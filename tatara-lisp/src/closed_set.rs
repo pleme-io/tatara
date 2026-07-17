@@ -19710,6 +19710,368 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "unique variants" projection — the
+    /// `Vec<Self>` DECLARATION-ORDER strict-uniqueness set of
+    /// [`Self::ALL`], keeping every variant whose per-target
+    /// multiplicity in `items` is EXACTLY `1` and dropping every
+    /// variant whose multiplicity is `0` or `>= 2`. The VEC-RETURN
+    /// STRICT-UNIQUENESS corner OPENING the (`Vec<Self>`, set-level,
+    /// multiplicity-band `== 1`) column past the (`bool`, set-level,
+    /// multiplicity-band `== 1`) [`Self::is_unique_any`] existential
+    /// corner AND the (`usize`, set-level, multiplicity-band `== 1`)
+    /// [`Self::count_unique_variants`] cardinality corner on the
+    /// equivalence-partition surface, positioned as the concrete
+    /// WITNESS behind those two peer projections (which report
+    /// whether the strict-uniqueness set is non-empty and its
+    /// cardinality alone, respectively).
+    ///
+    /// Cardinality identity: for every slice `items`,
+    /// `T::unique_variants(items).len() ==
+    /// T::count_unique_variants(items)` — the Vec-return strict-
+    /// uniqueness projection's length matches the usize-return
+    /// strict-uniqueness count exactly. Sibling posture to
+    /// `repeating_variants_length_equals_count_repeating_variants_across_every_triple`
+    /// on the peer (mult `>= 2`) band. Pinned by
+    /// `unique_variants_length_equals_count_unique_variants_across_every_triple`.
+    ///
+    /// Bool-projection identities: for every slice `items`,
+    /// * `T::unique_variants(items).is_empty()` iff
+    ///   `!T::is_unique_any(items)` — the strict-uniqueness set is
+    ///   empty iff the strict-uniqueness existential fails;
+    /// * `!T::unique_variants(items).is_empty()` iff
+    ///   `T::is_unique_any(items)` — the strict-uniqueness set is
+    ///   non-empty iff the strict-uniqueness existential holds.
+    ///
+    /// Both identities pin the bool-return existential endpoint as a
+    /// typed projection of the Vec-return strict-uniqueness set.
+    /// Pinned by
+    /// `unique_variants_is_empty_iff_not_is_unique_any_across_every_triple`.
+    ///
+    /// Sub-set relation: `T::unique_variants(items)` is a SUBSET of
+    /// `T::present_variants(items)` — every strict-uniqueness variant
+    /// occurs at least once, so the (multiplicity `== 1`) band is
+    /// contained in the (multiplicity `>= 1`) presence band.
+    /// Symmetrically, `T::unique_variants(items)` is DISJOINT from
+    /// `T::missing_variants(items)` (the multiplicity `== 0` band
+    /// cannot overlap the multiplicity `== 1` band) AND DISJOINT
+    /// from `T::repeating_variants(items)` (the multiplicity `>= 2`
+    /// band cannot overlap the multiplicity `== 1` band). Pinned by
+    /// `unique_variants_is_a_subset_of_present_variants_across_every_triple`,
+    /// `unique_variants_is_disjoint_from_missing_variants_across_every_triple`,
+    /// and
+    /// `unique_variants_is_disjoint_from_repeating_variants_across_every_triple`.
+    ///
+    /// Trichotomy partition identity: for every slice `items`, the
+    /// three Vec-return witnesses on the multiplicity-band trichotomy
+    /// PARTITION [`Self::ALL`] exactly, so
+    /// `T::missing_variants(items).len() +
+    /// T::unique_variants(items).len() +
+    /// T::repeating_variants(items).len() == T::CARDINALITY`. This
+    /// is the Vec-return lift of
+    /// `count_missing + count_unique_variants + count_repeating_variants
+    /// == T::CARDINALITY` on the peer usize-return column. Pinned by
+    /// `unique_variants_plus_missing_variants_plus_repeating_variants_partitions_all_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the strict-
+    /// uniqueness predicate is a function of that multiset alone.
+    /// The OUTPUT ordering is fixed by [`Self::ALL`]'s declaration
+    /// order regardless of the input ordering. Pinned by
+    /// `unique_variants_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Declaration-order subsequence contract: the returned
+    /// `Vec<Self>` is ALWAYS a subsequence of [`Self::ALL`] — every
+    /// variant appears at most once (dedup by the closed-set well-
+    /// formedness invariant [`assert_closed_set_well_formed`]'s
+    /// clause (3) pairwise-distinctness), in [`Self::ALL`]'s
+    /// declaration order. Pinned by
+    /// `unique_variants_preserves_declaration_order_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::unique_variants(&[])` is the empty
+    /// `Vec` UNCONDITIONALLY — the empty slice hits zero positions,
+    /// so every per-variant multiplicity is `0` and the per-target
+    /// `== 1` test fails at every target. Sibling posture to
+    /// `is_unique_any_returns_false_on_the_empty_slice_across_every_kind`
+    /// at the OPPOSITE return-shape column: the bool-return
+    /// projection reports `false` (strict-uniqueness existential
+    /// fails); this Vec-return projection reports `[]` (strict-
+    /// uniqueness witness is empty). Pinned by
+    /// `unique_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Full-set contract: `T::unique_variants(<T as ClosedSet>::ALL)
+    /// == <T as ClosedSet>::ALL.to_vec()` UNCONDITIONALLY — the
+    /// closed-set well-formedness invariant's clause (3) pairwise-
+    /// distinctness pins every variant of [`Self::ALL`] as occurring
+    /// at EXACTLY ONE position of the full-set slice, so every per-
+    /// target multiplicity is `1` and the per-target `== 1` test
+    /// succeeds at every target. The full-set arm is LOAD-BEARING —
+    /// it is the ONLY canonical fixpoint arm that separates the
+    /// (multiplicity `== 1`) band from the (multiplicity `== 0`)
+    /// absence band (empty-slice arm) AND from the (multiplicity
+    /// `>= 2`) repetition band (doubled-full-set arm). Pinned by
+    /// `unique_variants_over_the_full_set_equals_all_across_every_kind`.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::unique_variants(&<T as ClosedSet>::ALL.iter().chain(<T
+    /// as ClosedSet>::ALL.iter()).copied().collect::<Vec<_>>())`
+    /// is the empty `Vec` UNCONDITIONALLY — the doubled full set
+    /// hits every variant at EXACTLY TWO positions, so every per-
+    /// target multiplicity is `2` and the per-target `== 1` test
+    /// fails at every target. The doubled-full-set arm is LOAD-
+    /// BEARING as the boundary separating the (mult `== 1`) band
+    /// from the (mult `>= 2`) band. Pinned by
+    /// `unique_variants_over_the_doubled_full_set_returns_the_empty_vec_across_every_kind`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of the
+    /// substrate's per-target [`Self::is_unique_occurrence_of`]
+    /// primitive filtered through [`Self::ALL`]. The composition
+    /// uses `<Self as ClosedSet>::ALL.iter().copied().filter(…)
+    /// .collect()` with the substrate's strict-uniqueness per-target
+    /// predicate as the filter — allocation-free on the `Sized +
+    /// Copy + 'static` supertrait pair (no `PartialEq`/`Eq`/`Hash`
+    /// bound; the substrate's [`Self::index_of`] projection replaces
+    /// the standard-library group-by signatures' `Eq`/`Hash` demand),
+    /// `O(T::CARDINALITY × n)` worst-case on slice arity `n` for the
+    /// per-target occurrence sweep, no bitset-shape carrier.
+    ///
+    /// Future consumers that compose against
+    /// [`Self::unique_variants`]: a `tatara-check` predicate
+    /// `(check-phases-report-unique-variants …)` that emits the
+    /// concrete list of `WorkloadPhase` variants a rollout window
+    /// saw EXACTLY ONCE (a strict-uniqueness witness rather than the
+    /// sibling `is_unique_any` existential or the sibling
+    /// `count_unique_variants` cardinality); an LSP diagnostic on a
+    /// Lisp-author-written `:severities [:info :warn :info]` closed-
+    /// set field that renders the strict-uniqueness set as an
+    /// author-facing "used exactly once: [warn]" completion hint;
+    /// a Sekiban audit-trail projection that carries the concrete
+    /// unique-witness set of a classification poset window as its
+    /// per-window witness (not just the existential or the count);
+    /// a `tatara-lisp::macro_expand::Expander` hygiene pass that
+    /// reports the exact set of linearly-bound identifiers a
+    /// template hit (turning the pass-level `bool` or `usize`
+    /// diagnostic into a fine-grained witness without a second
+    /// sweep). Each binds to ONE typed N-ary strict-uniqueness-
+    /// witness projection on the trait rather than re-deriving
+    /// `T::ALL.iter().copied().filter(|&v|
+    /// T::count_occurrences_of(v, items) == 1).collect()` inline
+    /// per callsite.
+    ///
+    /// Compounding closure: the (`Vec<Self>`, set-level) ×
+    /// (mult `== 0`, mult `>= 1`, mult `== 1`, mult `>= 2`) 1×4 =
+    /// 4-corner (return-shape × multiplicity-band) grid on the
+    /// equivalence-partition surface's Vec-return column now closes
+    /// EXHAUSTIVELY at four typed peer projections —
+    /// [`Self::missing_variants`] (mult `== 0`),
+    /// [`Self::present_variants`] (mult `>= 1`), THIS (mult `== 1`),
+    /// [`Self::repeating_variants`] (mult `>= 2`). The (Vec-return ×
+    /// multiplicity-band) row is now EXHAUSTIVELY closed at four peer
+    /// projections on the substrate rather than unnamed inline
+    /// compositions at every downstream generic site. The next
+    /// natural lift on this surface — the (declaration, lex) ordering
+    /// axis: `sorted_unique_variants` walking [`Self::sorted_variants`]
+    /// instead of [`Self::ALL`], opening the lex-order arm of the
+    /// (mult `== 1`) column past the declaration-order arm THIS
+    /// projection opens.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// strict-uniqueness witness projection becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline `T::ALL.iter().copied().filter(|&v|
+    /// T::count_occurrences_of(v, items) == 1).collect()`
+    /// composition at every downstream generic site. THEORY.md §V.1
+    /// — knowable platform; the (Vec-return, mult `== 1`) corner was
+    /// an unnamed inline composition recurring at every prospective
+    /// downstream "which variants occurred EXACTLY ONCE?" site pre-
+    /// lift. Naming it on the trait makes the projection a TYPED
+    /// CONSEQUENCE of the substrate's per-target strict-uniqueness
+    /// primitive ([`Self::is_unique_occurrence_of`]) filtered through
+    /// [`Self::ALL`] via the standard-library filter combinator.
+    /// THEORY.md §VI.1 — generation over composition; the strict-
+    /// uniqueness witness projection emerges from the composition of
+    /// ONE substrate primitive with an `iter().copied().filter(…)
+    /// .collect()` combinator, not as a per-implementor hand-rolled
+    /// body.
+    ///
+    /// Frontier inspiration: Coq's `filter (fun v => count_occ eqb l v
+    /// =? 1) all` decidable-equality-derived strict-uniqueness
+    /// witness on a `list nat`; SQL's `SELECT variant FROM t GROUP BY
+    /// variant HAVING COUNT(*) = 1` group-by-with-having idiom
+    /// (linear duplicates elimination); NumPy's
+    /// `all[np.array([np.sum(items == v) == 1 for v in all])]`
+    /// vectorized strict-uniqueness mask; Racket's `(filter (lambda
+    /// (v) (= (count (curry equal? v) items) 1)) all)` on a `listof
+    /// T` bundle. Translation through pleme-io primitives: the N-ary
+    /// strict-uniqueness witness projection on the closed-set trait
+    /// binds through the substrate's per-target strict-uniqueness
+    /// primitive [`Self::is_unique_occurrence_of`] filtered through
+    /// [`Self::ALL`] instead of an `Eq`/`Hash` supertrait bound on
+    /// a `GROUP BY`-shaped carrier — staying allocation-free on the
+    /// `Sized + Copy + 'static` supertrait pair.
+    fn unique_variants(items: &[Self]) -> ::std::vec::Vec<Self> {
+        <Self as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|&v| <Self as ClosedSet>::is_unique_occurrence_of(v, items))
+            .collect()
+    }
+
+    /// The N-ARY ORDERING-AGNOSTIC "unique variants" projection —
+    /// the `Vec<Self>` LEX-ORDER strict-uniqueness set of
+    /// [`Self::sorted_variants`], keeping every variant whose per-
+    /// target multiplicity in `items` is EXACTLY `1` and dropping
+    /// every variant whose multiplicity is `0` or `>= 2`. The LEX-
+    /// ORDER peer of [`Self::unique_variants`] on the (declaration,
+    /// lex) ordering axis of the Vec-return column of the
+    /// equivalence-partition surface — closes the lex arm past the
+    /// declaration arm the prior projection opens.
+    ///
+    /// Composition law: for every slice `items`,
+    /// `T::sorted_unique_variants(items) ==
+    /// T::sorted_variants().into_iter().filter(|&v|
+    /// T::is_unique_occurrence_of(v, items)).collect()` — the
+    /// projection binds through the substrate's
+    /// [`Self::sorted_variants`] canonical-listing surface composed
+    /// with the standard-library filter combinator keyed on
+    /// [`Self::is_unique_occurrence_of`]. The uniqueness MEMBERSHIP
+    /// predicate matches [`Self::unique_variants`] byte-for-byte on
+    /// every variant; only the ITERATION ORDER differs (lex vs
+    /// declaration).
+    ///
+    /// Cross-arm permutation identity: for every slice `items`,
+    /// `T::sorted_unique_variants(items)` is a PERMUTATION of
+    /// `T::unique_variants(items)` — the two projections filter the
+    /// SAME strict-uniqueness set from [`Self::ALL`] /
+    /// [`Self::sorted_variants`] (both of which contain every
+    /// variant exactly once by the closed-set well-formedness
+    /// invariant [`assert_closed_set_well_formed`]'s clauses 3 + 17),
+    /// so the multiset of variant identities in the two returned
+    /// Vecs coincides though the ordering differs. Pinned by
+    /// `sorted_unique_variants_is_a_permutation_of_unique_variants_across_every_triple`.
+    ///
+    /// Cardinality identity: for every slice `items`,
+    /// `T::sorted_unique_variants(items).len() ==
+    /// T::count_unique_variants(items)` — the lex-order Vec-return
+    /// strict-uniqueness projection's length matches the usize-
+    /// return strict-uniqueness count exactly. Pinned by
+    /// `sorted_unique_variants_length_equals_count_unique_variants_across_every_triple`.
+    ///
+    /// Bool-projection identities: for every slice `items`,
+    /// * `T::sorted_unique_variants(items).is_empty()` iff
+    ///   `!T::is_unique_any(items)`;
+    /// * `!T::sorted_unique_variants(items).is_empty()` iff
+    ///   `T::is_unique_any(items)`.
+    ///
+    /// Pinned by
+    /// `sorted_unique_variants_is_empty_iff_not_is_unique_any_across_every_triple`.
+    ///
+    /// Lex-order subsequence contract: the returned `Vec<Self>` is
+    /// ALWAYS a subsequence of [`Self::sorted_variants`] — every
+    /// variant appears at most once, in lex order of
+    /// [`Self::label`]. Pinned by
+    /// `sorted_unique_variants_preserves_lex_order_across_every_triple`.
+    ///
+    /// Ordering-axis normalization: on implementors whose
+    /// declaration order diverges from lex order, the lex-arm and
+    /// decl-arm projections carry the SAME multiset but DIFFERENT
+    /// declaration-order-preserving indexing. Pinned by
+    /// `sorted_unique_variants_normalizes_arbitrary_declaration_order`.
+    ///
+    /// Empty-slice contract: `T::sorted_unique_variants(&[])` is the
+    /// empty `Vec` UNCONDITIONALLY — every multiplicity is `0`, so
+    /// no variant survives the per-target `== 1` filter. Pinned by
+    /// `sorted_unique_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Full-set contract: `T::sorted_unique_variants(<T as
+    /// ClosedSet>::ALL) == T::sorted_variants()` UNCONDITIONALLY —
+    /// clause (3)'s pairwise-distinctness invariant pins every
+    /// variant as occurring at EXACTLY ONE position of the full-set
+    /// slice, so every per-target multiplicity is `1` and the
+    /// projection returns each variant of `T::sorted_variants()`
+    /// exactly once in lex order. Pinned by
+    /// `sorted_unique_variants_over_the_full_set_equals_sorted_variants_across_every_kind`.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::sorted_unique_variants(&<T as ClosedSet>::ALL.iter()
+    /// .chain(<T as ClosedSet>::ALL.iter()).copied()
+    /// .collect::<Vec<_>>())` is the empty `Vec` UNCONDITIONALLY —
+    /// every per-target multiplicity is `2` and the per-target `==
+    /// 1` test fails at every target. Pinned by
+    /// `sorted_unique_variants_over_the_doubled_full_set_returns_the_empty_vec_across_every_kind`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of TWO
+    /// substrate primitives ([`Self::sorted_variants`] +
+    /// [`Self::is_unique_occurrence_of`]) via an
+    /// `into_iter().filter(…).collect()` combinator, not as a per-
+    /// implementor hand-rolled body — allocation-owned (the
+    /// `sorted_variants` allocation is inherited verbatim, no
+    /// second allocation past the filter), no
+    /// `PartialEq`/`Eq`/`Hash` bound, `O(T::CARDINALITY × n)` worst-
+    /// case on slice arity `n`.
+    ///
+    /// Compounding closure: the (`Vec<Self>`, declaration, lex) 3×2
+    /// = 6-corner `Vec<Self>`-return (partition-arm × ordering)
+    /// face on the equivalence-partition surface at the (mult `>= 1`,
+    /// mult `== 0`, mult `>= 2`) partition-arm triple was closed by
+    /// [`Self::sorted_repeating_variants`]; adding this projection
+    /// and the peer [`Self::unique_variants`] promotes the face to
+    /// a 4×2 = 8-corner face by adding the (mult `== 1`) column at
+    /// BOTH ordering arms, EXHAUSTIVELY closing every corner on the
+    /// Vec-return column of the (partition-arm × ordering) face at
+    /// eight typed peer projections — [`Self::present_variants`] +
+    /// [`Self::sorted_present_variants`] (mult `>= 1`),
+    /// [`Self::missing_variants`] + [`Self::sorted_missing_variants`]
+    /// (mult `== 0`), [`Self::repeating_variants`] +
+    /// [`Self::sorted_repeating_variants`] (mult `>= 2`),
+    /// [`Self::unique_variants`] + THIS (mult `== 1`).
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary lex-
+    /// order strict-uniqueness-witness projection becomes a TYPE-
+    /// level primitive on the closed-set trait rather than a per-
+    /// consumer inline `T::sorted_variants().into_iter().filter(|&v|
+    /// T::count_occurrences_of(v, items) == 1).collect()` composition
+    /// at every downstream generic site. THEORY.md §V.1 — knowable
+    /// platform; the (strict-uniqueness-Vec, lex-order) corner was
+    /// an unnamed inline composition recurring at every prospective
+    /// downstream "which variants occurred EXACTLY ONCE, in lex
+    /// order?" site pre-lift. Naming it on the trait makes the
+    /// projection a TYPED CONSEQUENCE of the substrate's canonical-
+    /// listing surface composed with the substrate's per-target
+    /// strict-uniqueness primitive via the standard-library filter
+    /// combinator. THEORY.md §VI.1 — generation over composition;
+    /// the lex-order strict-uniqueness-witness projection emerges
+    /// from the composition of TWO substrate primitives
+    /// ([`Self::sorted_variants`] +
+    /// [`Self::is_unique_occurrence_of`]) via an
+    /// `into_iter().filter(…).collect()` combinator, not as a per-
+    /// implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Racket's `(sort (filter (lambda (v) (=
+    /// (count (curry equal? v) items) 1)) (enum->list T)) #:key
+    /// T-label)` — the canonical-list-then-strict-uniqueness-filter
+    /// idiom on any decidable-equality carrier, keyed on a label
+    /// projection; Haskell's `sortOn label . filter (\v -> length
+    /// (filter (== v) items) == 1)` on a `[T]` bundle-then-filter
+    /// shape; NumPy's `np.sort(all[np.array([np.sum(items == v) == 1
+    /// for v in all])])` vectorized strict-uniqueness mask composed
+    /// with a lex-order sort; SQL's `SELECT variant FROM t GROUP BY
+    /// variant HAVING COUNT(*) = 1 ORDER BY variant` group-by-with-
+    /// having-then-order-by idiom. Translation through pleme-io
+    /// primitives: the N-ary lex-order strict-uniqueness-witness
+    /// projection on the closed-set trait binds through the
+    /// substrate's [`Self::sorted_variants`] canonical lex-order
+    /// enumeration composed with the substrate's per-target strict-
+    /// uniqueness primitive [`Self::is_unique_occurrence_of`] via
+    /// the standard-library filter combinator — no new dep, no
+    /// `Eq`/`Hash` supertrait bound, no set-shape carrier.
+    fn sorted_unique_variants(items: &[Self]) -> ::std::vec::Vec<Self> {
+        <Self as ClosedSet>::sorted_variants()
+            .into_iter()
+            .filter(|&v| <Self as ClosedSet>::is_unique_occurrence_of(v, items))
+            .collect()
+    }
+
     /// The N-ARY DECLARATION-ORDER "present labels" projection — the
     /// `Vec<&'static str>` label rendering of [`Self::present_variants`]
     /// under [`Self::label`]. Every label `s` in the returned vector is
@@ -29842,6 +30204,176 @@ where
     assert_eq!(
         doubled_decl_sorted, doubled_lex_sorted,
         "{type_name}: T::sorted_repeating_variants(&doubled_full_set) is not a permutation of T::repeating_variants(&doubled_full_set) — the (declaration, lex) arms MUST filter the SAME strict-repeat set from the equivalence-partition surface's `Vec<Self>`-return column, so a downstream consumer that treats one arm's multiset as an authoritative substitute for the other's would disagree with the pinned projection",
+    );
+    // (119) — `T::unique_variants(items)` MUST agree with the filter
+    // of the per-target multiplicity-`== 1` predicate over `T::ALL`
+    // on every slice AND MUST land on its three canonical fixpoints
+    // (`[]` on the empty slice UNCONDITIONALLY, `T::ALL.to_vec()` on
+    // the full set UNCONDITIONALLY, `[]` on the doubled full set
+    // UNCONDITIONALLY) AND on the length-vs-count identity
+    // `T::unique_variants(items).len() ==
+    // T::count_unique_variants(items)` pinned at BOTH the full-set
+    // and doubled-full-set fixpoints.
+    //
+    // The three fixpoints + composition-equality arm + length-vs-
+    // count arm partition failure modes at the (Vec-return × slice-
+    // shape × composition-equality × cross-projection) corner
+    // simultaneously: an override that folds onto `T::ALL.to_vec()`
+    // unconditionally fires on the empty-slice AND doubled-full-set
+    // arms (returns the full ambient set rather than `[]`); an
+    // override that folds onto `[]` unconditionally fires on the
+    // full-set arm at cardinality `>= 1` (returns `[]` rather than
+    // `T::ALL.to_vec()`); an override that detaches from the filter-
+    // composition on any slice bifurcates loudly at the filter-
+    // composition arm; an override that inflates or deflates the
+    // returned `Vec`'s length at ANY slice bifurcates the length-vs-
+    // count identity against [`Self::count_unique_variants`] (already
+    // pinned by clause (114)).
+    //
+    // Sibling posture to clause (117) — clause (117) pins the
+    // (`Vec<Self>`, set-level, multiplicity-band `>= 2`) repeat-
+    // witness corner; this clause pins the (`Vec<Self>`, set-level,
+    // multiplicity-band `== 1`) unique-witness corner peer to it one
+    // MULTIPLICITY-BAND axis over, opening the (mult `== 1`) column
+    // on the Vec-return row of the equivalence-partition surface at
+    // its canonical filter-composition-then-fixpoint-witness shape.
+    // Sibling posture to clause (77) — that clause pins the
+    // (`Vec<Self>`, set-level, mult `== 0`) miss-witness corner at
+    // the low band; this clause pins the (`Vec<Self>`, set-level,
+    // mult `== 1`) unique-witness corner at the middle band peer to
+    // it one MULTIPLICITY-BAND axis over. The default trait body
+    // threads the filter over the substrate's per-target strict-
+    // uniqueness primitive ([`Self::is_unique_occurrence_of`])
+    // verbatim and satisfies every fixpoint arm + composition-
+    // equality arm + length-vs-count arm for free; the assertion
+    // catches a future implementor whose override drifts the
+    // projection loudly rather than silently bifurcating the set-
+    // level strict-uniqueness-witness surface every downstream
+    // uniqueness-witness consumer routes through.
+    assert!(
+        T::unique_variants(&[]).is_empty(),
+        "{type_name}: T::unique_variants(&[]) != [] — the set-level strict-uniqueness witness MUST report `[]` on the empty slice because every per-variant multiplicity is `0` and the per-target `== 1` test fails at every target; a non-`[]` empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream strict-uniqueness-witness consumer routes through",
+    );
+    let full_unique = T::unique_variants(T::ALL);
+    assert_eq!(
+        full_unique,
+        T::ALL.to_vec(),
+        "{type_name}: T::unique_variants(T::ALL) != T::ALL.to_vec() on a cardinality-{cardinality} closed set — clause (3)'s pairwise-distinctness invariant forces every variant to appear at EXACTLY ONE position of the full-set slice, so every per-target multiplicity is `1` and the per-target `== 1` test succeeds at every target; a full-set value diverging from T::ALL.to_vec() silently detaches the set-level strict-uniqueness witness from the (variant → decl-slot) injectivity clause (16), breaking every downstream uniqueness-witness consumer — the full-set arm is LOAD-BEARING as the boundary that separates the (mult `== 1`) band from the (mult `== 0`) absence band (empty-slice arm) AND from the (mult `>= 2`) repetition band (doubled-full-set arm)",
+        cardinality = T::CARDINALITY,
+    );
+    let doubled_unique = T::unique_variants(&doubled_full_set);
+    assert!(
+        doubled_unique.is_empty(),
+        "{type_name}: T::unique_variants(&doubled_full_set) != [] on a cardinality-{cardinality} closed set — the doubled full set hits every variant at EXACTLY TWO positions, so every per-target multiplicity is `2` and the per-target `== 1` test fails at every target; a non-`[]` doubled-full-set value silently drifts the projection past the strict-uniqueness boundary the trichotomy partitions — the doubled-full-set arm pins the projection as a STRICT `== 1` witness rather than the weaker `>= 1` presence witness [`T::present_variants`] which reports T::ALL.to_vec() on BOTH the full set and the doubled full set",
+        cardinality = T::CARDINALITY,
+    );
+    let expected_unique_via_filter: Vec<T> = T::ALL
+        .iter()
+        .copied()
+        .filter(|&v| T::is_unique_occurrence_of(v, T::ALL))
+        .collect();
+    assert_eq!(
+        full_unique, expected_unique_via_filter,
+        "{type_name}: T::unique_variants(T::ALL) drifted from T::ALL.iter().filter(|&v| T::is_unique_occurrence_of(v, T::ALL)).collect() — the set-level strict-uniqueness witness MUST equal the filter of the per-target multiplicity-`== 1` predicate over T::ALL on every slice, so a downstream strict-uniqueness-witness consumer that binds this filter-composition as its uniqueness-witness query surface would disagree with the pinned projection",
+    );
+    assert_eq!(
+        full_unique.len(),
+        T::count_unique_variants(T::ALL),
+        "{type_name}: T::unique_variants(T::ALL).len() drifted from T::count_unique_variants(T::ALL) — the (Vec-return, usize-return) strict-uniqueness-band cardinality identity was violated on the full set; the two peer projections MUST agree on their multiset-cardinality projection at every slice",
+    );
+    assert_eq!(
+        doubled_unique.len(),
+        T::count_unique_variants(&doubled_full_set),
+        "{type_name}: T::unique_variants(&doubled_full_set).len() drifted from T::count_unique_variants(&doubled_full_set) — the (Vec-return, usize-return) strict-uniqueness-band cardinality identity was violated on the doubled full set; the two peer projections MUST agree on their multiset-cardinality projection at every slice",
+    );
+    // Trichotomy partition arm — `T::missing_variants.len() +
+    // T::unique_variants.len() + T::repeating_variants.len() ==
+    // T::CARDINALITY` on the full-set fixpoint. Pins the Vec-return
+    // lift of the (`count_missing + count_unique_variants +
+    // count_repeating_variants == T::CARDINALITY`) trichotomy
+    // partition identity on the peer usize-return column at the load-
+    // bearing full-set fixpoint arm.
+    assert_eq!(
+        T::missing_variants(T::ALL).len()
+            + full_unique.len()
+            + T::repeating_variants(T::ALL).len(),
+        T::CARDINALITY,
+        "{type_name}: T::missing_variants(T::ALL).len() + T::unique_variants(T::ALL).len() + T::repeating_variants(T::ALL).len() != T::CARDINALITY on a cardinality-{cardinality} closed set — the three Vec-return witnesses on the multiplicity-band trichotomy MUST partition T::ALL exactly, mirroring the (`count_missing + count_unique_variants + count_repeating_variants == T::CARDINALITY`) trichotomy partition identity on the peer usize-return column",
+        cardinality = T::CARDINALITY,
+    );
+    // (120) — `T::sorted_unique_variants(items)` MUST agree with the
+    // filter of the per-target multiplicity-`== 1` predicate over
+    // `T::sorted_variants()` on every slice AND MUST land on its
+    // three canonical fixpoints (`[]` on the empty slice
+    // UNCONDITIONALLY, `T::sorted_variants()` on the full set
+    // UNCONDITIONALLY, `[]` on the doubled full set UNCONDITIONALLY)
+    // AND on the length-vs-count identity
+    // `T::sorted_unique_variants(items).len() ==
+    // T::count_unique_variants(items)` pinned at BOTH the full-set
+    // and doubled-full-set fixpoints AND on the cross-arm
+    // permutation identity against the declaration-arm sibling
+    // [`Self::unique_variants`] at the full-set fixpoint.
+    //
+    // Sibling posture to clause (118) — clause (118) pins the
+    // (`Vec<Self>`, set-level, multiplicity-band `>= 2`, lex-order)
+    // strict-repeat-witness corner; this clause pins the (`Vec<Self>`,
+    // set-level, multiplicity-band `== 1`, lex-order) strict-
+    // uniqueness-witness corner peer to it one MULTIPLICITY-BAND
+    // axis over, EXHAUSTIVELY closing the (`Vec<Self>`-return ×
+    // (mult `== 0`, mult `== 1`, mult `>= 2`) × (declaration, lex))
+    // 3×2 = 6-corner face at all six corners across the three-band
+    // trichotomy on both ordering arms — peer to
+    // [`Self::sorted_missing_variants`] (mult `== 0` × lex),
+    // [`Self::sorted_repeating_variants`] (mult `>= 2` × lex) one
+    // MULTIPLICITY-BAND axis over on the same lex column. The
+    // default trait body threads the filter over the substrate's
+    // [`Self::sorted_variants`] canonical lex-order listing surface
+    // composed with the substrate's per-target strict-uniqueness
+    // primitive [`Self::is_unique_occurrence_of`] verbatim and
+    // satisfies every fixpoint arm + composition-equality arm +
+    // length-vs-count arm + cross-arm permutation arm for free.
+    assert!(
+        T::sorted_unique_variants(&[]).is_empty(),
+        "{type_name}: T::sorted_unique_variants(&[]) != [] — the set-level lex-order strict-uniqueness witness MUST report `[]` on the empty slice because every per-variant multiplicity is `0` and the per-target `== 1` test fails at every target; a non-`[]` empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream lex-order strict-uniqueness-witness consumer routes through",
+    );
+    let full_sorted_unique = T::sorted_unique_variants(T::ALL);
+    assert_eq!(
+        full_sorted_unique,
+        T::sorted_variants(),
+        "{type_name}: T::sorted_unique_variants(T::ALL) != T::sorted_variants() on a cardinality-{cardinality} closed set — clause (3)'s pairwise-distinctness invariant forces every variant to appear at EXACTLY ONE position of the full-set slice, so every per-target multiplicity is `1` and the projection MUST return each variant of T::sorted_variants() exactly once in lex order; a full-set value diverging from T::sorted_variants() silently detaches the set-level lex-order strict-uniqueness witness from the (variant → decl-slot) injectivity clause (16), breaking every downstream lex-order uniqueness-witness consumer",
+        cardinality = T::CARDINALITY,
+    );
+    let doubled_sorted_unique = T::sorted_unique_variants(&doubled_full_set);
+    assert!(
+        doubled_sorted_unique.is_empty(),
+        "{type_name}: T::sorted_unique_variants(&doubled_full_set) != [] on a cardinality-{cardinality} closed set — the doubled full set hits every variant at EXACTLY TWO positions, so every per-target multiplicity is `2` and the per-target `== 1` test fails at every target; a non-`[]` doubled-full-set value silently drifts the projection past the strict-uniqueness boundary the trichotomy partitions",
+        cardinality = T::CARDINALITY,
+    );
+    let expected_sorted_unique_via_filter: Vec<T> = T::sorted_variants()
+        .into_iter()
+        .filter(|&v| T::is_unique_occurrence_of(v, T::ALL))
+        .collect();
+    assert_eq!(
+        full_sorted_unique, expected_sorted_unique_via_filter,
+        "{type_name}: T::sorted_unique_variants(T::ALL) drifted from T::sorted_variants().into_iter().filter(|&v| T::is_unique_occurrence_of(v, T::ALL)).collect() — the set-level lex-order strict-uniqueness witness MUST equal the filter of the per-target multiplicity-`== 1` predicate over T::sorted_variants() on every slice, so a downstream lex-order strict-uniqueness-witness consumer that binds this filter-composition as its uniqueness-witness query surface would disagree with the pinned projection",
+    );
+    assert_eq!(
+        full_sorted_unique.len(),
+        T::count_unique_variants(T::ALL),
+        "{type_name}: T::sorted_unique_variants(T::ALL).len() drifted from T::count_unique_variants(T::ALL) — the (Vec-return, usize-return) strict-uniqueness-band cardinality identity was violated on the full set on the lex arm; the two peer projections MUST agree on their multiset-cardinality projection at every slice regardless of ordering",
+    );
+    assert_eq!(
+        doubled_sorted_unique.len(),
+        T::count_unique_variants(&doubled_full_set),
+        "{type_name}: T::sorted_unique_variants(&doubled_full_set).len() drifted from T::count_unique_variants(&doubled_full_set) — the (Vec-return, usize-return) strict-uniqueness-band cardinality identity was violated on the doubled full set on the lex arm; the two peer projections MUST agree on their multiset-cardinality projection at every slice regardless of ordering",
+    );
+    let mut full_decl_unique_sorted = full_unique.clone();
+    let mut full_lex_unique_sorted = full_sorted_unique.clone();
+    full_decl_unique_sorted.sort_unstable_by_key(|v| T::index_of(*v));
+    full_lex_unique_sorted.sort_unstable_by_key(|v| T::index_of(*v));
+    assert_eq!(
+        full_decl_unique_sorted, full_lex_unique_sorted,
+        "{type_name}: T::sorted_unique_variants(T::ALL) is not a permutation of T::unique_variants(T::ALL) — the (declaration, lex) arms MUST filter the SAME strict-uniqueness set from the equivalence-partition surface's `Vec<Self>`-return column, so a downstream consumer that treats one arm's multiset as an authoritative substitute for the other's would disagree with the pinned projection",
     );
 }
 
@@ -61599,6 +62131,515 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedSortedRepeatingVariantsKind whose sorted_repeating_variants override folds onto `[]` unconditionally — clause (118)'s doubled-full-set fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn unique_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT: `T::unique_variants(&[])` is the
+        // empty `Vec` on every implementor — the empty slice hits
+        // zero positions, so every per-variant multiplicity is `0`
+        // and the per-target `== 1` test fails at every target.
+        // Sibling posture to
+        // `is_unique_any_returns_false_on_the_empty_slice_across_every_kind`
+        // at the OPPOSITE return-shape column: the bool-return
+        // projection is `false`; this Vec-return projection is `[]`.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::unique_variants(empty),
+            Vec::<StubKind>::new(),
+        );
+    }
+
+    #[test]
+    fn unique_variants_over_the_full_set_equals_all_across_every_kind() {
+        // FULL-SET CONTRACT: `T::unique_variants(T::ALL) ==
+        // T::ALL.to_vec()` UNCONDITIONALLY — clause (3)'s pairwise-
+        // distinctness invariant forces every variant to appear at
+        // EXACTLY ONE position of the full-set slice, so every per-
+        // target multiplicity is `1` and the per-target `== 1` test
+        // succeeds at every target. The full-set arm is LOAD-BEARING —
+        // it is the ONLY canonical fixpoint arm that separates the
+        // (multiplicity `== 1`) band from the (multiplicity `== 0`)
+        // absence band (empty-slice arm) AND from the (multiplicity
+        // `>= 2`) repetition band (doubled-full-set arm).
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(<StubKind as ClosedSet>::unique_variants(all), all.to_vec(),);
+    }
+
+    #[test]
+    fn unique_variants_over_the_doubled_full_set_returns_the_empty_vec_across_every_kind() {
+        // DOUBLED-FULL-SET CONTRACT: `T::unique_variants` on the
+        // doubled full set returns `[]` UNCONDITIONALLY — every per-
+        // target multiplicity is `2` and the per-target `== 1` test
+        // fails at every target. The doubled-full-set arm is LOAD-
+        // BEARING as the boundary separating the (mult `== 1`) band
+        // from the (mult `>= 2`) band.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::unique_variants(&doubled),
+            Vec::<StubKind>::new(),
+        );
+    }
+
+    #[test]
+    fn unique_variants_length_equals_count_unique_variants_across_every_triple() {
+        // CARDINALITY IDENTITY:
+        // `T::unique_variants(items).len() ==
+        // T::count_unique_variants(items)` on every slice — the Vec-
+        // return strict-uniqueness projection's length matches the
+        // usize-return strict-uniqueness count exactly. Cross-checks
+        // the strict-uniqueness witness against the pre-existing
+        // strict-uniqueness count.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::unique_variants(empty).len(),
+            <StubKind as ClosedSet>::count_unique_variants(empty),
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_variants(&triple).len(),
+                        <StubKind as ClosedSet>::count_unique_variants(&triple),
+                        "T::unique_variants({triple:?}).len() diverged from T::count_unique_variants({triple:?}) — the (Vec-return, usize-return) strict-uniqueness-band cardinality identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_variants_is_empty_iff_not_is_unique_any_across_every_triple() {
+        // BOOL-PROJECTION IDENTITY:
+        // `T::unique_variants(items).is_empty() ==
+        // !T::is_unique_any(items)` on every slice — the strict-
+        // uniqueness set is empty iff the strict-uniqueness
+        // existential fails.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::unique_variants(empty).is_empty(),
+            !<StubKind as ClosedSet>::is_unique_any(empty),
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_variants(&triple).is_empty(),
+                        !<StubKind as ClosedSet>::is_unique_any(&triple),
+                        "T::unique_variants({triple:?}).is_empty() diverged from !T::is_unique_any({triple:?}) — the (Vec-return, bool-return) strict-uniqueness-band emptiness identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_variants_preserves_declaration_order_across_every_triple() {
+        // DECLARATION-ORDER SUBSEQUENCE CONTRACT: the returned
+        // `Vec<Self>` is ALWAYS a subsequence of `T::ALL` (with each
+        // variant appearing at most once, in `T::ALL`'s declaration
+        // order). Verified by walking the returned Vec's `index_of`
+        // sequence and asserting strictly increasing.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let unique = <StubKind as ClosedSet>::unique_variants(&triple);
+                    let indices: Vec<usize> = unique
+                        .iter()
+                        .copied()
+                        .map(<StubKind as ClosedSet>::index_of)
+                        .collect();
+                    assert!(
+                        indices.windows(2).all(|w| w[0] < w[1]),
+                        "T::unique_variants({triple:?}) indices {indices:?} not strictly ascending — the declaration-order subsequence property was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_variants_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::unique_variants(items) ==
+        // T::unique_variants(reversed items)` on every slice —
+        // reversing a slice preserves its multiset of variant
+        // identities, and the strict-uniqueness predicate is a
+        // function of that multiset alone.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_variants(&forward),
+                        <StubKind as ClosedSet>::unique_variants(&reversed),
+                        "T::unique_variants({forward:?}) diverged from T::unique_variants({reversed:?}) — the strict-uniqueness-witness projection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_variants_is_disjoint_from_missing_and_repeating_variants_across_every_triple() {
+        // MULTIPLICITY-BAND DISJOINTNESS CONTRACT: the (mult `== 1`)
+        // strict-uniqueness band cannot overlap the (mult `== 0`)
+        // absence band or the (mult `>= 2`) strict-repeat band, so
+        // `T::unique_variants(items)` is DISJOINT from both
+        // `T::missing_variants(items)` and
+        // `T::repeating_variants(items)` on every slice.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let unique = <StubKind as ClosedSet>::unique_variants(&triple);
+                    let missing = <StubKind as ClosedSet>::missing_variants(&triple);
+                    let repeating = <StubKind as ClosedSet>::repeating_variants(&triple);
+                    for u in unique.iter().copied() {
+                        for m in missing.iter().copied() {
+                            assert_ne!(
+                                <StubKind as ClosedSet>::index_of(u),
+                                <StubKind as ClosedSet>::index_of(m),
+                                "T::unique_variants({triple:?}) and T::missing_variants({triple:?}) share variant {u:?} == {m:?} — the (mult `== 1`, mult `== 0`) partition arms MUST be disjoint",
+                            );
+                        }
+                        for r in repeating.iter().copied() {
+                            assert_ne!(
+                                <StubKind as ClosedSet>::index_of(u),
+                                <StubKind as ClosedSet>::index_of(r),
+                                "T::unique_variants({triple:?}) and T::repeating_variants({triple:?}) share variant {u:?} == {r:?} — the (mult `== 1`, mult `>= 2`) partition arms MUST be disjoint",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_variants_plus_missing_variants_plus_repeating_variants_partitions_all_across_every_triple(
+    ) {
+        // TRICHOTOMY PARTITION IDENTITY: `T::missing_variants.len() +
+        // T::unique_variants.len() + T::repeating_variants.len() ==
+        // T::CARDINALITY` on every slice — the three Vec-return
+        // witnesses on the multiplicity-band trichotomy partition
+        // T::ALL exactly, mirroring the (`count_missing +
+        // count_unique_variants + count_repeating_variants ==
+        // T::CARDINALITY`) trichotomy partition identity on the peer
+        // usize-return column.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::missing_variants(empty).len()
+                + <StubKind as ClosedSet>::unique_variants(empty).len()
+                + <StubKind as ClosedSet>::repeating_variants(empty).len(),
+            <StubKind as ClosedSet>::CARDINALITY,
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::missing_variants(&triple).len()
+                            + <StubKind as ClosedSet>::unique_variants(&triple).len()
+                            + <StubKind as ClosedSet>::repeating_variants(&triple).len(),
+                        <StubKind as ClosedSet>::CARDINALITY,
+                        "the (missing, unique, repeating) trichotomy did not partition T::CARDINALITY on triple {triple:?} — the three Vec-return witnesses MUST partition T::ALL exactly at every slice",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_variants_equals_filter_over_all_by_is_unique_occurrence_of_across_every_triple() {
+        // COMPOSITION-EQUALITY CONTRACT: for every slice `items`,
+        // `T::unique_variants(items) ==
+        // T::ALL.iter().copied().filter(|&v|
+        // T::is_unique_occurrence_of(v, items)).collect()` — the
+        // set-level strict-uniqueness witness MUST equal the filter
+        // of the per-target multiplicity-`== 1` predicate over T::ALL
+        // on every slice.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_pinned = <StubKind as ClosedSet>::unique_variants(&triple);
+                    let via_filter: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+                        .iter()
+                        .copied()
+                        .filter(|&v| <StubKind as ClosedSet>::is_unique_occurrence_of(v, &triple))
+                        .collect();
+                    assert_eq!(
+                        via_pinned, via_filter,
+                        "T::unique_variants({triple:?}) diverged from the direct `is_unique_occurrence_of` filter over T::ALL — the composition-equality identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_unique_variants_and_composition() {
+        // Drift catch — clause (119)'s full-set fixpoint arm fires
+        // when an override folds the set-level strict-uniqueness
+        // witness onto `[]` regardless of slice (returning `[]` on
+        // the full set rather than `T::ALL.to_vec()`). The stub below
+        // overrides the default body to return `vec![]`
+        // unconditionally; on the full set that produces `[] !=
+        // T::ALL.to_vec()`, tripping clause (119)'s full-set fixpoint
+        // arm loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedUniqueVariantsKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedUniqueVariantsKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedUniqueVariantsKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted unique_variants kind: {}", self.0)
+            }
+        }
+
+        impl DriftedUniqueVariantsKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedUniqueVariantsKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted unique_variants kind";
+            type Unknown = UnknownDriftedUniqueVariantsKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedUniqueVariantsKind(s.to_owned())
+            }
+            fn unique_variants(_items: &[Self]) -> Vec<Self> {
+                // Drift: return `[]` regardless of slice. On the
+                // full set that produces `[] != T::ALL.to_vec()`,
+                // tripping clause (119)'s full-set fixpoint arm
+                // loudly.
+                Vec::new()
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedUniqueVariantsKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedUniqueVariantsKind whose unique_variants override folds onto `[]` unconditionally — clause (119)'s full-set fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (lex arm): every multiplicity is `0`,
+        // so no variant survives the per-target `== 1` filter.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_variants(empty),
+            Vec::<StubKind>::new(),
+        );
+    }
+
+    #[test]
+    fn sorted_unique_variants_over_the_full_set_equals_sorted_variants_across_every_kind() {
+        // FULL-SET CONTRACT (lex arm): clause (3)'s pairwise-
+        // distinctness invariant pins every variant as occurring at
+        // EXACTLY ONE position of the full-set slice, so every per-
+        // target multiplicity is `1` and the projection returns each
+        // variant of `T::sorted_variants()` exactly once in lex order.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_variants(all),
+            <StubKind as ClosedSet>::sorted_variants(),
+        );
+    }
+
+    #[test]
+    fn sorted_unique_variants_over_the_doubled_full_set_returns_the_empty_vec_across_every_kind() {
+        // DOUBLED-FULL-SET CONTRACT (lex arm): every per-target
+        // multiplicity is `2` and the per-target `== 1` test fails at
+        // every target.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_variants(&doubled),
+            Vec::<StubKind>::new(),
+        );
+    }
+
+    #[test]
+    fn sorted_unique_variants_length_equals_count_unique_variants_across_every_triple() {
+        // CARDINALITY IDENTITY (lex arm):
+        // `T::sorted_unique_variants(items).len() ==
+        // T::count_unique_variants(items)` on every slice.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_variants(empty).len(),
+            <StubKind as ClosedSet>::count_unique_variants(empty),
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_variants(&triple).len(),
+                        <StubKind as ClosedSet>::count_unique_variants(&triple),
+                        "T::sorted_unique_variants({triple:?}).len() diverged from T::count_unique_variants({triple:?}) — the (Vec-return, usize-return) strict-uniqueness-band cardinality identity was violated on the lex arm",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_variants_is_a_permutation_of_unique_variants_across_every_triple() {
+        // CROSS-ARM PERMUTATION IDENTITY: for every slice `items`,
+        // `T::sorted_unique_variants(items)` and
+        // `T::unique_variants(items)` are PERMUTATIONS of each other
+        // — the two projections filter the SAME strict-uniqueness set
+        // from `T::ALL` / `T::sorted_variants()`, so the multiset of
+        // variant identities in the two returned Vecs coincides
+        // though the ordering differs.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let mut decl_sorted = <StubKind as ClosedSet>::unique_variants(&triple);
+                    let mut lex_sorted = <StubKind as ClosedSet>::sorted_unique_variants(&triple);
+                    decl_sorted.sort_unstable_by_key(|v| <StubKind as ClosedSet>::index_of(*v));
+                    lex_sorted.sort_unstable_by_key(|v| <StubKind as ClosedSet>::index_of(*v));
+                    assert_eq!(
+                        decl_sorted, lex_sorted,
+                        "T::sorted_unique_variants({triple:?}) is not a permutation of T::unique_variants({triple:?}) — the (declaration, lex) arms MUST filter the SAME strict-uniqueness set",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_variants_preserves_lex_order_across_every_triple() {
+        // LEX-ORDER SUBSEQUENCE CONTRACT (uniqueness arm): the
+        // returned `Vec<Self>` is ALWAYS a subsequence of
+        // `T::sorted_variants()` — verified by walking the returned
+        // Vec's `label()` sequence and asserting strictly ASCII-
+        // ascending.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let unique = <StubKind as ClosedSet>::sorted_unique_variants(&triple);
+                    let labels: Vec<&'static str> =
+                        unique.iter().copied().map(|v| v.label()).collect();
+                    assert!(
+                        labels.windows(2).all(|w| w[0] < w[1]),
+                        "T::sorted_unique_variants({triple:?}) labels {labels:?} not strictly ASCII-ascending — the lex-order subsequence property was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_variants_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT (lex uniqueness arm):
+        // reversing a slice preserves its multiset of variant
+        // identities, and the strict-uniqueness predicate is a
+        // function of that multiset alone.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_variants(&forward),
+                        <StubKind as ClosedSet>::sorted_unique_variants(&reversed),
+                        "T::sorted_unique_variants({forward:?}) diverged from T::sorted_unique_variants({reversed:?}) — the lex-order strict-uniqueness-witness projection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_unique_variants_and_composition()
+    {
+        // Drift catch — clause (120)'s full-set fixpoint arm fires
+        // when an override folds the set-level lex-order strict-
+        // uniqueness witness onto `[]` regardless of slice (returning
+        // `[]` on the full set rather than `T::sorted_variants()`).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedUniqueVariantsKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedSortedUniqueVariantsKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedSortedUniqueVariantsKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted sorted_unique_variants kind: {}", self.0)
+            }
+        }
+
+        impl DriftedSortedUniqueVariantsKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedSortedUniqueVariantsKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted sorted_unique_variants kind";
+            type Unknown = UnknownDriftedSortedUniqueVariantsKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedUniqueVariantsKind(s.to_owned())
+            }
+            fn sorted_unique_variants(_items: &[Self]) -> Vec<Self> {
+                // Drift: return `[]` regardless of slice. On the
+                // full set that produces `[] != T::sorted_variants()`,
+                // tripping clause (120)'s full-set fixpoint arm
+                // loudly.
+                Vec::new()
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedSortedUniqueVariantsKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedSortedUniqueVariantsKind whose sorted_unique_variants override folds onto `[]` unconditionally — clause (120)'s full-set fixpoint arm MUST reject the drift",
         );
     }
 

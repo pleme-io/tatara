@@ -16511,6 +16511,217 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::count_occurrences_of(target, items) >= 2
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "target saturates every position"
+    /// predicate — `true` iff every position of `items` sits at the
+    /// target variant, computed as the strict-equality test of the
+    /// per-target multiplicity primitive [`Self::count_occurrences_of`]
+    /// against the slice arity `items.len()`. The PER-TARGET × bool ×
+    /// per-position-universal-quantifier corner OPENING the (per-target
+    /// × bool × per-position-quantifier) 2-corner face on the
+    /// equivalence-partition surface at the ∀-arm peer to the pre-
+    /// existing (per-target × bool × per-position-EXISTENTIAL-quantifier)
+    /// [`Self::occurs_in`] ∃-arm one QUANTIFIER-axis over — the ∃/∀
+    /// duality on the PER-POSITION quantifier axis at the SAME per-
+    /// target arity. Distinct from the (per-target × bool ×
+    /// multiplicity-band) trichotomy corners [`Self::occurs_in`] (mult
+    /// `> 0`) / [`Self::is_unique_occurrence_of`] (mult `== 1`) /
+    /// [`Self::is_repeated_occurrence_of`] (mult `>= 2`) which sit on
+    /// the multiplicity-band axis, while this predicate sits on the
+    /// slice-arity-relative saturation axis (multiplicity `==
+    /// items.len()`).
+    ///
+    /// Count-composition identity: for every slice `items` and every
+    /// target `v`,
+    /// `T::is_saturated_by(v, items) == (T::count_occurrences_of(v, items) == items.len())`
+    /// — the bool predicate is EXACTLY the strict-equality test of the
+    /// per-target multiplicity primitive against the slice arity. The
+    /// canonical form the body uses. Pinned by clause (122) and by
+    /// `is_saturated_by_holds_iff_count_occurrences_of_equals_len_across_every_target_and_triple`.
+    ///
+    /// Per-position universal identity: for every slice `items` and
+    /// every target `v`,
+    /// `T::is_saturated_by(v, items) == items.iter().all(|w| T::index_of(*w) == T::index_of(v))`
+    /// — the per-target saturation predicate is the EXACT universal
+    /// quantification over the slice's positions of the per-position
+    /// index-equality test via the substrate's [`Self::index_of`]
+    /// bijection (the closed-set well-formedness invariant clause (16)
+    /// pins that projection as injective). Pinned by
+    /// `is_saturated_by_equals_universal_of_index_of_equality_across_every_target_and_triple`.
+    ///
+    /// Constant-arity-lift identity: for every slice `items` on any
+    /// implementor of cardinality `>= 1`,
+    /// `T::is_constant(items) == T::ALL.iter().any(|&v| T::is_saturated_by(v, items))`
+    /// — the set-level EXISTENTIAL LIFT of this per-target predicate
+    /// over [`Self::ALL`] equals the direction-conjunction constant
+    /// predicate [`Self::is_constant`]. This identity binds the SET-
+    /// LEVEL ARITY axis (`is_constant` = ∃v : ∀i, items[i] == v)
+    /// against the PER-TARGET ARITY axis (`is_saturated_by` = ∀i,
+    /// items[i] == v) one ARITY axis over on the (arity × per-position-
+    /// quantifier) face, pinning the compounding closure the set-level
+    /// [`Self::is_constant`] corner opened as the existential lift of
+    /// this per-target predicate. Pinned by
+    /// `is_constant_equals_existential_of_is_saturated_by_across_every_triple`.
+    ///
+    /// Membership-and-covering-degenerate composition identity: for
+    /// every slice `items` and every target `v`,
+    /// `T::is_saturated_by(v, items) == (items.is_empty() || (T::occurs_in(v, items) && T::count_distinct(items) == 1))`
+    /// — the per-target saturation predicate factors through the
+    /// disjunction of (i) the empty-slice trivial-holds arm AND (ii)
+    /// the conjunction of (a) target-presence via [`Self::occurs_in`]
+    /// AND (b) singleton-distinct-count [`Self::count_distinct`] `== 1`
+    /// (the slice hits only ONE variant). Independent cross-check
+    /// distinct from the count-composition arm on the composition-arity
+    /// axis (empty-guard × two-way conjunction vs one direct scalar-
+    /// equality). Pinned by
+    /// `is_saturated_by_equals_empty_or_occurs_in_and_count_distinct_equals_one_across_every_target_and_triple`.
+    ///
+    /// Empty-slice contract: `T::is_saturated_by(v, &[])` is `true` for
+    /// every target `v` — the empty slice hits zero positions, the per-
+    /// target multiplicity is `0`, the slice arity is `0`, and the
+    /// strict-equality test `0 == 0` holds VACUOUSLY. Sibling posture
+    /// to [`Self::is_pairwise_distinct`]'s empty-slice vacuous-`true`
+    /// contract: both PER-POSITION UNIVERSAL-QUANTIFIER predicates
+    /// collapse to `true` on the empty slice by empty-quantification
+    /// over positions. Pinned by clause (122) and by
+    /// `is_saturated_by_returns_true_on_the_empty_slice_across_every_target`.
+    ///
+    /// Matching-singleton contract: `T::is_saturated_by(v, &[v]) ==
+    /// true` for every target `v` — the sole position hits the target,
+    /// the per-target multiplicity is `1`, the slice arity is `1`, and
+    /// the strict-equality test `1 == 1` holds. Pinned by
+    /// `is_saturated_by_returns_true_on_the_matching_singleton_across_every_target`.
+    ///
+    /// Non-matching-singleton contract: `T::is_saturated_by(v, &[w]) ==
+    /// false` for every target `v` and slice-element `w` with
+    /// `T::index_of(v) != T::index_of(w)` — the per-target multiplicity
+    /// is `0` at the target, the slice arity is `1`, and the strict-
+    /// equality test `0 == 1` fails. The non-matching-singleton arm is
+    /// LOAD-BEARING as the drift catch for an override that folds onto
+    /// `true` unconditionally. Pinned by clause (122) and by
+    /// `is_saturated_by_returns_false_on_the_non_matching_singleton_across_every_target_pair`.
+    ///
+    /// Full-set contract: `T::is_saturated_by(v, <T as ClosedSet>::ALL)`
+    /// is `true` iff `T::CARDINALITY <= 1` at every target `v` — on
+    /// cardinality-0 implementors [`Self::ALL`] is empty and the
+    /// vacuous-`true` empty-slice arm applies (there are no targets to
+    /// test but the identity holds structurally); on cardinality-1
+    /// implementors [`Self::ALL`] is `[only]` and the sole variant
+    /// saturates it (`count == 1 == len`); on cardinality-`>= 2`
+    /// implementors [`Self::ALL`] holds every variant at exactly one
+    /// position (clause (3)'s pairwise-distinctness invariant), the
+    /// per-target multiplicity is `1` at every target, the slice arity
+    /// is `T::CARDINALITY >= 2`, and the strict-equality test `1 ==
+    /// T::CARDINALITY` fails. The full-set arm is LOAD-BEARING as the
+    /// boundary that separates saturation (per-target × ∀-position)
+    /// from covering ([`Self::is_covering`], which is `true` on the
+    /// full set at every cardinality). Pinned by clause (122) and by
+    /// `is_saturated_by_returns_false_on_the_full_set_across_every_target_at_cardinality_ge_two`.
+    ///
+    /// Doubled-matching-singleton contract:
+    /// `T::is_saturated_by(v, &[v, v]) == true` for every target `v` —
+    /// both positions hit the target, the per-target multiplicity is
+    /// `2`, the slice arity is `2`, and the strict-equality test `2 ==
+    /// 2` holds. The doubled-matching-singleton arm is LOAD-BEARING as
+    /// the drift catch for an override that folds onto the (multi-
+    /// plicity `== 1`) uniqueness predicate [`Self::is_unique_occurrence_of`]
+    /// (which is `false` on this slice while THIS predicate is `true`).
+    /// Pinned by clause (122) and by
+    /// `is_saturated_by_returns_true_on_the_doubled_matching_singleton_across_every_target`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic — the (declaration, lex) axis on `T::ALL`
+    /// COLLAPSES on this predicate because it factors through
+    /// [`Self::count_occurrences_of`] (itself ordering-agnostic) via
+    /// a scalar strict-equality test against `items.len()`. No separate
+    /// `sorted_is_saturated_by` peer is needed. Sibling posture to
+    /// every predicate on the equivalence-partition surface. Pinned by
+    /// `is_saturated_by_is_invariant_under_slice_reversal_across_every_target_and_triple`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of
+    /// [`Self::count_occurrences_of`] via strict-equality against
+    /// `items.len()`. The sweep cost inherits the multiplicity
+    /// primitive: O(n) on slice arity `n`, allocation-free, no
+    /// `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's minimal
+    /// `Sized + Copy + 'static` supertrait pair stays untouched).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::is_saturated_by`]: a `tatara-check` predicate
+    /// `(check-window-saturated-by …)` that verifies a `WorkloadPhase`
+    /// window sits entirely at a SPECIFIC phase (e.g. entire attest
+    /// window is `Attested`, distinct from the set-level
+    /// [`Self::is_constant`] which only pins "SOME phase" rather than
+    /// WHICH phase); an LSP diagnostic on a Lisp-author-written closed-
+    /// set field that reports "field is entirely `<target>`" as a
+    /// per-variant witness distinct from the set-level constant
+    /// witness; a Sekiban audit-trail per-window classification anchor
+    /// binding "window is entirely `Converged`" as a typed proof-of-
+    /// stability distinct from "window is entirely some SINGLE
+    /// classification"; a `tatara-lisp::macro_expand::Expander` hygiene
+    /// pass that flags a template's identifier list as SATURATED BY a
+    /// specific gensym (e.g. every hygiene binding uses the same
+    /// generated identifier — a rare but signal-worthy invariant
+    /// distinct from the set-level "all-identifiers-equal" check). Each
+    /// binds to ONE typed N-ary per-target saturation predicate on the
+    /// trait rather than re-deriving
+    /// `T::count_occurrences_of(v, items) == items.len()` inline per
+    /// callsite.
+    ///
+    /// Compounding closure: the (per-target × bool × per-position-
+    /// quantifier) 2-corner face on the equivalence-partition surface
+    /// now OPENS at the ∀-arm peer to [`Self::occurs_in`] — every point
+    /// on the per-target per-position-quantifier axis now binds to a
+    /// typed predicate on the trait ([`Self::occurs_in`] on the ∃-arm,
+    /// this predicate on the ∀-arm). The set-level ARITY-lift of the
+    /// ∀-arm through `T::ALL.iter().any(...)` recovers the pre-existing
+    /// direction-conjunction [`Self::is_constant`] predicate, closing
+    /// the (arity × per-position-quantifier) face at the (set-level, ∃-
+    /// over-targets-of-∀-over-positions) `is_constant` corner. The
+    /// natural next lift past this corner is the (per-target × Vec<usize>
+    /// × per-position-quantifier) sharpening — a per-target vec of
+    /// positions where the target does NOT sit (the vacuous-∀ witness
+    /// for the negation), OR the set-level `saturating_variant` primitive
+    /// (`Option<Self>` returning the sole saturating variant when
+    /// `is_constant` holds on a non-empty slice) opening the (return-
+    /// shape × arity) face on the saturation axis.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary per-
+    /// target ∀-position saturation predicate becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline `T::count_occurrences_of(v, items) == items.len()`
+    /// composition at every downstream generic site. THEORY.md §V.1 —
+    /// knowable platform; naming the (per-target × bool × ∀-position)
+    /// corner on the trait makes the projection a TYPED CONSEQUENCE of
+    /// the substrate's per-target multiplicity primitive packaged as
+    /// one atomic strict-equality test against the slice arity — AND
+    /// opens the ∀-arm peer to [`Self::occurs_in`] on the per-target
+    /// per-position-quantifier axis as a TYPED THEOREM the substrate
+    /// proves once. THEORY.md §VI.1 — generation over composition; the
+    /// saturation predicate emerges from one composition (strict-
+    /// equality against `items.len()` on the multiplicity primitive),
+    /// not as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Coq's `forallb (fun w => v =? w) items`
+    /// decidable-equality-derived per-position universal on `list nat`;
+    /// Idris's `all (\w => w == v) items` on a `Vect n a`; Racket's
+    /// `(andmap (λ (w) (equal? v w)) items)`; Julia's
+    /// `all(w -> w == v, items)`; Haskell's `all (== v) items`; Rust's
+    /// own `items.iter().all(|&w| w == v)` binds through a `Self:
+    /// PartialEq` supertrait bound; Python's `all(w == v for w in
+    /// items)`; SQL's `NOT EXISTS (SELECT 1 FROM t WHERE variant != v)`
+    /// — the canonical per-key saturation witness on a relational
+    /// carrier. Translation through pleme-io primitives: the N-ary per-
+    /// target ∀-position saturation predicate on the closed-set trait
+    /// binds through strict-equality against `items.len()` on the
+    /// substrate's per-target multiplicity primitive — no new dep, no
+    /// supertrait bound (the [`Self::index_of`] projection the
+    /// multiplicity primitive already threads through replaces the
+    /// `PartialEq` bound the standard-library `all(== v)` signature
+    /// chain demands), no allocation, O(n) on slice arity `n` inherited
+    /// verbatim from the multiplicity primitive.
+    fn is_saturated_by(target: Self, items: &[Self]) -> bool {
+        <Self as ClosedSet>::count_occurrences_of(target, items) == items.len()
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "per-slot variant histogram"
     /// projection — the `Vec<usize>` DECLARATION-ORDER histogram over
     /// [`Self::ALL`] whose slot `i` reports the multiplicity of
@@ -30665,6 +30876,121 @@ where
             doubled_uniformly_repeating, expected_via_covering_and_not_unique_any,
             "{type_name}: T::is_uniformly_repeating(&doubled_full_set) drifted from (T::is_covering(&doubled_full_set) && !T::is_unique_any(&doubled_full_set)) — the set-level uniform-repeat predicate MUST equal the De Morgan decomposition (covering ∧ ¬any-unique) on every slice, so a downstream uniform-repeat consumer that binds this covering-and-not-any-unique conjunction as its uniform-repeat query surface would disagree with the pinned predicate; the identity captures that a slice's per-variant multiplicity histogram lies entirely in the (mult `>= 2`) band iff (i) every variant appears at least once (covering rules out mult `== 0`) AND (ii) no variant appears exactly once (¬any-unique rules out mult `== 1`), together forcing every variant into the (mult `>= 2`) band",
         );
+    }
+
+    // (122) — `T::is_saturated_by(target, items)` MUST agree with the
+    // strict-equality test of the per-target multiplicity primitive
+    // against the slice arity `items.len()` on every (target, slice)
+    // pair AND MUST land on its four canonical fixpoints (`true` at
+    // every target on the empty slice UNCONDITIONALLY, `false` at every
+    // target on the full set gated on `T::CARDINALITY >= 2`, `true` at
+    // every target on the doubled-matching-singleton `[target, target]`
+    // slice UNCONDITIONALLY, `false` at every non-matching (target,
+    // slice-element) pair on a singleton) AND on TWO composition-
+    // equality arms on the doubled-matching-singleton fixpoint: (a)
+    // count-composition against `T::count_occurrences_of(target,
+    // items) == items.len()`, (b) empty-or-covering-degenerate
+    // composition against
+    // `items.is_empty() || (T::occurs_in(target, items) &&
+    // T::count_distinct(items) == 1)`. The four fixpoints + two
+    // composition arms partition failure modes at the (discriminant ×
+    // slice-shape × composition-equality) corner simultaneously: an
+    // override that folds onto `true` unconditionally fires on the
+    // non-matching-singleton arm AND the full-set arm at cardinality
+    // `>= 2` (returns `true` rather than `false`); an override that
+    // folds onto `false` unconditionally fires on the empty-slice AND
+    // matching-singleton AND doubled-matching-singleton arms (returns
+    // `false` rather than `true`); an override that folds onto the
+    // (multiplicity `> 0`) membership predicate [`T::occurs_in`]
+    // bifurcates at the doubled-matching-singleton arm at cardinality
+    // `>= 2` (still `true` there — fine) BUT fires on the full-set arm
+    // at cardinality `>= 2` (returns `true` rather than `false`); an
+    // override that folds onto the (multiplicity `== 1`) uniqueness
+    // predicate [`T::is_unique_occurrence_of`] fires on the doubled-
+    // matching-singleton arm (returns `false` rather than `true`); an
+    // override that detaches from the count-composition on any slice
+    // bifurcates loudly at the count-arm; an override that detaches
+    // from the empty-or-covering-degenerate composition bifurcates at
+    // the composition arm.
+    //
+    // Sibling posture to clauses (97) + (111) + (112): those clauses
+    // close the (per-target × bool × MULTIPLICITY-band) trichotomy at
+    // (mult `> 0`, mult `== 1`, mult `>= 2`) via [`T::occurs_in`],
+    // [`T::is_unique_occurrence_of`], [`T::is_repeated_occurrence_of`]
+    // one QUANTIFIER-axis under; this clause opens the (per-target ×
+    // bool × PER-POSITION-quantifier) 2-corner face at the ∀-arm peer
+    // to [`T::occurs_in`] one PER-POSITION QUANTIFIER-axis over on the
+    // SAME per-target arity. Together with the pre-existing (per-target
+    // × bool × per-position-EXISTENTIAL) [`T::occurs_in`] ∃-arm, the
+    // (per-target × bool × per-position-quantifier) face now closes
+    // exhaustively at two peer per-position-quantifier bool corners
+    // across the (∃, ∀) partition — the mirror of the (mult `> 0`,
+    // mult `== 1`, mult `>= 2`) multiplicity-band trichotomy one
+    // quantifier axis over. The default trait body threads
+    // `<Self as ClosedSet>::count_occurrences_of(target, items) ==
+    // items.len()` verbatim and satisfies every fixpoint arm + every
+    // composition-equality arm for free; the assertion catches a future
+    // implementor whose override drifts the projection loudly rather
+    // than silently bifurcating the per-target saturation predicate
+    // surface every downstream saturation consumer routes through.
+    let empty: &[T] = &[];
+    for target in T::ALL.iter().copied() {
+        assert!(
+            T::is_saturated_by(target, empty),
+            "{type_name}: T::is_saturated_by({target_label:?}, &[]) == false != true — the per-target ∀-position saturation predicate MUST report `true` on the empty slice because the multiplicity primitive returns `0`, the slice arity is `0`, and the strict-equality test `0 == 0` holds VACUOUSLY; a `false` empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream saturation consumer routes through",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let matching_singleton = [target];
+        assert!(
+            T::is_saturated_by(target, &matching_singleton),
+            "{type_name}: T::is_saturated_by({target_label:?}, [{target_label:?}]) == false != true — the sole position hits the target, the per-target multiplicity is `1`, the slice arity is `1`, and the strict-equality test `1 == 1` holds; a `false` matching-singleton value silently bifurcates the matching-singleton fixpoint contract every downstream saturation consumer routes through",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let doubled_matching = [target, target];
+        let doubled_matching_saturated = T::is_saturated_by(target, &doubled_matching);
+        assert!(
+            doubled_matching_saturated,
+            "{type_name}: T::is_saturated_by({target_label:?}, [{target_label:?}, {target_label:?}]) == false != true — both positions hit the target, the per-target multiplicity is `2`, the slice arity is `2`, and the strict-equality test `2 == 2` holds; the doubled-matching-singleton arm is LOAD-BEARING as the drift catch for an override that folds onto the (multiplicity `== 1`) uniqueness predicate [`T::is_unique_occurrence_of`] (which returns `false` on this slice while THIS predicate returns `true`)",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let expected_via_count_eq_len =
+            T::count_occurrences_of(target, &doubled_matching) == doubled_matching.len();
+        assert_eq!(
+            doubled_matching_saturated, expected_via_count_eq_len,
+            "{type_name}: T::is_saturated_by({target_label:?}, [{target_label:?}, {target_label:?}]) drifted from (T::count_occurrences_of({target_label:?}, [{target_label:?}, {target_label:?}]) == 2) — the saturation predicate MUST equal the strict-equality test of the per-target multiplicity primitive against the slice arity on every slice, so a downstream saturation consumer that binds `T::count_occurrences_of(_, items) == items.len()` as its saturation query surface would disagree with the pinned predicate",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let expected_via_empty_or_occurs_and_count_distinct_one = doubled_matching.is_empty()
+            || (T::occurs_in(target, &doubled_matching)
+                && T::count_distinct(&doubled_matching) == 1);
+        assert_eq!(
+            doubled_matching_saturated, expected_via_empty_or_occurs_and_count_distinct_one,
+            "{type_name}: T::is_saturated_by({target_label:?}, [{target_label:?}, {target_label:?}]) drifted from (items.is_empty() || (T::occurs_in(_, items) && T::count_distinct(items) == 1)) — the saturation predicate MUST factor through the disjunction of (i) the empty-slice trivial-holds arm AND (ii) the conjunction of (a) target-presence via `T::occurs_in` AND (b) singleton-distinct-count `T::count_distinct == 1`; the identity captures that a slice is saturated by a target iff EITHER it is empty (vacuously) OR the target appears AND the slice hits only ONE variant",
+            target_label = <T as ClosedSet>::label(target),
+        );
+    }
+    if T::CARDINALITY >= 2 {
+        for target in T::ALL.iter().copied() {
+            assert!(
+                !T::is_saturated_by(target, T::ALL),
+                "{type_name}: T::is_saturated_by({target_label:?}, T::ALL) == true != false on a cardinality-{cardinality} closed set — clause (3)'s pairwise-distinctness invariant forces every variant to appear at EXACTLY ONE position of the full-set slice, so the per-target multiplicity is `1`, the slice arity is `T::CARDINALITY == {cardinality} >= 2`, and the strict-equality test `1 == {cardinality}` fails; the full-set arm at cardinality `>= 2` is LOAD-BEARING as the boundary that separates saturation (per-target × ∀-position) from covering ([`T::is_covering`], which is `true` on the full set at every cardinality)",
+                target_label = <T as ClosedSet>::label(target),
+                cardinality = T::CARDINALITY,
+            );
+        }
+        for target in T::ALL.iter().copied() {
+            for other in T::ALL.iter().copied() {
+                if T::index_of(target) != T::index_of(other) {
+                    let non_matching_singleton = [other];
+                    assert!(
+                        !T::is_saturated_by(target, &non_matching_singleton),
+                        "{type_name}: T::is_saturated_by({target_label:?}, [{other_label:?}]) == true != false — the per-target multiplicity is `0` at the target because the sole position sits at a DISTINCT variant, the slice arity is `1`, and the strict-equality test `0 == 1` fails; the non-matching-singleton arm is LOAD-BEARING as the drift catch for an override that folds onto `true` unconditionally",
+                        target_label = <T as ClosedSet>::label(target),
+                        other_label = <T as ClosedSet>::label(other),
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -66207,6 +66533,463 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedIsUniformlyRepeatingFalseKind whose is_uniformly_repeating override folds onto `false` unconditionally — clause (121)'s doubled-full-set arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn is_saturated_by_returns_true_on_the_empty_slice_across_every_target() {
+        // EMPTY-SLICE CONTRACT (per-target × bool × ∀-position
+        // saturation): `T::is_saturated_by(v, &[])` is `true` for every
+        // target `v` — the empty slice hits zero positions, so the per-
+        // target multiplicity is `0`, the slice arity is `0`, and the
+        // strict-equality test `0 == 0` holds VACUOUSLY. Sibling posture
+        // to `is_pairwise_distinct_returns_true_on_the_empty_slice_across_every_kind`
+        // one PER-POSITION-QUANTIFIER-axis over: both universal-
+        // quantifier predicates collapse to `true` on the empty slice
+        // by empty-quantification over positions.
+        let empty: &[StubKind] = &[];
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert!(
+                <StubKind as ClosedSet>::is_saturated_by(v, empty),
+                "T::is_saturated_by({v:?}, &[]) diverged from the empty-slice vacuous fixpoint `true`",
+            );
+        }
+    }
+
+    #[test]
+    fn is_saturated_by_returns_true_on_the_matching_singleton_across_every_target() {
+        // MATCHING-SINGLETON CONTRACT: `T::is_saturated_by(v, &[v]) ==
+        // true` for every target `v` — the sole position hits the
+        // target, the per-target multiplicity is `1`, the slice arity
+        // is `1`, and the strict-equality test `1 == 1` holds.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert!(
+                <StubKind as ClosedSet>::is_saturated_by(v, &singleton),
+                "T::is_saturated_by({v:?}, {singleton:?}) diverged from the matching-singleton fixpoint `true`",
+            );
+        }
+    }
+
+    #[test]
+    fn is_saturated_by_returns_false_on_the_non_matching_singleton_across_every_target_pair() {
+        // NON-MATCHING-SINGLETON CONTRACT: for every target `v` and
+        // slice-element `w` with `T::index_of(v) != T::index_of(w)`,
+        // `T::is_saturated_by(v, &[w]) == false` — the per-target
+        // multiplicity is `0` at the target, the slice arity is `1`,
+        // and the strict-equality test `0 == 1` fails. Sweeps every
+        // (target, singleton-element) pair pins the miss contract
+        // across the full 3×3 = 9-corner matrix at the six OFF-DIAGONAL
+        // corners.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for w in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if <StubKind as ClosedSet>::index_of(v) != <StubKind as ClosedSet>::index_of(w) {
+                    let singleton = [w];
+                    assert!(
+                        !<StubKind as ClosedSet>::is_saturated_by(v, &singleton),
+                        "T::is_saturated_by({v:?}, {singleton:?}) diverged from the non-matching-singleton fixpoint `false`",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_saturated_by_returns_false_on_the_full_set_across_every_target_at_cardinality_ge_two() {
+        // FULL-SET CONTRACT: `T::is_saturated_by(v, T::ALL) == false`
+        // UNCONDITIONALLY on every implementor of cardinality `>= 2`
+        // — clause (3)'s pairwise-distinctness invariant forces every
+        // variant to appear at EXACTLY ONE position of the full-set
+        // slice, so the per-target multiplicity is `1`, the slice
+        // arity is `T::CARDINALITY >= 2`, and the strict-equality test
+        // `1 == T::CARDINALITY` fails at every target. The full-set arm
+        // at cardinality `>= 2` is LOAD-BEARING as the boundary that
+        // separates saturation (per-target × ∀-position) from covering
+        // (`T::is_covering`, which is `true` on the full set at every
+        // cardinality).
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 2) };
+        let all = <StubKind as ClosedSet>::ALL;
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert!(
+                !<StubKind as ClosedSet>::is_saturated_by(v, all),
+                "T::is_saturated_by({v:?}, T::ALL) diverged from `false` on a cardinality-{cardinality} closed set — clause (3)'s pairwise-distinctness invariant forces the multiplicity primitive to return `1` and the strict-equality test `1 == {cardinality}` to fail at every target",
+                cardinality = <StubKind as ClosedSet>::CARDINALITY,
+            );
+        }
+    }
+
+    #[test]
+    fn is_saturated_by_returns_true_on_the_doubled_matching_singleton_across_every_target() {
+        // DOUBLED-MATCHING-SINGLETON CONTRACT:
+        // `T::is_saturated_by(v, &[v, v]) == true` for every target `v`
+        // — both positions hit the target, the per-target multiplicity
+        // is `2`, the slice arity is `2`, and the strict-equality test
+        // `2 == 2` holds. The doubled-matching-singleton arm is LOAD-
+        // BEARING as the drift catch for an override that folds onto
+        // the (multiplicity `== 1`) uniqueness predicate
+        // `T::is_unique_occurrence_of` (which returns `false` on this
+        // slice while THIS predicate returns `true`).
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let doubled = [v, v];
+            assert!(
+                <StubKind as ClosedSet>::is_saturated_by(v, &doubled),
+                "T::is_saturated_by({v:?}, {doubled:?}) diverged from the doubled-matching-singleton fixpoint `true`",
+            );
+        }
+    }
+
+    #[test]
+    fn is_saturated_by_holds_iff_count_occurrences_of_equals_len_across_every_target_and_triple() {
+        // COUNT-COMPOSITION IDENTITY: for every slice `items` and every
+        // target `v`,
+        // `T::is_saturated_by(v, items) == (T::count_occurrences_of(v, items) == items.len())`
+        // — the bool predicate is EXACTLY the strict-equality test of
+        // the per-target multiplicity primitive against the slice
+        // arity. Sweeping every length-3 triple × every target pins
+        // the identity across the full 3×27 = 81-corner (target ×
+        // triple) matrix. Sibling posture to
+        // `is_unique_occurrence_of_holds_iff_count_occurrences_of_equals_one_across_every_target_and_triple`
+        // one saturation-axis over: `is_unique_occurrence_of` binds to
+        // the multiplicity `== 1` corner (fixed threshold); this
+        // predicate binds to the multiplicity `== items.len()` corner
+        // (arity-relative threshold) via the SAME multiplicity
+        // primitive under a different scalar test.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let via_predicate = <StubKind as ClosedSet>::is_saturated_by(v, &triple);
+                        let via_count_eq_len =
+                            <StubKind as ClosedSet>::count_occurrences_of(v, &triple)
+                                == triple.len();
+                        assert_eq!(
+                            via_predicate, via_count_eq_len,
+                            "T::is_saturated_by({v:?}, {triple:?}) diverged from (T::count_occurrences_of({v:?}, {triple:?}) == {len}) — the saturation predicate MUST equal the strict-equality test of the per-target multiplicity primitive against the slice arity byte-for-byte",
+                            len = triple.len(),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_saturated_by_equals_universal_of_index_of_equality_across_every_target_and_triple() {
+        // PER-POSITION UNIVERSAL IDENTITY: for every slice `items` and
+        // every target `v`,
+        // `T::is_saturated_by(v, items) == items.iter().all(|&w| T::index_of(w) == T::index_of(v))`
+        // — the per-target saturation predicate is the EXACT universal
+        // quantification over the slice's positions of the per-position
+        // index-equality test via the substrate's `T::index_of`
+        // bijection. An INDEPENDENT cross-check against the per-position
+        // index-equality reformulation distinct from the count-
+        // composition arm on the composition-arity axis (per-position
+        // sweep vs single scalar-equality).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let via_predicate = <StubKind as ClosedSet>::is_saturated_by(v, &triple);
+                        let via_universal_index_of = triple.iter().all(|&w| {
+                            <StubKind as ClosedSet>::index_of(w)
+                                == <StubKind as ClosedSet>::index_of(v)
+                        });
+                        assert_eq!(
+                            via_predicate, via_universal_index_of,
+                            "T::is_saturated_by({v:?}, {triple:?}) diverged from items.iter().all(|w| T::index_of(w) == T::index_of({v:?})) — the saturation predicate MUST equal the per-position index-of-equality universal via the substrate's total-ordering bijection byte-for-byte",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_saturated_by_equals_empty_or_occurs_in_and_count_distinct_equals_one_across_every_target_and_triple(
+    ) {
+        // EMPTY-OR-COVERING-DEGENERATE COMPOSITION IDENTITY: for every
+        // slice `items` and every target `v`,
+        // `T::is_saturated_by(v, items) == (items.is_empty() || (T::occurs_in(v, items) && T::count_distinct(items) == 1))`
+        // — the per-target saturation predicate factors through the
+        // disjunction of (i) the empty-slice trivial-holds arm AND
+        // (ii) the conjunction of (a) target-presence via `T::occurs_in`
+        // AND (b) singleton-distinct-count `T::count_distinct == 1`.
+        // Independent cross-check distinct from the count-composition
+        // arm on the composition-arity axis (empty-guard × two-way
+        // conjunction vs one direct scalar-equality) AND distinct from
+        // the per-position universal arm on the aggregation-axis
+        // (set-level `count_distinct` scalar vs per-position sweep).
+        let empty: &[StubKind] = &[];
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let via_predicate = <StubKind as ClosedSet>::is_saturated_by(v, empty);
+            let via_composition = empty.is_empty()
+                || (<StubKind as ClosedSet>::occurs_in(v, empty)
+                    && <StubKind as ClosedSet>::count_distinct(empty) == 1);
+            assert_eq!(
+                via_predicate, via_composition,
+                "T::is_saturated_by({v:?}, &[]) diverged from (empty || (occurs_in && count_distinct == 1)) — the saturation predicate MUST factor through the empty-or-covering-degenerate composition",
+            );
+        }
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let via_predicate = <StubKind as ClosedSet>::is_saturated_by(v, &triple);
+                        let via_composition = triple.is_empty()
+                            || (<StubKind as ClosedSet>::occurs_in(v, &triple)
+                                && <StubKind as ClosedSet>::count_distinct(&triple) == 1);
+                        assert_eq!(
+                            via_predicate, via_composition,
+                            "T::is_saturated_by({v:?}, {triple:?}) diverged from (empty || (occurs_in && count_distinct == 1)) — the saturation predicate MUST factor through the empty-or-covering-degenerate composition byte-for-byte",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_constant_equals_existential_of_is_saturated_by_across_every_triple() {
+        // CONSTANT-ARITY-LIFT IDENTITY: for every slice `items` on a
+        // cardinality-`>= 1` implementor,
+        // `T::is_constant(items) == T::ALL.iter().any(|&v| T::is_saturated_by(v, items))`
+        // — the set-level EXISTENTIAL LIFT of the per-target saturation
+        // predicate over `T::ALL` equals the direction-conjunction
+        // constant predicate `T::is_constant`. This identity binds the
+        // SET-LEVEL ARITY axis (`is_constant`) against the PER-TARGET
+        // ARITY axis (`is_saturated_by`) one ARITY axis over on the
+        // (arity × per-position-quantifier) face, pinning the compounding
+        // closure the set-level `is_constant` corner opened as the
+        // existential lift of this per-target predicate.
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 1) };
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::is_constant(empty),
+            <StubKind as ClosedSet>::ALL
+                .iter()
+                .copied()
+                .any(|v| <StubKind as ClosedSet>::is_saturated_by(v, empty)),
+            "T::is_constant(&[]) diverged from T::ALL.iter().any(|v| T::is_saturated_by(v, &[])) — the set-level constant predicate MUST equal the existential lift of the per-target saturation predicate over T::ALL on a cardinality-`>= 1` implementor",
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let existential = <StubKind as ClosedSet>::ALL
+                        .iter()
+                        .copied()
+                        .any(|v| <StubKind as ClosedSet>::is_saturated_by(v, &triple));
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_constant(&triple),
+                        existential,
+                        "T::is_constant({triple:?}) diverged from T::ALL.iter().any(|v| T::is_saturated_by(v, {triple:?})) — the set-level constant predicate MUST equal the existential lift of the per-target saturation predicate over T::ALL byte-for-byte",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_saturated_by_is_invariant_under_slice_reversal_across_every_target_and_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::is_saturated_by(v, items) == T::is_saturated_by(v, reversed items)`
+        // on every (target, slice) pair — reversing a slice preserves
+        // its multiset of variant identities AND its arity, so the
+        // multiplicity primitive is a function of that multiset alone,
+        // the arity is a function of the slice length alone, and the
+        // strict-equality test inherits the reversal invariance.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::is_saturated_by(v, &forward),
+                            <StubKind as ClosedSet>::is_saturated_by(v, &reversed),
+                            "T::is_saturated_by({v:?}, ...) diverged under slice reversal at (target={v:?}, forward={forward:?}, reversed={reversed:?}) — the per-target saturation predicate MUST be a fixpoint of slice reversal",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_saturated_by_and_occurs_in_agree_past_singleton_at_arity_one_across_every_target() {
+        // SATURATION-VS-MEMBERSHIP COINCIDENCE CONTRACT (at arity-1):
+        // `T::is_saturated_by(v, &[w]) == T::occurs_in(v, &[w])` for
+        // every target-element pair — on singleton slices the per-
+        // position ∀-quantifier saturation predicate COINCIDES with the
+        // per-position ∃-quantifier membership predicate because a
+        // universal AND an existential over a singleton always agree
+        // (both are the single-position matching test). The two
+        // predicates DIVERGE on any slice past arity 1 with a mixture
+        // of positions: saturation requires EVERY position, membership
+        // requires ANY position. Pins the (per-position-quantifier)-
+        // axis collapse point at arity-1 as a typed theorem across
+        // every (target, singleton-element) pair.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for w in <StubKind as ClosedSet>::ALL.iter().copied() {
+                let singleton = [w];
+                assert_eq!(
+                    <StubKind as ClosedSet>::is_saturated_by(v, &singleton),
+                    <StubKind as ClosedSet>::occurs_in(v, &singleton),
+                    "T::is_saturated_by({v:?}, {singleton:?}) diverged from T::occurs_in({v:?}, {singleton:?}) at arity-1 — the per-position ∀-quantifier saturation predicate MUST coincide with the per-position ∃-quantifier membership predicate on every singleton slice byte-for-byte",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn is_saturated_by_implies_occurs_in_or_empty_across_every_target_and_triple() {
+        // MEMBERSHIP-IMPLICATION CONTRACT: for every slice `items` and
+        // every target `v`,
+        // `T::is_saturated_by(v, items) implies (items.is_empty() || T::occurs_in(v, items))`
+        // — a saturated slice on any non-empty carrier hits the target
+        // at every position, which forces the target to occur at least
+        // once (any position witnesses membership); the empty-slice
+        // arm is the vacuous escape hatch. Peer to `is_uniformly_repeating_implies_is_covering`
+        // on the set-level UNIVERSAL-lift × MULTIPLICITY-band axis one
+        // ARITY axis over: both universal-quantifier predicates imply
+        // the corresponding existential-quantifier predicate under a
+        // trivial escape hatch (empty slice for saturation, empty-set-
+        // trivial for covering).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        assert!(
+                            !<StubKind as ClosedSet>::is_saturated_by(v, &triple)
+                                || triple.is_empty()
+                                || <StubKind as ClosedSet>::occurs_in(v, &triple),
+                            "T::is_saturated_by({v:?}, {triple:?}) held but neither triple.is_empty() nor T::occurs_in({v:?}, {triple:?}) — the per-target saturation predicate MUST imply target-presence on every non-empty slice",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_true_drift_in_is_saturated_by() {
+        // Drift catch — clause (122)'s non-matching-singleton + full-
+        // set-at-cardinality-`>= 2` FALSE-fixpoint arms fire when an
+        // override folds the per-target saturation predicate onto
+        // `true` unconditionally. On a non-matching singleton the
+        // correct value is `false` (count == 0, len == 1, `0 == 1`
+        // fails); on the full set at cardinality `>= 2` the correct
+        // value is `false` at every target (count == 1, len ==
+        // T::CARDINALITY, `1 == T::CARDINALITY` fails). Both arms fire
+        // loudly against the `_ => true` override.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsSaturatedByTrueKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedIsSaturatedByTrueKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedIsSaturatedByTrueKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is_saturated_by true kind: {}", self.0)
+            }
+        }
+
+        impl DriftedIsSaturatedByTrueKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedIsSaturatedByTrueKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted is_saturated_by true kind";
+            type Unknown = UnknownDriftedIsSaturatedByTrueKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsSaturatedByTrueKind(s.to_owned())
+            }
+            fn is_saturated_by(_target: Self, _items: &[Self]) -> bool {
+                true
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedIsSaturatedByTrueKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedIsSaturatedByTrueKind whose is_saturated_by override folds onto `true` unconditionally — clause (122)'s non-matching-singleton + full-set-at-cardinality-`>= 2` FALSE-fixpoint arms MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_false_drift_in_is_saturated_by() {
+        // Drift catch — clause (122)'s empty-slice + matching-singleton
+        // + doubled-matching-singleton TRUE-fixpoint arms fire when an
+        // override folds the per-target saturation predicate onto
+        // `false` regardless of (target, slice). On the empty slice
+        // the correct value is `true` (0 == 0); on the matching
+        // singleton the correct value is `true` (1 == 1); on the
+        // doubled matching singleton the correct value is `true`
+        // (2 == 2). All three arms fire loudly against the `_ => false`
+        // override.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsSaturatedByFalseKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedIsSaturatedByFalseKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedIsSaturatedByFalseKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is_saturated_by false kind: {}", self.0)
+            }
+        }
+
+        impl DriftedIsSaturatedByFalseKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedIsSaturatedByFalseKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted is_saturated_by false kind";
+            type Unknown = UnknownDriftedIsSaturatedByFalseKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsSaturatedByFalseKind(s.to_owned())
+            }
+            fn is_saturated_by(_target: Self, _items: &[Self]) -> bool {
+                false
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedIsSaturatedByFalseKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedIsSaturatedByFalseKind whose is_saturated_by override folds onto `false` unconditionally — clause (122)'s empty-slice + matching-singleton + doubled-matching-singleton TRUE-fixpoint arms MUST reject the drift",
         );
     }
 }

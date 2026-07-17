@@ -18052,6 +18052,198 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::max_variant_count(items) >= 2
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "any variant unique?" predicate —
+    /// `true` iff AT LEAST ONE variant of [`Self::ALL`] appears EXACTLY
+    /// ONCE in `items`, computed as the disjunction over [`Self::ALL`]
+    /// of the per-target [`Self::is_unique_occurrence_of`] predicate.
+    /// The BOOL-RETURN closer on the (set-level × bool × multiplicity-
+    /// band) 3-corner existential-lift face at its final `== 1`
+    /// corner peer to the (set-level × bool × multiplicity-band `== 0`)
+    /// [`Self::is_missing_any`] corner and the (set-level × bool ×
+    /// multiplicity-band `>= 2`) [`Self::is_repeating_any`] corner
+    /// one MULTIPLICITY-BAND axis over, AND the direct SET-LEVEL
+    /// EXISTENTIAL LIFT of the (per-target × bool × multiplicity-band
+    /// `== 1`) [`Self::is_unique_occurrence_of`] corner one ARITY
+    /// axis over on the (arity × mult-band) face of the equivalence-
+    /// partition surface. Not a fresh substrate primitive on the
+    /// index axis — the predicate emerges from one existential
+    /// disjunction over [`Self::ALL`] of the per-target multiplicity-
+    /// `== 1` predicate, equivalently the histogram vector's
+    /// containment of the scalar `1`.
+    ///
+    /// Existential-lift identity: for every slice `items`,
+    /// `T::is_unique_any(items) == <T as ClosedSet>::ALL.iter().any(|&v| T::is_unique_occurrence_of(v, items))`
+    /// — the set-level bool predicate is the EXACT existential
+    /// quantification over [`Self::ALL`] of the per-target multiplicity-
+    /// ==1 predicate. This identity binds the set-level ARITY axis
+    /// against the per-target ARITY axis one arity axis over on the
+    /// (arity × mult-band) face, pinning the compounding closure the
+    /// prior per-target lift opened as the middle band of the
+    /// trichotomy. Pinned by clause (114) and by
+    /// `is_unique_any_equals_existential_of_is_unique_occurrence_of_across_every_triple`.
+    ///
+    /// Histogram-arm identity: for every slice `items`,
+    /// `T::is_unique_any(items) == <T as ClosedSet>::variant_counts(items).contains(&1)`
+    /// — the set-level bool predicate is EXACTLY the containment test
+    /// of the scalar `1` in the per-slot histogram vector. Independent
+    /// cross-check distinct from the existential-lift arm on the
+    /// return-shape (`Vec<usize>` vs the per-target `bool` predicate)
+    /// axis. Pinned by
+    /// `is_unique_any_holds_iff_variant_counts_contains_one_across_every_triple`.
+    ///
+    /// Trichotomy-closure identity: the (set-level × bool ×
+    /// multiplicity-band) 3-corner existential-lift face on the
+    /// equivalence-partition surface now CLOSES EXHAUSTIVELY at three
+    /// disjoint bands — (mult `== 0`) via [`Self::is_missing_any`],
+    /// (mult `== 1`) via THIS PREDICATE, and (mult `>= 2`) via
+    /// [`Self::is_repeating_any`]. Every position on the set-level
+    /// existential-multiplicity axis now binds to exactly ONE typed
+    /// predicate on the trait; the trichotomy partition is a TYPED
+    /// THEOREM the substrate proves once and every downstream
+    /// consumer routes through — peer posture one arity axis over to
+    /// the (per-target × bool × multiplicity-band) trichotomy the
+    /// prior three lifts closed via (`!occurs_in`,
+    /// `is_unique_occurrence_of`, `is_repeated_occurrence_of`).
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic — the (declaration, lex) axis COLLAPSES on
+    /// this predicate because it factors through
+    /// [`Self::is_unique_occurrence_of`] (itself ordering-agnostic)
+    /// via a standard-library `any` combinator over the closed set.
+    /// No separate `sorted_is_unique_any` peer is needed. Pinned by
+    /// `is_unique_any_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::is_unique_any(&[])` is `false`
+    /// UNCONDITIONALLY — the empty slice hits zero positions, so
+    /// every per-variant multiplicity is `0` and the per-target
+    /// `== 1` test fails at every target. The empty-slice arm is
+    /// LOAD-BEARING as the drift catch for an override that folds
+    /// onto `true` unconditionally (empty slice is the smallest
+    /// slice where the correct answer is `false`). Pinned by clause
+    /// (114) and by
+    /// `is_unique_any_returns_false_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Full-set contract: `T::is_unique_any(<T as ClosedSet>::ALL)`
+    /// is `true` on every implementor of non-zero cardinality — the
+    /// closed-set well-formedness invariant
+    /// [`assert_closed_set_well_formed`]'s clause (3) pins variants
+    /// as pairwise distinct, so every variant of [`Self::ALL`] appears
+    /// at EXACTLY ONE position in the full-set slice; every per-target
+    /// multiplicity is `1` and the existential disjunction fires at
+    /// the first variant. The full-set arm is LOAD-BEARING as the
+    /// drift catch for an override that folds onto `false`
+    /// unconditionally — at cardinality `>= 1` the correct answer is
+    /// `true` (any variant is a witness), so a `_ => false` override
+    /// bifurcates loudly. Pinned by clause (114) at the full-set
+    /// fixpoint AND by
+    /// `is_unique_any_over_the_full_set_is_true_across_every_non_degenerate_kind`.
+    ///
+    /// Doubled-full-set contract: `T::is_unique_any(&doubled)` is
+    /// `false` on every implementor of non-zero cardinality — the
+    /// doubled full set hits every variant at EXACTLY TWO positions,
+    /// so every per-target multiplicity is `2` and the per-target
+    /// `== 1` test fails at every target. Together with the full-set
+    /// arm (which pins the `true` fixpoint at cardinality `>= 1`),
+    /// the doubled-full-set arm demonstrates that the predicate
+    /// TRANSITIONS from `true` (at the canonical permutation) to
+    /// `false` (at the canonical repetition) purely through the
+    /// per-target multiplicity band change — pinning the projection
+    /// as a strict `== 1` predicate rather than the weaker `>= 1`
+    /// membership predicate [`Self::is_covering`]. Pinned by clause
+    /// (114) at the doubled-full-set fixpoint AND by
+    /// `is_unique_any_returns_false_on_the_doubled_full_set_across_every_non_degenerate_kind`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of
+    /// [`Self::is_unique_occurrence_of`] via the standard-library
+    /// `any` combinator over [`Self::ALL`]. The sweep cost is
+    /// O(T::CARDINALITY * n) on slice arity `n` — one per-target
+    /// multiplicity primitive per variant, allocation-free, no
+    /// `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's minimal
+    /// `Sized + Copy + 'static` supertrait pair stays untouched).
+    /// Short-circuiting: the `any` combinator halts at the first
+    /// witness variant, so the average-case cost drops proportionally
+    /// with the density of unique-multiplicity variants.
+    ///
+    /// Future consumers that compose against [`Self::is_unique_any`]:
+    /// a `tatara-check` predicate `(check-phases-report-any-unique …)`
+    /// on a `WorkloadPhase` sequence that flags "some phase visited
+    /// exactly once" (a canary-witness distinct from a re-convergence
+    /// loop OR a never-visited phase) without paying for the modal-
+    /// count histogram when only the existence of a singleton matters;
+    /// an LSP diagnostic on a Lisp-author-written variant-list that
+    /// flags "some variant occurs exactly once" as a completion hint
+    /// distinct from full-coverage OR repeated-usage; a Sekiban audit-
+    /// trail metric flagging a classification poset window as
+    /// "any-classification-singleton" WITHOUT emitting the per-slot
+    /// histogram; a `tatara-lisp::macro_expand::Expander` hygiene
+    /// pass that flags a template's identifier multiset as CARRYING
+    /// SOME LINEAR BINDING (a variable used exactly once — the shape
+    /// of a linearity-lint diagnostic distinct from unbound OR
+    /// re-bound identifiers) in ONE typed bool. Each binds to ONE
+    /// typed N-ary any-unique predicate on the trait rather than
+    /// re-deriving the `T::ALL.iter().any(|v| T::count_occurrences_of(v, items) == 1)`
+    /// disjunction OR the `T::variant_counts(items).contains(&1)`
+    /// histogram-arm inline per callsite.
+    ///
+    /// Compounding closure: the (set-level × bool × multiplicity-band)
+    /// 3-corner existential-lift face on the equivalence-partition
+    /// surface now CLOSES EXHAUSTIVELY at three disjoint corners
+    /// covering the trichotomy (`== 0`, `== 1`, `>= 2`). The natural
+    /// next lift past this closure is the SET-LEVEL UNIVERSAL LIFT
+    /// face — `is_uniformly_repeating` (∀v : count(v) >= 2, the
+    /// universal peer to this predicate's existential; equivalently
+    /// `min_variant_count(items) >= 2` on a covering slice) — opening
+    /// the (set-level × bool × mult-band × quantifier) 4th-axis
+    /// hypercube at its universal-`>= 2` corner peer to the existing
+    /// (set-level × universal × mult `>= 1`) [`Self::is_covering`]
+    /// corner and (set-level × universal × mult `<= 1`)
+    /// [`Self::is_pairwise_distinct`] corner.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary any-
+    /// unique predicate becomes a TYPE-level primitive on the closed-
+    /// set trait rather than a per-consumer inline existential over
+    /// the per-target multiplicity-`== 1` predicate at every
+    /// downstream generic site. THEORY.md §V.1 — knowable platform;
+    /// the (set-level × bool × mult `== 1`) corner was an unnamed
+    /// inline composition recurring at every prospective downstream
+    /// "did some variant occur exactly once?" site pre-lift. Naming
+    /// it on the trait makes the predicate a TYPED CONSEQUENCE of
+    /// the substrate's per-target uniqueness primitive lifted
+    /// set-level via the standard-library `any` combinator — AND
+    /// closes the (set-level × bool × multiplicity-band) existential-
+    /// lift trichotomy as a TYPED THEOREM the substrate proves
+    /// once. THEORY.md §VI.1 — generation over composition; the any-
+    /// unique predicate emerges from the composition of ONE substrate
+    /// primitive ([`Self::is_unique_occurrence_of`]) with an
+    /// `iter().copied().any(…)` combinator over [`Self::ALL`], not
+    /// as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Coq's `existsb (fun v => Nat.eqb 1
+    /// (count_occ eqb l v)) all` decidable-equality-derived any-
+    /// unique test on `list nat`; Idris's `any (\v => count (== v)
+    /// items == 1) all` on a `Vect n a`; Racket's `(ormap (λ (v)
+    /// (= (count (λ (w) (equal? v w)) items) 1)) all)`; Julia's
+    /// `any(v -> count(==(v), items) == 1, all)`; Haskell's `any
+    /// (\v -> length (filter (== v) items) == 1) all`; Rust's own
+    /// `T::ALL.iter().any(|v| items.iter().filter(|w| v == w).count() == 1)`
+    /// binds through a `Self: PartialEq` supertrait bound; Python's
+    /// `any(items.count(v) == 1 for v in all)`; SQL's `EXISTS
+    /// (SELECT 1 FROM GROUP BY variant HAVING COUNT(*) = 1)` — the
+    /// canonical set-level any-singleton witness. Translation through
+    /// pleme-io primitives: the N-ary any-unique predicate on the
+    /// closed-set trait binds through an `iter().copied().any(…)`
+    /// combinator over [`Self::ALL`] with the substrate's per-target
+    /// uniqueness primitive inside — no new dep, no supertrait bound
+    /// (the [`Self::is_unique_occurrence_of`] primitive replaces the
+    /// `Eq`/`Hash` bound the standard-library any/group-by
+    /// signatures demand), no set-shape carrier, no allocation.
+    fn is_unique_any(items: &[Self]) -> bool {
+        <Self as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .any(|v| <Self as ClosedSet>::is_unique_occurrence_of(v, items))
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "present variants" projection —
     /// the `Vec<Self>` DECLARATION-ORDER hit-set of [`Self::ALL`],
     /// keeping every variant that OCCURS at least once in `items`
@@ -28363,6 +28555,75 @@ where
         assert_eq!(
             doubled_repeating, expected_via_not_pairwise_distinct,
             "{type_name}: T::is_repeating_any(&doubled_full_set) drifted from !T::is_pairwise_distinct(&doubled_full_set) — the set-level any-repeat predicate MUST be the EXACT logical NEGATION of the pairwise-distinctness predicate on every slice, so a downstream any-repeat consumer that binds `!T::is_pairwise_distinct(_)` as its any-repeat query surface would disagree with the pinned predicate; the De Morgan pairing packages (`is_repeating_any`, `is_pairwise_distinct`) as the (mult `>= 2`, mult `<= 1`) dual pair peer to (`is_missing_any`, `is_covering`) on the (mult `== 0`, mult `>= 1`) split",
+        );
+    }
+
+    // (114) — `T::is_unique_any(items)` MUST agree with the existential
+    // quantification over `T::ALL` of the per-target multiplicity-`== 1`
+    // predicate on every slice AND MUST land on its three canonical
+    // fixpoints (`false` on the empty slice UNCONDITIONALLY, `true` on
+    // the full set gated on `T::CARDINALITY >= 1`, `false` on the
+    // doubled full set gated on `T::CARDINALITY >= 1`) AND on TWO
+    // composition-equality arms on the full-set fixpoint: (a)
+    // existential-lift against
+    // `T::ALL.iter().any(|&v| T::is_unique_occurrence_of(v, T::ALL))`,
+    // (b) histogram-arm against
+    // `T::variant_counts(T::ALL).contains(&1)`. The three
+    // fixpoints + two composition arms partition failure modes at the
+    // (discriminant × slice-shape × composition-equality) corner
+    // simultaneously: an override that folds onto `true` unconditionally
+    // fires on the empty-slice AND doubled-full-set arms (returns
+    // `true` rather than `false`); an override that folds onto `false`
+    // unconditionally fires on the full-set arm at cardinality `>= 1`
+    // (returns `false` rather than `true`); an override that detaches
+    // from the existential-lift composition on any slice bifurcates
+    // loudly at the existential-lift arm; an override that detaches
+    // from the histogram-arm bifurcates at the histogram-arm. Sibling
+    // posture to clause (113): that clause closes the set-level
+    // existential lift of the (per-target × bool × multiplicity-band
+    // `>= 2`) corner one MULTIPLICITY-BAND axis over; this clause
+    // closes the set-level existential lift of the (per-target × bool
+    // × multiplicity-band `== 1`) corner at the MIDDLE band of the
+    // trichotomy. The (arity × mult-band) face now carries typed set-
+    // level bool existential-lift predicates at ALL THREE multiplicity-
+    // band corners — `is_missing_any` (mult `== 0`), THIS PREDICATE
+    // (mult `== 1`), and `is_repeating_any` (mult `>= 2`) — closing
+    // the set-level existential-lift trichotomy exhaustively. The
+    // default trait body threads the existential quantifier verbatim
+    // and satisfies every fixpoint arm + every composition-equality arm
+    // for free; the assertion catches a future implementor whose
+    // override drifts the projection loudly rather than silently
+    // bifurcating the set-level any-unique predicate surface every
+    // downstream any-unique consumer routes through.
+    assert!(
+        !T::is_unique_any(&[]),
+        "{type_name}: T::is_unique_any(&[]) == true != false — the set-level any-unique predicate MUST report `false` on the empty slice because every per-variant multiplicity is `0` and the per-target `== 1` test fails at every target; a `true` empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream any-unique consumer routes through",
+    );
+    if T::CARDINALITY >= 1 {
+        let full_unique = T::is_unique_any(T::ALL);
+        assert!(
+            full_unique,
+            "{type_name}: T::is_unique_any(T::ALL) == false != true on a cardinality-{cardinality} closed set — clause (3)'s pairwise-distinctness invariant forces every variant to appear at EXACTLY ONE position of the full-set slice, so every per-target multiplicity is `1` and the existential disjunction fires at the first variant; a `false` full-set any-unique value silently detaches the set-level any-unique predicate from the (variant → decl-slot) injectivity clause (16), breaking every downstream any-unique consumer",
+            cardinality = T::CARDINALITY,
+        );
+        let expected_via_existential = T::ALL
+            .iter()
+            .copied()
+            .any(|v| T::is_unique_occurrence_of(v, T::ALL));
+        assert_eq!(
+            full_unique, expected_via_existential,
+            "{type_name}: T::is_unique_any(T::ALL) drifted from T::ALL.iter().any(|v| T::is_unique_occurrence_of(v, T::ALL)) — the set-level any-unique predicate MUST equal the existential quantification of the per-target multiplicity-`== 1` predicate over T::ALL on every slice, so a downstream any-unique consumer that binds this existential composition as its any-unique query surface would disagree with the pinned predicate",
+        );
+        let expected_via_histogram = T::variant_counts(T::ALL).contains(&1);
+        assert_eq!(
+            full_unique, expected_via_histogram,
+            "{type_name}: T::is_unique_any(T::ALL) drifted from T::variant_counts(T::ALL).contains(&1) — the set-level any-unique predicate MUST equal the containment test of the scalar `1` in the per-slot histogram vector on every slice, so a downstream any-unique consumer that binds this histogram-arm composition as its any-unique query surface would disagree with the pinned predicate",
+        );
+        let doubled_unique = T::is_unique_any(&doubled_full_set);
+        assert!(
+            !doubled_unique,
+            "{type_name}: T::is_unique_any(&doubled_full_set) == true != false on a cardinality-{cardinality} closed set — the doubled full set hits every variant at EXACTLY TWO positions, so every per-target multiplicity is `2` and the per-target `== 1` test fails at every target; the doubled-full-set arm at cardinality `>= 1` pins the projection as a STRICT `== 1` predicate rather than the weaker `>= 1` membership predicate — an override that folds onto `T::is_covering(items)` (which reports `true` on the doubled full set) would silently drift the projection past the strict-band boundary the trichotomy partitions",
+            cardinality = T::CARDINALITY,
         );
     }
 }
@@ -55379,6 +55640,397 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedIsRepeatingAnyFalseKind whose is_repeating_any override folds onto false unconditionally — clause (113)'s doubled-full-set arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn is_unique_any_returns_false_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (set-level any-unique predicate):
+        // `T::is_unique_any(&[])` is `false` UNCONDITIONALLY — the
+        // empty slice hits zero positions, so every per-variant
+        // multiplicity is `0` and the per-target `== 1` test fails at
+        // every target. The empty-slice arm is LOAD-BEARING as the
+        // drift catch for an override that folds onto `true`
+        // unconditionally — empty is the smallest slice past which the
+        // drift catch fires distinctly from the true-yielding
+        // fixpoints (full set on any non-degenerate cardinality).
+        assert!(
+            !<StubKind as ClosedSet>::is_unique_any(&[]),
+            "T::is_unique_any(&[]) diverged from the empty-slice fixpoint `false`",
+        );
+    }
+
+    #[test]
+    fn is_unique_any_returns_true_on_every_singleton_across_every_variant() {
+        // SINGLETON CONTRACT: `T::is_unique_any(&[v])` is `true` for
+        // every variant `v` — a singleton hits exactly one variant at
+        // one position, so the per-target multiplicity of THAT variant
+        // is `1` and the existential disjunction over T::ALL fires at
+        // that variant. Sibling posture to
+        // `is_repeating_any_returns_false_on_every_singleton_across_every_variant`
+        // one MULTIPLICITY-BAND axis over at the OPPOSITE polarity:
+        // the (mult `>= 2`) band reaches its `false` fixpoint on every
+        // singleton; the (mult `== 1`) band reaches its `true`
+        // fixpoint on the same slice because a singleton IS a unique-
+        // multiplicity witness by construction.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert!(
+                <StubKind as ClosedSet>::is_unique_any(&singleton),
+                "T::is_unique_any({singleton:?}) diverged from the singleton fixpoint `true`",
+            );
+        }
+    }
+
+    #[test]
+    fn is_unique_any_over_the_full_set_is_true_across_every_non_degenerate_kind() {
+        // FULL-SET CONTRACT: `T::is_unique_any(T::ALL) == true` on
+        // every implementor of non-zero cardinality — the closed-set
+        // well-formedness invariant clause (3) pins variants as
+        // pairwise distinct, so every variant of `Self::ALL` appears
+        // at EXACTLY ONE position of the full-set slice; every per-
+        // target multiplicity is `1` and the existential disjunction
+        // fires at the first variant. The full-set arm is LOAD-BEARING
+        // as the drift catch for an override that folds onto `false`
+        // unconditionally — empty accepts `false` (correct value),
+        // so ONLY the full-set arm fires the drift distinctly at
+        // cardinality `>= 1`.
+        const {
+            assert!(<StubKind as ClosedSet>::CARDINALITY >= 1);
+        }
+        let all = <StubKind as ClosedSet>::ALL;
+        assert!(
+            <StubKind as ClosedSet>::is_unique_any(all),
+            "T::is_unique_any(T::ALL) diverged from `true` — the closed-set well-formedness pairwise-distinctness invariant would be violated",
+        );
+    }
+
+    #[test]
+    fn is_unique_any_returns_false_on_the_doubled_full_set_across_every_non_degenerate_kind() {
+        // DOUBLED-FULL-SET CONTRACT: `T::is_unique_any(T::ALL ++ T::ALL)
+        // == false` on every implementor of non-zero cardinality — the
+        // doubled full set hits every variant at EXACTLY TWO positions,
+        // so every per-target multiplicity is `2` and the per-target
+        // `== 1` test fails at every target. Together with the full-
+        // set arm (which pins the `true` fixpoint at cardinality `>=
+        // 1`), the doubled-full-set arm demonstrates that the
+        // predicate TRANSITIONS from `true` (at the canonical
+        // permutation) to `false` (at the canonical repetition) purely
+        // through the per-target multiplicity band change — pinning
+        // the projection as a strict `== 1` predicate rather than the
+        // weaker `>= 1` membership predicate `is_covering`.
+        const {
+            assert!(<StubKind as ClosedSet>::CARDINALITY >= 1);
+        }
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert!(
+            !<StubKind as ClosedSet>::is_unique_any(&doubled),
+            "T::is_unique_any(ALL++ALL) diverged from `false` — every per-target multiplicity is `2` on the doubled full set, so the per-target `== 1` test fails at every target",
+        );
+    }
+
+    #[test]
+    fn is_unique_any_equals_existential_of_is_unique_occurrence_of_across_every_triple() {
+        // EXISTENTIAL-LIFT IDENTITY: for every slice `items`,
+        // `T::is_unique_any(items) == T::ALL.iter().any(|&v|
+        // T::is_unique_occurrence_of(v, items))` — the set-level bool
+        // predicate is the EXACT existential quantification over
+        // `T::ALL` of the per-target multiplicity-`== 1` predicate.
+        // This identity binds the set-level ARITY axis against the
+        // per-target ARITY axis one arity axis over on the (arity ×
+        // mult-band) face at the MIDDLE band of the trichotomy,
+        // pinning the compounding closure the prior per-target lift
+        // opened. Sweeping every length-3 triple pins the identity
+        // across the full 27-corner triple matrix.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_predicate = <StubKind as ClosedSet>::is_unique_any(&triple);
+                    let via_existential = <StubKind as ClosedSet>::ALL
+                        .iter()
+                        .copied()
+                        .any(|v| <StubKind as ClosedSet>::is_unique_occurrence_of(v, &triple));
+                    assert_eq!(
+                        via_predicate, via_existential,
+                        "T::is_unique_any({triple:?}) diverged from T::ALL.iter().any(|v| T::is_unique_occurrence_of(v, {triple:?})) — the set-level any-unique predicate MUST equal the existential quantification of the per-target multiplicity-`== 1` predicate over T::ALL",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_unique_any_holds_iff_variant_counts_contains_one_across_every_triple() {
+        // HISTOGRAM-ARM IDENTITY: for every slice `items`,
+        // `T::is_unique_any(items) == T::variant_counts(items).iter().any(|&c| c == 1)`
+        // — the set-level bool predicate is EXACTLY the containment
+        // test of the scalar `1` in the per-slot histogram vector.
+        // Independent cross-check distinct from the existential-lift
+        // arm on the return-shape (`Vec<usize>` vs the per-target
+        // `bool` predicate) axis.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_predicate = <StubKind as ClosedSet>::is_unique_any(&triple);
+                    let via_histogram_contains_one =
+                        <StubKind as ClosedSet>::variant_counts(&triple).contains(&1);
+                    assert_eq!(
+                        via_predicate, via_histogram_contains_one,
+                        "T::is_unique_any({triple:?}) diverged from T::variant_counts({triple:?}).contains(&1) — the any-unique predicate MUST equal the containment test of the scalar `1` in the per-slot histogram vector",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_unique_any_is_pairwise_disjoint_with_neither_missing_nor_repeating_partitions_the_trichotomy_across_every_triple(
+    ) {
+        // TRICHOTOMY-CLOSURE IDENTITY: for every slice `items`, the
+        // three set-level existential-lift predicates
+        // (`is_missing_any` for mult `== 0`, `is_unique_any` for mult
+        // `== 1`, `is_repeating_any` for mult `>= 2`) COVER the multi-
+        // plicity axis exhaustively — at least one of the three MUST
+        // hold at every slice EXCEPT the empty slice (where all three
+        // are `false` because `T::ALL` is walked but every predicate
+        // evaluates on the empty item set). At any non-empty slice,
+        // the existential-lift trichotomy always yields at least one
+        // witness variant across the three bands. Independent cross-
+        // check pinning the trichotomy closure the prior per-target
+        // lifts opened set-level via the three existential predicates.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let missing_any = <StubKind as ClosedSet>::is_missing_any(&triple);
+                    let unique_any = <StubKind as ClosedSet>::is_unique_any(&triple);
+                    let repeating_any = <StubKind as ClosedSet>::is_repeating_any(&triple);
+                    // On a non-empty length-3 slice at cardinality-3, at
+                    // least ONE of the three existential predicates
+                    // holds — every variant has some multiplicity band
+                    // in {0, 1, 2, 3}, and the existential lift fires
+                    // wherever a variant lands in {0} ∪ {1} ∪ {>= 2}.
+                    assert!(
+                        missing_any || unique_any || repeating_any,
+                        "T::is_unique_any({triple:?}) is `false` AND T::is_missing_any({triple:?}) is `false` AND T::is_repeating_any({triple:?}) is `false` — the trichotomy (mult == 0, mult == 1, mult >= 2) MUST cover every non-empty slice; at least one existential lift MUST fire",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_unique_any_is_invariant_under_slice_reversal_across_every_triple() {
+        // REVERSAL-INVARIANCE: `T::is_unique_any(items)` equals
+        // `T::is_unique_any(items.iter().rev().copied().collect::<Vec<_>>())`
+        // for every slice — reversing a slice preserves its multiset of
+        // variant identities, and the any-unique predicate is a
+        // function of the multiset alone (inherited from
+        // `is_unique_occurrence_of`'s reversal-invariance one arity
+        // axis over via the existential lift).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let reversed: Vec<StubKind> = triple.iter().rev().copied().collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_unique_any(&triple),
+                        <StubKind as ClosedSet>::is_unique_any(&reversed),
+                        "T::is_unique_any({triple:?}) diverged from T::is_unique_any({reversed:?}) — the predicate MUST be invariant under slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_true_drift_on_is_unique_any() {
+        // Drift catch — clause (114)'s empty-slice fixpoint arm fires
+        // when an override folds the set-level any-unique predicate
+        // onto `true` regardless of slice. The stub below overrides
+        // the default body to return `true` unconditionally; on the
+        // empty slice that produces `true != false`, tripping clause
+        // (114)'s empty-slice fixpoint arm loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsUniqueAnyTrueKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedIsUniqueAnyTrueKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedIsUniqueAnyTrueKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is_unique_any true kind: {}", self.0)
+            }
+        }
+
+        impl DriftedIsUniqueAnyTrueKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedIsUniqueAnyTrueKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted is_unique_any true kind";
+            type Unknown = UnknownDriftedIsUniqueAnyTrueKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsUniqueAnyTrueKind(s.to_owned())
+            }
+            fn is_unique_any(_items: &[Self]) -> bool {
+                true
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedIsUniqueAnyTrueKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedIsUniqueAnyTrueKind whose is_unique_any override folds onto true unconditionally — clause (114)'s empty-slice fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_false_drift_on_is_unique_any() {
+        // Drift catch — clause (114)'s full-set arm fires when an
+        // override folds the set-level any-unique predicate onto
+        // `false` regardless of slice. The stub below overrides the
+        // default body to return `false` unconditionally; on the full
+        // set the correct answer is `true` (every variant appears
+        // exactly once — the canonical permutation), so `false`
+        // bifurcates loudly at clause (114)'s full-set arm. This is
+        // the LOAD-BEARING drift catch that separates the strict (mult
+        // `== 1`) band from a `_ => false` degenerate override — the
+        // empty-slice fixpoint arm accepts `false` (correct value), so
+        // ONLY the full-set arm fires the drift.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsUniqueAnyFalseKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedIsUniqueAnyFalseKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedIsUniqueAnyFalseKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is_unique_any false kind: {}", self.0)
+            }
+        }
+
+        impl DriftedIsUniqueAnyFalseKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedIsUniqueAnyFalseKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted is_unique_any false kind";
+            type Unknown = UnknownDriftedIsUniqueAnyFalseKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsUniqueAnyFalseKind(s.to_owned())
+            }
+            fn is_unique_any(_items: &[Self]) -> bool {
+                false
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedIsUniqueAnyFalseKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedIsUniqueAnyFalseKind whose is_unique_any override folds onto false unconditionally — clause (114)'s full-set arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_is_covering_drift_on_is_unique_any() {
+        // Drift catch — clause (114)'s doubled-full-set arm fires
+        // when an override folds the set-level any-unique predicate
+        // onto `T::is_covering(items)` — the weaker (mult `>= 1`)
+        // membership predicate. On the doubled full set the correct
+        // answer for `is_unique_any` is `false` (every variant appears
+        // twice), while `is_covering` returns `true` (every variant
+        // appears at least once), so the override bifurcates loudly at
+        // clause (114)'s doubled-full-set arm. This is the LOAD-BEARING
+        // drift catch that pins the projection as a STRICT `== 1`
+        // predicate rather than the weaker `>= 1` membership
+        // predicate — the empty-slice AND full-set fixpoint arms
+        // ACCEPT `is_covering(items)` (empty: false coincides; full-
+        // set: true coincides), so ONLY the doubled-full-set arm fires
+        // the drift distinctly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsUniqueAnyToCoveringKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedIsUniqueAnyToCoveringKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedIsUniqueAnyToCoveringKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted is_unique_any-to-covering kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedIsUniqueAnyToCoveringKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedIsUniqueAnyToCoveringKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted is_unique_any-to-covering kind";
+            type Unknown = UnknownDriftedIsUniqueAnyToCoveringKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsUniqueAnyToCoveringKind(s.to_owned())
+            }
+            fn is_unique_any(items: &[Self]) -> bool {
+                <Self as ClosedSet>::is_covering(items)
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedIsUniqueAnyToCoveringKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedIsUniqueAnyToCoveringKind whose is_unique_any override folds onto is_covering — clause (114)'s doubled-full-set arm MUST reject the drift",
         );
     }
 

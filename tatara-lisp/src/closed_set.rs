@@ -19195,6 +19195,260 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "sorted modal variants" projection
+    /// — the `Vec<Self>` LEX-ORDER witness-collection of EVERY variant
+    /// of [`Self::sorted_variants`] whose per-target count equals
+    /// [`Self::max_variant_count`], preserving
+    /// [`Self::sorted_variants`]'s canonical ASCII-lex order and
+    /// returning the empty vector when `items` is empty. The LEX-ORDER
+    /// peer of [`Self::modal_variants`] one ORDERING axis over,
+    /// CLOSING the (set-level × `Vec<Self>` × statistical-aggregate ×
+    /// argmax × ordering) 2-corner face at its lex-arm past the
+    /// declaration-arm the sibling [`Self::modal_variants`] opened.
+    /// One RETURN-SHAPE axis over from [`Self::sorted_modal_variant`]
+    /// (`Option<Self>` first-witness under the lex tie-break): while
+    /// [`Self::sorted_modal_variant`] reports the FIRST tied argmax
+    /// variant walked in lex order, this projection reports EVERY
+    /// tied argmax variant walked in lex order — a COMPLETE witness-
+    /// collection with a canonical alphabetic display order, no tie-
+    /// break choice. Not a fresh substrate primitive on the index
+    /// axis — the projection emerges from ONE
+    /// `T::sorted_variants().into_iter().filter(|&v|
+    /// T::count_occurrences_of(v, items) == T::max_variant_count(items))
+    /// .collect()` sweep whose predicate binds
+    /// [`Self::count_occurrences_of`] against the just-lifted
+    /// [`Self::max_variant_count`] scalar, guarded by an empty-slice
+    /// short-circuit that maps `&[]` to `Vec::new()` past the (max ==
+    /// 0, every-count == 0) degenerate arm where an unguarded sweep
+    /// would silently return `T::sorted_variants()`.
+    ///
+    /// Multiset-agreement identity: for every slice `items`,
+    /// `T::sorted_modal_variants(items)` is a LEX-ORDER PERMUTATION of
+    /// `T::modal_variants(items)` — the two projections agree as
+    /// multisets because both filter [`Self::ALL`] under the same
+    /// predicate (`count(v) == T::max_variant_count(items)`); they
+    /// differ ONLY in the walk order that generates the returned Vec
+    /// (declaration order vs lex order). Pinned by
+    /// `sorted_modal_variants_is_a_lex_permutation_of_modal_variants_across_every_triple`.
+    ///
+    /// First-witness identity: for every NON-EMPTY slice `items`,
+    /// `T::sorted_modal_variants(items).first().copied() ==
+    /// T::sorted_modal_variant(items)` — the plural's HEAD equals the
+    /// singular's commit because both walk [`Self::sorted_variants`]
+    /// in lex order and commit at the first tied argmax. Pinned by
+    /// `sorted_modal_variants_head_agrees_with_sorted_modal_variant_across_every_triple`.
+    ///
+    /// Count-composition identity: for every slice `items` and every
+    /// variant `v` in the returned Vec,
+    /// `T::count_occurrences_of(v, items) == T::max_variant_count(items)`
+    /// — every element of the returned Vec achieves the modal
+    /// multiplicity exactly. Pinned by
+    /// `sorted_modal_variants_elements_agree_with_max_variant_count_across_every_triple`.
+    ///
+    /// Present-arm containment identity: for every NON-EMPTY slice
+    /// `items`, `T::sorted_modal_variants(items)` is a SUBSET (as
+    /// multiset) of `T::present_variants(items)` — every modal
+    /// variant is present (its count is at least
+    /// `T::max_variant_count(items) >= 1` on non-empty slices, so it
+    /// appears in the slice). Pinned by
+    /// `sorted_modal_variants_are_present_across_every_triple`.
+    ///
+    /// Non-emptiness identity: `T::sorted_modal_variants(items).is_empty()`
+    /// iff `items.is_empty()` on every slice — the empty-slice arm
+    /// is the SOLE empty-Vec arm; on every non-empty slice the filter
+    /// hits at least one variant whose count equals
+    /// [`Self::max_variant_count`] (the finite discrete histogram
+    /// achieves its max at at least one bin). Pinned by
+    /// `sorted_modal_variants_is_non_empty_iff_slice_is_non_empty_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::sorted_modal_variants(&[])` is the
+    /// empty `Vec<Self>` UNCONDITIONALLY — the empty slice hits zero
+    /// positions, so every per-variant occurrence count is `0`,
+    /// [`Self::max_variant_count`] collapses to `0`, and an UNGUARDED
+    /// `T::sorted_variants().into_iter().filter(|v| count(v) == 0)
+    /// .collect()` sweep would silently return `T::sorted_variants()`
+    /// past the (max == 0, every-count == 0) degenerate arm — the
+    /// empty guard maps `&[]` to `Vec::new()` before the sweep. The
+    /// empty-Vec-at-empty fixpoint is LOAD-BEARING as the drift catch
+    /// for an override that omits the guard. Pinned by clause (128)
+    /// and by
+    /// `sorted_modal_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Full-set contract:
+    /// `T::sorted_modal_variants(<T as ClosedSet>::ALL)` equals
+    /// `T::sorted_variants()` UNCONDITIONALLY — the closed-set well-
+    /// formedness invariant [`assert_closed_set_well_formed`]'s
+    /// clause (3) pins variants as pairwise distinct, so every
+    /// variant appears at exactly one position in the full-set slice,
+    /// every per-variant count is `1`, [`Self::max_variant_count`]
+    /// collapses to `1`, and the filter hits EVERY variant walked in
+    /// lex order — the flat-histogram fixpoint pins the direction-
+    /// axis degeneracy at every corner. The lex-order arm is LOAD-
+    /// BEARING as the drift catch for an override that walks
+    /// [`Self::ALL`] instead of [`Self::sorted_variants`] — a
+    /// declaration-order filter on the full set would return
+    /// `T::ALL.to_vec()`, bifurcating the lex-order walk when
+    /// `T::first() != T::sorted_first()`. Pinned by clause (128) and
+    /// by
+    /// `sorted_modal_variants_returns_sorted_variants_on_the_full_set_across_every_kind`.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::sorted_modal_variants(&doubled_full_set)` equals
+    /// `T::sorted_variants()` UNCONDITIONALLY — the doubled-full-set
+    /// slice appends [`Self::ALL`] to itself, so every variant
+    /// appears at EXACTLY two positions,
+    /// [`Self::max_variant_count`] collapses to `2`, and the filter
+    /// hits EVERY variant walked in lex order. Pinned by
+    /// `sorted_modal_variants_returns_sorted_variants_on_the_doubled_full_set_across_every_kind`.
+    ///
+    /// Matching-singleton contract:
+    /// `T::sorted_modal_variants(&[v])` equals `vec![v]` for every
+    /// variant `v` UNCONDITIONALLY — a matching singleton hits
+    /// `count(v) == 1` at the target and `count(w) == 0` at every
+    /// other variant, [`Self::max_variant_count`] collapses to `1`,
+    /// and the filter hits ONLY the target regardless of walk order
+    /// (declaration vs lex). Pinned by
+    /// `sorted_modal_variants_returns_the_target_only_on_every_matching_singleton_across_every_variant`.
+    ///
+    /// Ordering-axis invariance on the input axis: the projection is
+    /// intrinsically ordering-agnostic on the INPUT axis — permuting
+    /// `items` preserves its multiset of variant identities, so
+    /// [`Self::count_occurrences_of`] is a function of that multiset
+    /// alone, [`Self::max_variant_count`] is a function of that
+    /// multiset alone, and the filter over [`Self::sorted_variants`]
+    /// (which does NOT depend on `items`' ordering) is a function of
+    /// that multiset alone. Pinned by
+    /// `sorted_modal_variants_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of the
+    /// substrate's [`Self::count_occurrences_of`] primitive at the
+    /// trait level, filtered over [`Self::sorted_variants`] via the
+    /// standard-library [`Iterator::filter`] combinator against
+    /// [`Self::max_variant_count`]. The composition uses one
+    /// `is_empty()`-guarded
+    /// `T::sorted_variants().into_iter().filter(|&v| count == max)
+    /// .collect()` sweep, so the sweep costs `O(N log N +
+    /// T::CARDINALITY * n)` on slice arity `n` (the
+    /// [`Self::sorted_variants`] canonical-lex-sort step + one
+    /// [`Self::max_variant_count`] fold + one
+    /// [`Self::CARDINALITY`]-bounded filter sweep, plus one output-
+    /// `Vec` allocation of at most [`Self::CARDINALITY`] entries) —
+    /// no `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's
+    /// minimal `Sized + Copy + 'static` supertrait pair stays
+    /// untouched), no histogram-carrier allocation (the `filter`
+    /// sweep yields a `Vec<Self>` without materializing the
+    /// intermediate `Vec<usize>` histogram; the sweep streams
+    /// through per-target counts one at a time and commits at each
+    /// tied argmax hit).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::sorted_modal_variants`]: a `tatara-check` predicate
+    /// `(check-phases-modes-lex …)` that reports EVERY `WorkloadPhase`
+    /// tied at the modal multiplicity in a rollout window under a
+    /// canonical alphabetic display order (distinct from
+    /// [`Self::modal_variants`]'s declaration-order-canonical form
+    /// consumed by scheduler-oriented tools that route through
+    /// declaration slots); an LSP diagnostic that reports the full
+    /// modal witness-collection as an author-facing "most common
+    /// (alphabetical): `<label1>`, `<label2>` (each appears N times)"
+    /// hint aligned with lex-ordered enumeration surfaces; a Sekiban
+    /// audit-trail per-window classification argmax witness-collection
+    /// whose element order matches the UI's lex-ordered navigation
+    /// menu (so the audit trail and the UI's default enumeration
+    /// always agree on tied windows); a metric-emitter that binds a
+    /// Prometheus-style `mode_variants_lex` label alongside the
+    /// sibling `mode_variants_decl` label so tied-argmax rollouts
+    /// surface BOTH complete witness-collections on the same gauge.
+    /// Each binds to ONE typed `Vec<Self>`-return lex-order
+    /// witness-collection aggregate on the trait rather than re-
+    /// deriving `T::sorted_variants().into_iter().filter(|&v|
+    /// T::count_occurrences_of(v, items) ==
+    /// T::max_variant_count(items)).collect()` inline (behind an
+    /// `is_empty()` short-circuit) per callsite.
+    ///
+    /// Compounding closure: this projection CLOSES the (set-level ×
+    /// `Vec<Self>` × statistical-aggregate × argmax × ordering)
+    /// 2-corner face at the lex-arm past the declaration-arm
+    /// [`Self::modal_variants`] opened. Combined with the sibling
+    /// (`modal_variant`, `sorted_modal_variant`) closure one
+    /// RETURN-SHAPE axis over, the (set-level × {`Option<Self>`,
+    /// `Vec<Self>`} × statistical-aggregate × argmax × ordering)
+    /// 2×2 = 4-corner face on the direction-anchor argmax arm now
+    /// closes at every corner — the `Option<Self>` first-witness
+    /// row + `Vec<Self>` complete-witness row × declaration-order
+    /// column + lex-order column all pinned. The natural next lifts
+    /// past this closure are: an `antimodal_variants(items) ->
+    /// Vec<Self>` DIRECTION peer opening the (Vec<Self>, argmin,
+    /// declaration) corner on the direction-anchor argmin arm; a
+    /// `sorted_antimodal_variants(items) -> Vec<Self>` LEX-ORDER
+    /// × DIRECTION peer CLOSING the (return-shape × direction ×
+    /// ordering) 2×2×2 = 8-corner cube at its final (Vec<Self>,
+    /// argmin, lex) corner. Downstream consumers wanting a
+    /// `usize`-return "how many modes tie?" scalar compose on
+    /// this projection through `.len()` without an additional
+    /// substrate primitive.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// `Vec<Self>`-return lex-order argmax witness-collection
+    /// becomes a TYPE-level primitive on the closed-set trait
+    /// rather than a per-consumer inline
+    /// `T::sorted_variants().into_iter().filter(|&v| T::count_occurrences_of(v, items) == T::max_variant_count(items)).collect()`
+    /// composition. THEORY.md §V.1 — knowable platform; the (set-
+    /// level × `Vec<Self>` × argmax × lex-order) witness-collection
+    /// corner was an unnamed inline composition recurring at every
+    /// prospective downstream "which variants ALL tie for the
+    /// histogram's peak under a canonical alphabetic display
+    /// order?" site pre-lift. Naming it on the trait makes the
+    /// projection a TYPED CONSEQUENCE of the substrate's per-target
+    /// multiplicity primitive [`Self::count_occurrences_of`]
+    /// filtered over [`Self::sorted_variants`] against
+    /// [`Self::max_variant_count`]. THEORY.md §VI.1 — generation
+    /// over composition; the lex-order argmax witness-collection
+    /// emerges from the composition of THREE substrate primitives
+    /// ([`Self::sorted_variants`] +
+    /// [`Self::count_occurrences_of`] +
+    /// [`Self::max_variant_count`]) with an
+    /// `into_iter().filter().collect()` combinator, not as a per-
+    /// implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: R's `sort(names(table(items))[table(items)
+    /// == max(table(items))])` — the lex-sorted direction-anchor
+    /// filter yielding every argmax key on a factor histogram;
+    /// Julia's `sort([k for (k, v) in StatsBase.countmap(items) if
+    /// v == maximum(values(StatsBase.countmap(items)))])` on ties;
+    /// Python's `sorted([k for k, v in
+    /// collections.Counter(items).items() if v ==
+    /// max(collections.Counter(items).values())])` yielding the
+    /// alphabetic-sorted complete modal set on ties; Haskell's
+    /// `sort . map fst . filter (\(_, n) -> n == maximum (map snd
+    /// hist)) $ hist` on `Ord`-instance carriers; Clojure's `(let
+    /// [f (frequencies coll) m (apply max (vals f))] (sort (keep-
+    /// indexed (fn [_ [k v]] (when (= v m) k)) f)))`; Racket's
+    /// `(sort (filter (λ (v) (= (count-occ v items)
+    /// (max-count items))) T) string<? #:key label)`. Translation
+    /// through pleme-io primitives: the N-ary `Vec<Self>`-return
+    /// lex-order argmax witness-collection on the closed-set trait
+    /// binds through [`Self::sorted_variants`] composed with the
+    /// substrate's per-target multiplicity primitive
+    /// [`Self::count_occurrences_of`] against
+    /// [`Self::max_variant_count`] — no new dep, no supertrait
+    /// bound (the [`Self::index_of`] projection
+    /// [`Self::count_occurrences_of`] threads through and
+    /// [`Self::sorted_variants`]'s ASCII-`sort_unstable_by_key`
+    /// replace the `Eq`/`Hash` + `Ord` bound the standard-library
+    /// counter+lex-sort signatures demand), no histogram-carrier
+    /// allocation.
+    fn sorted_modal_variants(items: &[Self]) -> ::std::vec::Vec<Self> {
+        if items.is_empty() {
+            return ::std::vec::Vec::new();
+        }
+        let max = <Self as ClosedSet>::max_variant_count(items);
+        <Self as ClosedSet>::sorted_variants()
+            .into_iter()
+            .filter(|&v| <Self as ClosedSet>::count_occurrences_of(v, items) == max)
+            .collect()
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "any variant repeating?" predicate —
     /// `true` iff AT LEAST ONE variant of [`Self::ALL`] appears TWO OR
     /// MORE times in `items`, computed as the just-lifted usize-return
@@ -32548,6 +32802,83 @@ where
             Some(head),
             expected_head,
             "{type_name}: T::modal_variants(T::ALL).first() drifted from T::modal_variant(T::ALL) — the plural's HEAD MUST equal the singular's first-witness commit because both walk T::ALL in declaration order and commit at the first tied argmax; a divergence catches an override that reorders the witnesses on the plural side without threading through the same declaration-order argmax walk the singular pins",
+        );
+    }
+    // (128) — `T::sorted_modal_variants(items)` MUST agree with the
+    // lex-order-preserving argmax witness-collection over the
+    // [`T::variant_counts`] histogram on every slice AND MUST land on
+    // its THREE canonical fixpoints (empty vector on the empty slice
+    // UNCONDITIONALLY, `T::sorted_variants()` on the full-set slice
+    // UNCONDITIONALLY, `T::sorted_variants()` on the doubled-full-set
+    // slice UNCONDITIONALLY). The three fixpoints partition the
+    // failure modes at the (Vec-shape × ordering × slice-shape) corner
+    // simultaneously: an override that omits the empty-slice guard
+    // fires on the empty-slice arm (returns `T::sorted_variants()`
+    // rather than the empty vector past the (max == 0, every-count ==
+    // 0) degenerate arm where every variant hits `count == 0 == max`);
+    // an override that folds onto the empty vector unconditionally
+    // fires on the full-set + doubled-full-set arms; an override that
+    // walks [`T::ALL`] instead of [`T::sorted_variants`] fires on the
+    // full-set + doubled-full-set arms when `T::first() !=
+    // T::sorted_first()` (returns `T::ALL.to_vec()` rather than
+    // `T::sorted_variants()`, bifurcating the lex-order walk); an
+    // override that returns a Vec whose FIRST element disagrees with
+    // [`T::sorted_modal_variant`] on the full-set slice fires at the
+    // composition-equality arm against
+    // `T::sorted_modal_variant(T::ALL) == Some(T::sorted_first())`.
+    //
+    // Sibling posture to clause (127) one ORDERING axis over: clause
+    // (127) opens the (set-level × `Vec<Self>` × statistical-aggregate
+    // × declaration-order × argmax) COMPLETE-WITNESS corner via
+    // [`T::modal_variants`]; this clause CLOSES the (set-level ×
+    // `Vec<Self>` × statistical-aggregate × ordering × argmax)
+    // 2-corner face at its lex-arm via [`T::sorted_modal_variants`].
+    // Combined with the sibling (clause (123), clause (124)) closure
+    // one RETURN-SHAPE axis over on the (set-level × `Option<Self>` ×
+    // statistical-aggregate × argmax × ordering) 2-corner face, the
+    // (set-level × {`Option<Self>`, `Vec<Self>`} × statistical-
+    // aggregate × argmax × ordering) 2×2 = 4-corner face on the
+    // direction-anchor argmax arm now closes at every corner. The
+    // default trait body threads the `is_empty()`-guarded
+    // `T::sorted_variants().into_iter().filter(|&v|
+    // T::count_occurrences_of(v, items) == T::max_variant_count(items))
+    // .collect()` sweep verbatim and satisfies every fixpoint arm +
+    // the composition-equality arm for free; the assertion catches a
+    // future implementor whose override drifts the projection loudly
+    // rather than silently bifurcating the lex-order argmax witness-
+    // collection surface every downstream alphabetic-mode consumer
+    // routes through.
+    let sorted_all = T::sorted_variants();
+    assert_eq!(
+        T::sorted_modal_variants(empty),
+        <::std::vec::Vec<T>>::new(),
+        "{type_name}: T::sorted_modal_variants(&[]) drifted from Vec::new() — the empty-slice fixpoint MUST return the empty vector because every per-variant occurrence count collapses to 0 and an UNGUARDED T::sorted_variants().into_iter().filter(|v| count(v) == 0).collect() sweep would silently return T::sorted_variants() past the (max == 0, every-count == 0) degenerate arm where every variant satisfies `count == max == 0`; a non-empty empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream lex-order argmax witness-collection consumer routes through",
+    );
+    let full_sorted_modal_variants = T::sorted_modal_variants(T::ALL);
+    assert_eq!(
+        full_sorted_modal_variants.len(),
+        T::CARDINALITY,
+        "{type_name}: T::sorted_modal_variants(T::ALL).len() == {actual_len} != T::CARDINALITY == {cardinality} — clause (3)'s pairwise-distinctness invariant pins every variant of T::ALL at exactly one position on the full-set slice, every per-variant count is 1, T::max_variant_count(T::ALL) == 1, and the argmax witness-collection filter over T::sorted_variants() hits EVERY variant (the flat-histogram fixpoint pins the direction-axis degeneracy at every corner); a shorter Vec is the drift catch for an override that folds onto `Vec::new()` unconditionally OR that returns a proper subset of T::sorted_variants() on the full set",
+        actual_len = full_sorted_modal_variants.len(),
+        cardinality = T::CARDINALITY,
+    );
+    assert_eq!(
+        full_sorted_modal_variants,
+        sorted_all,
+        "{type_name}: T::sorted_modal_variants(T::ALL) drifted from T::sorted_variants() element-for-element — the lex-order-preserving argmax witness-collection MUST equal T::sorted_variants() on the full-set slice because every variant hits count == max == 1 and the filter walks T::sorted_variants() in lex order; a divergence is the drift catch for an override that walks T::ALL instead of T::sorted_variants (declaration-order-canonical would return T::ALL.to_vec(), bifurcating the lex-order walk when T::first() != T::sorted_first())",
+    );
+    let doubled_sorted_modal_variants = T::sorted_modal_variants(&doubled_full_set);
+    assert_eq!(
+        doubled_sorted_modal_variants,
+        sorted_all,
+        "{type_name}: T::sorted_modal_variants(&doubled_full_set) drifted from T::sorted_variants() element-for-element — every variant of T::ALL appears at exactly two positions of the doubled-full-set slice, every per-variant count is 2, T::max_variant_count(doubled) == 2, and the filter hits EVERY variant walked in lex order; a divergent doubled-full-set value silently bifurcates the lex-order flat-histogram fixpoint contract every downstream complete-mode consumer routes through",
+    );
+    if let Some(head) = full_sorted_modal_variants.first().copied() {
+        let expected_head = T::sorted_modal_variant(T::ALL);
+        assert_eq!(
+            Some(head),
+            expected_head,
+            "{type_name}: T::sorted_modal_variants(T::ALL).first() drifted from T::sorted_modal_variant(T::ALL) — the plural's HEAD MUST equal the singular's first-witness commit because both walk T::sorted_variants() in lex order and commit at the first tied argmax; a divergence catches an override that reorders the witnesses on the plural side without threading through the same lex-order argmax walk the singular pins",
         );
     }
 }
@@ -70503,6 +70834,410 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedModalVariantsAllKind whose modal_variants override omits the empty-slice guard — clause (127)'s empty-slice fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn sorted_modal_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (set-level × `Vec<Self>` × statistical-
+        // aggregate × lex-order × argmax): `T::sorted_modal_variants(
+        // &[])` is the empty `Vec<Self>` UNCONDITIONALLY — the empty
+        // slice hits zero positions, so every per-variant count is 0,
+        // T::max_variant_count collapses to 0, and an UNGUARDED filter
+        // `count(v) == 0` walked over T::sorted_variants() would
+        // silently return T::sorted_variants() past the degenerate
+        // arm. The empty guard maps `&[]` to `Vec::new()` before the
+        // filter. Sibling posture to
+        // `sorted_modal_variant_returns_none_on_the_empty_slice_across_every_kind`
+        // one return-shape axis over: the `Option<Self>` first-witness
+        // hits its `None` fixpoint at the same endpoint; this `Vec<
+        // Self>` complete-witness collection hits its empty-Vec
+        // fixpoint at the same endpoint.
+        let empty: &[StubKind] = &[];
+        let sorted_modal_variants = <StubKind as ClosedSet>::sorted_modal_variants(empty);
+        assert!(
+            sorted_modal_variants.is_empty(),
+            "T::sorted_modal_variants(&[]) diverged from the empty-slice fixpoint `Vec::new()` — got {sorted_modal_variants:?}",
+        );
+    }
+
+    #[test]
+    fn sorted_modal_variants_returns_the_target_only_on_every_matching_singleton_across_every_variant(
+    ) {
+        // MATCHING-SINGLETON CONTRACT: `T::sorted_modal_variants(&[v])`
+        // is `vec![v]` for every variant `v` — a matching singleton
+        // hits `count(v) == 1` at the target and `count(w) == 0` at
+        // every other variant, T::max_variant_count collapses to 1,
+        // and the filter hits ONLY the target regardless of walk
+        // order (declaration vs lex). Sibling posture to
+        // `sorted_modal_variant_returns_some_target_on_every_singleton_slice_across_every_variant`
+        // one return-shape axis over: the singular reports `Some(v)`,
+        // this plural reports `vec![v]`.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            let sorted_modal_variants = <StubKind as ClosedSet>::sorted_modal_variants(&singleton);
+            assert_eq!(
+                sorted_modal_variants.as_slice(),
+                &[v],
+                "T::sorted_modal_variants({singleton:?}) diverged from the matching-singleton fixpoint `vec![{v:?}]`",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_modal_variants_returns_sorted_variants_on_the_full_set_across_every_kind() {
+        // FULL-SET CONTRACT: `T::sorted_modal_variants(T::ALL)` equals
+        // `T::sorted_variants()` UNCONDITIONALLY — the closed-set
+        // well-formedness invariant pins variants as pairwise
+        // distinct, so every variant appears at exactly one position
+        // in the full-set slice, every per-variant count is 1,
+        // T::max_variant_count collapses to 1, and the filter hits
+        // EVERY variant walked in lex order. Complements
+        // `sorted_modal_variant_returns_sorted_first_on_the_full_set_across_every_kind`
+        // one return-shape axis over: the singular commits at the
+        // FIRST tied argmax (T::sorted_first()); this plural returns
+        // the FULL tied argmax set in lex order (T::sorted_variants()).
+        let all = <StubKind as ClosedSet>::ALL;
+        let expected = <StubKind as ClosedSet>::sorted_variants();
+        let sorted_modal_variants = <StubKind as ClosedSet>::sorted_modal_variants(all);
+        assert_eq!(
+            sorted_modal_variants, expected,
+            "T::sorted_modal_variants(T::ALL) diverged from T::sorted_variants() element-for-element — the full-set flat-histogram fixpoint MUST hit every variant walked in lex order",
+        );
+    }
+
+    #[test]
+    fn sorted_modal_variants_returns_sorted_variants_on_the_doubled_full_set_across_every_kind() {
+        // DOUBLED-FULL-SET CONTRACT:
+        // `T::sorted_modal_variants(T::ALL ++ T::ALL)` equals
+        // `T::sorted_variants()` UNCONDITIONALLY — the doubled full
+        // set hits every variant at EXACTLY two positions,
+        // T::max_variant_count collapses to 2, and the filter hits
+        // EVERY variant walked in lex order. Sibling posture to
+        // `sorted_modal_variant_returns_sorted_first_on_the_doubled_full_set_across_every_kind`
+        // one return-shape axis over: the singular hits
+        // `Some(T::sorted_first())` at the flat-histogram argmax;
+        // this plural hits every variant in lex order.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        let expected = <StubKind as ClosedSet>::sorted_variants();
+        let sorted_modal_variants = <StubKind as ClosedSet>::sorted_modal_variants(&doubled);
+        assert_eq!(
+            sorted_modal_variants, expected,
+            "T::sorted_modal_variants(ALL++ALL) diverged from T::sorted_variants() element-for-element — the doubled-full-set flat-histogram fixpoint MUST hit every variant walked in lex order",
+        );
+    }
+
+    #[test]
+    fn sorted_modal_variants_is_non_empty_iff_slice_is_non_empty_across_every_triple() {
+        // NON-EMPTINESS IDENTITY: `T::sorted_modal_variants(items)
+        // .is_empty() == items.is_empty()` on every slice — the
+        // empty-slice arm is the SOLE empty-Vec arm. On every non-
+        // empty slice the finite discrete histogram achieves its max
+        // at at least one bin, so the filter hits at least one
+        // variant. Sweeping every length-3 triple + the empty slice
+        // pins the identity across the full 27-corner triple domain
+        // plus the empty fixpoint.
+        let empty: &[StubKind] = &[];
+        assert!(
+            <StubKind as ClosedSet>::sorted_modal_variants(empty).is_empty(),
+            "T::sorted_modal_variants(&[]).is_empty() diverged from true on the empty slice",
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert!(
+                        !<StubKind as ClosedSet>::sorted_modal_variants(&triple).is_empty(),
+                        "T::sorted_modal_variants({triple:?}).is_empty() diverged from false on a non-empty triple — the finite discrete histogram MUST achieve its max at at least one bin on every non-empty slice",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_modal_variants_head_agrees_with_sorted_modal_variant_across_every_triple() {
+        // FIRST-WITNESS IDENTITY: for every NON-EMPTY slice `items`,
+        // `T::sorted_modal_variants(items).first().copied() ==
+        // T::sorted_modal_variant(items)` — the plural's HEAD equals
+        // the singular's commit because both walk T::sorted_variants()
+        // in lex order and commit at the first tied argmax. Sibling
+        // posture to
+        // `sorted_modal_variant_is_lex_order_first_argmax_across_every_triple`
+        // one return-shape axis over: both projections pin the same
+        // first-witness under the same lex-order tie-break. Sweeping
+        // every length-3 triple pins the identity across the full
+        // 27-corner triple domain.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let plural = <StubKind as ClosedSet>::sorted_modal_variants(&triple);
+                    let singular = <StubKind as ClosedSet>::sorted_modal_variant(&triple);
+                    assert_eq!(
+                        plural.first().copied(),
+                        singular,
+                        "T::sorted_modal_variants({triple:?}).first() diverged from T::sorted_modal_variant({triple:?}) — the plural's HEAD MUST equal the singular's first-witness commit under the same lex-order argmax tie-break",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_modal_variants_elements_agree_with_max_variant_count_across_every_triple() {
+        // COUNT-COMPOSITION IDENTITY: for every slice `items` and
+        // every variant `v` in the returned Vec,
+        // `T::count_occurrences_of(v, items) ==
+        // T::max_variant_count(items)` — every element of the returned
+        // Vec achieves the modal multiplicity exactly. Sweeping every
+        // length-3 triple pins the identity across the full 27-corner
+        // triple domain. Catches an override whose Vec includes a
+        // non-modal variant.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let max = <StubKind as ClosedSet>::max_variant_count(&triple);
+                    for v in <StubKind as ClosedSet>::sorted_modal_variants(&triple) {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::count_occurrences_of(v, &triple),
+                            max,
+                            "T::sorted_modal_variants({triple:?}) contained {v:?} whose count diverged from T::max_variant_count({triple:?}) == {max}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_modal_variants_are_present_across_every_triple() {
+        // PRESENT-ARM CONTAINMENT IDENTITY: for every NON-EMPTY slice
+        // `items`, every variant in `T::sorted_modal_variants(items)`
+        // also appears in `T::present_variants(items)` — every modal
+        // variant is present (its count is at least
+        // `T::max_variant_count(items) >= 1` on non-empty slices, so
+        // it appears in the slice). Sweeping every length-3 triple
+        // pins the containment across the full 27-corner triple
+        // domain.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let present = <StubKind as ClosedSet>::present_variants(&triple);
+                    for v in <StubKind as ClosedSet>::sorted_modal_variants(&triple) {
+                        assert!(
+                            present.iter().any(|&w| {
+                                <StubKind as ClosedSet>::index_of(w)
+                                    == <StubKind as ClosedSet>::index_of(v)
+                            }),
+                            "T::sorted_modal_variants({triple:?}) contained {v:?} not in T::present_variants({triple:?}) == {present:?} — every modal variant MUST be present",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_modal_variants_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::sorted_modal_variants(items) == T::sorted_modal_variants
+        // (reversed items)` on every slice — reversing a slice
+        // preserves its multiset of variant identities, and every
+        // projection on the equivalence-partition surface is a
+        // FIXPOINT of slice reversal. Sibling posture to
+        // `sorted_modal_variant_is_invariant_under_slice_reversal_across_every_triple`
+        // one return-shape axis over: both projections agree under
+        // the input-axis multiset invariance because both compose on
+        // T::count_occurrences_of (a multiset function) filtered
+        // through T::sorted_variants() (an ordering that does NOT
+        // depend on items).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_modal_variants(&forward),
+                        <StubKind as ClosedSet>::sorted_modal_variants(&reversed),
+                        "T::sorted_modal_variants({forward:?}) diverged from T::sorted_modal_variants({reversed:?}) — the lex-order argmax witness-collection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_modal_variants_is_a_lex_permutation_of_modal_variants_across_every_triple() {
+        // MULTISET-AGREEMENT IDENTITY: for every slice `items`,
+        // `T::sorted_modal_variants(items)` is a LEX-ORDER PERMUTATION
+        // of `T::modal_variants(items)` — the two projections agree
+        // as multisets (both filter under `count(v) ==
+        // T::max_variant_count(items)`) and differ ONLY in walk
+        // order (declaration vs lex). Sweeping every length-3 triple
+        // pins the multiset-equality identity by asserting the
+        // sorted-index projections agree element-for-element.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let mut decl_indices: Vec<usize> =
+                        <StubKind as ClosedSet>::modal_variants(&triple)
+                            .into_iter()
+                            .map(<StubKind as ClosedSet>::index_of)
+                            .collect();
+                    let mut lex_indices: Vec<usize> =
+                        <StubKind as ClosedSet>::sorted_modal_variants(&triple)
+                            .into_iter()
+                            .map(<StubKind as ClosedSet>::index_of)
+                            .collect();
+                    decl_indices.sort_unstable();
+                    lex_indices.sort_unstable();
+                    assert_eq!(
+                        decl_indices, lex_indices,
+                        "T::sorted_modal_variants({triple:?}) and T::modal_variants({triple:?}) diverged as multisets — both projections MUST filter under the same predicate (count == max) and thus agree as multisets, differing ONLY in walk order",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_empty_drift_in_sorted_modal_variants() {
+        // Drift catch — clause (128)'s full-set fixpoint arm fires
+        // when an override folds the plural onto `Vec::new()`
+        // regardless of slice-shape (returning empty on the full set
+        // rather than `T::sorted_variants()`). The stub below
+        // overrides the default body to return `Vec::new()`
+        // unconditionally; on the full set that produces `[] !=
+        // T::sorted_variants()`, tripping clause (128)'s full-set arm
+        // loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedModalVariantsEmptyKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedSortedModalVariantsEmptyKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedSortedModalVariantsEmptyKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted sorted_modal_variants empty kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedSortedModalVariantsEmptyKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedSortedModalVariantsEmptyKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted sorted_modal_variants empty kind";
+            type Unknown = UnknownDriftedSortedModalVariantsEmptyKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedModalVariantsEmptyKind(s.to_owned())
+            }
+            fn sorted_modal_variants(_items: &[Self]) -> Vec<Self> {
+                // Drift: return the empty vector unconditionally. On
+                // the full set that produces `[] !=
+                // T::sorted_variants()`, tripping clause (128)'s
+                // full-set fixpoint arm at the length assertion
+                // loudly.
+                Vec::new()
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedSortedModalVariantsEmptyKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedSortedModalVariantsEmptyKind whose sorted_modal_variants override folds onto Vec::new() unconditionally — clause (128)'s full-set fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_all_drift_in_sorted_modal_variants() {
+        // Drift catch — clause (128)'s empty-slice fixpoint arm fires
+        // when an override omits the empty-slice guard, returning
+        // `T::sorted_variants()` on the empty slice rather than
+        // `Vec::new()`. The stub below overrides the default body to
+        // return `T::sorted_variants()` unconditionally; on the
+        // empty slice that produces `T::sorted_variants() != []`,
+        // tripping clause (128)'s empty-slice arm loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedModalVariantsAllKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedSortedModalVariantsAllKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedSortedModalVariantsAllKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted sorted_modal_variants all kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedSortedModalVariantsAllKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedSortedModalVariantsAllKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted sorted_modal_variants all kind";
+            type Unknown = UnknownDriftedSortedModalVariantsAllKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedModalVariantsAllKind(s.to_owned())
+            }
+            fn sorted_modal_variants(_items: &[Self]) -> Vec<Self> {
+                // Drift: return T::sorted_variants() unconditionally
+                // (omitting the empty-slice guard). On the empty
+                // slice that produces `T::sorted_variants() != []`,
+                // tripping clause (128)'s empty-slice fixpoint arm
+                // loudly.
+                <Self as ClosedSet>::sorted_variants()
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedSortedModalVariantsAllKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedSortedModalVariantsAllKind whose sorted_modal_variants override omits the empty-slice guard — clause (128)'s empty-slice fixpoint arm MUST reject the drift",
         );
     }
 }

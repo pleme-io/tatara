@@ -17837,6 +17837,221 @@ pub trait ClosedSet: Sized + Copy + 'static {
         max_bar - min_bar
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "any variant repeating?" predicate —
+    /// `true` iff AT LEAST ONE variant of [`Self::ALL`] appears TWO OR
+    /// MORE times in `items`, computed as the just-lifted usize-return
+    /// [`Self::max_variant_count`] projection MEETING-OR-EXCEEDING the
+    /// scalar threshold `2`. The BOOL-RETURN opener on the (set-level ×
+    /// bool × multiplicity-band `>= 2`) corner peer to the (set-level ×
+    /// bool × multiplicity-band `== 0`) [`Self::is_missing_any`] corner
+    /// one MULTIPLICITY-BAND axis over, AND the direct SET-LEVEL
+    /// EXISTENTIAL LIFT of the (per-target × bool × multiplicity-band
+    /// `>= 2`) [`Self::is_repeated_occurrence_of`] corner one ARITY axis
+    /// over on the (arity × mult-band) face of the equivalence-partition
+    /// surface. Not a fresh substrate primitive on the index axis — the
+    /// predicate emerges from one comparison of the just-lifted
+    /// [`Self::max_variant_count`] modal-count aggregate against `2`,
+    /// equivalently the disjunction over [`Self::ALL`] of the per-target
+    /// [`Self::is_repeated_occurrence_of`] predicate.
+    ///
+    /// Max-composition identity: for every slice `items`,
+    /// `T::is_repeating_any(items) == (T::max_variant_count(items) >= 2)`
+    /// — the bool-return existential-repeat predicate is EXACTLY the
+    /// lower-bound test of the modal-count aggregate against `2`. Pinned
+    /// by clause (113) and by
+    /// `is_repeating_any_holds_iff_max_variant_count_ge_two_across_every_triple`.
+    ///
+    /// De Morgan identity: for every slice `items`,
+    /// `T::is_repeating_any(items) == !T::is_pairwise_distinct(items)` —
+    /// the (some-variant-repeats) predicate is the exact logical
+    /// NEGATION of the (no-variant-repeats) predicate on the equivalence-
+    /// partition surface. Together with [`Self::is_missing_any`]'s
+    /// De Morgan pairing against [`Self::is_covering`], the (set-level ×
+    /// bool × multiplicity-band) face now carries TWO independent
+    /// De Morgan pairs — (`is_missing_any`, `is_covering`) on the
+    /// (mult `== 0`, mult `>= 1`) split, and (`is_repeating_any`,
+    /// `is_pairwise_distinct`) on the (mult `>= 2`, mult `<= 1`) split.
+    /// Pinned by
+    /// `is_repeating_any_de_morgan_dual_of_is_pairwise_distinct_across_every_triple`.
+    ///
+    /// Existential-lift identity: for every slice `items`,
+    /// `T::is_repeating_any(items) == <T as ClosedSet>::ALL.iter().any(|&v| T::is_repeated_occurrence_of(v, items))`
+    /// — the set-level bool predicate is the EXACT existential
+    /// quantification over [`Self::ALL`] of the per-target multiplicity-
+    /// ≥2 predicate. This identity binds the set-level ARITY axis
+    /// against the per-target ARITY axis one arity axis over on the
+    /// (arity × mult-band) face, pinning the compounding closure the
+    /// prior per-target lift opened. Pinned by
+    /// `is_repeating_any_equals_existential_of_is_repeated_occurrence_of_across_every_triple`.
+    ///
+    /// Distinct-count composition identity: for every slice `items`,
+    /// `T::is_repeating_any(items) == (T::count_distinct(items) < items.len())`
+    /// — a slice is repetition-free iff its distinct-count reaches its
+    /// slice-length upper bound, so its NEGATION (the strictly-lesser
+    /// case) is EXACTLY the existential-repeat predicate. Pinned by
+    /// `is_repeating_any_holds_iff_count_distinct_is_strictly_less_than_slice_length_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic — the (declaration, lex) axis COLLAPSES on
+    /// element equality because [`Self::max_variant_count`]'s ordering-
+    /// axis invariance folds through the `>= 2` comparison bijectively.
+    /// Sibling posture to [`Self::is_missing_any`],
+    /// [`Self::is_pairwise_distinct`], [`Self::is_covering`],
+    /// [`Self::is_permutation_of_all`], [`Self::is_constant`], and
+    /// [`Self::is_uniform`]'s ordering-axis invariance: every projection
+    /// on the equivalence-partition surface is direction- AND ordering-
+    /// agnostic; no separate `sorted_is_repeating_any` peer is needed.
+    /// Pinned by
+    /// `is_repeating_any_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::is_repeating_any(&[])` is `false`
+    /// UNCONDITIONALLY — the empty slice hits zero positions, so every
+    /// per-variant occurrence count is `0`, the modal-count aggregate
+    /// collapses to `0`, and the lower-bound test against `2` fails.
+    /// Sibling posture to
+    /// `is_missing_any_returns_true_on_the_empty_slice_across_every_non_degenerate_kind`
+    /// one MULTIPLICITY-BAND axis over: the (mult `== 0`) band predicate
+    /// reaches its `true` fixpoint at the empty slice on any non-
+    /// degenerate implementor; the (mult `>= 2`) band predicate reaches
+    /// its `false` fixpoint at the same endpoint UNIVERSALLY (independent
+    /// of cardinality, since even a cardinality-0 empty slice has no
+    /// variant repeating). Pinned by clause (113) and by
+    /// `is_repeating_any_returns_false_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Singleton contract: `T::is_repeating_any(&[v])` is `false` for
+    /// every variant `v` — a singleton hits exactly one variant at one
+    /// position, so the modal-count aggregate collapses to `1` and the
+    /// lower-bound test against `2` fails. The singleton is the
+    /// LOAD-BEARING catcher separating the (mult `>= 2`) band from a
+    /// `_ => true` unconditional override — the empty slice and the
+    /// full set both yield `false` under the correct projection AND
+    /// under the drifted override, so the singleton (with correct value
+    /// `false`) is the smallest-arity slice that fires the drift catch
+    /// distinctly from the fixpoint arms. Pinned by
+    /// `is_repeating_any_returns_false_on_every_singleton_across_every_variant`.
+    ///
+    /// Full-set contract: `T::is_repeating_any(<T as ClosedSet>::ALL)`
+    /// is `false` UNCONDITIONALLY — the closed-set well-formedness
+    /// invariant [`assert_closed_set_well_formed`]'s clause (3) pins
+    /// variants as pairwise distinct, so every variant of [`Self::ALL`]
+    /// appears at exactly ONE position in the full-set slice, the
+    /// modal-count aggregate collapses to `1`, and the lower-bound test
+    /// against `2` fails. Sibling posture to
+    /// `is_missing_any_over_the_full_set_is_false_across_every_kind`
+    /// one MULTIPLICITY-BAND axis over: both existential predicates
+    /// reach their `false` fixpoint at the full-set endpoint because the
+    /// full set is the CANONICAL PERMUTATION (mult `== 1` at every
+    /// target) — no variant is missing AND no variant is repeating.
+    /// Pinned by clause (113) at the full-set fixpoint AND by
+    /// `is_repeating_any_over_the_full_set_is_false_across_every_kind`.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::is_repeating_any(&doubled)` is `true` on every implementor of
+    /// non-zero cardinality — the doubled full set hits every variant at
+    /// EXACTLY TWO positions, the modal-count aggregate collapses to
+    /// `2`, and the lower-bound test against `2` holds. The doubled-
+    /// full-set arm is LOAD-BEARING — it is the ONLY canonical fixpoint
+    /// arm that separates the (mult `>= 2`) band from the (mult `<= 1`)
+    /// [`Self::is_pairwise_distinct`] band: on empty, singleton, and
+    /// full-set fixpoints both bands report their `true`-for-distinct
+    /// / `false`-for-repeating value; only the doubled-full-set arm
+    /// distinguishes them (`true` under this predicate, `false` under
+    /// `is_pairwise_distinct`). Pinned by clause (113) at the doubled-
+    /// full-set fixpoint AND by
+    /// `is_repeating_any_returns_true_on_the_doubled_full_set_across_every_non_degenerate_kind`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of the
+    /// substrate's [`Self::max_variant_count`] projection at the trait
+    /// level. The composition uses one `>=` on `usize`, so the sweep
+    /// inherits [`Self::max_variant_count`]'s O(T::CARDINALITY * n) cost
+    /// on slice arity `n` — allocation-free (the max fold streams
+    /// through the per-variant multiplicity primitive without
+    /// materializing the intermediate `Vec<usize>` histogram), no
+    /// `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's minimal
+    /// `Sized + Copy + 'static` supertrait pair stays untouched), no
+    /// bitset-shape carrier.
+    ///
+    /// Future consumers that compose against [`Self::is_repeating_any`]:
+    /// a `tatara-check` predicate `(check-phases-report-any-repeat …)`
+    /// on a `WorkloadPhase` sequence that flags "some phase visited
+    /// more than once" (a rollout-loop witness distinct from a single-
+    /// shot success) without paying for the modal-count when only the
+    /// existence of a repeat matters; an LSP diagnostic on a Lisp-
+    /// author-written variant-list that flags "some variant listed more
+    /// than once" WITHOUT counting how many (the shape of a
+    /// duplicate-detection quick-fix that just wants to know a repeat
+    /// exists); a Sekiban audit-trail metric flagging a classification
+    /// poset window as "any-classification-repeated" WITHOUT emitting
+    /// the count-side gauge; a `tatara-lisp::macro_expand::Expander`
+    /// hygiene pass that flags a template's identifier multiset as
+    /// CARRYING SOME REDEFINITION (a common bug shape in quasi-quote
+    /// templates that unquote-splice a variable set) in ONE typed bool
+    /// rather than an inline `T::ALL.iter().any(|&v|
+    /// T::is_repeated_occurrence_of(v, items))` disjunction. Each binds
+    /// to ONE typed N-ary any-repeat predicate on the trait rather than
+    /// re-deriving `T::max_variant_count(items) >= 2` OR
+    /// `!T::is_pairwise_distinct(items)` OR the existential over targets
+    /// inline per callsite.
+    ///
+    /// Compounding closure: the (set-level × bool × multiplicity-band)
+    /// face on the equivalence-partition surface now OPENS its (mult
+    /// `>= 2`) corner past the pre-existing (mult `== 0`)
+    /// [`Self::is_missing_any`] corner and (mult `<= 1`)
+    /// [`Self::is_pairwise_distinct`] corner. Combined with the per-
+    /// target trichotomy the prior lift closed (`!occurs_in`,
+    /// `is_unique_occurrence_of`, `is_repeated_occurrence_of`), the
+    /// (arity × mult-band) face now carries THREE typed set-level
+    /// existential predicates (`is_missing_any`, `is_repeating_any`) +
+    /// (`is_pairwise_distinct`, `is_covering`) that project the per-
+    /// target multiplicity axis's three bands onto set-level bools via
+    /// standard-library `any` / `all` combinators. The natural next
+    /// lift past this corner is the (set-level × bool × multiplicity-
+    /// band `== 1`) `has_singleton_variant` corner (`T::ALL.iter().any(|&v|
+    /// T::is_unique_occurrence_of(v, items))` — the existential lift
+    /// of the middle band, distinct from any existing predicate)
+    /// closing the set-level existential-bool face at its remaining
+    /// mult-band corner.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary any-
+    /// repeat predicate becomes a TYPE-level primitive on the closed-
+    /// set trait rather than a per-consumer inline
+    /// `T::max_variant_count(items) >= 2` composition OR
+    /// `!T::is_pairwise_distinct(items)` negation at every downstream
+    /// generic site. THEORY.md §V.1 — knowable platform; the (set-
+    /// level × bool × mult `>= 2`) corner was an unnamed inline
+    /// composition recurring at every prospective downstream "did some
+    /// variant repeat?" site pre-lift. Naming it on the trait makes
+    /// the predicate a TYPED CONSEQUENCE of the substrate's modal-count
+    /// aggregate compared meet-or-exceed against `2`. THEORY.md §VI.1
+    /// — generation over composition; the any-repeat predicate emerges
+    /// from the composition of ONE substrate primitive
+    /// ([`Self::max_variant_count`]) with a `>= 2` comparison on
+    /// `usize`, not as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Coq's `existsb (fun v => 2 <=? count_occ
+    /// eqb l v) T` idiom composing an existential quantifier with a
+    /// per-key repetition witness on a decidable-equality carrier;
+    /// Idris's `any (\v => count (== v) items >= 2) all` on a
+    /// `Vect n a`; Racket's `(ormap (λ (v) (>= (count (λ (w) (equal? v w))
+    /// items) 2)) T)` on a list; Julia's `any(v ->
+    /// count(==(v), items) >= 2, T)` on a typed vector; Haskell's `any
+    /// (\v -> length (filter (== v) items) >= 2) all`; Rust's own
+    /// `T::ALL.iter().any(|v| items.iter().filter(|w| v == w).count() >= 2)`
+    /// idiom binds through a `Self: PartialEq` supertrait bound;
+    /// Python's `any(items.count(v) >= 2 for v in T)`; SQL's `EXISTS
+    /// (SELECT 1 FROM GROUP BY variant HAVING COUNT(*) >= 2)` on a
+    /// relational carrier — the canonical set-level any-repeat witness.
+    /// Translation through pleme-io primitives: the N-ary any-repeat
+    /// predicate on the closed-set trait binds through the substrate's
+    /// [`Self::max_variant_count`] projection compared meet-or-exceed
+    /// against `2` — no new dep, no supertrait bound (the
+    /// [`Self::max_variant_count`] projection replaces the
+    /// `Eq`/`Hash` bound the standard-library any/group-by signatures
+    /// demand), no set-shape carrier, no allocation.
+    fn is_repeating_any(items: &[Self]) -> bool {
+        <Self as ClosedSet>::max_variant_count(items) >= 2
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "present variants" projection —
     /// the `Vec<Self>` DECLARATION-ORDER hit-set of [`Self::ALL`],
     /// keeping every variant that OCCURS at least once in `items`
@@ -28077,6 +28292,77 @@ where
             doubled_repeated, expected_via_occurs_and_not_unique,
             "{type_name}: T::is_repeated_occurrence_of({target_label:?}, &doubled_full_set) drifted from (T::occurs_in({target_label:?}, &doubled_full_set) && !T::is_unique_occurrence_of({target_label:?}, &doubled_full_set)) — the multiplicity-≥2 predicate MUST factor through the (multiplicity `> 0`) membership predicate conjoined with the NEGATION of the (multiplicity `== 1`) uniqueness predicate; the trichotomy on the per-target multiplicity axis (`!occurs_in` XOR `is_unique_occurrence_of` XOR `is_repeated_occurrence_of`) demands this composition-equality identity",
             target_label = <T as ClosedSet>::label(target),
+        );
+    }
+    // (113) — `T::is_repeating_any(items)` MUST agree with the lower-
+    // bound test of the modal-count aggregate against `2` on every
+    // slice AND MUST land on its three canonical fixpoints (`false` on
+    // the empty slice UNCONDITIONALLY, `false` on the full set
+    // UNCONDITIONALLY, `true` on the doubled full set gated on
+    // `T::CARDINALITY >= 1`) AND on THREE composition-equality arms on
+    // the doubled-slice fixpoint: (a) max-composition against
+    // `T::max_variant_count(items) >= 2`, (b) distinct-count composition
+    // against `T::count_distinct(items) < items.len()`, (c) De Morgan
+    // composition against `!T::is_pairwise_distinct(items)`. The three
+    // fixpoints + three composition arms partition failure modes at the
+    // (discriminant × slice-shape × composition-equality) corner
+    // simultaneously: an override that folds onto `true` unconditionally
+    // fires on the empty-slice AND full-set arms (returns `true` rather
+    // than `false`); an override that folds onto `false` unconditionally
+    // fires on the doubled-full-set arm at cardinality `>= 1` (returns
+    // `false` rather than `true`); an override that detaches from the
+    // modal-count composition on any slice bifurcates loudly at the
+    // max-composition arm; an override that detaches from the distinct-
+    // count arithmetic bifurcates at the distinct-count arm; an
+    // override that detaches from the pairwise-distinct De Morgan
+    // pairing bifurcates at the De Morgan arm. Sibling posture to
+    // clauses (111) + (112): those clauses close the (per-target × bool
+    // × multiplicity-band) face at BOTH the `== 1` and `>= 2` corners
+    // one arity axis under; this clause opens the SET-LEVEL EXISTENTIAL
+    // LIFT of the `>= 2` corner via `max_variant_count >= 2` — the
+    // set-level ARITY axis' `>= 2` slot peer to the per-target ARITY
+    // axis' `>= 2` slot one arity axis over. The (arity × mult-band)
+    // face now carries typed set-level bool predicates at BOTH the
+    // (mult `== 0`) corner ([`Self::is_missing_any`]) AND the (mult
+    // `>= 2`) corner (this predicate), with the (mult `<= 1`) corner
+    // covered by [`Self::is_pairwise_distinct`] as this predicate's
+    // De Morgan dual. The default trait body threads
+    // `<Self as ClosedSet>::max_variant_count(items) >= 2` verbatim and
+    // satisfies every fixpoint arm + every composition-equality arm for
+    // free; the assertion catches a future implementor whose override
+    // drifts the projection loudly rather than silently bifurcating the
+    // set-level any-repeat predicate surface every downstream any-
+    // repeat consumer routes through.
+    assert!(
+        !T::is_repeating_any(&[]),
+        "{type_name}: T::is_repeating_any(&[]) == true != false — the set-level any-repeat predicate MUST report `false` on the empty slice because the modal-count aggregate returns `0` and the lower-bound test against `2` fails; a `true` empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream any-repeat consumer routes through",
+    );
+    assert!(
+        !T::is_repeating_any(T::ALL),
+        "{type_name}: T::is_repeating_any(T::ALL) == true != false — clause (3)'s pairwise-distinctness invariant forces every variant to appear at EXACTLY ONE position of the full-set slice, so the modal-count aggregate returns `1` and the lower-bound test against `2` fails; a `true` full-set any-repeat value silently detaches the set-level any-repeat predicate from the (variant → decl-slot) injectivity clause (16), breaking every downstream any-repeat consumer",
+    );
+    if T::CARDINALITY >= 1 {
+        let doubled_repeating = T::is_repeating_any(&doubled_full_set);
+        assert!(
+            doubled_repeating,
+            "{type_name}: T::is_repeating_any(&doubled_full_set) == false != true on a cardinality-{cardinality} closed set — the doubled full set hits every variant at EXACTLY TWO positions, so the modal-count aggregate returns `2` and the lower-bound test against `2` holds; the doubled-full-set arm at cardinality `>= 1` is LOAD-BEARING — it is the ONLY canonical fixpoint arm that separates the (mult `>= 2`) band from the (mult `<= 1`) pairwise-distinctness band (empty, full-set both coincide on `false`; only the doubled-full-set distinguishes them under any non-degenerate cardinality)",
+            cardinality = T::CARDINALITY,
+        );
+        let expected_via_max_ge_two = T::max_variant_count(&doubled_full_set) >= 2;
+        assert_eq!(
+            doubled_repeating, expected_via_max_ge_two,
+            "{type_name}: T::is_repeating_any(&doubled_full_set) drifted from (T::max_variant_count(&doubled_full_set) >= 2) — the set-level any-repeat predicate MUST equal the lower-bound test of the modal-count aggregate against `2` on every slice, so a downstream any-repeat consumer that binds `T::max_variant_count(_) >= 2` as its any-repeat query surface would disagree with the pinned predicate",
+        );
+        let expected_via_count_distinct_lt_len =
+            T::count_distinct(&doubled_full_set) < doubled_full_set.len();
+        assert_eq!(
+            doubled_repeating, expected_via_count_distinct_lt_len,
+            "{type_name}: T::is_repeating_any(&doubled_full_set) drifted from (T::count_distinct(&doubled_full_set) < doubled_full_set.len()) — the set-level any-repeat predicate MUST equal the (distinct-count strictly less than slice-length) arithmetic on every slice, so a downstream any-repeat consumer that binds this distinct-count composition would disagree with the pinned predicate; the identity captures that a slice is repetition-free iff its distinct-count reaches its slice-length upper bound, so the strictly-lesser case is EXACTLY the existential-repeat predicate",
+        );
+        let expected_via_not_pairwise_distinct = !T::is_pairwise_distinct(&doubled_full_set);
+        assert_eq!(
+            doubled_repeating, expected_via_not_pairwise_distinct,
+            "{type_name}: T::is_repeating_any(&doubled_full_set) drifted from !T::is_pairwise_distinct(&doubled_full_set) — the set-level any-repeat predicate MUST be the EXACT logical NEGATION of the pairwise-distinctness predicate on every slice, so a downstream any-repeat consumer that binds `!T::is_pairwise_distinct(_)` as its any-repeat query surface would disagree with the pinned predicate; the De Morgan pairing packages (`is_repeating_any`, `is_pairwise_distinct`) as the (mult `>= 2`, mult `<= 1`) dual pair peer to (`is_missing_any`, `is_covering`) on the (mult `== 0`, mult `>= 1`) split",
         );
     }
 }
@@ -54759,6 +55045,340 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted an OccursInDriftedIsRepeatedOccurrenceKind whose is_repeated_occurrence_of override folds onto the weaker membership predicate — clause (112)'s full-set arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn is_repeating_any_returns_false_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (set-level any-repeat predicate):
+        // `T::is_repeating_any(&[])` is `false` UNCONDITIONALLY — the
+        // empty slice hits zero positions, so the modal-count aggregate
+        // returns `0` and the lower-bound test against `2` fails.
+        // Sibling posture to
+        // `is_missing_any_returns_true_on_the_empty_slice_across_every_non_degenerate_kind`
+        // one MULTIPLICITY-BAND axis over at the OPPOSITE polarity:
+        // the (mult `== 0`) band reaches its `true` fixpoint on any
+        // non-degenerate empty slice; the (mult `>= 2`) band reaches
+        // its `false` fixpoint on EVERY empty slice regardless of
+        // cardinality.
+        assert!(
+            !<StubKind as ClosedSet>::is_repeating_any(&[]),
+            "T::is_repeating_any(&[]) diverged from the empty-slice fixpoint `false`",
+        );
+    }
+
+    #[test]
+    fn is_repeating_any_returns_false_on_every_singleton_across_every_variant() {
+        // SINGLETON CONTRACT: `T::is_repeating_any(&[v])` is `false` for
+        // every variant `v` — a singleton hits exactly one variant at
+        // one position, so the modal-count aggregate collapses to `1`
+        // and the lower-bound test against `2` fails. The singleton is
+        // the LOAD-BEARING catcher separating the (mult `>= 2`) band
+        // from a `_ => true` unconditional override: the three canonical
+        // fixpoints (empty, full-set) both yield `false` under the
+        // correct projection AND under the drifted override, so the
+        // singleton (with correct value `false`) is the smallest-arity
+        // slice past which the drift catch fires distinctly.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert!(
+                !<StubKind as ClosedSet>::is_repeating_any(&singleton),
+                "T::is_repeating_any({singleton:?}) diverged from the singleton fixpoint `false`",
+            );
+        }
+    }
+
+    #[test]
+    fn is_repeating_any_over_the_full_set_is_false_across_every_kind() {
+        // FULL-SET CONTRACT: `T::is_repeating_any(T::ALL) == false`
+        // UNCONDITIONALLY — the closed-set well-formedness invariant
+        // clause (3) pins variants as pairwise distinct, so every
+        // variant of `Self::ALL` appears at exactly ONE position of
+        // the full-set slice, the modal-count aggregate collapses to
+        // `1`, and the lower-bound test against `2` fails. Sibling
+        // posture to `is_missing_any_over_the_full_set_is_false_across_every_kind`
+        // one MULTIPLICITY-BAND axis over at the SAME polarity: both
+        // existential predicates reach their `false` fixpoint at the
+        // full-set endpoint because the full set is the canonical
+        // permutation (mult `== 1` at every target).
+        let all = <StubKind as ClosedSet>::ALL;
+        assert!(
+            !<StubKind as ClosedSet>::is_repeating_any(all),
+            "T::is_repeating_any(T::ALL) diverged from `false` — the closed-set well-formedness pairwise-distinctness invariant would be violated",
+        );
+    }
+
+    #[test]
+    fn is_repeating_any_returns_true_on_the_doubled_full_set_across_every_non_degenerate_kind() {
+        // DOUBLED-FULL-SET CONTRACT: `T::is_repeating_any(T::ALL ++ T::ALL)
+        // == true` on every implementor of non-zero cardinality — the
+        // doubled full set hits every variant at EXACTLY TWO positions,
+        // so the modal-count aggregate collapses to `2` and the lower-
+        // bound test against `2` holds. The doubled-full-set arm is
+        // LOAD-BEARING — it is the ONLY canonical fixpoint arm that
+        // separates the (mult `>= 2`) band from the (mult `<= 1`)
+        // pairwise-distinctness band (empty, full-set both coincide on
+        // `false`). At degenerate cardinality `0` the doubled slice IS
+        // the empty slice, so the load-bearing arm requires cardinality
+        // `>= 1`.
+        const {
+            assert!(<StubKind as ClosedSet>::CARDINALITY >= 1);
+        }
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert!(
+            <StubKind as ClosedSet>::is_repeating_any(&doubled),
+            "T::is_repeating_any(ALL++ALL) diverged from `true` — the doubled-slice fixpoint pins the set-level any-repeat predicate to `true` at every non-degenerate cardinality",
+        );
+    }
+
+    #[test]
+    fn is_repeating_any_holds_iff_max_variant_count_ge_two_across_every_triple() {
+        // MAX-COMPOSITION IDENTITY: for every slice `items`,
+        // `T::is_repeating_any(items) == (T::max_variant_count(items) >= 2)`
+        // — the bool-return existential-repeat predicate is EXACTLY the
+        // lower-bound test of the modal-count aggregate against `2`.
+        // Sweeping every length-3 triple pins the identity across the
+        // full 27-corner triple matrix.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_predicate = <StubKind as ClosedSet>::is_repeating_any(&triple);
+                    let via_max_ge_two = <StubKind as ClosedSet>::max_variant_count(&triple) >= 2;
+                    assert_eq!(
+                        via_predicate, via_max_ge_two,
+                        "T::is_repeating_any({triple:?}) diverged from (T::max_variant_count({triple:?}) >= 2) — the any-repeat predicate MUST equal the lower-bound test of the modal-count aggregate against `2`",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_repeating_any_de_morgan_dual_of_is_pairwise_distinct_across_every_triple() {
+        // DE MORGAN IDENTITY: for every slice `items`,
+        // `T::is_repeating_any(items) == !T::is_pairwise_distinct(items)`
+        // — the (some-variant-repeats) predicate is the exact logical
+        // NEGATION of the (no-variant-repeats) predicate on the
+        // equivalence-partition surface. Sibling posture to
+        // `is_missing_any_de_morgan_dual_of_is_covering_across_every_triple`
+        // one MULTIPLICITY-BAND axis over on the (set-level × bool ×
+        // mult-band) face: (`is_repeating_any`, `is_pairwise_distinct`)
+        // is the (mult `>= 2`, mult `<= 1`) De Morgan pair peer to
+        // (`is_missing_any`, `is_covering`) on the (mult `== 0`, mult
+        // `>= 1`) split.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_predicate = <StubKind as ClosedSet>::is_repeating_any(&triple);
+                    let via_not_pairwise_distinct =
+                        !<StubKind as ClosedSet>::is_pairwise_distinct(&triple);
+                    assert_eq!(
+                        via_predicate, via_not_pairwise_distinct,
+                        "T::is_repeating_any({triple:?}) diverged from !T::is_pairwise_distinct({triple:?}) — the any-repeat predicate MUST be the exact logical NEGATION of the pairwise-distinctness predicate",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_repeating_any_equals_existential_of_is_repeated_occurrence_of_across_every_triple() {
+        // EXISTENTIAL-LIFT IDENTITY: for every slice `items`,
+        // `T::is_repeating_any(items) == T::ALL.iter().any(|&v|
+        // T::is_repeated_occurrence_of(v, items))` — the set-level bool
+        // predicate is the EXACT existential quantification over
+        // `T::ALL` of the per-target multiplicity-≥2 predicate. This
+        // identity binds the set-level ARITY axis against the per-
+        // target ARITY axis one arity axis over on the (arity × mult-
+        // band) face, pinning the compounding closure the prior per-
+        // target lift opened.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_predicate = <StubKind as ClosedSet>::is_repeating_any(&triple);
+                    let via_existential = <StubKind as ClosedSet>::ALL
+                        .iter()
+                        .copied()
+                        .any(|v| <StubKind as ClosedSet>::is_repeated_occurrence_of(v, &triple));
+                    assert_eq!(
+                        via_predicate, via_existential,
+                        "T::is_repeating_any({triple:?}) diverged from T::ALL.iter().any(|v| T::is_repeated_occurrence_of(v, {triple:?})) — the set-level any-repeat predicate MUST equal the existential quantification of the per-target multiplicity-≥2 predicate over T::ALL",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_repeating_any_holds_iff_count_distinct_is_strictly_less_than_slice_length_across_every_triple(
+    ) {
+        // DISTINCT-COUNT COMPOSITION IDENTITY: for every slice `items`,
+        // `T::is_repeating_any(items) == (T::count_distinct(items) <
+        // items.len())` — a slice is repetition-free iff its distinct-
+        // count reaches its slice-length upper bound, so its NEGATION
+        // (the strictly-lesser case) is EXACTLY the existential-repeat
+        // predicate. Independent cross-check distinct from the max-
+        // composition AND the De Morgan pairing.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_predicate = <StubKind as ClosedSet>::is_repeating_any(&triple);
+                    let via_count_distinct_lt_len =
+                        <StubKind as ClosedSet>::count_distinct(&triple) < triple.len();
+                    assert_eq!(
+                        via_predicate, via_count_distinct_lt_len,
+                        "T::is_repeating_any({triple:?}) diverged from (T::count_distinct({triple:?}) < items.len()) — the any-repeat predicate MUST equal the (distinct-count strictly less than slice-length) arithmetic",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_repeating_any_is_invariant_under_slice_reversal_across_every_triple() {
+        // REVERSAL-INVARIANCE: `T::is_repeating_any(items)` equals
+        // `T::is_repeating_any(items.iter().rev().copied().collect::<Vec<_>>())`
+        // for every slice — reversing a slice preserves its multiset of
+        // variant identities, and the any-repeat predicate is a function
+        // of the multiset alone (inherited from `max_variant_count`'s
+        // reversal-invariance one return-shape axis over).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let reversed: Vec<StubKind> = triple.iter().rev().copied().collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_repeating_any(&triple),
+                        <StubKind as ClosedSet>::is_repeating_any(&reversed),
+                        "T::is_repeating_any({triple:?}) diverged from T::is_repeating_any({reversed:?}) — the predicate MUST be invariant under slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_true_drift_on_is_repeating_any() {
+        // Drift catch — clause (113)'s empty-slice fixpoint arm fires
+        // when an override folds the set-level any-repeat predicate
+        // onto `true` regardless of slice. The stub below overrides the
+        // default body to return `true` unconditionally; on the empty
+        // slice that produces `true != false`, tripping clause (113)'s
+        // empty-slice fixpoint arm loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsRepeatingAnyTrueKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedIsRepeatingAnyTrueKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedIsRepeatingAnyTrueKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is_repeating_any true kind: {}", self.0)
+            }
+        }
+
+        impl DriftedIsRepeatingAnyTrueKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedIsRepeatingAnyTrueKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted is_repeating_any true kind";
+            type Unknown = UnknownDriftedIsRepeatingAnyTrueKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsRepeatingAnyTrueKind(s.to_owned())
+            }
+            fn is_repeating_any(_items: &[Self]) -> bool {
+                true
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedIsRepeatingAnyTrueKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedIsRepeatingAnyTrueKind whose is_repeating_any override folds onto true unconditionally — clause (113)'s empty-slice fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_false_drift_on_is_repeating_any() {
+        // Drift catch — clause (113)'s doubled-full-set arm fires when
+        // an override folds the set-level any-repeat predicate onto
+        // `false` regardless of slice. The stub below overrides the
+        // default body to return `false` unconditionally; on the doubled
+        // full set the correct answer is `true` (every variant repeats),
+        // so `false` bifurcates loudly at clause (113)'s doubled-full-
+        // set arm. This is the LOAD-BEARING drift catch that separates
+        // the strict (mult `>= 2`) band from a `_ => false` degenerate
+        // override — the empty-slice AND full-set fixpoint arms accept
+        // `false` (correct value), so ONLY the doubled-full-set arm
+        // fires the drift.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsRepeatingAnyFalseKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedIsRepeatingAnyFalseKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedIsRepeatingAnyFalseKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted is_repeating_any false kind: {}", self.0)
+            }
+        }
+
+        impl DriftedIsRepeatingAnyFalseKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedIsRepeatingAnyFalseKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted is_repeating_any false kind";
+            type Unknown = UnknownDriftedIsRepeatingAnyFalseKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsRepeatingAnyFalseKind(s.to_owned())
+            }
+            fn is_repeating_any(_items: &[Self]) -> bool {
+                false
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedIsRepeatingAnyFalseKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedIsRepeatingAnyFalseKind whose is_repeating_any override folds onto false unconditionally — clause (113)'s doubled-full-set arm MUST reject the drift",
         );
     }
 

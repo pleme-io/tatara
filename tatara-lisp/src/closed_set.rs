@@ -15575,6 +15575,185 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .rposition(|&v| <Self as ClosedSet>::index_of(v) == target_index)
     }
 
+    /// The N-ARY PER-TARGET "all occurrence positions" projection —
+    /// the `Vec<usize>` of EVERY slice index at which `items[i]`
+    /// carries the same variant identity as `target`, in strictly
+    /// ascending slice-order. The PER-TARGET `Vec<usize>`-RETURN
+    /// opener on the (per-target × `Vec<usize>`) EVERY-POSITION column
+    /// of the equivalence-partition surface, positioned as the direct
+    /// VEC-LIFT of the just-lifted endpoint-anchor pair
+    /// [`Self::first_occurrence_of`] + [`Self::last_occurrence_of`]
+    /// one return-shape axis over — while those two projections report
+    /// the SMALLEST and LARGEST matching slice indices (a per-target
+    /// `Option<usize>` singleton at either endpoint of the matching
+    /// index set), THIS projection reports the ENTIRE matching index
+    /// set (a per-target `Vec<usize>` of every matching slice index).
+    /// The (per-target × return-shape) row on the equivalence-
+    /// partition surface now carries five typed corners:
+    /// [`Self::count_occurrences_of`] (usize; multiplicity),
+    /// [`Self::occurs_in`] (bool; membership),
+    /// [`Self::first_occurrence_of`] (`Option<usize>`; head-position),
+    /// [`Self::last_occurrence_of`] (`Option<usize>`; tail-position),
+    /// and THIS projection (`Vec<usize>`; every-position).
+    ///
+    /// Length-composition identity: for every slice `items` and every
+    /// target `v`,
+    /// `T::all_occurrences_of(v, items).len() == T::count_occurrences_of(v, items)`
+    /// — the vector's length is exactly the per-target multiplicity,
+    /// because the filter accepts precisely those slice positions
+    /// whose variant identity matches the target. Pinned by
+    /// `all_occurrences_of_len_equals_count_occurrences_of_across_every_target_and_triple`.
+    ///
+    /// Presence-composition identity: for every slice `items` and
+    /// every target `v`,
+    /// `!T::all_occurrences_of(v, items).is_empty() == T::occurs_in(v, items)`
+    /// — the vector's non-emptiness is exactly the per-target
+    /// membership predicate. Pinned by clause (108)'s doubled-full-
+    /// set arm.
+    ///
+    /// Head-composition identity: for every slice `items` and every
+    /// target `v`,
+    /// `T::all_occurrences_of(v, items).first().copied() == T::first_occurrence_of(v, items)`
+    /// — the vector's head element is exactly the smallest matching
+    /// slice index, coinciding with the head-endpoint projection.
+    /// Pinned by
+    /// `all_occurrences_of_first_equals_first_occurrence_of_across_every_target_and_triple`.
+    ///
+    /// Tail-composition identity: for every slice `items` and every
+    /// target `v`,
+    /// `T::all_occurrences_of(v, items).last().copied() == T::last_occurrence_of(v, items)`
+    /// — the vector's tail element is exactly the largest matching
+    /// slice index, coinciding with the tail-endpoint projection.
+    /// Pinned by
+    /// `all_occurrences_of_last_equals_last_occurrence_of_across_every_target_and_triple`.
+    ///
+    /// Empty-slice contract: `T::all_occurrences_of(v, &[])` is the
+    /// empty vector for every target `v` — the empty slice hits zero
+    /// positions, so the filter accepts nothing. Pinned by clause
+    /// (108)'s empty-slice fixpoint arm.
+    ///
+    /// Full-set contract:
+    /// `T::all_occurrences_of(v, <T as ClosedSet>::ALL) == vec![T::index_of(v)]`
+    /// UNCONDITIONALLY — clause (3)'s pairwise-distinctness invariant
+    /// forces every variant to appear at exactly ONE position of the
+    /// full-set slice, at slot `T::index_of(v)`. Pinned by clause
+    /// (108)'s full-set fixpoint arm.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::all_occurrences_of(v, &doubled_full_set) == vec![T::index_of(v), T::CARDINALITY + T::index_of(v)]`
+    /// UNCONDITIONALLY — in the doubled slice each variant appears at
+    /// EXACTLY TWO positions, and the ascending-order contract pins
+    /// the head hit at `T::index_of(v)` and the tail hit at
+    /// `T::CARDINALITY + T::index_of(v)`. Pinned by clause (108)'s
+    /// doubled-full-set arm.
+    ///
+    /// Strictly-increasing contract: for every slice `items` and
+    /// every target `v`, adjacent elements of
+    /// `T::all_occurrences_of(v, items)` are STRICTLY INCREASING —
+    /// no matching slice index is repeated because
+    /// [`Iterator::enumerate`] threads a fresh index per position.
+    /// Pinned by
+    /// `all_occurrences_of_is_strictly_increasing_across_every_target_and_triple`.
+    ///
+    /// Positional-correctness contract: for every slice `items`,
+    /// every target `v`, and every returned index `i` in
+    /// `T::all_occurrences_of(v, items)`, `i < items.len()` AND
+    /// `T::index_of(items[i]) == T::index_of(v)` — every returned
+    /// index is a valid slice index at which `items` carries the
+    /// target's variant identity. Pinned by
+    /// `all_occurrences_of_positions_all_match_across_every_target_and_triple`.
+    ///
+    /// Partition identity: for every slice `items`,
+    /// `T::ALL.iter().map(|v| T::all_occurrences_of(v, items).len()).sum::<usize>() == items.len()`
+    /// — the per-target index sets partition the slice's positions
+    /// exactly, because every position sits at EXACTLY ONE variant
+    /// (the (variant → decl-slot) injectivity clause (16) forces the
+    /// per-position occurrence-arm membership disjoint on `target`).
+    /// Pinned by
+    /// `all_occurrences_of_summed_over_all_targets_equals_slice_length_across_every_triple`.
+    ///
+    /// Signature note: the projection composes through
+    /// [`Iterator::enumerate`] + [`Iterator::filter`] + [`Iterator::map`]
+    /// on the same [`Self::index_of`] discriminator
+    /// [`Self::count_occurrences_of`] / [`Self::first_occurrence_of`]
+    /// / [`Self::last_occurrence_of`] thread through — one allocation
+    /// for the returned `Vec<usize>` bounded above by `items.len()`,
+    /// no supertrait bound past the trait's minimal `Sized + Copy +
+    /// 'static` pair, O(n) on slice arity `n` with NO early exit
+    /// (the every-position column REQUIRES a full-slice sweep, unlike
+    /// the endpoint-anchor pair's head- and tail-exit).
+    ///
+    /// Compounding closure: the (per-target × return-shape) row on
+    /// the equivalence-partition surface now closes at the
+    /// `Vec<usize>`-return column past the `Option<usize>`-return
+    /// endpoint-anchor pair — every future downstream site that needs
+    /// "at which slice positions does this variant appear?" (a
+    /// tatara-check predicate reporting the full per-variant index
+    /// list rather than a head/tail anchor; a Sekiban audit-trail
+    /// per-variant position-vector across a rollout window; a
+    /// tatara-lisp macro-expander hygiene pass reporting every
+    /// per-identifier binding position rather than just the first; a
+    /// per-slot alarm firing on ANY occurrence of a specific variant
+    /// with the full position list attached) binds to ONE typed N-ary
+    /// per-target every-position primitive on the trait rather than
+    /// re-deriving
+    /// `items.iter().enumerate().filter(|&(_, &w)| T::index_of(w) == T::index_of(target)).map(|(i, _)| i).collect()`
+    /// or the `Self: PartialEq`-bound
+    /// `items.iter().enumerate().filter(|&(_, &w)| w == target).map(|(i, _)| i).collect()`
+    /// inline per callsite. The natural next lift past this every-
+    /// position corner is the per-target `bool` "is-mono-occurrence"
+    /// predicate `is_unique_occurrence_of(target, items) ==
+    /// T::count_occurrences_of(target, items) == 1` or the set-level
+    /// bool "every-variant-mono" predicate `is_multiset_slice(items)
+    /// == T::variant_counts(items).iter().all(|&c| c <= 1)`, each
+    /// opening a fresh (per-target × bool × multiplicity-shape) or
+    /// (set-level × bool × multiplicity-shape) corner past the
+    /// membership arm on the equivalence-partition surface.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary per-
+    /// target every-position primitive becomes a TYPE-level primitive
+    /// on the closed-set trait rather than a per-consumer inline
+    /// `items.iter().enumerate().filter(…).map(|(i, _)| i).collect()`
+    /// composition at every downstream generic site. THEORY.md §V.1
+    /// — knowable platform; naming the (per-target × `Vec<usize>`)
+    /// every-position corner on the trait makes the projection a
+    /// TYPED CONSEQUENCE of the substrate's [`Self::index_of`]
+    /// discriminator threaded through
+    /// [`Iterator::enumerate`] + [`Iterator::filter`] + [`Iterator::map`].
+    /// THEORY.md §VI.1 — generation over composition; the every-
+    /// position primitive emerges from one composition
+    /// (`enumerate().filter().map()` on [`Self::index_of`]-equality),
+    /// not as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Coq's `List.find_all_indices` (a decidable-
+    /// equality-derived every-position combinator on `list nat`);
+    /// Idris's `Data.List.findIndices : (a -> Bool) -> List a -> List
+    /// Nat` with the predicate specialized to `\v => v == target`;
+    /// Haskell's `Data.List.findIndices (== v) items :: [Int]`; Rust's
+    /// own `items.iter().enumerate().filter(|&(_, &w)| w == target).map(|(i, _)| i).collect::<Vec<_>>()`
+    /// idiom which binds through a `Self: PartialEq` supertrait bound;
+    /// Julia's `findall(==(v), items)`; Python's
+    /// `[i for i, w in enumerate(items) if w == v]` list comprehension;
+    /// NumPy's `np.flatnonzero(items == v)` or `np.where(items == v)[0]`
+    /// idiom. Translation through pleme-io primitives: the N-ary
+    /// per-target every-position projection on the closed-set trait
+    /// binds through `enumerate().filter().map()` keyed on the
+    /// substrate's [`Self::index_of`] projection — no new dep, no
+    /// supertrait bound (the [`Self::index_of`] projection replaces
+    /// the `PartialEq` bound the standard-library `findIndices` /
+    /// `findall` signatures demand), one allocation for the returned
+    /// `Vec<usize>` bounded above by `items.len()`.
+    fn all_occurrences_of(target: Self, items: &[Self]) -> ::std::vec::Vec<usize> {
+        let target_index = <Self as ClosedSet>::index_of(target);
+        items
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|&(_, v)| <Self as ClosedSet>::index_of(v) == target_index)
+            .map(|(i, _)| i)
+            .collect()
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "per-slot variant histogram"
     /// projection — the `Vec<usize>` DECLARATION-ORDER histogram over
     /// [`Self::ALL`] whose slot `i` reports the multiplicity of
@@ -26739,6 +26918,87 @@ where
             doubled_tail.is_some(),
             T::occurs_in(target, &doubled_full_set),
             "{type_name}: T::last_occurrence_of({target_label:?}, &doubled_full_set).is_some() drifted from T::occurs_in({target_label:?}, &doubled_full_set) — the per-target tail-position projection's Option discriminant no longer agrees with the per-target bool membership predicate on the doubled-full-set fixpoint, so a downstream tail-position consumer that binds `T::last_occurrence_of(_, _).is_some()` as its presence query surface would disagree with the per-target bool predicate",
+            target_label = <T as ClosedSet>::label(target),
+        );
+    }
+    // (108) — `T::all_occurrences_of(target, items)` MUST agree with
+    // the per-target every-position projection on every (target, slice)
+    // pair AND MUST land on its three canonical fixpoints (empty vec
+    // at every target on the empty slice, `vec![T::index_of(target)]`
+    // at every target on the full set, `vec![T::index_of(target),
+    // T::CARDINALITY + T::index_of(target)]` at every target on the
+    // doubled full set). The three fixpoints partition the failure
+    // modes at the (return-length × per-element value × slice-shape)
+    // corner simultaneously so an override that folds onto the empty
+    // vec regardless of `target` fires on the full-set arm (returns
+    // `vec![]` at every target rather than the pinned singleton
+    // `vec![T::index_of(target)]`); an override that returns
+    // `vec![T::index_of(target)]` regardless of slice-arity fires on
+    // the doubled-full-set arm (returns length-1 vec rather than the
+    // pinned length-2 vec `vec![T::index_of(target), T::CARDINALITY +
+    // T::index_of(target)]`); an override that returns an ascending-
+    // shifted vec on the doubled slice bifurcates loudly at either
+    // the head-composition arm (against `T::first_occurrence_of` on
+    // `first().copied()`) or the tail-composition arm (against
+    // `T::last_occurrence_of` on `last().copied()`); an override that
+    // scrambles the returned indices on the doubled slice bifurcates
+    // loudly at the strictly-increasing contract embedded in the
+    // doubled-full-set arm's slot-equality check. Sibling posture to
+    // clauses (97) + (105) + (106) + (107) — clause (97) pins the
+    // (`usize`, per-target) multiplicity corner; clause (105) pins
+    // the (`bool`, per-target) membership corner; clauses (106) +
+    // (107) pin the (`Option<usize>`, per-target, head) + (…, tail)
+    // endpoint-anchor corners; this clause pins the (`Vec<usize>`,
+    // per-target) every-position corner peer to them one return-shape
+    // axis over on the (per-target) arity axis. Together, clauses
+    // (97) + (105) + (106) + (107) + (108) close the (per-target ×
+    // return-shape) row at FIVE typed corners — usize, bool,
+    // Option<usize> head, Option<usize> tail, Vec<usize> — closing the
+    // per-target arity axis exhaustively at every return-shape column
+    // opened on the equivalence-partition surface. The `Vec<usize>`-
+    // return column carries an INTRINSIC slice-position ordering
+    // (ascending indices from `Iterator::enumerate`), so the
+    // (decl, lex) ordering axis on `T::ALL` collapses on this clause
+    // (the returned indices are slice indices, not variant decl-
+    // slots) and no `sorted_all_occurrences_of` peer is needed.
+    for target in T::ALL.iter().copied() {
+        let empty_positions = T::all_occurrences_of(target, &[]);
+        assert!(
+            empty_positions.is_empty(),
+            "{type_name}: T::all_occurrences_of({target_label:?}, &[]) == {empty_positions:?} != vec![] — the per-target every-position projection MUST report an empty vec on the empty slice because the position sweep finds no match on a zero-position slice; a non-empty empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream every-position consumer routes through",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let target_index = <T as ClosedSet>::index_of(target);
+        let full_set_positions = T::all_occurrences_of(target, T::ALL);
+        assert_eq!(
+            full_set_positions,
+            vec![target_index],
+            "{type_name}: T::all_occurrences_of({target_label:?}, T::ALL) drifted from vec![T::index_of({target_label:?})] — the per-target every-position projection MUST report `vec![T::index_of(target)]` at every target on the full set by clause (3)'s pairwise-distinctness invariant because every variant appears at exactly one position in T::ALL at slot `T::index_of(target)`, so the every-position vec collapses to the singleton at that slot; a drifted full-set position vec silently detaches the every-position projection from the (variant → decl-slot) injectivity clause (16) at the every-position projection surface, breaking every downstream every-position consumer",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let doubled_positions = T::all_occurrences_of(target, &doubled_full_set);
+        assert_eq!(
+            doubled_positions,
+            vec![target_index, T::CARDINALITY + target_index],
+            "{type_name}: T::all_occurrences_of({target_label:?}, &doubled_full_set) drifted from vec![T::index_of({target_label:?}), T::CARDINALITY + T::index_of({target_label:?})] — the per-target every-position projection MUST report `vec![T::index_of(target), T::CARDINALITY + T::index_of(target)]` at every target on the doubled full set because every variant appears at EXACTLY TWO positions (T::index_of(target) and T::CARDINALITY + T::index_of(target)) and the ascending-order contract pins the head hit at the first-copy slot and the tail hit at the second-copy slot; a drifted doubled-position vec silently detaches the every-position projection from the endpoint-anchor pair on the doubled-slice fixpoint, and in particular catches an override that returns only the head hit (dropping the tail) or reorders the vec descending",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        assert_eq!(
+            full_set_positions.len(),
+            T::count_occurrences_of(target, T::ALL),
+            "{type_name}: T::all_occurrences_of({target_label:?}, T::ALL).len() drifted from T::count_occurrences_of({target_label:?}, T::ALL) — the per-target every-position projection's length no longer agrees with the per-target multiplicity primitive on the full-set fixpoint, so a downstream every-position consumer that binds `T::all_occurrences_of(_, _).len()` as its per-target multiplicity query surface would report the wrong count; the length-composition arm catches an override that detaches the vec's length from the per-target multiplicity on any slice",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        assert_eq!(
+            doubled_positions.first().copied(),
+            T::first_occurrence_of(target, &doubled_full_set),
+            "{type_name}: T::all_occurrences_of({target_label:?}, &doubled_full_set).first().copied() drifted from T::first_occurrence_of({target_label:?}, &doubled_full_set) — the per-target every-position projection's head element no longer agrees with the per-target head-position primitive on the doubled-full-set fixpoint, so a downstream every-position consumer that binds `T::all_occurrences_of(_, _).first().copied()` as its per-target head-position query surface would disagree with the pinned head-endpoint projection",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        assert_eq!(
+            doubled_positions.last().copied(),
+            T::last_occurrence_of(target, &doubled_full_set),
+            "{type_name}: T::all_occurrences_of({target_label:?}, &doubled_full_set).last().copied() drifted from T::last_occurrence_of({target_label:?}, &doubled_full_set) — the per-target every-position projection's tail element no longer agrees with the per-target tail-position primitive on the doubled-full-set fixpoint, so a downstream every-position consumer that binds `T::all_occurrences_of(_, _).last().copied()` as its per-target tail-position query surface would disagree with the pinned tail-endpoint projection",
             target_label = <T as ClosedSet>::label(target),
         );
     }
@@ -51322,6 +51582,384 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedLastOccurrenceKind whose last_occurrence_of override swaps endpoint direction — clause (107)'s doubled-full-set arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn all_occurrences_of_returns_empty_on_the_empty_slice_across_every_target() {
+        // EMPTY-SLICE CONTRACT: `T::all_occurrences_of(v, &[])` is
+        // the empty vec at every target — the empty slice hits zero
+        // positions, so `enumerate().filter().map()` yields no index.
+        let empty: &[StubKind] = &[];
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let positions = <StubKind as ClosedSet>::all_occurrences_of(v, empty);
+            assert!(
+                positions.is_empty(),
+                "T::all_occurrences_of({v:?}, &[]) = {positions:?} != vec![]",
+            );
+        }
+    }
+
+    #[test]
+    fn all_occurrences_of_returns_zero_singleton_on_the_matching_singleton_across_every_target() {
+        // MATCHING-SINGLETON CONTRACT:
+        // `T::all_occurrences_of(v, &[v]) == vec![0]` — the sole
+        // position hits the target at slot 0.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let positions = <StubKind as ClosedSet>::all_occurrences_of(v, &[v]);
+            assert_eq!(
+                positions,
+                vec![0],
+                "T::all_occurrences_of({v:?}, &[{v:?}]) = {positions:?} != vec![0]",
+            );
+        }
+    }
+
+    #[test]
+    fn all_occurrences_of_returns_empty_on_the_non_matching_singleton_across_every_target_pair() {
+        // NON-MATCHING-SINGLETON CONTRACT:
+        // `T::all_occurrences_of(v, &[w]) == vec![]` for every
+        // target `v` and slice-element `w != v` (compared via
+        // T::index_of).
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for w in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if <StubKind as ClosedSet>::index_of(v) != <StubKind as ClosedSet>::index_of(w) {
+                    let positions = <StubKind as ClosedSet>::all_occurrences_of(v, &[w]);
+                    assert!(
+                        positions.is_empty(),
+                        "T::all_occurrences_of({v:?}, &[{w:?}]) = {positions:?} != vec![]",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn all_occurrences_of_returns_index_of_singleton_on_the_full_set_across_every_target() {
+        // FULL-SET CONTRACT:
+        // `T::all_occurrences_of(v, <T as ClosedSet>::ALL) == vec![T::index_of(v)]`
+        // UNCONDITIONALLY — clause (3)'s pairwise-distinctness invariant
+        // forces every variant to appear at exactly ONE position of
+        // the full-set slice, at slot `T::index_of(v)`.
+        let all = <StubKind as ClosedSet>::ALL;
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let positions = <StubKind as ClosedSet>::all_occurrences_of(v, all);
+            let expected = vec![<StubKind as ClosedSet>::index_of(v)];
+            assert_eq!(
+                positions, expected,
+                "T::all_occurrences_of({v:?}, T::ALL) = {positions:?} != {expected:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn all_occurrences_of_returns_both_hits_on_the_doubled_full_set_across_every_target() {
+        // DOUBLED-FULL-SET CONTRACT:
+        // `T::all_occurrences_of(v, &doubled_full_set) == vec![
+        //   T::index_of(v),
+        //   T::CARDINALITY + T::index_of(v),
+        // ]` UNCONDITIONALLY — each variant appears at EXACTLY TWO
+        // positions in the doubled slice, and the ascending-order
+        // contract pins the head hit at the first-copy slot and the
+        // tail hit at the second-copy slot.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let positions = <StubKind as ClosedSet>::all_occurrences_of(v, &doubled);
+            let idx = <StubKind as ClosedSet>::index_of(v);
+            let expected = vec![idx, <StubKind as ClosedSet>::CARDINALITY + idx];
+            assert_eq!(
+                positions, expected,
+                "T::all_occurrences_of({v:?}, doubled_full_set) = {positions:?} != {expected:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn all_occurrences_of_len_equals_count_occurrences_of_across_every_target_and_triple() {
+        // LENGTH-COMPOSITION IDENTITY:
+        // `T::all_occurrences_of(v, items).len() == T::count_occurrences_of(v, items)`
+        // on every (v, items) pair — the vec's length is exactly the
+        // per-target multiplicity.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let vec_len = <StubKind as ClosedSet>::all_occurrences_of(v, &triple).len();
+                        let mult = <StubKind as ClosedSet>::count_occurrences_of(v, &triple);
+                        assert_eq!(
+                            vec_len, mult,
+                            "T::all_occurrences_of({v:?}, {triple:?}).len() = {vec_len} diverged from T::count_occurrences_of({v:?}, {triple:?}) = {mult}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn all_occurrences_of_first_equals_first_occurrence_of_across_every_target_and_triple() {
+        // HEAD-COMPOSITION IDENTITY:
+        // `T::all_occurrences_of(v, items).first().copied() == T::first_occurrence_of(v, items)`
+        // on every (v, items) pair — the vec's head element is
+        // exactly the head-endpoint projection.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let head = <StubKind as ClosedSet>::all_occurrences_of(v, &triple)
+                            .first()
+                            .copied();
+                        let expected = <StubKind as ClosedSet>::first_occurrence_of(v, &triple);
+                        assert_eq!(
+                            head, expected,
+                            "T::all_occurrences_of({v:?}, {triple:?}).first().copied() = {head:?} diverged from T::first_occurrence_of = {expected:?}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn all_occurrences_of_last_equals_last_occurrence_of_across_every_target_and_triple() {
+        // TAIL-COMPOSITION IDENTITY:
+        // `T::all_occurrences_of(v, items).last().copied() == T::last_occurrence_of(v, items)`
+        // on every (v, items) pair — the vec's tail element is
+        // exactly the tail-endpoint projection.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let tail = <StubKind as ClosedSet>::all_occurrences_of(v, &triple)
+                            .last()
+                            .copied();
+                        let expected = <StubKind as ClosedSet>::last_occurrence_of(v, &triple);
+                        assert_eq!(
+                            tail, expected,
+                            "T::all_occurrences_of({v:?}, {triple:?}).last().copied() = {tail:?} diverged from T::last_occurrence_of = {expected:?}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn all_occurrences_of_is_strictly_increasing_across_every_target_and_triple() {
+        // STRICTLY-INCREASING CONTRACT: adjacent elements of
+        // `T::all_occurrences_of(v, items)` are strictly
+        // increasing — the enumerate-based slice-position ordering
+        // pins ascending order and no duplicate index survives the
+        // filter's per-position gating.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let positions = <StubKind as ClosedSet>::all_occurrences_of(v, &triple);
+                        for window in positions.windows(2) {
+                            assert!(
+                                window[0] < window[1],
+                                "T::all_occurrences_of({v:?}, {triple:?}) = {positions:?} — adjacent slice indices {} and {} are not strictly increasing",
+                                window[0],
+                                window[1],
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn all_occurrences_of_positions_all_match_across_every_target_and_triple() {
+        // POSITIONAL-CORRECTNESS CONTRACT: every returned index `i`
+        // satisfies `i < items.len()` AND
+        // `T::index_of(items[i]) == T::index_of(v)` — every returned
+        // index is a valid slice index at which `items` carries the
+        // target's variant identity.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let positions = <StubKind as ClosedSet>::all_occurrences_of(v, &triple);
+                        for &i in &positions {
+                            assert!(
+                                i < triple.len(),
+                                "T::all_occurrences_of({v:?}, {triple:?}) = {positions:?} — returned index {i} is out of bounds for len {}",
+                                triple.len(),
+                            );
+                            assert_eq!(
+                                <StubKind as ClosedSet>::index_of(triple[i]),
+                                <StubKind as ClosedSet>::index_of(v),
+                                "T::all_occurrences_of({v:?}, {triple:?}) = {positions:?} — returned index {i} points at {:?} whose decl-slot differs from {v:?}'s",
+                                triple[i],
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn all_occurrences_of_summed_over_all_targets_equals_slice_length_across_every_triple() {
+        // PARTITION IDENTITY:
+        // `T::ALL.iter().map(|v| T::all_occurrences_of(v, items).len()).sum::<usize>()
+        //   == items.len()`
+        // — the per-target index sets partition the slice's positions
+        // exactly (every position sits at EXACTLY ONE variant by the
+        // (variant → decl-slot) injectivity clause (16)).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let sum: usize = <StubKind as ClosedSet>::ALL
+                        .iter()
+                        .copied()
+                        .map(|v| <StubKind as ClosedSet>::all_occurrences_of(v, &triple).len())
+                        .sum();
+                    assert_eq!(
+                        sum,
+                        triple.len(),
+                        "sum over targets of T::all_occurrences_of(v, {triple:?}).len() = {sum} diverged from triple.len() = {} — the per-target index-set partition identity was violated",
+                        triple.len(),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_all_occurrences_of_and_full_set() {
+        // Drift catch — clause (108)'s full-set fixpoint arm fires
+        // when an override folds the per-target every-position
+        // projection onto the empty vec regardless of target. The
+        // stub below overrides the default body to return `vec![]`
+        // unconditionally; on the full set that produces
+        // `vec![] != vec![T::index_of(target)]` at every target,
+        // tripping clause (108)'s full-set fixpoint arm loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedAllOccurrencesEmptyKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedAllOccurrencesEmptyKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedAllOccurrencesEmptyKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted all_occurrences empty kind: {}", self.0)
+            }
+        }
+
+        impl DriftedAllOccurrencesEmptyKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedAllOccurrencesEmptyKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted all_occurrences empty kind";
+            type Unknown = UnknownDriftedAllOccurrencesEmptyKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedAllOccurrencesEmptyKind(s.to_owned())
+            }
+            fn all_occurrences_of(_target: Self, _items: &[Self]) -> ::std::vec::Vec<usize> {
+                ::std::vec::Vec::new()
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedAllOccurrencesEmptyKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedAllOccurrencesEmptyKind whose all_occurrences_of override folds onto vec![] unconditionally — clause (108)'s full-set fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_length_drift_on_all_occurrences_of() {
+        // Drift catch — clause (108)'s doubled-full-set arm fires
+        // when an override drops the tail hit and returns only the
+        // head singleton `vec![T::index_of(target)]` regardless of
+        // slice arity. On the doubled full set that returns a
+        // length-1 vec instead of the pinned length-2
+        // `vec![T::index_of(target), T::CARDINALITY + T::index_of(target)]`,
+        // tripping the doubled-full-set arm loudly and simultaneously
+        // bifurcating the tail-composition arm against
+        // `T::last_occurrence_of`.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedAllOccurrencesHeadOnlyKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedAllOccurrencesHeadOnlyKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedAllOccurrencesHeadOnlyKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted all_occurrences head-only kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedAllOccurrencesHeadOnlyKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedAllOccurrencesHeadOnlyKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted all_occurrences head-only kind";
+            type Unknown = UnknownDriftedAllOccurrencesHeadOnlyKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedAllOccurrencesHeadOnlyKind(s.to_owned())
+            }
+            fn all_occurrences_of(target: Self, _items: &[Self]) -> ::std::vec::Vec<usize> {
+                // Drift: drop the tail hit — always return only the
+                // head-anchor singleton. On the doubled full set that
+                // returns `vec![T::index_of(target)]` instead of the
+                // pinned length-2 vec, bifurcating clause (108)'s
+                // doubled-full-set arm.
+                vec![<Self as ClosedSet>::index_of(target)]
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedAllOccurrencesHeadOnlyKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedAllOccurrencesHeadOnlyKind whose all_occurrences_of override drops the tail hit — clause (108)'s doubled-full-set arm MUST reject the drift",
         );
     }
 

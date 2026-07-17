@@ -122,6 +122,159 @@ const _: () = assert_char_array_pairwise_distinct(&Atom::ESCAPE_SOURCES);
 const _: () = assert_char_array_pairwise_distinct(&Atom::ESCAPE_DECODED);
 
 /// Compile-time contract verifier — panics at const evaluation time if
+/// any entry of `arr` carries a Unicode scalar value outside the
+/// seven-bit ASCII range (`> 0x7F`).
+///
+/// Element-type row-dual peer to [`assert_str_array_all_ascii`] on the
+/// (element-type) axis of the (element-type × contract-shape) matrix at
+/// the (per-entry, ASCII) column: where the (`&'static str`) sibling
+/// closes the ASCII-BYTE-RANGE per-entry corner on the substrate's
+/// closed-set outer algebras' family-wide `[&'static str; N]` label
+/// vocabularies, this (`char`) sibling closes the SAME per-entry
+/// contract-shape corner on the substrate's reader-boundary `[char; N]`
+/// scalar vocabularies. The two helpers close the (element-type ∈
+/// {char, `&'static str`} × contract-shape ∈ {ASCII}) 2-corner row of
+/// the per-entry ASCII column at ONE peer const-fn helper per element-
+/// type. Contract-orthogonal peer to
+/// [`assert_char_array_pairwise_distinct`] on the (INJECTIVITY, ASCII)
+/// axis of the (per-entry × set-level) column on the SAME (`char`) row:
+/// where the pairwise-distinctness sibling binds SET-LEVEL `∀ i ≠ j :
+/// arr[i] ≠ arr[j]`, this ASCII sibling binds PER-ENTRY `∀ i : (arr[i]
+/// as u32) <= 0x7F` — the two together give every `[char; N]` sub-
+/// vocabulary on the substrate BOTH set-level injectivity AND per-
+/// entry byte-range containment at compile time. Note the (per-entry,
+/// NONEMPTY) corner from the (`&'static str`) row is intentionally
+/// absent here: a `char` is a single Unicode scalar value and carries
+/// no length dimension, so the NONEMPTY per-entry gate degenerates to
+/// a vacuous tautology on the (`char`) row and needs no peer.
+///
+/// The invariant is load-bearing for every consumer that ships an
+/// array entry through a downstream surface whose canonical form is
+/// seven-bit-clean — the reader's `matches!(c, LIST_OPEN | LIST_CLOSE
+/// | …)` outer-dispatch on [`Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS`]
+/// entries; the tokenizer's byte-level scan on [`Sexp::LIST_DELIMITERS`]
+/// / [`Sexp::COMMENT_DELIMITERS`] / [`QuoteForm::LEADS`] entries; the
+/// atom-payload escape-decode dispatch on [`Atom::SELF_ESCAPE_TABLE`] /
+/// [`Atom::ESCAPE_SOURCES`] / [`Atom::ESCAPE_DECODED`] entries. Every
+/// consumer treats each entry as a single seven-bit-clean ASCII scalar;
+/// a regression that silently re-inlined `LIST_OPEN = '（'` (fullwidth
+/// U+FF08) or `QUOTE_LEAD = '‘'` (U+2018) — lookalike scalars that
+/// would parse as a Rust `char` literal but ship a multi-byte UTF-8
+/// sequence at every reader-boundary byte comparison — fails at `cargo
+/// check` BEFORE any test scheduler runs.
+///
+/// Adding a new family-wide `[char; N]` reader-boundary scalar
+/// vocabulary whose canonical spelling is seven-bit-clean: pair the
+/// declaration with `const _: () = assert_char_array_all_ascii
+/// (&Self::FOO_ARRAY);` co-located after the array's declaration and
+/// the ASCII-SCALAR-RANGE contract binds at compile time. The rustc-
+/// forced arity `[char; N]` composes with this const-eval sweep so
+/// BOTH cardinality AND per-entry ASCII are compile-time theorems on
+/// the SAME array declaration.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by
+/// `assert_char_array_all_ascii_panics_at_runtime_on_head_non_ascii` /
+/// `_interior_non_ascii` / `_tail_non_ascii` and
+/// `assert_char_array_all_ascii_panic_message_names_the_helper_and_axis`.
+/// The panic site carries the `"CHAR-NON-ASCII-SCALAR"` axis-
+/// provenance string chosen DISTINCT from every sibling helper's axis
+/// vocabulary (`"duplicate"` on the pairwise-distinct sibling;
+/// `"CHAR-SUBSET-VIOLATION"` on the within-finite-set sibling;
+/// `"CHAR-DISJOINTNESS-VIOLATION"` on the arrays-disjoint sibling;
+/// `"STR-NON-ASCII-ENTRY"` on the (`&'static str`) row-dual ASCII
+/// sibling) so a diagnostic that names the failed axis routes
+/// UNAMBIGUOUSLY to THIS specific (`char`)-row ASCII helper. The
+/// `"CHAR-"` prefix disambiguates from the (`&'static str`) row-dual
+/// ASCII sibling; the shared `"-NON-ASCII-"` infix lets callers grep
+/// any row's ASCII sibling by `"NON-ASCII"` alone.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide per-entry
+///   ASCII-scalar-range contract on the substrate's reader-boundary
+///   `char` vocabulary becomes a TYPE-LEVEL theorem the substrate
+///   carries per array declaration rather than a runtime test the
+///   developer must remember to write per scalar constant.
+/// - THEORY.md §II.1 invariant 1 — typed entry; a reader-boundary
+///   scalar's `char` projection IS the entry-point discriminator into
+///   the tokenizer's outer dispatch, and a non-ASCII scalar in that
+///   projection silently escapes the byte-level assumption every
+///   downstream parser encodes into its own byte-position arithmetic.
+/// - THEORY.md §III — the typescape; the (element-type × contract-
+///   shape) matrix now carries the ASCII per-entry corner on TWO rows
+///   ({`char`, `&'static str`}) at ONE peer const-fn helper per row.
+///   The (element-type ∈ {char, `&'static str`}) × (contract-shape ∈
+///   {per-entry ASCII}) 2-corner row of the per-entry ASCII column is
+///   now closed at TWO peer const-fn helpers.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   scalar-range sweep IS the generative shape. Every new closed-set
+///   reader-boundary scalar array adds ONE `const _` line to get the
+///   ASCII theorem rather than re-deriving a per-array runtime iterator
+///   sweep at each call site.
+///
+/// Frontier inspiration: Lean 4's `List.all` unfolded to `∀ i : arr[i]
+/// ∈ ascii` at the concrete `[char; N]` monomorphic realisation, where
+/// `ascii := { c : Char // c.toNat ≤ 0x7F }`. The (`char`, `&'static
+/// str`) row-dual pair mirrors Lean's element-polymorphic `List α`
+/// realised at the two concrete element-type instantiations the
+/// substrate closes at compile time.
+pub const fn assert_char_array_all_ascii<const N: usize>(arr: &[char; N]) {
+    let mut i = 0;
+    while i < N {
+        if arr[i] as u32 > 0x7F {
+            panic!(
+                "assert_char_array_all_ascii: CHAR-NON-ASCII-SCALAR — \
+                 the family-wide char array carries an entry with a \
+                 Unicode scalar value outside the seven-bit ASCII \
+                 range (> 0x7F) at some position — the substrate's \
+                 ASCII-SCALAR-RANGE contract on the array is broken; \
+                 every consumer that ships an entry through a seven-\
+                 bit-clean reader-boundary surface (the reader's \
+                 `matches!(c, LIST_OPEN | ...)` outer-dispatch on \
+                 NON_WHITESPACE_BARE_ATOM_TERMINATORS entries; the \
+                 tokenizer's byte-level scan on LIST_DELIMITERS / \
+                 COMMENT_DELIMITERS / QuoteForm::LEADS entries; the \
+                 atom-payload escape-decode dispatch on SELF_ESCAPE_\
+                 TABLE / ESCAPE_SOURCES / ESCAPE_DECODED entries) \
+                 treats each entry as a single seven-bit-clean ASCII \
+                 scalar — a non-ASCII scalar silently invites lookalike-\
+                 char collisions (fullwidth U+FF08 `（` vs ASCII U+0028 \
+                 `(`) and multi-byte UTF-8 drift that byte-position \
+                 arithmetic cannot detect. Fix at the ARRAY-DECLARATION \
+                 site by re-inlining the offending scalar constant to \
+                 its seven-bit-clean canonical spelling"
+            );
+        }
+        i += 1;
+    }
+}
+
+// Compile-time ASCII-SCALAR-RANGE witnesses — one `const _: () =
+// assert_char_array_all_ascii(&…)` per family-wide `[char; N]` char
+// array on the substrate's reader-boundary vocabulary. Each invocation
+// is const-evaluated at `cargo check` time; a regression that silently
+// re-inlined one scalar constant to a lookalike non-ASCII scalar
+// (fullwidth U+FF08 `（`, curly-quote U+2018 `‘`, etc.) fails the
+// build rather than deferring to a per-consumer byte-parse
+// misbehavior at runtime. Sibling to the pairwise-distinctness
+// witnesses above — those pin SET-LEVEL INJECTIVITY on each array,
+// these pin the strictly-orthogonal PER-ENTRY byte-range gate on the
+// SAME arrays. The two contracts compose orthogonally on every reader-
+// boundary `[char; N]` scalar vocabulary. The seven arrays covered
+// here mirror the seven arrays already pinned by the
+// `_pairwise_distinct` witnesses above — the (per-entry × set-level)
+// coverage matrix on the (`char`) row of this file now holds at TWO
+// corners {INJECTIVITY (set-level), ASCII (per-entry)} for the seven
+// reader-boundary arrays declared here.
+const _: () = assert_char_array_all_ascii(&Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS);
+const _: () = assert_char_array_all_ascii(&Sexp::LIST_DELIMITERS);
+const _: () = assert_char_array_all_ascii(&Sexp::COMMENT_DELIMITERS);
+const _: () = assert_char_array_all_ascii(&QuoteForm::LEADS);
+const _: () = assert_char_array_all_ascii(&Atom::SELF_ESCAPE_TABLE);
+const _: () = assert_char_array_all_ascii(&Atom::ESCAPE_SOURCES);
+const _: () = assert_char_array_all_ascii(&Atom::ESCAPE_DECODED);
+
+/// Compile-time contract verifier — panics at const evaluation time if
 /// the distinct-values set of `arr` is not a subset of the distinct-
 /// values set of `set` on the substrate's reader-boundary `char`
 /// vocabulary. Binds ONE conjunct clause: CHAR-SUBSET-VIOLATION —
@@ -34441,6 +34594,218 @@ mod tests {
             "assert_char_array_pairwise_distinct panic message \
              {msg:?} must name the helper for provenance-preserving \
              failure diagnostics",
+        );
+    }
+
+    // ── assert_char_array_all_ascii — the per-entry ASCII-SCALAR-RANGE
+    // gate row-dual peer of `assert_str_array_all_ascii` on the
+    // (element-type ∈ {char, `&'static str`}) axis of the (per-entry ×
+    // contract-shape) matrix at the (per-entry, ASCII) column. Contract-
+    // orthogonal sibling of `assert_char_array_pairwise_distinct` on
+    // the (INJECTIVITY, ASCII) axis of the SAME (`char`) row. ──
+
+    #[test]
+    fn assert_char_array_all_ascii_accepts_the_empty_array() {
+        // Empty array — vacuously all-ASCII (no entry to fail the
+        // scalar-range gate). The compile-time `const _: () =
+        // assert_char_array_all_ascii(&EMPTY);` would land on this
+        // arm, so the runtime call MUST return normally. Sibling
+        // posture to `assert_str_array_all_ascii_accepts_the_empty_
+        // array` on the (`&'static str`) row-dual ASCII helper — the
+        // two share the trivial-arity arm across the element-type
+        // column.
+        assert_char_array_all_ascii::<0>(&[]);
+    }
+
+    #[test]
+    fn assert_char_array_all_ascii_accepts_ascii_singleton_arrays() {
+        // Singleton array carrying an all-ASCII entry — the sole
+        // entry clears the scalar-range gate. Cross-arity coverage
+        // on the `[char; 1]` corner of the const-N generic. Includes
+        // a substrate-scalar entry (`Sexp::LIST_OPEN`) to cover the
+        // named-constant projection alongside the char literal
+        // projection.
+        assert_char_array_all_ascii(&['a']);
+        assert_char_array_all_ascii(&[Sexp::LIST_OPEN]);
+    }
+
+    #[test]
+    fn assert_char_array_all_ascii_accepts_every_family_wide_substrate_array() {
+        // Runtime cross-check that the SAME seven arrays the module-
+        // level `const _: () = ...` witnesses cover at COMPILE time
+        // are all-ASCII. Sibling posture to the runtime
+        // `_pairwise_distinct_accepts_every_family_wide_substrate_
+        // array` cross-check — the two together pin BOTH the SET-
+        // LEVEL INJECTIVITY axis AND the PER-ENTRY ASCII-SCALAR-RANGE
+        // axis on the SAME seven arrays, at TWO stages of the
+        // toolchain (compile-time `const _` line + this runtime
+        // safety-net). Row-dual posture to
+        // `assert_str_array_all_ascii_accepts_every_family_wide_
+        // substrate_array` on the (`&'static str`) row — the two
+        // together sweep the ASCII contract across every reader-
+        // boundary AND every outer-algebra vocabulary the substrate
+        // ships.
+        assert_char_array_all_ascii(&Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS);
+        assert_char_array_all_ascii(&Sexp::LIST_DELIMITERS);
+        assert_char_array_all_ascii(&Sexp::COMMENT_DELIMITERS);
+        assert_char_array_all_ascii(&QuoteForm::LEADS);
+        assert_char_array_all_ascii(&Atom::SELF_ESCAPE_TABLE);
+        assert_char_array_all_ascii(&Atom::ESCAPE_SOURCES);
+        assert_char_array_all_ascii(&Atom::ESCAPE_DECODED);
+    }
+
+    #[test]
+    fn assert_char_array_all_ascii_accepts_the_ascii_boundary_scalar() {
+        // Boundary-inclusive pin on the ASCII scalar range's upper
+        // edge — U+007F (DEL, the last ASCII scalar) MUST be
+        // accepted. Guards against an off-by-one regression that
+        // walked `arr[i] as u32 >= 0x7F` and spuriously rejected the
+        // sole `'\u{7F}'` character. Together with the negative pins
+        // below (which fire on U+0080 — the first non-ASCII scalar),
+        // the two pin the scalar-range boundary at both edges.
+        assert_char_array_all_ascii(&['\u{7F}']);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_array_all_ascii")]
+    fn assert_char_array_all_ascii_panics_at_runtime_on_singleton_non_ascii() {
+        // NEGATIVE PIN — singleton corner: a one-element array
+        // carrying a non-ASCII scalar MUST panic. Pins the helper's
+        // own reject-non-ascii arm on the smallest possible array
+        // shape. The scalar `'é'` (U+00E9) has `as u32 == 0xE9 >
+        // 0x7F` and fires the range gate.
+        assert_char_array_all_ascii(&['é']);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_array_all_ascii")]
+    fn assert_char_array_all_ascii_panics_at_runtime_on_head_non_ascii() {
+        // NEGATIVE PIN — head corner: the non-ASCII scalar at
+        // position 0 MUST fire even when subsequent entries are
+        // ASCII. Pins the sweep's inclusive-start behavior — a
+        // regression that walked `while i < N { … i += 1 }` from
+        // an off-by-one start (`i = 1`) would silently accept a
+        // leading non-ASCII entry.
+        assert_char_array_all_ascii(&['é', 'a', 'b']);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_array_all_ascii")]
+    fn assert_char_array_all_ascii_panics_at_runtime_on_interior_non_ascii() {
+        // NEGATIVE PIN — interior corner: the non-ASCII scalar at a
+        // strictly-interior position MUST fire. Pins the sweep's
+        // non-early-exit behavior at the head-arm — a regression
+        // that returned `Ok` on the first ASCII entry (bailing out
+        // of the sweep prematurely) would silently accept an
+        // interior non-ASCII entry.
+        assert_char_array_all_ascii(&['a', 'é', 'b']);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_array_all_ascii")]
+    fn assert_char_array_all_ascii_panics_at_runtime_on_tail_non_ascii() {
+        // NEGATIVE PIN — tail corner: the non-ASCII scalar at
+        // position `N - 1` MUST fire. Pins the outer `while i < N`
+        // upper bound — a regression that walked `while i < N - 1`
+        // (dropping the last slot) would silently accept a trailing
+        // non-ASCII entry.
+        assert_char_array_all_ascii(&['a', 'b', 'c', 'é']);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_char_array_all_ascii")]
+    fn assert_char_array_all_ascii_panics_on_the_first_non_ascii_scalar() {
+        // NEGATIVE PIN — first-non-ASCII-scalar boundary: U+0080
+        // (the smallest non-ASCII scalar) MUST fire. Guards against
+        // an off-by-one regression that walked `arr[i] as u32 >
+        // 0x80` (dropping U+0080 from the reject set). Together
+        // with `_accepts_the_ascii_boundary_scalar` (which pins
+        // U+007F acceptance), the two pin the scalar-range boundary
+        // at both edges. Row-dual posture to `assert_str_array_all_
+        // ascii_panics_on_the_first_non_ascii_byte` — the two
+        // together pin the boundary at both element-type projections.
+        assert_char_array_all_ascii(&['\u{80}']);
+    }
+
+    #[test]
+    fn assert_char_array_all_ascii_rejects_the_all_non_ascii_array() {
+        // POSITIVE-ORTHOGONAL PIN — the ALL-non-ASCII corner: an
+        // array whose every entry is a non-ASCII scalar fires the
+        // helper on the FIRST entry (the head-arm). Confirms the
+        // helper does not silently accept an array whose every
+        // entry ships non-ASCII scalars. Row-dual posture to
+        // `assert_str_array_all_ascii_rejects_the_all_non_ascii_
+        // array` on the (`&'static str`) row — the two together pin
+        // the all-reject corner across the element-type column.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_array_all_ascii(&['é', 'ü']);
+        });
+        outcome.expect_err(
+            "assert_char_array_all_ascii must panic on an array \
+             whose every entry is a non-ASCII scalar — the head-arm \
+             fires on the first non-ASCII scalar at position 0",
+        );
+    }
+
+    #[test]
+    fn assert_char_array_all_ascii_panic_message_names_the_helper_and_axis() {
+        // PANIC-MESSAGE PROVENANCE PIN: the panic message MUST
+        // begin with the helper's own name AND name the failed axis
+        // as `"CHAR-NON-ASCII-SCALAR"` (chosen DISTINCT from every
+        // sibling helper's axis vocabulary: `"duplicate"` on the
+        // pairwise-distinct sibling; `"CHAR-SUBSET-VIOLATION"` on
+        // the within-finite-set sibling; `"CHAR-DISJOINTNESS-
+        // VIOLATION"` on the arrays-disjoint sibling; `"STR-NON-
+        // ASCII-ENTRY"` on the (`&'static str`) row-dual ASCII
+        // sibling) so a diagnostic that names the failed axis routes
+        // UNAMBIGUOUSLY to THIS specific (`char`)-row ASCII helper.
+        // The `"CHAR-"` prefix disambiguates from the (`&'static
+        // str`) row-dual ASCII sibling; the shared `"-NON-ASCII-"`
+        // infix lets callers grep any row's ASCII sibling by `"NON-
+        // ASCII"` alone.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_char_array_all_ascii(&['é']);
+        });
+        let payload = outcome.expect_err(
+            "assert_char_array_all_ascii must panic on a non-ASCII \
+             scalar — the reject-non-ascii arm is the point of the \
+             helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_char_array_all_ascii panic payload must be \
+                 a static &str or String",
+            );
+        assert!(
+            msg.contains("assert_char_array_all_ascii"),
+            "assert_char_array_all_ascii panic message {msg:?} must \
+             name the helper for provenance-preserving failure \
+             diagnostics",
+        );
+        assert!(
+            msg.contains("CHAR-NON-ASCII-SCALAR"),
+            "assert_char_array_all_ascii panic message {msg:?} must \
+             name the failed axis as `CHAR-NON-ASCII-SCALAR` \
+             DISTINCT from every sibling helper's axis vocabulary",
+        );
+        assert!(
+            !msg.contains("STR-NON-ASCII-ENTRY"),
+            "assert_char_array_all_ascii panic message {msg:?} must \
+             NOT name the (`&'static str`) row-dual sibling's axis \
+             — the two row-dual ASCII helpers must keep their axis-\
+             provenance strings lexically distinct on the element-\
+             type column",
+        );
+        assert!(
+            !msg.contains("CHAR-SUBSET-VIOLATION"),
+            "assert_char_array_all_ascii panic message {msg:?} must \
+             NOT name the SUBSET-embedding sibling's axis — the \
+             per-entry ASCII helper and the SUBSET-embedding helper \
+             must keep their axis-provenance strings lexically \
+             distinct on the contract-shape column",
         );
     }
 

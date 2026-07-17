@@ -19481,6 +19481,235 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "repeating variants" projection
+    /// — the `Vec<Self>` LEX-ORDER strict-repeat set of
+    /// [`Self::sorted_variants`], keeping every variant whose per-
+    /// target multiplicity in `items` is `>= 2` and dropping every
+    /// variant whose multiplicity is `<= 1`. The LEX-ORDER peer of
+    /// [`Self::repeating_variants`] on the (declaration, lex)
+    /// ordering axis of the `Vec<Self>`-return strict-repeat-band
+    /// column of the equivalence-partition surface — CLOSES the lex
+    /// arm past the declaration arm the sibling
+    /// [`Self::repeating_variants`] opened, and CLOSES the (partition-
+    /// arm × ordering) 3×2 = 6-corner `Vec<Self>`-return face at its
+    /// SIXTH (strict-repeat, lex) corner peer to
+    /// [`Self::sorted_present_variants`] (present × lex) and
+    /// [`Self::sorted_missing_variants`] (absent × lex) one PARTITION-
+    /// ARM axis over on the same lex column.
+    ///
+    /// Composition law: for every slice `items`,
+    /// `T::sorted_repeating_variants(items) ==
+    /// T::sorted_variants().into_iter().filter(|&v|
+    /// T::is_repeated_occurrence_of(v, items)).collect()` — the
+    /// projection binds through the substrate's [`Self::sorted_variants`]
+    /// canonical lex-order listing surface composed with the
+    /// substrate's per-target strict-repeat primitive
+    /// [`Self::is_repeated_occurrence_of`] via the standard-library
+    /// filter combinator. The strict-repeat MEMBERSHIP predicate
+    /// matches [`Self::repeating_variants`] byte-for-byte on every
+    /// variant; only the ITERATION ORDER differs (lex vs declaration).
+    ///
+    /// Cross-arm permutation identity: for every slice `items`,
+    /// `T::sorted_repeating_variants(items)` is a PERMUTATION of
+    /// `T::repeating_variants(items)` — the two projections filter
+    /// the SAME strict-repeat set from [`Self::ALL`] /
+    /// [`Self::sorted_variants`] (both of which contain every variant
+    /// exactly once by the closed-set well-formedness invariant
+    /// [`assert_closed_set_well_formed`]'s clauses 3 + 17), so the
+    /// multiset of variant identities in the two returned Vecs
+    /// coincides though the ordering differs. Pinned by
+    /// `sorted_repeating_variants_is_a_permutation_of_repeating_variants_across_every_triple`.
+    ///
+    /// Cardinality identity: for every slice `items`,
+    /// `T::sorted_repeating_variants(items).len() ==
+    /// T::count_repeating_variants(items)` — the lex-order Vec-return
+    /// strict-repeat projection's length matches the usize-return
+    /// strict-repeat count exactly, and matches the declaration-order
+    /// Vec-return strict-repeat length. Pinned by
+    /// `sorted_repeating_variants_length_equals_count_repeating_variants_across_every_triple`.
+    ///
+    /// Bool-projection identities: for every slice `items`,
+    /// * `T::sorted_repeating_variants(items).is_empty()` iff
+    ///   `!T::is_repeating_any(items)` — the strict-repeat set is
+    ///   empty iff the strict-repeat existential fails;
+    /// * `!T::sorted_repeating_variants(items).is_empty()` iff
+    ///   `T::is_repeating_any(items)` — the strict-repeat set is
+    ///   non-empty iff the strict-repeat existential holds.
+    ///
+    /// Both bool-projections are INVARIANT under the (declaration,
+    /// lex) axis — the bool return carries no ordering, so the
+    /// identity holds identically on the declaration arm (pinned by
+    /// `repeating_variants_is_empty_iff_not_is_repeating_any_across_every_triple`)
+    /// AND on the lex arm (this pin). Pinned by
+    /// `sorted_repeating_variants_is_empty_iff_not_is_repeating_any_across_every_triple`.
+    ///
+    /// Sub-set relation: `T::sorted_repeating_variants(items)` is a
+    /// SUBSET of `T::sorted_present_variants(items)` — every strict-
+    /// repeat variant occurs at least once, so the (multiplicity `>=
+    /// 2`) band is contained in the (multiplicity `>= 1`) presence
+    /// band. Symmetrically, `T::sorted_repeating_variants(items)` is
+    /// DISJOINT from `T::sorted_missing_variants(items)` (the
+    /// multiplicity `== 0` band cannot overlap the multiplicity `>=
+    /// 2` band). Pinned by
+    /// `sorted_repeating_variants_is_a_subset_of_sorted_present_variants_across_every_triple`
+    /// and
+    /// `sorted_repeating_variants_is_disjoint_from_sorted_missing_variants_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the strict-
+    /// repeat predicate is a function of that multiset alone. The
+    /// OUTPUT ordering is fixed by [`Self::sorted_variants`]'s lex
+    /// order regardless of the input ordering. Pinned by
+    /// `sorted_repeating_variants_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Lex-order subsequence contract: the returned `Vec<Self>` is
+    /// ALWAYS a subsequence of [`Self::sorted_variants`] — every
+    /// variant appears at most once (dedup by the closed-set well-
+    /// formedness invariant [`assert_closed_set_well_formed`]'s
+    /// clause (3) pairwise-distinctness), in [`Self::sorted_variants`]'s
+    /// lex order. Pinned by
+    /// `sorted_repeating_variants_preserves_lex_order_across_every_triple`
+    /// which verifies the label sequence is strictly ascending in
+    /// ASCII order via `windows(2).all(|w| w[0] < w[1])`.
+    ///
+    /// Empty-slice contract: `T::sorted_repeating_variants(&[])` is
+    /// the empty `Vec` UNCONDITIONALLY — the empty slice hits zero
+    /// positions, so every per-variant multiplicity is `0` and the
+    /// per-target `>= 2` test fails at every target. Sibling posture
+    /// to the OPPOSITE declaration-order arm at
+    /// `repeating_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind`;
+    /// both arms agree on the empty-slice endpoint because the
+    /// zero-Vec has no ordering to distinguish. Pinned by
+    /// `sorted_repeating_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Full-set contract:
+    /// `T::sorted_repeating_variants(<T as ClosedSet>::ALL)` is the
+    /// empty `Vec` UNCONDITIONALLY — the closed-set well-formedness
+    /// invariant's clause (3) pairwise-distinctness pins every
+    /// variant of [`Self::ALL`] as occurring at EXACTLY ONE position
+    /// of the full-set slice, so every per-target multiplicity is
+    /// `1` and the per-target `>= 2` test fails at every target.
+    /// Pinned by
+    /// `sorted_repeating_variants_over_the_full_set_returns_the_empty_vec_across_every_kind`.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::sorted_repeating_variants(&<T as ClosedSet>::ALL.iter().chain(
+    /// <T as ClosedSet>::ALL.iter()).copied().collect::<Vec<_>>()) ==
+    /// T::sorted_variants()` UNCONDITIONALLY — the doubled full set
+    /// hits every variant at EXACTLY TWO positions, so every per-
+    /// target multiplicity is `2` and the per-target `>= 2` test
+    /// succeeds at every target; the projection dedups against
+    /// [`Self::sorted_variants`] and returns each variant exactly
+    /// once in lex order. The doubled-full-set arm is LOAD-BEARING
+    /// — it is the ONLY canonical fixpoint arm that separates the
+    /// (multiplicity `>= 2`) band from the (multiplicity `== 0`)
+    /// absence band (empty, full-set both coincide on `[]`). The
+    /// full-set endpoint reveals the ordering asymmetry: the
+    /// declaration arm returns [`Self::ALL`]-order; the lex arm
+    /// returns [`Self::sorted_variants`]-order. Pinned by
+    /// `sorted_repeating_variants_over_the_doubled_full_set_equals_sorted_variants_across_every_kind`.
+    ///
+    /// Signature note: the projection composes the substrate's
+    /// [`Self::sorted_variants`] canonical-listing surface with the
+    /// substrate's per-target [`Self::is_repeated_occurrence_of`]
+    /// primitive via the standard-library filter combinator. The
+    /// composition uses `<Self as ClosedSet>::sorted_variants()
+    /// .into_iter().filter(…).collect()` — the outer
+    /// `sorted_variants()` allocation is O(N log N) on the closed-
+    /// set cardinality (from `sort_unstable_by_key` inside
+    /// [`Self::sorted_variants`]), plus O(N * n) on the slice arity
+    /// `n` for the filter's per-target occurrence sweep. No
+    /// `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's minimal
+    /// `Sized + Copy + 'static` supertrait pair stays untouched), no
+    /// bitset-shape carrier.
+    ///
+    /// Future consumers that compose against
+    /// [`Self::sorted_repeating_variants`]: a `tatara-check`
+    /// predicate `(check-phases-report-repeated-variants-in-lex-order …)`
+    /// that emits the concrete list of `WorkloadPhase` variants a
+    /// rollout window saw MORE THAN ONCE in LEX ORDER (not
+    /// declaration order, so operator-facing duplication diagnostics
+    /// and metric-label sweeps agree with the closed-set surface's
+    /// canonical-listing surface); an LSP diagnostic on a Lisp-
+    /// author-written `:severities [:info :warn :info]` closed-set
+    /// field that renders the strict-repeat set as an author-facing
+    /// "used more than once: [info]" completion hint sorted lex; a
+    /// Sekiban audit-trail projection that carries the concrete
+    /// duplication set of a classification poset window in lex order
+    /// for operator-facing render agreement across every downstream
+    /// surface; a `tatara-lisp::macro_expand::Expander` hygiene pass
+    /// that reports the exact set of non-linearly-bound identifiers
+    /// a template hit in lex order (matching the substrate-wide
+    /// "did you mean …?" surface's canonical listing). Each binds
+    /// to ONE typed N-ary lex-order strict-repeat-witness projection
+    /// on the trait rather than re-deriving the sorted-then-filter
+    /// composition inline per callsite.
+    ///
+    /// Compounding closure: the (present, absent, strict-repeat) ×
+    /// (declaration, lex) 3×2 = 6-corner `Vec<Self>`-return (partition-
+    /// arm × ordering) face on the equivalence-partition surface now
+    /// closes at SIX typed primitives — [`Self::present_variants`] +
+    /// [`Self::sorted_present_variants`] on the present arm,
+    /// [`Self::missing_variants`] + [`Self::sorted_missing_variants`]
+    /// on the absent arm, [`Self::repeating_variants`] + THIS on the
+    /// strict-repeat arm. The (partition-arm × ordering) face is now
+    /// EXHAUSTIVELY closed on the `Vec<Self>`-return column; the
+    /// (bool, usize) return-shape columns COLLAPSE across the
+    /// (declaration, lex) axis (ordering-agnostic scalar returns:
+    /// [`Self::is_covering`] / [`Self::count_distinct`] on the present
+    /// arm, [`Self::is_missing_any`] / [`Self::count_missing`] on the
+    /// absent arm, [`Self::is_repeating_any`] /
+    /// [`Self::count_repeating_variants`] on the strict-repeat arm),
+    /// so the (partition-arm × ordering) axis of the prism is
+    /// materially distinct ONLY on the Vec-return column, which this
+    /// pair (+ the pre-existing four peer projections) exhausts.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary lex-
+    /// order strict-repeat-witness projection becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline `T::sorted_variants().into_iter().filter(|&v|
+    /// T::count_occurrences_of(v, items) >= 2).collect()` composition
+    /// at every downstream generic site. THEORY.md §V.1 — knowable
+    /// platform; the (strict-repeat-Vec, lex-order) corner was an
+    /// unnamed inline composition recurring at every prospective
+    /// downstream "which variants did we hit MORE THAN ONCE, in lex
+    /// order?" site pre-lift. Naming it on the trait makes the
+    /// projection a TYPED CONSEQUENCE of the substrate's canonical-
+    /// listing surface composed with the substrate's per-target
+    /// strict-repeat primitive via the standard-library filter
+    /// combinator. THEORY.md §VI.1 — generation over composition;
+    /// the lex-order strict-repeat-witness projection emerges from
+    /// the composition of TWO substrate primitives
+    /// ([`Self::sorted_variants`] + [`Self::is_repeated_occurrence_of`])
+    /// via an `into_iter().filter(…).collect()` combinator, not as a
+    /// per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Racket's `(sort (filter (lambda (v) (>=
+    /// (count (curry equal? v) items) 2)) (enum->list T)) #:key
+    /// T-label)` — the canonical-list-then-strict-repeat-filter
+    /// idiom on any decidable-equality carrier, keyed on a label
+    /// projection; Haskell's `sortOn label . filter (\v -> length
+    /// (filter (== v) items) >= 2)` on a `[T]` bundle-then-filter
+    /// shape; NumPy's `np.sort(all[np.array([np.sum(items == v) >=
+    /// 2 for v in all])])` vectorized strict-repeat mask composed
+    /// with a lex-order sort; SQL's `SELECT variant FROM t GROUP BY
+    /// variant HAVING COUNT(*) >= 2 ORDER BY variant` group-by-with-
+    /// having-then-order-by idiom. Translation through pleme-io
+    /// primitives: the N-ary lex-order strict-repeat-witness
+    /// projection on the closed-set trait binds through the substrate's
+    /// [`Self::sorted_variants`] canonical lex-order enumeration
+    /// composed with the substrate's per-target strict-repeat
+    /// primitive [`Self::is_repeated_occurrence_of`] via the standard-
+    /// library filter combinator — no new dep, no `Eq`/`Hash`
+    /// supertrait bound, no set-shape carrier.
+    fn sorted_repeating_variants(items: &[Self]) -> ::std::vec::Vec<Self> {
+        <Self as ClosedSet>::sorted_variants()
+            .into_iter()
+            .filter(|&v| <Self as ClosedSet>::is_repeated_occurrence_of(v, items))
+            .collect()
+    }
+
     /// The N-ARY DECLARATION-ORDER "present labels" projection — the
     /// `Vec<&'static str>` label rendering of [`Self::present_variants`]
     /// under [`Self::label`]. Every label `s` in the returned vector is
@@ -29512,6 +29741,107 @@ where
         doubled_repeating.len(),
         T::count_repeating_variants(&doubled_full_set),
         "{type_name}: T::repeating_variants(&doubled_full_set).len() drifted from T::count_repeating_variants(&doubled_full_set) — the (Vec-return, usize-return) strict-repeat-band cardinality identity was violated on the doubled full set; the two peer projections MUST agree on their multiset-cardinality projection at every slice",
+    );
+    // (118) — `T::sorted_repeating_variants(items)` MUST agree with
+    // the filter of the per-target multiplicity-`>= 2` predicate
+    // over `T::sorted_variants()` on every slice AND MUST land on
+    // its three canonical fixpoints (`[]` on the empty slice
+    // UNCONDITIONALLY, `[]` on the full set UNCONDITIONALLY,
+    // `T::sorted_variants()` on the doubled full set
+    // UNCONDITIONALLY) AND on the length-vs-count identity
+    // `T::sorted_repeating_variants(items).len() ==
+    // T::count_repeating_variants(items)` pinned at both the full-
+    // set and doubled-full-set fixpoints AND on the cross-arm
+    // permutation identity against the declaration-arm sibling
+    // [`Self::repeating_variants`] at the doubled-full-set fixpoint.
+    //
+    // The three fixpoints + composition-equality arm + length-vs-
+    // count arm + cross-arm permutation arm partition failure modes
+    // at the (Vec-return × slice-shape × composition-equality ×
+    // cross-projection × cross-arm) corner simultaneously: an
+    // override that folds onto `T::sorted_variants()` unconditionally
+    // fires on the empty-slice AND full-set arms (returns the full
+    // ambient set rather than `[]`); an override that folds onto
+    // `[]` unconditionally fires on the doubled-full-set arm at
+    // cardinality `>= 1` (returns `[]` rather than
+    // `T::sorted_variants()`); an override that detaches from the
+    // sorted-then-filter composition on any slice bifurcates loudly
+    // at the filter-composition arm; an override that inflates or
+    // deflates the returned `Vec`'s length at ANY slice bifurcates
+    // the length-vs-count identity against
+    // [`Self::count_repeating_variants`] (already pinned by clause
+    // (116)); an override that returns the correct multiset but
+    // silently reverts to declaration order (e.g. `T::ALL.iter()
+    // .filter(…).collect()` instead of `T::sorted_variants()
+    // .into_iter().filter(…).collect()`) bifurcates loudly against
+    // [`Self::repeating_variants`] byte-for-byte on any implementor
+    // whose declaration order differs from lex order.
+    //
+    // Sibling posture to clause (117) — clause (117) pins the
+    // (`Vec<Self>`, set-level, multiplicity-band `>= 2`,
+    // declaration-order) strict-repeat-WITNESS corner; this clause
+    // pins the (`Vec<Self>`, set-level, multiplicity-band `>= 2`,
+    // lex-order) strict-repeat-witness corner peer to it one
+    // ORDERING axis over, CLOSING the (partition-arm × ordering)
+    // 3×2 = 6-corner `Vec<Self>`-return face on the equivalence-
+    // partition surface at its SIXTH (strict-repeat, lex) corner
+    // exhaustively — peer to
+    // [`Self::sorted_present_variants`] (present × lex) and
+    // [`Self::sorted_missing_variants`] (absent × lex) one PARTITION-
+    // ARM axis over on the same lex column. The default trait body
+    // threads the filter over the substrate's
+    // [`Self::sorted_variants`] canonical lex-order listing surface
+    // composed with the substrate's per-target strict-repeat
+    // primitive [`Self::is_repeated_occurrence_of`] verbatim and
+    // satisfies every fixpoint arm + composition-equality arm +
+    // length-vs-count arm + cross-arm permutation arm for free;
+    // the assertion catches a future implementor whose override
+    // drifts the projection loudly rather than silently bifurcating
+    // the set-level lex-order strict-repeat-witness surface every
+    // downstream lex-order duplication-witness consumer routes
+    // through.
+    assert!(
+        T::sorted_repeating_variants(&[]).is_empty(),
+        "{type_name}: T::sorted_repeating_variants(&[]) != [] — the set-level lex-order strict-repeat witness MUST report `[]` on the empty slice because every per-variant multiplicity is `0` and the per-target `>= 2` test fails at every target; a non-`[]` empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream lex-order strict-repeat-witness consumer routes through",
+    );
+    let full_sorted_repeating = T::sorted_repeating_variants(T::ALL);
+    assert!(
+        full_sorted_repeating.is_empty(),
+        "{type_name}: T::sorted_repeating_variants(T::ALL) != [] on a cardinality-{cardinality} closed set — clause (3)'s pairwise-distinctness invariant forces every variant to appear at EXACTLY ONE position of the full-set slice, so every per-target multiplicity is `1` and the per-target `>= 2` test fails at every target; a non-`[]` full-set value silently detaches the set-level lex-order strict-repeat witness from the (variant → decl-slot) injectivity clause (16), breaking every downstream lex-order duplication-witness consumer",
+        cardinality = T::CARDINALITY,
+    );
+    let doubled_sorted_repeating = T::sorted_repeating_variants(&doubled_full_set);
+    assert_eq!(
+        doubled_sorted_repeating,
+        T::sorted_variants(),
+        "{type_name}: T::sorted_repeating_variants(&doubled_full_set) != T::sorted_variants() on a cardinality-{cardinality} closed set — the doubled full set hits every variant at EXACTLY TWO positions, so every per-target multiplicity is `2` and the projection MUST return each variant of T::sorted_variants() exactly once in lex order; a doubled-full-set value diverging from T::sorted_variants() silently drifts the projection past the strict-band boundary the trichotomy partitions — the doubled-full-set arm pins the projection as a STRICT `>= 2` witness rather than the weaker `>= 1` presence witness [`T::sorted_present_variants`] which reports T::sorted_variants() on BOTH the full set and the doubled full set",
+        cardinality = T::CARDINALITY,
+    );
+    let expected_sorted_via_filter: Vec<T> = T::sorted_variants()
+        .into_iter()
+        .filter(|&v| T::is_repeated_occurrence_of(v, &doubled_full_set))
+        .collect();
+    assert_eq!(
+        doubled_sorted_repeating, expected_sorted_via_filter,
+        "{type_name}: T::sorted_repeating_variants(&doubled_full_set) drifted from T::sorted_variants().into_iter().filter(|&v| T::is_repeated_occurrence_of(v, &doubled_full_set)).collect() — the set-level lex-order strict-repeat witness MUST equal the filter of the per-target multiplicity-`>= 2` predicate over T::sorted_variants() on every slice, so a downstream lex-order strict-repeat-witness consumer that binds this filter-composition as its duplication-witness query surface would disagree with the pinned projection",
+    );
+    assert_eq!(
+        full_sorted_repeating.len(),
+        T::count_repeating_variants(T::ALL),
+        "{type_name}: T::sorted_repeating_variants(T::ALL).len() drifted from T::count_repeating_variants(T::ALL) — the (Vec-return, usize-return) strict-repeat-band cardinality identity was violated on the full set on the lex arm; the two peer projections MUST agree on their multiset-cardinality projection at every slice regardless of ordering",
+    );
+    assert_eq!(
+        doubled_sorted_repeating.len(),
+        T::count_repeating_variants(&doubled_full_set),
+        "{type_name}: T::sorted_repeating_variants(&doubled_full_set).len() drifted from T::count_repeating_variants(&doubled_full_set) — the (Vec-return, usize-return) strict-repeat-band cardinality identity was violated on the doubled full set on the lex arm; the two peer projections MUST agree on their multiset-cardinality projection at every slice regardless of ordering",
+    );
+    let mut doubled_decl_sorted = doubled_repeating.clone();
+    let mut doubled_lex_sorted = doubled_sorted_repeating.clone();
+    doubled_decl_sorted.sort_unstable_by_key(|v| T::index_of(*v));
+    doubled_lex_sorted.sort_unstable_by_key(|v| T::index_of(*v));
+    assert_eq!(
+        doubled_decl_sorted, doubled_lex_sorted,
+        "{type_name}: T::sorted_repeating_variants(&doubled_full_set) is not a permutation of T::repeating_variants(&doubled_full_set) — the (declaration, lex) arms MUST filter the SAME strict-repeat set from the equivalence-partition surface's `Vec<Self>`-return column, so a downstream consumer that treats one arm's multiset as an authoritative substitute for the other's would disagree with the pinned projection",
     );
 }
 
@@ -60783,6 +61113,492 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedRepeatingVariantsKind whose repeating_variants override folds onto `[]` unconditionally — clause (117)'s doubled-full-set fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn sorted_repeating_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT: `T::sorted_repeating_variants(&[])` is
+        // the empty `Vec` on every implementor — the empty slice hits
+        // zero positions, so every per-variant multiplicity is `0`
+        // and the per-target `>= 2` test fails at every target.
+        // Sibling posture to the OPPOSITE declaration-order arm at
+        // `repeating_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind`;
+        // both arms agree on the empty-slice endpoint because the
+        // zero-Vec has no ordering to distinguish.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_repeating_variants(empty),
+            Vec::<StubKind>::new(),
+        );
+    }
+
+    #[test]
+    fn sorted_repeating_variants_returns_the_empty_vec_on_every_singleton_across_every_variant() {
+        // SINGLETON CONTRACT: `T::sorted_repeating_variants(&[v])` is
+        // the empty `Vec` for every variant `v` — a singleton hits
+        // exactly one variant at exactly one position, so its
+        // multiplicity is `1` and the per-target `>= 2` test fails
+        // at every target. Sibling posture to
+        // `repeating_variants_returns_the_empty_vec_on_every_singleton_across_every_variant`
+        // one arm over on the (declaration, lex) ordering axis; both
+        // arms agree on the singleton endpoint because a zero-length
+        // Vec has no ordering to distinguish.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_repeating_variants(&singleton),
+                Vec::<StubKind>::new(),
+                "T::sorted_repeating_variants({singleton:?}) diverged from [] — a singleton hits multiplicity `1` at every target and MUST not appear in the lex-order strict-repeat band",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_variants_over_the_full_set_returns_the_empty_vec_across_every_kind() {
+        // FULL-SET CONTRACT: `T::sorted_repeating_variants(<T as
+        // ClosedSet>::ALL)` is the empty `Vec` UNCONDITIONALLY —
+        // clause (3)'s pairwise-distinctness invariant forces every
+        // variant to appear at EXACTLY ONE position of the full-set
+        // slice, so every per-target multiplicity is `1` and the
+        // per-target `>= 2` test fails at every target. Sibling
+        // posture to the declaration-arm's
+        // `repeating_variants_over_the_full_set_returns_the_empty_vec_across_every_kind`;
+        // both arms agree on the full-set endpoint because a zero-
+        // length Vec has no ordering to distinguish.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_repeating_variants(all),
+            Vec::<StubKind>::new(),
+        );
+    }
+
+    #[test]
+    fn sorted_repeating_variants_over_the_doubled_full_set_equals_sorted_variants_across_every_kind(
+    ) {
+        // DOUBLED-FULL-SET CONTRACT: `T::sorted_repeating_variants` on
+        // the doubled full set returns `T::sorted_variants()`
+        // UNCONDITIONALLY — the doubled full set hits every variant
+        // at EXACTLY TWO positions, so every per-target multiplicity
+        // is `2` and the projection returns each variant of
+        // `T::sorted_variants()` exactly once in lex order. The
+        // doubled-full-set arm is LOAD-BEARING — it is the ONLY
+        // canonical fixpoint arm that separates the (multiplicity `>=
+        // 2`) band from the (multiplicity `== 0`) absence band
+        // (empty, full-set both coincide on `[]`). Sibling posture
+        // to the declaration-arm's
+        // `repeating_variants_over_the_doubled_full_set_equals_all_across_every_kind`;
+        // the two arms diverge on the ORDERING (declaration arm
+        // returns `T::ALL`-order; lex arm returns
+        // `T::sorted_variants()`-order) but agree on the multiset.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_repeating_variants(&doubled),
+            <StubKind as ClosedSet>::sorted_variants(),
+        );
+    }
+
+    #[test]
+    fn sorted_repeating_variants_length_equals_count_repeating_variants_across_every_triple() {
+        // CARDINALITY IDENTITY:
+        // `T::sorted_repeating_variants(items).len() ==
+        // T::count_repeating_variants(items)` on every slice — the
+        // lex-order Vec-return strict-repeat projection's length
+        // matches the usize-return strict-repeat count exactly, and
+        // matches the declaration-order Vec-return strict-repeat
+        // length (via clause (117)'s length identity on the sibling).
+        // Cross-checks the lex-order strict-repeat witness against
+        // the pre-existing strict-repeat count. Sibling posture to
+        // `repeating_variants_length_equals_count_repeating_variants_across_every_triple`
+        // one arm over on the (declaration, lex) ordering axis; both
+        // arms agree on the cardinality because the usize return
+        // carries no ordering.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_repeating_variants(empty).len(),
+            <StubKind as ClosedSet>::count_repeating_variants(empty),
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_repeating_variants(&triple).len(),
+                        <StubKind as ClosedSet>::count_repeating_variants(&triple),
+                        "T::sorted_repeating_variants({triple:?}).len() diverged from T::count_repeating_variants({triple:?}) — the lex-arm (Vec-return, usize-return) strict-repeat-band cardinality identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_variants_is_empty_iff_not_is_repeating_any_across_every_triple() {
+        // BOOL-PROJECTION IDENTITY (lex arm):
+        // `T::sorted_repeating_variants(items).is_empty() ==
+        // !T::is_repeating_any(items)` on every slice — the strict-
+        // repeat set is empty iff the strict-repeat existential
+        // fails. Sibling dual:
+        // `!T::sorted_repeating_variants(items).is_empty() ==
+        // T::is_repeating_any(items)`. Both bool-projections are
+        // INVARIANT under the (declaration, lex) axis — the bool
+        // return carries no ordering, so the identity holds
+        // identically on the declaration arm (pinned by
+        // `repeating_variants_is_empty_iff_not_is_repeating_any_across_every_triple`)
+        // AND on the lex arm (this pin).
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_repeating_variants(empty).is_empty(),
+            !<StubKind as ClosedSet>::is_repeating_any(empty),
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_repeating_variants(&triple).is_empty(),
+                        !<StubKind as ClosedSet>::is_repeating_any(&triple),
+                        "T::sorted_repeating_variants({triple:?}).is_empty() diverged from !T::is_repeating_any({triple:?}) — the lex-arm (Vec-return, bool-return) strict-repeat-band emptiness identity was violated",
+                    );
+                    assert_eq!(
+                        !<StubKind as ClosedSet>::sorted_repeating_variants(&triple).is_empty(),
+                        <StubKind as ClosedSet>::is_repeating_any(&triple),
+                        "!T::sorted_repeating_variants({triple:?}).is_empty() diverged from T::is_repeating_any({triple:?}) — the lex-arm (Vec-return, bool-return) strict-repeat-band non-emptiness identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_variants_preserves_lex_order_across_every_triple() {
+        // LEX-ORDER SUBSEQUENCE CONTRACT (strict-repeat arm): the
+        // returned `Vec<Self>` is ALWAYS a subsequence of
+        // `T::sorted_variants()` (with each variant appearing at
+        // most once, in `T::sorted_variants()`'s lex order).
+        // Verified by walking the returned Vec's `label()` sequence
+        // and asserting strictly ASCII-ascending. Sibling posture to
+        // `repeating_variants_preserves_declaration_order_across_every_triple`
+        // — that arm's declaration-order projection uses `index_of`
+        // strict-monotonicity; this arm's lex-order projection uses
+        // `label()` strict-ASCII-ascending.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let repeating = <StubKind as ClosedSet>::sorted_repeating_variants(&triple);
+                    let labels: Vec<&'static str> =
+                        repeating.iter().copied().map(|v| v.label()).collect();
+                    assert!(
+                        labels.windows(2).all(|w| w[0] < w[1]),
+                        "T::sorted_repeating_variants({triple:?}) labels {labels:?} not strictly ASCII-ascending — the lex-order subsequence property was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_variants_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT (lex strict-repeat arm):
+        // `T::sorted_repeating_variants(items) ==
+        // T::sorted_repeating_variants(reversed items)` on every
+        // slice — reversing a slice preserves its multiset of
+        // variant identities, and the strict-repeat predicate is a
+        // function of that multiset alone. Sibling posture to
+        // `repeating_variants_is_invariant_under_slice_reversal_across_every_triple`.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_repeating_variants(&forward),
+                        <StubKind as ClosedSet>::sorted_repeating_variants(&reversed),
+                        "T::sorted_repeating_variants({forward:?}) diverged from T::sorted_repeating_variants({reversed:?}) — the lex-order strict-repeat-witness projection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_variants_is_a_permutation_of_repeating_variants_across_every_triple() {
+        // CROSS-ARM PERMUTATION IDENTITY (strict-repeat arm): for
+        // every slice `items`, `T::sorted_repeating_variants(items)`
+        // and `T::repeating_variants(items)` are PERMUTATIONS of each
+        // other — the two projections filter the SAME strict-repeat
+        // set from `T::ALL` / `T::sorted_variants()`, so the multiset
+        // of variant identities in the two returned Vecs coincides
+        // though the ordering differs (declaration order vs lex
+        // order). Verified by asserting the two projections'
+        // returned Vecs, once sorted by `index_of`, agree byte-for-
+        // byte. Sibling posture to
+        // `sorted_present_variants_is_a_permutation_of_present_variants_across_every_triple`
+        // and
+        // `sorted_missing_variants_is_a_permutation_of_missing_variants_across_every_triple`
+        // one PARTITION-ARM axis over — together the three pins bind
+        // the cross-arm permutation identity on ALL THREE partition
+        // arms of the (declaration, lex) axis of the Vec-return column.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let mut decl = <StubKind as ClosedSet>::repeating_variants(&triple);
+                    let mut lex = <StubKind as ClosedSet>::sorted_repeating_variants(&triple);
+                    decl.sort_unstable_by_key(|v| <StubKind as ClosedSet>::index_of(*v));
+                    lex.sort_unstable_by_key(|v| <StubKind as ClosedSet>::index_of(*v));
+                    assert_eq!(
+                        decl, lex,
+                        "T::sorted_repeating_variants({triple:?}) is not a permutation of T::repeating_variants({triple:?}) — the (declaration, lex) arms must filter the SAME strict-repeat set on the equivalence-partition surface",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_variants_is_a_subset_of_sorted_present_variants_across_every_triple() {
+        // MULTIPLICITY-BAND CONTAINMENT CONTRACT (lex arm): every
+        // strict-repeat variant (mult `>= 2`) is also present (mult
+        // `>= 1`), so `T::sorted_repeating_variants(items)` is a
+        // SUBSET of `T::sorted_present_variants(items)` on every
+        // slice. Verified by asserting every variant in the lex-
+        // order strict-repeat set appears in the lex-order presence
+        // set on every length-3 triple. Sibling posture to
+        // `repeating_variants_is_a_subset_of_present_variants_across_every_triple`
+        // one arm over on the (declaration, lex) ordering axis.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let repeating = <StubKind as ClosedSet>::sorted_repeating_variants(&triple);
+                    let present = <StubKind as ClosedSet>::sorted_present_variants(&triple);
+                    for r in repeating.iter().copied() {
+                        let contained = present.iter().copied().any(|p| {
+                            <StubKind as ClosedSet>::index_of(p)
+                                == <StubKind as ClosedSet>::index_of(r)
+                        });
+                        assert!(
+                            contained,
+                            "T::sorted_repeating_variants({triple:?}) variant {r:?} not in T::sorted_present_variants({triple:?}) = {present:?} — the (mult `>= 2`) band MUST be contained in the (mult `>= 1`) presence band on the lex arm",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_variants_is_disjoint_from_sorted_missing_variants_across_every_triple() {
+        // MULTIPLICITY-BAND DISJOINTNESS CONTRACT (lex arm): the
+        // (mult `== 0`) absence band cannot overlap the (mult `>=
+        // 2`) strict-repeat band, so
+        // `T::sorted_repeating_variants(items)` and
+        // `T::sorted_missing_variants(items)` are DISJOINT on every
+        // slice. Verified by scanning every strict-repeat variant
+        // against every miss-arm variant on every length-3 triple.
+        // Sibling posture to
+        // `repeating_variants_is_disjoint_from_missing_variants_across_every_triple`
+        // one arm over on the (declaration, lex) ordering axis.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let repeating = <StubKind as ClosedSet>::sorted_repeating_variants(&triple);
+                    let missing = <StubKind as ClosedSet>::sorted_missing_variants(&triple);
+                    for r in repeating.iter().copied() {
+                        for m in missing.iter().copied() {
+                            assert_ne!(
+                                <StubKind as ClosedSet>::index_of(r),
+                                <StubKind as ClosedSet>::index_of(m),
+                                "T::sorted_repeating_variants({triple:?}) and T::sorted_missing_variants({triple:?}) share variant {r:?} == {m:?} — the (mult `>= 2`, mult `== 0`) lex partition arms MUST be disjoint",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_variants_equals_filter_over_sorted_variants_by_is_repeated_occurrence_of_across_every_triple(
+    ) {
+        // COMPOSITION-EQUALITY CONTRACT (lex arm): for every slice
+        // `items`, `T::sorted_repeating_variants(items) ==
+        // T::sorted_variants().into_iter().filter(|&v|
+        // T::is_repeated_occurrence_of(v, items)).collect()` — the
+        // set-level lex-order strict-repeat witness MUST equal the
+        // filter of the per-target multiplicity-`>= 2` predicate
+        // over `T::sorted_variants()` on every slice. Sweeping every
+        // length-3 triple pins the identity across the full
+        // 27-corner (triple) domain. Sibling posture to
+        // `repeating_variants_equals_filter_over_all_by_is_repeated_occurrence_of_across_every_triple`
+        // one arm over on the (declaration, lex) ordering axis.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_pinned = <StubKind as ClosedSet>::sorted_repeating_variants(&triple);
+                    let via_filter: Vec<StubKind> = <StubKind as ClosedSet>::sorted_variants()
+                        .into_iter()
+                        .filter(|&v| <StubKind as ClosedSet>::is_repeated_occurrence_of(v, &triple))
+                        .collect();
+                    assert_eq!(
+                        via_pinned, via_filter,
+                        "T::sorted_repeating_variants({triple:?}) diverged from the direct `is_repeated_occurrence_of` filter over T::sorted_variants() — the lex-arm composition-equality identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_variants_normalizes_arbitrary_declaration_order() {
+        // The sort-step contract on the lex-order strict-repeat-arm
+        // surface — `T::sorted_repeating_variants(items)` MUST
+        // normalize an arbitrary declaration order into ASCII
+        // lexicographic `label()` order, regardless of the
+        // implementor's `ALL`-array layout. A regression that returns
+        // `T::repeating_variants(items)` verbatim (without composing
+        // through `T::sorted_variants()`) would pass every StubKind
+        // pin above (because StubKind's declaration order aligns
+        // with lex order) but silently bifurcate the lex-order
+        // surface for any implementor whose declaration order
+        // differs from byte-wise sort order. Pinning the sort
+        // discipline here with a deliberately-out-of-order stub
+        // catches that drift directly. Sibling posture to
+        // `sorted_present_variants_normalizes_arbitrary_declaration_order`
+        // and
+        // `sorted_missing_variants_joined_normalizes_arbitrary_declaration_order`
+        // one PARTITION-ARM axis over on the same lex column.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ReverseVariantRepeatKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownReverseVariantRepeatKind(pub String);
+        impl core::fmt::Display for UnknownReverseVariantRepeatKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown reverse variant repeat kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for ReverseVariantRepeatKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "reverse variant repeat kind";
+            type Unknown = UnknownReverseVariantRepeatKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownReverseVariantRepeatKind(s.to_owned())
+            }
+        }
+        // Declaration order: Gamma, Beta, Alpha — the strict-repeat-
+        // arm's declaration-order projection on the doubled full set
+        // preserves this layout.
+        let doubled: Vec<ReverseVariantRepeatKind> = <ReverseVariantRepeatKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<ReverseVariantRepeatKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <ReverseVariantRepeatKind as ClosedSet>::repeating_variants(&doubled),
+            vec![
+                ReverseVariantRepeatKind::Gamma,
+                ReverseVariantRepeatKind::Beta,
+                ReverseVariantRepeatKind::Alpha,
+            ],
+            "repeating_variants over the doubled full set must preserve declaration order — Gamma, Beta, Alpha",
+        );
+        // Lex order: Alpha, Beta, Gamma — the sorted_repeating_variants
+        // arm on the doubled full set MUST normalize to lex order.
+        assert_eq!(
+            <ReverseVariantRepeatKind as ClosedSet>::sorted_repeating_variants(&doubled),
+            vec![
+                ReverseVariantRepeatKind::Alpha,
+                ReverseVariantRepeatKind::Beta,
+                ReverseVariantRepeatKind::Gamma,
+            ],
+            "sorted_repeating_variants over the doubled full set must normalize to lex order — Alpha, Beta, Gamma — regardless of declaration order",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_sorted_repeating_variants_and_composition(
+    ) {
+        // Drift catch — clause (118)'s doubled-full-set fixpoint arm
+        // fires when an override folds the set-level lex-order
+        // strict-repeat witness onto `[]` regardless of slice
+        // (returning `[]` on the doubled full set rather than
+        // `T::sorted_variants()`). The stub below overrides the
+        // default body to return `vec![]` unconditionally; on the
+        // doubled full set that produces `[] != T::sorted_variants()`,
+        // tripping clause (118)'s doubled-full-set fixpoint arm
+        // loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedRepeatingVariantsKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedSortedRepeatingVariantsKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedSortedRepeatingVariantsKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted sorted_repeating_variants kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedSortedRepeatingVariantsKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedSortedRepeatingVariantsKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted sorted_repeating_variants kind";
+            type Unknown = UnknownDriftedSortedRepeatingVariantsKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedRepeatingVariantsKind(s.to_owned())
+            }
+            fn sorted_repeating_variants(_items: &[Self]) -> Vec<Self> {
+                // Drift: return `[]` regardless of slice. On the
+                // doubled full set that produces `[] !=
+                // T::sorted_variants()`, tripping clause (118)'s
+                // doubled-full-set fixpoint arm loudly.
+                Vec::new()
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedSortedRepeatingVariantsKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedSortedRepeatingVariantsKind whose sorted_repeating_variants override folds onto `[]` unconditionally — clause (118)'s doubled-full-set fixpoint arm MUST reject the drift",
         );
     }
 

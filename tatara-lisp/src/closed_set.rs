@@ -15754,6 +15754,195 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY PER-TARGET "occurrence endpoint pair" projection —
+    /// `Some((first, last))` for the SMALLEST + LARGEST slice indices
+    /// at which `items` carries the same variant identity as `target`,
+    /// or `None` if `target` does not appear. The PER-TARGET
+    /// `Option<(usize, usize)>`-RETURN opener on the (per-target ×
+    /// `Option<(usize, usize)>`) ENDPOINT-PAIR column of the
+    /// equivalence-partition surface, positioned as the direct PAIR-
+    /// PACKAGED lift of the just-lifted
+    /// [`Self::first_occurrence_of`] + [`Self::last_occurrence_of`]
+    /// endpoint-anchor pair — while
+    /// the endpoint-anchor pair reports the head- and tail-position
+    /// across TWO separate `Option<usize>` returns, this projection
+    /// packages both endpoints into ONE atomic `Option<(usize, usize)>`
+    /// return via `Option::zip` on the two endpoint-anchor primitives.
+    /// Sibling posture to [`Self::variant_count_range`] one arity axis
+    /// over: the set-level projection returns `(usize, usize)` =
+    /// `(min_variant_count, max_variant_count)` of the histogram bars;
+    /// the per-target projection returns `Option<(usize, usize)>` =
+    /// the (head-position, tail-position) endpoint pair of a target's
+    /// slice occurrences. The (per-target × return-shape) row on the
+    /// equivalence-partition surface now closes the pair-return
+    /// column at the (`Option<(usize, usize)>`, per-target) corner
+    /// peer to the (`Vec<usize>`, per-target) corner
+    /// [`Self::all_occurrences_of`] just opened.
+    ///
+    /// Presence-composition identity: for every slice `items` and every
+    /// target `v`,
+    /// `T::occurrence_endpoints_of(v, items).is_some() == T::occurs_in(v, items)`
+    /// — the `Option`'s discriminant is exactly the per-target bool
+    /// membership predicate, so `Some(_)` iff `occurs_in(_, _)` is
+    /// `true`. `Option::zip` returns `Some((_, _))` iff BOTH inputs
+    /// are `Some`, and the two endpoint-anchor primitives have
+    /// coincident presence-discriminants (both `Some` iff the target
+    /// appears at all), so the pair's `Some` arm coincides with the
+    /// bool membership predicate exactly. Pinned by
+    /// `occurrence_endpoints_of_is_some_iff_occurs_in_across_every_target_and_triple`.
+    ///
+    /// Endpoint-pair composition identity: for every slice `items` and
+    /// every target `v`,
+    /// `T::occurrence_endpoints_of(v, items) == T::first_occurrence_of(v, items).zip(T::last_occurrence_of(v, items))`
+    /// — the pair-return is the direct `Option::zip` of the two
+    /// endpoint-anchor projections. Pinned by clause (109)'s
+    /// composition-equality arms + by
+    /// `occurrence_endpoints_of_equals_zip_of_first_and_last_occurrence_of_across_every_target_and_triple`.
+    ///
+    /// Head-projection identity: for every slice `items` and every
+    /// target `v`,
+    /// `T::occurrence_endpoints_of(v, items).map(|(f, _)| f) == T::first_occurrence_of(v, items)`
+    /// — the first component of the pair equals the head-endpoint.
+    /// Pinned by
+    /// `occurrence_endpoints_of_head_equals_first_occurrence_of_across_every_target_and_triple`.
+    ///
+    /// Tail-projection identity: for every slice `items` and every
+    /// target `v`,
+    /// `T::occurrence_endpoints_of(v, items).map(|(_, l)| l) == T::last_occurrence_of(v, items)`
+    /// — the second component of the pair equals the tail-endpoint.
+    /// Pinned by
+    /// `occurrence_endpoints_of_tail_equals_last_occurrence_of_across_every_target_and_triple`.
+    ///
+    /// Empty-slice contract: `T::occurrence_endpoints_of(v, &[])` is
+    /// `None` for every target `v` — the empty slice hits zero
+    /// positions, so both endpoint-anchor primitives yield `None`,
+    /// and `Option::zip` collapses to `None`. Pinned by clause (109)
+    /// and by
+    /// `occurrence_endpoints_of_returns_none_on_the_empty_slice_across_every_target`.
+    ///
+    /// Matching-singleton contract:
+    /// `T::occurrence_endpoints_of(v, &[v]) == Some((0, 0))` for
+    /// every target `v` — the sole position hits the target, so both
+    /// endpoint-anchor primitives yield `Some(0)`, and `Option::zip`
+    /// packages them as `Some((0, 0))`. Pinned by
+    /// `occurrence_endpoints_of_returns_some_zero_zero_on_the_matching_singleton_across_every_target`.
+    ///
+    /// Non-matching-singleton contract:
+    /// `T::occurrence_endpoints_of(v, &[w]) == None` for every target
+    /// `v` and slice-element `w != v` (compared via
+    /// [`Self::index_of`]). Pinned by
+    /// `occurrence_endpoints_of_returns_none_on_the_non_matching_singleton_across_every_target_pair`.
+    ///
+    /// Full-set contract:
+    /// `T::occurrence_endpoints_of(v, <T as ClosedSet>::ALL) ==
+    /// Some((T::index_of(v), T::index_of(v)))` UNCONDITIONALLY —
+    /// clause (3)'s pairwise-distinctness invariant forces every
+    /// variant to appear at exactly ONE position of the full-set
+    /// slice, so both endpoints coincide at that position. Pinned by
+    /// clause (109) at the full-set fixpoint AND by
+    /// `occurrence_endpoints_of_returns_index_of_pair_on_the_full_set_across_every_target`.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::occurrence_endpoints_of(v, &[T::ALL, T::ALL].concat()) ==
+    /// Some((T::index_of(v), T::CARDINALITY + T::index_of(v)))`
+    /// UNCONDITIONALLY — the doubled full set hits every variant at
+    /// exactly TWO positions, and the (head, tail) pair spans the two
+    /// copies. The doubled-full-set arm is the ONLY canonical fixpoint
+    /// arm that separates the (first, last) direction axis (on the
+    /// full set alone the two coincide), catching an override that
+    /// swaps the pair components or drops one of them. Pinned by
+    /// clause (109) and by
+    /// `occurrence_endpoints_of_returns_head_tail_pair_on_the_doubled_full_set_across_every_target`.
+    ///
+    /// First ≤ Second contract: for every slice `items` and every
+    /// target `v`, `T::occurrence_endpoints_of(v, items)` on the
+    /// `Some((f, l))` arm satisfies `f <= l` — the head-position
+    /// (`Iterator::position`) always precedes the tail-position
+    /// (`Iterator::rposition`) on the same slice, and they coincide
+    /// exactly on singleton-hit slices. Pinned by clause (109) and by
+    /// `occurrence_endpoints_of_first_bounded_above_by_second_across_every_target_and_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic — the (declaration, lex) axis on `T::ALL`
+    /// COLLAPSES on element equality because the head- and tail-
+    /// endpoint primitives fold through `Iterator::position` /
+    /// `Iterator::rposition` on `index_of`-equality bijectively.
+    /// Sibling posture to every projection on the equivalence-
+    /// partition surface: no separate `sorted_occurrence_endpoints_of`
+    /// peer is needed.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of
+    /// [`Self::first_occurrence_of`] + [`Self::last_occurrence_of`]
+    /// via `Option::zip`. The sweep cost inherits the endpoint-anchor
+    /// pair: two O(n) scans with EARLY EXIT at the head- and tail-
+    /// hits respectively, no allocation, no
+    /// `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's minimal
+    /// `Sized + Copy + 'static` supertrait pair stays untouched).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::occurrence_endpoints_of`]: a `tatara-check` predicate
+    /// `(check-phase-visit-window …)` reporting the (first-visited,
+    /// last-visited) slice window for a specific `WorkloadPhase` in
+    /// ONE atomic pair rather than two separate head/tail queries; a
+    /// Sekiban audit-trail per-variant endpoint-pair record across a
+    /// rollout window; a `tatara-lisp::macro_expand::Expander` hygiene
+    /// pass reporting the (first-reference, last-reference) position
+    /// pair for an identifier's usage span; a per-slot alarm firing
+    /// on the (first-seen, last-seen) window of a specific variant.
+    /// Each binds to ONE typed N-ary per-target endpoint-pair
+    /// primitive on the trait rather than re-deriving
+    /// `T::first_occurrence_of(v, items).zip(T::last_occurrence_of(v, items))`
+    /// inline per callsite.
+    ///
+    /// Compounding closure: the (per-target × return-shape) row on
+    /// the equivalence-partition surface now carries SIX typed
+    /// primitives — [`Self::count_occurrences_of`] (usize;
+    /// multiplicity), [`Self::occurs_in`] (bool; membership),
+    /// [`Self::first_occurrence_of`] (Option<usize>; head-position),
+    /// [`Self::last_occurrence_of`] (Option<usize>; tail-position),
+    /// [`Self::all_occurrences_of`] (Vec<usize>; every-position),
+    /// and THIS projection (Option<(usize, usize)>; endpoint-pair) —
+    /// closing the pair-return column on the per-target arity axis
+    /// past the five prior return-shape columns.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary per-
+    /// target endpoint-pair primitive becomes a TYPE-level primitive
+    /// on the closed-set trait rather than a per-consumer inline
+    /// `T::first_occurrence_of(v, items).zip(T::last_occurrence_of(v, items))`
+    /// composition at every downstream generic site. THEORY.md §V.1
+    /// — knowable platform; naming the (per-target ×
+    /// `Option<(usize, usize)>`) endpoint-pair column on the trait
+    /// makes the projection a TYPED CONSEQUENCE of the substrate's
+    /// two endpoint-anchor primitives packaged as one atomic
+    /// `Option::zip`. THEORY.md §VI.1 — generation over composition;
+    /// the endpoint-pair primitive emerges from one composition
+    /// (`Option::zip` on the two endpoint-anchor projections), not
+    /// as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Coq's `Option.bind (find_first eqb l) (fun f => Option.map (fun l => (f, l)) (find_last eqb l))`
+    /// pair-lift on `list nat`; Idris's `MonadZip` combinator
+    /// `Data.List.findIndex <*> Data.List.findLastIndex` lifting into
+    /// `Maybe (Nat, Nat)`; Julia's `let ps = findall(==(v), items);
+    /// isempty(ps) ? nothing : (first(ps), last(ps))` idiom; Rust's
+    /// own `items.iter().position(|&w| w == v).zip(items.iter().rposition(|&w| w == v))`
+    /// binds through a `Self: PartialEq` supertrait bound; Python's
+    /// `try: return (items.index(v), len(items) - 1 - items[::-1].index(v))
+    /// except ValueError: return None` idiom; Haskell's `liftA2 (,)
+    /// (findIndex (== v) items) (fmap (\is -> last is) (nonEmptyIndices (== v) items))`.
+    /// Translation through pleme-io primitives: the N-ary per-target
+    /// endpoint-pair projection on the closed-set trait binds
+    /// through `Option::zip` on the substrate's two endpoint-anchor
+    /// projections — no new dep, no supertrait bound (the
+    /// [`Self::index_of`] projection the two endpoint-anchor
+    /// primitives thread through replaces the `PartialEq` bound the
+    /// standard-library `position`+`rposition`+`zip` signature chain
+    /// demands), no allocation, EARLY EXIT at both endpoints
+    /// inherited from the endpoint-anchor pair.
+    fn occurrence_endpoints_of(target: Self, items: &[Self]) -> Option<(usize, usize)> {
+        <Self as ClosedSet>::first_occurrence_of(target, items)
+            .zip(<Self as ClosedSet>::last_occurrence_of(target, items))
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "per-slot variant histogram"
     /// projection — the `Vec<usize>` DECLARATION-ORDER histogram over
     /// [`Self::ALL`] whose slot `i` reports the multiplicity of
@@ -27001,6 +27190,107 @@ where
             "{type_name}: T::all_occurrences_of({target_label:?}, &doubled_full_set).last().copied() drifted from T::last_occurrence_of({target_label:?}, &doubled_full_set) — the per-target every-position projection's tail element no longer agrees with the per-target tail-position primitive on the doubled-full-set fixpoint, so a downstream every-position consumer that binds `T::all_occurrences_of(_, _).last().copied()` as its per-target tail-position query surface would disagree with the pinned tail-endpoint projection",
             target_label = <T as ClosedSet>::label(target),
         );
+    }
+    // (109) — `T::occurrence_endpoints_of(target, items)` MUST agree
+    // with the per-target endpoint-pair projection on every (target,
+    // slice) pair AND MUST land on its three canonical fixpoints
+    // (`None` at every target on the empty slice, `Some((i, i))`
+    // where `i == T::index_of(target)` at every target on the full
+    // set, `Some((i, T::CARDINALITY + i))` at every target on the
+    // doubled full set) AND on THREE composition-equality arms
+    // against the endpoint-anchor pair on the doubled-slice fixpoint:
+    // (a) `Option::zip` composition against
+    // `T::first_occurrence_of(target, items).zip(T::last_occurrence_of(target, items))`,
+    // (b) head-projection against `T::first_occurrence_of` on the
+    // `map(|(f, _)| f)` arm, (c) tail-projection against
+    // `T::last_occurrence_of` on the `map(|(_, l)| l)` arm. The three
+    // fixpoints + three composition arms partition failure modes at
+    // the (discriminant × pair-value × slice-shape × composition-
+    // equality) corner simultaneously: an override that folds onto
+    // `None` unconditionally fires on the full-set arm (returns
+    // `None` at every target rather than `Some((i, i))`); an
+    // override that returns `Some((i, i))` regardless of slice arity
+    // fires on the doubled-full-set arm (returns the length-1
+    // singleton pair rather than the pinned length-2 spread
+    // `Some((i, T::CARDINALITY + i))`); an override that swaps the
+    // (first, last) pair on the doubled slice bifurcates loudly at
+    // either the head-composition arm (against
+    // `T::first_occurrence_of`) or the tail-composition arm (against
+    // `T::last_occurrence_of`); an override that returns descending
+    // pairs (first > second) on the doubled slice bifurcates loudly
+    // at the first ≤ second contract embedded in the doubled-full-
+    // set arm's exact-equality check. Sibling posture to clauses
+    // (97) + (105) + (106) + (107) + (108): closes the
+    // (`Option<(usize, usize)>`, per-target) endpoint-pair corner
+    // peer to them one return-shape axis over on the (per-target)
+    // arity axis. Together, clauses (97) + (105) + (106) + (107) +
+    // (108) + (109) close the (per-target × return-shape) row at SIX
+    // typed corners — usize, bool, Option<usize> head, Option<usize>
+    // tail, Vec<usize>, Option<(usize, usize)> — closing the per-
+    // target arity axis exhaustively at every return-shape column
+    // opened on the equivalence-partition surface. The
+    // `Option<(usize, usize)>`-return column carries an INTRINSIC
+    // (head, tail) direction ordering inherited from
+    // `Iterator::position` / `Iterator::rposition`, so the
+    // (decl, lex) ordering axis on `T::ALL` collapses on this
+    // clause (the returned pair carries slice indices, not variant
+    // decl-slots) and no `sorted_occurrence_endpoints_of` peer is
+    // needed. The default trait body threads
+    // `<Self as ClosedSet>::first_occurrence_of(target, items).zip(<Self as ClosedSet>::last_occurrence_of(target, items))`
+    // verbatim and satisfies every fixpoint arm + every composition-
+    // equality arm for free; the assertion catches a future
+    // implementor whose override drifts the projection loudly rather
+    // than silently bifurcating the per-target endpoint-pair
+    // projection surface every downstream endpoint-pair consumer
+    // routes through.
+    for target in T::ALL.iter().copied() {
+        let empty_pair = T::occurrence_endpoints_of(target, &[]);
+        assert_eq!(
+            empty_pair, None,
+            "{type_name}: T::occurrence_endpoints_of({target_label:?}, &[]) == {empty_pair:?} != None — the per-target endpoint-pair projection MUST report `None` on the empty slice because both endpoint-anchor primitives yield `None` on the zero-position slice and `Option::zip` collapses to `None` iff EITHER input is `None`; a `Some(_)` empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream per-target endpoint-pair consumer routes through",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let target_index = <T as ClosedSet>::index_of(target);
+        let full_set_pair = T::occurrence_endpoints_of(target, T::ALL);
+        assert_eq!(
+            full_set_pair,
+            Some((target_index, target_index)),
+            "{type_name}: T::occurrence_endpoints_of({target_label:?}, T::ALL) drifted from Some((T::index_of({target_label:?}), T::index_of({target_label:?}))) — clause (3)'s pairwise-distinctness invariant forces every variant to appear at exactly ONE position of the full-set slice, so both endpoint-anchor primitives yield `Some(T::index_of(target))` and `Option::zip` packages the pair with coincident components; a drifted full-set pair silently detaches the endpoint-pair projection from the (variant → decl-slot) injectivity clause (16), breaking every downstream endpoint-pair consumer",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let doubled_pair = T::occurrence_endpoints_of(target, &doubled_full_set);
+        assert_eq!(
+            doubled_pair,
+            Some((target_index, T::CARDINALITY + target_index)),
+            "{type_name}: T::occurrence_endpoints_of({target_label:?}, &doubled_full_set) drifted from Some((T::index_of({target_label:?}), T::CARDINALITY + T::index_of({target_label:?}))) — the doubled full set hits every variant at EXACTLY TWO positions (T::index_of(target) and T::CARDINALITY + T::index_of(target)) and the (head, tail) endpoint pair spans the two copies; a drifted doubled pair silently detaches the endpoint-pair projection from the endpoint-anchor pair on the doubled-slice fixpoint, and in particular catches an override that swaps the pair components or drops one of them",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        let expected_via_zip = T::first_occurrence_of(target, &doubled_full_set)
+            .zip(T::last_occurrence_of(target, &doubled_full_set));
+        assert_eq!(
+            doubled_pair, expected_via_zip,
+            "{type_name}: T::occurrence_endpoints_of({target_label:?}, &doubled_full_set) drifted from T::first_occurrence_of({target_label:?}, &doubled_full_set).zip(T::last_occurrence_of({target_label:?}, &doubled_full_set)) — the endpoint-pair projection MUST equal the direct `Option::zip` of the two endpoint-anchor projections on every slice, so a downstream endpoint-pair consumer that binds `T::first_occurrence_of(_, _).zip(T::last_occurrence_of(_, _))` as its endpoint-pair query surface would disagree with the pinned pair projection",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        assert_eq!(
+            doubled_pair.map(|(f, _)| f),
+            T::first_occurrence_of(target, &doubled_full_set),
+            "{type_name}: T::occurrence_endpoints_of({target_label:?}, &doubled_full_set).map(|(f,_)|f) drifted from T::first_occurrence_of({target_label:?}, &doubled_full_set) — the head-projection arm bifurcates: the pair's first component MUST equal the head-endpoint primitive on every slice, so a downstream head-position consumer that binds `T::occurrence_endpoints_of(_, _).map(|(f,_)|f)` would disagree with the pinned head-endpoint projection",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        assert_eq!(
+            doubled_pair.map(|(_, l)| l),
+            T::last_occurrence_of(target, &doubled_full_set),
+            "{type_name}: T::occurrence_endpoints_of({target_label:?}, &doubled_full_set).map(|(_,l)|l) drifted from T::last_occurrence_of({target_label:?}, &doubled_full_set) — the tail-projection arm bifurcates: the pair's second component MUST equal the tail-endpoint primitive on every slice, so a downstream tail-position consumer that binds `T::occurrence_endpoints_of(_, _).map(|(_,l)|l)` would disagree with the pinned tail-endpoint projection",
+            target_label = <T as ClosedSet>::label(target),
+        );
+        if let Some((f, l)) = doubled_pair {
+            assert!(
+                f <= l,
+                "{type_name}: T::occurrence_endpoints_of({target_label:?}, &doubled_full_set) returned Some(({f}, {l})) with f > l — the per-target endpoint-pair projection MUST satisfy `first <= second` on the `Some((first, second))` arm because `Iterator::position` always precedes `Iterator::rposition` on the same slice; a descending pair silently bifurcates the endpoint-direction contract every downstream endpoint-pair consumer routes through",
+                target_label = <T as ClosedSet>::label(target),
+            );
+        }
     }
 }
 
@@ -51960,6 +52250,429 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedAllOccurrencesHeadOnlyKind whose all_occurrences_of override drops the tail hit — clause (108)'s doubled-full-set arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn occurrence_endpoints_of_returns_none_on_the_empty_slice_across_every_target() {
+        // EMPTY-SLICE CONTRACT (per-target × Option<(usize, usize)>
+        // endpoint-pair projection): `T::occurrence_endpoints_of(v,
+        // &[])` is `None` for every target `v` — both endpoint-anchor
+        // primitives yield `None` on the zero-position slice, and
+        // `Option::zip` collapses to `None` iff EITHER input is
+        // `None`. Sibling posture to
+        // `first_occurrence_of_returns_none_on_the_empty_slice_across_every_target`
+        // + `last_occurrence_of_returns_none_on_the_empty_slice_across_every_target`
+        // on the endpoint-anchor pair: this pair-lift projects the
+        // same `None` empty-slice fixpoint through `Option::zip`.
+        let empty: &[StubKind] = &[];
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            assert_eq!(
+                <StubKind as ClosedSet>::occurrence_endpoints_of(v, empty),
+                None,
+                "T::occurrence_endpoints_of({v:?}, &[]) diverged from the empty-slice fixpoint `None`",
+            );
+        }
+    }
+
+    #[test]
+    fn occurrence_endpoints_of_returns_some_zero_zero_on_the_matching_singleton_across_every_target(
+    ) {
+        // MATCHING-SINGLETON CONTRACT: `T::occurrence_endpoints_of(v,
+        // &[v]) == Some((0, 0))` for every target `v` — the sole
+        // position hits the target, so both endpoint-anchor primitives
+        // yield `Some(0)` and `Option::zip` packages the pair as
+        // `Some((0, 0))`. The two components coincide because on a
+        // singleton the head and tail hit are the same slot.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::occurrence_endpoints_of(v, &singleton),
+                Some((0, 0)),
+                "T::occurrence_endpoints_of({v:?}, {singleton:?}) diverged from the matching-singleton fixpoint `Some((0, 0))`",
+            );
+        }
+    }
+
+    #[test]
+    fn occurrence_endpoints_of_returns_none_on_the_non_matching_singleton_across_every_target_pair()
+    {
+        // NON-MATCHING-SINGLETON CONTRACT:
+        // `T::occurrence_endpoints_of(v, &[w]) == None` for every
+        // target `v` and slice-element `w` with `T::index_of(v) !=
+        // T::index_of(w)` — both endpoint-anchor primitives miss on a
+        // singleton at a different variant, and `Option::zip`
+        // collapses to `None`. Sweeps every (target, singleton-
+        // element) pair pins the miss contract across the full 3×3 =
+        // 9-corner matrix at the six OFF-DIAGONAL corners.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for w in <StubKind as ClosedSet>::ALL.iter().copied() {
+                if <StubKind as ClosedSet>::index_of(v) != <StubKind as ClosedSet>::index_of(w) {
+                    let singleton = [w];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::occurrence_endpoints_of(v, &singleton),
+                        None,
+                        "T::occurrence_endpoints_of({v:?}, {singleton:?}) diverged from the non-matching-singleton fixpoint `None`",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn occurrence_endpoints_of_returns_index_of_pair_on_the_full_set_across_every_target() {
+        // FULL-SET CONTRACT:
+        // `T::occurrence_endpoints_of(v, T::ALL) ==
+        // Some((T::index_of(v), T::index_of(v)))` UNCONDITIONALLY —
+        // clause (3)'s pairwise-distinctness invariant forces every
+        // variant to appear at exactly ONE position of the full-set
+        // slice, so both endpoint-anchor primitives yield
+        // `Some(T::index_of(v))` and `Option::zip` packages the pair
+        // with coincident components. The two components coincide
+        // BECAUSE the full-set slice hits each variant exactly once
+        // (head-position == tail-position on singleton-hit slices).
+        let all = <StubKind as ClosedSet>::ALL;
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let expected = <StubKind as ClosedSet>::index_of(v);
+            assert_eq!(
+                <StubKind as ClosedSet>::occurrence_endpoints_of(v, all),
+                Some((expected, expected)),
+                "T::occurrence_endpoints_of({v:?}, T::ALL) diverged from Some((T::index_of({v:?}), T::index_of({v:?}))) — the closed-set well-formedness pairwise-distinctness invariant would be violated",
+            );
+        }
+    }
+
+    #[test]
+    fn occurrence_endpoints_of_returns_head_tail_pair_on_the_doubled_full_set_across_every_target()
+    {
+        // DOUBLED-FULL-SET CONTRACT:
+        // `T::occurrence_endpoints_of(v, T::ALL ++ T::ALL) ==
+        // Some((T::index_of(v), T::CARDINALITY + T::index_of(v)))`
+        // UNCONDITIONALLY — the doubled full set hits every variant
+        // at exactly TWO positions spanning the two copies. The
+        // doubled-slice arm is the ONLY canonical fixpoint arm that
+        // separates the (head, tail) direction axis (on the full set
+        // alone the two coincide), catching an override that swaps
+        // the pair components or drops one of them.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let head = <StubKind as ClosedSet>::index_of(v);
+            let tail = <StubKind as ClosedSet>::CARDINALITY + head;
+            assert_eq!(
+                <StubKind as ClosedSet>::occurrence_endpoints_of(v, &doubled),
+                Some((head, tail)),
+                "T::occurrence_endpoints_of({v:?}, ALL++ALL) diverged from Some((T::index_of({v:?}), T::CARDINALITY + T::index_of({v:?}))) — the doubled-slice fixpoint pins the (head, tail) pair to span the two copies",
+            );
+        }
+    }
+
+    #[test]
+    fn occurrence_endpoints_of_is_some_iff_occurs_in_across_every_target_and_triple() {
+        // PRESENCE-COMPOSITION IDENTITY: for every slice `items` and
+        // every target `v`,
+        // `T::occurrence_endpoints_of(v, items).is_some() ==
+        // T::occurs_in(v, items)` — the `Option`'s discriminant is
+        // exactly the per-target bool membership predicate. Sweeping
+        // every length-3 triple × every target pins the identity
+        // across the full 3×27 = 81-corner (target × triple) matrix.
+        // Sibling posture to
+        // `first_occurrence_of_is_some_iff_occurs_in_across_every_target_and_triple`
+        // on the endpoint-anchor pair.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let via_pair =
+                            <StubKind as ClosedSet>::occurrence_endpoints_of(v, &triple).is_some();
+                        let via_bool = <StubKind as ClosedSet>::occurs_in(v, &triple);
+                        assert_eq!(
+                            via_pair, via_bool,
+                            "T::occurrence_endpoints_of({v:?}, {triple:?}).is_some() diverged from T::occurs_in({v:?}, {triple:?}) — the pair's `Some` arm MUST coincide with the bool membership predicate",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn occurrence_endpoints_of_equals_zip_of_first_and_last_occurrence_of_across_every_target_and_triple(
+    ) {
+        // ENDPOINT-PAIR COMPOSITION IDENTITY: for every slice `items`
+        // and every target `v`,
+        // `T::occurrence_endpoints_of(v, items) ==
+        // T::first_occurrence_of(v, items).zip(T::last_occurrence_of(v, items))`
+        // — the pair-return is the direct `Option::zip` of the two
+        // endpoint-anchor projections. Sweeping every length-3 triple
+        // × every target pins the identity across the full 3×27 =
+        // 81-corner (target × triple) matrix. Catches a future
+        // override that detaches the pair projection from the
+        // endpoint-anchor pair on any slice.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let via_pair = <StubKind as ClosedSet>::occurrence_endpoints_of(v, &triple);
+                        let via_zip = <StubKind as ClosedSet>::first_occurrence_of(v, &triple)
+                            .zip(<StubKind as ClosedSet>::last_occurrence_of(v, &triple));
+                        assert_eq!(
+                            via_pair, via_zip,
+                            "T::occurrence_endpoints_of({v:?}, {triple:?}) diverged from T::first_occurrence_of({v:?}, {triple:?}).zip(T::last_occurrence_of({v:?}, {triple:?})) — the pair projection MUST equal the direct `Option::zip` of the two endpoint-anchor projections",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn occurrence_endpoints_of_head_equals_first_occurrence_of_across_every_target_and_triple() {
+        // HEAD-PROJECTION IDENTITY:
+        // `T::occurrence_endpoints_of(v, items).map(|(f, _)| f) ==
+        // T::first_occurrence_of(v, items)` — the first component of
+        // the pair equals the head-endpoint. Catches an override that
+        // stores the head in the second slot (a pair-swap) — on the
+        // singleton-hit full set both components coincide so the swap
+        // is invisible; the doubled-full-set sweep here catches it on
+        // the 3-corner variant sub-face.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let head_via_pair =
+                            <StubKind as ClosedSet>::occurrence_endpoints_of(v, &triple)
+                                .map(|(f, _)| f);
+                        let head_direct = <StubKind as ClosedSet>::first_occurrence_of(v, &triple);
+                        assert_eq!(
+                            head_via_pair, head_direct,
+                            "T::occurrence_endpoints_of({v:?}, {triple:?}).map(|(f,_)|f) diverged from T::first_occurrence_of({v:?}, {triple:?}) — the head-projection arm bifurcated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn occurrence_endpoints_of_tail_equals_last_occurrence_of_across_every_target_and_triple() {
+        // TAIL-PROJECTION IDENTITY:
+        // `T::occurrence_endpoints_of(v, items).map(|(_, l)| l) ==
+        // T::last_occurrence_of(v, items)` — the second component of
+        // the pair equals the tail-endpoint. Sibling posture to the
+        // head-projection identity one endpoint-direction axis over:
+        // the pair-swap catch is symmetric.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let tail_via_pair =
+                            <StubKind as ClosedSet>::occurrence_endpoints_of(v, &triple)
+                                .map(|(_, l)| l);
+                        let tail_direct = <StubKind as ClosedSet>::last_occurrence_of(v, &triple);
+                        assert_eq!(
+                            tail_via_pair, tail_direct,
+                            "T::occurrence_endpoints_of({v:?}, {triple:?}).map(|(_,l)|l) diverged from T::last_occurrence_of({v:?}, {triple:?}) — the tail-projection arm bifurcated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn occurrence_endpoints_of_first_bounded_above_by_second_across_every_target_and_triple() {
+        // FIRST ≤ SECOND CONTRACT: on the `Some((f, l))` arm of the
+        // pair, `f <= l` — the head-position (`Iterator::position`)
+        // always precedes the tail-position (`Iterator::rposition`)
+        // on the same slice, and they coincide exactly on singleton-
+        // hit slices. Sibling posture to
+        // `first_occurrence_of_is_at_most_last_occurrence_of_across_every_target_and_triple`
+        // on the endpoint-anchor pair one arity axis over (pair-packaged
+        // form of the same contract).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        if let Some((f, l)) =
+                            <StubKind as ClosedSet>::occurrence_endpoints_of(v, &triple)
+                        {
+                            assert!(
+                                f <= l,
+                                "T::occurrence_endpoints_of({v:?}, {triple:?}) returned Some(({f}, {l})) with f > l — the endpoint-pair MUST satisfy first ≤ second",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn occurrence_endpoints_of_equals_all_occurrences_of_first_and_last_across_every_target_and_triple(
+    ) {
+        // ALL-OCCURRENCES CROSS-CHECK: for every slice `items` and
+        // every target `v`, the pair projection equals the (first,
+        // last) endpoints of the every-position vec — an independent
+        // cross-check against `all_occurrences_of` distinct from the
+        // `first_occurrence_of` + `last_occurrence_of` composition.
+        // Reinforces the pair projection's substrate-wide agreement
+        // with the every-position Vec-return primitive at both
+        // endpoint slots simultaneously.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+                        let via_pair = <StubKind as ClosedSet>::occurrence_endpoints_of(v, &triple);
+                        let positions = <StubKind as ClosedSet>::all_occurrences_of(v, &triple);
+                        let via_vec = positions.first().copied().zip(positions.last().copied());
+                        assert_eq!(
+                            via_pair, via_vec,
+                            "T::occurrence_endpoints_of({v:?}, {triple:?}) diverged from the (first, last) endpoints of T::all_occurrences_of({v:?}, {triple:?}) = {positions:?} — the pair projection MUST cross-check against the every-position vec's endpoints",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_occurrence_endpoints_of_and_none() {
+        // Drift catch — clause (109)'s full-set fixpoint arm fires
+        // when an override folds the per-target endpoint-pair
+        // projection onto `None` regardless of target. The stub
+        // below overrides the default body to return `None`
+        // unconditionally; on the full set that produces `None !=
+        // Some((T::index_of(target), T::index_of(target)))` at every
+        // target, tripping clause (109)'s full-set fixpoint arm
+        // loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedOccurrenceEndpointsNoneKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedOccurrenceEndpointsNoneKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedOccurrenceEndpointsNoneKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted occurrence_endpoints none kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedOccurrenceEndpointsNoneKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedOccurrenceEndpointsNoneKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted occurrence_endpoints none kind";
+            type Unknown = UnknownDriftedOccurrenceEndpointsNoneKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedOccurrenceEndpointsNoneKind(s.to_owned())
+            }
+            fn occurrence_endpoints_of(_target: Self, _items: &[Self]) -> Option<(usize, usize)> {
+                None
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedOccurrenceEndpointsNoneKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedOccurrenceEndpointsNoneKind whose occurrence_endpoints_of override folds onto None unconditionally — clause (109)'s full-set fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_swap_drift_on_occurrence_endpoints_of() {
+        // Drift catch — clause (109)'s doubled-full-set arm fires
+        // when an override swaps the (first, last) pair. On the
+        // singleton-hit full set the two components coincide so the
+        // swap is invisible; on the doubled full set the swap
+        // produces `Some((C + i, i))` where the pinned pair is
+        // `Some((i, C + i))`, bifurcating the doubled-full-set arm
+        // AND simultaneously the head- + tail-composition arms
+        // against `T::first_occurrence_of` and `T::last_occurrence_of`
+        // AND the first ≤ second contract (since C + i > i for i in
+        // [0, C)).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedOccurrenceEndpointsSwappedKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedOccurrenceEndpointsSwappedKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedOccurrenceEndpointsSwappedKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted occurrence_endpoints swapped kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedOccurrenceEndpointsSwappedKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedOccurrenceEndpointsSwappedKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted occurrence_endpoints swapped kind";
+            type Unknown = UnknownDriftedOccurrenceEndpointsSwappedKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedOccurrenceEndpointsSwappedKind(s.to_owned())
+            }
+            fn occurrence_endpoints_of(target: Self, items: &[Self]) -> Option<(usize, usize)> {
+                // Drift: swap (first, last) → (last, first). On the
+                // doubled full set this returns `Some((C + i, i))`
+                // where the pinned pair is `Some((i, C + i))`, and
+                // C + i > i triggers the first ≤ second contract.
+                <Self as ClosedSet>::last_occurrence_of(target, items)
+                    .zip(<Self as ClosedSet>::first_occurrence_of(target, items))
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedOccurrenceEndpointsSwappedKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedOccurrenceEndpointsSwappedKind whose occurrence_endpoints_of override swaps the pair — clause (109)'s doubled-full-set arm MUST reject the drift",
         );
     }
 

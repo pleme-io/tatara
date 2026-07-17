@@ -18971,6 +18971,230 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .find(|&v| <Self as ClosedSet>::count_occurrences_of(v, items) == min)
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "modal variants" projection —
+    /// the `Vec<Self>` DECLARATION-ORDER witness-collection of EVERY
+    /// variant of [`Self::ALL`] whose per-target count equals
+    /// [`Self::max_variant_count`], preserving [`Self::ALL`]'s
+    /// declaration order and returning the empty vector when `items`
+    /// is empty. The Vec-RETURN opener on the (set-level ×
+    /// `Vec<Self>` × statistical-aggregate × direction × argmax)
+    /// corner peer to the (set-level × `Option<Self>` × statistical-
+    /// aggregate × direction × argmax) [`Self::modal_variant`] corner
+    /// one RETURN-SHAPE axis over — while [`Self::modal_variant`]
+    /// reports the FIRST tied argmax variant (a single-witness
+    /// commit), this projection reports EVERY tied argmax variant (a
+    /// COMPLETE witness-collection, no tie-break choice). The (set-
+    /// level × {`Option<Self>`, `Vec<Self>`} × statistical-aggregate ×
+    /// argmax × declaration-order) 2-corner (return-shape) row on the
+    /// equivalence-partition surface now closes the `Vec<Self>` per-
+    /// direction column past the `Option<Self>` first-witness column
+    /// [`Self::modal_variant`] closed.
+    ///
+    /// Mult-band peer posture: the projection is the (statistical-
+    /// aggregate × direction) DIRECTION peer of the (multiplicity-
+    /// band) [`Self::repeating_variants`] Vec<Self>-return witness one
+    /// FILTER-KIND axis over — [`Self::repeating_variants`] filters
+    /// [`Self::ALL`] by `count(v) >= 2` (a fixed-threshold
+    /// multiplicity-band), this projection filters [`Self::ALL`] by
+    /// `count(v) == T::max_variant_count(items)` (a dynamic-threshold
+    /// statistical-aggregate direction-anchor). Both projections
+    /// share the `T::ALL.iter().copied().filter(...).collect()`
+    /// composition idiom on the (Vec<Self>, declaration-order, filter)
+    /// column.
+    ///
+    /// First-witness identity: for every NON-EMPTY slice `items`,
+    /// `T::modal_variants(items).first().copied() == T::modal_variant(items)`
+    /// — the plural's HEAD equals the singular's commit because both
+    /// walk [`Self::ALL`] in declaration order and commit at the first
+    /// tied argmax. Pinned by
+    /// `modal_variants_head_agrees_with_modal_variant_across_every_triple`.
+    ///
+    /// Count-composition identity: for every slice `items` and every
+    /// variant `v` in the returned Vec,
+    /// `T::count_occurrences_of(v, items) == T::max_variant_count(items)`
+    /// — every element of the returned Vec achieves the modal
+    /// multiplicity exactly. Pinned by
+    /// `modal_variants_elements_agree_with_max_variant_count_across_every_triple`.
+    ///
+    /// Present-arm containment identity: for every NON-EMPTY slice
+    /// `items`, `T::modal_variants(items)` is a SUBSET (as multiset)
+    /// of `T::present_variants(items)` — every modal variant is
+    /// present (its count is at least `T::max_variant_count(items)
+    /// >= 1` on non-empty slices, so it appears in the slice).
+    /// Pinned by
+    /// `modal_variants_are_present_across_every_triple`.
+    ///
+    /// Non-emptiness identity: `T::modal_variants(items).is_empty()`
+    /// iff `items.is_empty()` on every slice — the empty-slice arm
+    /// is the SOLE empty-Vec arm; on every non-empty slice the filter
+    /// hits at least one variant whose count equals
+    /// [`Self::max_variant_count`] (the finite discrete histogram
+    /// achieves its max at at least one bin). Pinned by
+    /// `modal_variants_is_non_empty_iff_slice_is_non_empty_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::modal_variants(&[])` is the empty
+    /// `Vec<Self>` UNCONDITIONALLY — the empty slice hits zero
+    /// positions, so every per-variant occurrence count is `0`,
+    /// [`Self::max_variant_count`] collapses to `0`, and an UNGUARDED
+    /// `T::ALL.iter().copied().filter(|v| count(v) == 0).collect()`
+    /// sweep would silently return `T::ALL.to_vec()` past the (max ==
+    /// 0, every-count == 0) degenerate arm — the empty guard maps
+    /// `&[]` to `Vec::new()` before the sweep. The empty-Vec-at-empty
+    /// fixpoint is LOAD-BEARING as the drift catch for an override
+    /// that omits the guard. Pinned by clause (127) and by
+    /// `modal_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Full-set contract:
+    /// `T::modal_variants(<T as ClosedSet>::ALL)` equals
+    /// `<T as ClosedSet>::ALL.to_vec()` UNCONDITIONALLY — the closed-
+    /// set well-formedness invariant [`assert_closed_set_well_formed`]'s
+    /// clause (3) pins variants as pairwise distinct, so every variant
+    /// appears at exactly one position in the full-set slice, every
+    /// per-variant count is `1`, [`Self::max_variant_count`] collapses
+    /// to `1`, and the filter hits EVERY variant — the flat-histogram
+    /// fixpoint pins the direction-axis degeneracy at every corner.
+    /// Pinned by clause (127) and by
+    /// `modal_variants_returns_all_on_the_full_set_across_every_kind`.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::modal_variants(&doubled_full_set)` equals
+    /// `<T as ClosedSet>::ALL.to_vec()` UNCONDITIONALLY — the doubled-
+    /// full-set slice appends [`Self::ALL`] to itself, so every
+    /// variant appears at EXACTLY two positions,
+    /// [`Self::max_variant_count`] collapses to `2`, and the filter
+    /// hits EVERY variant. Pinned by
+    /// `modal_variants_returns_all_on_the_doubled_full_set_across_every_kind`.
+    ///
+    /// Matching-singleton contract: `T::modal_variants(&[v])` equals
+    /// `vec![v]` for every variant `v` UNCONDITIONALLY — a matching
+    /// singleton hits `count(v) == 1` at the target and `count(w) ==
+    /// 0` at every other variant, [`Self::max_variant_count`]
+    /// collapses to `1`, and the filter hits ONLY the target. Pinned
+    /// by
+    /// `modal_variants_returns_the_target_only_on_every_matching_singleton_across_every_variant`.
+    ///
+    /// Ordering-axis invariance on the input axis: the projection is
+    /// intrinsically ordering-agnostic on the INPUT axis — permuting
+    /// `items` preserves its multiset of variant identities, so
+    /// [`Self::count_occurrences_of`] is a function of that multiset
+    /// alone, [`Self::max_variant_count`] is a function of that
+    /// multiset alone, and the filter over [`Self::ALL`] (which does
+    /// NOT depend on `items`' ordering) is a function of that multiset
+    /// alone. Pinned by
+    /// `modal_variants_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of the
+    /// substrate's [`Self::count_occurrences_of`] primitive at the
+    /// trait level, filtered over [`Self::ALL`] via the standard-
+    /// library [`Iterator::filter`] combinator against
+    /// [`Self::max_variant_count`]. The composition uses one
+    /// `is_empty()`-guarded
+    /// `T::ALL.iter().copied().filter(|&v| count == max).collect()`
+    /// sweep, so the sweep costs `O(T::CARDINALITY * n)` on slice
+    /// arity `n` (one [`Self::max_variant_count`] fold + one
+    /// [`Self::CARDINALITY`]-bounded filter sweep, plus one output-
+    /// `Vec` allocation of at most [`Self::CARDINALITY`] entries) —
+    /// no `PartialEq`/`Eq`/`Hash` supertrait bound, no bitset-shape
+    /// carrier.
+    ///
+    /// Future consumers that compose against [`Self::modal_variants`]:
+    /// a `tatara-check` predicate `(check-phases-modes …)` that
+    /// reports EVERY `WorkloadPhase` tied at the modal multiplicity in
+    /// a rollout window (surfacing "which phases tie for the most
+    /// visits?" rather than the single first-witness argmax); an LSP
+    /// diagnostic on a Lisp-author-written closed-set field that
+    /// reports the full modal witness-collection as an author-facing
+    /// "most common: `<label1>`, `<label2>` (each appears N times)"
+    /// hint whose completeness matters for a tie'd histogram; a
+    /// Sekiban audit-trail per-window classification argmax
+    /// witness-collection that lists EVERY classification tied at the
+    /// modal band, distinguishing "unique mode = X" from "modes = X,
+    /// Y" without paying for the full histogram; a scheduler-fairness
+    /// heuristic that treats the entire modal witness-collection as a
+    /// "hot bucket" to depriorize evenly rather than committing on the
+    /// first tied argmax. Each binds to ONE typed `Vec<Self>`-return
+    /// direction-anchor aggregate on the trait rather than re-deriving
+    /// `T::ALL.iter().copied().filter(|&v|
+    /// T::count_occurrences_of(v, items) == T::max_variant_count(items))
+    /// .collect()` inline per callsite.
+    ///
+    /// Compounding closure: this projection OPENS the (set-level ×
+    /// `Vec<Self>` × statistical-aggregate × direction × declaration-
+    /// order × argmax) corner on the (return-shape × direction ×
+    /// ordering) grid, sitting peer to [`Self::modal_variant`]
+    /// (`Option<Self>`, argmax, declaration) one RETURN-SHAPE axis
+    /// over. The natural next lifts past this corner are: a
+    /// `sorted_modal_variants(items) -> Vec<Self>` LEX-ORDER peer
+    /// closing the (return-shape × ordering) face at the (Vec<Self>,
+    /// argmax, lex) corner; an `antimodal_variants(items) ->
+    /// Vec<Self>` DIRECTION peer opening the (Vec<Self>, argmin,
+    /// declaration) corner; and a `sorted_antimodal_variants(items) ->
+    /// Vec<Self>` LEX-ORDER × DIRECTION peer closing the 2×2×2 =
+    /// 8-corner (return-shape × direction × ordering) cube at its
+    /// final (Vec<Self>, argmin, lex) corner. Downstream consumers
+    /// wanting a `usize`-return "how many modes tie?" scalar compose
+    /// on this projection through `.len()` without an additional
+    /// substrate primitive.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// `Vec<Self>`-return argmax witness-collection becomes a TYPE-
+    /// level primitive on the closed-set trait rather than a per-
+    /// consumer inline
+    /// `T::ALL.iter().copied().filter(|&v| T::count_occurrences_of(v, items) == T::max_variant_count(items)).collect()`
+    /// composition. THEORY.md §V.1 — knowable platform; the (set-
+    /// level × `Vec<Self>` × argmax) witness-collection corner was an
+    /// unnamed inline composition recurring at every prospective
+    /// downstream "which variants ALL tie for the histogram's peak?"
+    /// site pre-lift. Naming it on the trait makes the projection a
+    /// TYPED CONSEQUENCE of the substrate's per-target multiplicity
+    /// primitive [`Self::count_occurrences_of`] filtered over
+    /// [`Self::ALL`] against [`Self::max_variant_count`]. THEORY.md
+    /// §VI.1 — generation over composition; the argmax witness-
+    /// collection emerges from the composition of TWO substrate
+    /// primitives ([`Self::count_occurrences_of`] +
+    /// [`Self::max_variant_count`]) with an
+    /// `iter().copied().filter().collect()` combinator over
+    /// [`Self::ALL`].
+    ///
+    /// Frontier inspiration: R's `names(table(items))[table(items) ==
+    /// max(table(items))]` — the direction-anchor filter yielding
+    /// every argmax key on a factor histogram; Julia's
+    /// `[k for (k, v) in StatsBase.countmap(items) if v ==
+    /// maximum(values(StatsBase.countmap(items)))]` on ties;
+    /// Python's `[k for k, v in collections.Counter(items).items()
+    /// if v == max(collections.Counter(items).values())]` yielding
+    /// the complete modal set on ties; Haskell's `map fst . filter
+    /// (\(_, n) -> n == maximum (map snd hist)) $ hist` on
+    /// `Ord`-instance carriers; Clojure's `(let [f (frequencies
+    /// coll) m (apply max (vals f))] (keep-indexed (fn [_ [k v]]
+    /// (when (= v m) k)) f))` idiom; Coq's `list_modes` combinator
+    /// on a decidable-equality carrier yielding the complete argmax
+    /// set. Translation through pleme-io primitives: the N-ary
+    /// `Vec<Self>`-return declaration-order argmax witness-collection
+    /// on the closed-set trait binds through [`Self::ALL`] filtered
+    /// via the substrate's per-target multiplicity primitive
+    /// [`Self::count_occurrences_of`] against
+    /// [`Self::max_variant_count`] — no new dep, no supertrait bound
+    /// (the [`Self::index_of`] projection [`Self::count_occurrences_of`]
+    /// threads through replaces the `Eq`/`Hash` bound the standard-
+    /// library `Counter` / `frequencies` / `countmap` argmax
+    /// signatures demand), no histogram-carrier allocation (the
+    /// `filter` sweep yields a `Vec<Self>` without materializing the
+    /// intermediate `Vec<usize>` histogram; the sweep streams through
+    /// per-target counts one at a time and commits at each tied
+    /// argmax hit).
+    fn modal_variants(items: &[Self]) -> ::std::vec::Vec<Self> {
+        if items.is_empty() {
+            return ::std::vec::Vec::new();
+        }
+        let max = <Self as ClosedSet>::max_variant_count(items);
+        <Self as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|&v| <Self as ClosedSet>::count_occurrences_of(v, items) == max)
+            .collect()
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "any variant repeating?" predicate —
     /// `true` iff AT LEAST ONE variant of [`Self::ALL`] appears TWO OR
     /// MORE times in `items`, computed as the just-lifted usize-return
@@ -32249,6 +32473,83 @@ where
         Some(T::sorted_first()),
         "{type_name}: T::sorted_antimodal_variant(&doubled_full_set) drifted from Some({sorted_first_label:?}) — every variant of T::ALL appears at exactly two positions of the doubled-full-set slice, every per-variant count is 2, T::min_variant_count(doubled) == 2, and the LEX-ORDER-FIRST argmin sweep hits T::sorted_variants()[0] == T::sorted_first() immediately",
     );
+    // (127) — `T::modal_variants(items)` MUST agree with the
+    // declaration-order-preserving argmax witness-collection over the
+    // [`T::variant_counts`] histogram on every slice AND MUST land on
+    // its THREE canonical fixpoints (empty vector on the empty slice
+    // UNCONDITIONALLY, `T::ALL.to_vec()` on the full-set slice
+    // UNCONDITIONALLY, `T::ALL.to_vec()` on the doubled-full-set slice
+    // UNCONDITIONALLY). The three fixpoints partition the failure
+    // modes at the (Vec-shape × slice-shape) corner simultaneously:
+    // an override that omits the empty-slice guard fires on the
+    // empty-slice arm (returns `T::ALL.to_vec()` rather than the
+    // empty vector past the (max == 0, every-count == 0) degenerate
+    // arm where every variant hits `count == 0 == max`); an override
+    // that folds onto the empty vector unconditionally fires on the
+    // full-set + doubled-full-set arms (both flat-histogram fixpoints
+    // hit every variant); an override that returns a proper subset of
+    // T::ALL on the full set (e.g. only the first variant) fires on
+    // the full-set arm because clause (3)'s pairwise-distinctness pins
+    // every variant at count `1 == max`; an override that returns a
+    // Vec of the wrong length on any flat-histogram slice bifurcates
+    // loudly at the length arm; an override that returns a Vec whose
+    // FIRST element disagrees with [`T::modal_variant`] on the full-
+    // set slice fires at the composition-equality arm against
+    // `T::modal_variant(T::ALL) == Some(T::first())`.
+    //
+    // Sibling posture to clause (123): clause (123) opens the (set-
+    // level × `Option<Self>` × statistical-aggregate × declaration-
+    // order × argmax) FIRST-WITNESS corner via [`T::modal_variant`];
+    // this clause opens the (set-level × `Vec<Self>` × statistical-
+    // aggregate × declaration-order × argmax) COMPLETE-WITNESS
+    // corner one RETURN-SHAPE axis over via [`T::modal_variants`]. The
+    // (return-shape × direction × ordering) 2×2×2 = 8-corner cube on
+    // the direction-anchor face now opens its (Vec<Self>, argmax,
+    // declaration-order) corner past the (Option<Self>, argmax,
+    // declaration-order) corner clause (123) opened; the next lifts
+    // close (Vec<Self>, argmax, lex), (Vec<Self>, argmin, declaration),
+    // and (Vec<Self>, argmin, lex) — three remaining Vec-return
+    // corners. The default trait body threads the `is_empty()`-guarded
+    // `T::ALL.iter().copied().filter(|&v|
+    // T::count_occurrences_of(v, items) == T::max_variant_count(items))
+    // .collect()` sweep verbatim and satisfies every fixpoint arm +
+    // the composition-equality arm for free; the assertion catches a
+    // future implementor whose override drifts the projection loudly
+    // rather than silently bifurcating the declaration-order argmax
+    // witness-collection surface every downstream complete-mode
+    // consumer routes through.
+    assert_eq!(
+        T::modal_variants(empty),
+        <::std::vec::Vec<T>>::new(),
+        "{type_name}: T::modal_variants(&[]) drifted from Vec::new() — the empty-slice fixpoint MUST return the empty vector because every per-variant occurrence count collapses to 0 and an UNGUARDED T::ALL.iter().copied().filter(|v| count(v) == 0).collect() sweep would silently return T::ALL.to_vec() past the (max == 0, every-count == 0) degenerate arm where every variant satisfies `count == max == 0`; a non-empty empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream declaration-order argmax witness-collection consumer routes through",
+    );
+    let full_modal_variants = T::modal_variants(T::ALL);
+    assert_eq!(
+        full_modal_variants.len(),
+        T::CARDINALITY,
+        "{type_name}: T::modal_variants(T::ALL).len() == {actual_len} != T::CARDINALITY == {cardinality} — clause (3)'s pairwise-distinctness invariant pins every variant of T::ALL at exactly one position on the full-set slice, every per-variant count is 1, T::max_variant_count(T::ALL) == 1, and the argmax witness-collection filter hits EVERY variant of T::ALL (the flat-histogram fixpoint pins the direction-axis degeneracy at every corner); a shorter Vec is the drift catch for an override that folds onto `Vec::new()` unconditionally OR that returns a proper subset of T::ALL on the full set",
+        actual_len = full_modal_variants.len(),
+        cardinality = T::CARDINALITY,
+    );
+    assert_eq!(
+        full_modal_variants.as_slice(),
+        T::ALL,
+        "{type_name}: T::modal_variants(T::ALL) drifted from T::ALL element-for-element — the declaration-order-preserving argmax witness-collection MUST equal T::ALL on the full-set slice because every variant hits count == max == 1 and the filter walks T::ALL in declaration order; an ordering divergence is the drift catch for an override that reorders the witnesses via `T::sorted_variants` or via any other non-declaration walk",
+    );
+    let doubled_modal_variants = T::modal_variants(&doubled_full_set);
+    assert_eq!(
+        doubled_modal_variants.as_slice(),
+        T::ALL,
+        "{type_name}: T::modal_variants(&doubled_full_set) drifted from T::ALL element-for-element — every variant of T::ALL appears at exactly two positions of the doubled-full-set slice, every per-variant count is 2, T::max_variant_count(doubled) == 2, and the filter hits EVERY variant of T::ALL in declaration order; a divergent doubled-full-set value silently bifurcates the declaration-order flat-histogram fixpoint contract every downstream complete-mode consumer routes through",
+    );
+    if let Some(head) = full_modal_variants.first().copied() {
+        let expected_head = T::modal_variant(T::ALL);
+        assert_eq!(
+            Some(head),
+            expected_head,
+            "{type_name}: T::modal_variants(T::ALL).first() drifted from T::modal_variant(T::ALL) — the plural's HEAD MUST equal the singular's first-witness commit because both walk T::ALL in declaration order and commit at the first tied argmax; a divergence catches an override that reorders the witnesses on the plural side without threading through the same declaration-order argmax walk the singular pins",
+        );
+    }
 }
 
 #[cfg(test)]
@@ -69848,6 +70149,360 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedSortedAntimodalVariantWalksAllKind whose sorted_antimodal_variant override walks T::ALL instead of T::sorted_variants — clause (126)'s full-set + doubled-full-set arms MUST reject the drift when T::first() != T::sorted_first()",
+        );
+    }
+
+    #[test]
+    fn modal_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (set-level × `Vec<Self>` × statistical-
+        // aggregate × declaration-order × argmax): `T::modal_variants(
+        // &[])` is the empty `Vec<Self>` UNCONDITIONALLY — the empty
+        // slice hits zero positions, so every per-variant count is 0,
+        // T::max_variant_count collapses to 0, and an UNGUARDED filter
+        // `count(v) == 0` would silently return T::ALL.to_vec() past
+        // the degenerate arm. The empty guard maps `&[]` to
+        // `Vec::new()` before the filter. Sibling posture to
+        // `modal_variant_returns_none_on_the_empty_slice_across_every_kind`
+        // one return-shape axis over: the `Option<Self>` first-witness
+        // hits its `None` fixpoint at the same endpoint; this `Vec<
+        // Self>` complete-witness collection hits its empty-Vec
+        // fixpoint at the same endpoint.
+        let empty: &[StubKind] = &[];
+        let modal_variants = <StubKind as ClosedSet>::modal_variants(empty);
+        assert!(
+            modal_variants.is_empty(),
+            "T::modal_variants(&[]) diverged from the empty-slice fixpoint `Vec::new()` — got {modal_variants:?}",
+        );
+    }
+
+    #[test]
+    fn modal_variants_returns_the_target_only_on_every_matching_singleton_across_every_variant() {
+        // MATCHING-SINGLETON CONTRACT: `T::modal_variants(&[v])` is
+        // `vec![v]` for every variant `v` — a matching singleton hits
+        // `count(v) == 1` at the target and `count(w) == 0` at every
+        // other variant, T::max_variant_count collapses to 1, and the
+        // filter hits ONLY the target. Sibling posture to
+        // `modal_variant_returns_some_target_on_every_singleton_slice_across_every_variant`
+        // one return-shape axis over: the singular reports `Some(v)`,
+        // this plural reports `vec![v]`. The singleton is the smallest-
+        // arity slice on which the argmax is UNIQUE (a single target
+        // hits max) — pins the plural at exactly one element while
+        // separating it from the empty-Vec fixpoint one direction.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            let modal_variants = <StubKind as ClosedSet>::modal_variants(&singleton);
+            assert_eq!(
+                modal_variants.as_slice(),
+                &[v],
+                "T::modal_variants({singleton:?}) diverged from the matching-singleton fixpoint `vec![{v:?}]`",
+            );
+        }
+    }
+
+    #[test]
+    fn modal_variants_returns_all_on_the_full_set_across_every_kind() {
+        // FULL-SET CONTRACT: `T::modal_variants(T::ALL)` equals
+        // `T::ALL.to_vec()` UNCONDITIONALLY — the closed-set well-
+        // formedness invariant pins variants as pairwise distinct, so
+        // every variant appears at exactly one position in the full-
+        // set slice, every per-variant count is 1,
+        // T::max_variant_count collapses to 1, and the filter hits
+        // EVERY variant of T::ALL in declaration order. Complements
+        // `modal_variant_returns_first_on_the_full_set_across_every_kind`
+        // one return-shape axis over: the singular commits at the
+        // FIRST tied argmax (T::first()); this plural returns the FULL
+        // tied argmax set (T::ALL).
+        let all = <StubKind as ClosedSet>::ALL;
+        let modal_variants = <StubKind as ClosedSet>::modal_variants(all);
+        assert_eq!(
+            modal_variants.as_slice(),
+            all,
+            "T::modal_variants(T::ALL) diverged from T::ALL element-for-element — the full-set flat-histogram fixpoint MUST hit every variant of T::ALL in declaration order",
+        );
+    }
+
+    #[test]
+    fn modal_variants_returns_all_on_the_doubled_full_set_across_every_kind() {
+        // DOUBLED-FULL-SET CONTRACT:
+        // `T::modal_variants(T::ALL ++ T::ALL)` equals `T::ALL.to_vec()`
+        // UNCONDITIONALLY — the doubled full set hits every variant at
+        // EXACTLY two positions, T::max_variant_count collapses to 2,
+        // and the filter hits EVERY variant in declaration order.
+        // Sibling posture to
+        // `modal_variant_returns_first_on_the_doubled_full_set_across_every_kind`
+        // one return-shape axis over: the singular hits `Some(T::first())`
+        // at the flat-histogram argmax; this plural hits every variant.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        let modal_variants = <StubKind as ClosedSet>::modal_variants(&doubled);
+        assert_eq!(
+            modal_variants.as_slice(),
+            <StubKind as ClosedSet>::ALL,
+            "T::modal_variants(ALL++ALL) diverged from T::ALL element-for-element — the doubled-full-set flat-histogram fixpoint MUST hit every variant of T::ALL in declaration order",
+        );
+    }
+
+    #[test]
+    fn modal_variants_is_non_empty_iff_slice_is_non_empty_across_every_triple() {
+        // NON-EMPTINESS IDENTITY: `T::modal_variants(items).is_empty()
+        // == items.is_empty()` on every slice — the empty-slice arm is
+        // the SOLE empty-Vec arm. On every non-empty slice the finite
+        // discrete histogram achieves its max at at least one bin, so
+        // the filter hits at least one variant. Sweeping every length-
+        // 3 triple + the empty slice pins the identity across the
+        // full 27-corner triple domain plus the empty fixpoint.
+        let empty: &[StubKind] = &[];
+        assert!(
+            <StubKind as ClosedSet>::modal_variants(empty).is_empty(),
+            "T::modal_variants(&[]).is_empty() diverged from true on the empty slice",
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert!(
+                        !<StubKind as ClosedSet>::modal_variants(&triple).is_empty(),
+                        "T::modal_variants({triple:?}).is_empty() diverged from false on a non-empty triple — the finite discrete histogram MUST achieve its max at at least one bin on every non-empty slice",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn modal_variants_head_agrees_with_modal_variant_across_every_triple() {
+        // FIRST-WITNESS IDENTITY: for every NON-EMPTY slice `items`,
+        // `T::modal_variants(items).first().copied() ==
+        // T::modal_variant(items)` — the plural's HEAD equals the
+        // singular's commit because both walk T::ALL in declaration
+        // order and commit at the first tied argmax. Sibling posture
+        // to `modal_variant_is_declaration_order_first_argmax_across_every_triple`
+        // one return-shape axis over: both projections pin the same
+        // first-witness under the same declaration-order tie-break.
+        // Sweeping every length-3 triple pins the identity across the
+        // full 27-corner (triple) domain.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let plural = <StubKind as ClosedSet>::modal_variants(&triple);
+                    let singular = <StubKind as ClosedSet>::modal_variant(&triple);
+                    assert_eq!(
+                        plural.first().copied(),
+                        singular,
+                        "T::modal_variants({triple:?}).first() diverged from T::modal_variant({triple:?}) — the plural's HEAD MUST equal the singular's first-witness commit under the same declaration-order argmax tie-break",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn modal_variants_elements_agree_with_max_variant_count_across_every_triple() {
+        // COUNT-COMPOSITION IDENTITY: for every slice `items` and
+        // every variant `v` in the returned Vec,
+        // `T::count_occurrences_of(v, items) ==
+        // T::max_variant_count(items)` — every element of the returned
+        // Vec achieves the modal multiplicity exactly. Sweeping every
+        // length-3 triple pins the identity across the full 27-corner
+        // triple domain. Catches an override whose Vec includes a
+        // non-modal variant.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let max = <StubKind as ClosedSet>::max_variant_count(&triple);
+                    for v in <StubKind as ClosedSet>::modal_variants(&triple) {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::count_occurrences_of(v, &triple),
+                            max,
+                            "T::modal_variants({triple:?}) contained {v:?} whose count diverged from T::max_variant_count({triple:?}) == {max}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn modal_variants_are_present_across_every_triple() {
+        // PRESENT-ARM CONTAINMENT IDENTITY: for every NON-EMPTY slice
+        // `items`, every variant in `T::modal_variants(items)` also
+        // appears in `T::present_variants(items)` — every modal
+        // variant is present (its count is at least
+        // `T::max_variant_count(items) >= 1` on non-empty slices, so
+        // it appears in the slice). Sweeping every length-3 triple
+        // pins the containment across the full 27-corner triple
+        // domain.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let present = <StubKind as ClosedSet>::present_variants(&triple);
+                    for v in <StubKind as ClosedSet>::modal_variants(&triple) {
+                        assert!(
+                            present.iter().any(|&w| {
+                                <StubKind as ClosedSet>::index_of(w)
+                                    == <StubKind as ClosedSet>::index_of(v)
+                            }),
+                            "T::modal_variants({triple:?}) contained {v:?} not in T::present_variants({triple:?}) == {present:?} — every modal variant MUST be present",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn modal_variants_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::modal_variants(items) == T::modal_variants(reversed items)`
+        // on every slice — reversing a slice preserves its multiset of
+        // variant identities, and every projection on the equivalence-
+        // partition surface is a FIXPOINT of slice reversal. Sibling
+        // posture to
+        // `modal_variant_is_invariant_under_slice_reversal_across_every_triple`
+        // one return-shape axis over: both projections agree under the
+        // input-axis multiset invariance because both compose on
+        // T::count_occurrences_of (a multiset function) filtered
+        // through T::ALL (an ordering that does NOT depend on items).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::modal_variants(&forward),
+                        <StubKind as ClosedSet>::modal_variants(&reversed),
+                        "T::modal_variants({forward:?}) diverged from T::modal_variants({reversed:?}) — the declaration-order argmax witness-collection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_empty_drift_in_modal_variants() {
+        // Drift catch — clause (127)'s full-set fixpoint arm fires
+        // when an override folds the plural onto `Vec::new()`
+        // regardless of slice-shape (returning empty on the full set
+        // rather than `T::ALL.to_vec()`). The stub below overrides the
+        // default body to return `Vec::new()` unconditionally; on the
+        // full set that produces `[] != T::ALL`, tripping clause
+        // (127)'s full-set arm loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedModalVariantsEmptyKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedModalVariantsEmptyKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedModalVariantsEmptyKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted modal_variants empty kind: {}", self.0)
+            }
+        }
+
+        impl DriftedModalVariantsEmptyKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedModalVariantsEmptyKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted modal_variants empty kind";
+            type Unknown = UnknownDriftedModalVariantsEmptyKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedModalVariantsEmptyKind(s.to_owned())
+            }
+            fn modal_variants(_items: &[Self]) -> Vec<Self> {
+                // Drift: return the empty vector unconditionally. On
+                // the full set that produces `[] != T::ALL.to_vec()`,
+                // tripping clause (127)'s full-set fixpoint arm at
+                // the length assertion loudly.
+                Vec::new()
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedModalVariantsEmptyKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedModalVariantsEmptyKind whose modal_variants override folds onto Vec::new() unconditionally — clause (127)'s full-set fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_all_drift_in_modal_variants() {
+        // Drift catch — clause (127)'s empty-slice fixpoint arm fires
+        // when an override omits the empty-slice guard, returning
+        // `T::ALL.to_vec()` on the empty slice rather than
+        // `Vec::new()`. The stub below overrides the default body to
+        // return `T::ALL.to_vec()` unconditionally; on the empty
+        // slice that produces `T::ALL != []`, tripping clause (127)'s
+        // empty-slice arm loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedModalVariantsAllKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedModalVariantsAllKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedModalVariantsAllKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted modal_variants all kind: {}", self.0)
+            }
+        }
+
+        impl DriftedModalVariantsAllKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedModalVariantsAllKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted modal_variants all kind";
+            type Unknown = UnknownDriftedModalVariantsAllKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedModalVariantsAllKind(s.to_owned())
+            }
+            fn modal_variants(_items: &[Self]) -> Vec<Self> {
+                // Drift: return T::ALL.to_vec() unconditionally
+                // (omitting the empty-slice guard). On the empty
+                // slice that produces `T::ALL != []`, tripping clause
+                // (127)'s empty-slice fixpoint arm loudly.
+                <Self as ClosedSet>::ALL.to_vec()
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedModalVariantsAllKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedModalVariantsAllKind whose modal_variants override omits the empty-slice guard — clause (127)'s empty-slice fixpoint arm MUST reject the drift",
         );
     }
 }

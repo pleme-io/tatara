@@ -18967,6 +18967,205 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "repeating variants" projection
+    /// — the `Vec<Self>` DECLARATION-ORDER strict-repeat set of
+    /// [`Self::ALL`], keeping every variant whose per-target
+    /// multiplicity in `items` is `>= 2` and dropping every variant
+    /// whose multiplicity is `<= 1`. The VEC-RETURN STRICT-REPEAT
+    /// corner OPENING the (`Vec<Self>`, set-level, multiplicity-
+    /// band `>= 2`) column past the (`bool`, set-level,
+    /// multiplicity-band `>= 2`) [`Self::is_repeating_any`]
+    /// existential corner AND the (`usize`, set-level, multiplicity-
+    /// band `>= 2`) [`Self::count_repeating_variants`] cardinality
+    /// corner on the equivalence-partition surface, positioned as
+    /// the concrete WITNESS behind those two peer projections
+    /// (which report whether the strict-repeat set is non-empty and
+    /// its cardinality alone, respectively).
+    ///
+    /// Cardinality identity: for every slice `items`,
+    /// `T::repeating_variants(items).len() ==
+    /// T::count_repeating_variants(items)` — the Vec-return strict-
+    /// repeat projection's length matches the usize-return strict-
+    /// repeat count exactly. Pinned by
+    /// `repeating_variants_length_equals_count_repeating_variants_across_every_triple`.
+    ///
+    /// Bool-projection identities: for every slice `items`,
+    /// * `T::repeating_variants(items).is_empty()` iff
+    ///   `!T::is_repeating_any(items)` — the strict-repeat set is
+    ///   empty iff the strict-repeat existential fails;
+    /// * `!T::repeating_variants(items).is_empty()` iff
+    ///   `T::is_repeating_any(items)` — the strict-repeat set is
+    ///   non-empty iff the strict-repeat existential holds.
+    ///
+    /// Both identities pin the bool-return existential endpoint as
+    /// a typed projection of the Vec-return strict-repeat set.
+    /// Pinned by
+    /// `repeating_variants_is_empty_iff_not_is_repeating_any_across_every_triple`.
+    ///
+    /// Sub-set relation: `T::repeating_variants(items)` is a SUBSET
+    /// of `T::present_variants(items)` — every strict-repeat
+    /// variant occurs at least once, so the (multiplicity `>= 2`)
+    /// band is contained in the (multiplicity `>= 1`) presence
+    /// band. Symmetrically, `T::repeating_variants(items)` is
+    /// DISJOINT from `T::missing_variants(items)` (the multiplicity
+    /// `== 0` band cannot overlap the multiplicity `>= 2` band).
+    /// Pinned by
+    /// `repeating_variants_is_a_subset_of_present_variants_across_every_triple`
+    /// and
+    /// `repeating_variants_is_disjoint_from_missing_variants_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the
+    /// strict-repeat predicate is a function of that multiset
+    /// alone. The OUTPUT ordering is fixed by [`Self::ALL`]'s
+    /// declaration order regardless of the input ordering. Pinned
+    /// by `repeating_variants_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Declaration-order subsequence contract: the returned
+    /// `Vec<Self>` is ALWAYS a subsequence of [`Self::ALL`] — every
+    /// variant appears at most once (dedup by the closed-set well-
+    /// formedness invariant [`assert_closed_set_well_formed`]'s
+    /// clause (3) pairwise-distinctness), in [`Self::ALL`]'s
+    /// declaration order. Pinned by
+    /// `repeating_variants_preserves_declaration_order_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::repeating_variants(&[])` is the
+    /// empty `Vec` UNCONDITIONALLY — the empty slice hits zero
+    /// positions, so every per-variant multiplicity is `0` and the
+    /// per-target `>= 2` test fails at every target. Sibling
+    /// posture to
+    /// `is_repeating_any_returns_false_on_the_empty_slice_across_every_kind`
+    /// at the OPPOSITE return-shape column: the bool-return
+    /// projection reports `false` (strict-repeat existential
+    /// fails); this Vec-return projection reports `[]` (strict-
+    /// repeat witness is empty). Pinned by
+    /// `repeating_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Full-set contract:
+    /// `T::repeating_variants(<T as ClosedSet>::ALL)` is the empty
+    /// `Vec` UNCONDITIONALLY — the closed-set well-formedness
+    /// invariant's clause (3) pairwise-distinctness pins every
+    /// variant of [`Self::ALL`] as occurring at EXACTLY ONE
+    /// position of the full-set slice, so every per-target
+    /// multiplicity is `1` and the per-target `>= 2` test fails at
+    /// every target. Pinned by
+    /// `repeating_variants_over_the_full_set_returns_the_empty_vec_across_every_kind`.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::repeating_variants(&<T as ClosedSet>::ALL.iter().chain(<T
+    /// as ClosedSet>::ALL.iter()).copied().collect::<Vec<_>>()) ==
+    /// <T as ClosedSet>::ALL.to_vec()` UNCONDITIONALLY — the
+    /// doubled full set hits every variant at EXACTLY TWO
+    /// positions, so every per-target multiplicity is `2` and the
+    /// per-target `>= 2` test succeeds at every target; the
+    /// projection dedups against [`Self::ALL`] and returns each
+    /// variant exactly once in declaration order. The doubled-full-
+    /// set arm is LOAD-BEARING — it is the ONLY canonical fixpoint
+    /// arm that separates the (multiplicity `>= 2`) band from the
+    /// (multiplicity `== 0`) absence band (empty, full-set both
+    /// coincide on `[]`). Pinned by
+    /// `repeating_variants_over_the_doubled_full_set_equals_all_across_every_kind`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of
+    /// the substrate's per-target [`Self::is_repeated_occurrence_of`]
+    /// primitive filtered through [`Self::ALL`]. The composition
+    /// uses `<Self as ClosedSet>::ALL.iter().copied().filter(…)
+    /// .collect()` with the substrate's strict-repeat per-target
+    /// predicate as the filter — allocation-free on the
+    /// `Sized + Copy + 'static` supertrait pair (no
+    /// `PartialEq`/`Eq`/`Hash` bound; the substrate's
+    /// [`Self::index_of`] projection replaces the standard-library
+    /// group-by signatures' `Eq`/`Hash` demand), `O(T::CARDINALITY
+    /// × n)` worst-case on slice arity `n` for the per-target
+    /// occurrence sweep, no bitset-shape carrier.
+    ///
+    /// Future consumers that compose against
+    /// [`Self::repeating_variants`]: a `tatara-check` predicate
+    /// `(check-phases-report-repeated-variants …)` that emits the
+    /// concrete list of `WorkloadPhase` variants a rollout window
+    /// saw MORE THAN ONCE (a duplication witness rather than the
+    /// sibling `is_repeating_any` existential or the sibling
+    /// `count_repeating_variants` cardinality); an LSP diagnostic
+    /// on a Lisp-author-written `:severities [:info :warn :info]`
+    /// closed-set field that renders the strict-repeat set as an
+    /// author-facing "used more than once: [info]" completion
+    /// hint; a Sekiban audit-trail projection that carries the
+    /// concrete duplication set of a classification poset window
+    /// as its per-window witness (not just the existential or the
+    /// count); a `tatara-lisp::macro_expand::Expander` hygiene
+    /// pass that reports the exact set of non-linearly-bound
+    /// identifiers a template hit (turning the pass-level `bool`
+    /// or `usize` diagnostic into a fine-grained witness without a
+    /// second sweep). Each binds to ONE typed N-ary strict-repeat-
+    /// witness projection on the trait rather than re-deriving
+    /// `T::ALL.iter().copied().filter(|&v|
+    /// T::count_occurrences_of(v, items) >= 2).collect()` inline
+    /// per callsite.
+    ///
+    /// Compounding closure: the (bool, usize, `Vec<Self>`) ×
+    /// (mult `== 0`, mult `>= 1`, mult `== 1`, mult `>= 2`) 3×4 =
+    /// 12-corner (return-shape × multiplicity-band) grid on the
+    /// equivalence-partition surface now closes at TEN typed
+    /// primitives — [`Self::is_missing_any`] +
+    /// [`Self::count_missing`] + [`Self::missing_variants`] at the
+    /// (mult `== 0`) band, [`Self::is_covering`] +
+    /// [`Self::count_distinct`] + [`Self::present_variants`] at the
+    /// (mult `>= 1`) band, [`Self::is_unique_any`] +
+    /// [`Self::count_unique_variants`] at the (mult `== 1`) band
+    /// (the Vec-return witness on this band is the natural next
+    /// lift one MULTIPLICITY-BAND axis under from this projection),
+    /// [`Self::is_repeating_any`] +
+    /// [`Self::count_repeating_variants`] + THIS at the (mult `>= 2`)
+    /// band. The (mult `>= 2`) column is now EXHAUSTIVELY closed
+    /// at three peer projections on the substrate rather than
+    /// unnamed inline compositions at every downstream generic
+    /// site.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// strict-repeat witness projection becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-
+    /// consumer inline
+    /// `T::ALL.iter().copied().filter(|&v|
+    /// T::count_occurrences_of(v, items) >= 2).collect()`
+    /// composition at every downstream generic site. THEORY.md
+    /// §V.1 — knowable platform; the (Vec-return, mult `>= 2`)
+    /// corner was an unnamed inline composition recurring at
+    /// every prospective downstream "which variants occurred TWO
+    /// OR MORE TIMES?" site pre-lift. Naming it on the trait
+    /// makes the projection a TYPED CONSEQUENCE of the substrate's
+    /// per-target strict-repeat primitive
+    /// ([`Self::is_repeated_occurrence_of`]) filtered through
+    /// [`Self::ALL`] via the standard-library filter combinator.
+    /// THEORY.md §VI.1 — generation over composition; the strict-
+    /// repeat witness projection emerges from the composition of
+    /// ONE substrate primitive with an
+    /// `iter().copied().filter(…).collect()` combinator, not as a
+    /// per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Coq's `filter (fun v => 2 <=? count_occ
+    /// eqb l v) all` decidable-equality-derived strict-repeat
+    /// witness on a `list nat`; SQL's `SELECT variant FROM t GROUP
+    /// BY variant HAVING COUNT(*) >= 2` group-by-with-having
+    /// idiom; NumPy's
+    /// `all[np.array([np.sum(items == v) >= 2 for v in all])]`
+    /// vectorized strict-repeat mask; Racket's `(filter (lambda
+    /// (v) (>= (count (curry equal? v) items) 2)) all)` on a
+    /// `listof T` bundle. Translation through pleme-io primitives:
+    /// the N-ary strict-repeat witness projection on the closed-
+    /// set trait binds through the substrate's per-target strict-
+    /// repeat primitive [`Self::is_repeated_occurrence_of`] filtered
+    /// through [`Self::ALL`] instead of an `Eq`/`Hash` supertrait
+    /// bound on a `GROUP BY`-shaped carrier — staying allocation-
+    /// free on the `Sized + Copy + 'static` supertrait pair.
+    fn repeating_variants(items: &[Self]) -> ::std::vec::Vec<Self> {
+        <Self as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|&v| <Self as ClosedSet>::is_repeated_occurrence_of(v, items))
+            .collect()
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "present variants" projection —
     /// the `Vec<Self>` LEX-ORDER hit-set of [`Self::sorted_variants`],
     /// keeping every variant that DOES occur in `items` and dropping
@@ -29228,6 +29427,91 @@ where
         T::CARDINALITY,
         "{type_name}: T::count_missing(&doubled_full_set) + T::count_unique_variants(&doubled_full_set) + T::count_repeating_variants(&doubled_full_set) = {doubled_partition} != T::CARDINALITY = {cardinality} — the LOAD-BEARING trichotomy-partition identity was violated on the doubled full set; the three set-level cardinality-count corners of the (multiplicity-band) trichotomy MUST partition the `T::CARDINALITY`-many variants of the ambient closed set EXACTLY at every slice",
         cardinality = T::CARDINALITY,
+    );
+    // (117) — `T::repeating_variants(items)` MUST agree with the
+    // filter of the per-target multiplicity-`>= 2` predicate over
+    // `T::ALL` on every slice AND MUST land on its three canonical
+    // fixpoints (`[]` on the empty slice UNCONDITIONALLY, `[]` on
+    // the full set UNCONDITIONALLY, `T::ALL.to_vec()` on the doubled
+    // full set UNCONDITIONALLY) AND on the length-vs-count identity
+    // `T::repeating_variants(items).len() ==
+    // T::count_repeating_variants(items)` pinned at both the full-
+    // set and doubled-full-set fixpoints.
+    //
+    // The three fixpoints + composition-equality arm + length-vs-
+    // count arm partition failure modes at the (Vec-return × slice-
+    // shape × composition-equality × cross-projection) corner
+    // simultaneously: an override that folds onto `T::ALL.to_vec()`
+    // unconditionally fires on the empty-slice AND full-set arms
+    // (returns the full ambient set rather than `[]`); an override
+    // that folds onto `[]` unconditionally fires on the doubled-
+    // full-set arm at cardinality `>= 1` (returns `[]` rather than
+    // `T::ALL.to_vec()`); an override that detaches from the
+    // filter-composition on any slice bifurcates loudly at the
+    // filter-composition arm; an override that inflates or deflates
+    // the returned `Vec`'s length at ANY slice bifurcates the
+    // length-vs-count identity against
+    // [`Self::count_repeating_variants`] (already pinned by clause
+    // (116)).
+    //
+    // Sibling posture to clause (116) — clause (116) pins the
+    // (`usize`, set-level, multiplicity-band `>= 2`) repeat-
+    // cardinality corner; this clause pins the (`Vec<Self>`, set-
+    // level, multiplicity-band `>= 2`) repeat-WITNESS corner peer
+    // to it one RETURN-SHAPE axis over, CLOSING the (bool, usize,
+    // `Vec<Self>`) return-shape column at the strict-repeat band
+    // exhaustively at three typed peer projections
+    // ([`Self::is_repeating_any`],
+    // [`Self::count_repeating_variants`], THIS). Sibling posture
+    // to clause (77) — that clause pins the (`Vec<Self>`, set-
+    // level, multiplicity-band `== 0`) miss-witness corner AT the
+    // low band; this clause pins the (`Vec<Self>`, set-level,
+    // multiplicity-band `>= 2`) repeat-witness corner AT the high
+    // band peer to it one MULTIPLICITY-BAND axis over. The default
+    // trait body threads the filter over the substrate's per-
+    // target strict-repeat primitive
+    // ([`Self::is_repeated_occurrence_of`]) verbatim and satisfies
+    // every fixpoint arm + composition-equality arm + length-vs-
+    // count arm for free; the assertion catches a future
+    // implementor whose override drifts the projection loudly
+    // rather than silently bifurcating the set-level strict-
+    // repeat-witness surface every downstream duplication-witness
+    // consumer routes through.
+    assert!(
+        T::repeating_variants(&[]).is_empty(),
+        "{type_name}: T::repeating_variants(&[]) != [] — the set-level strict-repeat witness MUST report `[]` on the empty slice because every per-variant multiplicity is `0` and the per-target `>= 2` test fails at every target; a non-`[]` empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream strict-repeat-witness consumer routes through",
+    );
+    let full_repeating = T::repeating_variants(T::ALL);
+    assert!(
+        full_repeating.is_empty(),
+        "{type_name}: T::repeating_variants(T::ALL) != [] on a cardinality-{cardinality} closed set — clause (3)'s pairwise-distinctness invariant forces every variant to appear at EXACTLY ONE position of the full-set slice, so every per-target multiplicity is `1` and the per-target `>= 2` test fails at every target; a non-`[]` full-set value silently detaches the set-level strict-repeat witness from the (variant → decl-slot) injectivity clause (16), breaking every downstream duplication-witness consumer",
+        cardinality = T::CARDINALITY,
+    );
+    let doubled_repeating = T::repeating_variants(&doubled_full_set);
+    assert_eq!(
+        doubled_repeating,
+        T::ALL.to_vec(),
+        "{type_name}: T::repeating_variants(&doubled_full_set) != T::ALL.to_vec() on a cardinality-{cardinality} closed set — the doubled full set hits every variant at EXACTLY TWO positions, so every per-target multiplicity is `2` and the projection MUST return each variant of T::ALL exactly once in declaration order; a doubled-full-set value diverging from T::ALL.to_vec() silently drifts the projection past the strict-band boundary the trichotomy partitions — the doubled-full-set arm pins the projection as a STRICT `>= 2` witness rather than the weaker `>= 1` presence witness [`T::present_variants`] which reports T::ALL.to_vec() on BOTH the full set and the doubled full set",
+        cardinality = T::CARDINALITY,
+    );
+    let expected_via_filter: Vec<T> = T::ALL
+        .iter()
+        .copied()
+        .filter(|&v| T::is_repeated_occurrence_of(v, &doubled_full_set))
+        .collect();
+    assert_eq!(
+        doubled_repeating, expected_via_filter,
+        "{type_name}: T::repeating_variants(&doubled_full_set) drifted from T::ALL.iter().filter(|&v| T::is_repeated_occurrence_of(v, &doubled_full_set)).collect() — the set-level strict-repeat witness MUST equal the filter of the per-target multiplicity-`>= 2` predicate over T::ALL on every slice, so a downstream strict-repeat-witness consumer that binds this filter-composition as its duplication-witness query surface would disagree with the pinned projection",
+    );
+    assert_eq!(
+        full_repeating.len(),
+        T::count_repeating_variants(T::ALL),
+        "{type_name}: T::repeating_variants(T::ALL).len() drifted from T::count_repeating_variants(T::ALL) — the (Vec-return, usize-return) strict-repeat-band cardinality identity was violated on the full set; the two peer projections MUST agree on their multiset-cardinality projection at every slice",
+    );
+    assert_eq!(
+        doubled_repeating.len(),
+        T::count_repeating_variants(&doubled_full_set),
+        "{type_name}: T::repeating_variants(&doubled_full_set).len() drifted from T::count_repeating_variants(&doubled_full_set) — the (Vec-return, usize-return) strict-repeat-band cardinality identity was violated on the doubled full set; the two peer projections MUST agree on their multiset-cardinality projection at every slice",
     );
 }
 
@@ -60161,6 +60445,345 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn repeating_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT: `T::repeating_variants(&[])` is the
+        // empty `Vec` on every implementor — the empty slice hits
+        // zero positions, so every per-variant multiplicity is `0`
+        // and the per-target `>= 2` test fails at every target.
+        // Sibling posture to
+        // `is_repeating_any_returns_false_on_the_empty_slice_across_every_kind`
+        // at the OPPOSITE return-shape column: the bool-return
+        // projection is `false`; this Vec-return projection is
+        // `[]`.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::repeating_variants(empty),
+            Vec::<StubKind>::new(),
+        );
+    }
+
+    #[test]
+    fn repeating_variants_returns_the_empty_vec_on_every_singleton_across_every_variant() {
+        // SINGLETON CONTRACT: `T::repeating_variants(&[v])` is the
+        // empty `Vec` for every variant `v` — a singleton hits
+        // exactly one variant at exactly one position, so its
+        // multiplicity is `1` and the per-target `>= 2` test fails
+        // at every target. The singleton endpoint is the boundary
+        // that separates the strict-repeat band from the presence
+        // band: `T::present_variants(&[v]) == vec![v]` at the SAME
+        // singleton, so the two projections diverge on the (mult
+        // `>= 1`, mult `>= 2`) boundary here.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::repeating_variants(&singleton),
+                Vec::<StubKind>::new(),
+                "T::repeating_variants({singleton:?}) diverged from [] — a singleton hits multiplicity `1` at every target and MUST not appear in the strict-repeat band",
+            );
+        }
+    }
+
+    #[test]
+    fn repeating_variants_over_the_full_set_returns_the_empty_vec_across_every_kind() {
+        // FULL-SET CONTRACT: `T::repeating_variants(<T as
+        // ClosedSet>::ALL)` is the empty `Vec` UNCONDITIONALLY —
+        // clause (3)'s pairwise-distinctness invariant forces every
+        // variant to appear at EXACTLY ONE position of the full-set
+        // slice, so every per-target multiplicity is `1` and the
+        // per-target `>= 2` test fails at every target.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::repeating_variants(all),
+            Vec::<StubKind>::new(),
+        );
+    }
+
+    #[test]
+    fn repeating_variants_over_the_doubled_full_set_equals_all_across_every_kind() {
+        // DOUBLED-FULL-SET CONTRACT: `T::repeating_variants` on the
+        // doubled full set returns `T::ALL.to_vec()` UNCONDITIONALLY
+        // — the doubled full set hits every variant at EXACTLY TWO
+        // positions, so every per-target multiplicity is `2` and
+        // the projection returns each variant of `T::ALL` exactly
+        // once in declaration order. The doubled-full-set arm is
+        // LOAD-BEARING — it is the ONLY canonical fixpoint arm that
+        // separates the (multiplicity `>= 2`) band from the
+        // (multiplicity `== 0`) absence band (empty, full-set both
+        // coincide on `[]`).
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::repeating_variants(&doubled),
+            <StubKind as ClosedSet>::ALL.to_vec(),
+        );
+    }
+
+    #[test]
+    fn repeating_variants_length_equals_count_repeating_variants_across_every_triple() {
+        // CARDINALITY IDENTITY:
+        // `T::repeating_variants(items).len() ==
+        // T::count_repeating_variants(items)` on every slice — the
+        // Vec-return strict-repeat projection's length matches the
+        // usize-return strict-repeat count exactly. Cross-checks
+        // the strict-repeat witness against the pre-existing
+        // strict-repeat count.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::repeating_variants(empty).len(),
+            <StubKind as ClosedSet>::count_repeating_variants(empty),
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::repeating_variants(&triple).len(),
+                        <StubKind as ClosedSet>::count_repeating_variants(&triple),
+                        "T::repeating_variants({triple:?}).len() diverged from T::count_repeating_variants({triple:?}) — the (Vec-return, usize-return) strict-repeat-band cardinality identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_variants_is_empty_iff_not_is_repeating_any_across_every_triple() {
+        // BOOL-PROJECTION IDENTITY:
+        // `T::repeating_variants(items).is_empty() ==
+        // !T::is_repeating_any(items)` on every slice — the strict-
+        // repeat set is empty iff the strict-repeat existential
+        // fails. Sibling dual:
+        // `!T::repeating_variants(items).is_empty() ==
+        // T::is_repeating_any(items)`. Cross-checks the Vec-return
+        // strict-repeat witness against the pre-existing bool-return
+        // strict-repeat existential.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::repeating_variants(empty).is_empty(),
+            !<StubKind as ClosedSet>::is_repeating_any(empty),
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::repeating_variants(&triple).is_empty(),
+                        !<StubKind as ClosedSet>::is_repeating_any(&triple),
+                        "T::repeating_variants({triple:?}).is_empty() diverged from !T::is_repeating_any({triple:?}) — the (Vec-return, bool-return) strict-repeat-band emptiness identity was violated",
+                    );
+                    assert_eq!(
+                        !<StubKind as ClosedSet>::repeating_variants(&triple).is_empty(),
+                        <StubKind as ClosedSet>::is_repeating_any(&triple),
+                        "!T::repeating_variants({triple:?}).is_empty() diverged from T::is_repeating_any({triple:?}) — the (Vec-return, bool-return) strict-repeat-band non-emptiness identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_variants_preserves_declaration_order_across_every_triple() {
+        // DECLARATION-ORDER SUBSEQUENCE CONTRACT: the returned
+        // `Vec<Self>` is ALWAYS a subsequence of `T::ALL` (with
+        // each variant appearing at most once, in `T::ALL`'s
+        // declaration order). Verified by walking the returned
+        // Vec's `index_of` sequence and asserting strictly
+        // increasing.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let repeating = <StubKind as ClosedSet>::repeating_variants(&triple);
+                    let indices: Vec<usize> = repeating
+                        .iter()
+                        .copied()
+                        .map(<StubKind as ClosedSet>::index_of)
+                        .collect();
+                    assert!(
+                        indices.windows(2).all(|w| w[0] < w[1]),
+                        "T::repeating_variants({triple:?}) indices {indices:?} not strictly ascending — the declaration-order subsequence property was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_variants_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::repeating_variants(items) ==
+        // T::repeating_variants(reversed items)` on every slice —
+        // reversing a slice preserves its multiset of variant
+        // identities, and the strict-repeat predicate is a function
+        // of that multiset alone.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::repeating_variants(&forward),
+                        <StubKind as ClosedSet>::repeating_variants(&reversed),
+                        "T::repeating_variants({forward:?}) diverged from T::repeating_variants({reversed:?}) — the strict-repeat-witness projection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_variants_is_a_subset_of_present_variants_across_every_triple() {
+        // MULTIPLICITY-BAND CONTAINMENT CONTRACT: every strict-
+        // repeat variant (mult `>= 2`) is also present (mult `>=
+        // 1`), so `T::repeating_variants(items)` is a SUBSET of
+        // `T::present_variants(items)` on every slice. Verified by
+        // asserting every variant in the strict-repeat set appears
+        // in the presence set on every length-3 triple.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let repeating = <StubKind as ClosedSet>::repeating_variants(&triple);
+                    let present = <StubKind as ClosedSet>::present_variants(&triple);
+                    for r in repeating.iter().copied() {
+                        let contained = present.iter().copied().any(|p| {
+                            <StubKind as ClosedSet>::index_of(p)
+                                == <StubKind as ClosedSet>::index_of(r)
+                        });
+                        assert!(
+                            contained,
+                            "T::repeating_variants({triple:?}) variant {r:?} not in T::present_variants({triple:?}) = {present:?} — the (mult `>= 2`) band MUST be contained in the (mult `>= 1`) presence band",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_variants_is_disjoint_from_missing_variants_across_every_triple() {
+        // MULTIPLICITY-BAND DISJOINTNESS CONTRACT: the (mult `== 0`)
+        // absence band cannot overlap the (mult `>= 2`) strict-
+        // repeat band, so `T::repeating_variants(items)` and
+        // `T::missing_variants(items)` are DISJOINT on every slice.
+        // Verified by scanning every strict-repeat variant against
+        // every miss-arm variant on every length-3 triple.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let repeating = <StubKind as ClosedSet>::repeating_variants(&triple);
+                    let missing = <StubKind as ClosedSet>::missing_variants(&triple);
+                    for r in repeating.iter().copied() {
+                        for m in missing.iter().copied() {
+                            assert_ne!(
+                                <StubKind as ClosedSet>::index_of(r),
+                                <StubKind as ClosedSet>::index_of(m),
+                                "T::repeating_variants({triple:?}) and T::missing_variants({triple:?}) share variant {r:?} == {m:?} — the (mult `>= 2`, mult `== 0`) partition arms MUST be disjoint",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_variants_equals_filter_over_all_by_is_repeated_occurrence_of_across_every_triple()
+    {
+        // COMPOSITION-EQUALITY CONTRACT: for every slice `items`,
+        // `T::repeating_variants(items) ==
+        // T::ALL.iter().copied().filter(|&v|
+        // T::is_repeated_occurrence_of(v, items)).collect()` — the
+        // set-level strict-repeat witness MUST equal the filter of
+        // the per-target multiplicity-`>= 2` predicate over T::ALL
+        // on every slice. Sweeping every length-3 triple pins the
+        // identity across the full 27-corner (triple) domain.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_pinned = <StubKind as ClosedSet>::repeating_variants(&triple);
+                    let via_filter: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+                        .iter()
+                        .copied()
+                        .filter(|&v| <StubKind as ClosedSet>::is_repeated_occurrence_of(v, &triple))
+                        .collect();
+                    assert_eq!(
+                        via_pinned, via_filter,
+                        "T::repeating_variants({triple:?}) diverged from the direct `is_repeated_occurrence_of` filter over T::ALL — the composition-equality identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_repeating_variants_and_composition() {
+        // Drift catch — clause (117)'s doubled-full-set fixpoint arm
+        // fires when an override folds the set-level strict-repeat
+        // witness onto `[]` regardless of slice (returning `[]` on
+        // the doubled full set rather than `T::ALL.to_vec()`). The
+        // stub below overrides the default body to return `vec![]`
+        // unconditionally; on the doubled full set that produces
+        // `[] != T::ALL.to_vec()`, tripping clause (117)'s doubled-
+        // full-set fixpoint arm loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedRepeatingVariantsKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedRepeatingVariantsKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedRepeatingVariantsKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted repeating_variants kind: {}", self.0)
+            }
+        }
+
+        impl DriftedRepeatingVariantsKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedRepeatingVariantsKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted repeating_variants kind";
+            type Unknown = UnknownDriftedRepeatingVariantsKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedRepeatingVariantsKind(s.to_owned())
+            }
+            fn repeating_variants(_items: &[Self]) -> Vec<Self> {
+                // Drift: return `[]` regardless of slice. On the
+                // doubled full set that produces `[] != T::ALL.to_vec()`,
+                // tripping clause (117)'s doubled-full-set fixpoint
+                // arm loudly.
+                Vec::new()
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedRepeatingVariantsKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedRepeatingVariantsKind whose repeating_variants override folds onto `[]` unconditionally — clause (117)'s doubled-full-set fixpoint arm MUST reject the drift",
+        );
     }
 
     #[test]

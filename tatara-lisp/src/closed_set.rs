@@ -20072,6 +20072,218 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "every variant repeats?" predicate —
+    /// `true` iff EVERY variant of [`Self::ALL`] appears AT LEAST TWICE
+    /// in `items`, computed as the just-lifted set-level scalar
+    /// [`Self::min_variant_count`] projection's lower-bound test against
+    /// `2`. The BOOL-RETURN closer on the (set-level × bool × universal-
+    /// lift × multiplicity-band) 4th-axis hypercube at the universal-
+    /// lift `>= 2` corner peer to the pre-existing (set-level × bool ×
+    /// universal-lift × multiplicity-band `>= 1`) [`Self::is_covering`]
+    /// corner one MULTIPLICITY-BAND axis over AND peer to the pre-
+    /// existing (set-level × bool × universal-lift × multiplicity-band
+    /// `<= 1`) [`Self::is_pairwise_distinct`] corner one MULTIPLICITY-
+    /// BAND axis over on the SAME universal-lift arm of the quantifier
+    /// axis, AND the direct SET-LEVEL UNIVERSAL PEER of the (set-level
+    /// × bool × existential-lift × multiplicity-band `>= 2`)
+    /// [`Self::is_repeating_any`] corner one QUANTIFIER axis over on
+    /// the SAME multiplicity band. Not a fresh substrate primitive on
+    /// the index axis — the predicate emerges from ONE lower-bound
+    /// scalar comparison against the substrate's just-lifted set-level
+    /// least-common-multiplicity aggregate.
+    ///
+    /// Min-composition identity: for every slice `items`,
+    /// `T::is_uniformly_repeating(items) == (T::min_variant_count(items) >= 2)`
+    /// — the set-level universal-lift repeat predicate is EXACTLY the
+    /// lower-bound test of the least-common-multiplicity aggregate
+    /// against `2`. The canonical form the body uses. Pinned by
+    /// `is_uniformly_repeating_agrees_with_min_variant_count_ge_two_across_every_triple`.
+    ///
+    /// Universal-lift identity: for every slice `items`,
+    /// `T::is_uniformly_repeating(items) == <T as ClosedSet>::ALL.iter().all(|&v| T::count_occurrences_of(v, items) >= 2)`
+    /// — the set-level bool predicate is the EXACT universal
+    /// quantification over [`Self::ALL`] of the per-target multiplicity-
+    /// `>= 2` predicate. This identity binds the set-level ARITY axis
+    /// against the per-target ARITY axis one arity axis over on the
+    /// (arity × mult-band × quantifier) face, pinning the compounding
+    /// closure the prior per-target lifts opened as the universal peer
+    /// to the existential `is_repeating_any` corner. Pinned by
+    /// `is_uniformly_repeating_equals_universal_of_is_repeated_occurrence_of_across_every_triple`.
+    ///
+    /// Histogram-arm identity: for every slice `items`,
+    /// `T::is_uniformly_repeating(items) == <T as ClosedSet>::variant_counts(items).iter().all(|&c| c >= 2)`
+    /// — the set-level bool predicate is EXACTLY the universal test
+    /// against `>= 2` over the per-slot histogram vector. Independent
+    /// cross-check distinct from the min-composition + universal-lift
+    /// arms on the return-shape (`Vec<usize>` vs the per-target
+    /// `usize` multiplicity vs the set-level `usize` min-bar) axis.
+    /// Pinned by
+    /// `is_uniformly_repeating_agrees_with_variant_counts_all_ge_two_across_every_triple`.
+    ///
+    /// De Morgan decomposition identity: for every slice `items`,
+    /// `T::is_uniformly_repeating(items) == (T::is_covering(items) && !T::is_unique_any(items))`
+    /// — the universal-lift `>= 2` predicate factors EXACTLY through
+    /// the conjunction of (i) universal-lift `>= 1` ([`Self::is_covering`]:
+    /// every variant hit at least once) AND (ii) negated existential
+    /// `== 1` ([`Self::is_unique_any`]: no variant hit exactly once).
+    /// Covering rules out (mult `== 0`) at every variant; negating
+    /// any-unique rules out (mult `== 1`) at every variant; together
+    /// they force every variant into the strict (mult `>= 2`) band.
+    /// This identity threads THIS predicate through the trichotomy
+    /// (mult `== 0`, mult `== 1`, mult `>= 2`) as the UNIVERSAL COMPLEMENT
+    /// of the two lower bands' existential lifts — the same trichotomy
+    /// [`Self::is_missing_any`], [`Self::is_unique_any`],
+    /// [`Self::is_repeating_any`] partition on the existential arm.
+    /// Pinned by
+    /// `is_uniformly_repeating_equals_covering_and_not_unique_any_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::is_uniformly_repeating(&[])` is `false`
+    /// UNCONDITIONALLY — the empty slice hits zero positions, so every
+    /// per-variant multiplicity is `0`, and [`Self::min_variant_count`]
+    /// on the empty slice is `0`, so `0 >= 2` is `false`. The empty-
+    /// slice arm is LOAD-BEARING as the drift catch for an override
+    /// that folds onto `true` unconditionally. Pinned by clause (121)
+    /// and by
+    /// `is_uniformly_repeating_returns_false_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Full-set contract: `T::is_uniformly_repeating(<T as ClosedSet>::ALL)`
+    /// is `false` on every implementor of non-zero cardinality — the
+    /// closed-set well-formedness invariant
+    /// [`assert_closed_set_well_formed`]'s clause (3) pins variants as
+    /// pairwise distinct, so every variant of [`Self::ALL`] appears at
+    /// EXACTLY ONE position in the full-set slice; every per-variant
+    /// multiplicity is `1`, [`Self::min_variant_count`] on the full set
+    /// is `1`, and `1 >= 2` is `false`. The full-set arm is LOAD-BEARING
+    /// as the drift catch for an override that folds onto `true`
+    /// unconditionally, AND is the boundary that separates this strict
+    /// (mult `>= 2`) universal-lift predicate from the weaker (mult
+    /// `>= 1`) universal-lift predicate [`Self::is_covering`], which is
+    /// `true` on the full set. Pinned by clause (121) and by
+    /// `is_uniformly_repeating_returns_false_on_the_full_set_across_every_kind`.
+    ///
+    /// Doubled-full-set contract: `T::is_uniformly_repeating(&doubled)`
+    /// is `true` on every implementor of non-zero cardinality — the
+    /// doubled full set appends [`Self::ALL`] to itself, so every variant
+    /// appears at EXACTLY TWO positions, [`Self::min_variant_count`] on
+    /// the doubled full set is `2`, and `2 >= 2` is `true`. Together
+    /// with the full-set arm (which pins the `false` fixpoint at
+    /// cardinality `>= 1`), the doubled-full-set arm demonstrates that
+    /// the predicate TRANSITIONS from `false` (at the canonical
+    /// permutation) to `true` (at the canonical repetition) purely
+    /// through the per-variant multiplicity band change — pinning the
+    /// projection as a strict `>= 2` predicate AND is the LOAD-BEARING
+    /// drift catch for an override that folds onto `false`
+    /// unconditionally. Pinned by clause (121) at the doubled-full-set
+    /// fixpoint AND by
+    /// `is_uniformly_repeating_returns_true_on_the_doubled_full_set_across_every_non_degenerate_kind`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic — the (declaration, lex) axis COLLAPSES on
+    /// this predicate because it factors through
+    /// [`Self::min_variant_count`] (itself ordering-agnostic via
+    /// [`Self::count_occurrences_of`]) via a scalar-comparison. No
+    /// separate `sorted_is_uniformly_repeating` peer is needed. Pinned
+    /// by
+    /// `is_uniformly_repeating_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of
+    /// [`Self::min_variant_count`] via a scalar `>= 2` comparison. The
+    /// cost is O(T::CARDINALITY * n) on slice arity `n` (inherited from
+    /// the min-bar aggregate's per-target multiplicity sum), allocation-
+    /// free, no `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's
+    /// minimal `Sized + Copy + 'static` supertrait pair stays untouched),
+    /// no histogram-carrier allocation (the bool-return shape is a bare
+    /// `bool` scalar without materializing the intermediate `Vec<usize>`
+    /// histogram).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::is_uniformly_repeating`]: a `tatara-check` predicate
+    /// `(check-phases-every-visited-twice …)` on a `WorkloadPhase`
+    /// sequence that flags "every phase visited at least twice" (a
+    /// resilience-cycle witness distinct from a single-pass rollout OR
+    /// a partially-repeated churn) without paying for the full histogram
+    /// when only the min-bar's `>= 2` band matters; an LSP diagnostic
+    /// on a Lisp-author-written variant-list that flags "every variant
+    /// appears at least twice" as a redundancy-completeness hint
+    /// distinct from full-coverage OR any-repetition; a Sekiban audit-
+    /// trail metric flagging a classification poset window as
+    /// "every-classification-doubly-witnessed" WITHOUT emitting the
+    /// per-slot histogram; a `tatara-lisp::macro_expand::Expander`
+    /// hygiene pass that flags a template's identifier multiset as
+    /// UNIFORMLY-BOUND (every binding used at least twice — the shape
+    /// of a "no-linear-use" lint distinct from unbound OR singly-used
+    /// identifiers) in ONE typed bool. Each binds to ONE typed N-ary
+    /// universal-repeat predicate on the trait rather than re-deriving
+    /// the `T::ALL.iter().all(|v| T::count_occurrences_of(v, items) >= 2)`
+    /// conjunction OR the `T::variant_counts(items).iter().all(|&c| c >= 2)`
+    /// histogram-arm inline per callsite.
+    ///
+    /// Compounding closure: the (set-level × bool × quantifier ×
+    /// multiplicity-band) 4th-axis hypercube on the equivalence-
+    /// partition surface now CLOSES at three universal-lift corners
+    /// across the (mult `<= 1`, mult `>= 1`, mult `>= 2`) partition of
+    /// the multiplicity-band axis — [`Self::is_pairwise_distinct`]
+    /// (universal-lift `<= 1`), [`Self::is_covering`] (universal-lift
+    /// `>= 1`), and THIS PREDICATE (universal-lift `>= 2`). The three
+    /// existential-lift corners across the same partition
+    /// ([`Self::is_missing_any`] at `== 0`, [`Self::is_unique_any`] at
+    /// `== 1`, [`Self::is_repeating_any`] at `>= 2`) now bind against
+    /// their universal peers through the standard `∀/∃` duality: the
+    /// universal at each band is the negation of the existential at the
+    /// complementary band (universal `<= 1` = not existential `>= 2`;
+    /// universal `>= 1` = not existential `== 0`; universal `>= 2` =
+    /// not existential `<= 1` = not (existential `== 0` or existential
+    /// `== 1`)). The natural next lift past this closure is the
+    /// (set-level × usize × universal × mult `>= 2`) sharpening —
+    /// `count_uniformly_repeating_bar` (the min-bar itself, which is
+    /// `>= 2` iff this predicate holds; equivalently
+    /// `T::min_variant_count(items)` above the `>= 2` threshold), or
+    /// the (set-level × bool × universal × mult `== 0`) corner
+    /// `is_uniformly_missing` (∀v : count(v) == 0, equivalently
+    /// `items.is_empty()` on a non-degenerate carrier).
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// universal-repeat predicate becomes a TYPE-level primitive on
+    /// the closed-set trait rather than a per-consumer inline universal
+    /// over the per-target multiplicity-`>= 2` predicate at every
+    /// downstream generic site. THEORY.md §V.1 — knowable platform;
+    /// the (set-level × bool × universal × mult `>= 2`) corner was an
+    /// unnamed inline composition recurring at every prospective
+    /// downstream "does every variant occur at least twice?" site pre-
+    /// lift. Naming it on the trait makes the predicate a TYPED
+    /// CONSEQUENCE of the substrate's set-level least-common-
+    /// multiplicity aggregate lifted through a `>= 2` scalar comparison
+    /// — AND closes the (set-level × bool × universal × multiplicity-
+    /// band) hypercube corner as a TYPED THEOREM the substrate proves
+    /// once. THEORY.md §VI.1 — generation over composition; the
+    /// uniform-repeat predicate emerges from the composition of ONE
+    /// substrate primitive ([`Self::min_variant_count`]) with a `usize`-
+    /// scalar comparison, not as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Coq's `forallb (fun v => 2 <=? count_occ
+    /// eqb l v) all` decidable-equality-derived universal-repeat test
+    /// on `list nat`; Idris's `all (\v => count (== v) items >= 2)
+    /// all` on a `Vect n a`; Racket's `(andmap (λ (v) (>= (count (λ
+    /// (w) (equal? v w)) items) 2)) all)`; Julia's `all(v -> count(==(v),
+    /// items) >= 2, all)`; Haskell's `all (\v -> length (filter (== v)
+    /// items) >= 2) all`; Rust's own `T::ALL.iter().all(|v|
+    /// items.iter().filter(|w| v == w).count() >= 2)` binds through a
+    /// `Self: PartialEq` supertrait bound; Python's
+    /// `all(items.count(v) >= 2 for v in all)`; SQL's
+    /// `NOT EXISTS (SELECT 1 FROM t GROUP BY variant HAVING COUNT(*) < 2)`
+    /// — the canonical set-level
+    /// universal-repeat witness. Translation through pleme-io primitives:
+    /// the N-ary universal-repeat predicate on the closed-set trait
+    /// binds through the set-level least-common-multiplicity aggregate
+    /// [`Self::min_variant_count`] under a `usize`-scalar `>= 2`
+    /// comparison — no new dep, no supertrait bound (the substrate
+    /// primitive replaces the `Eq`/`Hash` bound the standard-library
+    /// universal/group-by signatures demand), no set-shape carrier, no
+    /// allocation.
+    fn is_uniformly_repeating(items: &[Self]) -> bool {
+        <Self as ClosedSet>::min_variant_count(items) >= 2
+    }
+
     /// The N-ARY DECLARATION-ORDER "present labels" projection — the
     /// `Vec<&'static str>` label rendering of [`Self::present_variants`]
     /// under [`Self::label`]. Every label `s` in the returned vector is
@@ -30375,6 +30587,85 @@ where
         full_decl_unique_sorted, full_lex_unique_sorted,
         "{type_name}: T::sorted_unique_variants(T::ALL) is not a permutation of T::unique_variants(T::ALL) — the (declaration, lex) arms MUST filter the SAME strict-uniqueness set from the equivalence-partition surface's `Vec<Self>`-return column, so a downstream consumer that treats one arm's multiset as an authoritative substitute for the other's would disagree with the pinned projection",
     );
+
+    // (121) — `T::is_uniformly_repeating(items)` MUST agree with the
+    // lower-bound test of the set-level least-common-multiplicity
+    // aggregate against `2` on every slice AND MUST land on its three
+    // canonical fixpoints (`false` on the empty slice UNCONDITIONALLY,
+    // `false` on the full set UNCONDITIONALLY, `true` on the doubled
+    // full set gated on `T::CARDINALITY >= 1`) AND on THREE
+    // composition-equality arms on the doubled-slice fixpoint: (a)
+    // min-composition against `T::min_variant_count(items) >= 2`, (b)
+    // histogram universal against `T::variant_counts(items).iter()
+    // .all(|&c| c >= 2)`, (c) De Morgan decomposition against
+    // `T::is_covering(items) && !T::is_unique_any(items)`. The three
+    // fixpoints + three composition arms partition failure modes at the
+    // (discriminant × slice-shape × composition-equality) corner
+    // simultaneously: an override that folds onto `true` unconditionally
+    // fires on the empty-slice AND full-set arms (returns `true` rather
+    // than `false`); an override that folds onto `false` unconditionally
+    // fires on the doubled-full-set arm at cardinality `>= 1` (returns
+    // `false` rather than `true`); an override that detaches from the
+    // min-composition on any slice bifurcates loudly at the min-arm; an
+    // override that detaches from the histogram universal bifurcates
+    // at the histogram arm; an override that detaches from the De Morgan
+    // decomposition bifurcates at the covering-vs-any-unique conjunction.
+    //
+    // Sibling posture to clauses (113) + (114) + (116): those clauses
+    // close the (set-level × bool × EXISTENTIAL-lift × multiplicity-
+    // band) trichotomy at (mult `>= 2`, mult `== 1`, mult `>= 2`
+    // sharpening) via [`Self::is_repeating_any`], [`Self::is_unique_any`],
+    // [`Self::count_repeating_variants`] one QUANTIFIER-and-return-shape
+    // axis under; this clause opens the SET-LEVEL UNIVERSAL LIFT peer
+    // to (113) at the (mult `>= 2`) band via `min_variant_count >= 2`
+    // — the ∀-arm of the ∀/∃ duality on the multiplicity-band axis.
+    // Together with the pre-existing (set-level × bool × UNIVERSAL-lift
+    // × mult `>= 1`) [`Self::is_covering`] corner and (set-level × bool
+    // × UNIVERSAL-lift × mult `<= 1`) [`Self::is_pairwise_distinct`]
+    // corner, the (set-level × bool × universal × mult-band) face now
+    // closes at three peer universal-lift bool corners across the
+    // (mult `<= 1`, mult `>= 1`, mult `>= 2`) partition — the mirror
+    // of the (mult `== 0`, mult `== 1`, mult `>= 2`) existential-lift
+    // trichotomy one quantifier axis over. The default trait body
+    // threads `<Self as ClosedSet>::min_variant_count(items) >= 2`
+    // verbatim and satisfies every fixpoint arm + every composition-
+    // equality arm for free; the assertion catches a future implementor
+    // whose override drifts the projection loudly rather than silently
+    // bifurcating the set-level uniform-repeat predicate surface every
+    // downstream uniform-repeat consumer routes through.
+    assert!(
+        !T::is_uniformly_repeating(&[]),
+        "{type_name}: T::is_uniformly_repeating(&[]) == true != false — the set-level universal-lift uniform-repeat predicate MUST report `false` on the empty slice because the least-common-multiplicity aggregate returns `0` and the lower-bound test against `2` fails; a `true` empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream uniform-repeat consumer routes through",
+    );
+    assert!(
+        !T::is_uniformly_repeating(T::ALL),
+        "{type_name}: T::is_uniformly_repeating(T::ALL) == true != false — clause (3)'s pairwise-distinctness invariant forces every variant to appear at EXACTLY ONE position of the full-set slice, so the least-common-multiplicity aggregate returns `1` and the lower-bound test against `2` fails; a `true` full-set uniform-repeat value silently detaches the set-level uniform-repeat predicate from the (variant → decl-slot) injectivity clause (16), breaking every downstream uniform-repeat consumer — the full-set arm is LOAD-BEARING as the boundary that separates this strict (mult `>= 2`) universal-lift predicate from the weaker (mult `>= 1`) universal-lift predicate [`T::is_covering`], which is `true` on the full set",
+    );
+    if T::CARDINALITY >= 1 {
+        let doubled_uniformly_repeating = T::is_uniformly_repeating(&doubled_full_set);
+        assert!(
+            doubled_uniformly_repeating,
+            "{type_name}: T::is_uniformly_repeating(&doubled_full_set) == false != true on a cardinality-{cardinality} closed set — the doubled full set hits every variant at EXACTLY TWO positions, so the least-common-multiplicity aggregate returns `2` and the lower-bound test against `2` holds; the doubled-full-set arm at cardinality `>= 1` is LOAD-BEARING — it is the ONLY canonical fixpoint arm that separates the (mult `>= 2`) universal band from a `_ => false` degenerate override (empty, full-set both coincide on `false`; only the doubled-full-set distinguishes them under any non-degenerate cardinality)",
+            cardinality = T::CARDINALITY,
+        );
+        let expected_via_min_ge_two = T::min_variant_count(&doubled_full_set) >= 2;
+        assert_eq!(
+            doubled_uniformly_repeating, expected_via_min_ge_two,
+            "{type_name}: T::is_uniformly_repeating(&doubled_full_set) drifted from (T::min_variant_count(&doubled_full_set) >= 2) — the set-level uniform-repeat predicate MUST equal the lower-bound test of the least-common-multiplicity aggregate against `2` on every slice, so a downstream uniform-repeat consumer that binds `T::min_variant_count(_) >= 2` as its uniform-repeat query surface would disagree with the pinned predicate",
+        );
+        let expected_via_variant_counts_all_ge_two =
+            T::variant_counts(&doubled_full_set).iter().all(|&c| c >= 2);
+        assert_eq!(
+            doubled_uniformly_repeating, expected_via_variant_counts_all_ge_two,
+            "{type_name}: T::is_uniformly_repeating(&doubled_full_set) drifted from T::variant_counts(&doubled_full_set).iter().all(|&c| c >= 2) — the set-level uniform-repeat predicate MUST equal the histogram-vector universal `>= 2` test on every slice, so a downstream uniform-repeat consumer that binds this histogram-arm composition would disagree with the pinned predicate; the identity captures that a slice's per-variant multiplicity histogram lies entirely in the (mult `>= 2`) band iff every bar clears the `>= 2` threshold",
+        );
+        let expected_via_covering_and_not_unique_any =
+            T::is_covering(&doubled_full_set) && !T::is_unique_any(&doubled_full_set);
+        assert_eq!(
+            doubled_uniformly_repeating, expected_via_covering_and_not_unique_any,
+            "{type_name}: T::is_uniformly_repeating(&doubled_full_set) drifted from (T::is_covering(&doubled_full_set) && !T::is_unique_any(&doubled_full_set)) — the set-level uniform-repeat predicate MUST equal the De Morgan decomposition (covering ∧ ¬any-unique) on every slice, so a downstream uniform-repeat consumer that binds this covering-and-not-any-unique conjunction as its uniform-repeat query surface would disagree with the pinned predicate; the identity captures that a slice's per-variant multiplicity histogram lies entirely in the (mult `>= 2`) band iff (i) every variant appears at least once (covering rules out mult `== 0`) AND (ii) no variant appears exactly once (¬any-unique rules out mult `== 1`), together forcing every variant into the (mult `>= 2`) band",
+        );
+    }
 }
 
 #[cfg(test)]
@@ -65506,6 +65797,416 @@ mod tests {
             <ReverseIndexStubKind as ClosedSet>::sorted_missing_indices(empty),
             vec![2usize, 1, 0],
             "sorted_missing_indices over the empty slice must return the full index list in lex order under index_of — [2, 1, 0] — regardless of the implementor's ALL-array declaration layout",
+        );
+    }
+
+    #[test]
+    fn is_uniformly_repeating_returns_false_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (bool × set-level × universal-lift
+        // multiplicity-band `>= 2`): `T::is_uniformly_repeating(&[])`
+        // is `false` on every implementor — the empty slice hits zero
+        // positions, so every per-variant multiplicity is `0`, the
+        // least-common-multiplicity aggregate returns `0`, and the
+        // lower-bound test `0 >= 2` is `false`. Sibling posture to
+        // `is_repeating_any_returns_false_on_the_empty_slice_across_every_kind`
+        // one QUANTIFIER-axis over: both the existential-lift `>= 2`
+        // predicate AND the universal-lift `>= 2` predicate collapse
+        // to `false` at the empty-slice endpoint, but for different
+        // reasons — existential collapses because NO variant witnesses
+        // the strict-repeat band, universal collapses because EVERY
+        // variant fails the strict-repeat band.
+        let empty: &[StubKind] = &[];
+        assert!(
+            !<StubKind as ClosedSet>::is_uniformly_repeating(empty),
+            "T::is_uniformly_repeating(&[]) accepted the empty slice — the universal-lift uniform-repeat predicate MUST reject the empty slice because the min-bar aggregate returns `0` and the `>= 2` lower-bound test fails",
+        );
+    }
+
+    #[test]
+    fn is_uniformly_repeating_returns_false_on_the_full_set_across_every_kind() {
+        // FULL-SET CONTRACT: `T::is_uniformly_repeating(<T as
+        // ClosedSet>::ALL)` is `false` UNCONDITIONALLY on every
+        // implementor of non-zero cardinality — clause (3)'s pairwise-
+        // distinctness invariant forces every variant to appear at
+        // EXACTLY ONE position of the full-set slice, so every per-
+        // variant multiplicity is `1`, `T::min_variant_count(T::ALL)
+        // == 1`, and `1 >= 2` is `false`. The full-set arm is the
+        // LOAD-BEARING boundary that separates this strict (mult `>= 2`)
+        // universal-lift predicate from the weaker (mult `>= 1`)
+        // universal-lift predicate [`T::is_covering`], which returns
+        // `true` on the full set.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert!(
+            !<StubKind as ClosedSet>::is_uniformly_repeating(all),
+            "T::is_uniformly_repeating(T::ALL) accepted the full set — clause (3)'s pairwise-distinctness invariant forces the min-bar aggregate to return `1` and the `>= 2` lower-bound test to fail; the full-set arm separates the strict (mult `>= 2`) band from the weaker (mult `>= 1`) is_covering band",
+        );
+    }
+
+    #[test]
+    fn is_uniformly_repeating_returns_true_on_the_doubled_full_set_across_every_non_degenerate_kind(
+    ) {
+        // DOUBLED-FULL-SET CONTRACT: `T::is_uniformly_repeating(&doubled)`
+        // is `true` UNCONDITIONALLY on every implementor of non-zero
+        // cardinality — the doubled-full-set slice appends `T::ALL` to
+        // itself, so every variant appears at EXACTLY two positions,
+        // the least-common-multiplicity aggregate returns `2`, and the
+        // lower-bound test `2 >= 2` is `true`. The doubled-full-set arm
+        // is the LOAD-BEARING drift catcher for a `_ => false`
+        // unconditional override — the empty AND full-set fixpoints
+        // both yield `false` (correct), so ONLY the doubled-full-set
+        // arm distinguishes the strict (mult `>= 2`) universal band
+        // from the constant-`false` degenerate override.
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 1) };
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert!(
+            <StubKind as ClosedSet>::is_uniformly_repeating(&doubled),
+            "T::is_uniformly_repeating(&doubled_full_set) rejected the doubled full set — the min-bar aggregate MUST return `2` (every variant appears twice) and the `>= 2` lower-bound test MUST hold",
+        );
+    }
+
+    #[test]
+    fn is_uniformly_repeating_agrees_with_min_variant_count_ge_two_across_every_triple() {
+        // COMPOSITION-EQUALITY CONTRACT (against min-bar `>= 2`): for
+        // every slice `items`, `T::is_uniformly_repeating(items) ==
+        // (T::min_variant_count(items) >= 2)` — the bool-return
+        // universal-lift uniform-repeat projection agrees with the
+        // set-level scalar least-common-multiplicity aggregate's
+        // lower-bound test BYTE-FOR-BYTE. Sweeps every length-3 triple
+        // to pin the composition-equality contract across the 3×3×3
+        // = 27-corner triple space. Catches an override that detaches
+        // the bool-return uniform-repeat check from the min-bar
+        // aggregate lower-bound composition on any slice.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::is_uniformly_repeating(empty),
+            <StubKind as ClosedSet>::min_variant_count(empty) >= 2,
+            "T::is_uniformly_repeating(&[]) diverged from (T::min_variant_count(&[]) >= 2) — the universal-lift uniform-repeat predicate MUST agree with the min-bar aggregate lower-bound test byte-for-byte",
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let min_bar = <StubKind as ClosedSet>::min_variant_count(&triple);
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_uniformly_repeating(&triple),
+                        min_bar >= 2,
+                        "T::is_uniformly_repeating({triple:?}) diverged from (T::min_variant_count({triple:?}) >= 2) — the universal-lift uniform-repeat predicate MUST agree with the min-bar aggregate lower-bound test byte-for-byte",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_uniformly_repeating_agrees_with_variant_counts_all_ge_two_across_every_triple() {
+        // COMPOSITION-EQUALITY CONTRACT (against histogram universal):
+        // for every slice `items`, `T::is_uniformly_repeating(items) ==
+        // T::variant_counts(items).iter().all(|&c| c >= 2)` — the
+        // bool-return universal-lift uniform-repeat projection agrees
+        // with the per-slot histogram's universal `>= 2` test BYTE-
+        // FOR-BYTE. Independent cross-check distinct from the min-bar
+        // arm on the return-shape axis (Vec<usize> vs usize scalar).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let counts = <StubKind as ClosedSet>::variant_counts(&triple);
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_uniformly_repeating(&triple),
+                        counts.iter().all(|&c| c >= 2),
+                        "T::is_uniformly_repeating({triple:?}) diverged from T::variant_counts({triple:?}).iter().all(|&c| c >= 2) — the universal-lift uniform-repeat predicate MUST agree with the histogram-vector universal `>= 2` test byte-for-byte",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_uniformly_repeating_equals_universal_of_is_repeated_occurrence_of_across_every_triple() {
+        // UNIVERSAL-LIFT CONTRACT: for every slice `items`,
+        // `T::is_uniformly_repeating(items) == T::ALL.iter().all(|&v|
+        // T::is_repeated_occurrence_of(v, items))` — the set-level bool
+        // predicate is the EXACT universal quantification over `T::ALL`
+        // of the per-target multiplicity-`>= 2` predicate. This
+        // identity binds the set-level ARITY axis against the per-
+        // target ARITY axis one arity axis over on the (arity × mult-
+        // band × quantifier) face, pinning the universal peer to the
+        // existential-lift `is_repeating_any` corner.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::is_uniformly_repeating(empty),
+            <StubKind as ClosedSet>::ALL
+                .iter()
+                .copied()
+                .all(|v| <StubKind as ClosedSet>::is_repeated_occurrence_of(v, empty)),
+            "T::is_uniformly_repeating(&[]) diverged from T::ALL.iter().all(|v| T::is_repeated_occurrence_of(v, &[])) — the set-level universal-lift predicate MUST equal the universal quantification over T::ALL of the per-target multiplicity-`>= 2` predicate",
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let universal = <StubKind as ClosedSet>::ALL
+                        .iter()
+                        .copied()
+                        .all(|v| <StubKind as ClosedSet>::is_repeated_occurrence_of(v, &triple));
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_uniformly_repeating(&triple),
+                        universal,
+                        "T::is_uniformly_repeating({triple:?}) diverged from T::ALL.iter().all(|v| T::is_repeated_occurrence_of(v, {triple:?})) — the set-level universal-lift predicate MUST equal the universal quantification over T::ALL of the per-target multiplicity-`>= 2` predicate byte-for-byte",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_uniformly_repeating_equals_covering_and_not_unique_any_across_every_triple() {
+        // DE MORGAN DECOMPOSITION CONTRACT: for every slice `items`,
+        // `T::is_uniformly_repeating(items) == (T::is_covering(items)
+        // && !T::is_unique_any(items))` — the universal-lift `>= 2`
+        // predicate factors EXACTLY through the conjunction of (i)
+        // universal-lift `>= 1` (covering rules out mult `== 0` at
+        // every variant) AND (ii) negated existential `== 1`
+        // (¬any-unique rules out mult `== 1` at every variant),
+        // together forcing every variant into the (mult `>= 2`) band.
+        // Threads THIS predicate through the trichotomy (mult `== 0`,
+        // mult `== 1`, mult `>= 2`) as the UNIVERSAL COMPLEMENT of
+        // the two lower bands' existential lifts.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::is_uniformly_repeating(empty),
+            <StubKind as ClosedSet>::is_covering(empty)
+                && !<StubKind as ClosedSet>::is_unique_any(empty),
+            "T::is_uniformly_repeating(&[]) diverged from (T::is_covering(&[]) && !T::is_unique_any(&[])) — the universal-lift `>= 2` predicate MUST equal the De Morgan decomposition (covering ∧ ¬any-unique)",
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let decomposition = <StubKind as ClosedSet>::is_covering(&triple)
+                        && !<StubKind as ClosedSet>::is_unique_any(&triple);
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_uniformly_repeating(&triple),
+                        decomposition,
+                        "T::is_uniformly_repeating({triple:?}) diverged from (T::is_covering({triple:?}) && !T::is_unique_any({triple:?})) — the universal-lift `>= 2` predicate MUST equal the De Morgan decomposition (covering ∧ ¬any-unique) byte-for-byte",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_uniformly_repeating_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::is_uniformly_repeating(items) == T::is_uniformly_repeating(reversed items)`
+        // on every slice — reversing a slice preserves its multiset of
+        // variant identities, the min-bar aggregate is a function of
+        // that multiset alone, and the `>= 2` lower-bound test inherits
+        // the reversal invariance.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::is_uniformly_repeating(&forward),
+                        <StubKind as ClosedSet>::is_uniformly_repeating(&reversed),
+                        "T::is_uniformly_repeating diverged under slice reversal at ({forward:?}, {reversed:?}) — the universal-lift uniform-repeat predicate MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_uniformly_repeating_is_pairwise_disjoint_with_is_pairwise_distinct_past_arity_one_across_every_triple(
+    ) {
+        // MULTIPLICITY-BAND DISJOINTNESS CONTRACT: for every slice
+        // `items` on a cardinality-`>= 2` closed set,
+        // `T::is_uniformly_repeating(items)` AND
+        // `T::is_pairwise_distinct(items)` are pairwise DISJOINT past
+        // arity one — a slice cannot simultaneously have every variant
+        // appearing `>= 2` times AND every variant appearing `<= 1`
+        // times (except the trivial empty case, where the covering
+        // predicate fails so uniform-repeat also fails). The two
+        // universal-lift predicates sit at OPPOSITE MULTIPLICITY BANDS
+        // on the (universal × mult-band) axis, so their conjunction is
+        // forced to `false` on every non-empty slice of a `>= 2`
+        // cardinality closed set.
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 2) };
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert!(
+                        !(<StubKind as ClosedSet>::is_uniformly_repeating(&triple)
+                            && <StubKind as ClosedSet>::is_pairwise_distinct(&triple)),
+                        "T::is_uniformly_repeating({triple:?}) && T::is_pairwise_distinct({triple:?}) both held — the (mult `<= 1`) and (mult `>= 2`) universal-lift bands MUST be pairwise disjoint at every slice",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn is_uniformly_repeating_implies_is_covering_across_every_triple() {
+        // IMPLICATION CONTRACT (uniform-repeat → covering):
+        // `T::is_uniformly_repeating(items) implies T::is_covering(items)`
+        // on every slice — every variant appearing `>= 2` times implies
+        // every variant appearing `>= 1` time, so the strict universal-
+        // lift band is a subset of the weaker universal-lift band. Peer
+        // to the (existential-lift × mult-band) axis' analogous
+        // implication `is_repeating_any → !is_missing_any → false`
+        // (which trivially holds because both bands can coexist under
+        // the existential quantifier); the universal-lift implication
+        // is the load-bearing arm because the universal bands are
+        // NESTED whereas the existential bands are OVERLAPPING.
+        let empty: &[StubKind] = &[];
+        assert!(
+            !<StubKind as ClosedSet>::is_uniformly_repeating(empty)
+                || <StubKind as ClosedSet>::is_covering(empty),
+            "T::is_uniformly_repeating(&[]) held but T::is_covering(&[]) did not — the (mult `>= 2`) universal-lift band MUST imply the (mult `>= 1`) universal-lift band on every slice",
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert!(
+                        !<StubKind as ClosedSet>::is_uniformly_repeating(&triple)
+                            || <StubKind as ClosedSet>::is_covering(&triple),
+                        "T::is_uniformly_repeating({triple:?}) held but T::is_covering({triple:?}) did not — the (mult `>= 2`) universal-lift band MUST imply the (mult `>= 1`) universal-lift band on every slice",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_true_drift_in_is_uniformly_repeating() {
+        // Drift catch — clause (121)'s empty-slice + full-set FALSE-
+        // fixpoint arms fire when an override folds the set-level
+        // universal-lift uniform-repeat predicate onto `true`
+        // unconditionally. On the empty slice the correct value is
+        // `false` (min-bar == 0, so `0 >= 2` fails); on the full set
+        // the correct value is `false` (min-bar == 1, so `1 >= 2`
+        // fails). Both arms fire loudly against the `_ => true`
+        // override.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsUniformlyRepeatingTrueKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedIsUniformlyRepeatingTrueKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedIsUniformlyRepeatingTrueKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted is_uniformly_repeating true kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedIsUniformlyRepeatingTrueKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedIsUniformlyRepeatingTrueKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted is_uniformly_repeating true kind";
+            type Unknown = UnknownDriftedIsUniformlyRepeatingTrueKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsUniformlyRepeatingTrueKind(s.to_owned())
+            }
+            fn is_uniformly_repeating(_items: &[Self]) -> bool {
+                true
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedIsUniformlyRepeatingTrueKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedIsUniformlyRepeatingTrueKind whose is_uniformly_repeating override folds onto `true` unconditionally — clause (121)'s empty-slice + full-set FALSE-fixpoint arms MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_false_drift_in_is_uniformly_repeating() {
+        // Drift catch — clause (121)'s doubled-full-set arm fires when
+        // an override folds the set-level universal-lift uniform-
+        // repeat predicate onto `false` regardless of slice. The
+        // doubled-full-set arm at cardinality `>= 1` is LOAD-BEARING —
+        // it is the ONLY canonical fixpoint arm that separates the
+        // strict (mult `>= 2`) universal band from a `_ => false`
+        // degenerate override (empty AND full-set both correctly yield
+        // `false`, so only the doubled-full-set arm distinguishes them
+        // under any non-degenerate cardinality).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedIsUniformlyRepeatingFalseKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedIsUniformlyRepeatingFalseKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedIsUniformlyRepeatingFalseKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted is_uniformly_repeating false kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedIsUniformlyRepeatingFalseKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedIsUniformlyRepeatingFalseKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted is_uniformly_repeating false kind";
+            type Unknown = UnknownDriftedIsUniformlyRepeatingFalseKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedIsUniformlyRepeatingFalseKind(s.to_owned())
+            }
+            fn is_uniformly_repeating(_items: &[Self]) -> bool {
+                false
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedIsUniformlyRepeatingFalseKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedIsUniformlyRepeatingFalseKind whose is_uniformly_repeating override folds onto `false` unconditionally — clause (121)'s doubled-full-set arm MUST reject the drift",
         );
     }
 }

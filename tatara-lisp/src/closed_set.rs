@@ -18244,6 +18244,221 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .any(|v| <Self as ClosedSet>::is_unique_occurrence_of(v, items))
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "count of unique-multiplicity
+    /// variants" projection — the `usize` count of variants of
+    /// [`Self::ALL`] whose per-target multiplicity in `items` equals
+    /// EXACTLY `1`, computed as the `.count()` reduction of
+    /// [`Self::ALL`] filtered through the per-target
+    /// [`Self::is_unique_occurrence_of`] predicate. The SET-LEVEL
+    /// USIZE-RETURN closer on the (set-level × usize × multiplicity-
+    /// band) 3-corner face at the middle band peer to the (set-level
+    /// × usize × multiplicity-band `== 0`) [`Self::count_missing`]
+    /// corner one MULTIPLICITY-BAND axis over, AND the direct
+    /// USIZE-RETURN SHARPENING of the (set-level × bool ×
+    /// multiplicity-band `== 1`) [`Self::is_unique_any`] corner one
+    /// return-shape axis over — while [`Self::is_unique_any`] reports
+    /// "IS THERE at least one variant occurring exactly once?" (a
+    /// set-level `bool`), this projection reports "HOW MANY variants
+    /// occur exactly once?" (a set-level `usize` that is a strict
+    /// refinement of the bool). Not a fresh substrate primitive on
+    /// the index axis — the count emerges from one composition of
+    /// [`Self::ALL`] filtered through the per-target
+    /// [`Self::is_unique_occurrence_of`] uniqueness primitive.
+    ///
+    /// Membership-projection identity: for every slice `items`,
+    /// `T::is_unique_any(items) == (T::count_unique_variants(items) > 0)`
+    /// — the set-level bool any-unique predicate is the (nonzero-
+    /// fixpoint) projection of THIS usize count. The bool-return
+    /// existential-lift decomposes through the strict cardinality
+    /// count exactly. Pinned by
+    /// `is_unique_any_holds_iff_count_unique_variants_is_strictly_positive_across_every_triple`.
+    ///
+    /// Histogram-arm identity: for every slice `items`,
+    /// `T::count_unique_variants(items) == T::variant_counts(items).iter().filter(|&&c| c == 1).count()`
+    /// — the set-level count of unique-multiplicity variants is
+    /// EXACTLY the count of per-slot histogram bars equal to `1`.
+    /// Independent cross-check distinct from the filter-composition
+    /// arm on the return-shape (`Vec<usize>` vs the per-target
+    /// [`Self::is_unique_occurrence_of`] `bool` predicate) axis.
+    /// Pinned by
+    /// `count_unique_variants_equals_variant_counts_filter_equals_one_count_across_every_triple`.
+    ///
+    /// Trichotomy-cardinality-partition identity: for every slice
+    /// `items`,
+    /// `T::count_missing(items) + T::count_unique_variants(items) + T::count_repeating_variants(items) == T::CARDINALITY`
+    /// — the three set-level cardinality counts on the multiplicity-
+    /// band trichotomy PARTITION the ambient set's cardinality
+    /// exactly, because every variant belongs to EXACTLY ONE of the
+    /// three disjoint bands (mult `== 0`, mult `== 1`, mult `>= 2`).
+    /// This identity binds the count-side trichotomy against the
+    /// [`Self::CARDINALITY`] constant as a load-bearing partition
+    /// invariant. (Not yet checkable — `count_repeating_variants` is
+    /// the next lift on the (mult `>= 2`) corner one MULTIPLICITY-
+    /// BAND axis over; when it lands the identity binds all three
+    /// counts to the substrate's forced-arity constant on every
+    /// slice.) The two-arm (mult `== 0` + mult `>= 1`) analogue
+    /// `T::count_missing(items) + T::count_distinct(items) == T::CARDINALITY`
+    /// is already checkable and lifts through
+    /// `count_unique_variants + count_repeating_variants == count_distinct`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic — the (declaration, lex) axis COLLAPSES on
+    /// this count because it factors through
+    /// [`Self::is_unique_occurrence_of`] (itself ordering-agnostic)
+    /// via a standard-library `filter().count()` combinator over the
+    /// closed set. No separate `sorted_count_unique_variants` peer
+    /// is needed. Pinned by
+    /// `count_unique_variants_is_invariant_under_ordering_axis_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::count_unique_variants(&[])` is `0`
+    /// UNCONDITIONALLY — the empty slice hits zero positions, so
+    /// every per-variant multiplicity is `0` and the per-target
+    /// `== 1` test fails at every target. Sibling posture to
+    /// `is_unique_any_returns_false_on_the_empty_slice_across_every_kind`
+    /// one return-shape axis over: the set-level bool any-unique
+    /// predicate collapses to `false` at the empty slice; this
+    /// projection collapses to `0` at the same endpoint. Pinned by
+    /// `count_unique_variants_returns_zero_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Full-set contract:
+    /// `T::count_unique_variants(<T as ClosedSet>::ALL)` is
+    /// `T::CARDINALITY` UNCONDITIONALLY — the closed-set well-
+    /// formedness invariant [`assert_closed_set_well_formed`]'s clause
+    /// (3) pins variants as pairwise distinct, so every variant of
+    /// [`Self::ALL`] appears at EXACTLY ONE position of the full-set
+    /// slice; every per-target multiplicity is `1` and every variant
+    /// contributes to the count. Complements
+    /// `is_unique_any_over_the_full_set_is_true_across_every_non_degenerate_kind`
+    /// one return-shape axis over: the set-level bool any-unique
+    /// predicate reaches `true` at the full set; this count reaches
+    /// its `T::CARDINALITY` maximum at the same endpoint. Pinned by
+    /// `count_unique_variants_over_the_full_set_equals_cardinality_across_every_kind`.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::count_unique_variants(&<T as ClosedSet>::ALL.iter().chain(<T as
+    /// ClosedSet>::ALL.iter()).copied().collect::<Vec<_>>())` is `0`
+    /// UNCONDITIONALLY — the doubled full set hits every variant at
+    /// EXACTLY TWO positions, so every per-target multiplicity is `2`
+    /// and the per-target `== 1` test fails at every target.
+    /// Together with the full-set arm, the doubled-full-set arm
+    /// demonstrates that the projection TRANSITIONS from
+    /// `T::CARDINALITY` (at the canonical permutation) to `0` (at the
+    /// canonical repetition) purely through the per-target
+    /// multiplicity band change — pinning the projection as a STRICT
+    /// `== 1` count rather than the weaker `>= 1` presence count
+    /// [`Self::count_distinct`]. Pinned by
+    /// `count_unique_variants_returns_zero_on_the_doubled_full_set_across_every_kind`.
+    ///
+    /// Bounded-above contract: for every slice `items`,
+    /// `T::count_unique_variants(items) <= T::CARDINALITY` AND
+    /// `T::count_unique_variants(items) <= T::count_distinct(items)`
+    /// — the count is bounded above by the ambient cardinality (there
+    /// are only `T::CARDINALITY` variants to sample from) AND by the
+    /// count of PRESENT variants (a variant with mult `== 1` is a
+    /// fortiori present with mult `>= 1`). The pair of upper bounds
+    /// partition the projection's range at the (set-level × usize)
+    /// slot on the equivalence-partition surface. Pinned by
+    /// `count_unique_variants_is_bounded_above_by_cardinality_and_count_distinct_across_every_triple`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of
+    /// [`Self::is_unique_occurrence_of`] via the standard-library
+    /// `filter().count()` combinator over [`Self::ALL`]. The sweep
+    /// cost is O(T::CARDINALITY * n) on slice arity `n` — one per-
+    /// target multiplicity primitive per variant, allocation-free, no
+    /// `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's minimal
+    /// `Sized + Copy + 'static` supertrait pair stays untouched). The
+    /// `filter().count()` composition does NOT short-circuit (unlike
+    /// [`Self::is_unique_any`]'s `.any(…)`), because the cardinality
+    /// count is a distinct output from the existential predicate.
+    ///
+    /// Future consumers that compose against
+    /// [`Self::count_unique_variants`]: a `tatara-check` predicate
+    /// `(check-phases-report-unique-count …)` on a `WorkloadPhase`
+    /// sequence that verifies EXACTLY `k` phases are visited once
+    /// (rather than just "some phase is visited once" via the sibling
+    /// [`Self::is_unique_any`]) at plan time — a stricter linearity
+    /// constraint distinct from full coverage OR pure absence; an
+    /// LSP diagnostic on a Lisp-author-written variant-list that
+    /// renders the count of linearly-bound identifiers ("3 of 5
+    /// severities are used exactly once") rather than a mere bool
+    /// witness; a Sekiban audit-trail metric emitting the count of
+    /// canary-witness classifications across a window rather than the
+    /// bool witness alone; a `tatara-lisp::macro_expand::Expander`
+    /// hygiene pass that reports the cardinality of linearly-bound
+    /// template identifiers as a scalar rather than a per-identifier
+    /// bool sweep. Each binds to ONE typed N-ary count-unique
+    /// primitive on the trait rather than re-deriving
+    /// `T::ALL.iter().filter(|&&v| T::count_occurrences_of(v, items) == 1).count()`
+    /// OR
+    /// `T::variant_counts(items).iter().filter(|&&c| c == 1).count()`
+    /// inline per callsite.
+    ///
+    /// Compounding closure: the (set-level × usize × multiplicity-
+    /// band) 3-corner CARDINALITY-COUNT face on the equivalence-
+    /// partition surface now closes at TWO of three bands — (mult
+    /// `== 0`) via [`Self::count_missing`], and (mult `== 1`) via
+    /// THIS projection. The natural next lift on this surface —
+    /// `count_repeating_variants(items) -> usize` closing the (mult
+    /// `>= 2`) band peer to this one MULTIPLICITY-BAND axis over —
+    /// opens the strict-repeat count corner and CLOSES the set-
+    /// level × usize trichotomy exhaustively at three typed
+    /// cardinality-count primitives. Downstream consumers wanting
+    /// the (bool, usize) × mult-band 3×2 = 6-corner (bool-existence
+    /// × usize-cardinality × mult-band) hyper-face composed of
+    /// (`is_missing_any`, `count_missing`), (`is_unique_any`, THIS),
+    /// (`is_repeating_any`, `count_repeating_variants`) — three
+    /// paired (existential, cardinality) primitives on the same
+    /// multiplicity band — bind through these six primitives on
+    /// the substrate.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// set-level count of unique-multiplicity variants becomes a
+    /// TYPE-level primitive on the closed-set trait rather than a
+    /// per-consumer inline
+    /// `T::ALL.iter().filter(|v| T::count_occurrences_of(*v, items) == 1).count()`
+    /// composition at every downstream generic site. THEORY.md
+    /// §V.1 — knowable platform; the (set-level × usize × mult `== 1`)
+    /// corner was an unnamed inline composition recurring at every
+    /// prospective downstream "how many variants occur exactly
+    /// once?" site pre-lift. Naming it on the trait makes the
+    /// count a TYPED CONSEQUENCE of the substrate's per-target
+    /// uniqueness primitive [`Self::is_unique_occurrence_of`]
+    /// filtered through [`Self::ALL`] and reduced via `.count()`.
+    /// THEORY.md §VI.1 — generation over composition; the count
+    /// emerges from the composition of ONE substrate primitive
+    /// ([`Self::is_unique_occurrence_of`]) with an
+    /// `iter().copied().filter(…).count()` combinator over
+    /// [`Self::ALL`], not as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Coq's `length (filter (fun v => Nat.eqb 1
+    /// (count_occ eqb l v)) all)` decidable-equality-derived count-
+    /// singleton primitive on `list nat`; Idris's `length (filter (\v
+    /// => count (== v) items == 1) all)` on a `Vect n a`; Racket's
+    /// `(length (filter (λ (v) (= (count (λ (w) (equal? v w)) items) 1)) all))`;
+    /// Julia's `count(v -> count(==(v), items) == 1, all)`; Haskell's
+    /// `length (filter (\v -> length (filter (== v) items) == 1) all)`;
+    /// Rust's own
+    /// `T::ALL.iter().filter(|v| items.iter().filter(|w| v == *w).count() == 1).count()`
+    /// binds through a `Self: PartialEq` supertrait bound; Python's
+    /// `sum(1 for v in all if items.count(v) == 1)`; SQL's `SELECT
+    /// COUNT(*) FROM (SELECT variant FROM t GROUP BY variant HAVING
+    /// COUNT(*) = 1)` — the canonical set-level singleton-cardinality
+    /// count. Translation through pleme-io primitives: the N-ary
+    /// set-level unique-variant count on the closed-set trait binds
+    /// through an `iter().copied().filter(…).count()` combinator
+    /// over [`Self::ALL`] with the substrate's per-target uniqueness
+    /// primitive inside — no new dep, no supertrait bound (the
+    /// [`Self::is_unique_occurrence_of`] primitive replaces the
+    /// `Eq`/`Hash` bound the standard-library group-by signatures
+    /// demand), no set-shape carrier, no allocation.
+    fn count_unique_variants(items: &[Self]) -> usize {
+        <Self as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .filter(|&v| <Self as ClosedSet>::is_unique_occurrence_of(v, items))
+            .count()
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "present variants" projection —
     /// the `Vec<Self>` DECLARATION-ORDER hit-set of [`Self::ALL`],
     /// keeping every variant that OCCURS at least once in `items`
@@ -28626,6 +28841,80 @@ where
             cardinality = T::CARDINALITY,
         );
     }
+    // (115) — `T::count_unique_variants(items)` MUST agree with the
+    // filter-count reduction over `T::ALL` of the per-target
+    // multiplicity-`== 1` predicate on every slice AND MUST land on
+    // its three canonical fixpoints (`0` on the empty slice
+    // UNCONDITIONALLY, `T::CARDINALITY` on the full set
+    // UNCONDITIONALLY, `0` on the doubled full set UNCONDITIONALLY)
+    // AND on TWO composition-equality arms on the full-set fixpoint:
+    // (a) filter-count against
+    // `T::ALL.iter().filter(|&&v| T::is_unique_occurrence_of(v, T::ALL)).count()`,
+    // (b) histogram-arm against
+    // `T::variant_counts(T::ALL).iter().filter(|&&c| c == 1).count()`.
+    // The three fixpoints + two composition arms partition failure
+    // modes at the (scalar × slice-shape × composition-equality)
+    // corner simultaneously: an override that folds onto
+    // `T::CARDINALITY` unconditionally fires on the empty-slice AND
+    // doubled-full-set arms (returns `T::CARDINALITY` rather than
+    // `0`); an override that folds onto `0` unconditionally fires on
+    // the full-set arm (returns `0` rather than `T::CARDINALITY`);
+    // an override that detaches from the filter-count composition
+    // on any slice bifurcates loudly at the filter-count arm; an
+    // override that detaches from the histogram-arm bifurcates at
+    // the histogram-arm. Sibling posture to clause (114) — clause
+    // (114) pins the (`bool`, set-level, mult `== 1`) any-unique
+    // predicate corner on the equivalence-partition surface; this
+    // clause pins the (`usize`, set-level, mult `== 1`)
+    // cardinality-count corner peer to it one return-shape axis over
+    // (bool-return → usize-return via cardinality sharpening).
+    // Sibling posture to clause (85) [count_missing on the mult
+    // `== 0` band] one MULTIPLICITY-BAND axis over: that clause
+    // pins the (`usize`, set-level, mult `== 0`) absent-count corner
+    // on the trichotomy face; this clause pins the (`usize`, set-
+    // level, mult `== 1`) unique-count corner at the middle band.
+    // The default trait body threads the filter-count reduction
+    // verbatim and satisfies every fixpoint arm + every composition-
+    // equality arm for free; the assertion catches a future
+    // implementor whose override drifts the projection loudly rather
+    // than silently bifurcating the set-level unique-variant count
+    // surface every downstream unique-count consumer routes through.
+    assert_eq!(
+        T::count_unique_variants(&[]),
+        0,
+        "{type_name}: T::count_unique_variants(&[]) != 0 — the set-level unique-variant count MUST report `0` on the empty slice because every per-variant multiplicity is `0` and the per-target `== 1` test fails at every target; a non-`0` empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream unique-count consumer routes through",
+    );
+    let full_unique_count = T::count_unique_variants(T::ALL);
+    assert_eq!(
+        full_unique_count,
+        T::CARDINALITY,
+        "{type_name}: T::count_unique_variants(T::ALL) != T::CARDINALITY on a cardinality-{cardinality} closed set — clause (3)'s pairwise-distinctness invariant forces every variant to appear at EXACTLY ONE position of the full-set slice, so every per-target multiplicity is `1` and every variant contributes to the count; a full-set value diverging from `T::CARDINALITY` silently detaches the set-level unique-variant count from the (variant → decl-slot) injectivity clause (16), breaking every downstream unique-count consumer",
+        cardinality = T::CARDINALITY,
+    );
+    let expected_via_filter = T::ALL
+        .iter()
+        .copied()
+        .filter(|&v| T::is_unique_occurrence_of(v, T::ALL))
+        .count();
+    assert_eq!(
+        full_unique_count, expected_via_filter,
+        "{type_name}: T::count_unique_variants(T::ALL) drifted from T::ALL.iter().filter(|&v| T::is_unique_occurrence_of(v, T::ALL)).count() — the set-level unique-variant count MUST equal the filter-count reduction of the per-target multiplicity-`== 1` predicate over T::ALL on every slice, so a downstream unique-count consumer that binds this filter-count composition as its unique-cardinality query surface would disagree with the pinned count",
+    );
+    let expected_via_histogram = T::variant_counts(T::ALL)
+        .iter()
+        .filter(|&&c| c == 1)
+        .count();
+    assert_eq!(
+        full_unique_count, expected_via_histogram,
+        "{type_name}: T::count_unique_variants(T::ALL) drifted from T::variant_counts(T::ALL).iter().filter(|&&c| c == 1).count() — the set-level unique-variant count MUST equal the count of per-slot histogram bars equal to `1` on every slice, so a downstream unique-count consumer that binds this histogram-arm composition as its unique-cardinality query surface would disagree with the pinned count",
+    );
+    let doubled_unique_count = T::count_unique_variants(&doubled_full_set);
+    assert_eq!(
+        doubled_unique_count,
+        0,
+        "{type_name}: T::count_unique_variants(&doubled_full_set) != 0 on a cardinality-{cardinality} closed set — the doubled full set hits every variant at EXACTLY TWO positions, so every per-target multiplicity is `2` and the per-target `== 1` test fails at every target; the doubled-full-set arm pins the projection as a STRICT `== 1` count rather than the weaker `>= 1` presence count [`T::count_distinct`] which reports `T::CARDINALITY` on the doubled full set — a non-`0` doubled-full-set value silently drifts the projection past the strict-band boundary the trichotomy partitions",
+        cardinality = T::CARDINALITY,
+    );
 }
 
 #[cfg(test)]
@@ -56031,6 +56320,277 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedIsUniqueAnyToCoveringKind whose is_unique_any override folds onto is_covering — clause (114)'s doubled-full-set arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn count_unique_variants_returns_zero_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (set-level × usize × multiplicity-band
+        // `== 1` cardinality-count projection):
+        // `T::count_unique_variants(&[])` is `0` UNCONDITIONALLY — the
+        // empty slice hits zero positions, so every per-variant
+        // multiplicity is `0` and the per-target `== 1` test fails at
+        // every target. Sibling posture to
+        // `is_unique_any_returns_false_on_the_empty_slice_across_every_kind`
+        // one return-shape axis over: the set-level bool any-unique
+        // predicate collapses to `false` at the empty slice; this
+        // projection collapses to `0` at the same endpoint.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::count_unique_variants(empty),
+            0,
+            "T::count_unique_variants(&[]) diverged from the empty-slice fixpoint `0`",
+        );
+    }
+
+    #[test]
+    fn count_unique_variants_returns_one_on_every_singleton_across_every_variant() {
+        // SINGLETON CONTRACT: `T::count_unique_variants(&[v])` is `1`
+        // for every variant `v` — a singleton slice hits exactly one
+        // variant at exactly one position, so exactly ONE per-target
+        // multiplicity is `1` (the target `v`) and the others are `0`.
+        // Sibling posture to
+        // `is_unique_any_returns_true_on_every_singleton_across_every_variant`
+        // one return-shape axis over: the set-level bool any-unique
+        // predicate collapses to `true`; this projection collapses to
+        // `1`.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::count_unique_variants(&singleton),
+                1,
+                "T::count_unique_variants({singleton:?}) diverged from the singleton fixpoint `1`",
+            );
+        }
+    }
+
+    #[test]
+    fn count_unique_variants_over_the_full_set_equals_cardinality_across_every_kind() {
+        // FULL-SET CONTRACT: `T::count_unique_variants(T::ALL)` is
+        // `T::CARDINALITY` UNCONDITIONALLY — the closed-set well-
+        // formedness invariant `assert_closed_set_well_formed`'s clause
+        // (3) pins variants as pairwise distinct, so every variant of
+        // `T::ALL` appears at EXACTLY ONE position of the full-set
+        // slice; every per-target multiplicity is `1` and every
+        // variant contributes to the count. Complements
+        // `is_unique_any_over_the_full_set_is_true_across_every_non_degenerate_kind`
+        // one return-shape axis over: the set-level bool any-unique
+        // predicate reaches `true` at the full set; this count reaches
+        // its `T::CARDINALITY` maximum at the same endpoint.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::count_unique_variants(all),
+            <StubKind as ClosedSet>::CARDINALITY,
+            "T::count_unique_variants(T::ALL) diverged from the full-set fixpoint `T::CARDINALITY` — the closed-set well-formedness pairwise-distinctness invariant would be violated",
+        );
+    }
+
+    #[test]
+    fn count_unique_variants_returns_zero_on_the_doubled_full_set_across_every_kind() {
+        // DOUBLED-FULL-SET CONTRACT:
+        // `T::count_unique_variants(T::ALL ++ T::ALL)` is `0`
+        // UNCONDITIONALLY — the doubled full set hits every variant
+        // at EXACTLY TWO positions, so every per-target multiplicity
+        // is `2` and the per-target `== 1` test fails at every target.
+        // Together with the full-set arm, the doubled-full-set arm
+        // demonstrates that the projection TRANSITIONS from
+        // `T::CARDINALITY` (at the canonical permutation) to `0` (at
+        // the canonical repetition) purely through the per-target
+        // multiplicity band change — pinning the projection as a
+        // STRICT `== 1` count rather than the weaker `>= 1` presence
+        // count `T::count_distinct` which reports `T::CARDINALITY` on
+        // the doubled full set.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::count_unique_variants(&doubled),
+            0,
+            "T::count_unique_variants(ALL++ALL) diverged from the doubled-full-set fixpoint `0`",
+        );
+    }
+
+    #[test]
+    fn is_unique_any_holds_iff_count_unique_variants_is_strictly_positive_across_every_triple() {
+        // MEMBERSHIP-PROJECTION IDENTITY: for every slice `items`,
+        // `T::is_unique_any(items) ==
+        // (T::count_unique_variants(items) > 0)` — the set-level
+        // bool any-unique predicate is the (nonzero-fixpoint)
+        // projection of the set-level unique-variant cardinality
+        // count. Sweeping every length-3 triple pins the identity
+        // across the full 27-corner (triple) domain. Catches a future
+        // override that returns `> 0` on a slice where `is_unique_any`
+        // reports `false`, or `0` on a slice where `is_unique_any`
+        // reports `true`. Sibling posture to
+        // `is_missing_any_holds_iff_count_missing_is_strictly_positive_across_every_triple`
+        // one MULTIPLICITY-BAND axis over on the (mult `== 0`) band:
+        // both projections agree because both encode the same
+        // (band-cardinality > 0) fixpoint at their respective bands.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_bool = <StubKind as ClosedSet>::is_unique_any(&triple);
+                    let via_count = <StubKind as ClosedSet>::count_unique_variants(&triple) > 0;
+                    assert_eq!(
+                        via_bool, via_count,
+                        "T::is_unique_any({triple:?}) diverged from (T::count_unique_variants({triple:?}) > 0) — the set-level bool any-unique predicate MUST project through the strictly-positive fixpoint of the set-level unique-variant cardinality count",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_unique_variants_equals_variant_counts_filter_equals_one_count_across_every_triple() {
+        // HISTOGRAM-ARM IDENTITY: for every slice `items`,
+        // `T::count_unique_variants(items) ==
+        // T::variant_counts(items).iter().filter(|&&c| c == 1).count()`
+        // — the set-level count of unique-multiplicity variants is
+        // EXACTLY the count of per-slot histogram bars equal to `1`.
+        // Independent cross-check distinct from the filter-composition
+        // arm on the return-shape (`Vec<usize>` vs the per-target
+        // `is_unique_occurrence_of` `bool` predicate) axis. Sweeping
+        // every length-3 triple pins the identity across the full
+        // 27-corner (triple) domain.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_predicate = <StubKind as ClosedSet>::count_unique_variants(&triple);
+                    let via_histogram = <StubKind as ClosedSet>::variant_counts(&triple)
+                        .iter()
+                        .filter(|&&count| count == 1)
+                        .count();
+                    assert_eq!(
+                        via_predicate, via_histogram,
+                        "T::count_unique_variants({triple:?}) diverged from T::variant_counts({triple:?}).iter().filter(|&&c| c == 1).count() — the set-level unique-variant count MUST equal the count of per-slot histogram bars equal to `1` on every slice",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_unique_variants_is_bounded_above_by_cardinality_and_count_distinct_across_every_triple(
+    ) {
+        // BOUNDED-ABOVE CONTRACT: for every slice `items`,
+        // `T::count_unique_variants(items) <= T::CARDINALITY` AND
+        // `T::count_unique_variants(items) <= T::count_distinct(items)`
+        // — the count is bounded above by the ambient cardinality (there
+        // are only `T::CARDINALITY` variants to sample from) AND by
+        // the count of PRESENT variants (a variant with mult `== 1` is
+        // a fortiori present with mult `>= 1`). Sweeping every length-3
+        // triple pins the pair of upper bounds across the full 27-
+        // corner (triple) domain.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let unique_count = <StubKind as ClosedSet>::count_unique_variants(&triple);
+                    assert!(
+                        unique_count <= <StubKind as ClosedSet>::CARDINALITY,
+                        "T::count_unique_variants({triple:?}) = {unique_count} exceeds T::CARDINALITY = {cardinality} — the set-level unique-variant count MUST be bounded above by the ambient cardinality",
+                        cardinality = <StubKind as ClosedSet>::CARDINALITY,
+                    );
+                    let distinct_count = <StubKind as ClosedSet>::count_distinct(&triple);
+                    assert!(
+                        unique_count <= distinct_count,
+                        "T::count_unique_variants({triple:?}) = {unique_count} exceeds T::count_distinct({triple:?}) = {distinct_count} — the set-level unique-variant count MUST be bounded above by the count of PRESENT variants because a variant with mult `== 1` is a fortiori present with mult `>= 1`",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn count_unique_variants_is_invariant_under_ordering_axis_across_every_triple() {
+        // ORDERING-AXIS INVARIANCE CONTRACT: the projection factors
+        // through `is_unique_occurrence_of` (itself ordering-agnostic)
+        // via a standard-library `filter().count()` combinator over
+        // the closed set — so the (declaration, lex) axis COLLAPSES
+        // on this count. Cross-checks against the direct filter-count
+        // sweep over `is_unique_occurrence_of`. Sweeping every
+        // length-3 triple pins the identity across the full 27-corner
+        // (triple) domain.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_pinned = <StubKind as ClosedSet>::count_unique_variants(&triple);
+                    let via_filter = <StubKind as ClosedSet>::ALL
+                        .iter()
+                        .copied()
+                        .filter(|&v| <StubKind as ClosedSet>::is_unique_occurrence_of(v, &triple))
+                        .count();
+                    assert_eq!(
+                        via_pinned, via_filter,
+                        "T::count_unique_variants({triple:?}) diverged from the direct `is_unique_occurrence_of` filter-count sweep — the ordering-agnostic count projection was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_drift_between_count_unique_variants_and_composition() {
+        // Drift catch — clause (115)'s full-set fixpoint arm fires
+        // when an override folds the set-level unique-variant count
+        // onto `0` regardless of slice (returning `0` on the full set
+        // rather than `T::CARDINALITY`). The stub below overrides the
+        // default body to return `0` unconditionally; on the full set
+        // that produces `0 != T::CARDINALITY`, tripping clause (115)'s
+        // full-set fixpoint arm loudly.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedCountUniqueVariantsKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedCountUniqueVariantsKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedCountUniqueVariantsKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown drifted count_unique_variants kind: {}", self.0)
+            }
+        }
+
+        impl DriftedCountUniqueVariantsKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedCountUniqueVariantsKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted count_unique_variants kind";
+            type Unknown = UnknownDriftedCountUniqueVariantsKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedCountUniqueVariantsKind(s.to_owned())
+            }
+            fn count_unique_variants(_items: &[Self]) -> usize {
+                // Drift: return `0` regardless of slice. On the full
+                // set that produces `0 != T::CARDINALITY`, tripping
+                // clause (115)'s full-set fixpoint arm loudly.
+                0
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedCountUniqueVariantsKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedCountUniqueVariantsKind whose count_unique_variants override folds onto `0` unconditionally — clause (115)'s full-set fixpoint arm MUST reject the drift",
         );
     }
 

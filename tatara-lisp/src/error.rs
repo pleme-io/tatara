@@ -130,6 +130,44 @@ const _: () = crate::ast::assert_str_array_all_nonempty(&ExpectedKwargShape::LAB
 const _: () = crate::ast::assert_str_array_all_nonempty(&SexpShape::LABELS);
 const _: () = crate::ast::assert_str_array_all_nonempty(&StructuralKind::LABELS);
 
+// Compile-time ASCII-BYTE-RANGE witnesses — one `const _: () =
+// crate::ast::assert_str_array_all_ascii(&…)` per family-wide
+// `[&'static str; N]` array declared in this module. Sibling to the
+// `_all_nonempty` witnesses above on the (per-entry × contract-shape)
+// axis: those pin the length-lower-bound gate (`∀ i : arr[i].len() >
+// 0`), these pin the strictly-orthogonal byte-range gate (`∀ i, ∀ b ∈
+// arr[i].as_bytes() : b <= 0x7F`). The two contracts compose
+// orthogonally — an array carrying `["café"]` passes NONEMPTY while
+// failing ASCII; `["", "a"]` passes ASCII while failing NONEMPTY.
+// Every consumer that ships an entry through a seven-bit-clean
+// downstream surface (K8s annotation keys + label values; YAML
+// flow-scalar map keys; BLAKE3 hash inputs; Rust byte-pattern
+// `matches!` arms) treats each entry as ASCII — a non-ASCII byte
+// silently invites Unicode-normalization drift on the wire and
+// lookalike-label collisions that byte-equality parsing cannot
+// detect. Post-lift a regression that silently re-inlined one label
+// constant to a lookalike non-ASCII spelling fails at `cargo check`
+// BEFORE any test scheduler runs. The thirteen arrays covered here
+// mirror the thirteen arrays already pinned by the `_all_nonempty`
+// witnesses above — the (per-entry × contract-shape) coverage matrix
+// on the (`&'static str`) row of this module now holds at BOTH
+// corners {NONEMPTY, ASCII} for every family-wide array declared
+// here.
+const _: () = crate::ast::assert_str_array_all_ascii(&CompilerSpecIoStage::LABELS);
+const _: () = crate::ast::assert_str_array_all_ascii(&TemplateInvariantKind::STATIC_MESSAGES);
+const _: () = crate::ast::assert_str_array_all_ascii(&TemplateInvariantKind::DYNAMIC_DESCRIPTORS);
+const _: () = crate::ast::assert_str_array_all_ascii(&MacroDefHead::KEYWORDS);
+const _: () = crate::ast::assert_str_array_all_ascii(&OptionalParamMalformedReason::STATIC_LABELS);
+const _: () =
+    crate::ast::assert_str_array_all_ascii(&OptionalParamMalformedReason::DYNAMIC_DESCRIPTORS);
+const _: () = crate::ast::assert_str_array_all_ascii(&UnquoteForm::MARKERS);
+const _: () = crate::ast::assert_str_array_all_ascii(&UnquoteForm::IAC_FORGE_TAGS);
+const _: () = crate::ast::assert_str_array_all_ascii(&UnquoteForm::LABELS);
+const _: () = crate::ast::assert_str_array_all_ascii(&KwargPathKind::LABELS);
+const _: () = crate::ast::assert_str_array_all_ascii(&ExpectedKwargShape::LABELS);
+const _: () = crate::ast::assert_str_array_all_ascii(&SexpShape::LABELS);
+const _: () = crate::ast::assert_str_array_all_ascii(&StructuralKind::LABELS);
+
 // Compile-time SUBSET-embedding witnesses — the THREE family-wide
 // `[&'static str; N]` sub-vocabularies of the substrate's twelve-arm
 // outer-shape label vocabulary at `SexpShape::LABELS` whose distinct-
@@ -21320,6 +21358,42 @@ mod tests {
         assert_str_array_pairwise_distinct(&ExpectedKwargShape::LABELS);
         assert_str_array_pairwise_distinct(&SexpShape::LABELS);
         assert_str_array_pairwise_distinct(&StructuralKind::LABELS);
+    }
+
+    /// Runtime cross-check that the SAME thirteen family-wide
+    /// `[&'static str; N]` arrays declared under this module that
+    /// the compile-time `const _: () = crate::ast::
+    /// assert_str_array_all_ascii(&…)` witness block above pins at
+    /// `cargo check` time are all-ASCII at runtime too. Sibling to
+    /// `assert_str_array_pairwise_distinct_accepts_every_family_
+    /// wide_error_module_array` on the (contract-shape) column —
+    /// the two together pin BOTH the INJECTIVITY axis AND the
+    /// ASCII-BYTE-RANGE axis on the SAME thirteen arrays, at TWO
+    /// stages of the toolchain (compile-time `const _` line + this
+    /// runtime safety-net). Includes `CompilerSpecIoStage::
+    /// OPERATIONS` — which is DELIBERATELY excluded from the
+    /// pairwise-distinct sibling because its four entries are
+    /// intentionally-collapsed onto two per-operation labels but
+    /// is enrolled here because its two distinct entries
+    /// (`"realize_to_disk"`, `"load_from_disk"`) are ASCII by
+    /// construction.
+    #[test]
+    fn assert_str_array_all_ascii_accepts_every_family_wide_error_module_array() {
+        use crate::ast::assert_str_array_all_ascii;
+        assert_str_array_all_ascii(&CompilerSpecIoStage::LABELS);
+        assert_str_array_all_ascii(&CompilerSpecIoStage::OPERATIONS);
+        assert_str_array_all_ascii(&TemplateInvariantKind::STATIC_MESSAGES);
+        assert_str_array_all_ascii(&TemplateInvariantKind::DYNAMIC_DESCRIPTORS);
+        assert_str_array_all_ascii(&MacroDefHead::KEYWORDS);
+        assert_str_array_all_ascii(&OptionalParamMalformedReason::STATIC_LABELS);
+        assert_str_array_all_ascii(&OptionalParamMalformedReason::DYNAMIC_DESCRIPTORS);
+        assert_str_array_all_ascii(&UnquoteForm::MARKERS);
+        assert_str_array_all_ascii(&UnquoteForm::IAC_FORGE_TAGS);
+        assert_str_array_all_ascii(&UnquoteForm::LABELS);
+        assert_str_array_all_ascii(&KwargPathKind::LABELS);
+        assert_str_array_all_ascii(&ExpectedKwargShape::LABELS);
+        assert_str_array_all_ascii(&SexpShape::LABELS);
+        assert_str_array_all_ascii(&StructuralKind::LABELS);
     }
 
     /// Confirm `CompilerSpecIoStage::OPERATIONS` — the ONE family-

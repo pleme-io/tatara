@@ -1408,6 +1408,137 @@ const _: () = assert_str_array_all_nonempty(&QuoteForm::IAC_FORGE_TAGS);
 const _: () = assert_str_array_all_nonempty(&QuoteForm::LABELS);
 
 /// Compile-time contract verifier — panics at const evaluation time if
+/// any entry of `arr` carries a byte outside the seven-bit ASCII range
+/// (`>= 0x80`, the first byte of any non-ASCII UTF-8 sequence).
+///
+/// Per-entry peer to [`assert_str_array_all_nonempty`] on the (per-
+/// entry × contract-shape) axis of the (`&'static str`) row: where the
+/// NONEMPTY sibling pins the length-lower-bound gate (`∀ i :
+/// arr[i].len() > 0`), this ASCII sibling pins the byte-range
+/// containment gate (`∀ i, ∀ b ∈ arr[i].as_bytes() : b <= 0x7F`). The
+/// two contracts compose orthogonally — an array carrying `["café"]`
+/// passes NONEMPTY while failing ASCII; an array carrying `["", "a"]`
+/// passes ASCII while failing NONEMPTY. Together with the INJECTIVITY
+/// sibling ([`assert_str_array_pairwise_distinct`]) the substrate's
+/// (per-entry × contract-shape) coverage matrix on the (`&'static
+/// str`) row closes at THREE corners: {NONEMPTY, ASCII, INJECTIVITY}
+/// on the SAME five outer-algebra arrays declared here.
+///
+/// The invariant is load-bearing for every consumer that ships an
+/// array entry through a downstream surface whose canonical form is
+/// seven-bit-clean — Kubernetes annotation keys + label values (RFC
+/// 1123 subset of ASCII); YAML flow-scalar map keys the reader-boundary
+/// prefix vocabulary threads through the four-Lisp projection; BLAKE3
+/// hash inputs on the three-pillar attestation chain (identical byte
+/// sequences hash identically regardless of encoding, but authoring a
+/// non-ASCII label silently invites U+FEFF BOMs and Unicode-normalization
+/// drift on the wire); Rust `matches!(s, "quote" | …)` byte-pattern
+/// arms the compiler lowers to `[u8]` comparison. Post-lift a
+/// regression that silently re-inlined one label constant to a byte-
+/// equivalent non-ASCII spelling (e.g. `AtomKind::SYMBOL_LABEL =
+/// "sýmbol";`, a lookalike that would parse as a Rust `&'static str`
+/// but ship non-ASCII bytes at every consumer) fails at `cargo check`
+/// BEFORE any test scheduler runs.
+///
+/// Adding a new family-wide `[&'static str; N]` label / prefix / tag /
+/// literal vocabulary whose canonical spelling is seven-bit-clean:
+/// pair the declaration with `const _: () =
+/// assert_str_array_all_ascii(&Self::FOO_ARRAY);` co-located after
+/// the array's declaration and the ASCII-BYTE-RANGE contract binds at
+/// compile time. The rustc-forced arity `[&'static str; N]` composes
+/// with this const-eval sweep so BOTH cardinality AND per-entry ASCII
+/// are compile-time theorems on the SAME array declaration.
+///
+/// Runtime callability: the function is a normal `pub const fn`, so
+/// callers CAN also invoke it at runtime — pinned by
+/// `assert_str_array_all_ascii_panics_at_runtime_on_head_non_ascii` /
+/// `_interior_non_ascii` / `_tail_non_ascii` and
+/// `assert_str_array_all_ascii_panic_message_names_the_helper_and_axis`.
+/// The panic site carries the `"STR-NON-ASCII-ENTRY"` axis-provenance
+/// string chosen DISTINCT from every sibling helper's axis vocabulary
+/// (`"duplicate"` on the pairwise-distinct sibling; `"STR-EMPTY-
+/// ENTRY"` on the per-entry NONEMPTY sibling; `"STR-DISJOINTNESS-
+/// VIOLATION"` on the arrays-disjoint sibling; `"STR-SUBSET-
+/// VIOLATION"` on the within-finite-set sibling) so a diagnostic that
+/// names the failed axis routes UNAMBIGUOUSLY to THIS specific ASCII
+/// helper.
+///
+/// Theory grounding:
+/// - THEORY.md §V.1 — knowable platform; the family-wide per-entry
+///   ASCII-byte-range contract on the substrate's `&'static str`
+///   label vocabulary becomes a TYPE-LEVEL theorem the substrate
+///   carries per array declaration rather than a runtime test the
+///   developer must remember to write per label constant.
+/// - THEORY.md §II.1 invariant 1 — typed entry; a closed-set variant's
+///   label projection is the entry-point discriminator into the typed
+///   algebra, and a non-ASCII byte in that projection silently
+///   escapes the seven-bit-clean assumption every downstream wire
+///   surface encodes into its own byte-level parser.
+/// - THEORY.md §VI.1 — generation over composition; the const-eval
+///   byte-range sweep IS the generative shape. Every new closed-set
+///   label array adds ONE `const _` line to get the ASCII theorem
+///   rather than re-deriving a per-array runtime iterator sweep at
+///   each call site.
+pub const fn assert_str_array_all_ascii<const N: usize>(arr: &[&'static str; N]) {
+    let mut i = 0;
+    while i < N {
+        let bytes = arr[i].as_bytes();
+        let mut j = 0;
+        while j < bytes.len() {
+            if bytes[j] > 0x7F {
+                panic!(
+                    "assert_str_array_all_ascii: STR-NON-ASCII-ENTRY — \
+                     the family-wide &'static str array carries an \
+                     entry with a byte outside the seven-bit ASCII \
+                     range (>= 0x80) at some position — the \
+                     substrate's ASCII-BYTE-RANGE contract on the \
+                     array is broken; every consumer that ships an \
+                     entry through a seven-bit-clean downstream \
+                     surface (K8s annotation keys + label values; \
+                     YAML flow-scalar map keys; BLAKE3 hash inputs on \
+                     the three-pillar attestation chain; Rust \
+                     `matches!(s, ...)` byte-pattern arms) treats \
+                     each entry as ASCII — a non-ASCII byte silently \
+                     invites Unicode-normalization drift on the wire, \
+                     BOM injection, and lookalike-label collisions \
+                     that byte-equality parsing cannot detect. Fix at \
+                     the ARRAY-DECLARATION site by re-inlining the \
+                     offending label constant to its seven-bit-clean \
+                     canonical spelling"
+                );
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+}
+
+// Compile-time ASCII-BYTE-RANGE witnesses — one `const _: () =
+// assert_str_array_all_ascii(&…)` per family-wide `[&'static str; N]`
+// array on the substrate's closed-set outer algebras. Each invocation
+// is const-evaluated at `cargo check` time; a regression that
+// silently re-inlined one label constant to a lookalike non-ASCII
+// spelling fails the build rather than deferring to a per-consumer
+// byte-parse misbehavior at runtime. Sibling to the NONEMPTY witnesses
+// above — those pin the per-entry length-lower-bound gate on each
+// array, these pin the strictly-orthogonal per-entry byte-range gate
+// on the SAME arrays. The two contracts compose orthogonally on every
+// closed-set outer algebra's label vocabulary. The five arrays covered
+// here mirror the five arrays already pinned by the `_pairwise_distinct`
+// AND `_all_nonempty` witnesses above — the (per-entry × contract-shape)
+// coverage matrix on the (`&'static str`) row of this file now holds
+// at THREE corners {NONEMPTY, ASCII, INJECTIVITY} for the five outer-
+// algebra arrays declared here. Analogous witnesses on the (`&'static
+// str`) arrays declared under `crate::error` land co-located with the
+// pre-existing `_pairwise_distinct` + `_all_nonempty` witnesses at
+// that file's module-level prelude.
+const _: () = assert_str_array_all_ascii(&Atom::BOOL_LITERALS);
+const _: () = assert_str_array_all_ascii(&AtomKind::LABELS);
+const _: () = assert_str_array_all_ascii(&QuoteForm::PREFIXES);
+const _: () = assert_str_array_all_ascii(&QuoteForm::IAC_FORGE_TAGS);
+const _: () = assert_str_array_all_ascii(&QuoteForm::LABELS);
+
+/// Compile-time contract verifier — panics at const evaluation time if
 /// any entry of `a` aliases any entry of `b` byte-for-byte through
 /// [`str::as_bytes`].
 ///
@@ -35873,6 +36004,224 @@ mod tests {
             "assert_str_array_all_nonempty panic message {msg:?} must \
              name the failed axis as `STR-EMPTY-ENTRY` DISTINCT from \
              every sibling helper's axis vocabulary",
+        );
+        // Trailing gate — the sibling `_all_ascii` axis vocabulary
+        // (`STR-NON-ASCII-ENTRY`) must NOT appear in the NONEMPTY
+        // helper's panic message. Guards against a copy-paste
+        // regression that drifted the two helpers' axis-provenance
+        // strings onto the same slot.
+        assert!(
+            !msg.contains("STR-NON-ASCII-ENTRY"),
+            "assert_str_array_all_nonempty panic message {msg:?} \
+             must NOT name the ASCII-sibling axis — the two per-\
+             entry helpers must keep their axis-provenance strings \
+             lexically distinct",
+        );
+    }
+
+    // ── assert_str_array_all_ascii — the per-entry ASCII-BYTE-RANGE
+    // gate sibling of `assert_str_array_all_nonempty` on the
+    // (`&'static str`) row's (per-entry × contract-shape) axis. ──
+
+    #[test]
+    fn assert_str_array_all_ascii_accepts_the_empty_array() {
+        // Empty array — vacuously all-ASCII (no entry to fail the
+        // byte-range gate). The compile-time `const _: () =
+        // assert_str_array_all_ascii(&EMPTY);` would land on this
+        // arm, so the runtime call MUST return normally.
+        assert_str_array_all_ascii::<0>(&[]);
+    }
+
+    #[test]
+    fn assert_str_array_all_ascii_accepts_ascii_singleton_arrays() {
+        // Singleton array carrying an all-ASCII entry — the sole
+        // entry clears the byte-range gate. Cross-arity coverage on
+        // the `[&'static str; 1]` corner of the const-N generic.
+        assert_str_array_all_ascii(&["a"]);
+        assert_str_array_all_ascii(&[Atom::TRUE_LITERAL]);
+    }
+
+    #[test]
+    fn assert_str_array_all_ascii_accepts_the_empty_entry() {
+        // Vacuous-inner-loop corner — a zero-length entry has no
+        // byte to fail the range gate, so the helper MUST accept.
+        // Positive-orthogonal pin against the NONEMPTY sibling — a
+        // regression that fused the two contracts into one (rejecting
+        // `""` on the ASCII sweep) would fail this pin. The two
+        // per-entry contracts stay independent axes on the SAME row.
+        assert_str_array_all_ascii(&[""]);
+        assert_str_array_all_ascii(&["", "a", ""]);
+    }
+
+    #[test]
+    fn assert_str_array_all_ascii_accepts_every_family_wide_substrate_array() {
+        // Runtime cross-check that the SAME five arrays the module-
+        // level `const _: () = ...` witnesses cover at COMPILE time
+        // are all-ASCII. Sibling posture to the runtime
+        // `_pairwise_distinct` + `_all_nonempty` cross-checks — the
+        // three together pin BOTH the INJECTIVITY axis AND the
+        // NONEMPTY-CARDINALITY-LOWER-BOUND axis AND the ASCII-BYTE-
+        // RANGE axis on the SAME five arrays, at TWO stages of the
+        // toolchain (compile-time `const _` line + this runtime
+        // safety-net).
+        assert_str_array_all_ascii(&Atom::BOOL_LITERALS);
+        assert_str_array_all_ascii(&AtomKind::LABELS);
+        assert_str_array_all_ascii(&QuoteForm::PREFIXES);
+        assert_str_array_all_ascii(&QuoteForm::IAC_FORGE_TAGS);
+        assert_str_array_all_ascii(&QuoteForm::LABELS);
+    }
+
+    #[test]
+    fn assert_str_array_all_ascii_accepts_the_ascii_boundary_byte() {
+        // Boundary-inclusive pin on the ASCII byte range's upper
+        // edge — byte `0x7F` (DEL, the last ASCII byte) MUST be
+        // accepted. Guards against an off-by-one regression that
+        // walked `bytes[j] >= 0x7F` and spuriously rejected the
+        // sole `0x7F` character. Together with the negative pins
+        // below (which fire on `0x80` — the first non-ASCII byte),
+        // the two pin the byte-range boundary at both edges.
+        assert_str_array_all_ascii(&["\u{7F}"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_str_array_all_ascii")]
+    fn assert_str_array_all_ascii_panics_at_runtime_on_singleton_non_ascii() {
+        // NEGATIVE PIN — singleton corner: a one-element array
+        // carrying a non-ASCII entry MUST panic. Pins the helper's
+        // own reject-non-ascii arm on the smallest possible array
+        // shape. The two-byte UTF-8 sequence `"é"` (0xC3 0xA9) fires
+        // on the leading high-byte `0xC3`.
+        assert_str_array_all_ascii(&["é"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_str_array_all_ascii")]
+    fn assert_str_array_all_ascii_panics_at_runtime_on_head_non_ascii() {
+        // NEGATIVE PIN — head corner: the non-ASCII entry at
+        // position 0 MUST fire even when subsequent entries are
+        // ASCII. Pins the outer sweep's inclusive-start behavior
+        // — a regression that walked `while i < N { … i += 1 }`
+        // from an off-by-one start (`i = 1`) would silently accept
+        // a leading non-ASCII entry.
+        assert_str_array_all_ascii(&["café", "a", "b"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_str_array_all_ascii")]
+    fn assert_str_array_all_ascii_panics_at_runtime_on_interior_non_ascii() {
+        // NEGATIVE PIN — interior corner: the non-ASCII entry at a
+        // strictly-interior position MUST fire. Pins the outer
+        // sweep's non-early-exit behavior at the head-arm — a
+        // regression that returned `Ok` on the first ASCII entry
+        // (bailing out of the sweep prematurely) would silently
+        // accept an interior non-ASCII entry.
+        assert_str_array_all_ascii(&["a", "café", "b"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_str_array_all_ascii")]
+    fn assert_str_array_all_ascii_panics_at_runtime_on_tail_non_ascii() {
+        // NEGATIVE PIN — tail corner: the non-ASCII entry at
+        // position `N - 1` MUST fire. Pins the outer `while i < N`
+        // upper bound — a regression that walked `while i < N - 1`
+        // (dropping the last slot) would silently accept a trailing
+        // non-ASCII entry.
+        assert_str_array_all_ascii(&["a", "b", "c", "café"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_str_array_all_ascii")]
+    fn assert_str_array_all_ascii_panics_at_runtime_on_interior_byte_non_ascii() {
+        // NEGATIVE PIN — interior-byte corner: the non-ASCII byte at
+        // a strictly-interior position WITHIN a single entry MUST
+        // fire. Pins the inner `while j < bytes.len()` sweep's
+        // non-early-exit behavior — a regression that returned on
+        // the first ASCII byte within an entry (bailing out of the
+        // inner sweep prematurely at `bytes[0] <= 0x7F`) would
+        // silently accept a non-ASCII byte in a strictly-interior
+        // slot of the entry.
+        assert_str_array_all_ascii(&["asdéf"]);
+    }
+
+    #[test]
+    #[should_panic(expected = "assert_str_array_all_ascii")]
+    fn assert_str_array_all_ascii_panics_on_the_first_non_ascii_byte() {
+        // NEGATIVE PIN — first-non-ASCII-byte boundary: byte `0x80`
+        // (the smallest non-ASCII byte) MUST fire. Guards against
+        // an off-by-one regression that walked `bytes[j] > 0x80`
+        // (dropping `0x80` from the reject set). Together with
+        // `_accepts_the_ascii_boundary_byte` (which pins `0x7F`
+        // acceptance), the two pin the byte-range boundary at both
+        // edges. UTF-8 lowest continuation byte in isolation is not
+        // well-formed, so we use `"\u{80}"` — which is the two-byte
+        // sequence `0xC2 0x80` — either byte is `> 0x7F` so the
+        // sweep fires on the leading byte `0xC2` regardless.
+        assert_str_array_all_ascii(&["\u{80}"]);
+    }
+
+    #[test]
+    fn assert_str_array_all_ascii_rejects_the_all_non_ascii_array() {
+        // POSITIVE-ORTHOGONAL PIN — the ALL-non-ASCII corner: an
+        // array whose every entry contains a non-ASCII byte fires
+        // the helper on the FIRST entry (the head-arm). Confirms
+        // the helper does not silently accept an array whose every
+        // entry ships non-ASCII bytes.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_str_array_all_ascii(&["café", "über"]);
+        });
+        outcome.expect_err(
+            "assert_str_array_all_ascii must panic on an array whose \
+             every entry carries a non-ASCII byte — the head-arm \
+             fires on the first non-ASCII byte at position 0",
+        );
+    }
+
+    #[test]
+    fn assert_str_array_all_ascii_panic_message_names_the_helper_and_axis() {
+        // PANIC-MESSAGE PROVENANCE PIN: the panic message MUST
+        // begin with the helper's own name AND name the failed axis
+        // as `"STR-NON-ASCII-ENTRY"` (chosen DISTINCT from every
+        // sibling helper's axis vocabulary: `"duplicate"` on the
+        // pairwise-distinct sibling; `"STR-EMPTY-ENTRY"` on the
+        // per-entry NONEMPTY sibling; `"STR-DISJOINTNESS-VIOLATION"`
+        // on the arrays-disjoint sibling; `"STR-SUBSET-VIOLATION"`
+        // on the within-finite-set sibling) so a diagnostic that
+        // names the failed axis routes UNAMBIGUOUSLY to THIS
+        // specific ASCII helper.
+        let outcome = std::panic::catch_unwind(|| {
+            assert_str_array_all_ascii(&["é"]);
+        });
+        let payload = outcome.expect_err(
+            "assert_str_array_all_ascii must panic on a non-ASCII \
+             entry — the reject-non-ascii arm is the point of the \
+             helper",
+        );
+        let msg = payload
+            .downcast_ref::<&'static str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .expect(
+                "assert_str_array_all_ascii panic payload must be a \
+                 static &str or String",
+            );
+        assert!(
+            msg.contains("assert_str_array_all_ascii"),
+            "assert_str_array_all_ascii panic message {msg:?} must \
+             name the helper for provenance-preserving failure \
+             diagnostics",
+        );
+        assert!(
+            msg.contains("STR-NON-ASCII-ENTRY"),
+            "assert_str_array_all_ascii panic message {msg:?} must \
+             name the failed axis as `STR-NON-ASCII-ENTRY` DISTINCT \
+             from every sibling helper's axis vocabulary",
+        );
+        assert!(
+            !msg.contains("STR-EMPTY-ENTRY"),
+            "assert_str_array_all_ascii panic message {msg:?} must \
+             NOT name the NONEMPTY-sibling axis — the two per-entry \
+             helpers must keep their axis-provenance strings \
+             lexically distinct",
         );
     }
 

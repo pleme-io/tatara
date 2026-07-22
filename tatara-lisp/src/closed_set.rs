@@ -19685,6 +19685,277 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "sorted antimodal variants" projection
+    /// — the `Vec<Self>` LEX-ORDER witness-collection of EVERY variant of
+    /// [`Self::sorted_variants`] whose per-target count equals
+    /// [`Self::min_variant_count`], preserving [`Self::sorted_variants`]'s
+    /// canonical ASCII-lex order and returning the empty vector when
+    /// `items` is empty. The FINAL corner CLOSING the (return-shape ×
+    /// direction × ordering) 2×2×2 = 8-corner cube at its (Vec<Self>,
+    /// argmin, lex) corner. The LEX-ORDER peer of [`Self::antimodal_variants`]
+    /// one ORDERING axis over on the argmin arm — peer to
+    /// [`Self::sorted_modal_variants`] one DIRECTION axis over on the
+    /// lex-ordering arm. One RETURN-SHAPE axis over from
+    /// [`Self::sorted_antimodal_variant`] (`Option<Self>` first-witness
+    /// under the lex tie-break): while [`Self::sorted_antimodal_variant`]
+    /// reports the FIRST tied argmin variant walked in lex order, this
+    /// projection reports EVERY tied argmin variant walked in lex order —
+    /// a COMPLETE witness-collection with a canonical alphabetic display
+    /// order, no tie-break choice. Not a fresh substrate primitive on
+    /// the index axis — the projection emerges from ONE
+    /// `T::sorted_variants().into_iter().filter(|&v|
+    /// T::count_occurrences_of(v, items) == T::min_variant_count(items))
+    /// .collect()` sweep whose predicate binds
+    /// [`Self::count_occurrences_of`] against the just-lifted
+    /// [`Self::min_variant_count`] scalar, guarded by an empty-slice
+    /// short-circuit that maps `&[]` to `Vec::new()` past the (min == 0,
+    /// every-count == 0) degenerate arm where an unguarded sweep would
+    /// silently return `T::sorted_variants()`.
+    ///
+    /// Multiset-agreement identity: for every slice `items`,
+    /// `T::sorted_antimodal_variants(items)` is a LEX-ORDER PERMUTATION
+    /// of `T::antimodal_variants(items)` — the two projections agree as
+    /// multisets because both filter under the same predicate
+    /// (`count(v) == T::min_variant_count(items)`); they differ ONLY in
+    /// the walk order that generates the returned Vec (declaration order
+    /// vs lex order). Sibling posture to
+    /// `sorted_modal_variants_is_a_lex_permutation_of_modal_variants_across_every_triple`
+    /// one DIRECTION axis over. Pinned by
+    /// `sorted_antimodal_variants_is_a_lex_permutation_of_antimodal_variants_across_every_triple`.
+    ///
+    /// First-witness identity: for every NON-EMPTY slice `items`,
+    /// `T::sorted_antimodal_variants(items).first().copied() ==
+    /// T::sorted_antimodal_variant(items)` — the plural's HEAD equals
+    /// the singular's commit because both walk [`Self::sorted_variants`]
+    /// in lex order and commit at the first tied argmin. Pinned by
+    /// `sorted_antimodal_variants_head_agrees_with_sorted_antimodal_variant_across_every_triple`.
+    ///
+    /// Count-composition identity: for every slice `items` and every
+    /// variant `v` in the returned Vec,
+    /// `T::count_occurrences_of(v, items) == T::min_variant_count(items)`
+    /// — every element of the returned Vec achieves the least-common
+    /// multiplicity exactly. Pinned by
+    /// `sorted_antimodal_variants_elements_agree_with_min_variant_count_across_every_triple`.
+    ///
+    /// Direction-axis degeneracy identity (flat-histogram slices): on
+    /// any flat-histogram slice (where `T::max_variant_count(items) ==
+    /// T::min_variant_count(items)`), `T::sorted_antimodal_variants(items)
+    /// == T::sorted_modal_variants(items)` — the argmin and argmax
+    /// lex-order witness-collections COINCIDE because the min-count band
+    /// and max-count band ARE the same band. Sibling posture to
+    /// `antimodal_variants_equals_modal_variants_on_flat_histogram_slices_across_every_kind`
+    /// one ORDERING axis over. Pinned on the full-set and doubled-full-
+    /// set fixpoints. Pinned by
+    /// `sorted_antimodal_variants_equals_sorted_modal_variants_on_flat_histogram_slices_across_every_kind`.
+    ///
+    /// Missing-variants identity (min == 0 fixpoint): for every slice
+    /// `items` with [`Self::is_missing_any`] holding (equivalently,
+    /// [`Self::min_variant_count`]`(items) == 0`),
+    /// `T::sorted_antimodal_variants(items) ==
+    /// T::sorted_missing_variants(items)` — on any slice with a missing
+    /// variant, the argmin filter collapses onto the SORTED MISSING
+    /// witness-collection because every present variant hits count `>=
+    /// 1 > 0`, and every missing variant hits count `== 0 == min`, all
+    /// walked in lex order. The lex-order argmin projection ABSORBS the
+    /// lex-order missing-witness projection at the min == 0 slice arm
+    /// without an extra substrate primitive. Sibling posture to
+    /// `antimodal_variants_equals_missing_variants_when_min_is_zero_across_every_triple`
+    /// one ORDERING axis over. Pinned by
+    /// `sorted_antimodal_variants_equals_sorted_missing_variants_when_min_is_zero_across_every_triple`.
+    ///
+    /// Non-emptiness identity:
+    /// `T::sorted_antimodal_variants(items).is_empty()` iff
+    /// `items.is_empty()` on every slice — the empty-slice arm is the
+    /// SOLE empty-Vec arm; on every non-empty slice the filter hits at
+    /// least one variant whose count equals [`Self::min_variant_count`]
+    /// (the finite discrete histogram achieves its min at at least one
+    /// bin). Pinned by
+    /// `sorted_antimodal_variants_is_non_empty_iff_slice_is_non_empty_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::sorted_antimodal_variants(&[])` is the
+    /// empty `Vec<Self>` UNCONDITIONALLY — the empty slice hits zero
+    /// positions, so every per-variant occurrence count is `0`,
+    /// [`Self::min_variant_count`] collapses to `0`, and an UNGUARDED
+    /// `T::sorted_variants().into_iter().filter(|v| count(v) == 0)
+    /// .collect()` sweep would silently return `T::sorted_variants()`
+    /// past the (min == 0, every-count == 0) degenerate arm — the empty
+    /// guard maps `&[]` to `Vec::new()` before the sweep. The empty-Vec-
+    /// at-empty fixpoint is LOAD-BEARING as the drift catch for an
+    /// override that omits the guard. Pinned by clause (130) and by
+    /// `sorted_antimodal_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Full-set contract:
+    /// `T::sorted_antimodal_variants(<T as ClosedSet>::ALL)` equals
+    /// `T::sorted_variants()` UNCONDITIONALLY — the closed-set well-
+    /// formedness invariant [`assert_closed_set_well_formed`]'s clause
+    /// (3) pins variants as pairwise distinct, so every variant appears
+    /// at exactly one position in the full-set slice, every per-variant
+    /// count is `1`, [`Self::min_variant_count`] collapses to `1`, and
+    /// the filter hits EVERY variant walked in lex order — the flat-
+    /// histogram fixpoint pins the direction-axis degeneracy (argmin
+    /// and argmax coincide) at the lex-ordering arm. The lex-order arm
+    /// is LOAD-BEARING as the drift catch for an override that walks
+    /// [`Self::ALL`] instead of [`Self::sorted_variants`] — a
+    /// declaration-order filter on the full set would return
+    /// `T::ALL.to_vec()`, bifurcating the lex-order walk when
+    /// `T::first() != T::sorted_first()`. Pinned by clause (130) and by
+    /// `sorted_antimodal_variants_returns_sorted_variants_on_the_full_set_across_every_kind`.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::sorted_antimodal_variants(&doubled_full_set)` equals
+    /// `T::sorted_variants()` UNCONDITIONALLY — the doubled-full-set
+    /// slice appends [`Self::ALL`] to itself, so every variant appears
+    /// at EXACTLY two positions, [`Self::min_variant_count`] collapses
+    /// to `2`, and the filter hits EVERY variant walked in lex order.
+    /// The flat-histogram fixpoint pins the direction-axis degeneracy
+    /// at the doubled endpoint too. Pinned by
+    /// `sorted_antimodal_variants_returns_sorted_variants_on_the_doubled_full_set_across_every_kind`.
+    ///
+    /// Matching-singleton contract:
+    /// `T::sorted_antimodal_variants(&[v])` is `vec![v]` at cardinality
+    /// 1 and depends on cardinality for larger sets — at
+    /// `T::CARDINALITY >= 2`, a matching singleton hits `count(v) == 1
+    /// == max` for the target and `count(w) == 0 == min` for every
+    /// other variant `w != v`, so the lex-order argmin filter yields
+    /// the LEX-ORDER-PRESERVING sub-slice of `T::sorted_variants()`
+    /// obtained by dropping the target (every non-target variant
+    /// walked in lex order). Sibling posture to
+    /// `antimodal_variants_returns_the_non_target_variants_on_matching_singleton_at_cardinality_gte_two_across_every_kind`
+    /// one ORDERING axis over: the declaration-order plural drops the
+    /// target from `T::ALL`; the lex-order plural drops the target from
+    /// `T::sorted_variants()`. Pinned by
+    /// `sorted_antimodal_variants_returns_the_non_target_variants_on_matching_singleton_at_cardinality_gte_two_across_every_kind`.
+    ///
+    /// Ordering-axis invariance on the input axis: the projection is
+    /// intrinsically ordering-agnostic on the INPUT axis — permuting
+    /// `items` preserves its multiset of variant identities, so
+    /// [`Self::count_occurrences_of`] is a function of that multiset
+    /// alone, [`Self::min_variant_count`] is a function of that multiset
+    /// alone, and the filter over [`Self::sorted_variants`] (which does
+    /// NOT depend on `items`' ordering) is a function of that multiset
+    /// alone. Pinned by
+    /// `sorted_antimodal_variants_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of the
+    /// substrate's [`Self::count_occurrences_of`] primitive at the trait
+    /// level, filtered over [`Self::sorted_variants`] via the standard-
+    /// library [`Iterator::filter`] combinator against
+    /// [`Self::min_variant_count`]. The composition uses one
+    /// `is_empty()`-guarded
+    /// `T::sorted_variants().into_iter().filter(|&v| count == min)
+    /// .collect()` sweep, so the sweep costs `O(N log N +
+    /// T::CARDINALITY * n)` on slice arity `n` (the
+    /// [`Self::sorted_variants`] canonical-lex-sort step + one
+    /// [`Self::min_variant_count`] fold + one
+    /// [`Self::CARDINALITY`]-bounded filter sweep, plus one output-`Vec`
+    /// allocation of at most [`Self::CARDINALITY`] entries) — no
+    /// `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's minimal
+    /// `Sized + Copy + 'static` supertrait pair stays untouched), no
+    /// histogram-carrier allocation (the `filter` sweep yields a
+    /// `Vec<Self>` without materializing the intermediate `Vec<usize>`
+    /// histogram; the sweep streams through per-target counts one at a
+    /// time and commits at each tied argmin hit).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::sorted_antimodal_variants`]: a `tatara-check` predicate
+    /// `(check-phases-antimodes-lex …)` that reports EVERY `WorkloadPhase`
+    /// tied at the min-count band in a rollout window under a canonical
+    /// alphabetic display order (distinct from
+    /// [`Self::antimodal_variants`]'s declaration-order-canonical form
+    /// consumed by scheduler-oriented tools routing through declaration
+    /// slots); an LSP diagnostic that reports the full antimodal
+    /// witness-collection as an author-facing "least common
+    /// (alphabetical): `<label1>`, `<label2>` (each appears N times)"
+    /// hint aligned with lex-ordered enumeration surfaces; a Sekiban
+    /// audit-trail per-window classification argmin witness-collection
+    /// whose element order matches the UI's lex-ordered navigation menu
+    /// (so the audit trail and the UI's default enumeration always agree
+    /// on tied windows); a metric-emitter that binds a Prometheus-style
+    /// `antimode_variants_lex` label alongside the sibling
+    /// `antimode_variants_decl` label so tied-argmin rollouts surface
+    /// BOTH complete witness-collections on the same gauge. Each binds
+    /// to ONE typed `Vec<Self>`-return lex-order witness-collection
+    /// aggregate on the trait rather than re-deriving
+    /// `T::sorted_variants().into_iter().filter(|&v|
+    /// T::count_occurrences_of(v, items) ==
+    /// T::min_variant_count(items)).collect()` inline (behind an
+    /// `is_empty()` short-circuit) per callsite.
+    ///
+    /// Compounding closure: this projection CLOSES the (set-level ×
+    /// `Vec<Self>` × statistical-aggregate × direction × ordering) 2×2×2
+    /// = 8-corner cube at its FINAL (Vec<Self>, argmin, lex) corner. All
+    /// four (return-shape × direction × ordering) Vec-return corners
+    /// (argmax declaration [`Self::modal_variants`], argmax lex
+    /// [`Self::sorted_modal_variants`], argmin declaration
+    /// [`Self::antimodal_variants`], argmin lex [`Self::sorted_antimodal_variants`])
+    /// now close at every corner, PARALLELING the four (return-shape ×
+    /// direction × ordering) Option-return corners (argmax declaration
+    /// [`Self::modal_variant`], argmax lex [`Self::sorted_modal_variant`],
+    /// argmin declaration [`Self::antimodal_variant`], argmin lex
+    /// [`Self::sorted_antimodal_variant`]) closed one RETURN-SHAPE axis
+    /// over. The (return-shape × direction × ordering) 2×2×2 = 8-corner
+    /// cube's `Vec<Self>` face + its `Option<Self>` face are BOTH FULLY
+    /// CLOSED as of this lift — the (return-shape × direction × ordering
+    /// × return-arity) 2×2×2×2 = 16-corner hypercube's statistical-
+    /// aggregate slab pins every corner. Future consumers wanting a
+    /// `usize`-return "how many antimodes tie?" scalar compose on this
+    /// projection through `.len()` without an additional substrate
+    /// primitive.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// `Vec<Self>`-return lex-order argmin witness-collection becomes a
+    /// TYPE-level primitive on the closed-set trait rather than a per-
+    /// consumer inline
+    /// `T::sorted_variants().into_iter().filter(|&v| T::count_occurrences_of(v, items) == T::min_variant_count(items)).collect()`
+    /// composition. THEORY.md §V.1 — knowable platform; the (set-level
+    /// × `Vec<Self>` × argmin × lex-order) witness-collection corner was
+    /// an unnamed inline composition recurring at every prospective
+    /// downstream "which variants ALL tie for the histogram's floor
+    /// under a canonical alphabetic display order?" site pre-lift.
+    /// Naming it on the trait makes the projection a TYPED CONSEQUENCE
+    /// of the substrate's per-target multiplicity primitive
+    /// [`Self::count_occurrences_of`] filtered over
+    /// [`Self::sorted_variants`] against [`Self::min_variant_count`].
+    /// THEORY.md §VI.1 — generation over composition; the lex-order
+    /// argmin witness-collection emerges from the composition of THREE
+    /// substrate primitives ([`Self::sorted_variants`] +
+    /// [`Self::count_occurrences_of`] + [`Self::min_variant_count`])
+    /// with an `into_iter().filter().collect()` combinator, not as a
+    /// per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: R's `sort(names(table(items))[table(items)
+    /// == min(table(items))])` — the lex-sorted direction-anchor filter
+    /// yielding every argmin key on a factor histogram; Julia's
+    /// `sort([k for (k, v) in StatsBase.countmap(items) if v ==
+    /// minimum(values(StatsBase.countmap(items)))])` on ties; Python's
+    /// `sorted([k for k, v in collections.Counter(items).items() if v
+    /// == min(collections.Counter(items).values())])` yielding the
+    /// alphabetic-sorted complete antimodal set on ties; Haskell's
+    /// `sort . map fst . filter (\(_, n) -> n == minimum (map snd hist))
+    /// $ hist` on `Ord`-instance carriers; Racket's `(sort (filter (λ
+    /// (v) (= (count-occ v items) (min-count items))) T) string<?
+    /// #:key label)`. Translation through pleme-io primitives: the
+    /// N-ary `Vec<Self>`-return lex-order argmin witness-collection on
+    /// the closed-set trait binds through [`Self::sorted_variants`]
+    /// composed with the substrate's per-target multiplicity primitive
+    /// [`Self::count_occurrences_of`] against
+    /// [`Self::min_variant_count`] — no new dep, no supertrait bound
+    /// (the [`Self::index_of`] projection [`Self::count_occurrences_of`]
+    /// threads through and [`Self::sorted_variants`]'s ASCII-
+    /// `sort_unstable_by_key` replace the `Eq`/`Hash` + `Ord` bound the
+    /// standard-library counter+lex-sort signatures demand), no
+    /// histogram-carrier allocation.
+    fn sorted_antimodal_variants(items: &[Self]) -> ::std::vec::Vec<Self> {
+        if items.is_empty() {
+            return ::std::vec::Vec::new();
+        }
+        let min = <Self as ClosedSet>::min_variant_count(items);
+        <Self as ClosedSet>::sorted_variants()
+            .into_iter()
+            .filter(|&v| <Self as ClosedSet>::count_occurrences_of(v, items) == min)
+            .collect()
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "any variant repeating?" predicate —
     /// `true` iff AT LEAST ONE variant of [`Self::ALL`] appears TWO OR
     /// MORE times in `items`, computed as the just-lifted usize-return
@@ -33203,6 +33474,94 @@ where
             Some(head),
             expected_head,
             "{type_name}: T::antimodal_variants(T::ALL).first() drifted from T::antimodal_variant(T::ALL) — the plural's HEAD MUST equal the singular's first-witness commit because both walk T::ALL in declaration order and commit at the first tied argmin; a divergence catches an override that reorders the witnesses on the plural side without threading through the same declaration-order argmin walk the singular pins",
+        );
+    }
+    // (130) — `T::sorted_antimodal_variants(items)` MUST agree with the
+    // lex-order-preserving argmin witness-collection over the
+    // [`T::variant_counts`] histogram on every slice AND MUST land on
+    // its THREE canonical fixpoints (empty vector on the empty slice
+    // UNCONDITIONALLY, `T::sorted_variants()` on the full-set slice
+    // UNCONDITIONALLY, `T::sorted_variants()` on the doubled-full-set
+    // slice UNCONDITIONALLY — the last two anchored by the flat-
+    // histogram fixpoint's direction-axis degeneracy where argmin ==
+    // argmax at every corner at the lex-ordering arm). The three
+    // fixpoints partition the failure modes at the (Vec-shape × ordering
+    // × slice-shape) corner simultaneously: an override that omits the
+    // empty-slice guard fires on the empty-slice arm (returns
+    // `T::sorted_variants()` rather than the empty vector past the (min
+    // == 0, every-count == 0) degenerate arm where every variant hits
+    // `count == 0 == min`); an override that folds onto the empty vector
+    // unconditionally fires on the full-set + doubled-full-set arms
+    // (both flat-histogram fixpoints hit every variant); an override
+    // that walks [`T::ALL`] instead of [`T::sorted_variants`] fires on
+    // the full-set + doubled-full-set arms when `T::first() !=
+    // T::sorted_first()` (returns `T::ALL.to_vec()` rather than
+    // `T::sorted_variants()`, bifurcating the lex-order walk); an
+    // override that returns a Vec whose FIRST element disagrees with
+    // [`T::sorted_antimodal_variant`] on the full-set slice fires at the
+    // composition-equality arm against
+    // `T::sorted_antimodal_variant(T::ALL) == Some(T::sorted_first())`
+    // (on the flat-histogram fixpoint the direction axis collapses so
+    // argmin and argmax agree at the same lex-order-first witness).
+    //
+    // Sibling posture to clause (128) one DIRECTION axis over: clause
+    // (128) closes the (set-level × `Vec<Self>` × statistical-aggregate
+    // × ordering × argmax) 2-corner face at its lex-arm via
+    // [`T::sorted_modal_variants`]; this clause CLOSES the (set-level ×
+    // `Vec<Self>` × statistical-aggregate × ordering × argmin) 2-corner
+    // face at its lex-arm one DIRECTION axis over via
+    // [`T::sorted_antimodal_variants`]. Sibling posture to clause (129)
+    // one ORDERING axis over: clause (129) opens the (set-level ×
+    // `Vec<Self>` × statistical-aggregate × declaration-order × argmin)
+    // COMPLETE-WITNESS corner via [`T::antimodal_variants`]; this clause
+    // CLOSES the (set-level × `Vec<Self>` × statistical-aggregate ×
+    // ordering × argmin) 2-corner face at its lex-arm one ORDERING axis
+    // over via [`T::sorted_antimodal_variants`]. Combined with the four
+    // Vec-return corners already pinned by clauses (127), (128), (129),
+    // this lift CLOSES the (return-shape × direction × ordering) 2×2×2
+    // = 8-corner Vec-return cube on the direction-anchor face at its
+    // final (Vec<Self>, argmin, lex) corner; PARALLELING the four
+    // (Option<Self>, {argmax, argmin}, {declaration, lex}) corners
+    // pinned by clauses (123), (124), (125), (126). The default trait
+    // body threads the `is_empty()`-guarded
+    // `T::sorted_variants().into_iter().filter(|&v|
+    // T::count_occurrences_of(v, items) == T::min_variant_count(items))
+    // .collect()` sweep verbatim and satisfies every fixpoint arm + the
+    // composition-equality arm for free; the assertion catches a future
+    // implementor whose override drifts the projection loudly rather
+    // than silently bifurcating the lex-order argmin witness-collection
+    // surface every downstream alphabetic-antimode consumer routes
+    // through.
+    assert_eq!(
+        T::sorted_antimodal_variants(empty),
+        <::std::vec::Vec<T>>::new(),
+        "{type_name}: T::sorted_antimodal_variants(&[]) drifted from Vec::new() — the empty-slice fixpoint MUST return the empty vector because every per-variant occurrence count collapses to 0 and an UNGUARDED T::sorted_variants().into_iter().filter(|v| count(v) == 0).collect() sweep would silently return T::sorted_variants() past the (min == 0, every-count == 0) degenerate arm where every variant satisfies `count == min == 0`; a non-empty empty-slice value silently bifurcates the empty-slice fixpoint contract every downstream lex-order argmin witness-collection consumer routes through",
+    );
+    let full_sorted_antimodal_variants = T::sorted_antimodal_variants(T::ALL);
+    assert_eq!(
+        full_sorted_antimodal_variants.len(),
+        T::CARDINALITY,
+        "{type_name}: T::sorted_antimodal_variants(T::ALL).len() == {actual_len} != T::CARDINALITY == {cardinality} — clause (3)'s pairwise-distinctness invariant pins every variant of T::ALL at exactly one position on the full-set slice, every per-variant count is 1, T::min_variant_count(T::ALL) == 1, and the argmin witness-collection filter over T::sorted_variants() hits EVERY variant (the flat-histogram fixpoint pins the direction-axis degeneracy at the lex-ordering arm — argmin and argmax coincide); a shorter Vec is the drift catch for an override that folds onto `Vec::new()` unconditionally OR that returns a proper subset of T::sorted_variants() on the full set",
+        actual_len = full_sorted_antimodal_variants.len(),
+        cardinality = T::CARDINALITY,
+    );
+    assert_eq!(
+        full_sorted_antimodal_variants,
+        sorted_all,
+        "{type_name}: T::sorted_antimodal_variants(T::ALL) drifted from T::sorted_variants() element-for-element — the lex-order-preserving argmin witness-collection MUST equal T::sorted_variants() on the full-set slice because every variant hits count == min == 1 and the filter walks T::sorted_variants() in lex order; a divergence is the drift catch for an override that walks T::ALL instead of T::sorted_variants (declaration-order-canonical would return T::ALL.to_vec(), bifurcating the lex-order walk when T::first() != T::sorted_first())",
+    );
+    let doubled_sorted_antimodal_variants = T::sorted_antimodal_variants(&doubled_full_set);
+    assert_eq!(
+        doubled_sorted_antimodal_variants,
+        sorted_all,
+        "{type_name}: T::sorted_antimodal_variants(&doubled_full_set) drifted from T::sorted_variants() element-for-element — every variant of T::ALL appears at exactly two positions of the doubled-full-set slice, every per-variant count is 2, T::min_variant_count(doubled) == 2, and the filter hits EVERY variant walked in lex order; a divergent doubled-full-set value silently bifurcates the lex-order flat-histogram fixpoint contract every downstream complete-antimode consumer routes through",
+    );
+    if let Some(head) = full_sorted_antimodal_variants.first().copied() {
+        let expected_head = T::sorted_antimodal_variant(T::ALL);
+        assert_eq!(
+            Some(head),
+            expected_head,
+            "{type_name}: T::sorted_antimodal_variants(T::ALL).first() drifted from T::sorted_antimodal_variant(T::ALL) — the plural's HEAD MUST equal the singular's first-witness commit because both walk T::sorted_variants() in lex order and commit at the first tied argmin; a divergence catches an override that reorders the witnesses on the plural side without threading through the same lex-order argmin walk the singular pins",
         );
     }
 }
@@ -71864,6 +72223,485 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedAntimodalVariantsKind whose antimodal_variants override omits the empty-slice guard — clause (129)'s empty-slice fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn sorted_antimodal_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (set-level × `Vec<Self>` × statistical-
+        // aggregate × lex-order × argmin witness-collection projection):
+        // `T::sorted_antimodal_variants(&[])` is `Vec::new()`
+        // UNCONDITIONALLY — the empty slice hits zero positions, every
+        // per-variant count collapses to `0`, and an UNGUARDED
+        // `T::sorted_variants().into_iter().filter(|v| count(v) == 0)
+        // .collect()` sweep would silently return `T::sorted_variants()`
+        // past the (min == 0, every-count == 0) degenerate arm. The
+        // empty guard maps `&[]` to `Vec::new()` explicitly. Sibling
+        // posture to
+        // `antimodal_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind`
+        // one ORDERING axis over AND to
+        // `sorted_modal_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind`
+        // one DIRECTION axis over.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_antimodal_variants(empty),
+            <Vec<StubKind>>::new(),
+            "T::sorted_antimodal_variants(&[]) diverged from the empty-slice fixpoint `Vec::new()`",
+        );
+    }
+
+    #[test]
+    fn sorted_antimodal_variants_returns_the_non_target_variants_on_matching_singleton_at_cardinality_gte_two_across_every_kind(
+    ) {
+        // MATCHING-SINGLETON CONTRACT (cardinality >= 2 branch): a
+        // matching singleton `&[v]` hits `count(v) == 1 == max` and
+        // `count(w) == 0 == min` for every non-target variant `w != v`.
+        // The lex-order argmin filter yields the LEX-ORDER-PRESERVING
+        // sub-slice of `T::sorted_variants()` obtained by dropping the
+        // target. Sibling posture to
+        // `antimodal_variants_returns_the_non_target_variants_on_matching_singleton_at_cardinality_gte_two_across_every_kind`
+        // one ORDERING axis over: the declaration-order plural drops
+        // the target from T::ALL; the lex-order plural drops the target
+        // from T::sorted_variants().
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            let actual = <StubKind as ClosedSet>::sorted_antimodal_variants(&singleton);
+            let expected: Vec<StubKind> = <StubKind as ClosedSet>::sorted_variants()
+                .into_iter()
+                .filter(|&w| {
+                    <StubKind as ClosedSet>::index_of(w) != <StubKind as ClosedSet>::index_of(v)
+                })
+                .collect();
+            assert_eq!(
+                actual, expected,
+                "T::sorted_antimodal_variants({singleton:?}) diverged from the (lex-order-preserving non-target sub-slice of T::sorted_variants()) fixpoint",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_antimodal_variants_returns_sorted_variants_on_the_full_set_across_every_kind() {
+        // FULL-SET CONTRACT: `T::sorted_antimodal_variants(T::ALL)`
+        // equals `T::sorted_variants()` UNCONDITIONALLY — clause (3)'s
+        // pairwise-distinctness invariant pins every variant of T::ALL
+        // at exactly one position, every per-variant count is `1`,
+        // `T::min_variant_count(T::ALL) == 1`, and the argmin filter
+        // hits EVERY variant walked in lex order. The flat-histogram
+        // fixpoint pins the direction-axis degeneracy at the lex-
+        // ordering arm — argmin and argmax coincide.
+        let all = <StubKind as ClosedSet>::ALL;
+        let expected = <StubKind as ClosedSet>::sorted_variants();
+        let actual = <StubKind as ClosedSet>::sorted_antimodal_variants(all);
+        assert_eq!(
+            actual, expected,
+            "T::sorted_antimodal_variants(T::ALL) diverged from T::sorted_variants() element-for-element (flat-histogram fixpoint at the lex-ordering arm)",
+        );
+    }
+
+    #[test]
+    fn sorted_antimodal_variants_returns_sorted_variants_on_the_doubled_full_set_across_every_kind()
+    {
+        // DOUBLED-FULL-SET CONTRACT:
+        // `T::sorted_antimodal_variants(T::ALL ++ T::ALL)` equals
+        // `T::sorted_variants()` UNCONDITIONALLY — every variant appears
+        // at exactly two positions of the doubled slice, every per-
+        // variant count is `2`, `T::min_variant_count(doubled) == 2`,
+        // and the argmin filter hits EVERY variant walked in lex order.
+        // The flat-histogram fixpoint pins the direction-axis degeneracy
+        // at the doubled endpoint too.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        let expected = <StubKind as ClosedSet>::sorted_variants();
+        let actual = <StubKind as ClosedSet>::sorted_antimodal_variants(&doubled);
+        assert_eq!(
+            actual, expected,
+            "T::sorted_antimodal_variants(ALL++ALL) diverged from T::sorted_variants() element-for-element",
+        );
+    }
+
+    #[test]
+    fn sorted_antimodal_variants_is_non_empty_iff_slice_is_non_empty_across_every_triple() {
+        // NON-EMPTINESS CONTRACT:
+        // `T::sorted_antimodal_variants(items).is_empty() ==
+        // items.is_empty()` — the argmin witness-collection is empty
+        // iff the slice is empty. Sweeps every length-3 triple × the
+        // empty slice.
+        assert!(
+            <StubKind as ClosedSet>::sorted_antimodal_variants(&[]).is_empty(),
+            "T::sorted_antimodal_variants(&[]) diverged from the empty-slice non-emptiness contract",
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert!(
+                        !<StubKind as ClosedSet>::sorted_antimodal_variants(&triple).is_empty(),
+                        "T::sorted_antimodal_variants({triple:?}) diverged from the non-empty-slice non-emptiness contract",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_antimodal_variants_head_agrees_with_sorted_antimodal_variant_across_every_triple() {
+        // HEAD-COMPOSITION IDENTITY: for every non-empty slice `items`,
+        // `T::sorted_antimodal_variants(items).first().copied() ==
+        // T::sorted_antimodal_variant(items)` — the plural's HEAD equals
+        // the singular's lex-order-first argmin commit because both
+        // walk `T::sorted_variants()` in lex order and commit at the
+        // first tied argmin.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let plural_head = <StubKind as ClosedSet>::sorted_antimodal_variants(&triple)
+                        .first()
+                        .copied();
+                    let singular = <StubKind as ClosedSet>::sorted_antimodal_variant(&triple);
+                    assert_eq!(
+                        plural_head, singular,
+                        "T::sorted_antimodal_variants({triple:?}).first() diverged from T::sorted_antimodal_variant({triple:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_antimodal_variants_elements_agree_with_min_variant_count_across_every_triple() {
+        // PRESENCE-PARTITION IDENTITY: every element of
+        // `T::sorted_antimodal_variants(items)` hits `count ==
+        // T::min_variant_count(items)` — the projection is the level-
+        // set of the per-target multiplicity primitive at the min-
+        // count band. Sweeps every length-3 triple.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let min = <StubKind as ClosedSet>::min_variant_count(&triple);
+                    for &witness in
+                        <StubKind as ClosedSet>::sorted_antimodal_variants(&triple).iter()
+                    {
+                        let count = <StubKind as ClosedSet>::count_occurrences_of(witness, &triple);
+                        assert_eq!(
+                            count, min,
+                            "T::sorted_antimodal_variants({triple:?}) contained {witness:?} whose count {count} disagrees with min_variant_count {min}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_antimodal_variants_equals_sorted_modal_variants_on_flat_histogram_slices_across_every_kind(
+    ) {
+        // DIRECTION-AXIS DEGENERACY IDENTITY (at the lex arm): on any
+        // flat-histogram slice, the argmin and argmax lex-order witness-
+        // collections COINCIDE because the min-count band and max-count
+        // band ARE the same band. Sibling posture to
+        // `antimodal_variants_equals_modal_variants_on_flat_histogram_slices_across_every_kind`
+        // one ORDERING axis over. Pinned on the full-set and doubled-
+        // full-set fixpoints where the flat-histogram invariant holds
+        // unconditionally.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_antimodal_variants(all),
+            <StubKind as ClosedSet>::sorted_modal_variants(all),
+            "T::sorted_antimodal_variants(T::ALL) diverged from T::sorted_modal_variants(T::ALL) on the flat-histogram full-set fixpoint",
+        );
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_antimodal_variants(&doubled),
+            <StubKind as ClosedSet>::sorted_modal_variants(&doubled),
+            "T::sorted_antimodal_variants(ALL++ALL) diverged from T::sorted_modal_variants(ALL++ALL) on the flat-histogram doubled fixpoint",
+        );
+    }
+
+    #[test]
+    fn sorted_antimodal_variants_equals_sorted_missing_variants_when_min_is_zero_across_every_triple(
+    ) {
+        // MISSING-VARIANTS IDENTITY (min == 0 fixpoint at the lex arm):
+        // on any slice with a missing variant (equivalently,
+        // `T::min_variant_count(items) == 0`), the argmin filter
+        // collapses onto the SORTED MISSING witness-collection because
+        // every present variant hits `count >= 1 > 0`, and every
+        // missing variant hits `count == 0 == min`, all walked in lex
+        // order. Sibling posture to
+        // `antimodal_variants_equals_missing_variants_when_min_is_zero_across_every_triple`
+        // one ORDERING axis over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    if <StubKind as ClosedSet>::min_variant_count(&triple) == 0 {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_antimodal_variants(&triple),
+                            <StubKind as ClosedSet>::sorted_missing_variants(&triple),
+                            "T::sorted_antimodal_variants({triple:?}) diverged from T::sorted_missing_variants({triple:?}) on the min == 0 slice arm",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_antimodal_variants_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT: the projection is a
+        // function of the multiset of per-target counts, which is
+        // invariant under any reordering of the slice.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_antimodal_variants(&forward),
+                        <StubKind as ClosedSet>::sorted_antimodal_variants(&reversed),
+                        "T::sorted_antimodal_variants({forward:?}) diverged from T::sorted_antimodal_variants({reversed:?}) under slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_antimodal_variants_is_a_lex_permutation_of_antimodal_variants_across_every_triple() {
+        // MULTISET-AGREEMENT IDENTITY: for every slice `items`,
+        // `T::sorted_antimodal_variants(items)` is a LEX-ORDER
+        // PERMUTATION of `T::antimodal_variants(items)` — the two
+        // projections agree as multisets (both filter under `count(v)
+        // == T::min_variant_count(items)`) and differ ONLY in walk
+        // order (declaration vs lex). Sibling posture to
+        // `sorted_modal_variants_is_a_lex_permutation_of_modal_variants_across_every_triple`
+        // one DIRECTION axis over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let mut decl_indices: Vec<usize> =
+                        <StubKind as ClosedSet>::antimodal_variants(&triple)
+                            .into_iter()
+                            .map(<StubKind as ClosedSet>::index_of)
+                            .collect();
+                    let mut lex_indices: Vec<usize> =
+                        <StubKind as ClosedSet>::sorted_antimodal_variants(&triple)
+                            .into_iter()
+                            .map(<StubKind as ClosedSet>::index_of)
+                            .collect();
+                    decl_indices.sort_unstable();
+                    lex_indices.sort_unstable();
+                    assert_eq!(
+                        decl_indices, lex_indices,
+                        "T::sorted_antimodal_variants({triple:?}) and T::antimodal_variants({triple:?}) diverged as multisets — both projections MUST filter under the same predicate (count == min) and thus agree as multisets, differing ONLY in walk order",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_empty_drift_in_sorted_antimodal_variants() {
+        // Drift catch — clause (130)'s full-set fixpoint arm fires when
+        // an override folds the plural onto `Vec::new()` regardless of
+        // slice-shape (returning empty on the full set rather than
+        // `T::sorted_variants()`).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedAntimodalVariantsEmptyKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedSortedAntimodalVariantsEmptyKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedSortedAntimodalVariantsEmptyKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted sorted_antimodal_variants empty kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedSortedAntimodalVariantsEmptyKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedSortedAntimodalVariantsEmptyKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted sorted_antimodal_variants empty kind";
+            type Unknown = UnknownDriftedSortedAntimodalVariantsEmptyKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedAntimodalVariantsEmptyKind(s.to_owned())
+            }
+            fn sorted_antimodal_variants(_items: &[Self]) -> Vec<Self> {
+                // Drift: return Vec::new() unconditionally. On the
+                // full set that produces `[] != T::sorted_variants()`,
+                // tripping clause (130)'s full-set fixpoint arm loudly.
+                Vec::new()
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedSortedAntimodalVariantsEmptyKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedSortedAntimodalVariantsEmptyKind whose sorted_antimodal_variants override folds onto Vec::new() unconditionally — clause (130)'s full-set fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_all_drift_in_sorted_antimodal_variants() {
+        // Drift catch — clause (130)'s empty-slice fixpoint arm fires
+        // when an override omits the empty-slice guard, returning
+        // `T::sorted_variants()` on the empty slice rather than
+        // `Vec::new()`.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedAntimodalVariantsAllKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedSortedAntimodalVariantsAllKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedSortedAntimodalVariantsAllKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted sorted_antimodal_variants all kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedSortedAntimodalVariantsAllKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedSortedAntimodalVariantsAllKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted sorted_antimodal_variants all kind";
+            type Unknown = UnknownDriftedSortedAntimodalVariantsAllKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedAntimodalVariantsAllKind(s.to_owned())
+            }
+            fn sorted_antimodal_variants(_items: &[Self]) -> Vec<Self> {
+                // Drift: return T::sorted_variants() unconditionally
+                // (omitting the empty-slice guard). On the empty slice
+                // that produces `T::sorted_variants() != []`, tripping
+                // clause (130)'s empty-slice fixpoint arm loudly.
+                <Self as ClosedSet>::sorted_variants()
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedSortedAntimodalVariantsAllKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedSortedAntimodalVariantsAllKind whose sorted_antimodal_variants override omits the empty-slice guard — clause (130)'s empty-slice fixpoint arm MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_walks_all_drift_in_sorted_antimodal_variants() {
+        // Drift catch — clause (130)'s full-set + doubled-full-set arms
+        // fire when an override walks `T::ALL` (declaration order)
+        // instead of `T::sorted_variants()` (lex order) on a closed set
+        // where `T::first() != T::sorted_first()`. On ZetaAlphaBeta the
+        // declaration order is [Zeta, Alpha, Beta] and the lex order is
+        // [Alpha, Beta, Zeta]; on the full-set slice every count is
+        // `1`, so the declaration-order argmin filter yields
+        // [Zeta, Alpha, Beta] (T::ALL) while the pinned lex-order
+        // argmin yields [Alpha, Beta, Zeta] (T::sorted_variants()); the
+        // two bifurcate loudly at the full-set + doubled-full-set arms.
+        // LOAD-BEARING as the drift catch for the exact shape of an
+        // override that accidentally reuses `T::antimodal_variants` (or
+        // an inline `T::ALL.iter()...filter(...).collect()`) for the
+        // sorted argmin.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedAntimodalVariantsWalksAllKind {
+            Zeta,
+            Alpha,
+            Beta,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedSortedAntimodalVariantsWalksAllKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedSortedAntimodalVariantsWalksAllKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted sorted_antimodal_variants walks all kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedSortedAntimodalVariantsWalksAllKind {
+            const ALL: [Self; 3] = [Self::Zeta, Self::Alpha, Self::Beta];
+        }
+
+        impl ClosedSet for DriftedSortedAntimodalVariantsWalksAllKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted sorted_antimodal_variants walks all kind";
+            type Unknown = UnknownDriftedSortedAntimodalVariantsWalksAllKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Zeta => "zeta",
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedAntimodalVariantsWalksAllKind(s.to_owned())
+            }
+            fn sorted_antimodal_variants(items: &[Self]) -> Vec<Self> {
+                // Drift shape: walks T::ALL instead of T::sorted_variants
+                // — the same body as antimodal_variants. Correct on
+                // empty + matching-singleton but BIFURCATES at the full-
+                // set + doubled-full-set flat-histogram fixpoints
+                // because T::first() (Zeta) != T::sorted_first() (Alpha).
+                <Self as ClosedSet>::antimodal_variants(items)
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedSortedAntimodalVariantsWalksAllKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedSortedAntimodalVariantsWalksAllKind whose sorted_antimodal_variants override walks T::ALL instead of T::sorted_variants — clause (130)'s full-set + doubled-full-set arms MUST reject the drift when T::first() != T::sorted_first()",
         );
     }
 }

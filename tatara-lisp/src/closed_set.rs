@@ -30544,6 +30544,230 @@ pub trait ClosedSet: Sized + Copy + 'static {
         }
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "the unique intersection-band witness as
+    /// a singleton-or-empty Vec" projection — returns
+    /// [`Self::bimodal_variants`] iff `items` has a UNIQUE intersection-band
+    /// witness ([`Self::has_unique_bimodal_variant`] holds — equivalently
+    /// the histogram is flat AND `T::CARDINALITY == 1`), else `vec![]`.
+    /// Computed as the just-lifted set-level intersection-band uniqueness
+    /// bit [`Self::has_unique_bimodal_variant`] guarding the declaration-
+    /// order intersection witness-collection [`Self::bimodal_variants`]:
+    /// when the guard holds the collection is already a length-`1` Vec by
+    /// the guard's own definition (`count_bimodal_variants == 1`) and is
+    /// lifted verbatim; when the guard falsifies the projection collapses
+    /// to the EMPTY Vec through a zero-allocation
+    /// `::std::vec::Vec::new()` short-circuit. The `Vec<Self>`-RETURN
+    /// UNIQUE-TIE SHARPENING corner CLOSING the intersection arm of the
+    /// (set-level × `Vec<Self>` × statistical-aggregate × direction-
+    /// composition × combinator × unique-tie) row past the just-opened
+    /// UNION arm [`Self::unique_extremal_variants`] AND the just-closed
+    /// COMPLEMENT arm [`Self::unique_middle_band_variants`] one COMBINATOR
+    /// axis over on the modal-aggregation matrix AND EXHAUSTIVELY CLOSING
+    /// the (`Vec<Self>` × direction-composition × combinator × unique-tie)
+    /// 3-corner row at its FINAL THIRD tile, peer to
+    /// [`Self::unique_bimodal_variant`] (set-level × `Option<Self>` ×
+    /// intersection × unique-tie) one RETURN-SHAPE axis over (Option-
+    /// return witness-when-unique → Vec-return singleton-or-empty-when-
+    /// unique) AND peer to [`Self::has_unique_bimodal_variant`]
+    /// (set-level × `bool` × intersection × unique-tie) one RETURN-SHAPE
+    /// axis over (bool uniqueness bit → Vec-return singleton-or-empty
+    /// carrier of the same bit). Not a fresh substrate primitive on the
+    /// index axis — the projection emerges from the boolean-guarded
+    /// selection of the just-lifted declaration-order intersection
+    /// witness-collection under the set-level intersection-band uniqueness
+    /// bit, collapsing to the empty Vec through the guard-arm when the
+    /// bit falsifies.
+    ///
+    /// Guarded-witness-collection identity: for every slice `items`,
+    /// `T::unique_bimodal_variants(items) == if T::has_unique_bimodal_variant(items) { T::bimodal_variants(items) } else { vec![] }`
+    /// — the canonical form the body uses. Pinned by
+    /// `unique_bimodal_variants_equals_has_unique_bimodal_variant_gated_bimodal_variants_across_every_triple`.
+    ///
+    /// Length coincidence identity: for every slice `items`,
+    /// `T::unique_bimodal_variants(items).len() == usize::from(T::has_unique_bimodal_variant(items))`
+    /// — the return-Vec's length COINCIDES with the set-level intersection-
+    /// band uniqueness bit projected onto `usize`: exactly `0` when the
+    /// bit falsifies, exactly `1` when it holds (since
+    /// `has_unique_bimodal_variant` holds only when
+    /// `count_bimodal_variants == 1`, and the guarded lift of
+    /// [`Self::bimodal_variants`] admits EXACTLY ONE variant on that
+    /// arm). Independent cross-check on the surface axis distinct from
+    /// the guarded-witness-collection arm (length reduction vs
+    /// conditional Vec-select). Pinned by
+    /// `unique_bimodal_variants_len_equals_has_unique_bimodal_variant_as_usize_across_every_triple`.
+    ///
+    /// Option-equality identity: for every slice `items`,
+    /// `T::unique_bimodal_variants(items).first().copied() == T::unique_bimodal_variant(items)`
+    /// — the `Vec`-return's first-element projection COINCIDES with the
+    /// `Option`-return peer one RETURN-SHAPE axis over, since both encode
+    /// the same "sole intersection-band witness if unique, else nothing"
+    /// semantics through different return shapes. Pinned by
+    /// `unique_bimodal_variants_first_equals_unique_bimodal_variant_across_every_triple`.
+    ///
+    /// Is-empty coincidence identity: for every slice `items`,
+    /// `T::unique_bimodal_variants(items).is_empty() == !T::has_unique_bimodal_variant(items)`
+    /// — the return-Vec's emptiness coincides with the NEGATION of the
+    /// set-level uniqueness bit. Independent cross-check on the surface
+    /// axis distinct from the length-coincidence arm (Vec::is_empty vs
+    /// integer equality). Pinned by
+    /// `unique_bimodal_variants_is_empty_iff_not_has_unique_bimodal_variant_across_every_triple`.
+    ///
+    /// Reversal-invariance identity: the projection factors through
+    /// [`Self::has_unique_bimodal_variant`] (ordering-agnostic — the
+    /// underlying [`Self::count_bimodal_variants`] is invariant under
+    /// slice-reversal via the uniformity-collapse dichotomy) and
+    /// [`Self::bimodal_variants`] (ordering-agnostic on the input axis —
+    /// the underlying [`Self::is_uniform`] gate + `T::ALL.to_vec()` /
+    /// `Vec::new()` dichotomy are all invariant under slice-reversal) via
+    /// a boolean-guarded Vec-select. Pinned by
+    /// `unique_bimodal_variants_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::unique_bimodal_variants(&[]) == vec![]`
+    /// UNCONDITIONALLY — [`Self::has_unique_bimodal_variant`] collapses
+    /// to `false` via its `count_bimodal_variants(&[]) == 0 != 1`
+    /// fixpoint (the empty-slice guard on [`Self::bimodal_variants`]
+    /// short-circuits BEFORE the uniformity gate is consulted so the
+    /// vacuous flat-histogram `is_uniform(&[]) == true` doesn't leak
+    /// into the count), and the guard-arm maps the empty slice to the
+    /// empty Vec directly.
+    ///
+    /// Matching-singleton contract at cardinality `>= 2`:
+    /// `T::unique_bimodal_variants(&[v]) == vec![]` for every variant
+    /// `v` — the target hits count `1 == max`, every non-target sits at
+    /// count `0 == min`, the histogram is non-flat (max `1` != min `0`),
+    /// [`Self::is_uniform`] returns `false`,
+    /// [`Self::bimodal_variants`] collapses to `Vec::new()`,
+    /// [`Self::count_bimodal_variants`] reports `0`,
+    /// [`Self::has_unique_bimodal_variant`] returns `false`, and the
+    /// guard collapses the projection to `vec![]`.
+    ///
+    /// Full-set contract: `T::unique_bimodal_variants(<T as ClosedSet>::ALL) ==
+    /// (if T::CARDINALITY == 1 { T::ALL.to_vec() } else { vec![] })` —
+    /// clause (3)'s pairwise-distinctness invariant pins every variant
+    /// at exactly one position, [`Self::max_variant_count`] ==
+    /// [`Self::min_variant_count`] == 1 on the flat-histogram fixpoint,
+    /// [`Self::is_uniform`] returns `true`,
+    /// [`Self::bimodal_variants`] admits EVERY variant via the
+    /// (max == min == 1) collapse, and
+    /// [`Self::count_bimodal_variants`] reports `T::CARDINALITY`.
+    /// [`Self::has_unique_bimodal_variant`] then holds iff
+    /// `T::CARDINALITY == 1`, and the guarded lift returns
+    /// `T::ALL.to_vec()` (a length-`1` Vec) on that arm and `vec![]` on
+    /// every `T::CARDINALITY >= 2` arm. LOAD-BEARING singleton-carrier
+    /// positive fixpoint at `T::CARDINALITY == 1` — the ONLY positive
+    /// arm on this corner across any test-module carrier.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::unique_bimodal_variants(&doubled) ==
+    /// (if T::CARDINALITY == 1 { T::ALL.to_vec() } else { vec![] })` —
+    /// the second flat-histogram fixpoint (max == min == 2) folds through
+    /// the same uniformity-collapse dichotomy as the full-set arm; the
+    /// projection returns `T::ALL.to_vec()` at `T::CARDINALITY == 1`
+    /// (`bimodal_variants` = [T::ALL[0]] via the flat-histogram fixpoint)
+    /// and `vec![]` at `T::CARDINALITY >= 2`.
+    ///
+    /// Bimodal-triple contract at cardinality `>= 3`:
+    /// `T::unique_bimodal_variants([T::ALL[0], T::ALL[0], T::ALL[1]]) == vec![]`
+    /// — the histogram is (T::ALL[0] -> 2 == max, T::ALL[1] -> 1 ==
+    /// MIDDLE, T::ALL[2..] -> 0 == min); non-flat (max `2` != min `0`),
+    /// [`Self::is_uniform`] returns `false`,
+    /// [`Self::bimodal_variants`] reports `Vec::new()`,
+    /// [`Self::count_bimodal_variants`] reports `0`,
+    /// [`Self::has_unique_bimodal_variant`] returns `false`, and the
+    /// guard collapses the projection to `vec![]`. LOAD-BEARING
+    /// DISCRIMINATOR from [`Self::unique_middle_band_variants`] which
+    /// reports `vec![T::ALL[1]]` on the SAME fixture — the direction-
+    /// composition axis SEPARATES this INTERSECTION degenerate arm
+    /// from the COMPLEMENT positive arm on the shared canonical
+    /// fixture window at cardinality `>= 3`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of
+    /// [`Self::has_unique_bimodal_variant`] +
+    /// [`Self::bimodal_variants`] via a boolean-guarded Vec-select on
+    /// `Vec<Self>`. Cost inherits both underlying projections:
+    /// `O(T::CARDINALITY * n)` on slice arity `n` (one
+    /// [`Self::count_bimodal_variants`] reduction for the guard via
+    /// the uniformity-collapse dichotomy, one
+    /// [`Self::bimodal_variants`] dichotomy sweep when the guard holds;
+    /// the short-circuiting `if` avoids the sweep AND the Vec allocation
+    /// when the guard falsifies), no `PartialEq`/`Eq`/`Hash` supertrait
+    /// bound (the trait's minimal `Sized + Copy + 'static` supertrait
+    /// pair stays untouched).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::unique_bimodal_variants`]: a `tatara-check` predicate
+    /// `(check-bimodal-if-unique …)` that reports the singleton-or-
+    /// empty flat-diagonal witness collection as a typed
+    /// `Vec<Self>`-return rather than a two-step (has-unique-bimodal-
+    /// variant? then bimodal-variants) composition; a Sekiban audit-
+    /// trail per-window singleton-or-empty binding that composes
+    /// uniformly with the six-Vec (union/complement/intersection ×
+    /// declaration/lex) rows through a shared Vec return shape;
+    /// downstream aggregate code that iterates over "the sole flat-
+    /// diagonal witness if any" without needing to dispatch on
+    /// Option/Vec at the callsite; a scheduler-fairness heuristic that
+    /// branches on "is the workload distribution perfectly flat over a
+    /// single dispatch class in this window?" through one typed Vec-
+    /// return primitive.
+    ///
+    /// Compounding closure: this projection CLOSES the intersection arm
+    /// of the (set-level × `Vec<Self>` × direction-composition ×
+    /// combinator × unique-tie) row past the just-opened UNION arm
+    /// [`Self::unique_extremal_variants`] AND the just-closed COMPLEMENT
+    /// arm [`Self::unique_middle_band_variants`] one COMBINATOR axis
+    /// over AND EXHAUSTIVELY CLOSES the (`Vec<Self>` × direction-
+    /// composition × combinator × unique-tie) 3-corner row at its FINAL
+    /// THIRD tile. The (set-level × Vec × direction-composition ×
+    /// combinator × unique-tie) row is now EXHAUSTIVELY closed; the
+    /// natural next lift past this row is the LEX-order peer trio
+    /// (`sorted_unique_extremal_variants`,
+    /// `sorted_unique_middle_band_variants`,
+    /// `sorted_unique_bimodal_variants`) opening the (`Vec<Self>` ×
+    /// sorted × unique-tie) column one ORDERING axis over.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary set-
+    /// level unique-bimodal `Vec<Self>` singleton-or-empty witness
+    /// projection becomes a TYPE-level primitive on the closed-set
+    /// trait rather than a per-consumer inline
+    /// `if T::has_unique_bimodal_variant(items) { T::bimodal_variants(items) } else { vec![] }`
+    /// composition at every downstream generic site. THEORY.md §V — the
+    /// (set-level × `Vec<Self>` × direction-composition × intersection ×
+    /// unique-tie) witness-if-unique corner was an unnamed inline
+    /// composition recurring at every prospective downstream "the sole
+    /// flat-diagonal variant, as a Vec, if it's unambiguous" site pre-
+    /// lift. THEORY.md §VI.1 — generation over composition; the
+    /// projection emerges from the composition of TWO substrate
+    /// primitives ([`Self::has_unique_bimodal_variant`] +
+    /// [`Self::bimodal_variants`]) with the
+    /// `if _ { _ } else { vec![] }` combinator on `Vec<Self>`.
+    ///
+    /// Frontier inspiration: R's
+    /// `{ t <- table(items); if (length(unique(t)) == 1 && length(t) == 1) names(t) else character(0) }`
+    /// — the canonical guarded flat-diagonal singleton-or-empty
+    /// carrier on a factor histogram; Julia's
+    /// `let c = StatsBase.countmap(items); if length(c) == 1 && length(unique(values(c))) == 1 collect(keys(c)) else eltype(items)[] end`;
+    /// Python's
+    /// `list(c.keys()) if len(c) == 1 and len(set(c.values())) == 1 else []`
+    /// on a `collections.Counter`; Clojure's
+    /// `(let [f (frequencies coll)] (if (and (= 1 (count f)) (apply = (vals f))) (keys f) ()))`;
+    /// SQL's
+    /// `SELECT ARRAY(SELECT variant FROM t GROUP BY variant HAVING (SELECT COUNT(DISTINCT c) FROM …) = 1 AND (SELECT COUNT(*) FROM …) = 1)`.
+    /// Translation through pleme-io primitives: the N-ary set-level
+    /// uniqueness-gated intersection singleton-or-empty projection on
+    /// the closed-set trait binds through the just-lifted
+    /// [`Self::has_unique_bimodal_variant`] guard conjoined with the
+    /// just-lifted [`Self::bimodal_variants`] witness-collection
+    /// under a Vec-select — no new dep, no supertrait bound,
+    /// `O(T::CARDINALITY * n)` inherited from the underlying aggregates
+    /// with short-circuiting on the guard.
+    fn unique_bimodal_variants(items: &[Self]) -> ::std::vec::Vec<Self> {
+        if <Self as ClosedSet>::has_unique_bimodal_variant(items) {
+            <Self as ClosedSet>::bimodal_variants(items)
+        } else {
+            ::std::vec::Vec::new()
+        }
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "target is THE UNIQUE extremal variant"
     /// per-target predicate — `true` iff `target` is an extremal variant of
     /// `items` (its per-target multiplicity sits on the union of the argmax
@@ -55194,6 +55418,164 @@ where
             T::unique_middle_band_variants(&bimodal_triple).first().copied(),
             T::unique_middle_band_variant(&bimodal_triple),
             "{type_name}: T::unique_middle_band_variants(&bimodal_triple).first() drifted from T::unique_middle_band_variant(&bimodal_triple) — the Option-equality identity MUST hold on the bimodal-triple fixture (both project to Some(T::ALL[1]))",
+        );
+    }
+    // (190) — `T::unique_bimodal_variants(items)` MUST agree with the
+    // guarded-lift body
+    // `if T::has_unique_bimodal_variant(items) { T::bimodal_variants(items) } else { vec![] }`
+    // on every canonical slice AND MUST pin length + first-element +
+    // is-empty coincidences against the sibling
+    // (`bool`, `Option<Self>`) unique-tie intersection corners one RETURN-
+    // SHAPE axis over. THIS clause CLOSES the intersection arm of the
+    // (set-level × `Vec<Self>` × direction-composition × combinator ×
+    // unique-tie) row past the just-opened UNION arm clause (188)
+    // ([`T::unique_extremal_variants`]) AND the just-closed COMPLEMENT
+    // arm clause (189) ([`T::unique_middle_band_variants`]) one
+    // COMBINATOR axis over AND EXHAUSTIVELY CLOSES the (`Vec<Self>` ×
+    // direction-composition × combinator × unique-tie) 3-corner row at
+    // its FINAL THIRD tile, peer to clause (167)
+    // ([`T::unique_bimodal_variant`]) one RETURN-SHAPE axis over.
+    //
+    // Degenerate-arm discipline (LOAD-BEARING DISCRIMINATOR from clause
+    // (189)): at `T::CARDINALITY >= 2` the intersection band collapses to
+    // `vec![]` on EVERY canonical fixture — `has_unique_bimodal_variant`
+    // holds only when `count_bimodal_variants == 1`, which requires a
+    // flat histogram AND `T::CARDINALITY == 1` (since a flat histogram on
+    // `T::CARDINALITY >= 2` variants yields
+    // `count_bimodal_variants == T::CARDINALITY >= 2 != 1`). Clause
+    // (189)'s complement counterpart lands a positive arm on the bimodal-
+    // triple at cardinality `>= 3` (`vec![T::ALL[1]]`); THIS intersection
+    // arm stays degenerate. The direction-composition axis SEPARATES the
+    // INTERSECTION degenerate arm from the COMPLEMENT positive arm on the
+    // shared canonical fixture window.
+    //
+    // Singleton-carrier positive fixpoint (LOAD-BEARING `true`-arm catch
+    // at cardinality `1`): on `T::ALL` at `T::CARDINALITY == 1` the
+    // single-variant slice sits at count `1`, the histogram is flat
+    // (max == min == 1), `is_uniform` returns `true`, `bimodal_variants`
+    // reports `T::ALL.to_vec()` (a length-`1` Vec),
+    // `count_bimodal_variants` reports `1`, `has_unique_bimodal_variant`
+    // returns `true`, guard fires, and the guarded lift returns
+    // `T::ALL.to_vec()` — the SOLE positive arm on THIS corner across
+    // any test-module carrier. On `doubled_full_set` at
+    // `T::CARDINALITY == 1` the same collapse fires (flat histogram at
+    // count `2`), yielding another positive arm at the same cardinality.
+    //
+    // The default trait body threads the boolean-guarded Vec-select
+    // verbatim and satisfies every fixpoint arm + the length + Option-
+    // equality + is-empty coincidence identities for free; the assertion
+    // catches a future implementor whose override drifts the projection
+    // loudly rather than silently bifurcating the set-level direction-
+    // composition intersection singleton-or-empty witness surface. An
+    // override that folds onto `vec![T::ALL[0]]` unconditionally
+    // bifurcates every `T::CARDINALITY >= 2` arm at `[T::ALL[0]] != []`.
+    // An override that folds onto `vec![]` unconditionally bifurcates
+    // the `T::CARDINALITY == 1` full-set + doubled-full-set positive
+    // arms at `[] != T::ALL.to_vec()`.
+    let empty_unique_bimodals = T::unique_bimodal_variants(empty);
+    let expected_empty_unique_bimodals: ::std::vec::Vec<T> = if T::has_unique_bimodal_variant(empty)
+    {
+        T::bimodal_variants(empty)
+    } else {
+        ::std::vec::Vec::new()
+    };
+    assert_eq!(
+        empty_unique_bimodals, expected_empty_unique_bimodals,
+        "{type_name}: T::unique_bimodal_variants(&[]) drifted from the guarded lift `if T::has_unique_bimodal_variant(&[]) {{ T::bimodal_variants(&[]) }} else {{ vec![] }}` — the guarded-lift identity MUST hold on the empty slice; the empty-slice guard of `has_unique_bimodal_variant` collapses to `false` via `count_bimodal_variants(&[]) == 0 != 1` (the empty-slice short-circuit on `bimodal_variants` fires BEFORE the vacuous `is_uniform(&[]) == true` collapse leaks into the count), the guarded lift short-circuits to the empty Vec, and `T::bimodal_variants(&[])`'s own empty-Vec-at-empty branch is not consulted",
+    );
+    assert_eq!(
+        T::unique_bimodal_variants(empty).len(),
+        usize::from(T::has_unique_bimodal_variant(empty)),
+        "{type_name}: T::unique_bimodal_variants(&[]).len() drifted from `T::has_unique_bimodal_variant(&[]) as usize` — the length-coincidence identity MUST hold on the empty slice",
+    );
+    assert_eq!(
+        T::unique_bimodal_variants(empty).first().copied(),
+        T::unique_bimodal_variant(empty),
+        "{type_name}: T::unique_bimodal_variants(&[]).first() drifted from T::unique_bimodal_variant(&[]) — the Option-equality identity MUST hold on the empty slice",
+    );
+    assert_eq!(
+        T::unique_bimodal_variants(empty).is_empty(),
+        !T::has_unique_bimodal_variant(empty),
+        "{type_name}: T::unique_bimodal_variants(&[]).is_empty() drifted from `!T::has_unique_bimodal_variant(&[])` — the is-empty coincidence identity MUST hold on the empty slice",
+    );
+    let full_unique_bimodals = T::unique_bimodal_variants(T::ALL);
+    let expected_full_unique_bimodals: ::std::vec::Vec<T> = if T::has_unique_bimodal_variant(T::ALL)
+    {
+        T::bimodal_variants(T::ALL)
+    } else {
+        ::std::vec::Vec::new()
+    };
+    assert_eq!(
+        full_unique_bimodals, expected_full_unique_bimodals,
+        "{type_name}: T::unique_bimodal_variants(T::ALL) drifted from the guarded lift `if T::has_unique_bimodal_variant(T::ALL) {{ T::bimodal_variants(T::ALL) }} else {{ vec![] }}` — the guarded-lift identity MUST hold on the full-set slice; at `T::CARDINALITY == 1` the flat histogram at count `1` fires the guard and the lift returns `T::ALL.to_vec()` (the SOLE positive arm at cardinality 1); at `T::CARDINALITY >= 2` the flat histogram at count `1` yields `count_bimodal_variants == T::CARDINALITY >= 2 != 1`, `has_unique_bimodal_variant` returns `false`, and the guarded lift collapses to `vec![]`",
+    );
+    assert_eq!(
+        T::unique_bimodal_variants(T::ALL).len(),
+        usize::from(T::has_unique_bimodal_variant(T::ALL)),
+        "{type_name}: T::unique_bimodal_variants(T::ALL).len() drifted from `T::has_unique_bimodal_variant(T::ALL) as usize` — the length-coincidence identity MUST hold on the full-set slice",
+    );
+    assert_eq!(
+        T::unique_bimodal_variants(T::ALL).first().copied(),
+        T::unique_bimodal_variant(T::ALL),
+        "{type_name}: T::unique_bimodal_variants(T::ALL).first() drifted from T::unique_bimodal_variant(T::ALL) — the Option-equality identity MUST hold on the full-set slice",
+    );
+    let doubled_unique_bimodals = T::unique_bimodal_variants(&doubled_full_set);
+    let expected_doubled_unique_bimodals: ::std::vec::Vec<T> =
+        if T::has_unique_bimodal_variant(&doubled_full_set) {
+            T::bimodal_variants(&doubled_full_set)
+        } else {
+            ::std::vec::Vec::new()
+        };
+    assert_eq!(
+        doubled_unique_bimodals, expected_doubled_unique_bimodals,
+        "{type_name}: T::unique_bimodal_variants(&doubled_full_set) drifted from the guarded lift `if T::has_unique_bimodal_variant(&doubled_full_set) {{ T::bimodal_variants(&doubled_full_set) }} else {{ vec![] }}` — the guarded-lift identity MUST hold on the doubled-full-set slice; at `T::CARDINALITY == 1` the flat histogram at count `2` fires the guard and the lift returns `T::ALL.to_vec()`; at `T::CARDINALITY >= 2` the flat histogram at count `2` yields `count_bimodal_variants == T::CARDINALITY >= 2 != 1`, the guarded lift collapses to `vec![]`",
+    );
+    assert_eq!(
+        T::unique_bimodal_variants(&doubled_full_set).len(),
+        usize::from(T::has_unique_bimodal_variant(&doubled_full_set)),
+        "{type_name}: T::unique_bimodal_variants(&doubled_full_set).len() drifted from `T::has_unique_bimodal_variant(&doubled_full_set) as usize` — the length-coincidence identity MUST hold on the doubled-full-set slice",
+    );
+    assert_eq!(
+        T::unique_bimodal_variants(&doubled_full_set).first().copied(),
+        T::unique_bimodal_variant(&doubled_full_set),
+        "{type_name}: T::unique_bimodal_variants(&doubled_full_set).first() drifted from T::unique_bimodal_variant(&doubled_full_set) — the Option-equality identity MUST hold on the doubled-full-set slice",
+    );
+    if T::CARDINALITY >= 2 {
+        for target in T::ALL.iter().copied() {
+            let target_label = <T as ClosedSet>::label(target);
+            let matching_singleton = [target];
+            assert_eq!(
+                T::unique_bimodal_variants(&matching_singleton),
+                ::std::vec::Vec::<T>::new(),
+                "{type_name}: T::unique_bimodal_variants([{target_label:?}]) drifted from `vec![]` at cardinality >= 2 — the target hits count 1 == max, every non-target sits at count 0 == min, max != min so the histogram is non-flat, `is_uniform` returns `false`, `bimodal_variants` collapses to `Vec::new()`, `count_bimodal_variants` reports `0`, `has_unique_bimodal_variant` returns `false`, and the guard collapses the projection to `vec![]`",
+            );
+            assert_eq!(
+                T::unique_bimodal_variants(&matching_singleton).first().copied(),
+                T::unique_bimodal_variant(&matching_singleton),
+                "{type_name}: T::unique_bimodal_variants([{target_label:?}]).first() drifted from T::unique_bimodal_variant([{target_label:?}]) — the Option-equality identity MUST hold on the matching-singleton fixture at cardinality >= 2 (both project to None/vec[].first())",
+            );
+        }
+    }
+    if T::CARDINALITY >= 3 {
+        // Bimodal-triple fixture: LOAD-BEARING `vec![]` arm on the
+        // (`Vec<Self>` × direction-composition × intersection × unique-
+        // tie) corner. count_bimodal_variants reports 0 (max 2 != min 0
+        // collapses the intersection to empty), has_unique_bimodal_variant
+        // returns false, guard falsifies, and the guarded lift lands on
+        // `vec![]`. LOAD-BEARING DISCRIMINATOR from clause (189) which
+        // reports `vec![T::ALL[1]]` on the SAME fixture — the direction-
+        // composition axis SEPARATES the INTERSECTION degenerate arm from
+        // the COMPLEMENT positive arm.
+        let bimodal_triple = [T::ALL[0], T::ALL[0], T::ALL[1]];
+        assert_eq!(
+            T::unique_bimodal_variants(&bimodal_triple),
+            ::std::vec::Vec::<T>::new(),
+            "{type_name}: T::unique_bimodal_variants(&bimodal_triple) drifted from `vec![]` — count_bimodal_variants reports 0 (max 2 != min 0 collapses the intersection to empty), has_unique_bimodal_variant returns false, guard falsifies, and the guarded lift lands on `vec![]`; a non-empty bimodal-triple arm silently bifurcates the LOAD-BEARING degenerate catch on the (Vec<Self> × direction-composition × intersection × unique-tie) corner AND its LOAD-BEARING DISCRIMINATION from clause (189) which reports vec![T::ALL[1]] on the SAME fixture",
+        );
+        assert_eq!(
+            T::unique_bimodal_variants(&bimodal_triple).first().copied(),
+            T::unique_bimodal_variant(&bimodal_triple),
+            "{type_name}: T::unique_bimodal_variants(&bimodal_triple).first() drifted from T::unique_bimodal_variant(&bimodal_triple) — the Option-equality identity MUST hold on the bimodal-triple fixture (both project to None/vec[].first())",
         );
     }
 }
@@ -108577,6 +108959,256 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedUniqueMiddleBandVariantsSingletonFirstKind whose unique_middle_band_variants override folds onto vec![Alpha] unconditionally — clause (189)'s empty-slice + flat-histogram + matching-singleton fixpoint arms MUST reject the drift AND the bimodal-triple positive arm at `[Alpha] != [Beta]` MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn unique_bimodal_variants_returns_empty_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT (set-level × Vec<Self> × direction-
+        // composition × intersection × unique-tie sharpening):
+        // T::unique_bimodal_variants(&[]) == vec![] UNCONDITIONALLY —
+        // T::has_unique_bimodal_variant(&[]) == false via
+        // count_bimodal_variants == 0 != 1 (the empty-slice short-circuit
+        // on bimodal_variants fires BEFORE the vacuous is_uniform(&[])
+        // == true collapse leaks into the count), guard falsifies, and
+        // the guarded lift lands on `Vec::new()`.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::unique_bimodal_variants(empty),
+            Vec::<StubKind>::new(),
+            "T::unique_bimodal_variants(&[]) diverged from the empty-slice fixpoint vec![]",
+        );
+    }
+
+    #[test]
+    fn unique_bimodal_variants_equals_has_unique_bimodal_variant_gated_bimodal_variants_across_every_triple(
+    ) {
+        // GUARDED-WITNESS-COLLECTION IDENTITY: for every slice `items`,
+        // `T::unique_bimodal_variants(items) ==
+        // if T::has_unique_bimodal_variant(items) { T::bimodal_variants(items) } else { vec![] }`
+        // — the canonical form the body uses.
+        let empty: &[StubKind] = &[];
+        let expected_empty: Vec<StubKind> =
+            if <StubKind as ClosedSet>::has_unique_bimodal_variant(empty) {
+                <StubKind as ClosedSet>::bimodal_variants(empty)
+            } else {
+                Vec::new()
+            };
+        assert_eq!(
+            <StubKind as ClosedSet>::unique_bimodal_variants(empty),
+            expected_empty,
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_projection = <StubKind as ClosedSet>::unique_bimodal_variants(&triple);
+                    let via_guard: Vec<StubKind> =
+                        if <StubKind as ClosedSet>::has_unique_bimodal_variant(&triple) {
+                            <StubKind as ClosedSet>::bimodal_variants(&triple)
+                        } else {
+                            Vec::new()
+                        };
+                    assert_eq!(
+                        via_projection, via_guard,
+                        "T::unique_bimodal_variants({triple:?}) diverged from the guarded lift `if T::has_unique_bimodal_variant(items) {{ T::bimodal_variants(items) }} else {{ vec![] }}`",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_bimodal_variants_len_equals_has_unique_bimodal_variant_as_usize_across_every_triple()
+    {
+        // LENGTH-COINCIDENCE IDENTITY: for every slice `items`,
+        // `T::unique_bimodal_variants(items).len() ==
+        // usize::from(T::has_unique_bimodal_variant(items))` — exactly
+        // `0` when the guard falsifies, exactly `1` when it holds (since
+        // `count_bimodal_variants == 1` on the positive arm and the
+        // guarded lift admits EXACTLY ONE variant).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_len = <StubKind as ClosedSet>::unique_bimodal_variants(&triple).len();
+                    let via_bit =
+                        usize::from(<StubKind as ClosedSet>::has_unique_bimodal_variant(&triple));
+                    assert_eq!(
+                        via_len, via_bit,
+                        "T::unique_bimodal_variants({triple:?}).len() diverged from usize::from(T::has_unique_bimodal_variant({triple:?})) — the length-coincidence identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_bimodal_variants_first_equals_unique_bimodal_variant_across_every_triple() {
+        // OPTION-EQUALITY IDENTITY: for every slice `items`,
+        // `T::unique_bimodal_variants(items).first().copied() ==
+        // T::unique_bimodal_variant(items)` — the Vec-return's first-
+        // element projection COINCIDES with the Option-return peer one
+        // RETURN-SHAPE axis over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_first = <StubKind as ClosedSet>::unique_bimodal_variants(&triple)
+                        .first()
+                        .copied();
+                    let via_option = <StubKind as ClosedSet>::unique_bimodal_variant(&triple);
+                    assert_eq!(
+                        via_first, via_option,
+                        "T::unique_bimodal_variants({triple:?}).first() diverged from T::unique_bimodal_variant({triple:?}) — the Option-equality identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_bimodal_variants_is_empty_iff_not_has_unique_bimodal_variant_across_every_triple() {
+        // IS-EMPTY COINCIDENCE IDENTITY: for every slice `items`,
+        // `T::unique_bimodal_variants(items).is_empty() ==
+        // !T::has_unique_bimodal_variant(items)` — the return-Vec's
+        // emptiness coincides with the NEGATION of the set-level
+        // uniqueness bit. Independent cross-check on the surface axis
+        // distinct from the length-coincidence arm (Vec::is_empty vs
+        // integer equality).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_is_empty =
+                        <StubKind as ClosedSet>::unique_bimodal_variants(&triple).is_empty();
+                    let via_negation =
+                        !<StubKind as ClosedSet>::has_unique_bimodal_variant(&triple);
+                    assert_eq!(
+                        via_is_empty, via_negation,
+                        "T::unique_bimodal_variants({triple:?}).is_empty() diverged from !T::has_unique_bimodal_variant({triple:?}) — the is-empty coincidence identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_bimodal_variants_is_invariant_under_slice_reversal_across_every_triple() {
+        // REVERSAL-INVARIANCE CONTRACT: the projection factors through
+        // T::has_unique_bimodal_variant (ordering-agnostic via the
+        // uniformity-collapse dichotomy) and T::bimodal_variants
+        // (ordering-agnostic — is_uniform + T::ALL.to_vec() / Vec::new()
+        // are all invariant under slice-reversal) via a boolean-guarded
+        // Vec-select.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let reversed: Vec<StubKind> = triple.iter().rev().copied().collect();
+                    let via_forward = <StubKind as ClosedSet>::unique_bimodal_variants(&triple);
+                    let via_reversed = <StubKind as ClosedSet>::unique_bimodal_variants(&reversed);
+                    assert_eq!(
+                        via_forward, via_reversed,
+                        "T::unique_bimodal_variants({triple:?}) diverged from T::unique_bimodal_variants({reversed:?}) — the reversal-invariance contract was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_bimodal_variants_returns_empty_on_the_bimodal_triple_at_cardinality_gte_three() {
+        // BIMODAL-TRIPLE CONTRACT AT CARDINALITY `>= 3`: LOAD-BEARING
+        // vec![] arm on the (Vec<Self> × direction-composition ×
+        // intersection × unique-tie) corner. On `[T::ALL[0], T::ALL[0],
+        // T::ALL[1]]` count_bimodal_variants reports 0 (max 2 != min 0
+        // collapses the intersection to empty), has_unique_bimodal_variant
+        // returns false, guard falsifies, and the guarded lift lands on
+        // `vec![]`. LOAD-BEARING DISCRIMINATOR from
+        // T::unique_middle_band_variants which reports `vec![T::ALL[1]]`
+        // on the SAME fixture — the direction-composition axis SEPARATES
+        // the INTERSECTION degenerate arm from the COMPLEMENT positive
+        // arm.
+        assert_eq!(<StubKind as ClosedSet>::CARDINALITY, 3);
+        let bimodal_triple = [
+            <StubKind as ClosedSet>::ALL[0],
+            <StubKind as ClosedSet>::ALL[0],
+            <StubKind as ClosedSet>::ALL[1],
+        ];
+        assert_eq!(
+            <StubKind as ClosedSet>::unique_bimodal_variants(&bimodal_triple),
+            Vec::<StubKind>::new(),
+            "T::unique_bimodal_variants({bimodal_triple:?}) diverged from `vec![]` — the LOAD-BEARING discriminator against T::unique_middle_band_variants which reports `vec![T::ALL[1]]` on the SAME fixture",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_singleton_first_drift_in_unique_bimodal_variants() {
+        // Drift catch — clause (190)'s empty-slice + flat-histogram +
+        // matching-singleton + bimodal-triple fixpoint arms fire when an
+        // override folds the set-level unique-bimodal-variants projection
+        // onto vec![Self::first()] unconditionally. On EVERY canonical
+        // fixture at cardinality >= 2 the correct answer is vec![]; a
+        // `vec![Alpha]` override bifurcates every arm at `[Alpha] != []`.
+        // At cardinality 3 the intersection corner has NO positive arm on
+        // any canonical fixture (unlike clauses (188) and (189) where the
+        // bimodal-triple or complement arms provide a positive discriminator),
+        // so the singleton-first drift is the ONLY drift the multi-variant
+        // stub can catch on this corner.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedUniqueBimodalVariantsSingletonFirstKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedUniqueBimodalVariantsSingletonFirstKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedUniqueBimodalVariantsSingletonFirstKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted unique_bimodal_variants singleton-first kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedUniqueBimodalVariantsSingletonFirstKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedUniqueBimodalVariantsSingletonFirstKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted unique_bimodal_variants singleton-first kind";
+            type Unknown = UnknownDriftedUniqueBimodalVariantsSingletonFirstKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedUniqueBimodalVariantsSingletonFirstKind(s.to_owned())
+            }
+            fn unique_bimodal_variants(_items: &[Self]) -> Vec<Self> {
+                // Drift: always return vec![Alpha]. Fires clause (190)'s
+                // empty-slice + full-set + doubled + matching-singleton +
+                // bimodal-triple arms at `[Alpha] != []`.
+                ::std::vec![Self::Alpha]
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedUniqueBimodalVariantsSingletonFirstKind>(
+            );
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedUniqueBimodalVariantsSingletonFirstKind whose unique_bimodal_variants override folds onto vec![Alpha] unconditionally — clause (190)'s empty-slice + full-set + doubled + matching-singleton + bimodal-triple fixpoint arms MUST reject the drift at `[Alpha] != []`",
         );
     }
 

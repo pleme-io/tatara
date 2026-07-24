@@ -32379,6 +32379,231 @@ pub trait ClosedSet: Sized + Copy + 'static {
         }
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "THE unique unique-band variant,
+    /// lex-first" projection — `Some(v)` iff `items` has a UNIQUE
+    /// singleton-multiplicity witness ([`Self::has_unique_unique_variant`]
+    /// holds) AND `v` is the sole variant of [`Self::sorted_variants`]
+    /// whose per-target multiplicity sits EXACTLY at `1`, else `None`.
+    /// Computed as the just-lifted set-level unique-band uniqueness bit
+    /// [`Self::has_unique_unique_variant`] guarding a LEX-ORDER first-
+    /// witness sweep of [`Self::sorted_variants`] keyed on the substrate's
+    /// per-target singleton-multiplicity primitive
+    /// [`Self::is_unique_occurrence_of`]. The LEX-ORDER `Option<Self>`-
+    /// RETURN UNIQUE-TIE SHARPENING corner EXHAUSTIVELY CLOSING the
+    /// middle-band arm of the (set-level × `Option<Self>` × sorted ×
+    /// equivalence-partition × multiplicity-band × unique-tie) row on the
+    /// EQUIVALENCE-PARTITION surface at its (mult `== 1`) band — the FINAL
+    /// THIRD tile past the just-lifted (mult `>= 2`)
+    /// [`Self::sorted_unique_repeating_variant`] strict-repeat arm AND the
+    /// just-lifted (mult `== 0`) [`Self::sorted_unique_missing_variant`]
+    /// miss-band arm one MULTIPLICITY-BAND axis over. Together the three
+    /// EXHAUSTIVELY CLOSE the (set-level × `Option<Self>` × sorted ×
+    /// equivalence-partition × mult-band × unique-tie) trichotomy row on
+    /// the LEX-ORDER equivalence-partition surface. Peer to
+    /// [`Self::unique_unique_variant`] one ORDERING axis over (the
+    /// declaration-order sibling this LEX peer is provably identical to),
+    /// AND peer to [`Self::has_unique_unique_variant`] one RETURN-SHAPE
+    /// axis over. Not a fresh substrate primitive on the index axis — the
+    /// projection emerges from a boolean-guarded lex-order first-witness
+    /// [`Iterator::find`] sweep of [`Self::sorted_variants`] under an
+    /// `Option`-collapse when the guard falsifies.
+    ///
+    /// Ordering-choice-irrelevance identity: for every slice `items`,
+    /// `T::sorted_unique_unique_variant(items) ==
+    /// T::unique_unique_variant(items)` — when the sole singleton-
+    /// multiplicity witness is UNIQUE ([`Self::has_unique_unique_variant`]
+    /// holds) declaration-order and lex-order both walk the same predicate
+    /// over the same `T::CARDINALITY`-sized variant carrier and land on
+    /// THE SAME SOLE (mult `== 1`) variant; when the guard falsifies both
+    /// projections collapse to `None` through the same guard arm. The LEX
+    /// peer is thus IDENTICALLY equal to its declaration-order sibling on
+    /// every input — the ordering axis becomes provably irrelevant WHEN
+    /// the underlying uniqueness bit holds. Pinned by
+    /// `sorted_unique_unique_variant_equals_unique_unique_variant_across_every_triple`
+    /// as a TYPED THEOREM the substrate proves once, replacing per-
+    /// consumer inline re-derivations of the equivalence.
+    ///
+    /// Guarded-lex-first-witness identity: for every slice `items`,
+    /// `T::sorted_unique_unique_variant(items) ==
+    /// if T::has_unique_unique_variant(items)
+    /// { T::sorted_variants().into_iter().find(|&v| T::is_unique_occurrence_of(v, items)) }
+    /// else { None }` — the canonical form the body uses.
+    ///
+    /// Is-some coincidence identity: for every slice `items`,
+    /// `T::sorted_unique_unique_variant(items).is_some() ==
+    /// T::has_unique_unique_variant(items)` — the `Option<Self>` return's
+    /// `is_some` bit COINCIDES with the set-level unique-band uniqueness
+    /// bit. Independent cross-check on the surface axis (`Option::is_some`
+    /// vs conditional-Option construction).
+    ///
+    /// Sorted-unique witness singleton identity: for every slice `items`,
+    /// `T::sorted_unique_unique_variant(items) == (if T::sorted_unique_variants(items).len() == 1 { Some(T::sorted_unique_variants(items)[0]) } else { None })`
+    /// — when `items` has a unique singleton-multiplicity witness the lex-
+    /// order singleton-multiplicity witness-collection
+    /// [`Self::sorted_unique_variants`] collapses to a length-`1` Vec
+    /// containing EXACTLY that unique variant, so its slot-`0` wrapped in
+    /// `Some` coincides with THIS projection.
+    ///
+    /// Slice-reversal invariance: the projection factors through
+    /// [`Self::has_unique_unique_variant`] (ordering-agnostic on the input
+    /// axis — the underlying [`Self::count_unique_variants`] is invariant
+    /// under slice-reversal) and a lex-order sweep of
+    /// [`Self::sorted_variants`] keyed on
+    /// [`Self::is_unique_occurrence_of`] (also ordering-agnostic on the
+    /// input axis via [`Self::count_occurrences_of`]) under a boolean-
+    /// guarded `Option`-collapse.
+    ///
+    /// Empty-slice contract: `T::sorted_unique_unique_variant(&[]) == None`
+    /// UNCONDITIONALLY — the empty slice hits zero positions,
+    /// [`Self::count_unique_variants`] reports `0`,
+    /// [`Self::has_unique_unique_variant`] returns `false`, and the guard
+    /// collapses the projection to `None` before the
+    /// [`Self::sorted_variants`] sweep is consulted.
+    ///
+    /// Matching-singleton contract: `T::sorted_unique_unique_variant(&[v])
+    /// == Some(v)` for every variant `v` — the sole position hits `v` at
+    /// count `1` (the SOLE singleton-multiplicity witness), every non-
+    /// target sits at count `0` (not singleton-multiplicity);
+    /// [`Self::count_unique_variants`] reports `1`,
+    /// [`Self::has_unique_unique_variant`] returns `true`, the guard
+    /// fires, and the lex-order sweep of [`Self::sorted_variants`] finds
+    /// `v` at its sole singleton entry — the SAME variant the declaration-
+    /// order sweep at [`Self::unique_unique_variant`] lands on.
+    ///
+    /// Full-set contract: `T::sorted_unique_unique_variant(T::ALL)` is
+    /// `Some(T::sorted_variants()[0])` iff [`Self::CARDINALITY`] `== 1`
+    /// on the implementor, else `None` — clause (3)'s pairwise-distinctness
+    /// invariant pins every variant at exactly one position of the full-
+    /// set slice, every per-target multiplicity is `1`,
+    /// [`Self::count_unique_variants`] reports [`Self::CARDINALITY`],
+    /// [`Self::has_unique_unique_variant`] holds EXACTLY when
+    /// [`Self::CARDINALITY`] `== 1`. At `T::CARDINALITY == 1` the guarded
+    /// lex sweep lands on the sole variant; at `T::CARDINALITY >= 2` every
+    /// variant is a singleton-multiplicity witness, uniqueness fails, and
+    /// the guard collapses to `None`.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::sorted_unique_unique_variant(T::ALL ++ T::ALL) == None`
+    /// UNCONDITIONALLY — appending a full-set copy to the full-set slice
+    /// hits every variant at multiplicity `2`, every per-target
+    /// multiplicity-`== 1` test fails,
+    /// [`Self::count_unique_variants`] reports `0`,
+    /// [`Self::has_unique_unique_variant`] returns `false`, and the guard
+    /// collapses to `None`.
+    ///
+    /// Bimodal-triple contract at [`Self::CARDINALITY`] `>= 3`
+    /// (LOAD-BEARING POSITIVE ARM):
+    /// `T::sorted_unique_unique_variant([T::ALL[0], T::ALL[0], T::ALL[1]])
+    /// == Some(T::ALL[1])`. On the non-flat triple `T::ALL[0]` sits at
+    /// count `2 >= 2`, `T::ALL[1]` at count `1` (the SOLE (mult `== 1`)
+    /// witness), `T::ALL[2..]` at count `0`;
+    /// [`Self::has_unique_unique_variant`] returns `true`, the guard
+    /// fires, and the lex-order sweep of [`Self::sorted_variants`] hits
+    /// the SAME sole singleton-multiplicity variant `T::ALL[1]` that the
+    /// declaration-order sweep at [`Self::unique_unique_variant`] lands
+    /// on. The LOAD-BEARING SOLE `Some(_)`-arm on the canonical bimodal-
+    /// triple fixture witnesses the ordering-choice-irrelevance identity
+    /// structurally — BY UNIQUENESS of the singleton-multiplicity witness
+    /// the sole witness is the ONLY variant either sweep can find.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of
+    /// [`Self::has_unique_unique_variant`] +
+    /// [`Self::is_unique_occurrence_of`] + [`Self::sorted_variants`] via
+    /// a boolean-guarded lex-order [`Iterator::find`] sweep. Cost:
+    /// `O(T::CARDINALITY * n)` on slice arity `n` for the
+    /// [`Self::count_occurrences_of`] sweeps + `O(T::CARDINALITY log
+    /// T::CARDINALITY)` for the [`Self::sorted_variants`] cache, no
+    /// `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's minimal
+    /// `Sized + Copy + 'static` supertrait pair stays untouched); the
+    /// short-circuiting `if` avoids the sweep when the guard falsifies
+    /// and `find` short-circuits on the first hit when it holds.
+    ///
+    /// Future consumers that compose against
+    /// [`Self::sorted_unique_unique_variant`]: a `tatara-check` predicate
+    /// `(check-singleton-hit-if-unique-lex-first …)` that reports "the
+    /// sole singleton-multiplicity variant, in lex order, if unambiguous"
+    /// for a caller that prefers lex-order presentation regardless of
+    /// declaration-order (which may be arbitrary or convenience-ordered);
+    /// an LSP diagnostic on a Lisp-authored `:phases [:pending :running
+    /// :pending]` closed-set field that surfaces the SOLE singleton-
+    /// multiplicity enum-arm ("occurred exactly once: [running]") sorted
+    /// so the highlight stays deterministic under enum refactoring that
+    /// permutes declaration order; a Sekiban audit-trail per-window
+    /// witness-if-unique binding that pins the lex-order singleton-
+    /// multiplicity witness for stability against upstream declaration-
+    /// order churn. Each binds to ONE typed lex-order `Option<Self>`-
+    /// return uniqueness-gated singleton-multiplicity aggregate on the
+    /// trait — AND, by the ordering-choice-irrelevance identity, TYPED
+    /// PROOF that the ordering choice is operationally free WHEN the
+    /// underlying uniqueness bit holds (the substrate proves the
+    /// equivalence once so every downstream consumer can pick whichever
+    /// surface reads best without re-verifying the coincidence per
+    /// callsite).
+    ///
+    /// Compounding closure: this projection EXHAUSTIVELY CLOSES the
+    /// (set-level × `Option<Self>` × sorted × equivalence-partition ×
+    /// multiplicity-band × unique-tie) trichotomy row on the LEX-ORDER
+    /// equivalence-partition surface at its MIDDLE (mult `== 1`) band,
+    /// past the just-lifted (mult `>= 2`)
+    /// [`Self::sorted_unique_repeating_variant`] strict-repeat arm AND
+    /// the just-lifted (mult `== 0`)
+    /// [`Self::sorted_unique_missing_variant`] miss-band arm one
+    /// MULTIPLICITY-BAND axis over — the row is now the CANONICAL
+    /// `Option<Self>`-return unique-tie sharpening on the LEX-ORDER
+    /// equivalence-partition surface, closed at its FINAL third tile.
+    /// Mirrors the declaration-order trichotomy row's exhaustive closure
+    /// ([`Self::unique_missing_variant`] + [`Self::unique_unique_variant`]
+    /// + [`Self::unique_repeating_variant`]) one ORDERING axis over.
+    ///
+    /// Theory anchor: THEORY.md §II.1 — the Rust + Lisp pattern; the
+    /// (set-level × `Option<Self>` × sorted × equivalence-partition ×
+    /// mult `== 1` × unique-tie) corner becomes a TYPED WITNESS on the
+    /// ClosedSet trait rather than a per-consumer inline
+    /// `if T::has_unique_unique_variant(items) { T::sorted_variants().into_iter().find(|&v| T::is_unique_occurrence_of(v, items)) } else { None }`
+    /// re-derivation. THEORY.md §III — the typescape; a fresh TYPE-level
+    /// primitive plus a typed THEOREM (ordering-choice-irrelevance) the
+    /// substrate proves once rather than every downstream site re-proving
+    /// via `sorted_unique_unique_variant(items) == unique_unique_variant(items)`
+    /// assertions per callsite. THEORY.md §V.1 — knowable platform; the
+    /// (lex-order × `Option<Self>` × mult `== 1` × unique-tie) corner was
+    /// an unnamed inline composition — OR silently absent because the
+    /// caller shrugged and used the declaration-order sibling without
+    /// proof of coincidence — recurring at every prospective downstream
+    /// "which variant is the sole singleton-multiplicity witness, in lex
+    /// order, if unambiguous?" site pre-lift. THEORY.md §VI.1 —
+    /// generation over composition; the projection emerges from the
+    /// composition of the three substrate primitives
+    /// [`Self::has_unique_unique_variant`], [`Self::sorted_variants`],
+    /// and [`Self::is_unique_occurrence_of`] with the
+    /// `if _ { sorted_variants.find(is_unique_occurrence_of) } else { None }`
+    /// combinator on `Option<Self>`, not as a per-implementor hand-
+    /// rolled body.
+    ///
+    /// Frontier inspiration: R's `t <- table(items); s <- sort(names(t)[t == 1]); if (length(s) == 1) s[1] else NA`
+    /// — the guarded singleton-multiplicity lex-first witness on a sorted
+    /// factor histogram; Julia's `let c = StatsBase.countmap(items), s = filter(kv -> kv[2] == 1, sort(collect(c), by = kv -> kv[1])); length(s) == 1 ? Some(s[1][1]) : Nothing end`;
+    /// Python's `sorted(k for k, v in collections.Counter(items).items() if v == 1)[:1]`
+    /// filtered by length; Haskell's `let hs = Map.fromListWith (+) [(v, 1) | v <- items]; ss = filter (\v -> Map.findWithDefault 0 v hs == 1) (sort allLevels) in case ss of [v] -> Just v; _ -> Nothing`;
+    /// Clojure's `(let [ss (filter #(= 1 (get (frequencies coll) % 0)) (sort ALL-LEVELS))] (when (= 1 (count ss)) (first ss)))`;
+    /// SQL's `SELECT variant FROM t GROUP BY variant HAVING COUNT(*) = 1 ORDER BY variant LIMIT 1`
+    /// filtered by an outer count-guard. Translation through pleme-io
+    /// primitives: the projection binds through the set-level unique-band
+    /// uniqueness bit [`Self::has_unique_unique_variant`] conjoined with
+    /// a lex-order [`Iterator::find`] sweep of [`Self::sorted_variants`]
+    /// keyed on the substrate's per-target [`Self::is_unique_occurrence_of`]
+    /// primitive under an `Option`-collapse — no new dep, no supertrait
+    /// bound (`Sized + Copy + 'static` stays untouched), cost inherited
+    /// from the underlying aggregates with short-circuiting on the guard.
+    fn sorted_unique_unique_variant(items: &[Self]) -> Option<Self> {
+        if <Self as ClosedSet>::has_unique_unique_variant(items) {
+            <Self as ClosedSet>::sorted_variants()
+                .into_iter()
+                .find(|&v| <Self as ClosedSet>::is_unique_occurrence_of(v, items))
+        } else {
+            None
+        }
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC PER-TARGET "is `target` the SOLE
     /// absent variant?" predicate — `true` iff `target` does NOT
     /// occur in `items` AND exactly ONE variant of [`Self::ALL`] is
@@ -52141,6 +52366,136 @@ where
             T::sorted_unique_repeating_variant(&bimodal_triple).is_some(),
             T::has_unique_repeating_variant(&bimodal_triple),
             "{type_name}: T::sorted_unique_repeating_variant(&bimodal_triple).is_some() drifted from T::has_unique_repeating_variant(&bimodal_triple) — the is-some coincidence identity MUST hold on the bimodal-triple fixture",
+        );
+    }
+    // (182) — `T::sorted_unique_unique_variant(items)` MUST agree with
+    // the guarded-lex-first-witness body
+    // `if T::has_unique_unique_variant(items)
+    //  { T::sorted_variants().into_iter().find(|&v| T::is_unique_occurrence_of(v, items)) }
+    //  else { None }` on every canonical slice AND MUST IDENTICALLY EQUAL
+    // its declaration-order sibling `T::unique_unique_variant` on every
+    // canonical slice — the ordering-choice-irrelevance identity witnesses
+    // that WHEN the unique-band uniqueness bit holds the SOLE singleton-
+    // multiplicity witness is unambiguous, so declaration-order and lex-
+    // order first-witness sweeps land on THE SAME variant. Sibling posture
+    // to clauses (180) and (181) one MULTIPLICITY-BAND axis over: (180)
+    // pins the LEX-ORDER `Option<Self>` miss-band witness-if-unique
+    // projection (mult `== 0`); (181) pins the LEX-ORDER `Option<Self>`
+    // strict-repeat witness-if-unique projection (mult `>= 2`); THIS
+    // clause pins the LEX-ORDER `Option<Self>` unique-band witness-if-
+    // unique projection (mult `== 1`) — the three together EXHAUSTIVELY
+    // CLOSE the (set-level × `Option<Self>` × sorted × equivalence-
+    // partition × mult-band × unique-tie) trichotomy on the LEX-ORDER
+    // equivalence-partition surface.
+    //
+    // Empty-slice arm: `T::has_unique_unique_variant(&[])` collapses to
+    // `false` via `count_unique_variants(&[]) == 0 != 1`, the guard
+    // short-circuits, and the projection lands on `None` before the
+    // `T::sorted_variants` sweep is consulted.
+    //
+    // Full-set arm: clause (3)'s pairwise-distinctness invariant pins
+    // every variant at exactly one position, `count_unique_variants(T::ALL)`
+    // reports `T::CARDINALITY`, `has_unique_unique_variant(T::ALL)` returns
+    // `true` iff `T::CARDINALITY == 1` and `false` otherwise; at
+    // `T::CARDINALITY >= 2` the guard collapses to `None`.
+    //
+    // Doubled-full-set arm: the doubled full set hits every variant at
+    // exactly two positions, no variant sits at multiplicity `1`,
+    // `count_unique_variants` reports `0`,
+    // `has_unique_unique_variant` returns `false`, and the guard collapses
+    // to `None`.
+    //
+    // Bimodal-triple arm at cardinality `>= 3` (LOAD-BEARING `Some(_)`-arm
+    // catch): on `[T::ALL[0], T::ALL[0], T::ALL[1]]` `T::ALL[0]` sits at
+    // count `2 >= 2`, `T::ALL[1]` at count `1` (the SOLE singleton-
+    // multiplicity witness), `T::ALL[2..]` at count `0`;
+    // `count_unique_variants` reports `1`,
+    // `has_unique_unique_variant` returns `true`, the guard fires, and
+    // the lex-order sweep of `T::sorted_variants` bypasses every non-
+    // singleton variant and hits `T::ALL[1]` at its sole singleton entry
+    // — the SAME variant clause `unique_unique_variant` (declaration-
+    // order sibling) lands on. The identity
+    // `sorted_unique_unique_variant == unique_unique_variant` holds on
+    // this positive fixture BY UNIQUENESS: the sole singleton-multiplicity
+    // witness is the ONLY variant either sweep can find.
+    //
+    // Is-some coincidence: on every fixture the projection's `is_some`
+    // bit MUST equal `T::has_unique_unique_variant`.
+    //
+    // The default trait body threads the guarded-lex-first-witness sweep
+    // verbatim and satisfies every fixpoint arm + the ordering-choice-
+    // irrelevance arm for free; the assertion catches a future implementor
+    // whose override drifts the projection loudly rather than silently
+    // bifurcating the lex-order unique-band uniqueness-gated witness
+    // surface every downstream consumer routes through.
+    assert_eq!(
+        T::sorted_unique_unique_variant(empty),
+        T::unique_unique_variant(empty),
+        "{type_name}: T::sorted_unique_unique_variant(&[]) drifted from T::unique_unique_variant(&[]) — the ordering-choice-irrelevance identity MUST hold on the empty slice; both projections collapse to `None` through the same guard arm",
+    );
+    assert_eq!(
+        T::sorted_unique_unique_variant(empty).is_some(),
+        T::has_unique_unique_variant(empty),
+        "{type_name}: T::sorted_unique_unique_variant(&[]).is_some() drifted from T::has_unique_unique_variant(&[]) — the is-some coincidence identity MUST hold on the empty slice",
+    );
+    assert_eq!(
+        T::sorted_unique_unique_variant(T::ALL),
+        T::unique_unique_variant(T::ALL),
+        "{type_name}: T::sorted_unique_unique_variant(T::ALL) drifted from T::unique_unique_variant(T::ALL) — the ordering-choice-irrelevance identity MUST hold on the full-set covering slice",
+    );
+    assert_eq!(
+        T::sorted_unique_unique_variant(T::ALL).is_some(),
+        T::has_unique_unique_variant(T::ALL),
+        "{type_name}: T::sorted_unique_unique_variant(T::ALL).is_some() drifted from T::has_unique_unique_variant(T::ALL) — the is-some coincidence identity MUST hold on the full-set slice",
+    );
+    assert_eq!(
+        T::sorted_unique_unique_variant(&doubled_full_set),
+        T::unique_unique_variant(&doubled_full_set),
+        "{type_name}: T::sorted_unique_unique_variant(&doubled_full_set) drifted from T::unique_unique_variant(&doubled_full_set) — the ordering-choice-irrelevance identity MUST hold on the doubled-full-set covering slice where both projections collapse to `None`",
+    );
+    assert_eq!(
+        T::sorted_unique_unique_variant(&doubled_full_set).is_some(),
+        T::has_unique_unique_variant(&doubled_full_set),
+        "{type_name}: T::sorted_unique_unique_variant(&doubled_full_set).is_some() drifted from T::has_unique_unique_variant(&doubled_full_set) — the is-some coincidence identity MUST hold on the doubled-full-set slice",
+    );
+    if T::CARDINALITY >= 3 {
+        // Bimodal-triple fixture: LOAD-BEARING `Some(T::ALL[1])`-arm
+        // catch on the (equivalence-partition × mult `== 1` × unique-
+        // tie × lex-order × `Option<Self>`) corner. On
+        // `[T::ALL[0], T::ALL[0], T::ALL[1]]` `T::ALL[0]` sits at count
+        // `2`, `T::ALL[1]` at count `1` (the SOLE singleton-multiplicity
+        // witness), `T::ALL[2..]` at count `0`;
+        // `has_unique_unique_variant` returns `true`, the guard fires,
+        // and the lex-order sweep of `T::sorted_variants` hits
+        // `T::ALL[1]` as the sole singleton-multiplicity entry — the
+        // SAME variant the declaration-order sweep at
+        // `T::unique_unique_variant` lands on. The two projections
+        // return the SAME `Some(T::ALL[1])` on this positive fixture BY
+        // UNIQUENESS of the singleton-multiplicity witness. LOAD-BEARING
+        // DISJOINT-WITNESS mirror of the sibling clause (181) at the
+        // SAME fixture: the LEX-ORDER strict-repeat arm lands on
+        // `Some(T::ALL[0])`; THIS LEX-ORDER unique-band arm lands on
+        // `Some(T::ALL[1])` — the two POSITIVE `Some(_)` arms of the
+        // LEX-ORDER equivalence-partition (mult `>= 2`, mult `== 1`)
+        // uniqueness columns report DIFFERENT witnesses on the same
+        // slice, pinning the two multiplicity-bands as ORTHOGONAL
+        // uniqueness axes with disjoint witness projections riding
+        // DIFFERENT variants of the CANONICAL bimodal triple.
+        let bimodal_triple = [T::ALL[0], T::ALL[0], T::ALL[1]];
+        assert_eq!(
+            T::sorted_unique_unique_variant(&bimodal_triple),
+            T::unique_unique_variant(&bimodal_triple),
+            "{type_name}: T::sorted_unique_unique_variant(&bimodal_triple) drifted from T::unique_unique_variant(&bimodal_triple) — the ordering-choice-irrelevance identity MUST hold on the LOAD-BEARING bimodal-triple positive fixture; when the sole singleton-multiplicity witness is unique, declaration-order and lex-order sweeps BOTH land on `Some(T::ALL[1])`",
+        );
+        assert_eq!(
+            T::sorted_unique_unique_variant(&bimodal_triple),
+            Some(T::ALL[1]),
+            "{type_name}: T::sorted_unique_unique_variant(&bimodal_triple) drifted from `Some(T::ALL[1])` at cardinality >= 3 — on `[T::ALL[0], T::ALL[0], T::ALL[1]]` T::ALL[1] is the SOLE singleton-multiplicity witness, `count_unique_variants` reports `1`, `has_unique_unique_variant` returns `true`, and the lex-order sweep of T::sorted_variants through T::is_unique_occurrence_of bypasses every non-singleton variant and lands at THE unique singleton-multiplicity witness",
+        );
+        assert_eq!(
+            T::sorted_unique_unique_variant(&bimodal_triple).is_some(),
+            T::has_unique_unique_variant(&bimodal_triple),
+            "{type_name}: T::sorted_unique_unique_variant(&bimodal_triple).is_some() drifted from T::has_unique_unique_variant(&bimodal_triple) — the is-some coincidence identity MUST hold on the bimodal-triple fixture",
         );
     }
 }
@@ -109657,6 +110012,307 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedSortedUniqueRepeatingVariantNoneKind whose sorted_unique_repeating_variant override folds onto `None` unconditionally — clause (181)'s bimodal-triple positive fixpoint arm at cardinality >= 2 MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_unique_variant_returns_none_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT: T::sorted_unique_unique_variant(&[]) ==
+        // None UNCONDITIONALLY — the empty slice hits zero positions,
+        // every variant sits at multiplicity 0, count_unique_variants
+        // reports 0, has_unique_unique_variant returns false, and the
+        // guard collapses the projection to `None` before the
+        // T::sorted_variants sweep is consulted.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_unique_variant(empty),
+            None,
+            "T::sorted_unique_unique_variant(&[]) diverged from the empty-slice fixpoint None",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_unique_variant_returns_some_self_on_every_matching_singleton_across_every_variant(
+    ) {
+        // MATCHING-SINGLETON CONTRACT:
+        // T::sorted_unique_unique_variant(&[v]) == Some(v) for every v
+        // — the sole position hits v at count 1 (the SOLE singleton-
+        // multiplicity witness), every non-target sits at count 0 (not
+        // singleton-multiplicity), count_unique_variants reports 1,
+        // has_unique_unique_variant returns true, the guard fires, and
+        // the lex-order sweep of T::sorted_variants finds v at its sole
+        // singleton entry — the SAME variant the declaration-order sweep
+        // at T::unique_unique_variant lands on (ordering-choice-
+        // irrelevance identity).
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_unique_unique_variant(&singleton),
+                Some(v),
+                "T::sorted_unique_unique_variant([{v:?}]) diverged from `Some({v:?})` — the matching-singleton positive fixpoint arm demands the sole present variant",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_unique_unique_variant_returns_none_on_the_full_set_at_cardinality_gte_two() {
+        // FULL-SET CONTRACT AT CARDINALITY >= 2:
+        // T::sorted_unique_unique_variant(T::ALL) == None — clause (3)'s
+        // pairwise-distinctness invariant pins every variant at exactly
+        // one position, count_unique_variants reports T::CARDINALITY,
+        // has_unique_unique_variant returns false at cardinality >= 2,
+        // and the guard collapses to `None`.
+        assert!(<StubKind as ClosedSet>::CARDINALITY >= 2);
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_unique_variant(<StubKind as ClosedSet>::ALL),
+            None,
+            "T::sorted_unique_unique_variant(T::ALL) diverged from the full-set fixpoint None at cardinality >= 2",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_unique_variant_returns_none_on_the_doubled_full_set_across_every_kind() {
+        // DOUBLED-FULL-SET CONTRACT:
+        // T::sorted_unique_unique_variant(T::ALL ++ T::ALL) == None
+        // UNCONDITIONALLY — the doubled full set hits every variant at
+        // exactly two positions, no variant sits at multiplicity 1,
+        // count_unique_variants reports 0, has_unique_unique_variant
+        // returns false, and the guard collapses to `None`.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_unique_variant(&doubled),
+            None,
+            "T::sorted_unique_unique_variant(ALL++ALL) diverged from the doubled-full-set fixpoint None",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_unique_variant_returns_some_all_1_on_the_bimodal_triple_at_cardinality_gte_three(
+    ) {
+        // BIMODAL-TRIPLE CONTRACT AT CARDINALITY >= 3: LOAD-BEARING
+        // `Some(T::ALL[1])`-arm catch on the lex-order unique-band
+        // uniqueness column. On `[T::ALL[0], T::ALL[0], T::ALL[1]]`
+        // T::ALL[0] sits at count 2, T::ALL[1] at count 1 (the SOLE
+        // singleton-multiplicity witness), T::ALL[2..] at count 0;
+        // T::count_unique_variants reports 1,
+        // T::has_unique_unique_variant returns true, the guard fires,
+        // and the lex-order sweep of T::sorted_variants hits T::ALL[1]
+        // as the sole singleton-multiplicity entry — the SAME variant
+        // the declaration-order sweep at T::unique_unique_variant lands
+        // on (ordering-choice-irrelevance identity).
+        assert!(<StubKind as ClosedSet>::CARDINALITY >= 3);
+        let bimodal_triple = [
+            <StubKind as ClosedSet>::ALL[0],
+            <StubKind as ClosedSet>::ALL[0],
+            <StubKind as ClosedSet>::ALL[1],
+        ];
+        let via_sorted = <StubKind as ClosedSet>::sorted_unique_unique_variant(&bimodal_triple);
+        let via_decl = <StubKind as ClosedSet>::unique_unique_variant(&bimodal_triple);
+        assert_eq!(
+            via_sorted, via_decl,
+            "T::sorted_unique_unique_variant(&bimodal_triple) diverged from T::unique_unique_variant(&bimodal_triple) — uniqueness of the singleton-multiplicity witness pins ordering-choice irrelevance",
+        );
+        assert_eq!(
+            via_sorted,
+            Some(<StubKind as ClosedSet>::ALL[1]),
+            "T::sorted_unique_unique_variant({bimodal_triple:?}) diverged from `Some(T::ALL[1])` — the LOAD-BEARING Some-arm on the canonical bimodal-triple fixture pins the sole singleton-multiplicity witness",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_unique_variant_equals_unique_unique_variant_across_every_triple() {
+        // ORDERING-CHOICE-IRRELEVANCE IDENTITY: for every slice `items`,
+        // T::sorted_unique_unique_variant(items) ==
+        // T::unique_unique_variant(items) — when the unique-band
+        // uniqueness bit holds the SOLE singleton-multiplicity witness
+        // is unambiguous, so declaration-order and lex-order first-
+        // witness sweeps land on THE SAME variant; when the bit
+        // falsifies both projections collapse to `None` through the
+        // same guard arm. The lex peer is thus IDENTICALLY equal to
+        // its declaration-order sibling on every input.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_unique_variant(&triple),
+                        <StubKind as ClosedSet>::unique_unique_variant(&triple),
+                        "T::sorted_unique_unique_variant({triple:?}) diverged from T::unique_unique_variant({triple:?}) — the ordering-choice-irrelevance identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_unique_variant_equals_has_unique_unique_variant_gated_lex_first_across_every_triple(
+    ) {
+        // GUARDED-LEX-FIRST-WITNESS IDENTITY: for every slice `items`,
+        // T::sorted_unique_unique_variant(items) ==
+        // if T::has_unique_unique_variant(items) {
+        //   T::sorted_variants().into_iter().find(|&v| T::is_unique_occurrence_of(v, items))
+        // } else { None }. The canonical form the body uses.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_body = <StubKind as ClosedSet>::sorted_unique_unique_variant(&triple);
+                    let via_guarded_lex_lift =
+                        if <StubKind as ClosedSet>::has_unique_unique_variant(&triple) {
+                            <StubKind as ClosedSet>::sorted_variants()
+                                .into_iter()
+                                .find(|&v| {
+                                    <StubKind as ClosedSet>::is_unique_occurrence_of(v, &triple)
+                                })
+                        } else {
+                            None
+                        };
+                    assert_eq!(
+                        via_body, via_guarded_lex_lift,
+                        "T::sorted_unique_unique_variant({triple:?}) diverged from the guarded lex-first-witness lift",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_unique_variant_is_some_iff_has_unique_unique_variant_across_every_triple() {
+        // IS-SOME COINCIDENCE IDENTITY: for every slice `items`,
+        // T::sorted_unique_unique_variant(items).is_some() ==
+        // T::has_unique_unique_variant(items). Independent cross-check
+        // on the surface axis distinct from the option-equality arm
+        // against T::unique_unique_variant.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_unique_variant(&triple)
+                            .is_some(),
+                        <StubKind as ClosedSet>::has_unique_unique_variant(&triple),
+                        "T::sorted_unique_unique_variant({triple:?}).is_some() diverged from T::has_unique_unique_variant({triple:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_unique_variant_agrees_with_sorted_unique_variants_singleton_across_every_triple(
+    ) {
+        // SORTED-UNIQUE WITNESS SINGLETON IDENTITY: for every slice
+        // `items`, T::sorted_unique_unique_variant(items) is Some iff
+        // T::sorted_unique_variants(items) is length-1, and then wraps
+        // the sole tie-member in Some. Independent cross-check on the
+        // witness-Vec surface axis distinct from the scalar arms.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let witnesses = <StubKind as ClosedSet>::sorted_unique_variants(&triple);
+                    let via_witnesses = if witnesses.len() == 1 {
+                        Some(witnesses[0])
+                    } else {
+                        None
+                    };
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_unique_variant(&triple),
+                        via_witnesses,
+                        "T::sorted_unique_unique_variant({triple:?}) diverged from the length-1 sorted-witness-Vec projection",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_unique_variant_is_invariant_under_slice_reversal_across_every_triple() {
+        // REVERSAL-INVARIANCE CONTRACT:
+        // T::sorted_unique_unique_variant is invariant under slice-
+        // reversal. Both T::has_unique_unique_variant and the
+        // T::sorted_variants sweep keyed on T::is_unique_occurrence_of
+        // are ordering-agnostic on the input axis, so the guarded lift
+        // is too.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let reversed: Vec<StubKind> = triple.iter().rev().copied().collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_unique_variant(&triple),
+                        <StubKind as ClosedSet>::sorted_unique_unique_variant(&reversed),
+                        "T::sorted_unique_unique_variant({triple:?}) diverged from T::sorted_unique_unique_variant({reversed:?}) — reversal-invariance was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_none_drift_in_sorted_unique_unique_variant() {
+        // Drift catch — clause (182)'s matching-singleton positive arm
+        // at every variant AND its bimodal-triple positive arm at
+        // T::ALL[1] on the canonical fixture fire when an override folds
+        // the projection onto `None` regardless of input. The matching-
+        // singleton fixture demands `Some(v)`; the drifted override
+        // cannot produce it.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedUniqueUniqueVariantNoneKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedSortedUniqueUniqueVariantNoneKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedSortedUniqueUniqueVariantNoneKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted sorted_unique_unique_variant none kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedSortedUniqueUniqueVariantNoneKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedSortedUniqueUniqueVariantNoneKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted sorted_unique_unique_variant none kind";
+            type Unknown = UnknownDriftedSortedUniqueUniqueVariantNoneKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedUniqueUniqueVariantNoneKind(s.to_owned())
+            }
+            fn sorted_unique_unique_variant(_items: &[Self]) -> Option<Self> {
+                // Drift: return `None` regardless. Fires clause
+                // (182)'s bimodal-triple positive fixpoint arm at
+                // `None != Some(T::ALL[1])`.
+                None
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedSortedUniqueUniqueVariantNoneKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedSortedUniqueUniqueVariantNoneKind whose sorted_unique_unique_variant override folds onto `None` unconditionally — clause (182)'s bimodal-triple positive fixpoint arm at cardinality >= 3 MUST reject the drift",
         );
     }
 }

@@ -30191,6 +30191,169 @@ pub trait ClosedSet: Sized + Copy + 'static {
         }
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "the unique extremal witness as a
+    /// singleton-or-empty Vec" projection — returns `vec![v]` iff `items`
+    /// has a UNIQUE extremal witness ([`Self::has_unique_extremal_variant`]
+    /// holds) AND `v` is the sole variant achieving EITHER
+    /// [`Self::max_variant_count`] OR [`Self::min_variant_count`], else
+    /// `vec![]`. Computed as the just-lifted set-level extremal-union
+    /// uniqueness bit [`Self::has_unique_extremal_variant`] guarding the
+    /// declaration-order union witness-collection
+    /// [`Self::extremal_variants`]: when the guard holds the collection is
+    /// already a length-`1` Vec by the guard's own definition
+    /// (`count_extremal_variants == 1`) and is lifted verbatim; when the
+    /// guard falsifies the projection collapses to the EMPTY Vec through
+    /// a zero-allocation `::std::vec::Vec::new()` short-circuit. The
+    /// `Vec<Self>`-RETURN UNIQUE-TIE SHARPENING corner OPENING the
+    /// (set-level × `Vec<Self>` × statistical-aggregate × direction-
+    /// composition × unique-tie) column past the six unsharpened
+    /// (declaration/lex × union/complement/intersection) direction-
+    /// composition witness-collection peers
+    /// ([`Self::extremal_variants`], [`Self::sorted_extremal_variants`],
+    /// [`Self::middle_band_variants`],
+    /// [`Self::sorted_middle_band_variants`], [`Self::bimodal_variants`],
+    /// [`Self::sorted_bimodal_variants`]) one UNIQUE-TIE-SHARPENING axis
+    /// over on the modal-aggregation matrix AND peer to
+    /// [`Self::unique_extremal_variant`] (set-level × `Option<Self>` ×
+    /// union × unique-tie) one RETURN-SHAPE axis over (Option-return
+    /// witness-when-unique → Vec-return singleton-or-empty-when-unique)
+    /// AND peer to [`Self::has_unique_extremal_variant`] (set-level ×
+    /// `bool` × union × unique-tie) one RETURN-SHAPE axis over (bool
+    /// uniqueness bit → Vec-return singleton-or-empty carrier of the same
+    /// bit). Not a fresh substrate primitive on the index axis — the
+    /// projection emerges from the boolean-guarded selection of the just-
+    /// lifted declaration-order union witness-collection under the set-
+    /// level extremal-union uniqueness bit, collapsing to the empty Vec
+    /// through the guard-arm when the bit falsifies.
+    ///
+    /// Guarded-witness-collection identity: for every slice `items`,
+    /// `T::unique_extremal_variants(items) == if T::has_unique_extremal_variant(items) { T::extremal_variants(items) } else { vec![] }`
+    /// — the canonical form the body uses. Pinned by
+    /// `unique_extremal_variants_equals_has_unique_extremal_variant_gated_extremal_variants_across_every_triple`.
+    ///
+    /// Length coincidence identity: for every slice `items`,
+    /// `T::unique_extremal_variants(items).len() == usize::from(T::has_unique_extremal_variant(items))`
+    /// — the return-Vec's length COINCIDES with the set-level extremal-
+    /// union uniqueness bit projected onto `usize`: exactly `0` when the
+    /// bit falsifies, exactly `1` when it holds (since when
+    /// `count_extremal_variants == 1` the underlying
+    /// [`Self::extremal_variants`] filter over [`Self::ALL`] admits
+    /// EXACTLY ONE variant). Independent cross-check on the surface axis
+    /// distinct from the guarded-witness-collection arm (length reduction
+    /// vs conditional Vec-select). Pinned by
+    /// `unique_extremal_variants_len_equals_has_unique_extremal_variant_as_usize_across_every_triple`.
+    ///
+    /// Option-equality identity: for every slice `items`,
+    /// `T::unique_extremal_variants(items).first().copied() == T::unique_extremal_variant(items)`
+    /// — the `Vec`-return's first-element projection COINCIDES with the
+    /// `Option`-return peer one RETURN-SHAPE axis over, since both encode
+    /// the same "sole witness if unique, else nothing" semantics through
+    /// different return shapes. Pinned by
+    /// `unique_extremal_variants_first_equals_unique_extremal_variant_across_every_triple`.
+    ///
+    /// Is-empty coincidence identity: for every slice `items`,
+    /// `T::unique_extremal_variants(items).is_empty() == !T::has_unique_extremal_variant(items)`
+    /// — the return-Vec's emptiness coincides with the NEGATION of the
+    /// set-level uniqueness bit. Independent cross-check on the surface
+    /// axis distinct from the length-coincidence arm (Vec::is_empty vs
+    /// integer equality). Pinned by
+    /// `unique_extremal_variants_is_empty_iff_not_has_unique_extremal_variant_across_every_triple`.
+    ///
+    /// Reversal-invariance identity: the projection factors through
+    /// [`Self::has_unique_extremal_variant`] (ordering-agnostic — the
+    /// underlying [`Self::count_extremal_variants`] is invariant under
+    /// slice-reversal) and [`Self::extremal_variants`] (ordering-agnostic
+    /// on the input axis — the underlying max/min-fold pair +
+    /// [`Self::is_extremal_variant_of`] filter over [`Self::ALL`] are all
+    /// invariant under slice-reversal) via a boolean-guarded Vec-select.
+    /// Pinned by
+    /// `unique_extremal_variants_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::unique_extremal_variants(&[]) == vec![]`
+    /// UNCONDITIONALLY — [`Self::has_unique_extremal_variant`] collapses
+    /// to `false` via its `count_extremal_variants(&[]) == 0 != 1`
+    /// fixpoint, and the guard-arm short-circuit maps the empty slice to
+    /// the empty Vec before [`Self::extremal_variants`]'s own empty-Vec-
+    /// at-empty branch is consulted.
+    ///
+    /// Degenerate-opener contract at cardinality `>= 2`:
+    /// `T::unique_extremal_variants(items) == vec![]` on EVERY non-empty
+    /// canonical fixture on EVERY implementor with `T::CARDINALITY >= 2`
+    /// — the inclusion-exclusion identity pins the union cardinality at
+    /// either `0` or `>= 2` past the empty slice at cardinality `>= 2`,
+    /// so [`Self::has_unique_extremal_variant`] returns `false` and the
+    /// guard collapses the projection to the EMPTY Vec. THIS corner is
+    /// the DEGENERATE OPENER on the (`Vec<Self>` × direction-composition
+    /// × union × unique-tie) axis — the SOLE non-empty arm sits at
+    /// `T::CARDINALITY == 1` where a matching singleton (= full-set)
+    /// collapses the union to a single variant, out of reach of the
+    /// multi-variant test-module fixtures. LOAD-BEARING ASYMMETRY against
+    /// [`Self::extremal_variants`] which returns a non-empty Vec on
+    /// every non-empty slice.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of
+    /// [`Self::has_unique_extremal_variant`] +
+    /// [`Self::extremal_variants`] via a boolean-guarded Vec-select on
+    /// `Vec<Self>`. Cost inherits both underlying projections:
+    /// `O(T::CARDINALITY * n)` on slice arity `n` (one
+    /// [`Self::count_extremal_variants`] reduction for the guard, one
+    /// [`Self::extremal_variants`] filter sweep when the guard holds; the
+    /// short-circuiting `if` avoids the filter sweep AND the Vec
+    /// allocation when the guard falsifies), no `PartialEq`/`Eq`/`Hash`
+    /// supertrait bound (the trait's minimal `Sized + Copy + 'static`
+    /// supertrait pair stays untouched).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::unique_extremal_variants`]: a `tatara-check` predicate
+    /// `(check-extremals-if-unique …)` that reports the singleton-or-
+    /// empty extremal witness collection as a typed `Vec<Self>`-return
+    /// rather than a two-step (has-unique-extremal-variant? then
+    /// extremal-variants) composition; a Sekiban audit-trail per-window
+    /// singleton-or-empty binding that composes uniformly with the
+    /// six-Vec (union/complement/intersection × declaration/lex) rows
+    /// through a shared Vec return shape; downstream aggregate code that
+    /// iterates over "the sole witness if any" without needing to
+    /// dispatch on Option/Vec at the callsite.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary set-
+    /// level unique-extremal `Vec<Self>` singleton-or-empty witness
+    /// projection becomes a TYPE-level primitive on the closed-set trait
+    /// rather than a per-consumer inline
+    /// `if T::has_unique_extremal_variant(items) { T::extremal_variants(items) } else { vec![] }`
+    /// composition at every downstream generic site. THEORY.md §V.1 —
+    /// knowable platform; the (set-level × `Vec<Self>` × direction-
+    /// composition × union × unique-tie) witness-if-unique corner was an
+    /// unnamed inline composition recurring at every prospective
+    /// downstream "the sole extremal, as a Vec, if it's unambiguous"
+    /// site pre-lift. THEORY.md §VI.1 — generation over composition; the
+    /// projection emerges from the composition of TWO substrate
+    /// primitives ([`Self::has_unique_extremal_variant`] +
+    /// [`Self::extremal_variants`]) with the `if _ { _ } else { vec![] }`
+    /// combinator on `Vec<Self>`.
+    ///
+    /// Frontier inspiration: R's
+    /// `{ t <- table(items); m <- max(t); n <- min(t); tied <- names(t)[t == m | t == n]; if (length(tied) == 1) tied else character(0) }`
+    /// — the canonical guarded-union singleton-or-empty carrier on a
+    /// factor histogram; Clojure's
+    /// `(let [f (frequencies coll), m (apply max (vals f)), n (apply min (vals f)), ts (filter #(or (= (val %) m) (= (val %) n)) f)] (if (= 1 (count ts)) [(key (first ts))] []))`;
+    /// SQL's
+    /// `SELECT ARRAY(SELECT variant FROM t GROUP BY variant HAVING COUNT(*) IN (SELECT MAX(c), MIN(c) FROM …)) WHERE cardinality(…) = 1`.
+    /// Translation through pleme-io primitives: the N-ary set-level
+    /// uniqueness-gated union singleton-or-empty projection on the
+    /// closed-set trait binds through the just-lifted
+    /// [`Self::has_unique_extremal_variant`] guard conjoined with the
+    /// just-lifted [`Self::extremal_variants`] witness-collection under
+    /// a Vec-select — no new dep, no supertrait bound,
+    /// `O(T::CARDINALITY * n)` inherited from the underlying aggregates
+    /// with short-circuiting on the guard.
+    fn unique_extremal_variants(items: &[Self]) -> ::std::vec::Vec<Self> {
+        if <Self as ClosedSet>::has_unique_extremal_variant(items) {
+            <Self as ClosedSet>::extremal_variants(items)
+        } else {
+            ::std::vec::Vec::new()
+        }
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "target is THE UNIQUE extremal variant"
     /// per-target predicate — `true` iff `target` is an extremal variant of
     /// `items` (its per-target multiplicity sits on the union of the argmax
@@ -54564,6 +54727,140 @@ where
             T::sorted_unique_bimodal_variant(&bimodal_triple),
             T::unique_bimodal_variant(&bimodal_triple),
             "{type_name}: T::sorted_unique_bimodal_variant(&bimodal_triple) drifted from T::unique_bimodal_variant(&bimodal_triple) — the ordering-choice-irrelevance identity MUST hold on the bimodal-triple fixture (both projections collapse to `None`)",
+        );
+    }
+    // (188) — `T::unique_extremal_variants(items)` MUST agree with the
+    // guarded-lift body
+    // `if T::has_unique_extremal_variant(items) { T::extremal_variants(items) } else { vec![] }`
+    // on every canonical slice AND MUST pin length + first-element +
+    // is-empty coincidences against the sibling
+    // (`bool`, `Option<Self>`) unique-tie union corners one RETURN-SHAPE
+    // axis over. THIS clause OPENS the (set-level × `Vec<Self>` ×
+    // direction-composition × union × unique-tie) column past the six
+    // unsharpened (declaration/lex × union/complement/intersection)
+    // witness-collection peers one UNIQUE-TIE-SHARPENING axis over on
+    // the modal-aggregation matrix AND peer to clause (165)
+    // ([`T::unique_extremal_variant`]) one RETURN-SHAPE axis over.
+    //
+    // Degenerate-opener discipline (inherited from clause (165)): at
+    // `T::CARDINALITY >= 2` the inclusion-exclusion identity pins
+    // `count_extremal_variants` at either `0` or `>= 2` past the empty
+    // slice, so `has_unique_extremal_variant` returns `false` and the
+    // guarded lift collapses to `vec![]` on EVERY canonical fixture.
+    // The SOLE non-empty arm sits at `T::CARDINALITY == 1` on the full-
+    // set / doubled-full-set / matching-singleton fixpoints where the
+    // uniformity-collapse pins the union count at `1`.
+    //
+    // The default trait body threads the boolean-guarded Vec-select
+    // verbatim and satisfies every fixpoint arm + the length +
+    // Option-equality + is-empty coincidence identities for free; the
+    // assertion catches a future implementor whose override drifts the
+    // projection loudly rather than silently bifurcating the set-level
+    // direction-composition union singleton-or-empty witness surface.
+    // An override that folds onto `vec![T::ALL[0]]` unconditionally
+    // bifurcates the empty-slice arm at `[T::ALL[0]] != []` AND every
+    // flat-histogram + matching-singleton + bimodal-triple fixpoint arm
+    // at cardinality `>= 2` at `[T::ALL[0]] != []`.
+    let empty_unique_extremals = T::unique_extremal_variants(empty);
+    let expected_empty_unique_extremals: ::std::vec::Vec<T> =
+        if T::has_unique_extremal_variant(empty) {
+            T::extremal_variants(empty)
+        } else {
+            ::std::vec::Vec::new()
+        };
+    assert_eq!(
+        empty_unique_extremals, expected_empty_unique_extremals,
+        "{type_name}: T::unique_extremal_variants(&[]) drifted from the guarded lift `if T::has_unique_extremal_variant(&[]) {{ T::extremal_variants(&[]) }} else {{ vec![] }}` — the guarded-lift identity MUST hold on the empty slice; the empty-slice guard of `has_unique_extremal_variant` collapses to `false`, the guarded lift short-circuits to the empty Vec, and `T::extremal_variants(&[])`'s own empty-Vec-at-empty branch is not consulted",
+    );
+    assert_eq!(
+        T::unique_extremal_variants(empty).len(),
+        usize::from(T::has_unique_extremal_variant(empty)),
+        "{type_name}: T::unique_extremal_variants(&[]).len() drifted from `T::has_unique_extremal_variant(&[]) as usize` — the length-coincidence identity MUST hold on the empty slice",
+    );
+    assert_eq!(
+        T::unique_extremal_variants(empty).first().copied(),
+        T::unique_extremal_variant(empty),
+        "{type_name}: T::unique_extremal_variants(&[]).first() drifted from T::unique_extremal_variant(&[]) — the Option-equality identity MUST hold on the empty slice",
+    );
+    assert_eq!(
+        T::unique_extremal_variants(empty).is_empty(),
+        !T::has_unique_extremal_variant(empty),
+        "{type_name}: T::unique_extremal_variants(&[]).is_empty() drifted from `!T::has_unique_extremal_variant(&[])` — the is-empty coincidence identity MUST hold on the empty slice",
+    );
+    let full_unique_extremals = T::unique_extremal_variants(T::ALL);
+    let expected_full_unique_extremals: ::std::vec::Vec<T> =
+        if T::has_unique_extremal_variant(T::ALL) {
+            T::extremal_variants(T::ALL)
+        } else {
+            ::std::vec::Vec::new()
+        };
+    assert_eq!(
+        full_unique_extremals, expected_full_unique_extremals,
+        "{type_name}: T::unique_extremal_variants(T::ALL) drifted from the guarded lift `if T::has_unique_extremal_variant(T::ALL) {{ T::extremal_variants(T::ALL) }} else {{ vec![] }}` — the guarded-lift identity MUST hold on the full-set slice; at cardinality >= 2 the flat histogram pins every variant at both extremes, `has_unique_extremal_variant` returns `false`, and the guarded lift collapses to `vec![]`; at `T::CARDINALITY == 1` the single-variant slice pins the union count at `1`, `has_unique_extremal_variant` returns `true`, and the guarded lift reports `vec![T::ALL[0]]` — the SOLE non-empty arm of the degenerate opener",
+    );
+    assert_eq!(
+        T::unique_extremal_variants(T::ALL).len(),
+        usize::from(T::has_unique_extremal_variant(T::ALL)),
+        "{type_name}: T::unique_extremal_variants(T::ALL).len() drifted from `T::has_unique_extremal_variant(T::ALL) as usize` — the length-coincidence identity MUST hold on the full-set slice",
+    );
+    assert_eq!(
+        T::unique_extremal_variants(T::ALL).first().copied(),
+        T::unique_extremal_variant(T::ALL),
+        "{type_name}: T::unique_extremal_variants(T::ALL).first() drifted from T::unique_extremal_variant(T::ALL) — the Option-equality identity MUST hold on the full-set slice",
+    );
+    let doubled_unique_extremals = T::unique_extremal_variants(&doubled_full_set);
+    let expected_doubled_unique_extremals: ::std::vec::Vec<T> =
+        if T::has_unique_extremal_variant(&doubled_full_set) {
+            T::extremal_variants(&doubled_full_set)
+        } else {
+            ::std::vec::Vec::new()
+        };
+    assert_eq!(
+        doubled_unique_extremals, expected_doubled_unique_extremals,
+        "{type_name}: T::unique_extremal_variants(&doubled_full_set) drifted from the guarded lift `if T::has_unique_extremal_variant(&doubled_full_set) {{ T::extremal_variants(&doubled_full_set) }} else {{ vec![] }}` — the guarded-lift identity MUST hold on the doubled-full-set slice",
+    );
+    assert_eq!(
+        T::unique_extremal_variants(&doubled_full_set).len(),
+        usize::from(T::has_unique_extremal_variant(&doubled_full_set)),
+        "{type_name}: T::unique_extremal_variants(&doubled_full_set).len() drifted from `T::has_unique_extremal_variant(&doubled_full_set) as usize` — the length-coincidence identity MUST hold on the doubled-full-set slice",
+    );
+    assert_eq!(
+        T::unique_extremal_variants(&doubled_full_set).first().copied(),
+        T::unique_extremal_variant(&doubled_full_set),
+        "{type_name}: T::unique_extremal_variants(&doubled_full_set).first() drifted from T::unique_extremal_variant(&doubled_full_set) — the Option-equality identity MUST hold on the doubled-full-set slice",
+    );
+    if T::CARDINALITY >= 2 {
+        for target in T::ALL.iter().copied() {
+            let target_label = <T as ClosedSet>::label(target);
+            let matching_singleton = [target];
+            assert_eq!(
+                T::unique_extremal_variants(&matching_singleton),
+                ::std::vec::Vec::<T>::new(),
+                "{type_name}: T::unique_extremal_variants([{target_label:?}]) drifted from `vec![]` at cardinality >= 2 — argmax `{{{target_label:?}}}` and argmin `T::ALL \\ {{{target_label:?}}}` are disjoint, `count_extremal_variants` reports `T::CARDINALITY >= 2`, `has_unique_extremal_variant` returns `false`, and the guard collapses the projection to `vec![]`",
+            );
+            assert_eq!(
+                T::unique_extremal_variants(&matching_singleton).first().copied(),
+                T::unique_extremal_variant(&matching_singleton),
+                "{type_name}: T::unique_extremal_variants([{target_label:?}]).first() drifted from T::unique_extremal_variant([{target_label:?}]) — the Option-equality identity MUST hold on the matching-singleton fixture at cardinality >= 2 (both project to None/vec[].first())",
+            );
+        }
+    }
+    if T::CARDINALITY >= 3 {
+        // Bimodal-triple fixture: LOAD-BEARING empty-Vec arm on the
+        // (`Vec<Self>` × direction-composition × union × unique-tie)
+        // corner. count_extremal_variants reports T::CARDINALITY - 1 >= 2
+        // via disjoint argmax + argmin bands, has_unique_extremal_variant
+        // returns false, and the guard collapses the projection to vec[].
+        let bimodal_triple = [T::ALL[0], T::ALL[0], T::ALL[1]];
+        assert_eq!(
+            T::unique_extremal_variants(&bimodal_triple),
+            ::std::vec::Vec::<T>::new(),
+            "{type_name}: T::unique_extremal_variants(&bimodal_triple) drifted from `vec![]` — count_extremal_variants reports T::CARDINALITY - 1 >= 2, has_unique_extremal_variant returns false, and the guard collapses to vec![]",
+        );
+        assert_eq!(
+            T::unique_extremal_variants(&bimodal_triple).first().copied(),
+            T::unique_extremal_variant(&bimodal_triple),
+            "{type_name}: T::unique_extremal_variants(&bimodal_triple).first() drifted from T::unique_extremal_variant(&bimodal_triple) — the Option-equality identity MUST hold on the bimodal-triple fixture (both project to None)",
         );
     }
 }
@@ -107459,6 +107756,202 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedUniqueExtremalVariantSomeFirstKind whose unique_extremal_variant override folds onto Some(first) unconditionally — clause (165)'s empty-slice + flat-histogram + matching-singleton + bimodal-triple fixpoint arms MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn unique_extremal_variants_returns_empty_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT: T::unique_extremal_variants(&[]) == vec![]
+        // UNCONDITIONALLY — has_unique_extremal_variant(&[]) is false via
+        // count_extremal_variants == 0 != 1, the guard falsifies, and
+        // the projection collapses to the empty Vec through the guard arm.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::unique_extremal_variants(empty),
+            Vec::<StubKind>::new(),
+            "T::unique_extremal_variants(&[]) diverged from the empty-slice fixpoint vec![]",
+        );
+    }
+
+    #[test]
+    fn unique_extremal_variants_equals_has_unique_extremal_variant_gated_extremal_variants_across_every_triple(
+    ) {
+        // GUARDED-WITNESS-COLLECTION IDENTITY: for every slice `items`,
+        // T::unique_extremal_variants(items) ==
+        // if T::has_unique_extremal_variant(items)
+        // { T::extremal_variants(items) } else { vec![] }. The canonical
+        // form the body uses.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_body = <StubKind as ClosedSet>::unique_extremal_variants(&triple);
+                    let via_guarded_lift =
+                        if <StubKind as ClosedSet>::has_unique_extremal_variant(&triple) {
+                            <StubKind as ClosedSet>::extremal_variants(&triple)
+                        } else {
+                            Vec::new()
+                        };
+                    assert_eq!(
+                        via_body, via_guarded_lift,
+                        "T::unique_extremal_variants({triple:?}) diverged from the guarded lift `if T::has_unique_extremal_variant {{ T::extremal_variants }} else {{ vec![] }}`",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_extremal_variants_len_equals_has_unique_extremal_variant_as_usize_across_every_triple(
+    ) {
+        // LENGTH-COINCIDENCE IDENTITY: for every slice `items`,
+        // T::unique_extremal_variants(items).len() ==
+        // usize::from(T::has_unique_extremal_variant(items)) — the
+        // return-Vec's length coincides with the set-level uniqueness
+        // bit projected onto usize.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_extremal_variants(&triple).len(),
+                        usize::from(<StubKind as ClosedSet>::has_unique_extremal_variant(&triple)),
+                        "T::unique_extremal_variants({triple:?}).len() diverged from usize::from(T::has_unique_extremal_variant({triple:?}))",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_extremal_variants_first_equals_unique_extremal_variant_across_every_triple() {
+        // OPTION-EQUALITY IDENTITY: for every slice `items`,
+        // T::unique_extremal_variants(items).first().copied() ==
+        // T::unique_extremal_variant(items) — the Vec-return's first-
+        // element projection coincides with the Option-return peer.
+        // Independent cross-check binding the Vec-return column against
+        // the Option-return column one RETURN-SHAPE axis over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_extremal_variants(&triple)
+                            .first()
+                            .copied(),
+                        <StubKind as ClosedSet>::unique_extremal_variant(&triple),
+                        "T::unique_extremal_variants({triple:?}).first() diverged from T::unique_extremal_variant({triple:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_extremal_variants_is_empty_iff_not_has_unique_extremal_variant_across_every_triple() {
+        // IS-EMPTY COINCIDENCE IDENTITY: for every slice `items`,
+        // T::unique_extremal_variants(items).is_empty() ==
+        // !T::has_unique_extremal_variant(items). Independent cross-
+        // check on the surface axis distinct from the length-coincidence
+        // arm (Vec::is_empty vs integer equality).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_extremal_variants(&triple).is_empty(),
+                        !<StubKind as ClosedSet>::has_unique_extremal_variant(&triple),
+                        "T::unique_extremal_variants({triple:?}).is_empty() diverged from !T::has_unique_extremal_variant({triple:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_extremal_variants_is_invariant_under_slice_reversal_across_every_triple() {
+        // REVERSAL-INVARIANCE CONTRACT: T::unique_extremal_variants is
+        // invariant under slice-reversal — both underlying projections
+        // (has_unique_extremal_variant + extremal_variants) are
+        // ordering-agnostic on the input axis.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let reversed: Vec<StubKind> = triple.iter().rev().copied().collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_extremal_variants(&triple),
+                        <StubKind as ClosedSet>::unique_extremal_variants(&reversed),
+                        "T::unique_extremal_variants({triple:?}) diverged from T::unique_extremal_variants({reversed:?}) — reversal-invariance was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_singleton_first_drift_in_unique_extremal_variants(
+    ) {
+        // Drift catch — clause (188)'s empty-slice + flat-histogram +
+        // matching-singleton + bimodal-triple fixpoint arms fire when
+        // an override folds the set-level unique-extremal-variants
+        // projection onto vec![Self::first()] unconditionally. On every
+        // canonical fixture at T::CARDINALITY >= 2 the correct answer is
+        // vec![]; a `vec![Alpha]` override bifurcates every arm at
+        // `[Alpha] != []`.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedUniqueExtremalVariantsSingletonFirstKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedUniqueExtremalVariantsSingletonFirstKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedUniqueExtremalVariantsSingletonFirstKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted unique_extremal_variants singleton-first kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedUniqueExtremalVariantsSingletonFirstKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedUniqueExtremalVariantsSingletonFirstKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted unique_extremal_variants singleton-first kind";
+            type Unknown = UnknownDriftedUniqueExtremalVariantsSingletonFirstKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedUniqueExtremalVariantsSingletonFirstKind(s.to_owned())
+            }
+            fn unique_extremal_variants(_items: &[Self]) -> Vec<Self> {
+                // Drift: always return vec![Alpha]. Fires clause (188)'s
+                // empty-slice arm ([Alpha] != []) AND every non-empty
+                // fixpoint arm at cardinality >= 2 ([Alpha] != []).
+                ::std::vec![Self::Alpha]
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedUniqueExtremalVariantsSingletonFirstKind>(
+            );
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedUniqueExtremalVariantsSingletonFirstKind whose unique_extremal_variants override folds onto vec![Alpha] unconditionally — clause (188)'s empty-slice + flat-histogram + matching-singleton + bimodal-triple fixpoint arms MUST reject the drift",
         );
     }
 

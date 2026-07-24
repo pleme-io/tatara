@@ -23148,6 +23148,258 @@ pub trait ClosedSet: Sized + Copy + 'static {
         }
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "THE unique middle-band variant, lex-
+    /// first" projection — `Some(v)` iff `items` has a UNIQUE strict-
+    /// interior witness ([`Self::has_unique_middle_band_variant`] holds)
+    /// AND `v` is the sole variant of [`Self::sorted_variants`] with
+    /// occurrence-count STRICTLY BETWEEN [`Self::max_variant_count`] AND
+    /// [`Self::min_variant_count`], else `None`. Computed as the just-
+    /// lifted set-level middle-band uniqueness bit
+    /// [`Self::has_unique_middle_band_variant`] guarding the LEX-ORDER
+    /// strict-interior first-witness [`Self::sorted_middle_band_variant`]
+    /// projection: when the guard holds the complement witness is
+    /// unambiguous and lifted verbatim; when the guard falsifies the
+    /// projection collapses to `None`. The LEX-ORDER `Option<Self>`-
+    /// RETURN UNIQUE-TIE SHARPENING corner CLOSING the complement arm
+    /// of the (set-level × sorted × `Option<Self>` × direction-
+    /// composition × combinator × unique-tie) row past the just-opened
+    /// UNION arm [`Self::sorted_unique_extremal_variant`] one COMBINATOR
+    /// axis over on the modal-aggregation matrix AND peer to
+    /// [`Self::unique_middle_band_variant`] one ORDERING axis over
+    /// (declaration-order → lex-order strict-interior first-witness-
+    /// when-unique) AND peer to [`Self::sorted_middle_band_variant`]
+    /// one UNIQUE-TIE-SHARPENING axis over (unsharpened lex-order
+    /// strict-interior first-witness → uniqueness-gated lex-order
+    /// strict-interior first-witness). Not a fresh substrate primitive
+    /// on the index axis — the projection emerges from a boolean
+    /// conjunction of the just-lifted set-level middle-band uniqueness
+    /// bit with the just-lifted lex-order strict-interior first-witness
+    /// projection under an `Option`-collapse when the guard falsifies.
+    ///
+    /// Ordering-choice-irrelevance identity: for every slice `items`,
+    /// `T::sorted_unique_middle_band_variant(items) ==
+    /// T::unique_middle_band_variant(items)` — when the sole strict-
+    /// interior witness is UNIQUE ([`Self::has_unique_middle_band_variant`]
+    /// holds) declaration-order and lex-order both walk the same
+    /// `count > min && count < max` predicate over the same
+    /// `T::CARDINALITY`-sized variant carrier and land on THE SAME SOLE
+    /// strict-interior variant; when the guard falsifies both
+    /// projections collapse to `None` through the same guard arm. The
+    /// LEX peer is thus IDENTICALLY equal to its declaration-order
+    /// sibling on every input — the search-order axis becomes provably
+    /// irrelevant WHEN the underlying uniqueness bit holds. Pinned by
+    /// `sorted_unique_middle_band_variant_equals_unique_middle_band_variant_across_every_triple`
+    /// as a TYPED THEOREM the substrate proves once, replacing per-
+    /// consumer inline re-derivations of the equivalence. Sibling
+    /// posture to the just-opened union peer
+    /// [`Self::sorted_unique_extremal_variant`] one COMBINATOR axis
+    /// over which pins the SAME ordering-choice-irrelevance identity
+    /// against [`Self::unique_extremal_variant`]: both witness-if-
+    /// unique corners on the direction-composition row prove the
+    /// search-order axis irrelevant, so the substrate's four search-
+    /// order projections on the (union, complement) × (declaration,
+    /// lex) 2×2 face of the unique-tie-sharpened direction-composition
+    /// row of the closed-set trait now pairwise-collapse to two
+    /// projections modulo the two uniqueness bits.
+    ///
+    /// Guarded-lex-first-witness identity: for every slice `items`,
+    /// `T::sorted_unique_middle_band_variant(items) ==
+    /// if T::has_unique_middle_band_variant(items) { T::sorted_middle_band_variant(items) }
+    /// else { None }` — the canonical form the body uses. Pinned by
+    /// `sorted_unique_middle_band_variant_equals_has_unique_middle_band_variant_gated_sorted_middle_band_variant_across_every_triple`.
+    ///
+    /// Is-some coincidence identity: for every slice `items`,
+    /// `T::sorted_unique_middle_band_variant(items).is_some() ==
+    /// T::has_unique_middle_band_variant(items)` — the `Option<Self>`
+    /// return's `is_some` bit COINCIDES with the set-level middle-band
+    /// uniqueness bit. Independent cross-check on the surface axis
+    /// distinct from the option-equality arm against
+    /// [`Self::unique_middle_band_variant`]. Pinned by
+    /// `sorted_unique_middle_band_variant_is_some_iff_has_unique_middle_band_variant_across_every_triple`.
+    ///
+    /// Sorted-middle-band witness singleton identity: for every slice
+    /// `items`,
+    /// `T::sorted_unique_middle_band_variant(items) == (if T::sorted_middle_band_variants(items).len() == 1 { Some(T::sorted_middle_band_variants(items)[0]) } else { None })`
+    /// — when `items` has a unique middle-band witness, the lex-order
+    /// complement witness-collection [`Self::sorted_middle_band_variants`]
+    /// collapses to a length-`1` Vec containing EXACTLY that unique
+    /// variant, so its slot-`0` wrapped in `Some` coincides with THIS
+    /// projection. Independent cross-check on the witness-Vec surface
+    /// axis distinct from the scalar arms. Pinned by
+    /// `sorted_unique_middle_band_variant_agrees_with_sorted_middle_band_variants_singleton_across_every_triple`.
+    ///
+    /// Slice-reversal invariance: the projection factors through
+    /// [`Self::has_unique_middle_band_variant`] (ordering-agnostic on
+    /// the input axis — the underlying [`Self::count_middle_band_variants`]
+    /// is invariant under slice-reversal) and
+    /// [`Self::sorted_middle_band_variant`] (ordering-agnostic on the
+    /// input axis — the underlying max/min-fold pair +
+    /// [`Self::count_occurrences_of`] find sweep are all invariant
+    /// under slice-reversal) under a boolean-guarded `Option`-collapse.
+    /// Pinned by
+    /// `sorted_unique_middle_band_variant_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::sorted_unique_middle_band_variant(&[])
+    /// == None` UNCONDITIONALLY — the empty slice hits zero positions,
+    /// [`Self::count_middle_band_variants`] reports `0` at the empty-
+    /// slice short-circuit, [`Self::has_unique_middle_band_variant`]
+    /// returns `false` (0 != 1), and the guard collapses the projection
+    /// to `None` before [`Self::sorted_middle_band_variant`]'s own
+    /// `None`-at-empty branch is consulted.
+    ///
+    /// Flat-histogram contract at cardinality `>= 2`:
+    /// `T::sorted_unique_middle_band_variant(<T as ClosedSet>::ALL) ==
+    /// None` + `T::sorted_unique_middle_band_variant(&doubled) == None`
+    /// — on either flat-histogram fixpoint every variant sits at BOTH
+    /// extremes simultaneously via the (max == min) collapse, NO
+    /// variant sits strictly between,
+    /// [`Self::count_middle_band_variants`] reports `0`,
+    /// [`Self::has_unique_middle_band_variant`] returns `false`, and
+    /// the guard collapses the projection to `None`.
+    ///
+    /// Matching-singleton contract at cardinality `>= 2`:
+    /// `T::sorted_unique_middle_band_variant(&[v]) == None` for every
+    /// variant `v` — the target hits count `1 == max`, every non-
+    /// target sits at count `0 == min`; EVERY variant of [`Self::ALL`]
+    /// sits AT one of the two extremes, NO variant sits strictly
+    /// between, [`Self::count_middle_band_variants`] reports `0`, and
+    /// the guard collapses to `None`.
+    ///
+    /// Bimodal-triple contract at cardinality `>= 3`:
+    /// `T::sorted_unique_middle_band_variant([T::ALL[0], T::ALL[0],
+    /// T::ALL[1]]) == Some(T::ALL[1])` — the LOAD-BEARING SOLE
+    /// `Some(_)`-arm on the canonical fixture window. On the non-flat
+    /// triple `T::ALL[0]` sits at count `2 == max`, `T::ALL[1]` at
+    /// count `1` STRICTLY between max `2` and min `0` (the SOLE strict-
+    /// interior inhabitant), `T::ALL[2..]` at count `0 == min`;
+    /// [`Self::count_middle_band_variants`] reports `1`,
+    /// [`Self::has_unique_middle_band_variant`] returns `true`, the
+    /// guard fires, and [`Self::sorted_middle_band_variant`]'s lex-
+    /// order sweep hits `T::ALL[1]` on the sole middle-band member.
+    /// LOAD-BEARING SYMMETRY against [`Self::unique_middle_band_variant`]
+    /// which returns `Some(T::ALL[1])` on the same fixture (the SOLE
+    /// strict-interior variant is uniquely identified regardless of
+    /// ordering — the length-1 witness collection has ordering-
+    /// invariant content). Pinned by
+    /// `sorted_unique_middle_band_variant_returns_some_alpha_1_on_the_bimodal_triple_at_cardinality_gte_three`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of
+    /// [`Self::has_unique_middle_band_variant`] +
+    /// [`Self::sorted_middle_band_variant`] via a boolean-guarded
+    /// `Option`-collapse on `Option<Self>`. Cost inherits both
+    /// underlying projections: `O(T::CARDINALITY * n)` on slice arity
+    /// `n` (one max/min-fold pair, one
+    /// [`Self::count_middle_band_variants`] filter-count sweep, and
+    /// one lex-order [`Iterator::find`] sweep when the guard holds;
+    /// the short-circuiting `if` avoids the second sweep when the
+    /// guard falsifies) + `O(T::CARDINALITY log T::CARDINALITY)` for
+    /// the [`Self::sorted_variants`] cache, allocation-free at the
+    /// return, no `PartialEq`/`Eq`/`Hash` supertrait bound (the
+    /// trait's minimal `Sized + Copy + 'static` supertrait pair stays
+    /// untouched).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::sorted_unique_middle_band_variant`]: a `tatara-check`
+    /// predicate `(check-middle-band-if-unique-lex-first …)` that
+    /// reports "the sole strict-interior variant, in lex order, if
+    /// unambiguous" for a caller that prefers lex-order presentation
+    /// regardless of declaration-order; a Sekiban audit-trail per-
+    /// window witness-if-unique binding that pins the lex-order
+    /// middle-band witness for stability against upstream declaration-
+    /// order churn; an LSP hint that surfaces the SOLE middle-priority
+    /// enum-arm — the canonical "everyone else is either exhaustive
+    /// or missed" reviewer heuristic — on a Lisp-authored variant-
+    /// list only when the interior is unambiguous, in lex order,
+    /// staying silent on tied interiors; a Prometheus-style
+    /// `unique_middle_band_variant_lex` label with the empty-string
+    /// absent semantic on tied windows. Each binds to ONE typed lex-
+    /// order `Option<Self>`-return uniqueness-gated complement
+    /// aggregate on the trait — AND, by the ordering-choice-
+    /// irrelevance identity, TYPED PROOF that the search-order choice
+    /// is operationally free WHEN the underlying middle-band-
+    /// uniqueness bit holds.
+    ///
+    /// Compounding closure: this projection CLOSES the complement arm
+    /// of the LEX-ORDER (set-level × `Option<Self>` × direction-
+    /// composition × combinator × unique-tie) row on the direction-
+    /// composition surface past the just-opened UNION arm
+    /// [`Self::sorted_unique_extremal_variant`] one COMBINATOR axis
+    /// over, peer to [`Self::unique_middle_band_variant`] one
+    /// ORDERING axis over. The remaining tile on the LEX row is the
+    /// intersection arm `sorted_unique_bimodal_variant(items) ->
+    /// Option<Self>` (returning `Some(v)` iff
+    /// `has_unique_bimodal_variant(items)` holds AND `v` is the lex-
+    /// first sole `max == min` witness), emerging as a boolean-
+    /// guarded lift of [`Self::sorted_bimodal_variant`] under
+    /// [`Self::has_unique_bimodal_variant`]. Together with the just-
+    /// opened union arm the LEX row will EXHAUSTIVELY CLOSE the
+    /// (set-level × `Option<Self>` × direction-composition ×
+    /// combinator × ordering × unique-tie) 3×2 face at its final
+    /// intersection-arm tile once the sibling `sorted_unique_bimodal_variant`
+    /// lands.
+    ///
+    /// Theory anchor: THEORY.md §II.1 — the Rust + Lisp pattern; the
+    /// (set-level × `Option<Self>` × sorted × statistical-aggregate ×
+    /// direction-composition × complement × unique-tie) corner
+    /// becomes a TYPED WITNESS on the ClosedSet trait rather than a
+    /// per-consumer inline
+    /// `if T::has_unique_middle_band_variant(items) { T::sorted_middle_band_variant(items) } else { None }`
+    /// re-derivation. THEORY.md §III — the typescape; a fresh TYPE-
+    /// level primitive plus a typed THEOREM (ordering-choice-
+    /// irrelevance) the substrate proves once rather than every
+    /// downstream site re-proving via
+    /// `sorted_unique_middle_band_variant(items) == unique_middle_band_variant(items)`
+    /// assertions per callsite. THEORY.md §V.1 — knowable platform;
+    /// the (lex-order × `Option<Self>` × direction-composition ×
+    /// complement × unique-tie) corner was an unnamed inline
+    /// composition — OR silently absent because the caller shrugged
+    /// and used the declaration-order sibling without proof of
+    /// coincidence — recurring at every prospective downstream "which
+    /// variant is the histogram's strict interior, in lex order, if
+    /// unambiguous?" site pre-lift. THEORY.md §VI.1 — generation over
+    /// composition; the projection emerges from the composition of
+    /// the two substrate primitives
+    /// [`Self::has_unique_middle_band_variant`] +
+    /// [`Self::sorted_middle_band_variant`] with the
+    /// `if _ { _ } else { None }` combinator on `Option<Self>`, not
+    /// as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: R's `{ t <- table(items); m <- max(t);
+    /// n <- min(t); s <- sort(names(t)[t > n & t < m]); if
+    /// (length(s) == 1) s[1] else NA }` — the guarded lex-order
+    /// strict-interior on a factor histogram; Julia's `let c =
+    /// StatsBase.countmap(items), m = maximum(values(c)), n =
+    /// minimum(values(c)), ties = filter(kv -> n < kv[2] < m,
+    /// sort(collect(c), by = kv -> kv[1])); length(ties) == 1 ?
+    /// Some(ties[1][1]) : Nothing end`; Python's `sorted(k for k, v
+    /// in collections.Counter(items).items() if
+    /// min(collections.Counter(items).values(), default=0) < v <
+    /// max(collections.Counter(items).values(), default=0))[:1]`
+    /// filtered by outer count-guard; Haskell's `filter (\v -> let c
+    /// = Map.findWithDefault 0 v hs in c > n && c < m) (sort
+    /// allLevels)` guarded to singleton; Clojure's `(let [f
+    /// (frequencies coll), m (apply max (vals f)), n (apply min
+    /// (vals f)), ts (filter #(< n (val %) m) (sort ALL-LEVELS))]
+    /// (when (= 1 (count ts)) (first ts)))`; SQL's `SELECT variant
+    /// FROM t GROUP BY variant HAVING COUNT(*) > (SELECT MIN(c) …)
+    /// AND COUNT(*) < (SELECT MAX(c) …) ORDER BY variant LIMIT 1`
+    /// filtered by an outer count-guard. Translation through pleme-io
+    /// primitives: the projection binds through the set-level middle-
+    /// band uniqueness bit [`Self::has_unique_middle_band_variant`]
+    /// conjoined with the lex-order complement first-witness
+    /// [`Self::sorted_middle_band_variant`] under an `Option`-
+    /// collapse — no new dep, no supertrait bound (`Sized + Copy +
+    /// 'static` stays untouched), no allocation at the return, cost
+    /// inherited from the underlying aggregates with short-circuiting
+    /// on the guard.
+    fn sorted_unique_middle_band_variant(items: &[Self]) -> Option<Self> {
+        if <Self as ClosedSet>::has_unique_middle_band_variant(items) {
+            <Self as ClosedSet>::sorted_middle_band_variant(items)
+        } else {
+            None
+        }
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "target is AT EITHER histogram
     /// extreme" per-target predicate — `true` iff `target` sits on the
     /// modal (argmax) band OR the antimodal (argmin) band of the per-
@@ -53701,6 +53953,175 @@ where
             T::sorted_unique_extremal_variant(&bimodal_triple),
             T::unique_extremal_variant(&bimodal_triple),
             "{type_name}: T::sorted_unique_extremal_variant(&bimodal_triple) drifted from T::unique_extremal_variant(&bimodal_triple) — the ordering-choice-irrelevance identity MUST hold on the bimodal-triple fixture (both projections collapse to `None`)",
+        );
+    }
+    // (186) — `T::sorted_unique_middle_band_variant(items)` MUST agree
+    // with the guarded-lex-first-witness body
+    // `if T::has_unique_middle_band_variant(items) { T::sorted_middle_band_variant(items) }
+    //  else { None }` on every canonical slice AND MUST IDENTICALLY
+    // EQUAL its declaration-order sibling `T::unique_middle_band_variant`
+    // on every canonical slice — the ordering-choice-irrelevance
+    // identity witnesses that WHEN the middle-band uniqueness bit holds
+    // the SOLE strict-interior witness is unambiguous, so declaration-
+    // order and lex-order first-witness sweeps land on THE SAME
+    // variant. Sibling posture to clause (185) one COMBINATOR axis
+    // over: clause (185) OPENED the LEX-ORDER direction-composition
+    // row at the (union, lex) corner; THIS clause CLOSES the complement
+    // arm past the union arm — one COMBINATOR axis over from clause
+    // (185) AND one ORDERING axis over from clause (166) which pinned
+    // the (complement, declaration) opener.
+    //
+    // Empty-slice arm: `count_middle_band_variants(&[])` reports `0`
+    // via the empty-slice short-circuit,
+    // `has_unique_middle_band_variant` returns `false` (0 != 1), the
+    // guard short-circuits, and the projection lands on `None` before
+    // `sorted_middle_band_variant`'s own None-at-empty branch is
+    // consulted.
+    //
+    // Full-set arm at cardinality `>= 2`: clause (3)'s pairwise-
+    // distinctness invariant pins every variant at count `1`, max ==
+    // min == 1, NO variant sits strictly between the collapsed
+    // extremes, `count_middle_band_variants` reports `0`,
+    // `has_unique_middle_band_variant` returns `false`, and the guard
+    // collapses to `None`.
+    //
+    // Doubled-full-set arm at cardinality `>= 2`: every variant is at
+    // count `2`, max == min == 2, NO variant sits strictly between,
+    // `count_middle_band_variants` reports `0`,
+    // `has_unique_middle_band_variant` returns `false`, and the guard
+    // collapses to `None`.
+    //
+    // Matching-singleton arm at cardinality `>= 2`: the target hits
+    // count `1 == max`, every non-target sits at count `0 == min`;
+    // EVERY variant of T::ALL sits AT one of the two extremes, NO
+    // variant sits strictly between, `count_middle_band_variants`
+    // reports `0`, `has_unique_middle_band_variant` returns `false`,
+    // and the guard collapses to `None`.
+    //
+    // Bimodal-triple arm at cardinality `>= 3` (LOAD-BEARING
+    // `Some(T::ALL[1])`-arm catch): on `[T::ALL[0], T::ALL[0],
+    // T::ALL[1]]` `T::ALL[0]` sits at count `2 == max`, `T::ALL[1]`
+    // at count `1` STRICTLY between max `2` and min `0` (the SOLE
+    // strict-interior inhabitant), `T::ALL[2..]` at count `0 == min`;
+    // `count_middle_band_variants` reports `1`,
+    // `has_unique_middle_band_variant` returns `true`, the guard
+    // fires, and `sorted_middle_band_variant`'s lex-order sweep hits
+    // `T::ALL[1]` on the sole middle-band member. This positive
+    // fixpoint is the SOLE `Some(_)`-arm on the canonical fixture
+    // window and LOAD-BEARING SYMMETRY with clause (166) which
+    // returns the SAME `Some(T::ALL[1])` on the same fixture — the
+    // ordering-choice axis is provably irrelevant on the LOAD-BEARING
+    // Some arm.
+    //
+    // Is-some coincidence: on every fixture the projection's
+    // `is_some` bit MUST equal `T::has_unique_middle_band_variant`.
+    //
+    // The default trait body threads the guarded-lex-first-witness
+    // sweep verbatim and satisfies every fixpoint arm + the ordering-
+    // choice-irrelevance arm for free; the assertion catches a future
+    // implementor whose override drifts the projection loudly rather
+    // than silently bifurcating the lex-order middle-band uniqueness-
+    // gated witness surface. An override that folds onto `Some(first)`
+    // unconditionally bifurcates on the empty-slice + full-set +
+    // doubled-full-set + matching-singleton arms (all correct `None`)
+    // AND on the bimodal-triple arm whenever `first != T::ALL[1]`
+    // (correct `Some(T::ALL[1])`); an override that folds onto `None`
+    // unconditionally bifurcates on the bimodal-triple arm at
+    // cardinality `>= 3`.
+    assert_eq!(
+        T::sorted_unique_middle_band_variant(empty),
+        T::unique_middle_band_variant(empty),
+        "{type_name}: T::sorted_unique_middle_band_variant(&[]) drifted from T::unique_middle_band_variant(&[]) — the ordering-choice-irrelevance identity MUST hold on the empty slice; both projections collapse to `None` through the same guard arm",
+    );
+    assert_eq!(
+        T::sorted_unique_middle_band_variant(empty),
+        None,
+        "{type_name}: T::sorted_unique_middle_band_variant(&[]) drifted from the empty-slice fixpoint None — `has_unique_middle_band_variant(&[])` collapses to `false` via `count_middle_band_variants(&[]) == 0 != 1`, the guard short-circuits, and the projection lands on `None` before `sorted_middle_band_variant`'s own None-at-empty branch is consulted",
+    );
+    assert_eq!(
+        T::sorted_unique_middle_band_variant(empty).is_some(),
+        T::has_unique_middle_band_variant(empty),
+        "{type_name}: T::sorted_unique_middle_band_variant(&[]).is_some() drifted from T::has_unique_middle_band_variant(&[]) — the is-some coincidence identity MUST hold on the empty slice",
+    );
+    let full_sorted_unique_middle_band = T::sorted_unique_middle_band_variant(T::ALL);
+    let expected_full_sorted_unique_middle_band = if T::has_unique_middle_band_variant(T::ALL) {
+        T::sorted_middle_band_variant(T::ALL)
+    } else {
+        None
+    };
+    assert_eq!(
+        full_sorted_unique_middle_band, expected_full_sorted_unique_middle_band,
+        "{type_name}: T::sorted_unique_middle_band_variant(T::ALL) drifted from the guarded lex-lift `if T::has_unique_middle_band_variant(T::ALL) {{ T::sorted_middle_band_variant(T::ALL) }} else {{ None }}` — the guarded-lift identity MUST hold on the full-set slice; the flat histogram pins every variant at both extremes via max == min, no strict interior exists, `has_unique_middle_band_variant` returns `false`, and the guarded lift collapses to `None`",
+    );
+    assert_eq!(
+        T::sorted_unique_middle_band_variant(T::ALL),
+        T::unique_middle_band_variant(T::ALL),
+        "{type_name}: T::sorted_unique_middle_band_variant(T::ALL) drifted from T::unique_middle_band_variant(T::ALL) — the ordering-choice-irrelevance identity MUST hold on the full-set covering slice (both projections collapse to `None`)",
+    );
+    assert_eq!(
+        T::sorted_unique_middle_band_variant(T::ALL).is_some(),
+        T::has_unique_middle_band_variant(T::ALL),
+        "{type_name}: T::sorted_unique_middle_band_variant(T::ALL).is_some() drifted from T::has_unique_middle_band_variant(T::ALL) — the is-some coincidence identity MUST hold on the full-set slice",
+    );
+    let doubled_sorted_unique_middle_band = T::sorted_unique_middle_band_variant(&doubled_full_set);
+    let expected_doubled_sorted_unique_middle_band =
+        if T::has_unique_middle_band_variant(&doubled_full_set) {
+            T::sorted_middle_band_variant(&doubled_full_set)
+        } else {
+            None
+        };
+    assert_eq!(
+        doubled_sorted_unique_middle_band, expected_doubled_sorted_unique_middle_band,
+        "{type_name}: T::sorted_unique_middle_band_variant(&doubled_full_set) drifted from the guarded lex-lift `if T::has_unique_middle_band_variant(&doubled_full_set) {{ T::sorted_middle_band_variant(&doubled_full_set) }} else {{ None }}` — the guarded-lift identity MUST hold on the doubled-full-set slice; the second flat-histogram fixpoint pins every variant at both extremes via max == min, no strict interior exists, `has_unique_middle_band_variant` returns `false`, and the guarded lift collapses to `None`",
+    );
+    assert_eq!(
+        T::sorted_unique_middle_band_variant(&doubled_full_set),
+        T::unique_middle_band_variant(&doubled_full_set),
+        "{type_name}: T::sorted_unique_middle_band_variant(&doubled_full_set) drifted from T::unique_middle_band_variant(&doubled_full_set) — the ordering-choice-irrelevance identity MUST hold on the doubled-full-set covering slice (both projections collapse to `None`)",
+    );
+    assert_eq!(
+        T::sorted_unique_middle_band_variant(&doubled_full_set).is_some(),
+        T::has_unique_middle_band_variant(&doubled_full_set),
+        "{type_name}: T::sorted_unique_middle_band_variant(&doubled_full_set).is_some() drifted from T::has_unique_middle_band_variant(&doubled_full_set) — the is-some coincidence identity MUST hold on the doubled-full-set slice",
+    );
+    if T::CARDINALITY >= 2 {
+        for target in T::ALL.iter().copied() {
+            let matching_singleton = [target];
+            assert_eq!(
+                T::sorted_unique_middle_band_variant(&matching_singleton),
+                None,
+                "{type_name}: T::sorted_unique_middle_band_variant([{target_label:?}]) drifted from `None` at cardinality >= 2 — the sole position hits {target_label:?} at count `1 == max` while every non-target variant sits at count `0 == min`; EVERY variant of T::ALL sits AT one of the two extremes, NO variant sits strictly between, `count_middle_band_variants` reports `0`, `has_unique_middle_band_variant` returns `false`, and the guard collapses the projection to `None`; a `Some(_)` matching-singleton value at cardinality >= 2 silently bifurcates the matching-singleton fixpoint contract on the (LEX × Option<Self> × direction-composition × complement × unique-tie) corner",
+                target_label = target.label(),
+            );
+            assert_eq!(
+                T::sorted_unique_middle_band_variant(&matching_singleton),
+                T::unique_middle_band_variant(&matching_singleton),
+                "{type_name}: T::sorted_unique_middle_band_variant([{target_label:?}]) drifted from T::unique_middle_band_variant([{target_label:?}]) — the ordering-choice-irrelevance identity MUST hold on the matching-singleton fixture at cardinality >= 2 (both projections collapse to `None`)",
+                target_label = target.label(),
+            );
+        }
+    }
+    if T::CARDINALITY >= 3 {
+        // Bimodal-triple fixture: LOAD-BEARING SOLE `Some(_)`-arm on
+        // the (LEX × Option<Self> × direction-composition × complement
+        // × unique-tie) corner. On `[T::ALL[0], T::ALL[0], T::ALL[1]]`
+        // `T::ALL[1]` is the SOLE strict-interior witness at count 1
+        // strictly between max 2 and min 0;
+        // `has_unique_middle_band_variant` returns `true`, and the
+        // lex-order first-witness sweep hits `T::ALL[1]`. LOAD-BEARING
+        // SYMMETRY with clause (166) which returns the SAME
+        // `Some(T::ALL[1])` on the same fixture — the ordering-choice
+        // axis is provably irrelevant on the Some arm.
+        let bimodal_triple = [T::ALL[0], T::ALL[0], T::ALL[1]];
+        assert_eq!(
+            T::sorted_unique_middle_band_variant(&bimodal_triple),
+            Some(T::ALL[1]),
+            "{type_name}: T::sorted_unique_middle_band_variant(&bimodal_triple) drifted from `Some(T::ALL[1])` — the LOAD-BEARING sole Some-arm on the canonical fixture window; T::ALL[1] is the SOLE strict-interior witness at count 1 strictly between max 2 and min 0, `count_middle_band_variants` reports `1`, `has_unique_middle_band_variant` returns `true`, and the lex-order sweep hits T::ALL[1] on the sole middle-band member",
+        );
+        assert_eq!(
+            T::sorted_unique_middle_band_variant(&bimodal_triple),
+            T::unique_middle_band_variant(&bimodal_triple),
+            "{type_name}: T::sorted_unique_middle_band_variant(&bimodal_triple) drifted from T::unique_middle_band_variant(&bimodal_triple) — the ordering-choice-irrelevance identity MUST hold on the LOAD-BEARING bimodal-triple positive fixture (both projections report Some(T::ALL[1]) on a singleton middle-band whose lex- and declaration-order witnesses coincide)",
         );
     }
 }
@@ -112371,6 +112792,378 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedSortedUniqueExtremalVariantSomeFirstKind whose sorted_unique_extremal_variant override folds onto Some(first) unconditionally — clause (185)'s empty-slice + flat-histogram + matching-singleton + bimodal-triple fixpoint arms MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_middle_band_variant_returns_none_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT: T::sorted_unique_middle_band_variant(&[])
+        // == None UNCONDITIONALLY — the empty slice hits zero positions,
+        // count_middle_band_variants reports 0 via its empty-slice
+        // short-circuit, has_unique_middle_band_variant returns false
+        // (0 != 1), and the guard collapses the projection to `None`
+        // before the T::sorted_middle_band_variant sweep is consulted.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_middle_band_variant(empty),
+            None,
+            "T::sorted_unique_middle_band_variant(&[]) diverged from the empty-slice fixpoint None",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_middle_band_variant_returns_none_on_every_matching_singleton_at_cardinality_gte_two_across_every_variant(
+    ) {
+        // MATCHING-SINGLETON CONTRACT AT CARDINALITY >= 2:
+        // T::sorted_unique_middle_band_variant(&[v]) == None for every
+        // variant v — the target hits count 1 == max, every non-target
+        // sits at count 0 == min; EVERY variant of T::ALL sits AT one of
+        // the two extremes, NO variant sits strictly between,
+        // count_middle_band_variants reports 0,
+        // has_unique_middle_band_variant returns false, and the guard
+        // collapses the projection to None.
+        assert_eq!(<StubKind as ClosedSet>::CARDINALITY, 3);
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_unique_middle_band_variant(&singleton),
+                None,
+                "T::sorted_unique_middle_band_variant([{v:?}]) diverged from None — at CARDINALITY 3 the two-value dichotomy has NO strict interior, count_middle_band_variants == 0",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_unique_middle_band_variant_returns_none_on_the_full_set_at_cardinality_gte_two() {
+        // FULL-SET CONTRACT AT CARDINALITY >= 2:
+        // T::sorted_unique_middle_band_variant(T::ALL) == None
+        // UNCONDITIONALLY — clause (3)'s pairwise-distinctness invariant
+        // pins every variant at count 1, max == min == 1, no strict
+        // interior exists, count_middle_band_variants reports 0,
+        // has_unique_middle_band_variant returns false, and the guard
+        // collapses to `None`.
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 2) };
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_middle_band_variant(
+                <StubKind as ClosedSet>::ALL
+            ),
+            None,
+            "T::sorted_unique_middle_band_variant(T::ALL) diverged from the full-set fixpoint None at cardinality >= 2",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_middle_band_variant_returns_none_on_the_doubled_full_set_across_every_kind() {
+        // DOUBLED-FULL-SET CONTRACT:
+        // T::sorted_unique_middle_band_variant(T::ALL ++ T::ALL) == None
+        // UNCONDITIONALLY — the doubled full set hits every variant at
+        // count 2, max == min == 2, no strict interior exists,
+        // count_middle_band_variants reports 0,
+        // has_unique_middle_band_variant returns false, and the guard
+        // collapses to `None`.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_middle_band_variant(&doubled),
+            None,
+            "T::sorted_unique_middle_band_variant(ALL++ALL) diverged from the doubled-full-set fixpoint None",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_middle_band_variant_returns_some_alpha_1_on_the_bimodal_triple_at_cardinality_gte_three(
+    ) {
+        // BIMODAL-TRIPLE CONTRACT AT CARDINALITY >= 3: LOAD-BEARING
+        // SOLE `Some(_)`-arm on the canonical fixture window.
+        // T::sorted_unique_middle_band_variant([T::ALL[0], T::ALL[0],
+        // T::ALL[1]]) == Some(T::ALL[1]) — T::ALL[1] is the SOLE
+        // strict-interior witness at count 1 strictly between max 2 and
+        // min 0; count_middle_band_variants reports 1,
+        // has_unique_middle_band_variant returns true, and the lex-
+        // order sweep hits T::ALL[1] on the sole middle-band member.
+        // LOAD-BEARING SYMMETRY with T::unique_middle_band_variant
+        // which returns the SAME Some(T::ALL[1]) on the same fixture —
+        // the ordering-choice axis is provably irrelevant on this arm.
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 3) };
+        let bimodal_triple = [
+            <StubKind as ClosedSet>::ALL[0],
+            <StubKind as ClosedSet>::ALL[0],
+            <StubKind as ClosedSet>::ALL[1],
+        ];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_middle_band_variant(&bimodal_triple),
+            Some(<StubKind as ClosedSet>::ALL[1]),
+            "T::sorted_unique_middle_band_variant({bimodal_triple:?}) diverged from Some(T::ALL[1]) — the LOAD-BEARING sole Some arm on the canonical fixture window",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_middle_band_variant_equals_unique_middle_band_variant_across_every_triple() {
+        // ORDERING-CHOICE-IRRELEVANCE IDENTITY: for every slice `items`,
+        // T::sorted_unique_middle_band_variant(items) ==
+        // T::unique_middle_band_variant(items) — when the middle-band
+        // uniqueness bit holds the SOLE strict-interior witness is
+        // unambiguous, so declaration-order and lex-order first-witness
+        // sweeps land on THE SAME variant; when the bit falsifies both
+        // projections collapse to `None` through the same guard arm.
+        // The lex peer is thus IDENTICALLY equal to its declaration-
+        // order sibling on every input. On the cardinality-3 stub the
+        // bimodal-triple fixture is the LOAD-BEARING Some-arm where
+        // BOTH sides fire to Some(T::ALL[1]).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_middle_band_variant(&triple),
+                        <StubKind as ClosedSet>::unique_middle_band_variant(&triple),
+                        "T::sorted_unique_middle_band_variant({triple:?}) diverged from T::unique_middle_band_variant({triple:?}) — the ordering-choice-irrelevance identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_middle_band_variant_equals_has_unique_middle_band_variant_gated_sorted_middle_band_variant_across_every_triple(
+    ) {
+        // GUARDED-LEX-FIRST-WITNESS IDENTITY: for every slice `items`,
+        // T::sorted_unique_middle_band_variant(items) ==
+        // if T::has_unique_middle_band_variant(items) {
+        //   T::sorted_middle_band_variant(items)
+        // } else { None }. The canonical form the body uses.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_body =
+                        <StubKind as ClosedSet>::sorted_unique_middle_band_variant(&triple);
+                    let via_guarded_lex_lift =
+                        if <StubKind as ClosedSet>::has_unique_middle_band_variant(&triple) {
+                            <StubKind as ClosedSet>::sorted_middle_band_variant(&triple)
+                        } else {
+                            None
+                        };
+                    assert_eq!(
+                        via_body, via_guarded_lex_lift,
+                        "T::sorted_unique_middle_band_variant({triple:?}) diverged from the guarded lex-first-witness lift",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_middle_band_variant_is_some_iff_has_unique_middle_band_variant_across_every_triple(
+    ) {
+        // IS-SOME COINCIDENCE IDENTITY: for every slice `items`,
+        // T::sorted_unique_middle_band_variant(items).is_some() ==
+        // T::has_unique_middle_band_variant(items). Independent cross-
+        // check on the surface axis distinct from the option-equality
+        // arm against T::unique_middle_band_variant.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_middle_band_variant(&triple)
+                            .is_some(),
+                        <StubKind as ClosedSet>::has_unique_middle_band_variant(&triple),
+                        "T::sorted_unique_middle_band_variant({triple:?}).is_some() diverged from T::has_unique_middle_band_variant({triple:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_middle_band_variant_agrees_with_sorted_middle_band_variants_singleton_across_every_triple(
+    ) {
+        // SORTED-MIDDLE-BAND WITNESS SINGLETON IDENTITY: for every
+        // slice `items`, T::sorted_unique_middle_band_variant(items) is
+        // Some iff T::sorted_middle_band_variants(items) is length-1,
+        // and then wraps the sole tie-member in Some. Independent
+        // cross-check on the witness-Vec surface axis distinct from the
+        // scalar arms.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let witnesses = <StubKind as ClosedSet>::sorted_middle_band_variants(&triple);
+                    let via_witnesses = if witnesses.len() == 1 {
+                        Some(witnesses[0])
+                    } else {
+                        None
+                    };
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_middle_band_variant(&triple),
+                        via_witnesses,
+                        "T::sorted_unique_middle_band_variant({triple:?}) diverged from the length-1 sorted-middle-band-witness-Vec projection",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_middle_band_variant_is_invariant_under_slice_reversal_across_every_triple() {
+        // REVERSAL-INVARIANCE CONTRACT:
+        // T::sorted_unique_middle_band_variant is invariant under
+        // slice-reversal. Both T::has_unique_middle_band_variant and
+        // T::sorted_middle_band_variant are ordering-agnostic on the
+        // input axis, so the guarded lift is too.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let reversed: Vec<StubKind> = triple.iter().rev().copied().collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_middle_band_variant(&triple),
+                        <StubKind as ClosedSet>::sorted_unique_middle_band_variant(&reversed),
+                        "T::sorted_unique_middle_band_variant({triple:?}) diverged from T::sorted_unique_middle_band_variant({reversed:?}) — reversal-invariance was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_some_first_drift_in_sorted_unique_middle_band_variant(
+    ) {
+        // Drift catch — clause (186)'s empty-slice + flat-histogram +
+        // matching-singleton fixpoint arms fire when an override folds
+        // the LEX-ORDER set-level unique-middle-band-variant witness
+        // onto `Some(T::first())` unconditionally. The bimodal-triple
+        // arm demands `Some(T::ALL[1])` == `Some(Beta)`, so an
+        // always-Some(Alpha) override ALSO bifurcates on the bimodal-
+        // triple arm at `Some(Alpha) != Some(Beta)`.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedUniqueMiddleBandVariantSomeFirstKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedSortedUniqueMiddleBandVariantSomeFirstKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedSortedUniqueMiddleBandVariantSomeFirstKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted sorted_unique_middle_band_variant some-first kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedSortedUniqueMiddleBandVariantSomeFirstKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedSortedUniqueMiddleBandVariantSomeFirstKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str =
+                "drifted sorted_unique_middle_band_variant some-first kind";
+            type Unknown = UnknownDriftedSortedUniqueMiddleBandVariantSomeFirstKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedUniqueMiddleBandVariantSomeFirstKind(s.to_owned())
+            }
+            fn sorted_unique_middle_band_variant(_items: &[Self]) -> Option<Self> {
+                // Drift: always return Some(first=Alpha). Fires clause
+                // (186)'s empty-slice + flat-histogram + matching-
+                // singleton arms at `Some(_) != None` AND the bimodal-
+                // triple arm at `Some(Alpha) != Some(Beta)`.
+                Some(Self::Alpha)
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedSortedUniqueMiddleBandVariantSomeFirstKind>(
+            );
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedSortedUniqueMiddleBandVariantSomeFirstKind whose sorted_unique_middle_band_variant override folds onto Some(first) unconditionally — clause (186)'s empty-slice + flat-histogram + matching-singleton + bimodal-triple fixpoint arms MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_none_drift_in_sorted_unique_middle_band_variant(
+    ) {
+        // Drift catch — clause (186)'s bimodal-triple fixpoint arm at
+        // cardinality >= 3 fires when an override folds the LEX-ORDER
+        // set-level unique-middle-band-variant witness onto `None`
+        // unconditionally. The bimodal-triple arm is the SOLE
+        // `Some(_)`-arm on the canonical fixture window (correct value
+        // Some(T::ALL[1])), so a `None` override bifurcates
+        // `None != Some(T::ALL[1])`. DISCRIMINATES this LEX-ORDER
+        // complement uniqueness-witness corner from the union sibling
+        // clause (185) which is a DEGENERATE opener at cardinality >= 2
+        // (its bimodal-triple arm is correct None — no `None`-drift
+        // catch available there).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedUniqueMiddleBandVariantNoneKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedSortedUniqueMiddleBandVariantNoneKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedSortedUniqueMiddleBandVariantNoneKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted sorted_unique_middle_band_variant none kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedSortedUniqueMiddleBandVariantNoneKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedSortedUniqueMiddleBandVariantNoneKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted sorted_unique_middle_band_variant none kind";
+            type Unknown = UnknownDriftedSortedUniqueMiddleBandVariantNoneKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedUniqueMiddleBandVariantNoneKind(s.to_owned())
+            }
+            fn sorted_unique_middle_band_variant(_items: &[Self]) -> Option<Self> {
+                // Drift: always return None. Fires clause (186)'s
+                // bimodal-triple fixpoint arm at cardinality >= 3 at
+                // `None != Some(T::ALL[1])`.
+                None
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedSortedUniqueMiddleBandVariantNoneKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedSortedUniqueMiddleBandVariantNoneKind whose sorted_unique_middle_band_variant override folds onto None unconditionally — clause (186)'s bimodal-triple fixpoint arm at cardinality >= 3 MUST reject the drift",
         );
     }
 }

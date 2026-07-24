@@ -22417,9 +22417,16 @@ pub trait ClosedSet: Sized + Copy + 'static {
     /// and [`Self::antimodal_variant`] (ordering-agnostic — the underlying
     /// [`Self::count_occurrences_of`] + [`Self::min_variant_count`] are both
     /// invariant under slice-reversal) via a boolean-guarded `Option`-
-    /// collapse. No separate `sorted_unique_antimodal_variant` peer is
-    /// needed. Pinned by
+    /// collapse. Pinned by
     /// `unique_antimodal_variant_is_invariant_under_slice_reversal_across_every_triple`.
+    /// The lex-order peer [`Self::sorted_unique_antimodal_variant`]
+    /// substrate-proves this ordering-agnosticism as a TYPED THEOREM
+    /// (ordering-choice-irrelevance) rather than a per-consumer inline
+    /// re-derivation — the two projections are IDENTICALLY equal on every
+    /// input because declaration-order and lex-order sweeps land on THE
+    /// SAME sole argmin variant WHEN the underlying antimodal-uniqueness
+    /// bit holds and BOTH collapse to `None` through the same guard arm
+    /// when the bit falsifies.
     ///
     /// Empty-slice contract: `T::unique_antimodal_variant(&[]) == None`
     /// UNCONDITIONALLY — the empty slice hits zero positions,
@@ -22544,19 +22551,18 @@ pub trait ClosedSet: Sized + Copy + 'static {
     /// 2-corner face at its argmin arm past the just-opened
     /// [`Self::unique_modal_variant`] argmax corner one DIRECTION axis
     /// over, completing the (direction × unique-tie) column at both
-    /// corners on the `Option<Self>`-return row. The (`Option<Self>` ×
-    /// unique-tie × direction × ordering) 2×2×2 = 8-corner cube now
-    /// closes its SECOND corner past the (argmax, declaration) opener at
-    /// (argmin, declaration); the natural next lifts past this closure
-    /// are `sorted_unique_modal_variant` /
-    /// `sorted_unique_antimodal_variant` closing the ORDERING axis one
-    /// ordering-axis over on both direction arms. Each remaining corner
-    /// emerges as a boolean-guarded lift of the existing (`Option<Self>`
-    /// × statistical-aggregate × direction × ordering) unsharpened peer
-    /// under the existing (bool × direction) uniqueness bit, so the
-    /// (`Option<Self>` × unique-tie × direction × ordering) 2×2×2 =
-    /// 8-corner cube fills with no fresh substrate primitives on the
-    /// index axis.
+    /// corners on the `Option<Self>`-return row. The just-lifted lex-
+    /// order peer [`Self::sorted_unique_antimodal_variant`] closes the
+    /// (declaration, lex) row at the argmin arm as the mirror
+    /// [`Self::sorted_unique_modal_variant`] closed at the argmax arm,
+    /// EXHAUSTIVELY CLOSING the (`Option<Self>` × direction × ordering ×
+    /// unique-tie) 2×2×2 = 8-corner cube at its FINAL corner past the
+    /// (argmax, declaration), (argmax, lex), (argmin, declaration) prior
+    /// three uniqueness-gated arms; the natural next lifts past this
+    /// closure walk one COMBINATOR axis over on the modal-aggregation
+    /// matrix into the direction-composition (extremal / middle-band /
+    /// bimodal × ordering × unique-tie) arms via the same boolean-guarded
+    /// lift under an `Option`-collapse.
     ///
     /// Theory anchor: THEORY.md §III — the typescape; the N-ary set-
     /// level unique-antimode `Option<Self>` witness projection becomes a
@@ -22612,6 +22618,269 @@ pub trait ClosedSet: Sized + Copy + 'static {
     fn unique_antimodal_variant(items: &[Self]) -> Option<Self> {
         if <Self as ClosedSet>::has_unique_antimode(items) {
             <Self as ClosedSet>::antimodal_variant(items)
+        } else {
+            None
+        }
+    }
+
+    /// The N-ARY ORDERING-AGNOSTIC "THE unique antimodal variant, lex-
+    /// first" projection — `Some(v)` iff `items` has a unique antimode
+    /// ([`Self::has_unique_antimode`] holds) AND `v` is the sole variant
+    /// of [`Self::sorted_variants`] achieving [`Self::min_variant_count`],
+    /// else `None`. Computed as the just-lifted set-level antimodal-
+    /// uniqueness bit [`Self::has_unique_antimode`] guarding a LEX-ORDER
+    /// first-witness sweep of [`Self::sorted_variants`] keyed on
+    /// `count == min` — equivalently, the just-lifted
+    /// [`Self::sorted_antimodal_variant`] projection under the same
+    /// guard. The LEX-ORDER `Option<Self>`-RETURN UNIQUE-TIE SHARPENING
+    /// corner EXHAUSTIVELY CLOSING the (set-level × `Option<Self>` ×
+    /// statistical-aggregate × direction × ordering × unique-tie) 2×2×2
+    /// = 8-corner cube at its FINAL corner past the (argmax, declaration)
+    /// [`Self::unique_modal_variant`] opener, the (argmax, lex)
+    /// [`Self::sorted_unique_modal_variant`] just-lifted argmax-lex
+    /// closure, and the (argmin, declaration) [`Self::unique_antimodal_variant`]
+    /// argmin-declaration closure — the argmin-lex arm one ORDERING axis
+    /// over from [`Self::unique_antimodal_variant`] AND one DIRECTION axis
+    /// over from [`Self::sorted_unique_modal_variant`]. Not a fresh
+    /// substrate primitive on the index axis — the projection emerges
+    /// from a boolean conjunction of the set-level antimodal-uniqueness
+    /// bit with a lex-order first-witness [`Iterator::find`] sweep of
+    /// [`Self::sorted_variants`] under an `Option`-collapse when the
+    /// guard falsifies.
+    ///
+    /// Ordering-choice-irrelevance identity: for every slice `items`,
+    /// `T::sorted_unique_antimodal_variant(items) ==
+    /// T::unique_antimodal_variant(items)` — when the sole argmin witness
+    /// is UNIQUE ([`Self::has_unique_antimode`] holds) declaration-order
+    /// and lex-order both walk the same `count == min` predicate over the
+    /// same `T::CARDINALITY`-sized variant carrier and land on THE SAME
+    /// SOLE argmin variant; when the guard falsifies both projections
+    /// collapse to `None` through the same guard arm. The LEX peer is
+    /// thus IDENTICALLY equal to its declaration-order sibling on every
+    /// input — the search-order axis becomes provably irrelevant WHEN
+    /// the underlying uniqueness bit holds. Pinned by
+    /// `sorted_unique_antimodal_variant_equals_unique_antimodal_variant_across_every_triple`
+    /// as a TYPED THEOREM the substrate proves once, replacing per-
+    /// consumer inline re-derivations of the equivalence. Sibling posture
+    /// to the argmax peer's ordering-choice-irrelevance identity one
+    /// DIRECTION axis over: the argmax and argmin arms report DIFFERENT
+    /// witnesses on the same slice at directional-asymmetry fixtures
+    /// (e.g. the single-missing arm at cardinality `>= 2`) but BOTH
+    /// witness ordering-agnosticism on their respective direction anchor.
+    ///
+    /// Guarded-lex-first-witness identity: for every slice `items`,
+    /// `T::sorted_unique_antimodal_variant(items) ==
+    /// if T::has_unique_antimode(items) { T::sorted_antimodal_variant(items) }
+    /// else { None }` — the canonical form the body uses.
+    ///
+    /// Is-some coincidence identity: for every slice `items`,
+    /// `T::sorted_unique_antimodal_variant(items).is_some() ==
+    /// T::has_unique_antimode(items)` — the `Option<Self>` return's
+    /// `is_some` bit COINCIDES with the set-level antimodal-uniqueness
+    /// bit. Independent cross-check on the surface axis distinct from the
+    /// option-equality arm against [`Self::unique_antimodal_variant`].
+    ///
+    /// Sorted-antimodal witness singleton identity: for every slice
+    /// `items`,
+    /// `T::sorted_unique_antimodal_variant(items) == (if T::sorted_antimodal_variants(items).len() == 1 { Some(T::sorted_antimodal_variants(items)[0]) } else { None })`
+    /// — when `items` has a unique antimode, the lex-order argmin witness-
+    /// collection [`Self::sorted_antimodal_variants`] collapses to a
+    /// length-`1` Vec containing EXACTLY that unique variant, so its
+    /// slot-`0` wrapped in `Some` coincides with THIS projection.
+    /// Independent cross-check on the witness-Vec surface axis distinct
+    /// from the scalar arms.
+    ///
+    /// Flat-histogram coincidence identity: for every NON-EMPTY slice
+    /// `items` whose per-variant histogram is flat (i.e. every variant of
+    /// [`Self::ALL`] shares one common multiplicity — the empty, full-
+    /// set, and doubled-full-set fixpoints),
+    /// `T::sorted_unique_antimodal_variant(items) == T::sorted_unique_modal_variant(items)`
+    /// — the direction axis on flat-histogram slices COLLAPSES
+    /// (`min == max`), so the argmin and argmax lex-first-witnesses
+    /// coincide AND the uniqueness guards coincide at their common
+    /// (`count_modal_variants == count_antimodal_variants == T::CARDINALITY`)
+    /// value, and the guarded `Option<Self>` projections coincide byte-
+    /// for-byte. Sibling posture to
+    /// `unique_antimodal_variant_coincides_with_unique_modal_variant_on_flat_histogram_slices`
+    /// one ORDERING axis over: the declaration-order (direction × unique-
+    /// tie) coincidence lifts verbatim to the lex-order row through the
+    /// shared guarded-lift combinator.
+    ///
+    /// Slice-reversal invariance: the projection factors through
+    /// [`Self::has_unique_antimode`] (ordering-agnostic on the input axis
+    /// — the underlying [`Self::count_antimodal_variants`] is invariant
+    /// under slice-reversal) and [`Self::sorted_antimodal_variant`]
+    /// (ordering-agnostic on the input axis — the underlying
+    /// [`Self::count_occurrences_of`] + [`Self::min_variant_count`] are
+    /// both invariant under slice-reversal) under a boolean-guarded
+    /// `Option`-collapse.
+    ///
+    /// Empty-slice contract: `T::sorted_unique_antimodal_variant(&[]) ==
+    /// None` UNCONDITIONALLY — the empty slice hits zero positions,
+    /// [`Self::count_antimodal_variants`] reports `0` at the empty-slice
+    /// short-circuit, [`Self::has_unique_antimode`] returns `false`, and
+    /// the guard collapses the projection to `None` before
+    /// [`Self::sorted_antimodal_variant`]'s own `None`-at-empty branch
+    /// is consulted.
+    ///
+    /// Matching-singleton contract at [`Self::CARDINALITY`] `>= 3`:
+    /// `T::sorted_unique_antimodal_variant(&[v]) == None` for every
+    /// variant `v` — the sole position hits `v` at count `1`, every
+    /// non-target variant has count `0`, [`Self::min_variant_count`]
+    /// collapses to `0`, EVERY non-target variant satisfies `count ==
+    /// min`, so [`Self::count_antimodal_variants`] reports
+    /// [`Self::CARDINALITY`] `- 1 >= 2 != 1`,
+    /// [`Self::has_unique_antimode`] returns `false`, and the guard
+    /// collapses the projection to `None`. LOAD-BEARING ASYMMETRY
+    /// against [`Self::sorted_unique_modal_variant`] which returns
+    /// `Some(v)` on the same slice — the direction axis SEPARATES the
+    /// argmax and argmin uniqueness-witness corners distinctly on the
+    /// lex-order `Option<Self>`-return row at the matching-singleton
+    /// fixpoint on any implementor of cardinality `>= 3`.
+    ///
+    /// Single-missing contract at [`Self::CARDINALITY`] `>= 2`
+    /// (LOAD-BEARING POSITIVE ARM): for the slice
+    /// `T::ALL[..T::CARDINALITY - 1]` (omit the last variant),
+    /// `T::sorted_unique_antimodal_variant(&single_missing) == Some(T::ALL[T::CARDINALITY - 1])`
+    /// — every present variant has count `1`, the omitted last variant
+    /// has count `0`, [`Self::min_variant_count`] collapses to `0`, ONLY
+    /// the omitted variant satisfies `count == min`, so
+    /// [`Self::count_antimodal_variants`] reports `1`,
+    /// [`Self::has_unique_antimode`] returns `true`, the guard fires,
+    /// and the lex-order sweep of [`Self::sorted_variants`] hits the
+    /// SAME sole argmin variant `T::ALL[T::CARDINALITY - 1]` that the
+    /// declaration-order sweep at [`Self::unique_antimodal_variant`]
+    /// lands on. BY UNIQUENESS of the argmin witness the sole witness is
+    /// the ONLY variant either sweep can find. The single-missing arm is
+    /// the LOAD-BEARING `Some`-arm catch on the argmin-lex unique-tie
+    /// corner — every OTHER canonical fixpoint at cardinality `>= 2`
+    /// (empty, matching-singleton at cardinality `>= 3`, full-set,
+    /// doubled-full-set) reports `None`, so an override that folds onto
+    /// `None` unconditionally passes every other arm silently but
+    /// bifurcates HERE loudly. LOAD-BEARING DISJOINT-WITNESS mirror of
+    /// the sibling equivalence-partition (mult `== 0`) arm
+    /// [`Self::sorted_unique_missing_variant`] at the SAME single-missing
+    /// fixture: both LEX-ORDER `Some(_)` arms report THE SAME omitted-
+    /// last variant on this fixture because the argmin-band and the
+    /// (mult `== 0`) miss-band COINCIDE at exactly the omitted variant
+    /// on this canonical positive fixpoint — the two orthogonal surfaces
+    /// (modal-aggregation × direction × argmin, equivalence-partition ×
+    /// mult-band `== 0`) UNIFY at the single-missing witness because
+    /// argmin-count-`0` and missing-multiplicity-`0` are the same band on
+    /// slices where `min_variant_count == 0`.
+    ///
+    /// Full-set contract at [`Self::CARDINALITY`] `>= 2`:
+    /// `T::sorted_unique_antimodal_variant(T::ALL) == None`
+    /// UNCONDITIONALLY — clause (3)'s pairwise-distinctness invariant
+    /// pins every variant at count `1`, every per-variant multiplicity
+    /// is `1`, [`Self::count_antimodal_variants`] reports
+    /// [`Self::CARDINALITY`] `>= 2`, [`Self::has_unique_antimode`]
+    /// returns `false`, and the guard collapses to `None`. LOAD-BEARING
+    /// ASYMMETRY against [`Self::sorted_antimodal_variant`] which
+    /// returns `Some(T::sorted_first())` on the same slice — the unique-
+    /// tie sharpening SEPARATES the unsharpened lex-order argmin first-
+    /// witness (returns the lex-order-first tie-member) from THIS
+    /// uniqueness-gated projection (collapses to `None` on multi-way
+    /// ties) on the flat-histogram fixpoint at cardinality `>= 2`.
+    ///
+    /// Doubled-full-set contract at [`Self::CARDINALITY`] `>= 2`:
+    /// `T::sorted_unique_antimodal_variant(T::ALL ++ T::ALL) == None`
+    /// UNCONDITIONALLY — the doubled full set hits every variant at
+    /// exactly two positions, every count is `2`,
+    /// [`Self::count_antimodal_variants`] reports [`Self::CARDINALITY`],
+    /// [`Self::has_unique_antimode`] returns `false`, and the guard
+    /// collapses to `None`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of
+    /// [`Self::has_unique_antimode`] + [`Self::sorted_antimodal_variant`]
+    /// via a boolean-guarded `Option`-collapse on `Option<Self>`. Cost
+    /// inherits both underlying projections: `O(T::CARDINALITY * n)` on
+    /// slice arity `n` (one [`Self::min_variant_count`] fold, one
+    /// [`Self::count_antimodal_variants`] filter-count sweep, and one
+    /// lex-order [`Iterator::find`] sweep when the guard holds; the
+    /// short-circuiting `if` avoids the second sweep when the guard
+    /// falsifies) + `O(T::CARDINALITY log T::CARDINALITY)` for the
+    /// [`Self::sorted_variants`] cache, allocation-free at the return,
+    /// no `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's minimal
+    /// `Sized + Copy + 'static` supertrait pair stays untouched).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::sorted_unique_antimodal_variant`]: a `tatara-check`
+    /// predicate `(check-antimode-if-unique-lex-first …)` that reports
+    /// "the trough variant, in lex order, if unambiguous" for a caller
+    /// that prefers lex-order presentation regardless of declaration-
+    /// order (which may be arbitrary or convenience-ordered); a Sekiban
+    /// audit-trail per-window witness-if-unique binding that pins the
+    /// lex-order trough-witness for stability against upstream
+    /// declaration-order churn; a scheduler-fairness diagnostic reporting
+    /// "the idlest worker, lex-first, only if uniquely idlest" for
+    /// deterministic presentation on enum refactoring that permutes
+    /// declaration order; a starvation-witness metric emitter that binds
+    /// a Prometheus-style `unique_antimode_variant_lex` label with the
+    /// empty-string absent semantic on tied windows. Each binds to ONE
+    /// typed lex-order `Option<Self>`-return uniqueness-gated argmin
+    /// aggregate on the trait — AND, by the ordering-choice-irrelevance
+    /// identity, TYPED PROOF that the search-order choice is
+    /// operationally free WHEN the underlying antimodal-uniqueness bit
+    /// holds.
+    ///
+    /// Compounding closure: this projection EXHAUSTIVELY CLOSES the
+    /// (set-level × `Option<Self>` × statistical-aggregate × direction ×
+    /// ordering × unique-tie) 2×2×2 = 8-corner cube at its FINAL corner
+    /// past the (argmax, declaration) [`Self::unique_modal_variant`]
+    /// opener, the (argmax, lex) [`Self::sorted_unique_modal_variant`]
+    /// argmax-lex closure, and the (argmin, declaration)
+    /// [`Self::unique_antimodal_variant`] argmin-declaration closure. The
+    /// natural next lifts past this closure walk one COMBINATOR axis over
+    /// on the modal-aggregation matrix into the direction-composition
+    /// (extremal / middle-band / bimodal) LEX-order uniqueness-gated arms
+    /// (`sorted_unique_extremal_variant`, `sorted_unique_middle_band_variant`,
+    /// `sorted_unique_bimodal_variant`), each emerging as a boolean-
+    /// guarded lift of the existing (`Option<Self>` × direction-
+    /// composition × ordering) unsharpened peer under the existing (bool
+    /// × direction-composition) uniqueness bit with no fresh substrate
+    /// primitives on the index axis.
+    ///
+    /// Theory anchor: THEORY.md §II.1 — the Rust + Lisp pattern; the
+    /// (set-level × `Option<Self>` × sorted × statistical-aggregate ×
+    /// direction × argmin × unique-tie) corner becomes a TYPED WITNESS
+    /// on the ClosedSet trait rather than a per-consumer inline
+    /// `if T::has_unique_antimode(items) { T::sorted_antimodal_variant(items) } else { None }`
+    /// re-derivation. THEORY.md §III — the typescape; a fresh TYPE-level
+    /// primitive plus a typed THEOREM (ordering-choice-irrelevance) the
+    /// substrate proves once rather than every downstream site re-proving
+    /// via `sorted_unique_antimodal_variant(items) == unique_antimodal_variant(items)`
+    /// assertions per callsite. THEORY.md §V.1 — knowable platform; the
+    /// (lex-order × `Option<Self>` × direction × argmin × unique-tie)
+    /// corner was an unnamed inline composition — OR silently absent
+    /// because the caller shrugged and used the declaration-order sibling
+    /// without proof of coincidence — recurring at every prospective
+    /// downstream "which variant is the histogram's trough, in lex order,
+    /// if unambiguous?" site pre-lift. THEORY.md §VI.1 — generation over
+    /// composition; the projection emerges from the composition of the
+    /// two substrate primitives [`Self::has_unique_antimode`] +
+    /// [`Self::sorted_antimodal_variant`] with the `if _ { _ } else { None }`
+    /// combinator on `Option<Self>`, not as a per-implementor hand-rolled
+    /// body.
+    ///
+    /// Frontier inspiration: R's `{ t <- table(items); s <- sort(names(t)[t == min(t)]); if (length(s) == 1) s[1] else NA }`
+    /// — the guarded lex-order argmin on a factor histogram; Julia's
+    /// `let c = StatsBase.countmap(items), m = minimum(values(c)), ties = filter(kv -> kv[2] == m, sort(collect(c), by = kv -> kv[1])); length(ties) == 1 ? Some(ties[1][1]) : Nothing end`;
+    /// Python's `sorted(k for k, v in collections.Counter(items).items() if v == min(collections.Counter(items).values(), default=0))[:1]`
+    /// filtered by outer count-guard; Haskell's `filter (\v -> Map.findWithDefault 0 v hs == m) (sort allLevels)`
+    /// guarded to singleton; Clojure's `(let [f (frequencies coll), m (apply min (vals f)), ts (filter #(= (val %) m) (sort ALL-LEVELS))] (when (= 1 (count ts)) (first ts)))`;
+    /// SQL's `SELECT variant FROM t GROUP BY variant HAVING COUNT(*) = (SELECT MIN(c) …) ORDER BY variant LIMIT 1`
+    /// filtered by an outer count-guard. Translation through pleme-io
+    /// primitives: the projection binds through the set-level antimodal-
+    /// uniqueness bit [`Self::has_unique_antimode`] conjoined with the
+    /// lex-order argmin first-witness [`Self::sorted_antimodal_variant`]
+    /// under an `Option`-collapse — no new dep, no supertrait bound
+    /// (`Sized + Copy + 'static` stays untouched), no allocation at the
+    /// return, cost inherited from the underlying aggregates with short-
+    /// circuiting on the guard.
+    fn sorted_unique_antimodal_variant(items: &[Self]) -> Option<Self> {
+        if <Self as ClosedSet>::has_unique_antimode(items) {
+            <Self as ClosedSet>::sorted_antimodal_variant(items)
         } else {
             None
         }
@@ -52867,6 +53136,139 @@ where
             T::sorted_unique_modal_variant(&bimodal_triple).is_some(),
             T::has_unique_mode(&bimodal_triple),
             "{type_name}: T::sorted_unique_modal_variant(&bimodal_triple).is_some() drifted from T::has_unique_mode(&bimodal_triple) — the is-some coincidence identity MUST hold on the bimodal-triple fixture",
+        );
+    }
+    // (184) — `T::sorted_unique_antimodal_variant(items)` MUST agree
+    // with the guarded-lex-first-witness body
+    // `if T::has_unique_antimode(items) { T::sorted_antimodal_variant(items) }
+    //  else { None }` on every canonical slice AND MUST IDENTICALLY
+    // EQUAL its declaration-order sibling `T::unique_antimodal_variant`
+    // on every canonical slice — the ordering-choice-irrelevance
+    // identity witnesses that WHEN the antimodal-uniqueness bit holds
+    // the SOLE argmin witness is unambiguous, so declaration-order and
+    // lex-order first-witness sweeps land on THE SAME variant. Sibling
+    // posture to clause (183) one DIRECTION axis over: clause (183)
+    // OPENED the LEX-ORDER (Option<Self> × direction × argmax × unique-
+    // tie) arm on the MODAL-AGGREGATION surface; THIS clause EXHAUSTIVELY
+    // CLOSES the (set-level × Option<Self> × statistical-aggregate ×
+    // direction × ordering × unique-tie) 2×2×2 = 8-corner cube at its
+    // FINAL corner past the three prior uniqueness-gated arms — the
+    // argmin-lex peer one DIRECTION axis over from clause (183).
+    //
+    // Empty-slice arm: `count_antimodal_variants(&[])` reports `0` via
+    // the empty-slice short-circuit, `has_unique_antimode` returns
+    // `false`, the guard short-circuits, and the projection lands on
+    // `None` before `sorted_antimodal_variant`'s own None-at-empty
+    // branch is consulted.
+    //
+    // Full-set arm at cardinality `>= 2`: clause (3)'s pairwise-
+    // distinctness invariant pins every variant at count `1`,
+    // `min_variant_count` collapses to `1`, `count_antimodal_variants`
+    // reports `T::CARDINALITY >= 2`, `has_unique_antimode` returns
+    // `false`, and the guard collapses to `None`. LOAD-BEARING ASYMMETRY
+    // against `sorted_antimodal_variant` which returns
+    // `Some(T::sorted_first())` on the same slice — the unique-tie
+    // sharpening SEPARATES the unsharpened lex-order argmin first-
+    // witness from THIS uniqueness-gated projection at the flat-
+    // histogram fixpoint.
+    //
+    // Doubled-full-set arm at cardinality `>= 2`: every variant is at
+    // count `2`, `has_unique_antimode` returns `false`, and the guard
+    // collapses to `None`.
+    //
+    // Single-missing arm at cardinality `>= 2` (LOAD-BEARING
+    // `Some(_)`-arm catch): on `T::ALL[..T::CARDINALITY - 1]`
+    // `T::ALL[T::CARDINALITY - 1]` sits at count `0` (the SOLE argmin
+    // witness), every other variant sits at count `1`;
+    // `count_antimodal_variants` reports `1`, `has_unique_antimode`
+    // returns `true`, the guard fires, and the lex-order sweep of
+    // `T::sorted_variants` hits `T::ALL[T::CARDINALITY - 1]` at its
+    // sole count-`0` entry — the SAME variant `T::unique_antimodal_variant`
+    // lands on (ordering-choice-irrelevance BY UNIQUENESS). LOAD-BEARING
+    // DISJOINT-WITNESS mirror of clause (180) at the SAME fixture: the
+    // LEX-ORDER (mult `== 0`) miss-band arm ALSO lands on
+    // `Some(T::ALL[T::CARDINALITY - 1])`; the two POSITIVE `Some(_)`
+    // arms of the LEX-ORDER uniqueness column on the two orthogonal
+    // surfaces UNIFY at the single-missing witness because argmin-
+    // count-`0` and missing-multiplicity-`0` COINCIDE on slices where
+    // `min_variant_count == 0`. The single-missing arm is the LOAD-
+    // BEARING `Some(_)` catch — every other canonical fixpoint reports
+    // `None`, so an override that folds onto `None` unconditionally
+    // passes every other arm silently but bifurcates HERE loudly.
+    //
+    // Is-some coincidence: on every fixture the projection's `is_some`
+    // bit MUST equal `T::has_unique_antimode`.
+    //
+    // The default trait body threads the guarded-lex-first-witness
+    // sweep verbatim and satisfies every fixpoint arm + the ordering-
+    // choice-irrelevance arm for free; the assertion catches a future
+    // implementor whose override drifts the projection loudly rather
+    // than silently bifurcating the lex-order antimodal-uniqueness-
+    // gated witness surface every downstream consumer routes through.
+    assert_eq!(
+        T::sorted_unique_antimodal_variant(empty),
+        T::unique_antimodal_variant(empty),
+        "{type_name}: T::sorted_unique_antimodal_variant(&[]) drifted from T::unique_antimodal_variant(&[]) — the ordering-choice-irrelevance identity MUST hold on the empty slice; both projections collapse to `None` through the same guard arm",
+    );
+    assert_eq!(
+        T::sorted_unique_antimodal_variant(empty).is_some(),
+        T::has_unique_antimode(empty),
+        "{type_name}: T::sorted_unique_antimodal_variant(&[]).is_some() drifted from T::has_unique_antimode(&[]) — the is-some coincidence identity MUST hold on the empty slice",
+    );
+    assert_eq!(
+        T::sorted_unique_antimodal_variant(T::ALL),
+        T::unique_antimodal_variant(T::ALL),
+        "{type_name}: T::sorted_unique_antimodal_variant(T::ALL) drifted from T::unique_antimodal_variant(T::ALL) — the ordering-choice-irrelevance identity MUST hold on the full-set covering slice",
+    );
+    assert_eq!(
+        T::sorted_unique_antimodal_variant(T::ALL).is_some(),
+        T::has_unique_antimode(T::ALL),
+        "{type_name}: T::sorted_unique_antimodal_variant(T::ALL).is_some() drifted from T::has_unique_antimode(T::ALL) — the is-some coincidence identity MUST hold on the full-set slice",
+    );
+    assert_eq!(
+        T::sorted_unique_antimodal_variant(&doubled_full_set),
+        T::unique_antimodal_variant(&doubled_full_set),
+        "{type_name}: T::sorted_unique_antimodal_variant(&doubled_full_set) drifted from T::unique_antimodal_variant(&doubled_full_set) — the ordering-choice-irrelevance identity MUST hold on the doubled-full-set covering slice where both projections collapse to `None`",
+    );
+    assert_eq!(
+        T::sorted_unique_antimodal_variant(&doubled_full_set).is_some(),
+        T::has_unique_antimode(&doubled_full_set),
+        "{type_name}: T::sorted_unique_antimodal_variant(&doubled_full_set).is_some() drifted from T::has_unique_antimode(&doubled_full_set) — the is-some coincidence identity MUST hold on the doubled-full-set slice",
+    );
+    if T::CARDINALITY >= 2 {
+        // Single-missing fixture at cardinality `>= 2`: LOAD-BEARING
+        // `Some(T::ALL[T::CARDINALITY - 1])`-arm catch on the (modal-
+        // aggregation × direction × argmin × unique-tie × lex-order ×
+        // `Option<Self>`) corner. On `T::ALL[..T::CARDINALITY - 1]`
+        // the omitted last variant sits at count `0` (the SOLE argmin
+        // witness), every present variant sits at count `1`;
+        // `count_antimodal_variants` reports `1`, `has_unique_antimode`
+        // returns `true`, the guard fires, and the lex-order sweep of
+        // `T::sorted_variants` hits `T::ALL[T::CARDINALITY - 1]` as the
+        // sole count-`0` entry — the SAME variant the declaration-order
+        // sweep at `T::unique_antimodal_variant` lands on. The two
+        // projections return the SAME `Some(T::ALL[T::CARDINALITY -
+        // 1])` on this positive fixture BY UNIQUENESS. LOAD-BEARING
+        // DISJOINT-WITNESS mirror of clause (180) at the SAME fixture:
+        // clause (180)'s LEX-ORDER (mult `== 0`) miss-band arm ALSO
+        // lands on `Some(T::ALL[T::CARDINALITY - 1])` because argmin-
+        // count-`0` and missing-multiplicity-`0` UNIFY at exactly the
+        // omitted variant on slices where `min_variant_count == 0`.
+        let single_missing: ::std::vec::Vec<T> = T::ALL[..T::CARDINALITY - 1].to_vec();
+        assert_eq!(
+            T::sorted_unique_antimodal_variant(&single_missing),
+            T::unique_antimodal_variant(&single_missing),
+            "{type_name}: T::sorted_unique_antimodal_variant(&single_missing) drifted from T::unique_antimodal_variant(&single_missing) — the ordering-choice-irrelevance identity MUST hold on the LOAD-BEARING single-missing positive fixture; when the sole argmin witness is unique, declaration-order and lex-order sweeps BOTH land on `Some(T::ALL[T::CARDINALITY - 1])`",
+        );
+        assert_eq!(
+            T::sorted_unique_antimodal_variant(&single_missing),
+            Some(T::ALL[T::CARDINALITY - 1]),
+            "{type_name}: T::sorted_unique_antimodal_variant(&single_missing) drifted from `Some(T::ALL[T::CARDINALITY - 1])` at cardinality >= 2 — on `T::ALL[..T::CARDINALITY - 1]` the omitted last variant is the SOLE argmin witness at count 0, `count_antimodal_variants` reports `1`, `has_unique_antimode` returns `true`, and the lex-order sweep of T::sorted_variants through `count == min` bypasses every present variant and lands at THE unique argmin witness",
+        );
+        assert_eq!(
+            T::sorted_unique_antimodal_variant(&single_missing).is_some(),
+            T::has_unique_antimode(&single_missing),
+            "{type_name}: T::sorted_unique_antimodal_variant(&single_missing).is_some() drifted from T::has_unique_antimode(&single_missing) — the is-some coincidence identity MUST hold on the single-missing fixture",
         );
     }
 }
@@ -110979,6 +111381,250 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedSortedUniqueModalVariantNoneKind whose sorted_unique_modal_variant override folds onto `None` unconditionally — clause (183)'s bimodal-triple positive fixpoint arm at cardinality >= 3 MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_antimodal_variant_returns_none_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT:
+        // T::sorted_unique_antimodal_variant(&[]) == None
+        // UNCONDITIONALLY — the empty slice hits zero positions,
+        // count_antimodal_variants reports 0 via its empty-slice
+        // short-circuit, has_unique_antimode returns false, and the
+        // guard collapses the projection to `None` before the
+        // T::sorted_antimodal_variant sweep is consulted.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_antimodal_variant(empty),
+            None,
+            "T::sorted_unique_antimodal_variant(&[]) diverged from the empty-slice fixpoint None",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_antimodal_variant_returns_none_on_the_full_set_at_cardinality_gte_two() {
+        // FULL-SET CONTRACT AT CARDINALITY >= 2:
+        // T::sorted_unique_antimodal_variant(T::ALL) == None — clause (3)'s
+        // pairwise-distinctness invariant pins every variant at count 1,
+        // count_antimodal_variants reports T::CARDINALITY,
+        // has_unique_antimode returns false at cardinality >= 2, and
+        // the guard collapses to `None`.
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 2) };
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_antimodal_variant(<StubKind as ClosedSet>::ALL),
+            None,
+            "T::sorted_unique_antimodal_variant(T::ALL) diverged from the full-set fixpoint None at cardinality >= 2",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_antimodal_variant_returns_none_on_the_doubled_full_set_across_every_kind() {
+        // DOUBLED-FULL-SET CONTRACT:
+        // T::sorted_unique_antimodal_variant(T::ALL ++ T::ALL) == None
+        // UNCONDITIONALLY — the doubled full set hits every variant
+        // at count 2, count_antimodal_variants reports T::CARDINALITY,
+        // has_unique_antimode returns false, and the guard collapses
+        // to `None`.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_antimodal_variant(&doubled),
+            None,
+            "T::sorted_unique_antimodal_variant(ALL++ALL) diverged from the doubled-full-set fixpoint None",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_antimodal_variant_returns_some_omitted_last_on_the_single_missing_slice_at_cardinality_gte_two(
+    ) {
+        // SINGLE-MISSING CONTRACT AT CARDINALITY >= 2: LOAD-BEARING
+        // `Some(T::ALL[T::CARDINALITY - 1])`-arm catch on the lex-
+        // order argmin uniqueness column. On T::ALL[..T::CARDINALITY - 1]
+        // the omitted last variant sits at count 0 (the SOLE argmin
+        // witness), every present variant sits at count 1;
+        // T::count_antimodal_variants reports 1, T::has_unique_antimode
+        // returns true, the guard fires, and the lex-order sweep of
+        // T::sorted_variants hits T::ALL[T::CARDINALITY - 1] as the
+        // sole count-0 entry — the SAME variant the declaration-order
+        // sweep at T::unique_antimodal_variant lands on (ordering-
+        // choice-irrelevance identity).
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 2) };
+        let single_missing: Vec<StubKind> =
+            <StubKind as ClosedSet>::ALL[..<StubKind as ClosedSet>::CARDINALITY - 1].to_vec();
+        let via_sorted = <StubKind as ClosedSet>::sorted_unique_antimodal_variant(&single_missing);
+        let via_decl = <StubKind as ClosedSet>::unique_antimodal_variant(&single_missing);
+        assert_eq!(
+            via_sorted, via_decl,
+            "T::sorted_unique_antimodal_variant(&single_missing) diverged from T::unique_antimodal_variant(&single_missing) — uniqueness of the argmin witness pins ordering-choice irrelevance",
+        );
+        assert_eq!(
+            via_sorted,
+            Some(<StubKind as ClosedSet>::ALL[<StubKind as ClosedSet>::CARDINALITY - 1]),
+            "T::sorted_unique_antimodal_variant({single_missing:?}) diverged from `Some(T::ALL[T::CARDINALITY - 1])` — the LOAD-BEARING Some-arm on the canonical single-missing fixture pins the sole argmin witness at the omitted last variant",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_antimodal_variant_equals_unique_antimodal_variant_across_every_triple() {
+        // ORDERING-CHOICE-IRRELEVANCE IDENTITY: for every slice `items`,
+        // T::sorted_unique_antimodal_variant(items) ==
+        // T::unique_antimodal_variant(items) — when the antimodal-
+        // uniqueness bit holds the SOLE argmin witness is unambiguous,
+        // so declaration-order and lex-order first-witness sweeps land
+        // on THE SAME variant; when the bit falsifies both projections
+        // collapse to `None` through the same guard arm. The lex peer
+        // is thus IDENTICALLY equal to its declaration-order sibling
+        // on every input.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_antimodal_variant(&triple),
+                        <StubKind as ClosedSet>::unique_antimodal_variant(&triple),
+                        "T::sorted_unique_antimodal_variant({triple:?}) diverged from T::unique_antimodal_variant({triple:?}) — the ordering-choice-irrelevance identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_antimodal_variant_equals_has_unique_antimode_gated_sorted_antimodal_variant_across_every_triple(
+    ) {
+        // GUARDED-LEX-FIRST-WITNESS IDENTITY: for every slice `items`,
+        // T::sorted_unique_antimodal_variant(items) ==
+        // if T::has_unique_antimode(items) {
+        //   T::sorted_antimodal_variant(items)
+        // } else { None }. The canonical form the body uses.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_body =
+                        <StubKind as ClosedSet>::sorted_unique_antimodal_variant(&triple);
+                    let via_guarded_lex_lift =
+                        if <StubKind as ClosedSet>::has_unique_antimode(&triple) {
+                            <StubKind as ClosedSet>::sorted_antimodal_variant(&triple)
+                        } else {
+                            None
+                        };
+                    assert_eq!(
+                        via_body, via_guarded_lex_lift,
+                        "T::sorted_unique_antimodal_variant({triple:?}) diverged from the guarded lex-first-witness lift",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_antimodal_variant_is_some_iff_has_unique_antimode_across_every_triple() {
+        // IS-SOME COINCIDENCE IDENTITY: for every slice `items`,
+        // T::sorted_unique_antimodal_variant(items).is_some() ==
+        // T::has_unique_antimode(items). Independent cross-check on
+        // the surface axis distinct from the option-equality arm
+        // against T::unique_antimodal_variant.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_antimodal_variant(&triple)
+                            .is_some(),
+                        <StubKind as ClosedSet>::has_unique_antimode(&triple),
+                        "T::sorted_unique_antimodal_variant({triple:?}).is_some() diverged from T::has_unique_antimode({triple:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_antimodal_variant_is_invariant_under_slice_reversal_across_every_triple() {
+        // REVERSAL-INVARIANCE CONTRACT:
+        // T::sorted_unique_antimodal_variant is invariant under slice-
+        // reversal. Both T::has_unique_antimode and
+        // T::sorted_antimodal_variant are ordering-agnostic on the
+        // input axis, so the guarded lift is too.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let reversed: Vec<StubKind> = triple.iter().rev().copied().collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_antimodal_variant(&triple),
+                        <StubKind as ClosedSet>::sorted_unique_antimodal_variant(&reversed),
+                        "T::sorted_unique_antimodal_variant({triple:?}) diverged from T::sorted_unique_antimodal_variant({reversed:?}) — reversal-invariance was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_none_drift_in_sorted_unique_antimodal_variant()
+    {
+        // Drift catch — clause (184)'s single-missing positive arm
+        // at cardinality >= 2 fires when an override folds the
+        // projection onto `None` regardless of input. The single-
+        // missing fixture demands `Some(T::ALL[T::CARDINALITY - 1])`;
+        // the drifted override cannot produce it.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedUniqueAntimodalVariantNoneKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedSortedUniqueAntimodalVariantNoneKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedSortedUniqueAntimodalVariantNoneKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted sorted_unique_antimodal_variant none kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedSortedUniqueAntimodalVariantNoneKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedSortedUniqueAntimodalVariantNoneKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted sorted_unique_antimodal_variant none kind";
+            type Unknown = UnknownDriftedSortedUniqueAntimodalVariantNoneKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedUniqueAntimodalVariantNoneKind(s.to_owned())
+            }
+            fn sorted_unique_antimodal_variant(_items: &[Self]) -> Option<Self> {
+                // Drift: return `None` regardless. Fires clause
+                // (184)'s single-missing positive fixpoint arm at
+                // `None != Some(T::ALL[T::CARDINALITY - 1])`.
+                None
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedSortedUniqueAntimodalVariantNoneKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedSortedUniqueAntimodalVariantNoneKind whose sorted_unique_antimodal_variant override folds onto `None` unconditionally — clause (184)'s single-missing positive fixpoint arm at cardinality >= 2 MUST reject the drift",
         );
     }
 }

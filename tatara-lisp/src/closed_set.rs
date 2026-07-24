@@ -22886,6 +22886,268 @@ pub trait ClosedSet: Sized + Copy + 'static {
         }
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "THE unique extremal variant, lex-
+    /// first" projection — `Some(v)` iff `items` has a UNIQUE extremal
+    /// witness ([`Self::has_unique_extremal_variant`] holds) AND `v` is
+    /// the sole variant of [`Self::sorted_variants`] achieving EITHER
+    /// [`Self::max_variant_count`] OR [`Self::min_variant_count`], else
+    /// `None`. Computed as the just-lifted set-level extremal-union
+    /// uniqueness bit [`Self::has_unique_extremal_variant`] guarding a
+    /// LEX-ORDER first-witness sweep of [`Self::sorted_variants`] keyed
+    /// on `count == max || count == min` — equivalently, the just-
+    /// lifted [`Self::sorted_extremal_variant`] projection under the
+    /// same guard. The LEX-ORDER `Option<Self>`-RETURN UNIQUE-TIE
+    /// SHARPENING corner OPENING the (set-level × `Option<Self>` ×
+    /// statistical-aggregate × direction-composition × ordering ×
+    /// unique-tie) column past the (declaration, union) opener
+    /// [`Self::unique_extremal_variant`] one ORDERING axis over on the
+    /// modal-aggregation matrix — the union-lex arm one COMBINATOR
+    /// axis over from [`Self::sorted_unique_modal_variant`] /
+    /// [`Self::sorted_unique_antimodal_variant`] which just closed the
+    /// direction-anchored 8-corner cube at the (argmax, lex) and
+    /// (argmin, lex) corners. Not a fresh substrate primitive on the
+    /// index axis — the projection emerges from a boolean conjunction
+    /// of the set-level extremal-union uniqueness bit with a lex-order
+    /// first-witness [`Iterator::find`] sweep of [`Self::sorted_variants`]
+    /// under an `Option`-collapse when the guard falsifies.
+    ///
+    /// Ordering-choice-irrelevance identity: for every slice `items`,
+    /// `T::sorted_unique_extremal_variant(items) ==
+    /// T::unique_extremal_variant(items)` — when the sole extremal
+    /// witness is UNIQUE ([`Self::has_unique_extremal_variant`] holds)
+    /// declaration-order and lex-order both walk the same `count ==
+    /// max || count == min` predicate over the same `T::CARDINALITY`-
+    /// sized variant carrier and land on THE SAME SOLE extremal
+    /// variant; when the guard falsifies both projections collapse to
+    /// `None` through the same guard arm. The LEX peer is thus
+    /// IDENTICALLY equal to its declaration-order sibling on every
+    /// input — the search-order axis becomes provably irrelevant WHEN
+    /// the underlying uniqueness bit holds. Pinned by
+    /// `sorted_unique_extremal_variant_equals_unique_extremal_variant_across_every_triple`
+    /// as a TYPED THEOREM the substrate proves once, replacing per-
+    /// consumer inline re-derivations of the equivalence. Sibling
+    /// posture to the direction-anchored peers' ordering-choice-
+    /// irrelevance identities one COMBINATOR axis over: the argmax
+    /// and argmin arms report DIRECTION-SPECIFIC witnesses on the same
+    /// slice at directional-asymmetry fixtures (single-missing arm at
+    /// cardinality `>= 2`, matching-singleton arm) while THIS union
+    /// arm collapses to `None` on every multi-variant fixture at
+    /// cardinality `>= 2` via the degenerate-opener property.
+    ///
+    /// Guarded-lex-first-witness identity: for every slice `items`,
+    /// `T::sorted_unique_extremal_variant(items) ==
+    /// if T::has_unique_extremal_variant(items) { T::sorted_extremal_variant(items) }
+    /// else { None }` — the canonical form the body uses.
+    ///
+    /// Is-some coincidence identity: for every slice `items`,
+    /// `T::sorted_unique_extremal_variant(items).is_some() ==
+    /// T::has_unique_extremal_variant(items)` — the `Option<Self>`
+    /// return's `is_some` bit COINCIDES with the set-level extremal-
+    /// union uniqueness bit. Independent cross-check on the surface
+    /// axis distinct from the option-equality arm against
+    /// [`Self::unique_extremal_variant`].
+    ///
+    /// Sorted-extremal witness singleton identity: for every slice
+    /// `items`,
+    /// `T::sorted_unique_extremal_variant(items) == (if T::sorted_extremal_variants(items).len() == 1 { Some(T::sorted_extremal_variants(items)[0]) } else { None })`
+    /// — when `items` has a unique extremal witness, the lex-order
+    /// union witness-collection [`Self::sorted_extremal_variants`]
+    /// collapses to a length-`1` Vec containing EXACTLY that unique
+    /// variant, so its slot-`0` wrapped in `Some` coincides with THIS
+    /// projection. Independent cross-check on the witness-Vec surface
+    /// axis distinct from the scalar arms.
+    ///
+    /// Slice-reversal invariance: the projection factors through
+    /// [`Self::has_unique_extremal_variant`] (ordering-agnostic on the
+    /// input axis — the underlying [`Self::count_extremal_variants`]
+    /// is invariant under slice-reversal) and
+    /// [`Self::sorted_extremal_variant`] (ordering-agnostic on the
+    /// input axis — the underlying max/min-fold pair +
+    /// [`Self::count_occurrences_of`] find sweep are all invariant
+    /// under slice-reversal) under a boolean-guarded `Option`-collapse.
+    ///
+    /// Empty-slice contract: `T::sorted_unique_extremal_variant(&[]) ==
+    /// None` UNCONDITIONALLY — the empty slice hits zero positions,
+    /// [`Self::count_extremal_variants`] reports `0` at the empty-
+    /// slice short-circuit, [`Self::has_unique_extremal_variant`]
+    /// returns `false`, and the guard collapses the projection to
+    /// `None` before [`Self::sorted_extremal_variant`]'s own `None`-
+    /// at-empty branch is consulted.
+    ///
+    /// Degenerate-opener contract at cardinality `>= 2`:
+    /// `T::sorted_unique_extremal_variant(items) == None` on EVERY
+    /// non-empty slice on EVERY implementor with `T::CARDINALITY >=
+    /// 2` — the inclusion-exclusion identity `count_extremal_variants
+    /// == count_modal + count_antimodal - count_bimodal` pins the
+    /// union cardinality at `T::CARDINALITY` on every flat-histogram
+    /// fixpoint (max == min collapses all three counts) and at `>= 2`
+    /// on every non-flat fixpoint (max != min splits argmax and argmin
+    /// into two disjoint non-empty bands with empty intersection, so
+    /// the union carries at least one modal AND one antimodal
+    /// variant — count `>= 2`). [`Self::has_unique_extremal_variant`]
+    /// therefore returns `false` everywhere past the empty slice at
+    /// cardinality `>= 2`, and the guard collapses the projection to
+    /// `None`. THIS corner INHERITS the DEGENERATE-OPENER property of
+    /// its declaration-order sibling [`Self::unique_extremal_variant`]
+    /// verbatim — the SOLE `Some(_)` arm sits at `T::CARDINALITY == 1`
+    /// where a matching singleton (= full-set) collapses the union to
+    /// a single variant, out of reach of the multi-variant test-
+    /// module fixtures. LOAD-BEARING ASYMMETRY against
+    /// [`Self::sorted_unique_modal_variant`] which returns `Some(v)`
+    /// on every matching-singleton at any cardinality — the
+    /// direction-composition axis SEPARATES the argmax uniqueness-
+    /// witness corner from THIS union uniqueness-witness corner on
+    /// the matching-singleton fixpoint at cardinality `>= 2` (the
+    /// argmax witness collapses to `{v}`, unambiguous; the union
+    /// witness carries both `{v}` and `T::ALL \ {v}`, ambiguous).
+    ///
+    /// Matching-singleton contract at cardinality `>= 2`:
+    /// `T::sorted_unique_extremal_variant(&[v]) == None` for every
+    /// variant `v` — the target hits count `1 == max`, every non-
+    /// target sits at count `0 == min`, the argmax band `{v}` (size
+    /// `1`) and the argmin band `T::ALL \ {v}` (size `T::CARDINALITY -
+    /// 1 >= 1`) are disjoint, so [`Self::count_extremal_variants`]
+    /// reports `T::CARDINALITY >= 2`,
+    /// [`Self::has_unique_extremal_variant`] returns `false`, and the
+    /// guard collapses to `None`.
+    ///
+    /// Full-set + doubled-full-set contract at cardinality `>= 2`:
+    /// `T::sorted_unique_extremal_variant(<T as ClosedSet>::ALL) ==
+    /// None` + `T::sorted_unique_extremal_variant(&doubled) == None`
+    /// — on either flat-histogram fixpoint every variant sits at BOTH
+    /// extremes simultaneously via the (max == min) collapse; the
+    /// union covers all of [`Self::ALL`],
+    /// [`Self::count_extremal_variants`] reports `T::CARDINALITY >=
+    /// 2`, and the guard collapses to `None`. LOAD-BEARING ASYMMETRY
+    /// against [`Self::sorted_extremal_variant`] which returns
+    /// `Some(T::sorted_first())` on the same slice — the unique-tie
+    /// sharpening SEPARATES the unsharpened lex-order union first-
+    /// witness from THIS uniqueness-gated projection at the flat-
+    /// histogram fixpoint.
+    ///
+    /// Bimodal-triple contract at cardinality `>= 3`: on the canonical
+    /// non-flat triple `[T::ALL[0], T::ALL[0], T::ALL[1]]` the argmax
+    /// is `{T::ALL[0]}` (count `2`), the argmin is `T::ALL[2..]`
+    /// (count `0`), the union carries the two disjoint bands and
+    /// [`Self::count_extremal_variants`] reports `T::CARDINALITY - 1
+    /// >= 2`, so the guard collapses the projection to `None`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of
+    /// [`Self::has_unique_extremal_variant`] +
+    /// [`Self::sorted_extremal_variant`] via a boolean-guarded
+    /// `Option`-collapse on `Option<Self>`. Cost inherits both
+    /// underlying projections: `O(T::CARDINALITY * n)` on slice arity
+    /// `n` (one max/min-fold pair, one
+    /// [`Self::count_extremal_variants`] filter-count sweep, and one
+    /// lex-order [`Iterator::find`] sweep when the guard holds; the
+    /// short-circuiting `if` avoids the second sweep when the guard
+    /// falsifies) + `O(T::CARDINALITY log T::CARDINALITY)` for the
+    /// [`Self::sorted_variants`] cache, allocation-free at the return,
+    /// no `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's
+    /// minimal `Sized + Copy + 'static` supertrait pair stays
+    /// untouched).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::sorted_unique_extremal_variant`]: a `tatara-check`
+    /// predicate `(check-extremal-if-unique-lex-first …)` that reports
+    /// "the sole extremal variant, in lex order, if unambiguous" for
+    /// a caller that prefers lex-order presentation regardless of
+    /// declaration-order (which may be arbitrary or convenience-
+    /// ordered); a Sekiban audit-trail per-window witness-if-unique
+    /// binding that pins the lex-order extremum for stability against
+    /// upstream declaration-order churn; an LSP hint that surfaces
+    /// the histogram extremum on a Lisp-authored field only when the
+    /// extremum is unambiguous, in lex order, staying silent on tied
+    /// unions; a Prometheus-style `unique_extremal_variant_lex` label
+    /// with the empty-string absent semantic on tied windows. Each
+    /// binds to ONE typed lex-order `Option<Self>`-return uniqueness-
+    /// gated union aggregate on the trait — AND, by the ordering-
+    /// choice-irrelevance identity, TYPED PROOF that the search-order
+    /// choice is operationally free WHEN the underlying extremal-
+    /// uniqueness bit holds.
+    ///
+    /// Compounding closure: this projection OPENS the LEX-ORDER
+    /// (`Option<Self>` × direction-composition × ordering × unique-
+    /// tie) row on the direction-composition surface past the just-
+    /// closed direction-anchored (argmax, lex) + (argmin, lex) arms
+    /// [`Self::sorted_unique_modal_variant`] +
+    /// [`Self::sorted_unique_antimodal_variant`] one COMBINATOR axis
+    /// over, peer to [`Self::unique_extremal_variant`] one ORDERING
+    /// axis over. The remaining two tiles on the direction-composition
+    /// LEX row are the complement arm
+    /// `sorted_unique_middle_band_variant(items) -> Option<Self>`
+    /// (returning `Some(v)` iff `has_unique_middle_band_variant(items)`
+    /// holds AND `v` is the lex-first sole strict-interior variant)
+    /// and the intersection arm `sorted_unique_bimodal_variant(items)
+    /// -> Option<Self>` (returning `Some(v)` iff
+    /// `has_unique_bimodal_variant(items)` holds AND `v` is the lex-
+    /// first sole `max == min` witness). Each remaining corner
+    /// emerges as a boolean-guarded lift of the existing
+    /// (`Option<Self>` × direction-composition × lex) unsharpened peer
+    /// under the existing (`bool` × direction-composition × unique-
+    /// tie) uniqueness bit with no fresh substrate primitives on the
+    /// index axis.
+    ///
+    /// Theory anchor: THEORY.md §II.1 — the Rust + Lisp pattern; the
+    /// (set-level × `Option<Self>` × sorted × statistical-aggregate ×
+    /// direction-composition × union × unique-tie) corner becomes a
+    /// TYPED WITNESS on the ClosedSet trait rather than a per-consumer
+    /// inline `if T::has_unique_extremal_variant(items) { T::sorted_extremal_variant(items) } else { None }`
+    /// re-derivation. THEORY.md §III — the typescape; a fresh TYPE-
+    /// level primitive plus a typed THEOREM (ordering-choice-
+    /// irrelevance) the substrate proves once rather than every
+    /// downstream site re-proving via
+    /// `sorted_unique_extremal_variant(items) == unique_extremal_variant(items)`
+    /// assertions per callsite. THEORY.md §V.1 — knowable platform;
+    /// the (lex-order × `Option<Self>` × direction-composition × union
+    /// × unique-tie) corner was an unnamed inline composition — OR
+    /// silently absent because the caller shrugged and used the
+    /// declaration-order sibling without proof of coincidence —
+    /// recurring at every prospective downstream "which variant is
+    /// the histogram's extremum, in lex order, if unambiguous?" site
+    /// pre-lift. THEORY.md §VI.1 — generation over composition; the
+    /// projection emerges from the composition of the two substrate
+    /// primitives [`Self::has_unique_extremal_variant`] +
+    /// [`Self::sorted_extremal_variant`] with the
+    /// `if _ { _ } else { None }` combinator on `Option<Self>`, not as
+    /// a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: R's `{ t <- table(items); m <- max(t);
+    /// n <- min(t); s <- sort(names(t)[t == m | t == n]); if
+    /// (length(s) == 1) s[1] else NA }` — the guarded lex-order union
+    /// on a factor histogram; Julia's `let c = StatsBase.countmap(items),
+    /// m = maximum(values(c)), n = minimum(values(c)), ties =
+    /// filter(kv -> kv[2] == m || kv[2] == n, sort(collect(c), by =
+    /// kv -> kv[1])); length(ties) == 1 ? Some(ties[1][1]) : Nothing
+    /// end`; Python's `sorted(k for k, v in
+    /// collections.Counter(items).items() if v ==
+    /// max(collections.Counter(items).values(), default=0) or v ==
+    /// min(collections.Counter(items).values(), default=0))[:1]`
+    /// filtered by outer count-guard; Haskell's `filter (\v ->
+    /// let c = Map.findWithDefault 0 v hs in c == m || c == n) (sort
+    /// allLevels)` guarded to singleton; Clojure's `(let [f
+    /// (frequencies coll), m (apply max (vals f)), n (apply min (vals
+    /// f)), ts (filter #(or (= (val %) m) (= (val %) n)) (sort ALL-
+    /// LEVELS))] (when (= 1 (count ts)) (first ts)))`; SQL's `SELECT
+    /// variant FROM t GROUP BY variant HAVING COUNT(*) = (SELECT
+    /// MAX(c) …) OR COUNT(*) = (SELECT MIN(c) …) ORDER BY variant
+    /// LIMIT 1` filtered by an outer count-guard. Translation through
+    /// pleme-io primitives: the projection binds through the set-
+    /// level extremal-union uniqueness bit
+    /// [`Self::has_unique_extremal_variant`] conjoined with the lex-
+    /// order union first-witness [`Self::sorted_extremal_variant`]
+    /// under an `Option`-collapse — no new dep, no supertrait bound
+    /// (`Sized + Copy + 'static` stays untouched), no allocation at
+    /// the return, cost inherited from the underlying aggregates with
+    /// short-circuiting on the guard.
+    fn sorted_unique_extremal_variant(items: &[Self]) -> Option<Self> {
+        if <Self as ClosedSet>::has_unique_extremal_variant(items) {
+            <Self as ClosedSet>::sorted_extremal_variant(items)
+        } else {
+            None
+        }
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "target is AT EITHER histogram
     /// extreme" per-target predicate — `true` iff `target` sits on the
     /// modal (argmax) band OR the antimodal (argmin) band of the per-
@@ -53269,6 +53531,176 @@ where
             T::sorted_unique_antimodal_variant(&single_missing).is_some(),
             T::has_unique_antimode(&single_missing),
             "{type_name}: T::sorted_unique_antimodal_variant(&single_missing).is_some() drifted from T::has_unique_antimode(&single_missing) — the is-some coincidence identity MUST hold on the single-missing fixture",
+        );
+    }
+
+    // (185) — `T::sorted_unique_extremal_variant(items)` MUST agree
+    // with the guarded-lex-first-witness body
+    // `if T::has_unique_extremal_variant(items) { T::sorted_extremal_variant(items) }
+    //  else { None }` on every canonical slice AND MUST IDENTICALLY
+    // EQUAL its declaration-order sibling `T::unique_extremal_variant`
+    // on every canonical slice — the ordering-choice-irrelevance
+    // identity witnesses that WHEN the extremal-union uniqueness bit
+    // holds the SOLE extremal witness is unambiguous, so declaration-
+    // order and lex-order first-witness sweeps land on THE SAME
+    // variant. Sibling posture to clause (184) one COMBINATOR axis
+    // over: clause (184) EXHAUSTIVELY CLOSED the direction-anchored
+    // (Option<Self> × direction × ordering × unique-tie) 8-corner
+    // cube at the (argmin, lex) FINAL corner; THIS clause OPENS the
+    // direction-composition LEX row past the just-closed direction-
+    // anchored arms at the (union, lex) corner — one COMBINATOR axis
+    // over from clause (184) AND one ORDERING axis over from clause
+    // (165) which pinned the (union, declaration) opener.
+    //
+    // Empty-slice arm: `count_extremal_variants(&[])` reports `0` via
+    // the empty-slice short-circuit, `has_unique_extremal_variant`
+    // returns `false`, the guard short-circuits, and the projection
+    // lands on `None` before `sorted_extremal_variant`'s own None-at-
+    // empty branch is consulted.
+    //
+    // Full-set arm at cardinality `>= 2`: clause (3)'s pairwise-
+    // distinctness invariant pins every variant at count `1`, max ==
+    // min == 1, the union covers all of T::ALL,
+    // `count_extremal_variants` reports `T::CARDINALITY >= 2`,
+    // `has_unique_extremal_variant` returns `false`, and the guard
+    // collapses to `None`. At `T::CARDINALITY == 1` the full-set
+    // slice collapses to a single variant at max == min == 1,
+    // `count_extremal_variants` reports `1`,
+    // `has_unique_extremal_variant` returns `true`, and the guarded
+    // lift reports `Some(T::ALL[0])` — the SOLE `Some(_)` arm of the
+    // degenerate opener, out of reach of the cardinality-3 stub.
+    // LOAD-BEARING ASYMMETRY at cardinality `>= 2` against
+    // `sorted_extremal_variant` which returns `Some(T::sorted_first())`
+    // on the same slice — the unique-tie sharpening SEPARATES the
+    // unsharpened lex-order union first-witness from THIS uniqueness-
+    // gated projection at the flat-histogram fixpoint.
+    //
+    // Doubled-full-set arm at cardinality `>= 2`: every variant is at
+    // count `2`, max == min == 2, `count_extremal_variants` reports
+    // `T::CARDINALITY >= 2`, `has_unique_extremal_variant` returns
+    // `false`, and the guard collapses to `None`.
+    //
+    // Matching-singleton arm at cardinality `>= 2`: the target hits
+    // count `1 == max`, every non-target sits at count `0 == min`,
+    // the argmax band `{v}` (size 1) and the argmin band `T::ALL \
+    // {v}` (size `T::CARDINALITY - 1 >= 1`) are disjoint, so
+    // `count_extremal_variants` reports `T::CARDINALITY >= 2`,
+    // `has_unique_extremal_variant` returns `false`, and the guard
+    // collapses to `None`. LOAD-BEARING ASYMMETRY against
+    // `sorted_unique_modal_variant` which returns `Some(v)` on the
+    // same slice at any cardinality — the direction-composition axis
+    // SEPARATES the argmax uniqueness-witness corner from THIS union
+    // uniqueness-witness corner on the matching-singleton fixpoint.
+    //
+    // Bimodal-triple arm at cardinality `>= 3`: `T::ALL[0]` at count
+    // `2 == max`, `T::ALL[1]` at count `1` (strictly interior),
+    // `T::ALL[2..]` at count `0 == min`, the union carries
+    // `{T::ALL[0]} ∪ T::ALL[2..]` (disjoint bands),
+    // `count_extremal_variants` reports `T::CARDINALITY - 1 >= 2`,
+    // `has_unique_extremal_variant` returns `false`, and the guard
+    // collapses to `None`.
+    //
+    // Is-some coincidence: on every fixture the projection's
+    // `is_some` bit MUST equal `T::has_unique_extremal_variant`.
+    //
+    // The default trait body threads the guarded-lex-first-witness
+    // sweep verbatim and satisfies every fixpoint arm + the ordering-
+    // choice-irrelevance arm for free; the assertion catches a future
+    // implementor whose override drifts the projection loudly rather
+    // than silently bifurcating the lex-order extremal-union
+    // uniqueness-gated witness surface every downstream consumer
+    // routes through. Note: at cardinality `>= 2` the correct
+    // answer is `None` on EVERY canonical fixture (the degenerate-
+    // opener property inherited from clause (165)), so an always-
+    // `None` override matches truth structurally on the multi-variant
+    // stub — the structural catch for `None`-drifting overrides sits
+    // at `T::CARDINALITY == 1` on the full-set arm above. The
+    // always-`Some(first)` drift catch on the test module reaches
+    // the `Some(_) != None` bifurcation on every fixture arm.
+    assert_eq!(
+        T::sorted_unique_extremal_variant(empty),
+        T::unique_extremal_variant(empty),
+        "{type_name}: T::sorted_unique_extremal_variant(&[]) drifted from T::unique_extremal_variant(&[]) — the ordering-choice-irrelevance identity MUST hold on the empty slice; both projections collapse to `None` through the same guard arm",
+    );
+    assert_eq!(
+        T::sorted_unique_extremal_variant(empty),
+        None,
+        "{type_name}: T::sorted_unique_extremal_variant(&[]) drifted from the empty-slice fixpoint None — `has_unique_extremal_variant(&[])` collapses to `false` via `count_extremal_variants(&[]) == 0 != 1`, the guard short-circuits, and the projection lands on `None` before `sorted_extremal_variant`'s own None-at-empty branch is consulted",
+    );
+    assert_eq!(
+        T::sorted_unique_extremal_variant(empty).is_some(),
+        T::has_unique_extremal_variant(empty),
+        "{type_name}: T::sorted_unique_extremal_variant(&[]).is_some() drifted from T::has_unique_extremal_variant(&[]) — the is-some coincidence identity MUST hold on the empty slice",
+    );
+    let full_sorted_unique_extremal = T::sorted_unique_extremal_variant(T::ALL);
+    let expected_full_sorted_unique_extremal = if T::has_unique_extremal_variant(T::ALL) {
+        T::sorted_extremal_variant(T::ALL)
+    } else {
+        None
+    };
+    assert_eq!(
+        full_sorted_unique_extremal, expected_full_sorted_unique_extremal,
+        "{type_name}: T::sorted_unique_extremal_variant(T::ALL) drifted from the guarded lex-lift `if T::has_unique_extremal_variant(T::ALL) {{ T::sorted_extremal_variant(T::ALL) }} else {{ None }}` — the guarded-lift identity MUST hold on the full-set slice; at `T::CARDINALITY >= 2` the flat histogram pins every variant at both extremes via max == min == 1, `has_unique_extremal_variant` returns `false`, and the guarded lift collapses to `None`; at `T::CARDINALITY == 1` the full-set slice collapses to a single variant at max == min == 1, `has_unique_extremal_variant` returns `true`, and the guarded lift reports `Some(T::ALL[0])` — the SOLE `Some(_)` arm of the degenerate opener; a divergent full-set value silently bifurcates the load-bearing structural catch for a `None`-drifting override on cardinality-1 implementors",
+    );
+    assert_eq!(
+        T::sorted_unique_extremal_variant(T::ALL),
+        T::unique_extremal_variant(T::ALL),
+        "{type_name}: T::sorted_unique_extremal_variant(T::ALL) drifted from T::unique_extremal_variant(T::ALL) — the ordering-choice-irrelevance identity MUST hold on the full-set covering slice",
+    );
+    assert_eq!(
+        T::sorted_unique_extremal_variant(T::ALL).is_some(),
+        T::has_unique_extremal_variant(T::ALL),
+        "{type_name}: T::sorted_unique_extremal_variant(T::ALL).is_some() drifted from T::has_unique_extremal_variant(T::ALL) — the is-some coincidence identity MUST hold on the full-set slice",
+    );
+    let doubled_sorted_unique_extremal = T::sorted_unique_extremal_variant(&doubled_full_set);
+    let expected_doubled_sorted_unique_extremal =
+        if T::has_unique_extremal_variant(&doubled_full_set) {
+            T::sorted_extremal_variant(&doubled_full_set)
+        } else {
+            None
+        };
+    assert_eq!(
+        doubled_sorted_unique_extremal, expected_doubled_sorted_unique_extremal,
+        "{type_name}: T::sorted_unique_extremal_variant(&doubled_full_set) drifted from the guarded lex-lift `if T::has_unique_extremal_variant(&doubled_full_set) {{ T::sorted_extremal_variant(&doubled_full_set) }} else {{ None }}` — the guarded-lift identity MUST hold on the doubled-full-set slice; the second flat-histogram fixpoint pins every variant at both extremes via max == min == 2, `has_unique_extremal_variant` returns `false` at cardinality `>= 2`, and the guarded lift collapses to `None` (at cardinality `== 1` the doubled slice `[T::ALL[0], T::ALL[0]]` still collapses to a single variant at max == min == 2, so the guarded lift reports `Some(T::ALL[0])`)",
+    );
+    assert_eq!(
+        T::sorted_unique_extremal_variant(&doubled_full_set),
+        T::unique_extremal_variant(&doubled_full_set),
+        "{type_name}: T::sorted_unique_extremal_variant(&doubled_full_set) drifted from T::unique_extremal_variant(&doubled_full_set) — the ordering-choice-irrelevance identity MUST hold on the doubled-full-set covering slice",
+    );
+    assert_eq!(
+        T::sorted_unique_extremal_variant(&doubled_full_set).is_some(),
+        T::has_unique_extremal_variant(&doubled_full_set),
+        "{type_name}: T::sorted_unique_extremal_variant(&doubled_full_set).is_some() drifted from T::has_unique_extremal_variant(&doubled_full_set) — the is-some coincidence identity MUST hold on the doubled-full-set slice",
+    );
+    if T::CARDINALITY >= 2 {
+        for target in T::ALL.iter().copied() {
+            let matching_singleton = [target];
+            assert_eq!(
+                T::sorted_unique_extremal_variant(&matching_singleton),
+                None,
+                "{type_name}: T::sorted_unique_extremal_variant([{target_label:?}]) drifted from `None` at cardinality >= 2 — the sole position hits {target_label:?} at count `1 == max` while every non-target variant sits at count `0 == min`; the argmax band {{{target_label:?}}} (size 1) and the argmin band `T::ALL \\ {{{target_label:?}}}` (size `T::CARDINALITY - 1 >= 1`) are disjoint, so `count_extremal_variants` reports `T::CARDINALITY >= 2`, `has_unique_extremal_variant` returns `false`, and the guard collapses the projection to `None`; a `Some(_)` matching-singleton value at cardinality >= 2 silently bifurcates the matching-singleton fixpoint contract on the (LEX × Option<Self> × direction-composition × union × unique-tie) corner — LOAD-BEARING ASYMMETRY against T::sorted_unique_modal_variant which returns Some({target_label:?}) on the same slice at any cardinality",
+                target_label = target.label(),
+            );
+            assert_eq!(
+                T::sorted_unique_extremal_variant(&matching_singleton),
+                T::unique_extremal_variant(&matching_singleton),
+                "{type_name}: T::sorted_unique_extremal_variant([{target_label:?}]) drifted from T::unique_extremal_variant([{target_label:?}]) — the ordering-choice-irrelevance identity MUST hold on the matching-singleton fixture at cardinality >= 2 (both projections collapse to `None`)",
+                target_label = target.label(),
+            );
+        }
+    }
+    if T::CARDINALITY >= 3 {
+        let bimodal_triple = [T::ALL[0], T::ALL[0], T::ALL[1]];
+        assert_eq!(
+            T::sorted_unique_extremal_variant(&bimodal_triple),
+            None,
+            "{type_name}: T::sorted_unique_extremal_variant(&bimodal_triple) drifted from `None` — argmax {{T::ALL[0]}} (count 2) disjoint from argmin T::ALL[2..] (count 0), the union carries the two disjoint bands, `count_extremal_variants` reports `T::CARDINALITY - 1 >= 2`, `has_unique_extremal_variant` returns `false`, and the guard collapses to `None`; a `Some(_)` bimodal-triple arm silently bifurcates the disjoint-band uniqueness catch on the LEX-ORDER (Option<Self> × direction-composition × union × unique-tie) corner",
+        );
+        assert_eq!(
+            T::sorted_unique_extremal_variant(&bimodal_triple),
+            T::unique_extremal_variant(&bimodal_triple),
+            "{type_name}: T::sorted_unique_extremal_variant(&bimodal_triple) drifted from T::unique_extremal_variant(&bimodal_triple) — the ordering-choice-irrelevance identity MUST hold on the bimodal-triple fixture (both projections collapse to `None`)",
         );
     }
 }
@@ -111625,6 +112057,320 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedSortedUniqueAntimodalVariantNoneKind whose sorted_unique_antimodal_variant override folds onto `None` unconditionally — clause (184)'s single-missing positive fixpoint arm at cardinality >= 2 MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_extremal_variant_returns_none_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT:
+        // T::sorted_unique_extremal_variant(&[]) == None
+        // UNCONDITIONALLY — the empty slice hits zero positions,
+        // count_extremal_variants reports 0 via its empty-slice
+        // short-circuit, has_unique_extremal_variant returns false,
+        // and the guard collapses the projection to `None` before
+        // the T::sorted_extremal_variant sweep is consulted.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_extremal_variant(empty),
+            None,
+            "T::sorted_unique_extremal_variant(&[]) diverged from the empty-slice fixpoint None",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_extremal_variant_returns_none_on_every_matching_singleton_at_cardinality_gte_two_across_every_variant(
+    ) {
+        // MATCHING-SINGLETON CONTRACT AT CARDINALITY >= 2:
+        // T::sorted_unique_extremal_variant(&[v]) == None for every
+        // variant v — the target hits count 1 == max, every non-target
+        // sits at count 0 == min, argmax band {v} disjoint from argmin
+        // band T::ALL \ {v}, count_extremal_variants reports
+        // T::CARDINALITY >= 2, has_unique_extremal_variant returns
+        // false, and the guard collapses the projection to None.
+        // LOAD-BEARING ASYMMETRY against T::sorted_unique_modal_variant
+        // which returns Some(v) on the same slice at any cardinality —
+        // the direction-composition axis SEPARATES the argmax
+        // uniqueness-witness corner from THIS union uniqueness-witness
+        // corner on the matching-singleton fixpoint at cardinality >= 2.
+        assert_eq!(<StubKind as ClosedSet>::CARDINALITY, 3);
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_unique_extremal_variant(&singleton),
+                None,
+                "T::sorted_unique_extremal_variant([{v:?}]) diverged from None — at CARDINALITY 3 the argmax band {{{v:?}}} disjoint from argmin band `T::ALL \\ {{{v:?}}}` (size 2), so count_extremal_variants == 3 != 1",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_unique_extremal_variant_returns_none_on_the_full_set_at_cardinality_gte_two() {
+        // FULL-SET CONTRACT AT CARDINALITY >= 2:
+        // T::sorted_unique_extremal_variant(T::ALL) == None
+        // UNCONDITIONALLY — clause (3)'s pairwise-distinctness
+        // invariant pins every variant at count 1, max == min == 1,
+        // count_extremal_variants reports T::CARDINALITY >= 2,
+        // has_unique_extremal_variant returns false, and the guard
+        // collapses to `None`.
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 2) };
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_extremal_variant(<StubKind as ClosedSet>::ALL),
+            None,
+            "T::sorted_unique_extremal_variant(T::ALL) diverged from the full-set fixpoint None at cardinality >= 2",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_extremal_variant_returns_none_on_the_doubled_full_set_across_every_kind() {
+        // DOUBLED-FULL-SET CONTRACT:
+        // T::sorted_unique_extremal_variant(T::ALL ++ T::ALL) == None
+        // UNCONDITIONALLY — the doubled full set hits every variant
+        // at count 2, max == min == 2, count_extremal_variants
+        // reports T::CARDINALITY, has_unique_extremal_variant returns
+        // false, and the guard collapses to `None`.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_extremal_variant(&doubled),
+            None,
+            "T::sorted_unique_extremal_variant(ALL++ALL) diverged from the doubled-full-set fixpoint None",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_extremal_variant_returns_none_on_the_bimodal_triple_at_cardinality_gte_three()
+    {
+        // BIMODAL-TRIPLE CONTRACT AT CARDINALITY >= 3:
+        // T::sorted_unique_extremal_variant([T::ALL[0], T::ALL[0],
+        // T::ALL[1]]) == None — argmax {T::ALL[0]} (count 2) disjoint
+        // from argmin T::ALL[2..] (count 0), union carries the two
+        // disjoint bands, count_extremal_variants ==
+        // T::CARDINALITY - 1 >= 2, has_unique_extremal_variant ==
+        // false, guard collapses to None.
+        const { assert!(<StubKind as ClosedSet>::CARDINALITY >= 3) };
+        let bimodal_triple = [
+            <StubKind as ClosedSet>::ALL[0],
+            <StubKind as ClosedSet>::ALL[0],
+            <StubKind as ClosedSet>::ALL[1],
+        ];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_extremal_variant(&bimodal_triple),
+            None,
+            "T::sorted_unique_extremal_variant({bimodal_triple:?}) diverged from the bimodal-triple fixpoint None",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_extremal_variant_equals_unique_extremal_variant_across_every_triple() {
+        // ORDERING-CHOICE-IRRELEVANCE IDENTITY: for every slice
+        // `items`, T::sorted_unique_extremal_variant(items) ==
+        // T::unique_extremal_variant(items) — when the extremal-
+        // union uniqueness bit holds the SOLE extremal witness is
+        // unambiguous, so declaration-order and lex-order first-
+        // witness sweeps land on THE SAME variant; when the bit
+        // falsifies both projections collapse to `None` through the
+        // same guard arm. The lex peer is thus IDENTICALLY equal to
+        // its declaration-order sibling on every input. On a
+        // cardinality-3 stub every fixture collapses to `None` via
+        // the degenerate-opener property; the identity holds
+        // STRUCTURALLY at every length-3 corner via `None == None`.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_extremal_variant(&triple),
+                        <StubKind as ClosedSet>::unique_extremal_variant(&triple),
+                        "T::sorted_unique_extremal_variant({triple:?}) diverged from T::unique_extremal_variant({triple:?}) — the ordering-choice-irrelevance identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_extremal_variant_equals_has_unique_extremal_variant_gated_sorted_extremal_variant_across_every_triple(
+    ) {
+        // GUARDED-LEX-FIRST-WITNESS IDENTITY: for every slice `items`,
+        // T::sorted_unique_extremal_variant(items) ==
+        // if T::has_unique_extremal_variant(items) {
+        //   T::sorted_extremal_variant(items)
+        // } else { None }. The canonical form the body uses.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_body = <StubKind as ClosedSet>::sorted_unique_extremal_variant(&triple);
+                    let via_guarded_lex_lift =
+                        if <StubKind as ClosedSet>::has_unique_extremal_variant(&triple) {
+                            <StubKind as ClosedSet>::sorted_extremal_variant(&triple)
+                        } else {
+                            None
+                        };
+                    assert_eq!(
+                        via_body, via_guarded_lex_lift,
+                        "T::sorted_unique_extremal_variant({triple:?}) diverged from the guarded lex-first-witness lift",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_extremal_variant_is_some_iff_has_unique_extremal_variant_across_every_triple()
+    {
+        // IS-SOME COINCIDENCE IDENTITY: for every slice `items`,
+        // T::sorted_unique_extremal_variant(items).is_some() ==
+        // T::has_unique_extremal_variant(items). Independent cross-
+        // check on the surface axis distinct from the option-equality
+        // arm against T::unique_extremal_variant.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_extremal_variant(&triple)
+                            .is_some(),
+                        <StubKind as ClosedSet>::has_unique_extremal_variant(&triple),
+                        "T::sorted_unique_extremal_variant({triple:?}).is_some() diverged from T::has_unique_extremal_variant({triple:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_extremal_variant_agrees_with_sorted_extremal_variants_singleton_across_every_triple(
+    ) {
+        // SORTED-EXTREMAL WITNESS SINGLETON IDENTITY: for every slice
+        // `items`, T::sorted_unique_extremal_variant(items) is Some
+        // iff T::sorted_extremal_variants(items) is length-1, and
+        // then wraps the sole tie-member in Some. Independent cross-
+        // check on the witness-Vec surface axis distinct from the
+        // scalar arms.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let witnesses = <StubKind as ClosedSet>::sorted_extremal_variants(&triple);
+                    let via_witnesses = if witnesses.len() == 1 {
+                        Some(witnesses[0])
+                    } else {
+                        None
+                    };
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_extremal_variant(&triple),
+                        via_witnesses,
+                        "T::sorted_unique_extremal_variant({triple:?}) diverged from the length-1 sorted-extremal-witness-Vec projection",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_extremal_variant_is_invariant_under_slice_reversal_across_every_triple() {
+        // REVERSAL-INVARIANCE CONTRACT:
+        // T::sorted_unique_extremal_variant is invariant under slice-
+        // reversal. Both T::has_unique_extremal_variant and
+        // T::sorted_extremal_variant are ordering-agnostic on the
+        // input axis, so the guarded lift is too.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let reversed: Vec<StubKind> = triple.iter().rev().copied().collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_extremal_variant(&triple),
+                        <StubKind as ClosedSet>::sorted_unique_extremal_variant(&reversed),
+                        "T::sorted_unique_extremal_variant({triple:?}) diverged from T::sorted_unique_extremal_variant({reversed:?}) — reversal-invariance was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_some_first_drift_in_sorted_unique_extremal_variant(
+    ) {
+        // Drift catch — clause (185)'s empty-slice + flat-histogram +
+        // matching-singleton + bimodal-triple fixpoint arms fire when
+        // an override folds the LEX-ORDER set-level unique-extremal-
+        // variant witness onto `Some(T::first())` unconditionally. On
+        // the empty slice T::sorted_unique_extremal_variant MUST
+        // return None (has_unique_extremal_variant is false); on every
+        // non-empty fixture at cardinality >= 2 the same None-arm
+        // holds. An always-Some(first) override bifurcates every arm
+        // at `Some(_) != None`.
+        //
+        // Note: no `always-None` drift-catch peer is possible on a
+        // cardinality-3 stub — at T::CARDINALITY >= 2 the correct
+        // sorted-unique-extremal-witness answer is `None` on EVERY
+        // canonical fixture (the degenerate-opener property inherited
+        // from clause (165) via clause (185)'s ordering-choice-
+        // irrelevance identity), so an always-None override matches
+        // truth structurally on the multi-variant stub. The
+        // structural catch for `None`-drifting overrides sits at
+        // T::CARDINALITY == 1 in clause (185)'s guarded-lift arm on
+        // the full-set fixpoint, out of reach of a multi-variant stub.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedUniqueExtremalVariantSomeFirstKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedSortedUniqueExtremalVariantSomeFirstKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedSortedUniqueExtremalVariantSomeFirstKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted sorted_unique_extremal_variant some-first kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedSortedUniqueExtremalVariantSomeFirstKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedSortedUniqueExtremalVariantSomeFirstKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str =
+                "drifted sorted_unique_extremal_variant some-first kind";
+            type Unknown = UnknownDriftedSortedUniqueExtremalVariantSomeFirstKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedUniqueExtremalVariantSomeFirstKind(s.to_owned())
+            }
+            fn sorted_unique_extremal_variant(_items: &[Self]) -> Option<Self> {
+                // Drift: always return Some(first). Fires clause
+                // (185)'s empty-slice arm (Some(_) != None) AND every
+                // non-empty fixpoint arm at cardinality >= 2
+                // (Some(_) != None).
+                Some(Self::Alpha)
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedSortedUniqueExtremalVariantSomeFirstKind>(
+            );
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedSortedUniqueExtremalVariantSomeFirstKind whose sorted_unique_extremal_variant override folds onto Some(first) unconditionally — clause (185)'s empty-slice + flat-histogram + matching-singleton + bimodal-triple fixpoint arms MUST reject the drift",
         );
     }
 }

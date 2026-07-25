@@ -40885,6 +40885,191 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY LEX-ORDER "repeating indices" projection — the
+    /// `Vec<usize>` [`Self::ALL`]-index rendering of
+    /// [`Self::sorted_repeating_variants`] under [`Self::index_of`].
+    /// Every `usize` `i` in the returned vector is the [`Self::ALL`]-
+    /// position of some variant appearing STRICTLY MORE THAN ONCE
+    /// (multiplicity `>= 2`) in `items`; the lex order of
+    /// [`Self::sorted_repeating_variants`] is preserved verbatim, so the
+    /// returned indices form a canonical LEX-order subsequence of
+    /// [`Self::sorted_variants`] under [`Self::index_of`] — which is
+    /// NOT in general a monotone subsequence of `0..Self::CARDINALITY`
+    /// on implementors whose declaration order diverges from
+    /// [`Self::sorted_labels`]. The LEX-ORDER peer of
+    /// [`Self::repeating_indices`] one ORDERING axis over on the
+    /// equivalence-partition surface — EXHAUSTIVELY CLOSES the
+    /// (partition-band × ordering) 3×2 = 6-corner face on the
+    /// index-return column at its FINAL sixth tile past the pre-
+    /// existing quintet of [`Self::present_indices`],
+    /// [`Self::missing_indices`], [`Self::repeating_indices`],
+    /// [`Self::sorted_present_indices`], and [`Self::sorted_missing_indices`],
+    /// mirroring the exhaustively-closed (partition-band × ordering) 3×2
+    /// face on the sibling label-Vec-return column that
+    /// [`Self::sorted_repeating_labels`] closed one return-shape axis
+    /// over.
+    ///
+    /// Sibling posture to [`Self::sorted_repeating_labels`] one RETURN-
+    /// SHAPE column over on the same lex-order strict-repeat arm — the
+    /// two projections walk the SAME lex-ordered strict-repeat witness
+    /// set through different per-slot projections ([`Self::index_of`]
+    /// vs [`Self::label`]) and coincide on cardinality, emptiness, and
+    /// slice-reversal invariance at every slice. Sibling posture to
+    /// [`Self::sorted_repeating_variants`] one RETURN-SHAPE axis over
+    /// on the (`Vec<Self>` typed-variant witness, `Vec<usize>` index
+    /// witness) partition of the lex-order arm — the typed-variant arm
+    /// materializes each strict-repeat slot as `Self`, this method
+    /// indexes each slot under [`Self::index_of`].
+    ///
+    /// Composition law: for every slice `items`,
+    /// `T::sorted_repeating_indices(items) ==
+    /// T::sorted_repeating_variants(items).into_iter().map(T::index_of).collect()`
+    /// — the lex-order index-Vec projection binds through the
+    /// substrate's [`Self::sorted_repeating_variants`] Vec-return
+    /// primitive composed with the per-slot [`Self::index_of`]
+    /// projection. This IS the default trait body.
+    ///
+    /// Cross-arm permutation identity: for every slice `items`,
+    /// `T::sorted_repeating_indices(items)` is a PERMUTATION of
+    /// `T::repeating_indices(items)` — the two projections index the
+    /// SAME strict-repeat set under [`Self::index_of`], so the multiset
+    /// of indices in the two returned Vecs coincides though the
+    /// ordering differs. On implementors where declaration order
+    /// aligns with lex order, the two projections coincide element-
+    /// for-element; on implementors that diverge, they diverge on
+    /// layout while agreeing on membership.
+    ///
+    /// Cardinality identity: for every slice `items`,
+    /// `T::sorted_repeating_indices(items).len() ==
+    /// T::count_repeating_variants(items)` — the lex-order index-Vec-
+    /// return strict-repeat projection's length matches the usize-
+    /// return strict-repeat count exactly, and matches the declaration-
+    /// order index-Vec-return strict-repeat length one ordering axis
+    /// over at [`Self::repeating_indices`] AND the lex-order label-Vec-
+    /// return length one return-shape column over at
+    /// [`Self::sorted_repeating_labels`].
+    ///
+    /// Bool-projection identity: for every slice `items`,
+    /// `T::sorted_repeating_indices(items).is_empty() ==
+    /// !T::is_repeating_any(items)` — the lex-order strict-repeat
+    /// index list is empty iff no target hits multiplicity `>= 2`. The
+    /// bool-projection is INVARIANT under the (declaration, lex)
+    /// ordering axis AND under the (variant, label, index) return-shape
+    /// axis because strict-repeat-emptiness is a function of the
+    /// strict-repeat set's cardinality alone.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the strict-
+    /// repeat predicate is a function of that multiset alone. The
+    /// OUTPUT ordering is fixed by [`Self::sorted_variants`]'s lex
+    /// order regardless of the input ordering.
+    ///
+    /// Empty-slice contract: `T::sorted_repeating_indices(&[])` is the
+    /// empty `Vec` UNCONDITIONALLY — the empty slice hits zero
+    /// positions and no target reaches multiplicity `>= 2`, so no
+    /// index contributes.
+    ///
+    /// Singleton contract: `T::sorted_repeating_indices(&[v])` is the
+    /// empty `Vec` for every variant `v` — a singleton hits
+    /// multiplicity `1` at exactly one target and the strict-repeat
+    /// `>= 2` test fails at every target, so no index contributes.
+    ///
+    /// Full-set contract: `T::sorted_repeating_indices(<T as
+    /// ClosedSet>::ALL)` is the empty `Vec` UNCONDITIONALLY — the
+    /// well-formedness pairwise-distinctness invariant pins every
+    /// variant of [`Self::ALL`] as hitting multiplicity `1` in the
+    /// full-set slice, so the strict-repeat `>= 2` test fails at every
+    /// target.
+    ///
+    /// Doubled-full-set contract: `T::sorted_repeating_indices` on the
+    /// doubled full set equals `T::sorted_variants().into_iter().
+    /// map(T::index_of).collect()` UNCONDITIONALLY — the doubled full
+    /// set hits every variant at multiplicity `2` (satisfying the
+    /// strict-repeat `>= 2` test at every target), so every index of
+    /// `T::sorted_variants` contributes in lex order. On implementors
+    /// where declaration order aligns with lex order, this equals
+    /// `(0..T::CARDINALITY).collect()`; on implementors that diverge,
+    /// the output is a lex-ordered permutation of the same index set.
+    /// The doubled-full-set arm is LOAD-BEARING — it is the ONLY
+    /// canonical fixpoint arm that separates the (multiplicity `>= 2`)
+    /// strict-repeat band from the miss/present bands (empty and full-
+    /// set both coincide on `[]` on the strict-repeat band; the
+    /// multiplicity `== 2` doubled-full-set fixture is what forces non-
+    /// emptiness).
+    ///
+    /// Future consumers — a `tatara-check` predicate `(check-phases-re-
+    /// entered-indices-sorted …)` that renders a compact
+    /// canonically-ordered index witness of a rollout window's STRICT-
+    /// REPEAT set for wire-encoding under `u8` STABLE across
+    /// `ALL`-array declaration-layout drift (declaration-order writes
+    /// diverge on layout changes; lex order pins the wire encoding to
+    /// the author-stable label sort); an LSP diagnostic that walks the
+    /// lex-ordered strict-repeat indices against a `[Payload;
+    /// T::CARDINALITY]` slotted lookup table to render per-slot
+    /// annotations in author-friendly canonical order at each repeated
+    /// variant's position; a Sekiban audit-trail projection that carries
+    /// the concrete strict-repeat-index set of a classification poset
+    /// window in canonical lex order as a numerically dense witness
+    /// (rather than the label or variant witnesses) for compact wire
+    /// serialization; a `tatara-lisp::macro_expand::Expander` hygiene
+    /// pass reporting the exact positions of a template's repeated
+    /// bindings in canonical lex order for author-stable diagnostic
+    /// output. Each binds to ONE typed N-ary lex-order strict-repeat
+    /// index projection on the trait rather than re-deriving the
+    /// `sorted_repeating_variants + index_of + map + collect` four-
+    /// primitive composition inline per callsite.
+    ///
+    /// Compounding closure: the (partition-band × ordering) 3×2 = 6-
+    /// corner index-return face on the equivalence-partition surface
+    /// now EXHAUSTIVELY CLOSES at its FINAL sixth tile past the pre-
+    /// existing quintet — the strict-repeat arm's ordering-axis pair
+    /// (declaration, lex) is closed at both endpoints via
+    /// [`Self::repeating_indices`] and this method, and the surface's
+    /// (partition-band × ordering) index-return face fully matches the
+    /// exhaustively-closed (partition-band × ordering) label-Vec-return
+    /// face one return-shape column over.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary lex-
+    /// order strict-repeat index projection becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline `T::sorted_repeating_variants(items).into_iter().map
+    /// (T::index_of).collect()` composition at every downstream
+    /// generic site. THEORY.md §V.1 — knowable platform; the (strict-
+    /// repeat, `Vec<usize>` index, lex-order) corner was an unnamed
+    /// inline composition recurring at every prospective downstream
+    /// "which INDICES did we REPEAT, in canonical lex order?" site
+    /// pre-lift. THEORY.md §VI.1 — generation over composition; the
+    /// lex-order strict-repeat index projection emerges from the
+    /// composition of TWO substrate primitives
+    /// ([`Self::sorted_repeating_variants`] + [`Self::index_of`]) via
+    /// `Iterator::map` + `Iterator::collect`, not as a per-implementor
+    /// hand-rolled body.
+    ///
+    /// Frontier inspiration: NumPy's `np.argsort(labels)[np.where
+    /// (np.array([np.sum(items == v) >= 2 for v in
+    /// sorted(all, key=label)]))[0]]` composing the strict-repeat
+    /// boolean-mask over the lex-sorted enumeration with a positional
+    /// projection; Julia's `[index_of(v) for v in sort(filter(v ->
+    /// count(==(v), items) >= 2, all), by=label)]`; Racket's `(map
+    /// T-index (sort (filter (lambda (v) (>= (count (curry equal? v)
+    /// items) 2)) (enum->list T)) #:key T-label))`; SQL's `SELECT
+    /// index_of(variant) FROM t GROUP BY variant HAVING COUNT(*) >= 2
+    /// ORDER BY label(variant)`. Translation through pleme-io
+    /// primitives: a pure default method mapping the trait's existing
+    /// [`Self::sorted_repeating_variants`] Vec-return primitive under
+    /// the per-slot [`Self::index_of`] projection — no new dep, no
+    /// supertrait bound, no set-shape carrier, no additional
+    /// allocation beyond the natural `Vec<usize>` the sibling
+    /// [`Self::sorted_present_indices`] / [`Self::sorted_missing_indices`]
+    /// surface already routes.
+    fn sorted_repeating_indices(items: &[Self]) -> ::std::vec::Vec<usize> {
+        <Self as ClosedSet>::sorted_repeating_variants(items)
+            .into_iter()
+            .map(<Self as ClosedSet>::index_of)
+            .collect()
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -96417,6 +96602,369 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn sorted_repeating_indices_returns_the_empty_vec_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT: `T::sorted_repeating_indices(&[])` is
+        // the empty `Vec` UNCONDITIONALLY — the empty slice hits zero
+        // positions and no target reaches multiplicity `>= 2`, so no
+        // index contributes. The empty-slice endpoint is the natural
+        // opener for the lex-order strict-repeat arm of the (equivalence-
+        // partition × ordering × index-return) surface — matches
+        // `T::sorted_repeating_labels(&[])` one return-shape column over
+        // AND `T::repeating_indices(&[])` one ordering axis over.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_repeating_indices(empty),
+            Vec::<usize>::new(),
+        );
+    }
+
+    #[test]
+    fn sorted_repeating_indices_returns_the_empty_vec_on_every_singleton_across_every_variant() {
+        // SINGLETON CONTRACT: `T::sorted_repeating_indices(&[v])` is the
+        // empty `Vec` for every variant `v` — a singleton hits
+        // multiplicity `1` at exactly one target and the strict-repeat
+        // `>= 2` test fails at every target, so no index contributes.
+        // The singleton endpoint is the boundary that separates the
+        // strict-repeat band from the presence band on the lex-order
+        // index-return surface: `T::sorted_present_indices(&[v])`
+        // reports the singleton `vec![T::index_of(v)]` at the SAME
+        // slice, so the two projections diverge on the (mult `>= 1`,
+        // mult `>= 2`) boundary at every singleton fixture.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_repeating_indices(&singleton),
+                Vec::<usize>::new(),
+                "T::sorted_repeating_indices([{:?}]) diverged from the empty vec — the singleton fixture at the lex-order strict-repeat band MUST return an empty index list because multiplicity 1 fails the >= 2 test",
+                v,
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_indices_over_the_full_set_returns_the_empty_vec_across_every_kind() {
+        // FULL-SET CONTRACT: `T::sorted_repeating_indices(<T as
+        // ClosedSet>::ALL)` is the empty `Vec` UNCONDITIONALLY — the
+        // well-formedness pairwise-distinctness invariant pins every
+        // variant of `T::ALL` as hitting multiplicity `1` in the full-
+        // set slice, so the strict-repeat `>= 2` test fails at every
+        // target and no index contributes. The full-set endpoint
+        // mirrors the empty-slice endpoint on this band — both collapse
+        // to `[]` — because the (multiplicity `== 0`) and (multiplicity
+        // `== 1`) bands both fall below the strict-repeat `>= 2`
+        // threshold.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_repeating_indices(all),
+            Vec::<usize>::new(),
+        );
+    }
+
+    #[test]
+    fn sorted_repeating_indices_over_the_doubled_full_set_equals_sorted_variants_mapped_under_index_of_across_every_kind(
+    ) {
+        // DOUBLED-FULL-SET CONTRACT: `T::sorted_repeating_indices` on
+        // the doubled full set equals `T::sorted_variants().into_iter()
+        // .map(T::index_of).collect()` UNCONDITIONALLY — the doubled
+        // full set hits every variant at multiplicity `2` (satisfying
+        // the strict-repeat `>= 2` test at every target), so every
+        // index of `T::sorted_variants` contributes in lex order.
+        // LOAD-BEARING NON-EMPTY POSITIVE ARM — this is the ONLY
+        // canonical fixpoint arm where the strict-repeat band separates
+        // from the miss/present bands on the lex-order index-return
+        // surface (empty and full-set both coincide on `[]`; the
+        // doubled-full-set fixture at multiplicity `2` forces non-
+        // emptiness). On StubKind whose declaration order aligns with
+        // lex order the expected value equals `(0..T::CARDINALITY)
+        // .collect()`; the `ReverseIndexStubKind` normalization test
+        // below pins the divergence on layouts that DON'T align.
+        let all = <StubKind as ClosedSet>::ALL;
+        let doubled: Vec<StubKind> = all.iter().chain(all.iter()).copied().collect();
+        let expected: Vec<usize> = <StubKind as ClosedSet>::sorted_variants()
+            .into_iter()
+            .map(<StubKind as ClosedSet>::index_of)
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_repeating_indices(&doubled),
+            expected,
+        );
+    }
+
+    #[test]
+    fn sorted_repeating_indices_length_equals_count_repeating_variants_across_every_triple() {
+        // CARDINALITY IDENTITY: `T::sorted_repeating_indices(items).len()
+        // == T::count_repeating_variants(items)` on every slice — the
+        // lex-order index-Vec-return strict-repeat projection's length
+        // matches the usize-return strict-repeat count exactly. Sibling
+        // to the cardinality identities for `repeating_indices` one
+        // ordering axis over AND `sorted_repeating_labels` one return-
+        // shape column over — all three Vec-return arms walk the same
+        // strict-repeat witness set through different per-slot
+        // projections and report the same cardinality.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_repeating_indices(&triple).len(),
+                        <StubKind as ClosedSet>::count_repeating_variants(&triple),
+                        "T::sorted_repeating_indices({triple:?}).len() diverged from T::count_repeating_variants({triple:?}) — the (lex-order Vec-index-return, usize-return) strict-repeat cardinality identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_indices_equals_sorted_repeating_variants_mapped_under_index_of_across_every_triple(
+    ) {
+        // COMPOSITION LAW: for every slice `items`,
+        // `T::sorted_repeating_indices(items) ==
+        // T::sorted_repeating_variants(items).into_iter().map(T::index_of).collect()`
+        // — the lex-order index-Vec projection binds through the
+        // substrate's `T::sorted_repeating_variants` Vec-return primitive
+        // composed with the per-slot `T::index_of` projection. This IS
+        // the default trait body — the test catches an override that
+        // drifts the composition from the natural definition.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected: Vec<usize> =
+                        <StubKind as ClosedSet>::sorted_repeating_variants(&triple)
+                            .into_iter()
+                            .map(<StubKind as ClosedSet>::index_of)
+                            .collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_repeating_indices(&triple),
+                        expected,
+                        "T::sorted_repeating_indices({triple:?}) diverged from T::sorted_repeating_variants({triple:?}).into_iter().map(T::index_of).collect() — the lex-order strict-repeat index-column composition law was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_indices_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE: `T::sorted_repeating_indices(items)
+        // == T::sorted_repeating_indices(reversed items)` on every slice
+        // — reversing a slice preserves its multiset of variant
+        // identities, and the strict-repeat predicate is a function of
+        // that multiset alone. The OUTPUT ordering is fixed by
+        // `T::sorted_variants`'s lex order under `T::index_of`,
+        // independent of the input's declaration ordering.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_repeating_indices(&forward),
+                        <StubKind as ClosedSet>::sorted_repeating_indices(&reversed),
+                        "T::sorted_repeating_indices({forward:?}) diverged from T::sorted_repeating_indices({reversed:?}) — the lex-order strict-repeat index projection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_indices_is_empty_iff_not_is_repeating_any_across_every_triple() {
+        // BOOL-PROJECTION IDENTITY: for every slice `items`,
+        // `T::sorted_repeating_indices(items).is_empty() ==
+        // !T::is_repeating_any(items)` — the lex-order strict-repeat
+        // index list is empty iff no target hits multiplicity `>= 2`.
+        // Cross-checks the lex-order index-Vec-return strict-repeat
+        // witness against the bool-return strict-repeat existential.
+        // The bool-projection is INVARIANT under the (declaration, lex)
+        // ordering axis AND under the (variant, label, index) return-
+        // shape axis because strict-repeat-emptiness is a function of
+        // the strict-repeat set's cardinality alone.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_repeating_indices(&triple).is_empty(),
+                        !<StubKind as ClosedSet>::is_repeating_any(&triple),
+                        "T::sorted_repeating_indices({triple:?}).is_empty() diverged from !T::is_repeating_any({triple:?}) — the (lex-order Vec-index-return, bool-return) strict-repeat existential-emptiness identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_indices_is_a_permutation_of_repeating_indices_across_every_triple() {
+        // PERMUTATION CONTRACT: for every slice `items`,
+        // `T::sorted_repeating_indices(items)` is a PERMUTATION of
+        // `T::repeating_indices(items)` — the two projections index the
+        // SAME strict-repeat set under `T::index_of`, so the multiset of
+        // indices in the two returned Vecs coincides though the ordering
+        // differs. Sibling posture to
+        // `sorted_repeating_labels_is_a_permutation_of_repeating_labels`
+        // one return-shape column over — the permutation relationship is
+        // invariant under the (variant, label, index) return-shape axis
+        // at the strict-repeat band because both ordering-axis endpoints
+        // walk the same strict-repeat witness set.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let mut lex = <StubKind as ClosedSet>::sorted_repeating_indices(&triple);
+                    let mut decl = <StubKind as ClosedSet>::repeating_indices(&triple);
+                    lex.sort_unstable();
+                    decl.sort_unstable();
+                    assert_eq!(
+                        lex, decl,
+                        "T::sorted_repeating_indices({triple:?}) is not a permutation of T::repeating_indices({triple:?}) — the (declaration, lex) ordering-axis pair MUST share the same multiset of indices at the strict-repeat band because they walk the SAME strict-repeat witness set through the SAME per-slot `T::index_of` projection",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_indices_is_disjoint_from_sorted_missing_indices_across_every_triple() {
+        // DISJOINTNESS CONTRACT (strict-repeat vs miss, lex-order): for
+        // every slice `items`, the (lex-order strict-repeat, lex-order
+        // miss) index Vecs share NO index — the strict-repeat band (mult
+        // `>= 2`) and the miss band (mult `== 0`) are DISJOINT
+        // multiplicity subranges, so a variant cannot simultaneously
+        // fall in both. Cross-arm disjointness on the lex-order index-
+        // return column matches the same relationship
+        // `repeating_indices` and `missing_indices` carry one ordering
+        // axis over AND `sorted_repeating_labels` and
+        // `sorted_missing_labels` one return-shape column over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let repeating = <StubKind as ClosedSet>::sorted_repeating_indices(&triple);
+                    let missing = <StubKind as ClosedSet>::sorted_missing_indices(&triple);
+                    for i in &repeating {
+                        assert!(
+                            !missing.contains(i),
+                            "T::sorted_repeating_indices({triple:?}) and T::sorted_missing_indices({triple:?}) share index {i} — the (lex-order strict-repeat, lex-order miss) index-column multiplicity-band disjointness was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_indices_is_a_subset_of_sorted_present_indices_across_every_triple() {
+        // SUBSET CONTRACT (strict-repeat ⊆ present, lex-order): for
+        // every slice `items`, every index in
+        // `T::sorted_repeating_indices(items)` also appears in
+        // `T::sorted_present_indices(items)` — the strict-repeat band
+        // (mult `>= 2`) is a SUBSET of the presence band (mult `>= 1`)
+        // because `>= 2` implies `>= 1`. Cross-arm inclusion on the lex-
+        // order index-return column matches the same relationship
+        // `repeating_indices` and `present_indices` carry one ordering
+        // axis over AND `sorted_repeating_labels` and
+        // `sorted_present_labels` one return-shape column over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let repeating = <StubKind as ClosedSet>::sorted_repeating_indices(&triple);
+                    let present = <StubKind as ClosedSet>::sorted_present_indices(&triple);
+                    for i in &repeating {
+                        assert!(
+                            present.contains(i),
+                            "T::sorted_repeating_indices({triple:?}) contains index {i} absent from T::sorted_present_indices({triple:?}) — the (lex-order strict-repeat ⊆ lex-order present) index-column multiplicity-band inclusion was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_indices_normalizes_arbitrary_declaration_order() {
+        // The sort-step contract on the lex-order strict-repeat index
+        // column — `T::sorted_repeating_indices(items)` MUST normalize
+        // an arbitrary declaration order into ASCII lexicographic label
+        // order under `T::index_of`, regardless of the implementor's
+        // `ALL`-array layout. A regression that returns
+        // `T::repeating_indices(items)` verbatim (without composing
+        // through the lex-order Vec-variant peer) would pass every
+        // StubKind pin above (because StubKind's declaration order
+        // aligns with lex order) but silently bifurcate the lex-order
+        // index surface for any implementor whose declaration order
+        // differs from byte-wise sort order. Pinning the sort discipline
+        // here with a deliberately-out-of-order stub catches that drift
+        // on the strict-repeat arm of the index-column surface directly
+        // — sibling to `sorted_present_indices_and_sorted_missing_indices_normalize_arbitrary_declaration_order`
+        // one multiplicity-band axis over.
+        //
+        // The reverse-layout stub has ALL = [Gamma, Beta, Alpha]. The
+        // corresponding `index_of` assignments are Gamma → 0, Beta → 1,
+        // Alpha → 2. On the doubled full set every variant hits
+        // multiplicity `2`, so every variant contributes an index in
+        // LEX order: Alpha → 2, Beta → 1, Gamma → 0 → [2, 1, 0] (NOT
+        // [0, 1, 2]). A regression returning the declaration-order arm
+        // would produce [0, 1, 2] here — the divergence catches the
+        // bug.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ReverseIndexStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownReverseIndexStubKind(pub String);
+        impl core::fmt::Display for UnknownReverseIndexStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown reverse index stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for ReverseIndexStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "reverse index stub kind";
+            type Unknown = UnknownReverseIndexStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownReverseIndexStubKind(s.to_owned())
+            }
+        }
+        // Declaration-order strict-repeat indices on the doubled full
+        // set: [0, 1, 2] — the declaration-order arm preserves the
+        // ALL-array layout.
+        let all = <ReverseIndexStubKind as ClosedSet>::ALL;
+        let doubled: Vec<ReverseIndexStubKind> = all.iter().chain(all.iter()).copied().collect();
+        assert_eq!(
+            <ReverseIndexStubKind as ClosedSet>::repeating_indices(&doubled),
+            vec![0usize, 1, 2],
+            "repeating_indices over the doubled full set must preserve declaration order — [0, 1, 2]",
+        );
+        // Lex-order strict-repeat indices on the doubled full set:
+        // Alpha → 2, Beta → 1, Gamma → 0 → [2, 1, 0]. The lex-order arm
+        // normalizes regardless of ALL-array declaration layout.
+        assert_eq!(
+            <ReverseIndexStubKind as ClosedSet>::sorted_repeating_indices(&doubled),
+            vec![2usize, 1, 0],
+            "sorted_repeating_indices over the doubled full set must normalize to lex order under index_of — [2, 1, 0] — regardless of the implementor's ALL-array declaration layout",
+        );
+        // Empty slice: strict-repeat is empty in both orderings.
+        let empty: &[ReverseIndexStubKind] = &[];
+        assert_eq!(
+            <ReverseIndexStubKind as ClosedSet>::sorted_repeating_indices(empty),
+            Vec::<usize>::new(),
+            "sorted_repeating_indices over the empty slice must return the empty vec",
+        );
     }
 
     #[test]

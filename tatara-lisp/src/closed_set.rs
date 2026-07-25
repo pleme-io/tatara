@@ -37921,6 +37921,241 @@ pub trait ClosedSet: Sized + Copy + 'static {
         }
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "the unique strict-repeat witness in LEX
+    /// order, as a singleton-or-empty Vec" projection — returns
+    /// [`Self::sorted_repeating_variants`] iff `items` has a UNIQUE
+    /// strict-repeat variant ([`Self::has_unique_repeating_variant`]
+    /// holds), else `vec![]`. Computed as the just-lifted set-level
+    /// strict-repeat uniqueness bit [`Self::has_unique_repeating_variant`]
+    /// guarding the LEX-ORDER strict-repeat witness-collection
+    /// [`Self::sorted_repeating_variants`]: when the guard holds the
+    /// collection is already a length-`1` Vec by the guard's own
+    /// definition (`count_repeating_variants == 1`) and is lifted verbatim;
+    /// when the guard falsifies the projection collapses to the EMPTY Vec
+    /// through a zero-allocation `::std::vec::Vec::new()` short-circuit.
+    /// The LEX-ORDER `Vec<Self>`-RETURN STRICT-REPEAT UNIQUE-TIE SHARPENING
+    /// corner CLOSING the strict-repeat arm of the LEX-ORDER (`Vec<Self>`
+    /// × equivalence-partition × mult-band × unique-tie) row past the
+    /// just-opened (mult `== 0`) miss-band arm
+    /// [`Self::sorted_unique_missing_variants`] one MULTIPLICITY-BAND axis
+    /// over on the EQUIVALENCE-PARTITION surface, peer to
+    /// [`Self::unique_repeating_variants`] one ORDERING axis over
+    /// (declaration-order → lex-order strict-repeat witness-collection-
+    /// when-unique) AND peer to [`Self::sorted_repeating_variants`] one
+    /// UNIQUE-TIE-SHARPENING axis over (unsharpened lex-order strict-
+    /// repeat witness-collection → uniqueness-gated lex-order strict-
+    /// repeat witness-collection) AND peer to
+    /// [`Self::sorted_unique_repeating_variant`] one RETURN-SHAPE axis
+    /// over (Option-return lex-first-witness-when-unique → Vec-return
+    /// singleton-or-empty-when-unique) AND peer to
+    /// [`Self::sorted_unique_extremal_variants`] one SURFACE axis over on
+    /// the (Vec × sorted × unique-tie) face (EQUIVALENCE-PARTITION strict-
+    /// repeat band → MODAL-AGGREGATION union band). Not a fresh substrate
+    /// primitive on the index axis — the projection emerges from the
+    /// boolean-guarded selection of the just-lifted lex-order strict-
+    /// repeat witness-collection under the set-level strict-repeat
+    /// uniqueness bit, collapsing to the empty Vec through the guard-arm
+    /// when the bit falsifies.
+    ///
+    /// Ordering-choice-irrelevance identity: for every slice `items`,
+    /// `T::sorted_unique_repeating_variants(items) ==
+    /// T::unique_repeating_variants(items)` — when the sole strict-repeat
+    /// variant is UNIQUE ([`Self::has_unique_repeating_variant`] holds)
+    /// the underlying [`Self::sorted_repeating_variants`] and
+    /// [`Self::repeating_variants`] each collapse to a length-`1` Vec
+    /// containing THE SAME sole strict-repeat variant (uniqueness pins the
+    /// sole witness before any ordering choice is consulted); when the
+    /// guard falsifies both projections collapse to `vec![]` through the
+    /// same guard arm. The LEX peer is thus IDENTICALLY equal to its
+    /// declaration-order sibling on every input — the search-order axis
+    /// becomes provably irrelevant WHEN the underlying uniqueness bit
+    /// holds. Pinned by
+    /// `sorted_unique_repeating_variants_equals_unique_repeating_variants_across_every_triple`
+    /// as a TYPED THEOREM the substrate proves once, replacing per-
+    /// consumer inline re-derivations of the equivalence.
+    ///
+    /// Guarded-lex-witness-collection identity: for every slice `items`,
+    /// `T::sorted_unique_repeating_variants(items) ==
+    /// if T::has_unique_repeating_variant(items) { T::sorted_repeating_variants(items) }
+    /// else { vec![] }` — the canonical form the body uses. Pinned by
+    /// `sorted_unique_repeating_variants_equals_has_unique_repeating_variant_gated_sorted_repeating_variants_across_every_triple`.
+    ///
+    /// Length coincidence identity: for every slice `items`,
+    /// `T::sorted_unique_repeating_variants(items).len() ==
+    /// usize::from(T::has_unique_repeating_variant(items))` — the return-
+    /// Vec's length COINCIDES with the set-level strict-repeat uniqueness
+    /// bit projected onto `usize`: exactly `0` when the bit falsifies,
+    /// exactly `1` when it holds. Pinned by
+    /// `sorted_unique_repeating_variants_len_equals_has_unique_repeating_variant_as_usize_across_every_triple`.
+    ///
+    /// Option-equality identity: for every slice `items`,
+    /// `T::sorted_unique_repeating_variants(items).first().copied() ==
+    /// T::sorted_unique_repeating_variant(items)` — the `Vec`-return's
+    /// first-element projection COINCIDES with the `Option`-return LEX
+    /// peer one RETURN-SHAPE axis over, since both encode the same "sole
+    /// strict-repeat witness if unique, else nothing" semantics through
+    /// different return shapes. Pinned by
+    /// `sorted_unique_repeating_variants_first_equals_sorted_unique_repeating_variant_across_every_triple`.
+    ///
+    /// Is-empty coincidence identity: for every slice `items`,
+    /// `T::sorted_unique_repeating_variants(items).is_empty() ==
+    /// !T::has_unique_repeating_variant(items)` — the return-Vec's
+    /// emptiness coincides with the NEGATION of the set-level strict-
+    /// repeat uniqueness bit. Independent cross-check on the surface axis
+    /// distinct from the length-coincidence arm (Vec::is_empty vs integer
+    /// equality). Pinned by
+    /// `sorted_unique_repeating_variants_is_empty_iff_not_has_unique_repeating_variant_across_every_triple`.
+    ///
+    /// Reversal-invariance identity: the projection factors through
+    /// [`Self::has_unique_repeating_variant`] (ordering-agnostic — the
+    /// underlying [`Self::count_repeating_variants`] is invariant under
+    /// slice-reversal via [`Self::is_repeated_occurrence_of`]) and
+    /// [`Self::sorted_repeating_variants`] (ordering-agnostic on the
+    /// input axis — the underlying [`Self::is_repeated_occurrence_of`]
+    /// filter over [`Self::sorted_variants`] is invariant under slice-
+    /// reversal) via a boolean-guarded Vec-select. Pinned by
+    /// `sorted_unique_repeating_variants_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::sorted_unique_repeating_variants(&[]) ==
+    /// vec![]` UNCONDITIONALLY — the empty slice hits zero positions,
+    /// [`Self::count_repeating_variants`] reports `0`,
+    /// [`Self::has_unique_repeating_variant`] returns `false` via `0 !=
+    /// 1`, and the guard collapses the projection to `vec![]` through the
+    /// guard arm before the underlying witness-collection filter is
+    /// consulted.
+    ///
+    /// Matching-singleton contract: on every variant `v`,
+    /// `T::sorted_unique_repeating_variants(&[v]) == vec![]` — the target
+    /// hits count `1` (unique-band, not strict-repeat), every non-target
+    /// sits at count `0` (miss-band, not strict-repeat);
+    /// [`Self::count_repeating_variants`] reports `0`,
+    /// [`Self::has_unique_repeating_variant`] returns `false`, and the
+    /// guard collapses the projection to `vec![]`.
+    ///
+    /// Full-set contract: `T::sorted_unique_repeating_variants(<T as
+    /// ClosedSet>::ALL) == vec![]` UNCONDITIONALLY — clause (3)'s
+    /// pairwise-distinctness invariant pins every variant at exactly one
+    /// position, every per-target multiplicity is `1`,
+    /// [`Self::count_repeating_variants`] reports `0`,
+    /// [`Self::has_unique_repeating_variant`] returns `false`, and the
+    /// guard collapses the projection to `vec![]`.
+    ///
+    /// Doubled-full-set contract at cardinality `>= 2`:
+    /// `T::sorted_unique_repeating_variants(&doubled) == vec![]` — the
+    /// doubled full-set appends [`Self::ALL`] to itself, every variant
+    /// hits count `2` (all repeating), [`Self::count_repeating_variants`]
+    /// reports `T::CARDINALITY >= 2`,
+    /// [`Self::has_unique_repeating_variant`] returns `false` via
+    /// `T::CARDINALITY != 1`, and the guard collapses the projection to
+    /// `vec![]`. At cardinality `== 1` the doubled slice `[T::ALL[0],
+    /// T::ALL[0]]` collapses the strict-repeat count to `1`,
+    /// [`Self::has_unique_repeating_variant`] returns `true`, guard fires,
+    /// and the guarded lex-lift returns `vec![T::ALL[0]]` (the SOLE
+    /// positive arm on the degenerate cardinality-1 corner of the
+    /// doubled-full-set fixture).
+    ///
+    /// Bimodal-triple contract at cardinality `== 3`:
+    /// `T::sorted_unique_repeating_variants([T::ALL[0], T::ALL[0],
+    /// T::ALL[1]]) == vec![T::ALL[0]]` — the LOAD-BEARING SOLE non-empty
+    /// arm at the canonical cardinality-3 window. `T::ALL[0]` at count `2`
+    /// (the SOLE strict-repeat witness), `T::ALL[1]` at count `1`
+    /// (unique-band, not strict-repeat), `T::ALL[2]` at count `0` (miss-
+    /// band, not strict-repeat); [`Self::count_repeating_variants`]
+    /// reports `1`, [`Self::has_unique_repeating_variant`] returns `true`,
+    /// the guard fires, and [`Self::sorted_repeating_variants`]'s lex-
+    /// order sweep hits `T::ALL[0]` as its sole strict-repeat variant.
+    /// LOAD-BEARING DISCRIMINATOR from the sibling declaration-order
+    /// corner [`Self::unique_repeating_variants`] which reports the SAME
+    /// witness `vec![T::ALL[0]]` on the SAME fixture (the ordering-choice-
+    /// irrelevance identity in action — strict-repeat uniqueness pins the
+    /// witness before either sweep-order kicks in) AND from the just-
+    /// opened miss-band lex-peer [`Self::sorted_unique_missing_variants`]
+    /// which reports `vec![T::ALL[2]]` on the SAME fixture (the
+    /// MULTIPLICITY-BAND axis SEPARATES the strict-repeat positive arm
+    /// from the miss-band positive arm on the shared canonical fixture
+    /// window: the two POSITIVE arms report DIFFERENT witnesses on the
+    /// same slice, pinning the (mult `>= 2`) and (mult `== 0`) bands as
+    /// orthogonal uniqueness axes with disjoint witness projections
+    /// riding DIFFERENT variants of the CANONICAL bimodal triple).
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of
+    /// [`Self::has_unique_repeating_variant`] +
+    /// [`Self::sorted_repeating_variants`] via a boolean-guarded Vec-
+    /// select on `Vec<Self>`. Cost inherits both underlying projections:
+    /// `O(T::CARDINALITY * n)` on slice arity `n` (one
+    /// [`Self::count_repeating_variants`] reduction for the guard via
+    /// [`Self::is_repeated_occurrence_of`], one
+    /// [`Self::sorted_repeating_variants`] filter sweep over
+    /// [`Self::sorted_variants`] when the guard holds; the short-
+    /// circuiting `if` avoids the sweep AND the Vec allocation when the
+    /// guard falsifies) + `O(T::CARDINALITY log T::CARDINALITY)` for the
+    /// [`Self::sorted_variants`] cache, no `PartialEq`/`Eq`/`Hash`
+    /// supertrait bound (the trait's minimal `Sized + Copy + 'static`
+    /// supertrait pair stays untouched).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::sorted_unique_repeating_variants`]: a `tatara-check`
+    /// predicate `(check-repeating-if-unique-lex …)` that reports the
+    /// singleton-or-empty lex-order strict-repeat witness collection as a
+    /// typed `Vec<Self>`-return rather than a two-step composition; a
+    /// Sekiban audit-trail per-window singleton-or-empty binding stable
+    /// against upstream declaration-order churn.
+    ///
+    /// Compounding closure: this projection CLOSES the strict-repeat arm
+    /// of the LEX-ORDER (`Vec<Self>` × equivalence-partition × mult-band ×
+    /// unique-tie) row past the just-opened (mult `== 0`) miss-band arm
+    /// [`Self::sorted_unique_missing_variants`] one MULTIPLICITY-BAND axis
+    /// over on the EQUIVALENCE-PARTITION surface. The natural next lift
+    /// past this corner is the (mult `== 1`) unique-band arm
+    /// `sorted_unique_unique_variants` (guarded lift of
+    /// [`Self::sorted_unique_variants`] under
+    /// [`Self::has_unique_unique_variant`]) which EXHAUSTIVELY CLOSES the
+    /// LEX-ORDER trichotomy row at its FINAL third tile AND EXHAUSTIVELY
+    /// CLOSES the (`Vec<Self>` × equivalence-partition × mult-band ×
+    /// ordering × unique-tie) 3×2 face at its SIXTH tile.
+    ///
+    /// Theory anchor: THEORY.md §II.1 — the Rust + Lisp pattern; the
+    /// (set-level × `Vec<Self>` × sorted × equivalence-partition × mult
+    /// `>= 2` × unique-tie) corner becomes a TYPED WITNESS on the
+    /// ClosedSet trait rather than a per-consumer inline
+    /// `if T::has_unique_repeating_variant(items) { T::sorted_repeating_variants(items) } else { vec![] }`
+    /// re-derivation. THEORY.md §III — the typescape; a fresh TYPE-level
+    /// primitive plus a typed THEOREM (ordering-choice-irrelevance) the
+    /// substrate proves once. THEORY.md §V.1 — knowable platform; the
+    /// (lex-order × `Vec<Self>` × mult `>= 2` × unique-tie) corner was an
+    /// unnamed inline composition — or silently absent because callers
+    /// reached for the declaration-order sibling without proof of
+    /// coincidence — recurring at every prospective downstream "the sole
+    /// strict-repeat variant, as a Vec, in lex order, if it's
+    /// unambiguous" site pre-lift. THEORY.md §VI.1 — generation over
+    /// composition; the projection emerges from the composition of TWO
+    /// substrate primitives ([`Self::has_unique_repeating_variant`] +
+    /// [`Self::sorted_repeating_variants`]) with the
+    /// `if _ { _ } else { vec![] }` combinator on `Vec<Self>`.
+    ///
+    /// Frontier inspiration: R's
+    /// `{ t <- table(items); rep <- sort(names(t)[t >= 2]); if (length(rep) == 1) rep else character(0) }`
+    /// — the canonical guarded-strict-repeat lex-order singleton-or-empty
+    /// carrier on a factor histogram; Clojure's
+    /// `(let [rep (sort (keys (filter #(>= (val %) 2) (frequencies coll))))] (if (= 1 (count rep)) [(first rep)] []))`;
+    /// SQL's
+    /// `SELECT ARRAY(SELECT variant FROM t GROUP BY variant HAVING COUNT(*) >= 2 ORDER BY variant) WHERE cardinality(…) = 1`.
+    /// Translation through pleme-io primitives: the N-ary set-level
+    /// uniqueness-gated lex-order strict-repeat singleton-or-empty
+    /// projection on the closed-set trait binds through the just-lifted
+    /// [`Self::has_unique_repeating_variant`] guard conjoined with the
+    /// just-lifted [`Self::sorted_repeating_variants`] witness-collection
+    /// under a Vec-select — no new dep, no supertrait bound,
+    /// `O(T::CARDINALITY * n)` inherited from the underlying aggregates
+    /// with short-circuiting on the guard.
+    fn sorted_unique_repeating_variants(items: &[Self]) -> ::std::vec::Vec<Self> {
+        if <Self as ClosedSet>::has_unique_repeating_variant(items) {
+            <Self as ClosedSet>::sorted_repeating_variants(items)
+        } else {
+            ::std::vec::Vec::new()
+        }
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "every variant repeats?" predicate —
     /// `true` iff EVERY variant of [`Self::ALL`] appears AT LEAST TWICE
     /// in `items`, computed as the just-lifted set-level scalar
@@ -58181,6 +58416,191 @@ where
             T::sorted_unique_missing_variants(&bimodal_triple).first().copied(),
             T::sorted_unique_missing_variant(&bimodal_triple),
             "{type_name}: T::sorted_unique_missing_variants(&bimodal_triple).first() drifted from T::sorted_unique_missing_variant(&bimodal_triple) — the Option-equality identity MUST hold on the bimodal-triple fixture at cardinality == 3 (both project to Some(T::ALL[2]))",
+        );
+    }
+    // (198) — `T::sorted_unique_repeating_variants(items)` MUST agree
+    // with the guarded-lift body
+    // `if T::has_unique_repeating_variant(items) { T::sorted_repeating_variants(items) } else { vec![] }`
+    // on every canonical slice AND MUST pin the ORDERING-CHOICE-
+    // IRRELEVANCE identity
+    // `T::sorted_unique_repeating_variants(items) == T::unique_repeating_variants(items)`
+    // (the sole strict-repeat variant, if unique, is the SAME across
+    // declaration and lex sweep-orders — uniqueness pins the witness
+    // before any ordering choice is consulted). THIS clause CLOSES the
+    // strict-repeat arm of the LEX-ORDER (`Vec<Self>` × equivalence-
+    // partition × mult-band × unique-tie) row past the just-opened
+    // (mult `== 0`) miss-band arm clause (197)
+    // ([`T::sorted_unique_missing_variants`]) one MULTIPLICITY-BAND axis
+    // over on the EQUIVALENCE-PARTITION surface, peer to clause (195)
+    // ([`T::unique_repeating_variants`]) one ORDERING axis over AND peer
+    // to [`T::sorted_unique_repeating_variant`] one RETURN-SHAPE axis
+    // over.
+    //
+    // Bimodal-triple positive-arm discipline: at `T::CARDINALITY == 3`
+    // on the canonical bimodal triple `[T::ALL[0], T::ALL[0], T::ALL[1]]`,
+    // `count_repeating_variants` reports `1` (T::ALL[0] the SOLE strict-
+    // repeat witness — T::ALL[0] at count 2, T::ALL[1] at count 1,
+    // T::ALL[2] at count 0), `has_unique_repeating_variant` returns
+    // `true`, guard fires, and the guarded lex-lift reports
+    // `vec![T::ALL[0]]` — the SAME sole strict-repeat witness that
+    // clause (195)'s declaration-order sibling reports on the SAME
+    // fixture, pinning the ordering-choice-irrelevance identity as a
+    // TYPED THEOREM at the canonical bimodal-triple window. LOAD-BEARING
+    // DISCRIMINATOR from clause (197)'s just-opened lex miss-band peer
+    // which reports `vec![T::ALL[2]]` on the SAME fixture (the
+    // MULTIPLICITY-BAND axis SEPARATES the two lex positive arms at
+    // DIFFERENT witnesses of the same canonical bimodal triple).
+    //
+    // The default trait body threads the boolean-guarded Vec-select over
+    // [`Self::sorted_repeating_variants`] verbatim and satisfies every
+    // fixpoint arm + the length + Option-equality + is-empty + ordering-
+    // choice-irrelevance coincidence identities for free; the assertion
+    // catches a future implementor whose override drifts the projection
+    // loudly rather than silently bifurcating the set-level equivalence-
+    // partition strict-repeat lex-order singleton-or-empty witness
+    // surface. An override that folds onto `vec![T::ALL[0]]`
+    // unconditionally bifurcates the empty-slice + full-set + doubled-
+    // full-set (at cardinality >= 2) + matching-singleton arms at
+    // `[T::ALL[0]] != []`; an override that folds onto `vec![]`
+    // unconditionally bifurcates the bimodal-triple positive arm at
+    // cardinality `== 3` at `[] != [T::ALL[0]]` AND the doubled-full-set
+    // arm at cardinality `== 1` at `[] != [T::ALL[0]]`.
+    let empty_sorted_unique_repeatings = T::sorted_unique_repeating_variants(empty);
+    let expected_empty_sorted_unique_repeatings: ::std::vec::Vec<T> =
+        if T::has_unique_repeating_variant(empty) {
+            T::sorted_repeating_variants(empty)
+        } else {
+            ::std::vec::Vec::new()
+        };
+    assert_eq!(
+        empty_sorted_unique_repeatings, expected_empty_sorted_unique_repeatings,
+        "{type_name}: T::sorted_unique_repeating_variants(&[]) drifted from the guarded lex-lift `if T::has_unique_repeating_variant(&[]) {{ T::sorted_repeating_variants(&[]) }} else {{ vec![] }}` — the guarded-lift identity MUST hold on the empty slice",
+    );
+    assert_eq!(
+        T::sorted_unique_repeating_variants(empty),
+        T::unique_repeating_variants(empty),
+        "{type_name}: T::sorted_unique_repeating_variants(&[]) drifted from T::unique_repeating_variants(&[]) — the ordering-choice-irrelevance identity MUST hold on the empty slice",
+    );
+    assert_eq!(
+        T::sorted_unique_repeating_variants(empty).len(),
+        usize::from(T::has_unique_repeating_variant(empty)),
+        "{type_name}: T::sorted_unique_repeating_variants(&[]).len() drifted from `T::has_unique_repeating_variant(&[]) as usize` — the length-coincidence identity MUST hold on the empty slice",
+    );
+    assert_eq!(
+        T::sorted_unique_repeating_variants(empty).first().copied(),
+        T::sorted_unique_repeating_variant(empty),
+        "{type_name}: T::sorted_unique_repeating_variants(&[]).first() drifted from T::sorted_unique_repeating_variant(&[]) — the Option-equality identity MUST hold on the empty slice",
+    );
+    assert_eq!(
+        T::sorted_unique_repeating_variants(empty).is_empty(),
+        !T::has_unique_repeating_variant(empty),
+        "{type_name}: T::sorted_unique_repeating_variants(&[]).is_empty() drifted from `!T::has_unique_repeating_variant(&[])` — the is-empty coincidence identity MUST hold on the empty slice",
+    );
+    let full_sorted_unique_repeatings = T::sorted_unique_repeating_variants(T::ALL);
+    let expected_full_sorted_unique_repeatings: ::std::vec::Vec<T> =
+        if T::has_unique_repeating_variant(T::ALL) {
+            T::sorted_repeating_variants(T::ALL)
+        } else {
+            ::std::vec::Vec::new()
+        };
+    assert_eq!(
+        full_sorted_unique_repeatings, expected_full_sorted_unique_repeatings,
+        "{type_name}: T::sorted_unique_repeating_variants(T::ALL) drifted from the guarded lex-lift on the full-set slice — pairwise-distinctness pins every variant at exactly one position, count_repeating_variants reports 0, has_unique_repeating_variant returns false via `0 != 1`, and the guarded lex-lift collapses to vec![] UNCONDITIONALLY",
+    );
+    assert_eq!(
+        T::sorted_unique_repeating_variants(T::ALL),
+        T::unique_repeating_variants(T::ALL),
+        "{type_name}: T::sorted_unique_repeating_variants(T::ALL) drifted from T::unique_repeating_variants(T::ALL) — the ordering-choice-irrelevance identity MUST hold on the full-set slice",
+    );
+    assert_eq!(
+        T::sorted_unique_repeating_variants(T::ALL).len(),
+        usize::from(T::has_unique_repeating_variant(T::ALL)),
+        "{type_name}: T::sorted_unique_repeating_variants(T::ALL).len() drifted from `T::has_unique_repeating_variant(T::ALL) as usize` — the length-coincidence identity MUST hold on the full-set slice",
+    );
+    assert_eq!(
+        T::sorted_unique_repeating_variants(T::ALL).first().copied(),
+        T::sorted_unique_repeating_variant(T::ALL),
+        "{type_name}: T::sorted_unique_repeating_variants(T::ALL).first() drifted from T::sorted_unique_repeating_variant(T::ALL) — the Option-equality identity MUST hold on the full-set slice",
+    );
+    let doubled_sorted_unique_repeatings = T::sorted_unique_repeating_variants(&doubled_full_set);
+    let expected_doubled_sorted_unique_repeatings: ::std::vec::Vec<T> =
+        if T::has_unique_repeating_variant(&doubled_full_set) {
+            T::sorted_repeating_variants(&doubled_full_set)
+        } else {
+            ::std::vec::Vec::new()
+        };
+    assert_eq!(
+        doubled_sorted_unique_repeatings, expected_doubled_sorted_unique_repeatings,
+        "{type_name}: T::sorted_unique_repeating_variants(&doubled_full_set) drifted from the guarded lex-lift on the doubled-full-set slice — at cardinality >= 2 every variant hits two positions, count_repeating_variants reports T::CARDINALITY >= 2, has_unique_repeating_variant returns false, and the guarded lex-lift collapses to vec![]; at cardinality == 1 the doubled slice `[T::ALL[0], T::ALL[0]]` collapses count_repeating_variants to 1, has_unique_repeating_variant returns true, and the guarded lex-lift returns vec![T::ALL[0]]",
+    );
+    assert_eq!(
+        T::sorted_unique_repeating_variants(&doubled_full_set),
+        T::unique_repeating_variants(&doubled_full_set),
+        "{type_name}: T::sorted_unique_repeating_variants(&doubled_full_set) drifted from T::unique_repeating_variants(&doubled_full_set) — the ordering-choice-irrelevance identity MUST hold on the doubled-full-set slice",
+    );
+    assert_eq!(
+        T::sorted_unique_repeating_variants(&doubled_full_set).len(),
+        usize::from(T::has_unique_repeating_variant(&doubled_full_set)),
+        "{type_name}: T::sorted_unique_repeating_variants(&doubled_full_set).len() drifted from `T::has_unique_repeating_variant(&doubled_full_set) as usize` — the length-coincidence identity MUST hold on the doubled-full-set slice",
+    );
+    assert_eq!(
+        T::sorted_unique_repeating_variants(&doubled_full_set).first().copied(),
+        T::sorted_unique_repeating_variant(&doubled_full_set),
+        "{type_name}: T::sorted_unique_repeating_variants(&doubled_full_set).first() drifted from T::sorted_unique_repeating_variant(&doubled_full_set) — the Option-equality identity MUST hold on the doubled-full-set slice",
+    );
+    for target in T::ALL.iter().copied() {
+        let target_label = <T as ClosedSet>::label(target);
+        let matching_singleton = [target];
+        assert_eq!(
+            T::sorted_unique_repeating_variants(&matching_singleton),
+            ::std::vec::Vec::<T>::new(),
+            "{type_name}: T::sorted_unique_repeating_variants([{target_label:?}]) drifted from `vec![]` on every matching singleton — the target hits count 1, every non-target sits at count 0, count_repeating_variants reports 0, has_unique_repeating_variant returns false, and the guard collapses the projection to vec![]",
+        );
+        assert_eq!(
+            T::sorted_unique_repeating_variants(&matching_singleton),
+            T::unique_repeating_variants(&matching_singleton),
+            "{type_name}: T::sorted_unique_repeating_variants([{target_label:?}]) drifted from T::unique_repeating_variants([{target_label:?}]) — the ordering-choice-irrelevance identity MUST hold on every matching singleton (both collapse to vec![])",
+        );
+    }
+    if T::CARDINALITY == 3 {
+        // Bimodal-triple fixture: LOAD-BEARING SOLE non-empty positive
+        // arm on the (`Vec<Self>` × sorted × equivalence-partition × mult
+        // `>= 2` × unique-tie) corner at the canonical cardinality-3
+        // test-module window. count_repeating_variants reports 1
+        // (T::ALL[0] the SOLE strict-repeat witness — T::ALL[0] at count
+        // 2, T::ALL[1] at count 1, T::ALL[2] at count 0),
+        // has_unique_repeating_variant returns true, guard fires, and
+        // the guarded lex-lift returns vec![T::ALL[0]] — the SAME
+        // witness clause (195)'s declaration-order sibling reports on
+        // the SAME fixture (ordering-choice-irrelevance in action).
+        let bimodal_triple = [T::ALL[0], T::ALL[0], T::ALL[1]];
+        assert_eq!(
+            T::sorted_unique_repeating_variants(&bimodal_triple),
+            ::std::vec![T::ALL[0]],
+            "{type_name}: T::sorted_unique_repeating_variants(&bimodal_triple) drifted from `vec![T::ALL[0]]` at cardinality == 3 — count_repeating_variants reports 1 (T::ALL[0] the SOLE strict-repeat witness), has_unique_repeating_variant holds, guard fires, and the guarded lex-lift returns vec![T::ALL[0]]",
+        );
+        assert_eq!(
+            T::sorted_unique_repeating_variants(&bimodal_triple),
+            T::unique_repeating_variants(&bimodal_triple),
+            "{type_name}: T::sorted_unique_repeating_variants(&bimodal_triple) drifted from T::unique_repeating_variants(&bimodal_triple) — the ordering-choice-irrelevance identity MUST hold on the bimodal-triple fixture at cardinality == 3 (both report vec![T::ALL[0]])",
+        );
+        assert_eq!(
+            T::sorted_unique_repeating_variants(&bimodal_triple).first().copied(),
+            T::sorted_unique_repeating_variant(&bimodal_triple),
+            "{type_name}: T::sorted_unique_repeating_variants(&bimodal_triple).first() drifted from T::sorted_unique_repeating_variant(&bimodal_triple) — the Option-equality identity MUST hold on the bimodal-triple fixture at cardinality == 3 (both project to Some(T::ALL[0]))",
+        );
+    }
+    if T::CARDINALITY == 1 {
+        // Doubled-full-set positive arm at cardinality == 1: the doubled
+        // slice `[T::ALL[0], T::ALL[0]]` puts T::ALL[0] at count 2,
+        // count_repeating_variants reports 1, has_unique_repeating_variant
+        // holds, guard fires, and the guarded lex-lift returns
+        // vec![T::ALL[0]] — the SOLE positive arm on the degenerate
+        // cardinality-1 corner of the doubled-full-set fixture.
+        assert_eq!(
+            T::sorted_unique_repeating_variants(&doubled_full_set),
+            T::ALL.to_vec(),
+            "{type_name}: T::sorted_unique_repeating_variants(&doubled_full_set) drifted from T::ALL.to_vec() at cardinality == 1 — the doubled slice puts the sole variant at count 2, count_repeating_variants reports 1, has_unique_repeating_variant holds, and the guarded lex-lift returns the singleton vec containing the sole variant",
         );
     }
 }
@@ -113565,6 +113985,251 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedSortedUniqueMissingVariantsSingletonFirstKind whose sorted_unique_missing_variants override folds onto vec![Alpha] unconditionally — clause (197)'s empty-slice + full-set + doubled-full-set arms MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_repeating_variants_returns_empty_on_the_empty_slice_at_cardinality_gte_two() {
+        // EMPTY-SLICE CONTRACT: T::sorted_unique_repeating_variants(&[])
+        // == vec![] at StubKind's cardinality 3 —
+        // count_repeating_variants reports 0 (every variant absent),
+        // has_unique_repeating_variant returns false via `0 != 1`, and
+        // the guard collapses the projection to vec![] through the guard
+        // arm before sorted_repeating_variants's own sweep is consulted.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_repeating_variants(empty),
+            Vec::<StubKind>::new(),
+            "T::sorted_unique_repeating_variants(&[]) diverged from the empty-slice fixpoint vec![] at StubKind's cardinality 3",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_repeating_variants_equals_unique_repeating_variants_across_every_triple() {
+        // ORDERING-CHOICE-IRRELEVANCE IDENTITY: for every slice `items`,
+        // T::sorted_unique_repeating_variants(items) ==
+        // T::unique_repeating_variants(items) — when the sole strict-
+        // repeat variant is UNIQUE the length-1 witness collection is
+        // ordering-invariant; when the guard falsifies both projections
+        // collapse to vec![] through the same guard arm.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_repeating_variants(&triple),
+                        <StubKind as ClosedSet>::unique_repeating_variants(&triple),
+                        "T::sorted_unique_repeating_variants({triple:?}) diverged from T::unique_repeating_variants({triple:?}) — the ordering-choice-irrelevance identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_repeating_variants_equals_has_unique_repeating_variant_gated_sorted_repeating_variants_across_every_triple(
+    ) {
+        // GUARDED-LEX-WITNESS-COLLECTION IDENTITY: for every slice `items`,
+        // T::sorted_unique_repeating_variants(items) ==
+        // if T::has_unique_repeating_variant(items) {
+        //   T::sorted_repeating_variants(items)
+        // } else { vec![] }. The canonical form the body uses.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_body =
+                        <StubKind as ClosedSet>::sorted_unique_repeating_variants(&triple);
+                    let via_guarded_lex_lift =
+                        if <StubKind as ClosedSet>::has_unique_repeating_variant(&triple) {
+                            <StubKind as ClosedSet>::sorted_repeating_variants(&triple)
+                        } else {
+                            Vec::new()
+                        };
+                    assert_eq!(
+                        via_body, via_guarded_lex_lift,
+                        "T::sorted_unique_repeating_variants({triple:?}) diverged from the guarded lex-witness-collection lift",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_repeating_variants_len_equals_has_unique_repeating_variant_as_usize_across_every_triple(
+    ) {
+        // LENGTH-COINCIDENCE IDENTITY: for every slice `items`,
+        // T::sorted_unique_repeating_variants(items).len() ==
+        // usize::from(T::has_unique_repeating_variant(items)).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_repeating_variants(&triple).len(),
+                        usize::from(<StubKind as ClosedSet>::has_unique_repeating_variant(
+                            &triple,
+                        )),
+                        "T::sorted_unique_repeating_variants({triple:?}).len() diverged from usize::from(T::has_unique_repeating_variant({triple:?}))",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_repeating_variants_first_equals_sorted_unique_repeating_variant_across_every_triple(
+    ) {
+        // OPTION-EQUALITY IDENTITY: for every slice `items`,
+        // T::sorted_unique_repeating_variants(items).first().copied() ==
+        // T::sorted_unique_repeating_variant(items) — the Vec-return's
+        // first-element projection coincides with the Option-return LEX
+        // peer one RETURN-SHAPE axis over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_repeating_variants(&triple)
+                            .first()
+                            .copied(),
+                        <StubKind as ClosedSet>::sorted_unique_repeating_variant(&triple),
+                        "T::sorted_unique_repeating_variants({triple:?}).first() diverged from T::sorted_unique_repeating_variant({triple:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_repeating_variants_is_empty_iff_not_has_unique_repeating_variant_across_every_triple(
+    ) {
+        // IS-EMPTY COINCIDENCE IDENTITY: for every slice `items`,
+        // T::sorted_unique_repeating_variants(items).is_empty() ==
+        // !T::has_unique_repeating_variant(items).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_repeating_variants(&triple)
+                            .is_empty(),
+                        !<StubKind as ClosedSet>::has_unique_repeating_variant(&triple),
+                        "T::sorted_unique_repeating_variants({triple:?}).is_empty() diverged from !T::has_unique_repeating_variant({triple:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_unique_repeating_variants_returns_the_repeating_singleton_on_the_bimodal_triple_at_cardinality_three(
+    ) {
+        // BIMODAL-TRIPLE POSITIVE-ARM CONTRACT at StubKind's cardinality
+        // 3: on `[Alpha, Alpha, Beta]`, count_repeating_variants reports
+        // 1 (Alpha the SOLE strict-repeat witness),
+        // has_unique_repeating_variant returns true, guard fires, and
+        // the guarded lex-lift returns vec![Alpha] — the SAME sole
+        // strict-repeat witness that unique_repeating_variants reports
+        // on the SAME fixture (ordering-choice-irrelevance in action).
+        // LOAD-BEARING DISCRIMINATOR from the just-opened miss-band lex-
+        // peer sorted_unique_missing_variants which reports vec![Gamma]
+        // on the SAME fixture.
+        let bimodal_triple = [StubKind::Alpha, StubKind::Alpha, StubKind::Beta];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_unique_repeating_variants(&bimodal_triple),
+            vec![StubKind::Alpha],
+            "T::sorted_unique_repeating_variants([Alpha, Alpha, Beta]) diverged from vec![Alpha]",
+        );
+    }
+
+    #[test]
+    fn sorted_unique_repeating_variants_is_invariant_under_slice_reversal_across_every_triple() {
+        // REVERSAL-INVARIANCE CONTRACT:
+        // T::sorted_unique_repeating_variants is invariant under slice-
+        // reversal — both has_unique_repeating_variant and
+        // sorted_repeating_variants are ordering-agnostic on the input
+        // axis.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let reversed: Vec<StubKind> = triple.iter().rev().copied().collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_unique_repeating_variants(&triple),
+                        <StubKind as ClosedSet>::sorted_unique_repeating_variants(&reversed),
+                        "T::sorted_unique_repeating_variants({triple:?}) diverged from T::sorted_unique_repeating_variants({reversed:?}) — reversal-invariance was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_singleton_first_drift_in_sorted_unique_repeating_variants(
+    ) {
+        // Drift catch — clause (198)'s empty-slice + full-set +
+        // doubled-full-set + matching-singleton arms fire when an
+        // override folds sorted_unique_repeating_variants onto
+        // vec![Alpha] unconditionally. At StubKind's cardinality 3, the
+        // empty + full-set + doubled-full-set + matching-singleton arms
+        // yield vec![]; a [Alpha] override bifurcates each at
+        // `[Alpha] != []`.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedSortedUniqueRepeatingVariantsSingletonFirstKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedSortedUniqueRepeatingVariantsSingletonFirstKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedSortedUniqueRepeatingVariantsSingletonFirstKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted sorted_unique_repeating_variants singleton-first kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedSortedUniqueRepeatingVariantsSingletonFirstKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedSortedUniqueRepeatingVariantsSingletonFirstKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str =
+                "drifted sorted_unique_repeating_variants singleton-first kind";
+            type Unknown = UnknownDriftedSortedUniqueRepeatingVariantsSingletonFirstKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedSortedUniqueRepeatingVariantsSingletonFirstKind(s.to_owned())
+            }
+            fn sorted_unique_repeating_variants(_items: &[Self]) -> Vec<Self> {
+                // Drift: always return vec![Alpha]. Fires clause (198)'s
+                // empty-slice + full-set + doubled-full-set arms at
+                // `[Alpha] != []`.
+                ::std::vec![Self::Alpha]
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<
+                DriftedSortedUniqueRepeatingVariantsSingletonFirstKind,
+            >();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedSortedUniqueRepeatingVariantsSingletonFirstKind whose sorted_unique_repeating_variants override folds onto vec![Alpha] unconditionally — clause (198)'s empty-slice + full-set + doubled-full-set arms MUST reject the drift",
         );
     }
 

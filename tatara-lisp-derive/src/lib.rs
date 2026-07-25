@@ -959,3 +959,343 @@ mod snake_to_kebab_tests {
         assert_eq!(snake_to_kebab("foo__bar"), "foo--bar");
     }
 }
+
+#[cfg(test)]
+mod classify_tests {
+    use super::{classify, first_generic_type, Kind};
+    use syn::{parse_str, Type, TypePath};
+
+    // The `(syn::Type -> Kind)` projection is the derive's PRIVATE
+    // dispatch table — one field type maps to one extractor helper
+    // (`extract_string` for `Kind::String`, `extract_optional_int` for
+    // `Kind::OptionalInt(_)`, `extract_via_serde` for `Kind::Deserialize`,
+    // etc.). A regression that mis-classifies ONE `syn::Type` shape
+    // silently swaps the extractor emitted for a Kind of field: the
+    // operator sees no diagnostic drift at the derive site, but every
+    // downstream `#[derive(TataraDomain)]` implementor with a matching
+    // field routes through the wrong helper — the typed-entry gate
+    // fires against the wrong slot decoder, the `LispError::TypeMismatch`
+    // renders the wrong `expected` label, and the failure surfaces as a
+    // cascade of mystery `MissingKwarg` / `TypeMismatch` errors at
+    // integration-test time.
+    //
+    // The projection admits three distinct arms — the primitive-name
+    // switch (`String`, `bool`, `i64` / `i32` / `u32` / `u64` / `usize`,
+    // `f64` / `f32`), the `Option<T>` recursor (delegates to
+    // `classify_option`), the `Vec<T>` recursor (delegates to
+    // `classify_vec`) — and one fall-through arm to `Kind::Deserialize`
+    // that catches every non-primitive type (nested structs, foreign
+    // enums, un-named collection wrappers). The tests below pin each
+    // arm at the boundary of the shapes it decodes so a refactor of ANY
+    // of the three (e.g. adding a new primitive, tightening the
+    // fall-through, sharpening the nested-recursor discipline) surfaces
+    // at ONE test-module boundary in the derive crate rather than as
+    // silent drift across every downstream implementor.
+
+    fn parse_ty(s: &str) -> Type {
+        parse_str(s).expect("valid Rust type syntax")
+    }
+
+    fn last_segment(ty: &Type) -> &syn::PathSegment {
+        let Type::Path(TypePath { path, .. }) = ty else {
+            panic!("expected a path type");
+        };
+        path.segments.last().expect("path has at least one segment")
+    }
+
+    fn assert_first_generic_type_err(seg: &syn::PathSegment, expected: &str) {
+        // `syn::Type` does not implement `Debug` (the `full` feature
+        // does not activate `extra-traits`), so `Result::expect_err`
+        // is unavailable on the `Result<&Type, String>` return
+        // shape. Match the `Err` arm structurally and pin the message
+        // verbatim.
+        match first_generic_type(seg) {
+            Err(msg) => assert_eq!(msg, expected),
+            Ok(_) => panic!("expected first_generic_type Err({expected:?})"),
+        }
+    }
+
+    #[test]
+    fn string_classifies_as_kind_string() {
+        // Bread-and-butter case: a bare `String` field routes through
+        // `extract_string`. Pin the exact `Kind::String` variant identity
+        // so a refactor that (say) folded `Kind::String` into a broader
+        // `Kind::Text(&'static str)` payload variant surfaces here.
+        assert!(matches!(classify(&parse_ty("String")), Kind::String));
+    }
+
+    #[test]
+    fn bool_classifies_as_kind_bool() {
+        // The `bool` primitive routes through `extract_bool` — pinned
+        // separately from the integer / float arms because it's a
+        // structurally distinct payload with no `Kind::Int`-style width
+        // tag.
+        assert!(matches!(classify(&parse_ty("bool")), Kind::Bool));
+    }
+
+    #[test]
+    fn every_supported_integer_width_classifies_as_kind_int_with_the_matching_type_literal() {
+        // The five integer widths the derive supports each project to
+        // `Kind::Int(<literal>)` with the width name threaded through
+        // the payload — the payload IS the `as <ty>` cast the emitted
+        // extractor performs on `extract_int`'s `i64` return. A
+        // regression that (a) narrowed the supported set to a subset,
+        // (b) mis-labeled ONE width's payload (e.g. `u32` → `"i32"`),
+        // or (c) dropped the payload entirely would silently swap the
+        // emitted cast at every consumer's `compile_from_args` body.
+        assert!(matches!(classify(&parse_ty("i64")), Kind::Int("i64")));
+        assert!(matches!(classify(&parse_ty("i32")), Kind::Int("i32")));
+        assert!(matches!(classify(&parse_ty("u32")), Kind::Int("u32")));
+        assert!(matches!(classify(&parse_ty("u64")), Kind::Int("u64")));
+        assert!(matches!(classify(&parse_ty("usize")), Kind::Int("usize")));
+    }
+
+    #[test]
+    fn every_supported_float_width_classifies_as_kind_float_with_the_matching_type_literal() {
+        // Sibling of the integer-width pin — `f64` / `f32` each route
+        // through `Kind::Float(<literal>)`, threading the width name
+        // through the payload for the emitted `as <ty>` cast on
+        // `extract_float`'s `f64` return. A regression that dropped
+        // `f32` from the supported set (folding it into the
+        // fall-through arm) would silently rewire every `f32` field to
+        // `extract_via_serde` — the operator would see NO diagnostic
+        // drift at the derive site but the downstream error would
+        // surface as a mystery serde-deserialize failure on a numeric
+        // literal.
+        assert!(matches!(classify(&parse_ty("f64")), Kind::Float("f64")));
+        assert!(matches!(classify(&parse_ty("f32")), Kind::Float("f32")));
+    }
+
+    #[test]
+    fn option_of_supported_primitive_classifies_as_the_matching_optional_variant() {
+        // `Option<T>` where `T` is a supported primitive routes through
+        // `classify_option`'s per-variant arm — `Option<String>` →
+        // `OptionalString`, `Option<bool>` → `OptionalBool`, and the
+        // integer / float widths preserve their payload through the
+        // recursor (`Option<i64>` → `OptionalInt("i64")`, NOT
+        // `OptionalInt("i32")`). Pin the recursor's arm-by-arm mapping
+        // so a regression that dropped ONE arm (e.g. accidentally
+        // routing `Option<bool>` through the fall-through
+        // `OptionalDeserialize`) surfaces here rather than as a silent
+        // switch to the serde-bridge extractor at every downstream
+        // implementor with an optional-bool field.
+        assert!(matches!(
+            classify(&parse_ty("Option<String>")),
+            Kind::OptionalString
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<bool>")),
+            Kind::OptionalBool
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<i64>")),
+            Kind::OptionalInt("i64")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<u32>")),
+            Kind::OptionalInt("u32")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<f64>")),
+            Kind::OptionalFloat("f64")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<f32>")),
+            Kind::OptionalFloat("f32")
+        ));
+    }
+
+    #[test]
+    fn vec_of_string_classifies_as_kind_vec_string() {
+        // `Vec<String>` is the ONE non-primitive collection shape
+        // `classify_vec` decodes structurally — every other `Vec<T>`
+        // falls through to `Kind::VecDeserialize` (pinned by the peer
+        // test). The routes matter operationally: `Vec<String>` binds
+        // to `extract_string_list` (which decodes each element as a
+        // Sexp string atom), whereas `Vec<T: Deserialize>` binds to
+        // `extract_vec_via_serde` (which round-trips each element
+        // through the sexp_to_json bridge). A regression that
+        // conflated the two would silently swap the element decoder at
+        // every consumer with a `Vec<String>` field.
+        assert!(matches!(
+            classify(&parse_ty("Vec<String>")),
+            Kind::VecString
+        ));
+    }
+
+    #[test]
+    fn non_primitive_bare_type_falls_through_to_kind_deserialize() {
+        // Any type name that doesn't match the primitive-name switch
+        // (`String` / `bool` / `i*` / `u*` / `usize` / `f*` / `Option` /
+        // `Vec`) routes through the fall-through arm to
+        // `Kind::Deserialize` — the sexp_to_json + `serde_json::from_value`
+        // bridge that unlocks enums, nested structs, and foreign types.
+        // Pin the fall-through discipline: user-defined type names
+        // (`MonitorSpec`, `Severity`, `EscalationStep`), primitive-adjacent
+        // wrapper types (`String` misspelled as `Strng`), and
+        // fully-qualified but non-matching paths ALL land at the
+        // Deserialize arm. A regression that (say) narrowed the
+        // fall-through to only structs would break the enum
+        // authoring surface at every downstream consumer.
+        assert!(matches!(
+            classify(&parse_ty("MonitorSpec")),
+            Kind::Deserialize
+        ));
+        assert!(matches!(classify(&parse_ty("Severity")), Kind::Deserialize));
+        assert!(matches!(classify(&parse_ty("Strng")), Kind::Deserialize));
+    }
+
+    #[test]
+    fn option_of_non_primitive_classifies_as_kind_optional_deserialize() {
+        // `Option<T>` where `T` is NOT a supported primitive routes
+        // through `classify_option`'s catch-all arm to
+        // `Kind::OptionalDeserialize`. Pin the catch-all: a nested
+        // struct (`Option<MonitorSpec>`), an enum
+        // (`Option<Severity>`), even a `Vec` (`Option<Vec<String>>` —
+        // supported at the `Option` layer but NOT recognized as
+        // `OptionalVecString`, because no such Kind variant exists) all
+        // land at the same arm. A regression that added a new Kind
+        // variant for one of these compositions without updating the
+        // recursor arm mapping would silently drift the extractor at
+        // every consumer.
+        assert!(matches!(
+            classify(&parse_ty("Option<MonitorSpec>")),
+            Kind::OptionalDeserialize
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<Severity>")),
+            Kind::OptionalDeserialize
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<Vec<String>>")),
+            Kind::OptionalDeserialize
+        ));
+    }
+
+    #[test]
+    fn vec_of_non_string_classifies_as_kind_vec_deserialize() {
+        // `Vec<T>` where `T` is NOT `String` routes through
+        // `classify_vec`'s catch-all arm to `Kind::VecDeserialize` —
+        // even for supported primitives (`Vec<i64>`, `Vec<bool>`,
+        // `Vec<f64>`). This is a deliberate asymmetry with
+        // `classify_option`: the `Option` recursor sharpens per-primitive
+        // but the `Vec` recursor sharpens only for `String`. Pin the
+        // asymmetry — every non-`String` element type routes through
+        // the serde bridge (which decodes each element via the
+        // sexp_to_json round-trip) rather than through a hypothetical
+        // `Kind::VecInt` / `Kind::VecFloat` primitive-list extractor.
+        // A refactor that broadened `classify_vec`'s per-primitive
+        // sharpening without a matching Kind variant + extractor pair
+        // would produce a shape mismatch at emit time.
+        assert!(matches!(
+            classify(&parse_ty("Vec<i64>")),
+            Kind::VecDeserialize
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Vec<bool>")),
+            Kind::VecDeserialize
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Vec<MonitorSpec>")),
+            Kind::VecDeserialize
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Vec<Vec<String>>")),
+            Kind::VecDeserialize
+        ));
+    }
+
+    #[test]
+    fn fully_qualified_path_classifies_by_final_segment_only() {
+        // `classify` reads `path.segments.last()` to look up the type
+        // name — fully-qualified paths (`std::string::String`,
+        // `::std::string::String`, `alloc::string::String`) project the
+        // SAME `Kind::String` as the bare `String`. This is
+        // load-bearing: authors that import via `use std::string::String
+        // as MyString` or that spell out the full path in a `#[derive]`
+        // struct's field must get the SAME extractor. A regression that
+        // read the first segment (or the full path text) would break
+        // fully-qualified authoring.
+        assert!(matches!(
+            classify(&parse_ty("std::string::String")),
+            Kind::String
+        ));
+        assert!(matches!(
+            classify(&parse_ty("::std::string::String")),
+            Kind::String
+        ));
+        assert!(matches!(
+            classify(&parse_ty("core::option::Option<i64>")),
+            Kind::OptionalInt("i64")
+        ));
+    }
+
+    #[test]
+    fn reference_and_tuple_and_array_types_fall_through_to_kind_deserialize() {
+        // Non-`Type::Path` variants (`&str`, `[u8; 4]`, `(String,
+        // i64)`, `&mut i64`) all fall out of the outer `if let
+        // Type::Path` guard and land at the `Kind::Deserialize`
+        // fall-through. Pin the discipline: non-path types are
+        // structurally rejected by the primitive-name switch and route
+        // through the serde bridge — even though serde may or may not
+        // deserialize them successfully at runtime. The derive's
+        // contract is that ANY non-primitive shape gets the
+        // Deserialize extractor; the extractor's runtime behavior on
+        // exotic types is a separate concern the serde bridge owns.
+        assert!(matches!(classify(&parse_ty("&str")), Kind::Deserialize));
+        assert!(matches!(classify(&parse_ty("[u8; 4]")), Kind::Deserialize));
+        assert!(matches!(
+            classify(&parse_ty("(String, i64)")),
+            Kind::Deserialize
+        ));
+    }
+
+    #[test]
+    fn first_generic_type_returns_ok_on_a_single_type_argument_segment() {
+        // Positive control for the recursor's inner-type extractor —
+        // `Option<String>`'s last segment carries ONE type arg
+        // (`String`), and `first_generic_type` returns it borrowed. The
+        // borrow lifetime matches the caller's, so `classify_option` /
+        // `classify_vec` can immediately recurse. Pin the happy path
+        // separately from the error path so a regression that (say)
+        // returned the wrong generic index or dropped the borrow
+        // discipline surfaces here.
+        let ty = parse_ty("Option<String>");
+        let seg = last_segment(&ty);
+        let inner = first_generic_type(seg).expect("Option<String> has one type argument");
+        assert!(matches!(inner, Type::Path(_)));
+    }
+
+    #[test]
+    fn first_generic_type_returns_err_when_the_segment_has_no_angle_brackets() {
+        // Error path: a bare type name (`String`) carries NO angle
+        // brackets, so `first_generic_type` returns
+        // `Err("expected <T> generic arguments".into())`. The recursor
+        // wrappers (`classify_option` / `classify_vec`) then swallow
+        // the error via `let Ok(inner) = ... else { return
+        // Kind::OptionalDeserialize; }` — the fall-through arm the
+        // outer `classify` never reaches for `String` (which matches
+        // the primitive-name switch first). Pin the error identity so
+        // a regression that returned a different error message (or an
+        // `Option::None` shape) would surface at the recursor gate
+        // instead of silently.
+        let ty = parse_ty("String");
+        let seg = last_segment(&ty);
+        assert_first_generic_type_err(seg, "expected <T> generic arguments");
+    }
+
+    #[test]
+    fn first_generic_type_returns_err_when_the_segment_carries_only_a_lifetime_argument() {
+        // A segment with angle brackets but only a LIFETIME argument
+        // (`Cow<'a>` — syntactically valid, semantically incomplete)
+        // exits the `for arg in &args.args` loop without finding a
+        // `syn::GenericArgument::Type`, and falls through to the
+        // `Err("no type argument found".into())` arm. Pin this second
+        // error identity separately from the no-angle-brackets arm so
+        // a refactor that folded the two arms into one message would
+        // surface here.
+        let ty = parse_ty("Cow<'a>");
+        let seg = last_segment(&ty);
+        assert_first_generic_type_err(seg, "no type argument found");
+    }
+}

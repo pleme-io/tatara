@@ -41070,6 +41070,131 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY DECLARATION-ORDER "present indices joined" projection
+    /// — the `String` rendering of [`Self::present_indices`] under
+    /// `usize::to_string` joined by `sep`. Composes the substrate's
+    /// declaration-axis hit-index Vec-return primitive with the
+    /// per-slot `usize`-to-`String` projection and the standard-library
+    /// [`slice::join`](https://doc.rust-lang.org/std/primitive.slice.html#method.join)
+    /// combinator so a passing implementor of [`Self::present_indices`]
+    /// automatically satisfies this projection at every downstream
+    /// site. OPENS the (indices, joined) column of the (partition-band
+    /// × ordering × return-shape) 3×2×2 = 12-tile equivalence-partition
+    /// index-aggregation surface past the exhaustively-closed 6-corner
+    /// (partition-band × ordering) Vec-return face at [`Self::present_indices`]
+    /// / [`Self::missing_indices`] / [`Self::repeating_indices`] /
+    /// [`Self::sorted_present_indices`] / [`Self::sorted_missing_indices`]
+    /// / [`Self::sorted_repeating_indices`] one RETURN-SHAPE axis over.
+    ///
+    /// Sibling posture to [`Self::present_labels_joined`] one field-
+    /// flavor axis over on the (label, index) partition of the
+    /// declaration-order hit-arm join-string surface —
+    /// [`Self::present_labels_joined`] renders each hit slot as a
+    /// `&'static str` label through [`Self::label`], this method
+    /// renders each hit slot as a decimal-`usize` index-under-
+    /// [`Self::index_of`] rendered through `usize::to_string`. Sibling
+    /// posture to [`Self::present_indices`] one return-shape axis over
+    /// on the (`Vec<usize>`, `String`) partition of the declaration-
+    /// order hit-arm index-aggregation surface — the Vec-return arm
+    /// materializes each hit slot as a `usize`, this method joins them
+    /// into a single `String` under the caller's separator.
+    ///
+    /// Composition law: for every slice `items` and every separator
+    /// `sep`, `T::present_indices_joined(items, sep) ==
+    /// T::present_indices(items).iter().map(usize::to_string).collect::<Vec<String>>().join(sep)`
+    /// — the join-string projection binds through the substrate's
+    /// [`Self::present_indices`] Vec-return primitive composed with
+    /// `usize::to_string` and `slice::join`. Pinned by
+    /// `present_indices_joined_equals_present_indices_dot_map_to_string_dot_join_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the hit-set
+    /// membership predicate is a function of that multiset alone. The
+    /// OUTPUT ordering is fixed by [`Self::ALL`]'s declaration order
+    /// regardless of the input ordering, so the joined `String` matches
+    /// byte-for-byte under reversal. Pinned by
+    /// `present_indices_joined_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::present_indices_joined(&[], sep)` is
+    /// the empty `String` UNCONDITIONALLY for every `sep` — the empty
+    /// slice hits zero variants, so [`Self::present_indices`] yields
+    /// the empty `Vec`, and `slice::join` on an empty slice yields the
+    /// empty string. Full-set contract:
+    /// `T::present_indices_joined(<T as ClosedSet>::ALL, sep) ==
+    /// (0..T::CARDINALITY).map(|i| i.to_string()).collect::<Vec<_>>().join(sep)`
+    /// UNCONDITIONALLY for every `sep` — the pairwise-distinctness
+    /// invariant pins every variant of [`Self::ALL`] as hitting itself
+    /// at its own [`Self::index_of`], so every index of
+    /// `0..T::CARDINALITY` survives the filter in declaration order.
+    ///
+    /// Future consumers — a `tatara-check` diagnostic that renders the
+    /// concrete `WorkloadPhase` indices a rollout window HIT as a
+    /// compact deterministic wire-string (`"0,2,4"` — numerically
+    /// dense, `usize`-round-trippable through `str::parse`) for
+    /// per-cluster witness serialization; an LSP diagnostic that
+    /// renders the hit-indices of an author-written closed-set field
+    /// as a comma-joined slot-number hint against a
+    /// `[Payload; T::CARDINALITY]` slotted table; a Sekiban audit-
+    /// trail projection whose per-window hit-index witness renders as
+    /// a deterministic pipe-joined string across machines regardless
+    /// of declaration-layout drift; a `tatara-lisp::macro_expand::Expander`
+    /// diagnostic that emits the concrete BOUND vocabulary slot-
+    /// indices as a canonical slash-joined natural-language surface.
+    /// Each binds to ONE typed N-ary hit-index-as-string projection on
+    /// the trait rather than re-deriving
+    /// `T::present_indices(items).iter().map(usize::to_string).collect::<Vec<_>>().join(sep)`
+    /// inline per callsite.
+    ///
+    /// Compounding closure: the (partition-band × ordering × return-
+    /// shape) 3×2×2 = 12-corner equivalence-partition index-
+    /// aggregation surface now OPENS the (present, declaration, join-
+    /// string) corner past the exhaustively-closed 6-corner (partition-
+    /// band × ordering) Vec-return face. The natural next lifts on
+    /// this face — `missing_indices_joined` on (missing, declaration,
+    /// join-string), `repeating_indices_joined` on (repeating,
+    /// declaration, join-string), and their three lex-axis peers
+    /// `sorted_present_indices_joined` / `sorted_missing_indices_joined`
+    /// / `sorted_repeating_indices_joined` — each bind through their
+    /// respective sibling Vec-return primitive under the same
+    /// `usize::to_string` + `slice::join` composition, closing the
+    /// (partition-band × ordering) 3×2 face on the join-string column
+    /// tile by tile.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary hit-
+    /// index-as-string projection becomes a TYPE-level primitive on
+    /// the closed-set trait rather than a per-consumer inline
+    /// `T::present_indices(items).iter().map(usize::to_string).collect::<Vec<_>>().join(sep)`
+    /// composition at every downstream generic site. THEORY.md §V.1 —
+    /// knowable platform; the (present, index, `String`, declaration)
+    /// corner was an unnamed inline composition recurring at every
+    /// prospective downstream "which INDICES did we HIT, rendered
+    /// joined?" site pre-lift. THEORY.md §VI.1 — generation over
+    /// composition; the projection emerges from the composition of
+    /// ONE substrate primitive ([`Self::present_indices`]) with the
+    /// standard-library `usize::to_string` + `slice::join` combinators,
+    /// not as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: NumPy's `",".join(map(str,
+    /// np.where(np.isin(all, items))[0]))` composing the hit-index
+    /// positional projection with a stringify + join; Julia's
+    /// `join(string.(findall(v -> v in items, all)), sep)`; Racket's
+    /// `(string-join (map number->string (filter (lambda (i) (member
+    /// (list-ref all i) items)) (range (length all)))) sep)`.
+    /// Translation through pleme-io primitives: a pure default method
+    /// composing [`Self::present_indices`] with `usize::to_string` and
+    /// `slice::join` — no new dep, no supertrait bound, no set-shape
+    /// carrier, no allocation beyond the natural intermediate
+    /// `Vec<String>` the `slice::join` combinator's per-slot
+    /// stringification already routes.
+    fn present_indices_joined(items: &[Self], sep: &str) -> ::std::string::String {
+        <Self as ClosedSet>::present_indices(items)
+            .into_iter()
+            .map(|i| i.to_string())
+            .collect::<::std::vec::Vec<::std::string::String>>()
+            .join(sep)
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -96965,6 +97090,168 @@ mod tests {
             Vec::<usize>::new(),
             "sorted_repeating_indices over the empty slice must return the empty vec",
         );
+    }
+
+    #[test]
+    fn present_indices_joined_over_the_empty_slice_returns_the_empty_string_across_every_separator()
+    {
+        // EMPTY-SLICE CONTRACT:
+        // `T::present_indices_joined(&[], sep) == ""` UNCONDITIONALLY
+        // for every `sep` — the empty slice hits zero variants, so
+        // `T::present_indices(&[])` yields the empty `Vec`, and
+        // `slice::join` on an empty slice yields the empty string.
+        let empty: &[StubKind] = &[];
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::present_indices_joined(empty, sep),
+                String::new(),
+                "T::present_indices_joined(&[], {sep:?}) diverged from the empty-string fixpoint",
+            );
+        }
+    }
+
+    #[test]
+    fn present_indices_joined_over_the_full_set_equals_zero_to_cardinality_joined_across_every_separator(
+    ) {
+        // FULL-SET CONTRACT:
+        // `T::present_indices_joined(T::ALL, sep) ==
+        // (0..T::CARDINALITY).map(|i| i.to_string()).collect::<Vec<_>>().join(sep)`
+        // UNCONDITIONALLY for every `sep` — the pairwise-distinctness
+        // invariant pins every variant of `T::ALL` as hitting itself
+        // at its own `T::index_of`, so every index of
+        // `0..T::CARDINALITY` survives the hit filter in declaration
+        // order, and the join over the resulting decimal-`usize` slots
+        // equals the substrate's `0..CARDINALITY` decimal-slot join
+        // exactly under any separator.
+        let all = <StubKind as ClosedSet>::ALL;
+        let cardinality = <StubKind as ClosedSet>::CARDINALITY;
+        for sep in ["", ", ", "/", " | "] {
+            let expected: String = (0..cardinality)
+                .map(|i| i.to_string())
+                .collect::<Vec<String>>()
+                .join(sep);
+            assert_eq!(
+                <StubKind as ClosedSet>::present_indices_joined(all, sep),
+                expected,
+                "T::present_indices_joined(T::ALL, {sep:?}) diverged from the (0..T::CARDINALITY).map(to_string).join({sep:?}) fixpoint — the full-set hit-index join must render every declaration-order slot",
+            );
+        }
+    }
+
+    #[test]
+    fn present_indices_joined_equals_present_indices_dot_map_to_string_dot_join_across_every_triple(
+    ) {
+        // COMPOSITION LAW: for every slice `items` and every separator
+        // `sep`, `T::present_indices_joined(items, sep) ==
+        // T::present_indices(items).iter().map(usize::to_string).collect::<Vec<_>>().join(sep)`
+        // — the join-string projection binds through the substrate's
+        // `T::present_indices` Vec-return primitive composed with
+        // `usize::to_string` and `slice::join`. Pins the (Vec-return,
+        // String-return) composition against the natural
+        // `present_indices + usize::to_string + slice::join` shape
+        // across three representative separators.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for sep in ["/", ", ", "|"] {
+                        let expected: String = <StubKind as ClosedSet>::present_indices(&triple)
+                            .into_iter()
+                            .map(|i| i.to_string())
+                            .collect::<Vec<String>>()
+                            .join(sep);
+                        assert_eq!(
+                            <StubKind as ClosedSet>::present_indices_joined(&triple, sep),
+                            expected,
+                            "T::present_indices_joined({triple:?}, {sep:?}) diverged from T::present_indices({triple:?}).iter().map(usize::to_string).collect().join({sep:?}) — the index-column composition law was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn present_indices_joined_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::present_indices_joined(items, sep) ==
+        // T::present_indices_joined(reversed items, sep)` on every
+        // slice for every separator — reversing a slice preserves its
+        // multiset of variant identities, and the hit-set membership
+        // predicate is a function of that multiset alone. The OUTPUT
+        // ordering is fixed by `T::ALL`'s declaration order regardless
+        // of the input ordering, so the joined `String` matches
+        // byte-for-byte under reversal.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    for sep in ["/", ", ", "|"] {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::present_indices_joined(&forward, sep),
+                            <StubKind as ClosedSet>::present_indices_joined(&reversed, sep),
+                            "T::present_indices_joined({forward:?}, {sep:?}) diverged from T::present_indices_joined({reversed:?}, {sep:?}) — the index-column hit-witness join MUST be a fixpoint of slice reversal",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn present_indices_joined_threads_empty_separator_into_a_concatenated_run() {
+        // EMPTY-SEPARATOR CONTRACT:
+        // `T::present_indices_joined(items, "") ==
+        // T::present_indices(items).iter().map(usize::to_string).collect::<String>()`
+        // on every slice — with an empty separator, `slice::join`
+        // degenerates to concatenation of the hit-index decimal-string
+        // list. Pins the degenerate-separator arm on the index axis
+        // matching `present_labels_joined_threads_empty_separator_into_a_concatenated_run`
+        // one field-flavor axis over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let concat: String = <StubKind as ClosedSet>::present_indices(&triple)
+                        .into_iter()
+                        .map(|i| i.to_string())
+                        .collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::present_indices_joined(&triple, ""),
+                        concat,
+                        "T::present_indices_joined({triple:?}, \"\") diverged from T::present_indices({triple:?}).iter().map(usize::to_string).collect::<String>() — the empty-separator degenerate arm was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn present_indices_joined_threads_multi_char_separator_verbatim() {
+        // MULTI-CHAR SEPARATOR CONTRACT:
+        // `T::present_indices_joined(items, " and ") ==
+        // T::present_indices(items).iter().map(usize::to_string).collect::<Vec<_>>().join(" and ")`
+        // on every slice — pins the multi-character separator arm
+        // through the same composition, catching a drift that might
+        // treat only single-character separators verbatim.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected: String = <StubKind as ClosedSet>::present_indices(&triple)
+                        .into_iter()
+                        .map(|i| i.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" and ");
+                    assert_eq!(
+                        <StubKind as ClosedSet>::present_indices_joined(&triple, " and "),
+                        expected,
+                        "T::present_indices_joined({triple:?}, \" and \") diverged from the multi-character-separator composition arm — hit-index decimal-string join under a multi-character separator must match the natural `slice::join` composition byte-for-byte",
+                    );
+                }
+            }
+        }
     }
 
     #[test]

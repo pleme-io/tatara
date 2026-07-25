@@ -40087,6 +40087,184 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY LEX-ORDER "repeating labels joined" projection — the
+    /// `String` rendering of [`Self::sorted_repeating_labels`] joined by
+    /// `sep`. Composes the substrate's lex-axis strict-repeat-label
+    /// Vec-return primitive with the standard-library
+    /// [`slice::join`](https://doc.rust-lang.org/std/primitive.slice.html#method.join)
+    /// combinator so a passing implementor of
+    /// [`Self::sorted_repeating_labels`] automatically satisfies this
+    /// projection at every downstream site. The SIXTH corner
+    /// EXHAUSTIVELY CLOSING the (partition-band × ordering) 3×2 =
+    /// 6-corner join-string face on the label-join column of the
+    /// equivalence-partition surface past the pre-existing quintet at
+    /// [`Self::present_labels_joined`] (present × decl),
+    /// [`Self::missing_labels_joined`] (absent × decl),
+    /// [`Self::repeating_labels_joined`] (repeating × decl),
+    /// [`Self::sorted_present_labels_joined`] (present × lex), and
+    /// [`Self::sorted_missing_labels_joined`] (absent × lex). The
+    /// LEX-ORDER peer of [`Self::repeating_labels_joined`] one ORDERING
+    /// axis over, and the mult-band `>= 2` peer of
+    /// [`Self::sorted_missing_labels_joined`] +
+    /// [`Self::sorted_present_labels_joined`] one PARTITION-BAND axis
+    /// over on the lex arm.
+    ///
+    /// Sibling posture to [`Self::sorted_repeating_labels`] one return-
+    /// shape axis over on the (`Vec<&'static str>`, `String`) partition
+    /// of the lex-order arm of the equivalence-partition strict-repeat
+    /// label-aggregation surface — the Vec-return arm materializes each
+    /// strict-repeat slot as a `&'static str`, this method joins them
+    /// into a single `String` under the caller's separator. Sibling
+    /// posture to [`Self::sorted_labels_joined`] one partition-flavor
+    /// axis over on the (full-set, strict-repeat-partition) surface —
+    /// [`Self::sorted_labels_joined`] renders EVERY label of
+    /// [`Self::sorted_variants`] under the caller's separator, this
+    /// method renders only the DYNAMIC strict-repeat partition of an
+    /// N-ary input slice under the same separator in the same lex order.
+    ///
+    /// Composition law: for every slice `items` and every separator
+    /// `sep`, `T::sorted_repeating_labels_joined(items, sep) ==
+    /// T::sorted_repeating_labels(items).join(sep)` — the join-string
+    /// projection binds through the substrate's
+    /// [`Self::sorted_repeating_labels`] Vec-return primitive composed
+    /// with `slice::join`. Pinned by
+    /// `sorted_repeating_labels_joined_equals_sorted_repeating_labels_dot_join_across_every_triple`.
+    ///
+    /// Cross-arm permutation identity: for every slice `items` and
+    /// every separator `sep`, `T::sorted_repeating_labels_joined(items,
+    /// sep)` and `T::repeating_labels_joined(items, sep)` render the
+    /// SAME strict-repeat-label multiset through `slice::join` — the
+    /// two projections join the SAME set of labels under the SAME
+    /// separator, but the OUTPUT byte layout differs whenever
+    /// declaration order and lex order diverge on the strict-repeat
+    /// set. On implementors where declaration order aligns with lex
+    /// order, the two projections coincide byte-for-byte; on
+    /// implementors that diverge, the two projections diverge on
+    /// layout while agreeing on membership.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the strict-
+    /// repeat predicate is a function of that multiset alone. The
+    /// OUTPUT ordering is fixed by [`Self::sorted_variants`]'s lex
+    /// order regardless of the input ordering. Pinned by
+    /// `sorted_repeating_labels_joined_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::sorted_repeating_labels_joined(&[],
+    /// sep) == ""` UNCONDITIONALLY for every `sep` — the empty slice
+    /// hits zero positions, every per-target multiplicity is `0`, the
+    /// strict-repeat `>= 2` test fails at every target, and
+    /// `slice::join` on the empty slice yields the empty `String`.
+    /// Singleton contract: `T::sorted_repeating_labels_joined(&[v],
+    /// sep) == ""` UNCONDITIONALLY for every variant `v` and every
+    /// `sep` — a singleton hits multiplicity `1` at exactly one target
+    /// and the strict-repeat `>= 2` test fails at every target, so no
+    /// label contributes and the joined `String` is empty. Full-set
+    /// contract: `T::sorted_repeating_labels_joined(<T as
+    /// ClosedSet>::ALL, sep) == ""` UNCONDITIONALLY — the well-
+    /// formedness pairwise-distinctness invariant pins every variant of
+    /// [`Self::ALL`] as hitting itself, every per-target multiplicity
+    /// is `1`, and the empty label-Vec joins to the empty `String`. The
+    /// empty-slice, singleton, and full-set arms all collapse to `""`
+    /// because the (multiplicity `== 0`) and (multiplicity `== 1`)
+    /// bands both fall below the strict-repeat `>= 2` threshold.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::sorted_repeating_labels_joined(<T as ClosedSet>::ALL ++ <T
+    /// as ClosedSet>::ALL, sep) == T::sorted_labels_joined(sep)`
+    /// UNCONDITIONALLY for every `sep` — the doubled full set hits
+    /// every variant at multiplicity `2` (satisfying the strict-repeat
+    /// `>= 2` test at every target), so every label of [`Self::ALL`]
+    /// contributes in lex order and `slice::join` renders them under
+    /// the caller's separator matching [`Self::sorted_labels_joined`]
+    /// byte-for-byte. The doubled-full-set arm is LOAD-BEARING — it is
+    /// the ONLY canonical fixpoint arm that separates the strict-repeat
+    /// band from the miss band on the lex-label-join column (empty,
+    /// singleton, and full-set all coincide on `""`; the multiplicity
+    /// `== 2` doubled-full-set fixture is what forces non-emptiness).
+    ///
+    /// Bool-projection identity: for every slice `items` and every
+    /// separator `sep`,
+    /// `T::sorted_repeating_labels_joined(items, sep).is_empty() ==
+    /// !T::is_repeating_any(items)` — the lex-order strict-repeat
+    /// join-string is empty iff the strict-repeat existential fails.
+    /// The bool-projection is INVARIANT under the (declaration, lex)
+    /// axis because strict-repeat-emptiness is a function of the
+    /// strict-repeat set's cardinality alone. Pinned by
+    /// `sorted_repeating_labels_joined_is_empty_iff_not_is_repeating_any_across_every_triple`.
+    ///
+    /// Future consumers — a `tatara-check` diagnostic that renders the
+    /// concrete `WorkloadPhase` labels a rollout window RE-ENTERED
+    /// (multiplicity `>= 2`) in canonical lex order as author-stable
+    /// text (`"re-entered phases: contracting, ready, warmup"` —
+    /// stable regardless of `ALL`-array layout drift); an LSP
+    /// diagnostic on a Lisp-author-written closed-set field that
+    /// renders the strict-repeat label set in canonical lex order as
+    /// an author-facing pipe-joined "duplicate values" warning; a
+    /// Sekiban audit-trail projection whose per-window strict-repeat-
+    /// label witness renders as a deterministic slash-joined string
+    /// across machines regardless of declaration-layout drift; a
+    /// `tatara-lisp::macro_expand::Expander` diagnostic that emits
+    /// duplicate-template-binding vocabulary identifiers as a
+    /// canonical comma-joined natural-language surface. Each binds to
+    /// ONE typed N-ary lex-order strict-repeat-label-as-string
+    /// projection on the trait rather than re-deriving
+    /// `T::sorted_repeating_labels(items).join(sep)` inline per
+    /// callsite OR paying the two-primitive
+    /// `sorted_repeating_variants + map(label) + collect + join`
+    /// composition every downstream site would otherwise require.
+    ///
+    /// Compounding closure: the (partition-band × ordering) 3×2 = 6-
+    /// corner face on the join-string column of the equivalence-
+    /// partition surface is now EXHAUSTIVELY CLOSED — the six corners
+    /// [`Self::present_labels_joined`] on (present × decl),
+    /// [`Self::missing_labels_joined`] on (absent × decl),
+    /// [`Self::repeating_labels_joined`] on (repeating × decl),
+    /// [`Self::sorted_present_labels_joined`] on (present × lex),
+    /// [`Self::sorted_missing_labels_joined`] on (absent × lex), and
+    /// THIS projection on (repeating × lex) all bind through the same
+    /// `Vec-return + slice::join` composition shape, and each of the
+    /// six Vec-return underliers ([`Self::present_labels`] /
+    /// [`Self::missing_labels`] / [`Self::repeating_labels`] /
+    /// [`Self::sorted_present_labels`] / [`Self::sorted_missing_labels`]
+    /// / [`Self::sorted_repeating_labels`]) already exists on the
+    /// label-column arm one return-shape axis over. Past the
+    /// exhaustively-closed (Vec-label × ordering × partition-band)
+    /// 3×2 = 6-corner face on the label-column arm.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary lex-
+    /// order strict-repeat-label-as-string projection becomes a TYPE-
+    /// level primitive on the closed-set trait rather than a per-
+    /// consumer inline `T::sorted_repeating_labels(items).join(sep)`
+    /// composition at every downstream generic site. THEORY.md §V.1 —
+    /// knowable platform; the (repeating, label, `String`, lex) corner
+    /// was an unnamed inline composition recurring at every prospective
+    /// downstream "which labels did we REPEAT, rendered joined in lex
+    /// order?" site pre-lift. THEORY.md §VI.1 — generation over
+    /// composition; the projection emerges from the composition of ONE
+    /// substrate primitive ([`Self::sorted_repeating_labels`]) with the
+    /// standard-library `slice::join` combinator, not as a per-
+    /// implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Racket's `(string-join (map T-label
+    /// (sort (filter (lambda (v) (>= (count v items) 2)) (enum->list
+    /// T)) #:key T-label)) sep)` composing the strict-repeat filter
+    /// with a lex sort, a per-slot `label` map and a `string-join`
+    /// combinator; Haskell's `intercalate sep . map label . sortOn
+    /// label . filter (\v -> length (filter (==v) items) >= 2) $ all`
+    /// on the `Bounded + Enum + Show + Eq` type-class quartet; Julia's
+    /// `join(sort([label(v) for v in all if count(==(v), items) >= 2]),
+    /// sep)`; SQL's `STRING_AGG(label(variant), sep ORDER BY
+    /// label(variant)) FROM t GROUP BY variant HAVING COUNT(*) >= 2`.
+    /// Translation through pleme-io primitives: a pure default method
+    /// composing [`Self::sorted_repeating_labels`] with `slice::join`
+    /// — no new dep, no supertrait bound, no set-shape carrier, no
+    /// allocation beyond the natural `String` allocation
+    /// [`Self::sorted_labels_joined`]'s sibling surface already routes.
+    fn sorted_repeating_labels_joined(items: &[Self], sep: &str) -> ::std::string::String {
+        <Self as ClosedSet>::sorted_repeating_labels(items).join(sep)
+    }
+
     /// The N-ARY DECLARATION-ORDER "present indices" projection — the
     /// `Vec<usize>` [`Self::ALL`]-index rendering of
     /// [`Self::present_variants`] under [`Self::index_of`]. Every
@@ -94699,6 +94877,357 @@ mod tests {
             <ReverseRepeatLabelStubKind as ClosedSet>::sorted_repeating_labels(&two_repeats),
             vec!["alpha", "gamma"],
             "sorted_repeating_labels over [gamma, gamma, alpha, alpha] must normalize to lex order — alpha, gamma — regardless of the implementor's ALL-array declaration layout",
+        );
+    }
+
+    #[test]
+    fn sorted_repeating_labels_joined_over_the_empty_slice_returns_the_empty_string_across_every_separator(
+    ) {
+        // EMPTY-SLICE CONTRACT:
+        // `T::sorted_repeating_labels_joined(&[], sep) == ""`
+        // UNCONDITIONALLY for every `sep` — the empty slice hits zero
+        // positions, every per-target multiplicity is `0`, the strict-
+        // repeat `>= 2` test fails at every target, and `slice::join`
+        // on the empty slice yields the empty `String`. Sibling posture
+        // to `repeating_labels_joined_over_the_empty_slice_returns_the_empty_string_across_every_separator`
+        // one ordering axis over — the empty-slice contract is
+        // INVARIANT under the (declaration, lex) axis because strict-
+        // repeat-emptiness on the empty slice is a function of the
+        // multiplicity band alone.
+        let empty: &[StubKind] = &[];
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_repeating_labels_joined(empty, sep),
+                String::new(),
+                "T::sorted_repeating_labels_joined(&[], {sep:?}) diverged from the empty-string fixpoint",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_labels_joined_over_every_singleton_returns_the_empty_string_across_every_separator(
+    ) {
+        // SINGLETON CONTRACT:
+        // `T::sorted_repeating_labels_joined(&[v], sep) == ""`
+        // UNCONDITIONALLY for every variant `v` and every `sep` — a
+        // singleton hits multiplicity `1` at exactly one target and the
+        // strict-repeat `>= 2` test fails at every target, so the lex-
+        // order strict-repeat label Vec is empty and `slice::join`
+        // yields the empty `String`.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            for sep in ["", ", ", "/", " | "] {
+                assert_eq!(
+                    <StubKind as ClosedSet>::sorted_repeating_labels_joined(&singleton, sep),
+                    String::new(),
+                    "T::sorted_repeating_labels_joined({singleton:?}, {sep:?}) diverged from the empty-string singleton fixpoint",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_labels_joined_over_the_full_set_returns_the_empty_string_across_every_separator(
+    ) {
+        // FULL-SET CONTRACT:
+        // `T::sorted_repeating_labels_joined(T::ALL, sep) == ""`
+        // UNCONDITIONALLY for every `sep` — the well-formedness
+        // pairwise-distinctness invariant pins every variant as hitting
+        // itself, every per-target multiplicity is `1`, the strict-
+        // repeat `>= 2` test fails at every target, and `slice::join`
+        // on the empty slice yields the empty `String`. Sibling posture
+        // to `repeating_labels_joined_over_the_full_set_returns_the_empty_string_across_every_separator`
+        // one ordering axis over — the full-set contract is INVARIANT
+        // under the (declaration, lex) axis because strict-repeat-
+        // emptiness on the pairwise-distinct full set is a function of
+        // the multiplicity band alone.
+        let all = <StubKind as ClosedSet>::ALL;
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_repeating_labels_joined(all, sep),
+                String::new(),
+                "T::sorted_repeating_labels_joined(T::ALL, {sep:?}) diverged from the empty-string fixpoint",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_labels_joined_over_the_doubled_full_set_equals_sorted_labels_joined_across_every_separator(
+    ) {
+        // DOUBLED-FULL-SET CONTRACT:
+        // `T::sorted_repeating_labels_joined(<T as ClosedSet>::ALL ++
+        // <T as ClosedSet>::ALL, sep) == T::sorted_labels_joined(sep)`
+        // UNCONDITIONALLY for every `sep` — the doubled full set hits
+        // every variant at multiplicity `2` (satisfying the strict-
+        // repeat `>= 2` test at every target), so
+        // `sorted_repeating_labels` yields the full lex-order label
+        // listing, and `slice::join` under the caller's separator
+        // matches `sorted_labels_joined(sep)` byte-for-byte. The
+        // doubled-full-set arm is LOAD-BEARING — the ONLY canonical
+        // fixpoint arm that separates the strict-repeat band from the
+        // miss band on the lex-label-join column.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_repeating_labels_joined(&doubled, sep),
+                <StubKind as ClosedSet>::sorted_labels_joined(sep),
+                "T::sorted_repeating_labels_joined(ALL++ALL, {sep:?}) diverged from T::sorted_labels_joined({sep:?}) — the doubled-full-set LOAD-BEARING lex-order strict-repeat full-labels fixpoint was violated",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_labels_joined_equals_sorted_repeating_labels_dot_join_across_every_triple()
+    {
+        // COMPOSITION LAW: for every slice `items` and every separator
+        // `sep`, `T::sorted_repeating_labels_joined(items, sep) ==
+        // T::sorted_repeating_labels(items).join(sep)` — the lex-order
+        // strict-repeat label join-string projection binds through the
+        // substrate's `T::sorted_repeating_labels` Vec-return primitive
+        // composed with `slice::join`. Pins the (Vec-return, String-
+        // return) lex-order composition against the natural
+        // `sorted_repeating_labels + slice::join` shape across three
+        // representative separators. Sibling posture to
+        // `repeating_labels_joined_equals_repeating_labels_dot_join_across_every_triple`
+        // one ordering axis over on the (declaration, lex) join-string
+        // surface.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for sep in ["/", ", ", "|"] {
+                        let expected =
+                            <StubKind as ClosedSet>::sorted_repeating_labels(&triple).join(sep);
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_repeating_labels_joined(&triple, sep),
+                            expected,
+                            "T::sorted_repeating_labels_joined({triple:?}, {sep:?}) diverged from T::sorted_repeating_labels({triple:?}).join({sep:?}) — the lex-order strict-repeat label-column composition law was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_labels_joined_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::sorted_repeating_labels_joined(items, sep) ==
+        // T::sorted_repeating_labels_joined(reversed items, sep)` on
+        // every slice for every separator — reversing a slice preserves
+        // its multiset of variant identities, and the strict-repeat
+        // predicate is a function of that multiset alone. The OUTPUT
+        // ordering is fixed by `T::sorted_variants`'s lex order
+        // regardless of the input ordering, so the joined `String`
+        // matches byte-for-byte under reversal.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    for sep in ["/", ", ", "|"] {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_repeating_labels_joined(&forward, sep),
+                            <StubKind as ClosedSet>::sorted_repeating_labels_joined(&reversed, sep),
+                            "T::sorted_repeating_labels_joined({forward:?}, {sep:?}) diverged from T::sorted_repeating_labels_joined({reversed:?}, {sep:?}) — the lex-order strict-repeat label-column join MUST be a fixpoint of slice reversal",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_labels_joined_threads_empty_separator_into_a_concatenated_sorted_run() {
+        // EMPTY-SEPARATOR CONTRACT:
+        // `T::sorted_repeating_labels_joined(items, "") ==
+        // T::sorted_repeating_labels(items).concat()` on every slice —
+        // with an empty separator, `slice::join` degenerates to
+        // concatenation of the lex-order strict-repeat label list. Pins
+        // the degenerate-separator arm matching
+        // `sorted_missing_labels_joined_threads_empty_separator_into_a_concatenated_sorted_run`
+        // one partition-band over on the same lex-order join-string
+        // column.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let concat: String =
+                        <StubKind as ClosedSet>::sorted_repeating_labels(&triple).concat();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_repeating_labels_joined(&triple, ""),
+                        concat,
+                        "T::sorted_repeating_labels_joined({triple:?}, \"\") diverged from T::sorted_repeating_labels({triple:?}).concat() — the empty-separator degenerate arm was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_labels_joined_threads_multi_char_separator_verbatim() {
+        // MULTI-CHAR SEPARATOR CONTRACT:
+        // `T::sorted_repeating_labels_joined(items, " and ") ==
+        // T::sorted_repeating_labels(items).join(" and ")` on every
+        // slice — pins the multi-character separator arm through the
+        // same composition, catching a drift that might treat only
+        // single-character separators verbatim on the lex-order strict-
+        // repeat arm.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected =
+                        <StubKind as ClosedSet>::sorted_repeating_labels(&triple).join(" and ");
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_repeating_labels_joined(&triple, " and "),
+                        expected,
+                        "T::sorted_repeating_labels_joined({triple:?}, \" and \") diverged from T::sorted_repeating_labels({triple:?}).join(\" and \") — the multi-character-separator arm was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_labels_joined_is_empty_iff_not_is_repeating_any_across_every_triple() {
+        // BOOL-PROJECTION IDENTITY: for every slice `items` and every
+        // separator `sep`,
+        // `T::sorted_repeating_labels_joined(items, sep).is_empty() ==
+        // !T::is_repeating_any(items)` — the lex-order strict-repeat
+        // join-string is empty iff the strict-repeat existential fails.
+        // Pins the join-string-column projection against the bool-
+        // column projection one return-shape column over, and against
+        // `repeating_labels_joined_is_empty_iff_not_is_repeating_any_across_every_triple`
+        // one ordering axis over — the bool-projection is INVARIANT
+        // under the (declaration, lex) axis because strict-repeat-
+        // emptiness is a function of the strict-repeat set's
+        // cardinality alone.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for sep in ["", ", ", "/", " | "] {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_repeating_labels_joined(&triple, sep)
+                                .is_empty(),
+                            !<StubKind as ClosedSet>::is_repeating_any(&triple),
+                            "T::sorted_repeating_labels_joined({triple:?}, {sep:?}).is_empty() diverged from !T::is_repeating_any({triple:?}) — the (String-strict-repeat-join lex, bool-return strict-repeat-existence) De Morgan identity was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_labels_joined_normalizes_arbitrary_declaration_order() {
+        // The sort-step contract on the lex-order strict-repeat-arm
+        // join-string column —
+        // `T::sorted_repeating_labels_joined(items, sep)` MUST
+        // normalize an arbitrary declaration order into ASCII
+        // lexicographic label order before threading `slice::join`,
+        // regardless of the implementor's `ALL`-array layout. A
+        // regression that returns
+        // `T::repeating_labels_joined(items, sep)` verbatim (without
+        // composing through the lex-order Vec-label peer) would pass
+        // every StubKind pin above (because StubKind's declaration
+        // order aligns with lex order) but silently bifurcate the
+        // lex-order strict-repeat-arm join-string surface for any
+        // implementor whose declaration order differs from byte-wise
+        // sort order. Pinning the sort discipline here with a
+        // deliberately-out-of-order stub catches that drift on the
+        // strict-repeat-arm join-string face directly. Sibling posture
+        // to `sorted_missing_labels_joined_normalizes_arbitrary_declaration_order`
+        // one partition-band axis over AND to
+        // `sorted_repeating_labels_normalizes_arbitrary_declaration_order`
+        // one return-shape axis over.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ReverseRepeatJoinStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownReverseRepeatJoinStubKind(pub String);
+        impl core::fmt::Display for UnknownReverseRepeatJoinStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown reverse repeat join stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for ReverseRepeatJoinStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "reverse repeat join stub kind";
+            type Unknown = UnknownReverseRepeatJoinStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownReverseRepeatJoinStubKind(s.to_owned())
+            }
+        }
+        // Doubled full set → every variant repeats at mult `== 2`.
+        // Declaration-arm preserves layout: gamma, beta, alpha.
+        // Lex-arm normalizes: alpha, beta, gamma.
+        let doubled: Vec<ReverseRepeatJoinStubKind> = <ReverseRepeatJoinStubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(
+                <ReverseRepeatJoinStubKind as ClosedSet>::ALL
+                    .iter()
+                    .copied(),
+            )
+            .collect();
+        assert_eq!(
+            <ReverseRepeatJoinStubKind as ClosedSet>::repeating_labels_joined(&doubled, ", "),
+            "gamma, beta, alpha",
+            "repeating_labels_joined over the doubled full set must preserve declaration order — gamma, beta, alpha",
+        );
+        assert_eq!(
+            <ReverseRepeatJoinStubKind as ClosedSet>::sorted_repeating_labels_joined(
+                &doubled, ", "
+            ),
+            "alpha, beta, gamma",
+            "sorted_repeating_labels_joined over the doubled full set must normalize to lex order — alpha, beta, gamma — regardless of the implementor's ALL-array declaration layout",
+        );
+        // Empty slice → strict-repeat-set = empty. Both arms collapse
+        // to the empty string byte-for-byte regardless of declaration
+        // layout.
+        let empty: &[ReverseRepeatJoinStubKind] = &[];
+        assert_eq!(
+            <ReverseRepeatJoinStubKind as ClosedSet>::sorted_repeating_labels_joined(empty, ", "),
+            "",
+            "sorted_repeating_labels_joined over the empty slice must collapse to the empty string regardless of the implementor's ALL-array declaration layout",
+        );
+        // Two-variant repeat: [gamma, gamma, alpha, alpha] hits
+        // gamma at mult 2, alpha at mult 2, beta at mult 0 — the
+        // strict-repeat set is {alpha, gamma}. Declaration-arm
+        // renders "gamma, alpha"; lex-arm normalizes to "alpha, gamma".
+        let two_repeats = [
+            ReverseRepeatJoinStubKind::Gamma,
+            ReverseRepeatJoinStubKind::Gamma,
+            ReverseRepeatJoinStubKind::Alpha,
+            ReverseRepeatJoinStubKind::Alpha,
+        ];
+        assert_eq!(
+            <ReverseRepeatJoinStubKind as ClosedSet>::repeating_labels_joined(&two_repeats, ", "),
+            "gamma, alpha",
+            "repeating_labels_joined over [gamma, gamma, alpha, alpha] must preserve declaration order — gamma, alpha",
+        );
+        assert_eq!(
+            <ReverseRepeatJoinStubKind as ClosedSet>::sorted_repeating_labels_joined(
+                &two_repeats, ", "
+            ),
+            "alpha, gamma",
+            "sorted_repeating_labels_joined over [gamma, gamma, alpha, alpha] must normalize to lex order — alpha, gamma — regardless of the implementor's ALL-array declaration layout",
         );
     }
 

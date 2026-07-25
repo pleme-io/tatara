@@ -39220,6 +39220,176 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY DECLARATION-ORDER "repeating labels joined" projection —
+    /// the `String` rendering of [`Self::repeating_labels`] joined by
+    /// `sep`. Composes the substrate's declaration-axis strict-repeat
+    /// label-Vec primitive with the standard-library
+    /// [`slice::join`](https://doc.rust-lang.org/std/primitive.slice.html#method.join)
+    /// combinator so a passing implementor of [`Self::repeating_labels`]
+    /// automatically satisfies this projection at every downstream site.
+    /// The (multiplicity `>= 2`) STRICT-REPEAT band peer of
+    /// [`Self::present_labels_joined`] (multiplicity `>= 1`) and
+    /// [`Self::missing_labels_joined`] (multiplicity `== 0`) one
+    /// MULTIPLICITY-BAND axis over on the declaration-order `String`-
+    /// return column of the equivalence-partition surface —
+    /// EXHAUSTIVELY CLOSES the (partition-band × `String` ×
+    /// declaration-order) 3-tile row at its FINAL third tile past
+    /// the pre-existing (present, `String`, declaration) and
+    /// (absent, `String`, declaration) doublet.
+    ///
+    /// Sibling posture to [`Self::repeating_labels`] one return-shape
+    /// axis over on the (`Vec<&'static str>`, `String`) partition of the
+    /// declaration-order arm of the strict-repeat band — the Vec-return
+    /// arm materializes each strict-repeat slot as a `&'static str`,
+    /// this method joins them into a single `String` under the caller's
+    /// separator. Sibling posture to [`Self::missing_labels_joined`] one
+    /// MULTIPLICITY-BAND axis over on the equivalence-partition surface
+    /// — [`Self::missing_labels_joined`] renders the (multiplicity
+    /// `== 0`) miss band, this method renders the (multiplicity `>= 2`)
+    /// strict-repeat band, both under the SAME `slice::join` combinator
+    /// on the SAME declaration-order arm.
+    ///
+    /// Composition law: for every slice `items` and every separator
+    /// `sep`, `T::repeating_labels_joined(items, sep) ==
+    /// T::repeating_labels(items).join(sep)` — the join-string projection
+    /// binds through the substrate's [`Self::repeating_labels`] Vec-return
+    /// primitive composed with `slice::join`. Pinned by
+    /// `repeating_labels_joined_equals_repeating_labels_dot_join_across_every_triple`.
+    ///
+    /// Bool-projection identity: for every slice `items` and every
+    /// separator `sep`, `T::repeating_labels_joined(items, sep).is_empty()
+    /// == !T::is_repeating_any(items)` — the strict-repeat join-string
+    /// is empty iff no target hits multiplicity `>= 2`. Cross-checks the
+    /// join-string-column projection against the bool-column projection
+    /// one return-shape column over, and against the sibling
+    /// [`Self::repeating_labels`] `is_empty` identity one return-shape
+    /// column over on the Vec-return arm. Pinned by
+    /// `repeating_labels_joined_is_empty_iff_not_is_repeating_any_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items` preserves
+    /// its multiset of variant identities, and the strict-repeat
+    /// predicate is a function of that multiset alone. The OUTPUT
+    /// ordering is fixed by [`Self::ALL`]'s declaration order regardless
+    /// of the input ordering, so the joined `String` matches byte-for-
+    /// byte under reversal. Pinned by
+    /// `repeating_labels_joined_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::repeating_labels_joined(&[], sep) == ""`
+    /// UNCONDITIONALLY for every `sep` — the empty slice hits zero
+    /// positions, every per-target multiplicity is `0`, the strict-
+    /// repeat `>= 2` test fails at every target, and `slice::join` on
+    /// the empty slice yields the empty `String`. Pinned by
+    /// `repeating_labels_joined_over_the_empty_slice_returns_the_empty_string_across_every_separator`.
+    ///
+    /// Singleton contract: `T::repeating_labels_joined(&[v], sep) == ""`
+    /// UNCONDITIONALLY for every variant `v` and every `sep` — a
+    /// singleton hits multiplicity `1` at exactly one target and the
+    /// strict-repeat `>= 2` test fails at every target, so no label
+    /// contributes and the joined `String` is empty. Pinned by
+    /// `repeating_labels_joined_over_every_singleton_returns_the_empty_string_across_every_separator`.
+    ///
+    /// Full-set contract: `T::repeating_labels_joined(<T as
+    /// ClosedSet>::ALL, sep) == ""` UNCONDITIONALLY — the well-formedness
+    /// pairwise-distinctness invariant pins every variant of
+    /// [`Self::ALL`] as hitting itself, every per-target multiplicity is
+    /// `1`, the strict-repeat `>= 2` test fails at every target, and
+    /// the empty label-Vec joins to the empty `String`. The full-set
+    /// endpoint mirrors the empty-slice endpoint on this band — both
+    /// collapse to `""` — because the (multiplicity `== 0`) and
+    /// (multiplicity `== 1`) bands both fall below the strict-repeat
+    /// `>= 2` threshold. Pinned by
+    /// `repeating_labels_joined_over_the_full_set_returns_the_empty_string_across_every_separator`.
+    ///
+    /// Doubled-full-set contract: `T::repeating_labels_joined` on the
+    /// doubled full set equals [`Self::labels_joined`] UNCONDITIONALLY —
+    /// the doubled full set hits every variant at multiplicity `2`
+    /// (satisfying the strict-repeat `>= 2` test at every target), so
+    /// every label of [`Self::ALL`] contributes in declaration order and
+    /// `slice::join` renders them under the caller's separator matching
+    /// [`Self::labels_joined`] byte-for-byte. The doubled-full-set arm
+    /// is LOAD-BEARING — it is the ONLY canonical fixpoint arm that
+    /// separates the (multiplicity `>= 2`) strict-repeat band from the
+    /// (multiplicity `== 0`) miss band (empty and full-set both coincide
+    /// on `""` on the strict-repeat band; the multiplicity `== 2`
+    /// doubled-full-set fixture is what forces non-emptiness). Pinned by
+    /// `repeating_labels_joined_over_the_doubled_full_set_equals_labels_joined_across_every_separator`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of the
+    /// substrate's [`Self::repeating_labels`] Vec-return strict-repeat
+    /// witness composed with the standard-library `slice::join`
+    /// combinator. The composition uses
+    /// `<Self as ClosedSet>::repeating_labels(items).join(sep)` — O(N)
+    /// on the miss-label Vec's length inherited from the underlying
+    /// strict-repeat witness plus O(N * sep.len()) for the join. No
+    /// `PartialEq`/`Eq`/`Hash` supertrait bound, no bitset-shape carrier.
+    ///
+    /// Future consumers — a `tatara-check` diagnostic that renders the
+    /// concrete `WorkloadPhase` labels a rollout window RE-ENTERED
+    /// (multiplicity `>= 2`) as a comma-joined author-facing string
+    /// (`"re-entered phases: warmup, ready"`); an LSP diagnostic on a
+    /// Lisp-author-written closed-set field that renders the strict-
+    /// repeat label set as a pipe-joined "duplicate values" warning
+    /// (`":severities [:info :warn :info] — duplicates: info"`); a
+    /// Sekiban audit-trail projection that carries the concrete strict-
+    /// repeat label set of a classification poset window as its per-
+    /// window witness rendered under a deterministic separator across
+    /// machines; a `tatara-lisp::macro_expand::Expander` hygiene pass
+    /// that reports the exact set of vocabulary identifiers a template
+    /// bound MORE THAN ONCE as a slash-joined natural-language surface.
+    /// Each binds to ONE typed N-ary strict-repeat label-as-string
+    /// projection on the trait rather than re-deriving
+    /// `T::repeating_labels(items).join(sep)` inline per callsite.
+    ///
+    /// Compounding closure: the (partition-band × return-shape ×
+    /// ordering) 3×4×2 matrix over the closed-set label-aggregation
+    /// surface now EXHAUSTIVELY CLOSES the (declaration-order × 3-band
+    /// × `String`-return) row at its FINAL third tile past the pre-
+    /// existing (present × `String` × declaration-order)
+    /// [`Self::present_labels_joined`] and (absent × `String` ×
+    /// declaration-order) [`Self::missing_labels_joined`] doublet. The
+    /// natural next lifts on this face — a `sorted_repeating_labels` on
+    /// (repeating × `Vec<&'static str>` × lex-order) via a
+    /// `sorted_repeating_variants + map(label) + collect` composition,
+    /// and a `sorted_repeating_labels_joined` on (repeating × `String` ×
+    /// lex-order) via a `slice::join` composition on the lex-arm Vec —
+    /// each bind through their respective sibling variant-collector
+    /// primitive under the per-slot [`Self::label`] projection or the
+    /// `slice::join` combinator.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// strict-repeat label-as-string projection becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline `T::repeating_labels(items).join(sep)` composition at
+    /// every downstream generic site. THEORY.md §V.1 — knowable
+    /// platform; the (repeating × `String` × declaration-order) corner
+    /// was an unnamed inline composition recurring at every prospective
+    /// downstream "which labels did we REPEAT, rendered joined?" site
+    /// pre-lift. THEORY.md §VI.1 — generation over composition; the
+    /// strict-repeat label-as-string projection emerges from the
+    /// composition of ONE substrate primitive
+    /// ([`Self::repeating_labels`]) with the standard-library
+    /// `slice::join` combinator, not as a per-implementor hand-rolled
+    /// body.
+    ///
+    /// Frontier inspiration: Racket's `(string-join (map T-label
+    /// (filter (lambda (v) (>= (count v items) 2)) (enum->list T))) sep)`
+    /// composing the strict-repeat filter with a `string-join` combinator
+    /// under the per-slot label projection; Haskell's `intercalate sep
+    /// (map label (filter (\v -> length (filter (==v) items) >= 2) all))`
+    /// on the `Bounded + Enum + Show + Eq` type-class quartet; R's
+    /// `paste(names(table(items))[table(items) >= 2], collapse=sep)`
+    /// on a factor histogram; SQL's `STRING_AGG(label(variant), sep)
+    /// FROM t GROUP BY variant HAVING COUNT(*) >= 2` on a group-by
+    /// aggregate. Translation through pleme-io primitives: a pure default
+    /// method composing [`Self::repeating_labels`] with `slice::join` —
+    /// no new dep, no supertrait bound, no set-shape carrier, no
+    /// additional allocation beyond the natural `String` allocation
+    /// [`Self::labels_joined`]'s sibling surface already routes.
+    fn repeating_labels_joined(items: &[Self], sep: &str) -> ::std::string::String {
+        <Self as ClosedSet>::repeating_labels(items).join(sep)
+    }
+
     /// The N-ARY LEX-ORDER "present labels" projection — the
     /// `Vec<&'static str>` label rendering of
     /// [`Self::sorted_present_variants`] under [`Self::label`]. Every
@@ -92802,6 +92972,256 @@ mod tests {
     }
 
     #[test]
+    fn repeating_labels_joined_over_the_empty_slice_returns_the_empty_string_across_every_separator(
+    ) {
+        // EMPTY-SLICE CONTRACT:
+        // `T::repeating_labels_joined(&[], sep) == ""` UNCONDITIONALLY
+        // for every `sep` — the empty slice hits zero positions, every
+        // per-target multiplicity is `0`, the strict-repeat `>= 2` test
+        // fails at every target, the miss-label Vec is empty, and
+        // `slice::join` on the empty slice yields the empty `String`.
+        // Sibling posture to
+        // `repeating_labels_returns_the_empty_vec_on_the_empty_slice_across_every_kind`
+        // one RETURN-SHAPE column over on the declaration-order arm of
+        // the strict-repeat band — the Vec-label projection is `[]`;
+        // this join-`String` projection is `""`, both collapsing to the
+        // canonical empty carrier of their return-shape column at the
+        // empty-slice endpoint.
+        let empty: &[StubKind] = &[];
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::repeating_labels_joined(empty, sep),
+                String::new(),
+                "T::repeating_labels_joined(&[], {sep:?}) diverged from the empty-string fixpoint",
+            );
+        }
+    }
+
+    #[test]
+    fn repeating_labels_joined_over_every_singleton_returns_the_empty_string_across_every_separator(
+    ) {
+        // SINGLETON CONTRACT:
+        // `T::repeating_labels_joined(&[v], sep) == ""` UNCONDITIONALLY
+        // for every variant `v` and every `sep` — a singleton hits
+        // multiplicity `1` at exactly one target and the strict-repeat
+        // `>= 2` test fails at every target, so no label contributes
+        // and the joined `String` is the empty carrier. The singleton
+        // endpoint is the boundary that separates the strict-repeat
+        // band from the presence band:
+        // `T::present_labels_joined(&[v], sep) == T::label(v)` at the
+        // SAME singleton, so the two join-string projections diverge on
+        // the (mult `>= 1`, mult `>= 2`) boundary at every singleton
+        // fixture.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            for sep in ["", ", ", "/", " | "] {
+                assert_eq!(
+                    <StubKind as ClosedSet>::repeating_labels_joined(&singleton, sep),
+                    String::new(),
+                    "T::repeating_labels_joined({singleton:?}, {sep:?}) diverged from the empty-string fixpoint — a singleton hits multiplicity `1` at every target and MUST NOT contribute to the strict-repeat join-string",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_labels_joined_over_the_full_set_returns_the_empty_string_across_every_separator() {
+        // FULL-SET CONTRACT:
+        // `T::repeating_labels_joined(T::ALL, sep) == ""` UNCONDITIONALLY
+        // for every `sep` — the well-formedness pairwise-distinctness
+        // invariant pins every variant of `T::ALL` as hitting itself,
+        // every per-target multiplicity is `1`, the strict-repeat
+        // `>= 2` test fails at every target, and the empty label-Vec
+        // joins to the empty `String`. Mirrors the empty-slice endpoint
+        // — both fixpoint arms collapse to `""` because the
+        // (multiplicity `== 0`) and (multiplicity `== 1`) bands both
+        // fall below the strict-repeat `>= 2` threshold. Sibling posture
+        // to `repeating_labels_over_the_full_set_returns_the_empty_vec_across_every_kind`
+        // one RETURN-SHAPE column over on the declaration-order arm of
+        // the strict-repeat band.
+        let all = <StubKind as ClosedSet>::ALL;
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::repeating_labels_joined(all, sep),
+                String::new(),
+                "T::repeating_labels_joined(T::ALL, {sep:?}) diverged from the empty-string fixpoint",
+            );
+        }
+    }
+
+    #[test]
+    fn repeating_labels_joined_over_the_doubled_full_set_equals_labels_joined_across_every_separator(
+    ) {
+        // DOUBLED-FULL-SET CONTRACT:
+        // `T::repeating_labels_joined(doubled T::ALL, sep) ==
+        // T::labels_joined(sep)` UNCONDITIONALLY for every `sep` — the
+        // doubled full set hits every variant at EXACTLY TWO positions,
+        // so every per-target multiplicity is `2` and the projection
+        // contributes every label of `T::ALL` in declaration order,
+        // matching `T::labels_joined(sep)` byte-for-byte under the same
+        // `slice::join` combinator. Sibling posture to
+        // `repeating_labels_over_the_doubled_full_set_equals_labels_across_every_kind`
+        // one RETURN-SHAPE column over on the declaration-order arm of
+        // the strict-repeat band. The doubled-full-set arm is LOAD-
+        // BEARING — it is the ONLY canonical fixpoint arm that separates
+        // the (multiplicity `>= 2`) strict-repeat band from the
+        // (multiplicity `== 0`) miss band on the join-string column
+        // (empty and full-set both coincide on `""` here; the
+        // multiplicity `== 2` doubled-full-set fixture is what forces
+        // non-emptiness).
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::repeating_labels_joined(&doubled, sep),
+                <StubKind as ClosedSet>::labels_joined(sep),
+                "T::repeating_labels_joined(doubled T::ALL, {sep:?}) diverged from T::labels_joined({sep:?}) — the doubled-full-set fixpoint on the strict-repeat join-string column was violated",
+            );
+        }
+    }
+
+    #[test]
+    fn repeating_labels_joined_equals_repeating_labels_dot_join_across_every_triple() {
+        // COMPOSITION LAW: for every slice `items` and every separator
+        // `sep`, `T::repeating_labels_joined(items, sep) ==
+        // T::repeating_labels(items).join(sep)` — the join-string
+        // projection binds through the substrate's `T::repeating_labels`
+        // Vec-return primitive composed with `slice::join`. Pins the
+        // (Vec-return, String-return) composition against the natural
+        // `repeating_labels + slice::join` shape across three
+        // representative separators.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for sep in ["/", ", ", "|"] {
+                        let expected = <StubKind as ClosedSet>::repeating_labels(&triple).join(sep);
+                        assert_eq!(
+                            <StubKind as ClosedSet>::repeating_labels_joined(&triple, sep),
+                            expected,
+                            "T::repeating_labels_joined({triple:?}, {sep:?}) diverged from T::repeating_labels({triple:?}).join({sep:?}) — the strict-repeat label-join column composition law was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_labels_joined_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::repeating_labels_joined(items, sep) ==
+        // T::repeating_labels_joined(reversed items, sep)` on every
+        // slice for every separator — reversing a slice preserves its
+        // multiset of variant identities, and the strict-repeat
+        // predicate is a function of that multiset alone. The OUTPUT
+        // ordering is fixed by `T::ALL`'s declaration order regardless
+        // of the input ordering, so the joined `String` matches byte-
+        // for-byte under reversal.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    for sep in ["/", ", ", "|"] {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::repeating_labels_joined(&forward, sep),
+                            <StubKind as ClosedSet>::repeating_labels_joined(&reversed, sep),
+                            "T::repeating_labels_joined({forward:?}, {sep:?}) diverged from T::repeating_labels_joined({reversed:?}, {sep:?}) — the strict-repeat label-join column MUST be a fixpoint of slice reversal",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_labels_joined_threads_empty_separator_into_a_concatenated_run() {
+        // EMPTY-SEPARATOR CONTRACT:
+        // `T::repeating_labels_joined(items, "") ==
+        // T::repeating_labels(items).concat()` on every slice — with an
+        // empty separator, `slice::join` degenerates to concatenation
+        // of the strict-repeat label list. Pins the degenerate-separator
+        // arm matching `present_labels_joined` / `missing_labels_joined`
+        // / `labels_joined` / `interior_labels_joined` one partition-
+        // flavor over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let concat: String =
+                        <StubKind as ClosedSet>::repeating_labels(&triple).concat();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::repeating_labels_joined(&triple, ""),
+                        concat,
+                        "T::repeating_labels_joined({triple:?}, \"\") diverged from T::repeating_labels({triple:?}).concat() — the empty-separator degenerate arm was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_labels_joined_threads_multi_char_separator_verbatim() {
+        // MULTI-CHAR SEPARATOR CONTRACT:
+        // `T::repeating_labels_joined(items, " and ") ==
+        // T::repeating_labels(items).join(" and ")` on every slice —
+        // pins the multi-character separator arm through the same
+        // composition, catching a drift that might treat only single-
+        // character separators verbatim.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected = <StubKind as ClosedSet>::repeating_labels(&triple).join(" and ");
+                    assert_eq!(
+                        <StubKind as ClosedSet>::repeating_labels_joined(&triple, " and "),
+                        expected,
+                        "T::repeating_labels_joined({triple:?}, \" and \") diverged from T::repeating_labels({triple:?}).join(\" and \") — the multi-character-separator arm was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_labels_joined_is_empty_iff_not_is_repeating_any_across_every_triple() {
+        // BOOL-PROJECTION IDENTITY: for every slice `items` and every
+        // separator `sep`, `T::repeating_labels_joined(items, sep).is_empty()
+        // == !T::is_repeating_any(items)` — the strict-repeat join-
+        // string is empty iff the strict-repeat existential fails.
+        // Cross-checks the join-string-column projection against the
+        // bool-column projection one return-shape column over, and
+        // against the sibling `repeating_labels_is_empty_iff_not_is_repeating_any_across_every_triple`
+        // one return-shape column over on the Vec-return arm.
+        let empty: &[StubKind] = &[];
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::repeating_labels_joined(empty, sep).is_empty(),
+                !<StubKind as ClosedSet>::is_repeating_any(empty),
+            );
+        }
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for sep in ["", ", ", "/", " | "] {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::repeating_labels_joined(&triple, sep)
+                                .is_empty(),
+                            !<StubKind as ClosedSet>::is_repeating_any(&triple),
+                            "T::repeating_labels_joined({triple:?}, {sep:?}).is_empty() diverged from !T::is_repeating_any({triple:?}) — the (String-strict-repeat-join, bool-return) strict-repeat-band emptiness identity was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn sorted_present_labels_returns_the_empty_vec_on_the_empty_slice_across_every_kind() {
         // EMPTY-SLICE CONTRACT: `T::sorted_present_labels(&[])` is the
         // empty `Vec` on every implementor — the empty slice hits
@@ -115074,8 +115494,7 @@ mod tests {
             for b in <StubKind as ClosedSet>::ALL.iter().copied() {
                 for c in <StubKind as ClosedSet>::ALL.iter().copied() {
                     let triple = [a, b, c];
-                    let via_body =
-                        <StubKind as ClosedSet>::sorted_unique_unique_variants(&triple);
+                    let via_body = <StubKind as ClosedSet>::sorted_unique_unique_variants(&triple);
                     let via_guarded_lex_lift =
                         if <StubKind as ClosedSet>::has_unique_unique_variant(&triple) {
                             <StubKind as ClosedSet>::sorted_unique_variants(&triple)
@@ -115114,8 +115533,8 @@ mod tests {
     }
 
     #[test]
-    fn sorted_unique_unique_variants_first_equals_sorted_unique_unique_variant_across_every_triple(
-    ) {
+    fn sorted_unique_unique_variants_first_equals_sorted_unique_unique_variant_across_every_triple()
+    {
         // OPTION-EQUALITY IDENTITY: for every slice `items`,
         // T::sorted_unique_unique_variants(items).first().copied() ==
         // T::sorted_unique_unique_variant(items) — the Vec-return's
@@ -115195,8 +115614,8 @@ mod tests {
     }
 
     #[test]
-    fn sorted_unique_unique_variants_returns_the_singleton_on_every_matching_singleton_across_every_kind()
-    {
+    fn sorted_unique_unique_variants_returns_the_singleton_on_every_matching_singleton_across_every_kind(
+    ) {
         // MATCHING-SINGLETON POSITIVE-ARM CONTRACT: for every variant
         // `v`, T::sorted_unique_unique_variants(&[v]) == vec![v] — the
         // target hits count 1 (SOLE unique-band witness), every non-

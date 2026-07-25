@@ -41438,6 +41438,172 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .join(sep)
     }
 
+    /// The N-ARY LEX-ORDER "present indices joined" projection — the
+    /// `String` rendering of [`Self::sorted_present_indices`] under
+    /// `usize::to_string` joined by `sep`. Composes the substrate's
+    /// lex-axis hit-index Vec-return primitive with the per-slot
+    /// `usize`-to-`String` projection and the standard-library
+    /// [`slice::join`](https://doc.rust-lang.org/std/primitive.slice.html#method.join)
+    /// combinator so a passing implementor of
+    /// [`Self::sorted_present_indices`] automatically satisfies this
+    /// projection at every downstream site. OPENS the LEX-ORDER row of
+    /// the (partition-band × ordering × join-string) 3×2 = 6-corner
+    /// face on the index-join column of the equivalence-partition
+    /// index-aggregation surface past the just-closed declaration-order
+    /// row at [`Self::present_indices_joined`], [`Self::missing_indices_joined`],
+    /// and [`Self::repeating_indices_joined`] one ORDERING axis over.
+    ///
+    /// Sibling posture to [`Self::sorted_present_labels_joined`] one
+    /// field-flavor axis over on the (label, index) partition of the
+    /// lex-order hit-arm join-string surface —
+    /// [`Self::sorted_present_labels_joined`] renders each hit slot in
+    /// lex order as a `&'static str` label through [`Self::label`],
+    /// this method renders each hit slot in lex order as a decimal-
+    /// `usize` index-under-[`Self::index_of`] rendered through
+    /// `usize::to_string`. Sibling posture to
+    /// [`Self::sorted_present_indices`] one return-shape axis over on
+    /// the (`Vec<usize>`, `String`) partition of the lex-order hit-arm
+    /// index-aggregation surface — the Vec-return arm materializes
+    /// each hit slot as a `usize`, this method joins them into a single
+    /// `String` under the caller's separator. Sibling posture to
+    /// [`Self::present_indices_joined`] one ORDERING axis over on the
+    /// (declaration, lex) axis of the index-join column — same
+    /// partition-band, same return-shape, different ordering.
+    ///
+    /// Composition law: for every slice `items` and every separator
+    /// `sep`, `T::sorted_present_indices_joined(items, sep) ==
+    /// T::sorted_present_indices(items).iter().map(usize::to_string).collect::<Vec<String>>().join(sep)`
+    /// — the join-string projection binds through the substrate's
+    /// [`Self::sorted_present_indices`] Vec-return primitive composed
+    /// with `usize::to_string` and `slice::join`. Pinned by
+    /// `sorted_present_indices_joined_equals_sorted_present_indices_dot_map_to_string_dot_join_across_every_triple`.
+    ///
+    /// Cross-arm permutation identity: for every slice `items` and
+    /// every separator `sep`, `T::sorted_present_indices_joined(items,
+    /// sep)` and `T::present_indices_joined(items, sep)` render the
+    /// SAME hit-index multiset through `usize::to_string + slice::join`
+    /// — the two projections join the SAME set of indices under the
+    /// SAME separator, but the OUTPUT byte layout differs whenever
+    /// declaration order and lex order diverge on the hit-set. On
+    /// implementors where declaration order aligns with lex order, the
+    /// two projections coincide byte-for-byte; on implementors that
+    /// diverge, the two projections diverge on layout while agreeing
+    /// on membership.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the hit-set
+    /// membership predicate is a function of that multiset alone. The
+    /// OUTPUT ordering is fixed by [`Self::sorted_variants`]'s lex
+    /// order regardless of the input ordering, so the joined `String`
+    /// matches byte-for-byte under reversal. Pinned by
+    /// `sorted_present_indices_joined_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::sorted_present_indices_joined(&[], sep)`
+    /// is the empty `String` UNCONDITIONALLY for every `sep` — the
+    /// empty slice hits zero variants, so [`Self::sorted_present_indices`]
+    /// yields the empty `Vec`, and `slice::join` on an empty slice
+    /// yields the empty string. Full-set contract:
+    /// `T::sorted_present_indices_joined(<T as ClosedSet>::ALL, sep) ==
+    /// T::sorted_variants().into_iter().map(T::index_of).map(|i| i.to_string()).collect::<Vec<_>>().join(sep)`
+    /// UNCONDITIONALLY for every `sep` — the pairwise-distinctness
+    /// invariant pins every variant of [`Self::ALL`] as hitting itself
+    /// at its own [`Self::index_of`], so every index of
+    /// `T::sorted_variants` under `T::index_of` survives the filter in
+    /// lex order and contributes its decimal-`usize` rendering to the
+    /// join.
+    ///
+    /// Bool-projection identity: for every slice `items` and every
+    /// separator `sep`, `T::sorted_present_indices_joined(items,
+    /// sep).is_empty() == items.is_empty()` — the lex-order hit-index
+    /// join-string is empty iff no variant is hit (iff `items` is
+    /// empty). The bool-projection is INVARIANT under the (declaration,
+    /// lex) axis because hit-set-emptiness is a function of the
+    /// hit-set's cardinality alone. Pinned indirectly through the
+    /// composition law + [`Self::sorted_present_indices`]'s
+    /// bool-projection identity one return-shape axis over.
+    ///
+    /// Future consumers — a `tatara-check` diagnostic that renders the
+    /// concrete `WorkloadPhase` indices a rollout window HIT in
+    /// canonical LEX order as a compact deterministic wire-string
+    /// (`"0,2,4"` — numerically dense, `usize`-round-trippable through
+    /// `str::parse`, AUTHOR-STABLE regardless of `ALL`-array
+    /// declaration-layout drift because the index positions walk
+    /// [`Self::sorted_variants`] rather than [`Self::ALL`]) for
+    /// per-cluster witness serialization; an LSP diagnostic that
+    /// renders the hit-indices of an author-written closed-set field in
+    /// canonical lex order as a comma-joined slot-number hint against a
+    /// `[Payload; T::CARDINALITY]` slotted table; a Sekiban audit-trail
+    /// projection whose per-window hit-index witness renders as a
+    /// deterministic pipe-joined string across machines in canonical
+    /// lex order regardless of declaration-layout drift; a
+    /// `tatara-lisp::macro_expand::Expander` diagnostic that emits the
+    /// concrete BOUND vocabulary slot-indices in canonical lex order as
+    /// a slash-joined natural-language surface. Each binds to ONE
+    /// typed N-ary lex-order hit-index-as-string projection on the
+    /// trait rather than re-deriving the four-primitive
+    /// `T::sorted_present_indices(items).iter().map(usize::to_string).collect::<Vec<_>>().join(sep)`
+    /// composition inline per callsite.
+    ///
+    /// Compounding closure: the (partition-band × ordering × return-
+    /// shape) 3×2×2 = 12-corner equivalence-partition index-
+    /// aggregation surface now OPENS the (present, lex-order, join-
+    /// string) corner past the just-exhaustively-closed declaration-
+    /// order arm of the (partition-band × declaration × join-string)
+    /// 3-corner row — [`Self::present_indices_joined`] on (present,
+    /// declaration, join-string), [`Self::missing_indices_joined`] on
+    /// (missing, declaration, join-string),
+    /// [`Self::repeating_indices_joined`] on (repeating, declaration,
+    /// join-string), and THIS projection OPENING the (present,
+    /// lex-order, join-string) tile of the (partition-band × lex-order
+    /// × join-string) row. The natural next lifts on this face —
+    /// `sorted_missing_indices_joined` on (missing, lex-order,
+    /// join-string) closing the miss-arm one PARTITION-BAND axis over,
+    /// and `sorted_repeating_indices_joined` on (repeating, lex-order,
+    /// join-string) EXHAUSTIVELY closing the lex-order row at its
+    /// final third tile — each bind through their respective sibling
+    /// lex-order Vec-return primitive under the same `usize::to_string`
+    /// / `slice::join` composition, closing the (partition-band ×
+    /// ordering) 3×2 face on the join-string column tile by tile.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary lex-
+    /// order hit-index-as-string projection becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline `T::sorted_present_indices(items).iter().map
+    /// (usize::to_string).collect::<Vec<_>>().join(sep)` composition at
+    /// every downstream generic site. THEORY.md §V.1 — knowable
+    /// platform; the (present, index, `String`, lex) corner was an
+    /// unnamed inline composition recurring at every prospective
+    /// downstream "which INDICES did we HIT, rendered joined in lex
+    /// order?" site pre-lift. THEORY.md §VI.1 — generation over
+    /// composition; the projection emerges from the composition of ONE
+    /// substrate primitive ([`Self::sorted_present_indices`]) with the
+    /// standard-library `usize::to_string` + `slice::join` combinators,
+    /// not as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: NumPy's `",".join(map(str, np.argsort
+    /// (labels)[np.isin(np.argsort(labels).map(all.__getitem__),
+    /// items)]))` composing the lex-sorted enumeration's positional
+    /// projection with a hit-set boolean mask and a stringify + join;
+    /// Julia's `join(string.(sort(findall(v -> v in items, all),
+    /// by=i -> label(all[i]))), sep)`; Racket's `(string-join (map
+    /// number->string (sort (filter (lambda (i) (member (list-ref all
+    /// i) items)) (range (length all))) #:key (lambda (i) (label
+    /// (list-ref all i))))) sep)`. Translation through pleme-io
+    /// primitives: a pure default method composing
+    /// [`Self::sorted_present_indices`] with `usize::to_string` and
+    /// `slice::join` — no new dep, no supertrait bound, no set-shape
+    /// carrier, no allocation beyond the natural intermediate
+    /// `Vec<String>` the `slice::join` combinator's per-slot
+    /// stringification already routes.
+    fn sorted_present_indices_joined(items: &[Self], sep: &str) -> ::std::string::String {
+        <Self as ClosedSet>::sorted_present_indices(items)
+            .into_iter()
+            .map(|i| i.to_string())
+            .collect::<::std::vec::Vec<::std::string::String>>()
+            .join(sep)
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -97854,6 +98020,294 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn sorted_present_indices_joined_over_the_empty_slice_returns_the_empty_string_across_every_separator(
+    ) {
+        // EMPTY-SLICE CONTRACT:
+        // `T::sorted_present_indices_joined(&[], sep) == ""`
+        // UNCONDITIONALLY for every `sep` — the empty slice hits zero
+        // variants, so `T::sorted_present_indices(&[])` yields the
+        // empty `Vec`, and `slice::join` on an empty slice yields the
+        // empty string. Sibling posture to
+        // `present_indices_joined_over_the_empty_slice_returns_the_empty_string_across_every_separator`
+        // one ordering axis over — the empty-slice contract is
+        // INVARIANT under the (declaration, lex) axis because the
+        // empty-set-projected join collapses to the empty string on
+        // both arms.
+        let empty: &[StubKind] = &[];
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_present_indices_joined(empty, sep),
+                String::new(),
+                "T::sorted_present_indices_joined(&[], {sep:?}) diverged from the empty-string fixpoint — no variant is hit on the empty slice",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_present_indices_joined_over_the_full_set_equals_sorted_variants_indexed_and_joined_across_every_separator(
+    ) {
+        // FULL-SET CONTRACT:
+        // `T::sorted_present_indices_joined(T::ALL, sep) ==
+        // T::sorted_variants().into_iter().map(T::index_of).map(|i|
+        // i.to_string()).collect::<Vec<_>>().join(sep)`
+        // UNCONDITIONALLY for every `sep` — the pairwise-distinctness
+        // invariant pins every variant of `T::ALL` as hitting itself
+        // at its own `T::index_of`, so `T::sorted_present_indices(T::ALL)`
+        // yields `T::sorted_variants().into_iter().map(T::index_of).collect()`
+        // and the join over the resulting decimal-`usize` slots equals
+        // the substrate's lex-order full-set index-join exactly under
+        // any separator. Sibling posture to
+        // `present_indices_joined_over_the_full_set_equals_zero_to_cardinality_joined_across_every_separator`
+        // one ordering axis over — on implementors where declaration
+        // order aligns with lex order (like StubKind), the two arms
+        // coincide byte-for-byte; on divergent implementors, the
+        // (declaration-order arm) equals `(0..CARDINALITY).map(to_string).join(sep)`
+        // and this (lex-order arm) equals `sorted_variants.map(index_of).map(to_string).join(sep)`.
+        let all = <StubKind as ClosedSet>::ALL;
+        for sep in ["", ", ", "/", " | "] {
+            let expected: String = <StubKind as ClosedSet>::sorted_variants()
+                .into_iter()
+                .map(<StubKind as ClosedSet>::index_of)
+                .map(|i| i.to_string())
+                .collect::<Vec<String>>()
+                .join(sep);
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_present_indices_joined(all, sep),
+                expected,
+                "T::sorted_present_indices_joined(T::ALL, {sep:?}) diverged from T::sorted_variants().into_iter().map(T::index_of).map(to_string).join({sep:?}) — the (full-set, lex-order hit-index-join) fixpoint was violated",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_present_indices_joined_equals_sorted_present_indices_dot_map_to_string_dot_join_across_every_triple(
+    ) {
+        // COMPOSITION LAW: for every slice `items` and every separator
+        // `sep`, `T::sorted_present_indices_joined(items, sep) ==
+        // T::sorted_present_indices(items).iter().map(usize::to_string).collect::<Vec<_>>().join(sep)`
+        // — the lex-order join-string projection binds through the
+        // substrate's `T::sorted_present_indices` Vec-return primitive
+        // composed with `usize::to_string` and `slice::join`. Pins the
+        // (Vec-return, String-return) lex-order composition against
+        // the natural `sorted_present_indices + usize::to_string +
+        // slice::join` shape across three representative separators.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for sep in ["/", ", ", "|"] {
+                        let expected: String =
+                            <StubKind as ClosedSet>::sorted_present_indices(&triple)
+                                .into_iter()
+                                .map(|i| i.to_string())
+                                .collect::<Vec<String>>()
+                                .join(sep);
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_present_indices_joined(&triple, sep),
+                            expected,
+                            "T::sorted_present_indices_joined({triple:?}, {sep:?}) diverged from T::sorted_present_indices({triple:?}).iter().map(usize::to_string).collect().join({sep:?}) — the lex-order index-column composition law was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_indices_joined_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::sorted_present_indices_joined(items, sep) ==
+        // T::sorted_present_indices_joined(reversed items, sep)` on
+        // every slice for every separator — reversing a slice preserves
+        // its multiset of variant identities, and the hit-set
+        // membership predicate is a function of that multiset alone.
+        // The OUTPUT ordering is fixed by `T::sorted_variants`'s lex
+        // order regardless of the input ordering, so the joined
+        // `String` matches byte-for-byte under reversal.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    for sep in ["/", ", ", "|"] {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_present_indices_joined(&forward, sep),
+                            <StubKind as ClosedSet>::sorted_present_indices_joined(&reversed, sep),
+                            "T::sorted_present_indices_joined({forward:?}, {sep:?}) diverged from T::sorted_present_indices_joined({reversed:?}, {sep:?}) — the lex-order hit-index-column join MUST be a fixpoint of slice reversal",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_indices_joined_threads_empty_separator_into_a_concatenated_sorted_run() {
+        // EMPTY-SEPARATOR CONTRACT:
+        // `T::sorted_present_indices_joined(items, "") ==
+        // T::sorted_present_indices(items).iter().map(usize::to_string).collect::<String>()`
+        // on every slice — with an empty separator, `slice::join`
+        // degenerates to concatenation of the lex-order hit-index
+        // decimal-string list. Pins the degenerate-separator arm on
+        // the lex-order hit-index axis matching
+        // `present_indices_joined_threads_empty_separator_into_a_concatenated_run`
+        // one ordering axis over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let concat: String = <StubKind as ClosedSet>::sorted_present_indices(&triple)
+                        .into_iter()
+                        .map(|i| i.to_string())
+                        .collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_present_indices_joined(&triple, ""),
+                        concat,
+                        "T::sorted_present_indices_joined({triple:?}, \"\") diverged from T::sorted_present_indices({triple:?}).iter().map(usize::to_string).collect::<String>() — the empty-separator degenerate arm was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_indices_joined_threads_multi_char_separator_verbatim() {
+        // MULTI-CHAR SEPARATOR CONTRACT:
+        // `T::sorted_present_indices_joined(items, " and ") ==
+        // T::sorted_present_indices(items).iter().map(usize::to_string).collect::<Vec<_>>().join(" and ")`
+        // on every slice — pins the multi-character separator arm
+        // through the same composition, catching a drift that might
+        // treat only single-character separators verbatim on the
+        // lex-order arm.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected: String = <StubKind as ClosedSet>::sorted_present_indices(&triple)
+                        .into_iter()
+                        .map(|i| i.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" and ");
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_present_indices_joined(&triple, " and "),
+                        expected,
+                        "T::sorted_present_indices_joined({triple:?}, \" and \") diverged from the multi-character-separator composition arm — lex-order hit-index decimal-string join under a multi-character separator must match the natural `slice::join` composition byte-for-byte",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_present_indices_joined_normalizes_arbitrary_declaration_order() {
+        // The sort-step contract on the lex-order hit-arm join-string
+        // column — `T::sorted_present_indices_joined(items, sep)` MUST
+        // walk `T::sorted_present_indices` (which walks
+        // `T::sorted_variants` under `T::index_of`) before threading
+        // `slice::join`, regardless of the implementor's `ALL`-array
+        // layout. A regression that returns
+        // `T::present_indices_joined(items, sep)` verbatim (without
+        // composing through the lex-order Vec-index peer) would pass
+        // every StubKind pin above (because StubKind's declaration
+        // order aligns with lex order — index_of(Alpha)=0 both ways)
+        // but silently bifurcate the lex-order hit-arm join-string
+        // surface for any implementor whose declaration order differs
+        // from byte-wise sort order. Pinning the sort discipline here
+        // with a deliberately-out-of-order stub catches that drift on
+        // the hit-arm join-string face directly. Sibling posture to
+        // `sorted_present_labels_joined_normalizes_arbitrary_declaration_order`
+        // one return-shape axis over — same sort discipline, different
+        // per-slot projection (`index_of + to_string` here vs `label`
+        // there).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ReversePresentIndexJoinStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownReversePresentIndexJoinStubKind(pub String);
+        impl core::fmt::Display for UnknownReversePresentIndexJoinStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown reverse present index join stub kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for ReversePresentIndexJoinStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "reverse present index join stub kind";
+            type Unknown = UnknownReversePresentIndexJoinStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownReversePresentIndexJoinStubKind(s.to_owned())
+            }
+        }
+        // Declaration order: [Gamma, Beta, Alpha] → indices
+        // [Gamma:0, Beta:1, Alpha:2]. Lex order (by label):
+        // [Alpha, Beta, Gamma] → indices [Alpha:2, Beta:1, Gamma:0].
+        //
+        // Full set: declaration-arm renders "0, 1, 2" (indices in
+        // declaration order); lex-arm renders "2, 1, 0" (indices of
+        // lex-sorted variants).
+        let all = <ReversePresentIndexJoinStubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <ReversePresentIndexJoinStubKind as ClosedSet>::present_indices_joined(all, ", "),
+            "0, 1, 2",
+            "present_indices_joined over the full set must preserve declaration order — indices 0, 1, 2 in ALL-array layout",
+        );
+        assert_eq!(
+            <ReversePresentIndexJoinStubKind as ClosedSet>::sorted_present_indices_joined(
+                all, ", "
+            ),
+            "2, 1, 0",
+            "sorted_present_indices_joined over the full set must walk sorted_variants under index_of — [Alpha:2, Beta:1, Gamma:0] rendered as \"2, 1, 0\" — regardless of the implementor's ALL-array declaration layout",
+        );
+        // Partial hit: [Gamma] — declaration-arm renders "0"
+        // (Gamma sits at ALL[0]); lex-arm renders "0" as well (the
+        // singleton hit-set is {Gamma:0} — only Gamma passes the
+        // "is present" filter, so both arms yield the same single-
+        // element list). Sibling posture to the single-hit label
+        // arm above.
+        let single = [ReversePresentIndexJoinStubKind::Gamma];
+        assert_eq!(
+            <ReversePresentIndexJoinStubKind as ClosedSet>::sorted_present_indices_joined(
+                &single, ", "
+            ),
+            "0",
+            "sorted_present_indices_joined over the singleton [Gamma] hit-set must render Gamma's index (0) without separator",
+        );
+        // Partial hit: [Gamma, Alpha] — declaration-arm walks ALL in
+        // order and emits Gamma:0, then Alpha:2 → "0, 2". Lex-arm
+        // walks sorted_variants (Alpha, Beta, Gamma), filters to hits
+        // ({Alpha, Gamma}), emits Alpha:2, then Gamma:0 → "2, 0".
+        let pair = [
+            ReversePresentIndexJoinStubKind::Gamma,
+            ReversePresentIndexJoinStubKind::Alpha,
+        ];
+        assert_eq!(
+            <ReversePresentIndexJoinStubKind as ClosedSet>::present_indices_joined(&pair, ", "),
+            "0, 2",
+            "present_indices_joined over [Gamma, Alpha] must walk ALL in declaration order — Gamma:0, Alpha:2 → \"0, 2\"",
+        );
+        assert_eq!(
+            <ReversePresentIndexJoinStubKind as ClosedSet>::sorted_present_indices_joined(
+                &pair, ", "
+            ),
+            "2, 0",
+            "sorted_present_indices_joined over [Gamma, Alpha] must walk sorted_variants under index_of — [Alpha:2, Gamma:0] rendered as \"2, 0\" — regardless of input ordering or ALL-array declaration layout",
+        );
     }
 
     #[test]

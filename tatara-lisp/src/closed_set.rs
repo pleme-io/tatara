@@ -41776,6 +41776,172 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .join(sep)
     }
 
+    /// The N-ARY DECLARATION-ORDER "the unique miss-band witness as a
+    /// singleton-or-empty label Vec" projection — the
+    /// `Vec<&'static str>` label rendering of
+    /// [`Self::unique_missing_variants`] under [`Self::label`]. Every
+    /// label `s` in the returned vector is the canonical
+    /// [`Self::label`] rendering of some variant ABSENT from `items` AND
+    /// the SOLE absent variant (the miss-band uniqueness guard
+    /// [`Self::has_unique_missing_variant`] holds). When the guard
+    /// falsifies the projection collapses to the EMPTY Vec through a
+    /// zero-allocation short-circuit inherited from
+    /// [`Self::unique_missing_variants`].
+    ///
+    /// The `Vec<&'static str>`-RETURN UNIQUE-TIE SHARPENING corner
+    /// OPENING the LABEL-return column of the (set-level ×
+    /// `Vec<&'static str>` × equivalence-partition × mult-band ×
+    /// unique-tie) row past the just-closed variant-return trio
+    /// ([`Self::unique_missing_variants`],
+    /// [`Self::unique_repeating_variants`],
+    /// [`Self::unique_unique_variants`]) one RETURN-SHAPE axis over on
+    /// the equivalence-partition surface. Peer to [`Self::missing_labels`]
+    /// one UNIQUE-TIE-SHARPENING axis over on the label-Vec return column
+    /// (unsharpened miss-set label collection → uniqueness-gated singleton-
+    /// or-empty label collection). Peer to
+    /// [`Self::unique_missing_variants`] one RETURN-SHAPE axis over on
+    /// the miss-band unique-tie corner (variant-Vec witness → label-Vec
+    /// witness of the same singleton-or-empty binding).
+    ///
+    /// Composition law: for every slice `items`,
+    /// `T::unique_missing_labels(items) ==
+    /// T::unique_missing_variants(items).into_iter().map(T::label).collect()`
+    /// — the label-Vec projection binds through the substrate's
+    /// [`Self::unique_missing_variants`] Vec-return primitive composed
+    /// with the per-slot [`Self::label`] projection. Pinned by
+    /// `unique_missing_labels_equals_unique_missing_variants_mapped_under_label_across_every_triple`.
+    ///
+    /// Guarded-witness-collection identity: for every slice `items`,
+    /// `T::unique_missing_labels(items) ==
+    /// if T::has_unique_missing_variant(items) { T::missing_labels(items) } else { vec![] }`
+    /// — the uniqueness-gated label Vec coincides with the boolean-
+    /// guarded miss-set label Vec through the composition of
+    /// [`Self::unique_missing_variants`]'s guard-arm with [`Self::label`].
+    /// Pinned by
+    /// `unique_missing_labels_equals_has_unique_missing_variant_gated_missing_labels_across_every_triple`.
+    ///
+    /// Length coincidence identity: for every slice `items`,
+    /// `T::unique_missing_labels(items).len() ==
+    /// usize::from(T::has_unique_missing_variant(items))` — the return-
+    /// Vec's length COINCIDES with the set-level miss-band uniqueness bit
+    /// projected onto `usize`: exactly `0` when the bit falsifies,
+    /// exactly `1` when it holds (since the label-Vec inherits the
+    /// singleton-or-empty length discipline from
+    /// [`Self::unique_missing_variants`] one RETURN-SHAPE axis over
+    /// under the injective per-slot [`Self::label`] projection). Pinned
+    /// by
+    /// `unique_missing_labels_len_equals_has_unique_missing_variant_as_usize_across_every_triple`.
+    ///
+    /// Is-empty coincidence identity: for every slice `items`,
+    /// `T::unique_missing_labels(items).is_empty() ==
+    /// !T::has_unique_missing_variant(items)` — the label-Vec's
+    /// emptiness coincides with the NEGATION of the set-level uniqueness
+    /// bit. Independent cross-check on the surface axis distinct from
+    /// the length-coincidence arm (`Vec::is_empty` vs integer equality).
+    /// Pinned by
+    /// `unique_missing_labels_is_empty_iff_not_has_unique_missing_variant_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — the underlying
+    /// [`Self::unique_missing_variants`] factors through the ordering-
+    /// agnostic [`Self::has_unique_missing_variant`] +
+    /// [`Self::missing_variants`] pair, and [`Self::label`] is a pure
+    /// projection. The OUTPUT ordering is fixed by [`Self::ALL`]'s
+    /// declaration order regardless of the input ordering. Pinned by
+    /// `unique_missing_labels_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract at cardinality `>= 2`:
+    /// `T::unique_missing_labels(&[]) == vec![]` — the empty slice puts
+    /// every variant in the miss band, [`Self::count_missing`] reports
+    /// `T::CARDINALITY >= 2`, the uniqueness guard falsifies via
+    /// `count != 1`, and the projection collapses to the empty Vec.
+    /// At cardinality `== 1` the empty slice pins `count_missing == 1`,
+    /// the guard holds, and the projection returns
+    /// `vec![T::ALL[0].label()]`.
+    ///
+    /// Full-set contract: `T::unique_missing_labels(<T as ClosedSet>::ALL) ==
+    /// vec![]` UNCONDITIONALLY — the pairwise-distinctness invariant
+    /// pins every variant at exactly one position of the full-set
+    /// slice, [`Self::count_missing`] reports `0`, the guard falsifies
+    /// via `0 != 1`, and the projection collapses to the empty Vec.
+    ///
+    /// Bimodal-triple contract at cardinality `>= 3`: on
+    /// `[T::ALL[0], T::ALL[0], T::ALL[1]]`, `T::ALL[2]` sits at count
+    /// `0` (the SOLE absent variant), [`Self::count_missing`] reports
+    /// `1`, [`Self::has_unique_missing_variant`] returns `true`, the
+    /// guard holds, and the projection returns
+    /// `vec![T::ALL[2].label()]` — the LOAD-BEARING sole non-empty arm
+    /// on the multi-variant test-module fixture at the canonical
+    /// bimodal cardinality.
+    ///
+    /// Future consumers — a `tatara-check` predicate `(check-missing-if-
+    /// unique …)` that reports the singleton-or-empty miss-band label
+    /// witness as a typed author-facing string list rather than a two-
+    /// step (has-unique-missing-variant? then missing-labels)
+    /// composition; an LSP diagnostic on a Lisp-author-written closed-
+    /// set field that renders "the sole omitted label" (only when
+    /// uniquely omitted) as author-facing completion text (`":severities
+    /// [:info :warn] — sole omission: error"`); a Sekiban audit-trail
+    /// projection whose per-window "sole missing label" witness renders
+    /// as a deterministic label list across machines; a
+    /// `tatara-lisp::macro_expand::Expander` diagnostic that emits THE
+    /// LONE unbound vocabulary identifier's label when uniqueness holds
+    /// through a single typed label-Vec rather than a two-step
+    /// composition. Each binds to ONE typed N-ary uniqueness-gated
+    /// miss-witness label projection on the trait rather than re-
+    /// deriving the four-primitive
+    /// `unique_missing_variants + label + map + collect` composition
+    /// inline per callsite.
+    ///
+    /// Compounding closure: this projection OPENS the label-return
+    /// column of the (set-level × `Vec<&'static str>` × equivalence-
+    /// partition × mult-band × unique-tie) row past the just-closed
+    /// variant-return trio ([`Self::unique_missing_variants`],
+    /// [`Self::unique_repeating_variants`],
+    /// [`Self::unique_unique_variants`]) one RETURN-SHAPE axis over
+    /// on the equivalence-partition surface. The natural next lifts on
+    /// this face — `unique_missing_labels_joined` on the join-string
+    /// return axis; `unique_repeating_labels` / `unique_unique_labels`
+    /// on the peer multiplicity-band arms; the lex-order peers under
+    /// `sorted_unique_*_labels` — each bind through the same
+    /// composition of the uniqueness-gated variant Vec under
+    /// [`Self::label`].
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// uniqueness-gated miss-label projection becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline
+    /// `T::unique_missing_variants(items).into_iter().map(T::label).collect()`
+    /// composition at every downstream generic site. THEORY.md §V.1 —
+    /// knowable platform; the (set-level × label × equivalence-partition
+    /// × mult `== 0` × unique-tie) corner was an unnamed inline
+    /// composition recurring at every prospective downstream "the sole
+    /// missing label, if unique, else nothing" site pre-lift. THEORY.md
+    /// §VI.1 — generation over composition; the projection emerges from
+    /// the composition of TWO substrate primitives
+    /// ([`Self::unique_missing_variants`] + [`Self::label`]) via
+    /// `Iterator::map` + `Iterator::collect`, not as a per-implementor
+    /// hand-rolled body.
+    ///
+    /// Frontier inspiration: R's `{ t <- table(items); miss <-
+    /// setdiff(all, names(t)); if (length(miss) == 1) miss else
+    /// character(0) }` on a factor histogram; Clojure's
+    /// `(let [miss (remove (set items) all)] (if (= 1 (count miss))
+    /// [(label (first miss))] []))`; Julia's `let miss =
+    /// setdiff(all, items); length(miss) == 1 ? [label(only(miss))] :
+    /// String[] end`; Haskell's `case all \\ items of [v] -> [label v]
+    /// ; _ -> []` on the `Bounded + Enum + Show` type-class trio.
+    /// Translation through pleme-io primitives: a pure default method
+    /// mapping the just-lifted [`Self::unique_missing_variants`] Vec-
+    /// return primitive under the per-slot [`Self::label`] projection —
+    /// no new dep, no supertrait bound, no set-shape carrier.
+    fn unique_missing_labels(items: &[Self]) -> ::std::vec::Vec<&'static str> {
+        <Self as ClosedSet>::unique_missing_variants(items)
+            .into_iter()
+            .map(<Self as ClosedSet>::label)
+            .collect()
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -60766,6 +60932,102 @@ where
             T::sorted_unique_unique_variants(&bimodal_triple).first().copied(),
             T::sorted_unique_unique_variant(&bimodal_triple),
             "{type_name}: T::sorted_unique_unique_variants(&bimodal_triple).first() drifted from T::sorted_unique_unique_variant(&bimodal_triple) — the Option-equality identity MUST hold on the bimodal-triple fixture at cardinality == 3 (both project to Some(T::ALL[1]))",
+        );
+    }
+    // (200) — `T::unique_missing_labels(items)` MUST agree with the
+    // composition body
+    // `T::unique_missing_variants(items).into_iter().map(T::label).collect()`
+    // on every canonical slice AND MUST pin length + is-empty +
+    // guarded-lift coincidences against the sibling (`bool`,
+    // `Vec<Self>`) unique-tie miss-band corners one RETURN-SHAPE axis
+    // over. THIS clause OPENS the LABEL-return column of the (set-
+    // level × `Vec<&'static str>` × equivalence-partition × mult-band ×
+    // unique-tie) row on the EQUIVALENCE-PARTITION surface at its
+    // (mult `== 0`) miss-band arm past the just-closed variant-return
+    // trio clauses (194) + (195) + (196) one RETURN-SHAPE axis over.
+    // Peer to clause (194) ([`T::unique_missing_variants`]) one
+    // RETURN-SHAPE axis over (variant-Vec witness → label-Vec witness
+    // of the same singleton-or-empty binding).
+    //
+    // The default trait body threads the two-primitive
+    // `unique_missing_variants + label + map + collect` composition
+    // verbatim and satisfies every fixpoint arm + the composition +
+    // length + is-empty coincidence identities for free; the
+    // assertion catches a future implementor whose override drifts
+    // the label projection loudly rather than silently bifurcating
+    // the set-level equivalence-partition miss-band singleton-or-
+    // empty LABEL witness surface. An override that folds onto
+    // `vec![T::ALL[0].label()]` unconditionally bifurcates the
+    // empty-slice (at cardinality >= 2) + full-set + doubled-full-set
+    // arms at `[T::ALL[0].label()] != []`. An override that folds
+    // onto `vec![]` unconditionally bifurcates the bimodal-triple
+    // positive arm at cardinality `== 3` at `[] != [T::ALL[2].label()]`.
+    let empty_unique_missing_labels = T::unique_missing_labels(empty);
+    let expected_empty_unique_missing_labels: ::std::vec::Vec<&'static str> =
+        T::unique_missing_variants(empty)
+            .into_iter()
+            .map(<T as ClosedSet>::label)
+            .collect();
+    assert_eq!(
+        empty_unique_missing_labels, expected_empty_unique_missing_labels,
+        "{type_name}: T::unique_missing_labels(&[]) drifted from `T::unique_missing_variants(&[]).into_iter().map(T::label).collect()` — the composition law MUST hold on the empty slice",
+    );
+    assert_eq!(
+        T::unique_missing_labels(empty).len(),
+        usize::from(T::has_unique_missing_variant(empty)),
+        "{type_name}: T::unique_missing_labels(&[]).len() drifted from `T::has_unique_missing_variant(&[]) as usize` — the length-coincidence identity MUST hold on the empty slice",
+    );
+    assert_eq!(
+        T::unique_missing_labels(empty).is_empty(),
+        !T::has_unique_missing_variant(empty),
+        "{type_name}: T::unique_missing_labels(&[]).is_empty() drifted from `!T::has_unique_missing_variant(&[])` — the is-empty coincidence identity MUST hold on the empty slice",
+    );
+    let full_unique_missing_labels = T::unique_missing_labels(T::ALL);
+    let expected_full_unique_missing_labels: ::std::vec::Vec<&'static str> =
+        T::unique_missing_variants(T::ALL)
+            .into_iter()
+            .map(<T as ClosedSet>::label)
+            .collect();
+    assert_eq!(
+        full_unique_missing_labels, expected_full_unique_missing_labels,
+        "{type_name}: T::unique_missing_labels(T::ALL) drifted from the composition body on the full-set slice — pairwise-distinctness pins count_missing at 0, has_unique_missing_variant returns false, and the projection collapses to vec![] UNCONDITIONALLY",
+    );
+    assert_eq!(
+        T::unique_missing_labels(T::ALL).len(),
+        usize::from(T::has_unique_missing_variant(T::ALL)),
+        "{type_name}: T::unique_missing_labels(T::ALL).len() drifted from `T::has_unique_missing_variant(T::ALL) as usize` — the length-coincidence identity MUST hold on the full-set slice",
+    );
+    let doubled_unique_missing_labels = T::unique_missing_labels(&doubled_full_set);
+    let expected_doubled_unique_missing_labels: ::std::vec::Vec<&'static str> =
+        T::unique_missing_variants(&doubled_full_set)
+            .into_iter()
+            .map(<T as ClosedSet>::label)
+            .collect();
+    assert_eq!(
+        doubled_unique_missing_labels, expected_doubled_unique_missing_labels,
+        "{type_name}: T::unique_missing_labels(&doubled_full_set) drifted from the composition body on the doubled-full-set slice — every variant hit twice pins count_missing == 0, has_unique_missing_variant returns false, and the projection collapses to vec![] UNCONDITIONALLY",
+    );
+    assert_eq!(
+        T::unique_missing_labels(&doubled_full_set).len(),
+        usize::from(T::has_unique_missing_variant(&doubled_full_set)),
+        "{type_name}: T::unique_missing_labels(&doubled_full_set).len() drifted from `T::has_unique_missing_variant(&doubled_full_set) as usize` — the length-coincidence identity MUST hold on the doubled-full-set slice",
+    );
+    if T::CARDINALITY == 3 {
+        // Bimodal-triple fixture: LOAD-BEARING sole-non-empty positive
+        // arm on the (`Vec<&'static str>` × equivalence-partition ×
+        // mult `== 0` × unique-tie) corner at the canonical
+        // cardinality-3 test-module window. count_missing reports 1
+        // (T::ALL[2] absent), has_unique_missing_variant holds, guard
+        // fires, and the composition body reports
+        // vec![T::ALL[2].label()] — the SAME sole absent variant that
+        // clause (194)'s variant-Vec sibling reports on the SAME
+        // fixture one RETURN-SHAPE axis over, under the injective per-
+        // slot T::label projection.
+        let bimodal_triple = [T::ALL[0], T::ALL[0], T::ALL[1]];
+        assert_eq!(
+            T::unique_missing_labels(&bimodal_triple),
+            ::std::vec![<T as ClosedSet>::label(T::ALL[2])],
+            "{type_name}: T::unique_missing_labels(&bimodal_triple) drifted from `vec![T::ALL[2].label()]` at cardinality == 3 — count_missing reports 1 (T::ALL[2] sole absent), has_unique_missing_variant holds, guard fires, and the composition body reports vec![T::ALL[2].label()]",
         );
     }
 }
@@ -126049,6 +126311,261 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedSortedUniqueBimodalVariantSomeFirstKind whose sorted_unique_bimodal_variant override folds onto Some(first) unconditionally — clause (187)'s empty-slice + flat-histogram + matching-singleton + bimodal-triple fixpoint arms MUST reject the drift",
+        );
+    }
+
+    #[test]
+    fn unique_missing_labels_returns_empty_on_the_empty_slice_at_cardinality_gte_two() {
+        // EMPTY-SLICE CONTRACT at cardinality >= 2:
+        // T::unique_missing_labels(&[]) == vec![] — the empty slice puts
+        // every variant in the miss band, count_missing reports
+        // T::CARDINALITY >= 2, has_unique_missing_variant collapses to
+        // false via `count != 1`, and the projection collapses to vec![].
+        // StubKind has cardinality 3.
+        assert_eq!(<StubKind as ClosedSet>::CARDINALITY, 3);
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::unique_missing_labels(empty),
+            Vec::<&'static str>::new(),
+            "T::unique_missing_labels(&[]) diverged from vec![] at cardinality 3 — count_missing reports 3, has_unique_missing_variant returns false, and the projection collapses to vec![]",
+        );
+    }
+
+    #[test]
+    fn unique_missing_labels_returns_empty_on_the_full_set_across_every_kind() {
+        // FULL-SET CONTRACT: T::unique_missing_labels(T::ALL) == vec![]
+        // UNCONDITIONALLY — pairwise-distinctness pins every variant at
+        // exactly one position, count_missing reports 0,
+        // has_unique_missing_variant returns false via `0 != 1`, and the
+        // projection collapses to vec![].
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::unique_missing_labels(all),
+            Vec::<&'static str>::new(),
+            "T::unique_missing_labels(T::ALL) diverged from vec![] — every variant hits itself, count_missing == 0, has_unique_missing_variant is false, and the projection collapses to vec![]",
+        );
+    }
+
+    #[test]
+    fn unique_missing_labels_returns_empty_on_the_doubled_full_set_across_every_kind() {
+        // DOUBLED-FULL-SET CONTRACT: T::unique_missing_labels(ALL++ALL)
+        // == vec![] UNCONDITIONALLY — every variant hit at count 2,
+        // count_missing == 0, has_unique_missing_variant returns false,
+        // and the projection collapses to vec![].
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::unique_missing_labels(&doubled),
+            Vec::<&'static str>::new(),
+            "T::unique_missing_labels(ALL++ALL) diverged from vec![] — every variant hits count 2, count_missing == 0, has_unique_missing_variant is false, and the projection collapses to vec![]",
+        );
+    }
+
+    #[test]
+    fn unique_missing_labels_returns_the_sole_absent_label_on_the_bimodal_triple_at_cardinality_three(
+    ) {
+        // BIMODAL-TRIPLE POSITIVE-ARM CONTRACT at CARDINALITY == 3:
+        // T::unique_missing_labels([T::ALL[0], T::ALL[0], T::ALL[1]]) ==
+        // vec![T::ALL[2].label()] — T::ALL[2] at count 0 is the SOLE
+        // absent variant, count_missing reports 1,
+        // has_unique_missing_variant holds, and the composition returns
+        // the singleton label Vec of the sole absent variant.
+        assert_eq!(<StubKind as ClosedSet>::CARDINALITY, 3);
+        let bimodal_triple = [
+            <StubKind as ClosedSet>::ALL[0],
+            <StubKind as ClosedSet>::ALL[0],
+            <StubKind as ClosedSet>::ALL[1],
+        ];
+        assert_eq!(
+            <StubKind as ClosedSet>::unique_missing_labels(&bimodal_triple),
+            vec![<StubKind as ClosedSet>::label(<StubKind as ClosedSet>::ALL[2])],
+            "T::unique_missing_labels(&bimodal_triple) diverged from vec![T::ALL[2].label()] — count_missing reports 1 on the bimodal triple at cardinality 3, has_unique_missing_variant holds, and the composition returns the singleton label Vec of the sole absent variant",
+        );
+    }
+
+    #[test]
+    fn unique_missing_labels_equals_unique_missing_variants_mapped_under_label_across_every_triple()
+    {
+        // COMPOSITION LAW: T::unique_missing_labels(items) ==
+        // T::unique_missing_variants(items).into_iter().map(T::label).collect()
+        // on every canonical triple — the canonical form the body uses.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected: Vec<&'static str> =
+                        <StubKind as ClosedSet>::unique_missing_variants(&triple)
+                            .into_iter()
+                            .map(<StubKind as ClosedSet>::label)
+                            .collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_missing_labels(&triple),
+                        expected,
+                        "T::unique_missing_labels({triple:?}) diverged from T::unique_missing_variants({triple:?}).into_iter().map(T::label).collect() — the label-column composition law was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_missing_labels_equals_has_unique_missing_variant_gated_missing_labels_across_every_triple(
+    ) {
+        // GUARDED-WITNESS-COLLECTION IDENTITY: for every slice `items`,
+        // T::unique_missing_labels(items) == if
+        // T::has_unique_missing_variant(items) { T::missing_labels(items) }
+        // else { vec![] } — the label projection factors through the same
+        // uniqueness guard as its variant-Vec sibling. Independent cross-
+        // check binding the label-Vec return against the miss-set label
+        // Vec one UNIQUE-TIE-SHARPENING axis over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_body = <StubKind as ClosedSet>::unique_missing_labels(&triple);
+                    let via_guarded_lift =
+                        if <StubKind as ClosedSet>::has_unique_missing_variant(&triple) {
+                            <StubKind as ClosedSet>::missing_labels(&triple)
+                        } else {
+                            Vec::new()
+                        };
+                    assert_eq!(
+                        via_body, via_guarded_lift,
+                        "T::unique_missing_labels({triple:?}) diverged from the guarded lift `if T::has_unique_missing_variant {{ T::missing_labels }} else {{ vec![] }}`",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_missing_labels_len_equals_has_unique_missing_variant_as_usize_across_every_triple() {
+        // LENGTH-COINCIDENCE IDENTITY: for every slice `items`,
+        // T::unique_missing_labels(items).len() ==
+        // usize::from(T::has_unique_missing_variant(items)) — the label-
+        // Vec's length coincides with the set-level miss-band uniqueness
+        // bit projected onto usize.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_missing_labels(&triple).len(),
+                        usize::from(<StubKind as ClosedSet>::has_unique_missing_variant(&triple)),
+                        "T::unique_missing_labels({triple:?}).len() diverged from usize::from(T::has_unique_missing_variant({triple:?}))",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_missing_labels_is_empty_iff_not_has_unique_missing_variant_across_every_triple() {
+        // IS-EMPTY COINCIDENCE IDENTITY: for every slice `items`,
+        // T::unique_missing_labels(items).is_empty() ==
+        // !T::has_unique_missing_variant(items). Independent cross-check
+        // on the surface axis distinct from the length-coincidence arm
+        // (Vec::is_empty vs integer equality).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_missing_labels(&triple).is_empty(),
+                        !<StubKind as ClosedSet>::has_unique_missing_variant(&triple),
+                        "T::unique_missing_labels({triple:?}).is_empty() diverged from !T::has_unique_missing_variant({triple:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_missing_labels_is_invariant_under_slice_reversal_across_every_triple() {
+        // REVERSAL-INVARIANCE CONTRACT: T::unique_missing_labels is
+        // invariant under slice-reversal — both underlying projections
+        // (has_unique_missing_variant + missing_variants) are ordering-
+        // agnostic on the input axis, and T::label is a pure projection.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let reversed: Vec<StubKind> = triple.iter().rev().copied().collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_missing_labels(&triple),
+                        <StubKind as ClosedSet>::unique_missing_labels(&reversed),
+                        "T::unique_missing_labels({triple:?}) diverged from T::unique_missing_labels({reversed:?}) — reversal-invariance was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_singleton_first_drift_in_unique_missing_labels()
+    {
+        // Drift catch — clause (200)'s empty-slice + full-set +
+        // doubled-full-set + bimodal-triple fixpoint arms fire when an
+        // override folds the set-level unique-missing-labels projection
+        // onto vec!["alpha"] unconditionally. At CARDINALITY 3 the
+        // empty/full/doubled arms expect vec![]; the bimodal-triple
+        // positive arm expects vec![T::ALL[2].label()] == vec!["gamma"];
+        // a `vec!["alpha"]` override bifurcates every arm at
+        // `["alpha"] != []` OR `["alpha"] != ["gamma"]`.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedUniqueMissingLabelsSingletonFirstKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedUniqueMissingLabelsSingletonFirstKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedUniqueMissingLabelsSingletonFirstKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted unique_missing_labels singleton-first kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedUniqueMissingLabelsSingletonFirstKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedUniqueMissingLabelsSingletonFirstKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted unique_missing_labels singleton-first kind";
+            type Unknown = UnknownDriftedUniqueMissingLabelsSingletonFirstKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedUniqueMissingLabelsSingletonFirstKind(s.to_owned())
+            }
+            fn unique_missing_labels(_items: &[Self]) -> Vec<&'static str> {
+                // Drift: always return vec!["alpha"]. Fires clause
+                // (200)'s canonical-fixture arms at cardinality 3.
+                ::std::vec!["alpha"]
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedUniqueMissingLabelsSingletonFirstKind>();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedUniqueMissingLabelsSingletonFirstKind whose unique_missing_labels override folds onto vec![\"alpha\"] unconditionally — clause (200)'s canonical-fixture arms MUST reject the drift at cardinality 3",
         );
     }
 }

@@ -40734,6 +40734,157 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY DECLARATION-ORDER "repeating indices" projection — the
+    /// `Vec<usize>` [`Self::ALL`]-index rendering of
+    /// [`Self::repeating_variants`] under [`Self::index_of`]. Every
+    /// `usize` `i` in the returned vector is the [`Self::ALL`]-position
+    /// of some variant appearing STRICTLY MORE THAN ONCE (multiplicity
+    /// `>= 2`) in `items`; the declaration order of
+    /// [`Self::repeating_variants`] is preserved verbatim, so the
+    /// returned indices form a STRICTLY ASCENDING subsequence of
+    /// `0..Self::CARDINALITY`. The (multiplicity `>= 2`) STRICT-REPEAT
+    /// band peer of [`Self::present_indices`] (multiplicity `>= 1`) and
+    /// [`Self::missing_indices`] (multiplicity `== 0`) one MULTIPLICITY-
+    /// BAND axis over on the index-return column of the equivalence-
+    /// partition surface — OPENS the (repeating, `Vec<usize>` index,
+    /// declaration-order) corner past the exhaustively-closed
+    /// (index-return × ordering) 2×2 = 4-corner face on the (present,
+    /// absent) doublet that [`Self::present_indices`],
+    /// [`Self::missing_indices`], [`Self::sorted_present_indices`],
+    /// [`Self::sorted_missing_indices`] closed. Peer to
+    /// [`Self::repeating_labels`] one RETURN-SHAPE column over on the
+    /// same multiplicity band — same partition-arm, same declaration
+    /// order, different Vec-return projection (`Vec<usize>` vs
+    /// `Vec<&'static str>`).
+    ///
+    /// Composition law: for every slice `items`,
+    /// `T::repeating_indices(items) ==
+    /// T::repeating_variants(items).into_iter().map(T::index_of).collect()`
+    /// — the index-Vec projection binds through the substrate's
+    /// [`Self::repeating_variants`] Vec-return primitive composed with
+    /// the per-slot [`Self::index_of`] projection.
+    ///
+    /// Cardinality identity: for every slice `items`,
+    /// `T::repeating_indices(items).len() ==
+    /// T::count_repeating_variants(items)` — the index-Vec-return
+    /// strict-repeat projection's length matches the usize-return
+    /// strict-repeat count exactly, and matches
+    /// [`Self::repeating_variants`] and [`Self::repeating_labels`] one
+    /// return-shape column over.
+    ///
+    /// Bool-projection identity: for every slice `items`,
+    /// `T::repeating_indices(items).is_empty() ==
+    /// !T::is_repeating_any(items)` — the strict-repeat index list is
+    /// empty iff no target hits multiplicity `>= 2`. Cross-checks the
+    /// index-Vec-return strict-repeat witness against the pre-existing
+    /// bool-return strict-repeat existential.
+    ///
+    /// Declaration-order subsequence contract: the returned
+    /// `Vec<usize>` is ALWAYS a STRICTLY ASCENDING subsequence of
+    /// `0..Self::CARDINALITY` — every index appears at most once
+    /// (dedup by well-formedness), in the natural `usize` ordering
+    /// that coincides with [`Self::ALL`]'s declaration order under
+    /// [`Self::index_of`]. This subsequence property IS the composition-
+    /// law + [`Self::repeating_variants`]'s declaration-order-subsequence
+    /// contract propagated through [`Self::index_of`]'s bijection with
+    /// `0..Self::CARDINALITY`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the strict-
+    /// repeat predicate is a function of that multiset alone. The
+    /// OUTPUT ordering is fixed by [`Self::ALL`]'s declaration order.
+    ///
+    /// Empty-slice contract: `T::repeating_indices(&[])` is the empty
+    /// `Vec` UNCONDITIONALLY — the empty slice hits zero positions and
+    /// no target reaches multiplicity `>= 2`, so no index contributes.
+    ///
+    /// Singleton contract: `T::repeating_indices(&[v])` is the empty
+    /// `Vec` for every variant `v` — a singleton hits multiplicity `1`
+    /// at exactly one target and the strict-repeat `>= 2` test fails
+    /// at every target, so no index contributes.
+    ///
+    /// Full-set contract: `T::repeating_indices(<T as ClosedSet>::ALL)`
+    /// is the empty `Vec` UNCONDITIONALLY — the well-formedness
+    /// pairwise-distinctness invariant pins every variant of
+    /// [`Self::ALL`] as hitting multiplicity `1` in the full-set slice,
+    /// so the strict-repeat `>= 2` test fails at every target.
+    ///
+    /// Doubled-full-set contract: `T::repeating_indices` on the doubled
+    /// full set equals `(0..T::CARDINALITY).collect::<Vec<usize>>()`
+    /// UNCONDITIONALLY — the doubled full set hits every variant at
+    /// multiplicity `2` (satisfying the strict-repeat `>= 2` test at
+    /// every target), so every index of `0..T::CARDINALITY` contributes
+    /// in declaration order. The doubled-full-set arm is LOAD-BEARING
+    /// — it is the ONLY canonical fixpoint arm that separates the
+    /// (multiplicity `>= 2`) strict-repeat band from the miss/present
+    /// bands (empty and full-set both coincide on `[]` on the strict-
+    /// repeat band; the multiplicity `== 2` doubled-full-set fixture is
+    /// what forces non-emptiness).
+    ///
+    /// Future consumers — a `tatara-check` predicate `(check-phases-
+    /// re-entered-indices …)` that renders a compact bitset-like index
+    /// witness of a rollout window's STRICT-REPEAT set for wire-encoding
+    /// under `u8`; an LSP diagnostic that walks the strict-repeat
+    /// indices against a `[Payload; T::CARDINALITY]` slotted lookup
+    /// table to render per-slot annotations at each repeated variant's
+    /// position; a Sekiban audit-trail projection that carries the
+    /// concrete strict-repeat-index set of a classification poset
+    /// window as a numerically dense witness (rather than the typed
+    /// variant or label witnesses) for compact wire serialization; a
+    /// `tatara-lisp::macro_expand::Expander` hygiene pass reporting
+    /// the exact positions (not the typed variants) a template bound
+    /// MORE THAN ONCE. Each binds to ONE typed N-ary strict-repeat
+    /// index projection on the trait rather than re-deriving the
+    /// `repeating_variants + index_of + map + collect` four-primitive
+    /// composition inline per callsite.
+    ///
+    /// Compounding closure: the (partition-band × return-shape ×
+    /// ordering) 3×3×2 = 18-corner face on the equivalence-partition
+    /// surface now OPENS the (strict-repeat, `Vec<usize>` index,
+    /// declaration-order) corner past the exhaustively-closed 4-corner
+    /// (present, absent) × (declaration, lex) index-return face. The
+    /// natural next lift on this surface — the (lex-order) ordering
+    /// axis: [`sorted_repeating_indices`] via a
+    /// `sorted_repeating_variants + map(index_of) + collect`
+    /// composition, closing the strict-repeat arm's ordering-axis pair
+    /// at its lex tile and moving the (partition-band × ordering)
+    /// index-return face from 5/6 to 6/6 exhaustive closure.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary strict-
+    /// repeat index projection becomes a TYPE-level primitive on the
+    /// closed-set trait rather than a per-consumer inline
+    /// `T::repeating_variants(items).into_iter().map(T::index_of).collect()`
+    /// composition at every downstream generic site. THEORY.md §V.1 —
+    /// knowable platform; the (strict-repeat, `Vec<usize>` index,
+    /// declaration-order) corner was an unnamed inline composition
+    /// recurring at every prospective downstream "which INDICES did we
+    /// REPEAT?" site pre-lift. THEORY.md §VI.1 — generation over
+    /// composition; the strict-repeat index projection emerges from
+    /// the composition of TWO substrate primitives
+    /// ([`Self::repeating_variants`] + [`Self::index_of`]) via
+    /// `Iterator::map` + `Iterator::collect`, not as a per-implementor
+    /// hand-rolled body.
+    ///
+    /// Frontier inspiration: NumPy's `np.where(np.array([np.sum(items
+    /// == v) >= 2 for v in all]))[0]` composing the strict-repeat
+    /// boolean-mask with a positional projection; Julia's `findall(v
+    /// -> count(==(v), items) >= 2, all)`; Racket's `(map T-index
+    /// (filter (lambda (v) (>= (count (curry equal? v) items) 2))
+    /// (enum->list T)))`; SQL's `SELECT index_of(variant) FROM t
+    /// GROUP BY variant HAVING COUNT(*) >= 2 ORDER BY index_of(variant)`.
+    /// Translation through pleme-io primitives: a pure default method
+    /// mapping the trait's existing [`Self::repeating_variants`] Vec-
+    /// return primitive under the per-slot [`Self::index_of`]
+    /// projection — no new dep, no supertrait bound, no set-shape
+    /// carrier.
+    fn repeating_indices(items: &[Self]) -> ::std::vec::Vec<usize> {
+        <Self as ClosedSet>::repeating_variants(items)
+            .into_iter()
+            .map(<Self as ClosedSet>::index_of)
+            .collect()
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -95997,6 +96148,275 @@ mod tests {
             vec![2usize, 1, 0],
             "sorted_missing_indices over the empty slice must return the full index list in lex order under index_of — [2, 1, 0] — regardless of the implementor's ALL-array declaration layout",
         );
+    }
+
+    #[test]
+    fn repeating_indices_returns_the_empty_vec_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT: `T::repeating_indices(&[])` is the
+        // empty `Vec` UNCONDITIONALLY — the empty slice hits zero
+        // positions and no target reaches multiplicity `>= 2`, so no
+        // index contributes. The empty-slice endpoint is the natural
+        // opener for the strict-repeat arm of the (equivalence-partition
+        // × ordering × index-return) surface — matches
+        // `T::repeating_labels(&[])` and `T::repeating_variants(&[])`
+        // one return-shape column over.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::repeating_indices(empty),
+            Vec::<usize>::new(),
+        );
+    }
+
+    #[test]
+    fn repeating_indices_returns_the_empty_vec_on_every_singleton_across_every_variant() {
+        // SINGLETON CONTRACT: `T::repeating_indices(&[v])` is the empty
+        // `Vec` for every variant `v` — a singleton hits multiplicity
+        // `1` at exactly one target and the strict-repeat `>= 2` test
+        // fails at every target, so no index contributes. The singleton
+        // endpoint is the boundary that separates the strict-repeat
+        // band from the presence band on the index-return surface:
+        // `T::present_indices(&[v])` reports the singleton
+        // `vec![T::index_of(v)]` at the SAME slice, so the two
+        // projections diverge on the (mult `>= 1`, mult `>= 2`)
+        // boundary at every singleton fixture.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::repeating_indices(&singleton),
+                Vec::<usize>::new(),
+                "T::repeating_indices([{:?}]) diverged from the empty vec — the singleton fixture at the strict-repeat band MUST return an empty index list because multiplicity 1 fails the >= 2 test",
+                v,
+            );
+        }
+    }
+
+    #[test]
+    fn repeating_indices_over_the_full_set_returns_the_empty_vec_across_every_kind() {
+        // FULL-SET CONTRACT: `T::repeating_indices(<T as ClosedSet>::ALL)`
+        // is the empty `Vec` UNCONDITIONALLY — the well-formedness
+        // pairwise-distinctness invariant pins every variant of `T::ALL`
+        // as hitting multiplicity `1` in the full-set slice, so the
+        // strict-repeat `>= 2` test fails at every target and no index
+        // contributes. The full-set endpoint mirrors the empty-slice
+        // endpoint on this band — both collapse to `[]` — because the
+        // (multiplicity `== 0`) and (multiplicity `== 1`) bands both
+        // fall below the strict-repeat `>= 2` threshold.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::repeating_indices(all),
+            Vec::<usize>::new(),
+        );
+    }
+
+    #[test]
+    fn repeating_indices_over_the_doubled_full_set_equals_zero_to_cardinality_across_every_kind() {
+        // DOUBLED-FULL-SET CONTRACT: `T::repeating_indices` on the
+        // doubled full set equals `(0..T::CARDINALITY).collect()`
+        // UNCONDITIONALLY — the doubled full set hits every variant at
+        // multiplicity `2` (satisfying the strict-repeat `>= 2` test
+        // at every target), so every index of `0..T::CARDINALITY`
+        // contributes in declaration order. LOAD-BEARING NON-EMPTY
+        // POSITIVE ARM — this is the ONLY canonical fixpoint arm where
+        // the strict-repeat band separates from the miss/present bands
+        // on the index-return surface (empty and full-set both coincide
+        // on `[]`; the doubled-full-set fixture at multiplicity `2`
+        // forces non-emptiness).
+        let all = <StubKind as ClosedSet>::ALL;
+        let doubled: Vec<StubKind> = all.iter().chain(all.iter()).copied().collect();
+        let expected: Vec<usize> = (0..all.len()).collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::repeating_indices(&doubled),
+            expected,
+        );
+    }
+
+    #[test]
+    fn repeating_indices_length_equals_count_repeating_variants_across_every_triple() {
+        // CARDINALITY IDENTITY: `T::repeating_indices(items).len() ==
+        // T::count_repeating_variants(items)` on every slice — the
+        // index-Vec-return strict-repeat projection's length matches
+        // the usize-return strict-repeat count exactly. Sibling to the
+        // cardinality identities for `repeating_variants` and
+        // `repeating_labels` one return-shape column over — all three
+        // Vec-return arms report the same cardinality because they all
+        // walk the same strict-repeat witness set through different
+        // per-slot projections.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::repeating_indices(&triple).len(),
+                        <StubKind as ClosedSet>::count_repeating_variants(&triple),
+                        "T::repeating_indices({triple:?}).len() diverged from T::count_repeating_variants({triple:?}) — the (Vec-index-return, usize-return) strict-repeat cardinality identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_indices_equals_repeating_variants_mapped_under_index_of_across_every_triple() {
+        // COMPOSITION LAW: for every slice `items`,
+        // `T::repeating_indices(items) ==
+        // T::repeating_variants(items).into_iter().map(T::index_of).collect()`
+        // — the index-Vec projection binds through the substrate's
+        // `T::repeating_variants` Vec-return primitive composed with the
+        // per-slot `T::index_of` projection. This IS the default trait
+        // body — the test catches an override that drifts the
+        // composition from the natural definition.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected: Vec<usize> = <StubKind as ClosedSet>::repeating_variants(&triple)
+                        .into_iter()
+                        .map(<StubKind as ClosedSet>::index_of)
+                        .collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::repeating_indices(&triple),
+                        expected,
+                        "T::repeating_indices({triple:?}) diverged from T::repeating_variants({triple:?}).into_iter().map(T::index_of).collect() — the strict-repeat index-column composition law was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_indices_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE: `T::repeating_indices(items) ==
+        // T::repeating_indices(reversed items)` on every slice —
+        // reversing a slice preserves its multiset of variant
+        // identities, and the strict-repeat predicate is a function of
+        // that multiset alone. The OUTPUT ordering is fixed by
+        // `T::ALL`'s declaration order under `T::index_of`.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::repeating_indices(&forward),
+                        <StubKind as ClosedSet>::repeating_indices(&reversed),
+                        "T::repeating_indices({forward:?}) diverged from T::repeating_indices({reversed:?}) — the declaration-order strict-repeat index projection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_indices_is_empty_iff_not_is_repeating_any_across_every_triple() {
+        // BOOL-PROJECTION IDENTITY: for every slice `items`,
+        // `T::repeating_indices(items).is_empty() ==
+        // !T::is_repeating_any(items)` — the strict-repeat index list is
+        // empty iff no target hits multiplicity `>= 2`. Cross-checks the
+        // index-Vec-return strict-repeat witness against the bool-return
+        // strict-repeat existential. The bool-projection is INVARIANT
+        // under the (variant, label, index) return-shape axis — the
+        // three Vec-return arms all agree on the emptiness bit at every
+        // slice because they walk the SAME strict-repeat witness set
+        // through different per-slot projections.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::repeating_indices(&triple).is_empty(),
+                        !<StubKind as ClosedSet>::is_repeating_any(&triple),
+                        "T::repeating_indices({triple:?}).is_empty() diverged from !T::is_repeating_any({triple:?}) — the (Vec-index-return, bool-return) strict-repeat existential-emptiness identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_indices_is_a_strictly_ascending_subsequence_of_zero_to_cardinality_across_every_triple(
+    ) {
+        // DECLARATION-ORDER SUBSEQUENCE CONTRACT: the returned
+        // `Vec<usize>` is ALWAYS a STRICTLY ASCENDING subsequence of
+        // `0..T::CARDINALITY` — every index appears at most once (dedup
+        // by well-formedness), in the natural `usize` ordering that
+        // coincides with `T::ALL`'s declaration order under
+        // `T::index_of`. This is the index-return-column peer of the
+        // declaration-order subsequence contract `repeating_variants`
+        // carries one return-shape column over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let indices = <StubKind as ClosedSet>::repeating_indices(&triple);
+                    for window in indices.windows(2) {
+                        assert!(
+                            window[0] < window[1],
+                            "T::repeating_indices({triple:?}) is not strictly ascending — window {window:?} violates the declaration-order-subsequence contract",
+                        );
+                    }
+                    for &i in &indices {
+                        assert!(
+                            i < <StubKind as ClosedSet>::CARDINALITY,
+                            "T::repeating_indices({triple:?}) contains index {i} outside 0..T::CARDINALITY — the subsequence-of-0..CARDINALITY contract was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_indices_is_disjoint_from_missing_indices_across_every_triple() {
+        // DISJOINTNESS CONTRACT (strict-repeat vs miss): for every slice
+        // `items`, the (strict-repeat, miss) index Vecs share NO index
+        // — the strict-repeat band (mult `>= 2`) and the miss band
+        // (mult `== 0`) are DISJOINT multiplicity subranges, so a
+        // variant cannot simultaneously fall in both. Cross-arm
+        // disjointness on the index-return column matches the same
+        // relationship `repeating_variants` and `missing_variants`
+        // carry one return-shape column over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let repeating = <StubKind as ClosedSet>::repeating_indices(&triple);
+                    let missing = <StubKind as ClosedSet>::missing_indices(&triple);
+                    for i in &repeating {
+                        assert!(
+                            !missing.contains(i),
+                            "T::repeating_indices({triple:?}) and T::missing_indices({triple:?}) share index {i} — the (strict-repeat, miss) index-column multiplicity-band disjointness was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_indices_is_a_subset_of_present_indices_across_every_triple() {
+        // SUBSET CONTRACT (strict-repeat ⊆ present): for every slice
+        // `items`, every index in `T::repeating_indices(items)` also
+        // appears in `T::present_indices(items)` — the strict-repeat
+        // band (mult `>= 2`) is a SUBSET of the presence band (mult
+        // `>= 1`) because `>= 2` implies `>= 1`. Cross-arm inclusion on
+        // the index-return column matches the same relationship
+        // `repeating_variants` and `present_variants` carry one return-
+        // shape column over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let repeating = <StubKind as ClosedSet>::repeating_indices(&triple);
+                    let present = <StubKind as ClosedSet>::present_indices(&triple);
+                    for i in &repeating {
+                        assert!(
+                            present.contains(i),
+                            "T::repeating_indices({triple:?}) contains index {i} absent from T::present_indices({triple:?}) — the (strict-repeat ⊆ present) index-column multiplicity-band inclusion was violated",
+                        );
+                    }
+                }
+            }
+        }
     }
 
     #[test]

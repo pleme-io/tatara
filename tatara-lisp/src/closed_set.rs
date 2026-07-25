@@ -41304,6 +41304,140 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .join(sep)
     }
 
+    /// The N-ARY DECLARATION-ORDER "repeating indices" join-string
+    /// projection — the [`Self::repeating_indices`] Vec-return
+    /// strict-repeat-witness index list stringified per slot under
+    /// `usize::to_string` and threaded into a single `String` under the
+    /// caller's separator.
+    ///
+    /// Composition law: for every slice `items` and every separator
+    /// `sep`, `T::repeating_indices_joined(items, sep) ==
+    /// T::repeating_indices(items).iter().map(usize::to_string).collect::<Vec<String>>().join(sep)`
+    /// — the join-string projection binds through the substrate's
+    /// [`Self::repeating_indices`] Vec-return primitive composed with
+    /// `usize::to_string` and `slice::join`. Pinned by
+    /// `repeating_indices_joined_equals_repeating_indices_dot_map_to_string_dot_join_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the strict-
+    /// repeat `>= 2` membership predicate is a function of that
+    /// multiset alone. The OUTPUT ordering is fixed by [`Self::ALL`]'s
+    /// declaration order regardless of the input ordering, so the
+    /// joined `String` matches byte-for-byte under reversal. Pinned by
+    /// `repeating_indices_joined_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::repeating_indices_joined(&[], sep)`
+    /// is the empty `String` UNCONDITIONALLY for every `sep` — the
+    /// empty slice hits zero positions and no target reaches
+    /// multiplicity `>= 2`, so [`Self::repeating_indices`] yields the
+    /// empty `Vec`, and `slice::join` on an empty slice yields the
+    /// empty string. Full-set contract:
+    /// `T::repeating_indices_joined(<T as ClosedSet>::ALL, sep)` is
+    /// the empty `String` UNCONDITIONALLY for every `sep` — the
+    /// pairwise-distinctness invariant pins every variant of
+    /// [`Self::ALL`] as hitting itself at multiplicity `1`, so the
+    /// strict-repeat `>= 2` test fails at every target and
+    /// [`Self::repeating_indices`] yields the empty `Vec`. Singleton
+    /// contract: `T::repeating_indices_joined(&[v], sep)` is the empty
+    /// `String` for every variant `v` and every `sep` — a singleton
+    /// hits multiplicity `1` at exactly one target and the strict-
+    /// repeat `>= 2` test fails at every target. The three
+    /// "no-strict-repeat" endpoints (empty, singleton, full-set) all
+    /// coincide on the empty string, mirroring the empty-Vec fixpoint
+    /// of the sibling [`Self::repeating_indices`] Vec-return primitive
+    /// one return-shape axis over.
+    ///
+    /// Doubled-full-set contract: `T::repeating_indices_joined` on the
+    /// doubled full set equals
+    /// `(0..T::CARDINALITY).map(|i| i.to_string()).collect::<Vec<_>>().join(sep)`
+    /// UNCONDITIONALLY for every `sep` — the doubled full set hits
+    /// every variant at multiplicity `2`, satisfying the strict-repeat
+    /// `>= 2` test at every target, so [`Self::repeating_indices`]
+    /// yields `(0..T::CARDINALITY).collect::<Vec<usize>>()` and the
+    /// join over the resulting decimal-`usize` slots equals the
+    /// substrate's `0..CARDINALITY` decimal-slot join exactly under
+    /// any separator. This doubled-full-set arm is LOAD-BEARING — it
+    /// is the ONLY canonical fixpuint arm that separates the strict-
+    /// repeat band from the miss/present bands on the join-string
+    /// column (empty and full-set both coincide on the empty string on
+    /// the strict-repeat band; the multiplicity `== 2` doubled-full-
+    /// set fixture is what forces non-emptiness on the join-string
+    /// projection).
+    ///
+    /// Future consumers — a `tatara-check` diagnostic that renders the
+    /// concrete `WorkloadPhase` indices a rollout window RE-ENTERED as
+    /// a compact deterministic wire-string (`"1,3"` — numerically
+    /// dense, `usize`-round-trippable through `str::parse`) for
+    /// per-cluster re-entry-witness serialization; an LSP diagnostic
+    /// that renders the strict-repeat indices of an author-written
+    /// closed-set field as a comma-joined slot-number hint against a
+    /// `[Payload; T::CARDINALITY]` slotted lookup table pointing out
+    /// which slots are RE-VISITED; a Sekiban audit-trail projection
+    /// whose per-window strict-repeat-index witness renders as a
+    /// deterministic pipe-joined string across machines regardless of
+    /// declaration-layout drift; a `tatara-lisp::macro_expand::Expander`
+    /// hygiene pass that reports the concrete positions of a
+    /// template's REPEATED bindings as a canonical slash-joined
+    /// natural-language surface. Each binds to ONE typed N-ary
+    /// repeat-index-as-string projection on the trait rather than
+    /// re-deriving the four-primitive
+    /// `T::repeating_indices(items).iter().map(usize::to_string).collect().join(sep)`
+    /// composition inline per callsite.
+    ///
+    /// Compounding closure: the (partition-band × ordering × return-
+    /// shape) 3×2×2 = 12-corner equivalence-partition index-
+    /// aggregation surface now EXHAUSTIVELY CLOSES the declaration-
+    /// order arm of the (partition-band × declaration × join-string)
+    /// 3-corner row past the [`Self::present_indices_joined`] present-
+    /// arm opener AND [`Self::missing_indices_joined`] missing-arm
+    /// closer at its FINAL third tile — [`Self::present_indices_joined`]
+    /// on (present, declaration, join-string) +
+    /// [`Self::missing_indices_joined`] on (missing, declaration,
+    /// join-string) + THIS projection on (repeating, declaration,
+    /// join-string). The natural next lifts on this face —
+    /// `sorted_present_indices_joined` / `sorted_missing_indices_joined`
+    /// / `sorted_repeating_indices_joined` — each bind through their
+    /// respective sibling Vec-return primitive under the same
+    /// `usize::to_string` + `slice::join` composition, closing the
+    /// (partition-band × ordering) 3×2 face on the join-string column
+    /// at the lex-order row.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// repeat-index-as-string projection becomes a TYPE-level primitive
+    /// on the closed-set trait rather than a per-consumer inline
+    /// `T::repeating_indices(items).iter().map(usize::to_string).collect::<Vec<_>>().join(sep)`
+    /// composition at every downstream generic site. THEORY.md §V.1 —
+    /// knowable platform; the (repeating, index, `String`, declaration)
+    /// corner was an unnamed inline composition recurring at every
+    /// prospective downstream "which INDICES did we REPEAT, rendered
+    /// joined?" site pre-lift. THEORY.md §VI.1 — generation over
+    /// composition; the projection emerges from ONE substrate
+    /// primitive ([`Self::repeating_indices`]) composed with the
+    /// standard-library `usize::to_string` + `slice::join` combinators,
+    /// not as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: NumPy's `",".join(map(str,
+    /// np.where(np.array([np.sum(items == v) >= 2 for v in all]))[0]))`
+    /// composing the strict-repeat boolean-mask positional projection
+    /// with a stringify + join; Julia's `join(string.(findall(v ->
+    /// count(==(v), items) >= 2, all)), sep)`; Racket's `(string-join
+    /// (map number->string (filter (lambda (i) (>= (count (curry
+    /// equal? (list-ref all i)) items) 2)) (range (length all)))) sep)`.
+    /// Translation through pleme-io primitives: a pure default method
+    /// composing [`Self::repeating_indices`] with `usize::to_string`
+    /// and `slice::join` — no new dep, no supertrait bound, no set-
+    /// shape carrier, no allocation beyond the natural intermediate
+    /// `Vec<String>` the `slice::join` combinator's per-slot
+    /// stringification already routes.
+    fn repeating_indices_joined(items: &[Self], sep: &str) -> ::std::string::String {
+        <Self as ClosedSet>::repeating_indices(items)
+            .into_iter()
+            .map(|i| i.to_string())
+            .collect::<::std::vec::Vec<::std::string::String>>()
+            .join(sep)
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -97521,6 +97655,201 @@ mod tests {
                         <StubKind as ClosedSet>::missing_indices_joined(&triple, " and "),
                         expected,
                         "T::missing_indices_joined({triple:?}, \" and \") diverged from the multi-character-separator composition arm — miss-index decimal-string join under a multi-character separator must match the natural `slice::join` composition byte-for-byte",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_indices_joined_over_the_empty_slice_returns_the_empty_string_across_every_separator(
+    ) {
+        // EMPTY-SLICE CONTRACT:
+        // `T::repeating_indices_joined(&[], sep) == ""`
+        // UNCONDITIONALLY for every `sep` — the empty slice hits zero
+        // positions and no target reaches multiplicity `>= 2`, so
+        // `T::repeating_indices(&[])` yields the empty `Vec`, and
+        // `slice::join` on an empty slice yields the empty string.
+        // Coincides on the empty-string fixpoint with the singleton
+        // and full-set endpoints one multiplicity-band arm over on the
+        // strict-repeat band.
+        let empty: &[StubKind] = &[];
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::repeating_indices_joined(empty, sep),
+                String::new(),
+                "T::repeating_indices_joined(&[], {sep:?}) diverged from the empty-string fixpoint — no target reaches multiplicity `>= 2` on the empty slice",
+            );
+        }
+    }
+
+    #[test]
+    fn repeating_indices_joined_over_the_full_set_returns_the_empty_string_across_every_separator()
+    {
+        // FULL-SET CONTRACT:
+        // `T::repeating_indices_joined(T::ALL, sep) == ""`
+        // UNCONDITIONALLY for every `sep` — the pairwise-distinctness
+        // invariant pins every variant of `T::ALL` as hitting itself
+        // at multiplicity `1`, so the strict-repeat `>= 2` test fails
+        // at every target, `T::repeating_indices(T::ALL)` yields the
+        // empty `Vec`, and `slice::join` on an empty slice yields the
+        // empty string. Coincides with the empty-slice and singleton
+        // endpoints one multiplicity-band arm over on the strict-
+        // repeat band.
+        let all = <StubKind as ClosedSet>::ALL;
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::repeating_indices_joined(all, sep),
+                String::new(),
+                "T::repeating_indices_joined(T::ALL, {sep:?}) diverged from the empty-string fixpoint — pairwise-distinctness pins every full-set variant at multiplicity `1`",
+            );
+        }
+    }
+
+    #[test]
+    fn repeating_indices_joined_over_the_doubled_full_set_equals_zero_to_cardinality_joined_across_every_separator(
+    ) {
+        // DOUBLED-FULL-SET CONTRACT:
+        // `T::repeating_indices_joined(doubled_full_set, sep) ==
+        // (0..T::CARDINALITY).map(|i| i.to_string()).collect::<Vec<_>>().join(sep)`
+        // UNCONDITIONALLY for every `sep` — the doubled full set hits
+        // every variant at multiplicity `2`, satisfying the strict-
+        // repeat `>= 2` test at every target, so
+        // `T::repeating_indices(doubled_full_set)` yields
+        // `(0..T::CARDINALITY).collect::<Vec<usize>>()` and the join
+        // over the resulting decimal-`usize` slots equals the
+        // substrate's `0..CARDINALITY` decimal-slot join exactly under
+        // any separator. LOAD-BEARING arm — the only canonical fixpuint
+        // that separates the strict-repeat band from the empty-string
+        // endpoints of the miss/present bands on the join-string column.
+        let all = <StubKind as ClosedSet>::ALL;
+        let doubled: Vec<StubKind> = all.iter().copied().chain(all.iter().copied()).collect();
+        let cardinality = <StubKind as ClosedSet>::CARDINALITY;
+        for sep in ["", ", ", "/", " | "] {
+            let expected: String = (0..cardinality)
+                .map(|i| i.to_string())
+                .collect::<Vec<String>>()
+                .join(sep);
+            assert_eq!(
+                <StubKind as ClosedSet>::repeating_indices_joined(&doubled, sep),
+                expected,
+                "T::repeating_indices_joined(doubled_full_set, {sep:?}) diverged from the (0..T::CARDINALITY).map(to_string).join({sep:?}) fixpoint — every doubled full-set variant hits multiplicity `2` and MUST contribute its declaration-order slot to the join",
+            );
+        }
+    }
+
+    #[test]
+    fn repeating_indices_joined_equals_repeating_indices_dot_map_to_string_dot_join_across_every_triple(
+    ) {
+        // COMPOSITION LAW: for every slice `items` and every separator
+        // `sep`, `T::repeating_indices_joined(items, sep) ==
+        // T::repeating_indices(items).iter().map(usize::to_string).collect::<Vec<_>>().join(sep)`
+        // — the join-string projection binds through the substrate's
+        // `T::repeating_indices` Vec-return primitive composed with
+        // `usize::to_string` and `slice::join`. Pins the (Vec-return,
+        // String-return) composition against the natural
+        // `repeating_indices + usize::to_string + slice::join` shape
+        // across three representative separators.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for sep in ["/", ", ", "|"] {
+                        let expected: String = <StubKind as ClosedSet>::repeating_indices(&triple)
+                            .into_iter()
+                            .map(|i| i.to_string())
+                            .collect::<Vec<String>>()
+                            .join(sep);
+                        assert_eq!(
+                            <StubKind as ClosedSet>::repeating_indices_joined(&triple, sep),
+                            expected,
+                            "T::repeating_indices_joined({triple:?}, {sep:?}) diverged from T::repeating_indices({triple:?}).iter().map(usize::to_string).collect().join({sep:?}) — the repeat-index-column composition law was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_indices_joined_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::repeating_indices_joined(items, sep) ==
+        // T::repeating_indices_joined(reversed items, sep)` on every
+        // slice for every separator — reversing a slice preserves its
+        // multiset of variant identities, and the strict-repeat `>= 2`
+        // membership predicate is a function of that multiset alone.
+        // The OUTPUT ordering is fixed by `T::ALL`'s declaration order
+        // regardless of the input ordering, so the joined `String`
+        // matches byte-for-byte under reversal.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    for sep in ["/", ", ", "|"] {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::repeating_indices_joined(&forward, sep),
+                            <StubKind as ClosedSet>::repeating_indices_joined(&reversed, sep),
+                            "T::repeating_indices_joined({forward:?}, {sep:?}) diverged from T::repeating_indices_joined({reversed:?}, {sep:?}) — the repeat-index-column re-entry-witness join MUST be a fixpoint of slice reversal",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_indices_joined_threads_empty_separator_into_a_concatenated_run() {
+        // EMPTY-SEPARATOR CONTRACT:
+        // `T::repeating_indices_joined(items, "") ==
+        // T::repeating_indices(items).iter().map(usize::to_string).collect::<String>()`
+        // on every slice — with an empty separator, `slice::join`
+        // degenerates to concatenation of the strict-repeat-index
+        // decimal-string list. Pins the degenerate-separator arm on
+        // the repeat-index axis matching
+        // `missing_indices_joined_threads_empty_separator_into_a_concatenated_run`
+        // and `present_indices_joined_threads_empty_separator_into_a_concatenated_run`
+        // one partition-band axis over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let concat: String = <StubKind as ClosedSet>::repeating_indices(&triple)
+                        .into_iter()
+                        .map(|i| i.to_string())
+                        .collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::repeating_indices_joined(&triple, ""),
+                        concat,
+                        "T::repeating_indices_joined({triple:?}, \"\") diverged from T::repeating_indices({triple:?}).iter().map(usize::to_string).collect::<String>() — the empty-separator degenerate arm was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_indices_joined_threads_multi_char_separator_verbatim() {
+        // MULTI-CHAR SEPARATOR CONTRACT:
+        // `T::repeating_indices_joined(items, " and ") ==
+        // T::repeating_indices(items).iter().map(usize::to_string).collect::<Vec<_>>().join(" and ")`
+        // on every slice — pins the multi-character separator arm
+        // through the same composition, catching a drift that might
+        // treat only single-character separators verbatim.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected: String = <StubKind as ClosedSet>::repeating_indices(&triple)
+                        .into_iter()
+                        .map(|i| i.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" and ");
+                    assert_eq!(
+                        <StubKind as ClosedSet>::repeating_indices_joined(&triple, " and "),
+                        expected,
+                        "T::repeating_indices_joined({triple:?}, \" and \") diverged from the multi-character-separator composition arm — repeat-index decimal-string join under a multi-character separator must match the natural `slice::join` composition byte-for-byte",
                     );
                 }
             }

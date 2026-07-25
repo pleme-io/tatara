@@ -41604,6 +41604,178 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .join(sep)
     }
 
+    /// The N-ARY LEX-ORDER "missing indices joined" projection — the
+    /// `String` rendering of [`Self::sorted_missing_indices`] under
+    /// `usize::to_string` joined by `sep`. Composes the substrate's
+    /// lex-axis miss-index Vec-return primitive with the per-slot
+    /// `usize`-to-`String` projection and the standard-library
+    /// [`slice::join`](https://doc.rust-lang.org/std/primitive.slice.html#method.join)
+    /// combinator so a passing implementor of
+    /// [`Self::sorted_missing_indices`] automatically satisfies this
+    /// projection at every downstream site. CLOSES the miss-arm one
+    /// PARTITION-BAND axis over on the LEX-ORDER row of the (partition-
+    /// band × ordering × join-string) 3×2 = 6-corner face on the index-
+    /// join column of the equivalence-partition index-aggregation
+    /// surface past the just-opened [`Self::sorted_present_indices_joined`]
+    /// present-arm one PARTITION-BAND axis over.
+    ///
+    /// Sibling posture to [`Self::sorted_present_indices_joined`] one
+    /// PARTITION-BAND axis over on the (present, missing) axis of the
+    /// lex-order miss-arm join-string surface — same ordering, same
+    /// return-shape, DE MORGAN dual partition-band. Sibling posture to
+    /// [`Self::sorted_missing_indices`] one return-shape axis over on
+    /// the (`Vec<usize>`, `String`) partition of the lex-order miss-arm
+    /// index-aggregation surface — the Vec-return arm materializes each
+    /// miss slot as a `usize`, this method joins them into a single
+    /// `String` under the caller's separator. Sibling posture to
+    /// [`Self::missing_indices_joined`] one ORDERING axis over on the
+    /// (declaration, lex) axis of the miss-index-join column — same
+    /// partition-band, same return-shape, different ordering. Sibling
+    /// posture to [`Self::sorted_missing_labels_joined`] one field-
+    /// flavor axis over on the (label, index) partition of the lex-
+    /// order miss-arm join-string surface — [`Self::sorted_missing_labels_joined`]
+    /// renders each miss slot in lex order as a `&'static str` label
+    /// through [`Self::label`], this method renders each miss slot in
+    /// lex order as a decimal-`usize` index-under-[`Self::index_of`]
+    /// rendered through `usize::to_string`.
+    ///
+    /// Composition law: for every slice `items` and every separator
+    /// `sep`, `T::sorted_missing_indices_joined(items, sep) ==
+    /// T::sorted_missing_indices(items).iter().map(usize::to_string).collect::<Vec<String>>().join(sep)`
+    /// — the join-string projection binds through the substrate's
+    /// [`Self::sorted_missing_indices`] Vec-return primitive composed
+    /// with `usize::to_string` and `slice::join`. Pinned by
+    /// `sorted_missing_indices_joined_equals_sorted_missing_indices_dot_map_to_string_dot_join_across_every_triple`.
+    ///
+    /// Cross-arm permutation identity: for every slice `items` and
+    /// every separator `sep`, `T::sorted_missing_indices_joined(items,
+    /// sep)` and `T::missing_indices_joined(items, sep)` render the
+    /// SAME miss-index multiset through `usize::to_string + slice::join`
+    /// — the two projections join the SAME set of indices under the
+    /// SAME separator, but the OUTPUT byte layout differs whenever
+    /// declaration order and lex order diverge on the miss-set. On
+    /// implementors where declaration order aligns with lex order, the
+    /// two projections coincide byte-for-byte; on implementors that
+    /// diverge, the two projections diverge on layout while agreeing
+    /// on membership.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the miss-set
+    /// membership predicate is a function of that multiset alone. The
+    /// OUTPUT ordering is fixed by [`Self::sorted_variants`]'s lex
+    /// order regardless of the input ordering, so the joined `String`
+    /// matches byte-for-byte under reversal. Pinned by
+    /// `sorted_missing_indices_joined_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::sorted_missing_indices_joined(&[], sep)
+    /// == T::sorted_variants().into_iter().map(T::index_of).map(|i|
+    /// i.to_string()).collect::<Vec<_>>().join(sep)` UNCONDITIONALLY
+    /// for every `sep` — the empty slice hits zero variants, so every
+    /// variant passes the "not present" filter and
+    /// [`Self::sorted_missing_indices`] yields
+    /// `T::sorted_variants().into_iter().map(T::index_of).collect()`;
+    /// the join over the resulting decimal-`usize` slots equals the
+    /// substrate's lex-order full-set index-join exactly under any
+    /// separator. Full-set contract: `T::sorted_missing_indices_joined(<T
+    /// as ClosedSet>::ALL, sep)` is the empty `String` UNCONDITIONALLY
+    /// for every `sep` — the pairwise-distinctness invariant pins every
+    /// variant of [`Self::ALL`] as hitting itself at its own
+    /// [`Self::index_of`], so the miss-set is empty on the full slice,
+    /// [`Self::sorted_missing_indices`] yields the empty `Vec`, and
+    /// `slice::join` on an empty slice yields the empty string. Both
+    /// endpoints are DE MORGAN duals of the corresponding
+    /// [`Self::sorted_present_indices_joined`] endpoints one partition-
+    /// arm axis over.
+    ///
+    /// Bool-projection identity: for every slice `items` and every
+    /// separator `sep`, `T::sorted_missing_indices_joined(items,
+    /// sep).is_empty() == T::is_covering(items)` — the lex-order miss-
+    /// index join-string is empty iff the covering predicate holds (iff
+    /// every variant is hit). The bool-projection is INVARIANT under
+    /// the (declaration, lex) axis because covering-of-the-miss-set is
+    /// a function of the miss-set's cardinality alone. Pinned indirectly
+    /// through the composition law + [`Self::sorted_missing_indices`]'s
+    /// bool-projection identity one return-shape axis over.
+    ///
+    /// Future consumers — a `tatara-check` diagnostic that renders the
+    /// concrete `WorkloadPhase` indices a rollout window MISSED in
+    /// canonical LEX order as a compact deterministic wire-string
+    /// (`"1,3,5"` — numerically dense, `usize`-round-trippable through
+    /// `str::parse`, AUTHOR-STABLE regardless of `ALL`-array
+    /// declaration-layout drift because the index positions walk
+    /// [`Self::sorted_variants`] rather than [`Self::ALL`]) for
+    /// per-cluster gap-witness serialization; an LSP diagnostic that
+    /// renders the miss-indices of an author-written closed-set field
+    /// in canonical lex order as a comma-joined slot-number hint
+    /// against a `[Payload; T::CARDINALITY]` slotted lookup table
+    /// pointing out which slots are UNCOVERED in canonical lex order;
+    /// a Sekiban audit-trail projection whose per-window gap-index
+    /// witness renders as a deterministic pipe-joined string across
+    /// machines in canonical lex order regardless of declaration-layout
+    /// drift; a `tatara-lisp::macro_expand::Expander` diagnostic that
+    /// emits the concrete UNBOUND vocabulary slot-indices in canonical
+    /// lex order as a slash-joined natural-language surface. Each binds
+    /// to ONE typed N-ary lex-order miss-index-as-string projection on
+    /// the trait rather than re-deriving the four-primitive
+    /// `T::sorted_missing_indices(items).iter().map(usize::to_string).collect::<Vec<_>>().join(sep)`
+    /// composition inline per callsite.
+    ///
+    /// Compounding closure: the (partition-band × ordering × return-
+    /// shape) 3×2×2 = 12-corner equivalence-partition index-
+    /// aggregation surface now CLOSES the miss-arm one PARTITION-BAND
+    /// axis over on the LEX-ORDER row of the (partition-band × lex-
+    /// order × join-string) 3-corner row past the just-opened present-
+    /// arm [`Self::sorted_present_indices_joined`] one PARTITION-BAND
+    /// axis over — [`Self::sorted_present_indices_joined`] on (present,
+    /// lex-order, join-string) + THIS projection on (missing, lex-
+    /// order, join-string). The natural next lift on this face —
+    /// `sorted_repeating_indices_joined` on (repeating, lex-order,
+    /// join-string) EXHAUSTIVELY closing the lex-order row at its
+    /// FINAL third tile AND EXHAUSTIVELY closing the (partition-band ×
+    /// ordering × join-string) 3×2 = 6-corner face at its FINAL sixth
+    /// tile — binds through its sibling lex-order Vec-return primitive
+    /// [`Self::sorted_repeating_indices`] under the same
+    /// `usize::to_string` + `slice::join` composition.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary lex-
+    /// order miss-index-as-string projection becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline `T::sorted_missing_indices(items).iter().map
+    /// (usize::to_string).collect::<Vec<_>>().join(sep)` composition at
+    /// every downstream generic site. THEORY.md §V.1 — knowable
+    /// platform; the (missing, index, `String`, lex) corner was an
+    /// unnamed inline composition recurring at every prospective
+    /// downstream "which INDICES did we MISS, rendered joined in lex
+    /// order?" site pre-lift. THEORY.md §VI.1 — generation over
+    /// composition; the projection emerges from the composition of ONE
+    /// substrate primitive ([`Self::sorted_missing_indices`]) with the
+    /// standard-library `usize::to_string` + `slice::join` combinators,
+    /// not as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: NumPy's `",".join(map(str, np.argsort
+    /// (labels)[~np.isin(np.argsort(labels).map(all.__getitem__),
+    /// items)]))` composing the lex-sorted enumeration's positional
+    /// projection with a miss-set boolean mask and a stringify + join;
+    /// Julia's `join(string.(sort(findall(v -> !(v in items), all),
+    /// by=i -> label(all[i]))), sep)`; Racket's `(string-join (map
+    /// number->string (sort (filter (lambda (i) (not (member (list-ref
+    /// all i) items))) (range (length all))) #:key (lambda (i) (label
+    /// (list-ref all i))))) sep)`. Translation through pleme-io
+    /// primitives: a pure default method composing
+    /// [`Self::sorted_missing_indices`] with `usize::to_string` and
+    /// `slice::join` — no new dep, no supertrait bound, no set-shape
+    /// carrier, no allocation beyond the natural intermediate
+    /// `Vec<String>` the `slice::join` combinator's per-slot
+    /// stringification already routes.
+    fn sorted_missing_indices_joined(items: &[Self], sep: &str) -> ::std::string::String {
+        <Self as ClosedSet>::sorted_missing_indices(items)
+            .into_iter()
+            .map(|i| i.to_string())
+            .collect::<::std::vec::Vec<::std::string::String>>()
+            .join(sep)
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -98307,6 +98479,338 @@ mod tests {
             ),
             "2, 0",
             "sorted_present_indices_joined over [Gamma, Alpha] must walk sorted_variants under index_of — [Alpha:2, Gamma:0] rendered as \"2, 0\" — regardless of input ordering or ALL-array declaration layout",
+        );
+    }
+
+    #[test]
+    fn sorted_missing_indices_joined_over_the_empty_slice_equals_sorted_variants_indexed_and_joined_across_every_separator(
+    ) {
+        // EMPTY-SLICE CONTRACT:
+        // `T::sorted_missing_indices_joined(&[], sep) ==
+        // T::sorted_variants().into_iter().map(T::index_of).map(|i|
+        // i.to_string()).collect::<Vec<_>>().join(sep)`
+        // UNCONDITIONALLY for every `sep` — the empty slice hits zero
+        // variants, so every variant passes the "not present" filter,
+        // `T::sorted_missing_indices(&[])` yields
+        // `T::sorted_variants().into_iter().map(T::index_of).collect()`,
+        // and the join over the resulting decimal-`usize` slots equals
+        // the substrate's lex-order full-set index-join exactly under
+        // any separator. DE MORGAN dual of
+        // `sorted_present_indices_joined_over_the_empty_slice_returns_the_empty_string_across_every_separator`
+        // one partition-arm axis over — the empty-slice endpoint SWAPS
+        // between the two partition arms: present collapses to the
+        // empty string, missing spans the full lex-order index list.
+        let empty: &[StubKind] = &[];
+        for sep in ["", ", ", "/", " | "] {
+            let expected: String = <StubKind as ClosedSet>::sorted_variants()
+                .into_iter()
+                .map(<StubKind as ClosedSet>::index_of)
+                .map(|i| i.to_string())
+                .collect::<Vec<String>>()
+                .join(sep);
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_missing_indices_joined(empty, sep),
+                expected,
+                "T::sorted_missing_indices_joined(&[], {sep:?}) diverged from T::sorted_variants().into_iter().map(T::index_of).map(to_string).join({sep:?}) — the (empty-slice, lex-order miss-index-join) fixpoint was violated",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_missing_indices_joined_over_the_full_set_returns_the_empty_string_across_every_separator(
+    ) {
+        // FULL-SET CONTRACT: `T::sorted_missing_indices_joined(T::ALL,
+        // sep) == ""` UNCONDITIONALLY for every `sep` — the pairwise-
+        // distinctness invariant pins every variant of `T::ALL` as
+        // hitting itself at its own `T::index_of`, so the miss-set is
+        // empty on the full slice, `T::sorted_missing_indices(T::ALL)`
+        // yields the empty `Vec`, and `slice::join` on an empty slice
+        // yields the empty string. DE MORGAN dual of
+        // `sorted_present_indices_joined_over_the_full_set_equals_sorted_variants_indexed_and_joined_across_every_separator`
+        // one partition-arm axis over — the full-set endpoint SWAPS
+        // between the two partition arms: present spans the full lex-
+        // order index list, missing collapses to the empty string.
+        let all = <StubKind as ClosedSet>::ALL;
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_missing_indices_joined(all, sep),
+                String::new(),
+                "T::sorted_missing_indices_joined(T::ALL, {sep:?}) diverged from the empty-string fixpoint — the pairwise-distinctness invariant pins the miss-set as empty on the full-set slice",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_missing_indices_joined_equals_sorted_missing_indices_dot_map_to_string_dot_join_across_every_triple(
+    ) {
+        // COMPOSITION LAW: for every slice `items` and every separator
+        // `sep`, `T::sorted_missing_indices_joined(items, sep) ==
+        // T::sorted_missing_indices(items).iter().map(usize::to_string).collect::<Vec<_>>().join(sep)`
+        // — the lex-order miss-index join-string projection binds
+        // through the substrate's `T::sorted_missing_indices` Vec-return
+        // primitive composed with `usize::to_string` and `slice::join`.
+        // Pins the (Vec-return, String-return) lex-order composition
+        // against the natural `sorted_missing_indices + usize::to_string
+        // + slice::join` shape across three representative separators.
+        // Sibling posture to
+        // `sorted_present_indices_joined_equals_sorted_present_indices_dot_map_to_string_dot_join_across_every_triple`
+        // one PARTITION-BAND axis over — same composition shape, DE
+        // MORGAN dual sibling Vec-return primitive.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for sep in ["/", ", ", "|"] {
+                        let expected: String =
+                            <StubKind as ClosedSet>::sorted_missing_indices(&triple)
+                                .into_iter()
+                                .map(|i| i.to_string())
+                                .collect::<Vec<String>>()
+                                .join(sep);
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_missing_indices_joined(&triple, sep),
+                            expected,
+                            "T::sorted_missing_indices_joined({triple:?}, {sep:?}) diverged from T::sorted_missing_indices({triple:?}).iter().map(usize::to_string).collect().join({sep:?}) — the lex-order miss-index-column composition law was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_indices_joined_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::sorted_missing_indices_joined(items, sep) ==
+        // T::sorted_missing_indices_joined(reversed items, sep)` on
+        // every slice for every separator — reversing a slice preserves
+        // its multiset of variant identities, and the miss-set
+        // membership predicate is a function of that multiset alone.
+        // The OUTPUT ordering is fixed by `T::sorted_variants`'s lex
+        // order regardless of the input ordering, so the joined
+        // `String` matches byte-for-byte under reversal.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    for sep in ["/", ", ", "|"] {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_missing_indices_joined(&forward, sep),
+                            <StubKind as ClosedSet>::sorted_missing_indices_joined(&reversed, sep),
+                            "T::sorted_missing_indices_joined({forward:?}, {sep:?}) diverged from T::sorted_missing_indices_joined({reversed:?}, {sep:?}) — the lex-order miss-index-column join MUST be a fixpoint of slice reversal",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_indices_joined_threads_empty_separator_into_a_concatenated_sorted_run() {
+        // EMPTY-SEPARATOR CONTRACT:
+        // `T::sorted_missing_indices_joined(items, "") ==
+        // T::sorted_missing_indices(items).iter().map(usize::to_string).collect::<String>()`
+        // on every slice — with an empty separator, `slice::join`
+        // degenerates to concatenation of the lex-order miss-index
+        // decimal-string list. Sibling posture to
+        // `sorted_present_indices_joined_threads_empty_separator_into_a_concatenated_sorted_run`
+        // one PARTITION-BAND axis over — the empty-separator degenerate
+        // arm is INVARIANT under the (present, missing) axis on the
+        // lex-order arm because both sibling Vec-return primitives
+        // collapse under the same `slice::join` degenerate-separator
+        // discipline.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let concat: String = <StubKind as ClosedSet>::sorted_missing_indices(&triple)
+                        .into_iter()
+                        .map(|i| i.to_string())
+                        .collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_missing_indices_joined(&triple, ""),
+                        concat,
+                        "T::sorted_missing_indices_joined({triple:?}, \"\") diverged from T::sorted_missing_indices({triple:?}).iter().map(usize::to_string).collect::<String>() — the empty-separator degenerate arm was violated on the miss-arm",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_indices_joined_threads_multi_char_separator_verbatim() {
+        // MULTI-CHAR SEPARATOR CONTRACT:
+        // `T::sorted_missing_indices_joined(items, " and ") ==
+        // T::sorted_missing_indices(items).iter().map(usize::to_string).collect::<Vec<_>>().join(" and ")`
+        // on every slice — pins the multi-character separator arm
+        // through the same composition, catching a drift that might
+        // treat only single-character separators verbatim on the lex-
+        // order miss-arm.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected: String = <StubKind as ClosedSet>::sorted_missing_indices(&triple)
+                        .into_iter()
+                        .map(|i| i.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" and ");
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_missing_indices_joined(&triple, " and "),
+                        expected,
+                        "T::sorted_missing_indices_joined({triple:?}, \" and \") diverged from the multi-character-separator composition arm — lex-order miss-index decimal-string join under a multi-character separator must match the natural `slice::join` composition byte-for-byte",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_indices_joined_is_empty_iff_is_covering_across_every_triple() {
+        // BOOL-PROJECTION IDENTITY: for every slice `items` and every
+        // separator `sep`,
+        // `T::sorted_missing_indices_joined(items, sep).is_empty() ==
+        // T::is_covering(items)` — the lex-order miss-index join-string
+        // is empty iff the covering predicate holds (iff every variant
+        // is hit). The bool-projection is INVARIANT under the
+        // (declaration, lex) axis because covering-of-the-miss-set is
+        // a function of the miss-set's cardinality alone. Pins the
+        // covering-predicate bool cross-check against the miss-arm
+        // join-string emptiness bit across the 3×3×3 = 27-corner triple
+        // space and three representative separators. Sibling posture to
+        // `sorted_missing_indices_is_empty_iff_is_covering_holds_across_every_triple`
+        // one RETURN-SHAPE axis over — the Vec-return primitive's
+        // is-empty bit and this String-return primitive's is-empty bit
+        // MUST coincide.
+        let empty: &[StubKind] = &[];
+        for sep in ["/", ", ", "|"] {
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_missing_indices_joined(empty, sep).is_empty(),
+                <StubKind as ClosedSet>::is_covering(empty),
+                "T::sorted_missing_indices_joined(&[], {sep:?}).is_empty() diverged from T::is_covering(&[]) — the lex-order miss-arm join-string emptiness bit MUST coincide with the covering predicate at the empty-slice endpoint",
+            );
+        }
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let covering = <StubKind as ClosedSet>::is_covering(&triple);
+                    for sep in ["/", ", ", "|"] {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::sorted_missing_indices_joined(&triple, sep)
+                                .is_empty(),
+                            covering,
+                            "T::sorted_missing_indices_joined({triple:?}, {sep:?}).is_empty() diverged from T::is_covering({triple:?}) — the lex-order miss-arm join-string emptiness bit MUST coincide with the covering predicate byte-for-byte",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_missing_indices_joined_normalizes_arbitrary_declaration_order() {
+        // The sort-step contract on the lex-order miss-arm join-string
+        // column — `T::sorted_missing_indices_joined(items, sep)` MUST
+        // walk `T::sorted_missing_indices` (which walks
+        // `T::sorted_variants` under `T::index_of`, filtered to miss-
+        // set membership) before threading `slice::join`, regardless of
+        // the implementor's `ALL`-array layout. A regression that
+        // returns `T::missing_indices_joined(items, sep)` verbatim
+        // (without composing through the lex-order Vec-index peer)
+        // would pass every StubKind pin above (because StubKind's
+        // declaration order aligns with lex order — index_of(Alpha)=0
+        // both ways) but silently bifurcate the lex-order miss-arm
+        // join-string surface for any implementor whose declaration
+        // order differs from byte-wise sort order. Pinning the sort
+        // discipline here with a deliberately-out-of-order stub catches
+        // that drift on the miss-arm join-string face directly. Sibling
+        // posture to
+        // `sorted_present_indices_joined_normalizes_arbitrary_declaration_order`
+        // one PARTITION-BAND axis over — same sort discipline, DE
+        // MORGAN dual per-slot filter (`is not present` here vs `is
+        // present` there).
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ReverseMissingIndexJoinStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownReverseMissingIndexJoinStubKind(pub String);
+        impl core::fmt::Display for UnknownReverseMissingIndexJoinStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown reverse missing index join stub kind: {}",
+                    self.0
+                )
+            }
+        }
+        impl ClosedSet for ReverseMissingIndexJoinStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "reverse missing index join stub kind";
+            type Unknown = UnknownReverseMissingIndexJoinStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownReverseMissingIndexJoinStubKind(s.to_owned())
+            }
+        }
+        // Declaration order: [Gamma, Beta, Alpha] → indices
+        // [Gamma:0, Beta:1, Alpha:2]. Lex order (by label):
+        // [Alpha, Beta, Gamma] → indices [Alpha:2, Beta:1, Gamma:0].
+        //
+        // Empty slice: declaration-arm renders "0, 1, 2" (indices in
+        // declaration order — every variant is missing); lex-arm
+        // renders "2, 1, 0" (indices of lex-sorted variants under
+        // index_of — Alpha:2, Beta:1, Gamma:0).
+        let empty: &[ReverseMissingIndexJoinStubKind] = &[];
+        assert_eq!(
+            <ReverseMissingIndexJoinStubKind as ClosedSet>::missing_indices_joined(empty, ", "),
+            "0, 1, 2",
+            "missing_indices_joined over the empty slice must preserve declaration order — every variant absent, indices 0, 1, 2 in ALL-array layout",
+        );
+        assert_eq!(
+            <ReverseMissingIndexJoinStubKind as ClosedSet>::sorted_missing_indices_joined(
+                empty, ", "
+            ),
+            "2, 1, 0",
+            "sorted_missing_indices_joined over the empty slice must walk sorted_variants under index_of — [Alpha:2, Beta:1, Gamma:0] rendered as \"2, 1, 0\" — regardless of the implementor's ALL-array declaration layout",
+        );
+        // Partial hit: [Beta] — miss-set is {Alpha, Gamma}.
+        // Declaration-arm walks ALL and emits Gamma:0, then Alpha:2
+        // (Beta:1 skipped because hit) → "0, 2". Lex-arm walks
+        // sorted_variants (Alpha, Beta, Gamma), filters to misses
+        // ({Alpha, Gamma}), emits Alpha:2, then Gamma:0 → "2, 0".
+        let single = [ReverseMissingIndexJoinStubKind::Beta];
+        assert_eq!(
+            <ReverseMissingIndexJoinStubKind as ClosedSet>::missing_indices_joined(&single, ", "),
+            "0, 2",
+            "missing_indices_joined over [Beta] must walk ALL in declaration order — Gamma:0, Alpha:2 → \"0, 2\"",
+        );
+        assert_eq!(
+            <ReverseMissingIndexJoinStubKind as ClosedSet>::sorted_missing_indices_joined(
+                &single, ", "
+            ),
+            "2, 0",
+            "sorted_missing_indices_joined over [Beta] must walk sorted_variants under index_of — [Alpha:2, Gamma:0] rendered as \"2, 0\" — regardless of input ordering or ALL-array declaration layout",
+        );
+        // Full-set hit: [Gamma, Beta, Alpha] — miss-set is empty on
+        // both arms, so both projections collapse to the empty string.
+        let full = <ReverseMissingIndexJoinStubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <ReverseMissingIndexJoinStubKind as ClosedSet>::sorted_missing_indices_joined(
+                full, ", "
+            ),
+            "",
+            "sorted_missing_indices_joined over T::ALL must collapse to the empty string — the pairwise-distinctness invariant pins the miss-set as empty on the full-set slice regardless of the ALL-array declaration layout",
         );
     }
 

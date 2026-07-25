@@ -39915,6 +39915,178 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::sorted_missing_labels(items).join(sep)
     }
 
+    /// The N-ARY LEX-ORDER "repeating labels" projection — the
+    /// `Vec<&'static str>` label rendering of
+    /// [`Self::sorted_repeating_variants`] under [`Self::label`]. Every
+    /// label `s` in the returned vector is the canonical
+    /// [`Self::label`] rendering of some variant whose per-target
+    /// multiplicity in `items` is `>= 2`; the lex order of
+    /// [`Self::sorted_repeating_variants`] is preserved verbatim. The
+    /// LEX-ORDER peer of [`Self::repeating_labels`] one ORDERING axis
+    /// over on the equivalence-partition surface — opens the lex arm
+    /// of the (strict-repeat × `Vec<&'static str>`) column past the
+    /// declaration arm the sibling [`Self::repeating_labels`] closed,
+    /// mirroring [`Self::sorted_present_labels`] opening its lex arm
+    /// past [`Self::present_labels`] and [`Self::sorted_missing_labels`]
+    /// opening its lex arm past [`Self::missing_labels`].
+    ///
+    /// Sibling posture to [`Self::sorted_repeating_variants`] one
+    /// return-shape axis over on the (`Vec<Self>` typed-variant witness,
+    /// `Vec<&'static str>` label witness) partition of the lex-order arm
+    /// of the strict-repeat band — the typed-variant arm materializes
+    /// each strict-repeat slot as `Self`, this method labels each slot
+    /// under [`Self::label`]. Sibling posture to [`Self::sorted_missing_labels`]
+    /// and [`Self::sorted_present_labels`] one MULTIPLICITY-BAND axis
+    /// over on the lex-order label-Vec-return column — the three share
+    /// the lex-order ordering AND the label-Vec-return shape; they
+    /// differ only on the multiplicity-band column, where miss reports
+    /// `== 0`, present reports `>= 1`, and this projection reports
+    /// `>= 2`.
+    ///
+    /// Cross-arm permutation identity: for every slice `items`,
+    /// `T::sorted_repeating_labels(items)` is a PERMUTATION of
+    /// `T::repeating_labels(items)` — the two projections label the
+    /// SAME strict-repeat set under [`Self::label`], so the multiset
+    /// of labels in the two returned Vecs coincides though the
+    /// ordering differs. On implementors where declaration order
+    /// aligns with lex order, the two projections coincide element-
+    /// for-element; on implementors that diverge, they diverge on
+    /// layout while agreeing on membership. Pinned by
+    /// `sorted_repeating_labels_is_a_permutation_of_repeating_labels_across_every_triple`.
+    ///
+    /// Cardinality identity: for every slice `items`,
+    /// `T::sorted_repeating_labels(items).len() ==
+    /// T::count_repeating_variants(items)` — the lex-order label-Vec-
+    /// return strict-repeat projection's length matches the usize-
+    /// return strict-repeat count exactly, and matches the declaration-
+    /// order label-Vec-return strict-repeat length one ordering axis
+    /// over at [`Self::repeating_labels`]. Pinned by
+    /// `sorted_repeating_labels_length_equals_count_repeating_variants_across_every_triple`.
+    ///
+    /// Composition law: for every slice `items`,
+    /// `T::sorted_repeating_labels(items) ==
+    /// T::sorted_repeating_variants(items).into_iter().map(T::label).collect()`
+    /// — the lex-order label-Vec projection binds through the
+    /// substrate's [`Self::sorted_repeating_variants`] Vec-return
+    /// primitive composed with the per-slot [`Self::label`] projection.
+    /// Pinned by
+    /// `sorted_repeating_labels_equals_sorted_repeating_variants_mapped_under_label_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the strict-
+    /// repeat predicate is a function of that multiset alone. The
+    /// OUTPUT ordering is fixed by [`Self::sorted_variants`]'s lex
+    /// order regardless of the input ordering. Pinned by
+    /// `sorted_repeating_labels_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Bool-projection identity: for every slice `items`,
+    /// `T::sorted_repeating_labels(items).is_empty() ==
+    /// !T::is_repeating_any(items)` — the lex-order strict-repeat
+    /// label list is empty iff the strict-repeat existential fails.
+    /// The bool-projection is INVARIANT under the (declaration, lex)
+    /// axis because strict-repeat-emptiness is a function of the
+    /// strict-repeat set's cardinality alone. Pinned by
+    /// `sorted_repeating_labels_is_empty_iff_not_is_repeating_any_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::sorted_repeating_labels(&[])` is the
+    /// empty `Vec` UNCONDITIONALLY — the empty slice hits zero
+    /// positions and no target reaches multiplicity `>= 2`. Singleton
+    /// contract: `T::sorted_repeating_labels(&[v])` is the empty `Vec`
+    /// for every variant `v` — a singleton hits multiplicity `1` at
+    /// exactly one target and the strict-repeat `>= 2` test fails at
+    /// every target. Full-set contract: `T::sorted_repeating_labels(<T
+    /// as ClosedSet>::ALL)` is the empty `Vec` UNCONDITIONALLY — the
+    /// well-formedness pairwise-distinctness invariant pins every
+    /// variant of [`Self::ALL`] as hitting itself, every per-target
+    /// multiplicity is `1`, and the strict-repeat `>= 2` test fails.
+    /// Doubled-full-set contract: `T::sorted_repeating_labels` on the
+    /// doubled full set equals [`Self::sorted_labels`] UNCONDITIONALLY
+    /// — the doubled full set hits every variant at multiplicity `2`,
+    /// so every label of [`Self::ALL`] contributes in lex order. The
+    /// doubled-full-set arm is LOAD-BEARING — the ONLY canonical
+    /// fixpoint arm that separates the strict-repeat band from the
+    /// miss band on the lex-label-Vec column (empty and full-set both
+    /// coincide on `[]`; the multiplicity `== 2` doubled-full-set is
+    /// what forces non-emptiness). All four pinned across every kind.
+    ///
+    /// Future consumers — a `tatara-check` diagnostic that renders
+    /// the concrete `WorkloadPhase` labels a rollout window RE-ENTERED
+    /// (multiplicity `>= 2`) in canonical lex order as author-stable
+    /// text (`"re-entered phases: contracting, ready, warmup"` —
+    /// stable regardless of `ALL`-array layout drift); an LSP
+    /// diagnostic on a Lisp-author-written closed-set field that
+    /// renders the strict-repeat label set in canonical lex order as
+    /// an author-facing "duplicate values" warning; a Sekiban audit-
+    /// trail projection that carries the concrete strict-repeat label
+    /// set of a classification poset window in canonical lex order as
+    /// its per-window witness across machines regardless of
+    /// declaration-layout drift; a `tatara-lisp::macro_expand::Expander`
+    /// hygiene pass that reports the exact set of vocabulary
+    /// identifiers a template bound MORE THAN ONCE in canonical lex
+    /// order as a natural-language surface. Each binds to ONE typed
+    /// N-ary lex-order strict-repeat label projection on the trait
+    /// rather than re-deriving the `sorted_repeating_variants +
+    /// map(label) + collect` four-primitive composition inline per
+    /// callsite.
+    ///
+    /// Compounding closure: the (partition-band × return-shape ×
+    /// ordering) 3×4×2 matrix over the closed-set label-aggregation
+    /// surface now OPENS the (repeating × `Vec<&'static str>` × lex-
+    /// order) corner past the pre-existing (present × `Vec<&'static
+    /// str>` × lex-order) [`Self::sorted_present_labels`] and (absent
+    /// × `Vec<&'static str>` × lex-order) [`Self::sorted_missing_labels`]
+    /// doublet — mirroring the exhaustively-closed declaration-order
+    /// trio (present × decl) [`Self::present_labels`], (absent × decl)
+    /// [`Self::missing_labels`], (repeating × decl)
+    /// [`Self::repeating_labels`]. The natural next lift on this face
+    /// — a `sorted_repeating_labels_joined` on (repeating × `String` ×
+    /// lex-order) via a `slice::join` composition on this Vec-arm,
+    /// EXHAUSTIVELY CLOSING the (partition-band × ordering) 3×2 face
+    /// on the label-join column at its final sixth tile past the pre-
+    /// existing quintet of [`Self::present_labels_joined`],
+    /// [`Self::missing_labels_joined`], [`Self::repeating_labels_joined`],
+    /// [`Self::sorted_present_labels_joined`], and
+    /// [`Self::sorted_missing_labels_joined`].
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary lex-
+    /// order strict-repeat label projection becomes a TYPE-level
+    /// primitive on the closed-set trait rather than a per-consumer
+    /// inline `T::sorted_repeating_variants(items).into_iter().map
+    /// (T::label).collect()` composition at every downstream generic
+    /// site. THEORY.md §V.1 — knowable platform; the (repeating,
+    /// label, lex) corner was an unnamed inline composition recurring
+    /// at every prospective downstream "which labels did we REPEAT,
+    /// in canonical lex order?" site pre-lift. THEORY.md §VI.1 —
+    /// generation over composition; the lex-order strict-repeat label
+    /// projection emerges from the composition of TWO substrate
+    /// primitives ([`Self::sorted_repeating_variants`] +
+    /// [`Self::label`]) via `Iterator::map` + `Iterator::collect`,
+    /// not as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Racket's `(map T-label (sort (filter
+    /// (lambda (v) (>= (count v items) 2)) (enum->list T)) #:key
+    /// T-label))` composing the strict-repeat filter with a lex sort
+    /// and a `map` under `label`; Haskell's `map label . sortOn label
+    /// . filter (\v -> length (filter (==v) items) >= 2) all` on the
+    /// `Bounded + Enum + Show + Eq` type-class quartet; Julia's
+    /// `[label(v) for v in sort(filter(v -> count(==(v), items) >= 2,
+    /// all), by=label)]`; SQL's `SELECT label(variant) FROM t GROUP
+    /// BY variant HAVING COUNT(*) >= 2 ORDER BY label(variant)`.
+    /// Translation through pleme-io primitives: a pure default method
+    /// mapping the trait's existing [`Self::sorted_repeating_variants`]
+    /// Vec-return primitive under the per-slot [`Self::label`]
+    /// projection — no new dep, no supertrait bound, no set-shape
+    /// carrier, no additional allocation beyond the natural
+    /// `Vec<&'static str>` [`Self::sorted_labels`]'s sibling surface
+    /// already routes.
+    fn sorted_repeating_labels(items: &[Self]) -> ::std::vec::Vec<&'static str> {
+        <Self as ClosedSet>::sorted_repeating_variants(items)
+            .into_iter()
+            .map(<Self as ClosedSet>::label)
+            .collect()
+    }
+
     /// The N-ARY DECLARATION-ORDER "present indices" projection — the
     /// `Vec<usize>` [`Self::ALL`]-index rendering of
     /// [`Self::present_variants`] under [`Self::index_of`]. Every
@@ -94178,6 +94350,356 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn sorted_repeating_labels_returns_the_empty_vec_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT: `T::sorted_repeating_labels(&[])` is the
+        // empty `Vec` on every implementor — the empty slice hits zero
+        // positions, so every per-target multiplicity is `0` and the
+        // strict-repeat `>= 2` test fails at every target. Sibling
+        // posture to `repeating_labels_returns_the_empty_vec_on_the_empty_slice_across_every_kind`
+        // one ORDERING axis over on the label-Vec-return column of
+        // the strict-repeat band — both arms collapse to `[]` because
+        // the (multiplicity `== 0`) endpoint falls below the strict-
+        // repeat `>= 2` threshold regardless of the ordering
+        // discipline applied to a zero-length list.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_repeating_labels(empty),
+            Vec::<&'static str>::new(),
+        );
+    }
+
+    #[test]
+    fn sorted_repeating_labels_returns_the_empty_vec_on_every_singleton_across_every_variant() {
+        // SINGLETON CONTRACT: `T::sorted_repeating_labels(&[v])` is
+        // the empty `Vec` for every variant `v` — a singleton hits
+        // multiplicity `1` at exactly one target and the strict-
+        // repeat `>= 2` test fails at every target. The singleton
+        // endpoint is the boundary that separates the strict-repeat
+        // band from the presence band on the lex-order label-Vec-
+        // return column: `T::sorted_present_labels(&[v]) ==
+        // vec![T::label(v)]` at the SAME singleton, so the two lex-
+        // order label projections diverge on the (mult `>= 1`, mult
+        // `>= 2`) boundary at every singleton fixture.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::sorted_repeating_labels(&singleton),
+                Vec::<&'static str>::new(),
+                "T::sorted_repeating_labels({singleton:?}) diverged from [] — a singleton hits multiplicity `1` at every target and MUST NOT appear in the lex-order strict-repeat label band",
+            );
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_labels_over_the_full_set_returns_the_empty_vec_across_every_kind() {
+        // FULL-SET CONTRACT: `T::sorted_repeating_labels(<T as
+        // ClosedSet>::ALL)` is the empty `Vec` UNCONDITIONALLY — the
+        // well-formedness pairwise-distinctness invariant forces
+        // every variant to appear at EXACTLY ONE position of the
+        // full-set slice, so every per-target multiplicity is `1`
+        // and the strict-repeat `>= 2` test fails at every target.
+        // Mirrors the empty-slice endpoint above — both fixpoint
+        // arms collapse to `[]` because both the (multiplicity `== 0`)
+        // and the (multiplicity `== 1`) bands fall below the strict-
+        // repeat `>= 2` threshold. Sibling posture to
+        // `repeating_labels_over_the_full_set_returns_the_empty_vec_across_every_kind`
+        // one ORDERING axis over — the full-set contract is INVARIANT
+        // under the (declaration, lex) axis because strict-repeat-
+        // emptiness is a function of the strict-repeat set's
+        // cardinality alone.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_repeating_labels(all),
+            Vec::<&'static str>::new(),
+        );
+    }
+
+    #[test]
+    fn sorted_repeating_labels_over_the_doubled_full_set_equals_sorted_labels_across_every_kind() {
+        // DOUBLED-FULL-SET CONTRACT:
+        // `T::sorted_repeating_labels(doubled T::ALL) ==
+        // T::sorted_labels()` UNCONDITIONALLY — the doubled full set
+        // hits every variant at EXACTLY TWO positions, so every per-
+        // target multiplicity is `2` and the projection contributes
+        // every label of `T::ALL` exactly once in canonical lex
+        // order matching `T::sorted_labels()` byte-for-byte. Sibling
+        // posture to
+        // `repeating_labels_over_the_doubled_full_set_equals_labels_across_every_kind`
+        // one ORDERING axis over — the (repeating, label, lex)
+        // corner renders under lex order where the (repeating, label,
+        // declaration) corner rendered under declaration order. The
+        // doubled-full-set arm is LOAD-BEARING — the ONLY canonical
+        // fixpoint arm that separates the (multiplicity `>= 2`)
+        // strict-repeat band from the (multiplicity `== 0`) miss
+        // band on the lex-order label-Vec column (empty and full-set
+        // both coincide on `[]` here).
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_repeating_labels(&doubled),
+            <StubKind as ClosedSet>::sorted_labels(),
+        );
+    }
+
+    #[test]
+    fn sorted_repeating_labels_length_equals_count_repeating_variants_across_every_triple() {
+        // CARDINALITY IDENTITY:
+        // `T::sorted_repeating_labels(items).len() ==
+        // T::count_repeating_variants(items)` on every slice — the
+        // lex-order label-Vec-return strict-repeat projection's
+        // length matches the usize-return strict-repeat count
+        // exactly, and matches the declaration-order label-Vec-
+        // return strict-repeat length one ORDERING axis over from
+        // `repeating_labels_length_equals_count_repeating_variants_across_every_triple`.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_repeating_labels(empty).len(),
+            <StubKind as ClosedSet>::count_repeating_variants(empty),
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_repeating_labels(&triple).len(),
+                        <StubKind as ClosedSet>::count_repeating_variants(&triple),
+                        "T::sorted_repeating_labels({triple:?}).len() diverged from T::count_repeating_variants({triple:?}) — the (lex-order Vec-label-return, usize-return) strict-repeat-band cardinality identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_labels_equals_sorted_repeating_variants_mapped_under_label_across_every_triple(
+    ) {
+        // COMPOSITION LAW: for every slice `items`,
+        // `T::sorted_repeating_labels(items) ==
+        // T::sorted_repeating_variants(items).into_iter().map(T::label).collect()`
+        // — the lex-order label-Vec projection binds through the
+        // substrate's `T::sorted_repeating_variants` Vec-return
+        // primitive composed with the per-slot `T::label` projection.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected: Vec<&'static str> =
+                        <StubKind as ClosedSet>::sorted_repeating_variants(&triple)
+                            .into_iter()
+                            .map(<StubKind as ClosedSet>::label)
+                            .collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_repeating_labels(&triple),
+                        expected,
+                        "T::sorted_repeating_labels({triple:?}) diverged from T::sorted_repeating_variants({triple:?}).into_iter().map(T::label).collect() — the lex-order strict-repeat label-column composition law was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_labels_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::sorted_repeating_labels(items) ==
+        // T::sorted_repeating_labels(reversed items)` on every slice
+        // — reversing a slice preserves its multiset of variant
+        // identities, and the strict-repeat predicate is a function
+        // of that multiset alone. The OUTPUT ordering is fixed by
+        // `T::sorted_variants()`'s lex order regardless of the input
+        // ordering.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_repeating_labels(&forward),
+                        <StubKind as ClosedSet>::sorted_repeating_labels(&reversed),
+                        "T::sorted_repeating_labels({forward:?}) diverged from T::sorted_repeating_labels({reversed:?}) — the lex-order strict-repeat label-column projection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_labels_is_empty_iff_not_is_repeating_any_across_every_triple() {
+        // BOOL-PROJECTION IDENTITY:
+        // `T::sorted_repeating_labels(items).is_empty() ==
+        // !T::is_repeating_any(items)` on every slice — the lex-
+        // order strict-repeat label list is empty iff the strict-
+        // repeat existential fails. Cross-checks the lex-order label-
+        // Vec-return strict-repeat witness against the pre-existing
+        // bool-return strict-repeat existential, one return-shape
+        // column over from
+        // `repeating_labels_is_empty_iff_not_is_repeating_any_across_every_triple`
+        // one ORDERING axis over — the bool-projection is INVARIANT
+        // under the (declaration, lex) axis because strict-repeat-
+        // emptiness is a function of the strict-repeat set's
+        // cardinality alone.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::sorted_repeating_labels(empty).is_empty(),
+            !<StubKind as ClosedSet>::is_repeating_any(empty),
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::sorted_repeating_labels(&triple).is_empty(),
+                        !<StubKind as ClosedSet>::is_repeating_any(&triple),
+                        "T::sorted_repeating_labels({triple:?}).is_empty() diverged from !T::is_repeating_any({triple:?}) — the (lex-order Vec-label-return, bool-return) strict-repeat-band emptiness identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_labels_is_a_permutation_of_repeating_labels_across_every_triple() {
+        // CROSS-ARM PERMUTATION IDENTITY (repeating arm): for every
+        // slice `items`, `T::sorted_repeating_labels(items)` and
+        // `T::repeating_labels(items)` are PERMUTATIONS of each
+        // other — the two projections label the SAME strict-repeat
+        // set, so the multiset of labels in the two returned Vecs
+        // coincides though the ordering differs. Sibling posture to
+        // `sorted_missing_labels_is_a_permutation_of_missing_labels_across_every_triple`
+        // and
+        // `sorted_present_labels_is_a_permutation_of_present_labels_across_every_triple`
+        // one MULTIPLICITY-BAND axis over on the lex-order-vs-
+        // declaration-order label-column cross-arm identity of the
+        // equivalence-partition surface.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let mut decl = <StubKind as ClosedSet>::repeating_labels(&triple);
+                    let mut lex = <StubKind as ClosedSet>::sorted_repeating_labels(&triple);
+                    decl.sort_unstable();
+                    lex.sort_unstable();
+                    assert_eq!(
+                        decl, lex,
+                        "T::sorted_repeating_labels({triple:?}) is not a permutation of T::repeating_labels({triple:?}) — the (declaration, lex) label-column arms must label the SAME strict-repeat set on the equivalence-partition surface",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sorted_repeating_labels_normalizes_arbitrary_declaration_order() {
+        // The sort-step contract on the lex-order strict-repeat
+        // label-column surface — `T::sorted_repeating_labels(items)`
+        // MUST normalize an arbitrary declaration order into ASCII
+        // lexicographic label order, regardless of the implementor's
+        // `ALL`-array layout. A regression that returns
+        // `T::repeating_labels(items)` verbatim (without composing
+        // through the lex-order Vec-variant peer) would pass every
+        // StubKind pin above (because StubKind's declaration order
+        // aligns with lex order) but silently bifurcate the lex-
+        // order strict-repeat label surface for any implementor whose
+        // declaration order differs from byte-wise sort order.
+        // Pinning the sort discipline here with a deliberately-out-
+        // of-order stub catches that drift on the strict-repeat
+        // label-column arm directly. Sibling posture to
+        // `sorted_present_labels_and_sorted_missing_labels_normalize_arbitrary_declaration_order`
+        // one MULTIPLICITY-BAND axis over on the equivalence-
+        // partition surface.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ReverseRepeatLabelStubKind {
+            Gamma,
+            Beta,
+            Alpha,
+        }
+        #[derive(Debug)]
+        struct UnknownReverseRepeatLabelStubKind(pub String);
+        impl core::fmt::Display for UnknownReverseRepeatLabelStubKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(f, "unknown reverse repeat label stub kind: {}", self.0)
+            }
+        }
+        impl ClosedSet for ReverseRepeatLabelStubKind {
+            const ALL: &'static [Self] = &[Self::Gamma, Self::Beta, Self::Alpha];
+            const SET_LABEL: &'static str = "reverse repeat label stub kind";
+            type Unknown = UnknownReverseRepeatLabelStubKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Gamma => "gamma",
+                    Self::Beta => "beta",
+                    Self::Alpha => "alpha",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownReverseRepeatLabelStubKind(s.to_owned())
+            }
+        }
+        // Doubled full set → every variant repeats at mult `== 2`.
+        // Declaration-arm preserves layout: gamma, beta, alpha.
+        // Lex-arm normalizes: alpha, beta, gamma.
+        let doubled: Vec<ReverseRepeatLabelStubKind> =
+            <ReverseRepeatLabelStubKind as ClosedSet>::ALL
+                .iter()
+                .copied()
+                .chain(
+                    <ReverseRepeatLabelStubKind as ClosedSet>::ALL
+                        .iter()
+                        .copied(),
+                )
+                .collect();
+        assert_eq!(
+            <ReverseRepeatLabelStubKind as ClosedSet>::repeating_labels(&doubled),
+            vec!["gamma", "beta", "alpha"],
+            "repeating_labels over the doubled full set must preserve declaration order — gamma, beta, alpha",
+        );
+        assert_eq!(
+            <ReverseRepeatLabelStubKind as ClosedSet>::sorted_repeating_labels(&doubled),
+            vec!["alpha", "beta", "gamma"],
+            "sorted_repeating_labels over the doubled full set must normalize to lex order — alpha, beta, gamma — regardless of the implementor's ALL-array declaration layout",
+        );
+        // Partial repeat: [gamma, gamma, beta] hits gamma at mult 2,
+        // beta at mult 1, alpha at mult 0 — only gamma qualifies for
+        // the strict-repeat `>= 2` band. Both arms collapse to the
+        // singleton lex/decl vec ["gamma"] byte-for-byte because
+        // ordering is a no-op on a singleton set.
+        let partial = [
+            ReverseRepeatLabelStubKind::Gamma,
+            ReverseRepeatLabelStubKind::Gamma,
+            ReverseRepeatLabelStubKind::Beta,
+        ];
+        assert_eq!(
+            <ReverseRepeatLabelStubKind as ClosedSet>::sorted_repeating_labels(&partial),
+            vec!["gamma"],
+            "sorted_repeating_labels over [gamma, gamma, beta] must contain only the mult-2 gamma slot",
+        );
+        // Two-variant repeat: [gamma, gamma, alpha, alpha] hits
+        // gamma at mult 2, alpha at mult 2, beta at mult 0 — the
+        // strict-repeat set is {alpha, gamma}. Declaration-arm
+        // renders gamma before alpha; lex-arm normalizes to alpha
+        // before gamma.
+        let two_repeats = [
+            ReverseRepeatLabelStubKind::Gamma,
+            ReverseRepeatLabelStubKind::Gamma,
+            ReverseRepeatLabelStubKind::Alpha,
+            ReverseRepeatLabelStubKind::Alpha,
+        ];
+        assert_eq!(
+            <ReverseRepeatLabelStubKind as ClosedSet>::repeating_labels(&two_repeats),
+            vec!["gamma", "alpha"],
+            "repeating_labels over [gamma, gamma, alpha, alpha] must preserve declaration order — gamma, alpha",
+        );
+        assert_eq!(
+            <ReverseRepeatLabelStubKind as ClosedSet>::sorted_repeating_labels(&two_repeats),
+            vec!["alpha", "gamma"],
+            "sorted_repeating_labels over [gamma, gamma, alpha, alpha] must normalize to lex order — alpha, gamma — regardless of the implementor's ALL-array declaration layout",
+        );
     }
 
     #[test]

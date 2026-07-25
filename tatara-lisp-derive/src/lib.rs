@@ -1674,3 +1674,371 @@ mod has_serde_default_tests {
         assert!(has_serde_default(&field(raw)));
     }
 }
+
+#[cfg(test)]
+mod parse_closed_set_attrs_tests {
+    use super::{parse_closed_set_attrs, GenerateUnknown};
+    use syn::{parse::Parser, parse_str, Attribute, Ident};
+
+    // The `(&[Attribute], &Ident -> syn::Result<ClosedSetCfg>)` projection
+    // is the derive's PRIVATE reader for the SIX-keyed
+    // `#[closed_set(...)]` attribute surface (`via`, `unknown`,
+    // `no_from_str`, `generate_unknown` [with optional `= "<label>"`
+    // payload], `display`, `set_label`) — the sole authoring surface
+    // through which every `#[derive(ClosedSet)]` implementor pins the
+    // trait-impl plumbing the derive emits (delegation projection, name
+    // of the parse-rejection carrier, whether to suppress the generated
+    // `FromStr`, whether to auto-derive the `Unknown` struct, whether
+    // to emit a `Display` block, and the trait-level `SET_LABEL` const).
+    // A regression here silently swaps ONE of the SIX per-attribute
+    // outputs on every downstream implementor — the operator sees the
+    // attribute the same way but the emitted code silently diverges
+    // (e.g. a swap of the `via` default from `"label"` to `"as_str"`
+    // would break every implementor that omits `via` AND whose
+    // inherent projection method is NOT `as_str`).
+    //
+    // The reader admits SIX distinct disciplines (one per key), the
+    // typed-error escape hatch (unknown key), and the reader-level
+    // aggregation shape (multi-attr merging, path/shape gates that
+    // filter attributes before decode). Pin each discipline at the
+    // boundary of the shape it decodes so a refactor of any of them
+    // (e.g. a future `#[closed_set(prefix = "…")]` alias, a
+    // typed-diagnostic surfacing on the value-shape mismatch that today
+    // errors via `?`) surfaces at ONE test-module boundary in the
+    // derive crate rather than as silent drift across the 40+
+    // closed-set implementors that route through this reader.
+    //
+    // Peer to `extract_keyword_tests` above — the sibling
+    // single-keyed reader for `#[tatara(keyword = "…")]`. Together the
+    // two test modules close the derive's TWO attribute-reader
+    // contracts (operator-authored TataraDomain keyword override +
+    // operator-authored ClosedSet six-axis configuration) at the
+    // test-module boundary.
+
+    fn attrs(src: &str) -> Vec<Attribute> {
+        Attribute::parse_outer
+            .parse_str(src)
+            .expect("valid attribute syntax")
+    }
+
+    fn ident(s: &str) -> Ident {
+        parse_str(s).expect("valid identifier")
+    }
+
+    #[test]
+    fn empty_attribute_slice_projects_to_the_documented_default_configuration() {
+        // Bread-and-butter: no `#[closed_set(...)]` attribute → the
+        // derive falls back to the documented defaults documented on the
+        // proc-macro attribute:
+        //   - `via = "label"` (the trait's own method name),
+        //   - `unknown = "Unknown{EnumName}"` (the workspace-wide naming
+        //     convention),
+        //   - `no_from_str = false` (FromStr is emitted),
+        //   - `generate_unknown = Skip` (implementor hand-rolls the
+        //     carrier),
+        //   - `display = false` (implementor hand-rolls Display), and
+        //   - `set_label = None` (the trait `SET_LABEL` const resolves
+        //     via the `generate_unknown` label fallback chain).
+        // Pin the defaults separately from every override arm so a
+        // refactor that (say) flipped `no_from_str`'s default to `true`
+        // or changed the `Unknown{name}` fallback to `Unknown_{name}` /
+        // `{name}Unknown` surfaces here rather than as silent drift
+        // across every implementor that omits the corresponding key.
+        let name = ident("MyEnum");
+        let cfg = parse_closed_set_attrs(&[], &name).expect("empty attrs parse OK");
+        assert_eq!(cfg.via, "label");
+        assert_eq!(cfg.unknown, "UnknownMyEnum");
+        assert!(!cfg.no_from_str);
+        assert!(matches!(cfg.generate_unknown, GenerateUnknown::Skip));
+        assert!(!cfg.display);
+        assert_eq!(cfg.set_label, None);
+    }
+
+    #[test]
+    fn via_string_literal_overrides_the_delegation_projection_name() {
+        // The load-bearing `via` override: implementors on the
+        // domain-canonical `as_str` name (`tatara_process`'s
+        // wire-format axis), or on any other bespoke inherent
+        // projection (`prefix`, `marker`, `keyword`), thread the name
+        // through the `via` axis. Pin the exact string that survives
+        // the LitStr → String projection.
+        let name = ident("MyEnum");
+        let attrs = attrs(r#"#[closed_set(via = "as_str")]"#);
+        let cfg = parse_closed_set_attrs(&attrs, &name).expect("via override parses OK");
+        assert_eq!(cfg.via, "as_str");
+    }
+
+    #[test]
+    fn unknown_string_literal_overrides_the_default_carrier_name() {
+        // The `unknown` override: implementors whose carrier struct
+        // name diverges from the `Unknown{EnumName}` auto-derivation
+        // (e.g. a historical hand-rolled `BogusChannelKind` style)
+        // pin the carrier name through the `unknown` axis. Pin the
+        // exact string that survives the LitStr → String projection —
+        // a regression that (say) prepended `Unknown` to the override
+        // value would silently rewire the carrier reference.
+        let name = ident("MyEnum");
+        let attrs = attrs(r#"#[closed_set(unknown = "MyBespokeUnknown")]"#);
+        let cfg = parse_closed_set_attrs(&attrs, &name).expect("unknown override parses OK");
+        assert_eq!(cfg.unknown, "MyBespokeUnknown");
+    }
+
+    #[test]
+    fn no_from_str_bare_flag_projects_to_true() {
+        // The `no_from_str` flag suppresses the `impl FromStr` block
+        // for enums that carry a bespoke `FromStr` shape (e.g.
+        // `CompilerSpecIoStage`'s compound `"{operation}: {label}"`
+        // key). Pin the flag as a BARE meta path — `no_from_str = true`
+        // is NOT a valid form under today's reader; only the presence
+        // of the ident flips the flag. A refactor that admitted a
+        // typed `= <bool>` payload would surface here.
+        let name = ident("MyEnum");
+        let attrs = attrs("#[closed_set(no_from_str)]");
+        let cfg = parse_closed_set_attrs(&attrs, &name).expect("no_from_str flag parses OK");
+        assert!(cfg.no_from_str);
+    }
+
+    #[test]
+    fn generate_unknown_bare_flag_projects_to_the_auto_variant() {
+        // Bare `generate_unknown` — the callback's inner
+        // `match meta.value()` reaches the `Err(_)` arm (there is no
+        // `= <value>` payload), yielding `GenerateUnknown::Auto`. The
+        // downstream `set_label` resolver then projects the enum name
+        // through `pascal_to_spaced_lowercase`. Pin the bare-form
+        // dispatch: a regression that (say) required the `= "label"`
+        // payload as mandatory would flip this arm to a syn::Error.
+        let name = ident("MyEnum");
+        let attrs = attrs("#[closed_set(generate_unknown)]");
+        let cfg = parse_closed_set_attrs(&attrs, &name).expect("bare generate_unknown parses OK");
+        assert!(matches!(cfg.generate_unknown, GenerateUnknown::Auto));
+    }
+
+    #[test]
+    fn generate_unknown_with_string_literal_projects_to_the_explicit_variant() {
+        // `generate_unknown = "macro definition head"` — the callback
+        // reaches the `Ok(value)` arm, parses the LitStr, and yields
+        // `GenerateUnknown::Explicit(label)`. The downstream
+        // `set_label` resolver then reads the SAME label from the
+        // carrier's `#[error("unknown <label>: {0}")]` annotation so
+        // the trait const and the carrier annotation emit from ONE
+        // generative origin. Pin the exact label that survives the
+        // LitStr → Explicit(String) projection.
+        let name = ident("MyEnum");
+        let attrs = attrs(r#"#[closed_set(generate_unknown = "macro definition head")]"#);
+        let cfg =
+            parse_closed_set_attrs(&attrs, &name).expect("labeled generate_unknown parses OK");
+        match cfg.generate_unknown {
+            GenerateUnknown::Explicit(label) => {
+                assert_eq!(label, "macro definition head");
+            }
+            other => panic!(
+                "expected GenerateUnknown::Explicit(\"macro definition head\"), got {:?} variant",
+                match other {
+                    GenerateUnknown::Skip => "Skip",
+                    GenerateUnknown::Auto => "Auto",
+                    GenerateUnknown::Explicit(_) => unreachable!(),
+                },
+            ),
+        }
+    }
+
+    #[test]
+    fn display_bare_flag_projects_to_true() {
+        // The `display` flag emits the substrate-wide
+        // `impl fmt::Display { f.write_str(Self::$via(*self)) }` block.
+        // Pin the flag as a BARE meta path — sibling of `no_from_str`.
+        // A regression that (say) required a `= true` payload would
+        // surface here.
+        let name = ident("MyEnum");
+        let attrs = attrs("#[closed_set(display)]");
+        let cfg = parse_closed_set_attrs(&attrs, &name).expect("display flag parses OK");
+        assert!(cfg.display);
+    }
+
+    #[test]
+    fn set_label_string_literal_overrides_the_trait_const_label() {
+        // The `set_label` override binds the trait's `SET_LABEL` const
+        // independently of the carrier's `#[error(...)]` annotation.
+        // Pin the exact string that survives the LitStr → Option<String>
+        // projection — a regression that (say) collapsed `set_label`
+        // and `generate_unknown = "..."` onto ONE storage slot would
+        // surface here (the two axes are structurally distinct in
+        // ClosedSetCfg).
+        let name = ident("MyEnum");
+        let attrs = attrs(r#"#[closed_set(set_label = "explicit trait label")]"#);
+        let cfg = parse_closed_set_attrs(&attrs, &name).expect("set_label override parses OK");
+        assert_eq!(cfg.set_label, Some("explicit trait label".to_string()));
+    }
+
+    #[test]
+    fn unknown_key_returns_syn_error_with_the_documented_diagnostic() {
+        // An unrecognized sub-key under `#[closed_set(...)]` surfaces
+        // as a compile-time syn::Error via the callback's final `else`
+        // arm. The diagnostic names the SIX allowed keys verbatim so
+        // the operator's next action (fixing the typo) is obvious.
+        // Pin the discipline (Err path, not silent-swallow) AND the
+        // diagnostic wording — a refactor that added a new key must
+        // update the diagnostic to mention it, and this test surfaces
+        // the drift as a message-string mismatch rather than as a
+        // silent shift in the allowed-set.
+        let name = ident("MyEnum");
+        let attrs = attrs(r#"#[closed_set(bogus_key = "x")]"#);
+        // `ClosedSetCfg` does not derive `Debug` — `expect_err` would
+        // require it. Match structurally on the Err arm and pin the
+        // diagnostic verbatim (mirrors the discipline
+        // `classify_tests::assert_first_generic_type_err` follows for
+        // `first_generic_type`'s error path).
+        let err = match parse_closed_set_attrs(&attrs, &name) {
+            Err(err) => err,
+            Ok(_) => panic!("bogus key must return syn::Error"),
+        };
+        let msg = err.to_string();
+        assert!(
+            msg.contains("unknown #[closed_set(...)] key"),
+            "diagnostic must name the failing key surface, got {msg:?}",
+        );
+        for key in [
+            "via",
+            "unknown",
+            "no_from_str",
+            "generate_unknown",
+            "display",
+            "set_label",
+        ] {
+            assert!(
+                msg.contains(key),
+                "diagnostic must list the allowed key `{key}` verbatim, got {msg:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn multiple_keys_in_one_attribute_all_project_to_their_slots() {
+        // The realistic authoring shape: several keys under one
+        // `#[closed_set(...)]` attribute (`via = "as_str"`,
+        // `generate_unknown`, `display`) coexist. Pin the
+        // interleaved-decode discipline: each `parse_nested_meta`
+        // callback iteration writes to its OWN slot and the outer
+        // loop hands control back for the next key. A refactor that
+        // (say) accidentally shared state between two callback arms
+        // would surface here.
+        let name = ident("MyEnum");
+        let attrs =
+            attrs(r#"#[closed_set(via = "as_str", generate_unknown, display, no_from_str)]"#);
+        let cfg = parse_closed_set_attrs(&attrs, &name).expect("multi-key single-attr parses OK");
+        assert_eq!(cfg.via, "as_str");
+        assert!(matches!(cfg.generate_unknown, GenerateUnknown::Auto));
+        assert!(cfg.display);
+        assert!(cfg.no_from_str);
+        // Slots NOT set through this attribute must retain their
+        // defaults — pin the discipline that the reader touches
+        // ONLY the slots it decodes.
+        assert_eq!(cfg.unknown, "UnknownMyEnum");
+        assert_eq!(cfg.set_label, None);
+    }
+
+    #[test]
+    fn multiple_closed_set_attributes_merge_across_the_outer_loop() {
+        // The split-across-attrs authoring shape: two
+        // `#[closed_set(...)]` attributes on the same item. The outer
+        // `for attr in attrs` loop visits BOTH; each contributes its
+        // subset of the six slots. Pin the merge discipline — a
+        // refactor that (say) short-circuited on the first attribute
+        // would silently drop the second attribute's contribution.
+        let name = ident("MyEnum");
+        let raw = r#"
+            #[closed_set(via = "as_str")]
+            #[closed_set(display)]
+        "#;
+        let cfg = parse_closed_set_attrs(&attrs(raw), &name).expect("split-across-attrs parses OK");
+        assert_eq!(cfg.via, "as_str");
+        assert!(cfg.display);
+    }
+
+    #[test]
+    fn later_closed_set_attribute_wins_over_earlier_peer_on_the_same_key() {
+        // Two peer `#[closed_set(via = "...")]` attributes: the outer
+        // loop visits both, and each writes to the SAME `via: Option<
+        // String>` slot without a `.is_some()` guard, so the LAST
+        // write wins. Pin this discipline separately from
+        // `first_matching_tatara_attribute_wins_over_later_peers` on
+        // the sibling `extract_keyword` reader — the two readers make
+        // opposite choices, and pinning both surfaces the asymmetry
+        // at ONE test-module boundary per side.
+        let name = ident("MyEnum");
+        let raw = r#"
+            #[closed_set(via = "first")]
+            #[closed_set(via = "second")]
+        "#;
+        let cfg =
+            parse_closed_set_attrs(&attrs(raw), &name).expect("last-write-wins scenario parses OK");
+        assert_eq!(cfg.via, "second");
+    }
+
+    #[test]
+    fn non_closed_set_attribute_is_skipped_by_the_path_gate() {
+        // The outer `if !attr.path().is_ident("closed_set")` gate
+        // silently skips foreign attribute macros. A `#[serde(via =
+        // "foo")]` (structurally matching everything AFTER the path)
+        // does NOT contribute to the config — the resulting cfg is
+        // the empty-attrs default. Pin the path-gate discipline: the
+        // reader is namespaced to `closed_set(...)` alone.
+        let name = ident("MyEnum");
+        let attrs = attrs(r#"#[serde(via = "foo")]"#);
+        let cfg = parse_closed_set_attrs(&attrs, &name)
+            .expect("foreign attribute skipped, returns default");
+        assert_eq!(cfg.via, "label");
+    }
+
+    #[test]
+    fn bare_closed_set_path_attribute_without_meta_list_is_skipped() {
+        // `#[closed_set]` (a `Meta::Path` — no `(…)` payload) fails
+        // the inner `let Meta::List(list) = &attr.meta else { continue;
+        // }` guard and skips to the next attribute. Pin the shape
+        // gate: only `Meta::List` is decoded. A regression that
+        // broadened the gate to accept `Meta::Path` (yielding a
+        // silent "all defaults" cfg via a non-attribute code path)
+        // would surface here.
+        let name = ident("MyEnum");
+        let attrs = attrs("#[closed_set]");
+        let cfg = parse_closed_set_attrs(&attrs, &name)
+            .expect("bare closed_set path attribute skipped, returns default");
+        // Every slot at its default — indistinguishable from
+        // empty-attrs. The pin is that no PANIC / no ERROR surfaces.
+        assert_eq!(cfg.via, "label");
+        assert!(!cfg.no_from_str);
+        assert!(matches!(cfg.generate_unknown, GenerateUnknown::Skip));
+    }
+
+    #[test]
+    fn unknown_fallback_reads_the_ident_name_via_the_display_projection() {
+        // The `unknown` fallback `format!("Unknown{name}")` reads the
+        // `Ident`'s Display projection — the type name verbatim, no
+        // additional case-mapping. Pin the identity discipline across
+        // TWO distinct enum names so a refactor that (say) applied a
+        // hidden case-transform (`to_ascii_uppercase`, `to_pascal_case`)
+        // surfaces as a fallback drift at the second arm.
+        let cfg_a =
+            parse_closed_set_attrs(&[], &ident("ChannelKind")).expect("empty attrs parse OK");
+        assert_eq!(cfg_a.unknown, "UnknownChannelKind");
+        let cfg_b =
+            parse_closed_set_attrs(&[], &ident("ReplacementPolicy")).expect("empty attrs parse OK");
+        assert_eq!(cfg_b.unknown, "UnknownReplacementPolicy");
+    }
+
+    #[test]
+    fn explicit_unknown_override_takes_precedence_over_the_ident_fallback() {
+        // A `#[closed_set(unknown = "…")]` present alongside the
+        // fallback-eligible empty state must SUPPRESS the fallback.
+        // Pin the priority chain: attribute-supplied value wins over
+        // the `Unknown{name}` auto-derivation for EVERY ident name.
+        // A regression that (say) concatenated the two (e.g.
+        // `format!("Unknown{name}{override}")`) would surface here.
+        let cfg = parse_closed_set_attrs(
+            &attrs(r#"#[closed_set(unknown = "MyBespoke")]"#),
+            &ident("ChannelKind"),
+        )
+        .expect("unknown override parses OK");
+        assert_eq!(cfg.unknown, "MyBespoke");
+    }
+}

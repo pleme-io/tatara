@@ -39052,6 +39052,174 @@ pub trait ClosedSet: Sized + Copy + 'static {
         <Self as ClosedSet>::missing_labels(items).join(sep)
     }
 
+    /// The N-ARY DECLARATION-ORDER "repeating labels" projection — the
+    /// `Vec<&'static str>` label rendering of [`Self::repeating_variants`]
+    /// under [`Self::label`]. Every label `s` in the returned vector is
+    /// the canonical [`Self::label`] rendering of some variant appearing
+    /// STRICTLY MORE THAN ONCE (multiplicity `>= 2`) in `items`; the
+    /// declaration order of [`Self::repeating_variants`] is preserved
+    /// verbatim. The (multiplicity `>= 2`) STRICT-REPEAT band peer of
+    /// [`Self::present_labels`] (multiplicity `>= 1`) and
+    /// [`Self::missing_labels`] (multiplicity `== 0`) one MULTIPLICITY-
+    /// BAND axis over on the equivalence-partition surface — OPENS the
+    /// (repeating, `Vec<&'static str>` label, declaration-order) corner
+    /// past the pre-existing (present, `Vec<&'static str>` label,
+    /// declaration-order) and (absent, `Vec<&'static str>` label,
+    /// declaration-order) doublet on the label-return column.
+    ///
+    /// Composition law: for every slice `items`,
+    /// `T::repeating_labels(items) ==
+    /// T::repeating_variants(items).into_iter().map(T::label).collect()`
+    /// — the label-Vec projection binds through the substrate's
+    /// [`Self::repeating_variants`] Vec-return primitive composed with
+    /// the per-slot [`Self::label`] projection. Pinned by
+    /// `repeating_labels_equals_repeating_variants_mapped_under_label_across_every_triple`.
+    ///
+    /// Cardinality identity: for every slice `items`,
+    /// `T::repeating_labels(items).len() ==
+    /// T::count_repeating_variants(items)` — the label-Vec-return
+    /// strict-repeat projection's length matches the usize-return
+    /// strict-repeat count exactly, and matches
+    /// [`Self::repeating_variants`]'s length one return-shape column
+    /// over. Pinned by
+    /// `repeating_labels_length_equals_count_repeating_variants_across_every_triple`.
+    ///
+    /// Bool-projection identity: for every slice `items`,
+    /// `T::repeating_labels(items).is_empty() ==
+    /// !T::is_repeating_any(items)` — the strict-repeat label list is
+    /// empty iff no target hits multiplicity `>= 2`. Cross-checks the
+    /// label-Vec-return strict-repeat witness against the pre-existing
+    /// bool-return strict-repeat existential. Pinned by
+    /// `repeating_labels_is_empty_iff_not_is_repeating_any_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — permuting `items`
+    /// preserves its multiset of variant identities, and the strict-
+    /// repeat predicate is a function of that multiset alone. The
+    /// OUTPUT ordering is fixed by [`Self::ALL`]'s declaration order
+    /// regardless of the input ordering. Pinned by
+    /// `repeating_labels_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::repeating_labels(&[])` is the empty
+    /// `Vec` UNCONDITIONALLY — the empty slice hits zero positions and
+    /// no target reaches multiplicity `>= 2`, so no label contributes.
+    /// Pinned by
+    /// `repeating_labels_returns_the_empty_vec_on_the_empty_slice_across_every_kind`.
+    ///
+    /// Singleton contract: `T::repeating_labels(&[v])` is the empty
+    /// `Vec` for every variant `v` — a singleton hits multiplicity `1`
+    /// at exactly one target and the strict-repeat `>= 2` test fails
+    /// at every target, so no label contributes. The singleton
+    /// endpoint is the boundary that separates the strict-repeat band
+    /// from the presence band: `T::present_labels(&[v])` reports the
+    /// singleton `vec![T::label(v)]` at the SAME slice, so the two
+    /// projections diverge on the (mult `>= 1`, mult `>= 2`) boundary
+    /// at every singleton fixture. Pinned by
+    /// `repeating_labels_returns_the_empty_vec_on_every_singleton_across_every_variant`.
+    ///
+    /// Full-set contract: `T::repeating_labels(<T as ClosedSet>::ALL)`
+    /// is the empty `Vec` UNCONDITIONALLY — the well-formedness
+    /// pairwise-distinctness invariant pins every variant of
+    /// [`Self::ALL`] as hitting multiplicity `1` in the full-set slice,
+    /// so the strict-repeat `>= 2` test fails at every target and no
+    /// label contributes. The full-set endpoint mirrors the empty-slice
+    /// endpoint on this band — both collapse to `[]` — because the
+    /// (multiplicity `== 0`) and (multiplicity `== 1`) bands both fall
+    /// below the strict-repeat `>= 2` threshold. Pinned by
+    /// `repeating_labels_over_the_full_set_returns_the_empty_vec_across_every_kind`.
+    ///
+    /// Doubled-full-set contract: `T::repeating_labels` on the doubled
+    /// full set equals [`Self::labels`] UNCONDITIONALLY — the doubled
+    /// full set hits every variant at multiplicity `2` (satisfying the
+    /// strict-repeat `>= 2` test at every target), so every label of
+    /// [`Self::ALL`] contributes in declaration order. The doubled-
+    /// full-set arm is LOAD-BEARING — it is the ONLY canonical fixpoint
+    /// arm that separates the (multiplicity `>= 2`) strict-repeat band
+    /// from the (multiplicity `== 0`) miss band (empty and full-set
+    /// both coincide on `[]` on the strict-repeat band; the
+    /// multiplicity `== 2` doubled-full-set fixture is what forces
+    /// non-emptiness). Pinned by
+    /// `repeating_labels_over_the_doubled_full_set_equals_labels_across_every_kind`.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of the
+    /// substrate's [`Self::repeating_variants`] Vec-return strict-repeat
+    /// witness composed with the per-slot [`Self::label`] projection
+    /// under `Iterator::map` + `Iterator::collect`. The composition uses
+    /// `<Self as ClosedSet>::repeating_variants(items).into_iter().map
+    /// (<Self as ClosedSet>::label).collect()` — O(T::CARDINALITY * n)
+    /// inherited from the underlying strict-repeat witness plus
+    /// O(T::CARDINALITY) for the map. No `PartialEq`/`Eq`/`Hash`
+    /// supertrait bound, no bitset-shape carrier.
+    ///
+    /// Future consumers — a `tatara-check` diagnostic that renders the
+    /// concrete `WorkloadPhase` labels a rollout window RE-ENTERED
+    /// (multiplicity `>= 2`) as author-facing text (`"re-entered
+    /// phases: warmup, ready"`); an LSP diagnostic on a Lisp-author-
+    /// written closed-set field that renders the strict-repeat set as
+    /// an author-facing "duplicate values" warning (`":severities
+    /// [:info :warn :info] — duplicates: info"`); a Sekiban audit-
+    /// trail projection that carries the concrete strict-repeat label
+    /// set of a classification poset window as its per-window witness;
+    /// a `tatara-lisp::macro_expand::Expander` hygiene pass that reports
+    /// the exact set of vocabulary identifiers a template bound MORE
+    /// THAN ONCE. Each binds to ONE typed N-ary strict-repeat label
+    /// projection on the trait rather than re-deriving the
+    /// `repeating_variants + into_iter + map(label) + collect` four-
+    /// primitive composition inline per callsite.
+    ///
+    /// Compounding closure: the (partition-band × return-shape × ordering)
+    /// 3×4×2 matrix over the closed-set label-aggregation surface now
+    /// OPENS the (repeating × `Vec<&'static str>` × declaration-order)
+    /// corner past the pre-existing (present × `Vec<&'static str>` ×
+    /// declaration-order) [`Self::present_labels`] and (absent ×
+    /// `Vec<&'static str>` × declaration-order) [`Self::missing_labels`]
+    /// doublet. The natural next lifts on this face — a
+    /// `repeating_labels_joined` on (repeating × `String` ×
+    /// declaration-order) via a `slice::join` composition, a
+    /// `sorted_repeating_labels` on (repeating × `Vec<&'static str>` ×
+    /// lex-order) via a `sorted_repeating_variants + map(label) +
+    /// collect` composition, and a `sorted_repeating_labels_joined` on
+    /// (repeating × `String` × lex-order) via a `slice::join`
+    /// composition on the lex-arm Vec — each bind through their
+    /// respective sibling variant-collector primitive under the per-
+    /// slot [`Self::label`] projection or the `slice::join` combinator.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// strict-repeat label projection becomes a TYPE-level primitive
+    /// on the closed-set trait rather than a per-consumer inline
+    /// `T::repeating_variants(items).into_iter().map(T::label).collect()`
+    /// composition at every downstream generic site. THEORY.md §V.1 —
+    /// knowable platform; the (repeating-Vec-label) corner was an
+    /// unnamed inline composition recurring at every prospective
+    /// downstream "which labels did we REPEAT?" site pre-lift.
+    /// THEORY.md §VI.1 — generation over composition; the strict-
+    /// repeat label projection emerges from the composition of TWO
+    /// substrate primitives ([`Self::repeating_variants`] +
+    /// [`Self::label`]) via `Iterator::map` + `Iterator::collect`, not
+    /// as a per-implementor hand-rolled body.
+    ///
+    /// Frontier inspiration: Racket's `(map T-label (filter (lambda (v)
+    /// (>= (count v items) 2)) (enum->list T)))` composing the strict-
+    /// repeat filter with a `map` under `label`; Haskell's `map label
+    /// (filter (\v -> length (filter (==v) items) >= 2) all)` on the
+    /// `Bounded + Enum + Show + Eq` type-class quartet; R's
+    /// `names(table(items))[table(items) >= 2]` on a factor histogram
+    /// where `table` computes the multiplicity vector; SQL's
+    /// `SELECT label(variant) FROM t GROUP BY variant HAVING COUNT(*)
+    /// \>= 2`. Translation through pleme-io primitives: a pure default
+    /// method mapping the trait's existing [`Self::repeating_variants`]
+    /// Vec-return primitive under the per-slot [`Self::label`]
+    /// projection — no new dep, no supertrait bound, no set-shape
+    /// carrier, no additional allocation beyond the natural
+    /// `Vec<&'static str>` [`Self::labels`]'s sibling surface already
+    /// routes.
+    fn repeating_labels(items: &[Self]) -> ::std::vec::Vec<&'static str> {
+        <Self as ClosedSet>::repeating_variants(items)
+            .into_iter()
+            .map(<Self as ClosedSet>::label)
+            .collect()
+    }
+
     /// The N-ARY LEX-ORDER "present labels" projection — the
     /// `Vec<&'static str>` label rendering of
     /// [`Self::sorted_present_variants`] under [`Self::label`]. Every
@@ -92440,6 +92608,194 @@ mod tests {
                             "T::missing_labels_joined({triple:?}, {sep:?}).is_empty() diverged from T::is_covering({triple:?}) — the (String-miss-join absent-arm, bool-return present-arm) De Morgan identity was violated",
                         );
                     }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_labels_returns_the_empty_vec_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT: `T::repeating_labels(&[])` is the empty
+        // `Vec` on every implementor — the empty slice hits zero
+        // positions, so every per-target multiplicity is `0` and the
+        // strict-repeat `>= 2` test fails at every target. Sibling
+        // posture to `repeating_variants_returns_the_empty_vec_on_the_empty_slice_across_every_kind`
+        // one RETURN-SHAPE column over on the declaration-order arm of
+        // the equivalence-partition surface — the Vec-variant projection
+        // is `[]`; this Vec-label projection is `[]` too, both empty
+        // Vecs collapsing to the same bytes at the empty-slice endpoint.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::repeating_labels(empty),
+            Vec::<&'static str>::new(),
+        );
+    }
+
+    #[test]
+    fn repeating_labels_returns_the_empty_vec_on_every_singleton_across_every_variant() {
+        // SINGLETON CONTRACT: `T::repeating_labels(&[v])` is the empty
+        // `Vec` for every variant `v` — a singleton hits multiplicity
+        // `1` at exactly one target and the strict-repeat `>= 2` test
+        // fails at every target, so no label contributes. The
+        // singleton endpoint is the boundary that separates the
+        // strict-repeat band from the presence band:
+        // `T::present_labels(&[v]) == vec![T::label(v)]` at the SAME
+        // singleton, so the two label projections diverge on the (mult
+        // `>= 1`, mult `>= 2`) boundary here.
+        for v in <StubKind as ClosedSet>::ALL.iter().copied() {
+            let singleton = [v];
+            assert_eq!(
+                <StubKind as ClosedSet>::repeating_labels(&singleton),
+                Vec::<&'static str>::new(),
+                "T::repeating_labels({singleton:?}) diverged from [] — a singleton hits multiplicity `1` at every target and MUST not appear in the strict-repeat label band",
+            );
+        }
+    }
+
+    #[test]
+    fn repeating_labels_over_the_full_set_returns_the_empty_vec_across_every_kind() {
+        // FULL-SET CONTRACT: `T::repeating_labels(<T as ClosedSet>::ALL)`
+        // is the empty `Vec` UNCONDITIONALLY — clause (3)'s pairwise-
+        // distinctness invariant forces every variant to appear at
+        // EXACTLY ONE position of the full-set slice, so every per-
+        // target multiplicity is `1` and the strict-repeat `>= 2` test
+        // fails at every target. Mirrors the empty-slice endpoint
+        // above — both fixpoint arms collapse to `[]` because both the
+        // (multiplicity `== 0`) and the (multiplicity `== 1`) bands
+        // fall below the strict-repeat `>= 2` threshold.
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::repeating_labels(all),
+            Vec::<&'static str>::new(),
+        );
+    }
+
+    #[test]
+    fn repeating_labels_over_the_doubled_full_set_equals_labels_across_every_kind() {
+        // DOUBLED-FULL-SET CONTRACT: `T::repeating_labels` on the
+        // doubled full set returns `T::labels()` UNCONDITIONALLY —
+        // the doubled full set hits every variant at EXACTLY TWO
+        // positions, so every per-target multiplicity is `2` and the
+        // projection contributes every label of `T::ALL` exactly once
+        // in declaration order. The doubled-full-set arm is LOAD-
+        // BEARING — it is the ONLY canonical fixpoint arm that
+        // separates the (multiplicity `>= 2`) strict-repeat band from
+        // the (multiplicity `== 0`) miss band (empty and full-set both
+        // coincide on `[]` on the strict-repeat band).
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::repeating_labels(&doubled),
+            <StubKind as ClosedSet>::labels(),
+        );
+    }
+
+    #[test]
+    fn repeating_labels_length_equals_count_repeating_variants_across_every_triple() {
+        // CARDINALITY IDENTITY:
+        // `T::repeating_labels(items).len() ==
+        // T::count_repeating_variants(items)` on every slice — the
+        // label-Vec-return strict-repeat projection's length matches
+        // the usize-return strict-repeat count exactly, one return-
+        // shape column over from
+        // `repeating_variants_length_equals_count_repeating_variants_across_every_triple`.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::repeating_labels(empty).len(),
+            <StubKind as ClosedSet>::count_repeating_variants(empty),
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::repeating_labels(&triple).len(),
+                        <StubKind as ClosedSet>::count_repeating_variants(&triple),
+                        "T::repeating_labels({triple:?}).len() diverged from T::count_repeating_variants({triple:?}) — the (Vec-label-return, usize-return) strict-repeat-band cardinality identity was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_labels_equals_repeating_variants_mapped_under_label_across_every_triple() {
+        // COMPOSITION LAW: for every slice `items`,
+        // `T::repeating_labels(items) ==
+        // T::repeating_variants(items).into_iter().map(T::label).collect()`
+        // — the label-Vec projection binds through the substrate's
+        // `T::repeating_variants` Vec-return primitive composed with
+        // the per-slot `T::label` projection.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected: Vec<&'static str> =
+                        <StubKind as ClosedSet>::repeating_variants(&triple)
+                            .into_iter()
+                            .map(<StubKind as ClosedSet>::label)
+                            .collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::repeating_labels(&triple),
+                        expected,
+                        "T::repeating_labels({triple:?}) diverged from T::repeating_variants({triple:?}).into_iter().map(T::label).collect() — the strict-repeat label-column composition law was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_labels_is_invariant_under_slice_reversal_across_every_triple() {
+        // SLICE-REVERSAL INVARIANCE CONTRACT:
+        // `T::repeating_labels(items) ==
+        // T::repeating_labels(reversed items)` on every slice —
+        // reversing a slice preserves its multiset of variant
+        // identities, and the strict-repeat predicate is a function
+        // of that multiset alone. The OUTPUT ordering is fixed by
+        // `T::ALL`'s declaration order.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let forward = [a, b, c];
+                    let reversed = [c, b, a];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::repeating_labels(&forward),
+                        <StubKind as ClosedSet>::repeating_labels(&reversed),
+                        "T::repeating_labels({forward:?}) diverged from T::repeating_labels({reversed:?}) — the strict-repeat-label-column projection MUST be a fixpoint of slice reversal",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn repeating_labels_is_empty_iff_not_is_repeating_any_across_every_triple() {
+        // BOOL-PROJECTION IDENTITY:
+        // `T::repeating_labels(items).is_empty() ==
+        // !T::is_repeating_any(items)` on every slice — the strict-
+        // repeat label list is empty iff the strict-repeat existential
+        // fails. Cross-checks the label-Vec-return strict-repeat
+        // witness against the pre-existing bool-return strict-repeat
+        // existential, one return-shape column over from
+        // `repeating_variants_is_empty_iff_not_is_repeating_any_across_every_triple`.
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::repeating_labels(empty).is_empty(),
+            !<StubKind as ClosedSet>::is_repeating_any(empty),
+        );
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::repeating_labels(&triple).is_empty(),
+                        !<StubKind as ClosedSet>::is_repeating_any(&triple),
+                        "T::repeating_labels({triple:?}).is_empty() diverged from !T::is_repeating_any({triple:?}) — the (Vec-label-return, bool-return) strict-repeat-band emptiness identity was violated",
+                    );
                 }
             }
         }

@@ -37042,6 +37042,221 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY ORDERING-AGNOSTIC "the unique miss-band witness as a
+    /// singleton-or-empty Vec" projection — returns
+    /// [`Self::missing_variants`] iff `items` has a UNIQUE miss-band
+    /// witness ([`Self::has_unique_missing_variant`] holds) AND is the
+    /// sole variant whose per-target multiplicity sits at `== 0`, else
+    /// `vec![]`. Computed as the just-lifted set-level miss-band
+    /// uniqueness bit [`Self::has_unique_missing_variant`] guarding the
+    /// declaration-order miss-set witness-collection
+    /// [`Self::missing_variants`]: when the guard holds the collection
+    /// is already a length-`1` Vec by the guard's own definition
+    /// (`count_missing == 1`) and is lifted verbatim; when the guard
+    /// falsifies the projection collapses to the EMPTY Vec through a
+    /// zero-allocation `::std::vec::Vec::new()` short-circuit. The
+    /// `Vec<Self>`-RETURN UNIQUE-TIE SHARPENING corner OPENING the
+    /// (set-level × `Vec<Self>` × equivalence-partition ×
+    /// multiplicity-band × unique-tie) column past the eight unsharpened
+    /// (declaration/lex × miss/repeat/unique/present) equivalence-
+    /// partition witness-collection peers ([`Self::missing_variants`],
+    /// [`Self::sorted_missing_variants`], [`Self::repeating_variants`],
+    /// [`Self::sorted_repeating_variants`], [`Self::unique_variants`],
+    /// [`Self::sorted_unique_variants`], [`Self::present_variants`],
+    /// [`Self::sorted_present_variants`]) one UNIQUE-TIE-SHARPENING
+    /// axis over on the equivalence-partition surface AND peer to
+    /// [`Self::unique_extremal_variants`] (set-level × `Vec<Self>` ×
+    /// modal-aggregation × direction-composition × union × unique-tie)
+    /// one SURFACE axis over on the modal-aggregation matrix AND peer
+    /// to [`Self::unique_missing_variant`] (set-level × `Option<Self>`
+    /// × equivalence-partition × mult-band `== 0` × unique-tie) one
+    /// RETURN-SHAPE axis over (Option-return witness-when-unique →
+    /// Vec-return singleton-or-empty-when-unique) AND peer to
+    /// [`Self::has_unique_missing_variant`] (set-level × `bool` ×
+    /// equivalence-partition × mult-band `== 0` × unique-tie) one
+    /// RETURN-SHAPE axis over (bool uniqueness bit → Vec-return
+    /// singleton-or-empty carrier of the same bit). Not a fresh
+    /// substrate primitive on the index axis — the projection emerges
+    /// from the boolean-guarded selection of the declaration-order
+    /// miss-set witness-collection under the set-level miss-band
+    /// uniqueness bit, collapsing to the empty Vec through the guard-
+    /// arm when the bit falsifies.
+    ///
+    /// Guarded-witness-collection identity: for every slice `items`,
+    /// `T::unique_missing_variants(items) == if T::has_unique_missing_variant(items) { T::missing_variants(items) } else { vec![] }`
+    /// — the canonical form the body uses. Pinned by
+    /// `unique_missing_variants_equals_has_unique_missing_variant_gated_missing_variants_across_every_triple`.
+    ///
+    /// Length coincidence identity: for every slice `items`,
+    /// `T::unique_missing_variants(items).len() == usize::from(T::has_unique_missing_variant(items))`
+    /// — the return-Vec's length COINCIDES with the set-level miss-
+    /// band uniqueness bit projected onto `usize`: exactly `0` when the
+    /// bit falsifies, exactly `1` when it holds (since when
+    /// `count_missing == 1` the underlying [`Self::missing_variants`]
+    /// filter over [`Self::ALL`] admits EXACTLY ONE variant).
+    /// Independent cross-check on the surface axis distinct from the
+    /// guarded-witness-collection arm (length reduction vs conditional
+    /// Vec-select). Pinned by
+    /// `unique_missing_variants_len_equals_has_unique_missing_variant_as_usize_across_every_triple`.
+    ///
+    /// Option-equality identity: for every slice `items`,
+    /// `T::unique_missing_variants(items).first().copied() == T::unique_missing_variant(items)`
+    /// — the `Vec`-return's first-element projection COINCIDES with the
+    /// `Option`-return peer one RETURN-SHAPE axis over, since both
+    /// encode the same "sole absent witness if unique, else nothing"
+    /// semantics through different return shapes. Pinned by
+    /// `unique_missing_variants_first_equals_unique_missing_variant_across_every_triple`.
+    ///
+    /// Is-empty coincidence identity: for every slice `items`,
+    /// `T::unique_missing_variants(items).is_empty() == !T::has_unique_missing_variant(items)`
+    /// — the return-Vec's emptiness coincides with the NEGATION of the
+    /// set-level uniqueness bit. Independent cross-check on the surface
+    /// axis distinct from the length-coincidence arm (Vec::is_empty vs
+    /// integer equality). Pinned by
+    /// `unique_missing_variants_is_empty_iff_not_has_unique_missing_variant_across_every_triple`.
+    ///
+    /// Reversal-invariance identity: the projection factors through
+    /// [`Self::has_unique_missing_variant`] (ordering-agnostic — the
+    /// underlying [`Self::count_missing`] is invariant under slice-
+    /// reversal via [`Self::count_occurrences_of`]) and
+    /// [`Self::missing_variants`] (ordering-agnostic on the input axis
+    /// — the underlying [`Self::occurs_in`] complement filter over
+    /// [`Self::ALL`] is invariant under slice-reversal) via a boolean-
+    /// guarded Vec-select. Pinned by
+    /// `unique_missing_variants_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract at cardinality `>= 2`:
+    /// `T::unique_missing_variants(&[]) == vec![]` — the empty slice
+    /// hits zero positions, so every variant sits at count `0`,
+    /// [`Self::count_missing`] reports `T::CARDINALITY >= 2`,
+    /// [`Self::has_unique_missing_variant`] returns `false`, and the
+    /// guard collapses the projection to `vec![]`. Sibling posture at
+    /// `T::CARDINALITY == 1`: [`Self::count_missing`] reports `1`, the
+    /// guard holds, and the projection returns
+    /// `T::missing_variants(&[]) == T::ALL.to_vec()` — the SOLE non-
+    /// empty degenerate arm at cardinality-1.
+    ///
+    /// Matching-singleton contract: at `T::CARDINALITY >= 3` on every
+    /// variant `v`, `T::unique_missing_variants(&[v]) == vec![]` — the
+    /// target hits count `1`, every non-target sits at count `0`, so
+    /// [`Self::count_missing`] reports `T::CARDINALITY - 1 >= 2`,
+    /// [`Self::has_unique_missing_variant`] returns `false`, and the
+    /// guard collapses to `vec![]`. At `T::CARDINALITY == 2` the
+    /// matching singleton leaves EXACTLY ONE non-target absent,
+    /// [`Self::count_missing`] reports `1`, the guard holds, and the
+    /// projection returns `vec![the-non-target]`.
+    ///
+    /// Full-set + doubled-full-set contract:
+    /// `T::unique_missing_variants(T::ALL) == vec![]` +
+    /// `T::unique_missing_variants(&doubled) == vec![]`
+    /// UNCONDITIONALLY — the pairwise-distinctness invariant pins every
+    /// variant at exactly one position on the full set (doubled to two
+    /// on the doubled fixture), no variant is absent,
+    /// [`Self::count_missing`] reports `0`,
+    /// [`Self::has_unique_missing_variant`] returns `false` via
+    /// `0 != 1`, and the guard collapses to `vec![]`.
+    ///
+    /// Bimodal-triple contract at cardinality `>= 3`: on
+    /// `[T::ALL[0], T::ALL[0], T::ALL[1]]`, `T::ALL[0]` sits at count
+    /// `2 == max`, `T::ALL[1]` at count `1` (strict interior),
+    /// `T::ALL[2..]` at count `0 == min`;
+    /// [`Self::count_missing`] reports `T::CARDINALITY - 2`. At
+    /// `T::CARDINALITY == 3` that is `1`, the guard holds, and the
+    /// projection returns `vec![T::ALL[2]]` — the LOAD-BEARING sole
+    /// non-empty arm on the multi-variant test-module fixture at the
+    /// canonical bimodal cardinality. At `T::CARDINALITY >= 4` the
+    /// miss-band cardinality `>= 2` falsifies the guard, and the
+    /// projection collapses to `vec![]`. LOAD-BEARING DISCRIMINATOR
+    /// from [`Self::unique_extremal_variants`] which returns `vec![]`
+    /// on the SAME fixture — the SURFACE axis SEPARATES the
+    /// EQUIVALENCE-PARTITION miss-band positive arm at cardinality `3`
+    /// from the MODAL-AGGREGATION union degenerate arm on the shared
+    /// canonical fixture window.
+    ///
+    /// Signature note: the projection is a typed CONSEQUENCE of
+    /// [`Self::has_unique_missing_variant`] +
+    /// [`Self::missing_variants`] via a boolean-guarded Vec-select on
+    /// `Vec<Self>`. Cost inherits both underlying projections:
+    /// `O(T::CARDINALITY * n)` on slice arity `n` (one
+    /// [`Self::count_missing`] reduction for the guard, one
+    /// [`Self::missing_variants`] filter sweep when the guard holds;
+    /// the short-circuiting `if` avoids the filter sweep AND the Vec
+    /// allocation when the guard falsifies), no
+    /// `PartialEq`/`Eq`/`Hash` supertrait bound (the trait's minimal
+    /// `Sized + Copy + 'static` supertrait pair stays untouched).
+    ///
+    /// Future consumers that compose against
+    /// [`Self::unique_missing_variants`]: a `tatara-check` predicate
+    /// `(check-missing-if-unique …)` that reports the singleton-or-
+    /// empty absent witness collection as a typed `Vec<Self>`-return
+    /// rather than a two-step (has-unique-missing-variant? then
+    /// missing-variants) composition; a Sekiban audit-trail per-window
+    /// singleton-or-empty binding that composes uniformly with the
+    /// modal-aggregation Vec-return unique-tie corners
+    /// ([`Self::unique_extremal_variants`],
+    /// [`Self::unique_middle_band_variants`],
+    /// [`Self::unique_bimodal_variants`]) through a shared Vec return
+    /// shape; downstream aggregate code that iterates over "the sole
+    /// absent variant if any" without needing to dispatch on
+    /// Option/Vec at the callsite.
+    ///
+    /// Compounding closure: this projection OPENS the (set-level ×
+    /// `Vec<Self>` × equivalence-partition × mult-band × unique-tie)
+    /// column at its (mult `== 0`) miss-band arm — the NEW UNIQUE-TIE-
+    /// SHARPENING axis on the equivalence-partition Vec surface, peer
+    /// to the just-closed modal-aggregation (set-level × `Vec<Self>` ×
+    /// direction-composition × combinator × ordering × unique-tie) 3×2
+    /// face one SURFACE axis over. The natural next lifts past this
+    /// corner are the (mult `>= 2`) STRICT-REPEAT arm
+    /// `unique_repeating_variants` (guarded lift of
+    /// [`Self::repeating_variants`] under
+    /// [`Self::has_unique_repeating_variant`]) and the (mult `== 1`)
+    /// STRICT-UNIQUENESS arm `unique_unique_variants` (guarded lift of
+    /// [`Self::unique_variants`] under
+    /// [`Self::has_unique_unique_variant`]) that CLOSE the equivalence-
+    /// partition Vec-return unique-tie trichotomy row, followed by
+    /// their LEX-order peers (`sorted_unique_missing_variants`, etc.)
+    /// one ORDERING axis over.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary set-
+    /// level unique-missing `Vec<Self>` singleton-or-empty witness
+    /// projection becomes a TYPE-level primitive on the closed-set
+    /// trait rather than a per-consumer inline
+    /// `if T::has_unique_missing_variant(items) { T::missing_variants(items) } else { vec![] }`
+    /// composition at every downstream generic site. THEORY.md §V.1 —
+    /// knowable platform; the (set-level × `Vec<Self>` × equivalence-
+    /// partition × mult-band `== 0` × unique-tie) witness-if-unique
+    /// corner was an unnamed inline composition recurring at every
+    /// prospective downstream "the sole absent variant, as a Vec, if
+    /// it's unambiguous" site pre-lift. THEORY.md §VI.1 — generation
+    /// over composition; the projection emerges from the composition
+    /// of TWO substrate primitives ([`Self::has_unique_missing_variant`]
+    /// + [`Self::missing_variants`]) with the
+    /// `if _ { _ } else { vec![] }` combinator on `Vec<Self>`.
+    ///
+    /// Frontier inspiration: R's
+    /// `{ t <- table(items); miss <- setdiff(all, names(t)); if (length(miss) == 1) miss else character(0) }`
+    /// — the canonical guarded-absent singleton-or-empty carrier on a
+    /// factor histogram; Clojure's
+    /// `(let [seen (set coll), miss (remove seen all)] (if (= 1 (count miss)) [(first miss)] []))`;
+    /// SQL's
+    /// `SELECT ARRAY(SELECT v FROM all_variants WHERE v NOT IN (SELECT DISTINCT variant FROM t)) WHERE cardinality(…) = 1`.
+    /// Translation through pleme-io primitives: the N-ary set-level
+    /// uniqueness-gated miss-band singleton-or-empty projection on the
+    /// closed-set trait binds through the just-lifted
+    /// [`Self::has_unique_missing_variant`] guard conjoined with the
+    /// declaration-order [`Self::missing_variants`] witness-collection
+    /// under a Vec-select — no new dep, no supertrait bound,
+    /// `O(T::CARDINALITY * n)` inherited from the underlying aggregates
+    /// with short-circuiting on the guard.
+    fn unique_missing_variants(items: &[Self]) -> ::std::vec::Vec<Self> {
+        if <Self as ClosedSet>::has_unique_missing_variant(items) {
+            <Self as ClosedSet>::missing_variants(items)
+        } else {
+            ::std::vec::Vec::new()
+        }
+    }
+
     /// The N-ARY ORDERING-AGNOSTIC "every variant repeats?" predicate —
     /// `true` iff EVERY variant of [`Self::ALL`] appears AT LEAST TWICE
     /// in `items`, computed as the just-lifted set-level scalar
@@ -56631,6 +56846,190 @@ where
             T::sorted_unique_bimodal_variants(&bimodal_triple),
             T::unique_bimodal_variants(&bimodal_triple),
             "{type_name}: T::sorted_unique_bimodal_variants(&bimodal_triple) drifted from T::unique_bimodal_variants(&bimodal_triple) — the ordering-choice-irrelevance identity MUST hold on the bimodal-triple fixture",
+        );
+    }
+    // (194) — `T::unique_missing_variants(items)` MUST agree with the
+    // guarded-lift body
+    // `if T::has_unique_missing_variant(items) { T::missing_variants(items) } else { vec![] }`
+    // on every canonical slice AND MUST pin length + first-element +
+    // is-empty coincidences against the sibling (`bool`, `Option<Self>`)
+    // unique-tie miss-band corners one RETURN-SHAPE axis over. THIS
+    // clause OPENS the (set-level × `Vec<Self>` × equivalence-partition ×
+    // mult-band × unique-tie) column on the EQUIVALENCE-PARTITION surface
+    // at its (mult `== 0`) miss-band arm — the NEW UNIQUE-TIE-SHARPENING
+    // axis on the equivalence-partition Vec surface, peer to clause (163)
+    // ([`T::unique_missing_variant`]) one RETURN-SHAPE axis over AND
+    // peer to clause (188) ([`T::unique_extremal_variants`]) one SURFACE
+    // axis over on the modal-aggregation matrix.
+    //
+    // Bimodal-triple positive-arm discipline (LOAD-BEARING DISCRIMINATOR
+    // from clause (188)): at `T::CARDINALITY == 3` on the canonical
+    // bimodal triple `[T::ALL[0], T::ALL[0], T::ALL[1]]`,
+    // `count_missing` reports `1` (T::ALL[2] is the sole absent variant
+    // — `T::ALL[0]` at count 2, `T::ALL[1]` at count 1),
+    // `has_unique_missing_variant` returns `true`, and the guarded lift
+    // reports `vec![T::ALL[2]]` — the SOLE non-empty arm on the multi-
+    // variant test-module fixture at the canonical bimodal cardinality.
+    // At `T::CARDINALITY >= 4` the miss-band cardinality
+    // `T::CARDINALITY - 2 >= 2` falsifies the guard and the projection
+    // collapses to `vec![]`. Clause (188)'s modal-aggregation union
+    // counterpart collapses to `vec![]` on the same fixture at every
+    // cardinality; the SURFACE axis SEPARATES this EQUIVALENCE-PARTITION
+    // miss-band positive arm from the modal-aggregation union degenerate
+    // arm on the shared canonical fixture window.
+    //
+    // The default trait body threads the boolean-guarded Vec-select
+    // verbatim and satisfies every fixpoint arm + the length + Option-
+    // equality + is-empty coincidence identities for free; the assertion
+    // catches a future implementor whose override drifts the projection
+    // loudly rather than silently bifurcating the set-level equivalence-
+    // partition miss-band singleton-or-empty witness surface. An override
+    // that folds onto `vec![T::ALL[0]]` unconditionally bifurcates the
+    // empty-slice + full-set + doubled-full-set + matching-singleton arms
+    // at `[T::ALL[0]] != []` AND the bimodal-triple positive arm at
+    // `[T::ALL[0]] != [T::ALL[2]]` (via LOAD-BEARING mismatch at slot
+    // `0`). An override that folds onto `vec![]` unconditionally
+    // bifurcates the bimodal-triple positive arm at `[] != [T::ALL[2]]`.
+    let empty_unique_missings = T::unique_missing_variants(empty);
+    let expected_empty_unique_missings: ::std::vec::Vec<T> = if T::has_unique_missing_variant(empty)
+    {
+        T::missing_variants(empty)
+    } else {
+        ::std::vec::Vec::new()
+    };
+    assert_eq!(
+        empty_unique_missings, expected_empty_unique_missings,
+        "{type_name}: T::unique_missing_variants(&[]) drifted from the guarded lift `if T::has_unique_missing_variant(&[]) {{ T::missing_variants(&[]) }} else {{ vec![] }}` — the guarded-lift identity MUST hold on the empty slice; at cardinality >= 2 the empty-slice guard reports count_missing == T::CARDINALITY >= 2 so has_unique_missing_variant collapses to false and the guarded lift short-circuits to the empty Vec; at T::CARDINALITY == 1 count_missing reports 1 so the guard holds and the guarded lift returns T::missing_variants(&[]) == T::ALL.to_vec()",
+    );
+    assert_eq!(
+        T::unique_missing_variants(empty).len(),
+        usize::from(T::has_unique_missing_variant(empty)),
+        "{type_name}: T::unique_missing_variants(&[]).len() drifted from `T::has_unique_missing_variant(&[]) as usize` — the length-coincidence identity MUST hold on the empty slice",
+    );
+    assert_eq!(
+        T::unique_missing_variants(empty).first().copied(),
+        T::unique_missing_variant(empty),
+        "{type_name}: T::unique_missing_variants(&[]).first() drifted from T::unique_missing_variant(&[]) — the Option-equality identity MUST hold on the empty slice",
+    );
+    assert_eq!(
+        T::unique_missing_variants(empty).is_empty(),
+        !T::has_unique_missing_variant(empty),
+        "{type_name}: T::unique_missing_variants(&[]).is_empty() drifted from `!T::has_unique_missing_variant(&[])` — the is-empty coincidence identity MUST hold on the empty slice",
+    );
+    let full_unique_missings = T::unique_missing_variants(T::ALL);
+    let expected_full_unique_missings: ::std::vec::Vec<T> = if T::has_unique_missing_variant(T::ALL)
+    {
+        T::missing_variants(T::ALL)
+    } else {
+        ::std::vec::Vec::new()
+    };
+    assert_eq!(
+        full_unique_missings, expected_full_unique_missings,
+        "{type_name}: T::unique_missing_variants(T::ALL) drifted from the guarded lift `if T::has_unique_missing_variant(T::ALL) {{ T::missing_variants(T::ALL) }} else {{ vec![] }}` — the guarded-lift identity MUST hold on the full-set slice; pairwise-distinctness pins every variant at exactly one position, `count_missing` reports 0, `has_unique_missing_variant` returns false via `0 != 1`, and the guarded lift collapses to `vec![]` UNCONDITIONALLY",
+    );
+    assert_eq!(
+        T::unique_missing_variants(T::ALL).len(),
+        usize::from(T::has_unique_missing_variant(T::ALL)),
+        "{type_name}: T::unique_missing_variants(T::ALL).len() drifted from `T::has_unique_missing_variant(T::ALL) as usize` — the length-coincidence identity MUST hold on the full-set slice",
+    );
+    assert_eq!(
+        T::unique_missing_variants(T::ALL).first().copied(),
+        T::unique_missing_variant(T::ALL),
+        "{type_name}: T::unique_missing_variants(T::ALL).first() drifted from T::unique_missing_variant(T::ALL) — the Option-equality identity MUST hold on the full-set slice",
+    );
+    let doubled_unique_missings = T::unique_missing_variants(&doubled_full_set);
+    let expected_doubled_unique_missings: ::std::vec::Vec<T> =
+        if T::has_unique_missing_variant(&doubled_full_set) {
+            T::missing_variants(&doubled_full_set)
+        } else {
+            ::std::vec::Vec::new()
+        };
+    assert_eq!(
+        doubled_unique_missings, expected_doubled_unique_missings,
+        "{type_name}: T::unique_missing_variants(&doubled_full_set) drifted from the guarded lift on the doubled-full-set slice — every variant hit twice pins `count_missing == 0`, `has_unique_missing_variant` returns false, and the guarded lift collapses to `vec![]` UNCONDITIONALLY",
+    );
+    assert_eq!(
+        T::unique_missing_variants(&doubled_full_set).len(),
+        usize::from(T::has_unique_missing_variant(&doubled_full_set)),
+        "{type_name}: T::unique_missing_variants(&doubled_full_set).len() drifted from `T::has_unique_missing_variant(&doubled_full_set) as usize` — the length-coincidence identity MUST hold on the doubled-full-set slice",
+    );
+    if T::CARDINALITY >= 3 {
+        for target in T::ALL.iter().copied() {
+            let target_label = <T as ClosedSet>::label(target);
+            let matching_singleton = [target];
+            assert_eq!(
+                T::unique_missing_variants(&matching_singleton),
+                ::std::vec::Vec::<T>::new(),
+                "{type_name}: T::unique_missing_variants([{target_label:?}]) drifted from `vec![]` at cardinality >= 3 — the target hits count 1, every non-target sits at count 0, `count_missing` reports T::CARDINALITY - 1 >= 2, `has_unique_missing_variant` returns false, and the guard collapses the projection to `vec![]`",
+            );
+            assert_eq!(
+                T::unique_missing_variants(&matching_singleton).first().copied(),
+                T::unique_missing_variant(&matching_singleton),
+                "{type_name}: T::unique_missing_variants([{target_label:?}]).first() drifted from T::unique_missing_variant([{target_label:?}]) — the Option-equality identity MUST hold on the matching-singleton fixture at cardinality >= 3 (both project to None/vec[].first())",
+            );
+        }
+    }
+    if T::CARDINALITY == 2 {
+        // Matching-singleton positive arm at cardinality == 2: the target
+        // hits count 1, the sole non-target sits at count 0, so
+        // count_missing reports 1 (EXACTLY), has_unique_missing_variant
+        // holds, guard fires, and the guarded lift returns
+        // vec![the-non-target] — the SOLE positive arm on the cardinality-
+        // 2 test-module carriers (UnquoteForm, ReturnPolicy, …) at the
+        // matching-singleton fixture. Load-bearing drift catch against an
+        // override that folds onto `vec![]` on every matching singleton.
+        for target in T::ALL.iter().copied() {
+            let target_label = <T as ClosedSet>::label(target);
+            let matching_singleton = [target];
+            let expected: ::std::vec::Vec<T> = T::ALL
+                .iter()
+                .copied()
+                .filter(|&v| <T as ClosedSet>::index_of(v) != <T as ClosedSet>::index_of(target))
+                .collect();
+            assert_eq!(
+                T::unique_missing_variants(&matching_singleton),
+                expected,
+                "{type_name}: T::unique_missing_variants([{target_label:?}]) drifted from the sole non-target singleton at cardinality == 2 — the target hits count 1, the sole non-target sits at count 0, count_missing reports 1, has_unique_missing_variant holds, and the guarded lift returns vec![the-non-target]; a `vec![]` fold silently bifurcates the LOAD-BEARING positive arm on the cardinality-2 carriers",
+            );
+            assert_eq!(
+                T::unique_missing_variants(&matching_singleton).first().copied(),
+                T::unique_missing_variant(&matching_singleton),
+                "{type_name}: T::unique_missing_variants([{target_label:?}]).first() drifted from T::unique_missing_variant([{target_label:?}]) — the Option-equality identity MUST hold on the matching-singleton fixture at cardinality == 2 (both project to Some(the-non-target)/vec![the-non-target].first())",
+            );
+        }
+    }
+    if T::CARDINALITY == 1 {
+        // Empty-slice positive arm at cardinality == 1: count_missing
+        // reports 1 (the sole variant is absent), has_unique_missing_variant
+        // holds, guard fires, and the guarded lift returns T::ALL.to_vec()
+        // — the SOLE positive arm on the degenerate cardinality-1 corner.
+        assert_eq!(
+            T::unique_missing_variants(empty),
+            T::ALL.to_vec(),
+            "{type_name}: T::unique_missing_variants(&[]) drifted from T::ALL.to_vec() at cardinality == 1 — the empty slice pins count_missing at 1, has_unique_missing_variant holds, and the guarded lift returns the singleton vec containing the sole variant",
+        );
+    }
+    if T::CARDINALITY == 3 {
+        // Bimodal-triple fixture: LOAD-BEARING sole-non-empty positive arm
+        // on the (`Vec<Self>` × equivalence-partition × mult `== 0` ×
+        // unique-tie) corner at the canonical cardinality-3 test-module
+        // window. count_missing reports 1 (T::ALL[2] absent — T::ALL[0]
+        // at count 2, T::ALL[1] at count 1), has_unique_missing_variant
+        // returns true, guard holds, and the guarded lift reports
+        // vec![T::ALL[2]]. LOAD-BEARING DISCRIMINATOR from clause (188)
+        // which reports vec![] on the SAME fixture — the SURFACE axis
+        // SEPARATES the EQUIVALENCE-PARTITION miss-band positive arm
+        // from the MODAL-AGGREGATION union degenerate arm.
+        let bimodal_triple = [T::ALL[0], T::ALL[0], T::ALL[1]];
+        assert_eq!(
+            T::unique_missing_variants(&bimodal_triple),
+            ::std::vec![T::ALL[2]],
+            "{type_name}: T::unique_missing_variants(&bimodal_triple) drifted from `vec![T::ALL[2]]` at cardinality == 3 — count_missing reports 1 (T::ALL[2] sole absent), has_unique_missing_variant holds, guard fires, and the guarded lift returns vec![T::ALL[2]]. A `vec![]` fold silently bifurcates the LOAD-BEARING positive arm AND its LOAD-BEARING DISCRIMINATION from clause (188) which reports vec![] on the SAME fixture",
+        );
+        assert_eq!(
+            T::unique_missing_variants(&bimodal_triple).first().copied(),
+            T::unique_missing_variant(&bimodal_triple),
+            "{type_name}: T::unique_missing_variants(&bimodal_triple).first() drifted from T::unique_missing_variant(&bimodal_triple) — the Option-equality identity MUST hold on the bimodal-triple fixture at cardinality == 3 (both project to Some(T::ALL[2]))",
         );
     }
 }
@@ -111052,6 +111451,232 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedSortedUniqueBimodalVariantsSingletonFirstKind whose sorted_unique_bimodal_variants override folds onto vec![Alpha] unconditionally — clause (193)'s canonical-fixture arms MUST reject the drift at cardinality 3",
+        );
+    }
+
+    #[test]
+    fn unique_missing_variants_returns_empty_on_the_empty_slice_at_cardinality_gte_two() {
+        // EMPTY-SLICE CONTRACT at cardinality >= 2:
+        // T::unique_missing_variants(&[]) == vec![] — count_missing on the
+        // empty slice reports T::CARDINALITY >= 2 (every variant absent),
+        // has_unique_missing_variant collapses to false via `count != 1`,
+        // and the guard collapses the projection to vec![]. StubKind has
+        // cardinality 3, so the empty slice puts every variant in the
+        // miss band and the (mult == 0) uniqueness guard falsifies.
+        assert_eq!(<StubKind as ClosedSet>::CARDINALITY, 3);
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::unique_missing_variants(empty),
+            Vec::<StubKind>::new(),
+            "T::unique_missing_variants(&[]) diverged from vec![] at cardinality 3 — count_missing reports T::CARDINALITY == 3, has_unique_missing_variant returns false, and the guard collapses to vec![]",
+        );
+    }
+
+    #[test]
+    fn unique_missing_variants_equals_has_unique_missing_variant_gated_missing_variants_across_every_triple(
+    ) {
+        // GUARDED-WITNESS-COLLECTION IDENTITY: for every slice `items`,
+        // T::unique_missing_variants(items) ==
+        // if T::has_unique_missing_variant(items)
+        // { T::missing_variants(items) } else { vec![] }. The canonical
+        // form the body uses.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_body = <StubKind as ClosedSet>::unique_missing_variants(&triple);
+                    let via_guarded_lift =
+                        if <StubKind as ClosedSet>::has_unique_missing_variant(&triple) {
+                            <StubKind as ClosedSet>::missing_variants(&triple)
+                        } else {
+                            Vec::new()
+                        };
+                    assert_eq!(
+                        via_body, via_guarded_lift,
+                        "T::unique_missing_variants({triple:?}) diverged from the guarded lift `if T::has_unique_missing_variant {{ T::missing_variants }} else {{ vec![] }}`",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_missing_variants_len_equals_has_unique_missing_variant_as_usize_across_every_triple()
+    {
+        // LENGTH-COINCIDENCE IDENTITY: for every slice `items`,
+        // T::unique_missing_variants(items).len() ==
+        // usize::from(T::has_unique_missing_variant(items)) — the return-
+        // Vec's length coincides with the set-level uniqueness bit
+        // projected onto usize.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_missing_variants(&triple).len(),
+                        usize::from(<StubKind as ClosedSet>::has_unique_missing_variant(&triple)),
+                        "T::unique_missing_variants({triple:?}).len() diverged from usize::from(T::has_unique_missing_variant({triple:?}))",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_missing_variants_first_equals_unique_missing_variant_across_every_triple() {
+        // OPTION-EQUALITY IDENTITY: for every slice `items`,
+        // T::unique_missing_variants(items).first().copied() ==
+        // T::unique_missing_variant(items) — the Vec-return's first-
+        // element projection coincides with the Option-return peer.
+        // Independent cross-check binding the Vec-return column against
+        // the Option-return column one RETURN-SHAPE axis over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_missing_variants(&triple)
+                            .first()
+                            .copied(),
+                        <StubKind as ClosedSet>::unique_missing_variant(&triple),
+                        "T::unique_missing_variants({triple:?}).first() diverged from T::unique_missing_variant({triple:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_missing_variants_is_empty_iff_not_has_unique_missing_variant_across_every_triple() {
+        // IS-EMPTY COINCIDENCE IDENTITY: for every slice `items`,
+        // T::unique_missing_variants(items).is_empty() ==
+        // !T::has_unique_missing_variant(items). Independent cross-check
+        // on the surface axis distinct from the length-coincidence arm
+        // (Vec::is_empty vs integer equality).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_missing_variants(&triple).is_empty(),
+                        !<StubKind as ClosedSet>::has_unique_missing_variant(&triple),
+                        "T::unique_missing_variants({triple:?}).is_empty() diverged from !T::has_unique_missing_variant({triple:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_missing_variants_returns_the_absent_singleton_on_the_bimodal_triple_at_cardinality_three(
+    ) {
+        // BIMODAL-TRIPLE POSITIVE-ARM CONTRACT at CARDINALITY == 3:
+        // T::unique_missing_variants([T::ALL[0], T::ALL[0], T::ALL[1]])
+        // == vec![T::ALL[2]] — T::ALL[0] at count 2, T::ALL[1] at count
+        // 1, T::ALL[2] at count 0 (SOLE absent), count_missing reports
+        // 1, has_unique_missing_variant holds, and the guarded lift
+        // returns vec![T::ALL[2]]. LOAD-BEARING DISCRIMINATOR from
+        // T::unique_extremal_variants which returns vec![] on the SAME
+        // fixture at cardinality >= 2 — the SURFACE axis SEPARATES the
+        // EQUIVALENCE-PARTITION miss-band positive arm at cardinality 3
+        // from the MODAL-AGGREGATION union degenerate arm.
+        assert_eq!(<StubKind as ClosedSet>::CARDINALITY, 3);
+        let bimodal_triple = [
+            <StubKind as ClosedSet>::ALL[0],
+            <StubKind as ClosedSet>::ALL[0],
+            <StubKind as ClosedSet>::ALL[1],
+        ];
+        assert_eq!(
+            <StubKind as ClosedSet>::unique_missing_variants(&bimodal_triple),
+            vec![<StubKind as ClosedSet>::ALL[2]],
+            "T::unique_missing_variants({bimodal_triple:?}) diverged from vec![T::ALL[2]] — count_missing reports 1 on the bimodal triple at cardinality 3, has_unique_missing_variant holds, and the guarded lift returns the sole absent variant",
+        );
+    }
+
+    #[test]
+    fn unique_missing_variants_is_invariant_under_slice_reversal_across_every_triple() {
+        // REVERSAL-INVARIANCE CONTRACT: T::unique_missing_variants is
+        // invariant under slice-reversal — both underlying projections
+        // (has_unique_missing_variant + missing_variants) are ordering-
+        // agnostic on the input axis.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let reversed: Vec<StubKind> = triple.iter().rev().copied().collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_missing_variants(&triple),
+                        <StubKind as ClosedSet>::unique_missing_variants(&reversed),
+                        "T::unique_missing_variants({triple:?}) diverged from T::unique_missing_variants({reversed:?}) — reversal-invariance was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_singleton_first_drift_in_unique_missing_variants(
+    ) {
+        // Drift catch — clause (194)'s empty-slice + full-set + doubled-
+        // full-set + matching-singleton + bimodal-triple positive-arm
+        // fixpoint arms fire when an override folds the set-level
+        // unique-missing-variants projection onto vec![Alpha]
+        // unconditionally. At CARDINALITY 3 the empty/full/doubled/
+        // matching-singleton arms expect vec![]; the bimodal-triple
+        // positive arm expects vec![Gamma]; a `vec![Alpha]` override
+        // bifurcates every arm at `[Alpha] != []` OR `[Alpha] != [Gamma]`.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedUniqueMissingVariantsSingletonFirstKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedUniqueMissingVariantsSingletonFirstKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedUniqueMissingVariantsSingletonFirstKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted unique_missing_variants singleton-first kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedUniqueMissingVariantsSingletonFirstKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedUniqueMissingVariantsSingletonFirstKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted unique_missing_variants singleton-first kind";
+            type Unknown = UnknownDriftedUniqueMissingVariantsSingletonFirstKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedUniqueMissingVariantsSingletonFirstKind(s.to_owned())
+            }
+            fn unique_missing_variants(_items: &[Self]) -> Vec<Self> {
+                // Drift: always return vec![Alpha]. Fires clause (194)'s
+                // canonical-fixture arms at cardinality 3.
+                ::std::vec![Self::Alpha]
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedUniqueMissingVariantsSingletonFirstKind>(
+            );
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedUniqueMissingVariantsSingletonFirstKind whose unique_missing_variants override folds onto vec![Alpha] unconditionally — clause (194)'s canonical-fixture arms MUST reject the drift at cardinality 3",
         );
     }
 

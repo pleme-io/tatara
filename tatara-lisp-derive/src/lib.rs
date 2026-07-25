@@ -810,3 +810,152 @@ fn first_generic_type(seg: &syn::PathSegment) -> Result<&Type, String> {
     }
     Err("no type argument found".into())
 }
+
+#[cfg(test)]
+mod default_keyword_tests {
+    use super::default_keyword;
+
+    // README (`tatara-lisp-derive/README.md` §Keyword derivation) documents
+    // the derive's auto-keyword projection:
+    //   "Default: strip `Spec` suffix + prefix `def` + lowercase.
+    //    `MonitorSpec` → `defmonitor`."
+    // The projection is the derive's public contract when the operator
+    // omits `#[tatara(keyword = "...")]`; a regression here silently
+    // renames every downstream `(defX …)` authoring form. Pin the
+    // documented shape AND the load-bearing suffix-detection rules
+    // (case-sensitive, tail-only, single-pass) so a future refactor of
+    // the projection surfaces the drift at the derive's test layer
+    // rather than as a mystery "why did every existing Lisp source stop
+    // compiling" downstream.
+
+    #[test]
+    fn strips_spec_suffix_and_lowercases_readme_example() {
+        // The exact example in `tatara-lisp-derive/README.md`.
+        assert_eq!(default_keyword("MonitorSpec"), "defmonitor");
+    }
+
+    #[test]
+    fn strips_spec_suffix_across_the_workspace_spec_cohort() {
+        // Every `*Spec` struct across the tatara workspace that carries
+        // `#[derive(TataraDomain)]` without an explicit `#[tatara(keyword
+        // = "...")]` gets its keyword through this exact projection —
+        // `ProcessSpec` → `defprocess`, `NotifySpec` → `defnotify`, etc.
+        // Sweep three representative names so a projection change that
+        // affects only a subset (e.g. drops the lowercase pass, only
+        // strips one specific prefix, or projects capitals differently)
+        // surfaces on any implementor rather than only on `MonitorSpec`.
+        assert_eq!(default_keyword("ProcessSpec"), "defprocess");
+        assert_eq!(default_keyword("NotifySpec"), "defnotify");
+        assert_eq!(default_keyword("AlertPolicySpec"), "defalertpolicy");
+    }
+
+    #[test]
+    fn suffix_strip_is_case_sensitive() {
+        // The derive's convention is PascalCase types; a lowercase or
+        // all-uppercase `spec` / `SPEC` tail is NOT the singular `Spec`
+        // marker and must fall through unchanged. Pinning this rules
+        // out a permissive refactor (e.g. a case-insensitive strip via
+        // `to_ascii_lowercase().strip_suffix("spec")`) that would
+        // silently absorb identifiers the operator did NOT intend as
+        // `Spec`-suffixed.
+        assert_eq!(default_keyword("MonitorSPEC"), "defmonitorspec");
+        assert_eq!(default_keyword("Monitorspec"), "defmonitorspec");
+    }
+
+    #[test]
+    fn suffix_strip_only_matches_a_true_suffix() {
+        // A name that CONTAINS "Spec" mid-identifier — `SpecMonitor` (as
+        // prefix), `MySpecialType` (as substring) — must NOT be stripped.
+        // Rules out a permissive refactor (e.g. `.replace("Spec", "")`)
+        // that would remove `Spec` from the middle of an identifier and
+        // silently corrupt the keyword.
+        assert_eq!(default_keyword("SpecMonitor"), "defspecmonitor");
+        assert_eq!(default_keyword("MySpecialType"), "defmyspecialtype");
+    }
+
+    #[test]
+    fn no_spec_suffix_falls_through_unchanged() {
+        // Types without a `Spec` suffix pass through the lowercase step
+        // untouched — the `unwrap_or(type_name)` fall-through arm. Every
+        // `TataraDomain` implementor that doesn't follow the `*Spec`
+        // convention (a future `KenshiTestSuite`, a future `PoolConfig`)
+        // hits this arm; the projection must still emit a well-formed
+        // `def`-prefixed lowercase keyword rather than panicking or
+        // returning `def` alone.
+        assert_eq!(default_keyword("KenshiTestSuite"), "defkenshitestsuite");
+        assert_eq!(default_keyword("PoolConfig"), "defpoolconfig");
+        assert_eq!(default_keyword("Monitor"), "defmonitor");
+    }
+
+    #[test]
+    fn strips_exactly_one_spec_suffix_not_repeated() {
+        // The `strip_suffix("Spec")` primitive strips ONE occurrence,
+        // not all trailing occurrences. `SpecSpec` (degenerate but
+        // syntactically valid) strips to `Spec` and lowercases to
+        // `defspec`; a `while let Some(...)` refactor that iterates
+        // strip_suffix would drift silently to `def`.
+        assert_eq!(default_keyword("SpecSpec"), "defspec");
+    }
+
+    #[test]
+    fn ascii_uppercase_projection_leaves_digits_and_symbols_unchanged() {
+        // The projection only lowercases uppercase ASCII letters; digits
+        // and connector characters pass through untouched. A future
+        // Unicode-aware refactor (`c.to_lowercase()` iterator) must NOT
+        // change this contract without an intentional bump, because the
+        // Lisp keyword grammar admits only ASCII lowercase + digits +
+        // connectors after the leading `:`. Pinning digits keeps the
+        // ASCII-only guarantee load-bearing at the test layer.
+        assert_eq!(default_keyword("V2Api"), "defv2api");
+    }
+}
+
+#[cfg(test)]
+mod snake_to_kebab_tests {
+    use super::snake_to_kebab;
+
+    // README (`tatara-lisp-derive/README.md` §Field name ↔ keyword
+    // mapping) documents:
+    //   "Snake-case field names become kebab-case Lisp keywords:
+    //    `name` → `:name`, `window_seconds` → `:window-seconds`,
+    //    `delegate_to_nix_build` → `:delegate-to-nix-build`."
+    // The projection is the derive's public contract for kwarg naming;
+    // a regression here silently renames every kwarg on every generated
+    // extractor, breaking every downstream `(defX :kwarg …)` authoring
+    // form. Pin the three documented examples verbatim AND the boundary
+    // cases (no underscore, empty input) so a future refactor of the
+    // projection surfaces the drift here rather than as a cascade of
+    // mystery `LispError::MissingKwarg { key: "..." }` failures
+    // downstream.
+
+    #[test]
+    fn readme_examples_project_verbatim() {
+        // The exact three examples in `tatara-lisp-derive/README.md`.
+        assert_eq!(snake_to_kebab("name"), "name");
+        assert_eq!(snake_to_kebab("window_seconds"), "window-seconds");
+        assert_eq!(
+            snake_to_kebab("delegate_to_nix_build"),
+            "delegate-to-nix-build",
+        );
+    }
+
+    #[test]
+    fn empty_input_projects_to_empty_string() {
+        // Boundary contract: an empty field name (unreachable through
+        // the derive's `named field` gate, but pin the primitive's
+        // contract independent of the caller's discipline — mirrors
+        // `pascal_to_spaced_lowercase`'s empty-input test above).
+        assert_eq!(snake_to_kebab(""), "");
+    }
+
+    #[test]
+    fn projects_every_underscore_including_consecutive_runs() {
+        // The primitive is a bulk `replace('_', '-')` — every
+        // underscore anywhere in the input flips to a hyphen. Consecutive
+        // underscores (rare in idiomatic Rust field names but
+        // syntactically valid) project to consecutive hyphens; a
+        // regression that first-only-replaces (via `replacen`) or
+        // collapses runs would surface here.
+        assert_eq!(snake_to_kebab("foo__bar"), "foo--bar");
+    }
+}

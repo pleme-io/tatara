@@ -651,6 +651,18 @@ fn snake_to_kebab(snake: &str) -> String {
 /// Check if the field carries `#[serde(default)]` / `#[serde(default = "…")]`.
 /// We honor serde defaults so missing kwargs fall back to `Default::default()`
 /// — matches the deserialize semantics the field was already authored for.
+///
+/// Reads the attribute structurally through `parse_nested_meta` — matches
+/// how `extract_keyword` (the sibling `#[tatara(keyword = "…")]` reader)
+/// already dispatches, and rejects the false positive the previous
+/// substring-match implementation surfaced on a `#[serde]` attribute
+/// whose OTHER subkey values contained the literal substring `"default"`
+/// (e.g. `#[serde(rename = "default_val")]` was incorrectly reported as
+/// carrying `#[serde(default)]`). The optional `= <expr>` payload is
+/// consumed unconditionally so `parse_nested_meta` can traverse past a
+/// `key = value` peer to the next comma-separated item (the callback
+/// otherwise stalls at the `=` when a peer subkey precedes `default`
+/// — pinned as the `default_after_other_key_named_value_pair` test).
 fn has_serde_default(field: &syn::Field) -> bool {
     for attr in &field.attrs {
         if !attr.path().is_ident("serde") {
@@ -659,8 +671,17 @@ fn has_serde_default(field: &syn::Field) -> bool {
         let Meta::List(list) = &attr.meta else {
             continue;
         };
-        let tokens = list.tokens.to_string();
-        if tokens.contains("default") {
+        let mut found = false;
+        let _ = list.parse_nested_meta(|meta| {
+            if meta.path.is_ident("default") {
+                found = true;
+            }
+            if let Ok(value) = meta.value() {
+                let _: syn::Result<syn::Expr> = value.parse();
+            }
+            Ok(())
+        });
+        if found {
             return true;
         }
     }
@@ -1297,5 +1318,359 @@ mod classify_tests {
         let ty = parse_ty("Cow<'a>");
         let seg = last_segment(&ty);
         assert_first_generic_type_err(seg, "no type argument found");
+    }
+}
+
+#[cfg(test)]
+mod extract_keyword_tests {
+    use super::extract_keyword;
+    use syn::{parse::Parser, Attribute};
+
+    // The `(&[Attribute] -> Option<String>)` projection is the derive's
+    // PRIVATE reader for the operator-authored `#[tatara(keyword = "…")]`
+    // override. When present it names the top-level Lisp keyword the
+    // generated `TataraDomain::KEYWORD` binds to; when absent
+    // `derive_tatara_domain` falls back to the auto-derived
+    // `default_keyword` projection. A regression here silently swaps the
+    // KEYWORD const the entire domain registry hashes on — every
+    // downstream `(defX …)` authoring form stops compiling with the same
+    // `LispError::HeadMismatch` all `snake_to_kebab`/`default_keyword`
+    // regressions surface as, only ONE causal step deeper (the auto-derive
+    // ran instead of the operator's chosen keyword).
+    //
+    // The reader admits FIVE distinct disciplines: only the `tatara` path
+    // matches (foreign attribute macros are skipped), only the `Meta::List`
+    // shape is decoded (a bare `#[tatara]` is skipped), only the `keyword`
+    // sub-key is captured (peer sub-keys under `tatara(…)` are ignored),
+    // only a `LitStr` value is accepted (a non-string payload silently
+    // returns None — the parser error is swallowed by `let _ = …`), and
+    // the first matched attribute wins (later `#[tatara(keyword = …)]`
+    // attributes on the same item do not override). Pin each discipline at
+    // the boundary of the shape it decodes so a refactor of any of them
+    // (e.g. adding `#[tatara(keyword = …, alias = …)]` — a plausible
+    // future extension) surfaces at ONE test-module boundary in the
+    // derive crate rather than as silent drift across every downstream
+    // implementor.
+
+    fn attrs(src: &str) -> Vec<Attribute> {
+        Attribute::parse_outer
+            .parse_str(src)
+            .expect("valid attribute syntax")
+    }
+
+    #[test]
+    fn empty_attribute_slice_projects_to_none() {
+        // Bread-and-butter: no `#[tatara(...)]` attribute → the derive
+        // takes the `default_keyword(&type_name)` fallback path. Pin the
+        // None arm separately from every "some attr present but not
+        // matching" arm so a refactor that (say) returned an empty-string
+        // Some("") on missing attrs would surface here rather than as a
+        // mystery empty KEYWORD const at the auto-derive site.
+        assert_eq!(extract_keyword(&[]), None);
+    }
+
+    #[test]
+    fn tatara_keyword_string_literal_projects_to_the_literal_value() {
+        // The README example: `#[tatara(keyword = "defmonitor")]`
+        // projects to `Some("defmonitor".to_string())`. Pin the exact
+        // shape the derive contract documents — LitStr value, no
+        // surrounding whitespace/quotes preserved (the LitStr .value()
+        // yields the unescaped contents).
+        assert_eq!(
+            extract_keyword(&attrs(r#"#[tatara(keyword = "defmonitor")]"#)),
+            Some("defmonitor".to_string())
+        );
+    }
+
+    #[test]
+    fn non_tatara_attribute_is_skipped_by_the_path_gate() {
+        // The outer `if !attr.path().is_ident("tatara")` gate silently
+        // skips foreign attribute macros. A `#[serde(keyword = "defx")]`
+        // and a `#[kube(keyword = "defx")]` (both structurally
+        // matching everything AFTER the path) both project to None. Pin
+        // the path-gate discipline: the reader is namespaced to
+        // `tatara(...)` alone. A regression that broadened the path
+        // check (e.g. matched any attribute carrying a `keyword` sub-key)
+        // would silently harvest overrides from unrelated attribute macros.
+        assert_eq!(
+            extract_keyword(&attrs(r#"#[serde(keyword = "defx")]"#)),
+            None
+        );
+        assert_eq!(
+            extract_keyword(&attrs(r#"#[kube(keyword = "defx")]"#)),
+            None
+        );
+    }
+
+    #[test]
+    fn bare_tatara_path_attribute_without_meta_list_projects_to_none() {
+        // `#[tatara]` (a `Meta::Path` — no `(…)` payload) fails the
+        // inner `let Meta::List(list) = &attr.meta else { continue; }`
+        // guard and skips to the next attribute. Pin the shape gate:
+        // only `Meta::List` is decoded. A regression that broadened the
+        // gate to accept `Meta::Path` (yielding the bare `defmonitor`
+        // via `default_keyword` on the type-name AS IF authored) would
+        // silently short-circuit the fallback that today handles the
+        // no-attribute case.
+        assert_eq!(extract_keyword(&attrs("#[tatara]")), None);
+    }
+
+    #[test]
+    fn tatara_attribute_without_keyword_sub_key_projects_to_none() {
+        // `#[tatara(other_key = "x")]` — the path IS `tatara`, the shape
+        // IS `Meta::List`, but the `parse_nested_meta` callback finds no
+        // `keyword` ident. The callback silently swallows the `= "x"`
+        // value that follows a matched-but-uncaptured sub-key (via the
+        // `let _ = list.parse_nested_meta(...)` swallow); `found` stays
+        // None; the reader returns None. Pin the sub-key gate: only the
+        // `keyword` sub-key is captured. A regression that captured the
+        // FIRST sub-key regardless of ident (e.g. via `meta.value()`
+        // without the `is_ident("keyword")` guard) would silently
+        // harvest an arbitrary sub-key value as the KEYWORD const.
+        assert_eq!(
+            extract_keyword(&attrs(r#"#[tatara(other_key = "x")]"#)),
+            None
+        );
+    }
+
+    #[test]
+    fn non_string_literal_keyword_value_silently_projects_to_none() {
+        // `#[tatara(keyword = 42)]` — the path IS `tatara`, the sub-key
+        // IS `keyword`, but the value is a `LitInt`, not a `LitStr`.
+        // The `let s: LitStr = value.parse()?` inside the callback
+        // returns Err; the `?` propagates it out of the closure; the
+        // outer `let _ = list.parse_nested_meta(...)` swallows the Err;
+        // `found` stays None; the reader returns None WITHOUT diagnostic
+        // to the operator. Pin the swallow: today's shape mismatch on
+        // the value is silent — a future sharpening that surfaced a
+        // typed derive-time diagnostic would flip this test to expect
+        // an error path (or a `Result<Option<String>, syn::Error>`
+        // return shape). This is the load-bearing test that documents
+        // the CURRENT silent-swallow discipline as a deliberate choice
+        // rather than a latent bug.
+        assert_eq!(extract_keyword(&attrs(r#"#[tatara(keyword = 42)]"#)), None);
+    }
+
+    #[test]
+    fn first_matching_tatara_attribute_wins_over_later_peers() {
+        // Two `#[tatara(keyword = "…")]` attributes on the same item:
+        // the outer `for attr in attrs` loop returns the FIRST match
+        // via the `if found.is_some() { return found; }` early-exit.
+        // The second attribute is unreachable. Pin the winner
+        // discipline: earlier attributes shadow later peers. A refactor
+        // that (say) picked the LAST attribute or that concatenated
+        // matches would surface here.
+        let raw = r#"
+            #[tatara(keyword = "first")]
+            #[tatara(keyword = "second")]
+        "#;
+        assert_eq!(extract_keyword(&attrs(raw)), Some("first".to_string()));
+    }
+
+    #[test]
+    fn tatara_attribute_after_non_tatara_attribute_still_matches() {
+        // Interleaved: a `#[serde(...)]` (which the path gate skips) does
+        // NOT short-circuit the loop; the next `#[tatara(keyword = "…")]`
+        // still matches. Pin the loop-continuation discipline: the path
+        // gate uses `continue`, not `return`. A refactor that (say)
+        // broke out of the loop on the FIRST non-matching attribute
+        // would silently drop overrides that appeared after a foreign
+        // attribute macro.
+        let raw = r#"
+            #[serde(rename = "x")]
+            #[tatara(keyword = "defafter")]
+        "#;
+        assert_eq!(extract_keyword(&attrs(raw)), Some("defafter".to_string()));
+    }
+}
+
+#[cfg(test)]
+mod has_serde_default_tests {
+    use super::has_serde_default;
+    use syn::{parse::Parser, Field};
+
+    // The `(&syn::Field -> bool)` projection is the derive's PRIVATE
+    // sniffer for `#[serde(default)]` / `#[serde(default = "…")]`. When
+    // it returns true, `extractor_for` wraps the base extractor with a
+    // `if kw.contains_key(#key) { <extract> } else {
+    // ::std::default::Default::default() }` short-circuit so a missing
+    // kwarg falls back to `Default::default()` — matching the
+    // deserialize semantics the field was already authored for. A
+    // regression here silently swaps the missing-kwarg branch on every
+    // consumer with a `#[serde(default)]` field: false-negative
+    // regresses a legitimate default to a hard `LispError::MissingKwarg`,
+    // false-positive regresses a required field to a silent
+    // Default::default() slot.
+    //
+    // Reads the attribute structurally through `parse_nested_meta` —
+    // matches how `extract_keyword` already dispatches. The previous
+    // substring-match implementation (`tokens.to_string().contains(
+    // "default")`) surfaced a false positive on `#[serde]` attributes
+    // whose OTHER subkey values carried the literal substring `"default"`
+    // (`#[serde(rename = "default_val")]` was reported as carrying
+    // `#[serde(default)]`, silently making a required field's slot fall
+    // back to Default::default()). The
+    // `rename_value_containing_default_substring_projects_to_false` test
+    // below is the fail-before-pass-after guard for that fix.
+
+    fn field(src: &str) -> Field {
+        Field::parse_named
+            .parse_str(src)
+            .expect("valid named-field syntax")
+    }
+
+    #[test]
+    fn field_with_no_attributes_projects_to_false() {
+        // Bread-and-butter: a bare `pub name: String` field carries
+        // NO `#[serde(...)]` attribute → the derive emits the raw
+        // extractor with no missing-kwarg short-circuit. Pin the
+        // no-attrs baseline separately from every "attrs present but
+        // not matching" arm.
+        assert!(!has_serde_default(&field("pub name: String")));
+    }
+
+    #[test]
+    fn serde_default_bare_form_projects_to_true() {
+        // The bare `#[serde(default)]` form — the callback finds a
+        // `default` ident with no `= <expr>` payload; `found` flips to
+        // true; the outer `if found { return true; }` short-circuits.
+        // This is the load-bearing case: the standard serde-default
+        // idiom for optional-with-Default fields.
+        assert!(has_serde_default(&field(
+            "#[serde(default)] pub name: Vec<String>"
+        )));
+    }
+
+    #[test]
+    fn serde_default_with_named_function_payload_projects_to_true() {
+        // The `#[serde(default = "path::to::fn")]` form — the callback
+        // finds a `default` ident followed by `= "path::to::fn"`. The
+        // sharpened reader unconditionally consumes the `= <expr>`
+        // payload via `let _: syn::Result<syn::Expr> = value.parse()`
+        // so `parse_nested_meta` can advance past the assignment to the
+        // next comma-separated peer without stalling — even though
+        // `found` is already true.
+        assert!(has_serde_default(&field(
+            r#"#[serde(default = "path::to::fn")] pub name: String"#
+        )));
+    }
+
+    #[test]
+    fn default_after_other_key_named_value_pair_projects_to_true() {
+        // `#[serde(rename = "x", default)]` — the callback fires TWICE:
+        // once for `rename` (not matching, but the `= "x"` payload IS
+        // consumed via the unconditional value-drain step so the outer
+        // `parse_nested_meta` can advance past the `,` to the next
+        // peer), once for `default` (matching, flips `found` to true).
+        // This is the load-bearing test for the value-drain discipline:
+        // WITHOUT the unconditional `meta.value()` consumption, the
+        // outer parser stalls at the `=` following `rename` and errors
+        // before ever seeing `default` (verified via the `probe` crate
+        // in this run's investigation — a naive `parse_nested_meta`
+        // callback that just checked the ident returned false here).
+        assert!(has_serde_default(&field(
+            r#"#[serde(rename = "x", default)] pub name: String"#
+        )));
+    }
+
+    #[test]
+    fn default_before_other_key_named_value_pair_projects_to_true() {
+        // Reversed order: `#[serde(default, rename = "x")]` — the
+        // callback fires for `default` FIRST, flips `found` to true.
+        // Even if the SECOND callback (for `rename`) fails to advance
+        // (e.g. under a future refactor), `found` is already true.
+        // Pin both orderings so a refactor that made the reader
+        // order-sensitive would surface here.
+        assert!(has_serde_default(&field(
+            r#"#[serde(default, rename = "x")] pub name: String"#
+        )));
+    }
+
+    #[test]
+    fn rename_value_containing_default_substring_projects_to_false() {
+        // Fail-before-pass-after guard for the substring-match →
+        // structural-parse sharpen. Under the PREVIOUS implementation
+        // (`list.tokens.to_string().contains("default")`), this
+        // `#[serde(rename = "default_val")]` attribute was incorrectly
+        // reported as carrying `#[serde(default)]` — the substring
+        // `"default"` appears inside the RENAME value's LitStr and
+        // matched the loose check. The sharpened structural reader
+        // walks the nested meta items and only flips `found` when a
+        // sub-key ident is EXACTLY `default`; the rename value is now
+        // correctly ignored. A regression that reverted to the
+        // substring check would flip this test to true.
+        assert!(!has_serde_default(&field(
+            r#"#[serde(rename = "default_val")] pub name: String"#
+        )));
+    }
+
+    #[test]
+    fn alias_value_containing_default_substring_projects_to_false() {
+        // Sibling of the rename test — `#[serde(alias = "…default…")]`
+        // is another serde attribute whose value might carry the
+        // literal substring `"default"` (aliases occasionally mirror
+        // internal field names). Under the previous substring check
+        // both surfaced as false positives; under the sharpened reader
+        // both correctly project to false.
+        assert!(!has_serde_default(&field(
+            r#"#[serde(alias = "some_default_name")] pub name: String"#
+        )));
+    }
+
+    #[test]
+    fn non_serde_attribute_carrying_default_ident_is_skipped_by_the_path_gate() {
+        // `#[other(default)]` — the path is `other`, not `serde`, so
+        // the outer `if !attr.path().is_ident("serde")` gate silently
+        // skips it via `continue`. Pin the path-gate discipline: the
+        // sniffer is namespaced to `#[serde(...)]` alone. A regression
+        // that broadened the path check (e.g. matched any attribute
+        // carrying a `default` sub-key) would silently harvest defaults
+        // from unrelated attribute macros — e.g. `#[builder(default)]`
+        // from the `derive_builder` crate would incorrectly trigger the
+        // missing-kwarg short-circuit on every `derive_builder` +
+        // `derive_tatara_domain` co-derived field.
+        assert!(!has_serde_default(&field(
+            "#[other(default)] pub name: String"
+        )));
+    }
+
+    #[test]
+    fn bare_serde_path_attribute_without_meta_list_projects_to_false() {
+        // `#[serde]` (a `Meta::Path` — no `(…)` payload) fails the
+        // inner `let Meta::List(list) = &attr.meta else { continue; }`
+        // guard and skips to the next attribute. Pin the shape gate:
+        // only `Meta::List` is decoded. A regression that broadened the
+        // gate to accept `Meta::Path` would silently interpret every
+        // bare `#[serde]` (rare but syntactically valid) as
+        // `#[serde(default)]` — inverting the missing-kwarg semantics.
+        assert!(!has_serde_default(&field("#[serde] pub name: String")));
+    }
+
+    #[test]
+    fn serde_attribute_without_default_sub_key_projects_to_false() {
+        // Baseline "serde present, default absent" — the callback
+        // fires for every peer sub-key (`rename`, `skip_serializing_if`,
+        // `flatten`, …), none match `default`, `found` stays false.
+        // Pin the AND-gate: both the path AND the sub-key must match.
+        assert!(!has_serde_default(&field(
+            r#"#[serde(rename = "x", skip_serializing_if = "Option::is_none")] pub name: Option<String>"#
+        )));
+    }
+
+    #[test]
+    fn multiple_serde_attributes_project_to_true_if_any_carries_default() {
+        // Two peer `#[serde(...)]` attributes on the same field: the
+        // outer `for attr in &field.attrs` loop checks each until the
+        // `if found { return true; }` short-circuit fires. Pin the
+        // any-attr discipline: the sniffer is OR-across-attrs. This is
+        // load-bearing for the (rare but valid) split-across-attrs
+        // authoring style — a refactor that only checked the FIRST
+        // serde attribute would silently regress the split form.
+        let raw = r#"
+            #[serde(rename = "x")]
+            #[serde(default)]
+            pub name: String
+        "#;
+        assert!(has_serde_default(&field(raw)));
     }
 }

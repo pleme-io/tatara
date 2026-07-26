@@ -41942,6 +41942,192 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY DECLARATION-ORDER "the unique strict-repeat witness as a
+    /// singleton-or-empty label Vec" projection — the
+    /// `Vec<&'static str>` label rendering of
+    /// [`Self::unique_repeating_variants`] under [`Self::label`]. Every
+    /// label `s` in the returned vector is the canonical
+    /// [`Self::label`] rendering of some variant that appears TWO-OR-MORE
+    /// times in `items` AND is the SOLE strict-repeat variant (the
+    /// strict-repeat uniqueness guard
+    /// [`Self::has_unique_repeating_variant`] holds). When the guard
+    /// falsifies the projection collapses to the EMPTY Vec through a
+    /// zero-allocation short-circuit inherited from
+    /// [`Self::unique_repeating_variants`].
+    ///
+    /// The `Vec<&'static str>`-RETURN UNIQUE-TIE SHARPENING corner
+    /// CLOSING the strict-repeat arm of the (set-level ×
+    /// `Vec<&'static str>` × equivalence-partition × mult-band ×
+    /// unique-tie) row past the just-opened (mult `== 0`) miss-band arm
+    /// [`Self::unique_missing_labels`] one MULTIPLICITY-BAND axis over on
+    /// the equivalence-partition surface. Peer to
+    /// [`Self::repeating_labels`] one UNIQUE-TIE-SHARPENING axis over on
+    /// the label-Vec return column (unsharpened strict-repeat label
+    /// collection → uniqueness-gated singleton-or-empty label collection).
+    /// Peer to [`Self::unique_repeating_variants`] one RETURN-SHAPE axis
+    /// over on the strict-repeat unique-tie corner (variant-Vec witness
+    /// → label-Vec witness of the same singleton-or-empty binding).
+    ///
+    /// Composition law: for every slice `items`,
+    /// `T::unique_repeating_labels(items) ==
+    /// T::unique_repeating_variants(items).into_iter().map(T::label).collect()`
+    /// — the label-Vec projection binds through the substrate's
+    /// [`Self::unique_repeating_variants`] Vec-return primitive composed
+    /// with the per-slot [`Self::label`] projection. Pinned by
+    /// `unique_repeating_labels_equals_unique_repeating_variants_mapped_under_label_across_every_triple`.
+    ///
+    /// Guarded-witness-collection identity: for every slice `items`,
+    /// `T::unique_repeating_labels(items) ==
+    /// if T::has_unique_repeating_variant(items) { T::repeating_labels(items) } else { vec![] }`
+    /// — the uniqueness-gated label Vec coincides with the boolean-
+    /// guarded strict-repeat label Vec through the composition of
+    /// [`Self::unique_repeating_variants`]'s guard-arm with
+    /// [`Self::label`]. Pinned by
+    /// `unique_repeating_labels_equals_has_unique_repeating_variant_gated_repeating_labels_across_every_triple`.
+    ///
+    /// Length coincidence identity: for every slice `items`,
+    /// `T::unique_repeating_labels(items).len() ==
+    /// usize::from(T::has_unique_repeating_variant(items))` — the return-
+    /// Vec's length COINCIDES with the set-level strict-repeat uniqueness
+    /// bit projected onto `usize`: exactly `0` when the bit falsifies,
+    /// exactly `1` when it holds (since the label-Vec inherits the
+    /// singleton-or-empty length discipline from
+    /// [`Self::unique_repeating_variants`] one RETURN-SHAPE axis over
+    /// under the injective per-slot [`Self::label`] projection). Pinned
+    /// by
+    /// `unique_repeating_labels_len_equals_has_unique_repeating_variant_as_usize_across_every_triple`.
+    ///
+    /// Is-empty coincidence identity: for every slice `items`,
+    /// `T::unique_repeating_labels(items).is_empty() ==
+    /// !T::has_unique_repeating_variant(items)` — the label-Vec's
+    /// emptiness coincides with the NEGATION of the set-level uniqueness
+    /// bit. Independent cross-check on the surface axis distinct from
+    /// the length-coincidence arm (`Vec::is_empty` vs integer equality).
+    /// Pinned by
+    /// `unique_repeating_labels_is_empty_iff_not_has_unique_repeating_variant_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — the underlying
+    /// [`Self::unique_repeating_variants`] factors through the ordering-
+    /// agnostic [`Self::has_unique_repeating_variant`] +
+    /// [`Self::repeating_variants`] pair, and [`Self::label`] is a pure
+    /// projection. The OUTPUT ordering is fixed by [`Self::ALL`]'s
+    /// declaration order regardless of the input ordering. Pinned by
+    /// `unique_repeating_labels_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract: `T::unique_repeating_labels(&[]) == vec![]`
+    /// UNCONDITIONALLY — the empty slice hits zero positions, every per-
+    /// target multiplicity is `0`, [`Self::count_repeating_variants`]
+    /// reports `0`, the uniqueness guard falsifies via `0 != 1`, and the
+    /// projection collapses to the empty Vec.
+    ///
+    /// Full-set contract: `T::unique_repeating_labels(<T as ClosedSet>::ALL) ==
+    /// vec![]` UNCONDITIONALLY — the pairwise-distinctness invariant
+    /// pins every variant at exactly one position of the full-set slice,
+    /// every per-target multiplicity is `1`, the strict-repeat `>= 2`
+    /// test fails at every target, [`Self::count_repeating_variants`]
+    /// reports `0`, the guard falsifies via `0 != 1`, and the projection
+    /// collapses to the empty Vec.
+    ///
+    /// Doubled-full-set contract: `T::unique_repeating_labels` on the
+    /// doubled full set returns `vec![T::ALL[0].label()]` iff
+    /// [`Self::CARDINALITY`] `== 1`, else `vec![]` — every variant hits
+    /// multiplicity `2` (satisfying the strict-repeat `>= 2` test at
+    /// every target), so [`Self::count_repeating_variants`] reports
+    /// [`Self::CARDINALITY`]; the uniqueness guard `count == 1` holds
+    /// EXACTLY when [`Self::CARDINALITY`] `== 1`. At `T::CARDINALITY == 1`
+    /// the guarded lift returns `vec![T::ALL[0].label()]` (the sole
+    /// strict-repeat witness); at `T::CARDINALITY >= 2` every variant is
+    /// a strict-repeat witness, uniqueness fails, and the guard
+    /// collapses to `vec![]`.
+    ///
+    /// Bimodal-triple contract at cardinality `>= 3`: on
+    /// `[T::ALL[0], T::ALL[0], T::ALL[1]]`, `T::ALL[0]` sits at count
+    /// `2` (the SOLE strict-repeat witness), `T::ALL[1]` at count `1`
+    /// (unique-band, not strict-repeat), `T::ALL[2..]` at count `0`
+    /// (miss-band); [`Self::count_repeating_variants`] reports `1`,
+    /// [`Self::has_unique_repeating_variant`] returns `true`, the guard
+    /// holds, and the projection returns `vec![T::ALL[0].label()]` —
+    /// the LOAD-BEARING sole non-empty arm on the multi-variant test-
+    /// module fixture at the canonical bimodal cardinality. LOAD-BEARING
+    /// DISJOINT-WITNESS mirror of [`Self::unique_missing_labels`]
+    /// (returns `vec![T::ALL[2].label()]`) AND
+    /// [`Self::unique_repeating_variants`] (returns `vec![T::ALL[0]]`) on
+    /// the SAME fixture at cardinality `== 3` — the MULTIPLICITY-BAND
+    /// axis SEPARATES the (mult `>= 2`) strict-repeat positive arm
+    /// (WITNESS `T::ALL[0].label()`) from the (mult `== 0`) miss-band
+    /// positive arm (WITNESS `T::ALL[2].label()`) on the shared canonical
+    /// fixture window: the two label positive arms report TWO DIFFERENT
+    /// witnesses one MULTIPLICITY-BAND axis apart, pinning the miss-band
+    /// / strict-repeat band separation on the LABEL-return column under
+    /// the injective per-slot [`Self::label`] projection.
+    ///
+    /// Future consumers — a `tatara-check` predicate `(check-repeating-
+    /// if-unique …)` that reports the singleton-or-empty strict-repeat
+    /// label witness as a typed author-facing string list rather than a
+    /// two-step (has-unique-repeating-variant? then repeating-labels)
+    /// composition; an LSP diagnostic on a Lisp-author-written closed-
+    /// set field that renders "the sole duplicated label" (only when
+    /// uniquely duplicated) as author-facing completion text
+    /// (`":severities [:info :warn :info] — sole duplicate: info"`); a
+    /// Sekiban audit-trail projection whose per-window "sole duplicate
+    /// label" witness renders as a deterministic label list across
+    /// machines; a `tatara-lisp::macro_expand::Expander` diagnostic that
+    /// emits THE LONE re-bound vocabulary identifier's label when
+    /// uniqueness holds through a single typed label-Vec rather than a
+    /// two-step composition. Each binds to ONE typed N-ary uniqueness-
+    /// gated strict-repeat-witness label projection on the trait rather
+    /// than re-deriving the four-primitive
+    /// `unique_repeating_variants + label + map + collect` composition
+    /// inline per callsite.
+    ///
+    /// Compounding closure: this projection CLOSES the strict-repeat arm
+    /// of the (set-level × `Vec<&'static str>` × equivalence-partition ×
+    /// mult-band × unique-tie) row past the just-opened (mult `== 0`)
+    /// miss-band arm [`Self::unique_missing_labels`] one MULTIPLICITY-
+    /// BAND axis over on the equivalence-partition surface. The (mult-
+    /// band × return-shape) 3×2 face on the unique-tie subsurface now
+    /// sits 5/6 closed at (miss, variant), (strict-repeat, variant),
+    /// (unique-band, variant), (miss, label), (strict-repeat, label) —
+    /// with the (unique-band, label) `unique_unique_labels` corner as
+    /// the natural next lift EXHAUSTIVELY CLOSING the row at 6/6.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// uniqueness-gated strict-repeat-label projection becomes a TYPE-
+    /// level primitive on the closed-set trait rather than a per-consumer
+    /// inline
+    /// `T::unique_repeating_variants(items).into_iter().map(T::label).collect()`
+    /// composition at every downstream generic site. THEORY.md §V.1 —
+    /// knowable platform; the (set-level × label × equivalence-partition
+    /// × mult `>= 2` × unique-tie) corner was an unnamed inline
+    /// composition recurring at every prospective downstream "the sole
+    /// duplicated label, if unique, else nothing" site pre-lift.
+    /// THEORY.md §VI.1 — generation over composition; the projection
+    /// emerges from the composition of TWO substrate primitives
+    /// ([`Self::unique_repeating_variants`] + [`Self::label`]) via
+    /// `Iterator::map` + `Iterator::collect`, not as a per-implementor
+    /// hand-rolled body.
+    ///
+    /// Frontier inspiration: R's `{ t <- table(items); reps <-
+    /// names(t)[t >= 2]; if (length(reps) == 1) reps else character(0) }`
+    /// on a factor histogram; Clojure's `(let [reps (filter #(>= (val %)
+    /// 2) (frequencies coll))] (if (= 1 (count reps)) [(name (key (first
+    /// reps)))] []))`; Julia's `let reps = [v for v in all if
+    /// count(==(v), items) >= 2]; length(reps) == 1 ? [label(only(reps))]
+    /// : String[] end`; Haskell's `case [v | v <- all, length (filter
+    /// (==v) items) >= 2] of [v] -> [label v] ; _ -> []` on the
+    /// `Bounded + Enum + Show + Eq` type-class quartet. Translation
+    /// through pleme-io primitives: a pure default method mapping the
+    /// just-lifted [`Self::unique_repeating_variants`] Vec-return
+    /// primitive under the per-slot [`Self::label`] projection — no new
+    /// dep, no supertrait bound, no set-shape carrier.
+    fn unique_repeating_labels(items: &[Self]) -> ::std::vec::Vec<&'static str> {
+        <Self as ClosedSet>::unique_repeating_variants(items)
+            .into_iter()
+            .map(<Self as ClosedSet>::label)
+            .collect()
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -61028,6 +61214,109 @@ where
             T::unique_missing_labels(&bimodal_triple),
             ::std::vec![<T as ClosedSet>::label(T::ALL[2])],
             "{type_name}: T::unique_missing_labels(&bimodal_triple) drifted from `vec![T::ALL[2].label()]` at cardinality == 3 — count_missing reports 1 (T::ALL[2] sole absent), has_unique_missing_variant holds, guard fires, and the composition body reports vec![T::ALL[2].label()]",
+        );
+    }
+    // (201) — `T::unique_repeating_labels(items)` MUST agree with the
+    // composition body
+    // `T::unique_repeating_variants(items).into_iter().map(T::label).collect()`
+    // on every canonical slice AND MUST pin length + is-empty +
+    // guarded-lift coincidences against the sibling (`bool`,
+    // `Vec<Self>`) unique-tie strict-repeat corners one RETURN-SHAPE
+    // axis over. THIS clause CLOSES the strict-repeat arm of the (set-
+    // level × `Vec<&'static str>` × equivalence-partition × mult-band ×
+    // unique-tie) row on the EQUIVALENCE-PARTITION surface past the
+    // just-opened (mult `== 0`) miss-band clause (200) one
+    // MULTIPLICITY-BAND axis over. Peer to clause (195)
+    // ([`T::unique_repeating_variants`]) one RETURN-SHAPE axis over
+    // (variant-Vec witness → label-Vec witness of the same singleton-
+    // or-empty binding).
+    //
+    // The default trait body threads the two-primitive
+    // `unique_repeating_variants + label + map + collect` composition
+    // verbatim and satisfies every fixpoint arm + the composition +
+    // length + is-empty coincidence identities for free; the
+    // assertion catches a future implementor whose override drifts
+    // the label projection loudly rather than silently bifurcating
+    // the set-level equivalence-partition strict-repeat singleton-or-
+    // empty LABEL witness surface. An override that folds onto
+    // `vec![T::ALL[0].label()]` unconditionally bifurcates the
+    // empty-slice + full-set arms at `[T::ALL[0].label()] != []`. An
+    // override that folds onto `vec![]` unconditionally bifurcates the
+    // bimodal-triple positive arm at cardinality `== 3` at
+    // `[] != [T::ALL[0].label()]`.
+    let empty_unique_repeating_labels = T::unique_repeating_labels(empty);
+    let expected_empty_unique_repeating_labels: ::std::vec::Vec<&'static str> =
+        T::unique_repeating_variants(empty)
+            .into_iter()
+            .map(<T as ClosedSet>::label)
+            .collect();
+    assert_eq!(
+        empty_unique_repeating_labels, expected_empty_unique_repeating_labels,
+        "{type_name}: T::unique_repeating_labels(&[]) drifted from `T::unique_repeating_variants(&[]).into_iter().map(T::label).collect()` — the composition law MUST hold on the empty slice",
+    );
+    assert_eq!(
+        T::unique_repeating_labels(empty).len(),
+        usize::from(T::has_unique_repeating_variant(empty)),
+        "{type_name}: T::unique_repeating_labels(&[]).len() drifted from `T::has_unique_repeating_variant(&[]) as usize` — the length-coincidence identity MUST hold on the empty slice",
+    );
+    assert_eq!(
+        T::unique_repeating_labels(empty).is_empty(),
+        !T::has_unique_repeating_variant(empty),
+        "{type_name}: T::unique_repeating_labels(&[]).is_empty() drifted from `!T::has_unique_repeating_variant(&[])` — the is-empty coincidence identity MUST hold on the empty slice",
+    );
+    let full_unique_repeating_labels = T::unique_repeating_labels(T::ALL);
+    let expected_full_unique_repeating_labels: ::std::vec::Vec<&'static str> =
+        T::unique_repeating_variants(T::ALL)
+            .into_iter()
+            .map(<T as ClosedSet>::label)
+            .collect();
+    assert_eq!(
+        full_unique_repeating_labels, expected_full_unique_repeating_labels,
+        "{type_name}: T::unique_repeating_labels(T::ALL) drifted from the composition body on the full-set slice — pairwise-distinctness pins count_repeating_variants at 0, has_unique_repeating_variant returns false, and the projection collapses to vec![] UNCONDITIONALLY",
+    );
+    assert_eq!(
+        T::unique_repeating_labels(T::ALL).len(),
+        usize::from(T::has_unique_repeating_variant(T::ALL)),
+        "{type_name}: T::unique_repeating_labels(T::ALL).len() drifted from `T::has_unique_repeating_variant(T::ALL) as usize` — the length-coincidence identity MUST hold on the full-set slice",
+    );
+    let doubled_unique_repeating_labels = T::unique_repeating_labels(&doubled_full_set);
+    let expected_doubled_unique_repeating_labels: ::std::vec::Vec<&'static str> =
+        T::unique_repeating_variants(&doubled_full_set)
+            .into_iter()
+            .map(<T as ClosedSet>::label)
+            .collect();
+    assert_eq!(
+        doubled_unique_repeating_labels, expected_doubled_unique_repeating_labels,
+        "{type_name}: T::unique_repeating_labels(&doubled_full_set) drifted from the composition body on the doubled-full-set slice — every variant hit twice pins count_repeating_variants == T::CARDINALITY, has_unique_repeating_variant holds iff T::CARDINALITY == 1, and the projection collapses to vec![] at T::CARDINALITY >= 2",
+    );
+    assert_eq!(
+        T::unique_repeating_labels(&doubled_full_set).len(),
+        usize::from(T::has_unique_repeating_variant(&doubled_full_set)),
+        "{type_name}: T::unique_repeating_labels(&doubled_full_set).len() drifted from `T::has_unique_repeating_variant(&doubled_full_set) as usize` — the length-coincidence identity MUST hold on the doubled-full-set slice",
+    );
+    if T::CARDINALITY == 3 {
+        // Bimodal-triple fixture: LOAD-BEARING sole-non-empty positive
+        // arm on the (`Vec<&'static str>` × equivalence-partition ×
+        // mult `>= 2` × unique-tie) corner at the canonical
+        // cardinality-3 test-module window. count_repeating_variants
+        // reports 1 (T::ALL[0] sole strict-repeat at count 2),
+        // has_unique_repeating_variant holds, guard fires, and the
+        // composition body reports vec![T::ALL[0].label()] — the SAME
+        // sole strict-repeat variant that clause (195)'s variant-Vec
+        // sibling reports on the SAME fixture one RETURN-SHAPE axis
+        // over, under the injective per-slot T::label projection.
+        // LOAD-BEARING DISJOINT-WITNESS mirror of clause (200)'s
+        // bimodal-triple arm (which reports vec![T::ALL[2].label()])
+        // one MULTIPLICITY-BAND axis over on the LABEL-return column —
+        // the two positive label arms report TWO DIFFERENT witnesses
+        // (T::ALL[0].label() vs T::ALL[2].label()) on the SAME
+        // fixture, pinning the miss-band / strict-repeat band
+        // separation under the injective per-slot T::label projection.
+        let bimodal_triple = [T::ALL[0], T::ALL[0], T::ALL[1]];
+        assert_eq!(
+            T::unique_repeating_labels(&bimodal_triple),
+            ::std::vec![<T as ClosedSet>::label(T::ALL[0])],
+            "{type_name}: T::unique_repeating_labels(&bimodal_triple) drifted from `vec![T::ALL[0].label()]` at cardinality == 3 — count_repeating_variants reports 1 (T::ALL[0] sole strict-repeat), has_unique_repeating_variant holds, guard fires, and the composition body reports vec![T::ALL[0].label()]",
         );
     }
 }
@@ -126566,6 +126855,271 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedUniqueMissingLabelsSingletonFirstKind whose unique_missing_labels override folds onto vec![\"alpha\"] unconditionally — clause (200)'s canonical-fixture arms MUST reject the drift at cardinality 3",
+        );
+    }
+
+    #[test]
+    fn unique_repeating_labels_returns_empty_on_the_empty_slice_across_every_kind() {
+        // EMPTY-SLICE CONTRACT: T::unique_repeating_labels(&[]) == vec![]
+        // UNCONDITIONALLY — the empty slice hits zero positions,
+        // count_repeating_variants reports 0, has_unique_repeating_variant
+        // collapses to false via `count != 1`, and the projection
+        // collapses to vec![].
+        let empty: &[StubKind] = &[];
+        assert_eq!(
+            <StubKind as ClosedSet>::unique_repeating_labels(empty),
+            Vec::<&'static str>::new(),
+            "T::unique_repeating_labels(&[]) diverged from vec![] — count_repeating_variants reports 0, has_unique_repeating_variant returns false, and the projection collapses to vec![]",
+        );
+    }
+
+    #[test]
+    fn unique_repeating_labels_returns_empty_on_the_full_set_across_every_kind() {
+        // FULL-SET CONTRACT: T::unique_repeating_labels(T::ALL) == vec![]
+        // UNCONDITIONALLY — pairwise-distinctness pins every variant at
+        // exactly one position, count_repeating_variants reports 0,
+        // has_unique_repeating_variant returns false via `0 != 1`, and
+        // the projection collapses to vec![].
+        let all = <StubKind as ClosedSet>::ALL;
+        assert_eq!(
+            <StubKind as ClosedSet>::unique_repeating_labels(all),
+            Vec::<&'static str>::new(),
+            "T::unique_repeating_labels(T::ALL) diverged from vec![] — every variant hits itself once, count_repeating_variants == 0, has_unique_repeating_variant is false, and the projection collapses to vec![]",
+        );
+    }
+
+    #[test]
+    fn unique_repeating_labels_returns_empty_on_the_doubled_full_set_at_cardinality_gte_two() {
+        // DOUBLED-FULL-SET CONTRACT at CARDINALITY >= 2:
+        // T::unique_repeating_labels(ALL++ALL) == vec![] — every variant
+        // hit at count 2 pins count_repeating_variants == T::CARDINALITY,
+        // has_unique_repeating_variant returns false at CARDINALITY >= 2
+        // via `CARDINALITY != 1`, and the projection collapses to vec![].
+        // StubKind has cardinality 3.
+        assert_eq!(<StubKind as ClosedSet>::CARDINALITY, 3);
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        assert_eq!(
+            <StubKind as ClosedSet>::unique_repeating_labels(&doubled),
+            Vec::<&'static str>::new(),
+            "T::unique_repeating_labels(ALL++ALL) diverged from vec![] at CARDINALITY 3 — every variant hits count 2, count_repeating_variants == 3, has_unique_repeating_variant is false, and the projection collapses to vec![]",
+        );
+    }
+
+    #[test]
+    fn unique_repeating_labels_returns_the_sole_repeated_label_on_the_bimodal_triple_at_cardinality_three(
+    ) {
+        // BIMODAL-TRIPLE POSITIVE-ARM CONTRACT at CARDINALITY == 3:
+        // T::unique_repeating_labels([T::ALL[0], T::ALL[0], T::ALL[1]]) ==
+        // vec![T::ALL[0].label()] — T::ALL[0] at count 2 is the SOLE
+        // strict-repeat variant, count_repeating_variants reports 1,
+        // has_unique_repeating_variant holds, and the composition returns
+        // the singleton label Vec of the sole strict-repeat variant.
+        // LOAD-BEARING disjoint-witness mirror of the miss-band arm
+        // (T::ALL[2].label()) one MULTIPLICITY-BAND axis over on the SAME
+        // fixture.
+        assert_eq!(<StubKind as ClosedSet>::CARDINALITY, 3);
+        let bimodal_triple = [
+            <StubKind as ClosedSet>::ALL[0],
+            <StubKind as ClosedSet>::ALL[0],
+            <StubKind as ClosedSet>::ALL[1],
+        ];
+        assert_eq!(
+            <StubKind as ClosedSet>::unique_repeating_labels(&bimodal_triple),
+            vec![<StubKind as ClosedSet>::label(<StubKind as ClosedSet>::ALL[0])],
+            "T::unique_repeating_labels(&bimodal_triple) diverged from vec![T::ALL[0].label()] — count_repeating_variants reports 1 on the bimodal triple at cardinality 3, has_unique_repeating_variant holds, and the composition returns the singleton label Vec of the sole strict-repeat variant",
+        );
+    }
+
+    #[test]
+    fn unique_repeating_labels_equals_unique_repeating_variants_mapped_under_label_across_every_triple(
+    ) {
+        // COMPOSITION LAW: T::unique_repeating_labels(items) ==
+        // T::unique_repeating_variants(items).into_iter().map(T::label).collect()
+        // on every canonical triple — the canonical form the body uses.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected: Vec<&'static str> =
+                        <StubKind as ClosedSet>::unique_repeating_variants(&triple)
+                            .into_iter()
+                            .map(<StubKind as ClosedSet>::label)
+                            .collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_repeating_labels(&triple),
+                        expected,
+                        "T::unique_repeating_labels({triple:?}) diverged from T::unique_repeating_variants({triple:?}).into_iter().map(T::label).collect() — the label-column composition law was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_repeating_labels_equals_has_unique_repeating_variant_gated_repeating_labels_across_every_triple(
+    ) {
+        // GUARDED-WITNESS-COLLECTION IDENTITY: for every slice `items`,
+        // T::unique_repeating_labels(items) == if
+        // T::has_unique_repeating_variant(items) { T::repeating_labels(items) }
+        // else { vec![] } — the label projection factors through the same
+        // uniqueness guard as its variant-Vec sibling. Independent cross-
+        // check binding the label-Vec return against the strict-repeat
+        // label Vec one UNIQUE-TIE-SHARPENING axis over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let via_body = <StubKind as ClosedSet>::unique_repeating_labels(&triple);
+                    let via_guarded_lift =
+                        if <StubKind as ClosedSet>::has_unique_repeating_variant(&triple) {
+                            <StubKind as ClosedSet>::repeating_labels(&triple)
+                        } else {
+                            Vec::new()
+                        };
+                    assert_eq!(
+                        via_body, via_guarded_lift,
+                        "T::unique_repeating_labels({triple:?}) diverged from the guarded lift `if T::has_unique_repeating_variant {{ T::repeating_labels }} else {{ vec![] }}`",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_repeating_labels_len_equals_has_unique_repeating_variant_as_usize_across_every_triple(
+    ) {
+        // LENGTH-COINCIDENCE IDENTITY: for every slice `items`,
+        // T::unique_repeating_labels(items).len() ==
+        // usize::from(T::has_unique_repeating_variant(items)) — the label-
+        // Vec's length coincides with the set-level strict-repeat
+        // uniqueness bit projected onto usize.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_repeating_labels(&triple).len(),
+                        usize::from(<StubKind as ClosedSet>::has_unique_repeating_variant(
+                            &triple
+                        )),
+                        "T::unique_repeating_labels({triple:?}).len() diverged from usize::from(T::has_unique_repeating_variant({triple:?}))",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_repeating_labels_is_empty_iff_not_has_unique_repeating_variant_across_every_triple() {
+        // IS-EMPTY COINCIDENCE IDENTITY: for every slice `items`,
+        // T::unique_repeating_labels(items).is_empty() ==
+        // !T::has_unique_repeating_variant(items). Independent cross-
+        // check on the surface axis distinct from the length-coincidence
+        // arm (Vec::is_empty vs integer equality).
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_repeating_labels(&triple).is_empty(),
+                        !<StubKind as ClosedSet>::has_unique_repeating_variant(&triple),
+                        "T::unique_repeating_labels({triple:?}).is_empty() diverged from !T::has_unique_repeating_variant({triple:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_repeating_labels_is_invariant_under_slice_reversal_across_every_triple() {
+        // REVERSAL-INVARIANCE CONTRACT: T::unique_repeating_labels is
+        // invariant under slice-reversal — both underlying projections
+        // (has_unique_repeating_variant + repeating_variants) are
+        // ordering-agnostic on the input axis, and T::label is a pure
+        // projection.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let reversed: Vec<StubKind> = triple.iter().rev().copied().collect();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_repeating_labels(&triple),
+                        <StubKind as ClosedSet>::unique_repeating_labels(&reversed),
+                        "T::unique_repeating_labels({triple:?}) diverged from T::unique_repeating_labels({reversed:?}) — reversal-invariance was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_singleton_first_drift_in_unique_repeating_labels(
+    ) {
+        // Drift catch — clause (201)'s empty-slice + full-set +
+        // doubled-full-set + bimodal-triple fixpoint arms fire when an
+        // override folds the set-level unique-repeating-labels projection
+        // onto vec!["alpha"] unconditionally. At CARDINALITY 3 the
+        // empty/full/doubled arms expect vec![]; the bimodal-triple
+        // positive arm expects vec![T::ALL[0].label()] == vec!["alpha"];
+        // so the drift matches the bimodal-triple arm but bifurcates
+        // every empty/full/doubled arm at `["alpha"] != []`.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedUniqueRepeatingLabelsSingletonFirstKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedUniqueRepeatingLabelsSingletonFirstKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedUniqueRepeatingLabelsSingletonFirstKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted unique_repeating_labels singleton-first kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedUniqueRepeatingLabelsSingletonFirstKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedUniqueRepeatingLabelsSingletonFirstKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str = "drifted unique_repeating_labels singleton-first kind";
+            type Unknown = UnknownDriftedUniqueRepeatingLabelsSingletonFirstKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedUniqueRepeatingLabelsSingletonFirstKind(s.to_owned())
+            }
+            fn unique_repeating_labels(_items: &[Self]) -> Vec<&'static str> {
+                // Drift: always return vec!["alpha"]. Fires clause
+                // (201)'s empty-slice + full-set + doubled-full-set
+                // fixpoint arms at cardinality 3 (each expects vec![]).
+                ::std::vec!["alpha"]
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<DriftedUniqueRepeatingLabelsSingletonFirstKind>(
+            );
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedUniqueRepeatingLabelsSingletonFirstKind whose unique_repeating_labels override folds onto vec![\"alpha\"] unconditionally — clause (201)'s empty/full/doubled-full-set arms MUST reject the drift at cardinality 3",
         );
     }
 }

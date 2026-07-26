@@ -608,29 +608,62 @@ pub fn derive_tatara_domain(input: TokenStream) -> TokenStream {
 }
 
 fn extract_keyword(attrs: &[Attribute]) -> Option<String> {
+    find_named_sub_key(attrs, "tatara", "keyword", |meta| {
+        let value = meta.value()?;
+        let s: LitStr = value.parse()?;
+        Ok(s.value())
+    })
+}
+
+/// Walk each `#[<attr_ident>(...)]` attribute in `attrs`, first-hit-wins
+/// on any comma-separated sub-key whose ident equals `sub_key`. When the
+/// target sub-key is encountered, `on_match` projects the
+/// `ParseNestedMeta` into a `T` (typically by reading its `= <value>`
+/// payload). Every non-matching sub-key has its trailing `= <expr>`
+/// payload defensively drained — without this, `parse_nested_meta`
+/// stalls at the `=` that follows any value-carrying peer and silently
+/// drops every later sub-key (including a load-bearing target that
+/// appears AFTER an unrelated peer).
+///
+/// Lifts the shared shape of `extract_keyword` (the single-keyed
+/// `#[tatara(keyword = "…")]` reader) and `has_serde_default` (the
+/// single-flagged `#[serde(default)]` sniffer) — both projected on the
+/// same three axes (attr-path gate, sub-key ident match, unmatched-peer
+/// value-drain) with byte-for-byte duplicated `parse_nested_meta`
+/// callback scaffolds. A future single-keyed sub-key reader (e.g. the
+/// `#[tatara(alias = "…")]` extension the sibling
+/// `keyword_after_unrelated_named_value_key_projects_to_the_literal_value`
+/// test's docblock cites, or a `#[serde(rename = "…")]` sniffer) now
+/// composes as a three-line caller rather than a fresh copy of the
+/// scaffold — the value-drain contract that both existing callers
+/// depend on is closed at ONE substrate-level entry, not open to
+/// per-caller drift.
+///
+/// Errors that `on_match` returns via `?` unwind the outer
+/// `parse_nested_meta` and are silently absorbed, matching the historic
+/// swallow discipline both callers already carry (a `#[tatara(keyword
+/// = 42)]` value-shape mismatch projects to `None` without diagnostic;
+/// a `#[serde(default = <malformed-expr>)]` payload projects to `false`
+/// under the sibling reader's `let _ = ...` swallow of the outer
+/// traversal).
+fn find_named_sub_key<T>(
+    attrs: &[Attribute],
+    attr_ident: &str,
+    sub_key: &str,
+    mut on_match: impl FnMut(&syn::meta::ParseNestedMeta<'_>) -> syn::Result<T>,
+) -> Option<T> {
     for attr in attrs {
-        if !attr.path().is_ident("tatara") {
+        if !attr.path().is_ident(attr_ident) {
             continue;
         }
         let Meta::List(list) = &attr.meta else {
             continue;
         };
-        let mut found: Option<String> = None;
+        let mut found: Option<T> = None;
         let _ = list.parse_nested_meta(|meta| {
-            if meta.path.is_ident("keyword") {
-                let value = meta.value()?;
-                let s: LitStr = value.parse()?;
-                found = Some(s.value());
+            if meta.path.is_ident(sub_key) {
+                found = Some(on_match(&meta)?);
             } else if let Ok(value) = meta.value() {
-                // Defensive value-drain for unmatched sub-keys —
-                // mirrors `has_serde_default`'s callback discipline.
-                // Without this, `parse_nested_meta` errors at the `=`
-                // that follows any non-`keyword` sub-key, silently
-                // dropping every later peer (including a load-bearing
-                // `keyword = "…"` that appears AFTER it). Pinned by
-                // `keyword_after_unrelated_named_value_key_projects_to_the_literal_value`
-                // and its reversed-order sibling; a regression that
-                // removed the drain would surface at BOTH tests.
                 let _: syn::Result<syn::Expr> = value.parse();
             }
             Ok(())
@@ -663,40 +696,20 @@ fn snake_to_kebab(snake: &str) -> String {
 /// We honor serde defaults so missing kwargs fall back to `Default::default()`
 /// — matches the deserialize semantics the field was already authored for.
 ///
-/// Reads the attribute structurally through `parse_nested_meta` — matches
-/// how `extract_keyword` (the sibling `#[tatara(keyword = "…")]` reader)
-/// already dispatches, and rejects the false positive the previous
-/// substring-match implementation surfaced on a `#[serde]` attribute
-/// whose OTHER subkey values contained the literal substring `"default"`
-/// (e.g. `#[serde(rename = "default_val")]` was incorrectly reported as
-/// carrying `#[serde(default)]`). The optional `= <expr>` payload is
-/// consumed unconditionally so `parse_nested_meta` can traverse past a
-/// `key = value` peer to the next comma-separated item (the callback
-/// otherwise stalls at the `=` when a peer subkey precedes `default`
-/// — pinned as the `default_after_other_key_named_value_pair` test).
+/// Routes through the shared `find_named_sub_key` helper — the same
+/// entry the sibling `extract_keyword` reader uses. The `on_match`
+/// callback is `|_| Ok(())`: we care only whether the `default`
+/// sub-key ident appears anywhere in a `#[serde(...)]` attribute, not
+/// what its optional `= "path"` payload names. The helper closes the
+/// attr-path gate, the sub-key ident match, and the defensive
+/// value-drain across unmatched peers at ONE substrate entry —
+/// rejecting the false positive the pre-lift substring-match
+/// implementation surfaced on `#[serde(rename = "default_val")]` AND
+/// letting `default` appear ANYWHERE in the sub-key list without the
+/// callback stalling at a preceding value-carrying peer's `=`
+/// (pinned as `default_after_other_key_named_value_pair`).
 fn has_serde_default(field: &syn::Field) -> bool {
-    for attr in &field.attrs {
-        if !attr.path().is_ident("serde") {
-            continue;
-        }
-        let Meta::List(list) = &attr.meta else {
-            continue;
-        };
-        let mut found = false;
-        let _ = list.parse_nested_meta(|meta| {
-            if meta.path.is_ident("default") {
-                found = true;
-            }
-            if let Ok(value) = meta.value() {
-                let _: syn::Result<syn::Expr> = value.parse();
-            }
-            Ok(())
-        });
-        if found {
-            return true;
-        }
-    }
-    false
+    find_named_sub_key(&field.attrs, "serde", "default", |_meta| Ok(())).is_some()
 }
 
 fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2, String> {
@@ -1564,6 +1577,119 @@ mod extract_keyword_tests {
         assert_eq!(
             extract_keyword(&attrs(r#"#[tatara(other_flag, keyword = "defx")]"#)),
             Some("defx".to_string()),
+        );
+    }
+}
+
+#[cfg(test)]
+mod find_named_sub_key_tests {
+    use super::find_named_sub_key;
+    use syn::{parse::Parser, Attribute, LitStr};
+
+    // The `find_named_sub_key<T>(...) -> Option<T>` shared helper is
+    // the substrate-level entry the two sibling readers `extract_keyword`
+    // (`#[tatara(keyword = "…")]`) and `has_serde_default`
+    // (`#[serde(default)]` sniffer) both project through. It closes
+    // THREE historically duplicated axes at ONE point: the attr-path
+    // gate (only the matching `#[<attr_ident>(...)]` shape is decoded),
+    // the sub-key ident match (only the matching sub-key's payload is
+    // projected), and the defensive value-drain across unmatched peers
+    // (any value-carrying peer, before or after the target, is skipped
+    // past without stalling the parser at its `=`).
+    //
+    // The sibling `extract_keyword_tests` and `has_serde_default_tests`
+    // modules close every callback-specific corner via each caller's
+    // public projection. This module pins the helper's OWN generic
+    // contract — its behavior on a fresh `(attr_ident, sub_key)` pair
+    // NOT in use by either existing caller — so a future third caller
+    // (the `#[tatara(alias = "…")]` back-compat extension the sibling
+    // `keyword_after_unrelated_named_value_key_projects_to_the_literal_value`
+    // test's docblock cites, a `#[serde(rename = "…")]` sniffer, a
+    // single-key reader lifted out of the 6-key
+    // `parse_closed_set_attrs`) composes as a three-line caller
+    // against this contract rather than as a fresh copy of the
+    // `parse_nested_meta` + drain scaffold. A regression to any of the
+    // three axes surfaces AT ONE test-module boundary in the derive
+    // crate rather than as silent drift across every downstream
+    // implementor of either sibling reader.
+
+    fn attrs(src: &str) -> Vec<Attribute> {
+        Attribute::parse_outer
+            .parse_str(src)
+            .expect("valid attribute syntax")
+    }
+
+    fn read_lit_str(attrs_src: &str, attr_ident: &str, sub_key: &str) -> Option<String> {
+        find_named_sub_key(&attrs(attrs_src), attr_ident, sub_key, |meta| {
+            let value = meta.value()?;
+            let s: LitStr = value.parse()?;
+            Ok(s.value())
+        })
+    }
+
+    #[test]
+    fn fresh_attr_ident_and_sub_key_pair_project_to_the_literal_value() {
+        // The compounding proof: the helper works for a
+        // `(attr_ident = "myattr", sub_key = "mykey")` pair NOT in use
+        // by either `extract_keyword` (which pins on
+        // `("tatara", "keyword")`) or `has_serde_default` (which pins
+        // on `("serde", "default")`). A future third caller (the
+        // three-axis `alias`/`rename`/`marker`/…-style sub-key reader
+        // that today would have re-derived the whole scaffold)
+        // composes here in ONE three-line body. A regression that
+        // broke the generic-T projection or the (attr_ident, sub_key)
+        // parameterization would surface here.
+        assert_eq!(
+            read_lit_str(r#"#[myattr(mykey = "hello")]"#, "myattr", "mykey"),
+            Some("hello".to_string()),
+        );
+    }
+
+    #[test]
+    fn target_sub_key_after_unrelated_named_value_peer_still_resolves() {
+        // The defensive value-drain contract, pinned at the helper
+        // boundary. Under a naive callback (no drain),
+        // `parse_nested_meta` stalls at the `=` following `other`,
+        // silently drops the rest of the meta list, and the target
+        // `mykey` — which sits AFTER the unrelated peer — is never
+        // seen. The helper's `else if let Ok(value) = meta.value()`
+        // drain branch keeps the parser advancing past every
+        // unmatched value-carrying peer. Sibling to
+        // `extract_keyword_tests::keyword_after_unrelated_named_value_key_projects_to_the_literal_value`
+        // and
+        // `has_serde_default_tests::default_after_other_key_named_value_pair_projects_to_true`
+        // — same contract, tested at the helper level so a future
+        // third caller inherits it automatically. A refactor that
+        // removed the drain would surface across ALL THREE tests
+        // simultaneously, naming the causal boundary at the helper.
+        assert_eq!(
+            read_lit_str(
+                r#"#[myattr(other = "x", mykey = "hello")]"#,
+                "myattr",
+                "mykey"
+            ),
+            Some("hello".to_string()),
+        );
+    }
+
+    #[test]
+    fn on_match_error_is_silently_absorbed_by_the_outer_swallow() {
+        // The historic swallow discipline, pinned at the helper
+        // boundary. An `on_match` `?` bail (e.g. `LitStr::parse`
+        // failing on a `LitInt` value) unwinds the callback, errors
+        // the outer `parse_nested_meta`, and the `let _ = ...`
+        // swallow yields `None` WITHOUT surfacing a syn::Error.
+        // Mirrors the shape
+        // `extract_keyword_tests::non_string_literal_keyword_value_silently_projects_to_none`
+        // pins for the `extract_keyword` caller — same swallow, tested
+        // at the helper level so a future third caller inherits it. A
+        // refactor that surfaced a typed derive-time error here would
+        // flip both this test and the sibling caller's swallow test,
+        // pointing at the shared entry rather than either caller
+        // individually.
+        assert_eq!(
+            read_lit_str(r#"#[myattr(mykey = 42)]"#, "myattr", "mykey"),
+            None,
         );
     }
 }

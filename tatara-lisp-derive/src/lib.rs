@@ -621,6 +621,17 @@ fn extract_keyword(attrs: &[Attribute]) -> Option<String> {
                 let value = meta.value()?;
                 let s: LitStr = value.parse()?;
                 found = Some(s.value());
+            } else if let Ok(value) = meta.value() {
+                // Defensive value-drain for unmatched sub-keys —
+                // mirrors `has_serde_default`'s callback discipline.
+                // Without this, `parse_nested_meta` errors at the `=`
+                // that follows any non-`keyword` sub-key, silently
+                // dropping every later peer (including a load-bearing
+                // `keyword = "…"` that appears AFTER it). Pinned by
+                // `keyword_after_unrelated_named_value_key_projects_to_the_literal_value`
+                // and its reversed-order sibling; a regression that
+                // removed the drain would surface at BOTH tests.
+                let _: syn::Result<syn::Expr> = value.parse();
             }
             Ok(())
         });
@@ -1481,6 +1492,79 @@ mod extract_keyword_tests {
             #[tatara(keyword = "defafter")]
         "#;
         assert_eq!(extract_keyword(&attrs(raw)), Some("defafter".to_string()));
+    }
+
+    #[test]
+    fn keyword_after_unrelated_named_value_key_projects_to_the_literal_value() {
+        // Fail-before-pass-after guard for the callback's defensive
+        // value-drain discipline. Under the PREVIOUS implementation
+        // the `parse_nested_meta` callback returned Ok WITHOUT
+        // consuming the `= "x"` payload after any non-`keyword` peer,
+        // so the outer parser stalled at the `=` following the FIRST
+        // unrelated sub-key and errored BEFORE ever reaching
+        // `keyword`. The `let _ = list.parse_nested_meta(...)` swallow
+        // then dropped that error silently and the reader returned
+        // None even though a well-formed `keyword = "…"` sat later in
+        // the same attribute. The sharpened callback drains the value
+        // of every unmatched sub-key via
+        // `let _: syn::Result<syn::Expr> = value.parse()`, so the
+        // outer parser advances past the `= <expr>` payload of each
+        // peer to the next `,` and continues walking the meta list.
+        // A regression that reverted the drain would surface here.
+        assert_eq!(
+            extract_keyword(&attrs(r#"#[tatara(other = "x", keyword = "defx")]"#)),
+            Some("defx".to_string()),
+            "keyword AFTER an unrelated named-value sub-key must still be found",
+        );
+    }
+
+    #[test]
+    fn keyword_between_unrelated_named_value_keys_projects_to_the_literal_value() {
+        // Sibling of the above — pin the drain discipline across BOTH
+        // the pre-keyword AND post-keyword peer positions. Even after
+        // the callback flips `found` to Some for the middle `keyword`
+        // sub-key, the parse must continue past the trailing
+        // `alias = "y"` peer without erroring (the callback drains its
+        // value too), so the outer swallow doesn't unwind through a
+        // half-consumed attribute. A regression that only drained
+        // pre-match peers (e.g. via an early-return in the callback
+        // after `found` flips) would surface here.
+        assert_eq!(
+            extract_keyword(&attrs(
+                r#"#[tatara(other = "x", keyword = "defx", alias = "y")]"#
+            )),
+            Some("defx".to_string()),
+        );
+    }
+
+    #[test]
+    fn keyword_before_unrelated_bare_flag_projects_to_the_literal_value() {
+        // Sibling ordering — a bare-flag peer (`Meta::Path`, no `=`
+        // payload) after `keyword = "…"` must not stall the parse.
+        // The drain branch `if let Ok(value) = meta.value()` short-
+        // circuits when there is no `=` following the flag (the
+        // outer `meta.value()` returns Err on a bare path), so the
+        // callback's Ok return advances past the flag naturally.
+        // Pin the drain's tolerance of the bare-flag shape alongside
+        // the named-value shape.
+        assert_eq!(
+            extract_keyword(&attrs(r#"#[tatara(keyword = "defx", other_flag)]"#)),
+            Some("defx".to_string()),
+        );
+    }
+
+    #[test]
+    fn keyword_after_unrelated_bare_flag_projects_to_the_literal_value() {
+        // Reversed-ordering peer of the above — a bare-flag peer that
+        // appears BEFORE `keyword = "…"` must not stall the parse
+        // either. The callback's `else if let Ok(value)` branch
+        // short-circuits with Err on the bare flag (no `=` to consume)
+        // and returns Ok, letting `parse_nested_meta` advance to the
+        // next comma-separated peer where `keyword` is captured.
+        assert_eq!(
+            extract_keyword(&attrs(r#"#[tatara(other_flag, keyword = "defx")]"#)),
+            Some("defx".to_string()),
+        );
     }
 }
 

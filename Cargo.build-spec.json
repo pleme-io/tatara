@@ -1,7 +1,7 @@
 {
   "version": 10,
   "workspace": {
-    "root": "/Users/drzzln/code/github/pleme-io/tatara",
+    "root": "/Users/luis.d/code/github/pleme-io/tatara",
     "members": [
       {
         "name": "tatara-core",
@@ -34361,9 +34361,9 @@
         "preBuild": "export CARGO_CRATE_NAME=target_lexicon;"
       }
     },
-    "tatara-api-0.2.151": {
+    "tatara-api-0.2.154": {
       "name": "tatara-api",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -34470,7 +34470,7 @@
         },
         {
           "name": "tatara_core",
-          "package_key": "tatara-core-0.2.151",
+          "package_key": "tatara-core-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -34480,7 +34480,7 @@
         },
         {
           "name": "tatara_engine",
-          "package_key": "tatara-engine-0.2.151",
+          "package_key": "tatara-engine-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -34594,13 +34594,13 @@
         ],
         "tatara-core": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_core"
           }
         ],
         "tatara-engine": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_engine"
           }
         ],
@@ -34625,7 +34625,7 @@
       },
       "build_rust_crate_args": {
         "crateName": "tatara-api",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "async-graphql": [
@@ -34648,13 +34648,13 @@
           ],
           "tatara-core": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_core"
             }
           ],
           "tatara-engine": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_engine"
             }
           ],
@@ -34683,9 +34683,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_api;"
       }
     },
-    "tatara-build-remote-0.2.151": {
+    "tatara-build-remote-0.2.154": {
       "name": "tatara-build-remote",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -34748,7 +34748,7 @@
       "crate_renames": {},
       "build_rust_crate_args": {
         "crateName": "tatara-build-remote",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "release": true,
         "libName": "tatara_build_remote",
@@ -34756,9 +34756,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_build_remote;"
       }
     },
-    "tatara-cli-0.2.151": {
+    "tatara-cli-0.2.154": {
       "name": "tatara-cli",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -35008,7 +35008,7 @@
         },
         {
           "name": "tatara_api",
-          "package_key": "tatara-api-0.2.151",
+          "package_key": "tatara-api-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -35018,7 +35018,7 @@
         },
         {
           "name": "tatara_core",
-          "package_key": "tatara-core-0.2.151",
+          "package_key": "tatara-core-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -35028,7 +35028,7 @@
         },
         {
           "name": "tatara_engine",
-          "package_key": "tatara-engine-0.2.151",
+          "package_key": "tatara-engine-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -35180,19 +35180,19 @@
         ],
         "tatara-api": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_api"
           }
         ],
         "tatara-core": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_core"
           }
         ],
         "tatara-engine": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_engine"
           }
         ],
@@ -35217,7 +35217,7 @@
       },
       "build_rust_crate_args": {
         "crateName": "tatara-cli",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "async-graphql": [
@@ -35258,19 +35258,19 @@
           ],
           "tatara-api": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_api"
             }
           ],
           "tatara-core": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_core"
             }
           ],
           "tatara-engine": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_engine"
             }
           ],
@@ -35297,9 +35297,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_cli;"
       }
     },
-    "tatara-closed-loop-probe-0.2.151": {
+    "tatara-closed-loop-probe-0.2.154": {
       "name": "tatara-closed-loop-probe",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -35454,7 +35454,7 @@
         },
         {
           "name": "tatara_process",
-          "package_key": "tatara-process-0.2.151",
+          "package_key": "tatara-process-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -35518,7 +35518,7 @@
         ],
         "tatara-process": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_process"
           }
         ],
@@ -35531,7 +35531,7 @@
       },
       "build_rust_crate_args": {
         "crateName": "tatara-closed-loop-probe",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "k8s-openapi": [
@@ -35542,7 +35542,7 @@
           ],
           "tatara-process": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_process"
             }
           ],
@@ -35557,9 +35557,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_closed_loop_probe;"
       }
     },
-    "tatara-core-0.2.151": {
+    "tatara-core-0.2.154": {
       "name": "tatara-core",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -35740,7 +35740,7 @@
       "crate_renames": {},
       "build_rust_crate_args": {
         "crateName": "tatara-core",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "release": true,
         "libName": "tatara_core",
@@ -35748,9 +35748,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_core;"
       }
     },
-    "tatara-domains-0.2.151": {
+    "tatara-domains-0.2.154": {
       "name": "tatara-domains",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -35790,7 +35790,7 @@
         },
         {
           "name": "tatara_lisp",
-          "package_key": "tatara-lisp-0.2.151",
+          "package_key": "tatara-lisp-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -35803,19 +35803,19 @@
       "crate_renames": {
         "tatara-lisp": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp"
           }
         ]
       },
       "build_rust_crate_args": {
         "crateName": "tatara-domains",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "tatara-lisp": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp"
             }
           ]
@@ -35826,9 +35826,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_domains;"
       }
     },
-    "tatara-engine-0.2.151": {
+    "tatara-engine-0.2.154": {
       "name": "tatara-engine",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -36082,7 +36082,7 @@
         },
         {
           "name": "tatara_core",
-          "package_key": "tatara-core-0.2.151",
+          "package_key": "tatara-core-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -36187,7 +36187,7 @@
         ],
         "tatara-core": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_core"
           }
         ],
@@ -36206,7 +36206,7 @@
       },
       "build_rust_crate_args": {
         "crateName": "tatara-engine",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "features": [
           "default"
@@ -36238,7 +36238,7 @@
           ],
           "tatara-core": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_core"
             }
           ],
@@ -36262,9 +36262,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_engine;"
       }
     },
-    "tatara-eval-0.2.151": {
+    "tatara-eval-0.2.154": {
       "name": "tatara-eval",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -36316,7 +36316,7 @@
         },
         {
           "name": "tatara_lisp",
-          "package_key": "tatara-lisp-0.2.151",
+          "package_key": "tatara-lisp-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -36326,7 +36326,7 @@
         },
         {
           "name": "tatara_nix",
-          "package_key": "tatara-nix-0.2.151",
+          "package_key": "tatara-nix-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -36349,31 +36349,31 @@
       "crate_renames": {
         "tatara-lisp": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp"
           }
         ],
         "tatara-nix": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_nix"
           }
         ]
       },
       "build_rust_crate_args": {
         "crateName": "tatara-eval",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "tatara-lisp": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp"
             }
           ],
           "tatara-nix": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_nix"
             }
           ]
@@ -36384,9 +36384,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_eval;"
       }
     },
-    "tatara-export-worker-0.2.151": {
+    "tatara-export-worker-0.2.154": {
       "name": "tatara-export-worker",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -36544,7 +36544,7 @@
         },
         {
           "name": "tatara_process",
-          "package_key": "tatara-process-0.2.151",
+          "package_key": "tatara-process-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -36614,7 +36614,7 @@
         ],
         "tatara-process": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_process"
           }
         ],
@@ -36627,7 +36627,7 @@
       },
       "build_rust_crate_args": {
         "crateName": "tatara-export-worker",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "async-nats": [
@@ -36644,7 +36644,7 @@
           ],
           "tatara-process": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_process"
             }
           ],
@@ -36661,9 +36661,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_export_worker;"
       }
     },
-    "tatara-github-watcher-0.2.151": {
+    "tatara-github-watcher-0.2.154": {
       "name": "tatara-github-watcher",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -36832,7 +36832,7 @@
         },
         {
           "name": "tatara_process",
-          "package_key": "tatara-process-0.2.151",
+          "package_key": "tatara-process-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -36908,7 +36908,7 @@
         ],
         "tatara-process": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_process"
           }
         ],
@@ -36927,7 +36927,7 @@
       },
       "build_rust_crate_args": {
         "crateName": "tatara-github-watcher",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "k8s-openapi": [
@@ -36938,7 +36938,7 @@
           ],
           "tatara-process": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_process"
             }
           ],
@@ -36961,9 +36961,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_github_watcher;"
       }
     },
-    "tatara-hospedeiro-0.2.151": {
+    "tatara-hospedeiro-0.2.154": {
       "name": "tatara-hospedeiro",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -37003,7 +37003,7 @@
         },
         {
           "name": "tatara_build_remote",
-          "package_key": "tatara-build-remote-0.2.151",
+          "package_key": "tatara-build-remote-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -37013,7 +37013,7 @@
         },
         {
           "name": "tatara_hvf",
-          "package_key": "tatara-hvf-0.2.151",
+          "package_key": "tatara-hvf-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -37023,7 +37023,7 @@
         },
         {
           "name": "tatara_process",
-          "package_key": "tatara-process-0.2.151",
+          "package_key": "tatara-process-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -37033,7 +37033,7 @@
         },
         {
           "name": "tatara_vm",
-          "package_key": "tatara-vm-0.2.151",
+          "package_key": "tatara-vm-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -37043,7 +37043,7 @@
         },
         {
           "name": "tatara_wasm",
-          "package_key": "tatara-wasm-0.2.151",
+          "package_key": "tatara-wasm-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -37076,67 +37076,67 @@
       "crate_renames": {
         "tatara-build-remote": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_build_remote"
           }
         ],
         "tatara-hvf": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_hvf"
           }
         ],
         "tatara-process": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_process"
           }
         ],
         "tatara-vm": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_vm"
           }
         ],
         "tatara-wasm": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_wasm"
           }
         ]
       },
       "build_rust_crate_args": {
         "crateName": "tatara-hospedeiro",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "tatara-build-remote": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_build_remote"
             }
           ],
           "tatara-hvf": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_hvf"
             }
           ],
           "tatara-process": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_process"
             }
           ],
           "tatara-vm": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_vm"
             }
           ],
           "tatara-wasm": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_wasm"
             }
           ]
@@ -37147,9 +37147,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_hospedeiro;"
       }
     },
-    "tatara-hvf-0.2.151": {
+    "tatara-hvf-0.2.154": {
       "name": "tatara-hvf",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -37212,7 +37212,7 @@
       "crate_renames": {},
       "build_rust_crate_args": {
         "crateName": "tatara-hvf",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "release": true,
         "libName": "tatara_hvf",
@@ -37220,9 +37220,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_hvf;"
       }
     },
-    "tatara-init-0.2.151": {
+    "tatara-init-0.2.154": {
       "name": "tatara-init",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -37277,7 +37277,7 @@
         },
         {
           "name": "tatara_eval",
-          "package_key": "tatara-eval-0.2.151",
+          "package_key": "tatara-eval-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -37287,7 +37287,7 @@
         },
         {
           "name": "tatara_lisp",
-          "package_key": "tatara-lisp-0.2.151",
+          "package_key": "tatara-lisp-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -37297,7 +37297,7 @@
         },
         {
           "name": "tatara_lisp_derive",
-          "package_key": "tatara-lisp-derive-0.2.151",
+          "package_key": "tatara-lisp-derive-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -37320,43 +37320,43 @@
       "crate_renames": {
         "tatara-eval": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_eval"
           }
         ],
         "tatara-lisp": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp"
           }
         ],
         "tatara-lisp-derive": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp_derive"
           }
         ]
       },
       "build_rust_crate_args": {
         "crateName": "tatara-init",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "tatara-eval": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_eval"
             }
           ],
           "tatara-lisp": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp"
             }
           ],
           "tatara-lisp-derive": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp_derive"
             }
           ]
@@ -37367,9 +37367,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_init;"
       }
     },
-    "tatara-kube-0.2.151": {
+    "tatara-kube-0.2.154": {
       "name": "tatara-kube",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -37517,7 +37517,7 @@
         },
         {
           "name": "tatara_core",
-          "package_key": "tatara-core-0.2.151",
+          "package_key": "tatara-core-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -37581,7 +37581,7 @@
         ],
         "tatara-core": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_core"
           }
         ],
@@ -37594,7 +37594,7 @@
       },
       "build_rust_crate_args": {
         "crateName": "tatara-kube",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "features": [
           "default",
@@ -37609,7 +37609,7 @@
           ],
           "tatara-core": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_core"
             }
           ],
@@ -37626,9 +37626,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_kube;"
       }
     },
-    "tatara-lattice-0.2.151": {
+    "tatara-lattice-0.2.154": {
       "name": "tatara-lattice",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -37670,7 +37670,7 @@
         },
         {
           "name": "tatara_core",
-          "package_key": "tatara-core-0.2.151",
+          "package_key": "tatara-core-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -37680,7 +37680,7 @@
         },
         {
           "name": "tatara_process",
-          "package_key": "tatara-process-0.2.151",
+          "package_key": "tatara-process-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -37693,31 +37693,31 @@
       "crate_renames": {
         "tatara-core": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_core"
           }
         ],
         "tatara-process": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_process"
           }
         ]
       },
       "build_rust_crate_args": {
         "crateName": "tatara-lattice",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "tatara-core": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_core"
             }
           ],
           "tatara-process": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_process"
             }
           ]
@@ -37728,9 +37728,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_lattice;"
       }
     },
-    "tatara-lisp-0.2.151": {
+    "tatara-lisp-0.2.154": {
       "name": "tatara-lisp",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -37782,7 +37782,7 @@
         },
         {
           "name": "tatara_lisp_derive",
-          "package_key": "tatara-lisp-derive-0.2.151",
+          "package_key": "tatara-lisp-derive-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -37805,14 +37805,14 @@
       "crate_renames": {
         "tatara-lisp-derive": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp_derive"
           }
         ]
       },
       "build_rust_crate_args": {
         "crateName": "tatara-lisp",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "features": [
           "default"
@@ -37820,7 +37820,7 @@
         "crateRenames": {
           "tatara-lisp-derive": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp_derive"
             }
           ]
@@ -37831,9 +37831,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_lisp;"
       }
     },
-    "tatara-lisp-derive-0.2.151": {
+    "tatara-lisp-derive-0.2.154": {
       "name": "tatara-lisp-derive",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -37893,7 +37893,7 @@
       },
       "build_rust_crate_args": {
         "crateName": "tatara-lisp-derive",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "proc-macro2": [
@@ -37910,9 +37910,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_lisp_derive;"
       }
     },
-    "tatara-mcp-0.2.151": {
+    "tatara-mcp-0.2.154": {
       "name": "tatara-mcp",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -37952,7 +37952,7 @@
         },
         {
           "name": "tatara_core",
-          "package_key": "tatara-core-0.2.151",
+          "package_key": "tatara-core-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -37987,19 +37987,19 @@
       "crate_renames": {
         "tatara-core": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_core"
           }
         ]
       },
       "build_rust_crate_args": {
         "crateName": "tatara-mcp",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "tatara-core": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_core"
             }
           ]
@@ -38010,9 +38010,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_mcp;"
       }
     },
-    "tatara-net-0.2.151": {
+    "tatara-net-0.2.154": {
       "name": "tatara-net",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -38109,7 +38109,7 @@
         },
         {
           "name": "tatara_core",
-          "package_key": "tatara-core-0.2.151",
+          "package_key": "tatara-core-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -38173,14 +38173,14 @@
         ],
         "tatara-core": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_core"
           }
         ]
       },
       "build_rust_crate_args": {
         "crateName": "tatara-net",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "features": [
           "default",
@@ -38195,7 +38195,7 @@
           ],
           "tatara-core": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_core"
             }
           ]
@@ -38206,9 +38206,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_net;"
       }
     },
-    "tatara-nix-0.2.151": {
+    "tatara-nix-0.2.154": {
       "name": "tatara-nix",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -38268,7 +38268,7 @@
         },
         {
           "name": "tatara_lattice",
-          "package_key": "tatara-lattice-0.2.151",
+          "package_key": "tatara-lattice-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -38278,7 +38278,7 @@
         },
         {
           "name": "tatara_lisp",
-          "package_key": "tatara-lisp-0.2.151",
+          "package_key": "tatara-lisp-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -38288,7 +38288,7 @@
         },
         {
           "name": "tatara_lisp_derive",
-          "package_key": "tatara-lisp-derive-0.2.151",
+          "package_key": "tatara-lisp-derive-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -38321,43 +38321,43 @@
       "crate_renames": {
         "tatara-lattice": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lattice"
           }
         ],
         "tatara-lisp": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp"
           }
         ],
         "tatara-lisp-derive": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp_derive"
           }
         ]
       },
       "build_rust_crate_args": {
         "crateName": "tatara-nix",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "tatara-lattice": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lattice"
             }
           ],
           "tatara-lisp": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp"
             }
           ],
           "tatara-lisp-derive": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp_derive"
             }
           ]
@@ -38672,9 +38672,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_operator;"
       }
     },
-    "tatara-os-0.2.151": {
+    "tatara-os-0.2.154": {
       "name": "tatara-os",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -38734,7 +38734,7 @@
         },
         {
           "name": "tatara_lisp",
-          "package_key": "tatara-lisp-0.2.151",
+          "package_key": "tatara-lisp-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -38744,7 +38744,7 @@
         },
         {
           "name": "tatara_lisp_derive",
-          "package_key": "tatara-lisp-derive-0.2.151",
+          "package_key": "tatara-lisp-derive-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -38754,7 +38754,7 @@
         },
         {
           "name": "tatara_nix",
-          "package_key": "tatara-nix-0.2.151",
+          "package_key": "tatara-nix-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -38764,7 +38764,7 @@
         },
         {
           "name": "tatara_pkgs",
-          "package_key": "tatara-pkgs-0.2.151",
+          "package_key": "tatara-pkgs-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -38787,55 +38787,55 @@
       "crate_renames": {
         "tatara-lisp": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp"
           }
         ],
         "tatara-lisp-derive": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp_derive"
           }
         ],
         "tatara-nix": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_nix"
           }
         ],
         "tatara-pkgs": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_pkgs"
           }
         ]
       },
       "build_rust_crate_args": {
         "crateName": "tatara-os",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "tatara-lisp": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp"
             }
           ],
           "tatara-lisp-derive": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp_derive"
             }
           ],
           "tatara-nix": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_nix"
             }
           ],
           "tatara-pkgs": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_pkgs"
             }
           ]
@@ -38846,9 +38846,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_os;"
       }
     },
-    "tatara-pkgs-0.2.151": {
+    "tatara-pkgs-0.2.154": {
       "name": "tatara-pkgs",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -38888,7 +38888,7 @@
         },
         {
           "name": "tatara_lisp",
-          "package_key": "tatara-lisp-0.2.151",
+          "package_key": "tatara-lisp-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -38898,7 +38898,7 @@
         },
         {
           "name": "tatara_lisp_derive",
-          "package_key": "tatara-lisp-derive-0.2.151",
+          "package_key": "tatara-lisp-derive-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -38908,7 +38908,7 @@
         },
         {
           "name": "tatara_nix",
-          "package_key": "tatara-nix-0.2.151",
+          "package_key": "tatara-nix-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -38931,43 +38931,43 @@
       "crate_renames": {
         "tatara-lisp": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp"
           }
         ],
         "tatara-lisp-derive": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp_derive"
           }
         ],
         "tatara-nix": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_nix"
           }
         ]
       },
       "build_rust_crate_args": {
         "crateName": "tatara-pkgs",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "tatara-lisp": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp"
             }
           ],
           "tatara-lisp-derive": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp_derive"
             }
           ],
           "tatara-nix": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_nix"
             }
           ]
@@ -38978,9 +38978,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_pkgs;"
       }
     },
-    "tatara-pool-reconciler-0.2.151": {
+    "tatara-pool-reconciler-0.2.154": {
       "name": "tatara-pool-reconciler",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -39190,7 +39190,7 @@
         },
         {
           "name": "tatara_core",
-          "package_key": "tatara-core-0.2.151",
+          "package_key": "tatara-core-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -39200,7 +39200,7 @@
         },
         {
           "name": "tatara_process",
-          "package_key": "tatara-process-0.2.151",
+          "package_key": "tatara-process-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -39276,13 +39276,13 @@
         ],
         "tatara-core": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_core"
           }
         ],
         "tatara-process": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_process"
           }
         ],
@@ -39295,7 +39295,7 @@
       },
       "build_rust_crate_args": {
         "crateName": "tatara-pool-reconciler",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "async-trait": [
@@ -39318,13 +39318,13 @@
           ],
           "tatara-core": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_core"
             }
           ],
           "tatara-process": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_process"
             }
           ],
@@ -39341,9 +39341,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_pool_reconciler;"
       }
     },
-    "tatara-process-0.2.151": {
+    "tatara-process-0.2.154": {
       "name": "tatara-process",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -39488,7 +39488,7 @@
         },
         {
           "name": "tatara_core",
-          "package_key": "tatara-core-0.2.151",
+          "package_key": "tatara-core-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -39498,7 +39498,7 @@
         },
         {
           "name": "tatara_lisp",
-          "package_key": "tatara-lisp-0.2.151",
+          "package_key": "tatara-lisp-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -39508,7 +39508,7 @@
         },
         {
           "name": "tatara_lisp_derive",
-          "package_key": "tatara-lisp-derive-0.2.151",
+          "package_key": "tatara-lisp-derive-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -39547,26 +39547,26 @@
         ],
         "tatara-core": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_core"
           }
         ],
         "tatara-lisp": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp"
           }
         ],
         "tatara-lisp-derive": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp_derive"
           }
         ]
       },
       "build_rust_crate_args": {
         "crateName": "tatara-process",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "k8s-openapi": [
@@ -39577,19 +39577,19 @@
           ],
           "tatara-core": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_core"
             }
           ],
           "tatara-lisp": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp"
             }
           ],
           "tatara-lisp-derive": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp_derive"
             }
           ]
@@ -39600,9 +39600,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_process;"
       }
     },
-    "tatara-reconciler-0.2.151": {
+    "tatara-reconciler-0.2.154": {
       "name": "tatara-reconciler",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -39820,7 +39820,7 @@
         },
         {
           "name": "tatara_core",
-          "package_key": "tatara-core-0.2.151",
+          "package_key": "tatara-core-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -39830,7 +39830,7 @@
         },
         {
           "name": "tatara_domains",
-          "package_key": "tatara-domains-0.2.151",
+          "package_key": "tatara-domains-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -39840,7 +39840,7 @@
         },
         {
           "name": "tatara_lattice",
-          "package_key": "tatara-lattice-0.2.151",
+          "package_key": "tatara-lattice-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -39850,7 +39850,7 @@
         },
         {
           "name": "tatara_lisp",
-          "package_key": "tatara-lisp-0.2.151",
+          "package_key": "tatara-lisp-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -39860,7 +39860,7 @@
         },
         {
           "name": "tatara_process",
-          "package_key": "tatara-process-0.2.151",
+          "package_key": "tatara-process-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -39930,31 +39930,31 @@
         ],
         "tatara-core": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_core"
           }
         ],
         "tatara-domains": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_domains"
           }
         ],
         "tatara-lattice": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lattice"
           }
         ],
         "tatara-lisp": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp"
           }
         ],
         "tatara-process": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_process"
           }
         ],
@@ -39967,7 +39967,7 @@
       },
       "build_rust_crate_args": {
         "crateName": "tatara-reconciler",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "async-trait": [
@@ -39984,31 +39984,31 @@
           ],
           "tatara-core": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_core"
             }
           ],
           "tatara-domains": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_domains"
             }
           ],
           "tatara-lattice": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lattice"
             }
           ],
           "tatara-lisp": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp"
             }
           ],
           "tatara-process": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_process"
             }
           ],
@@ -40025,9 +40025,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_reconciler;"
       }
     },
-    "tatara-terreiro-0.2.151": {
+    "tatara-terreiro-0.2.154": {
       "name": "tatara-terreiro",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -40104,7 +40104,7 @@
         },
         {
           "name": "tatara_eval",
-          "package_key": "tatara-eval-0.2.151",
+          "package_key": "tatara-eval-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -40114,7 +40114,7 @@
         },
         {
           "name": "tatara_lisp",
-          "package_key": "tatara-lisp-0.2.151",
+          "package_key": "tatara-lisp-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -40124,7 +40124,7 @@
         },
         {
           "name": "tatara_lisp_derive",
-          "package_key": "tatara-lisp-derive-0.2.151",
+          "package_key": "tatara-lisp-derive-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -40134,7 +40134,7 @@
         },
         {
           "name": "tatara_nix",
-          "package_key": "tatara-nix-0.2.151",
+          "package_key": "tatara-nix-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -40144,7 +40144,7 @@
         },
         {
           "name": "tatara_ui",
-          "package_key": "tatara-ui-0.2.151",
+          "package_key": "tatara-ui-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -40167,67 +40167,67 @@
       "crate_renames": {
         "tatara-eval": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_eval"
           }
         ],
         "tatara-lisp": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp"
           }
         ],
         "tatara-lisp-derive": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp_derive"
           }
         ],
         "tatara-nix": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_nix"
           }
         ],
         "tatara-ui": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_ui"
           }
         ]
       },
       "build_rust_crate_args": {
         "crateName": "tatara-terreiro",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "tatara-eval": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_eval"
             }
           ],
           "tatara-lisp": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp"
             }
           ],
           "tatara-lisp-derive": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp_derive"
             }
           ],
           "tatara-nix": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_nix"
             }
           ],
           "tatara-ui": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_ui"
             }
           ]
@@ -40238,9 +40238,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_terreiro;"
       }
     },
-    "tatara-testing-0.2.151": {
+    "tatara-testing-0.2.154": {
       "name": "tatara-testing",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -40314,7 +40314,7 @@
         },
         {
           "name": "tatara_core",
-          "package_key": "tatara-core-0.2.151",
+          "package_key": "tatara-core-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -40324,7 +40324,7 @@
         },
         {
           "name": "tatara_engine",
-          "package_key": "tatara-engine-0.2.151",
+          "package_key": "tatara-engine-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -40374,31 +40374,31 @@
       "crate_renames": {
         "tatara-core": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_core"
           }
         ],
         "tatara-engine": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_engine"
           }
         ]
       },
       "build_rust_crate_args": {
         "crateName": "tatara-testing",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "tatara-core": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_core"
             }
           ],
           "tatara-engine": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_engine"
             }
           ]
@@ -40409,9 +40409,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_testing;"
       }
     },
-    "tatara-ui-0.2.151": {
+    "tatara-ui-0.2.154": {
       "name": "tatara-ui",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -40491,7 +40491,7 @@
         },
         {
           "name": "tatara_lisp",
-          "package_key": "tatara-lisp-0.2.151",
+          "package_key": "tatara-lisp-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -40501,7 +40501,7 @@
         },
         {
           "name": "tatara_lisp_derive",
-          "package_key": "tatara-lisp-derive-0.2.151",
+          "package_key": "tatara-lisp-derive-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -40530,20 +40530,20 @@
         ],
         "tatara-lisp": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp"
           }
         ],
         "tatara-lisp-derive": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp_derive"
           }
         ]
       },
       "build_rust_crate_args": {
         "crateName": "tatara-ui",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "owo-colors": [
@@ -40554,13 +40554,13 @@
           ],
           "tatara-lisp": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp"
             }
           ],
           "tatara-lisp-derive": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp_derive"
             }
           ]
@@ -40571,9 +40571,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_ui;"
       }
     },
-    "tatara-vm-0.2.151": {
+    "tatara-vm-0.2.154": {
       "name": "tatara-vm",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -40672,7 +40672,7 @@
         },
         {
           "name": "tatara_build_remote",
-          "package_key": "tatara-build-remote-0.2.151",
+          "package_key": "tatara-build-remote-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -40682,7 +40682,7 @@
         },
         {
           "name": "tatara_lisp",
-          "package_key": "tatara-lisp-0.2.151",
+          "package_key": "tatara-lisp-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -40692,7 +40692,7 @@
         },
         {
           "name": "tatara_lisp_derive",
-          "package_key": "tatara-lisp-derive-0.2.151",
+          "package_key": "tatara-lisp-derive-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -40702,7 +40702,7 @@
         },
         {
           "name": "tatara_nix",
-          "package_key": "tatara-nix-0.2.151",
+          "package_key": "tatara-nix-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -40712,7 +40712,7 @@
         },
         {
           "name": "tatara_os",
-          "package_key": "tatara-os-0.2.151",
+          "package_key": "tatara-os-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -40722,7 +40722,7 @@
         },
         {
           "name": "tatara_ui",
-          "package_key": "tatara-ui-0.2.151",
+          "package_key": "tatara-ui-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -40732,7 +40732,7 @@
         },
         {
           "name": "tatara_wasm",
-          "package_key": "tatara-wasm-0.2.151",
+          "package_key": "tatara-wasm-0.2.154",
           "kind": "normal",
           "features": [],
           "uses_default_features": true,
@@ -40773,50 +40773,50 @@
         ],
         "tatara-build-remote": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_build_remote"
           }
         ],
         "tatara-lisp": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp"
           }
         ],
         "tatara-lisp-derive": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_lisp_derive"
           }
         ],
         "tatara-nix": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_nix"
           }
         ],
         "tatara-os": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_os"
           }
         ],
         "tatara-ui": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_ui"
           }
         ],
         "tatara-wasm": [
           {
-            "version": "0.2.151",
+            "version": "0.2.154",
             "rename": "tatara_wasm"
           }
         ]
       },
       "build_rust_crate_args": {
         "crateName": "tatara-vm",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "crateRenames": {
           "gen-platform": [
@@ -40839,43 +40839,43 @@
           ],
           "tatara-build-remote": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_build_remote"
             }
           ],
           "tatara-lisp": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp"
             }
           ],
           "tatara-lisp-derive": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_lisp_derive"
             }
           ],
           "tatara-nix": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_nix"
             }
           ],
           "tatara-os": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_os"
             }
           ],
           "tatara-ui": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_ui"
             }
           ],
           "tatara-wasm": [
             {
-              "version": "0.2.151",
+              "version": "0.2.154",
               "rename": "tatara_wasm"
             }
           ]
@@ -40886,9 +40886,9 @@
         "preBuild": "export CARGO_CRATE_NAME=tatara_vm;"
       }
     },
-    "tatara-wasm-0.2.151": {
+    "tatara-wasm-0.2.154": {
       "name": "tatara-wasm",
-      "version": "0.2.151",
+      "version": "0.2.154",
       "edition": "2021",
       "source": {
         "kind": "path",
@@ -40981,7 +40981,7 @@
       },
       "build_rust_crate_args": {
         "crateName": "tatara-wasm",
-        "version": "0.2.151",
+        "version": "0.2.154",
         "edition": "2021",
         "features": [
           "default",
@@ -51080,39 +51080,39 @@
       }
     }
   },
-  "root_crate": "tatara-core-0.2.151",
+  "root_crate": "tatara-core-0.2.154",
   "workspace_members": [
-    "tatara-core-0.2.151",
-    "tatara-engine-0.2.151",
-    "tatara-process-0.2.151",
-    "tatara-lisp-0.2.151",
-    "tatara-lisp-derive-0.2.151",
-    "tatara-lattice-0.2.151",
-    "tatara-domains-0.2.151",
-    "tatara-nix-0.2.151",
-    "tatara-terreiro-0.2.151",
-    "tatara-eval-0.2.151",
-    "tatara-ui-0.2.151",
-    "tatara-pkgs-0.2.151",
-    "tatara-os-0.2.151",
-    "tatara-init-0.2.151",
-    "tatara-vm-0.2.151",
-    "tatara-build-remote-0.2.151",
-    "tatara-wasm-0.2.151",
-    "tatara-hvf-0.2.151",
-    "tatara-hospedeiro-0.2.151",
-    "tatara-reconciler-0.2.151",
-    "tatara-pool-reconciler-0.2.151",
-    "tatara-github-watcher-0.2.151",
-    "tatara-api-0.2.151",
-    "tatara-cli-0.2.151",
+    "tatara-core-0.2.154",
+    "tatara-engine-0.2.154",
+    "tatara-process-0.2.154",
+    "tatara-lisp-0.2.154",
+    "tatara-lisp-derive-0.2.154",
+    "tatara-lattice-0.2.154",
+    "tatara-domains-0.2.154",
+    "tatara-nix-0.2.154",
+    "tatara-terreiro-0.2.154",
+    "tatara-eval-0.2.154",
+    "tatara-ui-0.2.154",
+    "tatara-pkgs-0.2.154",
+    "tatara-os-0.2.154",
+    "tatara-init-0.2.154",
+    "tatara-vm-0.2.154",
+    "tatara-build-remote-0.2.154",
+    "tatara-wasm-0.2.154",
+    "tatara-hvf-0.2.154",
+    "tatara-hospedeiro-0.2.154",
+    "tatara-reconciler-0.2.154",
+    "tatara-pool-reconciler-0.2.154",
+    "tatara-github-watcher-0.2.154",
+    "tatara-api-0.2.154",
+    "tatara-cli-0.2.154",
     "tatara-operator-0.1.0",
-    "tatara-kube-0.2.151",
-    "tatara-mcp-0.2.151",
-    "tatara-net-0.2.151",
-    "tatara-testing-0.2.151",
-    "tatara-closed-loop-probe-0.2.151",
-    "tatara-export-worker-0.2.151",
+    "tatara-kube-0.2.154",
+    "tatara-mcp-0.2.154",
+    "tatara-net-0.2.154",
+    "tatara-testing-0.2.154",
+    "tatara-closed-loop-probe-0.2.154",
+    "tatara-export-worker-0.2.154",
     "ro-0.1.0"
   ],
   "flake_metadata": {
@@ -66231,7 +66231,7 @@
           "std"
         ]
       },
-      "tatara-api-0.2.151": {
+      "tatara-api-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -66324,7 +66324,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.151",
+            "package_key": "tatara-core-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -66334,7 +66334,7 @@
           },
           {
             "name": "tatara_engine",
-            "package_key": "tatara-engine-0.2.151",
+            "package_key": "tatara-engine-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -66429,7 +66429,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-build-remote-0.2.151": {
+      "tatara-build-remote-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -66477,7 +66477,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-cli-0.2.151": {
+      "tatara-cli-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -66711,7 +66711,7 @@
           },
           {
             "name": "tatara_api",
-            "package_key": "tatara-api-0.2.151",
+            "package_key": "tatara-api-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -66721,7 +66721,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.151",
+            "package_key": "tatara-core-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -66731,7 +66731,7 @@
           },
           {
             "name": "tatara_engine",
-            "package_key": "tatara-engine-0.2.151",
+            "package_key": "tatara-engine-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -66846,7 +66846,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-closed-loop-probe-0.2.151": {
+      "tatara-closed-loop-probe-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -66985,7 +66985,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.151",
+            "package_key": "tatara-process-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -67042,7 +67042,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-core-0.2.151": {
+      "tatara-core-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -67208,7 +67208,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-domains-0.2.151": {
+      "tatara-domains-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -67234,7 +67234,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.151",
+            "package_key": "tatara-lisp-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -67246,7 +67246,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-eval-0.2.151": {
+      "tatara-eval-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "bumpalo",
@@ -67284,7 +67284,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.151",
+            "package_key": "tatara-lisp-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -67294,7 +67294,7 @@
           },
           {
             "name": "tatara_nix",
-            "package_key": "tatara-nix-0.2.151",
+            "package_key": "tatara-nix-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -67316,7 +67316,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-export-worker-0.2.151": {
+      "tatara-export-worker-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -67455,7 +67455,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.151",
+            "package_key": "tatara-process-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -67512,7 +67512,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-github-watcher-0.2.151": {
+      "tatara-github-watcher-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -67662,7 +67662,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.151",
+            "package_key": "tatara-process-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -67731,7 +67731,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-hospedeiro-0.2.151": {
+      "tatara-hospedeiro-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -67757,7 +67757,7 @@
           },
           {
             "name": "tatara_build_remote",
-            "package_key": "tatara-build-remote-0.2.151",
+            "package_key": "tatara-build-remote-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -67767,7 +67767,7 @@
           },
           {
             "name": "tatara_hvf",
-            "package_key": "tatara-hvf-0.2.151",
+            "package_key": "tatara-hvf-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -67777,7 +67777,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.151",
+            "package_key": "tatara-process-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -67787,7 +67787,7 @@
           },
           {
             "name": "tatara_vm",
-            "package_key": "tatara-vm-0.2.151",
+            "package_key": "tatara-vm-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -67797,7 +67797,7 @@
           },
           {
             "name": "tatara_wasm",
-            "package_key": "tatara-wasm-0.2.151",
+            "package_key": "tatara-wasm-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -67829,7 +67829,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-init-0.2.151": {
+      "tatara-init-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "libc",
@@ -67865,7 +67865,7 @@
           },
           {
             "name": "tatara_eval",
-            "package_key": "tatara-eval-0.2.151",
+            "package_key": "tatara-eval-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -67875,7 +67875,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.151",
+            "package_key": "tatara-lisp-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -67885,7 +67885,7 @@
           },
           {
             "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.2.151",
+            "package_key": "tatara-lisp-derive-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -67907,7 +67907,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-kube-0.2.151": {
+      "tatara-kube-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -68033,7 +68033,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.151",
+            "package_key": "tatara-core-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -68093,7 +68093,7 @@
           "standalone"
         ]
       },
-      "tatara-lattice-0.2.151": {
+      "tatara-lattice-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "schemars",
@@ -68121,7 +68121,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.151",
+            "package_key": "tatara-core-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -68131,7 +68131,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.151",
+            "package_key": "tatara-process-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -68143,7 +68143,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-lisp-0.2.151": {
+      "tatara-lisp-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -68179,7 +68179,7 @@
           },
           {
             "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.2.151",
+            "package_key": "tatara-lisp-derive-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -68203,7 +68203,7 @@
           "default"
         ]
       },
-      "tatara-lisp-derive-0.2.151": {
+      "tatara-lisp-derive-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "proc_macro2",
@@ -68241,7 +68241,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-mcp-0.2.151": {
+      "tatara-mcp-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -68267,7 +68267,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.151",
+            "package_key": "tatara-core-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -68301,7 +68301,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-net-0.2.151": {
+      "tatara-net-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -68381,7 +68381,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.151",
+            "package_key": "tatara-core-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -68441,7 +68441,7 @@
           "userspace"
         ]
       },
-      "tatara-nix-0.2.151": {
+      "tatara-nix-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -68487,7 +68487,7 @@
           },
           {
             "name": "tatara_lattice",
-            "package_key": "tatara-lattice-0.2.151",
+            "package_key": "tatara-lattice-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -68497,7 +68497,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.151",
+            "package_key": "tatara-lisp-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -68507,7 +68507,7 @@
           },
           {
             "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.2.151",
+            "package_key": "tatara-lisp-derive-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -68770,7 +68770,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-os-0.2.151": {
+      "tatara-os-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -68816,7 +68816,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.151",
+            "package_key": "tatara-lisp-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -68826,7 +68826,7 @@
           },
           {
             "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.2.151",
+            "package_key": "tatara-lisp-derive-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -68836,7 +68836,7 @@
           },
           {
             "name": "tatara_nix",
-            "package_key": "tatara-nix-0.2.151",
+            "package_key": "tatara-nix-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -68846,7 +68846,7 @@
           },
           {
             "name": "tatara_pkgs",
-            "package_key": "tatara-pkgs-0.2.151",
+            "package_key": "tatara-pkgs-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -68868,7 +68868,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-pkgs-0.2.151": {
+      "tatara-pkgs-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -68894,7 +68894,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.151",
+            "package_key": "tatara-lisp-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -68904,7 +68904,7 @@
           },
           {
             "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.2.151",
+            "package_key": "tatara-lisp-derive-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -68914,7 +68914,7 @@
           },
           {
             "name": "tatara_nix",
-            "package_key": "tatara-nix-0.2.151",
+            "package_key": "tatara-nix-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -68936,7 +68936,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-pool-reconciler-0.2.151": {
+      "tatara-pool-reconciler-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -69127,7 +69127,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.151",
+            "package_key": "tatara-core-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69137,7 +69137,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.151",
+            "package_key": "tatara-process-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69194,7 +69194,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-process-0.2.151": {
+      "tatara-process-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -69320,7 +69320,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.151",
+            "package_key": "tatara-core-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69330,7 +69330,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.151",
+            "package_key": "tatara-lisp-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69340,7 +69340,7 @@
           },
           {
             "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.2.151",
+            "package_key": "tatara-lisp-derive-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69372,7 +69372,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-reconciler-0.2.151": {
+      "tatara-reconciler-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -69563,7 +69563,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.151",
+            "package_key": "tatara-core-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69573,7 +69573,7 @@
           },
           {
             "name": "tatara_domains",
-            "package_key": "tatara-domains-0.2.151",
+            "package_key": "tatara-domains-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69583,7 +69583,7 @@
           },
           {
             "name": "tatara_lattice",
-            "package_key": "tatara-lattice-0.2.151",
+            "package_key": "tatara-lattice-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69593,7 +69593,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.151",
+            "package_key": "tatara-lisp-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69603,7 +69603,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.151",
+            "package_key": "tatara-process-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69660,7 +69660,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-terreiro-0.2.151": {
+      "tatara-terreiro-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -69718,7 +69718,7 @@
           },
           {
             "name": "tatara_eval",
-            "package_key": "tatara-eval-0.2.151",
+            "package_key": "tatara-eval-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69728,7 +69728,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.151",
+            "package_key": "tatara-lisp-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69738,7 +69738,7 @@
           },
           {
             "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.2.151",
+            "package_key": "tatara-lisp-derive-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69748,7 +69748,7 @@
           },
           {
             "name": "tatara_nix",
-            "package_key": "tatara-nix-0.2.151",
+            "package_key": "tatara-nix-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69758,7 +69758,7 @@
           },
           {
             "name": "tatara_ui",
-            "package_key": "tatara-ui-0.2.151",
+            "package_key": "tatara-ui-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69780,7 +69780,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-testing-0.2.151": {
+      "tatara-testing-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -69840,7 +69840,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.151",
+            "package_key": "tatara-core-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69850,7 +69850,7 @@
           },
           {
             "name": "tatara_engine",
-            "package_key": "tatara-engine-0.2.151",
+            "package_key": "tatara-engine-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69899,7 +69899,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-ui-0.2.151": {
+      "tatara-ui-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -69965,7 +69965,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.151",
+            "package_key": "tatara-lisp-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69975,7 +69975,7 @@
           },
           {
             "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.2.151",
+            "package_key": "tatara-lisp-derive-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -69997,7 +69997,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-vm-0.2.151": {
+      "tatara-vm-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -70073,7 +70073,7 @@
           },
           {
             "name": "tatara_build_remote",
-            "package_key": "tatara-build-remote-0.2.151",
+            "package_key": "tatara-build-remote-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -70083,7 +70083,7 @@
           },
           {
             "name": "tatara_lisp",
-            "package_key": "tatara-lisp-0.2.151",
+            "package_key": "tatara-lisp-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -70093,7 +70093,7 @@
           },
           {
             "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.2.151",
+            "package_key": "tatara-lisp-derive-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -70103,7 +70103,7 @@
           },
           {
             "name": "tatara_nix",
-            "package_key": "tatara-nix-0.2.151",
+            "package_key": "tatara-nix-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -70113,7 +70113,7 @@
           },
           {
             "name": "tatara_os",
-            "package_key": "tatara-os-0.2.151",
+            "package_key": "tatara-os-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -70123,7 +70123,7 @@
           },
           {
             "name": "tatara_ui",
-            "package_key": "tatara-ui-0.2.151",
+            "package_key": "tatara-ui-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -70133,7 +70133,7 @@
           },
           {
             "name": "tatara_wasm",
-            "package_key": "tatara-wasm-0.2.151",
+            "package_key": "tatara-wasm-0.2.154",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -70155,7 +70155,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-wasm-0.2.151": {
+      "tatara-wasm-0.2.154": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -76880,7 +76880,7 @@
               "OSX_10_9"
             ]
           },
-          "tatara-engine-0.2.151": {
+          "tatara-engine-0.2.154": {
             "runtime_dependencies": [
               {
                 "name": "anyhow",
@@ -77118,7 +77118,7 @@
               },
               {
                 "name": "tatara_core",
-                "package_key": "tatara-core-0.2.151",
+                "package_key": "tatara-core-0.2.154",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -77200,7 +77200,7 @@
               "default"
             ]
           },
-          "tatara-hvf-0.2.151": {
+          "tatara-hvf-0.2.154": {
             "runtime_dependencies": [
               {
                 "name": "applevisor",
@@ -78655,7 +78655,7 @@
             "build_dependencies": [],
             "features": []
           },
-          "tatara-engine-0.2.151": {
+          "tatara-engine-0.2.154": {
             "runtime_dependencies": [
               {
                 "name": "anyhow",
@@ -78883,7 +78883,7 @@
               },
               {
                 "name": "tatara_core",
-                "package_key": "tatara-core-0.2.151",
+                "package_key": "tatara-core-0.2.154",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -78965,7 +78965,7 @@
               "default"
             ]
           },
-          "tatara-hvf-0.2.151": {
+          "tatara-hvf-0.2.154": {
             "runtime_dependencies": [
               {
                 "name": "serde",
@@ -80424,7 +80424,7 @@
             "build_dependencies": [],
             "features": []
           },
-          "tatara-engine-0.2.151": {
+          "tatara-engine-0.2.154": {
             "runtime_dependencies": [
               {
                 "name": "anyhow",
@@ -80652,7 +80652,7 @@
               },
               {
                 "name": "tatara_core",
-                "package_key": "tatara-core-0.2.151",
+                "package_key": "tatara-core-0.2.154",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -80734,7 +80734,7 @@
               "default"
             ]
           },
-          "tatara-hvf-0.2.151": {
+          "tatara-hvf-0.2.154": {
             "runtime_dependencies": [
               {
                 "name": "serde",
@@ -83232,7 +83232,7 @@
               "OSX_10_9"
             ]
           },
-          "tatara-engine-0.2.151": {
+          "tatara-engine-0.2.154": {
             "runtime_dependencies": [
               {
                 "name": "anyhow",
@@ -83470,7 +83470,7 @@
               },
               {
                 "name": "tatara_core",
-                "package_key": "tatara-core-0.2.151",
+                "package_key": "tatara-core-0.2.154",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -83552,7 +83552,7 @@
               "default"
             ]
           },
-          "tatara-hvf-0.2.151": {
+          "tatara-hvf-0.2.154": {
             "runtime_dependencies": [
               {
                 "name": "serde",
@@ -85081,7 +85081,7 @@
             "build_dependencies": [],
             "features": []
           },
-          "tatara-engine-0.2.151": {
+          "tatara-engine-0.2.154": {
             "runtime_dependencies": [
               {
                 "name": "anyhow",
@@ -85309,7 +85309,7 @@
               },
               {
                 "name": "tatara_core",
-                "package_key": "tatara-core-0.2.151",
+                "package_key": "tatara-core-0.2.154",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -85391,7 +85391,7 @@
               "default"
             ]
           },
-          "tatara-hvf-0.2.151": {
+          "tatara-hvf-0.2.154": {
             "runtime_dependencies": [
               {
                 "name": "serde",
@@ -86934,7 +86934,7 @@
             "build_dependencies": [],
             "features": []
           },
-          "tatara-engine-0.2.151": {
+          "tatara-engine-0.2.154": {
             "runtime_dependencies": [
               {
                 "name": "anyhow",
@@ -87162,7 +87162,7 @@
               },
               {
                 "name": "tatara_core",
-                "package_key": "tatara-core-0.2.151",
+                "package_key": "tatara-core-0.2.154",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": true,
@@ -87244,7 +87244,7 @@
               "default"
             ]
           },
-          "tatara-hvf-0.2.151": {
+          "tatara-hvf-0.2.154": {
             "runtime_dependencies": [
               {
                 "name": "serde",
@@ -87834,5 +87834,5 @@
       }
     }
   },
-  "cargo_lock_sha256": "66d62fff26fe67aaeef5ee77aca5930d061a4963f102be1f895e128b70df2241"
+  "cargo_lock_sha256": "07db751c11f4b062b01a45a84ab8d57568ae94ca1ad6c131371852b35474e8bd"
 }

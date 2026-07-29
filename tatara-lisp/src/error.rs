@@ -2591,6 +2591,102 @@ pub enum LispError {
         count: usize,
         limit: usize,
     },
+    /// `Expander::register_macro_def` rejected a macro definition whose
+    /// lambda-list arity — the [`crate::macro_expand::MacroParams::total_arity`]
+    /// projection: `required.len() + optional.len() + rest.is_some() as
+    /// usize` — exceeded the configured ceiling
+    /// (`Expander::max_macro_arity`, default
+    /// `crate::macro_expand::DEFAULT_MAX_MACRO_ARITY`). Peer to
+    /// [`Self::MacroBodySizeExceeded`] one RESOURCE-DIMENSION axis over
+    /// on the REGISTER-time surface — where `MacroBodySizeExceeded`
+    /// bounds a per-registration BODY node count (the AST-nodes of the
+    /// template a macro rewrites INTO), this variant bounds a
+    /// per-registration PARAM slot count (the fresh symbols
+    /// `compile_template`'s `,name`-index resolution AND
+    /// `MacroParams::bind`'s per-index binder walk have to thread
+    /// through on every call). Also peer to
+    /// [`Self::RegisteredMacrosExceeded`] one RESOURCE-DIMENSION axis
+    /// over on the REGISTER-time surface — where `RegisteredMacrosExceeded`
+    /// bounds cumulative registration COUNT (the table-scoped
+    /// resource), this variant bounds a per-registration PARAM-LIST
+    /// WIDTH (the per-entry resource). Together the three
+    /// REGISTER-time variants (this one +
+    /// [`Self::MacroBodySizeExceeded`] + [`Self::RegisteredMacrosExceeded`])
+    /// close the (per-body SIZE, per-body ARITY, per-table COUNT)
+    /// three-corner surface. Fires at
+    /// [`crate::macro_expand::Expander::register_macro_def`] BETWEEN the
+    /// table-count gate (cheapest — O(1) `HashMap::len`) and the
+    /// body-size gate (O(N) on `def.body.node_count()`) — the arity
+    /// projection is a three-arm addition on `def.params` fields, no
+    /// AST walk, so it sits BEFORE the body-size gate on the
+    /// O(1)-first ordering of the REGISTER-time chain. A failed
+    /// registration leaves BOTH `self.macros` AND `self.templates`
+    /// tables exactly as they were, matching the pristine-tables
+    /// invariant [`Self::MacroBodySizeExceeded`] and
+    /// [`Self::RegisteredMacrosExceeded`] hold on their axes.
+    ///
+    /// Fires on the canonical arity-bomb `(defmacro huge (a-1 a-2 …
+    /// a-N-million) `,a-1)` — a code-generator whose macro body sits
+    /// at ONE node (`Sexp::Quasiquote` wrapping a single `,a-1`
+    /// unquote is 3 nodes total, well under
+    /// `Expander::max_macro_body_size`) yet whose param list carries
+    /// millions of fresh names each subsequent call would have to
+    /// walk in the per-index binder — a below-floor resource-drift
+    /// the two prior REGISTER-time guards admit through because
+    /// neither of them fires against the PER-REGISTRATION PARAM-LIST
+    /// WIDTH.
+    ///
+    /// The three-field shape names BOTH the offending macro AND the
+    /// observed arity AND the configured ceiling — same shape as
+    /// `MacroBodySizeExceeded` / `ExpansionSizeExceeded` (its
+    /// register-time peer and expand-time peer). `macro_name` is
+    /// `String` because it comes from arbitrary source — the
+    /// `(defmacro NAME …)` head at the moment the ceiling is hit;
+    /// `arity` is the observed `def.params.total_arity()`; `limit` is
+    /// the configured ceiling. An LSP that wants to surface "your
+    /// macro `huge` declares 512 params past the 128-param ceiling;
+    /// is it a `Vec<TypedEntity>`-unroller?" reads all three from the
+    /// typed variant without substring parsing.
+    ///
+    /// Joins the [`Self::ExpansionDepthExceeded`] cohort in
+    /// [`Self::position`] so all six resource-ceiling rejections
+    /// route through the SAME `None` arm — the offending macro's byte
+    /// offset is not what an arity-bomb diagnostic anchors to; the
+    /// (macro name, observed arity, ceiling) triple is.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// arity-bomb failure mode (an unbounded per-registration param
+    /// list) becomes a first-class typed rejection at the REGISTRATION
+    /// boundary rather than an unhandled per-call binder-walk cost
+    /// that no `Result` witnesses. THEORY.md §II.1 invariant 1 —
+    /// typed entry; every resource-ceiling failure mode the expander
+    /// admits (expand-time recursion, expand-time memoization width,
+    /// expand-time output size, register-time body size, register-
+    /// time table width, register-time param-list width) is now a
+    /// variant of `LispError`, closing the "runaway macro" surface at
+    /// SIX RESOURCE-DIMENSION axes across TWO pipeline stages — the
+    /// register-time surface is now a three-dimensional (size × arity
+    /// × count) closure symmetric with the expand-time (depth + count
+    /// + size) triple.
+    ///
+    /// Frontier inspiration: Common Lisp's `LAMBDA-PARAMETERS-LIMIT`
+    /// standard variable (CLHS §3.4.1) — the runtime-reflectable
+    /// "upper exclusive bound on the number of parameters that may
+    /// appear in a lambda list" every conforming implementation
+    /// carries; this variant is the substrate's typed-Rust peer at
+    /// compile time, translated through pleme-io primitives: a typed
+    /// `LispError` variant rather than an implementation-defined
+    /// condition, wired into the substrate's `Result` algebra at
+    /// [`crate::macro_expand::Expander::register_macro_def`] rather
+    /// than raised at eval time.
+    #[error(
+        "compile error in defmacro {macro_name}: macro arity exceeded (arity: {arity}, limit: {limit})"
+    )]
+    MacroArityExceeded {
+        macro_name: String,
+        arity: usize,
+        limit: usize,
+    },
 }
 
 /// Closed-set identifier for the (operation, stage) pair of a
@@ -9255,7 +9351,8 @@ impl LispError {
             | Self::ExpansionDepthExceeded { .. }
             | Self::ExpansionSizeExceeded { .. }
             | Self::MacroBodySizeExceeded { .. }
-            | Self::RegisteredMacrosExceeded { .. } => None,
+            | Self::RegisteredMacrosExceeded { .. }
+            | Self::MacroArityExceeded { .. } => None,
         }
     }
 }

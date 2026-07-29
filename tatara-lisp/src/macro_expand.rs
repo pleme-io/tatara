@@ -197,6 +197,56 @@ pub const DEFAULT_MAX_MACRO_BODY_SIZE: usize = 16_384;
 /// [`Expander::set_max_registered_macros`].
 pub const DEFAULT_MAX_REGISTERED_MACROS: usize = 4096;
 
+/// Default ceiling on a registered macro's lambda-list ARITY — the
+/// count of parameter slots (`required` + `optional` + `rest?`) the
+/// [`MacroDef`] declares. Peer to [`DEFAULT_MAX_MACRO_BODY_SIZE`] one
+/// RESOURCE-DIMENSION axis over on the REGISTER-time surface — where
+/// body-size bounds a per-registration BODY node count (the AST-nodes
+/// of the template a macro rewrites INTO), this ceiling bounds a
+/// per-registration PARAM slot count (the fresh symbols
+/// [`compile_template`]'s `,name`-index resolution AND
+/// [`MacroParams::bind`]'s per-index binder walk have to thread through
+/// on every call). Peer to [`DEFAULT_MAX_REGISTERED_MACROS`] one
+/// RESOURCE-DIMENSION axis over on the REGISTER-time surface — where
+/// the registered-macros ceiling bounds cumulative registration COUNT
+/// (the table-scoped resource), this ceiling bounds a per-registration
+/// PARAM-LIST WIDTH (the per-entry resource). Together the three
+/// REGISTER-time ceilings close the (per-body SIZE, per-body ARITY,
+/// per-table COUNT) three-corner surface — a `Vec<TypedEntity>`
+/// arity-bomb code-generator emitting a
+/// `(defmacro huge (a-1 a-2 … a-N-million) `,a-1)` head with a
+/// single-node body slips past `max_macro_body_size` and past
+/// `max_registered_macros` (one fresh key), yet each subsequent call
+/// pays O(N) walking the required-run binder — a below-floor
+/// resource-drift the two prior REGISTER-time guards admit through
+/// because neither of them fires against the PER-REGISTRATION
+/// PARAM-LIST WIDTH.
+///
+/// The default is deliberately generous — lawful hand-authored macros
+/// carry a handful of required params + a small optional run + at
+/// most a single `&rest` slot (`observability-stack`'s `defalertpolicy`
+/// carries under 8 slots; even keyword-heavy authoring surfaces sit
+/// well under 32 slots). `128` sits an order of magnitude past any
+/// realistic authoring workload yet an order of magnitude BELOW a
+/// pathological code-generator's arity-bomb output, so the ceiling
+/// gates the drift without brushing lawful traffic. Consumers that
+/// want a tighter or looser ceiling call
+/// [`Expander::set_max_macro_arity`].
+///
+/// Frontier inspiration: Common Lisp's `LAMBDA-PARAMETERS-LIMIT`
+/// standard variable (CLHS §3.4.1) — the runtime-reflectable
+/// "upper exclusive bound on the number of parameters that may
+/// appear in a lambda list" every conforming implementation carries.
+/// SBCL's is `4611686018427387903`, ECL's is `4096`, CLisp's is `4096`.
+/// `DEFAULT_MAX_MACRO_ARITY` is the substrate's typed-Rust peer at
+/// compile time, translated through pleme-io primitives: a
+/// `pub const usize` on the typed macro-expander algebra rather than
+/// a runtime-mutable global, wired into the substrate's typed
+/// [`crate::error::LispError`] Result algebra at
+/// [`Expander::register_macro_def`] rather than raised as an
+/// implementation-defined condition.
+pub const DEFAULT_MAX_MACRO_ARITY: usize = 128;
+
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
 /// its manual `Hash` impl — no serde_json round-trip per cache lookup.
 type CacheKey = (String, u64);
@@ -775,6 +825,59 @@ impl MacroParams {
         self.required.len() + self.optional.len()
     }
 
+    /// The TOTAL lambda-list arity of this param list — every named
+    /// slot the reader accepted, in the canonical CL lambda-list
+    /// ordering: `required.len() + optional.len() + rest.is_some() as
+    /// usize`. Peer to [`Self::fixed_arity`] one REST-SLOT axis over
+    /// on the `MacroParams` algebra — where [`Self::fixed_arity`]
+    /// ignores the rest slot (the rest-less maximum-arity /
+    /// rest-start-boundary reading, unbounded on the call-time surface
+    /// when `self.rest.is_some()`), this projection INCLUDES the rest
+    /// slot as one additional named param (the total-slots reading,
+    /// bounded on the type-time surface regardless of `rest`).
+    ///
+    /// `Self::total_arity() == Self::names().len()` — a `Vec`-free
+    /// projection of the [`Self::names`] flat-index list's length. Two
+    /// equivalent readings collapse into ONE named primitive on the
+    /// typed [`MacroParams`] algebra:
+    ///
+    ///   * The **`Vec::with_capacity` hint**: [`Self::bind`] previously
+    ///     inlined `self.fixed_arity() + usize::from(self.rest.is_some())`
+    ///     as the bound-vec capacity hint. That expression IS this
+    ///     primitive.
+    ///   * The **REGISTER-time arity ceiling**: on the arity-bomb
+    ///     `(defmacro huge (a-1 a-2 … a-N) `,a-1)` [`Expander::register_macro_def`]
+    ///     compares `def.params.total_arity()` against
+    ///     [`Expander::max_macro_arity`] BEFORE the body-size gate walks
+    ///     the body or any insert lands. `total_arity()` IS that gate's
+    ///     axis.
+    ///
+    /// The structural identity
+    /// `names().len() == fixed_arity() + usize::from(rest.is_some())
+    ///                 == total_arity()`
+    /// binds the primitive to [`Self::names`] and [`Self::fixed_arity`]
+    /// on the [`MacroParams`] algebra — pinned by
+    /// `macro_params_total_arity_matches_names_len` AND
+    /// `macro_params_total_arity_equals_fixed_arity_plus_rest_bit`.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// "how many named slots does this macro declare?" projection
+    /// becomes a NAMED `&MacroParams` accessor rather than re-derived
+    /// arithmetic at [`Self::bind`]'s capacity hint AND at the
+    /// [`Expander::register_macro_def`] arity-ceiling gate.
+    /// THEORY.md §VI.1 — generation over composition; two inline copies
+    /// of the same three-arm arithmetic across two consumers is the
+    /// ≥2 PRIME-DIRECTIVE trigger once the structural shape is named.
+    /// THEORY.md §II.1 invariant 2 — free middle; both the binder AND
+    /// the arity-guard consult ONE primitive, so a regression that
+    /// drifts the guard's arity computation from the binder's capacity
+    /// hint (e.g. one counts `rest` as one slot, the other counts it
+    /// as zero) becomes structurally impossible.
+    #[must_use]
+    pub fn total_arity(&self) -> usize {
+        self.fixed_arity() + usize::from(self.rest.is_some())
+    }
+
     /// Bind call args to params positionally, returning the per-index bound
     /// values parallel to [`names`](Self::names): each required name takes
     /// the arg at its position (a missing one is
@@ -789,7 +892,7 @@ impl MacroParams {
     /// vec directly, `bind_args` zips it against `names()` into the
     /// name-keyed map.
     fn bind(&self, macro_name: &str, args: &[Sexp]) -> Result<Vec<Sexp>> {
-        let mut out = Vec::with_capacity(self.fixed_arity() + usize::from(self.rest.is_some()));
+        let mut out = Vec::with_capacity(self.total_arity());
         for (i, name) in self.required.iter().enumerate() {
             let arg = args
                 .get(i)
@@ -931,6 +1034,35 @@ pub struct Expander {
     /// via [`Self::set_max_registered_macros`] to pin the rejection
     /// shape without materializing a 4K-entry macros table.
     max_registered_macros: usize,
+    /// Ceiling on a registered macro's lambda-list ARITY (the
+    /// [`MacroParams::total_arity`] projection: `required.len() +
+    /// optional.len() + rest.is_some() as usize`), consulted at
+    /// [`Self::register_macro_def`] time BETWEEN the table-count gate
+    /// (cheapest, O(1) `HashMap::len`) and the body-size gate (O(N)
+    /// on `def.body.node_count()`). Peer to
+    /// [`Self::max_macro_body_size`] one RESOURCE-DIMENSION axis over
+    /// on the REGISTER-time surface — where body-size bounds a
+    /// per-registration BODY node count, this ceiling bounds a
+    /// per-registration PARAM slot count. Peer to
+    /// [`Self::max_registered_macros`] one RESOURCE-DIMENSION axis
+    /// over on the REGISTER-time surface — where registered-macros
+    /// bounds cumulative registration COUNT, this ceiling bounds a
+    /// per-registration PARAM-LIST WIDTH. Together the three
+    /// REGISTER-time ceilings close the (per-body SIZE, per-body
+    /// ARITY, per-table COUNT) three-corner surface. On the canonical
+    /// arity-bomb
+    /// `(defmacro huge (a-1 a-2 … a-N-million) `,a-1)` — a code
+    /// generator whose body sits at 1 node (well under
+    /// `max_macro_body_size`) yet whose param list carries millions
+    /// of fresh names each subsequent call has to walk in the
+    /// per-index binder — this is what turns an unbounded per-call
+    /// binder cost into a typed
+    /// [`crate::error::LispError::MacroArityExceeded`] rejection at
+    /// the REGISTRATION boundary.
+    /// Default [`DEFAULT_MAX_MACRO_ARITY`]; tests set it lower via
+    /// [`Self::set_max_macro_arity`] to pin the rejection shape
+    /// without materializing a 128-slot authoring blob.
+    max_macro_arity: usize,
 }
 
 impl Expander {
@@ -947,6 +1079,7 @@ impl Expander {
             max_expansion_size: DEFAULT_MAX_EXPANSION_SIZE,
             max_macro_body_size: DEFAULT_MAX_MACRO_BODY_SIZE,
             max_registered_macros: DEFAULT_MAX_REGISTERED_MACROS,
+            max_macro_arity: DEFAULT_MAX_MACRO_ARITY,
         }
     }
 
@@ -964,6 +1097,7 @@ impl Expander {
             max_expansion_size: DEFAULT_MAX_EXPANSION_SIZE,
             max_macro_body_size: DEFAULT_MAX_MACRO_BODY_SIZE,
             max_registered_macros: DEFAULT_MAX_REGISTERED_MACROS,
+            max_macro_arity: DEFAULT_MAX_MACRO_ARITY,
         }
     }
 
@@ -1102,6 +1236,31 @@ impl Expander {
         self.max_registered_macros = cap;
     }
 
+    /// The configured ceiling on a registered macro's lambda-list
+    /// arity. Defaults to [`DEFAULT_MAX_MACRO_ARITY`]. Peer to
+    /// [`Self::max_macro_body_size`] and [`Self::max_registered_macros`]
+    /// one RESOURCE-DIMENSION axis over on the REGISTER-time surface.
+    #[must_use]
+    pub fn max_macro_arity(&self) -> usize {
+        self.max_macro_arity
+    }
+
+    /// Set the ceiling on a registered macro's lambda-list arity —
+    /// the [`MacroParams::total_arity`] projection of `def.params`.
+    /// Tests bind low values (e.g. `2`) to pin the arity-bomb rejection
+    /// shape without materializing a 128-slot authoring blob;
+    /// consumers that author high-arity domain macros (a `defschema`
+    /// with 40 typed slots) can raise it. [`usize::MAX`] admits any
+    /// lawful arity (the ceiling is effectively lifted). Zero is
+    /// admitted and rejects every non-nullary macro registration
+    /// immediately — a `(defmacro nullary () BODY)` is still admitted
+    /// (its `total_arity()` is `0`, and only strict overrun rejects) —
+    /// useful for contract-tests that assert "this expander accepts
+    /// only nullary macros."
+    pub fn set_max_macro_arity(&mut self, cap: usize) {
+        self.max_macro_arity = cap;
+    }
+
     pub fn with_macros<I: IntoIterator<Item = MacroDef>>(defs: I) -> Result<Self> {
         let mut e = Self::new();
         for d in defs {
@@ -1237,6 +1396,32 @@ impl Expander {
                 macro_name: def.name.clone(),
                 count: self.macros.len(),
                 limit: self.max_registered_macros,
+            });
+        }
+        // Reject an arity-bomb `(defmacro huge (a-1 a-2 … a-N-million)
+        // `,a-1)` — a code-generator whose macro body sits at ONE node
+        // (well under `max_macro_body_size`) yet whose param list
+        // carries millions of fresh names the per-index binder walks on
+        // every call. Peer to the body-size gate below one RESOURCE-
+        // DIMENSION axis over on the REGISTER-time surface (per-body
+        // ARITY vs. per-body SIZE), AND peer to the table-count gate
+        // above one RESOURCE-DIMENSION axis over on the REGISTER-time
+        // surface (per-registration WIDTH vs. cumulative COUNT). Fires
+        // BEFORE the body-size gate walks `def.body.node_count()` or
+        // any insert lands, so a failed registration leaves BOTH tables
+        // exactly as they were. Cheaper than the body-size gate — a
+        // three-arm addition on `def.params` fields, no AST walk —
+        // hence positioned BEFORE it on the O(1)-first ordering of the
+        // REGISTER-time chain. Keyed on `>` (equality is admitted, only
+        // strict overrun rejects) so `max_macro_arity` names the
+        // LARGEST admissible `def.params.total_arity()` — same posture
+        // the body-size gate holds on the body node count.
+        let arity = def.params.total_arity();
+        if arity > self.max_macro_arity {
+            return Err(LispError::MacroArityExceeded {
+                macro_name: def.name.clone(),
+                arity,
+                limit: self.max_macro_arity,
             });
         }
         // Reject an authoring-bomb `(defmacro huge (x) `<template-of-
@@ -13696,5 +13881,461 @@ mod tests {
         // Overwrite of `a` at ceiling admits — no growth.
         e.register_macro_def(def_a_v2).unwrap();
         assert_eq!(e.len(), 1);
+    }
+
+    // ── `MacroParams::total_arity` — the total-slots projection ──
+    //
+    // `total_arity()` names `required.len() + optional.len() +
+    // rest.is_some() as usize` on the typed `MacroParams` algebra —
+    // the `Vec`-free peer of `names().len()` AND the axis both
+    // `MacroParams::bind`'s `Vec::with_capacity` hint AND the
+    // REGISTER-time arity-ceiling gate consult. These pins cover:
+    // structural identity vs. `names().len()`, the
+    // `fixed_arity + rest.is_some() as usize` decomposition, and the
+    // three canonical shapes (empty, all-required, mixed with rest).
+    #[test]
+    fn macro_params_total_arity_matches_names_len() {
+        // The structural identity `total_arity() == names().len()`
+        // — the `Vec`-free primitive's projection equals the flat-
+        // index list's length. A regression that ever miscounts
+        // one slot (drops rest, double-counts optional) fails this
+        // pin. Sibling to `fixed_arity`'s peer-arithmetic pins.
+        let params = MacroParams {
+            required: vec!["a".into(), "b".into()],
+            optional: vec![OptionalParam::bare("c"), OptionalParam::bare("d")],
+            rest: Some("e".into()),
+        };
+        assert_eq!(params.total_arity(), params.names().len());
+        assert_eq!(params.total_arity(), 5);
+    }
+
+    #[test]
+    fn macro_params_total_arity_equals_fixed_arity_plus_rest_bit() {
+        // The `fixed_arity + rest.is_some() as usize` decomposition
+        // — pins the composition on the [`MacroParams`] algebra so
+        // a future consumer that wants "total slots" via
+        // `fixed_arity + rest?` binds to the same arithmetic
+        // `total_arity` names.
+        let rest_none = MacroParams {
+            required: vec!["a".into()],
+            optional: vec![OptionalParam::bare("b")],
+            rest: None,
+        };
+        assert_eq!(rest_none.total_arity(), rest_none.fixed_arity());
+        assert_eq!(rest_none.total_arity(), 2);
+        let rest_some = MacroParams {
+            required: vec!["a".into()],
+            optional: vec![OptionalParam::bare("b")],
+            rest: Some("r".into()),
+        };
+        assert_eq!(rest_some.total_arity(), rest_some.fixed_arity() + 1);
+        assert_eq!(rest_some.total_arity(), 3);
+    }
+
+    #[test]
+    fn macro_params_total_arity_is_zero_for_the_empty_param_list() {
+        // Nullary macro edge: `(defmacro nullary () BODY)` has
+        // `total_arity() == 0`. Under a `set_max_macro_arity(0)`
+        // ceiling the arity gate keys on `>` (equality admits), so
+        // this nullary registration succeeds while any non-nullary
+        // one rejects — the exact contract the arity-gate
+        // zero-admits-nullary test below relies on.
+        let params = MacroParams::default();
+        assert_eq!(params.total_arity(), 0);
+    }
+
+    // ── max_macro_arity: REGISTRATION-time param-count ceiling ──
+    // Peer to body-size (REGISTER-time BODY SIZE) one RESOURCE-
+    // DIMENSION axis over — where body-size bounds a per-registration
+    // BODY node count, this ceiling bounds a per-registration PARAM
+    // slot count. Peer to registered-macros (REGISTER-time TABLE
+    // COUNT) one RESOURCE-DIMENSION axis over — where
+    // registered-macros bounds cumulative registration COUNT, this
+    // ceiling bounds a per-registration PARAM-LIST WIDTH. Together
+    // the three REGISTER-time ceilings close the (per-body SIZE,
+    // per-body ARITY, per-table COUNT) three-corner surface.
+
+    #[test]
+    fn expander_default_max_macro_arity_is_the_module_constant() {
+        // Both constructors seed `max_macro_arity` from the module
+        // constant — a regression that drifts one constructor's
+        // default from the constant (e.g. a hardcoded `128` at ONE
+        // site with the other left uninitialized after a `Default`
+        // derive addition) fails this pin. Peer to the five prior
+        // default-coherence pins on depth, cache-entries,
+        // expansion-size, body-size, and registered-macros.
+        assert_eq!(Expander::new().max_macro_arity(), DEFAULT_MAX_MACRO_ARITY);
+        assert_eq!(
+            Expander::new_substitute_only().max_macro_arity(),
+            DEFAULT_MAX_MACRO_ARITY
+        );
+        assert_eq!(DEFAULT_MAX_MACRO_ARITY, 128);
+    }
+
+    #[test]
+    fn set_max_macro_arity_takes_effect_on_subsequent_register() {
+        // Setter mirrors accessor — a regression that ever forgets to
+        // write through to the field, or writes to a shadow field the
+        // accessor does not read, fails this pin. Peer to the five
+        // prior setter/accessor coherence pins.
+        let mut e = Expander::new();
+        e.set_max_macro_arity(16);
+        assert_eq!(e.max_macro_arity(), 16);
+    }
+
+    #[test]
+    fn register_arity_bomb_rejects_at_arity_limit_bytecode_path() {
+        // `(defmacro huge (a b c) `,a)` declares 3 required params.
+        // Under `set_max_macro_arity(2)` the arity gate fires:
+        // 3 > 2 → `LispError::MacroArityExceeded { macro_name: "huge",
+        // arity: 3, limit: 2 }`. `arity` is the observed
+        // `def.params.total_arity()`, NOT `required.len()` alone —
+        // even an optional-only or rest-only overrun trips the gate
+        // (pinned separately). Peer to the register-time body-size
+        // rejection tests one RESOURCE-DIMENSION axis over.
+        let mut e = Expander::new();
+        e.set_max_macro_arity(2);
+        let forms = read("(defmacro huge (a b c) `,a)").unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        match err {
+            LispError::MacroArityExceeded {
+                macro_name,
+                arity,
+                limit,
+            } => {
+                assert_eq!(macro_name, "huge");
+                assert_eq!(arity, 3);
+                assert_eq!(limit, 2);
+            }
+            other => panic!("expected MacroArityExceeded, got: {other:?}"),
+        }
+        assert!(!e.has("huge"));
+    }
+
+    #[test]
+    fn register_arity_bomb_rejects_at_arity_limit_substitute_path() {
+        // The substitute strategy shares the same
+        // `register_macro_def` outer registration entry with the
+        // bytecode strategy, so the REGISTRATION-time ARITY ceiling
+        // fires at the SAME gate regardless of which apply-layer is
+        // active. Peer to
+        // `register_arity_bomb_rejects_at_arity_limit_bytecode_path`.
+        let mut e = Expander::new_substitute_only();
+        e.set_max_macro_arity(2);
+        let forms = read("(defmacro huge (a b c) `,a)").unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        match err {
+            LispError::MacroArityExceeded {
+                macro_name,
+                arity,
+                limit,
+            } => {
+                assert_eq!(macro_name, "huge");
+                assert_eq!(arity, 3);
+                assert_eq!(limit, 2);
+            }
+            other => panic!("expected MacroArityExceeded, got: {other:?}"),
+        }
+        assert!(!e.has("huge"));
+    }
+
+    #[test]
+    fn register_arity_gate_counts_optional_slots() {
+        // `(defmacro foo (a &optional b c) `,a)` has 1 required + 2
+        // optional + 0 rest = arity 3 via `total_arity`. Under a
+        // ceiling of `2` the gate rejects, matching the required-only
+        // arity-bomb — the arity axis is `total_arity()`, not
+        // `required.len()`. A regression that drops the optional slots
+        // from the arity computation would ADMIT this shape and fail
+        // this pin.
+        let mut e = Expander::new();
+        e.set_max_macro_arity(2);
+        let forms = read("(defmacro foo (a &optional b c) `,a)").unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        match err {
+            LispError::MacroArityExceeded {
+                macro_name,
+                arity,
+                limit,
+            } => {
+                assert_eq!(macro_name, "foo");
+                assert_eq!(arity, 3);
+                assert_eq!(limit, 2);
+            }
+            other => panic!("expected MacroArityExceeded, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn register_arity_gate_counts_rest_slot() {
+        // `(defmacro spread (a b &rest r) `,a)` has 2 required + 0
+        // optional + 1 rest = arity 3 via `total_arity`. Under a
+        // ceiling of `2` the gate rejects, matching the required-only
+        // arity-bomb — the arity axis includes the rest slot as ONE
+        // named param, not zero. A regression that drops the rest slot
+        // from the arity computation would ADMIT this shape and fail
+        // this pin.
+        let mut e = Expander::new();
+        e.set_max_macro_arity(2);
+        let forms = read("(defmacro spread (a b &rest r) `,a)").unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        match err {
+            LispError::MacroArityExceeded {
+                macro_name,
+                arity,
+                limit,
+            } => {
+                assert_eq!(macro_name, "spread");
+                assert_eq!(arity, 3);
+                assert_eq!(limit, 2);
+            }
+            other => panic!("expected MacroArityExceeded, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn register_arity_at_ceiling_admits() {
+        // `(defmacro pair (x y) `(list ,x ,y))` has 2 required = arity
+        // 2 via `total_arity`. Under a ceiling of `2` the arity gate
+        // keys on `>` (equality admits; only strict overrun rejects),
+        // so the registration succeeds and the expansion proceeds
+        // normally. Fail-before/pass-after negative control on the
+        // exact boundary: a regression that ever shifted the boundary
+        // by one (e.g. keyed on `>=` instead of `>`) would fail this
+        // pin. Peer to `register_macro_body_at_ceiling_admits` on the
+        // body-size axis.
+        let mut e = Expander::new();
+        e.set_max_macro_arity(2);
+        let forms = read("(defmacro pair (x y) `(list ,x ,y)) (pair a b)").unwrap();
+        let out = e.expand_program(forms).unwrap();
+        assert_eq!(out[0], parse("(list a b)"));
+        assert_eq!(e.len(), 1);
+    }
+
+    #[test]
+    fn register_arity_ceiling_leaves_both_tables_pristine_on_rejection() {
+        // A rejected arity-gated registration MUST leave BOTH
+        // `self.macros` AND `self.templates` exactly as they were —
+        // no partial-write window in which one table carries the
+        // over-ceiling entry while the other does not, or in which
+        // the template pre-compile already ran. Arity gate fires
+        // BEFORE the body-size gate walks the body AND BEFORE any
+        // insert lands, so a regression that ever moved the arity
+        // gate below `self.templates.insert` or below
+        // `self.macros.insert` would fail this pin. Peer to
+        // `register_failure_leaves_both_tables_pristine` (body-size)
+        // and `register_table_ceiling_leaves_both_tables_pristine_on_rejection`
+        // (table-count).
+        let mut e = Expander::new();
+        e.set_max_macro_arity(1);
+        let forms = read("(defmacro huge (a b c) `,a)").unwrap();
+        assert!(e.expand_program(forms).is_err());
+        assert!(
+            !e.has("huge"),
+            "macros table must stay pristine after rejection"
+        );
+        assert_eq!(e.len(), 0);
+        // Expanding a NEW lawful macro afterwards still works — the
+        // failed arity-gate rejection has not corrupted expander
+        // state.
+        let out = e
+            .expand_program(read("(defmacro id (x) `,x) (id hey)").unwrap())
+            .unwrap();
+        assert_eq!(out[0], parse("hey"));
+    }
+
+    #[test]
+    fn set_max_macro_arity_zero_rejects_every_non_nullary_registration() {
+        // Zero ceiling is the "contract-test that this expander
+        // accepts only nullary macros" posture — every fresh
+        // non-nullary key rejects at the arity gate because
+        // `total_arity() > 0`, while nullary `(defmacro nullary ()
+        // BODY)` still admits (its arity is exactly 0, and only
+        // strict overrun rejects). Peer to the body-size zero-rejects-
+        // every-non-empty-body pin one RESOURCE-DIMENSION axis over
+        // (though body-size zero rejects even nullary-body shapes,
+        // since `Sexp::Nil::node_count() == 1 > 0`; arity zero
+        // preserves the nullary registration surface).
+        let mut e = Expander::new();
+        e.set_max_macro_arity(0);
+        // Nullary admits — arity 0 <= 0.
+        e.expand_program(read("(defmacro nullary () `unit)").unwrap())
+            .unwrap();
+        assert!(e.has("nullary"));
+        // Non-nullary rejects — arity 1 > 0.
+        let err = e
+            .expand_program(read("(defmacro id (x) `,x)").unwrap())
+            .unwrap_err();
+        match err {
+            LispError::MacroArityExceeded {
+                macro_name,
+                arity,
+                limit,
+            } => {
+                assert_eq!(macro_name, "id");
+                assert_eq!(arity, 1);
+                assert_eq!(limit, 0);
+            }
+            other => panic!("expected MacroArityExceeded, got: {other:?}"),
+        }
+        assert!(!e.has("id"));
+    }
+
+    #[test]
+    fn macro_arity_exceeded_position_is_none() {
+        // The variant joins the non-positional cohort — the offending
+        // macro's byte offset is not what an arity-bomb diagnostic
+        // anchors to; the (macro name, observed arity, configured
+        // ceiling) triple is. This pin keeps the variant in the
+        // `position() -> None` cohort so a future span-carrying edit
+        // lands the field in ONE place across every non-positional
+        // variant simultaneously. Peer to the five prior
+        // `*_exceeded_position_is_none` pins on the resource-ceiling
+        // cohort.
+        let err = LispError::MacroArityExceeded {
+            macro_name: "huge".to_string(),
+            arity: 512,
+            limit: 128,
+        };
+        assert_eq!(err.position(), None);
+    }
+
+    #[test]
+    fn macro_arity_exceeded_display_matches_typed_variant_shape() {
+        // Display projection carries `macro_name`, `arity`, AND
+        // `limit`, so authoring surfaces that substring-grep the
+        // rendered diagnostic (`tatara-check`, REPL, LSP) see ALL
+        // THREE halves at the variant boundary and never need to
+        // substring-parse free-form text to recover the identity of
+        // the offending macro, the observed arity, or the ceiling it
+        // breached. Peer to the five prior
+        // `*_exceeded_display_matches_typed_variant_shape` pins.
+        let err = LispError::MacroArityExceeded {
+            macro_name: "huge".to_string(),
+            arity: 512,
+            limit: 128,
+        };
+        let rendered = err.to_string();
+        assert!(rendered.contains("huge"), "rendered: {rendered}");
+        assert!(rendered.contains("512"), "rendered: {rendered}");
+        assert!(rendered.contains("128"), "rendered: {rendered}");
+        assert!(
+            rendered.contains("macro arity exceeded"),
+            "rendered: {rendered}"
+        );
+    }
+
+    #[test]
+    fn lawful_macro_arity_within_ceiling_registers_and_expands() {
+        // A lawful hand-authored macro arity sits well below any
+        // realistic ceiling — the default `DEFAULT_MAX_MACRO_ARITY`
+        // is deliberately generous so operators never brush it on
+        // real authoring workloads. This pin locks the default
+        // ceiling's non-interference posture: a regression that
+        // ever lowered the default enough to reject the reference
+        // multi-slot `(defmacro when (cond x) …)` shape would fail
+        // here. Peer to `lawful_macro_body_within_ceiling_registers_and_expands`
+        // and `lawful_typescape_within_ceiling_registers_and_expands`.
+        let mut e = Expander::new();
+        let forms = read(
+            "(defmacro when (cond x) `(if ,cond ,x))
+             (defmacro triple (x y z) `(list ,x ,y ,z))
+             (when #t (triple a b c))",
+        )
+        .unwrap();
+        let out = e.expand_program(forms).unwrap();
+        assert_eq!(out[0], parse("(if #t (list a b c))"));
+    }
+
+    #[test]
+    fn register_macro_def_direct_call_respects_arity_ceiling() {
+        // `register_macro_def` is the substrate primitive both
+        // `expand_program`'s `defmacro` recognition AND `with_macros`'s
+        // bulk load route through. The arity ceiling fires on the
+        // primitive itself, not on any one consumer — a regression
+        // that ever moved the gate into `expand_program`'s arm alone
+        // would fail this pin. Peer to
+        // `register_macro_def_direct_call_respects_body_size_ceiling`
+        // AND `register_macro_def_direct_call_respects_table_ceiling`
+        // one RESOURCE-DIMENSION axis over.
+        let mut e = Expander::new();
+        e.set_max_macro_arity(2);
+        let def = MacroDef {
+            name: "huge".to_string(),
+            params: MacroParams {
+                required: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+                optional: Vec::new(),
+                rest: None,
+            },
+            body: Sexp::Atom(crate::ast::Atom::Symbol("a".to_string())),
+        };
+        // Arity 3 > ceiling 2 — rejected before body-size gate.
+        let err = e.register_macro_def(def).unwrap_err();
+        match err {
+            LispError::MacroArityExceeded {
+                macro_name,
+                arity,
+                limit,
+            } => {
+                assert_eq!(macro_name, "huge");
+                assert_eq!(arity, 3);
+                assert_eq!(limit, 2);
+            }
+            other => panic!("expected MacroArityExceeded, got: {other:?}"),
+        }
+        assert!(!e.has("huge"));
+    }
+
+    #[test]
+    fn arity_gate_fires_before_body_size_gate() {
+        // ORDERING PIN — the arity gate fires BEFORE the body-size
+        // gate. With both `set_max_macro_arity(1)` AND
+        // `set_max_macro_body_size(2)` set below a shape that violates
+        // BOTH ceilings — `(defmacro dual (a b) `(list ,a ,b))` has
+        // arity 2 AND body node count > 2 — the arity gate's
+        // rejection wins, so the returned variant is
+        // `MacroArityExceeded`, not `MacroBodySizeExceeded`. A
+        // regression that ever swapped the two gates' order would fail
+        // this pin. The ordering isn't cosmetic: arity is O(1)
+        // (three-arm addition on `def.params` fields), body-size is
+        // O(body_nodes) (`def.body.node_count()` walks the AST), so
+        // the O(1)-first order minimises the cost of rejecting the
+        // worst case (a large-body large-arity macro).
+        let mut e = Expander::new();
+        e.set_max_macro_arity(1);
+        e.set_max_macro_body_size(2);
+        let forms = read("(defmacro dual (a b) `(list ,a ,b))").unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        assert!(
+            matches!(err, LispError::MacroArityExceeded { .. }),
+            "arity gate must fire before body-size gate; got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn arity_gate_fires_after_table_count_gate() {
+        // ORDERING PIN — the table-count gate fires BEFORE the arity
+        // gate. Under `set_max_registered_macros(1)` at capacity AND
+        // `set_max_macro_arity(1)`, a fresh over-arity registration
+        // trips the table-count gate FIRST (its `HashMap::len`
+        // comparison is O(1) cache-friendly and gates cumulative
+        // registration cost); the arity gate is O(1) but on `def`,
+        // not on shared state, so it sits AFTER the table-count gate
+        // on the O(1)-first ordering of the REGISTER-time chain. A
+        // regression that ever swapped the two would fail this pin.
+        let mut e = Expander::new();
+        e.set_max_registered_macros(1);
+        e.set_max_macro_arity(1);
+        // Land one macro at table ceiling.
+        e.expand_program(read("(defmacro anchor (x) `,x)").unwrap())
+            .unwrap();
+        assert_eq!(e.len(), 1);
+        // Fresh registration with BOTH violations — table-count wins.
+        let forms = read("(defmacro huge (a b c) `,a)").unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        assert!(
+            matches!(err, LispError::RegisteredMacrosExceeded { .. }),
+            "table-count gate must fire before arity gate; got: {err:?}"
+        );
     }
 }

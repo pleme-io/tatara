@@ -13,7 +13,7 @@ use std::sync::{Mutex, OnceLock};
 
 use serde::de::DeserializeOwned;
 
-use crate::ast::Sexp;
+use crate::ast::{Atom, Sexp};
 use crate::error::{ExpectedKwargShape, KwargPath, LispError, Result, SexpShape, SexpWitness};
 
 /// A Rust type compilable from a Lisp form.
@@ -170,9 +170,9 @@ pub fn head_mismatch(keyword: &'static str, got: String) -> LispError {
 
 /// The substrate-wide [`TataraDomain`] well-formedness testkit — closes
 /// the four typed-entry rejection gates on the trait's default
-/// [`TataraDomain::compile_from_sexp`] AND three [`TataraDomain::KEYWORD`]
-/// grammar invariants at ONE call every implementor's test module
-/// reaches for.
+/// [`TataraDomain::compile_from_sexp`], three [`TataraDomain::KEYWORD`]
+/// grammar invariants, AND the reader round-trip theorem at ONE call
+/// every implementor's test module reaches for.
 ///
 /// Peer of [`crate::closed_set::assert_closed_set_well_formed`] on the
 /// sibling [`crate::ClosedSet`] contract — after this lift both
@@ -202,12 +202,61 @@ pub fn head_mismatch(keyword: &'static str, got: String) -> LispError {
 ///
 ///   5. `KEYWORD` is non-empty — a keyword-less form cannot be
 ///      dispatched.
-///   6. `KEYWORD` does not start with an ASCII digit — the Lisp reader
-///      would otherwise decode the head as a numeric atom rather than
-///      a symbol, and the trait's head-match would never fire.
-///   7. `KEYWORD` contains no ASCII whitespace — the Lisp reader would
-///      otherwise split it into two tokens, breaking the head-match
-///      structurally.
+///   6. `KEYWORD` classifies as [`Atom::Symbol`] through the substrate's
+///      typed-entry classifier [`Atom::from_lexeme`] — the ONE
+///      projection every bare-atom lexeme routes through inside the
+///      reader's parse arm. Subsumes the pre-lift "no leading ASCII
+///      digit" heuristic (a KEYWORD `"42"` decodes as [`Atom::Int`],
+///      `"1.5"` as [`Atom::Float`]) AND catches the two shapes the
+///      pre-lift check silently accepted: a leading `:` (KEYWORD
+///      `":foo"` decodes as [`Atom::Keyword`]) and the two boolean
+///      literals (`"#t"` / `"#f"` decode as [`Atom::Bool`]) — none of
+///      which the trait's `as_symbol()` head-match would fire on. Binds
+///      the invariant to the substrate's typed reader-classifier
+///      algebra so a future seventh [`Atom`] variant (e.g. `Char` for
+///      `#\x` reader syntax, `Bigint` for arbitrary-precision integers)
+///      strengthens the check ONCE at [`Atom::from_lexeme`] rather than
+///      re-heuristicing per implementor's test module.
+///   7. `KEYWORD` contains no [`Sexp::is_bare_atom_boundary`] char —
+///      the ONE typed projection on the outer [`Sexp`] algebra that
+///      names "this char breaks the reader's bare-atom accumulator."
+///      Subsumes the pre-lift "no ASCII whitespace" heuristic (via
+///      `char::is_whitespace()` covering the Unicode whitespace surface
+///      the reader also splits on — NBSP `\u{00A0}`, ideographic space
+///      `\u{3000}`, and every other codepoint the pre-lift ASCII-only
+///      check silently accepted) AND catches the seven non-whitespace
+///      terminators the pre-lift check ignored:
+///      [`Sexp::LIST_OPEN`] `(`, [`Sexp::LIST_CLOSE`] `)`,
+///      [`crate::ast::QuoteForm::QUOTE_LEAD`] `'`,
+///      [`crate::ast::QuoteForm::QUASIQUOTE_LEAD`] `` ` ``,
+///      [`crate::ast::QuoteForm::UNQUOTE_LEAD`] `,`,
+///      [`Atom::STR_DELIMITER`] `"`, [`Sexp::COMMENT_LEAD`] `;` — every
+///      char that would tokenize a KEYWORD like `"def(x"` / `"def;x"` /
+///      `"def\"x"` into TWO tokens, breaking the trait's head-match
+///      structurally. Binds the invariant to the substrate's typed
+///      reader-boundary algebra so a future eighth outer-dispatch
+///      category (e.g. `#|…|#` block-comment lead byte) strengthens the
+///      check ONCE at [`Sexp::is_bare_atom_boundary`] rather than
+///      per-implementor re-derivation.
+///
+/// ## The round-trip theorem
+///
+///   8. `read(KEYWORD)` produces exactly one form, and that form's
+///      [`Sexp::as_symbol`] projection returns `Some(KEYWORD)`. This is
+///      the STRUCTURAL condition the trait's default
+///      [`TataraDomain::compile_from_sexp`] head-match depends on: the
+///      reader tokenizes the head slot, projects through
+///      [`Atom::from_lexeme`], and the head-match calls `as_symbol()`
+///      on the resulting [`Sexp`]. If the round-trip holds, the
+///      head-match fires on the intended keyword; if it fails, no
+///      other invariant matters. Invariants (6) and (7) together
+///      *entail* this theorem — (6) closes the classifier axis,
+///      (7) closes the tokenizer axis — so a KEYWORD that passes both
+///      structural checks always passes the round-trip; pinning the
+///      theorem explicitly closes the LOOP at the verification site
+///      and catches drift outside the closed-set structural surface
+///      (e.g. a future reader-level input transformation that couldn't
+///      be reduced to either axis).
 ///
 /// A hand-written implementor that overrides
 /// [`TataraDomain::compile_from_sexp`] and drifts any of the four gates
@@ -265,27 +314,37 @@ where
         "{type_name}: TataraDomain::KEYWORD is empty — the head symbol has no lexeme to dispatch on",
     );
 
-    // (2) — KEYWORD does not start with an ASCII digit. The Lisp
-    // reader classifies a token beginning `0..=9` as a numeric atom;
-    // a KEYWORD like `"5foo"` would never round-trip through the
-    // reader as a symbol, and the trait's head-match would never fire.
-    let first = keyword
-        .chars()
-        .next()
-        .expect("keyword is non-empty per invariant (1)");
-    assert!(
-        !first.is_ascii_digit(),
-        "{type_name}: KEYWORD {keyword:?} starts with an ASCII digit — the Lisp reader would decode the head as a numeric atom, never as a symbol",
-    );
+    // (2) — KEYWORD classifies as `Atom::Symbol` through the substrate's
+    // typed-entry classifier `Atom::from_lexeme`. The reader routes every
+    // bare-atom lexeme through this ONE projection; anything that decodes
+    // as `Bool` / `Keyword` / `Int` / `Float` / `Str` never reaches the
+    // trait's head-match as a symbol. Subsumes the pre-lift "no leading
+    // ASCII digit" heuristic (`"42"` → `Int`, `"1.5"` → `Float`) AND
+    // catches the two shapes the pre-lift check silently accepted:
+    // `":foo"` → `Keyword` and `"#t"` / `"#f"` → `Bool`. Binding to the
+    // substrate's classifier means a future seventh `Atom` variant
+    // (`Char`, `Bigint`) strengthens the check ONCE.
+    match Atom::from_lexeme(keyword) {
+        Atom::Symbol(s) if s == keyword => {}
+        classified => panic!(
+            "{type_name}: KEYWORD {keyword:?} classifies as {classified:?} via Atom::from_lexeme — the Lisp reader would not project the head as a symbol at the trait's head-match",
+        ),
+    }
 
-    // (3) — KEYWORD contains no ASCII whitespace. The Lisp reader
-    // splits on whitespace, so a KEYWORD like `"def foo"` would arrive
-    // at the trait's head-match as two tokens (`"def"`, `"foo"`) and
-    // the match would fail structurally at every callsite.
-    assert!(
-        !keyword.chars().any(|c: char| c.is_ascii_whitespace()),
-        "{type_name}: KEYWORD {keyword:?} contains ASCII whitespace — the Lisp reader would split it into two tokens, breaking the head-match",
-    );
+    // (3) — KEYWORD contains no `Sexp::is_bare_atom_boundary` char. The
+    // substrate's typed reader-boundary projection covers BOTH the
+    // Unicode-whitespace surface (via `char::is_whitespace`) AND the
+    // seven non-whitespace terminators (`(` `)` `'` `` ` `` `,` `"` `;`)
+    // that would tokenize the KEYWORD into two tokens, breaking the
+    // trait's head-match structurally. Subsumes the pre-lift
+    // "no ASCII whitespace" heuristic; binding to the substrate's typed
+    // reader-boundary algebra means a future eighth outer-dispatch
+    // category (`#|` block-comment lead) strengthens the check ONCE.
+    if let Some(ch) = keyword.chars().find(|&c| Sexp::is_bare_atom_boundary(c)) {
+        panic!(
+            "{type_name}: KEYWORD {keyword:?} contains reader-boundary char {ch:?} (Sexp::is_bare_atom_boundary → true) — the Lisp reader would split it into multiple tokens, breaking the head-match structurally",
+        );
+    }
 
     // (4) — a bare-atom form rejects with `NotAListForm { keyword }`.
     // The typed-entry gate rejects the form-shape mismatch before
@@ -380,6 +439,27 @@ where
         ),
         Err(other) => panic!(
             "{type_name}: compile_from_sexp on the wrong-head form emitted {other:?}, expected LispError::HeadMismatch {{ keyword: {keyword:?}, got: {probe:?} }}",
+        ),
+    }
+
+    // (8) — reader round-trip theorem. `read(KEYWORD)` produces exactly
+    // one form, and that form's `as_symbol()` projection returns
+    // `Some(KEYWORD)`. This is the SUFFICIENT condition invariants
+    // (6) + (7) together entail: (6) closes the classifier axis (the
+    // token, once assembled, classifies as `Atom::Symbol`), (7) closes
+    // the tokenizer axis (the KEYWORD arrives at the classifier as ONE
+    // token). Pinning the composition explicitly closes the LOOP at
+    // the verification site — a substrate-owned theorem the two
+    // structural checks compose into — and catches drift outside the
+    // closed-set structural surface (e.g. a future reader-level input
+    // transformation that couldn't be reduced to either axis).
+    match crate::reader::read(keyword) {
+        Ok(forms) if forms.len() == 1 && forms[0].as_symbol() == Some(keyword) => {}
+        Ok(forms) => panic!(
+            "{type_name}: KEYWORD {keyword:?} did not round-trip through read → as_symbol — read produced {forms:?} (expected one form projecting to Some({keyword:?}))",
+        ),
+        Err(err) => panic!(
+            "{type_name}: KEYWORD {keyword:?} failed to tokenize at all — read returned {err:?}",
         ),
     }
 }
@@ -3969,12 +4049,15 @@ mod tests {
         // the four rejection gates (bare atom, empty list, non-symbol
         // head, wrong-head symbol) MUST fire with the substrate-wide
         // structural `LispError` variant, AND its KEYWORD `"defmonitor"`
-        // MUST pass the three grammar invariants (non-empty, no leading
-        // ASCII digit, no ASCII whitespace). The single line below
-        // pins all seven at once — every future `#[derive(TataraDomain)]`
-        // implementor reduces to the same one-line check in its test
-        // module, mirroring the `assert_closed_set_well_formed`
-        // deployment across 44+ closed-set implementor test sites.
+        // MUST pass the three grammar invariants (non-empty; classifies
+        // as `Atom::Symbol` via `Atom::from_lexeme`; contains no
+        // `Sexp::is_bare_atom_boundary` char) AND the round-trip
+        // theorem (`read("defmonitor")` projects to
+        // `Some("defmonitor")`). The single line below pins all EIGHT
+        // at once — every future `#[derive(TataraDomain)]` implementor
+        // reduces to the same one-line check in its test module,
+        // mirroring the `assert_closed_set_well_formed` deployment
+        // across 44+ closed-set implementor test sites.
         assert_tatara_domain_well_formed::<MonitorSpec>();
     }
 
@@ -4010,33 +4093,174 @@ mod tests {
         );
     }
 
-    #[test]
-    fn assert_tatara_domain_well_formed_panics_on_whitespace_keyword() {
-        // Negative arm on invariant (3) — a KEYWORD like `"def foo"`
-        // would arrive at the trait's head-match as two tokens because
-        // the Lisp reader splits on whitespace. The testkit MUST catch
-        // this before an integration surface silently drops the trailing
-        // word.
-        struct WhitespaceKeyword;
-        impl TataraDomain for WhitespaceKeyword {
-            const KEYWORD: &'static str = "def foo";
-            fn compile_from_args(_: &[Sexp]) -> Result<Self> {
-                unreachable!("compile_from_args unreachable — invariant (3) trips first")
-            }
-        }
-        let result = std::panic::catch_unwind(|| {
-            assert_tatara_domain_well_formed::<WhitespaceKeyword>();
-        });
-        let payload = result.expect_err("expected whitespace-KEYWORD invariant to panic");
+    /// Extract the panic message of the closure so the test module's
+    /// negative-arm sweep binds to ONE substrate-owned decode instead of
+    /// re-inlining the `catch_unwind` + `downcast_ref::<String>` + fallback
+    /// to `&'static str` cascade at every arm.
+    fn assert_panic_msg_contains(needle: &str, f: impl FnOnce() + std::panic::UnwindSafe) {
+        let result = std::panic::catch_unwind(f);
+        let payload = result.expect_err("expected invariant to panic");
         let msg = payload
             .downcast_ref::<String>()
             .map(String::as_str)
             .or_else(|| payload.downcast_ref::<&'static str>().copied())
             .unwrap_or("");
         assert!(
-            msg.contains("contains ASCII whitespace"),
-            "expected whitespace-KEYWORD panic message to name the invariant, got {msg:?}",
+            msg.contains(needle),
+            "expected panic message to contain {needle:?}, got {msg:?}",
         );
+    }
+
+    #[test]
+    fn assert_tatara_domain_well_formed_panics_on_ascii_whitespace_keyword() {
+        // Negative arm on invariant (7) — a KEYWORD like `"def foo"`
+        // would arrive at the trait's head-match as two tokens because
+        // `Sexp::is_bare_atom_boundary(' ') == true` via
+        // `char::is_whitespace`. The testkit MUST catch this before an
+        // integration surface silently drops the trailing word. The
+        // pre-lift ASCII-only heuristic caught the same case; the
+        // sharpened invariant catches it via the substrate's typed
+        // reader-boundary projection.
+        struct WhitespaceKeyword;
+        impl TataraDomain for WhitespaceKeyword {
+            const KEYWORD: &'static str = "def foo";
+            fn compile_from_args(_: &[Sexp]) -> Result<Self> {
+                unreachable!("compile_from_args unreachable — invariant (7) trips first")
+            }
+        }
+        assert_panic_msg_contains("reader-boundary char", || {
+            assert_tatara_domain_well_formed::<WhitespaceKeyword>();
+        });
+    }
+
+    #[test]
+    fn assert_tatara_domain_well_formed_panics_on_unicode_whitespace_keyword() {
+        // Negative arm on invariant (7) — a KEYWORD carrying the
+        // no-break-space codepoint `\u{00A0}` (a Unicode-whitespace
+        // char the pre-lift `is_ascii_whitespace()` check silently
+        // accepted). The reader's outer-dispatch calls
+        // `char::is_whitespace()` (Unicode-aware) via
+        // `Sexp::is_bare_atom_boundary`, so a KEYWORD `"def\u{00A0}foo"`
+        // would split into two tokens. Binding the invariant to the
+        // substrate's typed reader-boundary projection closes this hole
+        // that the pre-lift ASCII-only heuristic left open.
+        struct NbspKeyword;
+        impl TataraDomain for NbspKeyword {
+            const KEYWORD: &'static str = "def\u{00A0}foo";
+            fn compile_from_args(_: &[Sexp]) -> Result<Self> {
+                unreachable!("compile_from_args unreachable — invariant (7) trips first")
+            }
+        }
+        assert_panic_msg_contains("reader-boundary char", || {
+            assert_tatara_domain_well_formed::<NbspKeyword>();
+        });
+    }
+
+    #[test]
+    fn assert_tatara_domain_well_formed_panics_on_list_open_char_keyword() {
+        // Negative arm on invariant (7) — a KEYWORD like `"def(x"`
+        // embeds `Sexp::LIST_OPEN` mid-lexeme; the reader's bare-atom
+        // terminator disjunct fires on `(`, splitting the token so the
+        // trait's head-match would see `"def"` followed by an opening
+        // paren — the head-match would fire on `"def"`, silently
+        // matching a DIFFERENT keyword. This is the reader-boundary
+        // hole the pre-lift ASCII-whitespace heuristic silently
+        // accepted; binding to `Sexp::is_bare_atom_boundary` catches
+        // it structurally.
+        struct ListOpenKeyword;
+        impl TataraDomain for ListOpenKeyword {
+            const KEYWORD: &'static str = "def(x";
+            fn compile_from_args(_: &[Sexp]) -> Result<Self> {
+                unreachable!("compile_from_args unreachable — invariant (7) trips first")
+            }
+        }
+        assert_panic_msg_contains("reader-boundary char", || {
+            assert_tatara_domain_well_formed::<ListOpenKeyword>();
+        });
+    }
+
+    #[test]
+    fn assert_tatara_domain_well_formed_panics_on_comment_lead_char_keyword() {
+        // Negative arm on invariant (7) — a KEYWORD like `"def;bad"`
+        // embeds `Sexp::COMMENT_LEAD` mid-lexeme; the reader's outer
+        // dispatch would treat `;` as the start of a line comment,
+        // discarding everything after it up to newline. The trait's
+        // head-match would fire on `"def"` (the token before `;`),
+        // silently matching a DIFFERENT keyword. Sibling coverage to
+        // the list-open arm above on the seven-terminator disjunction
+        // `Sexp::NON_WHITESPACE_BARE_ATOM_TERMINATORS`.
+        struct CommentLeadKeyword;
+        impl TataraDomain for CommentLeadKeyword {
+            const KEYWORD: &'static str = "def;bad";
+            fn compile_from_args(_: &[Sexp]) -> Result<Self> {
+                unreachable!("compile_from_args unreachable — invariant (7) trips first")
+            }
+        }
+        assert_panic_msg_contains("reader-boundary char", || {
+            assert_tatara_domain_well_formed::<CommentLeadKeyword>();
+        });
+    }
+
+    #[test]
+    fn assert_tatara_domain_well_formed_panics_on_keyword_marker_prefix() {
+        // Negative arm on invariant (6) — a KEYWORD `":foo"` classifies
+        // as `Atom::Keyword` via the reader's `Atom::from_lexeme`
+        // classifier (the `:` prefix is stripped and the remainder
+        // becomes the keyword payload). The pre-lift "no leading ASCII
+        // digit" heuristic silently accepted this shape; the sharpened
+        // invariant binds to the substrate's typed classifier so the
+        // shape rejects structurally.
+        struct KeywordMarkerKeyword;
+        impl TataraDomain for KeywordMarkerKeyword {
+            const KEYWORD: &'static str = ":foo";
+            fn compile_from_args(_: &[Sexp]) -> Result<Self> {
+                unreachable!("compile_from_args unreachable — invariant (6) trips first")
+            }
+        }
+        assert_panic_msg_contains("Atom::from_lexeme", || {
+            assert_tatara_domain_well_formed::<KeywordMarkerKeyword>();
+        });
+    }
+
+    #[test]
+    fn assert_tatara_domain_well_formed_panics_on_bool_literal_keyword() {
+        // Negative arm on invariant (6) — a KEYWORD `"#t"` classifies
+        // as `Atom::Bool(true)` via `Atom::from_lexeme`'s bool-literal
+        // arm. The pre-lift heuristic silently accepted this shape
+        // (starts with `#`, not a digit); the sharpened invariant binds
+        // to the substrate's typed classifier so the shape rejects
+        // structurally. Peer coverage to the `:foo` arm above on the
+        // classifier's non-`Symbol` decode paths.
+        struct BoolLiteralKeyword;
+        impl TataraDomain for BoolLiteralKeyword {
+            const KEYWORD: &'static str = "#t";
+            fn compile_from_args(_: &[Sexp]) -> Result<Self> {
+                unreachable!("compile_from_args unreachable — invariant (6) trips first")
+            }
+        }
+        assert_panic_msg_contains("Atom::from_lexeme", || {
+            assert_tatara_domain_well_formed::<BoolLiteralKeyword>();
+        });
+    }
+
+    #[test]
+    fn assert_tatara_domain_well_formed_panics_on_numeric_keyword() {
+        // Negative arm on invariant (6) — a KEYWORD `"42"` classifies
+        // as `Atom::Int(42)` via `Atom::from_lexeme`'s `parse::<i64>`
+        // arm. The pre-lift heuristic caught this via the leading-
+        // digit check; the sharpened invariant catches it via the
+        // classifier's typed decode — a stricter check with a
+        // structurally-named diagnostic.
+        struct NumericKeyword;
+        impl TataraDomain for NumericKeyword {
+            const KEYWORD: &'static str = "42";
+            fn compile_from_args(_: &[Sexp]) -> Result<Self> {
+                unreachable!("compile_from_args unreachable — invariant (6) trips first")
+            }
+        }
+        assert_panic_msg_contains("Atom::from_lexeme", || {
+            assert_tatara_domain_well_formed::<NumericKeyword>();
+        });
     }
 
     #[test]

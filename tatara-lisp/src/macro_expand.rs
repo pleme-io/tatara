@@ -30,6 +30,20 @@ use std::sync::{Arc, Mutex};
 use crate::ast::Sexp;
 use crate::error::{LispError, MacroDefHead, Result, TemplateInvariantKind, UnquoteForm};
 
+/// Default ceiling on `Expander::expand`'s recursive re-entry into a
+/// macro-call form. A macro whose expansion contains another call to
+/// itself — the canonical runaway `(defmacro loop (x) `(loop ,x))` —
+/// pre-lift stack-overflowed the process (a below-floor abort with no
+/// `Result` witness). The ceiling turns that abort into a
+/// [`LispError::ExpansionDepthExceeded`] rejection at the expander
+/// boundary. `256` is large enough that no lawful hand-authored
+/// expansion nesting hits it (nested `when` / `let` / template
+/// compositions cap out in single digits in practice) and small
+/// enough that a runaway is rejected in microseconds instead of
+/// consuming a process stack. Consumers that need a tighter or looser
+/// ceiling call [`Expander::set_max_expansion_depth`].
+pub const DEFAULT_MAX_EXPANSION_DEPTH: usize = 256;
+
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
 /// its manual `Hash` impl — no serde_json round-trip per cache lookup.
 type CacheKey = (String, u64);
@@ -696,6 +710,13 @@ pub struct Expander {
     /// Toggle caching. Default on — caching is the actual performance win
     /// the bytecode layer enables.
     cache_enabled: bool,
+    /// Ceiling on `expand`'s recursive re-entry into a macro-call form. On
+    /// the runaway `(defmacro loop (x) `(loop ,x))` this is what turns a
+    /// stack overflow into a typed [`LispError::ExpansionDepthExceeded`]
+    /// rejection. Default [`DEFAULT_MAX_EXPANSION_DEPTH`]; tests set it
+    /// lower via [`Self::set_max_expansion_depth`] to pin the rejection
+    /// shape without paying for a 256-round walk.
+    max_expansion_depth: usize,
 }
 
 impl Expander {
@@ -707,6 +728,7 @@ impl Expander {
             compile_templates: true,
             cache: Arc::new(Mutex::new(HashMap::new())),
             cache_enabled: true,
+            max_expansion_depth: DEFAULT_MAX_EXPANSION_DEPTH,
         }
     }
 
@@ -719,6 +741,7 @@ impl Expander {
             compile_templates: false,
             cache: Arc::new(Mutex::new(HashMap::new())),
             cache_enabled: false,
+            max_expansion_depth: DEFAULT_MAX_EXPANSION_DEPTH,
         }
     }
 
@@ -743,6 +766,25 @@ impl Expander {
     /// Clear the expansion cache (e.g., after redefining a macro).
     pub fn clear_cache(&self) {
         self.cache.lock().unwrap().clear();
+    }
+
+    /// The configured ceiling on `expand`'s recursive re-entry into a
+    /// macro-call form. Defaults to [`DEFAULT_MAX_EXPANSION_DEPTH`].
+    #[must_use]
+    pub fn max_expansion_depth(&self) -> usize {
+        self.max_expansion_depth
+    }
+
+    /// Set the ceiling on `expand`'s recursive re-entry into a macro-call
+    /// form. Tests bind low values (e.g. `4`) to pin the runaway-rejection
+    /// shape without paying for a 256-round walk; consumers that compose
+    /// deep proven macro cascades can raise it. Zero is admitted and
+    /// makes every first macro-call return
+    /// [`LispError::ExpansionDepthExceeded`] immediately — useful for
+    /// contract-tests that assert "this reader path never expands a
+    /// macro."
+    pub fn set_max_expansion_depth(&mut self, depth: usize) {
+        self.max_expansion_depth = depth;
     }
 
     pub fn with_macros<I: IntoIterator<Item = MacroDef>>(defs: I) -> Result<Self> {
@@ -1930,10 +1972,38 @@ impl Expander {
     /// `self.macros.get(_)` inline rather than routing through the
     /// family) is no longer a silent two-site divergence.
     pub fn expand(&self, form: &Sexp) -> Result<Sexp> {
+        self.expand_with_depth(form, 0)
+    }
+
+    /// The depth-carrying peer of [`Self::expand`]. Each
+    /// post-apply re-expansion increments `depth`; each tree-child
+    /// descent passes `depth` through unchanged. The runaway
+    /// `(defmacro loop (x) `(loop ,x))` accretes depth on the
+    /// re-expansion path — one unit per round — and hits the ceiling
+    /// in `max_expansion_depth` rounds; lawful nested macros
+    /// (`(when1 (when1 x))`) accrete depth in the low single digits
+    /// because tree traversal doesn't count.
+    ///
+    /// The `depth >= limit` check sits INSIDE the macro-call arm
+    /// (`Some((def, args)) = form.as_call_to_any(…)`) rather than at
+    /// the top of the function so `def.name.clone()` is available at
+    /// the rejection site — the operator gets `macro_name` populated
+    /// from the actual offending call rather than a `<unknown>`
+    /// fallback. Tree-child descent is not gated on the ceiling
+    /// because the tree-child arm does not accrete depth; a lawfully
+    /// deep tree is bounded by the reader's own stack, not by this
+    /// ceiling.
+    fn expand_with_depth(&self, form: &Sexp, depth: usize) -> Result<Sexp> {
         if let Some((def, args)) = form.as_call_to_any(|h| self.macros.get(h)) {
+            if depth >= self.max_expansion_depth {
+                return Err(LispError::ExpansionDepthExceeded {
+                    macro_name: def.name.clone(),
+                    limit: self.max_expansion_depth,
+                });
+            }
             let expanded = self.apply(def, args)?;
             // Recurse — the expansion itself may contain more macro calls.
-            return self.expand(&expanded);
+            return self.expand_with_depth(&expanded, depth + 1);
         }
         // Not a macro call — expand children if this is a list; otherwise
         // (atom / Nil / quote-family wrapper) return the form verbatim.
@@ -1942,7 +2012,7 @@ impl Expander {
         };
         let mut out = Vec::with_capacity(list.len());
         for item in list {
-            out.push(self.expand(item)?);
+            out.push(self.expand_with_depth(item, depth)?);
         }
         Ok(Sexp::List(out))
     }
@@ -12044,5 +12114,146 @@ mod tests {
         assert_eq!(via_expand_to_named[0].spec.name, "x");
         assert_eq!(via_expand_to_named[1].name, "beta-compiler");
         assert_eq!(via_expand_to_named[1].spec.name, "y");
+    }
+
+    // ── ExpansionDepthExceeded: runaway macro rejected instead of aborting ──
+
+    #[test]
+    fn expander_default_max_expansion_depth_is_the_module_constant() {
+        // Both constructors seed `max_expansion_depth` from the module
+        // constant — a regression that drifts one constructor's default
+        // from the constant (e.g. a hardcoded `256` at ONE site with the
+        // other left uninitialized after a `Default` derive addition)
+        // fails this pin.
+        assert_eq!(
+            Expander::new().max_expansion_depth(),
+            DEFAULT_MAX_EXPANSION_DEPTH
+        );
+        assert_eq!(
+            Expander::new_substitute_only().max_expansion_depth(),
+            DEFAULT_MAX_EXPANSION_DEPTH
+        );
+        assert_eq!(DEFAULT_MAX_EXPANSION_DEPTH, 256);
+    }
+
+    #[test]
+    fn set_max_expansion_depth_takes_effect_on_subsequent_expand() {
+        let mut e = Expander::new();
+        e.set_max_expansion_depth(7);
+        assert_eq!(e.max_expansion_depth(), 7);
+    }
+
+    #[test]
+    fn expand_recursive_macro_rejects_at_depth_limit_bytecode_path() {
+        // `(defmacro loop (x) `(loop ,x))` applied to `(loop hello)`
+        // pre-lift stack-overflowed the process — a below-floor abort.
+        // Post-lift the expander returns a typed
+        // `LispError::ExpansionDepthExceeded` at the ceiling with
+        // `macro_name` populated from the offending call's head.
+        let mut e = Expander::new();
+        e.set_max_expansion_depth(4);
+        let forms = read("(defmacro loop (x) `(loop ,x)) (loop hello)").unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        match err {
+            LispError::ExpansionDepthExceeded { macro_name, limit } => {
+                assert_eq!(macro_name, "loop");
+                assert_eq!(limit, 4);
+            }
+            other => panic!("expected ExpansionDepthExceeded, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn expand_recursive_macro_rejects_at_depth_limit_substitute_path() {
+        // The substitute strategy shares the same `expand` outer walker
+        // with the bytecode strategy, so the ceiling fires at the SAME
+        // gate regardless of which apply-layer is active. The pin makes
+        // that shared-outer-walker property structural: a regression
+        // that ever branches the depth guard on strategy (e.g. moves it
+        // into `apply_compiled` alone) fails this test on the
+        // substitute expander.
+        let mut e = Expander::new_substitute_only();
+        e.set_max_expansion_depth(4);
+        let forms = read("(defmacro loop (x) `(loop ,x)) (loop hello)").unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        match err {
+            LispError::ExpansionDepthExceeded { macro_name, limit } => {
+                assert_eq!(macro_name, "loop");
+                assert_eq!(limit, 4);
+            }
+            other => panic!("expected ExpansionDepthExceeded, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn expand_lawful_nested_macros_within_ceiling_succeed() {
+        // Lawful nested macros (`(twice (twice hey))`) accrete depth in
+        // the low single digits because the tree-child arm doesn't
+        // count — only the post-apply re-expansion path bumps the
+        // counter. A ceiling of 3 is enough for a two-deep nested
+        // expansion. This pin is the fail-before/pass-after negative
+        // control for the recursive-macro rejection tests above: the
+        // depth counter must NOT reject lawful macro-nesting within
+        // the ceiling, and only reject the runaway shape.
+        let mut e = Expander::new();
+        e.set_max_expansion_depth(3);
+        let forms = read(
+            "(defmacro twice (x) `(list ,x ,x))
+             (twice (twice hey))",
+        )
+        .unwrap();
+        let out = e.expand_program(forms).unwrap();
+        assert_eq!(out[0], parse("(list (list hey hey) (list hey hey))"));
+    }
+
+    #[test]
+    fn expand_depth_ceiling_ignores_lawful_tree_nesting_depth() {
+        // A macro-free lawful deep tree — five levels of plain nesting —
+        // is expanded at a ceiling well below the tree's height. The
+        // tree-child arm does not accrete depth, so tree height is
+        // orthogonal to the ceiling; only macro re-expansion counts.
+        // A regression that ever bumps depth on tree-child descent
+        // fails this pin.
+        let mut e = Expander::new();
+        e.set_max_expansion_depth(2);
+        let forms = read("(a (b (c (d (e f)))))").unwrap();
+        let out = e.expand_program(forms).unwrap();
+        assert_eq!(out[0], parse("(a (b (c (d (e f)))))"));
+    }
+
+    #[test]
+    fn expansion_depth_exceeded_position_is_none() {
+        // The variant joins the non-positional cohort — the offending
+        // macro's byte offset is not what a runaway diagnostic anchors
+        // to; the OFFENDING MACRO NAME (`macro_name`) is. This pin
+        // keeps the variant in the `position() -> None` cohort so a
+        // future span-carrying edit lands the field in ONE place
+        // across every non-positional variant simultaneously.
+        let err = LispError::ExpansionDepthExceeded {
+            macro_name: "loop".to_string(),
+            limit: 256,
+        };
+        assert_eq!(err.position(), None);
+    }
+
+    #[test]
+    fn expansion_depth_exceeded_display_matches_typed_variant_shape() {
+        // Display projection carries both `macro_name` and `limit`, so
+        // authoring surfaces that substring-grep the rendered
+        // diagnostic (`tatara-check`, REPL, LSP) see BOTH halves at
+        // the variant boundary and never need to substring-parse
+        // free-form text to recover the identity of the offending
+        // macro or the ceiling it breached.
+        let err = LispError::ExpansionDepthExceeded {
+            macro_name: "loop".to_string(),
+            limit: 256,
+        };
+        let rendered = err.to_string();
+        assert!(rendered.contains("loop"), "rendered: {rendered}");
+        assert!(rendered.contains("256"), "rendered: {rendered}");
+        assert!(
+            rendered.contains("macro expansion depth exceeded"),
+            "rendered: {rendered}"
+        );
     }
 }

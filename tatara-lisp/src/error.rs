@@ -2383,6 +2383,44 @@ pub enum LispError {
         macro_name: String,
         kind: TemplateInvariantKind,
     },
+    /// `Expander::expand` recursed past its configured ceiling
+    /// (`Expander::max_expansion_depth`, default
+    /// `crate::macro_expand::DEFAULT_MAX_EXPANSION_DEPTH = 256`). Fires
+    /// on the runaway `(defmacro loop (x) `(loop ,x))` — a macro
+    /// whose expansion contains another call to itself — which pre-
+    /// lift stack-overflowed the process (a below-floor failure with
+    /// no `Result` witness). The typed-entry gate turns "we abort" into
+    /// "we reject at the expansion boundary" so authoring surfaces
+    /// (REPL, LSP, `tatara-check`) see a `Result::Err` at the same
+    /// call boundary as every other macro-expansion failure and can
+    /// pattern-match on the variant identity to route diagnostics
+    /// through the same channel as `TooManyMacroArgs` /
+    /// `MissingMacroArg` / `UnboundTemplateVar`.
+    ///
+    /// `macro_name` is `String` because it comes from arbitrary
+    /// source — the head symbol of the offending call at the moment
+    /// the ceiling is hit; `limit` is `usize` because it is the
+    /// configured ceiling the expander enforced at that call. The
+    /// pair names BOTH the offending macro AND the ceiling it
+    /// breached, so an LSP that wants to surface "your macro `loop`
+    /// re-expanded past 256 levels; is it recursive without a base
+    /// case?" has both halves at the variant boundary without
+    /// substring-parsing the rendered diagnostic.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// runaway-macro-expansion failure mode becomes a first-class
+    /// typed rejection at the expander boundary instead of an
+    /// unhandled stack overflow that aborts the process without
+    /// producing a `Result` at all. THEORY.md §II.1 invariant 1 —
+    /// typed entry; every macro-expansion failure mode the expander
+    /// admits is a variant of `LispError`, so the below-floor abort
+    /// is the last un-typed rejection in the expander's dispatch
+    /// chain — closing it moves the expansion surface fully into the
+    /// `Result` algebra.
+    #[error(
+        "compile error in call to {macro_name}: macro expansion depth exceeded (limit: {limit})"
+    )]
+    ExpansionDepthExceeded { macro_name: String, limit: usize },
 }
 
 /// Closed-set identifier for the (operation, stage) pair of a
@@ -9043,7 +9081,8 @@ impl LispError {
             | Self::DomainSerialize { .. }
             | Self::KwargDeserialize { .. }
             | Self::CompilerSpecIo { .. }
-            | Self::TemplateInvariant { .. } => None,
+            | Self::TemplateInvariant { .. }
+            | Self::ExpansionDepthExceeded { .. } => None,
         }
     }
 }

@@ -156,6 +156,47 @@ pub const DEFAULT_MAX_EXPANSION_SIZE: usize = 65_536;
 /// [`Expander::set_max_macro_body_size`].
 pub const DEFAULT_MAX_MACRO_BODY_SIZE: usize = 16_384;
 
+/// Default ceiling on the [`Expander::macros`] table's entry count.
+/// Peer to [`DEFAULT_MAX_MACRO_BODY_SIZE`] one RESOURCE-DIMENSION axis
+/// over on the REGISTER-time surface — where the body-size ceiling
+/// bounds a single macro's BODY SIZE (the per-registration authoring
+/// bomb), this ceiling bounds TABLE ENTRY COUNT (the cumulative
+/// registration bomb: a code-generator emitting unbounded fresh
+/// `(defmacro N (x) `(list ,x))` heads whose bodies each sit
+/// comfortably under [`DEFAULT_MAX_MACRO_BODY_SIZE`] yet collectively
+/// saturate process memory). Also peer to [`DEFAULT_MAX_CACHE_ENTRIES`]
+/// one PIPELINE-STAGE axis over — where the cache-entries ceiling
+/// bounds EXPAND-time memoization width, this ceiling bounds
+/// REGISTER-time macro-table width. The two entry-count guards close
+/// the two pipeline stages symmetrically. Pre-lift the macros table
+/// was an unbounded [`HashMap`]; a long-running host (REPL, LSP,
+/// `tatara-check`, MCP server) that ingested a source stream of
+/// distinct `(defmacro …)` heads would accrete entries without
+/// bound — a below-floor resource-drift the four prior guards (depth,
+/// cache-entries, expansion-size, body-size) all admitted through
+/// because none of them fires against the CUMULATIVE registration
+/// count.
+///
+/// Overwrites (a re-registration of an already-registered key) do not
+/// grow the table and never trigger this ceiling — operators can
+/// redefine a macro at capacity without hitting the gate. Only FRESH
+/// keys are counted against the ceiling.
+///
+/// `4096` is large enough that lawful hand-authored typescapes never
+/// brush the ceiling on any realistic authoring workload — a
+/// typescape with 20-100 macros × several call sites sits well under
+/// 1K entries, and even a library-heavy project composing hundreds of
+/// domain macros stays under a fraction of the default — and small
+/// enough that a pathological registration bomb (a code-generator
+/// unrolling a `Vec<TypedEntity>` into a giant `(defmacro fresh-N …)`
+/// stream) is rejected at the registration boundary in microseconds
+/// instead of leaking a multi-megabyte macros table into the live
+/// expander. The default is deliberately generous — the ceiling
+/// exists to prevent unbounded drift, not to force operators to tune
+/// it. Consumers that want a tighter or looser ceiling call
+/// [`Expander::set_max_registered_macros`].
+pub const DEFAULT_MAX_REGISTERED_MACROS: usize = 4096;
+
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
 /// its manual `Hash` impl — no serde_json round-trip per cache lookup.
 type CacheKey = (String, u64);
@@ -870,6 +911,26 @@ pub struct Expander {
     /// via [`Self::set_max_macro_body_size`] to pin the rejection
     /// shape without materializing a 16K-node authoring blob.
     max_macro_body_size: usize,
+    /// Ceiling on the [`Self::macros`] table's entry count, consulted
+    /// at [`Self::register_macro_def`] time BEFORE the body-size gate
+    /// walks the body or any insert lands. Peer to
+    /// [`Self::max_macro_body_size`] one RESOURCE-DIMENSION axis over
+    /// on the REGISTER-time surface — where body-size bounds a
+    /// per-registration SIZE, this ceiling bounds cumulative
+    /// registration COUNT. Peer to [`Self::max_cache_entries`] one
+    /// PIPELINE-STAGE axis over — the two entry-count guards close
+    /// the two pipeline stages symmetrically. On the canonical
+    /// registration-bomb (a code-generator emitting unbounded fresh
+    /// `(defmacro fresh-N (x) `(list ,x))` heads) this is what turns
+    /// an unbounded macros-table growth into a typed
+    /// [`crate::error::LispError::RegisteredMacrosExceeded`]
+    /// rejection at the first fresh key past the ceiling. Overwrites
+    /// (re-registrations of an already-registered key) never trigger
+    /// the gate — only FRESH keys are counted.
+    /// Default [`DEFAULT_MAX_REGISTERED_MACROS`]; tests set it lower
+    /// via [`Self::set_max_registered_macros`] to pin the rejection
+    /// shape without materializing a 4K-entry macros table.
+    max_registered_macros: usize,
 }
 
 impl Expander {
@@ -885,6 +946,7 @@ impl Expander {
             max_cache_entries: DEFAULT_MAX_CACHE_ENTRIES,
             max_expansion_size: DEFAULT_MAX_EXPANSION_SIZE,
             max_macro_body_size: DEFAULT_MAX_MACRO_BODY_SIZE,
+            max_registered_macros: DEFAULT_MAX_REGISTERED_MACROS,
         }
     }
 
@@ -901,6 +963,7 @@ impl Expander {
             max_cache_entries: DEFAULT_MAX_CACHE_ENTRIES,
             max_expansion_size: DEFAULT_MAX_EXPANSION_SIZE,
             max_macro_body_size: DEFAULT_MAX_MACRO_BODY_SIZE,
+            max_registered_macros: DEFAULT_MAX_REGISTERED_MACROS,
         }
     }
 
@@ -1014,6 +1077,31 @@ impl Expander {
         self.max_macro_body_size = size;
     }
 
+    /// The configured ceiling on the [`Self::macros`] table's entry
+    /// count. Defaults to [`DEFAULT_MAX_REGISTERED_MACROS`]. Peer to
+    /// [`Self::max_macro_body_size`] one RESOURCE-DIMENSION axis over
+    /// on the REGISTER-time surface, and to [`Self::max_cache_entries`]
+    /// one PIPELINE-STAGE axis over.
+    #[must_use]
+    pub fn max_registered_macros(&self) -> usize {
+        self.max_registered_macros
+    }
+
+    /// Set the ceiling on the [`Self::macros`] table's entry count.
+    /// Tests bind low values (e.g. `3`) to pin the registration-bomb
+    /// rejection shape without materializing a 4K-entry macros table;
+    /// consumers that compose deep proven typescapes can raise it.
+    /// [`usize::MAX`] admits any lawful cumulative registration count
+    /// (the ceiling is effectively lifted). Zero is admitted and
+    /// rejects every FRESH registration immediately — useful for
+    /// contract-tests that assert "this expander accepts no new
+    /// macros" — while still admitting overwrites of any macro that
+    /// was registered before the ceiling was set (a re-registration
+    /// of an existing key never grows the table).
+    pub fn set_max_registered_macros(&mut self, cap: usize) {
+        self.max_registered_macros = cap;
+    }
+
     pub fn with_macros<I: IntoIterator<Item = MacroDef>>(defs: I) -> Result<Self> {
         let mut e = Self::new();
         for d in defs {
@@ -1123,6 +1211,34 @@ impl Expander {
     /// pleme-io peer of that registration entry point on the macro-table
     /// algebra.
     pub fn register_macro_def(&mut self, def: MacroDef) -> Result<()> {
+        // Reject a registration-bomb (a code-generator emitting
+        // unbounded fresh `(defmacro fresh-N (x) `(list ,x))` heads
+        // whose bodies each sit comfortably under
+        // `max_macro_body_size` yet collectively saturate process
+        // memory) at the cheapest gate on the REGISTER-time surface
+        // — a `HashMap::len` comparison, no body walk. Peer to the
+        // body-size gate below one RESOURCE-DIMENSION axis over
+        // (COUNT vs. SIZE) and to the expand-time cache-entries gate
+        // in `apply` one PIPELINE-STAGE axis over (REGISTER-time
+        // COUNT vs. EXPAND-time COUNT). Fires BEFORE the body-size
+        // gate walks `def.body.node_count()` or any insert lands, so
+        // a failed registration leaves BOTH tables exactly as they
+        // were. Overwrites (a re-registration of an already-
+        // registered key) are ADMITTED at any table size — a
+        // re-`defmacro` never grows the table, so the ceiling cannot
+        // gate operator redefinitions. Keyed on `>=` (a table
+        // already at ceiling rejects a fresh key) so
+        // `max_registered_macros` names the LARGEST admissible
+        // `self.macros.len()` — same posture the expand-time
+        // cache-entries gate holds on the memoization cache.
+        let is_overwrite = self.macros.contains_key(&def.name);
+        if !is_overwrite && self.macros.len() >= self.max_registered_macros {
+            return Err(LispError::RegisteredMacrosExceeded {
+                macro_name: def.name.clone(),
+                count: self.macros.len(),
+                limit: self.max_registered_macros,
+            });
+        }
         // Reject an authoring-bomb `(defmacro huge (x) `<template-of-
         // N-million-nodes>)` at the REGISTRATION boundary — the
         // PIPELINE-STAGE peer of the EXPAND-time output-size gate in
@@ -13167,5 +13283,418 @@ mod tests {
             other => panic!("expected MacroBodySizeExceeded, got: {other:?}"),
         }
         assert!(!e.has("huge"));
+    }
+
+    // ── max_registered_macros: REGISTRATION-time table-count ceiling ──
+    // Peer to body-size (REGISTER-time SIZE) one RESOURCE-DIMENSION
+    // axis over — where body-size bounds a per-registration SIZE,
+    // this ceiling bounds cumulative registration COUNT. Peer to
+    // cache-entries (EXPAND-time COUNT) one PIPELINE-STAGE axis over
+    // — the two entry-count guards close the two pipeline stages
+    // symmetrically. Closes the expander's RESOURCE surface at a
+    // FIFTH typed dimension across two pipeline stages: the
+    // REGISTER-time face is now a two-dimensional (size × count)
+    // closure symmetric with the EXPAND-time (depth + count + size)
+    // triple.
+
+    #[test]
+    fn expander_default_max_registered_macros_is_the_module_constant() {
+        // Both constructors seed `max_registered_macros` from the
+        // module constant — a regression that drifts one
+        // constructor's default from the constant (e.g. a hardcoded
+        // `4096` at ONE site with the other left uninitialized
+        // after a `Default` derive addition) fails this pin. Peer
+        // to the four prior default-coherence pins on depth,
+        // cache-entries, expansion-size, and body-size.
+        assert_eq!(
+            Expander::new().max_registered_macros(),
+            DEFAULT_MAX_REGISTERED_MACROS
+        );
+        assert_eq!(
+            Expander::new_substitute_only().max_registered_macros(),
+            DEFAULT_MAX_REGISTERED_MACROS
+        );
+        assert_eq!(DEFAULT_MAX_REGISTERED_MACROS, 4096);
+    }
+
+    #[test]
+    fn set_max_registered_macros_takes_effect_on_subsequent_register() {
+        // Setter mirrors accessor — a regression that ever forgets
+        // to write through to the field, or writes to a shadow
+        // field the accessor does not read, fails this pin. Peer
+        // to the four prior setter/accessor coherence pins.
+        let mut e = Expander::new();
+        e.set_max_registered_macros(64);
+        assert_eq!(e.max_registered_macros(), 64);
+    }
+
+    #[test]
+    fn register_fresh_macro_past_table_ceiling_rejects_bytecode_path() {
+        // With a ceiling of `2`, the first two fresh registrations
+        // land in the table and the third fresh key rejects with
+        // `LispError::RegisteredMacrosExceeded { macro_name: "c",
+        // count: 2, limit: 2 }`. `count` is the pre-insert table
+        // length (which equals `limit` at rejection in the common
+        // case); `macro_name` is the OFFENDING call's name (the
+        // fresh key we could not admit), not the outermost caller.
+        let mut e = Expander::new();
+        e.set_max_registered_macros(2);
+        let forms = read(
+            "(defmacro a (x) `(list ,x))
+             (defmacro b (x) `(list ,x))
+             (defmacro c (x) `(list ,x))",
+        )
+        .unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        match err {
+            LispError::RegisteredMacrosExceeded {
+                macro_name,
+                count,
+                limit,
+            } => {
+                assert_eq!(macro_name, "c");
+                assert_eq!(count, 2);
+                assert_eq!(limit, 2);
+            }
+            other => panic!("expected RegisteredMacrosExceeded, got: {other:?}"),
+        }
+        // First two admitted; third rejected leaves the table at
+        // its pre-third-call size.
+        assert!(e.has("a"));
+        assert!(e.has("b"));
+        assert!(!e.has("c"));
+        assert_eq!(e.len(), 2);
+    }
+
+    #[test]
+    fn register_fresh_macro_past_table_ceiling_rejects_substitute_path() {
+        // The substitute strategy shares the same
+        // `register_macro_def` outer registration entry with the
+        // bytecode strategy, so the REGISTRATION-time TABLE-COUNT
+        // ceiling fires at the SAME gate regardless of which
+        // apply-layer is active. The pin makes that shared-
+        // registration property structural: a regression that ever
+        // branches the table-count guard on strategy (e.g. moves
+        // it into the `compile_templates` arm alone) fails this
+        // test on the substitute expander. Peer to the four prior
+        // shared-registration pins.
+        let mut e = Expander::new_substitute_only();
+        e.set_max_registered_macros(2);
+        let forms = read(
+            "(defmacro a (x) `(list ,x))
+             (defmacro b (x) `(list ,x))
+             (defmacro c (x) `(list ,x))",
+        )
+        .unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        match err {
+            LispError::RegisteredMacrosExceeded {
+                macro_name,
+                count,
+                limit,
+            } => {
+                assert_eq!(macro_name, "c");
+                assert_eq!(count, 2);
+                assert_eq!(limit, 2);
+            }
+            other => panic!("expected RegisteredMacrosExceeded, got: {other:?}"),
+        }
+        assert!(e.has("a"));
+        assert!(e.has("b"));
+        assert!(!e.has("c"));
+        assert_eq!(e.len(), 2);
+    }
+
+    #[test]
+    fn register_overwrite_of_existing_key_at_table_ceiling_admits() {
+        // OVERWRITES (a re-registration of an already-registered
+        // key) do not grow the table and MUST be admitted at any
+        // ceiling — operators redefining a macro at capacity is a
+        // legitimate authoring pattern. This pin catches a
+        // regression that ever treats overwrites the same as fresh
+        // keys (a `contains_key` check that inverts, or a
+        // `set_max_registered_macros(0)` that would reject even
+        // pre-registered overwrites).
+        let mut e = Expander::new();
+        // Land two macros with a permissive ceiling.
+        e.expand_program(
+            read(
+                "(defmacro a (x) `(list ,x))
+                 (defmacro b (x) `(list ,x))",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(e.len(), 2);
+        // Drop the ceiling to exactly the current size — a fresh
+        // third key would now reject, but an overwrite of `a` MUST
+        // admit.
+        e.set_max_registered_macros(2);
+        let forms = read("(defmacro a (x y) `(pair ,x ,y))").unwrap();
+        e.expand_program(forms).unwrap();
+        assert_eq!(e.len(), 2, "overwrite must not grow the table");
+        // Re-expand a call to `a` — the NEW definition (two
+        // required params) is active, and the OLD definition (one
+        // required param) is gone. Under the new definition,
+        // `(a 1 2)` expands to `(pair 1 2)`.
+        let expanded = e.expand_program(read("(a foo bar)").unwrap()).unwrap();
+        assert_eq!(expanded[0], parse("(pair foo bar)"));
+    }
+
+    #[test]
+    fn register_at_table_ceiling_admits_up_to_but_not_past() {
+        // Fail-before/pass-after negative control on the exact
+        // boundary: with a ceiling of `3`, exactly three fresh keys
+        // admit and the fourth rejects. A regression that ever
+        // shifted the boundary by one (e.g. keyed on `>` instead of
+        // `>=`, or checked `len() > cap` before insert instead of
+        // `len() >= cap`) would fail one of the two arms — either
+        // the third admission or the fourth rejection.
+        let mut e = Expander::new();
+        e.set_max_registered_macros(3);
+        // Three fresh keys admit.
+        e.expand_program(
+            read(
+                "(defmacro a (x) `(list ,x))
+                 (defmacro b (x) `(list ,x))
+                 (defmacro c (x) `(list ,x))",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(e.len(), 3);
+        // Fourth fresh key rejects.
+        let err = e
+            .expand_program(read("(defmacro d (x) `(list ,x))").unwrap())
+            .unwrap_err();
+        match err {
+            LispError::RegisteredMacrosExceeded {
+                macro_name,
+                count,
+                limit,
+            } => {
+                assert_eq!(macro_name, "d");
+                assert_eq!(count, 3);
+                assert_eq!(limit, 3);
+            }
+            other => panic!("expected RegisteredMacrosExceeded, got: {other:?}"),
+        }
+        // Table stays at pre-rejection size — no partial write.
+        assert_eq!(e.len(), 3);
+        assert!(!e.has("d"));
+    }
+
+    #[test]
+    fn register_table_ceiling_leaves_both_tables_pristine_on_rejection() {
+        // A rejected registration MUST leave BOTH `self.macros` AND
+        // `self.templates` exactly as they were — no partial-write
+        // window in which one table carries the over-ceiling entry
+        // while the other does not, or in which the template
+        // pre-compile already ran. Table-count gate fires BEFORE
+        // body-size gate walks the body AND BEFORE any insert lands,
+        // so a regression that ever moved the table-count gate
+        // below `self.templates.insert` or below
+        // `self.macros.insert` would fail this pin. Peer to
+        // `register_failure_leaves_both_tables_pristine` on the
+        // body-size axis.
+        let mut e = Expander::new();
+        e.set_max_registered_macros(1);
+        // Land one macro at ceiling.
+        e.expand_program(read("(defmacro a (x) `(list ,x))").unwrap())
+            .unwrap();
+        assert!(e.has("a"));
+        // Reject a fresh second key.
+        let err = e
+            .expand_program(read("(defmacro b (x) `(list ,x))").unwrap())
+            .unwrap_err();
+        assert!(matches!(err, LispError::RegisteredMacrosExceeded { .. }));
+        // Table stays at pre-rejection state — `b` is NOT present
+        // in either self.macros OR self.templates.
+        assert_eq!(e.len(), 1);
+        assert!(e.has("a"));
+        assert!(!e.has("b"));
+        // Expanding a call to `a` still works (templates table for
+        // `a` untouched by the failed `b` registration).
+        let expanded = e.expand_program(read("(a hey)").unwrap()).unwrap();
+        assert_eq!(expanded[0], parse("(list hey)"));
+    }
+
+    #[test]
+    fn set_max_registered_macros_zero_rejects_every_fresh_registration() {
+        // Zero ceiling is the "contract-test that this expander
+        // accepts no new macros" posture — every fresh key rejects
+        // at the first `defmacro` because `0 >= 0`. Peer to the
+        // depth-ceiling zero-admits-and-rejects-every-macro-call
+        // pin one RESOURCE axis over.
+        let mut e = Expander::new();
+        e.set_max_registered_macros(0);
+        let err = e
+            .expand_program(read("(defmacro a (x) `(list ,x))").unwrap())
+            .unwrap_err();
+        match err {
+            LispError::RegisteredMacrosExceeded {
+                macro_name,
+                count,
+                limit,
+            } => {
+                assert_eq!(macro_name, "a");
+                assert_eq!(count, 0);
+                assert_eq!(limit, 0);
+            }
+            other => panic!("expected RegisteredMacrosExceeded, got: {other:?}"),
+        }
+        assert!(e.is_empty());
+    }
+
+    #[test]
+    fn registered_macros_exceeded_position_is_none() {
+        // The variant joins the non-positional cohort — the
+        // offending macro's byte offset is not what a table-count
+        // diagnostic anchors to; the (offending fresh macro name,
+        // observed table count, configured ceiling) triple is.
+        // This pin keeps the variant in the `position() -> None`
+        // cohort so a future span-carrying edit lands the field
+        // in ONE place across every non-positional variant
+        // simultaneously. Peer to the four prior
+        // `*_exceeded_position_is_none` pins on the resource-
+        // ceiling cohort.
+        let err = LispError::RegisteredMacrosExceeded {
+            macro_name: "fresh-1000".to_string(),
+            count: 4096,
+            limit: 4096,
+        };
+        assert_eq!(err.position(), None);
+    }
+
+    #[test]
+    fn registered_macros_exceeded_display_matches_typed_variant_shape() {
+        // Display projection carries `macro_name`, `count`, AND
+        // `limit`, so authoring surfaces that substring-grep the
+        // rendered diagnostic (`tatara-check`, REPL, LSP) see ALL
+        // THREE halves at the variant boundary and never need to
+        // substring-parse free-form text to recover the identity
+        // of the offending fresh key, the observed table count, or
+        // the ceiling it breached. Peer to the four prior
+        // `*_exceeded_display_matches_typed_variant_shape` pins.
+        let err = LispError::RegisteredMacrosExceeded {
+            macro_name: "fresh-1000".to_string(),
+            count: 4096,
+            limit: 4096,
+        };
+        let rendered = err.to_string();
+        assert!(rendered.contains("fresh-1000"), "rendered: {rendered}");
+        assert!(rendered.contains("4096"), "rendered: {rendered}");
+        assert!(
+            rendered.contains("registered macros count exceeded"),
+            "rendered: {rendered}"
+        );
+    }
+
+    #[test]
+    fn lawful_typescape_within_ceiling_registers_and_expands() {
+        // A lawful hand-authored typescape (a handful of macros)
+        // sits well below any realistic ceiling — the default
+        // `DEFAULT_MAX_REGISTERED_MACROS` is deliberately generous
+        // so operators never brush it on real authoring workloads.
+        // This pin locks the default ceiling's non-interference
+        // posture: a regression that ever lowered the default
+        // enough to reject a small typescape would fail here. Peer
+        // to `lawful_macro_body_within_ceiling_registers_and_expands`.
+        let mut e = Expander::new();
+        let forms = read(
+            "(defmacro when (cond x) `(if ,cond ,x))
+             (defmacro twice (x) `(list ,x ,x))
+             (defmacro pair (x y) `(list ,x ,y))
+             (when #t (twice hey))",
+        )
+        .unwrap();
+        let out = e.expand_program(forms).unwrap();
+        assert_eq!(out[0], parse("(if #t (list hey hey))"));
+        assert_eq!(e.len(), 3);
+    }
+
+    #[test]
+    fn register_macro_def_direct_call_respects_table_ceiling() {
+        // `register_macro_def` is the substrate primitive both
+        // `expand_program`'s `defmacro` recognition AND
+        // `with_macros`'s bulk load route through. The table-count
+        // ceiling fires on the primitive itself, not on any one
+        // consumer — a regression that ever moved the gate into
+        // `expand_program`'s arm alone would fail this pin. Peer
+        // to `register_macro_def_direct_call_respects_body_size_ceiling`
+        // one RESOURCE-DIMENSION axis over.
+        let mut e = Expander::new();
+        e.set_max_registered_macros(1);
+        let def_a = MacroDef {
+            name: "a".to_string(),
+            params: MacroParams {
+                required: vec!["x".to_string()],
+                optional: Vec::new(),
+                rest: None,
+            },
+            body: Sexp::Atom(crate::ast::Atom::Symbol("y".to_string())),
+        };
+        let def_b = MacroDef {
+            name: "b".to_string(),
+            params: MacroParams {
+                required: vec!["x".to_string()],
+                optional: Vec::new(),
+                rest: None,
+            },
+            body: Sexp::Atom(crate::ast::Atom::Symbol("y".to_string())),
+        };
+        // First admits — table sits at ceiling.
+        e.register_macro_def(def_a).unwrap();
+        assert!(e.has("a"));
+        assert_eq!(e.len(), 1);
+        // Second rejects — fresh key past ceiling.
+        let err = e.register_macro_def(def_b).unwrap_err();
+        match err {
+            LispError::RegisteredMacrosExceeded {
+                macro_name,
+                count,
+                limit,
+            } => {
+                assert_eq!(macro_name, "b");
+                assert_eq!(count, 1);
+                assert_eq!(limit, 1);
+            }
+            other => panic!("expected RegisteredMacrosExceeded, got: {other:?}"),
+        }
+        assert!(!e.has("b"));
+        assert_eq!(e.len(), 1);
+    }
+
+    #[test]
+    fn register_macro_def_direct_call_admits_overwrite_at_table_ceiling() {
+        // Direct `register_macro_def` calls must ALSO admit
+        // overwrites at ceiling — the overwrite discipline lives
+        // on the primitive, not on `expand_program`'s arm alone.
+        // Sibling of the source-level overwrite admission test.
+        let mut e = Expander::new();
+        e.set_max_registered_macros(1);
+        let def_a_v1 = MacroDef {
+            name: "a".to_string(),
+            params: MacroParams {
+                required: vec!["x".to_string()],
+                optional: Vec::new(),
+                rest: None,
+            },
+            body: Sexp::Atom(crate::ast::Atom::Symbol("y".to_string())),
+        };
+        let def_a_v2 = MacroDef {
+            name: "a".to_string(),
+            params: MacroParams {
+                required: vec!["x".to_string(), "y".to_string()],
+                optional: Vec::new(),
+                rest: None,
+            },
+            body: Sexp::Atom(crate::ast::Atom::Symbol("z".to_string())),
+        };
+        e.register_macro_def(def_a_v1).unwrap();
+        assert_eq!(e.len(), 1);
+        // Overwrite of `a` at ceiling admits — no growth.
+        e.register_macro_def(def_a_v2).unwrap();
+        assert_eq!(e.len(), 1);
     }
 }

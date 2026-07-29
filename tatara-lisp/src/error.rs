@@ -2519,6 +2519,78 @@ pub enum LispError {
         size: usize,
         limit: usize,
     },
+    /// `Expander::register_macro_def` rejected a fresh (non-overwrite)
+    /// registration because the [`Expander::macros`] table already held
+    /// `Expander::max_registered_macros` entries (default
+    /// `crate::macro_expand::DEFAULT_MAX_REGISTERED_MACROS`). Peer to
+    /// [`Self::MacroBodySizeExceeded`] one RESOURCE-DIMENSION axis over
+    /// on the REGISTER-time surface — where `MacroBodySizeExceeded`
+    /// bounds a single macro's BODY SIZE (the per-registration
+    /// authoring bomb — one huge template landing in
+    /// `Expander::macros`), this variant bounds the TABLE ENTRY COUNT
+    /// (the cumulative registration bomb — a code-generator emitting
+    /// unbounded `(defmacro fresh-N (x) `(list ,x))` heads at REGISTER
+    /// time whose bodies each sit comfortably under
+    /// `Expander::max_macro_body_size` yet collectively saturate
+    /// process memory). Also peer to
+    /// [`crate::macro_expand::DEFAULT_MAX_CACHE_ENTRIES`] one
+    /// PIPELINE-STAGE axis over: where the cache-entries ceiling
+    /// bounds EXPAND-time memoization width, this ceiling bounds
+    /// REGISTER-time macro-table width — the two entry-count guards
+    /// close the two pipeline stages symmetrically.
+    ///
+    /// A re-registration of an already-registered key (`self.macros`
+    /// contains `macro_name` before the call) is an OVERWRITE, which
+    /// does not grow the table and therefore never fires this variant
+    /// — operators can redefine a macro at capacity without hitting
+    /// the ceiling, and only FRESH keys are gated. The gate fires
+    /// BEFORE [`compile_template`] walks the body or the entry lands
+    /// in the [`crate::macro_expand::Expander::macros`] /
+    /// `templates` tables — a failed registration leaves both tables
+    /// exactly as they were, matching the pristine-tables invariant
+    /// [`Self::MacroBodySizeExceeded`] holds on the body-size axis.
+    ///
+    /// The three-field shape names BOTH the offending macro AND the
+    /// observed table count AND the configured ceiling — same shape
+    /// as `MacroBodySizeExceeded` / `ExpansionSizeExceeded` (its
+    /// pipeline-stage peers) so authoring surfaces that route
+    /// resource-ceiling rejections through one diagnostic channel
+    /// bind to ONE structural pattern. `macro_name` is `String`
+    /// because it comes from arbitrary source — the `(defmacro NAME
+    /// …)` head at the moment the ceiling is hit; `count` is the
+    /// observed `self.macros.len()` (which equals `limit` at
+    /// rejection in the common case, or exceeds it if `limit` was
+    /// lowered mid-run past the current table size); `limit` is the
+    /// configured ceiling.
+    ///
+    /// Joins the [`Self::ExpansionDepthExceeded`] cohort in
+    /// [`Self::position`] so all four resource-ceiling rejections
+    /// route through the SAME `None` arm — the offending macro's
+    /// byte offset is not what a registration-bomb diagnostic
+    /// anchors to; the (macro name, observed table count, ceiling)
+    /// triple is.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// registration-bomb failure mode (unbounded macro-table growth)
+    /// becomes a first-class typed rejection at the REGISTRATION
+    /// boundary rather than an unhandled resource-drift that no
+    /// `Result` witnesses. THEORY.md §II.1 invariant 1 — typed entry;
+    /// every resource-ceiling failure mode the expander admits
+    /// (expand-time recursion, expand-time memoization width,
+    /// expand-time output size, register-time body size, register-
+    /// time table width) is now a variant of `LispError`, closing the
+    /// "runaway macro" surface at FIVE RESOURCE-DIMENSION axes across
+    /// TWO pipeline stages — the register-time surface is now a
+    /// two-dimensional (size × count) closure symmetric with the
+    /// expand-time (depth + count + size) triple.
+    #[error(
+        "compile error in defmacro {macro_name}: registered macros count exceeded (count: {count}, limit: {limit})"
+    )]
+    RegisteredMacrosExceeded {
+        macro_name: String,
+        count: usize,
+        limit: usize,
+    },
 }
 
 /// Closed-set identifier for the (operation, stage) pair of a
@@ -9182,7 +9254,8 @@ impl LispError {
             | Self::TemplateInvariant { .. }
             | Self::ExpansionDepthExceeded { .. }
             | Self::ExpansionSizeExceeded { .. }
-            | Self::MacroBodySizeExceeded { .. } => None,
+            | Self::MacroBodySizeExceeded { .. }
+            | Self::RegisteredMacrosExceeded { .. } => None,
         }
     }
 }

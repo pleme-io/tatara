@@ -2472,6 +2472,53 @@ pub enum LispError {
         size: usize,
         limit: usize,
     },
+    /// `Expander::register_macro_def` rejected a macro definition whose
+    /// body's [`crate::ast::Sexp::node_count`] exceeded the configured
+    /// ceiling (`Expander::max_macro_body_size`, default
+    /// `crate::macro_expand::DEFAULT_MAX_MACRO_BODY_SIZE`). Peer to
+    /// [`Self::ExpansionSizeExceeded`] one PIPELINE-STAGE axis over:
+    /// where `ExpansionSizeExceeded` bounds a macro `apply`'s OUTPUT
+    /// size at EXPAND time (the runtime bomb — `(defmacro bomb (x) `(list ,x ,x ,x ,x))`
+    /// producing a large tree from a small input), this variant bounds
+    /// a macro's BODY size at REGISTER time (the authoring bomb —
+    /// `(defmacro huge (x) `<template-of-N-million-nodes>)` whose
+    /// storage in the `Expander::macros` table alone would exhaust
+    /// memory before a single `apply` ran). Fires at
+    /// [`crate::macro_expand::Expander::register_macro_def`] BEFORE
+    /// `compile_template` walks the body or the entry lands in the
+    /// macros table — a failed registration leaves both tables exactly
+    /// as they were, matching the ordering `TemplateInvariant` /
+    /// `UnboundTemplateVar` already enjoy on the compile-time reject
+    /// path.
+    ///
+    /// The three-field shape names BOTH the offending macro AND the
+    /// observed body size AND the configured ceiling — same shape as
+    /// `ExpansionSizeExceeded` (its EXPAND-time peer) so authoring
+    /// surfaces that route resource-ceiling rejections through one
+    /// diagnostic channel bind to ONE structural pattern. `macro_name`
+    /// is `String` because it comes from arbitrary source — the
+    /// `(defmacro NAME …)` head at the moment the ceiling is hit;
+    /// `size` is the observed `body.node_count()`; `limit` is the
+    /// configured ceiling.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// authoring-bomb failure mode (a macro body large enough to hurt
+    /// storage or template-compile time) becomes a first-class typed
+    /// rejection at the REGISTRATION boundary. THEORY.md §II.1
+    /// invariant 1 — typed entry; every resource-ceiling failure mode
+    /// the expander admits (expand-time recursion, expand-time
+    /// memoization width, expand-time output size, register-time body
+    /// size) is now a variant of `LispError`, closing the "runaway
+    /// macro" surface at FOUR RESOURCE-DIMENSION axes across TWO
+    /// pipeline stages (register + expand).
+    #[error(
+        "compile error in defmacro {macro_name}: macro body size exceeded (size: {size}, limit: {limit})"
+    )]
+    MacroBodySizeExceeded {
+        macro_name: String,
+        size: usize,
+        limit: usize,
+    },
 }
 
 /// Closed-set identifier for the (operation, stage) pair of a
@@ -9134,7 +9181,8 @@ impl LispError {
             | Self::CompilerSpecIo { .. }
             | Self::TemplateInvariant { .. }
             | Self::ExpansionDepthExceeded { .. }
-            | Self::ExpansionSizeExceeded { .. } => None,
+            | Self::ExpansionSizeExceeded { .. }
+            | Self::MacroBodySizeExceeded { .. } => None,
         }
     }
 }

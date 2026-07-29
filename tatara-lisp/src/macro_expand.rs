@@ -117,6 +117,45 @@ pub const DEFAULT_MAX_CACHE_ENTRIES: usize = 8192;
 /// configure it explicitly.
 pub const DEFAULT_MAX_EXPANSION_SIZE: usize = 65_536;
 
+/// Default ceiling on a registered macro's BODY structural node count.
+/// Peer to [`DEFAULT_MAX_EXPANSION_DEPTH`], [`DEFAULT_MAX_CACHE_ENTRIES`],
+/// and [`DEFAULT_MAX_EXPANSION_SIZE`] one PIPELINE-STAGE axis over on
+/// the expander surface — the three prior guards close the RESOURCE
+/// surface at EXPAND time (recursion length, memoization width,
+/// single-`apply` output size); this ceiling closes it at REGISTER time
+/// (the SIZE the body itself contributes to storage in
+/// [`Expander::macros`], to [`compile_template`]'s pre-expansion walk,
+/// and to every subsequent [`substitute`] walk that recurses through
+/// the body-shaped template). Pre-lift a pathological
+/// `(defmacro huge (x) `<template-of-N-million-nodes>)` would land the
+/// body in the macros table before any `apply` ran and inflate the
+/// per-registration cost proportional to `N` — a below-floor
+/// resource-drift the three expand-time ceilings all admitted through
+/// because none of them fires at the registration boundary. Post-lift
+/// the [`Expander::register_macro_def`] site consults this ceiling
+/// against `def.body.node_count()`; once the observed size exceeds
+/// the ceiling the expander returns
+/// [`crate::error::LispError::MacroBodySizeExceeded`] with
+/// `macro_name`, `size`, and `limit` populated, and BOTH the
+/// [`Expander::macros`] AND [`Expander::templates`] tables stay
+/// exactly as they were — no partial-write window in which the
+/// registration succeeded halfway.
+///
+/// `16_384` is large enough that lawful hand-authored macro bodies
+/// (an outer quasi-quote wrapping a few dozen nested lists with a
+/// handful of substitution slots) never brush the ceiling on any
+/// realistic authoring workload — even a heavily-composed
+/// `defalertpolicy` template with multi-page cascades tops out in the
+/// low thousands — and small enough that a pathological "authoring
+/// bomb" (a code-generator that unrolls a `Vec<TypedEntity>` into a
+/// giant literal body) is rejected at the registration boundary in
+/// microseconds instead of leaking a multi-megabyte template into the
+/// live macros table. The default is deliberately generous — the
+/// ceiling exists to prevent unbounded drift, not to force operators
+/// to tune it. Consumers that want a tighter or looser ceiling call
+/// [`Expander::set_max_macro_body_size`].
+pub const DEFAULT_MAX_MACRO_BODY_SIZE: usize = 16_384;
+
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
 /// its manual `Hash` impl — no serde_json round-trip per cache lookup.
 type CacheKey = (String, u64);
@@ -815,6 +854,22 @@ pub struct Expander {
     /// [`Self::set_max_expansion_size`] to pin the rejection shape
     /// without materializing a 64K-node blob.
     max_expansion_size: usize,
+    /// Ceiling on a registered macro's BODY
+    /// [`crate::ast::Sexp::node_count`], consulted at
+    /// [`Self::register_macro_def`] time BEFORE
+    /// [`compile_template`] walks the body or the entry lands in
+    /// [`Self::macros`]. Peer to [`Self::max_expansion_depth`],
+    /// [`Self::max_cache_entries`], and [`Self::max_expansion_size`]
+    /// one PIPELINE-STAGE axis over — the three prior guards fire at
+    /// EXPAND time; this one fires at REGISTER time. On the
+    /// canonical authoring-bomb
+    /// `(defmacro huge (x) `<template-of-N-million-nodes>)` this is
+    /// what turns an unbounded body-storage cost into a typed
+    /// [`crate::error::LispError::MacroBodySizeExceeded`] rejection.
+    /// Default [`DEFAULT_MAX_MACRO_BODY_SIZE`]; tests set it lower
+    /// via [`Self::set_max_macro_body_size`] to pin the rejection
+    /// shape without materializing a 16K-node authoring blob.
+    max_macro_body_size: usize,
 }
 
 impl Expander {
@@ -829,6 +884,7 @@ impl Expander {
             max_expansion_depth: DEFAULT_MAX_EXPANSION_DEPTH,
             max_cache_entries: DEFAULT_MAX_CACHE_ENTRIES,
             max_expansion_size: DEFAULT_MAX_EXPANSION_SIZE,
+            max_macro_body_size: DEFAULT_MAX_MACRO_BODY_SIZE,
         }
     }
 
@@ -844,6 +900,7 @@ impl Expander {
             max_expansion_depth: DEFAULT_MAX_EXPANSION_DEPTH,
             max_cache_entries: DEFAULT_MAX_CACHE_ENTRIES,
             max_expansion_size: DEFAULT_MAX_EXPANSION_SIZE,
+            max_macro_body_size: DEFAULT_MAX_MACRO_BODY_SIZE,
         }
     }
 
@@ -929,6 +986,32 @@ impl Expander {
     /// must fit in N nodes" contract-tests set it exactly.
     pub fn set_max_expansion_size(&mut self, size: usize) {
         self.max_expansion_size = size;
+    }
+
+    /// The configured ceiling on a registered macro's BODY
+    /// [`crate::ast::Sexp::node_count`]. Defaults to
+    /// [`DEFAULT_MAX_MACRO_BODY_SIZE`]. Peer to
+    /// [`Self::max_expansion_depth`], [`Self::max_cache_entries`],
+    /// and [`Self::max_expansion_size`] one PIPELINE-STAGE axis over
+    /// (the three prior guards fire at EXPAND time; this one fires
+    /// at REGISTER time).
+    #[must_use]
+    pub fn max_macro_body_size(&self) -> usize {
+        self.max_macro_body_size
+    }
+
+    /// Set the ceiling on a registered macro's BODY node count.
+    /// Tests bind low values (e.g. `4`) to pin the authoring-bomb
+    /// rejection shape without materializing a 16K-node blob;
+    /// consumers that author deep proven macro-body templates can
+    /// raise it. [`usize::MAX`] admits any lawful body (the ceiling
+    /// is effectively lifted). Zero is admitted and rejects every
+    /// non-empty body immediately (a `Nil` body is 1 node, so the
+    /// smallest lawful body is still rejected under a zero
+    /// ceiling) — useful for contract-tests that assert "this
+    /// expander refuses every registration."
+    pub fn set_max_macro_body_size(&mut self, size: usize) {
+        self.max_macro_body_size = size;
     }
 
     pub fn with_macros<I: IntoIterator<Item = MacroDef>>(defs: I) -> Result<Self> {
@@ -1040,6 +1123,27 @@ impl Expander {
     /// pleme-io peer of that registration entry point on the macro-table
     /// algebra.
     pub fn register_macro_def(&mut self, def: MacroDef) -> Result<()> {
+        // Reject an authoring-bomb `(defmacro huge (x) `<template-of-
+        // N-million-nodes>)` at the REGISTRATION boundary — the
+        // PIPELINE-STAGE peer of the EXPAND-time output-size gate in
+        // `expand_with_depth`. Fires BEFORE `compile_template` walks
+        // the body or `self.macros.insert` lands the entry, so a
+        // failed registration leaves BOTH tables exactly as they
+        // were (no partial-write window in which the body-size
+        // rejection happened but the template pre-compile already
+        // consumed cycles or the macros table already carries the
+        // over-ceiling entry). Keyed on `>` rather than `>=` so
+        // `max_macro_body_size` names the LARGEST admissible body —
+        // equality is admitted, only strict overrun rejects — same
+        // posture the expand-time output-size gate holds.
+        let body_size = def.body.node_count();
+        if body_size > self.max_macro_body_size {
+            return Err(LispError::MacroBodySizeExceeded {
+                macro_name: def.name.clone(),
+                size: body_size,
+                limit: self.max_macro_body_size,
+            });
+        }
         if self.compile_templates {
             self.templates
                 .insert(def.name.clone(), compile_template(&def)?);
@@ -12815,5 +12919,253 @@ mod tests {
             }
             other => panic!("expected ExpansionSizeExceeded, got: {other:?}"),
         }
+    }
+
+    // ── max_macro_body_size: REGISTRATION-time body-size ceiling ──────
+    // Peer to depth (recursion length) + cache (memoization width) +
+    // expansion size (single-`apply` OUTPUT size) one PIPELINE-STAGE
+    // axis over — the three prior guards fire at EXPAND time; this
+    // one fires at REGISTER time. Closes the expander's RESOURCE
+    // surface at a fourth typed dimension across two pipeline stages.
+
+    #[test]
+    fn expander_default_max_macro_body_size_is_the_module_constant() {
+        // Both constructors seed `max_macro_body_size` from the
+        // module constant — a regression that drifts one
+        // constructor's default from the constant (e.g. a hardcoded
+        // `16_384` at ONE site with the other left uninitialized
+        // after a `Default` derive addition) fails this pin. Peer
+        // to the `expander_default_max_expansion_{depth,size}_is_the_module_constant`
+        // pins one PIPELINE-STAGE axis over.
+        assert_eq!(
+            Expander::new().max_macro_body_size(),
+            DEFAULT_MAX_MACRO_BODY_SIZE
+        );
+        assert_eq!(
+            Expander::new_substitute_only().max_macro_body_size(),
+            DEFAULT_MAX_MACRO_BODY_SIZE
+        );
+        assert_eq!(DEFAULT_MAX_MACRO_BODY_SIZE, 16_384);
+    }
+
+    #[test]
+    fn set_max_macro_body_size_takes_effect_on_subsequent_register() {
+        // Setter mirrors accessor — a regression that ever forgets to
+        // write through to the field, or writes to a shadow field the
+        // accessor does not read, fails this pin. Peer to the
+        // setter/accessor coherence pins on the depth + cache +
+        // expansion-size axes.
+        let mut e = Expander::new();
+        e.set_max_macro_body_size(64);
+        assert_eq!(e.max_macro_body_size(), 64);
+    }
+
+    #[test]
+    fn register_macro_body_bomb_rejects_at_body_size_limit_bytecode_path() {
+        // `(defmacro huge (x) `(list a b c d e))` has body
+        // `` `(list a b c d e) `` — a `Sexp::Quasiquote` wrapping a
+        // list of 6 nodes (outer List + 5 children); the outer
+        // quasi-quote wrapper adds one → 8 nodes total for
+        // `def.body.node_count()`. With a ceiling of `4` this
+        // crosses the REGISTRATION-time BODY-SIZE threshold and the
+        // expander returns a typed `LispError::MacroBodySizeExceeded`
+        // with `macro_name`, `size`, and `limit` all populated. Peer
+        // to `expand_expansion_bomb_rejects_at_size_limit_bytecode_path`
+        // one PIPELINE-STAGE axis over.
+        let mut e = Expander::new();
+        e.set_max_macro_body_size(4);
+        let forms = read("(defmacro huge (x) `(list a b c d e))").unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        match err {
+            LispError::MacroBodySizeExceeded {
+                macro_name,
+                size,
+                limit,
+            } => {
+                assert_eq!(macro_name, "huge");
+                assert_eq!(size, 8);
+                assert_eq!(limit, 4);
+            }
+            other => panic!("expected MacroBodySizeExceeded, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn register_macro_body_bomb_rejects_at_body_size_limit_substitute_path() {
+        // The substitute strategy shares the same
+        // `register_macro_def` outer registration entry with the
+        // bytecode strategy, so the REGISTRATION-time BODY-SIZE
+        // ceiling fires at the SAME gate regardless of which
+        // apply-layer is active. The pin makes that shared-registration
+        // property structural: a regression that ever branches the
+        // body-size guard on strategy (e.g. moves it into the
+        // `compile_templates` arm alone) fails this test on the
+        // substitute expander. Peer to
+        // `expand_expansion_bomb_rejects_at_size_limit_substitute_path`
+        // one PIPELINE-STAGE axis over.
+        let mut e = Expander::new_substitute_only();
+        e.set_max_macro_body_size(4);
+        let forms = read("(defmacro huge (x) `(list a b c d e))").unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        match err {
+            LispError::MacroBodySizeExceeded {
+                macro_name,
+                size,
+                limit,
+            } => {
+                assert_eq!(macro_name, "huge");
+                assert_eq!(size, 8);
+                assert_eq!(limit, 4);
+            }
+            other => panic!("expected MacroBodySizeExceeded, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn register_macro_body_at_ceiling_admits() {
+        // `(defmacro twice (x) `(list ,x))` has body
+        // `` `(list ,x) `` — `Sexp::Quasiquote` wrapping a 3-node
+        // list (List + `list` atom + `,x` unquote which is
+        // 1 + inner atom = 2 nodes) = 1 + (1 + 1 + 2) = 5 nodes.
+        // With a ceiling of `5` the body sits AT the ceiling
+        // (`<=` admits equality; only `>` rejects), so the
+        // registration succeeds and the subsequent expansion
+        // proceeds normally. Fail-before/pass-after negative
+        // control for the body-bomb rejection tests: a regression
+        // that ever rejected at-ceiling bodies would fail this pin.
+        let mut e = Expander::new();
+        e.set_max_macro_body_size(5);
+        let forms = read("(defmacro twice (x) `(list ,x)) (twice hey)").unwrap();
+        let out = e.expand_program(forms).unwrap();
+        assert_eq!(out[0], parse("(list hey)"));
+    }
+
+    #[test]
+    fn register_failure_leaves_both_tables_pristine() {
+        // A rejected registration MUST leave BOTH `self.macros`
+        // AND `self.templates` exactly as they were — no
+        // partial-write window in which one table carries the
+        // over-ceiling entry while the other does not, or in
+        // which the template pre-compile already ran. This pin
+        // catches a regression that ever moves the body-size
+        // gate below `self.templates.insert` or below
+        // `self.macros.insert`.
+        let mut e = Expander::new();
+        e.set_max_macro_body_size(4);
+        let forms = read("(defmacro huge (x) `(list a b c d e))").unwrap();
+        assert!(e.expand_program(forms).is_err());
+        assert!(
+            !e.has("huge"),
+            "macros table must stay pristine after rejection"
+        );
+        assert_eq!(e.len(), 0);
+    }
+
+    #[test]
+    fn macro_body_size_exceeded_position_is_none() {
+        // The variant joins the non-positional cohort — the
+        // offending macro's byte offset is not what a body-bomb
+        // diagnostic anchors to; the (offending macro name,
+        // observed body size, configured ceiling) triple is.
+        // This pin keeps the variant in the `position() -> None`
+        // cohort so a future span-carrying edit lands the field
+        // in ONE place across every non-positional variant
+        // simultaneously. Peer to
+        // `expansion_{depth,size}_exceeded_position_is_none` one
+        // PIPELINE-STAGE axis over.
+        let err = LispError::MacroBodySizeExceeded {
+            macro_name: "huge".to_string(),
+            size: 512,
+            limit: 256,
+        };
+        assert_eq!(err.position(), None);
+    }
+
+    #[test]
+    fn macro_body_size_exceeded_display_matches_typed_variant_shape() {
+        // Display projection carries `macro_name`, `size`, AND
+        // `limit`, so authoring surfaces that substring-grep the
+        // rendered diagnostic (`tatara-check`, REPL, LSP) see
+        // ALL THREE halves at the variant boundary and never need
+        // to substring-parse free-form text to recover the
+        // identity of the offending macro, the observed body
+        // size, or the ceiling it breached. Peer to
+        // `expansion_size_exceeded_display_matches_typed_variant_shape`
+        // one PIPELINE-STAGE axis over.
+        let err = LispError::MacroBodySizeExceeded {
+            macro_name: "huge".to_string(),
+            size: 512,
+            limit: 256,
+        };
+        let rendered = err.to_string();
+        assert!(rendered.contains("huge"), "rendered: {rendered}");
+        assert!(rendered.contains("512"), "rendered: {rendered}");
+        assert!(rendered.contains("256"), "rendered: {rendered}");
+        assert!(
+            rendered.contains("macro body size exceeded"),
+            "rendered: {rendered}"
+        );
+    }
+
+    #[test]
+    fn lawful_macro_body_within_ceiling_registers_and_expands() {
+        // A lawful hand-authored macro body sits well below any
+        // realistic ceiling — the default `DEFAULT_MAX_MACRO_BODY_SIZE`
+        // is deliberately generous so operators never brush it on
+        // real authoring workloads. This pin locks the default
+        // ceiling's non-interference posture: a regression that
+        // ever lowered the default enough to reject the reference
+        // `(defmacro when (cond x) `(if ,cond ,x))` shape would
+        // fail here.
+        let mut e = Expander::new();
+        let forms = read(
+            "(defmacro when (cond x) `(if ,cond ,x))
+             (when #t hey)",
+        )
+        .unwrap();
+        let out = e.expand_program(forms).unwrap();
+        assert_eq!(out[0], parse("(if #t hey)"));
+    }
+
+    #[test]
+    fn register_macro_def_direct_call_respects_body_size_ceiling() {
+        // `register_macro_def` is the substrate primitive both
+        // `expand_program`'s `defmacro` recognition AND
+        // `with_macros`'s bulk load route through. The body-size
+        // ceiling fires on the primitive itself, not on any one
+        // consumer — a regression that ever moved the gate into
+        // `expand_program`'s arm alone would fail this pin.
+        let mut e = Expander::new();
+        e.set_max_macro_body_size(4);
+        let def = MacroDef {
+            name: "huge".to_string(),
+            params: MacroParams {
+                required: vec!["x".to_string()],
+                optional: Vec::new(),
+                rest: None,
+            },
+            body: Sexp::List(vec![
+                Sexp::Atom(crate::ast::Atom::Symbol("a".to_string())),
+                Sexp::Atom(crate::ast::Atom::Symbol("b".to_string())),
+                Sexp::Atom(crate::ast::Atom::Symbol("c".to_string())),
+                Sexp::Atom(crate::ast::Atom::Symbol("d".to_string())),
+                Sexp::Atom(crate::ast::Atom::Symbol("e".to_string())),
+            ]),
+        };
+        // Body node_count: List(5 atoms) = 1 + 5 = 6 nodes.
+        let err = e.register_macro_def(def).unwrap_err();
+        match err {
+            LispError::MacroBodySizeExceeded {
+                macro_name,
+                size,
+                limit,
+            } => {
+                assert_eq!(macro_name, "huge");
+                assert_eq!(size, 6);
+                assert_eq!(limit, 4);
+            }
+            other => panic!("expected MacroBodySizeExceeded, got: {other:?}"),
+        }
+        assert!(!e.has("huge"));
     }
 }

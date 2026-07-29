@@ -44,6 +44,40 @@ use crate::error::{LispError, MacroDefHead, Result, TemplateInvariantKind, Unquo
 /// ceiling call [`Expander::set_max_expansion_depth`].
 pub const DEFAULT_MAX_EXPANSION_DEPTH: usize = 256;
 
+/// Default ceiling on the expansion cache's entry count. Peer to
+/// [`DEFAULT_MAX_EXPANSION_DEPTH`] one RESOURCE axis over on the
+/// expander surface — where the depth ceiling bounds RECURSION (a
+/// runaway macro's stack), this ceiling bounds MEMORY (the memoized
+/// `apply(macro, args)` result table). Pre-lift the cache was an
+/// unbounded [`HashMap`] shared across [`Expander`] clones via
+/// [`std::sync::Arc`]; a long-running host (REPL, LSP,
+/// `tatara-check`, MCP server) that expanded many distinct
+/// `(macro, args)` pairs would accrete cache entries without bound —
+/// the same below-floor resource-drift the depth ceiling closed on
+/// the recursion axis. Post-lift the [`Expander::apply`] insert path
+/// consults this ceiling before growing the cache; once the entry
+/// count reaches the ceiling, new expansions still succeed (the
+/// cache remains a pure PERFORMANCE optimization — never a
+/// CORRECTNESS gate) but skip cache insertion until the operator
+/// clears the cache via [`Expander::clear_cache`]. Consumers that
+/// need a tighter ceiling (embedded / test harnesses) call
+/// [`Expander::set_max_cache_entries`] with a lower cap; consumers
+/// that want unbounded caching (batch compilation runs where memory
+/// is not the concern) call it with [`usize::MAX`].
+///
+/// `8192` is large enough that lawful macro authoring — a small
+/// closed set of macros, each expanded against a bounded set of
+/// argument shapes — never brushes the ceiling on a session-length
+/// workload (a typescape with 20 macros × 32 distinct arg-shapes ×
+/// several call sites still sits under 1K entries), and small
+/// enough that a pathological expansion loop (a macro emitting
+/// unique arg-shapes on every call) is rejected before it exhausts
+/// process memory. The default is deliberately generous — the
+/// ceiling exists to prevent unbounded drift, not to force operators
+/// to tune it. Consumers that want a tighter policy configure it
+/// explicitly.
+pub const DEFAULT_MAX_CACHE_ENTRIES: usize = 8192;
+
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
 /// its manual `Hash` impl — no serde_json round-trip per cache lookup.
 type CacheKey = (String, u64);
@@ -717,6 +751,18 @@ pub struct Expander {
     /// lower via [`Self::set_max_expansion_depth`] to pin the rejection
     /// shape without paying for a 256-round walk.
     max_expansion_depth: usize,
+    /// Ceiling on the [`Self::cache`] entry count. Peer to
+    /// [`Self::max_expansion_depth`] one RESOURCE axis over — where the
+    /// depth ceiling bounds RECURSION, this ceiling bounds MEMORY. When
+    /// [`Self::apply`] would otherwise insert a fresh `(name, args)`
+    /// memoization onto a cache already holding `max_cache_entries`
+    /// entries, the insert is SKIPPED and the caller receives the
+    /// freshly-computed result verbatim — the cache remains a pure
+    /// PERFORMANCE optimization and never gates CORRECTNESS. Default
+    /// [`DEFAULT_MAX_CACHE_ENTRIES`]; tests set it lower via
+    /// [`Self::set_max_cache_entries`] to pin the bounded-cache
+    /// contract without paying for an 8K-entry walk.
+    max_cache_entries: usize,
 }
 
 impl Expander {
@@ -729,6 +775,7 @@ impl Expander {
             cache: Arc::new(Mutex::new(HashMap::new())),
             cache_enabled: true,
             max_expansion_depth: DEFAULT_MAX_EXPANSION_DEPTH,
+            max_cache_entries: DEFAULT_MAX_CACHE_ENTRIES,
         }
     }
 
@@ -742,6 +789,7 @@ impl Expander {
             cache: Arc::new(Mutex::new(HashMap::new())),
             cache_enabled: false,
             max_expansion_depth: DEFAULT_MAX_EXPANSION_DEPTH,
+            max_cache_entries: DEFAULT_MAX_CACHE_ENTRIES,
         }
     }
 
@@ -785,6 +833,27 @@ impl Expander {
     /// macro."
     pub fn set_max_expansion_depth(&mut self, depth: usize) {
         self.max_expansion_depth = depth;
+    }
+
+    /// The configured ceiling on the expansion cache's entry count.
+    /// Defaults to [`DEFAULT_MAX_CACHE_ENTRIES`]. Peer to
+    /// [`Self::max_expansion_depth`] one RESOURCE axis over.
+    #[must_use]
+    pub fn max_cache_entries(&self) -> usize {
+        self.max_cache_entries
+    }
+
+    /// Set the ceiling on the expansion cache's entry count. Tests bind
+    /// low values (e.g. `2`) to pin the bounded-cache contract without
+    /// paying for an 8K-entry walk; consumers that expand many distinct
+    /// argument shapes can raise it. Zero is admitted and effectively
+    /// disables caching (every fresh `(name, args)` pair skips the
+    /// insert path) — useful for contract-tests that assert "this
+    /// expander realizes without ever caching." [`usize::MAX`] is the
+    /// unbounded-cache mode for batch compilation runs where memory is
+    /// not the concern.
+    pub fn set_max_cache_entries(&mut self, cap: usize) {
+        self.max_cache_entries = cap;
     }
 
     pub fn with_macros<I: IntoIterator<Item = MacroDef>>(defs: I) -> Result<Self> {
@@ -2048,9 +2117,18 @@ impl Expander {
             substitute(def.template_body(), &bindings)?
         };
 
-        // Populate cache on miss.
+        // Populate cache on miss — capped by `max_cache_entries` so the
+        // memoization table cannot drift unboundedly across a long-
+        // running host session. When the cap is reached the freshly-
+        // computed result is returned verbatim; correctness is
+        // unaffected because caching is a pure PERFORMANCE optimization
+        // (the miss path always recomputes the same value the cache
+        // would have returned).
         if let Some(key) = cache_key {
-            self.cache.lock().unwrap().insert(key, result.clone());
+            let mut cache = self.cache.lock().unwrap();
+            if cache.len() < self.max_cache_entries {
+                cache.insert(key, result.clone());
+            }
         }
         Ok(result)
     }
@@ -12254,6 +12332,175 @@ mod tests {
         assert!(
             rendered.contains("macro expansion depth exceeded"),
             "rendered: {rendered}"
+        );
+    }
+
+    // ── max_cache_entries: bounded-memoization ceiling ──────────────────
+
+    #[test]
+    fn expander_default_max_cache_entries_is_the_module_constant() {
+        // Both cache-enabling constructors seed `max_cache_entries` from
+        // the module constant — a regression that drifts one
+        // constructor's default from the constant (e.g. a hardcoded
+        // `8192` at ONE site with the other left uninitialized after a
+        // `Default` derive addition) fails this pin. The peer
+        // constructor `new_substitute_only` seeds the same ceiling so
+        // the field stays initialized under `#[derive(Clone)]` (a
+        // zero-initialized clone would be a silent bifurcation of the
+        // cache-ceiling surface).
+        assert_eq!(
+            Expander::new().max_cache_entries(),
+            DEFAULT_MAX_CACHE_ENTRIES
+        );
+        assert_eq!(
+            Expander::new_substitute_only().max_cache_entries(),
+            DEFAULT_MAX_CACHE_ENTRIES
+        );
+        assert_eq!(DEFAULT_MAX_CACHE_ENTRIES, 8192);
+    }
+
+    #[test]
+    fn set_max_cache_entries_takes_effect_on_subsequent_expand() {
+        // Setter mirrors accessor — a regression that ever forgets to
+        // write through to the field, or writes to a shadow field the
+        // accessor does not read, fails this pin.
+        let mut e = Expander::new();
+        e.set_max_cache_entries(7);
+        assert_eq!(e.max_cache_entries(), 7);
+    }
+
+    #[test]
+    fn expand_cache_size_is_bounded_by_max_cache_entries() {
+        // Five distinct `(name, args)` pairs expanded against a cache
+        // ceiling of `2` populate the cache with EXACTLY the first two
+        // insertions and skip the remaining three. Every expansion
+        // still returns the correct result — the cache is a pure
+        // PERFORMANCE optimization; the ceiling gates memoization,
+        // never correctness. LOAD-BEARING true-arm catch on the
+        // bounded-cache contract: a regression that ignored the
+        // ceiling (unbounded insert) would land `cache_size() == 5`
+        // here; a regression that skipped insertion entirely (broken
+        // cache) would still see correct expansion output but would
+        // fail the interior `cache_size() == 2` pin.
+        let mut e = Expander::new();
+        e.set_max_cache_entries(2);
+        let src = "
+            (defmacro id (x) `,x)
+            (id one)
+            (id two)
+            (id three)
+            (id four)
+            (id five)
+        ";
+        let out = e.expand_program(read(src).unwrap()).unwrap();
+        assert_eq!(out.len(), 5);
+        assert_eq!(out[0], parse("one"));
+        assert_eq!(out[1], parse("two"));
+        assert_eq!(out[2], parse("three"));
+        assert_eq!(out[3], parse("four"));
+        assert_eq!(out[4], parse("five"));
+        assert_eq!(
+            e.cache_size(),
+            2,
+            "cache grew past the max_cache_entries ceiling",
+        );
+    }
+
+    #[test]
+    fn expand_zero_cache_ceiling_disables_caching_effectively() {
+        // Zero ceiling admits every fresh `(name, args)` pair through
+        // the compute path and never grows the cache — the same
+        // observable behavior as `set_cache_enabled(false)` but
+        // reached through the ceiling knob. Correctness is preserved:
+        // the miss path always recomputes the same value the cache
+        // would have returned, so an operator that dials the ceiling
+        // to `0` (e.g. to hunt a cache-related regression) never
+        // bifurcates the output surface. Peer to
+        // `set_max_expansion_depth(0)` one RESOURCE axis over — both
+        // ceilings admit the zero endpoint as a well-defined
+        // extremum.
+        let mut e = Expander::new();
+        e.set_max_cache_entries(0);
+        let src = "
+            (defmacro id (x) `,x)
+            (id one)
+            (id two)
+        ";
+        let out = e.expand_program(read(src).unwrap()).unwrap();
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0], parse("one"));
+        assert_eq!(out[1], parse("two"));
+        assert_eq!(
+            e.cache_size(),
+            0,
+            "zero cache ceiling grew the cache — the ceiling must be respected on every insert",
+        );
+    }
+
+    #[test]
+    fn expand_cached_hits_survive_past_the_ceiling() {
+        // Once a `(name, args)` pair sits IN the cache under the
+        // ceiling, subsequent calls hit it — the ceiling only gates
+        // NEW-KEY inserts, never lookups. This test seeds the cache
+        // with two entries under a ceiling of `2`, then re-issues the
+        // SAME calls to prove the cached hits still fire (cache_size
+        // stays at `2` because no new keys are inserted, and the
+        // expansion output is stable). LOAD-BEARING true-arm catch
+        // that the ceiling gates the INSERT path alone — a regression
+        // that ever refused cache LOOKUPS at the ceiling would
+        // silently bifurcate correctness on the second call.
+        let mut e = Expander::new();
+        e.set_max_cache_entries(2);
+        let src = "
+            (defmacro id (x) `,x)
+            (id one)
+            (id two)
+            (id one)
+            (id two)
+        ";
+        let out = e.expand_program(read(src).unwrap()).unwrap();
+        assert_eq!(out.len(), 4);
+        assert_eq!(out[0], parse("one"));
+        assert_eq!(out[1], parse("two"));
+        assert_eq!(out[2], parse("one"));
+        assert_eq!(out[3], parse("two"));
+        assert_eq!(
+            e.cache_size(),
+            2,
+            "cache grew past the max_cache_entries ceiling on repeated (name, args) pairs",
+        );
+    }
+
+    #[test]
+    fn clear_cache_reopens_the_insert_path_after_the_ceiling_was_hit() {
+        // After the cache reaches its ceiling and subsequent inserts
+        // are skipped, `clear_cache` empties the memo and RE-OPENS the
+        // insert path — the next expansion populates the freshly-
+        // empty cache without operator intervention on the ceiling
+        // itself. The pin binds the operator-facing recovery path
+        // documented on [`DEFAULT_MAX_CACHE_ENTRIES`]: "skip cache
+        // insertion until the operator clears the cache via
+        // [`Expander::clear_cache`]".
+        let mut e = Expander::new();
+        e.set_max_cache_entries(1);
+        let src_fill = "
+            (defmacro id (x) `,x)
+            (id one)
+            (id two)
+        ";
+        let _ = e.expand_program(read(src_fill).unwrap()).unwrap();
+        assert_eq!(e.cache_size(), 1, "cache did not stop at the ceiling");
+        e.clear_cache();
+        assert_eq!(e.cache_size(), 0, "clear_cache did not empty the memo");
+        let out = e
+            .expand_program(read("(defmacro id (x) `,x) (id three)").unwrap())
+            .unwrap();
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0], parse("three"));
+        assert_eq!(
+            e.cache_size(),
+            1,
+            "clear_cache did not re-open the insert path — the cache should have accepted the fresh (id, three) pair",
         );
     }
 }

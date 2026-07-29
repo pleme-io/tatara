@@ -469,14 +469,32 @@ fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<Clos
             continue;
         };
         list.parse_nested_meta(|meta| {
-            if meta.path.is_ident("via") {
-                via = Some(read_meta_lit_str(&meta)?);
-                Ok(())
-            } else if meta.path.is_ident("unknown") {
-                unknown = Some(read_meta_lit_str(&meta)?);
-                Ok(())
-            } else if meta.path.is_ident("no_from_str") {
-                no_from_str = true;
+            // Three-arm × three-arm × one-arm dispatch collapses onto
+            // the two sub-key primitives:
+            //   - `try_lit_str_sub_key` closes the (sub-key ident × `=
+            //     <LitStr>` payload × `Option<String>` slot mutation)
+            //     shape for `via`, `unknown`, `set_label` — the three
+            //     historically-duplicated string-valued arms.
+            //   - `try_bool_flag_sub_key` closes the (sub-key ident ×
+            //     bare-flag ident × `bool` slot flip) shape for
+            //     `no_from_str`, `display` — the two historically-
+            //     duplicated bare-flag arms.
+            // Short-circuit `||` evaluation preserves the first-match-
+            // wins ordering the previous `if / else if` chain carried;
+            // `?` unwraps the primitive's `syn::Result<bool>` to the
+            // matched bit so the outer chain composes cleanly across
+            // both primitive shapes. A future `#[closed_set(alias =
+            // "…")]` string-valued key composes as ONE `||` term
+            // against `try_lit_str_sub_key`; a future
+            // `#[closed_set(no_debug)]` bare-flag key composes as ONE
+            // `||` term against `try_bool_flag_sub_key` — no per-key
+            // scaffold, no drift.
+            if try_lit_str_sub_key(&meta, "via", &mut via)?
+                || try_lit_str_sub_key(&meta, "unknown", &mut unknown)?
+                || try_lit_str_sub_key(&meta, "set_label", &mut set_label)?
+                || try_bool_flag_sub_key(&meta, "no_from_str", &mut no_from_str)?
+                || try_bool_flag_sub_key(&meta, "display", &mut display)?
+            {
                 Ok(())
             } else if meta.path.is_ident("generate_unknown") {
                 // Both bare `generate_unknown` (auto-derived label)
@@ -490,17 +508,15 @@ fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<Clos
                 // already consumed the `=`, so it routes through the
                 // stream-level `parse_lit_str` primitive rather than
                 // the meta-level `read_meta_lit_str` (which would
-                // double-consume `.value()`).
+                // double-consume `.value()`) — and stays outside the
+                // `try_lit_str_sub_key` primitive's contract for the
+                // same reason (the primitive re-consumes `.value()`
+                // internally, incompatible with this arm's outer
+                // flag-or-value dispatch).
                 generate_unknown = match meta.value() {
                     Ok(value) => GenerateUnknown::Explicit(parse_lit_str(value)?),
                     Err(_) => GenerateUnknown::Auto,
                 };
-                Ok(())
-            } else if meta.path.is_ident("display") {
-                display = true;
-                Ok(())
-            } else if meta.path.is_ident("set_label") {
-                set_label = Some(read_meta_lit_str(&meta)?);
                 Ok(())
             } else {
                 Err(meta.error(
@@ -517,6 +533,120 @@ fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<Clos
         display,
         set_label,
     })
+}
+
+/// `parse_nested_meta` callback primitive: if `meta`'s sub-key path is
+/// `key`, read its `= <LitStr>` payload as an owned `String`, write
+/// `Some(<value>)` to `slot`, and return `Ok(true)`; otherwise leave
+/// `slot` untouched and return `Ok(false)`.
+///
+/// Lifts the byte-for-byte identical three-line
+///
+/// ```ignore
+/// } else if meta.path.is_ident("<key>") {
+///     <slot> = Some(read_meta_lit_str(&meta)?);
+///     Ok(())
+/// }
+/// ```
+///
+/// arm that pre-lift lived at THREE sites inside
+/// [`parse_closed_set_attrs`] (the `via`, `unknown`, and `set_label`
+/// string-valued sub-keys). Post-lift each site composes onto ONE `||`
+/// term of the dispatch chain — a future single-keyed string-valued
+/// sub-key extension (a `#[closed_set(alias = "…")]` peer, a lifted
+/// `keyword` axis pulled up from `#[tatara(…)]`, an operator-authored
+/// `prefix = "…"` axis) adds as ONE `||` term against the same
+/// substrate rather than as a fresh copy of the arm.
+///
+/// The `Ok(bool)` return shape lets callers chain arms via short-
+/// circuit `||`: `try_lit_str_sub_key(&meta, "via", &mut via)? || ...`.
+/// The `?` unwraps the inner `syn::Result<bool>` to the matched bit,
+/// and the `||` operator's laziness preserves the historic first-match-
+/// wins evaluation order without touching the trailing slots.
+///
+/// Sibling of [`try_bool_flag_sub_key`] one PAYLOAD-SHAPE axis over:
+/// the string-valued arm (this primitive) takes an
+/// `&mut Option<String>` slot and reads a `= <LitStr>` payload; the
+/// bare-flag arm (the sibling) takes an `&mut bool` slot and reads no
+/// payload. The `parse_lit_str` / `read_meta_lit_str` pair a few file-
+/// sections up carries the same primitive / meta-level wrapper motif —
+/// the derive crate's convention for two-shape sub-key primitives.
+///
+/// Theory grounding: THEORY.md §VI.1 — generation over composition.
+/// The three-times-rule signal fires at three sites of the string-
+/// valued sub-key idiom; the primitive names the composition as ONE
+/// substrate entry so a new arm of the same shape adds as ONE line, and
+/// a diagnostic upgrade (e.g. a `syn::Error::new_spanned(&meta.path,
+/// "expected LitStr, got LitInt")` sharpening on the `LitStr::parse`
+/// failure) lands at ONE line inherited by every existing caller.
+fn try_lit_str_sub_key(
+    meta: &syn::meta::ParseNestedMeta<'_>,
+    key: &str,
+    slot: &mut Option<String>,
+) -> syn::Result<bool> {
+    if meta.path.is_ident(key) {
+        *slot = Some(read_meta_lit_str(meta)?);
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+/// `parse_nested_meta` callback primitive: if `meta`'s sub-key path is
+/// `key`, flip `flag` to `true` and return `Ok(true)`; otherwise leave
+/// `flag` untouched and return `Ok(false)`.
+///
+/// Lifts the byte-for-byte identical three-line
+///
+/// ```ignore
+/// } else if meta.path.is_ident("<key>") {
+///     <flag> = true;
+///     Ok(())
+/// }
+/// ```
+///
+/// arm that pre-lift lived at TWO sites inside
+/// [`parse_closed_set_attrs`] (the `no_from_str` and `display` bare-
+/// flag sub-keys). Post-lift each site composes onto ONE `||` term of
+/// the dispatch chain — a future single-keyed bare-flag sub-key
+/// extension (a `#[closed_set(no_debug)]` peer, a `no_partial_eq`
+/// axis, a `no_hash` axis) adds as ONE `||` term against the same
+/// substrate rather than as a fresh copy of the arm.
+///
+/// Returns `syn::Result<bool>` — not `bool` — to homogenize the return
+/// shape with the sibling [`try_lit_str_sub_key`] so callers chain
+/// mixed arms via one `?` cadence: `try_lit_str_sub_key(&meta, "via",
+/// &mut via)? || try_bool_flag_sub_key(&meta, "display", &mut
+/// display)?`. Today the primitive's `Ok` arm cannot fail (a bare-flag
+/// match has no payload to parse), but the `syn::Result` wrapper
+/// preserves the composition uniformly and admits a future sharpening
+/// (e.g. surfacing a `syn::Error` on a stray `= <value>` payload after
+/// a bare-flag ident) without changing the primitive's signature or
+/// touching every caller's `?` cadence.
+///
+/// Sibling of [`try_lit_str_sub_key`] one PAYLOAD-SHAPE axis over — see
+/// that primitive's doc for the sibling-shape motif that mirrors the
+/// [`parse_lit_str`] / [`read_meta_lit_str`] pair.
+///
+/// Theory grounding: THEORY.md §VI.1 — generation over composition.
+/// The two sites of the bare-flag sub-key idiom cross the three-times-
+/// rule signal when composed with the sibling string-valued primitive
+/// (five sites in aggregate on the SAME `parse_nested_meta` callback);
+/// the two primitives together name the (sub-key ident × slot-shape)
+/// dispatch matrix as TWO substrate entries so every future closed-
+/// set sub-key of either shape adds as ONE `||` term rather than as
+/// a fresh scaffold.
+fn try_bool_flag_sub_key(
+    meta: &syn::meta::ParseNestedMeta<'_>,
+    key: &str,
+    flag: &mut bool,
+) -> syn::Result<bool> {
+    if meta.path.is_ident(key) {
+        *flag = true;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
 }
 
 #[proc_macro_derive(TataraDomain, attributes(tatara))]
@@ -2661,5 +2791,227 @@ mod parse_closed_set_attrs_tests {
         )
         .expect("unknown override parses OK");
         assert_eq!(cfg.unknown, "MyBespoke");
+    }
+}
+
+#[cfg(test)]
+mod try_sub_key_tests {
+    //! Contract tests for the [`try_lit_str_sub_key`] +
+    //! [`try_bool_flag_sub_key`] sibling primitives — the two-arm
+    //! `parse_nested_meta`-callback dispatch matrix
+    //! [`parse_closed_set_attrs`] threads through for its five
+    //! duplicated (three string-valued + two bare-flag) sub-key arms.
+    //!
+    //! The sibling `parse_closed_set_attrs_tests` module closes every
+    //! caller-specific corner via the SIX-key aggregating reader. This
+    //! module pins the two primitives' OWN generic contracts at their
+    //! natural corners:
+    //!   1. matching sub-key AND payload → slot mutation + `Ok(true)`;
+    //!   2. non-matching sub-key → slot untouched + `Ok(false)`;
+    //!   3. matching sub-key AND malformed payload (string-valued arm
+    //!      only) → syn::Error propagated + slot untouched;
+    //!   4. slot-mutation locality — only the primitive whose sub-key
+    //!      matches writes its slot; the other slots remain at their
+    //!      pre-call values, pinning the short-circuit `||` dispatch
+    //!      chain in [`parse_closed_set_attrs`] as safe under mixed
+    //!      calls.
+    //!
+    //! A regression to any of the four axes surfaces AT ONE
+    //! test-module boundary here rather than as silent drift across
+    //! every caller.
+
+    use super::{try_bool_flag_sub_key, try_lit_str_sub_key};
+    use syn::parse::Parser;
+    use syn::{Attribute, Meta};
+
+    fn nested_meta_list(attr_src: &str) -> syn::MetaList {
+        // Extract the SINGLE `Meta::List` — i.e., the
+        // `#[<attr_ident>(<sub_key> [= <value>] ...)]` payload — from an
+        // input attribute source. The two primitives take a
+        // `&ParseNestedMeta` handle, which is produced by the outer
+        // `MetaList::parse_nested_meta` walk; the driver below then
+        // exercises each callback through that walk.
+        let attrs: Vec<Attribute> = Attribute::parse_outer
+            .parse_str(attr_src)
+            .expect("valid attribute syntax");
+        let Meta::List(list) = attrs
+            .into_iter()
+            .next()
+            .expect("attribute list is non-empty")
+            .meta
+        else {
+            panic!("expected Meta::List (#[<attr>(...)]) shape");
+        };
+        list
+    }
+
+    #[test]
+    fn try_lit_str_sub_key_on_matching_ident_writes_slot_and_reports_matched() {
+        // Positive control for the string-valued arm — the primitive's
+        // MATCHING path: `#[myattr(mykey = "hello")]` with a
+        // `try_lit_str_sub_key(_, "mykey", _)` call writes
+        // `Some("hello".to_string())` to the slot and returns
+        // `Ok(true)`. Pin BOTH the slot mutation AND the return-bit so
+        // a regression that (say) flipped the return-bit to `false`
+        // (breaking the outer `||` dispatch's first-match-wins
+        // ordering) or wrote `None` (silently dropping the payload)
+        // surfaces here.
+        let list = nested_meta_list(r#"#[myattr(mykey = "hello")]"#);
+        let mut slot: Option<String> = None;
+        let mut matched: Option<bool> = None;
+        list.parse_nested_meta(|meta| {
+            matched = Some(try_lit_str_sub_key(&meta, "mykey", &mut slot)?);
+            Ok(())
+        })
+        .expect("meta walk completes");
+        assert_eq!(matched, Some(true));
+        assert_eq!(slot, Some("hello".to_string()));
+    }
+
+    #[test]
+    fn try_lit_str_sub_key_on_non_matching_ident_leaves_slot_and_reports_not_matched() {
+        // Negative-ident control for the string-valued arm — the
+        // primitive's NON-MATCHING path: `#[myattr(other = "x")]`
+        // with a `try_lit_str_sub_key(_, "mykey", _)` call returns
+        // `Ok(false)` and DOES NOT touch the slot (the pre-call
+        // `None` survives). Load-bearing for the outer `||` dispatch
+        // in `parse_closed_set_attrs`: every non-matching primitive
+        // call MUST leave its slot untouched so the mutation is
+        // local to the matching arm alone. A regression that (say)
+        // eagerly cleared the slot on non-match would silently reset
+        // any previous attribute's contribution — this test surfaces
+        // that drift immediately.
+        let list = nested_meta_list(r#"#[myattr(other = "x")]"#);
+        let mut slot: Option<String> = Some("preexisting".to_string());
+        let mut matched: Option<bool> = None;
+        list.parse_nested_meta(|meta| {
+            matched = Some(try_lit_str_sub_key(&meta, "mykey", &mut slot)?);
+            // The `parse_nested_meta` walk stalls at the `=` of a
+            // value-carrying peer without an explicit drain — mirror
+            // the sibling `find_named_sub_key`'s defensive value-drain
+            // discipline so the outer walk can complete.
+            if !matched.expect("callback ran") {
+                if let Ok(value) = meta.value() {
+                    let _: syn::Result<syn::Expr> = value.parse();
+                }
+            }
+            Ok(())
+        })
+        .expect("meta walk completes");
+        assert_eq!(matched, Some(false));
+        assert_eq!(slot, Some("preexisting".to_string()));
+    }
+
+    #[test]
+    fn try_lit_str_sub_key_on_matching_ident_with_non_lit_str_payload_bails_via_read_meta_lit_str()
+    {
+        // Negative-typed control for the string-valued arm — the
+        // primitive's MATCHING ident BUT MALFORMED payload path:
+        // `#[myattr(mykey = 42)]` with a `try_lit_str_sub_key(_,
+        // "mykey", _)` call returns `Err(syn::Error)` via the
+        // underlying `read_meta_lit_str` primitive's `LitStr::parse`
+        // failing on the `LitInt`. The slot MUST remain untouched
+        // (the `*slot = Some(...)` write is gated behind the
+        // `read_meta_lit_str(meta)?` propagation). A regression that
+        // (say) reordered the slot-write ahead of the parse-error
+        // propagation would silently write a garbage / partial value
+        // — this test surfaces that drift immediately.
+        let list = nested_meta_list(r#"#[myattr(mykey = 42)]"#);
+        let mut slot: Option<String> = None;
+        let err = list
+            .parse_nested_meta(|meta| try_lit_str_sub_key(&meta, "mykey", &mut slot).map(|_| ()))
+            .expect_err("non-LitStr payload must surface a syn::Error");
+        assert!(
+            err.to_string().contains("expected string literal")
+                || err.to_string().contains("LitStr"),
+            "diagnostic must surface the LitStr shape gate, got {err:?}",
+        );
+        assert_eq!(
+            slot, None,
+            "slot must remain untouched when the payload-parse fails",
+        );
+    }
+
+    #[test]
+    fn try_bool_flag_sub_key_on_matching_bare_ident_flips_flag_and_reports_matched() {
+        // Positive control for the bare-flag arm — the primitive's
+        // MATCHING path: `#[myattr(myflag)]` with a
+        // `try_bool_flag_sub_key(_, "myflag", _)` call flips the flag
+        // to `true` and returns `Ok(true)`. Pin BOTH the flag flip
+        // AND the return-bit for the SAME reasons as the sibling
+        // string-valued positive test above.
+        let list = nested_meta_list("#[myattr(myflag)]");
+        let mut flag: bool = false;
+        let mut matched: Option<bool> = None;
+        list.parse_nested_meta(|meta| {
+            matched = Some(try_bool_flag_sub_key(&meta, "myflag", &mut flag)?);
+            Ok(())
+        })
+        .expect("meta walk completes");
+        assert_eq!(matched, Some(true));
+        assert!(flag);
+    }
+
+    #[test]
+    fn try_bool_flag_sub_key_on_non_matching_ident_leaves_flag_and_reports_not_matched() {
+        // Negative-ident control for the bare-flag arm — the
+        // primitive's NON-MATCHING path: `#[myattr(other)]` with a
+        // `try_bool_flag_sub_key(_, "myflag", _)` call returns
+        // `Ok(false)` and DOES NOT touch the flag (the pre-call
+        // `true` survives). Load-bearing for the outer `||` dispatch
+        // in `parse_closed_set_attrs`: every non-matching primitive
+        // call MUST leave its flag untouched so the mutation is
+        // local to the matching arm alone. A regression that (say)
+        // reset the flag to `false` on non-match would silently drop
+        // any previous attribute's contribution — this test
+        // surfaces that drift immediately.
+        let list = nested_meta_list("#[myattr(other)]");
+        let mut flag: bool = true;
+        let mut matched: Option<bool> = None;
+        list.parse_nested_meta(|meta| {
+            matched = Some(try_bool_flag_sub_key(&meta, "myflag", &mut flag)?);
+            Ok(())
+        })
+        .expect("meta walk completes");
+        assert_eq!(matched, Some(false));
+        assert!(
+            flag,
+            "flag must remain at its pre-call `true` value on non-match",
+        );
+    }
+
+    #[test]
+    fn short_circuit_or_chain_of_mixed_primitives_only_mutates_the_matching_slot() {
+        // The compounding proof: the two primitives compose safely on
+        // ONE `||` dispatch chain — the SAME shape
+        // [`parse_closed_set_attrs`] uses to collapse its five
+        // duplicated arms. Given `#[myattr(display)]`, a chain
+        // `try_lit_str_sub_key("via")? || try_lit_str_sub_key("unknown")?
+        // || try_bool_flag_sub_key("no_from_str")? ||
+        // try_bool_flag_sub_key("display")?` MUST flip ONLY the
+        // `display` flag and leave the other three slots untouched.
+        // Pin the mutation-locality contract: the `||` operator's
+        // laziness stops evaluation at the first matching primitive,
+        // AND every non-matching primitive that DID run left its slot
+        // untouched. A regression to EITHER discipline would surface
+        // here.
+        let list = nested_meta_list("#[myattr(display)]");
+        let mut via: Option<String> = None;
+        let mut unknown: Option<String> = None;
+        let mut no_from_str: bool = false;
+        let mut display: bool = false;
+        list.parse_nested_meta(|meta| {
+            let matched = try_lit_str_sub_key(&meta, "via", &mut via)?
+                || try_lit_str_sub_key(&meta, "unknown", &mut unknown)?
+                || try_bool_flag_sub_key(&meta, "no_from_str", &mut no_from_str)?
+                || try_bool_flag_sub_key(&meta, "display", &mut display)?;
+            assert!(matched, "one of the four arms must match `display`");
+            Ok(())
+        })
+        .expect("meta walk completes");
+        assert_eq!(via, None);
+        assert_eq!(unknown, None);
+        assert!(!no_from_str);
+        assert!(display);
     }
 }

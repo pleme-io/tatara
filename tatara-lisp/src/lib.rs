@@ -41,7 +41,7 @@ pub mod interop;
 pub use compiler_spec::{
     load_from_disk, realize_in_memory, realize_to_disk, CompilerSpec, RealizedCompiler,
 };
-pub use domain::{DomainHandler, TataraDomain};
+pub use domain::{assert_tatara_domain_well_formed, DomainHandler, TataraDomain};
 // Derive macro — same name as the trait, different namespace (procedural
 // macros vs. types), so they coexist cleanly under one import.
 pub use tatara_lisp_derive::TataraDomain as DeriveTataraDomain;

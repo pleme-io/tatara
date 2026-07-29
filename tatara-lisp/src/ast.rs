@@ -15406,6 +15406,74 @@ impl Sexp {
     pub fn prefix(&self) -> Option<&'static str> {
         self.shape().prefix()
     }
+
+    /// Total structural node count of the outer [`Sexp`] value — one
+    /// node per outer-algebra arm plus the recursive node count of
+    /// each child. [`Self::Nil`] and [`Self::Atom`] contribute one
+    /// node apiece (the outer arm itself); [`Self::List`] contributes
+    /// one node for the outer arm plus the summed node count of each
+    /// child element; the four homoiconic wrapper arms
+    /// ([`Self::Quote`], [`Self::Quasiquote`], [`Self::Unquote`],
+    /// [`Self::UnquoteSplice`]) each contribute one node for the
+    /// outer arm plus the node count of the wrapped inner form. The
+    /// projection is a structural size on the AST — every closed-set
+    /// arm counts as one, so the count is well-defined on ANY
+    /// [`Sexp`] value regardless of how it was constructed.
+    ///
+    /// Load-bearing arithmetic identities:
+    ///   * `Sexp::Nil.node_count() == 1`
+    ///   * `Sexp::Atom(_).node_count() == 1`
+    ///   * `Sexp::list(items).node_count() == 1 + sum(item.node_count())`
+    ///   * `Sexp::quote(inner).node_count() == 1 + inner.node_count()`
+    ///   * (peer identity for each other quote-family arm)
+    ///
+    /// The identities compose: `node_count` is monotone in tree
+    /// growth (a strictly-larger tree — one containing more arms —
+    /// has a strictly-larger count), so a resource ceiling keyed on
+    /// `node_count` bounds the total AST arm-count reachable at that
+    /// ceiling. A future [`Self::UnquoteSplice`] wrapper appearing
+    /// inside a list contributes one node for the wrapper AND one
+    /// node for the outer list arm plus the node count of the
+    /// wrapper's inner form — the identity holds compositionally
+    /// through the wrapper's `Box<Sexp>` payload.
+    ///
+    /// Consumers so far: [`crate::macro_expand::Expander`]'s
+    /// `max_expansion_size` ceiling — the RESOURCE-axis peer of the
+    /// `max_expansion_depth` (recursion length) and
+    /// `max_cache_entries` (memoization width) ceilings — projects
+    /// the freshly-applied macro expansion through `node_count` to
+    /// decide whether the result crosses the "expansion bomb"
+    /// threshold on the OUTPUT-SIZE axis. A `#[derive(TataraDomain)]`
+    /// consumer that wants to reject "this macro produced a giant
+    /// blob" at the expander boundary now inherits the projection
+    /// mechanically through the ceiling; no per-consumer walker
+    /// discipline required.
+    ///
+    /// The `usize` return shape is the natural resource-count
+    /// carrier — sibling to `HashMap::len` (the cache-width ceiling
+    /// consumes) and to the `usize` depth counter (the recursion
+    /// ceiling consumes) — so all three ceilings compose against a
+    /// single arithmetic type without cross-cast overhead.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// structural size of a value on the outer [`Sexp`] algebra
+    /// becomes a first-class TYPED projection rather than a
+    /// per-consumer hand-rolled walker. THEORY.md §VI.1 — generation
+    /// over composition; a future ceiling on a subtree count (e.g.
+    /// "reject any expansion whose LIST arms exceed N") emerges
+    /// naturally as a peer projection on the same closed-set
+    /// algebra, not as a separate walker.
+    #[must_use]
+    pub fn node_count(&self) -> usize {
+        match self {
+            Self::Nil | Self::Atom(_) => 1,
+            Self::List(items) => 1 + items.iter().map(Self::node_count).sum::<usize>(),
+            Self::Quote(inner)
+            | Self::Quasiquote(inner)
+            | Self::Unquote(inner)
+            | Self::UnquoteSplice(inner) => 1 + inner.node_count(),
+        }
+    }
 }
 
 /// Static panic message for [`Sexp::expect_quote_form`]'s asserted-total
@@ -42832,5 +42900,102 @@ mod tests {
              AXIS (\"ARITY-MISMATCH\") for axis-provenance-preserving \
              failure diagnostics",
         );
+    }
+
+    // ── node_count: structural size on the outer Sexp algebra ──────────
+
+    #[test]
+    fn node_count_nil_is_one() {
+        // The residual-axis unit-payload arm contributes exactly one
+        // node — the outer arm itself. Base case of the recursion.
+        assert_eq!(Sexp::Nil.node_count(), 1);
+    }
+
+    #[test]
+    fn node_count_atom_is_one_for_every_atom_kind() {
+        // Every atomic arm — Symbol, Keyword, Str, Int, Float, Bool —
+        // is a leaf on the AST algebra. The payload's own length
+        // (a string with 100 chars, an integer with a large value)
+        // does not contribute; the projection counts NODES on the
+        // typed algebra, not bytes on the payload.
+        assert_eq!(Sexp::symbol("foo").node_count(), 1);
+        assert_eq!(Sexp::keyword("k").node_count(), 1);
+        assert_eq!(Sexp::string("hello world").node_count(), 1);
+        assert_eq!(Sexp::int(42).node_count(), 1);
+        assert_eq!(Sexp::float(1.5).node_count(), 1);
+        assert_eq!(Sexp::boolean(true).node_count(), 1);
+        assert_eq!(
+            Sexp::symbol("a-symbol-with-a-very-long-name").node_count(),
+            1
+        );
+    }
+
+    #[test]
+    fn node_count_empty_list_is_one() {
+        // The residual-axis payload-bearing arm with an empty payload
+        // contributes exactly one node — the outer arm itself, no
+        // children to sum over. Sits at the boundary between the
+        // `Sexp::Nil` unit arm (also one node) and every non-empty
+        // list.
+        assert_eq!(Sexp::List(vec![]).node_count(), 1);
+    }
+
+    #[test]
+    fn node_count_flat_list_is_one_plus_child_count() {
+        // `(a b c)` — one outer List arm plus three Atom children,
+        // each contributing one node. Load-bearing arithmetic
+        // identity: `list(items).node_count() == 1 +
+        // sum(item.node_count())` with atom children.
+        let form = Sexp::list([Sexp::symbol("a"), Sexp::symbol("b"), Sexp::symbol("c")]);
+        assert_eq!(form.node_count(), 4);
+    }
+
+    #[test]
+    fn node_count_nested_list_sums_recursively() {
+        // `(a (b c) d)` — one outer, plus a=1, plus inner (b c)=3,
+        // plus d=1. Total 6. Pins the recursive sum over the tree.
+        let form = Sexp::list([
+            Sexp::symbol("a"),
+            Sexp::list([Sexp::symbol("b"), Sexp::symbol("c")]),
+            Sexp::symbol("d"),
+        ]);
+        assert_eq!(form.node_count(), 6);
+    }
+
+    #[test]
+    fn node_count_each_quote_family_wrapper_adds_one_plus_inner() {
+        // The four homoiconic wrappers each contribute one node for
+        // the wrapper arm plus the node count of the wrapped inner.
+        // `'x` = 2 (Quote wrapper + Atom x).
+        // `` `x `` = 2. `,x` = 2. `,@x` = 2.
+        let x = Sexp::symbol("x");
+        assert_eq!(Sexp::Quote(Box::new(x.clone())).node_count(), 2);
+        assert_eq!(Sexp::Quasiquote(Box::new(x.clone())).node_count(), 2);
+        assert_eq!(Sexp::Unquote(Box::new(x.clone())).node_count(), 2);
+        assert_eq!(Sexp::UnquoteSplice(Box::new(x.clone())).node_count(), 2);
+        // Nested inner: `'(a b)` = Quote wrapper (1) + inner (a b)
+        // list (3) = 4. Pins the recursion through wrappers.
+        let inner = Sexp::list([Sexp::symbol("a"), Sexp::symbol("b")]);
+        assert_eq!(Sexp::Quote(Box::new(inner)).node_count(), 4);
+    }
+
+    #[test]
+    fn node_count_is_monotone_under_list_growth() {
+        // Adding a strictly-larger subtree to a list strictly grows
+        // the node count. LOAD-BEARING monotonicity pin — a resource
+        // ceiling keyed on `node_count` relies on this identity so
+        // that a strictly-larger expansion is bounded by a strictly-
+        // larger count. A regression that ever ignored a child's
+        // contribution (a bug that hardcoded arm-only counting)
+        // fails this pin because the added subtree's own children
+        // would silently drop out.
+        let small = Sexp::list([Sexp::symbol("a")]);
+        let large = Sexp::list([
+            Sexp::symbol("a"),
+            Sexp::list([Sexp::symbol("b"), Sexp::symbol("c")]),
+        ]);
+        assert!(large.node_count() > small.node_count());
+        assert_eq!(small.node_count(), 2);
+        assert_eq!(large.node_count(), 5);
     }
 }

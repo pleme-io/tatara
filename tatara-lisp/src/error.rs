@@ -2421,6 +2421,57 @@ pub enum LispError {
         "compile error in call to {macro_name}: macro expansion depth exceeded (limit: {limit})"
     )]
     ExpansionDepthExceeded { macro_name: String, limit: usize },
+    /// `Expander::expand`'s freshly-applied macro output crossed the
+    /// configured node-count ceiling (`Expander::max_expansion_size`,
+    /// default `crate::macro_expand::DEFAULT_MAX_EXPANSION_SIZE`).
+    /// Peer to [`Self::ExpansionDepthExceeded`] one RESOURCE axis over:
+    /// where the depth ceiling bounds RECURSION LENGTH (how many times
+    /// a macro re-expands into itself before the process aborts) and
+    /// [`crate::macro_expand::DEFAULT_MAX_CACHE_ENTRIES`] bounds
+    /// MEMOIZATION WIDTH (how many distinct `(name, args)` pairs the
+    /// cache retains), this variant bounds OUTPUT SIZE (how many
+    /// [`crate::ast::Sexp`] nodes a single macro `apply` may produce
+    /// before the expander rejects rather than descending into a
+    /// runaway tree). Fires on the canonical "expansion bomb"
+    /// `(defmacro bomb (x) `(list ,x ,x ,x ,x ,x ,x))` — a well-defined
+    /// but exponentially-productive macro whose depth stays small
+    /// while the produced tree grows past any reasonable working-set
+    /// budget. Pre-lift the runaway ran until the process exhausted
+    /// its heap; post-lift the expander returns this typed rejection
+    /// at the first `apply` output whose `node_count` exceeds the
+    /// ceiling, with `macro_name` populated from the offending call,
+    /// `size` populated from the observed node count, and `limit`
+    /// populated from the enforced ceiling — so authoring surfaces
+    /// (REPL, LSP, `tatara-check`) see BOTH halves at the variant
+    /// boundary rather than substring-parsing free-form text.
+    ///
+    /// The three-field shape names BOTH the offending macro AND the
+    /// observed size AND the configured ceiling. An LSP that wants to
+    /// surface "your macro `bomb` produced a 512-node result past the
+    /// 256-node ceiling; is it exponentially productive?" reads all
+    /// three from the typed variant without substring parsing. Joins
+    /// the [`Self::ExpansionDepthExceeded`] cohort so the
+    /// [`Self::position`] projection routes both resource-ceiling
+    /// rejections through the SAME `None` arm — the offending macro's
+    /// byte offset is not what a runaway diagnostic anchors to; the
+    /// (macro name, observed resource, ceiling) triple is.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// expansion-bomb failure mode becomes a first-class typed
+    /// rejection at the expander boundary rather than a heap-exhausted
+    /// abort that never reaches a `Result`. THEORY.md §II.1 invariant
+    /// 1 — typed entry; every resource-ceiling failure mode the
+    /// expander admits (recursion, memory, output size) is now a
+    /// variant of `LispError`, closing the "runaway macro" surface at
+    /// three RESOURCE-DIMENSION axes.
+    #[error(
+        "compile error in call to {macro_name}: macro expansion output size exceeded (size: {size}, limit: {limit})"
+    )]
+    ExpansionSizeExceeded {
+        macro_name: String,
+        size: usize,
+        limit: usize,
+    },
 }
 
 /// Closed-set identifier for the (operation, stage) pair of a
@@ -9082,7 +9133,8 @@ impl LispError {
             | Self::KwargDeserialize { .. }
             | Self::CompilerSpecIo { .. }
             | Self::TemplateInvariant { .. }
-            | Self::ExpansionDepthExceeded { .. } => None,
+            | Self::ExpansionDepthExceeded { .. }
+            | Self::ExpansionSizeExceeded { .. } => None,
         }
     }
 }

@@ -78,6 +78,45 @@ pub const DEFAULT_MAX_EXPANSION_DEPTH: usize = 256;
 /// explicitly.
 pub const DEFAULT_MAX_CACHE_ENTRIES: usize = 8192;
 
+/// Default ceiling on a single macro-expansion output's structural
+/// node count. Peer to [`DEFAULT_MAX_EXPANSION_DEPTH`] and
+/// [`DEFAULT_MAX_CACHE_ENTRIES`] one RESOURCE-DIMENSION axis over on
+/// the expander surface — where the depth ceiling bounds RECURSION
+/// LENGTH (a runaway macro's stack) and the cache ceiling bounds
+/// MEMOIZATION WIDTH (the memoized `apply(macro, args)` table's
+/// entry count), this ceiling bounds OUTPUT SIZE (the "expansion
+/// bomb" axis: a well-defined macro whose depth stays small while
+/// the produced tree grows past any reasonable working-set budget).
+/// Pre-lift the canonical
+/// `(defmacro bomb (x) `(list ,x ,x ,x ,x ,x ,x ,x ,x))` composed
+/// under itself a handful of times exhausted the process heap while
+/// the depth counter was still at low single digits and the cache
+/// entry count sat under any reasonable ceiling — a below-floor
+/// resource-drift the depth AND cache ceilings both admitted through.
+/// Post-lift the [`Expander::expand_with_depth`] site consults this
+/// ceiling on every freshly-applied macro output via
+/// [`crate::ast::Sexp::node_count`]; once an `apply` result exceeds
+/// the ceiling the expander returns
+/// [`crate::error::LispError::ExpansionSizeExceeded`] with
+/// `macro_name`, `size`, and `limit` populated. Consumers that need
+/// a tighter or looser ceiling call
+/// [`Expander::set_max_expansion_size`].
+///
+/// `65_536` is large enough that lawful macro-authored output — a
+/// domain-language body composed from a few dozen typed primitives,
+/// each expanded against a bounded set of arg-shapes — never brushes
+/// the ceiling on a session-length workload (a typical `defpoint` /
+/// `defmonitor` expansion sits under 100 nodes, and even a
+/// hand-authored `defcheck` cascade tops out in the low thousands),
+/// and small enough that a pathological "output bomb" (a macro
+/// producing a 2^N-node blob from a small input) is rejected in
+/// milliseconds instead of consuming multiple gigabytes of process
+/// memory in the worst case. The default is deliberately generous —
+/// the ceiling exists to prevent unbounded drift, not to force
+/// operators to tune it. Consumers that want a tighter policy
+/// configure it explicitly.
+pub const DEFAULT_MAX_EXPANSION_SIZE: usize = 65_536;
+
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
 /// its manual `Hash` impl — no serde_json round-trip per cache lookup.
 type CacheKey = (String, u64);
@@ -763,6 +802,19 @@ pub struct Expander {
     /// [`Self::set_max_cache_entries`] to pin the bounded-cache
     /// contract without paying for an 8K-entry walk.
     max_cache_entries: usize,
+    /// Ceiling on the [`crate::ast::Sexp::node_count`] of a single
+    /// macro-`apply` output. Peer to [`Self::max_expansion_depth`]
+    /// and [`Self::max_cache_entries`] one RESOURCE-DIMENSION axis
+    /// over — where depth bounds RECURSION LENGTH and cache-entries
+    /// bounds MEMOIZATION WIDTH, this ceiling bounds OUTPUT SIZE. On
+    /// the canonical "expansion bomb"
+    /// `(defmacro bomb (x) `(list ,x ,x ,x ,x ,x ,x ,x ,x))` this is
+    /// what turns a heap-exhausted abort into a typed
+    /// [`crate::error::LispError::ExpansionSizeExceeded`] rejection.
+    /// Default [`DEFAULT_MAX_EXPANSION_SIZE`]; tests set it lower via
+    /// [`Self::set_max_expansion_size`] to pin the rejection shape
+    /// without materializing a 64K-node blob.
+    max_expansion_size: usize,
 }
 
 impl Expander {
@@ -776,6 +828,7 @@ impl Expander {
             cache_enabled: true,
             max_expansion_depth: DEFAULT_MAX_EXPANSION_DEPTH,
             max_cache_entries: DEFAULT_MAX_CACHE_ENTRIES,
+            max_expansion_size: DEFAULT_MAX_EXPANSION_SIZE,
         }
     }
 
@@ -790,6 +843,7 @@ impl Expander {
             cache_enabled: false,
             max_expansion_depth: DEFAULT_MAX_EXPANSION_DEPTH,
             max_cache_entries: DEFAULT_MAX_CACHE_ENTRIES,
+            max_expansion_size: DEFAULT_MAX_EXPANSION_SIZE,
         }
     }
 
@@ -854,6 +908,27 @@ impl Expander {
     /// not the concern.
     pub fn set_max_cache_entries(&mut self, cap: usize) {
         self.max_cache_entries = cap;
+    }
+
+    /// The configured ceiling on a single macro-`apply` output's
+    /// [`crate::ast::Sexp::node_count`]. Defaults to
+    /// [`DEFAULT_MAX_EXPANSION_SIZE`]. Peer to
+    /// [`Self::max_expansion_depth`] and [`Self::max_cache_entries`]
+    /// one RESOURCE-DIMENSION axis over.
+    #[must_use]
+    pub fn max_expansion_size(&self) -> usize {
+        self.max_expansion_size
+    }
+
+    /// Set the ceiling on a single macro-`apply` output's node count.
+    /// Tests bind low values (e.g. `8`) to pin the "expansion bomb"
+    /// rejection shape without materializing a 64K-node blob;
+    /// consumers that compose deep proven macro cascades can raise it.
+    /// [`usize::MAX`] admits any lawful output (the ceiling is
+    /// effectively lifted); operators that want strict "your macros
+    /// must fit in N nodes" contract-tests set it exactly.
+    pub fn set_max_expansion_size(&mut self, size: usize) {
+        self.max_expansion_size = size;
     }
 
     pub fn with_macros<I: IntoIterator<Item = MacroDef>>(defs: I) -> Result<Self> {
@@ -2062,6 +2137,20 @@ impl Expander {
     /// because the tree-child arm does not accrete depth; a lawfully
     /// deep tree is bounded by the reader's own stack, not by this
     /// ceiling.
+    ///
+    /// The peer OUTPUT-SIZE gate (`expanded.node_count() >
+    /// self.max_expansion_size`) sits INSIDE the same macro-call arm,
+    /// between the `apply` and the re-expansion recursion, so a
+    /// single macro's `apply` output whose structural size crosses
+    /// the ceiling is rejected AT the offending `apply` boundary
+    /// (with `macro_name` populated from `def.name`) before the
+    /// runaway tree feeds back into further expansion. The gate is
+    /// keyed on `>` rather than `>=` so `max_expansion_size` names
+    /// the LARGEST admissible output — the ceiling admits equality,
+    /// only strict overrun rejects. Together with the depth ceiling
+    /// (recursion length) and the cache ceiling (memoization width),
+    /// this closes the expander's RESOURCE surface at three typed
+    /// dimensions.
     fn expand_with_depth(&self, form: &Sexp, depth: usize) -> Result<Sexp> {
         if let Some((def, args)) = form.as_call_to_any(|h| self.macros.get(h)) {
             if depth >= self.max_expansion_depth {
@@ -2071,6 +2160,22 @@ impl Expander {
                 });
             }
             let expanded = self.apply(def, args)?;
+            // Reject a single `apply` output whose structural node
+            // count crosses the OUTPUT-SIZE ceiling — the RESOURCE
+            // axis peer of the depth (recursion length) and
+            // cache-entries (memoization width) ceilings. Catches
+            // the canonical "expansion bomb" where a well-defined
+            // macro produces a 2^N-node blob from a small input
+            // while `depth` stays in the low single digits and the
+            // cache entry count sits under any reasonable ceiling.
+            let expanded_size = expanded.node_count();
+            if expanded_size > self.max_expansion_size {
+                return Err(LispError::ExpansionSizeExceeded {
+                    macro_name: def.name.clone(),
+                    size: expanded_size,
+                    limit: self.max_expansion_size,
+                });
+            }
             // Recurse — the expansion itself may contain more macro calls.
             return self.expand_with_depth(&expanded, depth + 1);
         }
@@ -12502,5 +12607,213 @@ mod tests {
             1,
             "clear_cache did not re-open the insert path — the cache should have accepted the fresh (id, three) pair",
         );
+    }
+
+    // ── max_expansion_size: bounded-output ceiling ─────────────────────
+
+    #[test]
+    fn expander_default_max_expansion_size_is_the_module_constant() {
+        // Both constructors seed `max_expansion_size` from the module
+        // constant — a regression that drifts one constructor's
+        // default from the constant (e.g. a hardcoded `65_536` at
+        // ONE site with the other left uninitialized after a
+        // `Default` derive addition) fails this pin. Peer to the
+        // `max_expansion_depth` + `max_cache_entries` default-
+        // coherence pins one RESOURCE-DIMENSION axis over.
+        assert_eq!(
+            Expander::new().max_expansion_size(),
+            DEFAULT_MAX_EXPANSION_SIZE
+        );
+        assert_eq!(
+            Expander::new_substitute_only().max_expansion_size(),
+            DEFAULT_MAX_EXPANSION_SIZE
+        );
+        assert_eq!(DEFAULT_MAX_EXPANSION_SIZE, 65_536);
+    }
+
+    #[test]
+    fn set_max_expansion_size_takes_effect_on_subsequent_expand() {
+        // Setter mirrors accessor — a regression that ever forgets to
+        // write through to the field, or writes to a shadow field the
+        // accessor does not read, fails this pin. Peer to the
+        // setter/accessor coherence pins on the depth + cache axes.
+        let mut e = Expander::new();
+        e.set_max_expansion_size(64);
+        assert_eq!(e.max_expansion_size(), 64);
+    }
+
+    #[test]
+    fn expand_expansion_bomb_rejects_at_size_limit_bytecode_path() {
+        // `(defmacro bomb (x) `(list ,x ,x ,x ,x))` applied to
+        // `(bomb hey)` produces `(list hey hey hey hey)` — 6 nodes
+        // (outer List + 5 children). With a ceiling of `4` this
+        // crosses the OUTPUT-SIZE threshold at the first apply and
+        // the expander returns a typed
+        // `LispError::ExpansionSizeExceeded` with `macro_name`,
+        // `size`, and `limit` all populated. Pre-lift the runaway
+        // just accumulated in a growing tree until the process
+        // heap ran out; post-lift the rejection sits at the same
+        // call boundary as every other macro-expansion failure.
+        let mut e = Expander::new();
+        e.set_max_expansion_size(4);
+        let forms = read("(defmacro bomb (x) `(list ,x ,x ,x ,x)) (bomb hey)").unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        match err {
+            LispError::ExpansionSizeExceeded {
+                macro_name,
+                size,
+                limit,
+            } => {
+                assert_eq!(macro_name, "bomb");
+                assert_eq!(size, 6);
+                assert_eq!(limit, 4);
+            }
+            other => panic!("expected ExpansionSizeExceeded, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn expand_expansion_bomb_rejects_at_size_limit_substitute_path() {
+        // The substitute strategy shares the same `expand_with_depth`
+        // outer walker with the bytecode strategy, so the ceiling
+        // fires at the SAME gate regardless of which apply-layer is
+        // active. The pin makes that shared-outer-walker property
+        // structural: a regression that ever branches the size guard
+        // on strategy (e.g. moves it into `apply_compiled` alone)
+        // fails this test on the substitute expander. Peer to
+        // `expand_recursive_macro_rejects_at_depth_limit_substitute_path`
+        // one RESOURCE axis over.
+        let mut e = Expander::new_substitute_only();
+        e.set_max_expansion_size(4);
+        let forms = read("(defmacro bomb (x) `(list ,x ,x ,x ,x)) (bomb hey)").unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        match err {
+            LispError::ExpansionSizeExceeded {
+                macro_name,
+                size,
+                limit,
+            } => {
+                assert_eq!(macro_name, "bomb");
+                assert_eq!(size, 6);
+                assert_eq!(limit, 4);
+            }
+            other => panic!("expected ExpansionSizeExceeded, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn expand_lawful_output_within_size_ceiling_succeeds() {
+        // `(defmacro twice (x) `(list ,x ,x))` applied to `(twice hey)`
+        // produces `(list hey hey)` — 4 nodes. With a ceiling of `4`
+        // the output sits AT the ceiling (`<=` admits equality; only
+        // `>` rejects), so the expansion succeeds. Fail-before/pass-
+        // after negative control for the bomb rejection tests: a
+        // regression that ever rejected at-ceiling output would fail
+        // this pin. Peer to `expand_lawful_nested_macros_within_ceiling_succeed`
+        // one RESOURCE axis over.
+        let mut e = Expander::new();
+        e.set_max_expansion_size(4);
+        let forms = read("(defmacro twice (x) `(list ,x ,x)) (twice hey)").unwrap();
+        let out = e.expand_program(forms).unwrap();
+        assert_eq!(out[0], parse("(list hey hey)"));
+    }
+
+    #[test]
+    fn expand_size_ceiling_ignores_lawful_tree_nesting_size() {
+        // A macro-free lawful large tree is NOT gated by the size
+        // ceiling — the ceiling gates macro-`apply` outputs alone,
+        // not tree-child descents through non-macro forms. A `usize::MAX`
+        // ceiling would trivially admit anything; this pin uses a
+        // deliberately small ceiling of `4` on a tree with 6 nodes
+        // to catch a regression that ever bumps the ceiling on tree
+        // descent. A tree-only walk should NEVER fire the ceiling.
+        // Peer to `expand_depth_ceiling_ignores_lawful_tree_nesting_depth`
+        // one RESOURCE axis over.
+        let mut e = Expander::new();
+        e.set_max_expansion_size(4);
+        // `(a (b (c d)))` — 6 nodes, no macros. Passes cleanly.
+        let forms = read("(a (b (c d)))").unwrap();
+        let out = e.expand_program(forms).unwrap();
+        assert_eq!(out[0], parse("(a (b (c d)))"));
+    }
+
+    #[test]
+    fn expansion_size_exceeded_position_is_none() {
+        // The variant joins the non-positional cohort — the offending
+        // macro's byte offset is not what an expansion-bomb diagnostic
+        // anchors to; the (offending macro name, observed size,
+        // configured ceiling) triple is. This pin keeps the variant
+        // in the `position() -> None` cohort so a future span-carrying
+        // edit lands the field in ONE place across every non-positional
+        // variant simultaneously. Peer to
+        // `expansion_depth_exceeded_position_is_none` one RESOURCE
+        // axis over.
+        let err = LispError::ExpansionSizeExceeded {
+            macro_name: "bomb".to_string(),
+            size: 512,
+            limit: 256,
+        };
+        assert_eq!(err.position(), None);
+    }
+
+    #[test]
+    fn expansion_size_exceeded_display_matches_typed_variant_shape() {
+        // Display projection carries `macro_name`, `size`, AND
+        // `limit`, so authoring surfaces that substring-grep the
+        // rendered diagnostic (`tatara-check`, REPL, LSP) see ALL
+        // THREE halves at the variant boundary and never need to
+        // substring-parse free-form text to recover the identity of
+        // the offending macro, the observed size, or the ceiling it
+        // breached. Peer to `expansion_depth_exceeded_display_matches_typed_variant_shape`
+        // one RESOURCE axis over.
+        let err = LispError::ExpansionSizeExceeded {
+            macro_name: "bomb".to_string(),
+            size: 512,
+            limit: 256,
+        };
+        let rendered = err.to_string();
+        assert!(rendered.contains("bomb"), "rendered: {rendered}");
+        assert!(rendered.contains("512"), "rendered: {rendered}");
+        assert!(rendered.contains("256"), "rendered: {rendered}");
+        assert!(
+            rendered.contains("macro expansion output size exceeded"),
+            "rendered: {rendered}"
+        );
+    }
+
+    #[test]
+    fn expand_size_ceiling_names_the_offending_macro_in_a_nested_expansion() {
+        // A lawful outer macro that expands to a call of a bomb inner
+        // macro rejects at the INNER call — `macro_name` at the
+        // variant boundary is the name of the macro whose `apply`
+        // output crossed the ceiling, not the outermost caller.
+        // Load-bearing name-provenance pin: an operator whose bomb
+        // sits N levels deep in a compose chain needs to see the
+        // INNER macro's name in the diagnostic, not the wrapping
+        // shape. A regression that ever populates `macro_name` from
+        // the outermost caller's head fails this pin.
+        let mut e = Expander::new();
+        e.set_max_expansion_size(4);
+        // `wrapper` re-expands into `bomb`; `bomb` produces a size-6
+        // output that crosses the ceiling. Expected: the diagnostic
+        // names `bomb`, not `wrapper`.
+        let src = "
+            (defmacro bomb (x) `(list ,x ,x ,x ,x))
+            (defmacro wrapper (x) `(bomb ,x))
+            (wrapper hey)
+        ";
+        let err = e.expand_program(read(src).unwrap()).unwrap_err();
+        match err {
+            LispError::ExpansionSizeExceeded {
+                macro_name,
+                size,
+                limit,
+            } => {
+                assert_eq!(macro_name, "bomb");
+                assert_eq!(size, 6);
+                assert_eq!(limit, 4);
+            }
+            other => panic!("expected ExpansionSizeExceeded, got: {other:?}"),
+        }
     }
 }

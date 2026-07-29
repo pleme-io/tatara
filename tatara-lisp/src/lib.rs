@@ -64,7 +64,9 @@ pub use error::{
     UnknownCompilerSpecIoStage, UnknownExpectedKwargShape, UnknownKwargPathKind,
     UnknownMacroDefHead, UnknownSexpShape, UnknownUnquoteForm, UnquoteForm,
 };
-pub use macro_expand::{Expander, MacroDef, MacroParams, OptionalParam};
+pub use macro_expand::{
+    Expander, MacroDef, MacroParams, OptionalParam, ResourceLimits, DEFAULT_RESOURCE_LIMITS,
+};
 pub use reader::read;
 // `#[derive(ClosedSet)]` proc-macro — same name as the trait, different
 // namespace (proc-macros vs. types), so they coexist cleanly under one

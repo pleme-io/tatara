@@ -247,6 +247,97 @@ pub const DEFAULT_MAX_REGISTERED_MACROS: usize = 4096;
 /// implementation-defined condition.
 pub const DEFAULT_MAX_MACRO_ARITY: usize = 128;
 
+/// Typed snapshot of the six `Expander` resource ceilings — the
+/// bundled peer of the six [`Expander::max_expansion_depth`] /
+/// [`Expander::max_cache_entries`] / [`Expander::max_expansion_size`] /
+/// [`Expander::max_macro_body_size`] / [`Expander::max_registered_macros`] /
+/// [`Expander::max_macro_arity`] individual getters. The six knobs form
+/// ONE resource surface (the (PIPELINE-STAGE × RESOURCE-DIMENSION)
+/// grid the last six commits closed corner-by-corner) yet the
+/// pre-lift `Expander` surface exposed them only as SIX independent
+/// projections — inspecting the full posture required six calls, and
+/// bulk-configuring the expander (a preset for CI, a preset for the
+/// REPL, a preset for a test harness) required six independent
+/// setter invocations whose ordering the type system did not gate.
+///
+/// Post-lift the typed bundle binds the six knobs at ONE typed value
+/// on the `Expander` surface. A `#[derive(Clone, Copy, Debug,
+/// PartialEq, Eq)]` posture — every ceiling is a `Copy` scalar —
+/// gives callers a cheap snapshot they can serialize, compare, or
+/// pass around; the `Copy` implementation guarantees the bundle
+/// never carries a hidden allocation. Adding a SEVENTH ceiling
+/// extends this struct AND [`DEFAULT_RESOURCE_LIMITS`] in lockstep
+/// via rustc's field-exhaustiveness on the `..Default::default()`-free
+/// literal construction — no independent-field-drift window.
+///
+/// Peer of the six `DEFAULT_MAX_*` module constants one AGGREGATION
+/// axis over: where each constant carries ONE ceiling, this struct
+/// carries the SIX-fold cross-product. [`DEFAULT_RESOURCE_LIMITS`]
+/// pins the (defaults × aggregation) corner so a consumer that wants
+/// the shipped posture in one value does not re-derive the six
+/// individual constants at its call site.
+///
+/// Theory grounding: THEORY.md §II.1 — typed entry / typed exit for
+/// the resource-limit configuration surface. The pre-lift six
+/// independent knobs were a set of typed scalars but their
+/// composition into an "Expander resource posture" was untyped —
+/// callers assembled the posture at their call site with no
+/// compile-time exhaustiveness check that all six were considered.
+/// Frontier inspiration: `tokio::runtime::Builder`'s bundled knob
+/// struct — a runtime's ceiling posture is ONE typed value rather
+/// than a chain of independent method calls; translation through
+/// pleme-io primitives is the plain `Copy` snapshot below, no
+/// builder-pattern indirection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ResourceLimits {
+    /// See [`Expander::max_expansion_depth`].
+    pub max_expansion_depth: usize,
+    /// See [`Expander::max_cache_entries`].
+    pub max_cache_entries: usize,
+    /// See [`Expander::max_expansion_size`].
+    pub max_expansion_size: usize,
+    /// See [`Expander::max_macro_body_size`].
+    pub max_macro_body_size: usize,
+    /// See [`Expander::max_registered_macros`].
+    pub max_registered_macros: usize,
+    /// See [`Expander::max_macro_arity`].
+    pub max_macro_arity: usize,
+}
+
+impl Default for ResourceLimits {
+    /// The shipped posture — every field seeded from its matching
+    /// `DEFAULT_MAX_*` module constant. Pinned equal to
+    /// [`DEFAULT_RESOURCE_LIMITS`] as a compile-time identity so a
+    /// future re-tuning of ONE default lands in ONE place and both
+    /// projections pick it up mechanically.
+    fn default() -> Self {
+        DEFAULT_RESOURCE_LIMITS
+    }
+}
+
+/// The shipped [`ResourceLimits`] posture — every field bound to its
+/// matching `DEFAULT_MAX_*` module constant at ONE typed value. This
+/// is the `const` peer of [`ResourceLimits::default`]; the two are
+/// pinned equal so a call-site that wants the shipped posture as a
+/// compile-time value binds through the `const` and a call-site that
+/// wants it as a runtime `Default::default()` value binds through the
+/// trait impl — both routes reach the SAME six numbers.
+///
+/// Adding a SEVENTH ceiling extends this constant AND the struct AND
+/// [`Expander`]'s constructors in lockstep — rustc's
+/// field-exhaustiveness on this `..Default::default()`-free literal
+/// forces the new field to appear here, and the trait impl above
+/// reuses this constant so no independent-default-drift window opens
+/// between the two projections.
+pub const DEFAULT_RESOURCE_LIMITS: ResourceLimits = ResourceLimits {
+    max_expansion_depth: DEFAULT_MAX_EXPANSION_DEPTH,
+    max_cache_entries: DEFAULT_MAX_CACHE_ENTRIES,
+    max_expansion_size: DEFAULT_MAX_EXPANSION_SIZE,
+    max_macro_body_size: DEFAULT_MAX_MACRO_BODY_SIZE,
+    max_registered_macros: DEFAULT_MAX_REGISTERED_MACROS,
+    max_macro_arity: DEFAULT_MAX_MACRO_ARITY,
+};
+
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
 /// its manual `Hash` impl — no serde_json round-trip per cache lookup.
 type CacheKey = (String, u64);
@@ -1259,6 +1350,70 @@ impl Expander {
     /// only nullary macros."
     pub fn set_max_macro_arity(&mut self, cap: usize) {
         self.max_macro_arity = cap;
+    }
+
+    /// Snapshot the six configured resource ceilings as ONE typed
+    /// [`ResourceLimits`] value — the bundled peer of the six
+    /// [`Self::max_expansion_depth`] / [`Self::max_cache_entries`] /
+    /// [`Self::max_expansion_size`] / [`Self::max_macro_body_size`] /
+    /// [`Self::max_registered_macros`] / [`Self::max_macro_arity`]
+    /// individual getters. Consumers that want to inspect the full
+    /// resource posture (a test that compares a preset expander to a
+    /// reference posture, a diagnostic that renders "the six ceilings"
+    /// as one line, a caller that clones + selectively overrides one
+    /// field via a struct-update literal) bind to this projection at
+    /// ONE call site rather than composing the six individual getters.
+    ///
+    /// Adding a SEVENTH ceiling extends this projection AND
+    /// [`Self::set_resource_limits`] AND [`ResourceLimits`] in
+    /// lockstep — rustc's field-exhaustiveness on the returned struct
+    /// literal fires the compilation error at ONE site.
+    #[must_use]
+    pub fn resource_limits(&self) -> ResourceLimits {
+        ResourceLimits {
+            max_expansion_depth: self.max_expansion_depth,
+            max_cache_entries: self.max_cache_entries,
+            max_expansion_size: self.max_expansion_size,
+            max_macro_body_size: self.max_macro_body_size,
+            max_registered_macros: self.max_registered_macros,
+            max_macro_arity: self.max_macro_arity,
+        }
+    }
+
+    /// Bulk-replace the six configured resource ceilings from ONE typed
+    /// [`ResourceLimits`] value — the bundled peer of the six
+    /// [`Self::set_max_expansion_depth`] /
+    /// [`Self::set_max_cache_entries`] /
+    /// [`Self::set_max_expansion_size`] /
+    /// [`Self::set_max_macro_body_size`] /
+    /// [`Self::set_max_registered_macros`] /
+    /// [`Self::set_max_macro_arity`] individual setters. Presets
+    /// (a hardened CI expander, a permissive REPL expander, a
+    /// throttled test harness) compose the six ceilings ONCE at the
+    /// preset call site and apply them ATOMICALLY here rather than
+    /// threading six independent setter invocations whose ordering
+    /// the type system does not gate.
+    ///
+    /// Round-trip identity: `let l = e.resource_limits(); e.set_resource_limits(l);`
+    /// leaves `e` in an equivalent posture — pinned as a typed theorem
+    /// in the [`ResourceLimits`] test cohort. Sibling of
+    /// [`Self::resource_limits`]; the pair closes the (getter, setter)
+    /// face on the aggregation axis.
+    pub fn set_resource_limits(&mut self, limits: ResourceLimits) {
+        let ResourceLimits {
+            max_expansion_depth,
+            max_cache_entries,
+            max_expansion_size,
+            max_macro_body_size,
+            max_registered_macros,
+            max_macro_arity,
+        } = limits;
+        self.max_expansion_depth = max_expansion_depth;
+        self.max_cache_entries = max_cache_entries;
+        self.max_expansion_size = max_expansion_size;
+        self.max_macro_body_size = max_macro_body_size;
+        self.max_registered_macros = max_registered_macros;
+        self.max_macro_arity = max_macro_arity;
     }
 
     pub fn with_macros<I: IntoIterator<Item = MacroDef>>(defs: I) -> Result<Self> {
@@ -14336,6 +14491,225 @@ mod tests {
         assert!(
             matches!(err, LispError::RegisteredMacrosExceeded { .. }),
             "table-count gate must fire before arity gate; got: {err:?}"
+        );
+    }
+
+    // ── ResourceLimits: bundled resource-ceiling snapshot ────────────
+
+    #[test]
+    fn default_resource_limits_binds_each_field_to_matching_module_constant() {
+        // Pin the (constant × aggregation) corner: the const-form
+        // aggregate MUST bind every field to its individually-defined
+        // module constant. A re-tuning of ONE module constant
+        // (e.g. `DEFAULT_MAX_EXPANSION_DEPTH` raised from 256 to 512)
+        // has to propagate through the aggregate at ONE site; this
+        // test fires the divergence loudly if a future edit sets a
+        // module constant to a fresh value but forgets to update the
+        // matching aggregate slot. Field-by-field equality carries
+        // the message better than one deep-equality assertion.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.max_expansion_depth,
+            DEFAULT_MAX_EXPANSION_DEPTH
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.max_cache_entries,
+            DEFAULT_MAX_CACHE_ENTRIES
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.max_expansion_size,
+            DEFAULT_MAX_EXPANSION_SIZE
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.max_macro_body_size,
+            DEFAULT_MAX_MACRO_BODY_SIZE
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.max_registered_macros,
+            DEFAULT_MAX_REGISTERED_MACROS
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.max_macro_arity,
+            DEFAULT_MAX_MACRO_ARITY
+        );
+    }
+
+    #[test]
+    fn resource_limits_default_impl_matches_const_form() {
+        // The two projections of the shipped posture — the `const`
+        // form [`DEFAULT_RESOURCE_LIMITS`] and the runtime
+        // `Default::default()` form — must reach the SAME value. Pins
+        // that a future edit which flips one to a new default cannot
+        // silently drift the other.
+        assert_eq!(ResourceLimits::default(), DEFAULT_RESOURCE_LIMITS);
+    }
+
+    #[test]
+    fn expander_new_resource_limits_matches_shipped_defaults() {
+        // Fresh-expander posture on the bundled-getter surface — the
+        // six ceilings [`Expander::new`] seeds MUST snapshot to
+        // [`DEFAULT_RESOURCE_LIMITS`] verbatim. Peer of the six
+        // individual `expander_default_max_*_is_the_module_constant`
+        // pins one AGGREGATION axis over — where each individual
+        // pin catches ONE field drift, this pin catches ANY of the
+        // six drifting AND the snapshot projection itself losing a
+        // field.
+        assert_eq!(Expander::new().resource_limits(), DEFAULT_RESOURCE_LIMITS);
+    }
+
+    #[test]
+    fn expander_new_substitute_only_resource_limits_matches_shipped_defaults() {
+        // Substitute-only expander seeds the SAME six ceilings from
+        // the SAME module constants as [`Expander::new`] — the two
+        // constructors share the resource-ceiling posture even
+        // though they diverge on `compile_templates` +
+        // `cache_enabled`. Pins that a future constructor which
+        // forgets to seed one of the six ceilings from its module
+        // constant fails loudly through the bundled getter.
+        assert_eq!(
+            Expander::new_substitute_only().resource_limits(),
+            DEFAULT_RESOURCE_LIMITS
+        );
+    }
+
+    #[test]
+    fn resource_limits_snapshot_reflects_each_individual_setter() {
+        // Coherence pin between the six individual setters and the
+        // bundled getter — flipping ONE ceiling via its individual
+        // setter must project through [`Expander::resource_limits`]
+        // to the SAME value the individual getter returns. A
+        // regression that leaves ONE field out of the snapshot
+        // projection (a copy-paste omission in the struct literal
+        // constructor) fires here. Distinct low-non-default values
+        // so a stray field carrying the default fails loudly.
+        let mut e = Expander::new();
+        e.set_max_expansion_depth(3);
+        e.set_max_cache_entries(5);
+        e.set_max_expansion_size(7);
+        e.set_max_macro_body_size(11);
+        e.set_max_registered_macros(13);
+        e.set_max_macro_arity(17);
+        let snap = e.resource_limits();
+        assert_eq!(snap.max_expansion_depth, 3);
+        assert_eq!(snap.max_cache_entries, 5);
+        assert_eq!(snap.max_expansion_size, 7);
+        assert_eq!(snap.max_macro_body_size, 11);
+        assert_eq!(snap.max_registered_macros, 13);
+        assert_eq!(snap.max_macro_arity, 17);
+        // And the individual getters see the same values — the
+        // snapshot is a projection, not a divergent copy.
+        assert_eq!(e.max_expansion_depth(), 3);
+        assert_eq!(e.max_cache_entries(), 5);
+        assert_eq!(e.max_expansion_size(), 7);
+        assert_eq!(e.max_macro_body_size(), 11);
+        assert_eq!(e.max_registered_macros(), 13);
+        assert_eq!(e.max_macro_arity(), 17);
+    }
+
+    #[test]
+    fn set_resource_limits_bulk_propagates_every_field_to_individual_getters() {
+        // Sibling pin to `resource_limits_snapshot_reflects_...` on the
+        // WRITE axis — bulk-setting via [`Expander::set_resource_limits`]
+        // must reach every individual `max_*` getter. A regression
+        // that drops one field from the destructuring assignment in
+        // the bulk setter fires here. Distinct low-non-default values
+        // so a stray field carrying the previous value fails loudly.
+        let mut e = Expander::new();
+        e.set_resource_limits(ResourceLimits {
+            max_expansion_depth: 2,
+            max_cache_entries: 4,
+            max_expansion_size: 8,
+            max_macro_body_size: 16,
+            max_registered_macros: 32,
+            max_macro_arity: 64,
+        });
+        assert_eq!(e.max_expansion_depth(), 2);
+        assert_eq!(e.max_cache_entries(), 4);
+        assert_eq!(e.max_expansion_size(), 8);
+        assert_eq!(e.max_macro_body_size(), 16);
+        assert_eq!(e.max_registered_macros(), 32);
+        assert_eq!(e.max_macro_arity(), 64);
+    }
+
+    #[test]
+    fn resource_limits_round_trip_through_bundled_getter_and_setter_is_identity() {
+        // Round-trip theorem — for any starting expander, the
+        // composition `set_resource_limits(resource_limits())` is
+        // the identity on the resource-ceiling surface. This is the
+        // ONE typed statement that pins the (getter, setter) pair as
+        // strict projections of the same six-field surface, no
+        // hidden lossy field, no ordering asymmetry between the
+        // struct literal and the destructuring pattern.
+        let mut e = Expander::new();
+        e.set_max_expansion_depth(9);
+        e.set_max_cache_entries(19);
+        e.set_max_expansion_size(29);
+        e.set_max_macro_body_size(39);
+        e.set_max_registered_macros(49);
+        e.set_max_macro_arity(59);
+        let snap = e.resource_limits();
+        // Reset to defaults so any leftover state would show up in
+        // the post-round-trip snapshot as the default rather than
+        // the intended value.
+        e.set_resource_limits(ResourceLimits::default());
+        assert_eq!(e.resource_limits(), DEFAULT_RESOURCE_LIMITS);
+        // Apply the captured snapshot — the expander must land at
+        // the same six values `snap` recorded.
+        e.set_resource_limits(snap);
+        assert_eq!(e.resource_limits(), snap);
+    }
+
+    #[test]
+    fn resource_limits_struct_update_syntax_overrides_one_ceiling() {
+        // The `Copy` posture on [`ResourceLimits`] gives callers the
+        // cheap ergonomic of a struct-update literal — take the
+        // shipped posture and override ONE ceiling — that a chain of
+        // six independent setters cannot express in ONE typed expression.
+        // Pins the intended use-shape so a future refactor which
+        // removes `Copy` from the struct fails to compile at THIS
+        // site rather than at every downstream consumer.
+        let mut e = Expander::new();
+        e.set_resource_limits(ResourceLimits {
+            max_macro_arity: 4,
+            ..DEFAULT_RESOURCE_LIMITS
+        });
+        // Overridden field carries the fresh value.
+        assert_eq!(e.max_macro_arity(), 4);
+        // Every other field carries the shipped default — the
+        // struct-update literal is a full projection, not a
+        // selective mutation.
+        assert_eq!(e.max_expansion_depth(), DEFAULT_MAX_EXPANSION_DEPTH);
+        assert_eq!(e.max_cache_entries(), DEFAULT_MAX_CACHE_ENTRIES);
+        assert_eq!(e.max_expansion_size(), DEFAULT_MAX_EXPANSION_SIZE);
+        assert_eq!(e.max_macro_body_size(), DEFAULT_MAX_MACRO_BODY_SIZE);
+        assert_eq!(e.max_registered_macros(), DEFAULT_MAX_REGISTERED_MACROS);
+    }
+
+    #[test]
+    fn resource_limits_bulk_setter_keeps_the_arity_gate_in_effect() {
+        // Behavioral pin — the bundled setter is not a decorative
+        // getter/setter pair; the six ceilings it propagates must
+        // reach the SAME check sites the individual setters do. Set
+        // `max_macro_arity` to 1 via the bulk setter and confirm the
+        // arity gate fires on a two-arg macro registration. A
+        // regression that wired the bulk setter to a shadow field
+        // rather than the actual `Expander` state fails here.
+        let mut e = Expander::new();
+        e.set_resource_limits(ResourceLimits {
+            max_macro_arity: 1,
+            ..DEFAULT_RESOURCE_LIMITS
+        });
+        let forms = read("(defmacro two (a b) `,a)").unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::MacroArityExceeded {
+                    arity: 2,
+                    limit: 1,
+                    ..
+                }
+            ),
+            "bulk-set arity ceiling must reach the register-time gate; got: {err:?}"
         );
     }
 }

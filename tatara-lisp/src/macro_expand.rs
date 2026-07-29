@@ -567,6 +567,115 @@ impl ResourceLimits {
             max_macro_arity: max_usize(self.max_macro_arity, other.max_macro_arity),
         }
     }
+
+    /// Pointwise partial-order relation across the six ceilings — `self`
+    /// is at least as tight as `other` iff every field of `self` is at
+    /// most the matching field of `other`. `a.leq(b)` holds iff every
+    /// input the `a` posture admits the `b` posture also admits: `a`'s
+    /// per-axis ceilings all sit at or below `b`'s per-axis ceilings, so
+    /// any value that clears `a`'s tighter gates also clears `b`'s
+    /// looser gates.
+    ///
+    /// The partial order underneath the [`ResourceLimits`] lattice.
+    /// Peer of [`Self::strictest`] (meet, GLB) and [`Self::most_permissive`]
+    /// (join, LUB) one PRIMITIVE-KIND axis over on the lattice-algebra
+    /// surface: where those two are the (meet, join) COMBINATORS, this
+    /// is the RELATION they are defined against. Together the three
+    /// close the (meet, join, leq) primitive triple on the
+    /// [`ResourceLimits`] posture algebra — the same triple
+    /// `tatara-lattice`'s [`Lattice`] trait exposes as its three
+    /// required methods for every classification lattice one crate over
+    /// (see `tatara-lattice/src/lib.rs`).
+    ///
+    /// **Meet-agreement** (`a.leq(b) ⇔ a.strictest(b) == a`): if `a` is
+    /// tighter on every axis than `b`, then the pointwise `min` picks
+    /// `a` on every axis, so `a.strictest(b) == a`; conversely, if
+    /// `a.strictest(b) == a`, every field's `min` picked `a`, so every
+    /// field of `a` is at most the matching field of `b`. Pinned as
+    /// `resource_limits_leq_agrees_with_meet` in the test cohort.
+    ///
+    /// **Join-agreement** (`a.leq(b) ⇔ a.most_permissive(b) == b`):
+    /// symmetric statement on the LUB side; pinned as
+    /// `resource_limits_leq_agrees_with_join`. Together the two
+    /// agreements are the canonical lattice cross-check axiom
+    /// `a ≤ b ⇔ a ⊓ b = a ⇔ a ⊔ b = b` documented in
+    /// `tatara-lattice/src/lib.rs`'s preamble.
+    ///
+    /// Reflexive (`a.leq(a) == true`), antisymmetric (`a.leq(b) &&
+    /// b.leq(a) → a == b`), transitive (`a.leq(b) && b.leq(c) →
+    /// a.leq(c)`) — all pinned as typed theorems in the test cohort.
+    /// NOT total: two postures with reversed per-axis orderings (some
+    /// axes where `a` is tighter, some where `b` is tighter) are
+    /// incomparable — `!a.leq(b) && !b.leq(a)` — pinned by
+    /// `resource_limits_leq_is_not_total_on_asymmetric_postures`.
+    ///
+    /// **Bounds pins in terms of leq**:
+    ///   * `a.strictest(b).leq(a) && a.strictest(b).leq(b)` (meet is
+    ///     the greatest lower bound) — pinned by
+    ///     `resource_limits_strictest_is_leq_both_operands`, the typed
+    ///     lattice-relation companion to the per-axis
+    ///     `resource_limits_strictest_is_dominated_by_both_operands_pointwise`.
+    ///   * `a.leq(a.most_permissive(b)) && b.leq(a.most_permissive(b))`
+    ///     (join is the least upper bound) — pinned by
+    ///     `resource_limits_most_permissive_is_geq_both_operands`, the
+    ///     typed lattice-relation companion to the per-axis
+    ///     `resource_limits_most_permissive_dominates_both_operands_pointwise`.
+    ///
+    /// **Concrete-preset pin**: [`DEFAULT_RESOURCE_LIMITS`]`.leq(`
+    /// [`UNBOUNDED_RESOURCE_LIMITS`]`) == true` (every
+    /// `DEFAULT_MAX_*` module constant is a concrete positive value at
+    /// most [`usize::MAX`]) AND
+    /// `!UNBOUNDED_RESOURCE_LIMITS.leq(DEFAULT_RESOURCE_LIMITS)` (every
+    /// `DEFAULT_MAX_*` is strictly less than [`usize::MAX`], so on
+    /// every axis [`usize::MAX`] exceeds the matching default) — the
+    /// partial order is a STRICT order on the shipped preset pair.
+    /// Pinned by `resource_limits_leq_of_default_and_unbounded_is_a_strict_order`.
+    ///
+    /// `const fn` so a caller can pin a preset-relation identity at
+    /// compile time (`const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+    /// .leq(UNBOUNDED_RESOURCE_LIMITS));`) — the typed lattice-relation
+    /// peer of the `const fn` composition ability on
+    /// [`Self::strictest`] / [`Self::most_permissive`].
+    ///
+    /// Pre-lift, a caller wanting to decide whether one posture was
+    /// tighter than another either (a) composed six independent
+    /// per-axis `<=` comparisons at the call site stitched into a
+    /// six-fold `&&` — the same six-inline-primitive shape the
+    /// pre-`ResourceLimits` bundled Expander posture required its
+    /// callers to carry, and the same exhaustiveness gap the
+    /// `..Default::default()`-free literal on the bundled struct exists
+    /// to close: a copy-paste that dropped ONE of the six comparisons
+    /// silently admitted a posture that violated tightness on THAT
+    /// axis — or (b) invoked [`Self::strictest`] and compared the result
+    /// to `self` — a correct but roundabout composition of the partial-
+    /// order primitive against its lattice-companion. Post-lift the
+    /// relation binds at ONE typed method on the posture algebra; a
+    /// caller writes `tighter.leq(looser)` and rustc's exhaustiveness
+    /// on the six-field conjunction below guarantees every ceiling is
+    /// threaded through the `<=` primitive.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the partial-order relation on two preset-
+    /// carried resource proofs is itself a typed named entry composing
+    /// their tightness ordering. THEORY.md §V.1 — knowable platform;
+    /// the pointwise `<=` combinator becomes a TYPE-level operation on
+    /// the posture algebra rather than an inline six-primitive
+    /// conjunction at every consumer that compares two presets.
+    /// `tatara-lattice`'s [`Lattice::leq`] method on `Classification`
+    /// closes the SAME shape one layer down — an entity's
+    /// classification is a lattice with a `leq` partial order; a
+    /// resource posture is a lattice with a `leq` partial order; both
+    /// algebras carry the (meet, join, leq) primitive triple as their
+    /// fundamental relation-and-combinator surface.
+    #[must_use]
+    pub const fn leq(self, other: Self) -> bool {
+        self.max_expansion_depth <= other.max_expansion_depth
+            && self.max_cache_entries <= other.max_cache_entries
+            && self.max_expansion_size <= other.max_expansion_size
+            && self.max_macro_body_size <= other.max_macro_body_size
+            && self.max_registered_macros <= other.max_registered_macros
+            && self.max_macro_arity <= other.max_macro_arity
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -15596,6 +15705,287 @@ mod tests {
         const DEFAULT_LOOSENED_BY_UNBOUNDED: ResourceLimits =
             DEFAULT_RESOURCE_LIMITS.most_permissive(UNBOUNDED_RESOURCE_LIMITS);
         assert_eq!(DEFAULT_LOOSENED_BY_UNBOUNDED, UNBOUNDED_RESOURCE_LIMITS);
+    }
+
+    // ── ResourceLimits::leq — pointwise partial order ─────────────────
+
+    #[test]
+    fn resource_limits_leq_is_pointwise_field_conjunction() {
+        // Field-level pin — the leq relation projects the pointwise
+        // `<=` conjunction across the six-field surface. `LOOSER` is
+        // `MID + 1` on every axis, so `MID.leq(LOOSER)` holds; a
+        // per-axis tighten on ANY field alone flips the relation to
+        // false. Pinned as six independent tighten-per-axis asserts so
+        // a drift on ONE axis carries a distinct-name failure that
+        // names the drifting axis; a future SEVENTH ceiling extension
+        // requires an additional per-axis tighten assert here in
+        // lockstep.
+        const LOOSER: ResourceLimits = ResourceLimits {
+            max_expansion_depth: HAND_AUTHORED_MID_POSTURE.max_expansion_depth + 1,
+            max_cache_entries: HAND_AUTHORED_MID_POSTURE.max_cache_entries + 1,
+            max_expansion_size: HAND_AUTHORED_MID_POSTURE.max_expansion_size + 1,
+            max_macro_body_size: HAND_AUTHORED_MID_POSTURE.max_macro_body_size + 1,
+            max_registered_macros: HAND_AUTHORED_MID_POSTURE.max_registered_macros + 1,
+            max_macro_arity: HAND_AUTHORED_MID_POSTURE.max_macro_arity + 1,
+        };
+        assert!(HAND_AUTHORED_MID_POSTURE.leq(LOOSER));
+        assert!(!LOOSER.leq(HAND_AUTHORED_MID_POSTURE));
+
+        // Per-axis exceed pins: raise MID's field ONE axis above LOOSER
+        // on that axis; the leq must flip to false. Every other axis
+        // stays at MID, so LOOSER still dominates on those axes —
+        // isolating the single-axis violation.
+        let exceed_depth = ResourceLimits {
+            max_expansion_depth: LOOSER.max_expansion_depth + 1,
+            ..HAND_AUTHORED_MID_POSTURE
+        };
+        assert!(!exceed_depth.leq(LOOSER));
+        let exceed_cache = ResourceLimits {
+            max_cache_entries: LOOSER.max_cache_entries + 1,
+            ..HAND_AUTHORED_MID_POSTURE
+        };
+        assert!(!exceed_cache.leq(LOOSER));
+        let exceed_expansion = ResourceLimits {
+            max_expansion_size: LOOSER.max_expansion_size + 1,
+            ..HAND_AUTHORED_MID_POSTURE
+        };
+        assert!(!exceed_expansion.leq(LOOSER));
+        let exceed_body = ResourceLimits {
+            max_macro_body_size: LOOSER.max_macro_body_size + 1,
+            ..HAND_AUTHORED_MID_POSTURE
+        };
+        assert!(!exceed_body.leq(LOOSER));
+        let exceed_registered = ResourceLimits {
+            max_registered_macros: LOOSER.max_registered_macros + 1,
+            ..HAND_AUTHORED_MID_POSTURE
+        };
+        assert!(!exceed_registered.leq(LOOSER));
+        let exceed_arity = ResourceLimits {
+            max_macro_arity: LOOSER.max_macro_arity + 1,
+            ..HAND_AUTHORED_MID_POSTURE
+        };
+        assert!(!exceed_arity.leq(LOOSER));
+    }
+
+    #[test]
+    fn resource_limits_leq_is_reflexive() {
+        // Partial-order law — `a ≤ a` for every posture. Reflexivity
+        // is the identity axiom on any lattice's underlying partial
+        // order; a regression that changed the per-axis primitive to
+        // strict `<` (or that added an accidental "prefer other on
+        // tie" branch) fires here on every shipped posture.
+        assert!(DEFAULT_RESOURCE_LIMITS.leq(DEFAULT_RESOURCE_LIMITS));
+        assert!(UNBOUNDED_RESOURCE_LIMITS.leq(UNBOUNDED_RESOURCE_LIMITS));
+        assert!(HAND_AUTHORED_MID_POSTURE.leq(HAND_AUTHORED_MID_POSTURE));
+        assert!(HAND_AUTHORED_OTHER_POSTURE.leq(HAND_AUTHORED_OTHER_POSTURE));
+    }
+
+    #[test]
+    fn resource_limits_leq_is_antisymmetric() {
+        // Partial-order law — `a ≤ b ∧ b ≤ a ⇒ a = b`. The mutual-
+        // dominance witness on a partial order pins the two operands
+        // to structural equality. On the pointwise `<=` composition
+        // this holds because `a.max_X <= b.max_X && b.max_X <= a.max_X
+        // ⇒ a.max_X == b.max_X` on every axis, and struct equality
+        // is field-conjunction. Sibling to reflexivity one AXIOM axis
+        // over on the partial-order axiom surface.
+        //
+        // Two distinct constructions of the SAME six-field posture
+        // (one via struct literal, one via `..DEFAULT_RESOURCE_LIMITS`
+        // spread of the shipped preset) — mutual leq holds; struct
+        // equality holds; antisymmetry pin closes.
+        let a = DEFAULT_RESOURCE_LIMITS;
+        let b = ResourceLimits {
+            max_expansion_depth: DEFAULT_RESOURCE_LIMITS.max_expansion_depth,
+            max_cache_entries: DEFAULT_RESOURCE_LIMITS.max_cache_entries,
+            max_expansion_size: DEFAULT_RESOURCE_LIMITS.max_expansion_size,
+            max_macro_body_size: DEFAULT_RESOURCE_LIMITS.max_macro_body_size,
+            max_registered_macros: DEFAULT_RESOURCE_LIMITS.max_registered_macros,
+            max_macro_arity: DEFAULT_RESOURCE_LIMITS.max_macro_arity,
+        };
+        assert!(a.leq(b));
+        assert!(b.leq(a));
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn resource_limits_leq_is_transitive() {
+        // Partial-order law — `a ≤ b ∧ b ≤ c ⇒ a ≤ c`. Transitivity
+        // is the composition axiom on any lattice's partial order.
+        // Pointwise `<=` on [`usize`] is transitive per axis, so the
+        // six-field conjunction inherits it structurally.
+        //
+        // Chain witness: MID's every-axis `+1` shift is LOOSER, and
+        // LOOSER's every-axis `+1` shift is LOOSEST; the chain MID
+        // ≤ LOOSER ≤ LOOSEST implies MID ≤ LOOSEST.
+        const LOOSER: ResourceLimits = ResourceLimits {
+            max_expansion_depth: HAND_AUTHORED_MID_POSTURE.max_expansion_depth + 1,
+            max_cache_entries: HAND_AUTHORED_MID_POSTURE.max_cache_entries + 1,
+            max_expansion_size: HAND_AUTHORED_MID_POSTURE.max_expansion_size + 1,
+            max_macro_body_size: HAND_AUTHORED_MID_POSTURE.max_macro_body_size + 1,
+            max_registered_macros: HAND_AUTHORED_MID_POSTURE.max_registered_macros + 1,
+            max_macro_arity: HAND_AUTHORED_MID_POSTURE.max_macro_arity + 1,
+        };
+        const LOOSEST: ResourceLimits = ResourceLimits {
+            max_expansion_depth: LOOSER.max_expansion_depth + 1,
+            max_cache_entries: LOOSER.max_cache_entries + 1,
+            max_expansion_size: LOOSER.max_expansion_size + 1,
+            max_macro_body_size: LOOSER.max_macro_body_size + 1,
+            max_registered_macros: LOOSER.max_registered_macros + 1,
+            max_macro_arity: LOOSER.max_macro_arity + 1,
+        };
+        assert!(HAND_AUTHORED_MID_POSTURE.leq(LOOSER));
+        assert!(LOOSER.leq(LOOSEST));
+        assert!(HAND_AUTHORED_MID_POSTURE.leq(LOOSEST));
+    }
+
+    #[test]
+    fn resource_limits_leq_of_default_and_unbounded_is_a_strict_order() {
+        // Concrete-preset pin — the leq relation on the shipped
+        // preset pair is STRICT: DEFAULT ≤ UNBOUNDED holds (every
+        // `DEFAULT_MAX_*` module constant is a concrete positive
+        // value at most [`usize::MAX`]) AND UNBOUNDED ≤ DEFAULT
+        // fails (every `DEFAULT_MAX_*` is strictly less than
+        // [`usize::MAX`], so on every axis [`usize::MAX`] exceeds
+        // the matching default). Peer of
+        // `strictest_of_default_and_unbounded_projects_the_default`
+        // one PRIMITIVE-KIND axis over on the same shipped-preset-
+        // pair surface: where the meet composition projects DEFAULT,
+        // this relation asserts DEFAULT is the tighter of the two.
+        assert!(DEFAULT_RESOURCE_LIMITS.leq(UNBOUNDED_RESOURCE_LIMITS));
+        assert!(!UNBOUNDED_RESOURCE_LIMITS.leq(DEFAULT_RESOURCE_LIMITS));
+    }
+
+    #[test]
+    fn resource_limits_leq_is_not_total_on_asymmetric_postures() {
+        // Partial-order NON-total pin — the two hand-authored asymmetric
+        // postures have MID smaller on three axes (depth, expansion,
+        // registered) and OTHER smaller on the other three (cache,
+        // body, arity); neither dominates the other, so BOTH
+        // directions of the leq relation fail. The pin discriminates
+        // a regression that promoted `leq` from partial to total
+        // (e.g. an accidental `||` swap in the conjunction, which
+        // would make every pair comparable).
+        assert!(!HAND_AUTHORED_MID_POSTURE.leq(HAND_AUTHORED_OTHER_POSTURE));
+        assert!(!HAND_AUTHORED_OTHER_POSTURE.leq(HAND_AUTHORED_MID_POSTURE));
+    }
+
+    #[test]
+    fn resource_limits_leq_agrees_with_meet() {
+        // Lattice cross-check axiom — `a ≤ b ⇔ a ⊓ b = a`. Every
+        // classification lattice one crate over
+        // (`tatara-lattice/src/lib.rs`'s preamble) declares this
+        // agreement axiom binding the partial order to the meet
+        // combinator, and the default-impl body on
+        // `tatara_lattice::Lattice::leq` derives `leq` FROM `meet`
+        // through it. This pin discharges the same axiom on the
+        // ResourceLimits algebra as a two-direction structural
+        // equality across the strict-order preset pair AND the
+        // reflexivity witness.
+        //
+        // Forward (a ≤ b ⇒ a ⊓ b = a):
+        assert!(DEFAULT_RESOURCE_LIMITS.leq(UNBOUNDED_RESOURCE_LIMITS));
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.strictest(UNBOUNDED_RESOURCE_LIMITS),
+            DEFAULT_RESOURCE_LIMITS,
+        );
+        // Reverse (a ⊓ b = a ⇒ a ≤ b), reflexivity witness:
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.strictest(DEFAULT_RESOURCE_LIMITS),
+            DEFAULT_RESOURCE_LIMITS,
+        );
+        assert!(DEFAULT_RESOURCE_LIMITS.leq(DEFAULT_RESOURCE_LIMITS));
+
+        // Non-agreement witness — the incomparable asymmetric postures
+        // have meet distinct from EITHER operand, and leq false in
+        // both directions; agreement holds on the negative side too.
+        assert!(!HAND_AUTHORED_MID_POSTURE.leq(HAND_AUTHORED_OTHER_POSTURE));
+        assert_ne!(
+            HAND_AUTHORED_MID_POSTURE.strictest(HAND_AUTHORED_OTHER_POSTURE),
+            HAND_AUTHORED_MID_POSTURE,
+        );
+    }
+
+    #[test]
+    fn resource_limits_leq_agrees_with_join() {
+        // Lattice cross-check axiom, sibling of the meet-agreement
+        // pin one COMBINATOR axis over — `a ≤ b ⇔ a ⊔ b = b`.
+        //
+        // Forward (a ≤ b ⇒ a ⊔ b = b):
+        assert!(DEFAULT_RESOURCE_LIMITS.leq(UNBOUNDED_RESOURCE_LIMITS));
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.most_permissive(UNBOUNDED_RESOURCE_LIMITS),
+            UNBOUNDED_RESOURCE_LIMITS,
+        );
+        // Reverse (a ⊔ b = b ⇒ a ≤ b), reflexivity witness:
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.most_permissive(DEFAULT_RESOURCE_LIMITS),
+            DEFAULT_RESOURCE_LIMITS,
+        );
+        assert!(DEFAULT_RESOURCE_LIMITS.leq(DEFAULT_RESOURCE_LIMITS));
+
+        // Non-agreement witness — the incomparable asymmetric postures
+        // have join distinct from EITHER operand.
+        assert!(!HAND_AUTHORED_MID_POSTURE.leq(HAND_AUTHORED_OTHER_POSTURE));
+        assert_ne!(
+            HAND_AUTHORED_MID_POSTURE.most_permissive(HAND_AUTHORED_OTHER_POSTURE),
+            HAND_AUTHORED_OTHER_POSTURE,
+        );
+    }
+
+    #[test]
+    fn resource_limits_strictest_is_leq_both_operands() {
+        // Meet-lower-bound pin, typed lattice-relation companion to
+        // `resource_limits_strictest_is_dominated_by_both_operands_pointwise`
+        // one PRIMITIVE-KIND axis over — where the per-axis pin
+        // discharged the six independent `<=` asserts inline, this pin
+        // routes through the typed `leq` primitive, so the
+        // greatest-lower-bound property is stated in the LATTICE
+        // vocabulary (meet-is-leq-both-operands) rather than the
+        // six-fold field-conjunction vocabulary.
+        let a = HAND_AUTHORED_MID_POSTURE;
+        let b = HAND_AUTHORED_OTHER_POSTURE;
+        let m = a.strictest(b);
+        assert!(m.leq(a));
+        assert!(m.leq(b));
+    }
+
+    #[test]
+    fn resource_limits_most_permissive_is_geq_both_operands() {
+        // Join-upper-bound pin, typed lattice-relation companion to
+        // `resource_limits_most_permissive_dominates_both_operands_pointwise`
+        // one PRIMITIVE-KIND axis over. Stated in the LATTICE
+        // vocabulary as `a ≤ a ⊔ b ∧ b ≤ a ⊔ b` — sibling of the
+        // meet-lower-bound pin one COMBINATOR axis over.
+        let a = HAND_AUTHORED_MID_POSTURE;
+        let b = HAND_AUTHORED_OTHER_POSTURE;
+        let j = a.most_permissive(b);
+        assert!(a.leq(j));
+        assert!(b.leq(j));
+    }
+
+    #[test]
+    fn resource_limits_leq_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the leq relation is evaluable in const
+        // context, so a caller can pin a preset-relation identity at
+        // compile time. Sibling of the const-fn composition pins on
+        // `strictest` / `most_permissive` one PRIMITIVE-KIND axis
+        // over: those two operations compose two presets into a
+        // const-time third, and this operation decides a const-time
+        // yes/no on two presets. `const _: ()` at item scope is a
+        // compile-time proof — the compiler rejects the module if
+        // either identity does not hold; a runtime `assert!` over the
+        // same expression would fire at test time on the same value
+        // clippy's `assertions_on_constants` correctly names as a
+        // redundant late check on a compile-time constant.
+        //
+        // Strict-order preset-pair pin — DEFAULT ≤ UNBOUNDED (every
+        // `DEFAULT_MAX_*` module constant is at most [`usize::MAX`]):
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.leq(UNBOUNDED_RESOURCE_LIMITS));
+        // Reverse direction fails — [`usize::MAX`] exceeds every
+        // concrete `DEFAULT_MAX_*` constant, so the partial order is
+        // STRICT on the shipped preset pair:
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.leq(DEFAULT_RESOURCE_LIMITS));
     }
 
     #[test]

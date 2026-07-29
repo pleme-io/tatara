@@ -392,6 +392,183 @@ pub const UNBOUNDED_RESOURCE_LIMITS: ResourceLimits = ResourceLimits {
     max_macro_arity: usize::MAX,
 };
 
+/// Pointwise `min` / `max` primitives the [`ResourceLimits`] lattice binds
+/// its meet ([`ResourceLimits::strictest`]) and join
+/// ([`ResourceLimits::most_permissive`]) operations to. Named at module
+/// scope as `const fn` so both operations are themselves `const fn` on
+/// stable — composing two postures at compile time (a caller stitching a
+/// new `pub const` preset from two shipped presets) needs no runtime
+/// evaluation. Ternary form rather than [`usize::min`] / [`usize::max`]
+/// so the two `const fn` remain valid on any tatara MSRV whose stability
+/// on the primitive const-fn methods has not been established.
+const fn min_usize(a: usize, b: usize) -> usize {
+    if a <= b {
+        a
+    } else {
+        b
+    }
+}
+
+const fn max_usize(a: usize, b: usize) -> usize {
+    if a >= b {
+        a
+    } else {
+        b
+    }
+}
+
+impl ResourceLimits {
+    /// Pointwise-`min` across the six ceilings — the STRICTEST posture
+    /// whose admissible input set is the intersection of `self`'s and
+    /// `other`'s admissible input sets. `a.strictest(b)` admits an
+    /// input iff BOTH `a` AND `b` admit it: on every field the
+    /// per-axis ceiling is the smaller of the two, so a value that
+    /// clears the meet clears BOTH postures, and a value that any
+    /// posture rejects the meet also rejects.
+    ///
+    /// The meet of the `ResourceLimits` lattice under the pointwise
+    /// partial order `a ≤ b iff every field of a ≤ every field of b`
+    /// (tighter-first — a POSTURE admits FEWER inputs on that field's
+    /// axis when the ceiling is smaller). Peer of
+    /// [`Self::most_permissive`] one COMBINATOR axis over on the
+    /// lattice-algebra surface: where `most_permissive` is the join
+    /// (pointwise-`max`, LUB), this is the meet (pointwise-`min`, GLB).
+    /// Together the two operations close the (meet, join) lattice
+    /// operator pair on the [`ResourceLimits`] posture algebra.
+    ///
+    /// The concrete identity on the shipped preset pair holds
+    /// structurally: [`DEFAULT_RESOURCE_LIMITS`]`.strictest(`
+    /// [`UNBOUNDED_RESOURCE_LIMITS`]`) == `[`DEFAULT_RESOURCE_LIMITS`].
+    /// Every `DEFAULT_MAX_*` module constant is a concrete positive
+    /// value strictly less than [`usize::MAX`], so on every axis the
+    /// pointwise-`min` picks the DEFAULT side; the six-axis pin holds
+    /// as a typed theorem in the test cohort.
+    ///
+    /// Idempotent (`a.strictest(a) == a`), commutative
+    /// (`a.strictest(b) == b.strictest(a)`), associative
+    /// (`(a.strictest(b)).strictest(c) == a.strictest(b.strictest(c))`),
+    /// and satisfies the absorption identity with the join
+    /// (`a.strictest(a.most_permissive(b)) == a`) — all pinned as
+    /// typed theorems in the test cohort. Distributive over the join
+    /// (`a.strictest(b.most_permissive(c)) ==
+    /// a.strictest(b).most_permissive(a.strictest(c))`) because
+    /// pointwise-`min` and pointwise-`max` on [`usize`] each
+    /// distribute over the other on every axis.
+    ///
+    /// `const fn` so a caller can compose two named presets into a
+    /// third at compile time (`pub const CI_RESOURCE_LIMITS:
+    /// ResourceLimits = SOME_OPERATOR_PRESET.strictest(
+    /// SOME_CI_PRESET);`) rather than deferring the composition to
+    /// a runtime `Default::default()` chain.
+    ///
+    /// Pre-lift, a caller wanting the tightest common posture across
+    /// two shipped presets composed the intersection at its call site
+    /// as six independent `usize::min(a.max_X, b.max_X)` invocations
+    /// stitched into a fresh `ResourceLimits { ... }` literal — the
+    /// same six-inline-primitive shape the pre-`ResourceLimits`
+    /// bundled `Expander` posture required its callers to carry, and
+    /// the same exhaustiveness gap the `..Default::default()`-free
+    /// literal on the bundled struct exists to close: a copy-paste
+    /// that dropped ONE of the six `min` invocations left THAT
+    /// ceiling at whichever posture the caller happened to seed the
+    /// literal with, and the type system did not gate the drop.
+    /// Post-lift the composition binds at ONE typed method on the
+    /// posture algebra — a caller writes
+    /// `operator_preset.strictest(ci_preset)` and rustc's
+    /// field-exhaustiveness at the const's construction guarantees
+    /// every ceiling is threaded through the `min` primitive.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the tightest posture of two preset-carried
+    /// resource proofs is itself a `ResourceLimits` whose proof
+    /// content is the intersection of the two, and this method is
+    /// the typed named entry composing them. THEORY.md §V.1 —
+    /// knowable platform; the pointwise-`min` combinator becomes a
+    /// TYPE-level operation on the posture algebra rather than an
+    /// inline six-primitive cascade at every consumer that composes
+    /// two presets. `tatara-lattice`'s `meet` / `join` operators on
+    /// `Classification` (see `pleme-io/tatara` workspace crate
+    /// docstring: "Lattice algebra over Classification — `meet` /
+    /// `join` / `leq` / `Baseline`") close the SAME shape one layer
+    /// down: an entity's classification is a lattice; a resource
+    /// posture is a lattice; both algebras carry the (meet, join)
+    /// operator pair as their fundamental composition primitives.
+    #[must_use]
+    pub const fn strictest(self, other: Self) -> Self {
+        Self {
+            max_expansion_depth: min_usize(self.max_expansion_depth, other.max_expansion_depth),
+            max_cache_entries: min_usize(self.max_cache_entries, other.max_cache_entries),
+            max_expansion_size: min_usize(self.max_expansion_size, other.max_expansion_size),
+            max_macro_body_size: min_usize(self.max_macro_body_size, other.max_macro_body_size),
+            max_registered_macros: min_usize(
+                self.max_registered_macros,
+                other.max_registered_macros,
+            ),
+            max_macro_arity: min_usize(self.max_macro_arity, other.max_macro_arity),
+        }
+    }
+
+    /// Pointwise-`max` across the six ceilings — the MOST-PERMISSIVE
+    /// posture whose admissible input set is the union of `self`'s
+    /// and `other`'s admissible input sets. `a.most_permissive(b)`
+    /// admits an input iff EITHER `a` OR `b` admits it: on every
+    /// field the per-axis ceiling is the larger of the two, so a
+    /// value that either posture accepts the join accepts, and a
+    /// value the join rejects both postures reject.
+    ///
+    /// The join of the `ResourceLimits` lattice under the pointwise
+    /// partial order `a ≤ b iff every field of a ≤ every field of b`
+    /// (tighter-first). Peer of [`Self::strictest`] one COMBINATOR
+    /// axis over on the lattice-algebra surface: where `strictest` is
+    /// the meet (pointwise-`min`, GLB), this is the join
+    /// (pointwise-`max`, LUB). Together the two operations close the
+    /// (meet, join) lattice operator pair on the [`ResourceLimits`]
+    /// posture algebra.
+    ///
+    /// The concrete identity on the shipped preset pair holds
+    /// structurally: [`DEFAULT_RESOURCE_LIMITS`]`.most_permissive(`
+    /// [`UNBOUNDED_RESOURCE_LIMITS`]`) == `[`UNBOUNDED_RESOURCE_LIMITS`].
+    /// Every `DEFAULT_MAX_*` module constant is a concrete positive
+    /// value strictly less than [`usize::MAX`], so on every axis the
+    /// pointwise-`max` picks the UNBOUNDED side; the six-axis pin
+    /// holds as a typed theorem in the test cohort.
+    ///
+    /// Idempotent, commutative, associative, and satisfies the
+    /// absorption identity with the meet
+    /// (`a.most_permissive(a.strictest(b)) == a`) — all pinned as
+    /// typed theorems in the test cohort. Distributive over the meet
+    /// (`a.most_permissive(b.strictest(c)) ==
+    /// a.most_permissive(b).strictest(a.most_permissive(c))`).
+    ///
+    /// `const fn` so a caller can compose two named presets into a
+    /// third at compile time rather than deferring the composition
+    /// to a runtime `Default::default()` chain.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the most-permissive posture of two preset-
+    /// carried resource proofs is itself a `ResourceLimits` whose
+    /// proof content is the union of the two, and this method is the
+    /// typed named entry composing them. THEORY.md §V.1 — knowable
+    /// platform; the pointwise-`max` combinator becomes a TYPE-level
+    /// operation on the posture algebra rather than an inline
+    /// six-primitive cascade at every consumer that composes two
+    /// presets.
+    #[must_use]
+    pub const fn most_permissive(self, other: Self) -> Self {
+        Self {
+            max_expansion_depth: max_usize(self.max_expansion_depth, other.max_expansion_depth),
+            max_cache_entries: max_usize(self.max_cache_entries, other.max_cache_entries),
+            max_expansion_size: max_usize(self.max_expansion_size, other.max_expansion_size),
+            max_macro_body_size: max_usize(self.max_macro_body_size, other.max_macro_body_size),
+            max_registered_macros: max_usize(
+                self.max_registered_macros,
+                other.max_registered_macros,
+            ),
+            max_macro_arity: max_usize(self.max_macro_arity, other.max_macro_arity),
+        }
+    }
+}
+
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
 /// its manual `Hash` impl — no serde_json round-trip per cache lookup.
 type CacheKey = (String, u64);
@@ -15086,5 +15263,379 @@ mod tests {
         b.set_resource_limits(UNBOUNDED_RESOURCE_LIMITS);
         assert_eq!(a.resource_limits(), b.resource_limits());
         assert_eq!(a.resource_limits(), UNBOUNDED_RESOURCE_LIMITS);
+    }
+
+    // ── ResourceLimits::strictest / ::most_permissive — meet/join ──────
+
+    /// A hand-authored asymmetric posture used across the lattice-law
+    /// tests. Every field is a distinct positive value strictly less
+    /// than [`usize::MAX`] and distinct from every corresponding
+    /// [`DEFAULT_MAX_*`] module constant, so composition witnesses
+    /// (meet, join, absorption, distributivity) discriminate across
+    /// all three postures unambiguously.
+    const HAND_AUTHORED_MID_POSTURE: ResourceLimits = ResourceLimits {
+        max_expansion_depth: 7,
+        max_cache_entries: 11,
+        max_expansion_size: 13,
+        max_macro_body_size: 17,
+        max_registered_macros: 19,
+        max_macro_arity: 23,
+    };
+
+    /// A second asymmetric posture whose per-axis values are on both
+    /// sides of `HAND_AUTHORED_MID_POSTURE`'s values — three axes
+    /// smaller (so the meet picks THIS posture on those axes and the
+    /// join picks `MID` on those axes) and three axes larger (mirror).
+    /// Together the two postures exercise every ordering combination
+    /// on the six-axis pointwise `min`/`max` cascade.
+    const HAND_AUTHORED_OTHER_POSTURE: ResourceLimits = ResourceLimits {
+        max_expansion_depth: 3,   // smaller than MID's 7
+        max_cache_entries: 29,    // larger  than MID's 11
+        max_expansion_size: 5,    // smaller than MID's 13
+        max_macro_body_size: 31,  // larger  than MID's 17
+        max_registered_macros: 2, // smaller than MID's 19
+        max_macro_arity: 41,      // larger  than MID's 23
+    };
+
+    #[test]
+    fn resource_limits_strictest_of_default_and_unbounded_projects_the_default() {
+        // Concrete-preset pin — the meet of the (shipped default,
+        // ceiling-lifted unbounded) preset pair is the DEFAULT preset
+        // structurally: every `DEFAULT_MAX_*` module constant is a
+        // concrete positive value strictly less than [`usize::MAX`],
+        // so on every axis the pointwise-`min` picks the DEFAULT side.
+        // Peer of `most_permissive_of_default_and_unbounded_projects_the_unbounded`
+        // one COMBINATOR axis over on the same shipped-preset-pair
+        // surface.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.strictest(UNBOUNDED_RESOURCE_LIMITS),
+            DEFAULT_RESOURCE_LIMITS,
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.strictest(DEFAULT_RESOURCE_LIMITS),
+            DEFAULT_RESOURCE_LIMITS,
+        );
+    }
+
+    #[test]
+    fn resource_limits_most_permissive_of_default_and_unbounded_projects_the_unbounded() {
+        // Concrete-preset pin — the join of the (shipped default,
+        // ceiling-lifted unbounded) preset pair is the UNBOUNDED
+        // preset structurally: every axis's pointwise-`max` picks the
+        // [`usize::MAX`] side over any concrete default. Peer of
+        // `strictest_of_default_and_unbounded_projects_the_default`.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.most_permissive(UNBOUNDED_RESOURCE_LIMITS),
+            UNBOUNDED_RESOURCE_LIMITS,
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.most_permissive(DEFAULT_RESOURCE_LIMITS),
+            UNBOUNDED_RESOURCE_LIMITS,
+        );
+    }
+
+    #[test]
+    fn resource_limits_strictest_takes_pointwise_min_on_every_axis() {
+        // Field-level pin — the meet operation projects the pointwise
+        // `min` across the six-field surface. Pinned as six
+        // independent field asserts (rather than one struct equality)
+        // so a drift on ONE axis carries a distinct-name failure that
+        // names the drifting axis; a future SEVENTH ceiling extension
+        // requires an additional field assert here in lockstep.
+        let m = HAND_AUTHORED_MID_POSTURE.strictest(HAND_AUTHORED_OTHER_POSTURE);
+        assert_eq!(m.max_expansion_depth, 3);
+        assert_eq!(m.max_cache_entries, 11);
+        assert_eq!(m.max_expansion_size, 5);
+        assert_eq!(m.max_macro_body_size, 17);
+        assert_eq!(m.max_registered_macros, 2);
+        assert_eq!(m.max_macro_arity, 23);
+    }
+
+    #[test]
+    fn resource_limits_most_permissive_takes_pointwise_max_on_every_axis() {
+        // Field-level pin — the join operation projects the pointwise
+        // `max` across the six-field surface. Pinned as six
+        // independent field asserts so a drift on ONE axis carries a
+        // distinct-name failure that names the drifting axis.
+        let j = HAND_AUTHORED_MID_POSTURE.most_permissive(HAND_AUTHORED_OTHER_POSTURE);
+        assert_eq!(j.max_expansion_depth, 7);
+        assert_eq!(j.max_cache_entries, 29);
+        assert_eq!(j.max_expansion_size, 13);
+        assert_eq!(j.max_macro_body_size, 31);
+        assert_eq!(j.max_registered_macros, 19);
+        assert_eq!(j.max_macro_arity, 41);
+    }
+
+    #[test]
+    fn resource_limits_strictest_is_idempotent() {
+        // Lattice law — `a ∧ a = a`. Every posture is a fixed point of
+        // its own meet with itself; a regression that changed the
+        // per-axis primitive to something other than pointwise `min`
+        // (a `min - 1` off-by-one, or an arbitrary tie-breaker on
+        // equal values) fires here.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.strictest(DEFAULT_RESOURCE_LIMITS),
+            DEFAULT_RESOURCE_LIMITS,
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.strictest(UNBOUNDED_RESOURCE_LIMITS),
+            UNBOUNDED_RESOURCE_LIMITS,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.strictest(HAND_AUTHORED_MID_POSTURE),
+            HAND_AUTHORED_MID_POSTURE,
+        );
+    }
+
+    #[test]
+    fn resource_limits_most_permissive_is_idempotent() {
+        // Lattice law — `a ∨ a = a`. Sibling of the strictest
+        // idempotence pin one COMBINATOR axis over.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.most_permissive(DEFAULT_RESOURCE_LIMITS),
+            DEFAULT_RESOURCE_LIMITS,
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.most_permissive(UNBOUNDED_RESOURCE_LIMITS),
+            UNBOUNDED_RESOURCE_LIMITS,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.most_permissive(HAND_AUTHORED_MID_POSTURE),
+            HAND_AUTHORED_MID_POSTURE,
+        );
+    }
+
+    #[test]
+    fn resource_limits_strictest_is_commutative() {
+        // Lattice law — `a ∧ b = b ∧ a`. Pointwise `min` is symmetric
+        // on every axis, so the composition inherits commutativity
+        // structurally. A regression that broke ordering (e.g. a
+        // per-axis "prefer left on tie") fires here.
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.strictest(HAND_AUTHORED_OTHER_POSTURE),
+            HAND_AUTHORED_OTHER_POSTURE.strictest(HAND_AUTHORED_MID_POSTURE),
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.strictest(HAND_AUTHORED_MID_POSTURE),
+            HAND_AUTHORED_MID_POSTURE.strictest(DEFAULT_RESOURCE_LIMITS),
+        );
+    }
+
+    #[test]
+    fn resource_limits_most_permissive_is_commutative() {
+        // Lattice law — `a ∨ b = b ∨ a`. Sibling of the strictest
+        // commutativity pin one COMBINATOR axis over.
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.most_permissive(HAND_AUTHORED_OTHER_POSTURE),
+            HAND_AUTHORED_OTHER_POSTURE.most_permissive(HAND_AUTHORED_MID_POSTURE),
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.most_permissive(HAND_AUTHORED_MID_POSTURE),
+            HAND_AUTHORED_MID_POSTURE.most_permissive(DEFAULT_RESOURCE_LIMITS),
+        );
+    }
+
+    #[test]
+    fn resource_limits_strictest_is_associative() {
+        // Lattice law — `(a ∧ b) ∧ c = a ∧ (b ∧ c)`. Pointwise `min`
+        // is associative on every axis, so the composition inherits
+        // associativity structurally. A regression that broke
+        // grouping (e.g. an accidental accumulator that skewed the
+        // order of `min` invocations) fires here.
+        let a = DEFAULT_RESOURCE_LIMITS;
+        let b = HAND_AUTHORED_MID_POSTURE;
+        let c = HAND_AUTHORED_OTHER_POSTURE;
+        assert_eq!(a.strictest(b).strictest(c), a.strictest(b.strictest(c)));
+    }
+
+    #[test]
+    fn resource_limits_most_permissive_is_associative() {
+        // Lattice law — `(a ∨ b) ∨ c = a ∨ (b ∨ c)`. Sibling of the
+        // strictest associativity pin one COMBINATOR axis over.
+        let a = DEFAULT_RESOURCE_LIMITS;
+        let b = HAND_AUTHORED_MID_POSTURE;
+        let c = HAND_AUTHORED_OTHER_POSTURE;
+        assert_eq!(
+            a.most_permissive(b).most_permissive(c),
+            a.most_permissive(b.most_permissive(c)),
+        );
+    }
+
+    #[test]
+    fn resource_limits_meet_and_join_satisfy_absorption() {
+        // Lattice absorption identities — `a ∧ (a ∨ b) = a` AND
+        // `a ∨ (a ∧ b) = a`. Together with commutativity, idempotence,
+        // and associativity they define the lattice axioms; the two
+        // absorption laws are the operator PAIR's interlock (each
+        // undoes the other's contribution on the shared operand).
+        // Any per-axis primitive pair for which `min(a, max(a, b)) = a`
+        // AND `max(a, min(a, b)) = a` inherits this at the pointwise
+        // composition; pointwise-`min`/`max` on [`usize`] satisfy both.
+        let a = HAND_AUTHORED_MID_POSTURE;
+        let b = HAND_AUTHORED_OTHER_POSTURE;
+        assert_eq!(a.strictest(a.most_permissive(b)), a);
+        assert_eq!(a.most_permissive(a.strictest(b)), a);
+    }
+
+    #[test]
+    fn resource_limits_meet_distributes_over_join() {
+        // Distributive-lattice pin — `a ∧ (b ∨ c) = (a ∧ b) ∨ (a ∧ c)`.
+        // Pointwise-`min` distributes over pointwise-`max` on [`usize`]
+        // on every axis, so the composition inherits distributivity
+        // structurally. A regression that broke the pointwise
+        // structure (e.g. a per-axis operation that used SUBTRACTION
+        // rather than MIN/MAX) fires here — subtraction does NOT
+        // distribute over addition and would break the law on the
+        // asymmetric-posture witness pair.
+        let a = DEFAULT_RESOURCE_LIMITS;
+        let b = HAND_AUTHORED_MID_POSTURE;
+        let c = HAND_AUTHORED_OTHER_POSTURE;
+        assert_eq!(
+            a.strictest(b.most_permissive(c)),
+            a.strictest(b).most_permissive(a.strictest(c)),
+        );
+    }
+
+    #[test]
+    fn resource_limits_join_distributes_over_meet() {
+        // Distributive-lattice pin, sibling of the meet-over-join
+        // distributivity pin one COMBINATOR axis over — `a ∨ (b ∧ c) =
+        // (a ∨ b) ∧ (a ∨ c)`. In a distributive lattice BOTH
+        // distributivity identities hold; pin both so a regression
+        // that broke ONE without the other cannot slip through.
+        let a = DEFAULT_RESOURCE_LIMITS;
+        let b = HAND_AUTHORED_MID_POSTURE;
+        let c = HAND_AUTHORED_OTHER_POSTURE;
+        assert_eq!(
+            a.most_permissive(b.strictest(c)),
+            a.most_permissive(b).strictest(a.most_permissive(c)),
+        );
+    }
+
+    #[test]
+    fn resource_limits_strictest_is_dominated_by_both_operands_pointwise() {
+        // Meet-lower-bound pin — the meet lies at or below BOTH
+        // operands on every axis. This is the structural GLB property
+        // of the meet in the pointwise partial order (tighter-first):
+        // any admissible input under the meet is admissible under
+        // both operands, so the meet's ceiling must not exceed either
+        // operand's ceiling on any axis.
+        let a = HAND_AUTHORED_MID_POSTURE;
+        let b = HAND_AUTHORED_OTHER_POSTURE;
+        let m = a.strictest(b);
+        assert!(m.max_expansion_depth <= a.max_expansion_depth);
+        assert!(m.max_expansion_depth <= b.max_expansion_depth);
+        assert!(m.max_cache_entries <= a.max_cache_entries);
+        assert!(m.max_cache_entries <= b.max_cache_entries);
+        assert!(m.max_expansion_size <= a.max_expansion_size);
+        assert!(m.max_expansion_size <= b.max_expansion_size);
+        assert!(m.max_macro_body_size <= a.max_macro_body_size);
+        assert!(m.max_macro_body_size <= b.max_macro_body_size);
+        assert!(m.max_registered_macros <= a.max_registered_macros);
+        assert!(m.max_registered_macros <= b.max_registered_macros);
+        assert!(m.max_macro_arity <= a.max_macro_arity);
+        assert!(m.max_macro_arity <= b.max_macro_arity);
+    }
+
+    #[test]
+    fn resource_limits_most_permissive_dominates_both_operands_pointwise() {
+        // Join-upper-bound pin — the join lies at or above BOTH
+        // operands on every axis. Sibling of the strictest-lower-
+        // bound pin one COMBINATOR axis over; the structural LUB
+        // property of the join in the pointwise partial order.
+        let a = HAND_AUTHORED_MID_POSTURE;
+        let b = HAND_AUTHORED_OTHER_POSTURE;
+        let j = a.most_permissive(b);
+        assert!(j.max_expansion_depth >= a.max_expansion_depth);
+        assert!(j.max_expansion_depth >= b.max_expansion_depth);
+        assert!(j.max_cache_entries >= a.max_cache_entries);
+        assert!(j.max_cache_entries >= b.max_cache_entries);
+        assert!(j.max_expansion_size >= a.max_expansion_size);
+        assert!(j.max_expansion_size >= b.max_expansion_size);
+        assert!(j.max_macro_body_size >= a.max_macro_body_size);
+        assert!(j.max_macro_body_size >= b.max_macro_body_size);
+        assert!(j.max_registered_macros >= a.max_registered_macros);
+        assert!(j.max_registered_macros >= b.max_registered_macros);
+        assert!(j.max_macro_arity >= a.max_macro_arity);
+        assert!(j.max_macro_arity >= b.max_macro_arity);
+    }
+
+    #[test]
+    fn resource_limits_strictest_composes_at_compile_time_via_const_fn() {
+        // Const-fn pin — the meet is evaluable in const context, so a
+        // caller can stitch a new `pub const` preset from two shipped
+        // presets without deferring the composition to runtime. Pinned
+        // as a `const` binding at the item level so the compiler
+        // exercises the const-fn path structurally; the runtime
+        // assertion is redundant for a `const` value that already
+        // evaluated at compile time, but pins the identity as a typed
+        // theorem alongside every OTHER `strictest` pin above.
+        const DEFAULT_TIGHTENED_BY_MID: ResourceLimits =
+            DEFAULT_RESOURCE_LIMITS.strictest(HAND_AUTHORED_MID_POSTURE);
+        assert_eq!(
+            DEFAULT_TIGHTENED_BY_MID.max_expansion_depth,
+            min_usize(
+                DEFAULT_RESOURCE_LIMITS.max_expansion_depth,
+                HAND_AUTHORED_MID_POSTURE.max_expansion_depth,
+            ),
+        );
+        // Extra check: the composition MUST project the MID posture's
+        // small value on every axis where MID is smaller than DEFAULT
+        // — MID's per-axis values (7, 11, 13, 17, 19, 23) are all
+        // strictly less than every `DEFAULT_MAX_*` constant, so the
+        // meet projects MID verbatim.
+        assert_eq!(DEFAULT_TIGHTENED_BY_MID, HAND_AUTHORED_MID_POSTURE);
+    }
+
+    #[test]
+    fn resource_limits_most_permissive_composes_at_compile_time_via_const_fn() {
+        // Const-fn pin sibling of the strictest const-composition pin
+        // one COMBINATOR axis over — the join is also `const fn`, so
+        // a caller can stitch a new `pub const` preset via the LUB
+        // combinator at compile time.
+        const DEFAULT_LOOSENED_BY_UNBOUNDED: ResourceLimits =
+            DEFAULT_RESOURCE_LIMITS.most_permissive(UNBOUNDED_RESOURCE_LIMITS);
+        assert_eq!(DEFAULT_LOOSENED_BY_UNBOUNDED, UNBOUNDED_RESOURCE_LIMITS);
+    }
+
+    #[test]
+    fn expander_built_at_strictest_of_two_presets_gates_at_the_tighter_ceiling() {
+        // Behavioral pin — an expander constructed from the meet of
+        // two postures MUST gate at the tighter of the two ceilings
+        // on every axis. Build the meet of the ceiling-lifted preset
+        // and a hand-authored posture whose `max_macro_arity` sits at
+        // 1; the meet inherits the 1-slot arity ceiling (tighter than
+        // [`usize::MAX`]) AND the [`usize::MAX`] ceiling on every
+        // other axis (tighter than the hand-authored posture's small
+        // values — no, wait: the OTHER posture's small values ARE
+        // tighter. So the meet inherits 1 on arity and the OTHER
+        // small values elsewhere.) Confirm the constructed expander
+        // rejects a 2-arg macro registration with the arity gate.
+        let tightened = UNBOUNDED_RESOURCE_LIMITS.strictest(ResourceLimits {
+            max_macro_arity: 1,
+            ..UNBOUNDED_RESOURCE_LIMITS
+        });
+        assert_eq!(tightened.max_macro_arity, 1);
+        // Other five axes remain at `usize::MAX` (both operands carry
+        // `usize::MAX` on those, so the pointwise `min` is `usize::MAX`).
+        assert_eq!(tightened.max_expansion_depth, usize::MAX);
+        assert_eq!(tightened.max_cache_entries, usize::MAX);
+        assert_eq!(tightened.max_expansion_size, usize::MAX);
+        assert_eq!(tightened.max_macro_body_size, usize::MAX);
+        assert_eq!(tightened.max_registered_macros, usize::MAX);
+        let mut e = Expander::with_limits(tightened);
+        let forms = read("(defmacro two (a b) `,a)").unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::MacroArityExceeded {
+                    arity: 2,
+                    limit: 1,
+                    ..
+                }
+            ),
+            "the tighter arity ceiling from the meet MUST reach the register-time gate; got: {err:?}"
+        );
     }
 }

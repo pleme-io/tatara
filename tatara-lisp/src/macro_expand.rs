@@ -1057,103 +1057,28 @@ pub struct Expander {
     /// Toggle caching. Default on — caching is the actual performance win
     /// the bytecode layer enables.
     cache_enabled: bool,
-    /// Ceiling on `expand`'s recursive re-entry into a macro-call form. On
-    /// the runaway `(defmacro loop (x) `(loop ,x))` this is what turns a
-    /// stack overflow into a typed [`LispError::ExpansionDepthExceeded`]
-    /// rejection. Default [`DEFAULT_MAX_EXPANSION_DEPTH`]; tests set it
-    /// lower via [`Self::set_max_expansion_depth`] to pin the rejection
-    /// shape without paying for a 256-round walk.
-    max_expansion_depth: usize,
-    /// Ceiling on the [`Self::cache`] entry count. Peer to
-    /// [`Self::max_expansion_depth`] one RESOURCE axis over — where the
-    /// depth ceiling bounds RECURSION, this ceiling bounds MEMORY. When
-    /// [`Self::apply`] would otherwise insert a fresh `(name, args)`
-    /// memoization onto a cache already holding `max_cache_entries`
-    /// entries, the insert is SKIPPED and the caller receives the
-    /// freshly-computed result verbatim — the cache remains a pure
-    /// PERFORMANCE optimization and never gates CORRECTNESS. Default
-    /// [`DEFAULT_MAX_CACHE_ENTRIES`]; tests set it lower via
-    /// [`Self::set_max_cache_entries`] to pin the bounded-cache
-    /// contract without paying for an 8K-entry walk.
-    max_cache_entries: usize,
-    /// Ceiling on the [`crate::ast::Sexp::node_count`] of a single
-    /// macro-`apply` output. Peer to [`Self::max_expansion_depth`]
-    /// and [`Self::max_cache_entries`] one RESOURCE-DIMENSION axis
-    /// over — where depth bounds RECURSION LENGTH and cache-entries
-    /// bounds MEMOIZATION WIDTH, this ceiling bounds OUTPUT SIZE. On
-    /// the canonical "expansion bomb"
-    /// `(defmacro bomb (x) `(list ,x ,x ,x ,x ,x ,x ,x ,x))` this is
-    /// what turns a heap-exhausted abort into a typed
-    /// [`crate::error::LispError::ExpansionSizeExceeded`] rejection.
-    /// Default [`DEFAULT_MAX_EXPANSION_SIZE`]; tests set it lower via
-    /// [`Self::set_max_expansion_size`] to pin the rejection shape
-    /// without materializing a 64K-node blob.
-    max_expansion_size: usize,
-    /// Ceiling on a registered macro's BODY
-    /// [`crate::ast::Sexp::node_count`], consulted at
-    /// [`Self::register_macro_def`] time BEFORE
-    /// [`compile_template`] walks the body or the entry lands in
-    /// [`Self::macros`]. Peer to [`Self::max_expansion_depth`],
-    /// [`Self::max_cache_entries`], and [`Self::max_expansion_size`]
-    /// one PIPELINE-STAGE axis over — the three prior guards fire at
-    /// EXPAND time; this one fires at REGISTER time. On the
-    /// canonical authoring-bomb
-    /// `(defmacro huge (x) `<template-of-N-million-nodes>)` this is
-    /// what turns an unbounded body-storage cost into a typed
-    /// [`crate::error::LispError::MacroBodySizeExceeded`] rejection.
-    /// Default [`DEFAULT_MAX_MACRO_BODY_SIZE`]; tests set it lower
-    /// via [`Self::set_max_macro_body_size`] to pin the rejection
-    /// shape without materializing a 16K-node authoring blob.
-    max_macro_body_size: usize,
-    /// Ceiling on the [`Self::macros`] table's entry count, consulted
-    /// at [`Self::register_macro_def`] time BEFORE the body-size gate
-    /// walks the body or any insert lands. Peer to
-    /// [`Self::max_macro_body_size`] one RESOURCE-DIMENSION axis over
-    /// on the REGISTER-time surface — where body-size bounds a
-    /// per-registration SIZE, this ceiling bounds cumulative
-    /// registration COUNT. Peer to [`Self::max_cache_entries`] one
-    /// PIPELINE-STAGE axis over — the two entry-count guards close
-    /// the two pipeline stages symmetrically. On the canonical
-    /// registration-bomb (a code-generator emitting unbounded fresh
-    /// `(defmacro fresh-N (x) `(list ,x))` heads) this is what turns
-    /// an unbounded macros-table growth into a typed
-    /// [`crate::error::LispError::RegisteredMacrosExceeded`]
-    /// rejection at the first fresh key past the ceiling. Overwrites
-    /// (re-registrations of an already-registered key) never trigger
-    /// the gate — only FRESH keys are counted.
-    /// Default [`DEFAULT_MAX_REGISTERED_MACROS`]; tests set it lower
-    /// via [`Self::set_max_registered_macros`] to pin the rejection
-    /// shape without materializing a 4K-entry macros table.
-    max_registered_macros: usize,
-    /// Ceiling on a registered macro's lambda-list ARITY (the
-    /// [`MacroParams::total_arity`] projection: `required.len() +
-    /// optional.len() + rest.is_some() as usize`), consulted at
-    /// [`Self::register_macro_def`] time BETWEEN the table-count gate
-    /// (cheapest, O(1) `HashMap::len`) and the body-size gate (O(N)
-    /// on `def.body.node_count()`). Peer to
-    /// [`Self::max_macro_body_size`] one RESOURCE-DIMENSION axis over
-    /// on the REGISTER-time surface — where body-size bounds a
-    /// per-registration BODY node count, this ceiling bounds a
-    /// per-registration PARAM slot count. Peer to
-    /// [`Self::max_registered_macros`] one RESOURCE-DIMENSION axis
-    /// over on the REGISTER-time surface — where registered-macros
-    /// bounds cumulative registration COUNT, this ceiling bounds a
-    /// per-registration PARAM-LIST WIDTH. Together the three
-    /// REGISTER-time ceilings close the (per-body SIZE, per-body
-    /// ARITY, per-table COUNT) three-corner surface. On the canonical
-    /// arity-bomb
-    /// `(defmacro huge (a-1 a-2 … a-N-million) `,a-1)` — a code
-    /// generator whose body sits at 1 node (well under
-    /// `max_macro_body_size`) yet whose param list carries millions
-    /// of fresh names each subsequent call has to walk in the
-    /// per-index binder — this is what turns an unbounded per-call
-    /// binder cost into a typed
-    /// [`crate::error::LispError::MacroArityExceeded`] rejection at
-    /// the REGISTRATION boundary.
-    /// Default [`DEFAULT_MAX_MACRO_ARITY`]; tests set it lower via
-    /// [`Self::set_max_macro_arity`] to pin the rejection shape
-    /// without materializing a 128-slot authoring blob.
-    max_macro_arity: usize,
+    /// The six resource ceilings, held as ONE typed [`ResourceLimits`] bundle
+    /// rather than six sibling `max_*: usize` fields. Peer of the six
+    /// getter/setter pairs one AGGREGATION axis over — where each pair
+    /// projects ONE ceiling, this field carries the SIX-fold cross-product
+    /// so [`Self::resource_limits`] returns `self.limits` verbatim and
+    /// [`Self::set_resource_limits`] assigns through the bundle in ONE move.
+    ///
+    /// Adding a SEVENTH ceiling touches [`ResourceLimits`] + the matching
+    /// `DEFAULT_MAX_*` module constant + the paired individual getter/setter
+    /// — the [`Expander`] struct, its constructors, AND
+    /// [`Self::resource_limits`] / [`Self::set_resource_limits`] stay
+    /// exactly as they are. That's the compounding win of the
+    /// consolidation: the (Expander, constructors, bulk getter, bulk
+    /// setter) four-corner face is field-shape-agnostic — it composes with
+    /// the bundle by value, not by field-by-field literal.
+    ///
+    /// Consumers on the read path (`register_macro_def`'s three REGISTER-time
+    /// gates, `expand_with_depth`'s depth + output-size gates, `apply`'s
+    /// cache-entries gate) dereference through `self.limits.max_*`; the
+    /// projection is a `Copy usize` load — same shape as reading a bare
+    /// field, no `Deref`, no `Arc`, no lock.
+    limits: ResourceLimits,
 }
 
 impl Expander {
@@ -1165,12 +1090,7 @@ impl Expander {
             compile_templates: true,
             cache: Arc::new(Mutex::new(HashMap::new())),
             cache_enabled: true,
-            max_expansion_depth: DEFAULT_MAX_EXPANSION_DEPTH,
-            max_cache_entries: DEFAULT_MAX_CACHE_ENTRIES,
-            max_expansion_size: DEFAULT_MAX_EXPANSION_SIZE,
-            max_macro_body_size: DEFAULT_MAX_MACRO_BODY_SIZE,
-            max_registered_macros: DEFAULT_MAX_REGISTERED_MACROS,
-            max_macro_arity: DEFAULT_MAX_MACRO_ARITY,
+            limits: DEFAULT_RESOURCE_LIMITS,
         }
     }
 
@@ -1183,12 +1103,7 @@ impl Expander {
             compile_templates: false,
             cache: Arc::new(Mutex::new(HashMap::new())),
             cache_enabled: false,
-            max_expansion_depth: DEFAULT_MAX_EXPANSION_DEPTH,
-            max_cache_entries: DEFAULT_MAX_CACHE_ENTRIES,
-            max_expansion_size: DEFAULT_MAX_EXPANSION_SIZE,
-            max_macro_body_size: DEFAULT_MAX_MACRO_BODY_SIZE,
-            max_registered_macros: DEFAULT_MAX_REGISTERED_MACROS,
-            max_macro_arity: DEFAULT_MAX_MACRO_ARITY,
+            limits: DEFAULT_RESOURCE_LIMITS,
         }
     }
 
@@ -1219,7 +1134,7 @@ impl Expander {
     /// macro-call form. Defaults to [`DEFAULT_MAX_EXPANSION_DEPTH`].
     #[must_use]
     pub fn max_expansion_depth(&self) -> usize {
-        self.max_expansion_depth
+        self.limits.max_expansion_depth
     }
 
     /// Set the ceiling on `expand`'s recursive re-entry into a macro-call
@@ -1231,7 +1146,7 @@ impl Expander {
     /// contract-tests that assert "this reader path never expands a
     /// macro."
     pub fn set_max_expansion_depth(&mut self, depth: usize) {
-        self.max_expansion_depth = depth;
+        self.limits.max_expansion_depth = depth;
     }
 
     /// The configured ceiling on the expansion cache's entry count.
@@ -1239,7 +1154,7 @@ impl Expander {
     /// [`Self::max_expansion_depth`] one RESOURCE axis over.
     #[must_use]
     pub fn max_cache_entries(&self) -> usize {
-        self.max_cache_entries
+        self.limits.max_cache_entries
     }
 
     /// Set the ceiling on the expansion cache's entry count. Tests bind
@@ -1252,7 +1167,7 @@ impl Expander {
     /// unbounded-cache mode for batch compilation runs where memory is
     /// not the concern.
     pub fn set_max_cache_entries(&mut self, cap: usize) {
-        self.max_cache_entries = cap;
+        self.limits.max_cache_entries = cap;
     }
 
     /// The configured ceiling on a single macro-`apply` output's
@@ -1262,7 +1177,7 @@ impl Expander {
     /// one RESOURCE-DIMENSION axis over.
     #[must_use]
     pub fn max_expansion_size(&self) -> usize {
-        self.max_expansion_size
+        self.limits.max_expansion_size
     }
 
     /// Set the ceiling on a single macro-`apply` output's node count.
@@ -1273,7 +1188,7 @@ impl Expander {
     /// effectively lifted); operators that want strict "your macros
     /// must fit in N nodes" contract-tests set it exactly.
     pub fn set_max_expansion_size(&mut self, size: usize) {
-        self.max_expansion_size = size;
+        self.limits.max_expansion_size = size;
     }
 
     /// The configured ceiling on a registered macro's BODY
@@ -1285,7 +1200,7 @@ impl Expander {
     /// at REGISTER time).
     #[must_use]
     pub fn max_macro_body_size(&self) -> usize {
-        self.max_macro_body_size
+        self.limits.max_macro_body_size
     }
 
     /// Set the ceiling on a registered macro's BODY node count.
@@ -1299,7 +1214,7 @@ impl Expander {
     /// ceiling) — useful for contract-tests that assert "this
     /// expander refuses every registration."
     pub fn set_max_macro_body_size(&mut self, size: usize) {
-        self.max_macro_body_size = size;
+        self.limits.max_macro_body_size = size;
     }
 
     /// The configured ceiling on the [`Self::macros`] table's entry
@@ -1309,7 +1224,7 @@ impl Expander {
     /// one PIPELINE-STAGE axis over.
     #[must_use]
     pub fn max_registered_macros(&self) -> usize {
-        self.max_registered_macros
+        self.limits.max_registered_macros
     }
 
     /// Set the ceiling on the [`Self::macros`] table's entry count.
@@ -1324,7 +1239,7 @@ impl Expander {
     /// was registered before the ceiling was set (a re-registration
     /// of an existing key never grows the table).
     pub fn set_max_registered_macros(&mut self, cap: usize) {
-        self.max_registered_macros = cap;
+        self.limits.max_registered_macros = cap;
     }
 
     /// The configured ceiling on a registered macro's lambda-list
@@ -1333,7 +1248,7 @@ impl Expander {
     /// one RESOURCE-DIMENSION axis over on the REGISTER-time surface.
     #[must_use]
     pub fn max_macro_arity(&self) -> usize {
-        self.max_macro_arity
+        self.limits.max_macro_arity
     }
 
     /// Set the ceiling on a registered macro's lambda-list arity —
@@ -1349,7 +1264,7 @@ impl Expander {
     /// useful for contract-tests that assert "this expander accepts
     /// only nullary macros."
     pub fn set_max_macro_arity(&mut self, cap: usize) {
-        self.max_macro_arity = cap;
+        self.limits.max_macro_arity = cap;
     }
 
     /// Snapshot the six configured resource ceilings as ONE typed
@@ -1364,20 +1279,15 @@ impl Expander {
     /// field via a struct-update literal) bind to this projection at
     /// ONE call site rather than composing the six individual getters.
     ///
-    /// Adding a SEVENTH ceiling extends this projection AND
-    /// [`Self::set_resource_limits`] AND [`ResourceLimits`] in
-    /// lockstep — rustc's field-exhaustiveness on the returned struct
-    /// literal fires the compilation error at ONE site.
+    /// Post the [`Self::limits`]-field consolidation the projection is
+    /// a direct `Copy` of the bundled field — a `usize`-sized fixed
+    /// return with no per-field literal walk. Adding a SEVENTH ceiling
+    /// extends [`ResourceLimits`] and the paired individual
+    /// getter/setter; this bulk getter is field-shape-agnostic and
+    /// stays exactly as it is.
     #[must_use]
     pub fn resource_limits(&self) -> ResourceLimits {
-        ResourceLimits {
-            max_expansion_depth: self.max_expansion_depth,
-            max_cache_entries: self.max_cache_entries,
-            max_expansion_size: self.max_expansion_size,
-            max_macro_body_size: self.max_macro_body_size,
-            max_registered_macros: self.max_registered_macros,
-            max_macro_arity: self.max_macro_arity,
-        }
+        self.limits
     }
 
     /// Bulk-replace the six configured resource ceilings from ONE typed
@@ -1396,24 +1306,15 @@ impl Expander {
     ///
     /// Round-trip identity: `let l = e.resource_limits(); e.set_resource_limits(l);`
     /// leaves `e` in an equivalent posture — pinned as a typed theorem
-    /// in the [`ResourceLimits`] test cohort. Sibling of
+    /// in the [`ResourceLimits`] test cohort. Post the [`Self::limits`]-
+    /// field consolidation the assignment is a direct `Copy` of the
+    /// bundled field, structurally atomic — no per-field destructure +
+    /// six-way write cascade in which a mid-cascade panic could leave
+    /// the six knobs in a half-updated posture. Sibling of
     /// [`Self::resource_limits`]; the pair closes the (getter, setter)
     /// face on the aggregation axis.
     pub fn set_resource_limits(&mut self, limits: ResourceLimits) {
-        let ResourceLimits {
-            max_expansion_depth,
-            max_cache_entries,
-            max_expansion_size,
-            max_macro_body_size,
-            max_registered_macros,
-            max_macro_arity,
-        } = limits;
-        self.max_expansion_depth = max_expansion_depth;
-        self.max_cache_entries = max_cache_entries;
-        self.max_expansion_size = max_expansion_size;
-        self.max_macro_body_size = max_macro_body_size;
-        self.max_registered_macros = max_registered_macros;
-        self.max_macro_arity = max_macro_arity;
+        self.limits = limits;
     }
 
     pub fn with_macros<I: IntoIterator<Item = MacroDef>>(defs: I) -> Result<Self> {
@@ -1546,11 +1447,11 @@ impl Expander {
         // `self.macros.len()` — same posture the expand-time
         // cache-entries gate holds on the memoization cache.
         let is_overwrite = self.macros.contains_key(&def.name);
-        if !is_overwrite && self.macros.len() >= self.max_registered_macros {
+        if !is_overwrite && self.macros.len() >= self.limits.max_registered_macros {
             return Err(LispError::RegisteredMacrosExceeded {
                 macro_name: def.name.clone(),
                 count: self.macros.len(),
-                limit: self.max_registered_macros,
+                limit: self.limits.max_registered_macros,
             });
         }
         // Reject an arity-bomb `(defmacro huge (a-1 a-2 … a-N-million)
@@ -1572,11 +1473,11 @@ impl Expander {
         // LARGEST admissible `def.params.total_arity()` — same posture
         // the body-size gate holds on the body node count.
         let arity = def.params.total_arity();
-        if arity > self.max_macro_arity {
+        if arity > self.limits.max_macro_arity {
             return Err(LispError::MacroArityExceeded {
                 macro_name: def.name.clone(),
                 arity,
-                limit: self.max_macro_arity,
+                limit: self.limits.max_macro_arity,
             });
         }
         // Reject an authoring-bomb `(defmacro huge (x) `<template-of-
@@ -1593,11 +1494,11 @@ impl Expander {
         // equality is admitted, only strict overrun rejects — same
         // posture the expand-time output-size gate holds.
         let body_size = def.body.node_count();
-        if body_size > self.max_macro_body_size {
+        if body_size > self.limits.max_macro_body_size {
             return Err(LispError::MacroBodySizeExceeded {
                 macro_name: def.name.clone(),
                 size: body_size,
-                limit: self.max_macro_body_size,
+                limit: self.limits.max_macro_body_size,
             });
         }
         if self.compile_templates {
@@ -2699,7 +2600,7 @@ impl Expander {
     /// ceiling.
     ///
     /// The peer OUTPUT-SIZE gate (`expanded.node_count() >
-    /// self.max_expansion_size`) sits INSIDE the same macro-call arm,
+    /// self.limits.max_expansion_size`) sits INSIDE the same macro-call arm,
     /// between the `apply` and the re-expansion recursion, so a
     /// single macro's `apply` output whose structural size crosses
     /// the ceiling is rejected AT the offending `apply` boundary
@@ -2713,10 +2614,10 @@ impl Expander {
     /// dimensions.
     fn expand_with_depth(&self, form: &Sexp, depth: usize) -> Result<Sexp> {
         if let Some((def, args)) = form.as_call_to_any(|h| self.macros.get(h)) {
-            if depth >= self.max_expansion_depth {
+            if depth >= self.limits.max_expansion_depth {
                 return Err(LispError::ExpansionDepthExceeded {
                     macro_name: def.name.clone(),
-                    limit: self.max_expansion_depth,
+                    limit: self.limits.max_expansion_depth,
                 });
             }
             let expanded = self.apply(def, args)?;
@@ -2729,11 +2630,11 @@ impl Expander {
             // while `depth` stays in the low single digits and the
             // cache entry count sits under any reasonable ceiling.
             let expanded_size = expanded.node_count();
-            if expanded_size > self.max_expansion_size {
+            if expanded_size > self.limits.max_expansion_size {
                 return Err(LispError::ExpansionSizeExceeded {
                     macro_name: def.name.clone(),
                     size: expanded_size,
-                    limit: self.max_expansion_size,
+                    limit: self.limits.max_expansion_size,
                 });
             }
             // Recurse — the expansion itself may contain more macro calls.
@@ -2791,7 +2692,7 @@ impl Expander {
         // would have returned).
         if let Some(key) = cache_key {
             let mut cache = self.cache.lock().unwrap();
-            if cache.len() < self.max_cache_entries {
+            if cache.len() < self.limits.max_cache_entries {
                 cache.insert(key, result.clone());
             }
         }
@@ -14682,6 +14583,35 @@ mod tests {
         assert_eq!(e.max_expansion_size(), DEFAULT_MAX_EXPANSION_SIZE);
         assert_eq!(e.max_macro_body_size(), DEFAULT_MAX_MACRO_BODY_SIZE);
         assert_eq!(e.max_registered_macros(), DEFAULT_MAX_REGISTERED_MACROS);
+    }
+
+    #[test]
+    fn expander_default_derives_resource_limits_from_bundled_field_default() {
+        // Post the [`Expander::limits`]-field consolidation the derived
+        // `Default` on [`Expander`] projects through [`ResourceLimits`]'s
+        // own `Default` — which returns [`DEFAULT_RESOURCE_LIMITS`] — so
+        // `Expander::default().resource_limits()` lands at the shipped
+        // ceiling posture verbatim. Pre-consolidation the six independent
+        // `max_*: usize` fields defaulted to the bare `usize` zero, so
+        // `Expander::default()` yielded a below-floor posture with every
+        // ceiling clamped to `0` — a shape no consumer wanted and every
+        // test path avoided by routing through [`Expander::new`] instead.
+        // The consolidation is what turned that latent below-floor
+        // derived-`Default` shape into a lawful shipped posture on the
+        // structural axis. Peer of
+        // `expander_new_resource_limits_matches_shipped_defaults` one
+        // CONSTRUCTOR axis over — where that test pins the explicit
+        // [`Expander::new`] constructor, this test pins the derived-
+        // [`Default`] constructor route to the SAME six values through
+        // the SAME bundled projection. Sibling of
+        // `resource_limits_default_impl_matches_const_form` one
+        // TYPE-LEVEL axis over — that test pins [`ResourceLimits::default`]
+        // to [`DEFAULT_RESOURCE_LIMITS`]; this test pins [`Expander`]'s
+        // derived `Default` to project through it.
+        assert_eq!(
+            Expander::default().resource_limits(),
+            DEFAULT_RESOURCE_LIMITS
+        );
     }
 
     #[test]

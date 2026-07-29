@@ -1082,29 +1082,91 @@ pub struct Expander {
 }
 
 impl Expander {
-    /// Default expander — compiled bytecode + expansion cache enabled.
-    pub fn new() -> Self {
+    /// Default-posture expander with an operator-supplied resource-ceiling
+    /// bundle — the AGGREGATION-axis peer of
+    /// [`Self::set_resource_limits`] one CONSTRUCTOR-STAGE axis over.
+    /// Where [`Self::set_resource_limits`] applies the bundled six ceilings
+    /// POST-construction on an already-built expander, this constructor
+    /// binds them AT construction so a call-site that wants a fresh
+    /// expander with a non-default posture composes ONE typed call
+    /// (`Expander::with_limits(limits)`) rather than the two-step
+    /// (`let mut e = Expander::new(); e.set_resource_limits(limits);`)
+    /// dance the post-construction sibling still admits.
+    ///
+    /// The (compile_templates, cache_enabled) execution-strategy pair
+    /// carries the [`Self::new`] default posture (`true, true`) — the
+    /// bytecode-with-cache strategy — since callers that want the
+    /// substitute-only strategy still route through
+    /// [`Self::new_substitute_only`]. Post-lift both convenience
+    /// constructors delegate their `macros` / `templates` / `cache` field
+    /// literals through THIS primitive at the resource-posture axis: the
+    /// four-out-of-six field literals (`HashMap::new()` × 2 +
+    /// `Arc::new(Mutex::new(HashMap::new()))` + `limits`) lived
+    /// byte-identical across [`Self::new`] and [`Self::new_substitute_only`]
+    /// pre-lift; the two divergent flags (`compile_templates`,
+    /// `cache_enabled`) still differ between the two constructors, and the
+    /// substitute-only variant flips them AFTER threading through
+    /// `with_limits` — same shape as [`Self::new_bytecode_no_cache`] does
+    /// on the `cache_enabled` flag.
+    ///
+    /// Round-trip identity: `Expander::with_limits(limits).resource_limits()
+    /// == limits` for any `ResourceLimits` — pinned as a typed theorem in
+    /// the test cohort. The at-construction assignment is a direct `Copy`
+    /// of the bundled field (no per-field cascade), so a mid-construction
+    /// panic window on the six knobs is structurally impossible. Peer of
+    /// the `Expander::with_limits(DEFAULT_RESOURCE_LIMITS) ==
+    /// Expander::new()` delegation identity — pinned on the resource-
+    /// posture projection so a future refactor that drifts the two
+    /// constructors on the ceiling axis fails loudly.
+    ///
+    /// Frontier inspiration: Cranelift's `settings::Flags::new(builder)` —
+    /// codegen ceilings (opt level, allocator strategy, feature enables)
+    /// bind at CONSTRUCTION-time on a typed `Flags` bundle rather than
+    /// composed through post-construction setters on the `Isa`. Same
+    /// posture as this lift: the (getter, setter, at-construction)
+    /// three-corner face on the resource-posture surface now binds at ONE
+    /// typed bundle across ALL three surfaces.
+    ///
+    /// Theory grounding: THEORY.md §II.1 invariants 1 + 2 — typed entry +
+    /// free middle. Pre-lift the "expander with a chosen resource posture"
+    /// concept was untyped: consumers composed [`Self::new`] +
+    /// [`Self::set_resource_limits`] at their call site with no
+    /// compile-time gate that BOTH steps land atomically. Post-lift the
+    /// concept has ONE named entry point on the `Expander` surface, and a
+    /// future consumer (`RealizedCompiler` builder that ships a
+    /// CI-tightened preset, an LSP session that ships a REPL-permissive
+    /// preset, a test-harness fixture that ships an `UNBOUNDED`-style
+    /// preset) binds through ONE typed constructor.
+    pub fn with_limits(limits: ResourceLimits) -> Self {
         Self {
             macros: HashMap::new(),
             templates: HashMap::new(),
             compile_templates: true,
             cache: Arc::new(Mutex::new(HashMap::new())),
             cache_enabled: true,
-            limits: DEFAULT_RESOURCE_LIMITS,
+            limits,
         }
+    }
+
+    /// Default expander — compiled bytecode + expansion cache enabled.
+    /// Delegates to [`Self::with_limits`] with [`DEFAULT_RESOURCE_LIMITS`]
+    /// so the (macros, templates, cache, limits) field-shape agreement
+    /// with every other constructor on this `Expander` surface lives at
+    /// ONE literal.
+    pub fn new() -> Self {
+        Self::with_limits(DEFAULT_RESOURCE_LIMITS)
     }
 
     /// Expander using the legacy substitute path (no template compilation,
     /// no cache). Kept for benchmarking + equivalence testing.
+    /// Delegates to [`Self::with_limits`] with [`DEFAULT_RESOURCE_LIMITS`]
+    /// and flips the two divergent execution-strategy flags — same
+    /// composition shape as [`Self::new_bytecode_no_cache`] one flag over.
     pub fn new_substitute_only() -> Self {
-        Self {
-            macros: HashMap::new(),
-            templates: HashMap::new(),
-            compile_templates: false,
-            cache: Arc::new(Mutex::new(HashMap::new())),
-            cache_enabled: false,
-            limits: DEFAULT_RESOURCE_LIMITS,
-        }
+        let mut e = Self::with_limits(DEFAULT_RESOURCE_LIMITS);
+        e.compile_templates = false;
+        e.cache_enabled = false;
+        e
     }
 
     /// Expander with bytecode on but expansion cache off — isolates the cache
@@ -14640,6 +14702,138 @@ mod tests {
                 }
             ),
             "bulk-set arity ceiling must reach the register-time gate; got: {err:?}"
+        );
+    }
+
+    // ── Expander::with_limits — at-construction resource-posture ───────
+
+    #[test]
+    fn expander_with_limits_seeds_the_provided_resource_posture() {
+        // Round-trip pin at CONSTRUCTION time — the bundle the caller
+        // passes into [`Expander::with_limits`] MUST project back
+        // through [`Expander::resource_limits`] verbatim. Peer of the
+        // `set_resource_limits(l); resource_limits() == l` round-trip
+        // one CONSTRUCTOR-STAGE axis over — that pin covers the
+        // POST-construction assignment; this pin covers the
+        // AT-construction assignment. A regression that dropped the
+        // `limits` argument on the floor (a copy-paste that left
+        // `limits: DEFAULT_RESOURCE_LIMITS` in the struct literal
+        // instead of `limits`) fires here on every non-default field.
+        // Distinct low-non-default values so a stray field defaulting
+        // fails loudly.
+        let want = ResourceLimits {
+            max_expansion_depth: 3,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: 11,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        assert_eq!(Expander::with_limits(want).resource_limits(), want);
+    }
+
+    #[test]
+    fn expander_with_default_limits_agrees_with_new_on_resource_posture() {
+        // Delegation identity — [`Expander::new`] delegates to
+        // [`Expander::with_limits`] with [`DEFAULT_RESOURCE_LIMITS`] so
+        // the two constructors MUST agree on the resource-ceiling
+        // projection. Pins the "no drift between the two paths to a
+        // fresh default-posture expander" theorem: a future refactor
+        // that breaks the delegation (an inline field literal reappearing
+        // in [`Expander::new`], an accidental hardcoded const at ONE
+        // site with the other unchanged) fires here. Peer of
+        // `resource_limits_default_impl_matches_const_form` one
+        // TYPE-LEVEL axis over — that test pins the two projections of
+        // the shipped posture on [`ResourceLimits`] itself; this test
+        // pins the two constructor paths on [`Expander`] to reach the
+        // SAME six values through the SAME bundle.
+        assert_eq!(
+            Expander::with_limits(DEFAULT_RESOURCE_LIMITS).resource_limits(),
+            Expander::new().resource_limits()
+        );
+    }
+
+    #[test]
+    fn expander_with_limits_composes_with_struct_update_override() {
+        // The `Copy` posture on [`ResourceLimits`] lets a caller compose
+        // "the shipped posture with ONE ceiling overridden" as ONE
+        // struct-update literal AND thread that composition through
+        // [`Expander::with_limits`] as ONE typed call — the ergonomic
+        // shape that six independent setter invocations cannot express
+        // in ONE expression. Overridden ceiling carries the fresh value,
+        // every other ceiling carries its shipped default. A future
+        // refactor that removes `Copy` from [`ResourceLimits`] fails to
+        // compile at THIS site rather than at every downstream consumer.
+        let e = Expander::with_limits(ResourceLimits {
+            max_macro_arity: 4,
+            ..DEFAULT_RESOURCE_LIMITS
+        });
+        assert_eq!(e.max_macro_arity(), 4);
+        assert_eq!(e.max_expansion_depth(), DEFAULT_MAX_EXPANSION_DEPTH);
+        assert_eq!(e.max_cache_entries(), DEFAULT_MAX_CACHE_ENTRIES);
+        assert_eq!(e.max_expansion_size(), DEFAULT_MAX_EXPANSION_SIZE);
+        assert_eq!(e.max_macro_body_size(), DEFAULT_MAX_MACRO_BODY_SIZE);
+        assert_eq!(e.max_registered_macros(), DEFAULT_MAX_REGISTERED_MACROS);
+    }
+
+    #[test]
+    fn expander_with_limits_carries_the_new_execution_strategy() {
+        // The (compile_templates, cache_enabled) execution-strategy pair
+        // MUST carry the [`Expander::new`] default posture — bytecode +
+        // cache both on — regardless of which resource posture the
+        // caller passes in. Cache-count observation is the least-
+        // invasive check available on the public surface: a fresh
+        // `with_limits` expander that expands a repeat-call site must
+        // populate at least one cache entry (bytecode + cache both on),
+        // and a substitute-only sibling would leave `cache_size()` at
+        // zero even after every call site expanded. A regression that
+        // wired the wrong execution strategy into `with_limits`
+        // (compile_templates: false, cache_enabled: false) fires here.
+        let mut e = Expander::with_limits(DEFAULT_RESOURCE_LIMITS);
+        let forms = read(
+            "(defmacro id (x) `,x)
+             (id one)
+             (id one)",
+        )
+        .unwrap();
+        e.expand_program(forms).unwrap();
+        assert!(
+            e.cache_size() >= 1,
+            "with_limits carries the bytecode+cache strategy; cache_size must be >= 1 after repeat calls, got {}",
+            e.cache_size()
+        );
+    }
+
+    #[test]
+    fn expander_with_limits_fires_the_arity_gate_from_construction() {
+        // Behavioral pin — the at-construction bundle assignment MUST
+        // reach the SAME check sites the individual + bulk POST-
+        // construction setters do. Construct an expander with
+        // `max_macro_arity: 1` directly and confirm the arity gate
+        // fires on a two-arg macro registration. Sibling of
+        // `resource_limits_bulk_setter_keeps_the_arity_gate_in_effect`
+        // one CONSTRUCTOR-STAGE axis over — that pin covers the POST-
+        // construction setter reaching the gate; this pin covers the
+        // AT-construction assignment reaching the SAME gate through
+        // the SAME `self.limits.max_macro_arity` load. A regression
+        // that wired `with_limits` to a shadow field rather than
+        // `self.limits` fails here.
+        let mut e = Expander::with_limits(ResourceLimits {
+            max_macro_arity: 1,
+            ..DEFAULT_RESOURCE_LIMITS
+        });
+        let forms = read("(defmacro two (a b) `,a)").unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::MacroArityExceeded {
+                    arity: 2,
+                    limit: 1,
+                    ..
+                }
+            ),
+            "at-construction arity ceiling must reach the register-time gate; got: {err:?}"
         );
     }
 }

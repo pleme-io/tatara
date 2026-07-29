@@ -392,6 +392,100 @@ pub const UNBOUNDED_RESOURCE_LIMITS: ResourceLimits = ResourceLimits {
     max_macro_arity: usize::MAX,
 };
 
+/// The zero [`ResourceLimits`] posture — every ceiling seeded to `0` at
+/// ONE typed value. This is the BOTTOM peer of
+/// [`UNBOUNDED_RESOURCE_LIMITS`] one LATTICE-POLE axis over on the
+/// (bottom, top) bounded-lattice preset-pair surface: where the
+/// ceiling-lifted preset carries every gate at [`usize::MAX`]
+/// (admitting every lawful `usize`-indexed value the type system
+/// supports), this preset carries every gate at `0` (rejecting every
+/// non-empty input past the first depth step, cache slot, macro-body
+/// node, macro registration, or arity slot). Together the two close
+/// the (BOTTOM, TOP) preset-posture pair on the bounded-lattice
+/// diagonal, and [`DEFAULT_RESOURCE_LIMITS`] sits strictly between
+/// them (`EMPTY.leq(DEFAULT) && DEFAULT.leq(UNBOUNDED)`).
+///
+/// **Bounded-lattice identity elements**: [`ResourceLimits`] under the
+/// pointwise `min` / `max` operations forms a BOUNDED lattice; each
+/// operation acquires its identity element from the OPPOSITE pole of
+/// the preset-pair diagonal, and its ANNIHILATOR from the SAME pole.
+///   * [`Self::strictest`] (meet, pointwise `min`) —
+///     [`UNBOUNDED_RESOURCE_LIMITS`] is the identity
+///     (`a.strictest(UNBOUNDED) == a` for every posture, since pointwise
+///     `min` against [`usize::MAX`] returns `a`); this constant is the
+///     ANNIHILATOR (`a.strictest(EMPTY) == EMPTY` for every posture,
+///     since pointwise `min` against `0` returns `0`).
+///   * [`Self::most_permissive`] (join, pointwise `max`) — this
+///     constant is the identity (`a.most_permissive(EMPTY) == a` for
+///     every posture, since pointwise `max` against `0` returns `a`);
+///     [`UNBOUNDED_RESOURCE_LIMITS`] is the ANNIHILATOR
+///     (`a.most_permissive(UNBOUNDED) == UNBOUNDED`).
+///   * [`Self::leq`] (partial order) — this constant is the MINIMUM
+///     (`EMPTY.leq(a) == true` for every posture, since `0 <= x` holds
+///     for every `usize x`); [`UNBOUNDED_RESOURCE_LIMITS`] is the
+///     MAXIMUM (`a.leq(UNBOUNDED) == true` for every posture, since
+///     `x <= usize::MAX` holds for every `usize x`).
+///
+/// **Fold-identity use case**: a caller aggregating a slice of
+/// postures through [`Self::most_permissive`] (computing the pointwise
+/// least upper bound across the slice) seeds the fold from this
+/// constant — the join-identity property guarantees the seed does not
+/// distort the fold's result:
+///
+/// ```rust,ignore
+/// let joined = postures.iter().copied()
+///     .fold(EMPTY_RESOURCE_LIMITS, ResourceLimits::most_permissive);
+/// ```
+///
+/// The dual pattern (folding through [`Self::strictest`] to compute
+/// the pointwise greatest lower bound) seeds from
+/// [`UNBOUNDED_RESOURCE_LIMITS`] — the meet-identity from the OPPOSITE
+/// pole. Pre-lift, an aggregator either (a) picked ONE arbitrary
+/// element of the slice as the seed and folded through the tail — a
+/// non-total fixup that panicked on an empty slice — or (b) seeded
+/// from `Some(first)`-style option wrapper — a runtime `Option` that
+/// carried a type-level admission the aggregate might be absent even
+/// though the algebra defines it exhaustively via its identity. Post-
+/// lift the fold takes ONE typed identity element and handles empty
+/// slices as the algebraic identity value — a boundary case which the
+/// bounded-lattice structure resolves at TYPE level rather than the
+/// caller resolving at CALL SITE with a wrapper type.
+///
+/// Adding a SEVENTH ceiling extends this constant AND the struct AND
+/// [`DEFAULT_RESOURCE_LIMITS`] AND [`UNBOUNDED_RESOURCE_LIMITS`] in
+/// lockstep — rustc's field-exhaustiveness on this
+/// `..Default::default()`-free literal forces the new field to appear
+/// at this site, and the identity-law tests pin `0` as the seventh
+/// field's value at compile time via the const-fn peer of the
+/// existing lattice-law const-fn pins.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+/// proofs; the identity element of a lattice operation is itself a
+/// typed named entry whose composition with any other element is the
+/// element (join) or the identity (meet). THEORY.md §V.1 — knowable
+/// platform; the bounded-lattice bottom binds at ONE typed constant
+/// rather than a six-primitive inline literal every consumer that
+/// needs the fold identity carries at its call site. Frontier
+/// inspiration: the algebraic-datatypes tradition of a `Monoid` typeclass
+/// (Haskell's `mempty`, Scala's `Monoid.empty`, Rust's various
+/// `Default::default` for `Sum`/`Product` newtypes) — a caller
+/// aggregating values through a binary combinator binds its identity
+/// element at ONE named entry rather than composing the identity
+/// literal at every fold site. Translation through pleme-io primitives
+/// is the plain `const` snapshot below, no typeclass indirection — the
+/// `Copy` posture on [`ResourceLimits`] already gives callers the
+/// struct-update literal (`ResourceLimits { max_macro_arity: 3,
+/// ..EMPTY_RESOURCE_LIMITS }`) that isolates the ONE ceiling admitting
+/// non-zero input from the five sealed at `0`.
+pub const EMPTY_RESOURCE_LIMITS: ResourceLimits = ResourceLimits {
+    max_expansion_depth: 0,
+    max_cache_entries: 0,
+    max_expansion_size: 0,
+    max_macro_body_size: 0,
+    max_registered_macros: 0,
+    max_macro_arity: 0,
+};
+
 /// Pointwise `min` / `max` primitives the [`ResourceLimits`] lattice binds
 /// its meet ([`ResourceLimits::strictest`]) and join
 /// ([`ResourceLimits::most_permissive`]) operations to. Named at module
@@ -15986,6 +16080,411 @@ mod tests {
         // concrete `DEFAULT_MAX_*` constant, so the partial order is
         // STRICT on the shipped preset pair:
         const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.leq(DEFAULT_RESOURCE_LIMITS));
+    }
+
+    // ── EMPTY_RESOURCE_LIMITS — bounded-lattice bottom preset ─────────
+
+    #[test]
+    fn empty_resource_limits_binds_every_ceiling_to_zero() {
+        // Field-level pin — the zero preset carries `0` on every axis
+        // of the six-field surface. Pinned as six independent field
+        // asserts (rather than one struct equality) so a drift on ONE
+        // field carries a distinct-name failure that names the drifting
+        // axis. A future extension that adds a SEVENTH ceiling requires
+        // an additional field assert here in lockstep with the const
+        // literal — rustc's field-exhaustiveness on the const forces
+        // the new field to appear, and this pin exercises the seed
+        // value. Structural peer of
+        // `unbounded_resource_limits_binds_every_ceiling_to_usize_max`
+        // one LATTICE-POLE axis over on the (bottom, top)
+        // bounded-lattice preset-pair surface.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.max_expansion_depth, 0);
+        assert_eq!(EMPTY_RESOURCE_LIMITS.max_cache_entries, 0);
+        assert_eq!(EMPTY_RESOURCE_LIMITS.max_expansion_size, 0);
+        assert_eq!(EMPTY_RESOURCE_LIMITS.max_macro_body_size, 0);
+        assert_eq!(EMPTY_RESOURCE_LIMITS.max_registered_macros, 0);
+        assert_eq!(EMPTY_RESOURCE_LIMITS.max_macro_arity, 0);
+    }
+
+    #[test]
+    fn empty_resource_limits_disagrees_with_default_on_every_ceiling() {
+        // Structural-distinctness pin — the two constants
+        // [`DEFAULT_RESOURCE_LIMITS`] and [`EMPTY_RESOURCE_LIMITS`] sit
+        // at DISTINCT points on the preset-posture axis, and the
+        // disagreement is EXHAUSTIVE on the six-field surface — every
+        // shipped `DEFAULT_MAX_*` module constant is a concrete
+        // strictly-positive value, so every axis distinguishes DEFAULT
+        // from the all-zero bottom. Peer of
+        // `unbounded_resource_limits_disagrees_with_default_on_every_ceiling`
+        // one LATTICE-POLE axis over.
+        assert_ne!(
+            EMPTY_RESOURCE_LIMITS.max_expansion_depth,
+            DEFAULT_RESOURCE_LIMITS.max_expansion_depth
+        );
+        assert_ne!(
+            EMPTY_RESOURCE_LIMITS.max_cache_entries,
+            DEFAULT_RESOURCE_LIMITS.max_cache_entries
+        );
+        assert_ne!(
+            EMPTY_RESOURCE_LIMITS.max_expansion_size,
+            DEFAULT_RESOURCE_LIMITS.max_expansion_size
+        );
+        assert_ne!(
+            EMPTY_RESOURCE_LIMITS.max_macro_body_size,
+            DEFAULT_RESOURCE_LIMITS.max_macro_body_size
+        );
+        assert_ne!(
+            EMPTY_RESOURCE_LIMITS.max_registered_macros,
+            DEFAULT_RESOURCE_LIMITS.max_registered_macros
+        );
+        assert_ne!(
+            EMPTY_RESOURCE_LIMITS.max_macro_arity,
+            DEFAULT_RESOURCE_LIMITS.max_macro_arity
+        );
+    }
+
+    #[test]
+    fn empty_resource_limits_disagrees_with_unbounded_on_every_ceiling() {
+        // Diagonal-distinctness pin — the (BOTTOM, TOP) preset pair
+        // disagrees on every axis (`0 != usize::MAX` on every field).
+        // Structural companion to the DEFAULT-vs-EMPTY and
+        // UNBOUNDED-vs-DEFAULT disagreement pins one PRESET-PAIR axis
+        // over — together the three pin the six-field surface at the
+        // full diagonal of the (EMPTY, DEFAULT, UNBOUNDED) triple.
+        assert_ne!(
+            EMPTY_RESOURCE_LIMITS.max_expansion_depth,
+            UNBOUNDED_RESOURCE_LIMITS.max_expansion_depth
+        );
+        assert_ne!(
+            EMPTY_RESOURCE_LIMITS.max_cache_entries,
+            UNBOUNDED_RESOURCE_LIMITS.max_cache_entries
+        );
+        assert_ne!(
+            EMPTY_RESOURCE_LIMITS.max_expansion_size,
+            UNBOUNDED_RESOURCE_LIMITS.max_expansion_size
+        );
+        assert_ne!(
+            EMPTY_RESOURCE_LIMITS.max_macro_body_size,
+            UNBOUNDED_RESOURCE_LIMITS.max_macro_body_size
+        );
+        assert_ne!(
+            EMPTY_RESOURCE_LIMITS.max_registered_macros,
+            UNBOUNDED_RESOURCE_LIMITS.max_registered_macros
+        );
+        assert_ne!(
+            EMPTY_RESOURCE_LIMITS.max_macro_arity,
+            UNBOUNDED_RESOURCE_LIMITS.max_macro_arity
+        );
+    }
+
+    #[test]
+    fn empty_resource_limits_is_the_join_identity() {
+        // Lattice-identity law — `a ⊔ ⊥ = a`. Every posture's
+        // pointwise `max` against 0 returns the posture verbatim, so
+        // [`EMPTY_RESOURCE_LIMITS`] acts as the identity element of
+        // the join monoid. Peer of
+        // `empty_resource_limits_is_the_meet_annihilator` one
+        // COMBINATOR axis over on the (meet, join) surface.
+        //
+        // Cross-preset exhaustion — verify the identity against every
+        // named preset (DEFAULT, UNBOUNDED, both hand-authored
+        // asymmetric postures) so a regression that broke ONE axis of
+        // the algebra fires here on the operand whose field crosses
+        // that axis's boundary.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.most_permissive(EMPTY_RESOURCE_LIMITS),
+            DEFAULT_RESOURCE_LIMITS,
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.most_permissive(DEFAULT_RESOURCE_LIMITS),
+            DEFAULT_RESOURCE_LIMITS,
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.most_permissive(EMPTY_RESOURCE_LIMITS),
+            UNBOUNDED_RESOURCE_LIMITS,
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.most_permissive(UNBOUNDED_RESOURCE_LIMITS),
+            UNBOUNDED_RESOURCE_LIMITS,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.most_permissive(EMPTY_RESOURCE_LIMITS),
+            HAND_AUTHORED_MID_POSTURE,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.most_permissive(EMPTY_RESOURCE_LIMITS),
+            HAND_AUTHORED_OTHER_POSTURE,
+        );
+        // Idempotence at the identity itself — sibling witness of the
+        // `most_permissive_is_idempotent` general pin one PRESET axis
+        // over.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.most_permissive(EMPTY_RESOURCE_LIMITS),
+            EMPTY_RESOURCE_LIMITS,
+        );
+    }
+
+    #[test]
+    fn empty_resource_limits_is_the_meet_annihilator() {
+        // Lattice-annihilator law — `a ⊓ ⊥ = ⊥`. Every posture's
+        // pointwise `min` against 0 returns 0 on every axis, so
+        // [`EMPTY_RESOURCE_LIMITS`] acts as the annihilator (absorbing
+        // element) of the meet operation. Peer of
+        // `empty_resource_limits_is_the_join_identity` one COMBINATOR
+        // axis over — the identity on one side of the bounded lattice
+        // is the annihilator on the other side.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.strictest(EMPTY_RESOURCE_LIMITS),
+            EMPTY_RESOURCE_LIMITS,
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.strictest(DEFAULT_RESOURCE_LIMITS),
+            EMPTY_RESOURCE_LIMITS,
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.strictest(EMPTY_RESOURCE_LIMITS),
+            EMPTY_RESOURCE_LIMITS,
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.strictest(UNBOUNDED_RESOURCE_LIMITS),
+            EMPTY_RESOURCE_LIMITS,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.strictest(EMPTY_RESOURCE_LIMITS),
+            EMPTY_RESOURCE_LIMITS,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.strictest(EMPTY_RESOURCE_LIMITS),
+            EMPTY_RESOURCE_LIMITS,
+        );
+    }
+
+    #[test]
+    fn empty_resource_limits_is_the_lattice_minimum() {
+        // Partial-order minimum law — `⊥ ≤ a` for every `a`. Every
+        // posture's field is a `usize` and `0 <= x` holds for every
+        // `usize x`, so [`EMPTY_RESOURCE_LIMITS`] sits at or below
+        // every posture on every axis of the pointwise `<=` conjunction.
+        // Peer of the UNBOUNDED-is-maximum property on the
+        // partial-order face one LATTICE-POLE axis over — those two
+        // pin the (min, max) bounds of the bounded lattice.
+        assert!(EMPTY_RESOURCE_LIMITS.leq(EMPTY_RESOURCE_LIMITS));
+        assert!(EMPTY_RESOURCE_LIMITS.leq(DEFAULT_RESOURCE_LIMITS));
+        assert!(EMPTY_RESOURCE_LIMITS.leq(UNBOUNDED_RESOURCE_LIMITS));
+        assert!(EMPTY_RESOURCE_LIMITS.leq(HAND_AUTHORED_MID_POSTURE));
+        assert!(EMPTY_RESOURCE_LIMITS.leq(HAND_AUTHORED_OTHER_POSTURE));
+        // Reverse direction FAILS on every non-EMPTY preset (each has
+        // at least one field strictly greater than 0). The partial
+        // order is STRICT between EMPTY and every other named preset,
+        // structurally exhausting the diagonal of the
+        // (EMPTY, DEFAULT, UNBOUNDED, MID, OTHER) 5-preset ordering
+        // face at the BOTTOM row.
+        assert!(!DEFAULT_RESOURCE_LIMITS.leq(EMPTY_RESOURCE_LIMITS));
+        assert!(!UNBOUNDED_RESOURCE_LIMITS.leq(EMPTY_RESOURCE_LIMITS));
+        assert!(!HAND_AUTHORED_MID_POSTURE.leq(EMPTY_RESOURCE_LIMITS));
+        assert!(!HAND_AUTHORED_OTHER_POSTURE.leq(EMPTY_RESOURCE_LIMITS));
+    }
+
+    #[test]
+    fn empty_resource_limits_composes_at_compile_time_via_const_fn() {
+        // Const-fn pin — the bounded-lattice identity + annihilator +
+        // minimum laws hold at COMPILE time. Sibling of
+        // `resource_limits_leq_evaluates_at_compile_time_via_const_fn`
+        // one LATTICE-STRUCTURE axis over — that pin fixed the strict
+        // order of the (DEFAULT, UNBOUNDED) preset pair at compile
+        // time; this pin fixes the bounded-lattice pole role of the
+        // (EMPTY, UNBOUNDED) preset pair. `const _: ()` at item scope
+        // is a compile-time proof — a regression that broke either
+        // identity element or the bottom-is-minimum invariant fires at
+        // rustc time, not test-run time.
+        //
+        // Bottom-is-minimum: EMPTY ≤ DEFAULT ≤ UNBOUNDED (the
+        // three-preset ordering chain on the shipped preset diagonal).
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.leq(DEFAULT_RESOURCE_LIMITS));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.leq(UNBOUNDED_RESOURCE_LIMITS));
+        // Reverse strictness — neither DEFAULT nor UNBOUNDED sits
+        // below EMPTY (each has a strictly-positive field).
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.leq(EMPTY_RESOURCE_LIMITS));
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.leq(EMPTY_RESOURCE_LIMITS));
+        // Join-identity + meet-annihilator laws cross-pinned through
+        // the `leq` primitive at const time — the round-trip identity
+        // (`a ⊔ ⊥ = a ⇔ ⊥ ≤ a`, `a ⊓ ⊥ = ⊥ ⇔ ⊥ ≤ a`) means the two
+        // leq asserts above discharge both algebraic laws by the
+        // `leq_agrees_with_meet` + `leq_agrees_with_join` lattice
+        // cross-check axiom already pinned in this cohort.
+    }
+
+    #[test]
+    fn empty_resource_limits_seeds_most_permissive_fold_over_slice() {
+        // Fold-identity behavioral pin — a slice of postures folded
+        // through [`ResourceLimits::most_permissive`] with EMPTY as
+        // the seed produces the pointwise least upper bound across
+        // the slice on every axis. The join-identity property
+        // (`a.most_permissive(EMPTY) == a`) guarantees the seed
+        // contributes nothing to the fold's result — every field's
+        // pointwise `max` against the seed's `0` returns the field's
+        // value verbatim, so the fold reduces to the joined-across-
+        // -operands upper bound. This is the destination usage the
+        // constant's docstring names as its fold-identity role.
+        //
+        // A regression that seeded from ANY non-empty posture (e.g.
+        // `DEFAULT_RESOURCE_LIMITS`) would inflate the fold's result
+        // on every axis where the seed's field exceeds the pointwise
+        // max of the slice — fires as a distinct-axis inequality here.
+        let postures: [ResourceLimits; 3] = [
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            DEFAULT_RESOURCE_LIMITS,
+        ];
+        let joined = postures
+            .iter()
+            .copied()
+            .fold(EMPTY_RESOURCE_LIMITS, ResourceLimits::most_permissive);
+        // Every operand is `leq` the joined result — the least
+        // upper bound dominates each contributor on every axis.
+        assert!(HAND_AUTHORED_MID_POSTURE.leq(joined));
+        assert!(HAND_AUTHORED_OTHER_POSTURE.leq(joined));
+        assert!(DEFAULT_RESOURCE_LIMITS.leq(joined));
+        // Field-level pin — each axis is the pointwise `max` of the
+        // three sources' values. Six independent field asserts so a
+        // drift on ONE axis carries a distinct-name failure.
+        assert_eq!(
+            joined.max_expansion_depth,
+            HAND_AUTHORED_MID_POSTURE
+                .max_expansion_depth
+                .max(HAND_AUTHORED_OTHER_POSTURE.max_expansion_depth)
+                .max(DEFAULT_RESOURCE_LIMITS.max_expansion_depth),
+        );
+        assert_eq!(
+            joined.max_cache_entries,
+            HAND_AUTHORED_MID_POSTURE
+                .max_cache_entries
+                .max(HAND_AUTHORED_OTHER_POSTURE.max_cache_entries)
+                .max(DEFAULT_RESOURCE_LIMITS.max_cache_entries),
+        );
+        assert_eq!(
+            joined.max_expansion_size,
+            HAND_AUTHORED_MID_POSTURE
+                .max_expansion_size
+                .max(HAND_AUTHORED_OTHER_POSTURE.max_expansion_size)
+                .max(DEFAULT_RESOURCE_LIMITS.max_expansion_size),
+        );
+        assert_eq!(
+            joined.max_macro_body_size,
+            HAND_AUTHORED_MID_POSTURE
+                .max_macro_body_size
+                .max(HAND_AUTHORED_OTHER_POSTURE.max_macro_body_size)
+                .max(DEFAULT_RESOURCE_LIMITS.max_macro_body_size),
+        );
+        assert_eq!(
+            joined.max_registered_macros,
+            HAND_AUTHORED_MID_POSTURE
+                .max_registered_macros
+                .max(HAND_AUTHORED_OTHER_POSTURE.max_registered_macros)
+                .max(DEFAULT_RESOURCE_LIMITS.max_registered_macros),
+        );
+        assert_eq!(
+            joined.max_macro_arity,
+            HAND_AUTHORED_MID_POSTURE
+                .max_macro_arity
+                .max(HAND_AUTHORED_OTHER_POSTURE.max_macro_arity)
+                .max(DEFAULT_RESOURCE_LIMITS.max_macro_arity),
+        );
+        // Empty-slice edge case — folding over an EMPTY slice returns
+        // the seed verbatim (the identity element as the null aggregate).
+        // A wrapper-type approach (`Option<ResourceLimits>` for the
+        // aggregate) would need a distinct absent branch here; the
+        // typed identity-element approach resolves it structurally.
+        let empty_slice: [ResourceLimits; 0] = [];
+        assert_eq!(
+            empty_slice
+                .iter()
+                .copied()
+                .fold(EMPTY_RESOURCE_LIMITS, ResourceLimits::most_permissive),
+            EMPTY_RESOURCE_LIMITS,
+        );
+    }
+
+    #[test]
+    fn unbounded_resource_limits_seeds_strictest_fold_over_slice() {
+        // Dual fold-identity pin — a slice of postures folded through
+        // [`ResourceLimits::strictest`] with UNBOUNDED as the seed
+        // produces the pointwise greatest lower bound across the slice
+        // on every axis. Peer of the EMPTY-seeds-most_permissive-fold
+        // pin one COMBINATOR axis over — the identity element for
+        // meet is the join's ANNIHILATOR (`UNBOUNDED`), and the
+        // identity element for join is the meet's annihilator
+        // (`EMPTY`); the two together bind the bounded-lattice's
+        // aggregation surface at BOTH poles.
+        let postures: [ResourceLimits; 3] = [
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            DEFAULT_RESOURCE_LIMITS,
+        ];
+        let met = postures
+            .iter()
+            .copied()
+            .fold(UNBOUNDED_RESOURCE_LIMITS, ResourceLimits::strictest);
+        // The greatest lower bound sits `leq` every operand.
+        assert!(met.leq(HAND_AUTHORED_MID_POSTURE));
+        assert!(met.leq(HAND_AUTHORED_OTHER_POSTURE));
+        assert!(met.leq(DEFAULT_RESOURCE_LIMITS));
+        // Field-level pin — each axis is the pointwise `min` of the
+        // three sources' values (the UNBOUNDED seed's `usize::MAX`
+        // never wins the min against a concrete positive value).
+        assert_eq!(
+            met.max_expansion_depth,
+            HAND_AUTHORED_MID_POSTURE
+                .max_expansion_depth
+                .min(HAND_AUTHORED_OTHER_POSTURE.max_expansion_depth)
+                .min(DEFAULT_RESOURCE_LIMITS.max_expansion_depth),
+        );
+        assert_eq!(
+            met.max_cache_entries,
+            HAND_AUTHORED_MID_POSTURE
+                .max_cache_entries
+                .min(HAND_AUTHORED_OTHER_POSTURE.max_cache_entries)
+                .min(DEFAULT_RESOURCE_LIMITS.max_cache_entries),
+        );
+        assert_eq!(
+            met.max_expansion_size,
+            HAND_AUTHORED_MID_POSTURE
+                .max_expansion_size
+                .min(HAND_AUTHORED_OTHER_POSTURE.max_expansion_size)
+                .min(DEFAULT_RESOURCE_LIMITS.max_expansion_size),
+        );
+        assert_eq!(
+            met.max_macro_body_size,
+            HAND_AUTHORED_MID_POSTURE
+                .max_macro_body_size
+                .min(HAND_AUTHORED_OTHER_POSTURE.max_macro_body_size)
+                .min(DEFAULT_RESOURCE_LIMITS.max_macro_body_size),
+        );
+        assert_eq!(
+            met.max_registered_macros,
+            HAND_AUTHORED_MID_POSTURE
+                .max_registered_macros
+                .min(HAND_AUTHORED_OTHER_POSTURE.max_registered_macros)
+                .min(DEFAULT_RESOURCE_LIMITS.max_registered_macros),
+        );
+        assert_eq!(
+            met.max_macro_arity,
+            HAND_AUTHORED_MID_POSTURE
+                .max_macro_arity
+                .min(HAND_AUTHORED_OTHER_POSTURE.max_macro_arity)
+                .min(DEFAULT_RESOURCE_LIMITS.max_macro_arity),
+        );
+        // Empty-slice edge — folding over an empty slice returns the
+        // UNBOUNDED seed verbatim (the meet-identity as the null
+        // aggregate). Symmetric to the EMPTY-seed empty-slice pin.
+        let empty_slice: [ResourceLimits; 0] = [];
+        assert_eq!(
+            empty_slice
+                .iter()
+                .copied()
+                .fold(UNBOUNDED_RESOURCE_LIMITS, ResourceLimits::strictest),
+            UNBOUNDED_RESOURCE_LIMITS,
+        );
     }
 
     #[test]

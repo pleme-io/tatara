@@ -5,6 +5,12 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+# Phase 0 freeze (theory/TATARA-LISP-CONSOLIDATION.md): this crate owns
+# crates.io tatara-lisp-derive at 0.2.154 while the lib is published from
+# pleme-io/tatara-lisp at 0.2.5. Two repos, two halves of one pair, one
+# namespace. Reversible; preferred over a yank (86 published versions,
+# none yanked, external reverse-deps unenumerable).
+publish = false
 
 [lib]
 proc-macro = true

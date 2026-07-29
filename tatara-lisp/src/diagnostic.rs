@@ -108,6 +108,39 @@ fn line_at(src: &str, byte_offset: usize) -> &str {
     &src[start..end]
 }
 
+/// Build a caret-pad string whose rendered visual width equals the
+/// first `column - 1` chars of `line_text` under a fixed-width terminal.
+///
+/// Each source `\t` mirrors through as `\t`; every other char becomes
+/// a space. This preserves caret alignment for tab-indented sources —
+/// the pad and the source line consume the same tab-stops, so the
+/// caret lands under the offending byte regardless of the terminal's
+/// tab-stop setting. Pre-lift the caret pad was
+/// `" ".repeat(column.saturating_sub(1))`, which silently drifted
+/// under a tab-indented source (a `\t` renders as N columns of source
+/// but as ONE space in the pad, so the caret slid left of the byte).
+///
+/// Named at the substrate level so a future range-underline
+/// diagnostic (e.g. `let caret = mirror + "^".repeat(width)` for a
+/// multi-column highlight, or a `note:` companion line pinned under a
+/// different column of the SAME source line) inherits the tab-mirror
+/// discipline mechanically — the visual-width invariant lives at ONE
+/// projection on the diagnostic-rendering surface.
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform / constructive
+/// diagnostics. A caret whose column drifts under a tab-indented
+/// source is not knowable to the operator. Inspiration: rustc's
+/// `SnippetData::render_source_line` tab-mirror idiom; translation
+/// through pleme-io primitives is a chars-iterator over the source
+/// line already in hand, no new IR layer.
+fn mirror_source_prefix_as_pad(line_text: &str, column: usize) -> String {
+    line_text
+        .chars()
+        .take(column.saturating_sub(1))
+        .map(|c| if c == '\t' { '\t' } else { ' ' })
+        .collect()
+}
+
 /// Render a `LispError` as a rustc-style diagnostic with a caret.
 ///
 /// ```text
@@ -137,7 +170,7 @@ pub fn format_diagnostic(src: &str, err: &LispError, label: Option<&str>) -> Str
     let line_text = line_at(src, pos);
     let line_str = line.to_string();
     let gutter = " ".repeat(line_str.len());
-    let caret_pad = " ".repeat(column.saturating_sub(1));
+    let caret_pad = mirror_source_prefix_as_pad(line_text, column);
 
     out.push('\n');
     match label {
@@ -152,7 +185,7 @@ pub fn format_diagnostic(src: &str, err: &LispError, label: Option<&str>) -> Str
 
 #[cfg(test)]
 mod tests {
-    use super::{format_diagnostic, line_at, line_col, LineCol};
+    use super::{format_diagnostic, line_at, line_col, mirror_source_prefix_as_pad, LineCol};
     use crate::error::LispError;
     use crate::reader::read;
 
@@ -363,5 +396,134 @@ error: unexpected end of input at position 7
             !rendered.contains('^'),
             "no caret allowed without a position to point at"
         );
+    }
+
+    // ── mirror_source_prefix_as_pad ─────────────────────────────────
+    //
+    // The pre-lift `" ".repeat(column - 1)` caret pad drifted under a
+    // tab-indented source (a `\t` renders as N columns of source but
+    // as ONE space in the pad, so the caret slid left of the offending
+    // byte). Post-lift the pad mirrors each source char — tabs stay
+    // tabs, everything else becomes a space — so the pad and the
+    // source line consume the SAME tab-stops on a fixed-width terminal.
+    // The pins below anchor the four canonical fixpoints AND the
+    // end-to-end composition through `format_diagnostic`.
+
+    #[test]
+    fn mirror_source_prefix_as_pad_at_column_one_is_empty() {
+        // Column 1 means the caret sits under the FIRST char of the
+        // source line — zero pad ahead of it. `saturating_sub(1)` guards
+        // both column 0 (unreachable but defensively OK) and column 1.
+        assert_eq!(mirror_source_prefix_as_pad("(a b)", 1), "");
+        assert_eq!(mirror_source_prefix_as_pad("(a b)", 0), "");
+    }
+
+    #[test]
+    fn mirror_source_prefix_as_pad_replaces_non_tab_chars_with_spaces() {
+        // A tab-free source line reproduces the pre-lift behavior byte-
+        // for-byte: N chars of source before the caret → N spaces of
+        // pad. Load-bearing for the existing `format_diagnostic_*`
+        // tests, which all pin space-only prefixes.
+        assert_eq!(mirror_source_prefix_as_pad("   )", 4), "   ");
+        assert_eq!(mirror_source_prefix_as_pad("(a b c)", 5), "    ");
+        assert_eq!(
+            mirror_source_prefix_as_pad("hello", 6),
+            "     ",
+            "column past-last-char pads with spaces for every source char",
+        );
+    }
+
+    #[test]
+    fn mirror_source_prefix_as_pad_preserves_tabs_verbatim() {
+        // A single leading tab mirrors through as a tab — the caret pad
+        // consumes the same tab-stop the source did, so `\t)` and `\t^`
+        // land the `)` and the `^` at the SAME visual column regardless
+        // of the terminal's tab-stop setting (2, 4, 8, whatever).
+        assert_eq!(mirror_source_prefix_as_pad("\t)", 2), "\t");
+        assert_eq!(mirror_source_prefix_as_pad("\t\t)", 3), "\t\t");
+    }
+
+    #[test]
+    fn mirror_source_prefix_as_pad_mirrors_mixed_tab_and_space_prefix() {
+        // Real-world indent shapes (space-then-tab, tab-then-space,
+        // interleaved) must reproduce the source's exact whitespace
+        // sequence in the pad. A regression that converts tabs to
+        // spaces (or vice versa) fails HERE with a visible mismatch.
+        assert_eq!(mirror_source_prefix_as_pad("  \t)", 4), "  \t");
+        assert_eq!(mirror_source_prefix_as_pad("\t  )", 4), "\t  ");
+        // `(` is a non-tab char — it becomes a space in the pad while
+        // the surrounding tabs mirror through as tabs. Pin that the
+        // interleaved `[tab, space, non-tab, tab]` prefix produces
+        // `[tab, space, space, tab]` so the caret's tab-stop advances
+        // remain aligned regardless of what non-tab chars precede it.
+        assert_eq!(mirror_source_prefix_as_pad("\t (\t)", 5), "\t  \t");
+    }
+
+    #[test]
+    fn mirror_source_prefix_as_pad_replaces_multibyte_chars_with_spaces() {
+        // `é` is one char, one column. The pad counts CHARS (matching
+        // `line_col`'s `column` accounting), so `é)` at column 2 →
+        // ONE space of pad, not two (which the pre-lift byte-repeat
+        // would have produced under a naive byte-count).
+        assert_eq!(mirror_source_prefix_as_pad("é)", 2), " ");
+        assert_eq!(mirror_source_prefix_as_pad("\téé)", 4), "\t  ");
+    }
+
+    #[test]
+    fn mirror_source_prefix_as_pad_clamps_to_line_length_at_eof_column() {
+        // `format_diagnostic_renders_eof_at_end_of_input` renders the
+        // caret one column past the last visible char. Under this
+        // logic the pad is `chars().take(N)` over an N-char line, which
+        // yields exactly N mirrored chars — same as the pre-lift
+        // `" ".repeat(N)` for a tab-free source. Pin the clamp so a
+        // future refactor that swaps `take` for a slice-index panics
+        // out at rustc / test time rather than silently mispadding
+        // EOF errors.
+        assert_eq!(mirror_source_prefix_as_pad("(a b) '", 8), "       ");
+        assert_eq!(mirror_source_prefix_as_pad("\tfoo", 5), "\t   ");
+    }
+
+    #[test]
+    fn format_diagnostic_caret_pad_mirrors_tab_indent_for_terminal_alignment() {
+        // END-TO-END CONTRACT: a tab-indented source with a stray `)`
+        // must render a caret pad whose leading tab matches the source
+        // line's leading tab — so the terminal displays `^` under `)`
+        // regardless of tab-stop setting. Pre-lift this rendered
+        // `\t)` above `  ^` (two spaces where a tab belongs), which
+        // slid the caret left of the `)` on every real terminal. Pin
+        // the fix at the outer boundary so a regression in
+        // `mirror_source_prefix_as_pad` surfaces through the diagnostic
+        // consumer, not just its internal unit-pin.
+        let src = "\t)";
+        let err = read(src).unwrap_err();
+        let rendered = format_diagnostic(src, &err, Some("tabby.lisp"));
+        let expected = "\
+error: unmatched closing paren at position 1
+ --> tabby.lisp:1:2
+  |
+1 | \t)
+  | \t^";
+        assert_eq!(rendered, expected, "got:\n{rendered}");
+    }
+
+    #[test]
+    fn format_diagnostic_caret_pad_mirrors_mixed_tab_space_indent() {
+        // Deeper composition: mixed leading indent (space + tab +
+        // space) with the caret on a nested `(` that stays unclosed.
+        // Every prefix char round-trips into the pad — spaces stay
+        // spaces, the tab stays a tab. A regression that homogenizes
+        // the prefix to all-spaces fails HERE with a visible mismatch
+        // on the tab position.
+        let src = " \t (a b";
+        let err = read(src).unwrap_err();
+        let rendered = format_diagnostic(src, &err, Some("mixed.lisp"));
+        // Unclosed `(` sits at byte 3, column 4 on line 1.
+        let expected = "\
+error: unmatched opening paren at position 3
+ --> mixed.lisp:1:4
+  |
+1 |  \t (a b
+  |  \t ^";
+        assert_eq!(rendered, expected, "got:\n{rendered}");
     }
 }

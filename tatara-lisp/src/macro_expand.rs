@@ -338,6 +338,60 @@ pub const DEFAULT_RESOURCE_LIMITS: ResourceLimits = ResourceLimits {
     max_macro_arity: DEFAULT_MAX_MACRO_ARITY,
 };
 
+/// The unbounded [`ResourceLimits`] posture — every ceiling seeded to
+/// [`usize::MAX`] at ONE typed value. This is the CEILING-LIFTED peer of
+/// [`DEFAULT_RESOURCE_LIMITS`] one PRESET-POSTURE axis over on the
+/// named-preset surface: where the default constant binds each field to
+/// the shipped `DEFAULT_MAX_*` module constant, this constant binds
+/// each field to the raw `usize::MAX` sentinel that every
+/// [`Expander::set_max_expansion_depth`] / [`Expander::set_max_cache_entries`] /
+/// [`Expander::set_max_expansion_size`] / [`Expander::set_max_macro_body_size`] /
+/// [`Expander::set_max_registered_macros`] / [`Expander::set_max_macro_arity`]
+/// setter's doc names as "the ceiling is effectively lifted" —
+/// admitting any lawful value the type system supports.
+///
+/// A test-harness fixture that wants "exercise the raw expander with no
+/// ceiling gating anything" pre-lift composed the posture at its call
+/// site as six independent [`usize::MAX`] literals (or six independent
+/// setter invocations post-`Expander::new`) whose exhaustiveness the
+/// type system did NOT gate — a copy-paste that dropped one of the six
+/// lifts left THAT ceiling at its default and gated the fixture
+/// silently. Post-lift the posture is ONE named typed constant every
+/// such fixture routes through, AND rustc's field-exhaustiveness on
+/// the `..Default::default()`-free literal here forces a SEVENTH
+/// ceiling extension to appear at this site in lockstep with
+/// [`DEFAULT_RESOURCE_LIMITS`] and the [`ResourceLimits`] struct
+/// itself — no independent-preset-drift window.
+///
+/// Peer to [`DEFAULT_RESOURCE_LIMITS`] on the (posture × aggregation)
+/// grid: both constants live at the AGGREGATION corner (six ceilings
+/// as ONE typed value); the posture axis distinguishes the SHIPPED
+/// default from the CEILING-LIFTED unbounded preset. Disagrees with
+/// [`DEFAULT_RESOURCE_LIMITS`] on every field (every default is a
+/// concrete non-[`usize::MAX`] positive constant, so the six-way
+/// disagreement is structurally exhaustive) — pinned as a typed
+/// theorem in the [`ResourceLimits`] test cohort.
+///
+/// Frontier inspiration: `tokio::runtime::Builder`'s pattern of
+/// exposing named preset thunks (`multi_thread`, `current_thread`)
+/// alongside the field-level configurators, so a caller that wants a
+/// standard posture binds through ONE named entry rather than
+/// composing the field literals at the call site. Translation
+/// through pleme-io primitives is the plain `const` snapshot below,
+/// no builder-pattern indirection — the `Copy` posture on
+/// [`ResourceLimits`] already gives callers the struct-update
+/// literal (`ResourceLimits { max_expansion_depth: 4,
+/// ..UNBOUNDED_RESOURCE_LIMITS }`) that isolates the ONE ceiling
+/// still gating from the five lifted.
+pub const UNBOUNDED_RESOURCE_LIMITS: ResourceLimits = ResourceLimits {
+    max_expansion_depth: usize::MAX,
+    max_cache_entries: usize::MAX,
+    max_expansion_size: usize::MAX,
+    max_macro_body_size: usize::MAX,
+    max_registered_macros: usize::MAX,
+    max_macro_arity: usize::MAX,
+};
+
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
 /// its manual `Hash` impl — no serde_json round-trip per cache lookup.
 type CacheKey = (String, u64);
@@ -14835,5 +14889,202 @@ mod tests {
             ),
             "at-construction arity ceiling must reach the register-time gate; got: {err:?}"
         );
+    }
+
+    // ── UNBOUNDED_RESOURCE_LIMITS — ceiling-lifted preset posture ──────
+
+    #[test]
+    fn unbounded_resource_limits_binds_every_ceiling_to_usize_max() {
+        // Field-level pin — the ceiling-lifted preset carries
+        // [`usize::MAX`] on every axis of the six-field surface. Pinned
+        // as six independent field asserts (rather than one struct
+        // equality) so a drift on ONE field carries a distinct-name
+        // failure that names the drifting axis. A future extension
+        // that adds a SEVENTH ceiling requires an additional field
+        // assert here in lockstep with the const literal — rustc's
+        // field-exhaustiveness on the const forces the new field to
+        // appear, and this pin exercises it.
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.max_expansion_depth, usize::MAX);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.max_cache_entries, usize::MAX);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.max_expansion_size, usize::MAX);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.max_macro_body_size, usize::MAX);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.max_registered_macros, usize::MAX);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.max_macro_arity, usize::MAX);
+    }
+
+    #[test]
+    fn unbounded_resource_limits_disagrees_with_default_on_every_ceiling() {
+        // Structural-distinctness pin — the two constants
+        // [`DEFAULT_RESOURCE_LIMITS`] and [`UNBOUNDED_RESOURCE_LIMITS`]
+        // sit at DISTINCT points on the posture axis of the (posture ×
+        // aggregation) grid, and the disagreement is EXHAUSTIVE on the
+        // six-field surface — every shipped `DEFAULT_MAX_*` module
+        // constant is a concrete positive value strictly less than
+        // [`usize::MAX`]. Pins that a future re-tuning which cranked one
+        // shipped default up to [`usize::MAX`] (collapsing the two
+        // presets on that field) fires here loudly rather than
+        // silently letting the two presets become indistinguishable
+        // on that axis. A regression which flipped ONE unbounded-const
+        // field back to its default value also fires here — either
+        // half of the disagreement breaks the theorem.
+        assert_ne!(
+            UNBOUNDED_RESOURCE_LIMITS.max_expansion_depth,
+            DEFAULT_RESOURCE_LIMITS.max_expansion_depth
+        );
+        assert_ne!(
+            UNBOUNDED_RESOURCE_LIMITS.max_cache_entries,
+            DEFAULT_RESOURCE_LIMITS.max_cache_entries
+        );
+        assert_ne!(
+            UNBOUNDED_RESOURCE_LIMITS.max_expansion_size,
+            DEFAULT_RESOURCE_LIMITS.max_expansion_size
+        );
+        assert_ne!(
+            UNBOUNDED_RESOURCE_LIMITS.max_macro_body_size,
+            DEFAULT_RESOURCE_LIMITS.max_macro_body_size
+        );
+        assert_ne!(
+            UNBOUNDED_RESOURCE_LIMITS.max_registered_macros,
+            DEFAULT_RESOURCE_LIMITS.max_registered_macros
+        );
+        assert_ne!(
+            UNBOUNDED_RESOURCE_LIMITS.max_macro_arity,
+            DEFAULT_RESOURCE_LIMITS.max_macro_arity
+        );
+    }
+
+    #[test]
+    fn expander_with_unbounded_limits_projects_through_resource_limits_getter() {
+        // Round-trip pin at CONSTRUCTION time — an expander built at
+        // the ceiling-lifted preset MUST project back through
+        // [`Expander::resource_limits`] to the SAME constant verbatim.
+        // Peer of `expander_with_limits_seeds_the_provided_resource_posture`
+        // one PRESET-POSTURE axis over — that pin exercises the
+        // constructor's carry via a distinct-low-value bundle; this
+        // pin exercises it via the ceiling-lifted preset constant.
+        // Cross-pin the six-field snapshot equals the ceiling-lifted
+        // constant so a regression that broke either the constant OR
+        // the constructor's carry fires here.
+        assert_eq!(
+            Expander::with_limits(UNBOUNDED_RESOURCE_LIMITS).resource_limits(),
+            UNBOUNDED_RESOURCE_LIMITS
+        );
+    }
+
+    #[test]
+    fn expander_with_unbounded_limits_admits_a_body_over_the_default_size_ceiling() {
+        // Behavioral pin — the ceiling-lifted preset MUST reach the
+        // register-time body-size gate as an actually-lifted ceiling.
+        // Register a macro whose body node count strictly exceeds
+        // [`DEFAULT_MAX_MACRO_BODY_SIZE`] (a body which under the
+        // shipped default would fail [`register_macro_def`] with a
+        // [`LispError::MacroBodySizeExceeded`]) and confirm the
+        // registration succeeds under the ceiling-lifted preset. Only
+        // the body-size ceiling being lifted lets a body of that
+        // magnitude land; the arity ceiling is left at 1 param via
+        // struct-update override to prove the preset's other five
+        // ceilings STILL project cleanly at [`usize::MAX`] alongside
+        // the ceiling under test. A regression that failed to lift
+        // ONE ceiling across the preset (a stale `DEFAULT_MAX_*` field
+        // in the const literal) fires here on the axis it dropped.
+        let mut e = Expander::with_limits(UNBOUNDED_RESOURCE_LIMITS);
+        // Build a huge quasi-quoted list body: `(k k k k k … k) whose
+        // node_count() eclipses DEFAULT_MAX_MACRO_BODY_SIZE = 16384.
+        let mut body = String::from("(defmacro huge (k) `(");
+        for _ in 0..(DEFAULT_MAX_MACRO_BODY_SIZE + 1) {
+            body.push_str(",k ");
+        }
+        body.push_str("))");
+        let forms = read(&body).unwrap();
+        e.expand_program(forms)
+            .expect("unbounded body-size ceiling must admit a body over the default limit");
+        assert!(e.has("huge"));
+    }
+
+    #[test]
+    fn expander_with_unbounded_limits_admits_arity_over_the_default_arity_ceiling() {
+        // Behavioral pin sibling of the body-size pin above one
+        // RESOURCE-DIMENSION axis over on the REGISTER-time surface —
+        // the ceiling-lifted preset MUST also reach the arity gate as
+        // an actually-lifted ceiling. Register a macro whose param
+        // list strictly exceeds [`DEFAULT_MAX_MACRO_ARITY`] (a
+        // 129-slot lambda list which under the shipped default fails
+        // with [`LispError::MacroArityExceeded`]) and confirm the
+        // registration succeeds under the ceiling-lifted preset.
+        use std::fmt::Write as _;
+        let mut e = Expander::with_limits(UNBOUNDED_RESOURCE_LIMITS);
+        let mut src = String::from("(defmacro many-arity (");
+        for i in 0..(DEFAULT_MAX_MACRO_ARITY + 1) {
+            write!(src, "a-{i} ").unwrap();
+        }
+        src.push_str(") `,a-0)");
+        let forms = read(&src).unwrap();
+        e.expand_program(forms)
+            .expect("unbounded arity ceiling must admit a param list over the default limit");
+        assert!(e.has("many-arity"));
+    }
+
+    #[test]
+    fn unbounded_resource_limits_composes_via_struct_update_to_isolate_one_ceiling() {
+        // Ergonomic pin — the `Copy` posture on [`ResourceLimits`] lets
+        // a caller build "every ceiling lifted EXCEPT this ONE" as ONE
+        // struct-update literal on the ceiling-lifted preset AND thread
+        // that composition through [`Expander::with_limits`] as ONE
+        // typed call. This is the "only THIS ceiling gates" fixture
+        // shape a chain of six independent setters cannot express in
+        // ONE expression, and the shape the last commit named as a
+        // future benefit of the (getter, setter, at-construction)
+        // three-corner face closing at ONE bundle.
+        //
+        // Set only `max_macro_arity: 1`; confirm the arity gate fires
+        // on a two-arg registration while the five other lifted
+        // ceilings project through the getter as [`usize::MAX`]. A
+        // regression that broke the ceiling-lifted preset would EITHER
+        // fail to project [`usize::MAX`] on one of the five other
+        // fields OR fail to gate the isolated arity ceiling at 1.
+        let mut e = Expander::with_limits(ResourceLimits {
+            max_macro_arity: 1,
+            ..UNBOUNDED_RESOURCE_LIMITS
+        });
+        assert_eq!(e.max_macro_arity(), 1);
+        assert_eq!(e.max_expansion_depth(), usize::MAX);
+        assert_eq!(e.max_cache_entries(), usize::MAX);
+        assert_eq!(e.max_expansion_size(), usize::MAX);
+        assert_eq!(e.max_macro_body_size(), usize::MAX);
+        assert_eq!(e.max_registered_macros(), usize::MAX);
+        let forms = read("(defmacro two (a b) `,a)").unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::MacroArityExceeded {
+                    arity: 2,
+                    limit: 1,
+                    ..
+                }
+            ),
+            "struct-update override on the ceiling-lifted preset must \
+             leave the isolated arity ceiling gating; got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn unbounded_resource_limits_carries_through_the_bulk_setter() {
+        // Coherence pin between the AT-construction constructor and
+        // the POST-construction bulk setter — both paths that reach the
+        // ceiling-lifted preset must land at the SAME six values on
+        // the expander state. Pre-lift a caller wanting the unbounded
+        // posture composed six individual setter invocations at the
+        // call site; post-lift both `Expander::with_limits(UNBOUNDED_
+        // RESOURCE_LIMITS)` and `e.set_resource_limits(UNBOUNDED_
+        // RESOURCE_LIMITS)` reach the SAME snapshot through the SAME
+        // constant. A regression that wired the bulk setter to a
+        // shadow field, or the ceiling-lifted preset to a stale field
+        // literal, fires here on the constructor-vs-setter identity.
+        let a = Expander::with_limits(UNBOUNDED_RESOURCE_LIMITS);
+        let mut b = Expander::new();
+        b.set_resource_limits(UNBOUNDED_RESOURCE_LIMITS);
+        assert_eq!(a.resource_limits(), b.resource_limits());
+        assert_eq!(a.resource_limits(), UNBOUNDED_RESOURCE_LIMITS);
     }
 }

@@ -66,6 +66,7 @@ pub use error::{
 };
 pub use macro_expand::{
     Expander, MacroDef, MacroParams, OptionalParam, ResourceLimits, DEFAULT_RESOURCE_LIMITS,
+    UNBOUNDED_RESOURCE_LIMITS,
 };
 pub use reader::read;
 // `#[derive(ClosedSet)]` proc-macro — same name as the trait, different

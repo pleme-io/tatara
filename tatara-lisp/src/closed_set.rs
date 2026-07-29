@@ -42332,6 +42332,208 @@ pub trait ClosedSet: Sized + Copy + 'static {
             .collect()
     }
 
+    /// The N-ARY DECLARATION-ORDER "the unique miss-band witness as a
+    /// singleton-or-empty joined-label String" projection — the `String`
+    /// rendering of [`Self::unique_missing_labels`] joined by `sep`.
+    /// Composes the substrate's just-lifted uniqueness-gated miss-band
+    /// label-Vec primitive with the standard-library
+    /// [`slice::join`](https://doc.rust-lang.org/std/primitive.slice.html#method.join)
+    /// combinator so a passing implementor of
+    /// [`Self::unique_missing_labels`] automatically satisfies this
+    /// projection at every downstream site. When the miss-band uniqueness
+    /// guard [`Self::has_unique_missing_variant`] holds, the projection
+    /// returns the sole absent variant's label as a bare `String` (no
+    /// separator surfaces because the joined slice is a singleton); when
+    /// the guard falsifies, the projection collapses to the EMPTY
+    /// `String` through a zero-allocation short-circuit inherited from
+    /// [`Self::unique_missing_labels`].
+    ///
+    /// The `String`-RETURN UNIQUE-TIE SHARPENING corner OPENING the
+    /// JOIN-STRING column of the (set-level × `String` ×
+    /// equivalence-partition × mult-band × unique-tie) row past the
+    /// just-closed label-Vec trio ([`Self::unique_missing_labels`],
+    /// [`Self::unique_repeating_labels`], [`Self::unique_unique_labels`])
+    /// one RETURN-SHAPE axis over on the equivalence-partition surface.
+    /// Peer to [`Self::missing_labels_joined`] one UNIQUE-TIE-SHARPENING
+    /// axis over on the join-string return column (unsharpened miss-set
+    /// label-join → uniqueness-gated singleton-or-empty label-join).
+    /// Peer to [`Self::unique_missing_labels`] one RETURN-SHAPE axis over
+    /// on the miss-band unique-tie corner (label-Vec witness → joined-
+    /// String witness of the same singleton-or-empty binding).
+    ///
+    /// Composition law: for every slice `items` and every separator
+    /// `sep`, `T::unique_missing_labels_joined(items, sep) ==
+    /// T::unique_missing_labels(items).join(sep)` — the joined-String
+    /// projection binds through the substrate's
+    /// [`Self::unique_missing_labels`] Vec-return primitive composed with
+    /// `slice::join`. Pinned by
+    /// `unique_missing_labels_joined_equals_unique_missing_labels_dot_join_across_every_triple`.
+    ///
+    /// Guarded-witness-collection identity: for every slice `items` and
+    /// every separator `sep`, `T::unique_missing_labels_joined(items,
+    /// sep) == if T::has_unique_missing_variant(items) {
+    /// T::missing_labels_joined(items, sep) } else { String::new() }` —
+    /// the uniqueness-gated join-String coincides with the boolean-
+    /// guarded miss-set label-join through the composition of
+    /// [`Self::unique_missing_labels`]'s guard-arm with `slice::join`.
+    /// Pinned by
+    /// `unique_missing_labels_joined_equals_has_unique_missing_variant_gated_missing_labels_joined_across_every_triple`.
+    ///
+    /// Bare-label singleton identity: for every slice `items` on which
+    /// [`Self::has_unique_missing_variant`] holds AND for every separator
+    /// `sep`, `T::unique_missing_labels_joined(items, sep) ==
+    /// T::unique_missing_labels(items)[0]` (as `String`) — because the
+    /// underlying label-Vec is a SINGLETON on the positive arm, the
+    /// separator NEVER surfaces in the output; `slice::join` on a
+    /// singleton `[label]` returns `label.to_string()` regardless of
+    /// `sep`. Pinned by
+    /// `unique_missing_labels_joined_is_separator_agnostic_on_the_positive_arm_across_every_triple`.
+    ///
+    /// Is-empty coincidence identity: for every slice `items` and every
+    /// separator `sep`, `T::unique_missing_labels_joined(items,
+    /// sep).is_empty() == !T::has_unique_missing_variant(items)` — the
+    /// join-String's emptiness coincides with the NEGATION of the
+    /// set-level uniqueness bit. Independent cross-check binding the
+    /// String-return uniqueness projection against the bool-column
+    /// projection one return-shape column over, and against the sibling
+    /// [`Self::unique_missing_labels`] `is_empty` identity one return-
+    /// shape column over on the Vec-return arm. Pinned by
+    /// `unique_missing_labels_joined_is_empty_iff_not_has_unique_missing_variant_across_every_triple`.
+    ///
+    /// Ordering-axis invariance: the projection is intrinsically
+    /// ordering-agnostic on the INPUT axis — the underlying
+    /// [`Self::unique_missing_labels`] factors through the
+    /// ordering-agnostic [`Self::has_unique_missing_variant`] +
+    /// [`Self::missing_variants`] pair under [`Self::label`], and
+    /// `slice::join` is a pure combinator. The OUTPUT byte layout is
+    /// fixed by [`Self::ALL`]'s declaration order regardless of the
+    /// input ordering, so the joined `String` matches byte-for-byte
+    /// under reversal. Pinned by
+    /// `unique_missing_labels_joined_is_invariant_under_slice_reversal_across_every_triple`.
+    ///
+    /// Empty-slice contract at cardinality `>= 2`:
+    /// `T::unique_missing_labels_joined(&[], sep) == String::new()` for
+    /// every `sep` — the empty slice puts every variant in the miss
+    /// band, [`Self::count_missing`] reports `T::CARDINALITY >= 2`, the
+    /// uniqueness guard falsifies via `count != 1`, the label-Vec
+    /// collapses to `vec![]`, and `slice::join` on an empty slice yields
+    /// the empty `String`. At cardinality `== 1` the empty slice pins
+    /// `count_missing == 1`, the guard holds, and the projection returns
+    /// `T::ALL[0].label().to_string()` for every `sep`.
+    ///
+    /// Full-set contract: `T::unique_missing_labels_joined(<T as
+    /// ClosedSet>::ALL, sep) == String::new()` UNCONDITIONALLY for every
+    /// `sep` — the pairwise-distinctness invariant pins every variant at
+    /// exactly one position of the full-set slice,
+    /// [`Self::count_missing`] reports `0`, the guard falsifies via
+    /// `0 != 1`, the label-Vec collapses to `vec![]`, and `slice::join`
+    /// on the empty slice yields the empty `String`.
+    ///
+    /// Doubled-full-set contract:
+    /// `T::unique_missing_labels_joined(&doubled, sep) == String::new()`
+    /// UNCONDITIONALLY for every `sep` — every variant sits at count
+    /// `2` (strict-repeat, NOT miss-band), so [`Self::count_missing`]
+    /// reports `0`, the uniqueness guard falsifies via `0 != 1`, and the
+    /// projection collapses to the empty `String` at every cardinality.
+    ///
+    /// Bimodal-triple positive-arm contract at cardinality `>= 3`: on
+    /// `[T::ALL[0], T::ALL[0], T::ALL[1]]` for every `sep`, `T::ALL[2]`
+    /// sits at count `0` (the SOLE absent variant),
+    /// [`Self::count_missing`] reports `1`,
+    /// [`Self::has_unique_missing_variant`] returns `true`, the label-
+    /// Vec collapses to `vec![T::ALL[2].label()]`, and `slice::join` on
+    /// the singleton returns `T::ALL[2].label().to_string()` — the
+    /// SEPARATOR-AGNOSTIC positive arm on the multi-variant test-module
+    /// fixture at the canonical bimodal cardinality (the separator
+    /// NEVER surfaces because the joined slice is a singleton).
+    ///
+    /// Empty-separator degeneracy: on the positive arm, the joined
+    /// `String` equals the sole absent label EXACTLY under the empty
+    /// separator (the joined slice is a singleton, `slice::join` on a
+    /// singleton is identity-into-`String`); on the negative arm, the
+    /// joined `String` is empty. Independent cross-check that the
+    /// combinator threads the empty separator through without inserting
+    /// a spurious rendering. Pinned by
+    /// `unique_missing_labels_joined_threads_empty_separator_into_a_concatenated_run`.
+    ///
+    /// Multi-char separator verbatim: on the positive arm, the multi-
+    /// character separator NEVER surfaces because the label-Vec is a
+    /// singleton; on the negative arm, the output is the empty `String`.
+    /// Independent cross-check that the combinator does not treat only
+    /// single-character separators verbatim, pinning the same identity
+    /// under a multi-byte separator surface. Pinned by
+    /// `unique_missing_labels_joined_threads_multi_char_separator_verbatim`.
+    ///
+    /// Future consumers — a `tatara-check` predicate `(check-missing-if-
+    /// unique-joined …)` that reports the singleton-or-empty miss-band
+    /// join-String witness as a typed author-facing scalar rather than a
+    /// three-step (has-unique-missing-variant? then missing-labels then
+    /// join) composition; an LSP diagnostic on a Lisp-author-written
+    /// closed-set field that renders "the sole omitted label" (only when
+    /// uniquely omitted) as an author-facing scalar completion string
+    /// (`":severities [:info :warn] — sole omission: error"` where the
+    /// suffix is `.to_string()` of the sole miss label); a Sekiban
+    /// audit-trail projection whose per-window "sole missing label"
+    /// witness renders as a deterministic scalar across machines
+    /// (rather than a Vec that a downstream consumer must join
+    /// separately); a `tatara-lisp::macro_expand::Expander` diagnostic
+    /// that emits THE LONE unbound vocabulary identifier's label when
+    /// uniqueness holds through a single typed String rather than a
+    /// three-step composition. Each binds to ONE typed N-ary
+    /// uniqueness-gated miss-witness join-String projection on the
+    /// trait rather than re-deriving the three-primitive
+    /// `unique_missing_labels + join` composition inline per callsite.
+    ///
+    /// Compounding closure: this projection OPENS the JOIN-STRING
+    /// return column of the (set-level × `String` × equivalence-
+    /// partition × mult-band × unique-tie) row past the just-closed
+    /// label-Vec trio ([`Self::unique_missing_labels`],
+    /// [`Self::unique_repeating_labels`], [`Self::unique_unique_labels`])
+    /// one RETURN-SHAPE axis over on the equivalence-partition surface.
+    /// The (mult-band × return-shape) 3×3 face on the unique-tie
+    /// subsurface now sits 7/9 closed at (miss, variant),
+    /// (strict-repeat, variant), (unique-band, variant), (miss, label),
+    /// (strict-repeat, label), (unique-band, label), and THIS
+    /// (miss, join-String) corner — with the (strict-repeat, join-String)
+    /// `unique_repeating_labels_joined` corner and the (unique-band,
+    /// join-String) `unique_unique_labels_joined` corner as the natural
+    /// next lifts closing the row past this opener.
+    ///
+    /// Theory anchor: THEORY.md §III — the typescape; the N-ary
+    /// uniqueness-gated miss-band join-String projection becomes a
+    /// TYPE-level primitive on the closed-set trait rather than a
+    /// per-consumer inline
+    /// `T::unique_missing_labels(items).join(sep)` composition at every
+    /// downstream generic site. THEORY.md §V.1 — knowable platform;
+    /// the (set-level × `String` × equivalence-partition × mult `== 0`
+    /// × unique-tie) corner was an unnamed inline composition recurring
+    /// at every prospective downstream "the sole missing label as a
+    /// bare string, if unique, else empty" site pre-lift. THEORY.md
+    /// §VI.1 — generation over composition; the projection emerges
+    /// from the composition of ONE substrate primitive
+    /// ([`Self::unique_missing_labels`]) with the standard-library
+    /// `slice::join` combinator, not as a per-implementor hand-rolled
+    /// body.
+    ///
+    /// Frontier inspiration: R's `{ t <- table(items); miss <-
+    /// setdiff(all, names(t)); if (length(miss) == 1) miss[[1]] else ""
+    /// }` on a factor histogram (returns a bare character scalar rather
+    /// than a length-0 vector on the negative arm); Clojure's
+    /// `(let [miss (remove (set items) all)] (if (= 1 (count miss))
+    /// (name (first miss)) ""))`; Julia's `let miss = setdiff(all,
+    /// items); length(miss) == 1 ? label(only(miss)) : "" end`;
+    /// Haskell's `case all \\ items of [v] -> label v ; _ -> ""` on the
+    /// `Bounded + Enum + Show` type-class trio. Translation through
+    /// pleme-io primitives: a pure default method composing the
+    /// just-lifted [`Self::unique_missing_labels`] Vec-return primitive
+    /// under `slice::join` — no new dep, no supertrait bound, no
+    /// set-shape carrier, no allocation beyond the natural intermediate
+    /// `Vec<&'static str>` the `slice::join` combinator's per-slot
+    /// stringification already routes.
+    fn unique_missing_labels_joined(items: &[Self], sep: &str) -> ::std::string::String {
+        <Self as ClosedSet>::unique_missing_labels(items).join(sep)
+    }
+
     /// The declaration-order INCLUSIVE-both closed-range containment
     /// predicate — `true` iff `self` sits in the closed range
     /// `[lo, hi]` of [`Self::ALL`]'s declaration order, `false` when
@@ -61670,6 +61872,104 @@ where
             ::std::vec![<T as ClosedSet>::label(T::ALL[1])],
             "{type_name}: T::unique_unique_labels(&bimodal_triple) drifted from `vec![T::ALL[1].label()]` at cardinality == 3 — count_unique_variants reports 1 (T::ALL[1] the SOLE unique-band witness), has_unique_unique_variant holds, guard fires, and the composition body reports vec![T::ALL[1].label()]. A `vec![]` fold silently bifurcates the LOAD-BEARING positive arm AND its LOAD-BEARING TRICHOTOMY DISCRIMINATION from clauses (200) + (201) which report vec![T::ALL[2].label()] + vec![T::ALL[0].label()] on the SAME fixture",
         );
+    }
+    // (203) — `T::unique_missing_labels_joined(items, sep)` MUST agree
+    // with the composition body `T::unique_missing_labels(items).join(sep)`
+    // on every canonical slice AND MUST pin fixpoint arms against the
+    // sibling label-Vec projection one RETURN-SHAPE axis over. THIS
+    // clause OPENS the JOIN-STRING return column of the (set-level ×
+    // `String` × equivalence-partition × mult-band × unique-tie) row on
+    // the EQUIVALENCE-PARTITION surface at its (mult `== 0`) miss-band
+    // arm past the just-closed label-Vec trio clauses (200) + (201) +
+    // (202) one RETURN-SHAPE axis over. Peer to clause (200)
+    // ([`T::unique_missing_labels`]) one RETURN-SHAPE axis over
+    // (label-Vec witness → joined-String witness of the same
+    // singleton-or-empty binding).
+    //
+    // Bimodal-triple positive-arm discipline (SEPARATOR-AGNOSTIC on the
+    // singleton positive arm): at `T::CARDINALITY == 3` on the canonical
+    // bimodal triple `[T::ALL[0], T::ALL[0], T::ALL[1]]` for every `sep`
+    // in `["/", ", ", "|"]`, `T::ALL[2]` sits at count `0` (the SOLE
+    // absent variant), `count_missing` reports `1`,
+    // `has_unique_missing_variant` holds, guard fires, the label-Vec
+    // collapses to `vec![T::ALL[2].label()]`, and `slice::join` on the
+    // singleton returns `T::ALL[2].label().to_string()` UNCONDITIONALLY
+    // — the separator NEVER surfaces in the output because the joined
+    // slice is a singleton. Sweep three representative separators (the
+    // slash, comma-space, and pipe shapes clauses (8) + (10) already
+    // route through) so a drift in any rendering surface fails.
+    //
+    // The default trait body threads the two-primitive
+    // `unique_missing_labels + join` composition verbatim and satisfies
+    // every fixpoint arm + the composition + is-empty coincidence
+    // identities for free; the assertion catches a future implementor
+    // whose override drifts the join-String projection loudly rather
+    // than silently bifurcating the set-level equivalence-partition
+    // miss-band singleton-or-empty JOIN-STRING witness surface. An
+    // override that folds onto `String::new()` unconditionally
+    // bifurcates the bimodal-triple positive arm at cardinality == 3
+    // at `"" != "gamma"` under every sep. An override that folds onto
+    // `T::ALL[0].label().to_string()` unconditionally bifurcates the
+    // empty-slice + full-set + doubled-full-set arms at CARDINALITY
+    // >= 2 (each expects `""`) at `"alpha" != ""`.
+    for sep in ["/", ", ", "|"] {
+        let lifted_empty = T::unique_missing_labels_joined(empty, sep);
+        let natural_empty = T::unique_missing_labels(empty).join(sep);
+        assert_eq!(
+            lifted_empty, natural_empty,
+            "{type_name}: T::unique_missing_labels_joined(&[], {sep:?}) drifted from `T::unique_missing_labels(&[]).join({sep:?})` — the composition law MUST hold on the empty slice",
+        );
+        assert_eq!(
+            T::unique_missing_labels_joined(empty, sep).is_empty(),
+            !T::has_unique_missing_variant(empty),
+            "{type_name}: T::unique_missing_labels_joined(&[], {sep:?}).is_empty() drifted from `!T::has_unique_missing_variant(&[])` — the is-empty coincidence identity MUST hold on the empty slice",
+        );
+        let lifted_full = T::unique_missing_labels_joined(T::ALL, sep);
+        let natural_full = T::unique_missing_labels(T::ALL).join(sep);
+        assert_eq!(
+            lifted_full, natural_full,
+            "{type_name}: T::unique_missing_labels_joined(T::ALL, {sep:?}) drifted from `T::unique_missing_labels(T::ALL).join({sep:?})` — the composition law MUST hold on the full-set slice",
+        );
+        assert_eq!(
+            T::unique_missing_labels_joined(T::ALL, sep),
+            ::std::string::String::new(),
+            "{type_name}: T::unique_missing_labels_joined(T::ALL, {sep:?}) drifted from the empty-String fixpoint — pairwise-distinctness pins count_missing == 0, has_unique_missing_variant is false, the label-Vec collapses to vec![], and slice::join on [] is the empty String",
+        );
+        let lifted_doubled = T::unique_missing_labels_joined(&doubled_full_set, sep);
+        let natural_doubled = T::unique_missing_labels(&doubled_full_set).join(sep);
+        assert_eq!(
+            lifted_doubled, natural_doubled,
+            "{type_name}: T::unique_missing_labels_joined(&doubled_full_set, {sep:?}) drifted from `T::unique_missing_labels(&doubled_full_set).join({sep:?})` — the composition law MUST hold on the doubled-full-set slice",
+        );
+        assert_eq!(
+            T::unique_missing_labels_joined(&doubled_full_set, sep),
+            ::std::string::String::new(),
+            "{type_name}: T::unique_missing_labels_joined(&doubled_full_set, {sep:?}) drifted from the empty-String fixpoint — every variant hits count 2 (strict-repeat, NOT miss-band), count_missing == 0, has_unique_missing_variant is false, and the projection collapses to the empty String at every cardinality",
+        );
+    }
+    if T::CARDINALITY == 3 {
+        // Bimodal-triple fixture: LOAD-BEARING sole-non-empty positive
+        // arm on the (`String` × equivalence-partition × mult `== 0` ×
+        // unique-tie) corner at the canonical cardinality-3 test-module
+        // window. count_missing reports 1 (T::ALL[2] the SOLE absent
+        // witness), has_unique_missing_variant holds, guard fires, the
+        // label-Vec collapses to vec![T::ALL[2].label()], and
+        // slice::join on the singleton returns T::ALL[2].label() as a
+        // bare String — SEPARATOR-AGNOSTIC because the joined slice is
+        // a singleton. Sweep three representative separators so a
+        // drift on any rendering surface fails. LOAD-BEARING mirror of
+        // clause (200)'s bimodal-triple label-Vec positive arm one
+        // RETURN-SHAPE axis over on the miss-band unique-tie corner.
+        let bimodal_triple = [T::ALL[0], T::ALL[0], T::ALL[1]];
+        let expected_bimodal =
+            ::std::string::ToString::to_string(<T as ClosedSet>::label(T::ALL[2]));
+        for sep in ["/", ", ", "|"] {
+            assert_eq!(
+                T::unique_missing_labels_joined(&bimodal_triple, sep),
+                expected_bimodal,
+                "{type_name}: T::unique_missing_labels_joined(&bimodal_triple, {sep:?}) drifted from T::ALL[2].label() as String at cardinality == 3 — count_missing reports 1 (T::ALL[2] the SOLE absent witness), has_unique_missing_variant holds, guard fires, the label-Vec collapses to vec![T::ALL[2].label()], and slice::join on the singleton returns T::ALL[2].label() as a bare String (the separator NEVER surfaces because the joined slice is a singleton)",
+            );
+        }
     }
 }
 
@@ -127726,6 +128026,322 @@ mod tests {
         assert!(
             result.is_err(),
             "assert_closed_set_well_formed accepted a DriftedUniqueUniqueLabelsSingletonFirstKind whose unique_unique_labels override folds onto vec![\"alpha\"] unconditionally — clause (202)'s empty/full/doubled-full-set arms MUST reject the drift at cardinality 3",
+        );
+    }
+
+    #[test]
+    fn unique_missing_labels_joined_returns_empty_on_the_empty_slice_at_cardinality_gte_two() {
+        // EMPTY-SLICE CONTRACT at cardinality >= 2:
+        // T::unique_missing_labels_joined(&[], sep) == String::new()
+        // for every sep — the empty slice puts every variant in the
+        // miss band, count_missing reports T::CARDINALITY >= 2,
+        // has_unique_missing_variant collapses to false via `count != 1`,
+        // the label-Vec collapses to vec![], and slice::join on [] is
+        // the empty String. StubKind has cardinality 3.
+        assert_eq!(<StubKind as ClosedSet>::CARDINALITY, 3);
+        let empty: &[StubKind] = &[];
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::unique_missing_labels_joined(empty, sep),
+                String::new(),
+                "T::unique_missing_labels_joined(&[], {sep:?}) diverged from String::new() at cardinality 3",
+            );
+        }
+    }
+
+    #[test]
+    fn unique_missing_labels_joined_returns_empty_on_the_full_set_across_every_separator() {
+        // FULL-SET CONTRACT: T::unique_missing_labels_joined(T::ALL, sep)
+        // == String::new() UNCONDITIONALLY for every sep — pairwise-
+        // distinctness pins every variant at exactly one position,
+        // count_missing reports 0, has_unique_missing_variant returns
+        // false via `0 != 1`, the label-Vec collapses to vec![], and
+        // slice::join on [] is the empty String.
+        let all = <StubKind as ClosedSet>::ALL;
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::unique_missing_labels_joined(all, sep),
+                String::new(),
+                "T::unique_missing_labels_joined(T::ALL, {sep:?}) diverged from String::new()",
+            );
+        }
+    }
+
+    #[test]
+    fn unique_missing_labels_joined_returns_empty_on_the_doubled_full_set_across_every_separator() {
+        // DOUBLED-FULL-SET CONTRACT:
+        // T::unique_missing_labels_joined(ALL++ALL, sep) == String::new()
+        // UNCONDITIONALLY for every sep — every variant sits at count 2
+        // (strict-repeat, NOT miss-band), count_missing reports 0,
+        // has_unique_missing_variant returns false, and the projection
+        // collapses to the empty String at every cardinality.
+        let doubled: Vec<StubKind> = <StubKind as ClosedSet>::ALL
+            .iter()
+            .copied()
+            .chain(<StubKind as ClosedSet>::ALL.iter().copied())
+            .collect();
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::unique_missing_labels_joined(&doubled, sep),
+                String::new(),
+                "T::unique_missing_labels_joined(ALL++ALL, {sep:?}) diverged from String::new()",
+            );
+        }
+    }
+
+    #[test]
+    fn unique_missing_labels_joined_returns_the_sole_absent_label_on_the_bimodal_triple_at_cardinality_three(
+    ) {
+        // BIMODAL-TRIPLE POSITIVE-ARM CONTRACT at CARDINALITY == 3
+        // (SEPARATOR-AGNOSTIC): for every sep,
+        // T::unique_missing_labels_joined([T::ALL[0], T::ALL[0], T::ALL[1]], sep)
+        // == T::ALL[2].label().to_string() — T::ALL[2] at count 0 is
+        // the SOLE absent variant, count_missing reports 1,
+        // has_unique_missing_variant holds, guard fires, the label-Vec
+        // collapses to vec![T::ALL[2].label()], and slice::join on the
+        // singleton returns T::ALL[2].label() as a bare String (the
+        // separator NEVER surfaces because the joined slice is a
+        // singleton).
+        assert_eq!(<StubKind as ClosedSet>::CARDINALITY, 3);
+        let bimodal_triple = [
+            <StubKind as ClosedSet>::ALL[0],
+            <StubKind as ClosedSet>::ALL[0],
+            <StubKind as ClosedSet>::ALL[1],
+        ];
+        let expected = <StubKind as ClosedSet>::label(<StubKind as ClosedSet>::ALL[2]).to_string();
+        for sep in ["", ", ", "/", " | "] {
+            assert_eq!(
+                <StubKind as ClosedSet>::unique_missing_labels_joined(&bimodal_triple, sep),
+                expected,
+                "T::unique_missing_labels_joined(&bimodal_triple, {sep:?}) diverged from T::ALL[2].label().to_string() — the separator MUST NOT surface because the joined slice is a singleton",
+            );
+        }
+    }
+
+    #[test]
+    fn unique_missing_labels_joined_equals_unique_missing_labels_dot_join_across_every_triple() {
+        // COMPOSITION LAW: for every slice `items` and every separator
+        // `sep`, T::unique_missing_labels_joined(items, sep) ==
+        // T::unique_missing_labels(items).join(sep) on every canonical
+        // triple — the canonical form the body uses.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for sep in ["/", ", ", "|"] {
+                        let expected =
+                            <StubKind as ClosedSet>::unique_missing_labels(&triple).join(sep);
+                        assert_eq!(
+                            <StubKind as ClosedSet>::unique_missing_labels_joined(&triple, sep),
+                            expected,
+                            "T::unique_missing_labels_joined({triple:?}, {sep:?}) diverged from T::unique_missing_labels({triple:?}).join({sep:?}) — the join-String-column composition law was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_missing_labels_joined_equals_has_unique_missing_variant_gated_missing_labels_joined_across_every_triple(
+    ) {
+        // GUARDED-WITNESS-COLLECTION IDENTITY: for every slice `items`
+        // and every separator `sep`,
+        // T::unique_missing_labels_joined(items, sep) ==
+        // if T::has_unique_missing_variant(items)
+        //     { T::missing_labels_joined(items, sep) }
+        // else
+        //     { String::new() }
+        // — the join-String projection factors through the same
+        // uniqueness guard as its label-Vec sibling.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for sep in ["/", ", ", "|"] {
+                        let via_body =
+                            <StubKind as ClosedSet>::unique_missing_labels_joined(&triple, sep);
+                        let via_guarded_lift =
+                            if <StubKind as ClosedSet>::has_unique_missing_variant(&triple) {
+                                <StubKind as ClosedSet>::missing_labels_joined(&triple, sep)
+                            } else {
+                                String::new()
+                            };
+                        assert_eq!(
+                            via_body, via_guarded_lift,
+                            "T::unique_missing_labels_joined({triple:?}, {sep:?}) diverged from the guarded lift `if T::has_unique_missing_variant {{ T::missing_labels_joined }} else {{ String::new() }}`",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_missing_labels_joined_is_empty_iff_not_has_unique_missing_variant_across_every_triple(
+    ) {
+        // IS-EMPTY COINCIDENCE IDENTITY: for every slice `items` and
+        // every separator `sep`,
+        // T::unique_missing_labels_joined(items, sep).is_empty() ==
+        // !T::has_unique_missing_variant(items). Independent cross-check
+        // binding the String-return uniqueness projection against the
+        // bool-column projection one return-shape column over.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    for sep in ["", ", ", "/", " | "] {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::unique_missing_labels_joined(&triple, sep)
+                                .is_empty(),
+                            !<StubKind as ClosedSet>::has_unique_missing_variant(&triple),
+                            "T::unique_missing_labels_joined({triple:?}, {sep:?}).is_empty() diverged from !T::has_unique_missing_variant({triple:?})",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_missing_labels_joined_is_invariant_under_slice_reversal_across_every_triple() {
+        // REVERSAL-INVARIANCE CONTRACT:
+        // T::unique_missing_labels_joined is invariant under slice-
+        // reversal — both underlying projections are ordering-agnostic
+        // on the input axis, T::label is a pure projection, and
+        // slice::join is a pure combinator.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let reversed: Vec<StubKind> = triple.iter().rev().copied().collect();
+                    for sep in ["/", ", ", "|"] {
+                        assert_eq!(
+                            <StubKind as ClosedSet>::unique_missing_labels_joined(&triple, sep),
+                            <StubKind as ClosedSet>::unique_missing_labels_joined(&reversed, sep),
+                            "T::unique_missing_labels_joined({triple:?}, {sep:?}) diverged from T::unique_missing_labels_joined({reversed:?}, {sep:?}) — reversal-invariance was violated",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_missing_labels_joined_threads_empty_separator_into_a_concatenated_run() {
+        // EMPTY-SEPARATOR CONTRACT: for every slice `items`,
+        // T::unique_missing_labels_joined(items, "") ==
+        // T::unique_missing_labels(items).concat() — with an empty
+        // separator, slice::join degenerates to concatenation. On the
+        // singleton positive arm, concatenation IS the sole label; on
+        // the empty-Vec negative arm, concatenation IS the empty
+        // String.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let concat: String =
+                        <StubKind as ClosedSet>::unique_missing_labels(&triple).concat();
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_missing_labels_joined(&triple, ""),
+                        concat,
+                        "T::unique_missing_labels_joined({triple:?}, \"\") diverged from T::unique_missing_labels({triple:?}).concat() — the empty-separator degenerate arm was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unique_missing_labels_joined_threads_multi_char_separator_verbatim() {
+        // MULTI-CHAR SEPARATOR CONTRACT: for every slice `items`,
+        // T::unique_missing_labels_joined(items, " and ") ==
+        // T::unique_missing_labels(items).join(" and ") — pins the
+        // multi-character separator arm through the same composition,
+        // catching a drift that might treat only single-character
+        // separators verbatim. On the singleton positive arm the
+        // separator never surfaces regardless of length.
+        for a in <StubKind as ClosedSet>::ALL.iter().copied() {
+            for b in <StubKind as ClosedSet>::ALL.iter().copied() {
+                for c in <StubKind as ClosedSet>::ALL.iter().copied() {
+                    let triple = [a, b, c];
+                    let expected =
+                        <StubKind as ClosedSet>::unique_missing_labels(&triple).join(" and ");
+                    assert_eq!(
+                        <StubKind as ClosedSet>::unique_missing_labels_joined(&triple, " and "),
+                        expected,
+                        "T::unique_missing_labels_joined({triple:?}, \" and \") diverged from T::unique_missing_labels({triple:?}).join(\" and \") — the multi-character-separator arm was violated",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_closed_set_well_formed_catches_always_singleton_first_drift_in_unique_missing_labels_joined(
+    ) {
+        // Drift catch — clause (203)'s empty-slice + full-set +
+        // doubled-full-set + bimodal-triple fixpoint arms fire when an
+        // override folds the set-level unique_missing_labels_joined
+        // projection onto "alpha".to_string() unconditionally. At
+        // CARDINALITY 3 the empty/full/doubled arms expect String::new();
+        // the bimodal-triple positive arm expects
+        // T::ALL[2].label().to_string() == "gamma"; an "alpha" override
+        // bifurcates every arm at `"alpha" != ""` OR `"alpha" != "gamma"`.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum DriftedUniqueMissingLabelsJoinedSingletonFirstKind {
+            Alpha,
+            Beta,
+            Gamma,
+        }
+
+        #[derive(Debug, PartialEq, Eq)]
+        struct UnknownDriftedUniqueMissingLabelsJoinedSingletonFirstKind(pub String);
+
+        impl core::fmt::Display for UnknownDriftedUniqueMissingLabelsJoinedSingletonFirstKind {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                write!(
+                    f,
+                    "unknown drifted unique_missing_labels_joined singleton-first kind: {}",
+                    self.0
+                )
+            }
+        }
+
+        impl DriftedUniqueMissingLabelsJoinedSingletonFirstKind {
+            const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        }
+
+        impl ClosedSet for DriftedUniqueMissingLabelsJoinedSingletonFirstKind {
+            const ALL: &'static [Self] = &Self::ALL;
+            const SET_LABEL: &'static str =
+                "drifted unique_missing_labels_joined singleton-first kind";
+            type Unknown = UnknownDriftedUniqueMissingLabelsJoinedSingletonFirstKind;
+            fn label(self) -> &'static str {
+                match self {
+                    Self::Alpha => "alpha",
+                    Self::Beta => "beta",
+                    Self::Gamma => "gamma",
+                }
+            }
+            fn make_unknown(s: &str) -> Self::Unknown {
+                UnknownDriftedUniqueMissingLabelsJoinedSingletonFirstKind(s.to_owned())
+            }
+            fn unique_missing_labels_joined(_items: &[Self], _sep: &str) -> String {
+                // Drift: always return "alpha". Fires clause (203)'s
+                // canonical-fixture arms at cardinality 3.
+                "alpha".to_string()
+            }
+        }
+
+        let result = std::panic::catch_unwind(|| {
+            super::assert_closed_set_well_formed::<
+                DriftedUniqueMissingLabelsJoinedSingletonFirstKind,
+            >();
+        });
+        assert!(
+            result.is_err(),
+            "assert_closed_set_well_formed accepted a DriftedUniqueMissingLabelsJoinedSingletonFirstKind whose unique_missing_labels_joined override folds onto \"alpha\".to_string() unconditionally — clause (203)'s canonical-fixture arms MUST reject the drift at cardinality 3",
         );
     }
 }

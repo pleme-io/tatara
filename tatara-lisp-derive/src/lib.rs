@@ -472,14 +472,10 @@ fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<Clos
         };
         list.parse_nested_meta(|meta| {
             if meta.path.is_ident("via") {
-                let value = meta.value()?;
-                let s: LitStr = value.parse()?;
-                via = Some(s.value());
+                via = Some(read_meta_lit_str(&meta)?);
                 Ok(())
             } else if meta.path.is_ident("unknown") {
-                let value = meta.value()?;
-                let s: LitStr = value.parse()?;
-                unknown = Some(s.value());
+                unknown = Some(read_meta_lit_str(&meta)?);
                 Ok(())
             } else if meta.path.is_ident("no_from_str") {
                 no_from_str = true;
@@ -492,12 +488,13 @@ fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<Clos
                 // attribute surface stays single-keyed (no
                 // `auto_label`/`label` bifurcation that would force
                 // the operator to think about which of two
-                // attributes is canonical).
+                // attributes is canonical). The `Ok(value)` arm has
+                // already consumed the `=`, so it routes through the
+                // stream-level `parse_lit_str` primitive rather than
+                // the meta-level `read_meta_lit_str` (which would
+                // double-consume `.value()`).
                 generate_unknown = match meta.value() {
-                    Ok(value) => {
-                        let s: LitStr = value.parse()?;
-                        GenerateUnknown::Explicit(s.value())
-                    }
+                    Ok(value) => GenerateUnknown::Explicit(parse_lit_str(value)?),
                     Err(_) => GenerateUnknown::Auto,
                 };
                 Ok(())
@@ -505,9 +502,7 @@ fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<Clos
                 display = true;
                 Ok(())
             } else if meta.path.is_ident("set_label") {
-                let value = meta.value()?;
-                let s: LitStr = value.parse()?;
-                set_label = Some(s.value());
+                set_label = Some(read_meta_lit_str(&meta)?);
                 Ok(())
             } else {
                 Err(meta.error(
@@ -608,11 +603,7 @@ pub fn derive_tatara_domain(input: TokenStream) -> TokenStream {
 }
 
 fn extract_keyword(attrs: &[Attribute]) -> Option<String> {
-    find_named_sub_key(attrs, "tatara", "keyword", |meta| {
-        let value = meta.value()?;
-        let s: LitStr = value.parse()?;
-        Ok(s.value())
-    })
+    find_named_sub_key(attrs, "tatara", "keyword", read_meta_lit_str)
 }
 
 /// Walk each `#[<attr_ident>(...)]` attribute in `attrs`, first-hit-wins
@@ -673,6 +664,55 @@ fn find_named_sub_key<T>(
         }
     }
     None
+}
+
+/// Parse a `LitStr` off an already-obtained value stream and project it
+/// to an owned `String`. The primitive-level shape the two peer readers
+/// [`read_meta_lit_str`] (the "read `= <LitStr>` payload of a sub-key"
+/// composition, called on 4 arms across `extract_keyword` +
+/// `parse_closed_set_attrs`'s `via`/`unknown`/`set_label` slots) AND
+/// `parse_closed_set_attrs`'s `generate_unknown` Explicit arm (which
+/// already consumed the `=` via the outer `match meta.value()` flag-
+/// or-value dispatch and therefore can't route through the
+/// meta-level helper without double-consuming `.value()`) BOTH
+/// project through.
+///
+/// Lifts the byte-for-byte identical `let s: LitStr = value.parse()?;
+/// Ok(s.value())` shape that pre-lift lived at 5 sites across the
+/// derive crate (once per string-slot). A future refactor that
+/// tightens the parse (e.g. surfaces a specific `syn::Error` diagnostic
+/// on the non-`LitStr` value shape, or admits both `LitStr` +
+/// `LitByteStr`, or trims surrounding whitespace at the parse
+/// boundary) lands at ONE line and is inherited by every caller
+/// automatically.
+fn parse_lit_str(value: syn::parse::ParseStream<'_>) -> syn::Result<String> {
+    let s: LitStr = value.parse()?;
+    Ok(s.value())
+}
+
+/// Read the `= <LitStr>` payload of a named-value sub-key inside a
+/// `parse_nested_meta` callback as an owned `String`. Composes
+/// `meta.value()?` + [`parse_lit_str`] into ONE substrate entry that
+/// [`extract_keyword`]'s callback + `parse_closed_set_attrs`'s
+/// `via` / `unknown` / `set_label` arms route through.
+///
+/// Lifts the byte-for-byte identical `let value = meta.value()?; let
+/// s: LitStr = value.parse()?; Ok(s.value())` scaffold that pre-lift
+/// lived at 4 sites across the derive crate. Peer to the sibling
+/// `find_named_sub_key` helper one abstraction level up — together
+/// the two compose the derive's "read `#[<attr>(<sub_key> = "…")]`
+/// payload as `Option<String>`" idiom onto ONE stack of substrate
+/// primitives (`find_named_sub_key` + `read_meta_lit_str`), which the
+/// [`extract_keyword`] reader collapses onto a one-line callable-pointer
+/// projection (`find_named_sub_key(attrs, "tatara", "keyword",
+/// read_meta_lit_str)`) and which every future single-keyed string-
+/// valued sub-key reader (the `#[tatara(alias = "…")]` extension the
+/// `keyword_after_unrelated_named_value_key_projects_to_the_literal_value`
+/// test's docblock cites; a `#[serde(rename = "…")]` sniffer; a
+/// single-key reader lifted out of the 6-key `parse_closed_set_attrs`)
+/// inherits automatically.
+fn read_meta_lit_str(meta: &syn::meta::ParseNestedMeta<'_>) -> syn::Result<String> {
+    parse_lit_str(meta.value()?)
 }
 
 fn default_keyword(type_name: &str) -> String {
@@ -1691,6 +1731,168 @@ mod find_named_sub_key_tests {
             read_lit_str(r#"#[myattr(mykey = 42)]"#, "myattr", "mykey"),
             None,
         );
+    }
+}
+
+#[cfg(test)]
+mod read_meta_lit_str_tests {
+    use super::{find_named_sub_key, parse_lit_str, read_meta_lit_str};
+    use syn::{parse::Parser, Attribute};
+
+    // The `read_meta_lit_str(&ParseNestedMeta) -> syn::Result<String>`
+    // and its underlying `parse_lit_str(ParseStream) -> syn::Result<String>`
+    // primitives are the derive's PRIVATE readers for the "read a
+    // `LitStr` payload as an owned String" idiom that four sub-key
+    // arms across `extract_keyword` +
+    // `parse_closed_set_attrs`'s `via` / `unknown` / `set_label`
+    // slots project through — plus the `generate_unknown` Explicit arm
+    // that stops one abstraction level lower at `parse_lit_str`
+    // because its outer `match meta.value()` flag-or-value dispatch
+    // has already consumed the `=`.
+    //
+    // Pre-lift the byte-for-byte identical `let value = meta.value()?;
+    // let s: LitStr = value.parse()?; Ok(s.value())` shape lived at
+    // FIVE sites. Under this lift the shape lives at ONE substrate
+    // entry (two-level: `parse_lit_str` at the ParseStream layer +
+    // `read_meta_lit_str` at the ParseNestedMeta layer); every caller
+    // routes through it. A future single-keyed string-valued sub-key
+    // reader (the `#[tatara(alias = "…")]` extension, a
+    // `#[serde(rename = "…")]` sniffer, a single-key reader lifted
+    // out of the 6-key `parse_closed_set_attrs`) composes as a
+    // one-line caller against the same substrate contract rather
+    // than as a fresh copy of the scaffold.
+    //
+    // Sibling test modules `extract_keyword_tests` /
+    // `parse_closed_set_attrs_tests` / `find_named_sub_key_tests`
+    // close every caller-specific corner via each caller's public
+    // projection. This module pins the primitive's OWN generic
+    // contract at THREE corners:
+    //   1. positive (LitStr payload projects to owned String);
+    //   2. negative-typed (non-LitStr value surfaces syn::Error via
+    //      the callback's `?` bail, matching the historic swallow
+    //      discipline the sibling readers pin at their own layer);
+    //   3. missing-`=` (a bare-flag sub-key with no payload projects
+    //      to Err via `meta.value()?` bailing before the parse).
+    // A regression to any of the three axes surfaces AT ONE
+    // test-module boundary here rather than as silent drift across
+    // every caller.
+
+    fn read_via_find(attr_src: &str, attr_ident: &str, sub_key: &str) -> Option<String> {
+        // Test-driver: exercise the primitive through its natural
+        // composition site (`find_named_sub_key` with the primitive
+        // as callback). The outer swallow flips a callback-`?` bail
+        // into an outer `None`, so the "syn::Error unwind" corner is
+        // observable as `None` at the caller boundary — matching the
+        // discipline `extract_keyword_tests::
+        // non_string_literal_keyword_value_silently_projects_to_none`
+        // and `find_named_sub_key_tests::
+        // on_match_error_is_silently_absorbed_by_the_outer_swallow`
+        // already pin at the sibling caller / helper layers.
+        let attrs: Vec<Attribute> = Attribute::parse_outer
+            .parse_str(attr_src)
+            .expect("valid attribute syntax");
+        find_named_sub_key(&attrs, attr_ident, sub_key, read_meta_lit_str)
+    }
+
+    #[test]
+    fn lit_str_payload_projects_to_the_owned_string_value() {
+        // Positive control — a bare `= "hello"` payload projects
+        // through `meta.value()?` + `parse_lit_str` to
+        // `Some("hello".to_string())`. Pin the identity so a
+        // regression that (say) applied a hidden case-transform or
+        // trimmed whitespace surfaces here.
+        assert_eq!(
+            read_via_find(r#"#[myattr(mykey = "hello")]"#, "myattr", "mykey"),
+            Some("hello".to_string()),
+        );
+    }
+
+    #[test]
+    fn lit_str_payload_preserves_interior_whitespace_and_escaped_content() {
+        // Load-bearing detail — the `LitStr::value()` projection
+        // unescapes the token content but preserves interior spaces
+        // AND the unescaped character set. Pin both aspects so a
+        // future refactor that swapped `LitStr::value()` for the raw
+        // `to_string()` (which would include the surrounding
+        // quotation marks) surfaces here.
+        assert_eq!(
+            read_via_find(r#"#[myattr(mykey = "hello world")]"#, "myattr", "mykey"),
+            Some("hello world".to_string()),
+        );
+        assert_eq!(
+            read_via_find(r#"#[myattr(mykey = "line1\nline2")]"#, "myattr", "mykey"),
+            Some("line1\nline2".to_string()),
+        );
+    }
+
+    #[test]
+    fn non_lit_str_payload_bails_and_is_swallowed_by_the_outer_find() {
+        // Negative-typed control — `= 42` (a `LitInt`) fails the
+        // inner `LitStr::parse()` inside `parse_lit_str`; the `?`
+        // propagates the syn::Error out through the callback; the
+        // outer `find_named_sub_key`'s `let _ = ...` swallows the
+        // error and returns None. Pin the swallow at the primitive
+        // boundary so a future refactor that surfaced a typed
+        // derive-time diagnostic on the value-shape mismatch would
+        // flip this test alongside the sibling
+        // `extract_keyword_tests::
+        // non_string_literal_keyword_value_silently_projects_to_none`
+        // and `find_named_sub_key_tests::
+        // on_match_error_is_silently_absorbed_by_the_outer_swallow`
+        // — naming the CAUSAL boundary as the shared primitive
+        // rather than as any one caller.
+        assert_eq!(
+            read_via_find(r#"#[myattr(mykey = 42)]"#, "myattr", "mykey"),
+            None,
+        );
+    }
+
+    #[test]
+    fn bare_flag_sub_key_without_payload_bails_and_is_swallowed() {
+        // Missing-`=` control — a bare `mykey` (no `=`) inside
+        // `#[myattr(mykey)]` reaches `read_meta_lit_str`, which
+        // calls `meta.value()?`. The value getter tries to consume
+        // a `=` token and fails (there is none); the `?` propagates
+        // the syn::Error; the outer swallow returns None. Pin the
+        // flag-vs-value distinction at the primitive: the primitive
+        // is EXCLUSIVELY the "read `= <LitStr>` payload" idiom, not
+        // a bare-flag reader. A future primitive that admitted the
+        // bare-flag shape (a peer to the current one) would keep
+        // this contract intact by NOT touching `read_meta_lit_str`
+        // itself.
+        assert_eq!(read_via_find("#[myattr(mykey)]", "myattr", "mykey"), None,);
+    }
+
+    #[test]
+    fn parse_lit_str_projects_a_naked_lit_str_stream_to_the_owned_string() {
+        // The lower-level `parse_lit_str(ParseStream) -> syn::Result<
+        // String>` primitive — pinned separately from the
+        // `read_meta_lit_str` composition because it's the arm the
+        // `parse_closed_set_attrs::generate_unknown` Explicit branch
+        // routes through (its outer `match meta.value()` has already
+        // consumed the `=`, so the primitive receives a
+        // ParseStream that starts AT the LitStr payload rather than
+        // at the `=` gate). Exercise the primitive by feeding it a
+        // synthetic ParseStream via `syn::parse::Parser::parse_str`.
+        // A regression that folded `parse_lit_str` into
+        // `read_meta_lit_str` would break the generate_unknown arm
+        // AND surface here.
+        let result: syn::Result<String> =
+            syn::parse::Parser::parse_str(parse_lit_str, r#""hello""#);
+        assert_eq!(result.expect("well-formed LitStr parses OK"), "hello");
+    }
+
+    #[test]
+    fn parse_lit_str_on_non_lit_str_stream_returns_syn_error() {
+        // Negative control for `parse_lit_str` at its OWN layer —
+        // feeding it a `42` (LitInt) yields a syn::Error rather than
+        // a String. Pin the error path separately from the outer
+        // swallow so a future refactor that changed the primitive's
+        // error signature (e.g. from `syn::Result<String>` to
+        // `Option<String>`) surfaces here rather than as a silent
+        // recompilation at every caller.
+        let result: syn::Result<String> = syn::parse::Parser::parse_str(parse_lit_str, "42");
+        assert!(result.is_err(), "LitInt must not parse as LitStr");
     }
 }
 

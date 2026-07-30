@@ -1389,6 +1389,175 @@ impl ResourceLimits {
         }
         true
     }
+
+    /// Strict pointwise partial-order relation across the six ceilings —
+    /// `self` is STRICTLY tighter than `other` iff `self.leq(other)` AND
+    /// `self != other`. `a.lt(b)` holds iff every input the `a` posture
+    /// admits the `b` posture also admits AND there is at least one axis
+    /// on which `a`'s ceiling is strictly smaller than `b`'s: `a`'s per-
+    /// axis ceilings all sit at-or-below `b`'s AND at least one field
+    /// closes the inequality strictly, so `b` strictly extends `a`'s
+    /// admissible input set on at least one axis.
+    ///
+    /// The STRICT peer of [`Self::leq`] one STRICTNESS axis over on the
+    /// pairwise partial-order surface: where `leq` is the REFLEXIVE
+    /// non-strict `≤` relation (`a.leq(a) == true`), this is the
+    /// IRREFLEXIVE strict `<` relation (`a.lt(a) == false`). Together
+    /// the two close the (non-strict, strict) partial-order pair on the
+    /// pairwise-relation face of the (combinator, predicate) ×
+    /// (strictness) primitive surface — itself peer of the
+    /// (`strictest`, `most_permissive`) meet/join combinator pair one
+    /// PRIMITIVE-KIND axis over (both bind against the same pointwise
+    /// `≤` ordering).
+    ///
+    /// Encoded as `self.leq(other) && !other.leq(self)` — the two-
+    /// primitive antisymmetric encoding of strict `<` on any partial
+    /// order, pointwise or otherwise. Equivalent on the
+    /// [`ResourceLimits`] pointwise partial order (which is
+    /// antisymmetric) to `self.leq(other) && self != other`:
+    /// antisymmetry says `self.leq(other) && other.leq(self) ⇒ self ==
+    /// other`, so `self.leq(other) && !other.leq(self)` iff
+    /// `self.leq(other) && self != other`. The antisymmetric-leq
+    /// encoding is chosen because it does NOT rely on
+    /// [`PartialEq::eq`] being `const fn` (which the derived impl is
+    /// not on stable) — both [`Self::leq`] calls are already `const fn`
+    /// on the algebra.
+    ///
+    /// **Irreflexivity**: `a.lt(a) == false` for every posture. A
+    /// posture is never strictly tighter than itself, since
+    /// `a.leq(a) && !a.leq(a)` short-circuits `false` on the second
+    /// conjunct. Pinned as
+    /// `resource_limits_lt_is_irreflexive`.
+    ///
+    /// **Asymmetry**: `a.lt(b) ⇒ !b.lt(a)` for every pair. The two
+    /// directions of the strict relation cannot both hold, since
+    /// `a.lt(b)` implies `!b.leq(a)`, and `b.lt(a)` requires
+    /// `b.leq(a)` — the two are contradictory. Pinned as
+    /// `resource_limits_lt_is_asymmetric`.
+    ///
+    /// **Transitivity**: `a.lt(b) && b.lt(c) ⇒ a.lt(c)` for every
+    /// triple. Inherits from the transitivity of [`Self::leq`] on both
+    /// conjuncts, with the strictness carried through by the outer
+    /// antisymmetric leg (if `c.leq(a)` held, transitivity of `leq`
+    /// would give `b.leq(a)` contradicting `a.lt(b)`). Pinned as
+    /// `resource_limits_lt_is_transitive`.
+    ///
+    /// **Refines [`Self::leq`]**: `a.lt(b) ⇒ a.leq(b)` for every pair
+    /// — the strict relation refines the non-strict one. Conversely
+    /// `a.leq(b) && !a.lt(b) ⇒ a == b` (the reflexive tie is exactly
+    /// the non-strict-minus-strict gap). Pinned as
+    /// `resource_limits_lt_refines_leq` AND
+    /// `resource_limits_lt_agrees_with_leq_minus_equality`.
+    ///
+    /// **Bounded-lattice diagonal**:
+    /// `EMPTY_RESOURCE_LIMITS.lt(DEFAULT_RESOURCE_LIMITS)` AND
+    /// `DEFAULT_RESOURCE_LIMITS.lt(UNBOUNDED_RESOURCE_LIMITS)` AND
+    /// `EMPTY_RESOURCE_LIMITS.lt(UNBOUNDED_RESOURCE_LIMITS)` — the
+    /// strict chain across the (bottom, middle, top) preset triple on
+    /// the bounded-lattice diagonal. Every `DEFAULT_MAX_*` module
+    /// constant is a concrete positive value strictly less than
+    /// [`usize::MAX`] and strictly greater than `0`, so the two
+    /// endpoints and the interior are strictly ordered on every axis.
+    /// Pinned as `resource_limits_lt_of_bottom_diagonal_pinned`.
+    ///
+    /// **Incomparable rejection**: on the two hand-authored asymmetric
+    /// postures (three axes smaller in each direction), both
+    /// directions of the strict relation fail (`!a.lt(b) && !b.lt(a)`)
+    /// because neither `leq` direction holds. The predicate does NOT
+    /// promote incomparable pairs to a comparison verdict. Pinned as
+    /// `resource_limits_lt_rejects_incomparable_postures`.
+    ///
+    /// **Antisymmetric-encoding cross-check**: `a.lt(b) == (a.leq(b)
+    /// && !b.leq(a))` at every pair by definition, AND `a.lt(b) ==
+    /// (a.leq(b) && a != b)` at every pair by antisymmetry. Both
+    /// encodings are pinned equal to the shipped body across the
+    /// (empty, default, unbounded, mid, other) 5×5 preset matrix.
+    /// Pinned as
+    /// `resource_limits_lt_agrees_with_direct_antisymmetric_encoding`.
+    ///
+    /// `const fn` so a caller can pin a strict-order identity at
+    /// compile time (`const _: () = assert!(EMPTY_RESOURCE_LIMITS.lt(
+    /// DEFAULT_RESOURCE_LIMITS));`) rather than deferring the
+    /// composition to a runtime chain — sibling of the const-fn
+    /// evaluability pin on [`Self::leq`] one STRICTNESS axis over.
+    ///
+    /// Pre-lift, a caller wanting "is this posture STRICTLY tighter
+    /// than that one?" composed the two-primitive
+    /// `a.leq(b) && !b.leq(a)` (or equivalently `a.leq(b) && a != b`)
+    /// conjunction at its call site — a PRIME DIRECTIVE ≥2 pattern
+    /// once two consumers need it, and one that couples the strictness
+    /// interpretation to the caller's chosen encoding
+    /// (antisymmetric-leq vs. leq-and-not-equal, which coincide on
+    /// pointwise partial orders but diverge on non-antisymmetric
+    /// preorders). Post-lift the strict relation binds at ONE typed
+    /// method the algebra exposes, and the encoding is a private
+    /// implementation detail no caller can drift from.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the strict-tightening relation between two
+    /// preset-carried resource proofs is itself a typed named `bool`
+    /// predicate composing them via the underlying `leq`. THEORY.md
+    /// §V.1 — knowable platform; the strict `<` relation becomes a
+    /// TYPE-level primitive on the posture algebra rather than an
+    /// inline two-primitive conjunction at every consumer that
+    /// decides "did we strictly tighten?" `tatara-lattice`'s partial
+    /// order on `Classification` closes the SAME shape one layer
+    /// down: an entity's classification lattice carries a strict `<`
+    /// peer of its `leq` for the same reason a resource posture does.
+    /// Frontier inspiration: [`PartialOrd::lt`] on Rust's partial-
+    /// order trait; [`Ord::lt`] on the total-order trait — the
+    /// strict variant of `≤` is a first-class named method the
+    /// standard library exposes rather than leaving each consumer to
+    /// compose `partial_cmp(&other) == Some(Less)` at its call site.
+    /// Translation through pleme-io primitives is the plain `const
+    /// fn` antisymmetric encoding below, no trait indirection — the
+    /// non-strict [`Self::leq`] already exists as a `const fn` on the
+    /// algebra so the strict variant picks it up structurally.
+    #[must_use]
+    pub const fn lt(self, other: Self) -> bool {
+        self.leq(other) && !other.leq(self)
+    }
+
+    /// Strict pointwise partial-order relation dual of [`Self::lt`] —
+    /// `a.gt(b) == b.lt(a)`. `self` is STRICTLY looser than `other`
+    /// iff `other.leq(self)` AND `self != other`: on every axis
+    /// `self`'s ceiling sits at-or-above `other`'s, and at least one
+    /// axis closes the inequality strictly, so `self` strictly extends
+    /// `other`'s admissible input set on at least one axis.
+    ///
+    /// The DIRECTION peer of [`Self::lt`] one DIRECTION axis over on
+    /// the strict-pairwise-relation face — where `lt` is the strict
+    /// "below" relation (`a < b`), this is the strict "above"
+    /// relation (`a > b`). Together the two close the (below, above)
+    /// direction pair on the strict pairwise relation, exactly as
+    /// [`Self::is_lower_bound_of`] / [`Self::is_upper_bound_of`] close
+    /// the (below, above) direction pair on the non-strict N-ary
+    /// relation one ARITY axis over.
+    ///
+    /// Same laws as [`Self::lt`] with directions flipped:
+    /// irreflexive (`a.gt(a) == false`), asymmetric
+    /// (`a.gt(b) ⇒ !b.gt(a)`), transitive
+    /// (`a.gt(b) && b.gt(c) ⇒ a.gt(c)`); refines a hypothetical `geq`
+    /// (the reflexive `≥`) exactly as `lt` refines `leq`. Pinned on
+    /// the shipped preset triangle: `UNBOUNDED_RESOURCE_LIMITS.gt(
+    /// DEFAULT_RESOURCE_LIMITS) && DEFAULT_RESOURCE_LIMITS.gt(
+    /// EMPTY_RESOURCE_LIMITS)`.
+    ///
+    /// Encoded as `other.lt(self)` — one primitive delegation to
+    /// [`Self::lt`] so the strict-relation encoding lives at exactly
+    /// one implementation site, and a future re-derivation of `lt`
+    /// (e.g. to a different antisymmetry encoding) propagates to `gt`
+    /// mechanically rather than requiring a per-method fix-up.
+    ///
+    /// `const fn` for the same compile-time-pin reasons as
+    /// [`Self::lt`]. See [`Self::lt`] for the full docstring, the
+    /// pre-lift `a.leq(b) && !b.leq(a)` two-primitive PRIME DIRECTIVE
+    /// ≥2 pattern, the theory anchor (THEORY.md §II.1 invariant 5,
+    /// §V.1), and the [`Ord::gt`] frontier inspiration.
+    #[must_use]
+    pub const fn gt(self, other: Self) -> bool {
+        other.lt(self)
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -18269,5 +18438,234 @@ mod tests {
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.is_upper_bound_of(&[]));
         const _: () =
             assert!(!EMPTY_RESOURCE_LIMITS.is_upper_bound_of(&[UNBOUNDED_RESOURCE_LIMITS]));
+    }
+
+    /// The full canonical preset roster the strict-order pins sweep
+    /// through — the (bottom, middle, top) bounded-lattice preset
+    /// triple plus the two hand-authored incomparable asymmetric
+    /// postures. Every strict-order law below quantifies over this
+    /// slice, so a regression that breaks strict `<` on any preset
+    /// pair discriminates at ONE named fixture rather than at a
+    /// per-test ad-hoc literal.
+    const STRICT_ORDER_ROSTER: &[ResourceLimits] = &[
+        EMPTY_RESOURCE_LIMITS,
+        DEFAULT_RESOURCE_LIMITS,
+        UNBOUNDED_RESOURCE_LIMITS,
+        HAND_AUTHORED_MID_POSTURE,
+        HAND_AUTHORED_OTHER_POSTURE,
+    ];
+
+    #[test]
+    fn resource_limits_lt_is_irreflexive() {
+        // Strict partial-order law — `a < a == false` for every
+        // posture. Irreflexivity is the strict-relation axiom peer of
+        // reflexivity on `leq` one STRICTNESS axis over on the
+        // partial-order axiom surface; a regression that dropped the
+        // antisymmetric leg (`!other.leq(self)`) — leaving the body at
+        // `self.leq(other)` — would fire here on every preset since
+        // `leq` is reflexive.
+        for &a in STRICT_ORDER_ROSTER {
+            assert!(!a.lt(a), "irreflexivity failed on {a:?}");
+        }
+    }
+
+    #[test]
+    fn resource_limits_lt_is_asymmetric() {
+        // Strict partial-order law — `a < b ⇒ ¬(b < a)` for every
+        // pair. The two directions of the strict relation cannot both
+        // hold, since `a.lt(b)` implies `!b.leq(a)` and `b.lt(a)`
+        // requires `b.leq(a)`. Sweeps every ordered pair in the
+        // canonical preset roster; discriminates a regression that
+        // dropped the antisymmetric leg in either direction.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                if a.lt(b) {
+                    assert!(!b.lt(a), "asymmetry failed on ({a:?}, {b:?})");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_lt_is_transitive() {
+        // Strict partial-order law — `a < b ∧ b < c ⇒ a < c`. Sweeps
+        // every ordered triple in the canonical preset roster; each
+        // consequence is checked whenever both antecedents hold. On
+        // the (bottom, middle, top) diagonal the canonical witness
+        // `EMPTY < DEFAULT < UNBOUNDED` composes to
+        // `EMPTY < UNBOUNDED`, exercising the transitivity chain on
+        // the bounded-lattice diagonal explicitly; the sweep pins the
+        // same law on every other transitively-related triple in the
+        // roster.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                for &c in STRICT_ORDER_ROSTER {
+                    if a.lt(b) && b.lt(c) {
+                        assert!(a.lt(c), "transitivity failed on ({a:?}, {b:?}, {c:?})");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_lt_refines_leq() {
+        // Refinement axiom — `a < b ⇒ a ≤ b`. The strict relation is
+        // a refinement of the non-strict one; a witness of strict `<`
+        // is also a witness of `≤`. Sweeps every ordered pair in the
+        // canonical preset roster.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                if a.lt(b) {
+                    assert!(a.leq(b), "refinement failed on ({a:?}, {b:?})");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_lt_agrees_with_leq_minus_equality() {
+        // Antisymmetry consequence — on ANY antisymmetric partial
+        // order (which the pointwise `≤` on `ResourceLimits` is),
+        // `a < b ⇔ a ≤ b ∧ a ≠ b`. Cross-checks the shipped
+        // antisymmetric-leq encoding against the leq-and-not-equal
+        // encoding across the full 5×5 preset matrix; a regression to
+        // a non-antisymmetric preorder encoding would fire here.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                let shipped = a.lt(b);
+                let alt = a.leq(b) && a != b;
+                assert_eq!(
+                    shipped, alt,
+                    "encoding cross-check failed on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_lt_of_bottom_diagonal_pinned() {
+        // Concrete-preset pin — the strict chain across the (bottom,
+        // middle, top) preset triple on the bounded-lattice diagonal.
+        // Every `DEFAULT_MAX_*` module constant is a concrete positive
+        // value strictly less than [`usize::MAX`] and strictly greater
+        // than `0`, so on every axis the three endpoints are strictly
+        // ordered; the six-axis pointwise conjunction lifts the
+        // per-axis strict chain to the posture-level strict chain.
+        //
+        // Peer of `resource_limits_leq_of_default_and_unbounded_is_a_
+        // strict_order` one STRICTNESS axis over — where the non-
+        // strict pin asserted "leq holds one way and not the other"
+        // via two `leq` calls, this pin asserts the strict-chain
+        // conclusion via one `lt` call per link and pinpoints the
+        // three-preset chain on the bounded-lattice diagonal.
+        assert!(EMPTY_RESOURCE_LIMITS.lt(DEFAULT_RESOURCE_LIMITS));
+        assert!(DEFAULT_RESOURCE_LIMITS.lt(UNBOUNDED_RESOURCE_LIMITS));
+        assert!(EMPTY_RESOURCE_LIMITS.lt(UNBOUNDED_RESOURCE_LIMITS));
+    }
+
+    #[test]
+    fn resource_limits_lt_rejects_incomparable_postures() {
+        // Partial-order non-total pin — the two hand-authored
+        // asymmetric postures have MID smaller on three axes and OTHER
+        // smaller on the other three, so neither `leq` direction
+        // holds; strict `<` therefore fails in BOTH directions. The
+        // pin discriminates a regression that promoted strict `<`
+        // from partial to total (e.g. treating incomparable pairs as
+        // strictly `<` in some canonical direction), and pairs with
+        // `resource_limits_leq_is_not_total_on_asymmetric_postures`
+        // one STRICTNESS axis over.
+        assert!(!HAND_AUTHORED_MID_POSTURE.lt(HAND_AUTHORED_OTHER_POSTURE));
+        assert!(!HAND_AUTHORED_OTHER_POSTURE.lt(HAND_AUTHORED_MID_POSTURE));
+    }
+
+    #[test]
+    fn resource_limits_lt_agrees_with_direct_antisymmetric_encoding() {
+        // Direct-encoding cross-check — `a.lt(b) == (a.leq(b) &&
+        // !b.leq(a))` at every pair by definition. Sibling of the
+        // `leq_minus_equality` pin one ENCODING axis over: that pin
+        // routes through the equality-based encoding (an
+        // antisymmetry consequence), this pin routes through the
+        // definitional antisymmetric-leq encoding. A regression that
+        // shipped a different (e.g. axis-wise strict) encoding of
+        // `lt` diverges from this cross-check on the incomparable
+        // asymmetric-preset pair.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                let shipped = a.lt(b);
+                let direct = a.leq(b) && !b.leq(a);
+                assert_eq!(
+                    shipped, direct,
+                    "direct-encoding cross-check failed on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_gt_is_dual_of_lt() {
+        // Direction-flip pin — `a.gt(b) == b.lt(a)` at every pair. The
+        // shipped `gt` body delegates to `lt` verbatim so this
+        // agreement holds definitionally, but the pin discriminates a
+        // regression that re-implemented `gt` independently and
+        // dropped the direction flip. Sweeps the full 5×5 preset
+        // matrix so incomparable + strictly-ordered + equal pairs
+        // are all exercised.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                assert_eq!(a.gt(b), b.lt(a), "gt/lt duality failed on ({a:?}, {b:?})");
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_gt_of_top_diagonal_pinned() {
+        // Concrete-preset pin — the strict chain across the (top,
+        // middle, bottom) preset triple on the bounded-lattice
+        // diagonal, walked in the "above" direction. Peer of
+        // `resource_limits_lt_of_bottom_diagonal_pinned` one
+        // DIRECTION axis over.
+        assert!(UNBOUNDED_RESOURCE_LIMITS.gt(DEFAULT_RESOURCE_LIMITS));
+        assert!(DEFAULT_RESOURCE_LIMITS.gt(EMPTY_RESOURCE_LIMITS));
+        assert!(UNBOUNDED_RESOURCE_LIMITS.gt(EMPTY_RESOURCE_LIMITS));
+    }
+
+    #[test]
+    fn resource_limits_gt_is_irreflexive() {
+        // Strict partial-order law dual — `a > a == false` for every
+        // posture. Inherits from the irreflexivity of `lt` via the
+        // shipped `gt` body's delegation, but pinned explicitly so a
+        // future non-delegating re-implementation of `gt` still has
+        // its irreflexivity gated at the type-level test cohort.
+        for &a in STRICT_ORDER_ROSTER {
+            assert!(!a.gt(a), "irreflexivity failed on {a:?}");
+        }
+    }
+
+    #[test]
+    fn resource_limits_lt_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the strict `<` relation is evaluable in
+        // const context, so a caller can pin a preset-strict-order
+        // identity at compile time. Sibling of the const-fn
+        // evaluability pin on `leq` one STRICTNESS axis over.
+        //
+        // A regression to a runtime `fn` here would fail the `const
+        // _: () = assert!(...)` bindings below at compile time.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.lt(DEFAULT_RESOURCE_LIMITS));
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.lt(UNBOUNDED_RESOURCE_LIMITS));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.lt(UNBOUNDED_RESOURCE_LIMITS));
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.lt(DEFAULT_RESOURCE_LIMITS));
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.lt(EMPTY_RESOURCE_LIMITS));
+    }
+
+    #[test]
+    fn resource_limits_gt_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn dual pin — sibling of `lt`'s const-fn pin one
+        // DIRECTION axis over.
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.gt(DEFAULT_RESOURCE_LIMITS));
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.gt(EMPTY_RESOURCE_LIMITS));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.gt(EMPTY_RESOURCE_LIMITS));
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.gt(DEFAULT_RESOURCE_LIMITS));
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.gt(UNBOUNDED_RESOURCE_LIMITS));
     }
 }

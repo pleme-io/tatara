@@ -1391,6 +1391,152 @@ impl ResourceLimits {
         true
     }
 
+    /// Boolean `lt`-conjunction across a slice of postures — `self` sits
+    /// STRICTLY below every operand in `postures`.
+    /// `a.is_strict_lower_bound_of(&[b, c, d])` holds iff
+    /// `a.lt(b) && a.lt(c) && a.lt(d)`: on every operand, `a`'s per-axis
+    /// ceilings all sit at-or-below the operand's AND at least one axis
+    /// closes the inequality strictly, so `a` is a common STRICT lower
+    /// bound for the slice.
+    ///
+    /// The STRICT peer of [`Self::is_lower_bound_of`] one STRICTNESS axis
+    /// over on the N-ary-aggregation surface: where `is_lower_bound_of`
+    /// delegates to the REFLEXIVE non-strict [`Self::leq`], this delegates
+    /// to the IRREFLEXIVE strict [`Self::lt`]. The two together open the
+    /// non-strict / strict pair on the LOWER-BOUND N-ary predicate; the
+    /// direction peer [`Self::is_strict_upper_bound_of`] closes the same
+    /// dichotomy on the UPPER-BOUND side, EXHAUSTIVELY closing the
+    /// (lower, upper) × (non-strict, strict) 2×2 face on the N-ary-
+    /// predicate surface — the direct N-ary lift of the pair-level
+    /// (leq, geq) × (non-strict, strict) 2×2 partial-order face
+    /// [`Self::leq`] / [`Self::geq`] / [`Self::lt`] / [`Self::gt`]
+    /// EXHAUSTIVELY closed one CARDINALITY axis under, and the direct
+    /// N-ary-predicate PEER of the (is_ascending, is_descending) ×
+    /// (non-strict, strict) 2×2 sequence-level face one PRIMITIVE-KIND
+    /// axis over.
+    ///
+    /// **Empty-slice vacuous truth**: `a.is_strict_lower_bound_of(&[]) ==
+    /// true` for every posture — the empty conjunction is vacuously true.
+    /// Peer of [`Self::is_lower_bound_of`]'s empty-slice identity one
+    /// STRICTNESS axis over: both walk zero operands, so both accept.
+    ///
+    /// **Single-element identity**: `a.is_strict_lower_bound_of(&[b]) ==
+    /// a.lt(b)` — the 1-input predicate reduces to the pairwise strict
+    /// relation, mirroring `is_lower_bound_of(&[b]) == a.leq(b)` one
+    /// STRICTNESS axis over.
+    ///
+    /// **Refines [`Self::is_lower_bound_of`]**:
+    /// `a.is_strict_lower_bound_of(&postures) ⇒
+    /// a.is_lower_bound_of(&postures)` for every slice — the strict
+    /// N-ary predicate refines the non-strict one, since each per-operand
+    /// `lt` verdict refines the corresponding `leq` verdict. The
+    /// LOAD-BEARING separator past `is_lower_bound_of`: any slice that
+    /// CONTAINS `self` fails the strict predicate at that operand
+    /// (`self.lt(self) == false` by irreflexivity) while satisfying the
+    /// non-strict one via reflexivity — mirroring the strict-vs-non-strict
+    /// diagonal-duplicate divergence one PRIMITIVE-KIND axis over on
+    /// [`Self::is_strictly_ascending`] vs [`Self::is_ascending`].
+    ///
+    /// **Universal-bottom does NOT strictly lower-bound EMPTY-containing
+    /// slices**: `EMPTY_RESOURCE_LIMITS.is_strict_lower_bound_of(
+    /// &[EMPTY_RESOURCE_LIMITS, …]) == false` — the lattice bottom is
+    /// only a NON-STRICT lower bound of a slice containing itself.
+    /// Contrast with `EMPTY.is_lower_bound_of(&[EMPTY, …]) == true` via
+    /// leq-reflexivity — the strict projection catches exactly the
+    /// diagonal cell the non-strict projection accepts.
+    ///
+    /// `const fn` so a caller can pin a strict-N-ary-bound-membership
+    /// identity at compile time as a build-break.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the N-ary strict-lower-bound predicate on (1 + N) preset-
+    /// carried resource proofs is itself a typed named `bool` predicate
+    /// composing them via the underlying pair-level [`Self::lt`]
+    /// projection. THEORY.md §V.1 — knowable platform; the N-ary
+    /// `lt`-conjunction becomes a TYPE-level operation on the posture
+    /// algebra rather than an inline `postures.iter().all(|p|
+    /// self.lt(*p))` two-primitive scaffolding at every consumer that
+    /// decides strict N-ary lower-bound membership.
+    ///
+    /// Frontier inspiration: the order-theoretic notion of a STRICT lower
+    /// bound of a subset of a poset — an element `a` such that `a < x`
+    /// for every `x` in the subset (Birkhoff's *Lattice Theory*); the
+    /// standard-library `<[T]>::iter().all(|p| self < p)` idiom on
+    /// totally-ordered carriers with a strict comparator. Translation
+    /// through pleme-io primitives: the plain `const fn` slice-walk
+    /// with [`Self::lt`] as the pair-level primitive, no typeclass
+    /// indirection — the strict partial-order relation already exists
+    /// as a `const fn` on the algebra so the predicate picks it up
+    /// structurally.
+    #[must_use]
+    pub const fn is_strict_lower_bound_of(self, postures: &[Self]) -> bool {
+        let mut i = 0;
+        while i < postures.len() {
+            if !self.lt(postures[i]) {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
+
+    /// Boolean `lt`-conjunction across a slice of postures with reversed
+    /// direction — every operand in `postures` sits STRICTLY below `self`.
+    /// `a.is_strict_upper_bound_of(&[b, c, d])` holds iff `b.lt(a) &&
+    /// c.lt(a) && d.lt(a)`: on every operand the operand's per-axis
+    /// ceilings all sit at-or-below `self`'s AND at least one axis closes
+    /// the inequality strictly, so `self` is a common STRICT upper bound
+    /// for the slice.
+    ///
+    /// The DUAL N-ary predicate of [`Self::is_strict_lower_bound_of`] one
+    /// COMBINATOR-DIRECTION axis over, AND the STRICT peer of
+    /// [`Self::is_upper_bound_of`] one STRICTNESS axis over. The two
+    /// strict predicates together close the strict row of the (lower,
+    /// upper) × (non-strict, strict) 2×2 face on the N-ary-predicate
+    /// surface past the non-strict row [`Self::is_lower_bound_of`] /
+    /// [`Self::is_upper_bound_of`] opened — EXHAUSTIVELY CLOSING the
+    /// N-ary lift of the pair-level (leq, geq) × (non-strict, strict)
+    /// 2×2 partial-order face one CARDINALITY axis under.
+    ///
+    /// **Empty-slice vacuous truth**: `a.is_strict_upper_bound_of(&[]) ==
+    /// true` for every posture — the empty conjunction is vacuously true.
+    ///
+    /// **Single-element identity**: `a.is_strict_upper_bound_of(&[b]) ==
+    /// b.lt(a)` — the 1-input predicate reduces to the pairwise strict
+    /// relation with the direction flipped (since `self` sits STRICTLY
+    /// ABOVE the operand rather than STRICTLY BELOW it).
+    ///
+    /// **Refines [`Self::is_upper_bound_of`]**:
+    /// `a.is_strict_upper_bound_of(&postures) ⇒
+    /// a.is_upper_bound_of(&postures)` for every slice. The LOAD-BEARING
+    /// separator past `is_upper_bound_of`: any slice CONTAINING `self`
+    /// fails the strict predicate at that operand (`self.lt(self) ==
+    /// false` by irreflexivity) while satisfying the non-strict one via
+    /// reflexivity.
+    ///
+    /// **Universal-top does NOT strictly upper-bound UNBOUNDED-containing
+    /// slices**: `UNBOUNDED_RESOURCE_LIMITS.is_strict_upper_bound_of(
+    /// &[UNBOUNDED_RESOURCE_LIMITS, …]) == false` — the lattice top is
+    /// only a NON-STRICT upper bound of a slice containing itself.
+    ///
+    /// `const fn` so a caller can pin a strict-N-ary-bound-membership
+    /// identity at compile time. See [`Self::is_strict_lower_bound_of`]
+    /// for the theory anchor (THEORY.md §II.1 invariant 5, §V.1), and
+    /// the frontier `iter().all(|p| p < self)` inspiration — this method
+    /// carries the dual `postures[i].lt(self)` direction rather than
+    /// `self.lt(postures[i])`.
+    #[must_use]
+    pub const fn is_strict_upper_bound_of(self, postures: &[Self]) -> bool {
+        let mut i = 0;
+        while i < postures.len() {
+            if !postures[i].lt(self) {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
+
     /// Strict pointwise partial-order relation across the six ceilings —
     /// `self` is STRICTLY tighter than `other` iff `self.leq(other)` AND
     /// `self != other`. `a.lt(b)` holds iff every input the `a` posture
@@ -20884,6 +21030,363 @@ mod tests {
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.is_upper_bound_of(&[]));
         const _: () =
             assert!(!EMPTY_RESOURCE_LIMITS.is_upper_bound_of(&[UNBOUNDED_RESOURCE_LIMITS]));
+    }
+
+    // ── ResourceLimits::is_strict_lower_bound_of / is_strict_upper_bound_of ─
+    //   STRICT N-ary boolean-conjunction peers of `is_lower_bound_of` /
+    //   `is_upper_bound_of` one STRICTNESS axis over, closing the (lower,
+    //   upper) × (non-strict, strict) 2×2 face on the N-ary-predicate
+    //   surface — the direct N-ary lift of the pair-level (leq, geq) ×
+    //   (non-strict, strict) 2×2 partial-order face `leq` / `geq` / `lt` /
+    //   `gt` EXHAUSTIVELY closed one CARDINALITY axis under.
+
+    #[test]
+    fn resource_limits_is_strict_lower_bound_of_empty_slice_is_vacuously_true() {
+        // Empty-conjunction identity — every posture is trivially a
+        // STRICT lower bound of the empty set. Peer of
+        // `is_lower_bound_of_empty_slice_is_vacuously_true` one STRICTNESS
+        // axis over: both walk zero operands so both accept, mirroring
+        // how the strictness axis does NOT change the vacuous-truth
+        // verdict at the empty slice on the sequence-level face
+        // (is_ascending vs is_strictly_ascending).
+        assert!(HAND_AUTHORED_MID_POSTURE.is_strict_lower_bound_of(&[]));
+        assert!(EMPTY_RESOURCE_LIMITS.is_strict_lower_bound_of(&[]));
+        assert!(UNBOUNDED_RESOURCE_LIMITS.is_strict_lower_bound_of(&[]));
+        assert!(DEFAULT_RESOURCE_LIMITS.is_strict_lower_bound_of(&[]));
+    }
+
+    #[test]
+    fn resource_limits_is_strict_upper_bound_of_empty_slice_is_vacuously_true() {
+        // Empty-conjunction dual — every posture is trivially a STRICT
+        // upper bound of the empty set.
+        assert!(HAND_AUTHORED_MID_POSTURE.is_strict_upper_bound_of(&[]));
+        assert!(EMPTY_RESOURCE_LIMITS.is_strict_upper_bound_of(&[]));
+        assert!(UNBOUNDED_RESOURCE_LIMITS.is_strict_upper_bound_of(&[]));
+        assert!(DEFAULT_RESOURCE_LIMITS.is_strict_upper_bound_of(&[]));
+    }
+
+    #[test]
+    fn resource_limits_is_strict_lower_bound_of_single_element_reduces_to_lt() {
+        // 1-input identity — the singleton strict predicate reduces to
+        // the pairwise strict partial-order relation. The N-ary predicate
+        // on a 1-element slice is the pairwise `lt` verbatim, mirroring
+        // `is_lower_bound_of(&[b]) == a.leq(b)` one STRICTNESS axis over.
+        let cases: [(ResourceLimits, ResourceLimits); 6] = [
+            (EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS),
+            (UNBOUNDED_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS),
+            (DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS),
+            (UNBOUNDED_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS),
+            (HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE),
+            (HAND_AUTHORED_OTHER_POSTURE, HAND_AUTHORED_MID_POSTURE),
+        ];
+        for (a, b) in cases {
+            assert_eq!(
+                a.is_strict_lower_bound_of(&[b]),
+                a.lt(b),
+                "1-input is_strict_lower_bound_of must agree with pairwise lt for ({a:?}, {b:?})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strict_upper_bound_of_single_element_reduces_to_lt() {
+        // 1-input dual identity — the singleton strict upper-bound
+        // predicate is the pairwise `lt` with the direction flipped
+        // (`b.lt(a)`), since `self` sits STRICTLY ABOVE the operand
+        // rather than STRICTLY BELOW it.
+        let cases: [(ResourceLimits, ResourceLimits); 6] = [
+            (EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS),
+            (UNBOUNDED_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS),
+            (DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS),
+            (UNBOUNDED_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS),
+            (HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE),
+            (HAND_AUTHORED_OTHER_POSTURE, HAND_AUTHORED_MID_POSTURE),
+        ];
+        for (a, b) in cases {
+            assert_eq!(
+                a.is_strict_upper_bound_of(&[b]),
+                b.lt(a),
+                "1-input is_strict_upper_bound_of must agree with pairwise lt(other, self) for ({a:?}, {b:?})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strict_lower_bound_of_rejects_diagonal_membership() {
+        // Diagonal-duplicate REJECTION — the LOAD-BEARING separator past
+        // `is_lower_bound_of`. A slice CONTAINING `self` fails the strict
+        // predicate at that operand (`self.lt(self) == false` by lt-
+        // irreflexivity) while satisfying the non-strict predicate via
+        // leq-reflexivity. Mirrors the strict-vs-non-strict diagonal-
+        // duplicate divergence on `is_strictly_ascending` /
+        // `is_ascending` one PRIMITIVE-KIND axis over: the strict
+        // projection isolates STRICTLY-below-every-element as a distinct
+        // verdict from AT-OR-BELOW-every-element, exactly where the
+        // pair-level (`lt`, `leq`) pair diverges one CARDINALITY axis
+        // under.
+        for &a in STRICT_ORDER_ROSTER {
+            // Slice contains `a` itself — the strict predicate must
+            // reject via lt-irreflexivity on the self operand.
+            assert!(
+                !a.is_strict_lower_bound_of(&[a]),
+                "diagonal membership must reject strict lower bound on {a:?}",
+            );
+            // Corresponding non-strict predicate must accept via leq-
+            // reflexivity — pinning the divergence at the diagonal cell
+            // the strict projection catches and the non-strict projection
+            // accepts.
+            assert!(
+                a.is_lower_bound_of(&[a]),
+                "diagonal membership must accept non-strict lower bound on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strict_upper_bound_of_rejects_diagonal_membership() {
+        // Dual diagonal-duplicate REJECTION — a slice containing `self`
+        // fails the strict upper-bound predicate at that operand via
+        // lt-irreflexivity.
+        for &a in STRICT_ORDER_ROSTER {
+            assert!(
+                !a.is_strict_upper_bound_of(&[a]),
+                "diagonal membership must reject strict upper bound on {a:?}",
+            );
+            assert!(
+                a.is_upper_bound_of(&[a]),
+                "diagonal membership must accept non-strict upper bound on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strict_lower_bound_of_refines_is_lower_bound_of() {
+        // Strict-refinement theorem — `is_strict_lower_bound_of(&postures)
+        // ⇒ is_lower_bound_of(&postures)`. Each per-operand `lt` verdict
+        // refines the corresponding `leq` verdict via `lt` refining `leq`
+        // pairwise; the N-ary conjunction lifts the refinement pointwise.
+        // Sweeps a candidate roster × a slice-shape roster; the theorem
+        // holds vacuously at every candidate where the strict antecedent
+        // fails, and holds informatively where it holds.
+        let candidates: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        let slices: [&[ResourceLimits]; 5] = [
+            &[],
+            &[DEFAULT_RESOURCE_LIMITS],
+            &[DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS],
+            &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE],
+            &[
+                DEFAULT_RESOURCE_LIMITS,
+                UNBOUNDED_RESOURCE_LIMITS,
+                HAND_AUTHORED_MID_POSTURE,
+            ],
+        ];
+        for c in candidates {
+            for slice in slices {
+                if c.is_strict_lower_bound_of(slice) {
+                    assert!(
+                        c.is_lower_bound_of(slice),
+                        "strict-refinement failed on candidate {c:?} and slice {slice:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strict_upper_bound_of_refines_is_upper_bound_of() {
+        // Dual strict-refinement theorem.
+        let candidates: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        let slices: [&[ResourceLimits]; 5] = [
+            &[],
+            &[EMPTY_RESOURCE_LIMITS],
+            &[EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS],
+            &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE],
+            &[
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                HAND_AUTHORED_MID_POSTURE,
+            ],
+        ];
+        for c in candidates {
+            for slice in slices {
+                if c.is_strict_upper_bound_of(slice) {
+                    assert!(
+                        c.is_upper_bound_of(slice),
+                        "strict-refinement failed on candidate {c:?} and slice {slice:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_empty_is_universal_strict_lower_bound_of_strictly_larger_slices() {
+        // Universal-bottom witness at the STRICT projection — the lattice
+        // bottom is a common STRICT lower bound of every slice whose
+        // every element is STRICTLY greater than EMPTY on at least one
+        // axis. Each of DEFAULT / UNBOUNDED / MID / OTHER carries at
+        // least one positive per-axis value on the fields where EMPTY is
+        // zero, so `EMPTY.lt(x) == true` for each and the N-ary strict
+        // predicate closes.
+        let strictly_larger: [ResourceLimits; 4] = [
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        assert!(EMPTY_RESOURCE_LIMITS.is_strict_lower_bound_of(&strictly_larger));
+        // Contrast: EMPTY is only a NON-STRICT lower bound of a slice
+        // containing itself — the strict predicate catches the diagonal
+        // cell the non-strict accepts.
+        assert!(EMPTY_RESOURCE_LIMITS
+            .is_lower_bound_of(&[EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS]));
+        assert!(!EMPTY_RESOURCE_LIMITS
+            .is_strict_lower_bound_of(&[EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS]));
+    }
+
+    #[test]
+    fn resource_limits_unbounded_is_universal_strict_upper_bound_of_strictly_smaller_slices() {
+        // Universal-top witness at the STRICT projection — the lattice
+        // top is a common STRICT upper bound of every slice whose every
+        // element is STRICTLY less than UNBOUNDED on at least one axis.
+        let strictly_smaller: [ResourceLimits; 4] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        assert!(UNBOUNDED_RESOURCE_LIMITS.is_strict_upper_bound_of(&strictly_smaller));
+        // Contrast at the diagonal — the top is a non-strict but NOT a
+        // strict upper bound of a slice containing itself.
+        assert!(UNBOUNDED_RESOURCE_LIMITS
+            .is_upper_bound_of(&[UNBOUNDED_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS]));
+        assert!(!UNBOUNDED_RESOURCE_LIMITS
+            .is_strict_upper_bound_of(&[UNBOUNDED_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS]));
+    }
+
+    #[test]
+    fn resource_limits_is_strict_lower_bound_of_rejects_incomparable_operand() {
+        // Incomparable operand REJECTION — if any operand in the slice
+        // is INCOMPARABLE with `self` (neither leq nor its reverse), the
+        // strict predicate rejects at that operand, since `self.lt(op)`
+        // requires `self.leq(op)` which fails at incomparability. The
+        // predicate does NOT promote incomparable pairs to a strict-
+        // ordering verdict — mirroring how the pair-level `lt` rejects
+        // incomparable pairs one CARDINALITY axis under.
+        // MID and OTHER are hand-authored incomparable postures.
+        assert!(!HAND_AUTHORED_MID_POSTURE.is_strict_lower_bound_of(&[HAND_AUTHORED_OTHER_POSTURE]));
+        assert!(!HAND_AUTHORED_OTHER_POSTURE.is_strict_lower_bound_of(&[HAND_AUTHORED_MID_POSTURE]));
+    }
+
+    #[test]
+    fn resource_limits_is_strict_upper_bound_of_rejects_incomparable_operand() {
+        // Dual incomparable-operand rejection.
+        assert!(!HAND_AUTHORED_MID_POSTURE.is_strict_upper_bound_of(&[HAND_AUTHORED_OTHER_POSTURE]));
+        assert!(!HAND_AUTHORED_OTHER_POSTURE.is_strict_upper_bound_of(&[HAND_AUTHORED_MID_POSTURE]));
+    }
+
+    #[test]
+    fn resource_limits_is_strict_lower_bound_of_agrees_with_direct_all_lt_conjunction() {
+        // Method-vs-scaffold cross-check — the lifted N-ary strict
+        // predicate agrees with the pre-lift two-primitive
+        // `postures.iter().all(|p| self.lt(*p))` scaffolding on every
+        // preset-carried posture across the shipped bounded-lattice
+        // extrema AND the two hand-authored asymmetric witnesses. Pins
+        // the lift is a semantic no-op — post-lift the consumer routes
+        // through ONE name instead of composing the conjunction inline.
+        let candidates: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        let slices: [&[ResourceLimits]; 4] = [
+            &[],
+            &[DEFAULT_RESOURCE_LIMITS],
+            &[DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS],
+            &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE],
+        ];
+        for c in candidates {
+            for slice in slices {
+                let direct = slice.iter().all(|p| c.lt(*p));
+                assert_eq!(
+                    c.is_strict_lower_bound_of(slice),
+                    direct,
+                    "is_strict_lower_bound_of must agree with iter().all(|p| self.lt(*p)) on candidate {c:?} and slice {slice:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strict_upper_bound_of_agrees_with_direct_all_lt_conjunction() {
+        // Dual method-vs-scaffold cross-check.
+        let candidates: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        let slices: [&[ResourceLimits]; 4] = [
+            &[],
+            &[EMPTY_RESOURCE_LIMITS],
+            &[EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS],
+            &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE],
+        ];
+        for c in candidates {
+            for slice in slices {
+                let direct = slice.iter().all(|p| p.lt(c));
+                assert_eq!(
+                    c.is_strict_upper_bound_of(slice),
+                    direct,
+                    "is_strict_upper_bound_of must agree with iter().all(|p| p.lt(self)) on candidate {c:?} and slice {slice:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strict_lower_bound_of_composes_at_compile_time_via_const_fn() {
+        // Const-fn pin — the N-ary strict-lower-bound predicate is
+        // evaluable in const context, so a caller can pin a strict-N-ary-
+        // bound-membership identity at compile time. Sibling of the
+        // const-fn evaluability pins on `is_lower_bound_of` one
+        // STRICTNESS axis over.
+        //
+        // A regression to a runtime `fn` here would fail the `const _:
+        // () = assert!(...)` bindings below at compile time.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .is_strict_lower_bound_of(&[DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.is_strict_lower_bound_of(&[]));
+        // Diagonal-membership REJECTION at compile time — the strict
+        // projection isolates the strict-below-every-element verdict.
+        const _: () =
+            assert!(!EMPTY_RESOURCE_LIMITS.is_strict_lower_bound_of(&[EMPTY_RESOURCE_LIMITS]));
+    }
+
+    #[test]
+    fn resource_limits_is_strict_upper_bound_of_composes_at_compile_time_via_const_fn() {
+        // Const-fn dual pin.
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .is_strict_upper_bound_of(&[DEFAULT_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS]));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.is_strict_upper_bound_of(&[]));
+        const _: () = assert!(
+            !UNBOUNDED_RESOURCE_LIMITS.is_strict_upper_bound_of(&[UNBOUNDED_RESOURCE_LIMITS])
+        );
     }
 
     /// The full canonical preset roster the strict-order pins sweep

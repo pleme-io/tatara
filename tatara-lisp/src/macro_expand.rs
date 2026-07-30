@@ -19434,6 +19434,54 @@ mod tests {
     }
 
     #[test]
+    fn preset_resource_limits_triple_reachable_via_crate_top_level_path() {
+        // Export-surface pin — the (BOTTOM, DEFAULT, TOP) preset triple
+        // is reachable at the crate top-level path `crate::*` (aka
+        // `tatara_lisp::*` for downstream consumers), not only at the
+        // module-local `macro_expand::*` path where the constants are
+        // defined. Pre-lift, [`DEFAULT_RESOURCE_LIMITS`] +
+        // [`UNBOUNDED_RESOURCE_LIMITS`] were re-exported from
+        // `tatara-lisp/src/lib.rs` but [`EMPTY_RESOURCE_LIMITS`] was
+        // NOT — an asymmetry on the (DEFAULT, EMPTY, UNBOUNDED) preset
+        // triple's export surface. A downstream consumer following the
+        // fold-identity pattern documented on [`EMPTY_RESOURCE_LIMITS`]
+        // (`postures.iter().copied().fold(EMPTY_RESOURCE_LIMITS,
+        // ResourceLimits::most_permissive)`) could not `use
+        // tatara_lisp::EMPTY_RESOURCE_LIMITS` at the top-level path
+        // every peer preset resolves through; the workaround was the
+        // longer `use tatara_lisp::macro_expand::EMPTY_RESOURCE_LIMITS`
+        // which threads a MODULE PATH from an INTERNAL organizational
+        // choice into every downstream consumer's imports.
+        //
+        // `const _: ()` pins at ITEM scope — a regression that drops
+        // the re-export from `lib.rs` fires at RUSTC time (name
+        // resolution failure on `crate::EMPTY_RESOURCE_LIMITS`), not
+        // test-run time. Three independent pins so a drift on ONE
+        // preset's re-export carries a distinct-name failure that
+        // names the drifting axis; a future FOURTH preset (a
+        // hand-authored `SMALL_RESOURCE_LIMITS` for e.g. constrained
+        // sandboxes) extends this pin in lockstep with `lib.rs`. The
+        // equality check against the module-local name proves the
+        // re-export is a plain projection (not a distinct constant
+        // that could drift structurally) — `pub use` cannot drift the
+        // value, but the pin documents the intent alongside the name
+        // resolution check.
+        const _: () = assert!(crate::DEFAULT_RESOURCE_LIMITS.leq(crate::UNBOUNDED_RESOURCE_LIMITS));
+        const _: () = assert!(crate::EMPTY_RESOURCE_LIMITS.leq(crate::DEFAULT_RESOURCE_LIMITS));
+        const _: () = assert!(crate::EMPTY_RESOURCE_LIMITS.leq(crate::UNBOUNDED_RESOURCE_LIMITS));
+        // Runtime cross-check — the re-exported names project the
+        // SAME six-field values as the module-local names on every
+        // axis of the six-field surface. `PartialEq` on
+        // [`ResourceLimits`] discharges the structural identity at
+        // ONE assert per preset (rather than six per-axis asserts) —
+        // the field-level pins already live in the preset-specific
+        // `*_binds_every_ceiling_to_*` tests one section over.
+        assert_eq!(crate::DEFAULT_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS);
+        assert_eq!(crate::EMPTY_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS);
+        assert_eq!(crate::UNBOUNDED_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS);
+    }
+
+    #[test]
     fn unbounded_resource_limits_seeds_strictest_fold_over_slice() {
         // Dual fold-identity pin — a slice of postures folded through
         // [`ResourceLimits::strictest`] with UNBOUNDED as the seed

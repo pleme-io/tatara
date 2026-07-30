@@ -3651,6 +3651,153 @@ impl ResourceLimits {
     pub const fn is_non_monotone(postures: &[Self]) -> bool {
         !Self::is_ascending(postures) && !Self::is_descending(postures)
     }
+
+    /// The DISJUNCTION corner of the (is_monotone, is_non_monotone)
+    /// 2-cell combinator-dual face on the sequence-level pairwise-
+    /// relation surface — `true` iff EITHER direction projection
+    /// [`Self::is_ascending`] OR [`Self::is_descending`] accepts. The
+    /// DIRECT COMPLEMENT-PAIR PEER of [`Self::is_non_monotone`] one
+    /// COMBINATOR-DUAL axis over via De Morgan: `is_monotone ==
+    /// is_ascending || is_descending == !(!is_ascending &&
+    /// !is_descending) == !is_non_monotone`. The two verdicts partition
+    /// EVERY slice into exactly two disjoint arms — no third cell — and
+    /// the (is_monotone, is_non_monotone) partition is DEFINITIONALLY
+    /// exhaustive at every slice, arity, and preset.
+    ///
+    /// Pins:
+    ///
+    /// **De Morgan complement theorem — `is_monotone iff
+    /// !is_non_monotone`**: for every slice `postures`,
+    /// `Self::is_monotone(postures) == !Self::is_non_monotone(postures)`,
+    /// by construction of both projections on the same two underlying
+    /// direction verdicts. The two-cell partition is exhaustive at
+    /// EVERY slice, closing the (is_monotone, is_non_monotone) row of
+    /// the combinator-dual face. Pinned as
+    /// `resource_limits_is_monotone_iff_not_is_non_monotone_on_every_shipped_slice`.
+    ///
+    /// **Transitivity theorem — `is_monotone ⇒ is_chain`**: for every
+    /// slice `postures`, `Self::is_monotone(postures) == true` implies
+    /// `Self::is_chain(postures) == true`, by the transitivity theorem
+    /// on each direction projection (`is_ascending ⇒ is_chain` and
+    /// `is_descending ⇒ is_chain`, both pinned) applied to whichever
+    /// arm of the disjunction accepts. Every monotone slice is a chain
+    /// — the sequence-level ordering property refines the set-level
+    /// pairwise-comparability property. Pinned as
+    /// `resource_limits_is_monotone_implies_is_chain_on_every_shipped_slice`.
+    ///
+    /// **Empty-slice vacuous truth**: `ResourceLimits::is_monotone(&[])
+    /// == true`, since both direction projections return `true`
+    /// vacuously on the empty slice and the disjunction accepts on
+    /// either arm. Sibling of [`Self::is_ascending`]'s + [`Self::is_
+    /// descending`]'s empty-slice identity one COMBINATOR-DUAL axis
+    /// over. Pinned as
+    /// `resource_limits_is_monotone_empty_slice_is_vacuously_true`.
+    ///
+    /// **Singleton vacuous truth**: `ResourceLimits::is_monotone(&[a])
+    /// == true` for every posture `a`, since a one-element slice
+    /// contains no consecutive pairs and both direction projections
+    /// vacuously accept. Pinned as
+    /// `resource_limits_is_monotone_singleton_is_vacuously_true`.
+    ///
+    /// **Diagonal-duplicate identity**: `ResourceLimits::is_monotone(
+    /// &[a, a]) == true` for every posture `a`, since `leq` and `geq`
+    /// are BOTH reflexive so both direction projections accept and the
+    /// disjunction opens on either arm. Every diagonal-duplicate slice
+    /// inhabits the `is_constant` cell — the intersection of the two
+    /// direction arms — which is a subset of the monotone arm. Pinned
+    /// as `resource_limits_is_monotone_of_diagonal_duplicate_is_true`.
+    ///
+    /// **Shipped-preset chain closure**: `ResourceLimits::is_monotone(
+    /// &[EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS]) == true` (via is_ascending arm)
+    /// AND `ResourceLimits::is_monotone(&[UNBOUNDED_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS]) == true`
+    /// (via is_descending arm). Pure monotone chains open the cell on
+    /// their respective arm, pinning the disjunction factors through
+    /// both direction verdicts. Pinned as
+    /// `resource_limits_is_monotone_holds_on_the_shipped_preset_chain_triple_in_both_permutations`.
+    ///
+    /// **Hand-authored antichain rejection**: `ResourceLimits::is_monotone(
+    /// &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE]) ==
+    /// false`, since the two hand-authored asymmetric postures are
+    /// incomparable and both direction projections reject on the
+    /// single consecutive pair; the disjunction closes on both arms.
+    /// Pinned in both orderings as
+    /// `resource_limits_is_monotone_rejects_the_hand_authored_antichain_pair`.
+    ///
+    /// **Zig-zag chain-permutation rejection**: `ResourceLimits::is_monotone(
+    /// &[DEFAULT_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS]) == false`. LOAD-BEARING
+    /// discriminating arm past [`Self::is_chain`] — is_chain accepts
+    /// the same slice via pairwise comparability, but the sequence-
+    /// level projection catches the ordering-dependent zig-zag pattern
+    /// is_chain discards. Pinned in both zig-zag permutations as
+    /// `resource_limits_is_monotone_rejects_the_zigzag_chain_permutation`.
+    ///
+    /// **Structural round-trip — `is_monotone iff is_ascending ||
+    /// is_descending`**: for every slice, the projection is
+    /// definitionally the disjunction of the two direction projections;
+    /// the equality holds by construction. Pinned across arity 0-3 over
+    /// all five shipped presets, catching any future rewrite of any of
+    /// the three underlying projections that silently drifts from the
+    /// composition contract. Pinned as
+    /// `resource_limits_is_monotone_iff_is_ascending_or_is_descending_on_every_shipped_slice`.
+    ///
+    /// **Const-fn evaluability**: the disjunction corner is evaluable
+    /// in `const` context, so a caller can bind a monotone-sequence
+    /// identity at compile time as a build-break
+    /// (`const _: () = assert!(ResourceLimits::is_monotone(&[
+    /// EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS]));`). Sibling of the const-fn
+    /// evaluability pins on [`Self::is_ascending`] + [`Self::is_
+    /// descending`] + [`Self::is_constant`] + [`Self::is_non_monotone`]
+    /// one COMBINATOR axis over.
+    ///
+    /// Pre-lift, a caller wanting "is this slice ascending OR
+    /// descending?" composed the doubly-primitive disjunction
+    /// `Self::is_ascending(postures) || Self::is_descending(postures)`
+    /// at every prospective callsite — a two-primitive scaffolding
+    /// whose exhaustiveness the type system did NOT gate. Post-lift
+    /// the monotone verdict binds at ONE typed method the algebra
+    /// exposes, composes into a compile-time bound, and the doubly-
+    /// disjoined substrate lives at ONE implementation site — a ≥2
+    /// PRIME DIRECTIVE trigger, since the DISJUNCTION corner on the
+    /// (is_monotone, is_non_monotone) combinator-dual 2-cell face was
+    /// the last unnamed corner on the sequence-level pairwise-relation
+    /// surface, closing what the just-lifted [`Self::is_non_monotone`]
+    /// opened one COMBINATOR-DUAL axis over.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the sequence-level monotone verdict on N
+    /// preset-carried resource proofs is itself a typed named `bool`
+    /// predicate composing them via the underlying sequence-level
+    /// [`Self::is_ascending`] + [`Self::is_descending`] projections.
+    /// THEORY.md §V.1 — knowable platform; the doubly-disjoined
+    /// projection becomes a TYPE-level operation on the posture
+    /// algebra rather than an inline `is_ascending || is_descending`
+    /// scaffolding at every consumer that decides "is this slice
+    /// ascending or descending?"
+    ///
+    /// Frontier inspiration: the order-theoretic notion of a MONOTONE
+    /// SEQUENCE on a poset — Haskell's `isSorted xs || isSorted
+    /// (reverse xs)` idiom on partial-order carriers; Coq's disjunction
+    /// of `StronglySorted` on both a `<=` and `>=` relation; Julia's
+    /// `issorted(v) || issorted(v, rev=true)` composition on
+    /// `AbstractVector`; APL's `∧/2≤/⍵` or `∧/2≥/⍵` monotonicity
+    /// gauges. Translation through pleme-io primitives: the doubly-
+    /// disjoined sequence-level projection composes directly from the
+    /// two just-lifted direction projections, no new dep, no supertrait
+    /// bound (`Copy` on [`ResourceLimits`] suffices to pass slices by
+    /// value through the inner `const fn` bodies), no allocation,
+    /// `const fn` throughout. Encoding the monotone verdict at the
+    /// SEQUENCE level rather than the SET level preserves the
+    /// enumeration ordering that distinguishes ordered chains from
+    /// their zig-zag permutations — a distinction the SET-level
+    /// [`Self::is_chain`] verdict collapses.
+    #[must_use]
+    pub const fn is_monotone(postures: &[Self]) -> bool {
+        Self::is_ascending(postures) || Self::is_descending(postures)
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -23512,6 +23659,348 @@ mod tests {
             HAND_AUTHORED_OTHER_POSTURE,
         ]));
         const _: () = assert!(ResourceLimits::is_non_monotone(&[
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_monotone_empty_slice_is_vacuously_true() {
+        // Empty-slice contract — is_ascending(&[]) and is_descending(&[])
+        // BOTH return `true` vacuously, so the disjunction accepts on
+        // either arm. The empty slice inhabits the monotone cell.
+        // Sibling of is_non_monotone(&[]) == false one COMBINATOR-DUAL
+        // axis over on the (is_monotone, is_non_monotone) 2-cell face.
+        assert!(ResourceLimits::is_monotone(&[]));
+    }
+
+    #[test]
+    fn resource_limits_is_monotone_singleton_is_vacuously_true() {
+        // Singleton contract — a one-element slice contains no
+        // consecutive pairs; both direction projections return `true`
+        // vacuously so the disjunction accepts. Pinned on every
+        // canonical preset AND on both hand-authored asymmetric
+        // postures so the monotone verdict holds regardless of the
+        // singleton element's lattice position — the SAME arity-1
+        // vacuity every sibling sequence-level projection shares.
+        assert!(ResourceLimits::is_monotone(&[EMPTY_RESOURCE_LIMITS]));
+        assert!(ResourceLimits::is_monotone(&[DEFAULT_RESOURCE_LIMITS]));
+        assert!(ResourceLimits::is_monotone(&[UNBOUNDED_RESOURCE_LIMITS]));
+        assert!(ResourceLimits::is_monotone(&[HAND_AUTHORED_MID_POSTURE]));
+        assert!(ResourceLimits::is_monotone(&[HAND_AUTHORED_OTHER_POSTURE]));
+    }
+
+    #[test]
+    fn resource_limits_is_monotone_of_diagonal_duplicate_is_true() {
+        // Diagonal-duplicate contract — leq AND geq are BOTH REFLEXIVE,
+        // so both is_ascending and is_descending accept at every
+        // diagonal-duplicate slice; the disjunction opens on either
+        // arm. The diagonal-duplicate slice inhabits the is_constant
+        // cell (intersection of the two direction arms), which is a
+        // subset of the monotone arm.
+        assert!(ResourceLimits::is_monotone(&[
+            DEFAULT_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ]));
+        assert!(ResourceLimits::is_monotone(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_monotone_holds_on_the_shipped_preset_chain_triple_in_both_permutations() {
+        // Chain closure — the shipped-preset triple on the bounded-
+        // lattice diagonal is a pure monotone chain and opens the cell
+        // via either the is_ascending arm (ascending permutation) or
+        // the is_descending arm (descending permutation). Pinned on
+        // both permutations so the disjunction factors through both
+        // direction verdicts.
+        assert!(ResourceLimits::is_monotone(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        assert!(ResourceLimits::is_monotone(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_monotone_rejects_the_hand_authored_antichain_pair() {
+        // Antichain-pair rejection — LOAD-BEARING `false`-arm catch at
+        // arity 2. The two hand-authored asymmetric postures are
+        // incomparable, so BOTH direction projections reject on the
+        // single consecutive pair and the disjunction closes on both
+        // arms. Pinned in both orderings.
+        assert!(!ResourceLimits::is_monotone(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+        assert!(!ResourceLimits::is_monotone(&[
+            HAND_AUTHORED_OTHER_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_monotone_rejects_the_zigzag_chain_permutation() {
+        // Zig-zag rejection — LOAD-BEARING `false`-arm catch on a slice
+        // that is a CHAIN but neither ascending nor descending as a
+        // sequence. The (DEFAULT, EMPTY, UNBOUNDED) triple has
+        // `DEFAULT.leq(EMPTY) == false` at consecutive pair (0, 1)
+        // (falsifying is_ascending) and `EMPTY.geq(UNBOUNDED) == false`
+        // at consecutive pair (1, 2) (falsifying is_descending), so the
+        // disjunction closes on both arms. This is the DISCRIMINATING
+        // arm between the sequence-level monotone cell and the set-
+        // level is_chain verdict — is_chain accepts the same slice via
+        // pairwise comparability, but the sequence-level projection
+        // catches the ordering-dependent zig-zag pattern is_chain
+        // discards. The mirror (up-then-down) permutation also closes
+        // this cell, pinning the symmetry.
+        assert!(!ResourceLimits::is_monotone(&[
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        assert!(!ResourceLimits::is_monotone(&[
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_monotone_iff_is_ascending_or_is_descending_on_every_shipped_slice() {
+        // Structural round-trip — the projection is definitionally
+        // `is_ascending || is_descending`, so the equality holds by
+        // construction at every slice. Pinned as a substrate-level
+        // identity that catches a future rewrite of any of the three
+        // underlying projections that silently drifts from the
+        // composition contract. Swept across arity 0, arity 1, arity 2,
+        // and arity 3 over all five shipped presets.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        assert_eq!(
+            ResourceLimits::is_monotone(&[]),
+            ResourceLimits::is_ascending(&[]) || ResourceLimits::is_descending(&[]),
+        );
+        for a in presets {
+            let slice = [a];
+            assert_eq!(
+                ResourceLimits::is_monotone(&slice),
+                ResourceLimits::is_ascending(&slice) || ResourceLimits::is_descending(&slice),
+                "round-trip failed on singleton {a:?}",
+            );
+        }
+        for a in presets {
+            for b in presets {
+                let slice = [a, b];
+                assert_eq!(
+                    ResourceLimits::is_monotone(&slice),
+                    ResourceLimits::is_ascending(&slice) || ResourceLimits::is_descending(&slice),
+                    "round-trip failed on pair ({a:?}, {b:?})",
+                );
+            }
+        }
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        ResourceLimits::is_monotone(&slice),
+                        ResourceLimits::is_ascending(&slice)
+                            || ResourceLimits::is_descending(&slice),
+                        "round-trip failed on triple ({a:?}, {b:?}, {c:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_monotone_iff_not_is_non_monotone_on_every_shipped_slice() {
+        // De Morgan complement theorem — is_monotone iff !is_non_monotone
+        // on every slice, by construction of both projections on the
+        // same two underlying direction verdicts. The two-cell
+        // partition (is_monotone, is_non_monotone) is EXHAUSTIVE at
+        // every slice — no third cell. Substrate-level identity that
+        // catches any future combinator drift on either projection.
+        // Swept across arity 0-3 over all five shipped presets.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        assert_eq!(
+            ResourceLimits::is_monotone(&[]),
+            !ResourceLimits::is_non_monotone(&[]),
+        );
+        for a in presets {
+            let slice = [a];
+            assert_eq!(
+                ResourceLimits::is_monotone(&slice),
+                !ResourceLimits::is_non_monotone(&slice),
+                "De Morgan complement failed on singleton {a:?}",
+            );
+        }
+        for a in presets {
+            for b in presets {
+                let slice = [a, b];
+                assert_eq!(
+                    ResourceLimits::is_monotone(&slice),
+                    !ResourceLimits::is_non_monotone(&slice),
+                    "De Morgan complement failed on pair ({a:?}, {b:?})",
+                );
+            }
+        }
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        ResourceLimits::is_monotone(&slice),
+                        !ResourceLimits::is_non_monotone(&slice),
+                        "De Morgan complement failed on triple ({a:?}, {b:?}, {c:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_monotone_implies_is_chain_on_every_shipped_slice() {
+        // Transitivity theorem — is_monotone ⇒ is_chain on every slice,
+        // by the pinned transitivity theorems `is_ascending ⇒ is_chain`
+        // and `is_descending ⇒ is_chain` applied to whichever arm of
+        // the disjunction accepts. Every monotone slice is a chain —
+        // the sequence-level ordering property refines the set-level
+        // pairwise-comparability property. Swept across arity 2 and
+        // arity 3 over all five shipped presets to sweep every slice
+        // where the sequence-level verdict can vary.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                let slice = [a, b];
+                if ResourceLimits::is_monotone(&slice) {
+                    assert!(
+                        ResourceLimits::is_chain(&slice),
+                        "is_monotone accepts but is_chain rejects on {slice:?}",
+                    );
+                }
+            }
+        }
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    if ResourceLimits::is_monotone(&slice) {
+                        assert!(
+                            ResourceLimits::is_chain(&slice),
+                            "is_monotone accepts but is_chain rejects on {slice:?}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_monotone_and_is_non_monotone_partition_every_shipped_slice() {
+        // Two-cell partition — exactly one of `is_monotone` or
+        // `is_non_monotone` accepts on every slice; the two form a
+        // definitional XOR partition on the same two underlying
+        // direction projections. Sharpens the three-cell
+        // (is_ascending, is_descending, is_non_monotone) coverage
+        // theorem into a strict two-cell exhaustive partition once the
+        // (is_ascending, is_descending) pair is collapsed into their
+        // combinator-dual disjunction. Swept across arity 0-3 over all
+        // five shipped presets.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        assert_ne!(
+            ResourceLimits::is_monotone(&[]),
+            ResourceLimits::is_non_monotone(&[]),
+            "partition failed on empty slice",
+        );
+        for a in presets {
+            let slice = [a];
+            assert_ne!(
+                ResourceLimits::is_monotone(&slice),
+                ResourceLimits::is_non_monotone(&slice),
+                "partition failed on singleton {slice:?}",
+            );
+        }
+        for a in presets {
+            for b in presets {
+                let slice = [a, b];
+                assert_ne!(
+                    ResourceLimits::is_monotone(&slice),
+                    ResourceLimits::is_non_monotone(&slice),
+                    "partition failed on pair {slice:?}",
+                );
+            }
+        }
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    assert_ne!(
+                        ResourceLimits::is_monotone(&slice),
+                        ResourceLimits::is_non_monotone(&slice),
+                        "partition failed on triple {slice:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_monotone_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the disjunction corner of the (is_monotone,
+        // is_non_monotone) combinator-dual 2-cell face is evaluable in
+        // const context, so a caller can pin a monotone-sequence
+        // identity at compile time. Sibling of the const-fn
+        // evaluability pins on is_ascending + is_descending +
+        // is_constant + is_non_monotone one COMBINATOR axis over.
+        const _: () = assert!(ResourceLimits::is_monotone(&[]));
+        const _: () = assert!(ResourceLimits::is_monotone(&[EMPTY_RESOURCE_LIMITS]));
+        const _: () = assert!(ResourceLimits::is_monotone(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        const _: () = assert!(ResourceLimits::is_monotone(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+        const _: () = assert!(!ResourceLimits::is_monotone(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+        const _: () = assert!(!ResourceLimits::is_monotone(&[
             DEFAULT_RESOURCE_LIMITS,
             EMPTY_RESOURCE_LIMITS,
             UNBOUNDED_RESOURCE_LIMITS,

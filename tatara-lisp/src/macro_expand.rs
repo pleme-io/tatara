@@ -1779,6 +1779,176 @@ impl ResourceLimits {
     pub const fn is_incomparable(self, other: Self) -> bool {
         !self.leq(other) && !self.geq(other)
     }
+
+    /// Pointwise partial-order COMPARABILITY relation across the six
+    /// ceilings — `true` iff `self` and `other` sit on the SAME lattice
+    /// branch, i.e., EITHER `self.leq(other)` OR `self.geq(other)`
+    /// holds. The two postures then admit a pointwise-domination
+    /// verdict in at least one direction: every axis has `self` at-or-
+    /// below `other` (the `leq` branch) or every axis has `self`
+    /// at-or-above `other` (the `geq` branch), so at least one
+    /// direction closes and one preset dominates the other on every
+    /// field.
+    ///
+    /// The COMPARABLE CORNER on the (leq, geq, lt, gt, incomparable,
+    /// comparable) pairwise-relation surface — the DIRECT POSITIVE
+    /// DUAL of [`Self::is_incomparable`] one COVER-COMPLEMENT axis
+    /// over on the (comparable, incomparable) two-cell partition of
+    /// the ordered pair × verdict surface. The just-lifted
+    /// [`Self::is_incomparable`] projection pins the ANTICHAIN half of
+    /// that partition (the pairs where NEITHER pointwise-domination
+    /// direction closes); THIS projection pins the DUAL COMPARABLE
+    /// half (the pairs where AT LEAST ONE direction closes) —
+    /// EXHAUSTIVELY CLOSING the (comparable, incomparable) two-cell
+    /// partition at its FINAL SECOND tile on the pairwise-relation
+    /// surface. The (leq, geq, lt, gt) 2×2 pairwise partial-order face
+    /// carries the four DIRECTIONAL comparable predicates one COVER
+    /// axis over; THIS projection folds them into ONE POSITIVE
+    /// COMPARABILITY verdict — the SET-UNION of the two pointwise-
+    /// domination directions.
+    ///
+    /// Symmetric on its argument order: `a.is_comparable(b) ==
+    /// b.is_comparable(a)` — the composition `self.leq(other) ||
+    /// self.geq(other)` folds through `self.leq(other) ==
+    /// other.geq(self)` (dual identity on [`Self::geq`]) and the
+    /// disjunction's commutativity, so the projection is order-
+    /// independent on its two inputs. This SYMMETRY POSTURE mirrors
+    /// [`Self::is_incomparable`]'s symmetry one CELL axis over on the
+    /// (comparable, incomparable) partition: both cells of an
+    /// EXHAUSTIVE-AND-DISJOINT partition of a symmetric surface must
+    /// themselves be symmetric — the two verdicts flip in lockstep on
+    /// argument swap. Distinguishes it from [`Self::leq`] / [`Self::lt`]
+    /// (both antisymmetric — swapping inputs FLIPS the verdict).
+    ///
+    /// Reflexive on its own argument: `a.is_comparable(a) == true` —
+    /// every posture is comparable to itself via [`Self::leq`]'s
+    /// reflexivity (`a.leq(a) == true`), so the disjunction's
+    /// `self.leq(other)` leg holds at every diagonal input. Sibling
+    /// posture to [`Self::leq`]'s reflexivity one COVER axis over:
+    /// the diagonal COMPARABLE cell is a substrate-level THEOREM
+    /// falling out of the partial-order axioms, and THIS projection
+    /// pins it as ONE positive verdict rather than the caller re-
+    /// deriving `a.leq(a) || a.geq(a) == true` at every diagonal
+    /// callsite.
+    ///
+    /// **Bottom-pole absorption**: `a.is_comparable(
+    /// EMPTY_RESOURCE_LIMITS) == true` on every posture `a` —
+    /// [`EMPTY_RESOURCE_LIMITS`] is the bounded-lattice bottom, so
+    /// `EMPTY.leq(a)` holds on every axis (`0 <= a.max_*` on `usize`),
+    /// which gives `a.geq(EMPTY)` through the [`Self::geq`] dual
+    /// identity, which satisfies the `self.geq(other)` leg. The
+    /// bounded-lattice bottom is comparable to every posture. The
+    /// COMPLEMENT of [`Self::is_incomparable`]'s bottom-pole
+    /// absorption pin one CELL axis over — where the antichain
+    /// verdict FOLDS FALSE at the bottom pole, the comparability
+    /// verdict FOLDS TRUE. Pinned on the canonical preset roster.
+    ///
+    /// **Top-pole absorption**: `a.is_comparable(
+    /// UNBOUNDED_RESOURCE_LIMITS) == true` on every posture `a` —
+    /// [`UNBOUNDED_RESOURCE_LIMITS`] is the bounded-lattice top, so
+    /// `a.leq(UNBOUNDED)` holds on every axis (`a.max_* <=
+    /// usize::MAX` unconditionally), which satisfies the
+    /// `self.leq(other)` leg. The bounded-lattice top is comparable
+    /// to every posture. The COMPLEMENT of [`Self::is_incomparable`]'s
+    /// top-pole absorption pin one CELL axis over; pinned on the
+    /// canonical preset roster.
+    ///
+    /// **Antichain load-bearing arm**:
+    /// `HAND_AUTHORED_MID_POSTURE.is_comparable(
+    /// HAND_AUTHORED_OTHER_POSTURE) == false` — the two hand-authored
+    /// asymmetric postures sit on distinct branches (each is smaller
+    /// on three axes and larger on the other three), so NEITHER
+    /// pointwise-domination direction closes and the comparability
+    /// verdict is `false`. The DIRECT FALSIFICATION of
+    /// [`Self::is_incomparable`]'s antichain-arm HOLDS pin one CELL
+    /// axis over on the SAME pair — the two are the negation-paired
+    /// sides of the (comparable, incomparable) two-cell partition,
+    /// and pinning BOTH cells' verdicts on the SAME load-bearing
+    /// antichain pair closes the partition as a substrate-level
+    /// EXCLUSIVITY THEOREM rather than one direction's assertion.
+    ///
+    /// **De Morgan duality**: `a.is_comparable(b) == !a.is_incomparable(b)`
+    /// — the comparable corner is the SET-COMPLEMENT of the antichain
+    /// corner. Pinned by
+    /// `resource_limits_is_comparable_is_de_morgan_dual_of_incomparable`
+    /// which sweeps every ordered pair in the preset roster and
+    /// confirms the equivalence at every cell. Together with
+    /// `resource_limits_is_incomparable_is_de_morgan_dual_of_comparable`
+    /// (which pins the OTHER direction on
+    /// `a.leq(b) || a.geq(b)` composition), the two projections carry
+    /// the (comparable, incomparable) two-cell partition as an
+    /// EXHAUSTIVE-AND-DISJOINT decomposition of the ordered pair ×
+    /// verdict surface.
+    ///
+    /// Encoded as `self.leq(other) || self.geq(other)` — one
+    /// primitive delegation each to [`Self::leq`] and [`Self::geq`]
+    /// (with [`Self::geq`] itself delegating to [`Self::leq`]) so the
+    /// comparability characterization lives at exactly one
+    /// implementation site, and a future re-derivation of [`Self::leq`]
+    /// (e.g. to a different pointwise conjunction) propagates to
+    /// `is_comparable` mechanically rather than requiring a per-
+    /// method fix-up. Mirrors [`Self::is_incomparable`]'s
+    /// `!self.leq(other) && !self.geq(other)` delegation one COVER
+    /// axis over on the pairwise-relation surface — the two share
+    /// the SAME two-primitive substrate and diverge only on the
+    /// negation posture (`!… && !…` vs `… || …`), which De Morgan's
+    /// law pins as the SAME projection.
+    ///
+    /// `const fn` for the same compile-time-pin reasons as
+    /// [`Self::is_incomparable`] (`const _: () =
+    /// assert!(DEFAULT_RESOURCE_LIMITS.is_comparable(
+    /// EMPTY_RESOURCE_LIMITS));`), so a caller can pin a
+    /// comparability-agreement identity at compile time — a build-
+    /// break rather than a runtime `assert!` on the first execution.
+    ///
+    /// Pre-lift, a caller that wanted "these two postures are
+    /// comparable on the pointwise partial-order" composed
+    /// `a.leq(b) || a.geq(b)` at the callsite — a two-primitive
+    /// composition that appeared verbatim at every prospective
+    /// comparability-detection site pre-lift, and the NEGATION of the
+    /// same two-primitive composition [`Self::is_incomparable`]
+    /// lifted one COVER axis over — a ≥2 PRIME DIRECTIVE trigger with
+    /// the (comparable, incomparable) two-cell partition of the
+    /// ordered pair × verdict surface as its substrate posture. Post-
+    /// lift the comparability characterization is ONE named primitive
+    /// on the [`ResourceLimits`] surface, `const fn`-composable into
+    /// a compile-time bound, and the two-primitive `leq || geq`
+    /// composition lives at ONE implementation site.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the comparability characterization is the
+    /// SET-UNION of the two pointwise-domination directions, and
+    /// pinning the projection at ONE typed primitive makes the
+    /// (comparable, incomparable) two-cell partition of the ordered-
+    /// pair × verdict surface a substrate-level THEOREM proved on
+    /// BOTH SIDES rather than one side asserted and the other
+    /// inferred at consumer sites. THEORY.md §V.1 — knowable
+    /// platform; the comparability-detection corner was an unnamed
+    /// two-primitive composition recurring at every prospective
+    /// "these two postures sit on the same branch?" callsite pre-
+    /// lift.
+    ///
+    /// Frontier inspiration: Haskell's `Data.PartialOrd` typeclass'
+    /// `compare :: PartialOrd a => a -> a -> Maybe Ordering` — the
+    /// comparable corner is exactly the `isJust` projection of that
+    /// method (the DUAL of `is_incomparable`'s `isNothing` projection
+    /// on the SAME method); Julia's `Base.Order.lt` + `Base.Order.gt`
+    /// disjunction on the pairwise-comparability check; Rust's own
+    /// `PartialOrd::partial_cmp` whose `Some(_)` arm is the
+    /// comparable corner; Coq's `PreOrder` + classical LEM-derived
+    /// `leq a b \/ leq b a` proof obligation on the comparable arm.
+    /// Translation through pleme-io primitives: the comparability
+    /// characterization on the closed-set-paired [`ResourceLimits`]
+    /// posture binds through the just-lifted [`Self::leq`] and
+    /// [`Self::geq`] primitives (both const-evaluable, both
+    /// delegating to [`Self::leq`]) with a two-arm disjunction on the
+    /// direct forms — no new dep, no supertrait bound (`Sized + Copy + 'static`-plus-`Eq` stays untouched), no allocation, `const fn`
+    /// throughout so the comparability verdict is a compile-time
+    /// expression at every preset-tuple call site.
+    #[must_use]
+    pub const fn is_comparable(self, other: Self) -> bool {
+        self.leq(other) || self.geq(other)
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -19269,5 +19439,249 @@ mod tests {
         const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.is_incomparable(EMPTY_RESOURCE_LIMITS));
         const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.is_incomparable(EMPTY_RESOURCE_LIMITS));
         const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.is_incomparable(DEFAULT_RESOURCE_LIMITS));
+    }
+
+    // ── ResourceLimits::is_comparable ─────────────────────────────────
+    //
+    // The COMPARABLE CORNER on the pairwise-relation surface — the
+    // DIRECT POSITIVE DUAL of `is_incomparable` one COVER-COMPLEMENT
+    // axis over on the (comparable, incomparable) two-cell partition
+    // of the ordered pair × verdict surface. See `ResourceLimits::is_comparable`
+    // for the algebra; the pins below fix each documented property
+    // exactly once so a regression on any leg fires on a NAMED test
+    // rather than an ad-hoc downstream break.
+
+    #[test]
+    fn resource_limits_is_comparable_is_reflexive() {
+        // Comparable-corner reflexivity pin — `a.is_comparable(a) ==
+        // true` on every posture. Every posture is COMPARABLE to
+        // itself via `leq`'s reflexivity (`a.leq(a) == true`), so
+        // the disjunction's `self.leq(other)` leg holds at every
+        // diagonal input. Sibling of `is_incomparable`'s
+        // irreflexivity one CELL axis over on the (comparable,
+        // incomparable) partition — the diagonal MUST fold to `true`
+        // here iff it folds to `false` there.
+        for &a in STRICT_ORDER_ROSTER {
+            assert!(a.is_comparable(a), "reflexivity failed on {a:?}");
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_comparable_is_symmetric() {
+        // Comparable-corner symmetry pin — `a.is_comparable(b) ==
+        // b.is_comparable(a)` on every pair. The composition
+        // `self.leq(other) || self.geq(other)` folds through the
+        // `self.leq(other) == other.geq(self)` dual identity on
+        // `geq` and the disjunction's commutativity into an order-
+        // independent projection on its two inputs. Both cells of an
+        // EXHAUSTIVE-AND-DISJOINT partition of a symmetric surface
+        // must themselves be symmetric — the two verdicts flip in
+        // lockstep on argument swap.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                assert_eq!(
+                    a.is_comparable(b),
+                    b.is_comparable(a),
+                    "symmetry failed on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_comparable_is_de_morgan_dual_of_incomparable() {
+        // De Morgan dual pin — `a.is_comparable(b) ==
+        // !a.is_incomparable(b)` on every pair. The comparable corner
+        // is the SET-COMPLEMENT of the antichain corner on the
+        // (comparable, incomparable) two-cell partition of the
+        // ordered pair × verdict surface. The DIRECT dual of
+        // `resource_limits_is_incomparable_is_de_morgan_dual_of_comparable`
+        // one CELL axis over: that test pins the antichain corner as
+        // the negation of the `leq || geq` disjunction; THIS test
+        // pins the comparability corner as the negation of the
+        // antichain projection. Together the two pin BOTH SIDES of
+        // the partition, closing it as a substrate-level
+        // EXCLUSIVITY-AND-EXHAUSTIVENESS THEOREM.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                let via_named = a.is_comparable(b);
+                let via_negated_dual = !a.is_incomparable(b);
+                assert_eq!(
+                    via_named, via_negated_dual,
+                    "De Morgan dual failed on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_comparable_agrees_with_leq_or_geq_composition() {
+        // Direct composition pin — `a.is_comparable(b) == a.leq(b) ||
+        // a.geq(b)` on every pair. Discriminates a regression that
+        // drifted the comparability body off the substrate's `leq ||
+        // geq` composition (e.g., a shortcut through `a.leq(b) &&
+        // a.geq(b)` — the AND-form falsely reports comparability
+        // only on the equality diagonal, dropping the strict-order
+        // cells). Anchors the two-primitive delegation as a
+        // substrate-level identity.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                let via_named = a.is_comparable(b);
+                let via_composition = a.leq(b) || a.geq(b);
+                assert_eq!(
+                    via_named, via_composition,
+                    "leq||geq composition failed on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_comparable_folds_true_at_the_bottom_pole() {
+        // Bottom-pole absorption pin — `a.is_comparable(
+        // EMPTY_RESOURCE_LIMITS) == true` on every posture `a`.
+        // `EMPTY_RESOURCE_LIMITS` is the bounded-lattice bottom, so
+        // `EMPTY.leq(a)` holds on every axis (`usize` zero is the
+        // minimum), which gives `a.geq(EMPTY)` through the `geq`
+        // dual identity, which satisfies the `self.geq(other)` leg.
+        // The DIRECT COMPLEMENT of
+        // `resource_limits_is_incomparable_folds_false_at_the_bottom_pole`
+        // one CELL axis over on the SAME preset roster — where the
+        // antichain verdict FOLDS FALSE at the bottom pole, the
+        // comparability verdict FOLDS TRUE.
+        for &a in STRICT_ORDER_ROSTER {
+            assert!(
+                a.is_comparable(EMPTY_RESOURCE_LIMITS),
+                "bottom-pole absorption failed on {a:?}",
+            );
+            assert!(
+                EMPTY_RESOURCE_LIMITS.is_comparable(a),
+                "bottom-pole absorption failed on flipped ({a:?}, EMPTY)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_comparable_folds_true_at_the_top_pole() {
+        // Top-pole absorption pin — `a.is_comparable(
+        // UNBOUNDED_RESOURCE_LIMITS) == true` on every posture `a`.
+        // `UNBOUNDED_RESOURCE_LIMITS` is the bounded-lattice top, so
+        // `a.leq(UNBOUNDED)` holds on every axis (`a.max_* <=
+        // usize::MAX` unconditionally), which satisfies the
+        // `self.leq(other)` leg. The DIRECT COMPLEMENT of
+        // `resource_limits_is_incomparable_folds_false_at_the_top_pole`
+        // one CELL axis over on the SAME preset roster.
+        for &a in STRICT_ORDER_ROSTER {
+            assert!(
+                a.is_comparable(UNBOUNDED_RESOURCE_LIMITS),
+                "top-pole absorption failed on {a:?}",
+            );
+            assert!(
+                UNBOUNDED_RESOURCE_LIMITS.is_comparable(a),
+                "top-pole absorption failed on flipped ({a:?}, UNBOUNDED)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_comparable_falsifies_on_the_hand_authored_antichain_pair() {
+        // Antichain load-bearing arm — the two hand-authored
+        // asymmetric postures sit on distinct branches (each is
+        // smaller on three axes and larger on the other three), so
+        // NEITHER pointwise-domination direction closes and the
+        // comparability verdict FALSIFIES in both orderings. The
+        // DIRECT NEGATION of
+        // `resource_limits_is_incomparable_holds_on_the_hand_authored_antichain_pair`
+        // one CELL axis over on the SAME hand-authored pair — the
+        // two are the negation-paired sides of the (comparable,
+        // incomparable) two-cell partition, and pinning BOTH cells'
+        // verdicts on the SAME load-bearing antichain pair closes
+        // the partition as a substrate-level EXCLUSIVITY THEOREM.
+        assert!(
+            !HAND_AUTHORED_MID_POSTURE.is_comparable(HAND_AUTHORED_OTHER_POSTURE),
+            "antichain arm failed on (MID, OTHER)",
+        );
+        assert!(
+            !HAND_AUTHORED_OTHER_POSTURE.is_comparable(HAND_AUTHORED_MID_POSTURE),
+            "antichain arm failed on flipped (OTHER, MID)",
+        );
+    }
+
+    #[test]
+    fn resource_limits_is_comparable_holds_on_the_shipped_preset_triangle() {
+        // Shipped preset comparability pin — every ordered pair
+        // drawn from the (EMPTY, DEFAULT, UNBOUNDED) shipped preset
+        // triangle is COMPARABLE (in at least one direction the
+        // pairwise partial-order relation gives a verdict). The
+        // three shipped presets form a TOTALLY ORDERED chain on the
+        // pointwise partial-order (EMPTY <= DEFAULT <= UNBOUNDED on
+        // every field), so the comparability corner MUST fold to
+        // `true` on every ordered pair drawn from them. The DIRECT
+        // COMPLEMENT of
+        // `resource_limits_is_incomparable_folds_false_on_the_shipped_preset_triangle`
+        // one CELL axis over on the SAME triangle. Discriminates a
+        // regression that promoted a shipped preset off the total-
+        // order chain by drifting ONE field silently.
+        const TRIANGLE: &[ResourceLimits] = &[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ];
+        for &a in TRIANGLE {
+            for &b in TRIANGLE {
+                assert!(
+                    a.is_comparable(b),
+                    "shipped preset triangle comparability failed on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_comparable_partitions_ordered_pair_surface_exhaustively() {
+        // Exhaustive-and-disjoint partition pin — on every ordered
+        // pair EXACTLY ONE of `a.is_comparable(b)` OR
+        // `a.is_incomparable(b)` holds. The (comparable,
+        // incomparable) partition of the ordered pair × verdict
+        // surface is exhaustive-and-disjoint — a substrate-level
+        // EXCLUSIVITY-AND-EXHAUSTIVENESS THEOREM the two projections
+        // together pin. Complements
+        // `resource_limits_is_incomparable_partitions_ordered_pair_surface_with_comparable`
+        // one CELL axis over: that test pins the partition against
+        // the raw `a.leq(b) || a.geq(b)` composition; THIS test pins
+        // the partition against the NAMED comparability projection —
+        // a regression that drifted `is_comparable` off the
+        // composition without breaking the composition-based test
+        // would still fire here.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                let comparable = a.is_comparable(b);
+                let incomparable = a.is_incomparable(b);
+                assert!(
+                    comparable != incomparable,
+                    "partition failed on ({a:?}, {b:?}): comparable={comparable}, incomparable={incomparable}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_comparable_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the comparability characterization is
+        // evaluable in const context, so a caller can pin a
+        // comparability-agreement identity at compile time. Sibling
+        // of the const-fn evaluability pins on `leq` / `geq` / `lt`
+        // / `gt` / `is_incomparable` one COVER axis over on the
+        // pairwise-relation surface.
+        //
+        // A regression to a runtime `fn` here would fail the `const _:
+        // () = assert!(...)` bindings below at compile time.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.is_comparable(EMPTY_RESOURCE_LIMITS));
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.is_comparable(DEFAULT_RESOURCE_LIMITS));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.is_comparable(UNBOUNDED_RESOURCE_LIMITS));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.is_comparable(UNBOUNDED_RESOURCE_LIMITS));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.is_comparable(EMPTY_RESOURCE_LIMITS));
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.is_comparable(EMPTY_RESOURCE_LIMITS));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.is_comparable(DEFAULT_RESOURCE_LIMITS));
     }
 }

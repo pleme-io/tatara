@@ -5,6 +5,19 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+# Phase 0 freeze, other half (theory/TATARA-LISP-CONSOLIDATION.md). The
+# sibling ../tatara-lisp-derive/Cargo.toml was frozen for exactly this
+# reason and this crate was missed, so the seal read as applied while the
+# larger half of the pair stayed publishable. Both halves of the name
+# collision are now frozen.
+#
+# pleme-io/tatara-lisp is the canonical publisher and reached crates.io
+# 0.3.3 on 2026-07-30 (all 17 members). This workspace is still at
+# 0.2.154, so publishing from here would push 0.2.x over the canonical
+# namespace and win for every consumer still on a caret "0.2" spec — of
+# which there are several in the fleet mid-migration. Reversible; preferred
+# over a yank.
+publish = false
 
 [dependencies]
 tatara-lisp-derive = { path = "../tatara-lisp-derive" , version = "0.2.65" }

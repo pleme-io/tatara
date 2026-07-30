@@ -3456,6 +3456,201 @@ impl ResourceLimits {
     pub const fn is_constant(postures: &[Self]) -> bool {
         Self::is_ascending(postures) && Self::is_descending(postures)
     }
+
+    /// The MIDDLE cell of the (ascending, descending, non-monotone) three-
+    /// cell face on the sequence-level pairwise-relation surface —
+    /// `postures` is NON-MONOTONE (neither leq-monotone nor geq-monotone
+    /// on the pointwise partial order) iff SOME consecutive pair
+    /// `(postures[i], postures[i + 1])` fails `leq` AND SOME (possibly
+    /// distinct) consecutive pair fails `geq`. Every arity-≥2 slice
+    /// carrying at least one incomparable consecutive pair falls in this
+    /// cell (both direction verdicts reject on the antichain arm), as
+    /// does every arity-≥3 slice whose consecutive-pair verdicts MIX
+    /// strict-leq and strict-geq (a zig-zag on the partial order).
+    ///
+    /// The DIRECT SEQUENCE-LEVEL PEER of [`Self::is_mixed`] one
+    /// CARDINALITY axis DOWN (set-level → sequence-level) on the SAME
+    /// negation-conjunction combinator shape (`!X && !Y` on the two
+    /// direction projections) — where `is_mixed` carries the middle cell
+    /// of the set-level (chain, antichain, mixed) three-cell face via
+    /// `!is_chain && !is_antichain`, this projection carries the middle
+    /// cell of the sequence-level (ascending, descending, non-monotone)
+    /// three-cell face via `!is_ascending && !is_descending`. The
+    /// COMBINATOR peer of [`Self::is_constant`] one COMBINATOR axis over
+    /// (positive-conjunction → negation-conjunction) on the SAME two
+    /// underlying direction projections — where `is_constant` binds the
+    /// INTERSECTION corner (`is_ascending && is_descending`), this
+    /// projection binds the NEITHER corner (`!is_ascending &&
+    /// !is_descending`) of the same 2×2 verdict × verdict face. Together
+    /// with [`Self::is_ascending`] AND [`Self::is_descending`], the three
+    /// projections EXHAUSTIVELY COVER every slice — every slice is at
+    /// least one of ascending, descending, or non-monotone (with
+    /// ascending ∩ descending = [`Self::is_constant`]).
+    ///
+    /// **Constant-disjointness theorem — `is_non_monotone ⇒
+    /// !is_constant`**: for every slice `postures`,
+    /// `Self::is_non_monotone(postures) == true` implies
+    /// `Self::is_constant(postures) == false`. By the antisymmetry
+    /// theorem on [`Self::is_constant`], `is_constant ⇔ is_ascending &&
+    /// is_descending`; by construction `is_non_monotone == !is_ascending
+    /// && !is_descending`; the two are contradictory at every slice.
+    /// Symmetrically `is_non_monotone` is disjoint from both direction
+    /// projections individually — a slice inhabits at most one of the
+    /// four cells (constant, ascending-only, descending-only,
+    /// non-monotone) partitioning the (asc, desc) verdict × verdict
+    /// square. Pinned as
+    /// `resource_limits_is_non_monotone_is_disjoint_from_is_constant_on_every_shipped_slice`.
+    ///
+    /// **Strict-refinement theorem — `is_non_monotone ⇒
+    /// !is_strictly_ascending && !is_strictly_descending`**: for every
+    /// slice, `Self::is_non_monotone` implies BOTH strict verdicts
+    /// reject, by the strict-implies-non-strict lift (`is_strictly_X ⇒
+    /// is_X`) contrapositive: if `!is_ascending`, then
+    /// `!is_strictly_ascending` (since `is_strictly_ascending ⇒
+    /// is_ascending`). The non-monotone cell is thus disjoint from every
+    /// cell of the (asc, desc) × (non-strict, strict) 2×2 sequence-level
+    /// face. Pinned as
+    /// `resource_limits_is_non_monotone_implies_both_strict_projections_reject_on_every_shipped_slice`.
+    ///
+    /// **Empty-slice false verdict**: `ResourceLimits::is_non_monotone(&[])
+    /// == false` — [`Self::is_ascending(&[])`] and
+    /// [`Self::is_descending(&[])`] are BOTH vacuously `true`, so `!true
+    /// && !true == false`. The empty slice is NOT non-monotone. Sibling
+    /// posture to `is_mixed(&[]) == false` one CARDINALITY axis up.
+    /// Pinned as
+    /// `resource_limits_is_non_monotone_empty_slice_is_false`.
+    ///
+    /// **Singleton false verdict**: `ResourceLimits::is_non_monotone(&[a])
+    /// == false` for every posture `a` — both direction projections are
+    /// vacuously `true` on singletons. Pinned across every canonical
+    /// preset AND both hand-authored asymmetric postures. Pinned as
+    /// `resource_limits_is_non_monotone_singleton_is_false`.
+    ///
+    /// **Diagonal-duplicate false verdict**:
+    /// `ResourceLimits::is_non_monotone(&[a, a]) == false` for every
+    /// posture `a` — [`Self::leq`] AND [`Self::geq`] are BOTH REFLEXIVE,
+    /// so both direction projections accept at every diagonal-duplicate
+    /// pair. The diagonal-duplicate slice inhabits the [`Self::is_constant`]
+    /// cell, not the non-monotone cell. Pinned as
+    /// `resource_limits_is_non_monotone_of_diagonal_duplicate_is_false`.
+    ///
+    /// **Shipped-preset chain triple rejection**:
+    /// `ResourceLimits::is_non_monotone(&[EMPTY_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]) == false` —
+    /// the ascending shipped-preset triple binds [`Self::is_ascending`]
+    /// to `true`, and `!true && … == false`. Peer of the descending
+    /// permutation rejection one DIRECTION axis over. Pinned as
+    /// `resource_limits_is_non_monotone_rejects_the_shipped_preset_chain_triple`.
+    ///
+    /// **Hand-authored antichain pair closure — DISCRIMINATING positive-
+    /// arm catch at arity 2**: `ResourceLimits::is_non_monotone(&[
+    /// HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE]) == true`
+    /// — the two hand-authored asymmetric postures are incomparable, so
+    /// BOTH [`Self::is_ascending`] (via `MID.leq(OTHER) == false`) AND
+    /// [`Self::is_descending`] (via `MID.geq(OTHER) == false`) reject on
+    /// the single consecutive pair, and `!false && !false == true`. The
+    /// non-monotone cell OPENS at arity 2 on the antichain arm (unlike
+    /// its set-level peer [`Self::is_mixed`], which requires arity 3 to
+    /// open because the (chain, antichain) two-cell partition already
+    /// exhausts arity-2). Pinned in both orderings so the projection
+    /// factors through the argument-swap-symmetric antichain verdict on
+    /// the same pair. Pinned as
+    /// `resource_limits_is_non_monotone_holds_on_the_hand_authored_antichain_pair`.
+    ///
+    /// **Zig-zag chain-permutation closure — DISCRIMINATING positive-arm
+    /// catch on a slice that is a CHAIN**: `ResourceLimits::is_non_monotone(&[
+    /// DEFAULT_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS]) == true` — the triple has
+    /// `DEFAULT.leq(EMPTY) == false` at consecutive pair `(0, 1)`
+    /// (falsifying [`Self::is_ascending`] at index 0) AND
+    /// `EMPTY.geq(UNBOUNDED) == false` at consecutive pair `(1, 2)`
+    /// (falsifying [`Self::is_descending`] at index 1), so `!false &&
+    /// !false == true`. LOAD-BEARING: pins the projection on a slice
+    /// that is a CHAIN ([`Self::is_chain`] accepts it via pairwise
+    /// comparability) but neither ascending nor descending AS A
+    /// SEQUENCE. This is EXACTLY the DISCRIMINATING arm
+    /// [`Self::is_strictly_ascending`]'s non-monotone-chain-permutation
+    /// rejection carries at the strict row of the sequence-level 2×2
+    /// face, opened here as the POSITIVE arm at the sequence-level
+    /// three-cell face's middle cell. Pinned as
+    /// `resource_limits_is_non_monotone_holds_on_the_zigzag_chain_permutation`.
+    ///
+    /// **Coverage theorem — every slice hits at least one of the three
+    /// direction cells**: for every slice `postures`,
+    /// `Self::is_ascending(postures) || Self::is_descending(postures) ||
+    /// Self::is_non_monotone(postures) == true` — the three projections
+    /// EXHAUSTIVELY COVER the sequence-level verdict surface (with
+    /// ascending ∩ descending = [`Self::is_constant`] as the shared arm).
+    /// The non-monotone cell is exactly the residue any slice failing
+    /// both direction projections falls into by construction. Pinned on
+    /// every shipped slice up through arity 3 as
+    /// `resource_limits_is_ascending_is_descending_and_is_non_monotone_cover_every_shipped_slice`.
+    ///
+    /// Encoded as the boolean negation-conjunction of the two just-lifted
+    /// sequence-level direction projections — ONE implementation site,
+    /// ZERO new pair-level primitive delegations, `const fn` throughout
+    /// via the underlying `const fn` bodies. The SAME compositional
+    /// discipline [`Self::is_constant`] carries one COMBINATOR axis over
+    /// on the same two underlying projections, and [`Self::is_mixed`]
+    /// carries one CARDINALITY axis UP on the set-level (chain, antichain,
+    /// mixed) face's middle cell. Encoding the non-monotone verdict as a
+    /// fused walk (`if !leq && !geq { return true }` at each pair) would
+    /// halve the primitive-call count but SPLIT the substrate delegation
+    /// across two independent walks — a copy-paste that dropped one
+    /// primitive would leave the non-monotone verdict silently one-sided,
+    /// exactly the failure mode the compositional shape below rules out
+    /// by construction.
+    ///
+    /// `const fn` for the same compile-time-pin reasons as
+    /// [`Self::is_constant`] one COMBINATOR axis over on the same two
+    /// underlying projections (`const _: () = assert!(
+    /// ResourceLimits::is_non_monotone(&[HAND_AUTHORED_MID_POSTURE,
+    /// HAND_AUTHORED_OTHER_POSTURE]));`) — a caller can pin a non-monotone-
+    /// sequence identity at compile time as a build-break rather than a
+    /// runtime `assert!` on the first execution.
+    ///
+    /// Pre-lift, a caller wanting "is this slice neither ascending nor
+    /// descending?" composed the doubly-primitive negation-conjunction
+    /// `!Self::is_ascending(postures) && !Self::is_descending(postures)`
+    /// at every prospective callsite — a two-primitive scaffolding whose
+    /// exhaustiveness the type system did NOT gate. Post-lift the non-
+    /// monotone verdict binds at ONE typed method the algebra exposes,
+    /// composes into a compile-time bound, and the doubly-conjoined
+    /// substrate lives at ONE implementation site — a ≥2 PRIME DIRECTIVE
+    /// trigger, since the middle cell of the (ascending, descending,
+    /// non-monotone) three-cell face was the last unnamed corner on the
+    /// sequence-level pairwise-relation surface.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the sequence-level non-monotone verdict on N preset-
+    /// carried resource proofs is itself a typed named `bool` predicate
+    /// composing them via the underlying sequence-level
+    /// [`Self::is_ascending`] + [`Self::is_descending`] projections.
+    /// THEORY.md §V.1 — knowable platform; the doubly-conjoined negation-
+    /// conjunction becomes a TYPE-level operation on the posture algebra
+    /// rather than an inline `!is_ascending && !is_descending`
+    /// scaffolding at every consumer that decides "is this slice
+    /// neither ascending nor descending?"
+    ///
+    /// Frontier inspiration: the order-theoretic notion of a NON-MONOTONE
+    /// SEQUENCE on a poset — Haskell's `not (isSorted xs) && not
+    /// (isSorted (reverse xs))` idiom; Coq's negation of `StronglySorted`
+    /// on both a `<=` and `>=` relation; Julia's `!issorted(v) &&
+    /// !issorted(v, rev=true)` composition on `AbstractVector`.
+    /// Translation through pleme-io primitives: the doubly-conjoined
+    /// negation-conjunction of the two just-lifted direction projections
+    /// directly, no new dep, no supertrait bound (`Copy` on
+    /// [`ResourceLimits`] suffices to pass slices by value through the
+    /// inner `const fn` bodies), no allocation, `const fn` throughout.
+    /// Encoding the non-monotone verdict at the SEQUENCE level rather
+    /// than the SET level preserves the enumeration ordering that
+    /// distinguishes zig-zag permutations of a chain from the chain
+    /// itself — a distinction the SET-level (chain, antichain, mixed)
+    /// projection collapses because chain permutations are all chains.
+    #[must_use]
+    pub const fn is_non_monotone(postures: &[Self]) -> bool {
+        !Self::is_ascending(postures) && !Self::is_descending(postures)
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -22988,6 +23183,338 @@ mod tests {
         const _: () = assert!(!ResourceLimits::is_constant(&[
             DEFAULT_RESOURCE_LIMITS,
             EMPTY_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_non_monotone_empty_slice_is_false() {
+        // Empty-slice contract — is_ascending(&[]) and is_descending(&[])
+        // BOTH return `true` vacuously, so `!true && !true == false`.
+        // The empty slice is NOT non-monotone. Sibling posture to
+        // is_mixed(&[]) == false one CARDINALITY axis up on the set-level
+        // (chain, antichain, mixed) three-cell face.
+        assert!(!ResourceLimits::is_non_monotone(&[]));
+    }
+
+    #[test]
+    fn resource_limits_is_non_monotone_singleton_is_false() {
+        // Singleton contract — a one-element slice contains no
+        // consecutive pairs; is_ascending + is_descending BOTH return
+        // `true` vacuously. Pinned on every canonical preset AND on both
+        // hand-authored asymmetric postures so the false-at-singleton
+        // verdict holds regardless of the singleton element's lattice
+        // position — the SAME arity-1 vacuity every sibling sequence-
+        // level projection shares.
+        assert!(!ResourceLimits::is_non_monotone(&[EMPTY_RESOURCE_LIMITS]));
+        assert!(!ResourceLimits::is_non_monotone(&[DEFAULT_RESOURCE_LIMITS]));
+        assert!(!ResourceLimits::is_non_monotone(&[
+            UNBOUNDED_RESOURCE_LIMITS
+        ]));
+        assert!(!ResourceLimits::is_non_monotone(&[
+            HAND_AUTHORED_MID_POSTURE
+        ]));
+        assert!(!ResourceLimits::is_non_monotone(&[
+            HAND_AUTHORED_OTHER_POSTURE
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_non_monotone_of_diagonal_duplicate_is_false() {
+        // Diagonal-duplicate contract — leq AND geq are BOTH REFLEXIVE,
+        // so is_ascending and is_descending BOTH return `true` at every
+        // diagonal-duplicate slice; the negation-conjunction
+        // `!true && !true == false`. The diagonal-duplicate slice
+        // inhabits the is_constant cell, not the non-monotone cell.
+        assert!(!ResourceLimits::is_non_monotone(&[
+            DEFAULT_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ]));
+        assert!(!ResourceLimits::is_non_monotone(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_non_monotone_rejects_the_shipped_preset_chain_triple() {
+        // Chain rejection — the shipped-preset triple on the bounded-
+        // lattice diagonal is a chain and is_ascending on the ascending
+        // permutation OR is_descending on the descending permutation, so
+        // the negation-conjunction rejects. A PURE monotone chain is not
+        // non-monotone. Pinned on both permutations so the projection
+        // factors through both direction verdicts.
+        assert!(!ResourceLimits::is_non_monotone(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        assert!(!ResourceLimits::is_non_monotone(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_non_monotone_holds_on_the_hand_authored_antichain_pair() {
+        // Antichain-pair closure — LOAD-BEARING `true`-arm catch at
+        // arity 2. The two hand-authored asymmetric postures are
+        // incomparable, so BOTH direction projections reject on the
+        // single consecutive pair and the negation-conjunction opens.
+        // Unlike its set-level peer is_mixed (which requires arity ≥ 3
+        // to open), the non-monotone cell opens at arity 2 on the
+        // antichain arm — the sequence-level (asc, desc) pair is a
+        // NON-partition on the pairwise-relation surface, so the middle
+        // cell can catch arity-2 antichain slices the set-level face
+        // routes to is_antichain instead. Pinned in both orderings.
+        assert!(ResourceLimits::is_non_monotone(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+        assert!(ResourceLimits::is_non_monotone(&[
+            HAND_AUTHORED_OTHER_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_non_monotone_holds_on_the_zigzag_chain_permutation() {
+        // Zig-zag closure — LOAD-BEARING `true`-arm catch on a slice
+        // that is a CHAIN but neither ascending nor descending as a
+        // sequence. The (DEFAULT, EMPTY, UNBOUNDED) triple has
+        // `DEFAULT.leq(EMPTY) == false` at consecutive pair (0, 1)
+        // (falsifying is_ascending) and `EMPTY.geq(UNBOUNDED) == false`
+        // at consecutive pair (1, 2) (falsifying is_descending), so
+        // `!false && !false == true`. This is the DISCRIMINATING arm
+        // between the sequence-level middle cell and the set-level
+        // is_chain verdict — is_chain accepts the same slice via
+        // pairwise comparability, but the sequence-level projection
+        // catches the ordering-dependent zig-zag pattern is_chain
+        // discards. The mirror (up-then-down) permutation also opens
+        // this cell, pinning the symmetry.
+        assert!(ResourceLimits::is_non_monotone(&[
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        assert!(ResourceLimits::is_non_monotone(&[
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_non_monotone_iff_not_is_ascending_and_not_is_descending_on_every_shipped_slice(
+    ) {
+        // Structural round-trip — the projection is definitionally
+        // `!is_ascending && !is_descending`, so the equality holds by
+        // construction at every slice. Pinned as a substrate-level
+        // identity that catches a future rewrite of any of the three
+        // underlying projections that silently drifts from the composition
+        // contract. Swept across arity 0, arity 1, arity 2, and arity 3
+        // over all five shipped presets.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        assert_eq!(
+            ResourceLimits::is_non_monotone(&[]),
+            !ResourceLimits::is_ascending(&[]) && !ResourceLimits::is_descending(&[]),
+        );
+        for a in presets {
+            let slice = [a];
+            assert_eq!(
+                ResourceLimits::is_non_monotone(&slice),
+                !ResourceLimits::is_ascending(&slice) && !ResourceLimits::is_descending(&slice),
+                "round-trip failed on singleton {a:?}",
+            );
+        }
+        for a in presets {
+            for b in presets {
+                let slice = [a, b];
+                assert_eq!(
+                    ResourceLimits::is_non_monotone(&slice),
+                    !ResourceLimits::is_ascending(&slice) && !ResourceLimits::is_descending(&slice),
+                    "round-trip failed on pair ({a:?}, {b:?})",
+                );
+            }
+        }
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        ResourceLimits::is_non_monotone(&slice),
+                        !ResourceLimits::is_ascending(&slice)
+                            && !ResourceLimits::is_descending(&slice),
+                        "round-trip failed on triple ({a:?}, {b:?}, {c:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_ascending_is_descending_and_is_non_monotone_cover_every_shipped_slice() {
+        // Coverage — the three projections EXHAUSTIVELY COVER every
+        // slice, with is_ascending ∩ is_descending = is_constant as the
+        // shared arm. Every slice must return `true` on at least one of
+        // the three verdicts. Substrate-level identity: pinning it
+        // catches a future rewrite of any of the three projections that
+        // silently drifts from the coverage contract. Swept across arity
+        // 0 through arity 3 over all five shipped presets.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        assert!(
+            ResourceLimits::is_ascending(&[])
+                || ResourceLimits::is_descending(&[])
+                || ResourceLimits::is_non_monotone(&[]),
+            "coverage failed on empty slice",
+        );
+        for a in presets {
+            let slice = [a];
+            assert!(
+                ResourceLimits::is_ascending(&slice)
+                    || ResourceLimits::is_descending(&slice)
+                    || ResourceLimits::is_non_monotone(&slice),
+                "coverage failed on singleton {slice:?}",
+            );
+        }
+        for a in presets {
+            for b in presets {
+                let slice = [a, b];
+                assert!(
+                    ResourceLimits::is_ascending(&slice)
+                        || ResourceLimits::is_descending(&slice)
+                        || ResourceLimits::is_non_monotone(&slice),
+                    "coverage failed on pair {slice:?}",
+                );
+            }
+        }
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    assert!(
+                        ResourceLimits::is_ascending(&slice)
+                            || ResourceLimits::is_descending(&slice)
+                            || ResourceLimits::is_non_monotone(&slice),
+                        "coverage failed on triple {slice:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_non_monotone_is_disjoint_from_is_constant_on_every_shipped_slice() {
+        // Disjointness — is_non_monotone ⇒ !is_constant on every slice.
+        // By construction is_constant = is_ascending && is_descending
+        // and is_non_monotone = !is_ascending && !is_descending; the two
+        // are contradictory. Pinned across arity 2 and arity 3 to sweep
+        // every slice where either verdict can vary. Substrate-level
+        // identity that catches any future combinator drift on either
+        // projection.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                let slice = [a, b];
+                if ResourceLimits::is_non_monotone(&slice) {
+                    assert!(
+                        !ResourceLimits::is_constant(&slice),
+                        "is_non_monotone accepts but is_constant also accepts on {slice:?}",
+                    );
+                }
+            }
+        }
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    if ResourceLimits::is_non_monotone(&slice) {
+                        assert!(
+                            !ResourceLimits::is_constant(&slice),
+                            "is_non_monotone accepts but is_constant also accepts on {slice:?}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_non_monotone_implies_both_strict_projections_reject_on_every_shipped_slice(
+    ) {
+        // Strict-refinement contrapositive — is_non_monotone ⇒
+        // !is_strictly_ascending && !is_strictly_descending, via the
+        // strict-implies-non-strict lift's contrapositive at each
+        // direction (is_strictly_X ⇒ is_X, so !is_X ⇒ !is_strictly_X).
+        // The non-monotone cell is disjoint from every cell of the
+        // (asc, desc) × (non-strict, strict) 2×2 sequence-level face.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    if ResourceLimits::is_non_monotone(&slice) {
+                        assert!(
+                            !ResourceLimits::is_strictly_ascending(&slice),
+                            "is_non_monotone accepts but is_strictly_ascending also accepts on {slice:?}",
+                        );
+                        assert!(
+                            !ResourceLimits::is_strictly_descending(&slice),
+                            "is_non_monotone accepts but is_strictly_descending also accepts on {slice:?}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_non_monotone_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the middle cell of the sequence-level
+        // (ascending, descending, non-monotone) three-cell face is
+        // evaluable in const context, so a caller can pin a non-
+        // monotone-sequence identity at compile time. Sibling of the
+        // const-fn evaluability pins on is_ascending + is_descending +
+        // is_constant one COMBINATOR axis over.
+        const _: () = assert!(!ResourceLimits::is_non_monotone(&[]));
+        const _: () = assert!(!ResourceLimits::is_non_monotone(&[EMPTY_RESOURCE_LIMITS]));
+        const _: () = assert!(!ResourceLimits::is_non_monotone(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        const _: () = assert!(ResourceLimits::is_non_monotone(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+        const _: () = assert!(ResourceLimits::is_non_monotone(&[
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
         ]));
     }
 }

@@ -3207,6 +3207,255 @@ impl ResourceLimits {
         }
         true
     }
+
+    /// The INTERSECTION cell of the (ascending, descending) two-cell
+    /// direction face on the sequence-level pairwise-relation surface —
+    /// `postures` is CONSTANT (a pointwise-equal sequence on the
+    /// [`ResourceLimits`] lattice) iff every consecutive pair
+    /// `(postures[i], postures[i + 1])` satisfies BOTH
+    /// `postures[i].leq(postures[i + 1])` AND
+    /// `postures[i].geq(postures[i + 1])` — the antisymmetric
+    /// characterization of pointwise equality. By transitivity of
+    /// pointwise equality on the six-axis carrier, this reduces to "every
+    /// element of the slice equals the first" — a compile-time-checkable
+    /// SEQUENCE-LEVEL constant-value verdict.
+    ///
+    /// The DIRECT INTERSECTION peer of [`Self::is_ascending`] AND
+    /// [`Self::is_descending`] one COMBINATOR axis over on the
+    /// (union, intersection) combinator surface — where the individual
+    /// direction projections carry ONE HALF of the pointwise-equality
+    /// characterization each (`leq` for `is_ascending`, `geq` for
+    /// `is_descending`), THIS projection carries BOTH HALVES as ONE
+    /// typed `bool` and thereby pins the equality corner directly. The
+    /// mechanical peer of [`Self::is_mixed`] one CARDINALITY-AXIS-DOWN
+    /// (set-level → sequence-level) AND one COMBINATOR axis over
+    /// (negation-conjunction → positive-conjunction) on the set-level
+    /// (chain, antichain, mixed) three-cell face [`Self::is_chain`] /
+    /// [`Self::is_antichain`] / [`Self::is_mixed`] EXHAUSTIVELY closed
+    /// one CARDINALITY axis up.
+    ///
+    /// **Antisymmetry theorem — `is_constant ⇔ is_ascending &&
+    /// is_descending`**: for every slice `postures`,
+    /// `Self::is_constant(postures) == true` iff BOTH
+    /// `Self::is_ascending(postures) == true` AND
+    /// `Self::is_descending(postures) == true`. The equivalence is
+    /// STRUCTURAL, not merely observational — the body below binds
+    /// directly to the two-projection conjunction, so the round-trip
+    /// through the pair holds by CONSTRUCTION. The `leq && geq` inner
+    /// conjunction at each consecutive pair is the pointwise-
+    /// antisymmetric characterization of equality
+    /// (`a.leq(b) && b.leq(a) ⇒ a == b`, via each axis's `usize <=`
+    /// antisymmetry), so every consecutive pair binds `postures[i] ==
+    /// postures[i + 1]`, and by transitivity of `==` on the six-axis
+    /// carrier every element equals the first. Pinned as
+    /// `resource_limits_is_constant_iff_is_ascending_and_is_descending_on_every_shipped_slice`.
+    ///
+    /// **Chain-transitivity theorem — `is_constant ⇒ is_chain`**: for
+    /// every slice `postures`, `Self::is_constant(postures) == true`
+    /// implies `Self::is_chain(postures) == true`. By the antisymmetry
+    /// theorem above, `is_constant` entails `is_ascending`; by
+    /// [`Self::is_ascending`]'s transitivity theorem
+    /// (`is_ascending ⇒ is_chain`), the composition closes the
+    /// implication `is_constant ⇒ is_ascending ⇒ is_chain`. Symmetrically
+    /// `is_constant ⇒ is_descending ⇒ is_chain`. The verdict pinned here
+    /// is thus the CANONICAL constructive witness of the diagonal cell of
+    /// the (chain, antichain, mixed) trichotomy — every constant slice is
+    /// a chain of a single equivalence class. Pinned as
+    /// `resource_limits_is_constant_implies_is_chain_on_every_shipped_slice`.
+    ///
+    /// **Strict-disjointness theorem — `is_constant ⇒
+    /// !is_strictly_ascending && !is_strictly_descending` at arity
+    /// ≥2**: for every slice `postures` with `len() >= 2`,
+    /// `Self::is_constant(postures) == true` implies BOTH
+    /// `Self::is_strictly_ascending(postures) == false` AND
+    /// `Self::is_strictly_descending(postures) == false`. Every
+    /// consecutive pair binds `postures[i] == postures[i + 1]`, and
+    /// [`Self::lt`] / [`Self::gt`] are BOTH IRREFLEXIVE
+    /// (`a.lt(a) == false`, `a.gt(a) == false` via the
+    /// `self.leq(other) && !other.leq(self)` encoding at the diagonal),
+    /// so every consecutive pair rejects the strict verdict. The
+    /// (constant, strictly-ascending, strictly-descending) three-cell
+    /// face at arity ≥2 is thus MUTUALLY EXCLUSIVE: a slice can inhabit
+    /// AT MOST ONE of the three cells. At arity < 2 (empty and
+    /// singleton) all three vacuously coincide at `true` — the same
+    /// vacuous-truth degeneracy the three sibling non-strict / strict
+    /// projections share at the empty face. Pinned as
+    /// `resource_limits_is_constant_is_disjoint_from_strict_projections_on_every_arity_geq_two_shipped_slice`.
+    ///
+    /// **Empty-slice vacuous truth**: `ResourceLimits::is_constant(&[])
+    /// == true` — the empty conjunction is vacuously true; the empty
+    /// slice contains no consecutive pairs to reject. AGREES with all
+    /// four sibling sequence-level projections
+    /// ([`Self::is_ascending`], [`Self::is_descending`],
+    /// [`Self::is_strictly_ascending`], [`Self::is_strictly_descending`])
+    /// at the empty face — the sequence-level verdict surface collapses
+    /// to `true` uniformly at arity 0. Pinned as
+    /// `resource_limits_is_constant_empty_slice_is_vacuously_true`.
+    ///
+    /// **Singleton vacuous truth**: `ResourceLimits::is_constant(&[a])
+    /// == true` for every posture `a` — a one-element slice contains no
+    /// consecutive pairs. AGREES with all four sibling sequence-level
+    /// projections at singleton slices. Pinned as
+    /// `resource_limits_is_constant_singleton_is_vacuously_true`.
+    ///
+    /// **Diagonal-duplicate closure — DISCRIMINATING arm vs strict
+    /// projections**: `ResourceLimits::is_constant(&[a, a]) == true` for
+    /// every posture `a` — [`Self::leq`] AND [`Self::geq`] are BOTH
+    /// REFLEXIVE, so both halves of the inner conjunction close at the
+    /// diagonal. AGREES with the non-strict pair
+    /// ([`Self::is_ascending`], [`Self::is_descending`]) at every
+    /// diagonal-duplicate slice AND DISAGREES with the strict pair
+    /// ([`Self::is_strictly_ascending`], [`Self::is_strictly_descending`],
+    /// both `false` via irreflexivity). Pins the LOAD-BEARING closure at
+    /// the equality corner of the sequence-level surface — the strict
+    /// projections carve out "SEQUENCES-WITH-NO-REPEATS" while THIS
+    /// projection carves out "SEQUENCES-OF-ONE-VALUE", the two extremal
+    /// distinguished corners on the (leq, geq, lt, gt) 2×2 sequence-
+    /// level face. Pinned as
+    /// `resource_limits_is_constant_of_diagonal_duplicate_is_true`.
+    ///
+    /// **Homogeneous shipped-preset triple closure**: `ResourceLimits::
+    /// is_constant(&[DEFAULT_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS]) == true` — every consecutive pair binds
+    /// the pointwise equality `DEFAULT == DEFAULT`, so both halves of the
+    /// inner conjunction close at every pair. Pinned on all three
+    /// shipped presets ([`EMPTY_RESOURCE_LIMITS`],
+    /// [`DEFAULT_RESOURCE_LIMITS`], [`UNBOUNDED_RESOURCE_LIMITS`]) as
+    /// homogeneous arity-3 triples. Pinned as
+    /// `resource_limits_is_constant_holds_on_every_homogeneous_shipped_preset_triple`.
+    ///
+    /// **Ascending shipped-preset triple rejection — DISCRIMINATING
+    /// arm vs [`Self::is_chain`]**: `ResourceLimits::is_constant(
+    /// &[EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS]) == false` — the ascending shipped-
+    /// preset triple binds `EMPTY.geq(DEFAULT) == false` at the first
+    /// consecutive pair (the `geq` arm of the inner conjunction fails
+    /// because `EMPTY` is STRICTLY below `DEFAULT` on every axis), so
+    /// the walk rejects at index 0. This is the DISCRIMINATING arm
+    /// against [`Self::is_chain`] (which accepts the same slice via
+    /// pairwise comparability) and against [`Self::is_ascending`] (which
+    /// accepts the same slice via one-sided `leq`). Pins the strict-
+    /// refinement of the equality corner past the two comparability
+    /// projections. Pinned as
+    /// `resource_limits_is_constant_rejects_the_ascending_shipped_preset_triple`.
+    ///
+    /// **Descending shipped-preset triple rejection**: `ResourceLimits::
+    /// is_constant(&[UNBOUNDED_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS,
+    /// EMPTY_RESOURCE_LIMITS]) == false` — the reversed enumeration
+    /// binds `UNBOUNDED.leq(DEFAULT) == false` at the first consecutive
+    /// pair. Peer of the ascending-rejection pin one DIRECTION axis over.
+    /// Pinned as
+    /// `resource_limits_is_constant_rejects_the_descending_shipped_preset_triple`.
+    ///
+    /// **Hand-authored antichain rejection**: `ResourceLimits::is_constant(
+    /// &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE]) == false`
+    /// — the two hand-authored asymmetric postures are incomparable
+    /// (neither `MID.leq(OTHER)` nor `OTHER.leq(MID)`), so BOTH halves
+    /// of the inner conjunction fail at the single consecutive pair.
+    /// The (F, F) inner-conjunction verdict at every antichain pair is
+    /// the SAME shape that falsifies the two individual direction
+    /// projections one COMBINATOR axis over — the union combinator
+    /// would need at least one half to hold; the intersection combinator
+    /// (the shape used here) needs BOTH halves to hold, and the
+    /// antichain pair falsifies BOTH. Pinned as
+    /// `resource_limits_is_constant_rejects_the_hand_authored_antichain_pair`.
+    ///
+    /// **Constant-then-ascending rejection — DISCRIMINATING arm vs
+    /// [`Self::is_ascending`]**: `ResourceLimits::is_constant(
+    /// &[EMPTY_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS]) == false` — the first two elements
+    /// bind the equality conjunction, but the second consecutive pair
+    /// `(EMPTY, DEFAULT)` binds `EMPTY.geq(DEFAULT) == false`, so the
+    /// walk rejects at index 1. LOAD-BEARING: pins the equality
+    /// projection past the (weakly ascending, strictly ascending) two-
+    /// cell partition — a slice that is weakly ascending with a
+    /// strict-ascending suffix passes [`Self::is_ascending`] but fails
+    /// this projection. The equality corner is thus strictly stronger
+    /// than either non-strict direction projection alone. Pinned as
+    /// `resource_limits_is_constant_rejects_ascending_with_constant_prefix`.
+    ///
+    /// Encoded as the boolean conjunction of the two just-lifted
+    /// sequence-level direction projections — one implementation site,
+    /// ZERO new pair-level primitive delegations, `const fn` throughout
+    /// via the underlying `const fn` bodies. The singly-indexed
+    /// consecutive-pair walk lives at TWO sites (the [`Self::is_ascending`]
+    /// + [`Self::is_descending`] implementations), and this projection
+    /// factors THROUGH both without reopening it — the SAME compositional
+    /// discipline the set-level [`Self::is_mixed`] projection carries one
+    /// CARDINALITY axis up. Encoding the equality corner as a fused
+    /// walk (`if !leq || !geq { return false }` at each pair) would
+    /// halve the primitive-call count but SPLIT the substrate delegation
+    /// across two independent walks — a copy-paste that dropped one
+    /// primitive would leave the equality verdict silently one-sided,
+    /// exactly the failure mode the compositional shape below rules out
+    /// by construction. The `is_ascending && is_descending` composition
+    /// reads directly against the antisymmetry theorem above and pins
+    /// the equality characterization at ONE typed method the algebra
+    /// exposes.
+    ///
+    /// `const fn` for the same compile-time-pin reasons as
+    /// [`Self::is_mixed`] one CARDINALITY axis up on the (set-level,
+    /// sequence-level) primitive surface (`const _: () = assert!(
+    /// ResourceLimits::is_constant(&[DEFAULT_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS]));`) — a
+    /// caller can pin a constant-sequence identity at compile time as a
+    /// build-break rather than a runtime `assert!` on the first
+    /// execution.
+    ///
+    /// Pre-lift, a caller wanting "is this slice a pointwise-equal
+    /// sequence?" composed either (a) the singly-indexed
+    /// `postures.windows(2).all(|w| w[0] == w[1])` (via `PartialEq`, but
+    /// `derive(PartialEq)` on [`ResourceLimits`] is NOT `const fn` and
+    /// so would not compose into a compile-time bound) or (b) the
+    /// doubly-primitive conjunction
+    /// `Self::is_ascending(postures) && Self::is_descending(postures)`
+    /// at every prospective callsite — a two-primitive scaffolding
+    /// whose exhaustiveness the type system did NOT gate. Post-lift the
+    /// equality verdict binds at ONE typed method the algebra exposes,
+    /// composes into a compile-time bound, and the two-primitive
+    /// substrate lives at ONE implementation site — a ≥2 PRIME
+    /// DIRECTIVE trigger, since the intersection cell of the (ascending,
+    /// descending) 2×2 face was the last unnamed corner on the
+    /// sequence-level pairwise-relation surface.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the sequence-level constant-value verdict on N preset-
+    /// carried resource proofs is itself a typed named `bool` predicate
+    /// composing them via the underlying sequence-level
+    /// [`Self::is_ascending`] + [`Self::is_descending`] projections.
+    /// THEORY.md §V.1 — knowable platform; the doubly-conjoined
+    /// sequence-level projection becomes a TYPE-level operation on the
+    /// posture algebra rather than an inline windowed
+    /// `all(|w| w[0] == w[1])` scaffolding at every consumer that
+    /// decides "is this slice a pointwise-equal sequence?"
+    ///
+    /// Frontier inspiration: Haskell's `Data.List` idiom of `and .
+    /// zipWith (==) xs . tail xs` for the pointwise-equality
+    /// characterization on any `Eq`-carrying list; Coq's `Constant`
+    /// inductive on lists over a `Relation` (the trivial specialization
+    /// of `Sorted` where the relation is equality); the order-theoretic
+    /// notion of a CONSTANT SEQUENCE as the intersection of monotone-
+    /// non-decreasing and monotone-non-increasing on a partial order,
+    /// where antisymmetry collapses the intersection to pointwise
+    /// equality; Julia's `Base.allequal` on `AbstractArray` carrying the
+    /// pointwise-equality verdict as a first-class primitive. Translation
+    /// through pleme-io primitives: the doubly-conjoined sequence-level
+    /// projection composes directly from the two just-lifted direction
+    /// projections, no new dep, no supertrait bound (`Copy` on
+    /// [`ResourceLimits`] suffices to pass slices by value through the
+    /// inner `const fn` bodies), no allocation, `const fn` throughout.
+    /// Encoding the equality verdict at the SEQUENCE level rather than
+    /// the SET level (the frontier's default assumption on the trivial
+    /// specialization above) preserves the enumeration ordering the
+    /// direction projections make discriminating: the SEQUENCE-level
+    /// (constant, ascending, descending, mixed) partition carries more
+    /// content than the SET-level (constant, non-constant) partition,
+    /// and this projection binds the sequence-level equality cell
+    /// canonically.
+    #[must_use]
+    pub const fn is_constant(postures: &[Self]) -> bool {
+        Self::is_ascending(postures) && Self::is_descending(postures)
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -22448,6 +22697,297 @@ mod tests {
         const _: () = assert!(!ResourceLimits::is_strictly_descending(&[
             UNBOUNDED_RESOURCE_LIMITS,
             UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_constant_empty_slice_is_vacuously_true() {
+        // Empty-slice vacuous truth — the empty conjunction of the two
+        // just-lifted direction projections is vacuously true; the empty
+        // slice contains no consecutive pairs to reject. Agrees with the
+        // four sibling sequence-level projections at the empty face.
+        assert!(ResourceLimits::is_constant(&[]));
+        assert!(ResourceLimits::is_ascending(&[]));
+        assert!(ResourceLimits::is_descending(&[]));
+        assert!(ResourceLimits::is_strictly_ascending(&[]));
+        assert!(ResourceLimits::is_strictly_descending(&[]));
+    }
+
+    #[test]
+    fn resource_limits_is_constant_singleton_is_vacuously_true() {
+        // Singleton vacuous truth — pinned across the full shipped-preset
+        // roster to close the vacuous face on every shipped constant of
+        // arity 1.
+        for a in STRICT_ORDER_ROSTER {
+            let singleton = [*a];
+            assert!(
+                ResourceLimits::is_constant(&singleton),
+                "constant failed to accept singleton {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_constant_of_diagonal_duplicate_is_true() {
+        // Diagonal-duplicate closure — leq AND geq are both reflexive, so
+        // both halves of the inner conjunction close at every duplicate
+        // pair. Cross-projection pin: the non-strict pair accepts the
+        // same slice both directions AND the strict pair rejects it,
+        // pinning the equality corner as the LOAD-BEARING intersection
+        // cell of the (leq, geq, lt, gt) 2×2 sequence-level face.
+        for a in STRICT_ORDER_ROSTER {
+            let dup = [*a, *a];
+            assert!(
+                ResourceLimits::is_constant(&dup),
+                "constant failed to accept diagonal duplicate {a:?}",
+            );
+            assert!(
+                ResourceLimits::is_ascending(&dup),
+                "non-strict ascending should accept diagonal duplicate {a:?}",
+            );
+            assert!(
+                ResourceLimits::is_descending(&dup),
+                "non-strict descending should accept diagonal duplicate {a:?}",
+            );
+            assert!(
+                !ResourceLimits::is_strictly_ascending(&dup),
+                "strict ascending should reject diagonal duplicate {a:?}",
+            );
+            assert!(
+                !ResourceLimits::is_strictly_descending(&dup),
+                "strict descending should reject diagonal duplicate {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_constant_holds_on_every_homogeneous_shipped_preset_triple() {
+        // Homogeneous shipped-preset triple closure — every consecutive
+        // pair binds pointwise equality on the same preset, so both
+        // halves of the inner conjunction close.
+        for a in STRICT_ORDER_ROSTER {
+            let triple = [*a, *a, *a];
+            assert!(
+                ResourceLimits::is_constant(&triple),
+                "constant failed to accept homogeneous triple of {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_constant_rejects_the_ascending_shipped_preset_triple() {
+        // Ascending shipped-preset triple rejection — DISCRIMINATING arm
+        // against both is_chain (which accepts the same slice via
+        // pairwise comparability) and is_ascending (which accepts via
+        // one-sided leq). Pins the strict-refinement of the equality
+        // corner past the two comparability projections.
+        let triple = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ];
+        assert!(!ResourceLimits::is_constant(&triple));
+        // Cross-projection witness — the discriminating callsites the
+        // rejection above discriminates against.
+        assert!(ResourceLimits::is_chain(&triple));
+        assert!(ResourceLimits::is_ascending(&triple));
+    }
+
+    #[test]
+    fn resource_limits_is_constant_rejects_the_descending_shipped_preset_triple() {
+        // Descending shipped-preset triple rejection — peer of the
+        // ascending-rejection pin one DIRECTION axis over.
+        let triple = [
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ];
+        assert!(!ResourceLimits::is_constant(&triple));
+        // Cross-projection witness — descending accepts, is_constant
+        // rejects; the equality corner is disjoint from strict-monotone
+        // in either direction.
+        assert!(ResourceLimits::is_chain(&triple));
+        assert!(ResourceLimits::is_descending(&triple));
+    }
+
+    #[test]
+    fn resource_limits_is_constant_rejects_the_hand_authored_antichain_pair() {
+        // Hand-authored antichain rejection — neither MID.leq(OTHER) nor
+        // OTHER.leq(MID), so BOTH halves of the inner conjunction fail
+        // at the single consecutive pair.
+        let pair = [HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE];
+        assert!(!ResourceLimits::is_constant(&pair));
+        // Cross-projection witness — the antichain pair falsifies
+        // ascending AND descending, matching the (F, F) inner-
+        // conjunction shape.
+        assert!(!ResourceLimits::is_ascending(&pair));
+        assert!(!ResourceLimits::is_descending(&pair));
+    }
+
+    #[test]
+    fn resource_limits_is_constant_rejects_ascending_with_constant_prefix() {
+        // Constant-then-ascending rejection — the first two elements
+        // bind equality, but the second consecutive pair binds
+        // EMPTY.geq(DEFAULT) == false. LOAD-BEARING: a slice with a
+        // constant prefix followed by a strict-ascending suffix passes
+        // is_ascending but fails is_constant.
+        let slice = [
+            EMPTY_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ];
+        assert!(!ResourceLimits::is_constant(&slice));
+        // Cross-projection witness — is_ascending accepts the same
+        // slice (weakly ascending), pinning the strict-refinement.
+        assert!(ResourceLimits::is_ascending(&slice));
+        assert!(!ResourceLimits::is_strictly_ascending(&slice));
+    }
+
+    #[test]
+    fn resource_limits_is_constant_iff_is_ascending_and_is_descending_on_every_shipped_slice() {
+        // Antisymmetry theorem — is_constant(s) iff
+        // is_ascending(s) && is_descending(s). Holds by CONSTRUCTION on
+        // the body below, but the round-trip pin closes the equivalence
+        // on the shipped-slice roster so a future re-derivation of any
+        // of the three projections propagates coherently.
+        const SLICES: &[&[ResourceLimits]] = &[
+            &[],
+            &[EMPTY_RESOURCE_LIMITS],
+            &[DEFAULT_RESOURCE_LIMITS],
+            &[UNBOUNDED_RESOURCE_LIMITS],
+            &[EMPTY_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS],
+            &[DEFAULT_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS],
+            &[UNBOUNDED_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS],
+            &[EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS],
+            &[DEFAULT_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS],
+            &[UNBOUNDED_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS],
+            &[
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                UNBOUNDED_RESOURCE_LIMITS,
+            ],
+            &[
+                UNBOUNDED_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                EMPTY_RESOURCE_LIMITS,
+            ],
+            &[
+                DEFAULT_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+            ],
+            &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE],
+        ];
+        for slice in SLICES {
+            let constant = ResourceLimits::is_constant(slice);
+            let ascending = ResourceLimits::is_ascending(slice);
+            let descending = ResourceLimits::is_descending(slice);
+            assert_eq!(
+                constant,
+                ascending && descending,
+                "is_constant vs (is_ascending && is_descending) diverges on {slice:?}: \
+                 constant={constant} ascending={ascending} descending={descending}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_constant_implies_is_chain_on_every_shipped_slice() {
+        // Chain-transitivity theorem — is_constant(s) implies
+        // is_chain(s), via is_constant ⇒ is_ascending ⇒ is_chain.
+        const SLICES: &[&[ResourceLimits]] = &[
+            &[],
+            &[EMPTY_RESOURCE_LIMITS],
+            &[DEFAULT_RESOURCE_LIMITS],
+            &[UNBOUNDED_RESOURCE_LIMITS],
+            &[EMPTY_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS],
+            &[DEFAULT_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS],
+            &[UNBOUNDED_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS],
+            &[
+                DEFAULT_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+            ],
+            &[
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                UNBOUNDED_RESOURCE_LIMITS,
+            ],
+            &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE],
+        ];
+        for slice in SLICES {
+            if ResourceLimits::is_constant(slice) {
+                assert!(
+                    ResourceLimits::is_chain(slice),
+                    "is_constant holds but is_chain rejects on {slice:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_constant_is_disjoint_from_strict_projections_on_every_arity_geq_two_shipped_slice(
+    ) {
+        // Strict-disjointness theorem — is_constant(s) implies
+        // !is_strictly_ascending(s) && !is_strictly_descending(s) at
+        // arity >= 2. At arity < 2 all three vacuously coincide at
+        // true; pinning arity >= 2 isolates the load-bearing
+        // discriminating region.
+        const SLICES: &[&[ResourceLimits]] = &[
+            &[EMPTY_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS],
+            &[DEFAULT_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS],
+            &[UNBOUNDED_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS],
+            &[
+                DEFAULT_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+            ],
+            &[
+                EMPTY_RESOURCE_LIMITS,
+                EMPTY_RESOURCE_LIMITS,
+                EMPTY_RESOURCE_LIMITS,
+                EMPTY_RESOURCE_LIMITS,
+            ],
+            &[
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                UNBOUNDED_RESOURCE_LIMITS,
+            ],
+            &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE],
+        ];
+        for slice in SLICES {
+            if slice.len() >= 2 && ResourceLimits::is_constant(slice) {
+                assert!(
+                    !ResourceLimits::is_strictly_ascending(slice),
+                    "is_constant holds but is_strictly_ascending accepts on {slice:?}",
+                );
+                assert!(
+                    !ResourceLimits::is_strictly_descending(slice),
+                    "is_constant holds but is_strictly_descending accepts on {slice:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_constant_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the equality corner of the sequence-level
+        // pairwise-relation surface is evaluable in const context, so a
+        // caller can pin a constant-sequence identity at compile time.
+        const _: () = assert!(ResourceLimits::is_constant(&[]));
+        const _: () = assert!(ResourceLimits::is_constant(&[EMPTY_RESOURCE_LIMITS]));
+        const _: () = assert!(ResourceLimits::is_constant(&[
+            DEFAULT_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ]));
+        const _: () = assert!(!ResourceLimits::is_constant(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ]));
+        const _: () = assert!(!ResourceLimits::is_constant(&[
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
         ]));
     }
 }

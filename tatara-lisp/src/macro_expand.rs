@@ -3798,6 +3798,164 @@ impl ResourceLimits {
     pub const fn is_monotone(postures: &[Self]) -> bool {
         Self::is_ascending(postures) || Self::is_descending(postures)
     }
+
+    /// The STRICT peer of [`Self::is_monotone`] one STRICTNESS axis over
+    /// on the sequence-level pairwise-relation surface — `true` iff
+    /// EITHER strict-direction projection [`Self::is_strictly_ascending`]
+    /// OR [`Self::is_strictly_descending`] accepts. The DIRECT
+    /// STRICT-REFINEMENT PEER of [`Self::is_monotone`] one STRICTNESS
+    /// axis over via the same disjunction shape rebound onto the two
+    /// strict direction projections: `is_strictly_monotone ==
+    /// is_strictly_ascending || is_strictly_descending`. Opens the
+    /// (is_monotone, is_strictly_monotone) STRICTNESS row on the
+    /// (is_monotone) column of the sequence-level pairwise-relation
+    /// surface, mirroring the (is_ascending, is_strictly_ascending) +
+    /// (is_descending, is_strictly_descending) STRICTNESS-row peers one
+    /// COMBINATOR axis over that were closed at
+    /// [`Self::is_strictly_ascending`] + [`Self::is_strictly_descending`].
+    ///
+    /// Pins:
+    ///
+    /// **Strict-refinement theorem — `is_strictly_monotone ⇒
+    /// is_monotone`**: for every slice `postures`,
+    /// `Self::is_strictly_monotone(postures) == true` implies
+    /// `Self::is_monotone(postures) == true`, since each strict
+    /// direction projection refines the matching non-strict direction
+    /// projection ([`Self::is_strictly_ascending`] ⇒
+    /// [`Self::is_ascending`] and [`Self::is_strictly_descending`] ⇒
+    /// [`Self::is_descending`]), so whichever arm of the strict
+    /// disjunction accepts, the matching arm of the non-strict
+    /// disjunction accepts too. Composes with the transitivity theorem
+    /// `is_monotone ⇒ is_chain` to give `is_strictly_monotone ⇒
+    /// is_monotone ⇒ is_chain`. Pinned as
+    /// `resource_limits_is_strictly_monotone_implies_is_monotone_on_every_shipped_slice`.
+    ///
+    /// **Empty-slice vacuous truth**: `ResourceLimits::is_strictly_monotone(&[])
+    /// == true` — both strict direction projections
+    /// [`Self::is_strictly_ascending`] + [`Self::is_strictly_descending`]
+    /// accept vacuously on the empty slice and the disjunction opens on
+    /// either arm. Sibling of [`Self::is_monotone`]'s empty-slice
+    /// identity one STRICTNESS axis over. Pinned as
+    /// `resource_limits_is_strictly_monotone_empty_slice_is_vacuously_true`.
+    ///
+    /// **Singleton vacuous truth**: `ResourceLimits::is_strictly_monotone(
+    /// &[a]) == true` for every posture `a`, since a one-element slice
+    /// contains no consecutive pairs and both strict direction
+    /// projections vacuously accept. Pinned as
+    /// `resource_limits_is_strictly_monotone_singleton_is_vacuously_true`.
+    ///
+    /// **Diagonal-duplicate rejection**: `ResourceLimits::is_strictly_monotone(
+    /// &[a, a]) == false` for every posture `a`, since `lt` and `gt`
+    /// are BOTH IRREFLEXIVE, so both strict direction projections reject
+    /// at the single consecutive pair. LOAD-BEARING discriminating arm
+    /// past [`Self::is_monotone`] — the non-strict disjunction ACCEPTS
+    /// on every diagonal-duplicate slice (both `leq` and `geq` are
+    /// reflexive), so the two projections diverge exactly on the
+    /// diagonal-duplicate slices — the same STRICTNESS-refinement
+    /// separator that distinguishes [`Self::is_strictly_ascending`] from
+    /// [`Self::is_ascending`] and [`Self::is_strictly_descending`] from
+    /// [`Self::is_descending`]. Pinned as
+    /// `resource_limits_is_strictly_monotone_of_diagonal_duplicate_is_false`.
+    ///
+    /// **Shipped-preset chain closure**: `ResourceLimits::is_strictly_monotone(
+    /// &[EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS]) == true` (via the strict-ascending
+    /// arm) AND `ResourceLimits::is_strictly_monotone(
+    /// &[UNBOUNDED_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS,
+    /// EMPTY_RESOURCE_LIMITS]) == true` (via the strict-descending arm).
+    /// Every `DEFAULT_MAX_*` module constant is a distinct positive
+    /// value strictly between `0` and `usize::MAX`, so the diagonal
+    /// three-preset chain is STRICTLY monotone on every axis and both
+    /// permutations open the strict-disjunction on their respective
+    /// arm. Pinned as
+    /// `resource_limits_is_strictly_monotone_holds_on_the_shipped_preset_chain_triple_in_both_permutations`.
+    ///
+    /// **Hand-authored antichain rejection**: `ResourceLimits::is_strictly_monotone(
+    /// &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE]) ==
+    /// false`, since the two hand-authored asymmetric postures are
+    /// incomparable and both strict direction projections reject on the
+    /// single consecutive pair; the strict disjunction closes on both
+    /// arms. Pinned in both orderings as
+    /// `resource_limits_is_strictly_monotone_rejects_the_hand_authored_antichain_pair`.
+    ///
+    /// **Zig-zag chain-permutation rejection**: `ResourceLimits::is_strictly_monotone(
+    /// &[DEFAULT_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS]) == false`. Inherited from the non-
+    /// strict projection [`Self::is_monotone`] via the strict-refinement
+    /// theorem: is_monotone rejects the zig-zag permutation, and every
+    /// strictly-monotone slice is monotone, so is_strictly_monotone
+    /// rejects it too. Pinned in both zig-zag permutations as
+    /// `resource_limits_is_strictly_monotone_rejects_the_zigzag_chain_permutation`.
+    ///
+    /// **Structural round-trip — `is_strictly_monotone iff
+    /// is_strictly_ascending || is_strictly_descending`**: for every
+    /// slice, the projection is definitionally the disjunction of the
+    /// two strict direction projections; the equality holds by
+    /// construction. Pinned across arity 0-3 over all five shipped
+    /// presets, catching any future rewrite of any of the three
+    /// underlying projections that silently drifts from the composition
+    /// contract. Pinned as
+    /// `resource_limits_is_strictly_monotone_iff_is_strictly_ascending_or_is_strictly_descending_on_every_shipped_slice`.
+    ///
+    /// **Const-fn evaluability**: the strict-disjunction corner is
+    /// evaluable in `const` context, so a caller can bind a
+    /// strict-monotone-sequence identity at compile time as a build-break
+    /// (`const _: () = assert!(ResourceLimits::is_strictly_monotone(&[
+    /// EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS]));`). Sibling of the const-fn
+    /// evaluability pins on [`Self::is_strictly_ascending`] +
+    /// [`Self::is_strictly_descending`] + [`Self::is_monotone`] one
+    /// STRICTNESS-COMBINATOR axis over.
+    ///
+    /// Pre-lift, a caller wanting "is this slice strictly ascending OR
+    /// strictly descending?" composed the doubly-primitive disjunction
+    /// `Self::is_strictly_ascending(postures) ||
+    /// Self::is_strictly_descending(postures)` at every prospective
+    /// callsite — a two-primitive scaffolding whose exhaustiveness the
+    /// type system did NOT gate. Post-lift the strict-monotone verdict
+    /// binds at ONE typed method the algebra exposes, composes into a
+    /// compile-time bound, and the doubly-disjoined substrate lives at
+    /// ONE implementation site — a ≥2 PRIME DIRECTIVE trigger, since
+    /// the strict-monotone corner on the (is_monotone,
+    /// is_strictly_monotone) STRICTNESS row was the last unnamed corner
+    /// on the sequence-level (direction × strictness × combinator) face
+    /// past the just-closed (is_monotone, is_non_monotone) combinator-
+    /// dual 2-cell face at [`Self::is_monotone`] one STRICTNESS axis
+    /// over.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the sequence-level strict-monotone verdict on
+    /// N preset-carried resource proofs is itself a typed named `bool`
+    /// predicate composing them via the underlying sequence-level
+    /// [`Self::is_strictly_ascending`] + [`Self::is_strictly_descending`]
+    /// projections. THEORY.md §V.1 — knowable platform; the doubly-
+    /// disjoined strict projection becomes a TYPE-level operation on
+    /// the posture algebra rather than an inline `is_strictly_ascending
+    /// || is_strictly_descending` scaffolding at every consumer that
+    /// decides "is this slice strictly ascending or strictly
+    /// descending?"
+    ///
+    /// Frontier inspiration: the order-theoretic notion of a STRICTLY
+    /// MONOTONE SEQUENCE on a poset — Haskell's `strictlySorted xs ||
+    /// strictlySorted (reverse xs)` idiom via `zipWith (<)`; Coq's
+    /// disjunction of `StronglySorted lt` on both directions; Julia's
+    /// `issorted(v, lt=<) || issorted(v, lt=>)` composition; APL's
+    /// `∧/2</⍵` or `∧/2>/⍵` strict-monotonicity gauges. Translation
+    /// through pleme-io primitives: the doubly-disjoined sequence-level
+    /// projection composes directly from the two just-lifted strict-
+    /// direction projections, no new dep, no supertrait bound (`Copy`
+    /// on [`ResourceLimits`] suffices to pass slices by value through
+    /// the inner `const fn` bodies), no allocation, `const fn`
+    /// throughout. Encoding the strict-monotone verdict at the SEQUENCE
+    /// level rather than the SET level preserves the enumeration
+    /// ordering that distinguishes strictly-ordered chains from their
+    /// zig-zag permutations AND from their diagonal-duplicate closures
+    /// — a distinction the SET-level [`Self::is_chain`] verdict AND the
+    /// non-strict [`Self::is_monotone`] verdict both collapse.
+    #[must_use]
+    pub const fn is_strictly_monotone(postures: &[Self]) -> bool {
+        Self::is_strictly_ascending(postures) || Self::is_strictly_descending(postures)
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -24049,6 +24207,271 @@ mod tests {
             HAND_AUTHORED_OTHER_POSTURE,
         ]));
         const _: () = assert!(!ResourceLimits::is_monotone(&[
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_monotone_empty_slice_is_vacuously_true() {
+        // Empty-slice contract — is_strictly_ascending(&[]) and
+        // is_strictly_descending(&[]) BOTH return `true` vacuously, so
+        // the strict disjunction accepts on either arm. The empty slice
+        // inhabits the strictly-monotone cell. Sibling of is_monotone(
+        // &[]) == true one STRICTNESS axis over on the (is_monotone,
+        // is_strictly_monotone) STRICTNESS row.
+        assert!(ResourceLimits::is_strictly_monotone(&[]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_monotone_singleton_is_vacuously_true() {
+        // Singleton contract — a one-element slice contains no
+        // consecutive pairs; both strict direction projections return
+        // `true` vacuously so the strict disjunction accepts. Pinned on
+        // every canonical preset AND on both hand-authored asymmetric
+        // postures so the strict-monotone verdict holds regardless of
+        // the singleton element's lattice position — the SAME arity-1
+        // vacuity every sibling sequence-level projection shares.
+        assert!(ResourceLimits::is_strictly_monotone(&[
+            EMPTY_RESOURCE_LIMITS
+        ]));
+        assert!(ResourceLimits::is_strictly_monotone(&[
+            DEFAULT_RESOURCE_LIMITS
+        ]));
+        assert!(ResourceLimits::is_strictly_monotone(&[
+            UNBOUNDED_RESOURCE_LIMITS
+        ]));
+        assert!(ResourceLimits::is_strictly_monotone(&[
+            HAND_AUTHORED_MID_POSTURE
+        ]));
+        assert!(ResourceLimits::is_strictly_monotone(&[
+            HAND_AUTHORED_OTHER_POSTURE
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_monotone_of_diagonal_duplicate_is_false() {
+        // Diagonal-duplicate contract — `lt` AND `gt` are BOTH
+        // IRREFLEXIVE, so both is_strictly_ascending and
+        // is_strictly_descending reject at every diagonal-duplicate
+        // slice; the strict disjunction closes on both arms. LOAD-
+        // BEARING separator past is_monotone one STRICTNESS axis over
+        // — is_monotone ACCEPTS the same slice (both `leq` and `geq`
+        // are reflexive), so the two projections diverge exactly on the
+        // diagonal-duplicate slices.
+        assert!(!ResourceLimits::is_strictly_monotone(&[
+            DEFAULT_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ]));
+        assert!(!ResourceLimits::is_strictly_monotone(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_monotone_holds_on_the_shipped_preset_chain_triple_in_both_permutations(
+    ) {
+        // Shipped-preset chain closure — the diagonal three-preset
+        // enumeration is a STRICTLY leq-monotone ascending sequence and
+        // its reversal is a STRICTLY gt-monotone descending sequence,
+        // so both permutations open the strict disjunction on their
+        // respective arm. Peer of the same theorem on is_monotone one
+        // STRICTNESS axis over — the strict refinement transports over
+        // the diagonal preset chain because every `DEFAULT_MAX_*`
+        // module constant is a distinct positive value strictly between
+        // `0` and `usize::MAX`.
+        assert!(ResourceLimits::is_strictly_monotone(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        assert!(ResourceLimits::is_strictly_monotone(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_monotone_rejects_the_hand_authored_antichain_pair() {
+        // Antichain rejection — the two hand-authored asymmetric
+        // postures are incomparable, so both strict direction
+        // projections reject on the single consecutive pair; the strict
+        // disjunction closes on both arms. Peer of the same theorem on
+        // is_monotone one STRICTNESS axis over. Pinned in both
+        // orderings.
+        assert!(!ResourceLimits::is_strictly_monotone(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+        assert!(!ResourceLimits::is_strictly_monotone(&[
+            HAND_AUTHORED_OTHER_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_monotone_rejects_the_zigzag_chain_permutation() {
+        // Zig-zag chain-permutation rejection — inherited from
+        // is_monotone via the strict-refinement theorem: is_monotone
+        // rejects the zig-zag permutation, and every strictly-monotone
+        // slice is monotone (by is_strictly_ascending ⇒ is_ascending
+        // and is_strictly_descending ⇒ is_descending), so
+        // is_strictly_monotone rejects it too. Pinned in both zig-zag
+        // permutations. Peer of the same theorem on is_monotone one
+        // STRICTNESS axis over.
+        assert!(!ResourceLimits::is_strictly_monotone(&[
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        assert!(!ResourceLimits::is_strictly_monotone(&[
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_monotone_iff_is_strictly_ascending_or_is_strictly_descending_on_every_shipped_slice(
+    ) {
+        // Structural round-trip — the projection is definitionally
+        // `is_strictly_ascending || is_strictly_descending`, so the
+        // equality holds by construction at every slice. Pinned as a
+        // substrate-level identity that catches a future rewrite of any
+        // of the three underlying projections that silently drifts from
+        // the composition contract. Swept across arity 0, arity 1,
+        // arity 2, and arity 3 over all five shipped presets. Peer of
+        // the same theorem on is_monotone one STRICTNESS axis over.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        assert_eq!(
+            ResourceLimits::is_strictly_monotone(&[]),
+            ResourceLimits::is_strictly_ascending(&[])
+                || ResourceLimits::is_strictly_descending(&[]),
+        );
+        for a in presets {
+            let slice = [a];
+            assert_eq!(
+                ResourceLimits::is_strictly_monotone(&slice),
+                ResourceLimits::is_strictly_ascending(&slice)
+                    || ResourceLimits::is_strictly_descending(&slice),
+                "round-trip failed on singleton {a:?}",
+            );
+        }
+        for a in presets {
+            for b in presets {
+                let slice = [a, b];
+                assert_eq!(
+                    ResourceLimits::is_strictly_monotone(&slice),
+                    ResourceLimits::is_strictly_ascending(&slice)
+                        || ResourceLimits::is_strictly_descending(&slice),
+                    "round-trip failed on pair ({a:?}, {b:?})",
+                );
+            }
+        }
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        ResourceLimits::is_strictly_monotone(&slice),
+                        ResourceLimits::is_strictly_ascending(&slice)
+                            || ResourceLimits::is_strictly_descending(&slice),
+                        "round-trip failed on triple ({a:?}, {b:?}, {c:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_monotone_implies_is_monotone_on_every_shipped_slice() {
+        // Strict-refinement theorem — is_strictly_monotone ⇒
+        // is_monotone on every slice, since is_strictly_ascending ⇒
+        // is_ascending and is_strictly_descending ⇒ is_descending, so
+        // whichever arm of the strict disjunction accepts, the matching
+        // arm of the non-strict disjunction accepts too. Every
+        // strictly-monotone slice is monotone — the STRICTNESS
+        // refinement transports through the disjunction shape shared
+        // by both projections. Swept across arity 2 and arity 3 over
+        // all five shipped presets to sweep every slice where the
+        // sequence-level verdict can vary. Composes with the pinned
+        // transitivity theorem `is_monotone ⇒ is_chain` to give
+        // `is_strictly_monotone ⇒ is_monotone ⇒ is_chain`.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                let slice = [a, b];
+                if ResourceLimits::is_strictly_monotone(&slice) {
+                    assert!(
+                        ResourceLimits::is_monotone(&slice),
+                        "is_strictly_monotone accepts but is_monotone rejects on {slice:?}",
+                    );
+                }
+            }
+        }
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    if ResourceLimits::is_strictly_monotone(&slice) {
+                        assert!(
+                            ResourceLimits::is_monotone(&slice),
+                            "is_strictly_monotone accepts but is_monotone rejects on {slice:?}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_monotone_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the strict-disjunction corner of the
+        // (is_monotone, is_strictly_monotone) STRICTNESS row on the
+        // sequence-level pairwise-relation surface is evaluable in
+        // const context, so a caller can pin a strict-monotone-
+        // sequence identity at compile time. Sibling of the const-fn
+        // evaluability pins on is_strictly_ascending +
+        // is_strictly_descending + is_monotone one STRICTNESS-
+        // COMBINATOR axis over.
+        const _: () = assert!(ResourceLimits::is_strictly_monotone(&[]));
+        const _: () = assert!(ResourceLimits::is_strictly_monotone(&[
+            EMPTY_RESOURCE_LIMITS
+        ]));
+        const _: () = assert!(ResourceLimits::is_strictly_monotone(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        const _: () = assert!(ResourceLimits::is_strictly_monotone(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+        const _: () = assert!(!ResourceLimits::is_strictly_monotone(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+        const _: () = assert!(!ResourceLimits::is_strictly_monotone(&[
+            DEFAULT_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ]));
+        const _: () = assert!(!ResourceLimits::is_strictly_monotone(&[
             DEFAULT_RESOURCE_LIMITS,
             EMPTY_RESOURCE_LIMITS,
             UNBOUNDED_RESOURCE_LIMITS,

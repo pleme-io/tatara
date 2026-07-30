@@ -2909,6 +2909,304 @@ impl ResourceLimits {
         }
         true
     }
+
+    /// Boolean `lt`-conjunction across every CONSECUTIVE pair of a slice
+    /// of postures — `postures` is STRICTLY ASCENDING (an lt-monotone
+    /// sequence on the pointwise partial order, with no duplicate
+    /// consecutive elements) iff every consecutive pair
+    /// `(postures[i], postures[i + 1])` satisfies
+    /// `postures[i].lt(postures[i + 1])`.
+    ///
+    /// The STRICTNESS peer of [`Self::is_ascending`] one STRICTNESS axis
+    /// over on the sequence-level pairwise-relation surface — where
+    /// `is_ascending` delegates to the REFLEXIVE [`Self::leq`],
+    /// this projection delegates to the IRREFLEXIVE [`Self::lt`]. Together
+    /// with [`Self::is_strictly_descending`] one DIRECTION axis over
+    /// (delegating to [`Self::gt`]), the pair opens the (ascending,
+    /// descending) × (non-strict, strict) 2×2 sequence-level face on
+    /// [`ResourceLimits`], with each cell the single-axis peer of two
+    /// others (one DIRECTION axis over AND one STRICTNESS axis over) —
+    /// exactly the same 2×2 face the pair-level (`leq`, `geq`, `lt`,
+    /// `gt`) EXHAUSTIVELY closes one CARDINALITY axis down.
+    ///
+    /// **Strict-refinement theorem — `is_strictly_ascending ⇒
+    /// is_ascending`**: for every slice `postures`,
+    /// `Self::is_strictly_ascending(postures) == true` implies
+    /// `Self::is_ascending(postures) == true`, by the SAME strict-implies-
+    /// non-strict lift the pair-level `lt ⇒ leq` implication carries one
+    /// CARDINALITY axis down — [`Self::lt`] is defined as `self.leq(other)
+    /// && !other.leq(self)`, so every strict consecutive-pair verdict
+    /// entails the non-strict verdict at the same pair, and the
+    /// consecutive-pair conjunction lifts the implication mechanically.
+    /// Combined with [`Self::is_ascending`]'s transitivity theorem
+    /// (`is_ascending ⇒ is_chain`), this projection is TWO steps STRICTLY
+    /// STRONGER than the set-level chain verdict: `is_strictly_ascending
+    /// ⇒ is_ascending ⇒ is_chain`. Pinned as
+    /// `resource_limits_is_strictly_ascending_implies_is_ascending_on_every_shipped_slice`.
+    ///
+    /// **Empty-slice vacuous truth**: `ResourceLimits::is_strictly_ascending(&[])
+    /// == true` — the empty conjunction is vacuously true; the empty
+    /// slice contains no consecutive pairs to reject. AGREES with
+    /// [`Self::is_ascending`]'s empty-slice identity one STRICTNESS axis
+    /// over: BOTH cells of the (non-strict, strict) sequence-level pair
+    /// (and BOTH cells of the (ascending, descending) direction pair)
+    /// coincide at the empty face. Pinned as
+    /// `resource_limits_is_strictly_ascending_empty_slice_is_vacuously_true`.
+    ///
+    /// **Singleton vacuous truth**: `ResourceLimits::is_strictly_ascending(&[a])
+    /// == true` for every posture `a` — a one-element slice contains no
+    /// consecutive pairs, so the walk never enters the loop. AGREES with
+    /// [`Self::is_ascending`]'s singleton verdict. Pinned as
+    /// `resource_limits_is_strictly_ascending_singleton_is_vacuously_true`.
+    ///
+    /// **Diagonal-duplicate rejection — DISCRIMINATING arm vs
+    /// [`Self::is_ascending`]**: `ResourceLimits::is_strictly_ascending(
+    /// &[a, a]) == false` for every posture `a` — [`Self::lt`] is
+    /// IRREFLEXIVE (`a.lt(a) == false`, by `lt`'s
+    /// `self.leq(other) && !other.leq(self)` encoding with both legs of the
+    /// diagonal at the same posture), so the single consecutive pair
+    /// `(0, 1)` binds `a.lt(a) == false` and the conjunction rejects at
+    /// index 0. This is the LOAD-BEARING DIVERGENCE from
+    /// [`Self::is_ascending`] one STRICTNESS axis over — where `is_ascending`
+    /// ACCEPTS every diagonal-duplicate slice (via `leq`'s reflexivity),
+    /// this projection REJECTS every diagonal-duplicate slice (via `lt`'s
+    /// irreflexivity). Peer of the pair-level `lt` vs `leq` divergence at
+    /// the diagonal one CARDINALITY axis down. Pinned as
+    /// `resource_limits_is_strictly_ascending_of_diagonal_duplicate_is_false`.
+    ///
+    /// **Strict ascending shipped-preset triple closure**: `ResourceLimits::
+    /// is_strictly_ascending(&[EMPTY_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]) == true` —
+    /// the shipped-preset triple on the bounded-lattice diagonal is a
+    /// STRICTLY leq-monotone ascending sequence (every field of
+    /// [`EMPTY_RESOURCE_LIMITS`] is `0`, every field of
+    /// [`DEFAULT_RESOURCE_LIMITS`] is a positive constant strictly less
+    /// than [`usize::MAX`], and every field of [`UNBOUNDED_RESOURCE_LIMITS`]
+    /// is [`usize::MAX`]), so every consecutive pair satisfies `lt`.
+    /// Pinned on the arity-2 prefixes AND on the full arity-3 chain.
+    /// Pinned as
+    /// `resource_limits_is_strictly_ascending_holds_on_the_ascending_shipped_preset_triple`.
+    ///
+    /// **Descending shipped-preset triple rejection**: `ResourceLimits::
+    /// is_strictly_ascending(&[UNBOUNDED_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS]) == false` — the
+    /// reversed enumeration binds `UNBOUNDED.lt(DEFAULT) == false` at the
+    /// first consecutive pair. Peer of [`Self::is_ascending`]'s reversed-
+    /// triple rejection one STRICTNESS axis over — BOTH projections
+    /// reject the reversed enumeration, but for
+    /// [`Self::is_strictly_ascending`] the rejection ALSO holds where the
+    /// non-strict projection would only just barely fail (any
+    /// consecutive equal pair). Pinned as
+    /// `resource_limits_is_strictly_ascending_rejects_the_descending_shipped_preset_triple`.
+    ///
+    /// **Non-monotone chain permutation rejection**: `ResourceLimits::
+    /// is_strictly_ascending(&[DEFAULT_RESOURCE_LIMITS,
+    /// EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]) == false` —
+    /// the third permutation of the shipped-preset chain has
+    /// `DEFAULT.lt(EMPTY) == false` at the first consecutive pair, so
+    /// the walk rejects, EVEN THOUGH the slice is a chain
+    /// ([`Self::is_chain`] accepts it) and the underlying leq-chain
+    /// admits it under permutation. Pins the DISCRIMINATING arm between
+    /// the sequence-level strict projection and the set-level chain
+    /// projection at a slice that is a chain but neither strictly
+    /// ascending nor strictly descending. Pinned as
+    /// `resource_limits_is_strictly_ascending_rejects_the_non_monotone_chain_permutation`.
+    ///
+    /// **Hand-authored antichain rejection**: `ResourceLimits::is_strictly_ascending(
+    /// &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE]) == false`
+    /// — the two hand-authored asymmetric postures are incomparable
+    /// (neither `MID.lt(OTHER)` nor `OTHER.lt(MID)`, by `lt`'s composition
+    /// through `leq`), so the single consecutive pair rejects. Pinned in
+    /// both orderings. Pinned as
+    /// `resource_limits_is_strictly_ascending_rejects_the_hand_authored_antichain_pair`.
+    ///
+    /// **Ascending-with-repeat rejection — DISCRIMINATING arm vs
+    /// [`Self::is_ascending`]**: `ResourceLimits::is_strictly_ascending(
+    /// &[EMPTY_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS]) == false` — an ascending non-strict
+    /// slice with a repeated consecutive element passes
+    /// [`Self::is_ascending`] (via `leq`'s reflexivity at the repeat) but
+    /// fails this projection (via `lt`'s irreflexivity at the repeat).
+    /// LOAD-BEARING: pins the strict-refinement not just to the anti-
+    /// diagonal case (`[a, a]`) but to a genuine ascending-then-strict
+    /// slice — the strict projection isolates SEQUENCES-WITH-NO-REPEATS
+    /// as a distinct verdict from SEQUENCES-WEAKLY-ASCENDING. Pinned as
+    /// `resource_limits_is_strictly_ascending_rejects_ascending_with_consecutive_repeat`.
+    ///
+    /// Encoded as a singly-indexed const-`while` walk (`i in 0..n-1`)
+    /// with one [`Self::lt`] delegation per consecutive pair — the SAME
+    /// walk structure as [`Self::is_ascending`] one STRICTNESS axis over,
+    /// with only the inner primitive swapped between the two (`lt` in
+    /// place of `leq`). `const fn` throughout via the underlying `const
+    /// fn` [`Self::lt`] body — a caller can pin a strictly-ascending-
+    /// sequence identity at compile time (`const _: () = assert!(
+    /// ResourceLimits::is_strictly_ascending(&[EMPTY_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]));`).
+    ///
+    /// Pre-lift, a caller wanting "is this slice an lt-monotone strictly-
+    /// ascending sequence (no duplicates)?" composed the singly-indexed
+    /// `postures.windows(2).all(|w| w[0].lt(w[1]))` two-primitive
+    /// scaffolding at every prospective callsite — the SAME PRIME
+    /// DIRECTIVE ≥2 pattern the non-strict projections' pre-lift shapes
+    /// carried, one STRICTNESS axis over. Post-lift the strictly-
+    /// ascending verdict binds at ONE typed method the algebra exposes,
+    /// and the consecutive-pair walk lives at ONE implementation site —
+    /// the peer [`Self::is_strictly_descending`] shares the SAME walk
+    /// structure and diverges only on the pair-level primitive it
+    /// delegates to (`gt` in place of `lt`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the sequence-level strictly-ascending verdict on N preset-
+    /// carried resource proofs is itself a typed named `bool` predicate
+    /// composing them via the underlying pair-level [`Self::lt`]
+    /// projection. THEORY.md §V.1 — knowable platform; the consecutive-
+    /// pair lt conjunction becomes a TYPE-level operation on the posture
+    /// algebra rather than an inline windowed scaffolding at every
+    /// consumer that decides "is this slice an lt-monotone strictly-
+    /// ascending sequence?"
+    ///
+    /// Frontier inspiration: the order-theoretic notion of a STRICTLY
+    /// MONOTONE SEQUENCE on a poset — the standard-library
+    /// `<[T]>::is_sorted_by(|a, b| a < b)` idiom carries the totally-
+    /// ordered case with a strict comparator; Haskell's `Data.List` idiom
+    /// of `and . zipWith (<) xs . tail xs` on a partial-order carrier;
+    /// Coq's `StronglySorted` inductive on lists over a strict
+    /// `Relation`. Translation through pleme-io primitives: the singly-
+    /// indexed consecutive-pair walk directly, with [`Self::lt`] as the
+    /// pair-level primitive, no new dep, no supertrait bound, `const fn`
+    /// throughout. Closes the (ascending, descending) × (non-strict,
+    /// strict) 2×2 sequence-level face at its strict-ascending corner;
+    /// the DIRECTION peer [`Self::is_strictly_descending`] closes the
+    /// same face at its strict-descending corner.
+    #[must_use]
+    pub const fn is_strictly_ascending(postures: &[Self]) -> bool {
+        let n = postures.len();
+        let mut i = 0;
+        while i + 1 < n {
+            if !postures[i].lt(postures[i + 1]) {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
+
+    /// Boolean `gt`-conjunction across every CONSECUTIVE pair of a slice
+    /// of postures — `postures` is STRICTLY DESCENDING (a gt-monotone
+    /// sequence on the pointwise partial order, with no duplicate
+    /// consecutive elements) iff every consecutive pair
+    /// `(postures[i], postures[i + 1])` satisfies
+    /// `postures[i].gt(postures[i + 1])`.
+    ///
+    /// The DIRECT SEQUENCE-LEVEL DUAL of [`Self::is_strictly_ascending`]
+    /// one PAIR-LEVEL-PRIMITIVE axis over — where
+    /// [`Self::is_strictly_ascending`] delegates to [`Self::lt`], this
+    /// projection delegates to [`Self::gt`]. The two together close the
+    /// strict row of the (ascending, descending) × (non-strict, strict)
+    /// 2×2 sequence-level face on [`ResourceLimits`] that
+    /// [`Self::is_ascending`] / [`Self::is_descending`] open at the non-
+    /// strict row. Each of the four sequence-level cells is the single-
+    /// axis peer of two others (one DIRECTION axis over AND one
+    /// STRICTNESS axis over) — the SAME 2×2 face shape the pair-level
+    /// (`leq`, `geq`, `lt`, `gt`) EXHAUSTIVELY closes one CARDINALITY
+    /// axis down.
+    ///
+    /// **Strict-refinement theorem — `is_strictly_descending ⇒
+    /// is_descending`**: for every slice `postures`,
+    /// `Self::is_strictly_descending(postures) == true` implies
+    /// `Self::is_descending(postures) == true`, by the SAME strict-
+    /// implies-non-strict lift the pair-level `gt ⇒ geq` implication
+    /// carries one CARDINALITY axis down. Combined with
+    /// [`Self::is_descending`]'s transitivity theorem
+    /// (`is_descending ⇒ is_chain`), this projection is TWO steps
+    /// STRICTLY STRONGER than the set-level chain verdict:
+    /// `is_strictly_descending ⇒ is_descending ⇒ is_chain`. Pinned as
+    /// `resource_limits_is_strictly_descending_implies_is_descending_on_every_shipped_slice`.
+    ///
+    /// **Empty-slice vacuous truth**: `ResourceLimits::is_strictly_descending(&[])
+    /// == true` — vacuously. AGREES with all three sibling sequence-
+    /// level projections at the empty face. Pinned as
+    /// `resource_limits_is_strictly_descending_empty_slice_is_vacuously_true`.
+    ///
+    /// **Singleton vacuous truth**: `ResourceLimits::is_strictly_descending(&[a])
+    /// == true` for every posture `a`. AGREES with all three sibling
+    /// sequence-level projections at every singleton slice. Pinned as
+    /// `resource_limits_is_strictly_descending_singleton_is_vacuously_true`.
+    ///
+    /// **Diagonal-duplicate rejection — DISCRIMINATING arm vs
+    /// [`Self::is_descending`]**: `ResourceLimits::is_strictly_descending(
+    /// &[a, a]) == false` for every posture `a` — [`Self::gt`] is
+    /// IRREFLEXIVE, so the single consecutive pair binds
+    /// `a.gt(a) == false`. AGREES with [`Self::is_strictly_ascending`]'s
+    /// diagonal-duplicate rejection — the strict row of the sequence-
+    /// level 2×2 face uniformly rejects every diagonal-duplicate slice,
+    /// exactly where the non-strict row uniformly accepts. Pinned as
+    /// `resource_limits_is_strictly_descending_of_diagonal_duplicate_is_false`.
+    ///
+    /// **Strict descending shipped-preset triple closure**: `ResourceLimits::
+    /// is_strictly_descending(&[UNBOUNDED_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS]) == true` — the
+    /// reversed enumeration of the shipped-preset chain is a strictly
+    /// gt-monotone descending sequence. The DIRECT MIRROR of
+    /// [`Self::is_strictly_ascending`]'s ascending closure one PERMUTATION
+    /// axis over. Pinned as
+    /// `resource_limits_is_strictly_descending_holds_on_the_descending_shipped_preset_triple`.
+    ///
+    /// **Ascending shipped-preset triple rejection**: `ResourceLimits::
+    /// is_strictly_descending(&[EMPTY_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]) == false` —
+    /// binds `EMPTY.gt(DEFAULT) == false`. Pinned as
+    /// `resource_limits_is_strictly_descending_rejects_the_ascending_shipped_preset_triple`.
+    ///
+    /// **Hand-authored antichain rejection**: `ResourceLimits::is_strictly_descending(
+    /// &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE]) == false`
+    /// — the antichain pair rejects on both `gt` verdicts as it does on
+    /// both `geq` verdicts. Pinned as
+    /// `resource_limits_is_strictly_descending_rejects_the_hand_authored_antichain_pair`.
+    ///
+    /// **Descending-with-repeat rejection — DISCRIMINATING arm vs
+    /// [`Self::is_descending`]**: `ResourceLimits::is_strictly_descending(
+    /// &[UNBOUNDED_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS]) == false` — a descending non-strict
+    /// slice with a repeated consecutive element passes
+    /// [`Self::is_descending`] but fails this projection. Peer of
+    /// [`Self::is_strictly_ascending`]'s ascending-with-repeat rejection
+    /// one DIRECTION axis over. Pinned as
+    /// `resource_limits_is_strictly_descending_rejects_descending_with_consecutive_repeat`.
+    ///
+    /// Encoded as a singly-indexed const-`while` walk with one
+    /// [`Self::gt`] delegation per consecutive pair — the SAME iteration
+    /// structure as [`Self::is_strictly_ascending`] one PAIR-LEVEL-
+    /// PRIMITIVE axis over, with only the inner primitive swapped
+    /// between the two. `const fn` throughout via the underlying `const
+    /// fn` [`Self::gt`] body.
+    ///
+    /// Pre-lift, a caller wanting "is this slice a gt-monotone strictly-
+    /// descending sequence (no duplicates)?" composed the singly-indexed
+    /// `postures.windows(2).all(|w| w[0].gt(w[1]))` two-primitive
+    /// scaffolding at every prospective callsite. Post-lift the strictly-
+    /// descending verdict binds at ONE typed method the algebra exposes.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs. THEORY.md §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: `<[T]>::is_sorted_by` with a reversed strict
+    /// comparator on a totally-ordered carrier; Coq's `StronglySorted` on
+    /// a strict `>` relation. Translation through pleme-io primitives:
+    /// the singly-indexed consecutive-pair walk directly, with
+    /// [`Self::gt`] as the pair-level primitive.
+    #[must_use]
+    pub const fn is_strictly_descending(postures: &[Self]) -> bool {
+        let n = postures.len();
+        let mut i = 0;
+        while i + 1 < n {
+            if !postures[i].gt(postures[i + 1]) {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -21724,6 +22022,431 @@ mod tests {
         ]));
         const _: () = assert!(!ResourceLimits::is_descending(&[
             EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+    }
+
+    // ── ResourceLimits::is_strictly_ascending / ::is_strictly_descending —
+    // sequence-level STRICT row ────────────────────────────────────────────
+
+    #[test]
+    fn resource_limits_is_strictly_ascending_empty_slice_is_vacuously_true() {
+        // Empty-slice vacuous truth — the empty conjunction is vacuously
+        // true; the empty slice contains no consecutive pairs to reject.
+        // AGREES with is_ascending's empty-slice identity one STRICTNESS
+        // axis over: BOTH cells of the (non-strict, strict) sequence-level
+        // pair coincide at the empty face.
+        assert!(ResourceLimits::is_strictly_ascending(&[]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_descending_empty_slice_is_vacuously_true() {
+        // AGREES with all three sibling sequence-level projections at the
+        // empty face.
+        assert!(ResourceLimits::is_strictly_descending(&[]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_ascending_singleton_is_vacuously_true() {
+        // Singleton vacuous truth — a one-element slice contains no
+        // consecutive pairs, so the walk never enters the loop. Pinned on
+        // every canonical preset AND on both hand-authored asymmetric
+        // postures. AGREES with is_ascending's singleton verdict one
+        // STRICTNESS axis over.
+        assert!(ResourceLimits::is_strictly_ascending(&[
+            EMPTY_RESOURCE_LIMITS
+        ]));
+        assert!(ResourceLimits::is_strictly_ascending(&[
+            DEFAULT_RESOURCE_LIMITS
+        ]));
+        assert!(ResourceLimits::is_strictly_ascending(&[
+            UNBOUNDED_RESOURCE_LIMITS
+        ]));
+        assert!(ResourceLimits::is_strictly_ascending(&[
+            HAND_AUTHORED_MID_POSTURE
+        ]));
+        assert!(ResourceLimits::is_strictly_ascending(&[
+            HAND_AUTHORED_OTHER_POSTURE
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_descending_singleton_is_vacuously_true() {
+        assert!(ResourceLimits::is_strictly_descending(&[
+            EMPTY_RESOURCE_LIMITS
+        ]));
+        assert!(ResourceLimits::is_strictly_descending(&[
+            DEFAULT_RESOURCE_LIMITS
+        ]));
+        assert!(ResourceLimits::is_strictly_descending(&[
+            UNBOUNDED_RESOURCE_LIMITS
+        ]));
+        assert!(ResourceLimits::is_strictly_descending(&[
+            HAND_AUTHORED_MID_POSTURE
+        ]));
+        assert!(ResourceLimits::is_strictly_descending(&[
+            HAND_AUTHORED_OTHER_POSTURE
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_ascending_of_diagonal_duplicate_is_false() {
+        // Diagonal-duplicate rejection — `lt` is IRREFLEXIVE
+        // (`a.lt(a) == false` via `lt`'s `self.leq(other) &&
+        // !other.leq(self)` encoding, whose second leg becomes
+        // `!a.leq(a) == false` at the diagonal), so the single consecutive
+        // pair binds `a.lt(a) == false` and the conjunction rejects. LOAD-
+        // BEARING DIVERGENCE from is_ascending one STRICTNESS axis over —
+        // where is_ascending ACCEPTS every diagonal-duplicate slice (via
+        // `leq`'s reflexivity), THIS projection REJECTS every such slice.
+        // Pinned on both a shipped preset and the hand-authored asymmetric
+        // posture, so no preset carries a hidden reflexive `lt` — the
+        // property holds uniformly.
+        assert!(!ResourceLimits::is_strictly_ascending(&[
+            DEFAULT_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ]));
+        assert!(!ResourceLimits::is_strictly_ascending(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_descending_of_diagonal_duplicate_is_false() {
+        // Diagonal-duplicate rejection — `gt` is IRREFLEXIVE, so the
+        // single consecutive pair binds `a.gt(a) == false`. AGREES with
+        // is_strictly_ascending's diagonal-duplicate rejection — the
+        // STRICT row of the sequence-level 2×2 face uniformly rejects
+        // every diagonal-duplicate slice, exactly where the NON-STRICT
+        // row uniformly accepts.
+        assert!(!ResourceLimits::is_strictly_descending(&[
+            DEFAULT_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ]));
+        assert!(!ResourceLimits::is_strictly_descending(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_ascending_holds_on_the_ascending_shipped_preset_triple() {
+        // Strict ascending closure — the shipped-preset triple on the
+        // bounded-lattice diagonal is a STRICTLY leq-monotone ascending
+        // sequence: EMPTY's all-zeros → DEFAULT's positive constants →
+        // UNBOUNDED's all-`usize::MAX`, so every field strictly ascends
+        // on every consecutive pair. Pinned on the arity-2 prefixes AND
+        // on the full arity-3 chain.
+        assert!(ResourceLimits::is_strictly_ascending(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ]));
+        assert!(ResourceLimits::is_strictly_ascending(&[
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        assert!(ResourceLimits::is_strictly_ascending(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_descending_holds_on_the_descending_shipped_preset_triple() {
+        // Strict descending closure — the reversed enumeration is a
+        // strictly gt-monotone descending sequence. The DIRECT MIRROR of
+        // is_strictly_ascending's ascending closure one PERMUTATION axis
+        // over.
+        assert!(ResourceLimits::is_strictly_descending(&[
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+        assert!(ResourceLimits::is_strictly_descending(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ]));
+        assert!(ResourceLimits::is_strictly_descending(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_ascending_rejects_the_descending_shipped_preset_triple() {
+        // Order-sensitivity — the reversed enumeration binds
+        // `UNBOUNDED.lt(DEFAULT) == false` at the first consecutive pair.
+        // Peer of is_ascending's reversed-triple rejection one STRICTNESS
+        // axis over.
+        assert!(!ResourceLimits::is_strictly_ascending(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_descending_rejects_the_ascending_shipped_preset_triple() {
+        // Direct falsification of is_strictly_ascending's ascending
+        // closure one CELL axis over on the SAME slice.
+        assert!(!ResourceLimits::is_strictly_descending(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_ascending_rejects_the_non_monotone_chain_permutation() {
+        // Non-monotone chain permutation — [DEFAULT, EMPTY, UNBOUNDED] is
+        // a permutation of the shipped-preset chain, so it IS a chain
+        // (is_chain accepts it), but the first consecutive pair binds
+        // `DEFAULT.lt(EMPTY) == false`, so the sequence-level strict
+        // ascending walk rejects. Also is_strictly_descending rejects —
+        // `DEFAULT.gt(EMPTY) == true` but the second consecutive pair
+        // binds `EMPTY.gt(UNBOUNDED) == false`. Pins the DISCRIMINATING
+        // arm between the STRICT sequence-level projections and the set-
+        // level chain projection.
+        let slice = [
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ];
+        assert!(ResourceLimits::is_chain(&slice));
+        assert!(!ResourceLimits::is_strictly_ascending(&slice));
+        assert!(!ResourceLimits::is_strictly_descending(&slice));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_ascending_rejects_the_hand_authored_antichain_pair() {
+        // The two hand-authored asymmetric postures are incomparable
+        // (neither `MID.lt(OTHER)` nor `OTHER.lt(MID)`), so the single
+        // consecutive pair rejects. Pinned in both orderings.
+        assert!(!ResourceLimits::is_strictly_ascending(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+        assert!(!ResourceLimits::is_strictly_ascending(&[
+            HAND_AUTHORED_OTHER_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_descending_rejects_the_hand_authored_antichain_pair() {
+        assert!(!ResourceLimits::is_strictly_descending(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+        assert!(!ResourceLimits::is_strictly_descending(&[
+            HAND_AUTHORED_OTHER_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_ascending_rejects_ascending_with_consecutive_repeat() {
+        // LOAD-BEARING DISCRIMINATING ARM — an ascending non-strict slice
+        // with a repeated consecutive element passes is_ascending (via
+        // `leq`'s reflexivity at the repeat) but fails this projection
+        // (via `lt`'s irreflexivity at the repeat). The strict projection
+        // isolates SEQUENCES-WITH-NO-REPEATS as a distinct verdict from
+        // SEQUENCES-WEAKLY-ASCENDING, exactly where the pair-level
+        // (`lt`, `leq`) pair diverges one CARDINALITY axis down.
+        let slice = [
+            EMPTY_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ];
+        assert!(ResourceLimits::is_ascending(&slice));
+        assert!(!ResourceLimits::is_strictly_ascending(&slice));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_descending_rejects_descending_with_consecutive_repeat() {
+        // Peer of is_strictly_ascending's ascending-with-repeat rejection
+        // one DIRECTION axis over — a descending non-strict slice with a
+        // repeated consecutive element passes is_descending (via `geq`'s
+        // reflexivity at the repeat) but fails this projection.
+        let slice = [
+            UNBOUNDED_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ];
+        assert!(ResourceLimits::is_descending(&slice));
+        assert!(!ResourceLimits::is_strictly_descending(&slice));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_ascending_implies_is_ascending_on_every_shipped_slice() {
+        // Strict-refinement theorem — for every slice `postures`,
+        // `is_strictly_ascending(postures) == true` implies
+        // `is_ascending(postures) == true`, by the pair-level
+        // `lt ⇒ leq` implication lifted through the consecutive-pair
+        // conjunction. Substrate-level THEOREM: the strict sequence-level
+        // projection is strictly STRONGER than the non-strict sequence-
+        // level projection, which is in turn stronger than the set-level
+        // chain projection — so `is_strictly_ascending ⇒ is_ascending ⇒
+        // is_chain` (and mirror for descending). Every arity-2 slice
+        // from the 5×5 preset matrix witnesses the implication in both
+        // directions of the (strict-ascending, strict-descending) pair.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                let slice = [a, b];
+                if ResourceLimits::is_strictly_ascending(&slice) {
+                    assert!(
+                        ResourceLimits::is_ascending(&slice),
+                        "is_strictly_ascending ⇒ is_ascending failed on pair {a:?} / {b:?}",
+                    );
+                    assert!(
+                        ResourceLimits::is_chain(&slice),
+                        "is_strictly_ascending ⇒ is_chain failed on pair {a:?} / {b:?}",
+                    );
+                }
+                if ResourceLimits::is_strictly_descending(&slice) {
+                    assert!(
+                        ResourceLimits::is_descending(&slice),
+                        "is_strictly_descending ⇒ is_descending failed on pair {a:?} / {b:?}",
+                    );
+                    assert!(
+                        ResourceLimits::is_chain(&slice),
+                        "is_strictly_descending ⇒ is_chain failed on pair {a:?} / {b:?}",
+                    );
+                }
+            }
+        }
+        // Load-bearing arity-3 witness — the shipped strictly-ascending
+        // chain triple witnesses the full implication chain, mirror for
+        // strictly-descending.
+        let asc = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ];
+        assert!(ResourceLimits::is_strictly_ascending(&asc));
+        assert!(ResourceLimits::is_ascending(&asc));
+        assert!(ResourceLimits::is_chain(&asc));
+        let desc = [
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ];
+        assert!(ResourceLimits::is_strictly_descending(&desc));
+        assert!(ResourceLimits::is_descending(&desc));
+        assert!(ResourceLimits::is_chain(&desc));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_ascending_and_is_strictly_descending_agree_at_empty_and_singleton_slices(
+    ) {
+        // Empty-and-singleton agreement — the two STRICT sequence-level
+        // projections carry the SAME vacuous-truth verdict at every slice
+        // with fewer than two consecutive pairs. AGREES with the non-
+        // strict pair one STRICTNESS axis over — all four sequence-level
+        // cells (ascending × strict × direction) coincide at every slice
+        // shorter than 2. But at every DIAGONAL-DUPLICATE slice the strict
+        // pair DISAGREES with the non-strict pair (rejects where the
+        // non-strict accepts) — the strict pair AGREES with each other
+        // there too, both rejecting via IRREFLEXIVITY of `lt` / `gt`.
+        assert_eq!(
+            ResourceLimits::is_strictly_ascending(&[]),
+            ResourceLimits::is_strictly_descending(&[]),
+        );
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            let single = [a];
+            assert_eq!(
+                ResourceLimits::is_strictly_ascending(&single),
+                ResourceLimits::is_strictly_descending(&single),
+                "strict empty-and-singleton agreement failed on singleton {a:?}",
+            );
+            // Diagonal-duplicate uniform rejection — both strict
+            // projections REJECT every duplicated pair via lt/gt
+            // irreflexivity, in contrast with the non-strict pair which
+            // BOTH accept via leq/geq reflexivity.
+            let dup = [a, a];
+            assert!(
+                !ResourceLimits::is_strictly_ascending(&dup),
+                "strict-ascending failed to reject diagonal duplicate {a:?}",
+            );
+            assert!(
+                !ResourceLimits::is_strictly_descending(&dup),
+                "strict-descending failed to reject diagonal duplicate {a:?}",
+            );
+            // Cross-projection pin — non-strict pair ACCEPTS the same
+            // diagonal-duplicate slice both directions, so the (non-
+            // strict, strict) STRICTNESS axis carries a discriminating
+            // verdict at every diagonal-duplicate slice, in both
+            // directions.
+            assert!(
+                ResourceLimits::is_ascending(&dup),
+                "non-strict ascending should accept diagonal duplicate {a:?}",
+            );
+            assert!(
+                ResourceLimits::is_descending(&dup),
+                "non-strict descending should accept diagonal duplicate {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_ascending_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the strict sequence-level projection is evaluable
+        // in const context, so a caller can pin a strictly-ascending-
+        // sequence identity at compile time.
+        const _: () = assert!(ResourceLimits::is_strictly_ascending(&[]));
+        const _: () = assert!(ResourceLimits::is_strictly_ascending(&[
+            EMPTY_RESOURCE_LIMITS
+        ]));
+        const _: () = assert!(ResourceLimits::is_strictly_ascending(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        const _: () = assert!(!ResourceLimits::is_strictly_ascending(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+        const _: () = assert!(!ResourceLimits::is_strictly_ascending(&[
+            EMPTY_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_descending_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — sibling of is_strictly_ascending one PAIR-LEVEL-
+        // PRIMITIVE axis over.
+        const _: () = assert!(ResourceLimits::is_strictly_descending(&[]));
+        const _: () = assert!(ResourceLimits::is_strictly_descending(&[
+            EMPTY_RESOURCE_LIMITS
+        ]));
+        const _: () = assert!(ResourceLimits::is_strictly_descending(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+        const _: () = assert!(!ResourceLimits::is_strictly_descending(&[
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        const _: () = assert!(!ResourceLimits::is_strictly_descending(&[
+            UNBOUNDED_RESOURCE_LIMITS,
             UNBOUNDED_RESOURCE_LIMITS,
         ]));
     }

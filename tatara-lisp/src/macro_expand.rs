@@ -770,6 +770,184 @@ impl ResourceLimits {
             && self.max_registered_macros <= other.max_registered_macros
             && self.max_macro_arity <= other.max_macro_arity
     }
+
+    /// Pointwise-`min` fold across a slice of postures — the STRICTEST
+    /// posture whose admissible input set is the intersection of every
+    /// operand's admissible input sets. `ResourceLimits::strictest_of(&[a,
+    /// b, c])` admits an input iff EVERY operand admits it: on every
+    /// field the per-axis ceiling is the smallest across the whole slice,
+    /// so a value that clears the aggregated meet clears EVERY operand,
+    /// and a value that ANY operand rejects the aggregated meet also
+    /// rejects.
+    ///
+    /// The N-ary MEET aggregation on the [`ResourceLimits`] lattice —
+    /// the extension of [`Self::strictest`] from a 2-input pairwise
+    /// combinator to an N-input fold across a slice. Seeded from
+    /// [`UNBOUNDED_RESOURCE_LIMITS`] (the meet-identity — its per-axis
+    /// [`usize::MAX`] never wins the pointwise `min` against a concrete
+    /// positive value, so the seed contributes nothing to the fold's
+    /// result), which makes the empty-slice case aggregate to the
+    /// identity element rather than requiring an `Option<Self>` wrapper
+    /// the caller inspects at every consumption site. Peer of
+    /// [`Self::most_permissive_of`] one COMBINATOR axis over on the
+    /// N-ary aggregation surface: where `most_permissive_of` is the
+    /// N-ary JOIN (LUB across the slice, seeded from the join-identity
+    /// [`EMPTY_RESOURCE_LIMITS`]), this is the N-ary MEET (GLB across
+    /// the slice, seeded from the meet-identity). Together the two
+    /// close the (N-ary meet, N-ary join) aggregation pair the pairwise
+    /// combinators [`Self::strictest`] / [`Self::most_permissive`]
+    /// extend from 2 to N.
+    ///
+    /// **Empty-slice identity**: `strictest_of(&[]) ==
+    /// UNBOUNDED_RESOURCE_LIMITS` — the null aggregate binds structurally
+    /// to the meet-identity element. Pre-lift a caller composing "the
+    /// tightest posture across THIS SLICE" from the pairwise `strictest`
+    /// primitive either (a) seeded the fold from a non-empty first
+    /// element and panicked on empty input, or (b) wrapped the aggregate
+    /// in `Option<Self>` — a runtime type-level admission the aggregate
+    /// might be absent even though the algebra's bounded-lattice
+    /// structure defines the null aggregate exhaustively via its
+    /// identity element. Post-lift the null aggregate is
+    /// [`UNBOUNDED_RESOURCE_LIMITS`] at the TYPE level, not a wrapper
+    /// the consumer inspects.
+    ///
+    /// **Single-element identity**: `strictest_of(&[a]) == a` — the
+    /// 1-input aggregate is the input verbatim, since
+    /// `UNBOUNDED.strictest(a) == a` for every posture `a` by the
+    /// meet-identity law.
+    ///
+    /// **Two-element identity**: `strictest_of(&[a, b]) ==
+    /// a.strictest(b)` — the 2-input aggregate reduces to the pairwise
+    /// combinator, since `UNBOUNDED.strictest(a).strictest(b) ==
+    /// a.strictest(b)`.
+    ///
+    /// **Order-independent**: `strictest_of(&[a, b, c]) ==
+    /// strictest_of(&[c, b, a])` — the fold inherits the commutativity
+    /// AND associativity of the pairwise `strictest`, so any permutation
+    /// of the slice yields the same aggregate.
+    ///
+    /// `const fn` so a caller can compose an arbitrary-length preset
+    /// slice into a third preset at compile time (`pub const
+    /// COMBINED_PRESET: ResourceLimits = ResourceLimits::strictest_of(
+    /// &[SOME_OPERATOR_PRESET, SOME_CI_PRESET, SOME_HOSTILE_PRESET]);`)
+    /// rather than deferring the composition to a runtime chain — the
+    /// N-ary const-fn peer of the pairwise const-fn on
+    /// [`Self::strictest`]. `Copy` on [`ResourceLimits`] lets the const-
+    /// fn loop index the slice by value without an explicit `.clone()`
+    /// (which const-fn would not permit anyway).
+    ///
+    /// Pre-lift, the SAME `.iter().copied().fold(UNBOUNDED, strictest)`
+    /// three-primitive cascade appeared verbatim in
+    /// `unbounded_resource_limits_seeds_strictest_fold_over_slice` AND at
+    /// every future consumer that would compose "the tightest across
+    /// this set of presets" — a PRIME DIRECTIVE ≥2 trigger, since the
+    /// fold docstring on [`UNBOUNDED_RESOURCE_LIMITS`] explicitly names
+    /// this pattern as the constant's fold-identity use case. Post-lift
+    /// the N-ary aggregation binds at ONE typed method the algebra
+    /// exposes, and every future consumer routes through ONE name whose
+    /// signature carries the identity-element choice INTO the method
+    /// (rather than the consumer having to remember which seed pairs
+    /// with which combinator at each call site).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the N-ary aggregation of N preset-carried
+    /// resource proofs is itself a `ResourceLimits` whose proof content
+    /// is the intersection of every operand's, and this method is the
+    /// typed named entry composing them. THEORY.md §V.1 — knowable
+    /// platform; the N-ary meet becomes a TYPE-level operation on the
+    /// posture algebra rather than an inline fold cascade at every
+    /// consumer that aggregates a slice of presets — with the
+    /// meet-identity seed baked in so the consumer cannot pair the join-
+    /// identity (`EMPTY`) with the meet combinator (a silent
+    /// distortion that would collapse every axis to `0`). Frontier
+    /// inspiration: the algebraic-datatypes tradition of a `Monoid`
+    /// typeclass exposing `mconcat` / `Monoid.combineAll` alongside the
+    /// pairwise `mappend` — the N-ary aggregation of a collection
+    /// through a binary combinator is a first-class named method the
+    /// typeclass carries. Translation through pleme-io primitives is
+    /// the plain `const fn` slice-fold below, no typeclass indirection
+    /// — the meet-identity element already exists as a named `pub const`
+    /// on the algebra so the fold picks it up structurally.
+    #[must_use]
+    pub const fn strictest_of(postures: &[Self]) -> Self {
+        let mut acc = UNBOUNDED_RESOURCE_LIMITS;
+        let mut i = 0;
+        while i < postures.len() {
+            acc = acc.strictest(postures[i]);
+            i += 1;
+        }
+        acc
+    }
+
+    /// Pointwise-`max` fold across a slice of postures — the MOST-
+    /// PERMISSIVE posture whose admissible input set is the union of
+    /// every operand's admissible input sets.
+    /// `ResourceLimits::most_permissive_of(&[a, b, c])` admits an input
+    /// iff ANY operand admits it: on every field the per-axis ceiling
+    /// is the largest across the whole slice.
+    ///
+    /// The N-ary JOIN aggregation on the [`ResourceLimits`] lattice —
+    /// the extension of [`Self::most_permissive`] from a 2-input
+    /// pairwise combinator to an N-input fold across a slice. Seeded
+    /// from [`EMPTY_RESOURCE_LIMITS`] (the join-identity — every field
+    /// at `0`, which never wins the pointwise `max` against any
+    /// non-zero value, so the seed contributes nothing to the fold's
+    /// result), which makes the empty-slice case aggregate to the
+    /// identity element. Peer of [`Self::strictest_of`] one COMBINATOR
+    /// axis over on the N-ary aggregation surface: where `strictest_of`
+    /// is the N-ary MEET (seeded from the meet-identity
+    /// [`UNBOUNDED_RESOURCE_LIMITS`]), this is the N-ary JOIN (seeded
+    /// from the join-identity). Together the two close the (N-ary meet,
+    /// N-ary join) aggregation pair.
+    ///
+    /// **Empty-slice identity**: `most_permissive_of(&[]) ==
+    /// EMPTY_RESOURCE_LIMITS` — the null aggregate binds structurally
+    /// to the join-identity element.
+    ///
+    /// **Single-element identity**: `most_permissive_of(&[a]) == a` —
+    /// the 1-input aggregate is the input verbatim, since
+    /// `EMPTY.most_permissive(a) == a` for every posture `a` by the
+    /// join-identity law.
+    ///
+    /// **Two-element identity**: `most_permissive_of(&[a, b]) ==
+    /// a.most_permissive(b)` — the 2-input aggregate reduces to the
+    /// pairwise combinator.
+    ///
+    /// **Order-independent**: `most_permissive_of(&[a, b, c]) ==
+    /// most_permissive_of(&[c, b, a])` — the fold inherits the
+    /// commutativity AND associativity of the pairwise
+    /// `most_permissive`.
+    ///
+    /// `const fn` so a caller can compose an arbitrary-length preset
+    /// slice at compile time — the N-ary const-fn peer of the pairwise
+    /// const-fn on [`Self::most_permissive`].
+    ///
+    /// Pre-lift, the SAME `.iter().copied().fold(EMPTY,
+    /// most_permissive)` three-primitive cascade appeared verbatim in
+    /// `empty_resource_limits_seeds_most_permissive_fold_over_slice`
+    /// AND at every future consumer that would compose "the loosest
+    /// across this set of presets" — a PRIME DIRECTIVE ≥2 trigger.
+    /// Post-lift the N-ary aggregation binds at ONE typed method with
+    /// the join-identity seed baked in so the consumer cannot pair the
+    /// meet-identity (`UNBOUNDED`) with the join combinator (a silent
+    /// distortion that would inflate every axis to [`usize::MAX`]).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the N-ary join of N preset-carried resource
+    /// proofs is itself a `ResourceLimits`. THEORY.md §V.1 — knowable
+    /// platform; the N-ary join becomes a TYPE-level operation on the
+    /// posture algebra rather than an inline fold cascade at every
+    /// consumer that aggregates a slice of presets.
+    #[must_use]
+    pub const fn most_permissive_of(postures: &[Self]) -> Self {
+        let mut acc = EMPTY_RESOURCE_LIMITS;
+        let mut i = 0;
+        while i < postures.len() {
+            acc = acc.most_permissive(postures[i]);
+            i += 1;
+        }
+        acc
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -16484,6 +16662,293 @@ mod tests {
                 .copied()
                 .fold(UNBOUNDED_RESOURCE_LIMITS, ResourceLimits::strictest),
             UNBOUNDED_RESOURCE_LIMITS,
+        );
+    }
+
+    #[test]
+    fn resource_limits_strictest_of_empty_slice_returns_the_meet_identity() {
+        // Null-aggregate pin — the N-ary meet over an empty slice is
+        // the meet-identity element [`UNBOUNDED_RESOURCE_LIMITS`]. The
+        // typed identity-element approach resolves the empty-input case
+        // at the algebra layer; a wrapper-type approach
+        // (`Option<ResourceLimits>` for the aggregate) would need a
+        // distinct absent branch here, and a panic-on-empty seed-from-
+        // -first-element approach would abort the caller.
+        assert_eq!(ResourceLimits::strictest_of(&[]), UNBOUNDED_RESOURCE_LIMITS,);
+    }
+
+    #[test]
+    fn resource_limits_most_permissive_of_empty_slice_returns_the_join_identity() {
+        // Null-aggregate dual pin — the N-ary join over an empty slice
+        // is the join-identity element [`EMPTY_RESOURCE_LIMITS`]. Peer
+        // to `strictest_of_empty_slice` one COMBINATOR axis over on the
+        // (N-ary meet, N-ary join) surface — the identity element for
+        // join is the meet's ANNIHILATOR and vice versa; the two
+        // together bind both bounded-lattice poles as null aggregates.
+        assert_eq!(
+            ResourceLimits::most_permissive_of(&[]),
+            EMPTY_RESOURCE_LIMITS,
+        );
+    }
+
+    #[test]
+    fn resource_limits_strictest_of_single_element_returns_the_element_verbatim() {
+        // Meet-identity absorption pin at N=1 — the N-ary meet of ONE
+        // input is the input verbatim, since the meet-identity seed
+        // (`UNBOUNDED_RESOURCE_LIMITS`) satisfies
+        // `UNBOUNDED.strictest(a) == a` by the pointwise `min` behavior
+        // against [`usize::MAX`]. This is the identity-law-at-N=1
+        // pin: the fold's seed does not distort the 1-input case.
+        assert_eq!(
+            ResourceLimits::strictest_of(&[HAND_AUTHORED_MID_POSTURE]),
+            HAND_AUTHORED_MID_POSTURE,
+        );
+        assert_eq!(
+            ResourceLimits::strictest_of(&[HAND_AUTHORED_OTHER_POSTURE]),
+            HAND_AUTHORED_OTHER_POSTURE,
+        );
+        assert_eq!(
+            ResourceLimits::strictest_of(&[DEFAULT_RESOURCE_LIMITS]),
+            DEFAULT_RESOURCE_LIMITS,
+        );
+    }
+
+    #[test]
+    fn resource_limits_most_permissive_of_single_element_returns_the_element_verbatim() {
+        // Join-identity absorption pin at N=1 — dual of
+        // `strictest_of_single_element`, using the join-identity seed
+        // (`EMPTY_RESOURCE_LIMITS`) whose per-axis `0` satisfies
+        // `EMPTY.most_permissive(a) == a` against any non-zero value.
+        assert_eq!(
+            ResourceLimits::most_permissive_of(&[HAND_AUTHORED_MID_POSTURE]),
+            HAND_AUTHORED_MID_POSTURE,
+        );
+        assert_eq!(
+            ResourceLimits::most_permissive_of(&[HAND_AUTHORED_OTHER_POSTURE]),
+            HAND_AUTHORED_OTHER_POSTURE,
+        );
+        assert_eq!(
+            ResourceLimits::most_permissive_of(&[DEFAULT_RESOURCE_LIMITS]),
+            DEFAULT_RESOURCE_LIMITS,
+        );
+    }
+
+    #[test]
+    fn resource_limits_strictest_of_two_elements_reduces_to_pairwise_strictest() {
+        // N=2 reduction pin — the N-ary meet on a 2-element slice
+        // reduces to the pairwise combinator, since
+        // `UNBOUNDED.strictest(a).strictest(b) == a.strictest(b)`. The
+        // strictest_of(&[a, b]) call MUST agree with a.strictest(b) on
+        // every input pair the algebra distinguishes.
+        assert_eq!(
+            ResourceLimits::strictest_of(
+                &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE,]
+            ),
+            HAND_AUTHORED_MID_POSTURE.strictest(HAND_AUTHORED_OTHER_POSTURE),
+        );
+        assert_eq!(
+            ResourceLimits::strictest_of(&[DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS,]),
+            DEFAULT_RESOURCE_LIMITS.strictest(UNBOUNDED_RESOURCE_LIMITS),
+        );
+    }
+
+    #[test]
+    fn resource_limits_most_permissive_of_two_elements_reduces_to_pairwise_most_permissive() {
+        // N=2 reduction dual pin — the N-ary join on a 2-element slice
+        // reduces to the pairwise combinator.
+        assert_eq!(
+            ResourceLimits::most_permissive_of(&[
+                HAND_AUTHORED_MID_POSTURE,
+                HAND_AUTHORED_OTHER_POSTURE,
+            ]),
+            HAND_AUTHORED_MID_POSTURE.most_permissive(HAND_AUTHORED_OTHER_POSTURE),
+        );
+        assert_eq!(
+            ResourceLimits::most_permissive_of(&[DEFAULT_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS,]),
+            DEFAULT_RESOURCE_LIMITS.most_permissive(EMPTY_RESOURCE_LIMITS),
+        );
+    }
+
+    #[test]
+    fn resource_limits_strictest_of_agrees_with_direct_fold_over_slice() {
+        // Method-agrees-with-fold pin — the sole behavioral claim the
+        // N-ary aggregator makes is that it IS the inline
+        // `.iter().copied().fold(UNBOUNDED, strictest)` cascade the
+        // pre-lift caller composed at every consumption site. A drift
+        // between the method's implementation and the inline fold
+        // would break this equality on every non-empty slice.
+        let postures: [ResourceLimits; 3] = [
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            DEFAULT_RESOURCE_LIMITS,
+        ];
+        assert_eq!(
+            ResourceLimits::strictest_of(&postures),
+            postures
+                .iter()
+                .copied()
+                .fold(UNBOUNDED_RESOURCE_LIMITS, ResourceLimits::strictest),
+        );
+    }
+
+    #[test]
+    fn resource_limits_most_permissive_of_agrees_with_direct_fold_over_slice() {
+        // Method-agrees-with-fold dual pin.
+        let postures: [ResourceLimits; 3] = [
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            DEFAULT_RESOURCE_LIMITS,
+        ];
+        assert_eq!(
+            ResourceLimits::most_permissive_of(&postures),
+            postures
+                .iter()
+                .copied()
+                .fold(EMPTY_RESOURCE_LIMITS, ResourceLimits::most_permissive),
+        );
+    }
+
+    #[test]
+    fn resource_limits_strictest_of_is_order_independent() {
+        // Order-independence pin — the fold inherits commutativity AND
+        // associativity of the pairwise `strictest`, so any permutation
+        // of the input slice yields the same aggregate. Reversal is
+        // the maximal permutation for a 3-element input (indices
+        // 0,1,2 → 2,1,0); an aggregator that leaked fold order would
+        // discriminate here.
+        let forward = ResourceLimits::strictest_of(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            DEFAULT_RESOURCE_LIMITS,
+        ]);
+        let reversed = ResourceLimits::strictest_of(&[
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_OTHER_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]);
+        assert_eq!(forward, reversed);
+    }
+
+    #[test]
+    fn resource_limits_most_permissive_of_is_order_independent() {
+        let forward = ResourceLimits::most_permissive_of(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            DEFAULT_RESOURCE_LIMITS,
+        ]);
+        let reversed = ResourceLimits::most_permissive_of(&[
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_OTHER_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]);
+        assert_eq!(forward, reversed);
+    }
+
+    #[test]
+    fn resource_limits_strictest_of_composes_at_compile_time_via_const_fn() {
+        // Compile-time-composition pin — `strictest_of` is `const fn`,
+        // so a caller binds an N-ary aggregate to a `pub const` and the
+        // fold evaluates at compile time. Every `DEFAULT_MAX_*` is
+        // strictly less than `usize::MAX`, so the meet of `[DEFAULT,
+        // UNBOUNDED]` picks DEFAULT on every axis — a preset-pair
+        // identity already pinned pairwise, verified here through the
+        // N-ary method's const-context evaluation. The N-ary const-fn
+        // peer of the pairwise const-fn pins on
+        // [`ResourceLimits::strictest`]; a regression that turned
+        // `strictest_of` into a runtime `fn` would break the `const`
+        // binding below at compile time.
+        const AGGREGATED: ResourceLimits =
+            ResourceLimits::strictest_of(&[DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]);
+        assert_eq!(AGGREGATED, DEFAULT_RESOURCE_LIMITS);
+    }
+
+    #[test]
+    fn resource_limits_most_permissive_of_composes_at_compile_time_via_const_fn() {
+        // Compile-time-composition dual pin — every `DEFAULT_MAX_*` is
+        // strictly greater than `0`, so the join of `[EMPTY, DEFAULT]`
+        // picks DEFAULT on every axis.
+        const AGGREGATED: ResourceLimits =
+            ResourceLimits::most_permissive_of(&[EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS]);
+        assert_eq!(AGGREGATED, DEFAULT_RESOURCE_LIMITS);
+    }
+
+    #[test]
+    fn resource_limits_strictest_of_result_is_leq_every_operand() {
+        // Lattice-relation pin — the N-ary meet sits `leq` every
+        // operand. This is the N-ary extension of the pairwise
+        // `strictest_is_leq_both_operands` pin; the meet aggregate
+        // dominates from below (the greatest lower bound of the slice
+        // sits at-or-below each input on every axis).
+        let postures: [ResourceLimits; 3] = [
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            DEFAULT_RESOURCE_LIMITS,
+        ];
+        let met = ResourceLimits::strictest_of(&postures);
+        for p in postures {
+            assert!(met.leq(p));
+        }
+    }
+
+    #[test]
+    fn resource_limits_most_permissive_of_result_is_geq_every_operand() {
+        // Lattice-relation dual pin — every operand sits `leq` the
+        // N-ary join. The join aggregate is the least upper bound of
+        // the slice.
+        let postures: [ResourceLimits; 3] = [
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            DEFAULT_RESOURCE_LIMITS,
+        ];
+        let joined = ResourceLimits::most_permissive_of(&postures);
+        for p in postures {
+            assert!(p.leq(joined));
+        }
+    }
+
+    #[test]
+    fn expander_built_at_strictest_of_slice_gates_at_tightest_ceiling_across_the_slice() {
+        // Behavioral pin — an expander constructed from the N-ary meet
+        // of a slice of postures MUST gate at the tightest ceiling
+        // across the slice on every axis. Peer of
+        // `expander_built_at_strictest_of_two_presets_gates_at_the_tighter_ceiling`
+        // one AGGREGATION-ARITY axis over: where the pairwise pin
+        // composes exactly two postures, this pin composes THREE
+        // through the N-ary aggregator, confirming the arity extension
+        // preserves the "meet gates at tightest" behavioral contract.
+        //
+        // The slice tightens macro_arity to 1 (the tightest across the
+        // three postures) via the middle operand; every other axis
+        // stays at usize::MAX (the outer two operands supply
+        // usize::MAX; the middle operand's struct-update literal
+        // preserves usize::MAX everywhere except macro_arity).
+        let tightened = ResourceLimits::strictest_of(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            ResourceLimits {
+                max_macro_arity: 1,
+                ..UNBOUNDED_RESOURCE_LIMITS
+            },
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]);
+        assert_eq!(tightened.max_macro_arity, 1);
+        assert_eq!(tightened.max_expansion_depth, usize::MAX);
+        assert_eq!(tightened.max_cache_entries, usize::MAX);
+        assert_eq!(tightened.max_expansion_size, usize::MAX);
+        assert_eq!(tightened.max_macro_body_size, usize::MAX);
+        assert_eq!(tightened.max_registered_macros, usize::MAX);
+        let mut e = Expander::with_limits(tightened);
+        let forms = read("(defmacro two (a b) `,a)").unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::MacroArityExceeded {
+                    arity: 2,
+                    limit: 1,
+                    ..
+                }
+            ),
+            "expected MacroArityExceeded from N-ary meet's tightened arity gate, got {err:?}",
         );
     }
 

@@ -2625,6 +2625,290 @@ impl ResourceLimits {
     pub const fn is_mixed(postures: &[Self]) -> bool {
         !Self::is_chain(postures) && !Self::is_antichain(postures)
     }
+
+    /// Boolean `leq`-conjunction across every CONSECUTIVE pair of a slice
+    /// of postures — `postures` is ASCENDING (a leq-monotone sequence on
+    /// the pointwise partial order) iff every consecutive pair
+    /// `(postures[i], postures[i + 1])` satisfies
+    /// `postures[i].leq(postures[i + 1])`.
+    ///
+    /// The SEQUENCE-LEVEL N-ary peer of [`Self::leq`] one CARDINALITY axis
+    /// over on the (pairwise, sequence-level) primitive surface — the
+    /// DIRECT SEQUENCE-LEVEL LIFT of the pair-level partial-order primitive
+    /// through a consecutive-index walk. Opens a NEW AXIS one CONSECUTIVE-
+    /// VS-ALL-PAIRS step over from the just-lifted set-level projections
+    /// [`Self::is_chain`] / [`Self::is_antichain`] / [`Self::is_mixed`]:
+    /// where the set-level triple quantifies over EVERY distinct pair
+    /// `(i, j)` with `j > i`, this projection quantifies over only the
+    /// `n - 1` CONSECUTIVE pairs `(i, i + 1)`. The two axes lift the same
+    /// pair-level primitive family through DIFFERENT quantification shapes
+    /// — the set-level triple carries UNORDERED verdicts about the whole
+    /// slice's pairwise-relation graph, while this projection carries an
+    /// ORDER-SENSITIVE verdict about the slice's specific enumeration.
+    ///
+    /// **Transitivity theorem — `is_ascending ⇒ is_chain`**: for every
+    /// slice `postures`, `Self::is_ascending(postures) == true` implies
+    /// `Self::is_chain(postures) == true`. The pointwise partial order is
+    /// TRANSITIVE (`a.leq(b) && b.leq(c) ⇒ a.leq(c)` — verified structurally
+    /// by [`Self::leq`]'s six-axis pointwise `<=` conjunction, since each
+    /// `usize <=` is transitive), so a consecutive-pair leq-chain closes
+    /// under transitive composition into the all-pairs leq-chain; every
+    /// (i, j) pair with j > i decomposes into the composition of
+    /// consecutive-pair leqs (i, i+1), (i+1, i+2), ..., (j-1, j), which
+    /// transitivity collapses into `postures[i].leq(postures[j])`, and
+    /// `leq` implies `is_comparable`. This is a LOAD-BEARING substrate-
+    /// level theorem: the sequence-level ascending verdict is strictly
+    /// STRONGER than the set-level chain verdict (a chain admits any
+    /// permutation of a leq-sorted enumeration; an ascending sequence
+    /// admits exactly the leq-sorted one). Pinned as
+    /// `resource_limits_is_ascending_implies_is_chain_on_every_shipped_slice`.
+    ///
+    /// **Empty-slice vacuous truth**: `ResourceLimits::is_ascending(&[])
+    /// == true` — the empty conjunction is vacuously true; the empty
+    /// slice contains no consecutive pairs to reject. Peer of
+    /// [`Self::is_chain`]'s empty-slice identity one CONSECUTIVE-VS-ALL-
+    /// PAIRS axis over: both cells of the (set-level, sequence-level)
+    /// projection pair AGREE at the empty slice on the vacuous-truth
+    /// verdict — the two cells coincide at the empty face of the N-ary
+    /// verdict surface. Pinned as
+    /// `resource_limits_is_ascending_empty_slice_is_vacuously_true`.
+    ///
+    /// **Singleton vacuous truth**: `ResourceLimits::is_ascending(&[a])
+    /// == true` for every posture `a` — a one-element slice contains no
+    /// consecutive pairs, so the walk never enters the loop and returns
+    /// `true` vacuously. Peer of [`Self::is_chain`]'s singleton-vacuous-
+    /// truth identity: both projections AGREE at singleton slices too.
+    /// Pinned as
+    /// `resource_limits_is_ascending_singleton_is_vacuously_true`.
+    ///
+    /// **Diagonal-duplicate identity**: `ResourceLimits::is_ascending(
+    /// &[a, a]) == true` for every posture `a` — [`Self::leq`] is
+    /// REFLEXIVE (`a.leq(a) == true` via each axis's `<=` reflexivity), so
+    /// the single consecutive pair `(0, 1)` binds `a.leq(a) == true` and
+    /// the conjunction holds. AGREES with [`Self::is_chain`]'s diagonal-
+    /// duplicate verdict at every diagonal-duplicate slice — the two
+    /// projections diverge only where the ORDER matters, and duplicated
+    /// elements carry no ordering information to distinguish them.
+    /// Pinned as `resource_limits_is_ascending_of_diagonal_duplicate_is_true`.
+    ///
+    /// **Ascending shipped-preset triple closure**: `ResourceLimits::
+    /// is_ascending(&[EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS]) == true` — the shipped-preset triple
+    /// on the bounded-lattice diagonal is a leq-monotone ascending
+    /// sequence (`EMPTY.leq(DEFAULT).leq(UNBOUNDED)` pointwise), so every
+    /// consecutive pair satisfies `leq` and the conjunction closes.
+    /// Pinned as
+    /// `resource_limits_is_ascending_holds_on_the_ascending_shipped_preset_triple`.
+    ///
+    /// **Descending shipped-preset triple rejection**: `ResourceLimits::
+    /// is_ascending(&[UNBOUNDED_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS,
+    /// EMPTY_RESOURCE_LIMITS]) == false` — the reversed enumeration of the
+    /// same shipped-preset chain is a leq-monotone DESCENDING sequence, so
+    /// the first consecutive pair binds `UNBOUNDED.leq(DEFAULT) == false`
+    /// and the walk rejects at index 0. The DIRECT ORDER-SENSITIVITY
+    /// FALSIFICATION of the ascending closure one PERMUTATION axis over on
+    /// the SAME chain — [`Self::is_chain`] accepts BOTH orderings (its
+    /// verdict is order-INSENSITIVE), while this projection accepts only
+    /// the leq-sorted one. Pinned as
+    /// `resource_limits_is_ascending_rejects_the_descending_shipped_preset_triple`.
+    ///
+    /// **Non-monotone chain permutation rejection**: `ResourceLimits::
+    /// is_ascending(&[DEFAULT_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS]) == false` — the third permutation of
+    /// the shipped-preset chain has `DEFAULT.leq(EMPTY) == false` at the
+    /// first consecutive pair, so the walk rejects, EVEN THOUGH the slice
+    /// is a chain ([`Self::is_chain`] accepts it). Pins the DISCRIMINATING
+    /// arm between the sequence-level and set-level projections: a chain
+    /// permutation that is neither ascending nor descending falsifies BOTH
+    /// sequence-level projections while both set-level projections accept
+    /// it. Pinned as
+    /// `resource_limits_is_ascending_rejects_the_non_monotone_chain_permutation`.
+    ///
+    /// **Hand-authored antichain rejection**: `ResourceLimits::is_ascending(
+    /// &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE]) == false`
+    /// — the two hand-authored asymmetric postures are incomparable
+    /// (neither `MID.leq(OTHER)` nor `OTHER.leq(MID)`), so the single
+    /// consecutive pair rejects. Pinned as
+    /// `resource_limits_is_ascending_rejects_the_hand_authored_antichain_pair`.
+    ///
+    /// Encoded as a singly-indexed const-`while` walk (`i in 0..n-1`) with
+    /// one [`Self::leq`] delegation per consecutive pair — the SAME walk
+    /// structure the standard-library `<[T]>::is_sorted_by` idiom carries
+    /// on a totally-ordered carrier, generalized to the partial-order
+    /// [`Self::leq`] primitive here. `const fn` throughout via the
+    /// underlying `const fn` [`Self::leq`] body — a caller can pin an
+    /// ascending-sequence identity at compile time
+    /// (`const _: () = assert!(ResourceLimits::is_ascending(&[
+    /// EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS]));`) — a build-break rather than a
+    /// runtime `assert!` on the first execution.
+    ///
+    /// Pre-lift, a caller wanting "is this slice a leq-monotone ascending
+    /// sequence?" composed the singly-indexed
+    /// `postures.windows(2).all(|w| w[0].leq(w[1]))` two-primitive
+    /// scaffolding at every prospective callsite — the SAME PRIME
+    /// DIRECTIVE ≥2 pattern the set-level projections' pre-lift shapes
+    /// carried, one CARDINALITY axis over. Post-lift the ascending
+    /// verdict binds at ONE typed method the algebra exposes, and the
+    /// consecutive-pair walk lives at ONE implementation site — the peer
+    /// [`Self::is_descending`] shares the SAME walk structure and diverges
+    /// only on the pair-level primitive it delegates to (`geq` in place of
+    /// `leq`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the sequence-level ascending verdict on N preset-carried
+    /// resource proofs is itself a typed named `bool` predicate composing
+    /// them via the underlying pair-level [`Self::leq`] projection.
+    /// THEORY.md §V.1 — knowable platform; the consecutive-pair leq
+    /// conjunction becomes a TYPE-level operation on the posture algebra
+    /// rather than an inline windowed scaffolding at every consumer that
+    /// decides "is this slice a leq-monotone ascending sequence?"
+    ///
+    /// Frontier inspiration: the order-theoretic notion of a MONOTONE
+    /// SEQUENCE on a poset — the standard-library `Iterator::is_sorted`
+    /// / `<[T]>::is_sorted_by` idioms carry the totally-ordered case;
+    /// Haskell's `Data.List` idiom of `and . zipWith leq xs . tail xs`
+    /// on a partial-order carrier; Coq's `Sorted` inductive on lists over
+    /// a `Relation`. Translation through pleme-io primitives: the singly-
+    /// indexed consecutive-pair walk directly, with [`Self::leq`] as the
+    /// pair-level primitive, no new dep, no supertrait bound, `const fn`
+    /// throughout. The (ascending, descending) sequence-level pair opens
+    /// the door to `is_strictly_ascending` / `is_strictly_descending` via
+    /// [`Self::lt`] / [`Self::gt`] one STRICTNESS axis over, and to
+    /// `is_monotone` (`is_ascending || is_descending`) one DIRECTION-
+    /// AGNOSTIC axis over, at future callsites.
+    #[must_use]
+    pub const fn is_ascending(postures: &[Self]) -> bool {
+        let n = postures.len();
+        let mut i = 0;
+        while i + 1 < n {
+            if !postures[i].leq(postures[i + 1]) {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
+
+    /// Boolean `geq`-conjunction across every CONSECUTIVE pair of a slice
+    /// of postures — `postures` is DESCENDING (a geq-monotone sequence on
+    /// the pointwise partial order) iff every consecutive pair
+    /// `(postures[i], postures[i + 1])` satisfies
+    /// `postures[i].geq(postures[i + 1])`.
+    ///
+    /// The DIRECT SEQUENCE-LEVEL DUAL of [`Self::is_ascending`] one PAIR-
+    /// LEVEL-PRIMITIVE axis over — where `is_ascending` delegates to
+    /// [`Self::leq`], this projection delegates to [`Self::geq`]. The
+    /// two together close the (ascending, descending) two-cell face on
+    /// the sequence-level pairwise-relation surface, exactly one
+    /// CONSECUTIVE-VS-ALL-PAIRS axis over from the set-level (chain,
+    /// antichain) two-cell face [`Self::is_chain`] / [`Self::is_antichain`]
+    /// pin, and exactly one PAIR-LEVEL-PRIMITIVE axis over from the
+    /// (leq, geq) pair-level two-cell face [`Self::leq`] / [`Self::geq`]
+    /// pin one CARDINALITY axis down.
+    ///
+    /// The (ascending, descending) pair is NOT a partition of the
+    /// sequence-level verdict surface: a slice of ≥3 postures whose
+    /// consecutive-pair verdicts mix leq and geq (or contain any
+    /// incomparable consecutive pair) is neither ascending nor
+    /// descending, so the two sequence-level projections carry a THREE-
+    /// cell face (ascending, descending, non-monotone) at the sequence
+    /// level whose ends the two projections lifted here pin. The
+    /// (T, T) corner is achievable at every diagonal-duplicate slice
+    /// AND at every empty-or-singleton slice — [`Self::leq`] and
+    /// [`Self::geq`] are BOTH REFLEXIVE, so a repeated element passes
+    /// both consecutive-pair conjunctions.
+    ///
+    /// **Transitivity theorem — `is_descending ⇒ is_chain`**: for every
+    /// slice `postures`, `Self::is_descending(postures) == true` implies
+    /// `Self::is_chain(postures) == true`, by the SAME transitive
+    /// composition [`Self::is_ascending`] carries one PAIR-LEVEL-PRIMITIVE
+    /// axis over — the pointwise partial order is transitive under `geq`
+    /// (by [`Self::geq`]'s composition `other.leq(self)` and `leq`'s six-
+    /// axis transitivity), so a consecutive-pair geq-chain closes under
+    /// transitive composition into an all-pairs geq-chain, and `geq`
+    /// implies `is_comparable`. Pinned as
+    /// `resource_limits_is_descending_implies_is_chain_on_every_shipped_slice`.
+    ///
+    /// **Empty-slice vacuous truth**: `ResourceLimits::is_descending(&[])
+    /// == true` — the empty conjunction is vacuously true. Peer of
+    /// [`Self::is_ascending`]'s empty-slice identity one PAIR-LEVEL-
+    /// PRIMITIVE axis over: both cells of the (ascending, descending)
+    /// sequence-level pair AGREE at the empty slice. Pinned as
+    /// `resource_limits_is_descending_empty_slice_is_vacuously_true`.
+    ///
+    /// **Singleton vacuous truth**: `ResourceLimits::is_descending(&[a])
+    /// == true` for every posture `a`. Pinned as
+    /// `resource_limits_is_descending_singleton_is_vacuously_true`.
+    ///
+    /// **Diagonal-duplicate identity**: `ResourceLimits::is_descending(
+    /// &[a, a]) == true` for every posture `a` — [`Self::geq`] is
+    /// REFLEXIVE, so the single consecutive pair binds `a.geq(a) == true`.
+    /// AGREES with [`Self::is_ascending`]'s diagonal-duplicate verdict —
+    /// both leq and geq carry reflexivity, so the sequence-level (T, T)
+    /// corner opens at every diagonal-duplicate slice, distinct from the
+    /// set-level (T, F) verdict [`Self::is_chain`] / [`Self::is_antichain`]
+    /// carry on the same slice. Pinned as
+    /// `resource_limits_is_descending_of_diagonal_duplicate_is_true`.
+    ///
+    /// **Descending shipped-preset triple closure**: `ResourceLimits::
+    /// is_descending(&[UNBOUNDED_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS,
+    /// EMPTY_RESOURCE_LIMITS]) == true` — the reversed enumeration of the
+    /// shipped-preset chain is a geq-monotone descending sequence. The
+    /// DIRECT MIRROR of [`Self::is_ascending`]'s ascending closure one
+    /// PERMUTATION axis over — pinning the two closures on the SAME chain
+    /// in REVERSED orderings closes the (ascending, descending) sequence-
+    /// level pair on the shipped chain. Pinned as
+    /// `resource_limits_is_descending_holds_on_the_descending_shipped_preset_triple`.
+    ///
+    /// **Ascending shipped-preset triple rejection**: `ResourceLimits::
+    /// is_descending(&[EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS]) == false` — the ascending-sorted
+    /// enumeration binds `EMPTY.geq(DEFAULT) == false`. The DIRECT
+    /// FALSIFICATION of [`Self::is_ascending`]'s ascending closure one
+    /// CELL axis over on the SAME slice. Pinned as
+    /// `resource_limits_is_descending_rejects_the_ascending_shipped_preset_triple`.
+    ///
+    /// **Hand-authored antichain rejection**: `ResourceLimits::is_descending(
+    /// &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE]) == false`
+    /// — the two hand-authored asymmetric postures are incomparable, so
+    /// the single consecutive pair rejects. Pinned as
+    /// `resource_limits_is_descending_rejects_the_hand_authored_antichain_pair`.
+    ///
+    /// Encoded as a singly-indexed const-`while` walk (`i in 0..n-1`)
+    /// with one [`Self::geq`] delegation per consecutive pair — the SAME
+    /// iteration structure as [`Self::is_ascending`] one PAIR-LEVEL-
+    /// PRIMITIVE axis over, with only the inner primitive swapped between
+    /// the two. `const fn` throughout via the underlying `const fn`
+    /// [`Self::geq`] body.
+    ///
+    /// Pre-lift, a caller wanting "is this slice a geq-monotone descending
+    /// sequence?" composed the singly-indexed
+    /// `postures.windows(2).all(|w| w[0].geq(w[1]))` two-primitive
+    /// scaffolding at every prospective callsite. Post-lift the
+    /// descending verdict binds at ONE typed method the algebra exposes.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs. THEORY.md §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: `Iterator::is_sorted_by` with a reversed
+    /// comparator on a totally-ordered carrier; Coq's `StronglySorted`
+    /// on a `<=` relation applied with the argument order flipped.
+    /// Translation through pleme-io primitives: the singly-indexed
+    /// consecutive-pair walk directly, with [`Self::geq`] as the pair-
+    /// level primitive.
+    #[must_use]
+    pub const fn is_descending(postures: &[Self]) -> bool {
+        let n = postures.len();
+        let mut i = 0;
+        while i + 1 < n {
+            if !postures[i].geq(postures[i + 1]) {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -21111,6 +21395,336 @@ mod tests {
             DEFAULT_RESOURCE_LIMITS,
             HAND_AUTHORED_MID_POSTURE,
             HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+    }
+
+    // ── ResourceLimits::is_ascending / ::is_descending — sequence-level ──
+
+    #[test]
+    fn resource_limits_is_ascending_empty_slice_is_vacuously_true() {
+        // Empty-slice vacuous truth — the empty conjunction is vacuously
+        // true; the empty slice contains no consecutive pairs to reject.
+        // Peer of `is_chain(&[]) == true`'s empty-slice identity one
+        // CONSECUTIVE-VS-ALL-PAIRS axis over: both cells of the (set-
+        // level, sequence-level) projection pair AGREE at the empty slice
+        // on the vacuous-truth verdict.
+        assert!(ResourceLimits::is_ascending(&[]));
+    }
+
+    #[test]
+    fn resource_limits_is_descending_empty_slice_is_vacuously_true() {
+        // Peer of is_ascending's empty-slice identity one PAIR-LEVEL-
+        // PRIMITIVE axis over: both cells of the (ascending, descending)
+        // sequence-level pair AGREE at the empty slice.
+        assert!(ResourceLimits::is_descending(&[]));
+    }
+
+    #[test]
+    fn resource_limits_is_ascending_singleton_is_vacuously_true() {
+        // Singleton vacuous truth — a one-element slice contains no
+        // consecutive pairs, so the walk never enters the loop and
+        // returns `true` vacuously. Pinned on every canonical preset AND
+        // on both hand-authored asymmetric postures.
+        assert!(ResourceLimits::is_ascending(&[EMPTY_RESOURCE_LIMITS]));
+        assert!(ResourceLimits::is_ascending(&[DEFAULT_RESOURCE_LIMITS]));
+        assert!(ResourceLimits::is_ascending(&[UNBOUNDED_RESOURCE_LIMITS]));
+        assert!(ResourceLimits::is_ascending(&[HAND_AUTHORED_MID_POSTURE]));
+        assert!(ResourceLimits::is_ascending(&[HAND_AUTHORED_OTHER_POSTURE]));
+    }
+
+    #[test]
+    fn resource_limits_is_descending_singleton_is_vacuously_true() {
+        assert!(ResourceLimits::is_descending(&[EMPTY_RESOURCE_LIMITS]));
+        assert!(ResourceLimits::is_descending(&[DEFAULT_RESOURCE_LIMITS]));
+        assert!(ResourceLimits::is_descending(&[UNBOUNDED_RESOURCE_LIMITS]));
+        assert!(ResourceLimits::is_descending(&[HAND_AUTHORED_MID_POSTURE]));
+        assert!(ResourceLimits::is_descending(&[
+            HAND_AUTHORED_OTHER_POSTURE
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_ascending_of_diagonal_duplicate_is_true() {
+        // Diagonal-duplicate identity — `leq` is REFLEXIVE
+        // (`a.leq(a) == true` via each axis's `<=` reflexivity), so the
+        // single consecutive pair `(0, 1)` binds `a.leq(a) == true` and
+        // the conjunction holds at every diagonal-duplicate slice.
+        // AGREES with is_chain's diagonal-duplicate verdict — the two
+        // projections diverge only where the ORDER matters, and
+        // duplicated elements carry no ordering information.
+        assert!(ResourceLimits::is_ascending(&[
+            DEFAULT_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ]));
+        assert!(ResourceLimits::is_ascending(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_descending_of_diagonal_duplicate_is_true() {
+        // Diagonal-duplicate identity — `geq` is REFLEXIVE, so the
+        // single consecutive pair `(0, 1)` binds `a.geq(a) == true`.
+        // AGREES with is_ascending's diagonal-duplicate verdict — both
+        // leq and geq carry reflexivity, so the sequence-level (T, T)
+        // corner opens at every diagonal-duplicate slice, distinct from
+        // the set-level (T, F) verdict is_chain / is_antichain carry on
+        // the same slice.
+        assert!(ResourceLimits::is_descending(&[
+            DEFAULT_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ]));
+        assert!(ResourceLimits::is_descending(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_ascending_holds_on_the_ascending_shipped_preset_triple() {
+        // Ordered ascending closure — the shipped-preset triple on the
+        // bounded-lattice diagonal enumerated leq-ascending has
+        // `EMPTY.leq(DEFAULT) == true` and `DEFAULT.leq(UNBOUNDED) ==
+        // true`, so every consecutive pair passes the conjunction.
+        // Pinned on the arity-2 prefix AND on the full arity-3 chain so
+        // the walk closes at every non-degenerate ascending enumeration
+        // length.
+        assert!(ResourceLimits::is_ascending(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ]));
+        assert!(ResourceLimits::is_ascending(&[
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        assert!(ResourceLimits::is_ascending(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_descending_holds_on_the_descending_shipped_preset_triple() {
+        // Ordered descending closure — the reversed enumeration is a
+        // geq-monotone descending sequence. The DIRECT MIRROR of
+        // is_ascending's ascending closure one PERMUTATION axis over.
+        assert!(ResourceLimits::is_descending(&[
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+        assert!(ResourceLimits::is_descending(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ]));
+        assert!(ResourceLimits::is_descending(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_ascending_rejects_the_descending_shipped_preset_triple() {
+        // Order-sensitivity — the reversed enumeration of the same
+        // shipped-preset chain has `UNBOUNDED.leq(DEFAULT) == false` at
+        // the first consecutive pair. is_chain accepts BOTH orderings
+        // (order-INSENSITIVE); this projection accepts only the leq-
+        // sorted one — the DISCRIMINATING arm between the sequence-level
+        // and set-level projections.
+        assert!(!ResourceLimits::is_ascending(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_descending_rejects_the_ascending_shipped_preset_triple() {
+        // The direct falsification of is_ascending's ascending closure
+        // one CELL axis over on the SAME slice.
+        assert!(!ResourceLimits::is_descending(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_ascending_rejects_the_non_monotone_chain_permutation() {
+        // Non-monotone chain permutation — [DEFAULT, EMPTY, UNBOUNDED]
+        // is a permutation of the shipped-preset chain, so it IS a chain
+        // (is_chain accepts it), but the first consecutive pair binds
+        // `DEFAULT.leq(EMPTY) == false`, so the sequence-level ascending
+        // walk rejects. Also is_descending rejects — the third
+        // consecutive pair binds `EMPTY.geq(UNBOUNDED) == false`. Pins
+        // the DISCRIMINATING arm between the sequence-level and set-
+        // level projections at a slice that is a chain but neither
+        // ascending nor descending.
+        let slice = [
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ];
+        assert!(ResourceLimits::is_chain(&slice));
+        assert!(!ResourceLimits::is_ascending(&slice));
+        assert!(!ResourceLimits::is_descending(&slice));
+    }
+
+    #[test]
+    fn resource_limits_is_ascending_rejects_the_hand_authored_antichain_pair() {
+        // The two hand-authored asymmetric postures are incomparable
+        // (neither MID.leq(OTHER) nor OTHER.leq(MID)), so the single
+        // consecutive pair rejects. Pinned in both orderings — the pair-
+        // level leq verdict rejects on the antichain pair regardless of
+        // which side is `self`.
+        assert!(!ResourceLimits::is_ascending(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+        assert!(!ResourceLimits::is_ascending(&[
+            HAND_AUTHORED_OTHER_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_descending_rejects_the_hand_authored_antichain_pair() {
+        assert!(!ResourceLimits::is_descending(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+        assert!(!ResourceLimits::is_descending(&[
+            HAND_AUTHORED_OTHER_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_ascending_implies_is_chain_on_every_shipped_slice() {
+        // Transitivity theorem — for every slice `postures`,
+        // `is_ascending(postures) == true` implies `is_chain(postures)
+        // == true`. The pointwise partial order is TRANSITIVE, so a
+        // consecutive-pair leq-chain closes under transitive composition
+        // into the all-pairs leq-chain. Substrate-level THEOREM: the
+        // sequence-level ascending verdict is strictly STRONGER than the
+        // set-level chain verdict. Same identity for is_descending —
+        // both sequence-level projections imply the set-level chain
+        // projection.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        // Every arity-2 slice from the 5×5 preset matrix witnesses the
+        // implication in both directions of the (ascending, descending)
+        // pair.
+        for a in presets {
+            for b in presets {
+                let slice = [a, b];
+                if ResourceLimits::is_ascending(&slice) {
+                    assert!(
+                        ResourceLimits::is_chain(&slice),
+                        "is_ascending ⇒ is_chain failed on pair {a:?} / {b:?}",
+                    );
+                }
+                if ResourceLimits::is_descending(&slice) {
+                    assert!(
+                        ResourceLimits::is_chain(&slice),
+                        "is_descending ⇒ is_chain failed on pair {a:?} / {b:?}",
+                    );
+                }
+            }
+        }
+        // Load-bearing arity-3 witness — the shipped ascending chain
+        // triple satisfies is_ascending AND is_chain; the descending
+        // reversal satisfies is_descending AND is_chain.
+        let asc = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ];
+        assert!(ResourceLimits::is_ascending(&asc));
+        assert!(ResourceLimits::is_chain(&asc));
+        let desc = [
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ];
+        assert!(ResourceLimits::is_descending(&desc));
+        assert!(ResourceLimits::is_chain(&desc));
+    }
+
+    #[test]
+    fn resource_limits_is_ascending_and_is_descending_agree_at_empty_and_singleton_slices() {
+        // Empty-and-singleton agreement — the two sequence-level
+        // projections carry the SAME vacuous-truth verdict at every
+        // slice with fewer than two consecutive pairs. Pinned as a
+        // substrate-level identity so a future rewrite of either
+        // projection cannot silently drift from the shared vacuous-
+        // truth verdict.
+        assert_eq!(
+            ResourceLimits::is_ascending(&[]),
+            ResourceLimits::is_descending(&[]),
+        );
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            let single = [a];
+            assert_eq!(
+                ResourceLimits::is_ascending(&single),
+                ResourceLimits::is_descending(&single),
+                "empty-and-singleton agreement failed on singleton {a:?}",
+            );
+            let dup = [a, a];
+            assert_eq!(
+                ResourceLimits::is_ascending(&dup),
+                ResourceLimits::is_descending(&dup),
+                "diagonal-duplicate agreement failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_ascending_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the sequence-level ascending projection is
+        // evaluable in const context, so a caller can pin an ascending-
+        // sequence identity at compile time.
+        const _: () = assert!(ResourceLimits::is_ascending(&[]));
+        const _: () = assert!(ResourceLimits::is_ascending(&[EMPTY_RESOURCE_LIMITS]));
+        const _: () = assert!(ResourceLimits::is_ascending(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        const _: () = assert!(!ResourceLimits::is_ascending(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_descending_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — sibling of is_ascending one PAIR-LEVEL-
+        // PRIMITIVE axis over.
+        const _: () = assert!(ResourceLimits::is_descending(&[]));
+        const _: () = assert!(ResourceLimits::is_descending(&[EMPTY_RESOURCE_LIMITS]));
+        const _: () = assert!(ResourceLimits::is_descending(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+        const _: () = assert!(!ResourceLimits::is_descending(&[
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
         ]));
     }
 }

@@ -2155,6 +2155,347 @@ impl ResourceLimits {
             None
         }
     }
+
+    /// Boolean `is_comparable`-conjunction across every distinct pair of a
+    /// slice of postures — `postures` is a CHAIN (a totally-ordered subset of
+    /// the pointwise partial-order lattice) iff every distinct pair
+    /// `(postures[i], postures[j])` sits on the same lattice branch
+    /// (`postures[i].is_comparable(postures[j])`).
+    ///
+    /// The SET-LEVEL N-ary peer of [`Self::is_comparable`] one CARDINALITY
+    /// axis over on the (comparable, incomparable) × (pair-level, set-level)
+    /// primitive surface. Where [`Self::is_comparable`] decides the pairwise
+    /// question "do THESE TWO postures sit on the same branch?", THIS
+    /// projection decides the set-level question "does EVERY PAIR in this
+    /// slice sit on the same branch?" — the natural lift of the pair-level
+    /// verdict to the collection level, matching the arity extension the
+    /// [`Self::is_lower_bound_of`] / [`Self::is_upper_bound_of`] pair carries
+    /// one PRIMITIVE-KIND axis over on the (leq, comparable) × (pairwise,
+    /// N-ary) primitive surface.
+    ///
+    /// **Empty-slice vacuous truth**: `ResourceLimits::is_chain(&[]) == true`
+    /// — the empty conjunction is vacuously true; the empty slice contains
+    /// no distinct pairs to reject. Peer of
+    /// `is_lower_bound_of(&[]) == true`'s empty-slice identity one
+    /// PRIMITIVE-KIND axis over. Pinned as
+    /// `resource_limits_is_chain_empty_slice_is_vacuously_true`.
+    ///
+    /// **Singleton vacuous truth**: `ResourceLimits::is_chain(&[a]) == true`
+    /// for every posture `a` — a one-element slice contains no distinct
+    /// pairs, so the outer-and-inner-index conjunction never enters the
+    /// inner loop and returns `true` vacuously. Pinned as
+    /// `resource_limits_is_chain_singleton_is_vacuously_true`.
+    ///
+    /// **Diagonal-duplicate identity**: `ResourceLimits::is_chain(&[a, a])
+    /// == true` for every posture `a` — [`Self::is_comparable`] is
+    /// REFLEXIVE (`a.is_comparable(a) == true`), so the single distinct
+    /// index pair `(0, 1)` binds `a.is_comparable(a) == true` and the
+    /// conjunction holds. Distinguishes it from [`Self::is_antichain`] one
+    /// COVER-COMPLEMENT axis over, whose diagonal-duplicate verdict is
+    /// `false` (via [`Self::is_incomparable`]'s IRREFLEXIVITY). Pinned as
+    /// `resource_limits_is_chain_of_diagonal_duplicate_is_true`.
+    ///
+    /// **Ordered-chain closure**: `ResourceLimits::is_chain(
+    /// &[EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS]) == true` — the shipped-preset triple on
+    /// the bounded-lattice diagonal is an ascending chain (`EMPTY <=
+    /// DEFAULT <= UNBOUNDED` pointwise), so every distinct pair among the
+    /// three is comparable. Pinned as
+    /// `resource_limits_is_chain_holds_on_the_shipped_preset_triple`.
+    ///
+    /// **Antichain rejection**: `ResourceLimits::is_chain(
+    /// &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE]) == false`
+    /// — the two hand-authored asymmetric postures sit on distinct branches
+    /// (each is smaller on three axes and larger on the other three), so
+    /// neither pointwise-domination direction closes and the pair is
+    /// INCOMPARABLE. The chain conjunction rejects at the first
+    /// incomparable pair. Pinned as
+    /// `resource_limits_is_chain_rejects_the_hand_authored_antichain_pair`.
+    ///
+    /// **Mixed-set rejection**: `ResourceLimits::is_chain(
+    /// &[DEFAULT_RESOURCE_LIMITS, HAND_AUTHORED_MID_POSTURE,
+    /// HAND_AUTHORED_OTHER_POSTURE]) == false` — even though the first two
+    /// AND the first-and-third pairs are comparable in isolation, the
+    /// second-and-third pair is incomparable, so the whole-set conjunction
+    /// rejects. The set-level chain verdict is stricter than the union of
+    /// its pair-level verdicts — one antichain pair anywhere in the slice
+    /// falsifies the whole projection. Pinned as
+    /// `resource_limits_is_chain_rejects_mixed_slice_with_one_antichain_pair`.
+    ///
+    /// **`most_permissive_of` closure witness**: on every slice `postures`
+    /// where `ResourceLimits::is_chain(postures)` holds, the N-ary join
+    /// `most_permissive_of(postures)` is a MEMBER of the slice (not just a
+    /// bound above it) — the maximum element of a chain sits inside the
+    /// chain. The set-level verdict thus underwrites the pointwise-`max`
+    /// identification of the chain's top element. NOT pinned as a test in
+    /// this cohort (the general witness needs a slice-membership predicate
+    /// not yet lifted); recorded here as the future callsite the chain
+    /// verdict unlocks.
+    ///
+    /// Encoded as a doubly-indexed const-`while` walk (`i in 0..n`, `j in
+    /// i+1..n`) with one [`Self::is_comparable`] delegation per distinct
+    /// pair. The `j = i + 1` inner starting index skips the diagonal AND
+    /// the mirror pairs (`(j, i)` pairs the outer loop already visited from
+    /// the `(i, j)` direction) — [`Self::is_comparable`] is SYMMETRIC on
+    /// argument swap, so the mirror pair carries no additional information
+    /// and the (n choose 2) unique-pair count is the tight iteration budget
+    /// for the set-level verdict. `postures[i].is_comparable(postures[j])`
+    /// (not `.leq(...) || .geq(...)` directly) so the primitive delegation
+    /// lives at exactly one implementation site — a future re-derivation of
+    /// [`Self::is_comparable`] (e.g. to a different comparability
+    /// characterization) propagates to `is_chain` mechanically rather than
+    /// requiring a per-callsite fix-up.
+    ///
+    /// `const fn` for the same compile-time-pin reasons as
+    /// [`Self::is_comparable`] one CARDINALITY axis over on the (comparable,
+    /// incomparable) × (pair-level, set-level) primitive surface (`const _:
+    /// () = assert!(ResourceLimits::is_chain(&[EMPTY_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]));`), so a
+    /// caller can pin a chain-membership identity at compile time — a
+    /// build-break rather than a runtime `assert!` on the first execution.
+    /// `Copy` on [`ResourceLimits`] lets the const-fn loop index the slice
+    /// by value without an explicit `.clone()` (which const-fn would not
+    /// permit anyway).
+    ///
+    /// Pre-lift, a caller wanting "is this slice a chain?" composed the
+    /// doubly-indexed `postures.iter().enumerate().all(|(i, a)|
+    /// postures[i + 1..].iter().all(|b| a.is_comparable(*b)))` two-primitive
+    /// scaffolding at every prospective callsite — a PRIME DIRECTIVE ≥2
+    /// pattern once two consumers need the set-level chain verdict, and one
+    /// whose exhaustiveness the type system did NOT gate (a slice iterator
+    /// that stopped at the first `false` still needed the caller to bind
+    /// the outer-and-inner-index conjunction correctly, and a copy-paste
+    /// that swapped `postures[i]` with `postures[j]` would test the SAME
+    /// pair via [`Self::is_comparable`]'s symmetry — silent no-op — but a
+    /// copy-paste that inverted the primitive delegation to
+    /// [`Self::is_incomparable`] would test the DUAL question and silently
+    /// distort the verdict). Post-lift the chain verdict binds at ONE typed
+    /// method the algebra exposes, and the doubly-indexed all-pairs
+    /// scaffolding lives at ONE implementation site.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the set-level chain verdict on N preset-carried resource
+    /// proofs is itself a typed named `bool` predicate composing them via
+    /// the underlying pair-level [`Self::is_comparable`] projection.
+    /// THEORY.md §V.1 — knowable platform; the doubly-indexed all-pairs
+    /// comparability conjunction becomes a TYPE-level operation on the
+    /// posture algebra rather than an inline two-primitive scaffolding at
+    /// every consumer that decides "is this slice a totally-ordered
+    /// subset?"
+    ///
+    /// Frontier inspiration: Haskell's `Data.List.isSorted`
+    /// (adjacent-pair-comparability variant on `Ord a`); Coq's `Sorted`
+    /// inductive on lists over a `TotalOrder`; Idris's `Sorted` predicate
+    /// over `Ord`-carrying lists; the order-theoretic notion of a CHAIN
+    /// (a totally-ordered subset of a poset) canonicalized in
+    /// Birkhoff's *Lattice Theory* and every subsequent poset text.
+    /// Translation through pleme-io primitives: on a `PartialOrd`-derived
+    /// carrier the frontier `isSorted` variants reduce to adjacent-pair
+    /// comparability because total-order transitivity closes the chain; on
+    /// a PARTIAL order (the pointwise lattice) the adjacent-pair check is
+    /// INSUFFICIENT (three postures `a, b, c` where `a` and `c` are
+    /// comparable but `b` is incomparable to at least one of them satisfy
+    /// adjacent-pair comparability without forming a chain), so this
+    /// projection walks EVERY distinct pair rather than only the adjacent
+    /// ones — the strict partial-order generalization of the frontier
+    /// total-order predicate. No new dep, no supertrait bound, `const fn`
+    /// throughout.
+    #[must_use]
+    pub const fn is_chain(postures: &[Self]) -> bool {
+        let n = postures.len();
+        let mut i = 0;
+        while i < n {
+            let mut j = i + 1;
+            while j < n {
+                if !postures[i].is_comparable(postures[j]) {
+                    return false;
+                }
+                j += 1;
+            }
+            i += 1;
+        }
+        true
+    }
+
+    /// Boolean `is_incomparable`-conjunction across every distinct pair of a
+    /// slice of postures — `postures` is an ANTICHAIN (a pairwise-
+    /// incomparable subset of the pointwise partial-order lattice) iff every
+    /// distinct pair `(postures[i], postures[j])` sits on distinct branches
+    /// (`postures[i].is_incomparable(postures[j])`).
+    ///
+    /// The SET-LEVEL N-ary peer of [`Self::is_incomparable`] one CARDINALITY
+    /// axis over on the (comparable, incomparable) × (pair-level, set-level)
+    /// primitive surface — the DIRECT SET-LEVEL DUAL of [`Self::is_chain`]
+    /// one COVER-COMPLEMENT axis over on the SAME set-level cardinality
+    /// slice. Together the two close the (chain, antichain) two-cell face
+    /// on the set-level pairwise-relation surface, exactly ONE CARDINALITY
+    /// axis over from the (comparable, incomparable) two-cell partition of
+    /// the ordered-pair × verdict surface [`Self::is_comparable`] and
+    /// [`Self::is_incomparable`] closed one arity down.
+    ///
+    /// The (chain, antichain) pair is NOT a partition of the set-level
+    /// verdict surface: a slice of ≥3 postures whose pair-level verdicts
+    /// mix comparable and incomparable pairs is neither a chain nor an
+    /// antichain, so the two set-level projections carry a THREE-cell
+    /// face (chain, antichain, mixed) at the set level whose ends the two
+    /// projections lifted here pin. Distinguishes it from the pair-level
+    /// (comparable, incomparable) partition [`Self::is_comparable`] +
+    /// [`Self::is_incomparable`] EXHAUSTIVELY closed one arity down: at
+    /// arity 2 every pair is exactly one of comparable-or-incomparable, and
+    /// the two projections partition the ordered-pair × verdict surface; at
+    /// arity ≥3 the mixed-set cell opens up between them and the two
+    /// set-level projections carry the ends of that three-cell face.
+    ///
+    /// **Empty-slice vacuous truth**: `ResourceLimits::is_antichain(&[])
+    /// == true` — the empty conjunction is vacuously true; the empty slice
+    /// contains no distinct pairs to reject. Peer of [`Self::is_chain`]'s
+    /// empty-slice identity one COVER-COMPLEMENT axis over: both cells of
+    /// the (chain, antichain) set-level pair AGREE at the empty slice on
+    /// the vacuous-truth verdict — the two cells coincide at the empty
+    /// face of the set-level verdict surface. Pinned as
+    /// `resource_limits_is_antichain_empty_slice_is_vacuously_true`.
+    ///
+    /// **Singleton vacuous truth**: `ResourceLimits::is_antichain(&[a])
+    /// == true` for every posture `a` — a one-element slice contains no
+    /// distinct pairs, so the outer-and-inner-index conjunction never
+    /// enters the inner loop and returns `true` vacuously. Peer of
+    /// [`Self::is_chain`]'s singleton-vacuous-truth identity: both cells
+    /// AGREE at singleton slices too — the (chain, antichain) verdict
+    /// surface coincides at every slice with strictly fewer than two
+    /// distinct pairs. Pinned as
+    /// `resource_limits_is_antichain_singleton_is_vacuously_true`.
+    ///
+    /// **Diagonal-duplicate rejection**: `ResourceLimits::is_antichain(
+    /// &[a, a]) == false` for every posture `a` — [`Self::is_incomparable`]
+    /// is IRREFLEXIVE (`a.is_incomparable(a) == false`), so the single
+    /// distinct index pair `(0, 1)` binds `a.is_incomparable(a) == false`
+    /// and the conjunction rejects. Distinguishes it from [`Self::is_chain`]
+    /// one COVER-COMPLEMENT axis over, whose diagonal-duplicate verdict is
+    /// `true` (via [`Self::is_comparable`]'s REFLEXIVITY). The reflexivity/
+    /// irreflexivity divergence between the two pair-level projections
+    /// PROPAGATES to the set-level projections at any slice with a
+    /// duplicated element — the two set-level cells DIVERGE at every
+    /// diagonal-duplicate slice, the mirror of their AGREEMENT at every
+    /// empty-or-singleton slice one CARDINALITY axis over. Pinned as
+    /// `resource_limits_is_antichain_of_diagonal_duplicate_is_false`.
+    ///
+    /// **Hand-authored antichain closure**: `ResourceLimits::is_antichain(
+    /// &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE]) == true`
+    /// — the two hand-authored asymmetric postures sit on distinct
+    /// branches (each is smaller on three axes and larger on the other
+    /// three), so neither pointwise-domination direction closes and the
+    /// pair is INCOMPARABLE. The antichain conjunction accepts every
+    /// distinct pair of the slice. Pinned as
+    /// `resource_limits_is_antichain_holds_on_the_hand_authored_antichain_pair`.
+    ///
+    /// **Chain rejection**: `ResourceLimits::is_antichain(
+    /// &[EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS]) == false` — the
+    /// shipped-preset pair on the bounded-lattice diagonal is a strict
+    /// chain (`EMPTY.lt(DEFAULT)`), so the single distinct pair is
+    /// COMPARABLE and the antichain conjunction rejects. The DIRECT
+    /// FALSIFICATION of [`Self::is_chain`]'s ordered-chain closure one
+    /// CELL axis over on the SAME slice — the two set-level cells carry
+    /// the negation-paired verdict at every strictly-chained slice, the
+    /// mirror of their AGREEMENT at every empty-or-singleton slice one
+    /// CARDINALITY axis over. Pinned as
+    /// `resource_limits_is_antichain_rejects_the_shipped_preset_pair`.
+    ///
+    /// **Mixed-set rejection**: `ResourceLimits::is_antichain(
+    /// &[DEFAULT_RESOURCE_LIMITS, HAND_AUTHORED_MID_POSTURE,
+    /// HAND_AUTHORED_OTHER_POSTURE]) == false` — even though the
+    /// second-and-third pair is incomparable, the first pair
+    /// (`DEFAULT`-and-`MID`) is comparable, so the whole-set conjunction
+    /// rejects. Pins the three-cell (chain, antichain, mixed) set-level
+    /// face at the mixed-set cell: the same slice both [`Self::is_chain`]
+    /// AND [`Self::is_antichain`] reject at, and the third cell of the
+    /// three-cell face the two set-level projections carry the ends of.
+    /// Pinned as
+    /// `resource_limits_is_antichain_rejects_mixed_slice_with_one_comparable_pair`.
+    ///
+    /// **De Morgan mirror at arity 2**: on any two-element slice `[a, b]`
+    /// (`a != b`), `ResourceLimits::is_antichain(&[a, b]) ==
+    /// !ResourceLimits::is_chain(&[a, b])` — at exactly two DISTINCT
+    /// elements the set-level (chain, antichain) two-cell face reduces to
+    /// the pair-level (comparable, incomparable) two-cell partition and
+    /// the two cells become MUTUALLY EXCLUSIVE (the mixed cell requires
+    /// ≥3 elements to open). The set-level De Morgan mirror of the
+    /// pair-level identity `a.is_comparable(b) == !a.is_incomparable(b)`
+    /// [`Self::is_comparable`] pins one CARDINALITY axis over. Pinned as
+    /// `resource_limits_is_antichain_and_is_chain_are_mutually_exclusive_on_distinct_pairs`.
+    ///
+    /// Encoded as a doubly-indexed const-`while` walk (`i in 0..n`, `j in
+    /// i+1..n`) with one [`Self::is_incomparable`] delegation per distinct
+    /// pair — the SAME iteration structure as [`Self::is_chain`] one
+    /// PRIMITIVE-DELEGATION axis over, with only the inner primitive
+    /// swapped between the two. The two set-level projections share the
+    /// SAME two-primitive substrate (the doubly-indexed pair walk + one
+    /// pair-level projection) and diverge only on the pair-level primitive
+    /// they delegate to (`is_comparable` vs `is_incomparable`), which De
+    /// Morgan's law pins as the pair-level negation-paired substrate.
+    ///
+    /// `const fn` for the same compile-time-pin reasons as
+    /// [`Self::is_incomparable`] one CARDINALITY axis over on the
+    /// (comparable, incomparable) × (pair-level, set-level) primitive
+    /// surface (`const _: () = assert!(ResourceLimits::is_antichain(
+    /// &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE]));`), so
+    /// a caller can pin an antichain-membership identity at compile time
+    /// — a build-break rather than a runtime `assert!` on the first
+    /// execution.
+    ///
+    /// Pre-lift, a caller wanting "is this slice an antichain?" composed
+    /// the doubly-indexed `postures.iter().enumerate().all(|(i, a)|
+    /// postures[i + 1..].iter().all(|b| a.is_incomparable(*b)))` two-
+    /// primitive scaffolding at every prospective callsite — the SAME
+    /// PRIME DIRECTIVE ≥2 pattern [`Self::is_chain`]'s pre-lift shape
+    /// carried, with only the pair-level primitive swapped. Post-lift the
+    /// antichain verdict binds at ONE typed method the algebra exposes,
+    /// and the doubly-indexed all-pairs scaffolding lives at ONE
+    /// implementation site — the same site [`Self::is_chain`] delegates
+    /// to, factored down to a per-projection choice of pair-level
+    /// primitive.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the set-level antichain verdict on N preset-carried
+    /// resource proofs is itself a typed named `bool` predicate composing
+    /// them via the underlying pair-level [`Self::is_incomparable`]
+    /// projection. THEORY.md §V.1 — knowable platform; the doubly-indexed
+    /// all-pairs incomparability conjunction becomes a TYPE-level
+    /// operation on the posture algebra rather than an inline two-
+    /// primitive scaffolding at every consumer that decides "is this
+    /// slice a pairwise-incomparable subset?"
+    ///
+    /// Frontier inspiration: the order-theoretic notion of an ANTICHAIN
+    /// (a pairwise-incomparable subset of a poset) canonicalized in
+    /// Dilworth's theorem (a poset's width — the maximum antichain size —
+    /// equals the minimum number of chains covering the poset) and the
+    /// Robinson–Schensted correspondence's Young-tableau chain/antichain
+    /// duality; Haskell's `Data.List` idiom of
+    /// `all (uncurry incomparable) . pairs` for a partial-order carrier;
+    /// Coq's `Antichain` inductive on lists over a `PartialOrder`.
+    /// Translation through pleme-io primitives: the doubly-indexed pair
+    /// walk directly, with [`Self::is_incomparable`] as the pair-level
+    /// primitive, no new dep, no supertrait bound, `const fn` throughout.
+    /// The (chain, antichain) set-level pair opens the door to Dilworth's
+    /// width invariant on the [`ResourceLimits`] lattice at a future
+    /// callsite — the maximum antichain size is a substrate-level
+    /// dimension the two set-level projections lift here jointly
+    /// characterize.
+    #[must_use]
+    pub const fn is_antichain(postures: &[Self]) -> bool {
+        let n = postures.len();
+        let mut i = 0;
+        while i < n {
+            let mut j = i + 1;
+            while j < n {
+                if !postures[i].is_incomparable(postures[j]) {
+                    return false;
+                }
+                j += 1;
+            }
+            i += 1;
+        }
+        true
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -20148,5 +20489,320 @@ mod tests {
             EMPTY_RESOURCE_LIMITS.partial_cmp(DEFAULT_RESOURCE_LIMITS),
             Some(Ordering::Less),
         ));
+    }
+
+    #[test]
+    fn resource_limits_is_chain_empty_slice_is_vacuously_true() {
+        // Empty-slice vacuous truth — the empty conjunction is vacuously
+        // true; the empty slice contains no distinct pairs to reject.
+        // Peer of `is_lower_bound_of(&[]) == true`'s empty-slice identity
+        // one PRIMITIVE-KIND axis over on the (leq, comparable) ×
+        // (pairwise, N-ary) primitive surface.
+        assert!(ResourceLimits::is_chain(&[]));
+    }
+
+    #[test]
+    fn resource_limits_is_antichain_empty_slice_is_vacuously_true() {
+        // Empty-slice vacuous truth — the empty conjunction is vacuously
+        // true; the empty slice contains no distinct pairs to reject.
+        // Peer of `is_chain(&[]) == true`'s empty-slice identity one
+        // COVER-COMPLEMENT axis over: both cells of the (chain, antichain)
+        // set-level pair AGREE at the empty slice on the vacuous-truth
+        // verdict — the two cells coincide at the empty face of the
+        // set-level verdict surface.
+        assert!(ResourceLimits::is_antichain(&[]));
+    }
+
+    #[test]
+    fn resource_limits_is_chain_singleton_is_vacuously_true() {
+        // Singleton vacuous truth — a one-element slice contains no
+        // distinct pairs, so the outer-and-inner-index conjunction never
+        // enters the inner loop and returns `true` vacuously. Pinned on
+        // every canonical preset AND on both hand-authored asymmetric
+        // postures so the vacuous-truth verdict holds regardless of the
+        // singleton element's lattice position.
+        assert!(ResourceLimits::is_chain(&[EMPTY_RESOURCE_LIMITS]));
+        assert!(ResourceLimits::is_chain(&[DEFAULT_RESOURCE_LIMITS]));
+        assert!(ResourceLimits::is_chain(&[UNBOUNDED_RESOURCE_LIMITS]));
+        assert!(ResourceLimits::is_chain(&[HAND_AUTHORED_MID_POSTURE]));
+        assert!(ResourceLimits::is_chain(&[HAND_AUTHORED_OTHER_POSTURE]));
+    }
+
+    #[test]
+    fn resource_limits_is_antichain_singleton_is_vacuously_true() {
+        // Singleton vacuous truth — a one-element slice contains no
+        // distinct pairs, so the outer-and-inner-index conjunction never
+        // enters the inner loop and returns `true` vacuously. Peer of
+        // `is_chain`'s singleton-vacuous-truth identity: both cells AGREE
+        // at singleton slices — the (chain, antichain) verdict surface
+        // coincides at every slice with strictly fewer than two distinct
+        // pairs.
+        assert!(ResourceLimits::is_antichain(&[EMPTY_RESOURCE_LIMITS]));
+        assert!(ResourceLimits::is_antichain(&[DEFAULT_RESOURCE_LIMITS]));
+        assert!(ResourceLimits::is_antichain(&[UNBOUNDED_RESOURCE_LIMITS]));
+        assert!(ResourceLimits::is_antichain(&[HAND_AUTHORED_MID_POSTURE]));
+        assert!(ResourceLimits::is_antichain(&[HAND_AUTHORED_OTHER_POSTURE]));
+    }
+
+    #[test]
+    fn resource_limits_is_chain_of_diagonal_duplicate_is_true() {
+        // Diagonal-duplicate identity — `is_comparable` is REFLEXIVE
+        // (`a.is_comparable(a) == true`), so the single distinct index
+        // pair `(0, 1)` binds `a.is_comparable(a) == true` and the
+        // conjunction holds at every diagonal-duplicate slice.
+        // Distinguishes it from `is_antichain` one COVER-COMPLEMENT axis
+        // over, whose diagonal-duplicate verdict is `false` via
+        // `is_incomparable`'s IRREFLEXIVITY.
+        assert!(ResourceLimits::is_chain(&[
+            DEFAULT_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ]));
+        assert!(ResourceLimits::is_chain(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_antichain_of_diagonal_duplicate_is_false() {
+        // Diagonal-duplicate rejection — `is_incomparable` is
+        // IRREFLEXIVE (`a.is_incomparable(a) == false`), so the single
+        // distinct index pair `(0, 1)` binds `a.is_incomparable(a) ==
+        // false` and the conjunction rejects at every diagonal-duplicate
+        // slice. The reflexivity/irreflexivity divergence between the
+        // two pair-level projections PROPAGATES to the set-level
+        // projections at any slice with a duplicated element — the two
+        // set-level cells DIVERGE at every diagonal-duplicate slice, the
+        // mirror of their AGREEMENT at every empty-or-singleton slice
+        // one CARDINALITY axis over.
+        assert!(!ResourceLimits::is_antichain(&[
+            DEFAULT_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ]));
+        assert!(!ResourceLimits::is_antichain(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_chain_holds_on_the_shipped_preset_triple() {
+        // Ordered-chain closure — the shipped-preset triple on the
+        // bounded-lattice diagonal is an ascending chain (`EMPTY <=
+        // DEFAULT <= UNBOUNDED` pointwise), so every distinct pair among
+        // the three is comparable. Pinned in every permutation of the
+        // triple so the doubly-indexed all-pairs walk closes on every
+        // enumeration of the same chain.
+        assert!(ResourceLimits::is_chain(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        assert!(ResourceLimits::is_chain(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+        assert!(ResourceLimits::is_chain(&[
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_antichain_rejects_the_shipped_preset_pair() {
+        // Chain rejection — the shipped-preset pair on the bounded-
+        // lattice diagonal is a strict chain (`EMPTY.lt(DEFAULT)`), so
+        // the single distinct pair is COMPARABLE and the antichain
+        // conjunction rejects. The DIRECT FALSIFICATION of
+        // `is_chain_holds_on_the_shipped_preset_triple` one CELL axis
+        // over on the SAME lattice diagonal — the two set-level cells
+        // carry the negation-paired verdict at every strictly-chained
+        // slice, the mirror of their AGREEMENT at every empty-or-
+        // singleton slice one CARDINALITY axis over.
+        assert!(!ResourceLimits::is_antichain(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ]));
+        assert!(!ResourceLimits::is_antichain(&[
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        assert!(!ResourceLimits::is_antichain(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_chain_rejects_the_hand_authored_antichain_pair() {
+        // Antichain rejection — the two hand-authored asymmetric
+        // postures sit on distinct branches (each is smaller on three
+        // axes and larger on the other three), so neither pointwise-
+        // domination direction closes and the pair is INCOMPARABLE. The
+        // chain conjunction rejects at the first incomparable pair.
+        // Pinned in both orderings so the doubly-indexed pair walk
+        // rejects regardless of index order (the diagonal-adjacent
+        // pair-level rejection is symmetric on argument swap).
+        assert!(!ResourceLimits::is_chain(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+        assert!(!ResourceLimits::is_chain(&[
+            HAND_AUTHORED_OTHER_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_antichain_holds_on_the_hand_authored_antichain_pair() {
+        // Hand-authored antichain closure — the two hand-authored
+        // asymmetric postures sit on distinct branches (each is smaller
+        // on three axes and larger on the other three), so neither
+        // pointwise-domination direction closes and the pair is
+        // INCOMPARABLE. The antichain conjunction accepts every distinct
+        // pair of the slice. DIRECT LIFT of `is_chain`'s antichain
+        // rejection one CELL axis over on the SAME hand-authored pair —
+        // pinning BOTH cells' verdicts on the SAME load-bearing
+        // antichain pair closes the (chain, antichain) two-cell face on
+        // arity-2 slices as a substrate-level EXCLUSIVITY THEOREM.
+        assert!(ResourceLimits::is_antichain(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+        assert!(ResourceLimits::is_antichain(&[
+            HAND_AUTHORED_OTHER_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_chain_rejects_mixed_slice_with_one_antichain_pair() {
+        // Mixed-set rejection — both `(DEFAULT, MID)` and `(DEFAULT,
+        // OTHER)` are comparable pairs (DEFAULT's shipped `DEFAULT_MAX_*`
+        // per-axis values are all much larger than either hand-authored
+        // posture's, so DEFAULT dominates both pointwise), but the
+        // `(MID, OTHER)` pair is the hand-authored INCOMPARABLE pair.
+        // The set-level chain verdict is stricter than the union of its
+        // pair-level verdicts — one antichain pair anywhere in the
+        // slice falsifies the whole projection.
+        assert!(!ResourceLimits::is_chain(&[
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_antichain_rejects_mixed_slice_with_one_comparable_pair() {
+        // Mixed-set rejection — even though the second-and-third pair
+        // is incomparable (the hand-authored antichain pair), the first
+        // pair (`DEFAULT`-and-`MID`) is comparable, so the whole-set
+        // conjunction rejects. Pins the three-cell (chain, antichain,
+        // mixed) set-level face at the mixed-set cell: the same slice
+        // both `is_chain` AND `is_antichain` reject at, and the third
+        // cell of the three-cell face the two set-level projections
+        // carry the ends of.
+        assert!(!ResourceLimits::is_antichain(&[
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_antichain_and_is_chain_are_mutually_exclusive_on_distinct_pairs() {
+        // De Morgan mirror at arity 2 — on any two-element slice `[a,
+        // b]` with `a != b`, the set-level (chain, antichain) two-cell
+        // face reduces to the pair-level (comparable, incomparable)
+        // two-cell partition and the two cells become MUTUALLY
+        // EXCLUSIVE (the mixed cell requires ≥3 elements to open). The
+        // set-level De Morgan mirror of the pair-level identity
+        // `a.is_comparable(b) == !a.is_incomparable(b)` `is_comparable`
+        // pins one CARDINALITY axis over.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                if a == b {
+                    continue;
+                }
+                let pair = [a, b];
+                let chain = ResourceLimits::is_chain(&pair);
+                let antichain = ResourceLimits::is_antichain(&pair);
+                assert_ne!(
+                    chain, antichain,
+                    "distinct-pair mutual exclusivity failed on pair {a:?} / {b:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_chain_and_is_antichain_agree_at_empty_and_singleton_slices() {
+        // Empty-and-singleton agreement — the two set-level projections
+        // carry the SAME vacuous-truth verdict at every slice with
+        // strictly fewer than two distinct pairs (empty AND singleton).
+        // Pinned as a substrate-level identity so a future rewrite of
+        // either projection cannot silently drift from the shared
+        // vacuous-truth verdict.
+        assert_eq!(
+            ResourceLimits::is_chain(&[]),
+            ResourceLimits::is_antichain(&[]),
+        );
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            let single = [a];
+            assert_eq!(
+                ResourceLimits::is_chain(&single),
+                ResourceLimits::is_antichain(&single),
+                "singleton agreement failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_chain_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the set-level chain projection is evaluable in
+        // const context, so a caller can pin a chain-membership
+        // identity at compile time. Sibling of the const-fn
+        // evaluability pins on `is_comparable` one CARDINALITY axis
+        // over and on `is_lower_bound_of` / `is_upper_bound_of` one
+        // PRIMITIVE-KIND axis over on the N-ary aggregation surface.
+        const _: () = assert!(ResourceLimits::is_chain(&[]));
+        const _: () = assert!(ResourceLimits::is_chain(&[EMPTY_RESOURCE_LIMITS]));
+        const _: () = assert!(ResourceLimits::is_chain(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_antichain_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the set-level antichain projection is
+        // evaluable in const context, so a caller can pin an antichain-
+        // membership identity at compile time. Sibling of the const-fn
+        // evaluability pins on `is_incomparable` one CARDINALITY axis
+        // over and on `is_chain` one COVER-COMPLEMENT axis over.
+        const _: () = assert!(ResourceLimits::is_antichain(&[]));
+        const _: () = assert!(ResourceLimits::is_antichain(&[EMPTY_RESOURCE_LIMITS]));
+        const _: () = assert!(ResourceLimits::is_antichain(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
     }
 }

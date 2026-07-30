@@ -22,6 +22,7 @@
 //!   - Nested quasi-quotes.
 //!   - Hygiene / gensym — param names capture aggressively.
 
+use std::cmp::Ordering;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -1948,6 +1949,211 @@ impl ResourceLimits {
     #[must_use]
     pub const fn is_comparable(self, other: Self) -> bool {
         self.leq(other) || self.geq(other)
+    }
+
+    /// Pointwise partial-order VERDICT across the six ceilings — the
+    /// `Option<Ordering>` corner on the pairwise-relation surface. Folds
+    /// the four possible outcomes ([`Ordering::Less`], [`Ordering::Equal`],
+    /// [`Ordering::Greater`], INCOMPARABLE) into ONE typed value, so a
+    /// caller that wants "how do these two postures relate?" gets the
+    /// FULL verdict in a single call rather than composing
+    /// [`Self::leq`] / [`Self::geq`] / [`Self::lt`] / [`Self::gt`] /
+    /// `PartialEq::eq` at its callsite.
+    ///
+    /// The `Option<Ordering>` PROJECTION on the pairwise-relation surface —
+    /// the DIRECT LIFT of the frontier inspiration the just-lifted
+    /// [`Self::is_incomparable`] + [`Self::is_comparable`] pair explicitly
+    /// named (Rust's `PartialOrd::partial_cmp`, Haskell's
+    /// `Data.PartialOrd.compare :: a -> a -> Maybe Ordering`, Julia's
+    /// `Base.Order`, Coq's `PreOrder` decidability obligation). Those two
+    /// projections pinned ONE ARM each of the surface — the antichain
+    /// arm ([`Self::is_incomparable`] → `is_none()`) and the comparability
+    /// arm ([`Self::is_comparable`] → `is_some()`); THIS lift closes the
+    /// surface at its FULL VERDICT corner by returning the ordering
+    /// direction on the comparable arm and `None` on the antichain arm —
+    /// the (Less, Equal, Greater, None) 4-tile partition of the ordered
+    /// pair × verdict surface at ONE named primitive rather than a
+    /// four-way conditional composition at every consumer that wanted
+    /// the full verdict.
+    ///
+    /// **Antichain-arm identity**: `a.partial_cmp(b).is_none() ==
+    /// a.is_incomparable(b)` — the `None` arm of the return coincides
+    /// EXACTLY with the antichain-corner projection [`Self::is_incomparable`]
+    /// lifts. On the antichain the two-arm conjunction `!self.leq(other)
+    /// && !self.geq(other)` holds; neither branch of THIS method's
+    /// disjunction closes, so the fall-through arm binds. Pinned as a
+    /// substrate-level identity in the test cohort.
+    ///
+    /// **Comparability-arm identity**: `a.partial_cmp(b).is_some() ==
+    /// a.is_comparable(b)` — the `Some(_)` arm of the return coincides
+    /// EXACTLY with the comparability-corner projection [`Self::is_comparable`]
+    /// lifts. On every comparable pair at least one of the two
+    /// pointwise-domination legs closes, so the method returns a
+    /// concrete [`Ordering`] variant. Together with the antichain-arm
+    /// identity, THIS method is the JOINT LIFT of the (comparable,
+    /// incomparable) two-cell partition into ONE `Option<Ordering>`
+    /// value.
+    ///
+    /// **Equality on the diagonal**: `a.partial_cmp(a) ==
+    /// Some(Ordering::Equal)` on every posture — the `leq` reflexivity
+    /// (`a.leq(a) == true`) AND the `geq` reflexivity (`a.geq(a) ==
+    /// true`) both hold at the diagonal, so both branches of the
+    /// conjunction close and the equality arm fires. The diagonal cell
+    /// of the (Less, Equal, Greater, None) 4-tile partition on the
+    /// ordered pair × verdict surface pins to the Equal tile.
+    ///
+    /// **Ordering-direction agreement**: `a.partial_cmp(b) ==
+    /// Some(Ordering::Less)` iff `a.lt(b)` (strict less); `a.partial_cmp(b)
+    /// == Some(Ordering::Greater)` iff `a.gt(b)` (strict greater);
+    /// `a.partial_cmp(b) == Some(Ordering::Equal)` iff `a == b` (via
+    /// antisymmetry `a.leq(b) && a.geq(b) → a == b`). The four-arm
+    /// dispatch below binds each verdict tile to its named companion
+    /// primitive at exactly one implementation site, so a caller that
+    /// wants the strict-less verdict binds through either `a.lt(b)` OR
+    /// `matches!(a.partial_cmp(b), Some(Ordering::Less))` and both route
+    /// to the same substrate.
+    ///
+    /// **Antisymmetry under argument swap**: `a.partial_cmp(b) ==
+    /// b.partial_cmp(a).map(Ordering::reverse)` — swapping the argument
+    /// pair FLIPS the ordering-direction verdict (`Less <-> Greater`,
+    /// `Equal` fixed, `None` fixed). Discriminates [`Self::is_incomparable`] /
+    /// [`Self::is_comparable`] (both SYMMETRIC on argument swap) one
+    /// POSTURE axis over: the projections carry no directional content
+    /// and are argument-order-independent; the FULL verdict carries
+    /// directional content and inverts under swap. Pinned in the test
+    /// cohort.
+    ///
+    /// **Bottom-pole absorption**: `EMPTY_RESOURCE_LIMITS.partial_cmp(a)`
+    /// returns `Some(Ordering::Less)` for every posture `a` strictly
+    /// above [`EMPTY_RESOURCE_LIMITS`] on the pointwise partial order,
+    /// AND `Some(Ordering::Equal)` at `a == EMPTY_RESOURCE_LIMITS`.
+    /// [`EMPTY_RESOURCE_LIMITS`] is the bounded-lattice bottom, so on
+    /// every posture the `EMPTY.leq(a)` leg closes; the antisymmetric
+    /// leg discriminates the strict-less arm (concrete positive posture)
+    /// from the equality arm (`a == EMPTY`). The DIRECT REFINEMENT of
+    /// [`Self::is_comparable`]'s bottom-pole absorption pin one
+    /// DIRECTION-CONTENT axis over — where the comparability projection
+    /// folds TRUE at the bottom pole across every posture, THIS method
+    /// discriminates the equality-vs-strict-less refinement on the
+    /// SAME preset roster.
+    ///
+    /// **Top-pole absorption**: symmetric statement — `a.partial_cmp(
+    /// UNBOUNDED_RESOURCE_LIMITS)` returns `Some(Ordering::Less)` for
+    /// every posture `a` strictly below the top and
+    /// `Some(Ordering::Equal)` at `a == UNBOUNDED`. Pinned on the
+    /// canonical preset roster.
+    ///
+    /// **Antichain load-bearing arm**: `HAND_AUTHORED_MID_POSTURE
+    /// .partial_cmp(HAND_AUTHORED_OTHER_POSTURE) == None` — the two
+    /// hand-authored asymmetric postures sit on distinct branches
+    /// (each is smaller on three axes and larger on the other three),
+    /// so NEITHER pointwise-domination direction closes and the
+    /// fall-through `None` arm fires. The DIRECT LIFT of
+    /// [`Self::is_incomparable`]'s antichain-arm HOLDS pin AND
+    /// [`Self::is_comparable`]'s antichain-arm FALSIFIES pin one
+    /// PROJECTION axis over on the SAME hand-authored pair — the two
+    /// projections pinned each ARM's cell verdict; THIS method pins
+    /// the FULL `Option<Ordering>` return at the antichain corner
+    /// (`None`).
+    ///
+    /// Encoded as `if self.leq(other) && other.leq(self) { Equal } else
+    /// if self.leq(other) { Less } else if other.leq(self) { Greater }
+    /// else { None }` — a four-arm dispatch on the (`self.leq(other)`,
+    /// `other.leq(self)`) 2×2 boolean truth-table, with each arm binding
+    /// to its named companion primitive at exactly one implementation
+    /// site so a future re-derivation of [`Self::leq`] propagates to
+    /// EVERY ordering-direction verdict mechanically rather than
+    /// requiring a per-arm fix-up. The `self.leq(other) && other.leq(self)`
+    /// conjunction is the pointwise antisymmetric-equality
+    /// characterization — pinned as a substrate-level identity by the
+    /// `resource_limits_leq_is_antisymmetric` test cohort, so the
+    /// Equal-arm binding above is a substrate-level THEOREM rather than
+    /// an ad-hoc composition.
+    ///
+    /// `const fn` for the same compile-time-pin reasons as [`Self::leq`]
+    /// / [`Self::geq`] / [`Self::lt`] / [`Self::gt`] / [`Self::is_incomparable`]
+    /// / [`Self::is_comparable`] one COVER axis over on the pairwise-
+    /// relation surface (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.partial_cmp(UNBOUNDED_RESOURCE_LIMITS),
+    /// Some(Ordering::Less)));`) — a caller can pin a full-verdict
+    /// identity at compile time as a build-break rather than a runtime
+    /// `assert!` on the first execution. [`Ordering`] itself is
+    /// `const`-constructible (the three variants are plain enum
+    /// constructors), so the return-value cascade below stays inside
+    /// stable const-fn scope with no runtime allocation, no supertrait
+    /// bound, and no new dep.
+    ///
+    /// Pre-lift, a caller that wanted the FULL pointwise ordering
+    /// verdict either (a) composed four separate calls
+    /// (`a.lt(b)` / `a == b` / `a.gt(b)` / `a.is_incomparable(b)`) at
+    /// its callsite and dispatched on the resulting 4-way conditional —
+    /// a per-consumer FOUR-primitive composition whose exhaustiveness
+    /// the type system did NOT gate (a dropped arm silently miscategorized
+    /// the pair) — or (b) invoked [`Self::is_comparable`] to get the
+    /// `is_some`/`is_none` distinction and THEN chose one of `lt` / `gt`
+    /// / equality on the `is_some` arm — a two-stage composition that
+    /// double-evaluates the `leq` / `geq` primitives on every consumer.
+    /// Post-lift the full verdict is ONE named primitive returning
+    /// `Option<Ordering>`, `const fn`-composable into a compile-time
+    /// bound, and the two-primitive `leq(self, other)` + `leq(other, self)`
+    /// substrate binds at ONE implementation site — a ≥2 PRIME
+    /// DIRECTIVE trigger, since the four-way ordering dispatch appeared
+    /// inline at every prospective full-verdict callsite pre-lift.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the FULL pointwise partial-order verdict on
+    /// two preset-carried resource proofs is itself a typed
+    /// `Option<Ordering>` value whose four arms each carry a distinct
+    /// substrate-level relation proof (`Less` ⇒ strict-less on every
+    /// axis; `Equal` ⇒ pointwise equality on every axis; `Greater` ⇒
+    /// strict-greater on every axis; `None` ⇒ antichain — asymmetric
+    /// per-axis orderings). Pinning the projection at ONE typed
+    /// primitive makes the (Less, Equal, Greater, None) 4-tile
+    /// partition of the ordered pair × verdict surface a substrate-
+    /// level THEOREM rather than a per-consumer inline four-way
+    /// dispatch. THEORY.md §V.1 — knowable platform; the full-verdict
+    /// projection was an unnamed four-primitive composition recurring
+    /// at every prospective "how do these two postures relate?"
+    /// callsite pre-lift.
+    ///
+    /// Frontier inspiration: Rust's own `PartialOrd::partial_cmp :: fn
+    /// partial_cmp(&self, &Self) -> Option<Ordering>` — the CANONICAL
+    /// `Option<Ordering>` corner on any partial-order-carrying type;
+    /// Haskell's `Data.PartialOrd.compare :: PartialOrd a => a -> a
+    /// -> Maybe Ordering`; Julia's `Base.Order.NoOrder` sentinel folded
+    /// into `Option<Ordering>` on the `Base.Order`-compatible partial
+    /// order; Coq's `PreOrder` + `Decidable` typeclass composition
+    /// giving `forall a b, {leq a b} + {leq b a} + {~(leq a b) /\
+    /// ~(leq b a)}` — the three-way decidable sum where the third
+    /// disjunct is the antichain corner. Translation through pleme-io
+    /// primitives: the full-verdict projection binds through the just-
+    /// lifted [`Self::leq`] primitive (invoked twice — once in each
+    /// argument order — to derive the (`self.leq(other)`,
+    /// `other.leq(self)`) 2×2 truth-table the four-arm dispatch reads
+    /// against), no new dep, no supertrait bound (`Sized + Copy +
+    /// 'static`-plus-`Eq` stays untouched), no allocation, `const fn`
+    /// throughout. This method does NOT wire an `impl PartialOrd for
+    /// ResourceLimits` — the derive would give lexicographic ordering
+    /// on the six fields (WRONG for the pointwise lattice), and manually
+    /// implementing the trait would expose `<` / `<=` / `>` / `>=`
+    /// operators that overlap the named `lt` / `leq` / `gt` / `geq`
+    /// primitives already lifted one COVER axis over. Keeping the
+    /// `Option<Ordering>` corner at an inherent method preserves the
+    /// tight name-directed surface without introducing an operator
+    /// alias for each of the four directional predicates.
+    #[must_use]
+    pub const fn partial_cmp(self, other: Self) -> Option<Ordering> {
+        let self_leq = self.leq(other);
+        let other_leq = other.leq(self);
+        if self_leq && other_leq {
+            Some(Ordering::Equal)
+        } else if self_leq {
+            Some(Ordering::Less)
+        } else if other_leq {
+            Some(Ordering::Greater)
+        } else {
+            None
+        }
     }
 }
 
@@ -19683,5 +19889,264 @@ mod tests {
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.is_comparable(EMPTY_RESOURCE_LIMITS));
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.is_comparable(EMPTY_RESOURCE_LIMITS));
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.is_comparable(DEFAULT_RESOURCE_LIMITS));
+    }
+
+    // ── ResourceLimits::partial_cmp ───────────────────────────────────
+    //
+    // The `Option<Ordering>` FULL-VERDICT corner on the pairwise-
+    // relation surface — the JOINT LIFT of the (comparable, incomparable)
+    // two-cell partition together with the ordering-direction refinement
+    // on the comparable arm. See `ResourceLimits::partial_cmp` for the
+    // algebra; the pins below fix each documented property exactly once
+    // so a regression on any leg fires on a NAMED test rather than an
+    // ad-hoc downstream break.
+
+    #[test]
+    fn resource_limits_partial_cmp_is_equal_on_the_diagonal() {
+        // Diagonal-equality pin — `a.partial_cmp(a) ==
+        // Some(Ordering::Equal)` on every posture. The `leq`
+        // reflexivity closes both arms of the equality-guarding
+        // conjunction, so the diagonal cell of the (Less, Equal,
+        // Greater, None) 4-tile partition pins to the Equal tile.
+        // Sibling of `is_comparable_is_reflexive` one PROJECTION
+        // axis over — where the projection folds TRUE at the
+        // diagonal, THIS method refines the verdict to `Equal`.
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.partial_cmp(a),
+                Some(Ordering::Equal),
+                "diagonal-equality failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_partial_cmp_reverses_under_argument_swap() {
+        // Antisymmetric-swap pin — `a.partial_cmp(b) ==
+        // b.partial_cmp(a).map(Ordering::reverse)` on every pair.
+        // Swapping the argument pair FLIPS the ordering-direction
+        // verdict (`Less <-> Greater`), fixes the diagonal-equality
+        // arm, and fixes the antichain arm. Discriminates
+        // `is_incomparable` / `is_comparable` (both SYMMETRIC on
+        // argument swap) one POSTURE axis over — the FULL verdict
+        // carries directional content that inverts under swap where
+        // the projections do not.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                let forward = a.partial_cmp(b);
+                let swapped_reversed = b.partial_cmp(a).map(Ordering::reverse);
+                assert_eq!(
+                    forward, swapped_reversed,
+                    "swap-reverse failed on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_partial_cmp_none_iff_incomparable() {
+        // Antichain-arm identity pin — `a.partial_cmp(b).is_none()
+        // == a.is_incomparable(b)` on every pair. The `None` arm of
+        // the return coincides EXACTLY with the antichain-corner
+        // projection. Anchors the joint-lift claim: THIS method
+        // subsumes `is_incomparable` at its `is_none()` projection
+        // without drifting the antichain characterization.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                let via_partial_cmp = a.partial_cmp(b).is_none();
+                let via_is_incomparable = a.is_incomparable(b);
+                assert_eq!(
+                    via_partial_cmp, via_is_incomparable,
+                    "none-iff-incomparable failed on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_partial_cmp_some_iff_comparable() {
+        // Comparability-arm identity pin — `a.partial_cmp(b).is_some()
+        // == a.is_comparable(b)` on every pair. The `Some(_)` arm of
+        // the return coincides EXACTLY with the comparability-corner
+        // projection. The DUAL of the antichain-arm pin one CELL axis
+        // over on the (comparable, incomparable) partition — together
+        // the two pins close the JOINT LIFT of both cells at THIS
+        // method.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                let via_partial_cmp = a.partial_cmp(b).is_some();
+                let via_is_comparable = a.is_comparable(b);
+                assert_eq!(
+                    via_partial_cmp, via_is_comparable,
+                    "some-iff-comparable failed on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_partial_cmp_less_iff_lt() {
+        // Strict-less agreement pin — `a.partial_cmp(b) ==
+        // Some(Ordering::Less)` iff `a.lt(b)`. The strict-less arm of
+        // the (Less, Equal, Greater, None) 4-tile partition binds to
+        // the named `lt` companion primitive at exactly one dispatch
+        // site. A regression that drifted the arm off `lt` (e.g., to
+        // `leq` — including the equality diagonal) would fire here.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                let via_partial_cmp = a.partial_cmp(b) == Some(Ordering::Less);
+                let via_lt = a.lt(b);
+                assert_eq!(
+                    via_partial_cmp, via_lt,
+                    "less-iff-lt failed on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_partial_cmp_greater_iff_gt() {
+        // Strict-greater agreement pin — `a.partial_cmp(b) ==
+        // Some(Ordering::Greater)` iff `a.gt(b)`. Dual of the strict-
+        // less agreement pin one DIRECTION axis over on the (Less,
+        // Greater) strict-order pair — a regression that dropped the
+        // asymmetry between the two arms (e.g., collapsed both to
+        // `Less`) would fire here.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                let via_partial_cmp = a.partial_cmp(b) == Some(Ordering::Greater);
+                let via_gt = a.gt(b);
+                assert_eq!(
+                    via_partial_cmp, via_gt,
+                    "greater-iff-gt failed on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_partial_cmp_equal_iff_eq() {
+        // Equality agreement pin — `a.partial_cmp(b) ==
+        // Some(Ordering::Equal)` iff `a == b`. The equality arm of the
+        // 4-tile partition binds through the pointwise antisymmetric-
+        // equality characterization (`a.leq(b) && b.leq(a) → a == b`,
+        // pinned by `resource_limits_leq_is_antisymmetric`) to the
+        // `PartialEq::eq` companion. Discriminates a regression that
+        // drifted the Equal arm off the antisymmetric conjunction.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                let via_partial_cmp = a.partial_cmp(b) == Some(Ordering::Equal);
+                let via_eq = a == b;
+                assert_eq!(
+                    via_partial_cmp, via_eq,
+                    "equal-iff-eq failed on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_partial_cmp_folds_less_ascending_shipped_preset_chain() {
+        // Bottom-to-top-pole ordering pin — every strictly-ascending
+        // pair on the shipped preset chain (EMPTY <= DEFAULT <=
+        // UNBOUNDED) folds to `Some(Ordering::Less)`. The three
+        // shipped presets form a TOTALLY ORDERED chain on the
+        // pointwise partial-order (every DEFAULT_MAX_* is a concrete
+        // positive value strictly less than usize::MAX), so the
+        // strict-less arm fires on every ordered pair drawn in
+        // ascending direction.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.partial_cmp(DEFAULT_RESOURCE_LIMITS),
+            Some(Ordering::Less),
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.partial_cmp(UNBOUNDED_RESOURCE_LIMITS),
+            Some(Ordering::Less),
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.partial_cmp(UNBOUNDED_RESOURCE_LIMITS),
+            Some(Ordering::Less),
+        );
+    }
+
+    #[test]
+    fn resource_limits_partial_cmp_folds_greater_descending_shipped_preset_chain() {
+        // Top-to-bottom-pole ordering pin — every strictly-descending
+        // pair on the shipped preset chain folds to
+        // `Some(Ordering::Greater)`. The DUAL of the ascending pin
+        // one DIRECTION axis over — together the two pins close the
+        // (ascending, descending) direction pair on the shipped
+        // preset chain at the ordering-direction refinement.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.partial_cmp(EMPTY_RESOURCE_LIMITS),
+            Some(Ordering::Greater),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.partial_cmp(DEFAULT_RESOURCE_LIMITS),
+            Some(Ordering::Greater),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.partial_cmp(EMPTY_RESOURCE_LIMITS),
+            Some(Ordering::Greater),
+        );
+    }
+
+    #[test]
+    fn resource_limits_partial_cmp_folds_none_on_the_hand_authored_antichain_pair() {
+        // Antichain load-bearing arm — the two hand-authored
+        // asymmetric postures sit on distinct branches (each is
+        // smaller on three axes and larger on the other three), so
+        // NEITHER pointwise-domination direction closes and the
+        // fall-through `None` arm fires in both orderings. The DIRECT
+        // LIFT of `is_incomparable_holds_on_the_hand_authored_antichain_pair`
+        // one PROJECTION axis over on the SAME hand-authored pair —
+        // where the projection folds TRUE, THIS method folds to
+        // `None`. The two are the negation-paired sides of the
+        // (Some(_), None) two-cell partition of `Option<Ordering>`.
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.partial_cmp(HAND_AUTHORED_OTHER_POSTURE),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.partial_cmp(HAND_AUTHORED_MID_POSTURE),
+            None,
+        );
+    }
+
+    #[test]
+    fn resource_limits_partial_cmp_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the full-verdict projection is evaluable in
+        // const context, so a caller can pin an ordering-direction
+        // identity at compile time. Sibling of the const-fn
+        // evaluability pins on `leq` / `geq` / `lt` / `gt` /
+        // `is_incomparable` / `is_comparable` one COVER axis over on
+        // the pairwise-relation surface.
+        //
+        // `matches!` in const context requires the pattern's variants
+        // to be const-constructible — `Ordering::Less` / `Equal` /
+        // `Greater` are plain enum constructors, so the assertions
+        // below stay inside stable const-fn scope. A regression to a
+        // runtime `fn` here would fail the `const _: () = assert!(
+        // matches!(...))` bindings below at compile time.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.partial_cmp(EMPTY_RESOURCE_LIMITS),
+            Some(Ordering::Equal),
+        ));
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.partial_cmp(UNBOUNDED_RESOURCE_LIMITS),
+            Some(Ordering::Less),
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.partial_cmp(EMPTY_RESOURCE_LIMITS),
+            Some(Ordering::Greater),
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.partial_cmp(UNBOUNDED_RESOURCE_LIMITS),
+            Some(Ordering::Less),
+        ));
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.partial_cmp(DEFAULT_RESOURCE_LIMITS),
+            Some(Ordering::Less),
+        ));
     }
 }

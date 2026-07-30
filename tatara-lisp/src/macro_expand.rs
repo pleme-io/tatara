@@ -2496,6 +2496,135 @@ impl ResourceLimits {
         }
         true
     }
+
+    /// The MIDDLE-CELL corner of the (chain, antichain, mixed) three-cell
+    /// face on the set-level pairwise-relation surface — `postures` is a
+    /// MIXED slice iff it is NEITHER a chain NOR an antichain, computed
+    /// as the boolean conjunction of the negations of the just-lifted
+    /// [`Self::is_chain`] and [`Self::is_antichain`] projections.
+    ///
+    /// EXHAUSTIVELY CLOSES the (chain, antichain, mixed) three-cell face
+    /// at its previously-open middle cell — the two set-level ENDS the
+    /// just-lifted [`Self::is_chain`] / [`Self::is_antichain`] pair
+    /// pinned already carried the (chain, antichain) two ends; this
+    /// projection binds the third cell (F, F) as a NAMED typed `bool`.
+    /// The three cells now sit at (T, F) — pure chain, (F, T) — pure
+    /// antichain, and (F, F) — mixed. The fourth cell (T, T) is only
+    /// achievable at the degenerate empty-or-singleton slice where BOTH
+    /// projections agree on the vacuous-truth verdict — [`Self::is_mixed`]
+    /// reports `false` there too, aligning with the intuition that a
+    /// slice with strictly fewer than two distinct pairs is neither
+    /// chain-mixed nor antichain-mixed.
+    ///
+    /// **Empty-slice contract**: `ResourceLimits::is_mixed(&[]) == false`
+    /// — [`Self::is_chain`] and [`Self::is_antichain`] BOTH return `true`
+    /// vacuously, so `!true && !true == false`. The empty slice is NOT
+    /// mixed. Pinned as
+    /// `resource_limits_is_mixed_empty_slice_is_false`.
+    ///
+    /// **Singleton contract**: `ResourceLimits::is_mixed(&[a]) == false`
+    /// for every posture `a` — a one-element slice contains no distinct
+    /// pairs; both [`Self::is_chain`] and [`Self::is_antichain`] return
+    /// `true` vacuously. Pinned as
+    /// `resource_limits_is_mixed_singleton_is_false`.
+    ///
+    /// **Diagonal-duplicate contract**: `ResourceLimits::is_mixed(&[a, a])
+    /// == false` for every posture `a` — [`Self::is_chain`] returns
+    /// `true` via [`Self::is_comparable`]'s REFLEXIVITY;
+    /// [`Self::is_antichain`] returns `false` via
+    /// [`Self::is_incomparable`]'s IRREFLEXIVITY; the conjunction is
+    /// `!true && !false == false`. The diagonal-duplicate slice is a
+    /// CHAIN, not mixed. Pinned as
+    /// `resource_limits_is_mixed_of_diagonal_duplicate_is_false`.
+    ///
+    /// **Chain rejection**: `ResourceLimits::is_mixed(
+    /// &[EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS]) == false` — the shipped-preset triple
+    /// on the bounded-lattice diagonal is an ascending chain,
+    /// [`Self::is_chain`] returns `true`, and `!true && …` short-
+    /// circuits to `false`. Pinned as
+    /// `resource_limits_is_mixed_rejects_the_shipped_preset_triple`.
+    ///
+    /// **Antichain rejection**: `ResourceLimits::is_mixed(
+    /// &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE]) ==
+    /// false` — the hand-authored antichain pair binds
+    /// [`Self::is_antichain`] `true`, and `!… && !true == false`. Pinned
+    /// as
+    /// `resource_limits_is_mixed_rejects_the_hand_authored_antichain_pair`.
+    ///
+    /// **Mixed-set closure (LOAD-BEARING `true`-arm catch)**:
+    /// `ResourceLimits::is_mixed(&[DEFAULT_RESOURCE_LIMITS,
+    /// HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE]) == true`
+    /// — the (DEFAULT, MID) pair is comparable (falsifying
+    /// [`Self::is_antichain`]) while the (MID, OTHER) pair is
+    /// incomparable (falsifying [`Self::is_chain`]); the conjunction
+    /// `!false && !false == true`. This is the SAME fixture the sibling
+    /// [`Self::is_chain`] and [`Self::is_antichain`] BOTH reject at —
+    /// pinning the DISCRIMINATING positive-arm catch for the (mixed)
+    /// cell of the three-cell face. Pinned as
+    /// `resource_limits_is_mixed_holds_on_the_mixed_slice_with_one_comparable_and_one_antichain_pair`.
+    ///
+    /// **Trichotomy exhaustiveness at arity ≥3 with distinct
+    /// elements**: for every slice `postures` with `len() >= 2` and
+    /// pairwise-distinct elements, EXACTLY ONE of [`Self::is_chain`],
+    /// [`Self::is_antichain`], [`Self::is_mixed`] returns `true` — the
+    /// three cells partition the set-level verdict surface at every
+    /// non-degenerate slice. At arity < 2 (empty and singleton) the
+    /// verdict surface degenerates to the vacuous-truth (T, T, F)
+    /// cell; at arity ≥2 with any duplicated element the verdict
+    /// surface degenerates to the chain-only (T, F, F) cell (chain
+    /// wins via reflexivity, antichain drops via irreflexivity).
+    /// Pinned as
+    /// `resource_limits_is_chain_is_antichain_and_is_mixed_partition_the_verdict_surface_on_distinct_slices`.
+    ///
+    /// Encoded as the boolean conjunction of the negations of the two
+    /// just-lifted set-level projections — one implementation site, ZERO
+    /// new pair-level primitive delegations, `const fn` throughout via
+    /// the underlying `const fn` bodies. The doubly-indexed all-pairs
+    /// walk lives at ONE site (the [`Self::is_chain`] +
+    /// [`Self::is_antichain`] implementations), and this projection
+    /// factors THROUGH both without reopening it.
+    ///
+    /// Pre-lift, a caller wanting "is this slice a mixed subset (neither
+    /// chain nor antichain)?" composed the doubly-indexed
+    /// `!postures.iter().enumerate().all(|(i, a)|
+    /// postures[i + 1..].iter().all(|b| a.is_comparable(*b))) &&
+    /// !postures.iter().enumerate().all(|(i, a)|
+    /// postures[i + 1..].iter().all(|b| a.is_incomparable(*b)))`
+    /// two-scaffolding conjunction at every prospective callsite —
+    /// the SAME PRIME DIRECTIVE ≥2 pattern the pair of just-lifted
+    /// projections' pre-lift shapes carried, doubled. Post-lift the
+    /// mixed-set verdict binds at ONE typed method the algebra exposes.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the set-level mixed-set verdict on N preset-
+    /// carried resource proofs is itself a typed named `bool` predicate
+    /// composing them via the underlying set-level [`Self::is_chain`] +
+    /// [`Self::is_antichain`] projections. THEORY.md §V.1 — knowable
+    /// platform; the doubly-negated set-level conjunction becomes a
+    /// TYPE-level operation on the posture algebra rather than an inline
+    /// negation-composition at every consumer that decides "is this
+    /// slice a mixed subset?"
+    ///
+    /// Frontier inspiration: the order-theoretic notion of a MIXED
+    /// subset (a subset that is neither a chain nor an antichain) sits
+    /// at the interior of the (chain, antichain, mixed) trichotomy that
+    /// canonicalizes the SET-LEVEL verdict surface of a poset — a slice
+    /// whose Hasse-diagram induced subgraph carries both order-comparable
+    /// AND order-incomparable edges. Dilworth's width invariant and the
+    /// dual Mirsky theorem (a poset's height equals the minimum number of
+    /// antichains covering it) both take mixed sets as their non-trivial
+    /// inputs — a chain has width 1 and a mixed set of width ≥2 is
+    /// exactly where the width invariant becomes informative. Haskell's
+    /// `Data.List` idiom of `not . isChain && not . isAntichain`
+    /// composition on a partial-order carrier. Translation through
+    /// pleme-io primitives: the boolean conjunction of the negations of
+    /// the just-lifted set-level projections, no new dep, no supertrait
+    /// bound, `const fn` throughout.
+    #[must_use]
+    pub const fn is_mixed(postures: &[Self]) -> bool {
+        !Self::is_chain(postures) && !Self::is_antichain(postures)
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -20801,6 +20930,185 @@ mod tests {
         const _: () = assert!(ResourceLimits::is_antichain(&[]));
         const _: () = assert!(ResourceLimits::is_antichain(&[EMPTY_RESOURCE_LIMITS]));
         const _: () = assert!(ResourceLimits::is_antichain(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_mixed_empty_slice_is_false() {
+        // Empty-slice contract — is_chain and is_antichain BOTH return
+        // `true` vacuously, so `!true && !true == false`. The empty
+        // slice is NOT mixed. Sibling posture to the vacuous-truth
+        // verdicts of is_chain + is_antichain one CELL axis over on the
+        // (chain, antichain, mixed) three-cell face.
+        assert!(!ResourceLimits::is_mixed(&[]));
+    }
+
+    #[test]
+    fn resource_limits_is_mixed_singleton_is_false() {
+        // Singleton contract — a one-element slice contains no distinct
+        // pairs; is_chain + is_antichain BOTH return `true` vacuously.
+        // Pinned on every canonical preset AND on both hand-authored
+        // asymmetric postures so the false-at-singleton verdict holds
+        // regardless of the singleton element's lattice position.
+        assert!(!ResourceLimits::is_mixed(&[EMPTY_RESOURCE_LIMITS]));
+        assert!(!ResourceLimits::is_mixed(&[DEFAULT_RESOURCE_LIMITS]));
+        assert!(!ResourceLimits::is_mixed(&[UNBOUNDED_RESOURCE_LIMITS]));
+        assert!(!ResourceLimits::is_mixed(&[HAND_AUTHORED_MID_POSTURE]));
+        assert!(!ResourceLimits::is_mixed(&[HAND_AUTHORED_OTHER_POSTURE]));
+    }
+
+    #[test]
+    fn resource_limits_is_mixed_of_diagonal_duplicate_is_false() {
+        // Diagonal-duplicate contract — is_chain returns `true` via
+        // is_comparable's REFLEXIVITY; is_antichain returns `false` via
+        // is_incomparable's IRREFLEXIVITY; the conjunction
+        // `!true && !false == false`. The diagonal-duplicate slice is a
+        // CHAIN (per the reflexivity arm), not mixed.
+        assert!(!ResourceLimits::is_mixed(&[
+            DEFAULT_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+        ]));
+        assert!(!ResourceLimits::is_mixed(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_mixed_rejects_the_shipped_preset_triple() {
+        // Chain rejection — the shipped-preset triple on the bounded-
+        // lattice diagonal is an ascending chain, is_chain returns
+        // `true`, and `!true && …` short-circuits to `false`. A PURE
+        // chain is not mixed. Pinned in every permutation of the triple
+        // so the projection factors through the ordering-agnostic
+        // sibling is_chain verdict on the same chain.
+        assert!(!ResourceLimits::is_mixed(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        assert!(!ResourceLimits::is_mixed(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_mixed_rejects_the_hand_authored_antichain_pair() {
+        // Antichain rejection — the hand-authored antichain pair binds
+        // is_antichain to `true`, and `!… && !true == false`. A PURE
+        // antichain is not mixed. Pinned in both orderings so the
+        // projection factors through the argument-swap-symmetric
+        // sibling is_antichain verdict on the same antichain.
+        assert!(!ResourceLimits::is_mixed(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+        assert!(!ResourceLimits::is_mixed(&[
+            HAND_AUTHORED_OTHER_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_mixed_holds_on_the_mixed_slice_with_one_comparable_and_one_antichain_pair(
+    ) {
+        // Mixed-set closure — LOAD-BEARING `true`-arm catch. The
+        // (DEFAULT, MID) pair is comparable (falsifying is_antichain)
+        // while the (MID, OTHER) pair is incomparable (falsifying
+        // is_chain); the conjunction `!false && !false == true`. This
+        // is the SAME fixture the sibling is_chain + is_antichain BOTH
+        // reject at — the DISCRIMINATING positive-arm catch for the
+        // (mixed) cell of the three-cell face the two set-level
+        // projections carry the ends of.
+        assert!(ResourceLimits::is_mixed(&[
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_chain_is_antichain_and_is_mixed_partition_the_verdict_surface_on_distinct_slices(
+    ) {
+        // Trichotomy exhaustiveness at arity ≥2 with pairwise-distinct
+        // elements — EXACTLY ONE of is_chain, is_antichain, is_mixed
+        // returns `true` on every pair OR triple drawn from the shipped
+        // presets whose elements are pairwise distinct. The three cells
+        // partition the set-level verdict surface at every non-
+        // degenerate slice. Substrate-level identity: pinning it here
+        // catches a future rewrite of any of the three projections that
+        // silently drifts from the partition contract.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        // Arity-2 sweep — the mixed cell CANNOT open at arity 2 (only
+        // one distinct pair), so is_mixed is always false and the
+        // partition reduces to the (chain, antichain) two-cell face
+        // that is_chain + is_antichain already pinned MUTUALLY
+        // EXCLUSIVE. Cross-check that the three-cell projection
+        // AGREES with the two-cell projection at arity 2.
+        for a in presets {
+            for b in presets {
+                if a == b {
+                    continue;
+                }
+                let pair = [a, b];
+                let chain = ResourceLimits::is_chain(&pair);
+                let antichain = ResourceLimits::is_antichain(&pair);
+                let mixed = ResourceLimits::is_mixed(&pair);
+                let true_count = usize::from(chain) + usize::from(antichain) + usize::from(mixed);
+                assert_eq!(
+                    true_count, 1,
+                    "trichotomy partition failed on distinct pair {a:?} / {b:?} — (chain, antichain, mixed) = ({chain}, {antichain}, {mixed})",
+                );
+                assert!(
+                    !mixed,
+                    "is_mixed unexpectedly true on distinct pair {a:?} / {b:?} — the mixed cell requires ≥3 elements to open",
+                );
+            }
+        }
+        // Arity-3 sweep on distinct triples — the mixed cell opens
+        // whenever the triple carries both a comparable and an
+        // incomparable pair (e.g. DEFAULT + MID + OTHER above).
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    if a == b || b == c || a == c {
+                        continue;
+                    }
+                    let triple = [a, b, c];
+                    let chain = ResourceLimits::is_chain(&triple);
+                    let antichain = ResourceLimits::is_antichain(&triple);
+                    let mixed = ResourceLimits::is_mixed(&triple);
+                    let true_count =
+                        usize::from(chain) + usize::from(antichain) + usize::from(mixed);
+                    assert_eq!(
+                        true_count, 1,
+                        "trichotomy partition failed on distinct triple {a:?} / {b:?} / {c:?} — (chain, antichain, mixed) = ({chain}, {antichain}, {mixed})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_mixed_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the set-level mixed projection is evaluable
+        // in const context, so a caller can pin a mixed-set identity
+        // at compile time. Sibling of the const-fn evaluability pins
+        // on is_chain + is_antichain one CELL axis over.
+        const _: () = assert!(!ResourceLimits::is_mixed(&[]));
+        const _: () = assert!(!ResourceLimits::is_mixed(&[EMPTY_RESOURCE_LIMITS]));
+        const _: () = assert!(ResourceLimits::is_mixed(&[
+            DEFAULT_RESOURCE_LIMITS,
             HAND_AUTHORED_MID_POSTURE,
             HAND_AUTHORED_OTHER_POSTURE,
         ]));

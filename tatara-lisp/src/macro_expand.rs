@@ -4102,6 +4102,189 @@ impl ResourceLimits {
     pub const fn is_strictly_monotone(postures: &[Self]) -> bool {
         Self::is_strictly_ascending(postures) || Self::is_strictly_descending(postures)
     }
+
+    /// Bounded-lattice BOTTOM identity — `self.is_bottom()` holds iff
+    /// `self.leq(EMPTY_RESOURCE_LIMITS)`, which on this pointwise partial
+    /// order means every ceiling is `0`. Since [`EMPTY_RESOURCE_LIMITS`]
+    /// sits at the pointwise minimum on every axis (`0` is the `usize`
+    /// minimum), the only posture at-or-below it is itself, so
+    /// `self.is_bottom() ⇔ self == EMPTY_RESOURCE_LIMITS` on the
+    /// [`ResourceLimits`] lattice.
+    ///
+    /// The BOTTOM pole predicate of the (bottom, top) 2-cell face on the
+    /// LATTICE-POLE identity axis. Peer of [`Self::is_top`] one
+    /// LATTICE-POLE axis over: where `is_top` decides membership in the
+    /// top of the bounded lattice (the ceiling-lifted preset), this
+    /// decides membership in the bottom (the zero preset). Together the
+    /// two close the (bottom, top) pole-identity 2-cell face — every
+    /// posture is either the bottom, the top, or neither, with each pole
+    /// detectable at ONE named typed predicate.
+    ///
+    /// Encoded as `self.leq(EMPTY_RESOURCE_LIMITS)` — the one-primitive
+    /// bounded-lattice-bottom encoding via the already-lifted
+    /// [`Self::leq`] primitive. Equivalent on the [`ResourceLimits`]
+    /// pointwise partial order to `self == EMPTY_RESOURCE_LIMITS`: since
+    /// EMPTY sits at the pointwise minimum on every axis, `x ≤ EMPTY`
+    /// reduces to `x == EMPTY` on every axis (`x ≤ 0` on `usize` iff
+    /// `x == 0`), so pointwise leq-below-EMPTY is componentwise equality
+    /// with EMPTY. The leq-encoding is chosen because it does NOT rely on
+    /// [`PartialEq::eq`] being `const fn` (which the derived impl is not
+    /// on stable) — the [`Self::leq`] call is already `const fn` on the
+    /// algebra, and a future stabilization of derived `const PartialEq`
+    /// can substitute the structural encoding without changing the
+    /// caller-visible semantics.
+    ///
+    /// **Preset identity**: `EMPTY_RESOURCE_LIMITS.is_bottom() == true`
+    /// structurally — the bottom preset is the bottom of the lattice
+    /// under `leq`-reflexivity. Pinned as
+    /// `resource_limits_empty_is_bottom`.
+    ///
+    /// **Preset rejection**: `DEFAULT_RESOURCE_LIMITS.is_bottom() ==
+    /// false` and `UNBOUNDED_RESOURCE_LIMITS.is_bottom() == false` —
+    /// every `DEFAULT_MAX_*` module constant is a concrete positive value
+    /// strictly greater than `0`, and every `UNBOUNDED_RESOURCE_LIMITS`
+    /// field is `usize::MAX`, so both `DEFAULT.leq(EMPTY)` and
+    /// `UNBOUNDED.leq(EMPTY)` fail on every axis. Pinned as
+    /// `resource_limits_non_bottom_presets_are_not_bottom`.
+    ///
+    /// **Universal-bottom characterization**: `self.is_bottom() ⇔
+    /// self.leq(a) for every posture a`, since EMPTY is the pointwise
+    /// minimum and any element at-or-below EMPTY is at-or-below every
+    /// other element via `leq`-transitivity. Pinned as
+    /// `resource_limits_is_bottom_iff_leq_every_posture`.
+    ///
+    /// **Field-level equivalence**: `self.is_bottom() ⇔
+    /// (max_expansion_depth == 0 && … all six fields == 0)`. Pinned as
+    /// `resource_limits_is_bottom_agrees_with_all_fields_zero`.
+    ///
+    /// `const fn` so a caller can pin the pole-identity at compile time
+    /// (`const _: () = assert!(EMPTY_RESOURCE_LIMITS.is_bottom());`)
+    /// rather than deferring the composition to a runtime
+    /// `Default::default() == self` chain — sibling of the const-fn
+    /// evaluability pins on [`Self::leq`] one PREDICATE-KIND axis over.
+    /// Const-fn evaluability also permits the pole predicates to gate
+    /// `const _: () = assert!(...)` invariants on newly-authored
+    /// `pub const` preset composites — a caller stitching a new preset
+    /// from the shipped ones asserts at compile time that the composite
+    /// is NOT accidentally the pole (a strictest-with-EMPTY that
+    /// collapsed a field to zero, or a most-permissive-with-UNBOUNDED
+    /// that lifted every field).
+    ///
+    /// Pre-lift, a caller wanting "is this posture the bottom preset?"
+    /// composed either the six-primitive `self.max_expansion_depth == 0
+    /// && …` field-conjunction at its call site (PRIME DIRECTIVE ≥2
+    /// pattern once two consumers need it, brittle to a seventh ceiling
+    /// extension dropping the new field from the check) or the `self ==
+    /// EMPTY_RESOURCE_LIMITS` equality-with-preset invocation
+    /// (non-`const fn` on stable via the derived `PartialEq`, so unusable
+    /// in `const _: () = assert!(...)` contexts). Post-lift the pole
+    /// membership binds at ONE typed method the algebra exposes, and
+    /// both drift windows close: extending the struct with a seventh
+    /// ceiling propagates through `leq` and the bottom preset in lockstep
+    /// via rustc's field-exhaustiveness on the `..Default::default()`-
+    /// free literals, and the const-fn evaluability carries the pole-
+    /// identity into any const context.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the bottom-pole identity of a preset-carried resource
+    /// proof is itself a typed named `bool` predicate composing it via
+    /// the underlying `leq`. THEORY.md §V.1 — knowable platform; the
+    /// pole-identity binds at ONE typed method rather than an inline
+    /// six-primitive field-conjunction (or non-`const fn` `PartialEq`
+    /// call) at every consumer that decides pole membership. Frontier
+    /// inspiration: Haskell's `Bounded` typeclass exposing `minBound` as
+    /// a named entry alongside the derived `Eq`; standard-library idioms
+    /// `x == T::default()` for structural bottom-identity in Rust;
+    /// lattice-theory's canonical `isBot`/`isTop` observers on
+    /// `BoundedLattice` implementations (Kmett's `lattices` package).
+    /// Translation through pleme-io primitives is the plain `const fn`
+    /// [`Self::leq`] call against the already-shipped
+    /// [`EMPTY_RESOURCE_LIMITS`] bottom preset — no typeclass
+    /// indirection; the bounded-lattice pole constants already exist as
+    /// `pub const` on the algebra so the pole predicate picks them up
+    /// structurally.
+    #[must_use]
+    pub const fn is_bottom(self) -> bool {
+        self.leq(EMPTY_RESOURCE_LIMITS)
+    }
+
+    /// Bounded-lattice TOP identity — `self.is_top()` holds iff
+    /// `UNBOUNDED_RESOURCE_LIMITS.leq(self)`, which on this pointwise
+    /// partial order means every ceiling is `usize::MAX`. Since
+    /// [`UNBOUNDED_RESOURCE_LIMITS`] sits at the pointwise maximum on
+    /// every axis, the only posture at-or-above it is itself, so
+    /// `self.is_top() ⇔ self == UNBOUNDED_RESOURCE_LIMITS` on the
+    /// [`ResourceLimits`] lattice.
+    ///
+    /// The TOP pole predicate of the (bottom, top) 2-cell face on the
+    /// LATTICE-POLE identity axis. Peer of [`Self::is_bottom`] one
+    /// LATTICE-POLE axis over: where `is_bottom` decides membership in
+    /// the bottom of the bounded lattice (the zero preset), this decides
+    /// membership in the top (the ceiling-lifted preset). Together the
+    /// two close the (bottom, top) pole-identity 2-cell face.
+    ///
+    /// Encoded as `UNBOUNDED_RESOURCE_LIMITS.leq(self)` — the one-
+    /// primitive bounded-lattice-top encoding via the already-lifted
+    /// [`Self::leq`] primitive with the direction REVERSED against
+    /// [`Self::is_bottom`]. Equivalent on the [`ResourceLimits`]
+    /// pointwise partial order to `self == UNBOUNDED_RESOURCE_LIMITS`:
+    /// since UNBOUNDED sits at the pointwise maximum on every axis,
+    /// `UNBOUNDED ≤ x` reduces to `x == UNBOUNDED` on every axis
+    /// (`usize::MAX ≤ x` on `usize` iff `x == usize::MAX`), so pointwise
+    /// UNBOUNDED-below-leq-self is componentwise equality with UNBOUNDED.
+    ///
+    /// **Preset identity**: `UNBOUNDED_RESOURCE_LIMITS.is_top() == true`
+    /// structurally — the top preset is the top of the lattice under
+    /// `leq`-reflexivity. Pinned as `resource_limits_unbounded_is_top`.
+    ///
+    /// **Preset rejection**: `DEFAULT_RESOURCE_LIMITS.is_top() == false`
+    /// and `EMPTY_RESOURCE_LIMITS.is_top() == false` — every
+    /// `DEFAULT_MAX_*` module constant is a concrete positive value
+    /// strictly less than `usize::MAX`, and every `EMPTY_RESOURCE_LIMITS`
+    /// field is `0`, so both `UNBOUNDED.leq(DEFAULT)` and
+    /// `UNBOUNDED.leq(EMPTY)` fail on every axis. Pinned as
+    /// `resource_limits_non_top_presets_are_not_top`.
+    ///
+    /// **Universal-top characterization**: `self.is_top() ⇔
+    /// a.leq(self) for every posture a`, since UNBOUNDED is the
+    /// pointwise maximum and any element at-or-above UNBOUNDED is at-or-
+    /// above every other element via `leq`-transitivity. Pinned as
+    /// `resource_limits_is_top_iff_every_posture_leq_self`.
+    ///
+    /// **Field-level equivalence**: `self.is_top() ⇔
+    /// (max_expansion_depth == usize::MAX && … all six fields ==
+    /// usize::MAX)`. Pinned as
+    /// `resource_limits_is_top_agrees_with_all_fields_max`.
+    ///
+    /// **Bottom-top disjointness**: `self.is_bottom() && self.is_top()`
+    /// is false on the [`ResourceLimits`] lattice — the two poles are
+    /// distinct constants (`0 != usize::MAX` on every axis) so no
+    /// posture is simultaneously bottom and top. Pinned as
+    /// `resource_limits_no_posture_is_both_bottom_and_top`.
+    ///
+    /// `const fn` so a caller can pin the pole-identity at compile time
+    /// rather than deferring the composition to a runtime chain —
+    /// sibling of the const-fn evaluability pins on [`Self::leq`] one
+    /// PREDICATE-KIND axis over.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the top-pole identity of a preset-carried resource proof
+    /// is itself a typed named `bool` predicate composing it via the
+    /// underlying `leq`. THEORY.md §V.1 — knowable platform; the pole-
+    /// identity binds at ONE typed method rather than an inline six-
+    /// primitive field-conjunction. Frontier inspiration: Haskell's
+    /// `Bounded` typeclass exposing `maxBound` as a named entry
+    /// alongside the derived `Eq`; standard-library idioms `x == T::MAX`
+    /// for structural top-identity in Rust's numeric types; lattice-
+    /// theory's canonical `isTop` observers on `BoundedLattice`
+    /// implementations (Kmett's `lattices` package). Translation through
+    /// pleme-io primitives is the plain `const fn` [`Self::leq`] call
+    /// against the already-shipped [`UNBOUNDED_RESOURCE_LIMITS`] top
+    /// preset with the direction REVERSED — no typeclass indirection.
+    #[must_use]
+    pub const fn is_top(self) -> bool {
+        UNBOUNDED_RESOURCE_LIMITS.leq(self)
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -24979,5 +25162,219 @@ mod tests {
             EMPTY_RESOURCE_LIMITS,
             UNBOUNDED_RESOURCE_LIMITS,
         ]));
+    }
+
+    // ── ResourceLimits::is_bottom / ::is_top — bounded-lattice pole
+    //   identity predicates. Peers of each other one LATTICE-POLE axis
+    //   over, closing the (bottom, top) 2-cell face on the pole-identity
+    //   predicate surface. Each decides membership in one pole of the
+    //   bounded lattice at ONE named typed method rather than at an
+    //   inline six-primitive field-conjunction or a non-`const fn`
+    //   `PartialEq::eq(EMPTY|UNBOUNDED)` call at the consumer site.
+
+    #[test]
+    fn resource_limits_empty_is_bottom() {
+        // Preset identity — the bottom preset is the bottom of the
+        // lattice under `leq`-reflexivity. `EMPTY.leq(EMPTY)` holds by
+        // reflexivity, so `EMPTY.is_bottom()` reduces to `true`.
+        assert!(EMPTY_RESOURCE_LIMITS.is_bottom());
+    }
+
+    #[test]
+    fn resource_limits_unbounded_is_top() {
+        // Preset identity — the top preset is the top of the lattice
+        // under `leq`-reflexivity.
+        assert!(UNBOUNDED_RESOURCE_LIMITS.is_top());
+    }
+
+    #[test]
+    fn resource_limits_non_bottom_presets_are_not_bottom() {
+        // Preset rejection — every non-EMPTY preset in the roster fails
+        // `is_bottom` because at least one axis carries a positive value,
+        // and `x.leq(EMPTY)` requires `x ≤ 0` on every axis. Pins the
+        // (DEFAULT, UNBOUNDED, MID, OTHER) four-way rejection of the
+        // bottom-pole predicate against the shipped bounded-lattice
+        // interior + top + two hand-authored asymmetric witnesses.
+        for &a in &[
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert!(!a.is_bottom(), "non-bottom preset {a:?} must not be bottom");
+        }
+    }
+
+    #[test]
+    fn resource_limits_non_top_presets_are_not_top() {
+        // Preset rejection — every non-UNBOUNDED preset in the roster
+        // fails `is_top` because at least one axis carries a value
+        // strictly less than `usize::MAX`, and `UNBOUNDED.leq(x)`
+        // requires `usize::MAX ≤ x` on every axis.
+        for &a in &[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert!(!a.is_top(), "non-top preset {a:?} must not be top");
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_bottom_iff_leq_every_posture() {
+        // Universal-bottom characterization — a posture is the lattice
+        // bottom iff it is `leq` every posture in the roster (which
+        // spans the bounded-lattice extrema plus two asymmetric
+        // witnesses; the universal quantifier over this canonical
+        // roster carries the substrate-level identity). Sweeps every
+        // candidate × every posture pair; EMPTY passes both directions
+        // (bottom AND leq-every-posture), every other candidate fails
+        // both (non-bottom AND fails leq at itself or at an
+        // incomparable operand). Pins the pole-identity via its
+        // order-theoretic characterization rather than through the
+        // preset constants directly, so a future re-tuning of a
+        // `DEFAULT_MAX_*` constant does not invalidate the theorem.
+        for &candidate in STRICT_ORDER_ROSTER {
+            let leq_every = STRICT_ORDER_ROSTER
+                .iter()
+                .all(|&other| candidate.leq(other));
+            assert_eq!(
+                candidate.is_bottom(),
+                leq_every,
+                "is_bottom must agree with leq-every-posture for {candidate:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_top_iff_every_posture_leq_self() {
+        // Universal-top characterization — a posture is the lattice top
+        // iff every posture in the roster is `leq` it. Sweeps the same
+        // preset roster with the direction reversed.
+        for &candidate in STRICT_ORDER_ROSTER {
+            let every_leq = STRICT_ORDER_ROSTER
+                .iter()
+                .all(|&other| other.leq(candidate));
+            assert_eq!(
+                candidate.is_top(),
+                every_leq,
+                "is_top must agree with every-posture-leq-self for {candidate:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_bottom_agrees_with_all_fields_zero() {
+        // Field-level equivalence — the pole predicate agrees with the
+        // six-primitive `all six fields == 0` field-conjunction on every
+        // preset in the roster. Pins the leq-encoding is a semantic
+        // no-op against the direct field-check a pre-lift consumer
+        // would have composed at its call site; a regression that
+        // replaced the body with `self.leq(DEFAULT_RESOURCE_LIMITS)`
+        // (dropping the pole reference to EMPTY) fires here on DEFAULT
+        // (which is leq itself but not all-zero).
+        for &a in STRICT_ORDER_ROSTER {
+            let all_zero = a.max_expansion_depth == 0
+                && a.max_cache_entries == 0
+                && a.max_expansion_size == 0
+                && a.max_macro_body_size == 0
+                && a.max_registered_macros == 0
+                && a.max_macro_arity == 0;
+            assert_eq!(
+                a.is_bottom(),
+                all_zero,
+                "is_bottom must agree with all-fields-zero conjunction for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_top_agrees_with_all_fields_max() {
+        // Field-level equivalence dual — the pole predicate agrees with
+        // the six-primitive `all six fields == usize::MAX` field-
+        // conjunction on every preset in the roster.
+        for &a in STRICT_ORDER_ROSTER {
+            let all_max = a.max_expansion_depth == usize::MAX
+                && a.max_cache_entries == usize::MAX
+                && a.max_expansion_size == usize::MAX
+                && a.max_macro_body_size == usize::MAX
+                && a.max_registered_macros == usize::MAX
+                && a.max_macro_arity == usize::MAX;
+            assert_eq!(
+                a.is_top(),
+                all_max,
+                "is_top must agree with all-fields-max conjunction for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_no_posture_is_both_bottom_and_top() {
+        // Bottom-top disjointness — the two poles are distinct constants
+        // (`0 != usize::MAX` on every axis) so no posture is
+        // simultaneously bottom and top. Sweeps the canonical preset
+        // roster; discriminates a regression that collapsed one pole
+        // predicate to the other's body (e.g. `is_top` accidentally
+        // encoded as `self.leq(EMPTY_RESOURCE_LIMITS)` would agree with
+        // `is_bottom` at every candidate and this test would fire on
+        // EMPTY where BOTH would return true).
+        for &a in STRICT_ORDER_ROSTER {
+            assert!(
+                !(a.is_bottom() && a.is_top()),
+                "no posture may be both bottom and top; witnessed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_pole_predicates_agree_with_direct_equality_with_pole_presets() {
+        // Method-vs-equality cross-check — the lifted pole predicates
+        // agree with the pre-lift `self == EMPTY_RESOURCE_LIMITS` /
+        // `self == UNBOUNDED_RESOURCE_LIMITS` equality-with-preset
+        // invocation on every preset in the roster. Pins the lift is a
+        // semantic no-op — post-lift the consumer routes through ONE
+        // `const fn` name instead of composing the non-`const fn`
+        // `PartialEq::eq` call at its call site (which is unusable in
+        // `const _: () = assert!(...)` contexts).
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.is_bottom(),
+                a == EMPTY_RESOURCE_LIMITS,
+                "is_bottom must agree with equality-with-EMPTY for {a:?}",
+            );
+            assert_eq!(
+                a.is_top(),
+                a == UNBOUNDED_RESOURCE_LIMITS,
+                "is_top must agree with equality-with-UNBOUNDED for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_bottom_composes_at_compile_time_via_const_fn() {
+        // Const-fn pin — the bottom-pole predicate is evaluable in const
+        // context, so a caller can pin the pole-identity at compile
+        // time. Sibling of the const-fn evaluability pins on `leq` one
+        // PREDICATE-KIND axis over.
+        //
+        // A regression to a runtime `fn` here would fail the `const _:
+        // () = assert!(...)` bindings below at compile time; a
+        // regression to `self.leq(DEFAULT_RESOURCE_LIMITS)` would fire
+        // the DEFAULT-rejection const pin below at compile time.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.is_bottom());
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.is_bottom());
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.is_bottom());
+    }
+
+    #[test]
+    fn resource_limits_is_top_composes_at_compile_time_via_const_fn() {
+        // Const-fn dual pin. A regression that swapped the leq direction
+        // (`self.leq(UNBOUNDED_RESOURCE_LIMITS)` instead of the reverse)
+        // would fire on DEFAULT / EMPTY (both of which are leq UNBOUNDED
+        // but neither is the top).
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.is_top());
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.is_top());
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.is_top());
     }
 }

@@ -1198,6 +1198,197 @@ impl ResourceLimits {
     pub const fn within(self, lower: Self, upper: Self) -> bool {
         lower.leq(self) && self.leq(upper)
     }
+
+    /// Boolean `leq`-conjunction across a slice of postures — `self` sits
+    /// at-or-below every operand in `postures`. `a.is_lower_bound_of(&[b,
+    /// c, d])` holds iff `a.leq(b) && a.leq(c) && a.leq(d)`: on every
+    /// operand `self`'s per-axis ceilings sit at-or-below the operand's,
+    /// so `self` is a common lower bound for the slice.
+    ///
+    /// The N-ary boolean PREDICATE peer of the pairwise partial-order
+    /// relation [`Self::leq`] one ARITY axis over on the lattice-relation
+    /// surface: where `leq` decides the two-input partial-order between
+    /// two postures, this decides the (1 + N)-input containment-from-below
+    /// between `self` and a slice of postures. Peer of
+    /// [`Self::strictest_of`] one PRIMITIVE-KIND axis over on the N-ary
+    /// aggregation surface: where `strictest_of` COMPUTES the meet (the
+    /// greatest lower bound of the slice), this DECIDES whether `self` is
+    /// a lower bound of the slice (member of the lower-bound set the meet
+    /// is the largest element of). Together `strictest_of` and
+    /// `is_lower_bound_of` close the (combinator, predicate) row on the
+    /// N-ary-aggregation face, exactly the way (`strictest`,
+    /// `most_permissive`) ↔ `leq` closes the pairwise row and (`clamp` ↔
+    /// `within`) closes the bracket row on the (combinator, predicate) ×
+    /// (pairwise, N-ary, bracket) primitive surface.
+    ///
+    /// **Empty-slice vacuous truth**: `a.is_lower_bound_of(&[]) == true`
+    /// for every posture — the empty conjunction is vacuously true, since
+    /// every posture is trivially a lower bound of the empty set. Peer of
+    /// `strictest_of(&[]) == UNBOUNDED_RESOURCE_LIMITS`'s empty-slice
+    /// identity: the empty slice aggregates to the identity element of
+    /// the underlying operation (`true` for boolean conjunction,
+    /// [`UNBOUNDED_RESOURCE_LIMITS`] for pointwise `min`), so the empty
+    /// aggregate never rejects. Pinned as
+    /// `resource_limits_is_lower_bound_of_empty_slice_is_vacuously_true`.
+    ///
+    /// **Single-element identity**: `a.is_lower_bound_of(&[b]) ==
+    /// a.leq(b)` — the 1-input predicate reduces to the pairwise
+    /// relation, the same way `strictest_of(&[a]) == a` reduces the
+    /// 1-input N-ary combinator to the operand verbatim. Pinned as
+    /// `resource_limits_is_lower_bound_of_single_element_reduces_to_leq`.
+    ///
+    /// **Meet witness**: `strictest_of(&postures).is_lower_bound_of(&
+    /// postures) == true` for every slice — the N-ary meet is always a
+    /// lower bound of the slice it aggregates. The definitional link
+    /// between the N-ary COMBINATOR and the N-ary PREDICATE: the
+    /// aggregate `strictest_of` produces is a member of the lower-bound
+    /// set `is_lower_bound_of` characterizes. Pinned as
+    /// `resource_limits_is_lower_bound_of_holds_for_the_meet_of_the_slice`.
+    ///
+    /// **Universal-bottom witness**: `EMPTY_RESOURCE_LIMITS
+    /// .is_lower_bound_of(&postures) == true` for every slice — the
+    /// lattice bottom is a common lower bound of every set, since
+    /// `EMPTY.leq(a) == true` for every posture by the lattice-bottom
+    /// axiom (`0 ≤ x` per-axis). Pinned as
+    /// `resource_limits_empty_is_universal_lower_bound_of_every_slice`.
+    ///
+    /// **Any-operand rejection**: if `!self.leq(postures[i])` for any
+    /// `i`, then `a.is_lower_bound_of(&postures) == false` — the
+    /// conjunction short-circuits on the first violating operand and
+    /// rejects. Pinned as
+    /// `resource_limits_is_lower_bound_of_rejects_when_any_operand_is_below_self`.
+    ///
+    /// **Peer** — [`Self::is_upper_bound_of`] one COMBINATOR-DIRECTION
+    /// axis over: the two close the (`is_lower_bound_of`,
+    /// `is_upper_bound_of`) N-ary boolean-conjunction pair the pairwise
+    /// `leq` extends from 2 to N, itself peer of the (`strictest_of`,
+    /// `most_permissive_of`) N-ary combinator pair one PRIMITIVE-KIND
+    /// axis over.
+    ///
+    /// `const fn` so a caller can pin an N-ary-bound-membership identity
+    /// at compile time (`const _: () = assert!(EMPTY_RESOURCE_LIMITS
+    /// .is_lower_bound_of(&[DEFAULT_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS]));`) — the N-ary predicate peer of the
+    /// const-fn evaluability on [`Self::leq`] and [`Self::within`].
+    /// `Copy` on [`ResourceLimits`] lets the const-fn loop index the
+    /// slice by value without an explicit `.clone()` (which const-fn
+    /// would not permit anyway).
+    ///
+    /// Pre-lift, a caller wanting to decide whether a posture was a
+    /// common lower bound for a slice composed the
+    /// `postures.iter().all(|p| self.leq(*p))` two-primitive scaffolding
+    /// at every call site — the same PRIME DIRECTIVE ≥2 pattern the
+    /// pairwise `leq` combinator already lifted one arity down from the
+    /// six-inline-primitive per-axis cascade, and the same shape the
+    /// pairwise `within` combinator already lifted one arity down from
+    /// the two-primitive `lower.leq(a) && a.leq(upper)` conjunction.
+    /// Post-lift the N-ary predicate binds at ONE typed method whose
+    /// signature carries the containment direction (`self ≤ every
+    /// operand`) into the type system rather than the consumer composing
+    /// the `all()`-conjunction at every call site — a copy-paste that
+    /// flipped the leq direction would test `postures[i].leq(self)` (the
+    /// dual `is_upper_bound_of` question returning `true` only when
+    /// `self` DOMINATES rather than UNDERLIES the slice), a silent
+    /// distortion the method's parameter direction now gates.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the N-ary containment-from-below predicate on
+    /// (1 + N) preset-carried resource proofs is itself a typed named
+    /// entry composing the pairwise partial-order relation. THEORY.md
+    /// §V.1 — knowable platform; the N-ary `leq`-conjunction becomes a
+    /// TYPE-level operation on the posture algebra rather than an inline
+    /// two-primitive conjunction at every consumer that decides
+    /// N-ary-bound membership. Frontier inspiration: the algebraic-
+    /// datatypes tradition of a `Foldable` typeclass exposing `all` /
+    /// `Data.Foldable.all` alongside the pairwise relation — the N-ary
+    /// traversal of a collection through a boolean-conjunction seed is a
+    /// first-class named method the typeclass carries. Translation
+    /// through pleme-io primitives is the plain `const fn` slice-walk
+    /// below, no typeclass indirection — the partial-order relation
+    /// already exists as a `const fn` on the algebra so the predicate
+    /// picks it up structurally.
+    #[must_use]
+    pub const fn is_lower_bound_of(self, postures: &[Self]) -> bool {
+        let mut i = 0;
+        while i < postures.len() {
+            if !self.leq(postures[i]) {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
+
+    /// Boolean `leq`-conjunction across a slice of postures — every operand
+    /// in `postures` sits at-or-below `self`. `a.is_upper_bound_of(&[b, c,
+    /// d])` holds iff `b.leq(a) && c.leq(a) && d.leq(a)`: on every operand
+    /// the operand's per-axis ceilings sit at-or-below `self`'s, so `self`
+    /// is a common upper bound for the slice.
+    ///
+    /// The DUAL N-ary predicate of [`Self::is_lower_bound_of`] one
+    /// COMBINATOR-DIRECTION axis over: the two close the (lower, upper)
+    /// N-ary boolean-conjunction pair the pairwise `leq` extends from 2
+    /// to N, itself peer of the (`strictest_of`, `most_permissive_of`)
+    /// N-ary combinator pair one PRIMITIVE-KIND axis over on the N-ary-
+    /// aggregation face of the (combinator, predicate) × (pairwise,
+    /// N-ary, bracket) primitive surface. Peer of
+    /// [`Self::most_permissive_of`] one PRIMITIVE-KIND axis over on the
+    /// N-ary aggregation surface: where `most_permissive_of` COMPUTES
+    /// the join (the least upper bound of the slice), this DECIDES
+    /// whether `self` is an upper bound of the slice (member of the
+    /// upper-bound set the join is the smallest element of).
+    ///
+    /// **Empty-slice vacuous truth**: `a.is_upper_bound_of(&[]) == true`
+    /// for every posture — the empty conjunction is vacuously true. Peer
+    /// of `most_permissive_of(&[]) == EMPTY_RESOURCE_LIMITS`'s empty-
+    /// slice identity: the empty aggregate binds structurally to the
+    /// identity element of the underlying operation. Pinned as
+    /// `resource_limits_is_upper_bound_of_empty_slice_is_vacuously_true`.
+    ///
+    /// **Single-element identity**: `a.is_upper_bound_of(&[b]) ==
+    /// b.leq(a)` — the 1-input predicate reduces to the pairwise
+    /// relation with the direction flipped (since `self` sits ABOVE the
+    /// operand rather than BELOW it). Pinned as
+    /// `resource_limits_is_upper_bound_of_single_element_reduces_to_leq`.
+    ///
+    /// **Join witness**: `most_permissive_of(&postures).is_upper_bound_of(&
+    /// postures) == true` for every slice — the N-ary join is always an
+    /// upper bound of the slice it aggregates. The dual definitional link
+    /// between N-ary COMBINATOR and N-ary PREDICATE: the aggregate
+    /// `most_permissive_of` produces is a member of the upper-bound set
+    /// `is_upper_bound_of` characterizes. Pinned as
+    /// `resource_limits_is_upper_bound_of_holds_for_the_join_of_the_slice`.
+    ///
+    /// **Universal-top witness**: `UNBOUNDED_RESOURCE_LIMITS
+    /// .is_upper_bound_of(&postures) == true` for every slice — the
+    /// lattice top is a common upper bound of every set, since
+    /// `a.leq(UNBOUNDED) == true` for every posture by the lattice-top
+    /// axiom (`x ≤ usize::MAX` per-axis). Pinned as
+    /// `resource_limits_unbounded_is_universal_upper_bound_of_every_slice`.
+    ///
+    /// **Any-operand rejection**: if `!postures[i].leq(self)` for any
+    /// `i`, then `a.is_upper_bound_of(&postures) == false` — the
+    /// conjunction short-circuits and rejects. Pinned as
+    /// `resource_limits_is_upper_bound_of_rejects_when_any_operand_is_above_self`.
+    ///
+    /// `const fn` so a caller can pin an N-ary-bound-membership identity
+    /// at compile time. See [`Self::is_lower_bound_of`] for the shared
+    /// pre-lift ≥2 pattern (`postures.iter().all(|p| p.leq(*self))`), the
+    /// theory anchor (THEORY.md §II.1 invariant 5, §V.1), and the
+    /// `Foldable::all` frontier inspiration — this method carries the
+    /// dual `postures[i].leq(self)` direction rather than
+    /// `self.leq(postures[i])`.
+    #[must_use]
+    pub const fn is_upper_bound_of(self, postures: &[Self]) -> bool {
+        let mut i = 0;
+        while i < postures.len() {
+            if !postures[i].leq(self) {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -17804,5 +17995,279 @@ mod tests {
             ),
             "the within-gated candidate's arity ceiling MUST reach the register-time check; got: {err:?}",
         );
+    }
+
+    // ── ResourceLimits::is_lower_bound_of / is_upper_bound_of ─────────
+    //   N-ary boolean-conjunction peers of the pairwise `leq` relation,
+    //   closing the (combinator, predicate) row on the N-ary-aggregation
+    //   face of the lattice-algebra surface. See the docstring on
+    //   `ResourceLimits::is_lower_bound_of` for the (pairwise, N-ary,
+    //   bracket) × (combinator, predicate) placement.
+
+    #[test]
+    fn resource_limits_is_lower_bound_of_empty_slice_is_vacuously_true() {
+        // Empty-conjunction identity — every posture is trivially a
+        // lower bound of the empty set. Peer of `strictest_of(&[]) ==
+        // UNBOUNDED_RESOURCE_LIMITS`'s empty-slice identity one
+        // PRIMITIVE-KIND axis over: the empty slice aggregates to the
+        // identity element of the underlying operation (`true` for
+        // boolean conjunction, `UNBOUNDED` for pointwise `min`).
+        assert!(HAND_AUTHORED_MID_POSTURE.is_lower_bound_of(&[]));
+        assert!(EMPTY_RESOURCE_LIMITS.is_lower_bound_of(&[]));
+        assert!(UNBOUNDED_RESOURCE_LIMITS.is_lower_bound_of(&[]));
+        assert!(DEFAULT_RESOURCE_LIMITS.is_lower_bound_of(&[]));
+    }
+
+    #[test]
+    fn resource_limits_is_upper_bound_of_empty_slice_is_vacuously_true() {
+        // Empty-conjunction dual — every posture is trivially an upper
+        // bound of the empty set. Peer of
+        // `is_lower_bound_of_empty_slice_is_vacuously_true` one
+        // COMBINATOR-DIRECTION axis over, AND peer of
+        // `most_permissive_of(&[]) == EMPTY_RESOURCE_LIMITS`'s empty-
+        // slice identity one PRIMITIVE-KIND axis over.
+        assert!(HAND_AUTHORED_MID_POSTURE.is_upper_bound_of(&[]));
+        assert!(EMPTY_RESOURCE_LIMITS.is_upper_bound_of(&[]));
+        assert!(UNBOUNDED_RESOURCE_LIMITS.is_upper_bound_of(&[]));
+        assert!(DEFAULT_RESOURCE_LIMITS.is_upper_bound_of(&[]));
+    }
+
+    #[test]
+    fn resource_limits_is_lower_bound_of_single_element_reduces_to_leq() {
+        // 1-input identity — the singleton predicate reduces to the
+        // pairwise partial-order relation. The N-ary predicate on a
+        // 1-element slice is the pairwise `leq` verbatim, mirroring
+        // `strictest_of(&[a]) == a`'s reduction on the combinator side.
+        let cases: [(ResourceLimits, ResourceLimits); 6] = [
+            (EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS),
+            (UNBOUNDED_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS),
+            (DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS),
+            (UNBOUNDED_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS),
+            (HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE),
+            (HAND_AUTHORED_OTHER_POSTURE, HAND_AUTHORED_MID_POSTURE),
+        ];
+        for (a, b) in cases {
+            assert_eq!(
+                a.is_lower_bound_of(&[b]),
+                a.leq(b),
+                "1-input is_lower_bound_of must agree with pairwise leq for ({a:?}, {b:?})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_upper_bound_of_single_element_reduces_to_leq() {
+        // 1-input dual identity — the singleton upper-bound predicate
+        // is the pairwise `leq` with the direction flipped
+        // (`b.leq(a)`), since `self` sits ABOVE the operand rather than
+        // BELOW it.
+        let cases: [(ResourceLimits, ResourceLimits); 6] = [
+            (EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS),
+            (UNBOUNDED_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS),
+            (DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS),
+            (UNBOUNDED_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS),
+            (HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE),
+            (HAND_AUTHORED_OTHER_POSTURE, HAND_AUTHORED_MID_POSTURE),
+        ];
+        for (a, b) in cases {
+            assert_eq!(
+                a.is_upper_bound_of(&[b]),
+                b.leq(a),
+                "1-input is_upper_bound_of must agree with pairwise leq(other, self) for ({a:?}, {b:?})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_lower_bound_of_holds_for_the_meet_of_the_slice() {
+        // Definitional bridge — the N-ary meet is always a lower bound
+        // of the slice it aggregates. Pins the link between the N-ary
+        // COMBINATOR (`strictest_of`) and the N-ary PREDICATE
+        // (`is_lower_bound_of`): the meet is an ELEMENT of the lower-
+        // bound set the predicate CHARACTERIZES.
+        let postures: [ResourceLimits; 3] = [
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            DEFAULT_RESOURCE_LIMITS,
+        ];
+        let met = ResourceLimits::strictest_of(&postures);
+        assert!(met.is_lower_bound_of(&postures));
+    }
+
+    #[test]
+    fn resource_limits_is_upper_bound_of_holds_for_the_join_of_the_slice() {
+        // Dual definitional bridge — the N-ary join is always an upper
+        // bound of the slice it aggregates.
+        let postures: [ResourceLimits; 3] = [
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            DEFAULT_RESOURCE_LIMITS,
+        ];
+        let joined = ResourceLimits::most_permissive_of(&postures);
+        assert!(joined.is_upper_bound_of(&postures));
+    }
+
+    #[test]
+    fn resource_limits_empty_is_universal_lower_bound_of_every_slice() {
+        // Universal-bottom witness — the lattice bottom is a common
+        // lower bound of every slice, since `EMPTY.leq(a) == true` for
+        // every posture by the lattice-bottom axiom (`0 ≤ x` per-axis).
+        // The bounded-lattice specialization of the general "the meet-
+        // identity is a lower bound of every set" theorem.
+        let postures: [ResourceLimits; 4] = [
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ];
+        assert!(EMPTY_RESOURCE_LIMITS.is_lower_bound_of(&postures));
+        // The three preset-carried postures each individually — the
+        // universal-bottom witness holds on the singleton slice too.
+        assert!(EMPTY_RESOURCE_LIMITS.is_lower_bound_of(&[DEFAULT_RESOURCE_LIMITS]));
+        assert!(EMPTY_RESOURCE_LIMITS.is_lower_bound_of(&[UNBOUNDED_RESOURCE_LIMITS]));
+        assert!(EMPTY_RESOURCE_LIMITS.is_lower_bound_of(&[HAND_AUTHORED_MID_POSTURE]));
+    }
+
+    #[test]
+    fn resource_limits_unbounded_is_universal_upper_bound_of_every_slice() {
+        // Universal-top witness — the lattice top is a common upper
+        // bound of every slice, since `a.leq(UNBOUNDED) == true` for
+        // every posture by the lattice-top axiom (`x ≤ usize::MAX`
+        // per-axis).
+        let postures: [ResourceLimits; 4] = [
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ];
+        assert!(UNBOUNDED_RESOURCE_LIMITS.is_upper_bound_of(&postures));
+        assert!(UNBOUNDED_RESOURCE_LIMITS.is_upper_bound_of(&[DEFAULT_RESOURCE_LIMITS]));
+        assert!(UNBOUNDED_RESOURCE_LIMITS.is_upper_bound_of(&[EMPTY_RESOURCE_LIMITS]));
+        assert!(UNBOUNDED_RESOURCE_LIMITS.is_upper_bound_of(&[HAND_AUTHORED_MID_POSTURE]));
+    }
+
+    #[test]
+    fn resource_limits_is_lower_bound_of_rejects_when_any_operand_is_below_self() {
+        // Any-operand short-circuit — if `self` fails `leq` against ANY
+        // operand in the slice, the N-ary conjunction rejects. The dual
+        // of the "meet is a lower bound" witness on the false side:
+        // moving `self` STRICTLY ABOVE an operand on any axis costs the
+        // lower-bound property.
+        //
+        // MID sits above the join (element-wise) on some axes and below
+        // on others, so MID is NEITHER a lower bound of {MID, OTHER}
+        // (fails against OTHER's smaller-axis values) NOR is OTHER a
+        // lower bound of {MID, OTHER} (fails against MID's smaller-axis
+        // values).
+        assert!(!HAND_AUTHORED_MID_POSTURE
+            .is_lower_bound_of(&[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE,]));
+        assert!(!HAND_AUTHORED_OTHER_POSTURE
+            .is_lower_bound_of(&[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE,]));
+        // A UNIVERSAL rejection — the lattice top is a lower bound
+        // ONLY of the empty set OR of slices whose every element equals
+        // UNBOUNDED. Given a strictly-smaller preset in the slice, the
+        // top's per-axis usize::MAX loses `leq` on every axis whose
+        // preset value is strictly smaller.
+        assert!(!UNBOUNDED_RESOURCE_LIMITS.is_lower_bound_of(&[EMPTY_RESOURCE_LIMITS]));
+        assert!(!UNBOUNDED_RESOURCE_LIMITS.is_lower_bound_of(&[DEFAULT_RESOURCE_LIMITS]));
+    }
+
+    #[test]
+    fn resource_limits_is_upper_bound_of_rejects_when_any_operand_is_above_self() {
+        // Dual any-operand short-circuit — if ANY operand fails `leq`
+        // against `self`, the N-ary conjunction rejects.
+        assert!(!HAND_AUTHORED_MID_POSTURE
+            .is_upper_bound_of(&[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE,]));
+        assert!(!HAND_AUTHORED_OTHER_POSTURE
+            .is_upper_bound_of(&[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE,]));
+        // The bottom cannot bound anything from above except the empty
+        // set OR a slice of EMPTY-only postures.
+        assert!(!EMPTY_RESOURCE_LIMITS.is_upper_bound_of(&[DEFAULT_RESOURCE_LIMITS]));
+        assert!(!EMPTY_RESOURCE_LIMITS.is_upper_bound_of(&[UNBOUNDED_RESOURCE_LIMITS]));
+    }
+
+    #[test]
+    fn resource_limits_is_lower_bound_of_agrees_with_direct_all_leq_conjunction() {
+        // Method-vs-scaffold cross-check — the lifted N-ary predicate
+        // agrees with the pre-lift two-primitive
+        // `postures.iter().all(|p| self.leq(*p))` scaffolding on every
+        // preset-carried posture across the shipped bounded-lattice
+        // extrema AND the two hand-authored asymmetric witnesses. Pins
+        // the lift is a semantic no-op — post-lift the consumer routes
+        // through ONE name instead of composing the conjunction inline,
+        // but the two paths compute the same boolean.
+        let candidates: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        let slice: [ResourceLimits; 3] = [
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            DEFAULT_RESOURCE_LIMITS,
+        ];
+        for c in candidates {
+            let direct = slice.iter().all(|p| c.leq(*p));
+            assert_eq!(
+                c.is_lower_bound_of(&slice),
+                direct,
+                "is_lower_bound_of must agree with iter().all(|p| self.leq(*p)) on candidate {c:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_upper_bound_of_agrees_with_direct_all_leq_conjunction() {
+        // Dual method-vs-scaffold cross-check.
+        let candidates: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        let slice: [ResourceLimits; 3] = [
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            DEFAULT_RESOURCE_LIMITS,
+        ];
+        for c in candidates {
+            let direct = slice.iter().all(|p| p.leq(c));
+            assert_eq!(
+                c.is_upper_bound_of(&slice),
+                direct,
+                "is_upper_bound_of must agree with iter().all(|p| p.leq(self)) on candidate {c:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_lower_bound_of_composes_at_compile_time_via_const_fn() {
+        // Const-fn pin — the N-ary lower-bound predicate is evaluable
+        // in const context, so a caller can pin an N-ary-bound-
+        // membership identity at compile time. Sibling of the const-fn
+        // evaluability pins on `leq` and `within` one PRIMITIVE-KIND
+        // axis over, AND sibling of `strictest_of`'s const-fn pin one
+        // COMBINATOR-KIND axis over.
+        //
+        // A regression to a runtime `fn` here would fail the `const _:
+        // () = assert!(...)` bindings below at compile time.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .is_lower_bound_of(&[DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.is_lower_bound_of(&[]));
+        const _: () =
+            assert!(!UNBOUNDED_RESOURCE_LIMITS.is_lower_bound_of(&[EMPTY_RESOURCE_LIMITS]));
+    }
+
+    #[test]
+    fn resource_limits_is_upper_bound_of_composes_at_compile_time_via_const_fn() {
+        // Const-fn dual pin.
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .is_upper_bound_of(&[DEFAULT_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS]));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.is_upper_bound_of(&[]));
+        const _: () =
+            assert!(!EMPTY_RESOURCE_LIMITS.is_upper_bound_of(&[UNBOUNDED_RESOURCE_LIMITS]));
     }
 }

@@ -1558,6 +1558,73 @@ impl ResourceLimits {
     pub const fn gt(self, other: Self) -> bool {
         other.lt(self)
     }
+
+    /// Non-strict pointwise partial-order relation dual of
+    /// [`Self::leq`] — `a.geq(b) == b.leq(a)`. `self` is AT-OR-LOOSER-
+    /// THAN `other` iff on every axis `self`'s ceiling sits at-or-above
+    /// `other`'s: every input the `other` posture admits the `self`
+    /// posture also admits, so `self` dominates `other`'s admissible
+    /// input set pointwise (possibly with equality on some or every
+    /// axis).
+    ///
+    /// The DIRECTION peer of [`Self::leq`] one DIRECTION axis over on
+    /// the non-strict pairwise-relation face — where `leq` is the
+    /// non-strict "below" relation (`a ≤ b`), this is the non-strict
+    /// "above" relation (`a ≥ b`). Together the two close the
+    /// (below, above) direction pair on the non-strict pairwise
+    /// relation, exactly as [`Self::lt`] / [`Self::gt`] close the
+    /// (below, above) direction pair on the STRICT pairwise relation
+    /// one STRICTNESS axis over. The STRICTNESS peer of [`Self::gt`]
+    /// one STRICTNESS axis over on the "above" column of the
+    /// (direction × strictness) 2×2 partial-order face — where `gt` is
+    /// the IRREFLEXIVE strict `>` relation (`a.gt(a) == false`), this
+    /// is the REFLEXIVE non-strict `≥` relation (`a.geq(a) == true`).
+    /// The four methods `(leq, lt, gt, geq)` EXHAUSTIVELY close the
+    /// (below, above) × (non-strict, strict) 2×2 pairwise partial-order
+    /// face on [`ResourceLimits`], with each method the single-axis
+    /// peer of two others (one DIRECTION axis over AND one STRICTNESS
+    /// axis over).
+    ///
+    /// Same laws as [`Self::leq`] with directions flipped:
+    /// reflexive (`a.geq(a) == true`), antisymmetric
+    /// (`a.geq(b) && b.geq(a) ⇒ a == b`), transitive
+    /// (`a.geq(b) && b.geq(c) ⇒ a.geq(c)`); refines [`Self::gt`]
+    /// (`a.gt(b) ⇒ a.geq(b)`) exactly as `leq` is refined by `lt`.
+    /// NOT total on incomparable postures: on the two hand-authored
+    /// asymmetric postures both directions of `geq` fail — the
+    /// non-strict relation does not promote incomparable pairs to a
+    /// comparison verdict any more than the strict one does. Pinned on
+    /// the shipped preset triangle:
+    /// `UNBOUNDED_RESOURCE_LIMITS.geq(DEFAULT_RESOURCE_LIMITS) &&
+    /// DEFAULT_RESOURCE_LIMITS.geq(EMPTY_RESOURCE_LIMITS)`.
+    ///
+    /// Encoded as `other.leq(self)` — one primitive delegation to
+    /// [`Self::leq`] so the non-strict-relation encoding lives at
+    /// exactly one implementation site, and a future re-derivation of
+    /// `leq` (e.g. to a different pointwise conjunction) propagates to
+    /// `geq` mechanically rather than requiring a per-method fix-up.
+    /// Mirrors [`Self::gt`]'s `other.lt(self)` delegation one
+    /// STRICTNESS axis over.
+    ///
+    /// **N-ary-predicate link**: `a.geq(b) == a.is_upper_bound_of(&[b])`
+    /// — the pairwise "above" relation is exactly the 1-input
+    /// specialization of the N-ary upper-bound predicate. The
+    /// (`geq`, `is_upper_bound_of`) pair sits on the same ARITY axis
+    /// as (`leq`, `is_lower_bound_of`) one DIRECTION axis over — every
+    /// pairwise partial-order relation extends to an N-ary bound-
+    /// membership predicate the substrate carries as a named entry.
+    ///
+    /// `const fn` for the same compile-time-pin reasons as
+    /// [`Self::leq`] (`const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+    /// .geq(DEFAULT_RESOURCE_LIMITS));`). See [`Self::leq`] for the
+    /// full docstring, the pre-lift six-inline-`>=`-conjunction pattern
+    /// callers wrote before the pairwise relation was named, the
+    /// theory anchor (THEORY.md §II.1 invariant 5, §V.1), and the
+    /// [`PartialOrd::ge`] frontier inspiration.
+    #[must_use]
+    pub const fn geq(self, other: Self) -> bool {
+        other.leq(self)
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -18667,5 +18734,184 @@ mod tests {
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.gt(EMPTY_RESOURCE_LIMITS));
         const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.gt(DEFAULT_RESOURCE_LIMITS));
         const _: () = assert!(!EMPTY_RESOURCE_LIMITS.gt(UNBOUNDED_RESOURCE_LIMITS));
+    }
+
+    #[test]
+    fn resource_limits_geq_is_dual_of_leq() {
+        // Direction-flip pin — `a.geq(b) == b.leq(a)` at every pair.
+        // The shipped `geq` body delegates to `leq` verbatim so this
+        // agreement holds definitionally, but the pin discriminates a
+        // regression that re-implemented `geq` independently and
+        // dropped the direction flip. Sweeps the full 5×5 preset
+        // matrix so incomparable + strictly-ordered + equal pairs are
+        // all exercised. Peer of `resource_limits_gt_is_dual_of_lt`
+        // one STRICTNESS axis over on the (below, above) × (non-strict,
+        // strict) 2×2 pairwise partial-order face.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                assert_eq!(
+                    a.geq(b),
+                    b.leq(a),
+                    "geq/leq duality failed on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_geq_is_reflexive() {
+        // Non-strict partial-order law — `a ≥ a == true` for every
+        // posture. Reflexivity is the non-strict-relation axiom peer of
+        // irreflexivity on `gt` one STRICTNESS axis over on the
+        // partial-order axiom surface; a regression that hardened the
+        // delegation into a strict `!other.leq(self)` would fire here
+        // on every preset since the reflexive pair collapses.
+        for &a in STRICT_ORDER_ROSTER {
+            assert!(a.geq(a), "reflexivity failed on {a:?}");
+        }
+    }
+
+    #[test]
+    fn resource_limits_geq_is_antisymmetric() {
+        // Non-strict partial-order law — `a ≥ b ∧ b ≥ a ⇒ a == b`.
+        // Antisymmetry is inherited from `leq` via the shipped `geq`
+        // body's `other.leq(self)` delegation (which combined with
+        // `b.geq(a)` — i.e. `a.leq(b)` — gives `leq` antisymmetry on
+        // the pair). Sweeps the full 5×5 preset matrix; the pin fires
+        // on any regression that let two DISTINCT postures satisfy
+        // `geq` in both directions.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                if a.geq(b) && b.geq(a) {
+                    assert_eq!(a, b, "antisymmetry failed on ({a:?}, {b:?})");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_geq_is_transitive() {
+        // Non-strict partial-order law — `a ≥ b ∧ b ≥ c ⇒ a ≥ c`.
+        // Inherits from the transitivity of `leq` via the shipped
+        // delegation; sweeps every ordered triple in the canonical
+        // preset roster. Peer of `resource_limits_lt_is_transitive`
+        // one STRICTNESS axis over and `resource_limits_leq_is_
+        // transitive` one DIRECTION axis over.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                for &c in STRICT_ORDER_ROSTER {
+                    if a.geq(b) && b.geq(c) {
+                        assert!(a.geq(c), "transitivity failed on ({a:?}, {b:?}, {c:?})");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_geq_refines_gt() {
+        // Refinement axiom peer — `a > b ⇒ a ≥ b`. The strict
+        // relation is a refinement of the non-strict one in the
+        // "above" direction, exactly as `lt` refines `leq` in the
+        // "below" direction (pinned by
+        // `resource_limits_lt_refines_leq` one DIRECTION axis over).
+        // A witness of strict `>` is also a witness of `≥`.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                if a.gt(b) {
+                    assert!(a.geq(b), "refinement failed on ({a:?}, {b:?})");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_geq_agrees_with_gt_plus_equality() {
+        // Antisymmetry consequence peer — on ANY antisymmetric partial
+        // order, `a ≥ b ⇔ a > b ∨ a == b`. Cross-checks the shipped
+        // delegation against the strict-or-equal encoding across the
+        // full 5×5 preset matrix; a regression that shipped a non-
+        // antisymmetric preorder encoding for `geq` fires here. Peer
+        // of `resource_limits_lt_agrees_with_leq_minus_equality` one
+        // DIRECTION-AND-STRICTNESS axis over.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                let shipped = a.geq(b);
+                let alt = a.gt(b) || a == b;
+                assert_eq!(
+                    shipped, alt,
+                    "encoding cross-check failed on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_geq_of_top_diagonal_pinned() {
+        // Concrete-preset pin — the non-strict chain across the (top,
+        // middle, bottom) preset triple on the bounded-lattice
+        // diagonal, walked in the "above" direction. Peer of
+        // `resource_limits_gt_of_top_diagonal_pinned` one STRICTNESS
+        // axis over: the non-strict pin also holds at the reflexive
+        // diagonal, so every posture sits above ITSELF via `geq` in
+        // addition to sitting above the strictly-tighter presets.
+        assert!(UNBOUNDED_RESOURCE_LIMITS.geq(DEFAULT_RESOURCE_LIMITS));
+        assert!(DEFAULT_RESOURCE_LIMITS.geq(EMPTY_RESOURCE_LIMITS));
+        assert!(UNBOUNDED_RESOURCE_LIMITS.geq(EMPTY_RESOURCE_LIMITS));
+        assert!(EMPTY_RESOURCE_LIMITS.geq(EMPTY_RESOURCE_LIMITS));
+        assert!(DEFAULT_RESOURCE_LIMITS.geq(DEFAULT_RESOURCE_LIMITS));
+        assert!(UNBOUNDED_RESOURCE_LIMITS.geq(UNBOUNDED_RESOURCE_LIMITS));
+    }
+
+    #[test]
+    fn resource_limits_geq_rejects_incomparable_postures() {
+        // Partial-order non-total pin — the two hand-authored
+        // asymmetric postures have MID smaller on three axes and OTHER
+        // smaller on the other three, so neither `leq` direction holds
+        // and therefore neither `geq` direction holds. The pin
+        // discriminates a regression that promoted `geq` from partial
+        // to total, and pairs with
+        // `resource_limits_lt_rejects_incomparable_postures` one
+        // STRICTNESS-AND-DIRECTION axis over.
+        assert!(!HAND_AUTHORED_MID_POSTURE.geq(HAND_AUTHORED_OTHER_POSTURE));
+        assert!(!HAND_AUTHORED_OTHER_POSTURE.geq(HAND_AUTHORED_MID_POSTURE));
+    }
+
+    #[test]
+    fn resource_limits_geq_agrees_with_is_upper_bound_of_singleton() {
+        // Arity-reduction pin — `a.geq(b) == a.is_upper_bound_of(&[b])`
+        // at every pair. The pairwise "above" relation is exactly the
+        // 1-input specialization of the N-ary upper-bound predicate;
+        // the pin cross-checks that the two named entries agree on
+        // the single-element case, which discriminates a regression
+        // that drifted one from the other. Peer of the single-element
+        // identity docstring on `is_upper_bound_of` one ARITY axis
+        // over.
+        for &a in STRICT_ORDER_ROSTER {
+            for &b in STRICT_ORDER_ROSTER {
+                assert_eq!(
+                    a.geq(b),
+                    a.is_upper_bound_of(&[b]),
+                    "arity-reduction failed on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_geq_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the non-strict `≥` relation is evaluable in
+        // const context, so a caller can pin a preset-non-strict-order
+        // identity at compile time. Sibling of the const-fn evaluability
+        // pins on `leq` one DIRECTION axis over AND on `gt` one
+        // STRICTNESS axis over.
+        //
+        // A regression to a runtime `fn` here would fail the `const _:
+        // () = assert!(...)` bindings below at compile time.
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.geq(DEFAULT_RESOURCE_LIMITS));
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.geq(EMPTY_RESOURCE_LIMITS));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.geq(EMPTY_RESOURCE_LIMITS));
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.geq(DEFAULT_RESOURCE_LIMITS));
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.geq(UNBOUNDED_RESOURCE_LIMITS));
     }
 }

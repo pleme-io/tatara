@@ -948,6 +948,145 @@ impl ResourceLimits {
         }
         acc
     }
+
+    /// Pointwise projection of `self` into the closed range `[lower, upper]`
+    /// — the bounded-lattice bracket combinator. `a.clamp(lower, upper)`
+    /// returns the posture whose per-axis ceiling is the input's own
+    /// ceiling raised to at least `lower`'s and then lowered to at most
+    /// `upper`'s: on every field the result is `min(max(a, lower), upper)`.
+    ///
+    /// The BRACKET operation on the [`ResourceLimits`] lattice — the
+    /// composition of [`Self::most_permissive`] with `lower` followed by
+    /// [`Self::strictest`] with `upper`. Peer of the (meet, join) pairwise
+    /// combinators one ARITY axis over (2 → 3 inputs) on the lattice-
+    /// algebra surface: where those two combine a `self` with ONE bound,
+    /// this combines a `self` with TWO bounds and closes the (unbounded-
+    /// side, bounded) row on the combinator-arity face. The bounded-lattice
+    /// analog of [`Ord::clamp`] on total orders, and the natural typed
+    /// entry a caller enforces "this posture must sit within the
+    /// `[ORG_MIN, ORG_MAX]` operator bracket" through.
+    ///
+    /// **In-range identity**: if `lower.leq(self) && self.leq(upper)` (the
+    /// input already sits within the bracket), then `a.clamp(lower, upper)
+    /// == a` — the pointwise `max(a, lower)` picks `a` on every axis (since
+    /// `lower ≤ a` per-axis), then pointwise `min(..., upper)` picks `a`
+    /// again (since `a ≤ upper` per-axis). Pinned as
+    /// `resource_limits_clamp_of_posture_already_in_range_returns_the_posture`.
+    ///
+    /// **Below-lower floor**: if `self.leq(lower)` and `lower.leq(upper)`
+    /// (input tighter than the bracket floor, and floor within ceiling),
+    /// then `a.clamp(lower, upper) == lower` — the pointwise `max` lifts
+    /// every axis to `lower`, then the pointwise `min` keeps `lower` (since
+    /// `lower ≤ upper` per-axis). Pinned as
+    /// `resource_limits_clamp_of_posture_below_lower_returns_lower`.
+    ///
+    /// **Above-upper ceiling**: if `upper.leq(self)` and `lower.leq(upper)`
+    /// (input looser than the bracket ceiling), then `a.clamp(lower, upper)
+    /// == upper` — the pointwise `max` keeps `self` on every axis (since
+    /// `lower ≤ self` per-axis via transitivity through `upper`), then the
+    /// pointwise `min` lowers every axis to `upper`. Pinned as
+    /// `resource_limits_clamp_of_posture_above_upper_returns_upper`.
+    ///
+    /// **Bracket-membership** (`lower.leq(a.clamp(lower, upper)) &&
+    /// a.clamp(lower, upper).leq(upper)` for every `a` when `lower.leq(upper)`):
+    /// the result always sits within the `[lower, upper]` bracket
+    /// regardless of the input's position relative to the bracket. This is
+    /// the DEFINING contract of the clamp primitive — every consumer that
+    /// invokes it does so precisely to guarantee the result sits within
+    /// the bracket, and the type system now carries that guarantee at ONE
+    /// named entry. Pinned as
+    /// `resource_limits_clamp_result_sits_within_the_bracket`.
+    ///
+    /// **Extrema-bracket identity**: `a.clamp(EMPTY_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS) == a` — clamping against the bounded-
+    /// lattice extrema is the identity function, since every posture
+    /// already sits within the widest possible bracket. This is the
+    /// bounded-lattice cross-check with the identity elements previously
+    /// lifted (`EMPTY_RESOURCE_LIMITS` as the leq-minimum and
+    /// `UNBOUNDED_RESOURCE_LIMITS` as the leq-maximum). Pinned as
+    /// `resource_limits_clamp_with_lattice_extrema_returns_the_input`.
+    ///
+    /// **Degenerate-bracket collapse**: `a.clamp(x, x) == x` for every `a,
+    /// x` — a zero-width bracket collapses every input to the single point
+    /// `x`. Pinned as
+    /// `resource_limits_clamp_with_equal_bounds_returns_the_bound`.
+    ///
+    /// **Idempotence**: `a.clamp(lower, upper).clamp(lower, upper) ==
+    /// a.clamp(lower, upper)` — re-applying the same bracket to an
+    /// already-clamped posture returns the same result, since the clamped
+    /// value already sits within the bracket. Pinned as
+    /// `resource_limits_clamp_is_idempotent`.
+    ///
+    /// `const fn` so a caller can pre-clamp a shipped preset against an
+    /// operator-supplied policy bracket at compile time (`pub const
+    /// POLICY_CLAMPED: ResourceLimits = SOME_PRESET.clamp(
+    /// ORG_MIN_PRESET, ORG_MAX_PRESET);`) — the typed bracket-combinator
+    /// peer of the const-fn composition ability on [`Self::strictest`] /
+    /// [`Self::most_permissive`].
+    ///
+    /// Pre-lift, a caller wanting to bracket a posture within a
+    /// `[lower, upper]` range composed the two-step cascade at its call
+    /// site as `self.most_permissive(lower).strictest(upper)` — the same
+    /// PRIME DIRECTIVE ≥2 pattern the pairwise combinators already lifted
+    /// one arity down from the six-inline-primitive per-axis cascade.
+    /// The `resource_limits_clamp_agrees_with_direct_two_step_cascade`
+    /// pin below composes the pre-lift cascade at ONE explicit assertion
+    /// site (its sole purpose is to pin the method-vs-cascade equivalence)
+    /// — every future consumer that enforces a
+    /// policy bracket (an operator-supplied `[ORG_MIN, ORG_MAX]`, a
+    /// hostile-input `[EMPTY, HOSTILE_MAX]`, a CI-time `[TEST_MIN,
+    /// TEST_MAX]`) would compose the same cascade at its call site with
+    /// no exhaustiveness gate on the composition order. Post-lift the
+    /// bracket binds at ONE typed method whose signature carries the
+    /// bounds' roles (`lower` first, `upper` second) into the method
+    /// rather than the consumer having to remember which side pairs with
+    /// which combinator at each call site — a copy-paste that swapped the
+    /// two combinators would clip the input to `min(max(a, upper), lower)`
+    /// (the WRONG bracket order that returns `lower` for every input
+    /// looser than `lower` regardless of `upper`'s position), a silent
+    /// distortion the type system did not gate pre-lift and now does
+    /// through the method's parameter order.
+    ///
+    /// **Non-lattice-bracket behaviour** (`!lower.leq(upper)`): the four
+    /// documented invariants above are stated for the well-formed bracket
+    /// case where `lower.leq(upper)`. When the two bounds are pointwise-
+    /// incomparable OR strictly reversed (`upper.leq(lower) && lower !=
+    /// upper`), the result is pointwise `min(max(a, lower), upper)` which
+    /// is well-defined but no longer sits within a "bracket" in the
+    /// intuitive sense — for a reversed bound the pointwise `max` pushes
+    /// the value up to `lower`, then the pointwise `min` pushes it down to
+    /// `upper`, producing `upper` at every axis (since `upper < lower`
+    /// per-axis makes `min(anything ≥ lower, upper) == upper`). This
+    /// matches [`Ord::clamp`]'s "min ≤ max is a precondition, otherwise
+    /// behaviour is unspecified but well-defined" contract on total orders;
+    /// callers routing preset pairs through `clamp` maintain the
+    /// `lower.leq(upper)` invariant at their bounds' construction site,
+    /// not at every clamp call site.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the bracket projection of a preset-carried resource proof
+    /// against two bound preset-carried resource proofs is itself a
+    /// `ResourceLimits` whose proof content is the input's proof intersected
+    /// with the ceiling's and unioned with the floor's, and this method is
+    /// the typed named entry composing them. THEORY.md §V.1 — knowable
+    /// platform; the bracket combinator becomes a TYPE-level operation on
+    /// the posture algebra rather than an inline two-step composition at
+    /// every consumer that enforces a policy range — with the (lower,
+    /// upper) parameter order baked in so the consumer cannot swap the
+    /// two combinators (a silent distortion that would clip the input to
+    /// the wrong bracket order). Frontier inspiration: [`Ord::clamp`] on
+    /// total orders — the stdlib exposes a first-class named bracket
+    /// combinator alongside the pairwise `min` / `max`, and the bounded-
+    /// lattice extension is the same shape one dimension up (per-axis
+    /// pointwise on a Cartesian product of total orders). Translation
+    /// through pleme-io primitives is the plain `const fn` composition
+    /// below, no trait indirection — the pairwise combinators already
+    /// exist as `const fn` on the algebra so the bracket picks them up
+    /// structurally.
+    #[must_use]
+    pub const fn clamp(self, lower: Self, upper: Self) -> Self {
+        self.most_permissive(lower).strictest(upper)
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -16990,6 +17129,320 @@ mod tests {
                 }
             ),
             "the tighter arity ceiling from the meet MUST reach the register-time gate; got: {err:?}"
+        );
+    }
+
+    // ── ResourceLimits::clamp — bounded-lattice bracket combinator ────
+
+    /// A tighter-than-MID lower-bracket witness — every axis strictly
+    /// smaller than `HAND_AUTHORED_MID_POSTURE`'s matching axis, so the
+    /// pointwise `max(mid, floor) == mid` on every axis (`floor.leq(mid)`
+    /// holds structurally). Peer of `HAND_AUTHORED_CLAMP_CEILING` one
+    /// BRACKET-BOUND axis over on the (floor, ceiling) bracket-witness
+    /// pair.
+    const HAND_AUTHORED_CLAMP_FLOOR: ResourceLimits = ResourceLimits {
+        max_expansion_depth: 2,
+        max_cache_entries: 3,
+        max_expansion_size: 5,
+        max_macro_body_size: 7,
+        max_registered_macros: 11,
+        max_macro_arity: 13,
+    };
+
+    /// A looser-than-MID upper-bracket witness — every axis strictly larger
+    /// than `HAND_AUTHORED_MID_POSTURE`'s matching axis, so the pointwise
+    /// `min(mid, ceiling) == mid` on every axis (`mid.leq(ceiling)` holds
+    /// structurally). Peer of `HAND_AUTHORED_CLAMP_FLOOR` one BRACKET-
+    /// BOUND axis over. Together with `HAND_AUTHORED_CLAMP_FLOOR` the two
+    /// bracket `HAND_AUTHORED_MID_POSTURE` strictly on every axis:
+    /// `FLOOR.leq(MID) && MID.leq(CEILING) && FLOOR != MID && MID !=
+    /// CEILING`.
+    const HAND_AUTHORED_CLAMP_CEILING: ResourceLimits = ResourceLimits {
+        max_expansion_depth: 47,
+        max_cache_entries: 53,
+        max_expansion_size: 59,
+        max_macro_body_size: 61,
+        max_registered_macros: 67,
+        max_macro_arity: 71,
+    };
+
+    #[test]
+    fn resource_limits_clamp_of_posture_already_in_range_returns_the_posture() {
+        // In-range identity — when the input already sits within the
+        // `[lower, upper]` bracket (`lower.leq(a) && a.leq(upper)` per-
+        // axis), the clamp is the identity function: the pointwise
+        // `max(a, lower) == a` (since `lower ≤ a` per-axis picks `a`),
+        // then the pointwise `min(a, upper) == a` (since `a ≤ upper`
+        // per-axis picks `a`). The primary invariant on the "input
+        // already satisfies the bracket" arm of the three-arm bracket-
+        // membership surface.
+        //
+        // Prerequisite pins — the two hand-authored bounds bracket
+        // `MID` strictly on every axis (structural check that discharges
+        // the "already in range" premise). A regression that inflated
+        // `FLOOR` or deflated `CEILING` past `MID` would fail these
+        // asserts before the clamp identity was tested, making the
+        // premise's failure name itself rather than showing up as a
+        // downstream misleading clamp mismatch.
+        assert!(HAND_AUTHORED_CLAMP_FLOOR.leq(HAND_AUTHORED_MID_POSTURE));
+        assert!(HAND_AUTHORED_MID_POSTURE.leq(HAND_AUTHORED_CLAMP_CEILING));
+        let clamped =
+            HAND_AUTHORED_MID_POSTURE.clamp(HAND_AUTHORED_CLAMP_FLOOR, HAND_AUTHORED_CLAMP_CEILING);
+        assert_eq!(clamped, HAND_AUTHORED_MID_POSTURE);
+    }
+
+    #[test]
+    fn resource_limits_clamp_of_posture_below_lower_returns_lower() {
+        // Below-lower floor — when the input is tighter than the
+        // bracket floor on every axis (`a.leq(lower)` per-axis), the
+        // clamp lifts the input up to `lower`: the pointwise `max(a,
+        // lower) == lower` (since `a ≤ lower` per-axis picks `lower`),
+        // then the pointwise `min(lower, upper) == lower` (since
+        // `lower ≤ upper` per-axis picks `lower`). Peer of
+        // `resource_limits_clamp_of_posture_already_in_range_returns_the_posture`
+        // one BRACKET-POSITION axis over on the (in-range, below-lower,
+        // above-upper) three-arm bracket-membership surface.
+        //
+        // `EMPTY_RESOURCE_LIMITS` sits `leq` every posture (bounded-
+        // lattice bottom), so `EMPTY.leq(FLOOR)` holds structurally
+        // for any FLOOR; a clamp of `EMPTY` into `[FLOOR, CEILING]`
+        // MUST return `FLOOR`.
+        assert!(EMPTY_RESOURCE_LIMITS.leq(HAND_AUTHORED_CLAMP_FLOOR));
+        assert!(HAND_AUTHORED_CLAMP_FLOOR.leq(HAND_AUTHORED_CLAMP_CEILING));
+        let clamped =
+            EMPTY_RESOURCE_LIMITS.clamp(HAND_AUTHORED_CLAMP_FLOOR, HAND_AUTHORED_CLAMP_CEILING);
+        assert_eq!(clamped, HAND_AUTHORED_CLAMP_FLOOR);
+    }
+
+    #[test]
+    fn resource_limits_clamp_of_posture_above_upper_returns_upper() {
+        // Above-upper ceiling — when the input is looser than the
+        // bracket ceiling on every axis (`upper.leq(a)` per-axis), the
+        // clamp lowers the input down to `upper`: the pointwise
+        // `max(a, lower) == a` (since `lower ≤ upper ≤ a` per-axis picks
+        // `a`), then the pointwise `min(a, upper) == upper` (since
+        // `upper ≤ a` per-axis picks `upper`). Peer of the
+        // below-lower arm one BRACKET-POSITION axis over on the three-
+        // arm bracket-membership surface.
+        //
+        // `UNBOUNDED_RESOURCE_LIMITS` sits `geq` every posture (bounded-
+        // lattice top), so `CEILING.leq(UNBOUNDED)` holds structurally
+        // for any CEILING; a clamp of `UNBOUNDED` into `[FLOOR, CEILING]`
+        // MUST return `CEILING`.
+        assert!(HAND_AUTHORED_CLAMP_CEILING.leq(UNBOUNDED_RESOURCE_LIMITS));
+        assert!(HAND_AUTHORED_CLAMP_FLOOR.leq(HAND_AUTHORED_CLAMP_CEILING));
+        let clamped =
+            UNBOUNDED_RESOURCE_LIMITS.clamp(HAND_AUTHORED_CLAMP_FLOOR, HAND_AUTHORED_CLAMP_CEILING);
+        assert_eq!(clamped, HAND_AUTHORED_CLAMP_CEILING);
+    }
+
+    #[test]
+    fn resource_limits_clamp_result_sits_within_the_bracket() {
+        // Bracket-membership contract — the DEFINING invariant on the
+        // clamp primitive: for every well-formed bracket
+        // (`lower.leq(upper)`) and every input `a`, the result sits
+        // within the bracket `lower.leq(a.clamp(lower, upper)) &&
+        // a.clamp(lower, upper).leq(upper)`. Exercised on ALL FOUR arm
+        // positions of the bracket-membership surface via the four
+        // known-preset inputs (below-lower → in-range → above-upper
+        // → asymmetric-crossing) so a regression that inflated the
+        // ceiling arm or deflated the floor arm exhausts all four
+        // input positions and names the failing arm.
+        assert!(HAND_AUTHORED_CLAMP_FLOOR.leq(HAND_AUTHORED_CLAMP_CEILING));
+        let inputs = [
+            EMPTY_RESOURCE_LIMITS,       // below-lower
+            HAND_AUTHORED_MID_POSTURE,   // in-range
+            UNBOUNDED_RESOURCE_LIMITS,   // above-upper
+            HAND_AUTHORED_OTHER_POSTURE, // asymmetric (crosses the bracket)
+        ];
+        for a in inputs {
+            let clamped = a.clamp(HAND_AUTHORED_CLAMP_FLOOR, HAND_AUTHORED_CLAMP_CEILING);
+            assert!(
+                HAND_AUTHORED_CLAMP_FLOOR.leq(clamped),
+                "clamp result must sit at or above FLOOR; input={a:?} clamped={clamped:?}",
+            );
+            assert!(
+                clamped.leq(HAND_AUTHORED_CLAMP_CEILING),
+                "clamp result must sit at or below CEILING; input={a:?} clamped={clamped:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_clamp_with_lattice_extrema_returns_the_input() {
+        // Extrema-bracket identity — clamping against the bounded-
+        // lattice extrema (`EMPTY_RESOURCE_LIMITS` as the leq-minimum,
+        // `UNBOUNDED_RESOURCE_LIMITS` as the leq-maximum) is the
+        // identity function on every posture: every posture already
+        // sits within the widest possible bracket. Cross-checks the
+        // clamp primitive against the bounded-lattice identity elements
+        // previously lifted; a regression that swapped the two extrema
+        // in the impl would collapse every input to
+        // `UNBOUNDED.strictest(EMPTY) == EMPTY` and fail this pin on
+        // every non-EMPTY input.
+        for a in [
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ] {
+            assert_eq!(
+                a.clamp(EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS),
+                a,
+                "clamp against [EMPTY, UNBOUNDED] must be the identity on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_clamp_with_equal_bounds_returns_the_bound() {
+        // Degenerate-bracket collapse — a zero-width bracket
+        // (`lower == upper`) collapses every input to the single point.
+        // The pointwise `max(a, x)` lifts every axis to at least `x`,
+        // then the pointwise `min(., x)` clamps every axis to exactly
+        // `x` regardless of `a`'s per-axis position (since `x ≤ max(a,
+        // x) ≤ max(x, x) == x` when `a.leq(x)` and `min(max(a, x), x)
+        // == x` when `x.leq(a)`).
+        for x in [
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            DEFAULT_RESOURCE_LIMITS,
+        ] {
+            for a in [
+                EMPTY_RESOURCE_LIMITS,
+                HAND_AUTHORED_MID_POSTURE,
+                HAND_AUTHORED_OTHER_POSTURE,
+                UNBOUNDED_RESOURCE_LIMITS,
+            ] {
+                assert_eq!(
+                    a.clamp(x, x),
+                    x,
+                    "zero-width bracket [x, x] must collapse input {a:?} to x={x:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_clamp_is_idempotent() {
+        // Idempotence — re-applying the same bracket to an already-
+        // clamped posture returns the same result. The clamp primitive
+        // is idempotent because its output already sits within the
+        // `[lower, upper]` bracket (pinned by
+        // `resource_limits_clamp_result_sits_within_the_bracket`), so
+        // the second application hits the in-range identity arm. Peer
+        // of the idempotence pins on `strictest` and `most_permissive`
+        // one ARITY axis over (2-input primitive → 3-input bracket) on
+        // the lattice-algebra idempotence-law surface.
+        assert!(HAND_AUTHORED_CLAMP_FLOOR.leq(HAND_AUTHORED_CLAMP_CEILING));
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ] {
+            let once = a.clamp(HAND_AUTHORED_CLAMP_FLOOR, HAND_AUTHORED_CLAMP_CEILING);
+            let twice = once.clamp(HAND_AUTHORED_CLAMP_FLOOR, HAND_AUTHORED_CLAMP_CEILING);
+            assert_eq!(
+                once, twice,
+                "clamp must be idempotent; input={a:?} once={once:?} twice={twice:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_clamp_composes_at_compile_time_via_const_fn() {
+        // Const-fn pin — the bracket combinator is evaluable in const
+        // context, so a caller can pre-clamp a shipped preset against
+        // an operator-supplied policy bracket at compile time. Sibling
+        // of the const-fn composition pins on `strictest` /
+        // `most_permissive` / `strictest_of` / `most_permissive_of`
+        // one PRIMITIVE-KIND axis over: those four combinators compose
+        // presets at const time, and this bracket combinator projects
+        // a preset into a const-time bracket.
+        //
+        // A regression to a runtime `fn` here would fail the `pub
+        // const` binding below at compile time — a stronger guarantee
+        // than a runtime `assert!` because the const binding is
+        // evaluated once at compile time, not per test invocation.
+        const CLAMPED_DEFAULT: ResourceLimits =
+            DEFAULT_RESOURCE_LIMITS.clamp(EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS);
+        assert_eq!(CLAMPED_DEFAULT, DEFAULT_RESOURCE_LIMITS);
+
+        // Compile-time bracket-membership pin — const `assert!` on the
+        // lattice-relation contract discharges the "clamp result sits
+        // within the bracket" invariant at compile time on the
+        // (DEFAULT, EMPTY, UNBOUNDED) preset triple.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.leq(CLAMPED_DEFAULT));
+        const _: () = assert!(CLAMPED_DEFAULT.leq(UNBOUNDED_RESOURCE_LIMITS));
+    }
+
+    #[test]
+    fn resource_limits_clamp_agrees_with_direct_two_step_cascade() {
+        // Structural-equivalence pin — the sole behavioral claim the
+        // clamp primitive makes is that it IS the
+        // `self.most_permissive(lower).strictest(upper)` two-step
+        // cascade the pre-lift caller composed. A drift between the
+        // method and the inline cascade would break this equality on
+        // every input; the pin exhausts the four bracket-position arms
+        // of the input surface.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ] {
+            let via_method = a.clamp(HAND_AUTHORED_CLAMP_FLOOR, HAND_AUTHORED_CLAMP_CEILING);
+            let via_cascade = a
+                .most_permissive(HAND_AUTHORED_CLAMP_FLOOR)
+                .strictest(HAND_AUTHORED_CLAMP_CEILING);
+            assert_eq!(via_method, via_cascade);
+        }
+    }
+
+    #[test]
+    fn expander_built_at_clamped_preset_gates_at_the_bracket_ceiling() {
+        // Behavioral pin — an expander constructed from a preset
+        // clamped into `[EMPTY, TIGHT_BRACKET]` MUST gate at the
+        // bracket ceiling's arity axis. Confirms the clamp primitive
+        // reaches through to the runtime gates that consume
+        // `ResourceLimits`, so a future consumer that pre-clamps a
+        // preset against a policy bracket inherits the bracket's
+        // ceilings at every guard. Peer of
+        // `expander_built_at_strictest_of_two_presets_gates_at_the_tighter_ceiling`
+        // one COMBINATOR-ARITY axis over on the (pairwise-meet,
+        // N-ary-meet, bracket) combinator-arity face.
+        //
+        // The bracket ceiling tightens `max_macro_arity` to 1; every
+        // other axis stays at `usize::MAX` (the CEILING preset carries
+        // `usize::MAX` on those, and the input UNBOUNDED preset also
+        // carries `usize::MAX` on every axis — the clamp's `strictest`
+        // arm picks `usize::MAX` from either side).
+        let bracket_ceiling = ResourceLimits {
+            max_macro_arity: 1,
+            ..UNBOUNDED_RESOURCE_LIMITS
+        };
+        let clamped = UNBOUNDED_RESOURCE_LIMITS.clamp(EMPTY_RESOURCE_LIMITS, bracket_ceiling);
+        assert_eq!(clamped.max_macro_arity, 1);
+        assert_eq!(clamped.max_expansion_depth, usize::MAX);
+        assert_eq!(clamped.max_cache_entries, usize::MAX);
+        assert_eq!(clamped.max_expansion_size, usize::MAX);
+        assert_eq!(clamped.max_macro_body_size, usize::MAX);
+        assert_eq!(clamped.max_registered_macros, usize::MAX);
+        let mut e = Expander::with_limits(clamped);
+        let forms = read("(defmacro two (a b) `,a)").unwrap();
+        let err = e.expand_program(forms).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::MacroArityExceeded {
+                    arity: 2,
+                    limit: 1,
+                    ..
+                }
+            ),
+            "the bracket ceiling's arity gate MUST reach the register-time check; got: {err:?}",
         );
     }
 }

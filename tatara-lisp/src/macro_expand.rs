@@ -920,6 +920,141 @@ impl ResourceLimits {
         }
     }
 
+    /// The six per-axis `(name, value)` pairs of `self` as a fixed-size
+    /// array in canonical struct-declaration order — the ZIP FUSION of
+    /// [`Self::FIELD_NAMES`] and [`Self::field_values`] at ONE named
+    /// primitive on the algebra. Where `FIELD_NAMES` carries the six
+    /// `&'static str` field-name projections at the TYPE level and
+    /// `field_values` carries the six `usize` field-value projections at
+    /// the INSTANCE level, this method fuses the two SIBLING projections
+    /// into ONE positional-alignment-preserving zip so a consumer
+    /// reaching for the paired representation binds through ONE entry
+    /// rather than composing the two projections with a `.iter().zip(...)`
+    /// scaffold at every consumer that needs the paired view.
+    ///
+    /// The FUSION corner on the (name-only, value-only, name+value)
+    /// projection triple over the ceiling closed-set family — where
+    /// [`Self::FIELD_NAMES`] pins the (name-only, TYPE-level) leg and
+    /// [`Self::field_values`] pins the (value-only, INSTANCE-level) leg,
+    /// this method pins the (name+value, INSTANCE-level) closure
+    /// exhaustively: the zip is guaranteed at compile time to include
+    /// every axis in canonical order because the return-type arity ties
+    /// through [`Self::FIELD_COUNT`] and rustc's array-arity checking
+    /// rejects any element-count drift against the two SIBLING
+    /// projections. Sibling posture to the substrate-wide "closed-set
+    /// ALL array + per-instance projection" pattern the ceiling family
+    /// already carries at [`Self::FIELD_NAMES`] / [`Self::field_values`]
+    /// / [`Self::from_field_values`]; this method extends it one
+    /// PROJECTION-KIND axis over from single-axis projections to their
+    /// paired FUSION.
+    ///
+    /// The declaration order here mirrors the field order in the
+    /// [`ResourceLimits`] struct AND the field order in
+    /// [`DEFAULT_RESOURCE_LIMITS`] / [`EMPTY_RESOURCE_LIMITS`] /
+    /// [`UNBOUNDED_RESOURCE_LIMITS`] AND the ordering in
+    /// [`Self::FIELD_NAMES`] AND the projection order in
+    /// [`Self::field_values`] AND the injection order in
+    /// [`Self::from_field_values`] — one canonical ordering the substrate
+    /// pins at ONE `const fn` so every field-ordered consumer binds to
+    /// the SAME index-to-axis mapping across the FIVE peer entries.
+    ///
+    /// Arity pinned via [`Self::FIELD_COUNT`] rather than a bare `6`
+    /// literal, so a family extension (a seventh ceiling landing at the
+    /// struct declaration) forces this method's return-type arity to
+    /// bump in lockstep — rustc's array-arity checking rejects a
+    /// mismatch between the return-type's declared arity and the
+    /// initializer's element count, and the seventh element must be
+    /// added at both the name-half and the value-half of the pair in
+    /// lockstep.
+    ///
+    /// **Zip-alignment contract**: for every posture `p` and every
+    /// index `i in 0..FIELD_COUNT`, the per-index pair of `p.fields()`
+    /// equals `(Self::FIELD_NAMES[i], p.field_values()[i])` — pinned by
+    /// `resource_limits_fields_agree_with_zip_of_field_names_and_field_values`.
+    /// Guarantees the FUSION preserves the positional-alignment
+    /// invariant the two SIBLING projections carry independently.
+    ///
+    /// **Preset closure contracts**: on the three shipped presets the
+    /// fusion collapses to the paired all-constant array — `EMPTY_RESOURCE_LIMITS
+    /// .fields()` pairs every `FIELD_NAMES[i]` with `0`,
+    /// `UNBOUNDED_RESOURCE_LIMITS.fields()` pairs every `FIELD_NAMES[i]`
+    /// with `usize::MAX`, `DEFAULT_RESOURCE_LIMITS.fields()` pairs every
+    /// `FIELD_NAMES[i]` with the matching `DEFAULT_MAX_*` module
+    /// constant — pinned by the three preset-fusion tests in the cohort.
+    ///
+    /// `const fn` so a caller can pin a preset's per-axis paired
+    /// projection at compile time (`const _:
+    /// [(&'static str, usize); ResourceLimits::FIELD_COUNT] =
+    /// DEFAULT_RESOURCE_LIMITS.fields();`) — the const-fn peer of the
+    /// const-eval evaluability every other primitive on the
+    /// [`ResourceLimits`] algebra carries. `Copy` on [`ResourceLimits`]
+    /// lets the const-fn body return the paired array by value without
+    /// an explicit `.clone()` (which const-fn would not permit anyway),
+    /// and `&'static str` on the name half is itself `Copy` in the
+    /// tuple-element position.
+    ///
+    /// Pre-lift, a consumer wanting the six ceilings as a paired
+    /// `(name, value)` sequence (an observability serializer emitting
+    /// `{name: value}` JSON pairs, a per-field error formatter naming
+    /// the axis in a message like "the tighter posture on axis
+    /// `max_cache_entries`..."), composed the pair at its call site as
+    /// `Self::FIELD_NAMES.iter().zip(p.field_values().iter())` — a
+    /// two-primitive composition whose iteration surface returned a
+    /// `Zip<Iter<&&'static str>, Iter<&usize>>` (not an owned
+    /// fixed-size array, so a caller wanting the paired result inline
+    /// still had to `.collect::<Vec<_>>()` or destructure at the call
+    /// site), and whose exhaustiveness relied on the two projections
+    /// staying arity-aligned by convention rather than by construction.
+    /// Post-lift the paired projection binds at ONE typed `const fn` on
+    /// the algebra; a caller writes `posture.fields()` and rustc's
+    /// tuple-array-arity checking on the six-element paired array
+    /// literal below guarantees every axis is threaded through in
+    /// canonical order with the name-half and value-half taken from the
+    /// two SIBLING projections at compile time.
+    ///
+    /// **Enables field-agnostic observability composition**: with the
+    /// (name-only, value-only, name+value) triple now closed on the
+    /// substrate, an observability consumer serializing per-field
+    /// diagnostics reaches through ONE entry that guarantees per-axis
+    /// name-string agreement with the struct declaration at compile
+    /// time via the paired [`Self::field_values`] positional-alignment
+    /// pin — no `.iter().zip(...)` scaffold, no exhaustiveness gap on
+    /// family extension, no per-axis cascade to keep name and value in
+    /// lockstep.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-posture fusion into the six-tuple of `(name, value)` pairs
+    /// is itself a typed named exit rather than a per-consumer inline
+    /// `.iter().zip(...)` scaffold. THEORY.md §V.1 — knowable platform;
+    /// the fusion becomes a TYPE-level operation on the substrate
+    /// algebra rather than a per-consumer two-primitive composition,
+    /// and together with [`Self::FIELD_NAMES`] and [`Self::field_values`]
+    /// the trio pins the (name-only, value-only, name+value) projection
+    /// closure as a substrate-level typed theorem.
+    ///
+    /// Frontier inspiration: Racket's `struct-info` reflection surface
+    /// returning slot names and slot values together as a pairwise
+    /// alist; Common Lisp's `(mapcar #'cons slot-names slot-values)`
+    /// idiom over `slot-definition-name` and `slot-value` cascades;
+    /// Haskell's `Generic` deriving `HKD (Product Const)` for
+    /// name-and-value paired traversals over a record type. Translation
+    /// through pleme-io primitives: a `const fn` returning a
+    /// `[(&'static str, usize); N]` fixed-size paired array on the
+    /// typed [`ResourceLimits`] algebra rather than a runtime
+    /// reflection call, with the same struct-into-paired-sequence
+    /// closure at ONE named entry.
+    #[must_use]
+    pub const fn fields(self) -> [(&'static str, usize); Self::FIELD_COUNT] {
+        [
+            (Self::FIELD_NAMES[0], self.max_expansion_depth),
+            (Self::FIELD_NAMES[1], self.max_cache_entries),
+            (Self::FIELD_NAMES[2], self.max_expansion_size),
+            (Self::FIELD_NAMES[3], self.max_macro_body_size),
+            (Self::FIELD_NAMES[4], self.max_registered_macros),
+            (Self::FIELD_NAMES[5], self.max_macro_arity),
+        ]
+    }
+
     /// Pointwise-`min` across the six ceilings — the STRICTEST posture
     /// whose admissible input set is the intersection of `self`'s and
     /// `other`'s admissible input sets. `a.strictest(b)` admits an
@@ -26685,6 +26820,183 @@ mod tests {
         // identity closure on some axes.
         let round_trip = ResourceLimits::from_field_values(posture.field_values().map(|v| v));
         assert_eq!(round_trip, posture);
+    }
+
+    #[test]
+    fn resource_limits_fields_agree_with_zip_of_field_names_and_field_values() {
+        // Zip-alignment pin — for every posture `p` and every axis `i`,
+        // the per-index pair of `p.fields()` equals
+        // `(FIELD_NAMES[i], p.field_values()[i])`. This is the FUSION
+        // contract the (name-only, value-only, name+value) projection
+        // triple binds at ONE substrate entry: the paired projection
+        // preserves the positional-alignment invariant the two SIBLING
+        // projections carry independently. Sweeps the entire canonical
+        // preset roster (three shipped presets + two hand-authored
+        // asymmetric postures) so a hypothetical fusion drift that
+        // permutes a pair on some axis fires on at least one fixture
+        // even if it survives another.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            let paired = posture.fields();
+            let names = ResourceLimits::FIELD_NAMES;
+            let values = posture.field_values();
+            assert_eq!(paired.len(), ResourceLimits::FIELD_COUNT);
+            for (i, pair) in paired.iter().enumerate() {
+                assert_eq!(pair.0, names[i]);
+                assert_eq!(pair.1, values[i]);
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_fields_positional_alignment_at_every_axis() {
+        // Positional-alignment pin — a hand-authored posture whose
+        // per-field values are pairwise distinct primes fuses to a
+        // paired array whose per-index name matches the canonical
+        // field-name AND whose per-index value matches the direct
+        // field access at the matching axis. Peer of
+        // `resource_limits_from_field_values_positional_alignment_at_every_axis`
+        // one PROJECTION-KIND axis over — that pin proves the
+        // INJECTION aligns per-axis; this pin proves the paired
+        // FUSION aligns per-axis. Together with the zip-alignment pin
+        // above, these two guarantee the canonical index-to-axis
+        // mapping the (FIELD_NAMES, field_values, from_field_values,
+        // fields) family pins at ONE substrate ordering.
+        let posture = ResourceLimits {
+            max_expansion_depth: 2,
+            max_cache_entries: 3,
+            max_expansion_size: 5,
+            max_macro_body_size: 7,
+            max_registered_macros: 11,
+            max_macro_arity: 13,
+        };
+        let paired = posture.fields();
+        assert_eq!(paired[0], ("max_expansion_depth", 2));
+        assert_eq!(paired[1], ("max_cache_entries", 3));
+        assert_eq!(paired[2], ("max_expansion_size", 5));
+        assert_eq!(paired[3], ("max_macro_body_size", 7));
+        assert_eq!(paired[4], ("max_registered_macros", 11));
+        assert_eq!(paired[5], ("max_macro_arity", 13));
+    }
+
+    #[test]
+    fn resource_limits_fields_of_empty_preset_pairs_names_with_zero() {
+        // Bottom-preset fusion pin — every pair in
+        // `EMPTY_RESOURCE_LIMITS.fields()` binds the canonical
+        // `FIELD_NAMES[i]` with the meet-annihilator value `0`.
+        // Mirror of
+        // `resource_limits_field_values_of_empty_preset_are_all_zero`
+        // one PROJECTION-KIND axis over on the (name-only, value-only,
+        // name+value) projection triple: the value-half projection
+        // collapses to `[0; N]`, so the paired FUSION collapses to the
+        // zip of `FIELD_NAMES` with `[0; N]` at every axis.
+        let paired = EMPTY_RESOURCE_LIMITS.fields();
+        for (i, pair) in paired.iter().enumerate() {
+            assert_eq!(pair.0, ResourceLimits::FIELD_NAMES[i]);
+            assert_eq!(pair.1, 0);
+        }
+    }
+
+    #[test]
+    fn resource_limits_fields_of_unbounded_preset_pairs_names_with_usize_max() {
+        // Top-preset fusion pin — every pair in
+        // `UNBOUNDED_RESOURCE_LIMITS.fields()` binds the canonical
+        // `FIELD_NAMES[i]` with the join-annihilator value `usize::MAX`.
+        // Mirror of the empty-preset fusion pin above one LATTICE-POLE
+        // axis over on the preset-pair diagonal, and of
+        // `resource_limits_field_values_of_unbounded_preset_are_all_usize_max`
+        // one PROJECTION-KIND axis over on the (name-only, value-only,
+        // name+value) projection triple.
+        let paired = UNBOUNDED_RESOURCE_LIMITS.fields();
+        for (i, pair) in paired.iter().enumerate() {
+            assert_eq!(pair.0, ResourceLimits::FIELD_NAMES[i]);
+            assert_eq!(pair.1, usize::MAX);
+        }
+    }
+
+    #[test]
+    fn resource_limits_fields_of_default_preset_pairs_names_with_default_constants() {
+        // Interior-preset fusion pin — the shipped default's paired
+        // fusion binds each canonical `FIELD_NAMES[i]` with the
+        // matching `DEFAULT_MAX_*` module constant. Mirror of
+        // `resource_limits_field_values_of_default_preset_matches_default_constants`
+        // one PROJECTION-KIND axis over on the (name-only, value-only,
+        // name+value) projection triple. Together with the empty +
+        // unbounded preset fusion pins, this closes the three-fold
+        // preset-fusion surface on `fields`.
+        let paired = DEFAULT_RESOURCE_LIMITS.fields();
+        assert_eq!(
+            paired[0],
+            ("max_expansion_depth", DEFAULT_MAX_EXPANSION_DEPTH)
+        );
+        assert_eq!(paired[1], ("max_cache_entries", DEFAULT_MAX_CACHE_ENTRIES));
+        assert_eq!(
+            paired[2],
+            ("max_expansion_size", DEFAULT_MAX_EXPANSION_SIZE)
+        );
+        assert_eq!(
+            paired[3],
+            ("max_macro_body_size", DEFAULT_MAX_MACRO_BODY_SIZE)
+        );
+        assert_eq!(
+            paired[4],
+            ("max_registered_macros", DEFAULT_MAX_REGISTERED_MACROS)
+        );
+        assert_eq!(paired[5], ("max_macro_arity", DEFAULT_MAX_MACRO_ARITY));
+    }
+
+    #[test]
+    fn resource_limits_fields_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the `fields` fusion is `const fn` so a caller
+        // can pin a preset's per-axis paired projection at compile
+        // time. Sibling of the const-fn evaluability pins on
+        // `field_values` / `from_field_values` / `strictest` /
+        // `most_permissive` / `leq` / etc. on the `ResourceLimits`
+        // algebra. Round-trip pins the three shipped presets in const
+        // context so a const-fn body drift that dropped the fusion
+        // invariant fires at compile time via one of the paired-value
+        // assertions below.
+        const EMPTY_PAIRS: [(&str, usize); ResourceLimits::FIELD_COUNT] =
+            EMPTY_RESOURCE_LIMITS.fields();
+        const UNBOUNDED_PAIRS: [(&str, usize); ResourceLimits::FIELD_COUNT] =
+            UNBOUNDED_RESOURCE_LIMITS.fields();
+        const DEFAULT_PAIRS: [(&str, usize); ResourceLimits::FIELD_COUNT] =
+            DEFAULT_RESOURCE_LIMITS.fields();
+        // Per-axis discrimination pins in const context — the paired
+        // FUSION recovers the canonical `FIELD_NAMES[i]` on every
+        // preset at every axis (names are preset-invariant), and the
+        // value-half discriminates the three shipped presets at the
+        // per-axis level.
+        const _: () = assert!(EMPTY_PAIRS[0].1 == 0);
+        const _: () = assert!(EMPTY_PAIRS[5].1 == 0);
+        const _: () = assert!(UNBOUNDED_PAIRS[0].1 == usize::MAX);
+        const _: () = assert!(UNBOUNDED_PAIRS[5].1 == usize::MAX);
+        const _: () = assert!(DEFAULT_PAIRS[0].1 == DEFAULT_MAX_EXPANSION_DEPTH);
+        const _: () = assert!(DEFAULT_PAIRS[5].1 == DEFAULT_MAX_MACRO_ARITY);
+    }
+
+    #[test]
+    fn resource_limits_fields_discriminate_hand_authored_postures() {
+        // Discrimination pin — the paired FUSION discriminates the
+        // two hand-authored asymmetric postures at every axis via the
+        // value-half (the name-half is preset-invariant across postures
+        // so it does NOT contribute to per-posture discrimination).
+        // Rules out a hypothetical fusion bug that returned a constant
+        // paired array regardless of the receiver posture. Sibling of
+        // `resource_limits_field_values_discriminate_hand_authored_postures`
+        // one PROJECTION-KIND axis over on the (name-only, value-only,
+        // name+value) projection triple.
+        let mid = HAND_AUTHORED_MID_POSTURE.fields();
+        let other = HAND_AUTHORED_OTHER_POSTURE.fields();
+        for (mid_pair, other_pair) in mid.iter().zip(other.iter()) {
+            assert_eq!(mid_pair.0, other_pair.0);
+            assert_ne!(mid_pair.1, other_pair.1);
+        }
     }
 
     #[test]

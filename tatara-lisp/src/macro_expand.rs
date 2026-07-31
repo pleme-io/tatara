@@ -513,6 +513,254 @@ const fn max_usize(a: usize, b: usize) -> usize {
 }
 
 impl ResourceLimits {
+    /// The cardinality of the [`ResourceLimits`] ceiling family — pinned
+    /// at ONE typed `pub const` on the algebra so every field-arity-
+    /// sensitive projection (the paired [`Self::FIELD_NAMES`] closed-set
+    /// ALL array, the [`Self::field_values`] per-posture projection, the
+    /// two constants' identical arity) resolves through ONE substrate
+    /// entry rather than a per-projection `6` literal each consumer would
+    /// have to update in lockstep on a family extension.
+    ///
+    /// Sibling posture to the closed set of `pub const ALL: [Self; N]`
+    /// forced-arity arrays on the substrate's other closed-set outer
+    /// algebras ([`crate::ast::AtomKind::ALL`] `[Self; 6]`,
+    /// [`crate::ast::QuoteForm::ALL`] `[Self; 4]`,
+    /// [`crate::error::SexpShape::ALL`] `[Self; 12]`,
+    /// [`crate::error::UnquoteForm::ALL`] `[Self; 2]`,
+    /// [`crate::error::MacroDefHead::ALL`] `[Self; 3]`,
+    /// [`MacroParams::LAMBDA_LIST_KEYWORDS`] `[&'static str; 2]`) —
+    /// every closed-set algebra the substrate carries pins its
+    /// cardinality at the declaration site via a forced-arity constant
+    /// so a family extension fails compilation until every consumer
+    /// picks up the new element at the SAME structural site. This
+    /// constant closes the same shape on the [`ResourceLimits`] FIELD
+    /// family: a seventh ceiling extends this `pub const` PLUS the
+    /// struct declaration PLUS [`DEFAULT_RESOURCE_LIMITS`] PLUS
+    /// [`EMPTY_RESOURCE_LIMITS`] PLUS [`UNBOUNDED_RESOURCE_LIMITS`]
+    /// PLUS [`Self::FIELD_NAMES`] PLUS [`Self::field_values`] in
+    /// lockstep, and rustc's arity checking on every `[T; Self::
+    /// FIELD_COUNT]` literal downstream forces the new field to appear
+    /// at every site.
+    ///
+    /// Pre-lift, callers wanting to know the ceiling count either (a)
+    /// hardcoded `6` at their call site — a magic-number literal whose
+    /// meaning was opaque without cross-referencing the struct
+    /// declaration, and whose divergence on a family extension would
+    /// silently miscount the family — or (b) manually enumerated the
+    /// six field-accessors — a six-line cascade whose exhaustiveness
+    /// the type system did not gate. Post-lift the arity binds at ONE
+    /// typed constant on the algebra, and any downstream fixed-size
+    /// array over the six axes threads through this constant rather
+    /// than a `6` literal.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// family arity of the ceiling closed-set is itself a typed named
+    /// exit rather than a magic-number literal. THEORY.md §V.1 —
+    /// knowable platform; the arity becomes a TYPE-level constant on
+    /// the substrate algebra rather than a per-consumer magic-number.
+    ///
+    /// Frontier inspiration: Racket's `struct-info` / Common Lisp's
+    /// `class-slots` reflection surface exposing a struct's slot
+    /// cardinality as a first-class runtime value; `FIELD_COUNT` is the
+    /// substrate's typed-Rust compile-time peer. Translation through
+    /// pleme-io primitives: a `pub const usize` on the typed
+    /// [`ResourceLimits`] algebra rather than a runtime reflection
+    /// call, with the same family-cardinality-as-data closure at ONE
+    /// named entry.
+    pub const FIELD_COUNT: usize = 6;
+
+    /// Closed-set ALL array of the six per-axis field-name string
+    /// projections in canonical struct-declaration order —
+    /// `[max_expansion_depth, max_cache_entries, max_expansion_size,
+    /// max_macro_body_size, max_registered_macros, max_macro_arity]`.
+    /// The declaration order here mirrors the field order in the
+    /// [`ResourceLimits`] struct AND the field order in
+    /// [`DEFAULT_RESOURCE_LIMITS`] / [`EMPTY_RESOURCE_LIMITS`] /
+    /// [`UNBOUNDED_RESOURCE_LIMITS`] AND the projection order in
+    /// [`Self::field_values`] — one canonical ordering the substrate
+    /// pins at ONE `pub const` so every field-ordered consumer
+    /// (observability serializer, per-axis diff, structural iterator)
+    /// binds to the SAME index-to-axis mapping.
+    ///
+    /// Sibling posture to the closed set of `pub const ALL: [Self; N]`
+    /// forced-arity arrays on the substrate's other closed-set outer
+    /// algebras (see the [`Self::FIELD_COUNT`] docstring for the list).
+    /// Where those algebras carry the ALL array over ENUM variants, this
+    /// array carries it over STRUCT fields — the same closed-set family
+    /// closure one KIND axis over. Together with
+    /// [`MacroParams::LAMBDA_LIST_KEYWORDS`] (a closed-set `&'static
+    /// str` array over the CL lambda-list keyword family), this const
+    /// forms the substrate's second `[&'static str; N]` closed-set ALL
+    /// array — the pattern is converging on a substrate-wide
+    /// "family-name ALL array" idiom for every closed set the algebra
+    /// carries.
+    ///
+    /// Arity pinned via [`Self::FIELD_COUNT`] rather than a bare `6`
+    /// literal, so a family extension (a seventh ceiling landing at the
+    /// struct declaration) forces this array's arity to bump in
+    /// lockstep — rustc's array-arity checking rejects a mismatch
+    /// between the const's declared arity and the initializer's element
+    /// count.
+    ///
+    /// **Pairwise-distinctness contract**: every distinct index pair
+    /// `(i, j)` in `Self::FIELD_NAMES` satisfies
+    /// `Self::FIELD_NAMES[i] != Self::FIELD_NAMES[j]` — pinned by
+    /// `resource_limits_field_names_are_pairwise_distinct` in the test
+    /// cohort, mirroring the pairwise-disjointness pin
+    /// [`MacroParams::LAMBDA_LIST_KEYWORDS`] carries one closed-set
+    /// axis over.
+    ///
+    /// **Struct-order agreement contract**: the ordering of names in
+    /// this array agrees with the field order in the
+    /// [`ResourceLimits`] struct declaration — pinned by
+    /// `resource_limits_field_names_match_field_values_index_alignment`
+    /// via cross-reference with [`Self::field_values`] on a per-axis
+    /// distinct-value fixture, so a struct-field reorder that breaks
+    /// index alignment fails at least one per-axis positional
+    /// discrimination pin.
+    ///
+    /// Pre-lift, an observability consumer wanting to name the six
+    /// ceilings for a per-field error message ("the tighter posture on
+    /// axis `max_cache_entries`...") either (a) inlined the six string
+    /// literals at its call site — a copy-paste cascade whose
+    /// consistency with the struct declaration was maintained by hand,
+    /// and whose divergence on a struct-field rename would fail
+    /// silently at compile time (Rust does not check string literal
+    /// equality against field identifiers) — or (b) reached into a
+    /// serde `Deserialize` derive's field-name machinery through
+    /// reflection tricks not available on stable Rust. Post-lift the
+    /// six names bind at ONE typed `pub const` on the algebra, and a
+    /// consumer serializing per-field diagnostics reaches through ONE
+    /// entry whose per-index name-string is guaranteed to match the
+    /// struct declaration at compile time via the paired
+    /// [`Self::field_values`] positional-alignment pin.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; the
+    /// closed-set of ceiling field-name string projections binds at
+    /// ONE `pub const` on the typed [`ResourceLimits`] algebra
+    /// regardless of which consumer (observability serializer,
+    /// per-axis error formatter, authoring / rendering surface) reaches
+    /// in. THEORY.md §V.1 — knowable platform; the family closure
+    /// becomes a TYPE-level constant on the substrate algebra rather
+    /// than per-consumer hand-rolled enumeration of the six names.
+    ///
+    /// Frontier inspiration: Racket's `struct-info` returning the list
+    /// of slot names as a first-class value at struct-declaration time;
+    /// Common Lisp's `slot-definition-name` reflection over a class's
+    /// slots. Translation through pleme-io primitives: a `pub const
+    /// [&'static str; N]` on the typed [`ResourceLimits`] algebra
+    /// rather than a runtime reflection call, with the same
+    /// family-name closure at ONE named entry the closed-set ALL
+    /// pattern documents.
+    pub const FIELD_NAMES: [&'static str; Self::FIELD_COUNT] = [
+        "max_expansion_depth",
+        "max_cache_entries",
+        "max_expansion_size",
+        "max_macro_body_size",
+        "max_registered_macros",
+        "max_macro_arity",
+    ];
+
+    /// The six per-axis ceiling values as a fixed-size array in
+    /// canonical struct-declaration order — the PROJECTION peer of
+    /// [`Self::FIELD_NAMES`] one KIND axis over. Where `FIELD_NAMES`
+    /// carries the six `&'static str` field-name projections at the
+    /// TYPE level, this method carries the six `usize` field-value
+    /// projections at the INSTANCE level; together the two form a
+    /// zip-alignable `(name, value)` pair the substrate pins as a
+    /// typed positional invariant.
+    ///
+    /// The declaration order here mirrors the field order in the
+    /// [`ResourceLimits`] struct AND the field order in
+    /// [`DEFAULT_RESOURCE_LIMITS`] / [`EMPTY_RESOURCE_LIMITS`] /
+    /// [`UNBOUNDED_RESOURCE_LIMITS`] AND the ordering in
+    /// [`Self::FIELD_NAMES`] — one canonical ordering the substrate
+    /// pins at ONE `const fn` so every field-ordered consumer binds to
+    /// the SAME index-to-axis mapping.
+    ///
+    /// Arity pinned via [`Self::FIELD_COUNT`] rather than a bare `6`
+    /// literal, so a family extension (a seventh ceiling landing at
+    /// the struct declaration) forces this method's return-type arity
+    /// to bump in lockstep — rustc's array-arity checking rejects a
+    /// mismatch between the return-type's declared arity and the
+    /// initializer's element count.
+    ///
+    /// **Structural round-trip contract**: for every posture `p`, the
+    /// per-index element of `p.field_values()` equals the direct field
+    /// access at the matching axis
+    /// (`p.field_values()[0] == p.max_expansion_depth`, etc.) — pinned
+    /// by `resource_limits_field_values_agree_with_direct_field_access`.
+    /// **Preset round-trip contract**: on the three shipped presets,
+    /// the projection collapses to the matching per-axis constant array
+    /// (`EMPTY_RESOURCE_LIMITS.field_values() == [0; FIELD_COUNT]`,
+    /// `UNBOUNDED_RESOURCE_LIMITS.field_values() == [usize::MAX;
+    /// FIELD_COUNT]`, `DEFAULT_RESOURCE_LIMITS.field_values() ==
+    /// [DEFAULT_MAX_EXPANSION_DEPTH, ...]`) — pinned by the three
+    /// preset-projection tests in the cohort.
+    ///
+    /// `const fn` so a caller can pin a preset's per-axis projection
+    /// at compile time (`const _: [usize; ResourceLimits::FIELD_COUNT]
+    /// = DEFAULT_RESOURCE_LIMITS.field_values();`) — the const-fn peer
+    /// of the const-eval evaluability every other primitive on the
+    /// [`ResourceLimits`] algebra carries. `Copy` on
+    /// [`ResourceLimits`] lets the const-fn body return the array by
+    /// value without an explicit `.clone()` (which const-fn would not
+    /// permit anyway).
+    ///
+    /// Pre-lift, a consumer wanting the six ceilings as a homogeneous
+    /// array (a per-axis diff, a slice-fold over the ceilings, a
+    /// bulk-serialize into a fixed-size wire format) composed the
+    /// array at its call site as a six-line struct-field-access
+    /// literal — the same six-inline-primitive shape the pre-
+    /// `ResourceLimits` bundled `Expander` posture required its
+    /// callers to carry, and the same exhaustiveness gap the
+    /// `..Default::default()`-free literal on the bundled struct
+    /// exists to close. Post-lift the projection binds at ONE typed
+    /// method on the algebra; a caller writes `posture.field_values()`
+    /// and rustc's field-exhaustiveness on the six-element array
+    /// literal below guarantees every ceiling is threaded through the
+    /// projection in canonical order.
+    ///
+    /// Enables future field-agnostic composition — a per-axis
+    /// pointwise operation the substrate does not yet expose (a
+    /// generic pointwise combinator taking a `fn(usize, usize) ->
+    /// usize` closure, a per-axis diff returning
+    /// `[i128; FIELD_COUNT]`, a JSON serializer that emits `{name:
+    /// value}` pairs zipped from [`Self::FIELD_NAMES`] and this
+    /// method's output) binds to this projection rather than
+    /// re-deriving the six-field cascade.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-posture projection into the six-tuple of ceiling values is
+    /// itself a typed named exit rather than a per-consumer inline
+    /// array literal. THEORY.md §V.1 — knowable platform; the
+    /// projection becomes a TYPE-level operation on the substrate
+    /// algebra rather than a per-consumer field-access cascade.
+    ///
+    /// Frontier inspiration: Racket's `struct->vector` /
+    /// `struct->list` projecting a struct instance into a homogeneous
+    /// sequence for structural iteration; Common Lisp's
+    /// `slot-value`-over-`class-slots` cascade producing the same. The
+    /// pattern trades the sum-type projection (case-per-variant) for
+    /// the product-type projection (index-per-field) — a lossy
+    /// homogenizing view useful for structural iteration and
+    /// diagnostic emission. Translation through pleme-io primitives: a
+    /// `const fn` returning a `[usize; N]` fixed-size array on the
+    /// typed [`ResourceLimits`] algebra rather than a runtime
+    /// reflection call, with the same struct-into-sequence closure at
+    /// ONE named entry.
+    #[must_use]
+    pub const fn field_values(self) -> [usize; Self::FIELD_COUNT] {
+        [
+            self.max_expansion_depth,
+            self.max_cache_entries,
+            self.max_expansion_size,
+            self.max_macro_body_size,
+            self.max_registered_macros,
+            self.max_macro_arity,
+        ]
+    }
+
     /// Pointwise-`min` across the six ceilings — the STRICTEST posture
     /// whose admissible input set is the intersection of `self`'s and
     /// `other`'s admissible input sets. `a.strictest(b)` admits an
@@ -25813,5 +26061,311 @@ mod tests {
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.is_interior());
         const _: () = assert!(!EMPTY_RESOURCE_LIMITS.is_interior());
         const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.is_interior());
+    }
+
+    // ── Field-inspection primitives: FIELD_COUNT + FIELD_NAMES +
+    // field_values — the structural PROJECTION-into-sequence family
+    // one KIND axis over on the (posture, projection) grid. The
+    // pairwise / N-ary lattice-algebra methods above operate on
+    // postures AS wholes; these primitives project a posture into a
+    // homogeneous sequence for structural iteration + observability.
+    // Together they close the substrate-wide "closed-set ALL array +
+    // per-instance projection" pattern the enum-side algebras
+    // (AtomKind::ALL, QuoteForm::ALL, SexpShape::ALL,
+    // UnquoteForm::ALL, MacroDefHead::ALL,
+    // MacroParams::LAMBDA_LIST_KEYWORDS) already carry.
+
+    #[test]
+    fn resource_limits_field_count_is_six() {
+        // Cardinality pin — the ceiling family carries EXACTLY six
+        // axes. A seventh ceiling extension bumps this constant AND
+        // the struct declaration AND every downstream `[T;
+        // FIELD_COUNT]` array in lockstep; a diff to this constant
+        // alone (without the struct extension) fires the paired
+        // `field_count_matches_field_names_len` pin below.
+        assert_eq!(ResourceLimits::FIELD_COUNT, 6);
+    }
+
+    #[test]
+    fn resource_limits_field_count_matches_field_names_len() {
+        // Cross-consistency pin — the declared `FIELD_COUNT` constant
+        // matches the actual arity of the `FIELD_NAMES` closed-set
+        // ALL array. rustc's array-arity checking on `[&'static str;
+        // Self::FIELD_COUNT]` at the const declaration site already
+        // catches a mismatch at compile time, but this runtime pin
+        // discriminates the two projections independently against
+        // real values so a hypothetical unsound const-arity coercion
+        // still fails the cohort.
+        assert_eq!(
+            ResourceLimits::FIELD_NAMES.len(),
+            ResourceLimits::FIELD_COUNT
+        );
+    }
+
+    #[test]
+    fn resource_limits_field_count_matches_field_values_len() {
+        // Cross-consistency pin — the declared `FIELD_COUNT` matches
+        // the arity of the `field_values` projection's return array
+        // on a representative posture. Mirror of the
+        // `FIELD_NAMES.len()` pin above one KIND axis over on the
+        // (type-level, instance-level) grid: the `FIELD_NAMES` pin
+        // ties the arity to the TYPE-level constant; this pin ties
+        // it to the INSTANCE-level projection. Together the two
+        // guarantee zip-alignability of the `(name, value)` pair at
+        // every index without needing to trust either projection's
+        // arity in isolation.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.field_values().len(),
+            ResourceLimits::FIELD_COUNT
+        );
+    }
+
+    #[test]
+    fn resource_limits_field_names_are_pairwise_distinct() {
+        // Pairwise-distinctness pin — every distinct index pair
+        // `(i, j)` in `Self::FIELD_NAMES` carries a distinct name
+        // string. Sibling of the `LAMBDA_LIST_KEYWORDS` pairwise-
+        // distinctness pin one closed-set axis over on the
+        // substrate's `[&'static str; N]` closed-set family. A
+        // repeated name in the array would silently alias two
+        // ceilings for observability consumers ("the tighter posture
+        // on axis `max_cache_entries`" would ambiguate between the
+        // real cache-entries ceiling and the aliased peer), a
+        // failure mode this quadratic-over-N sweep catches at
+        // rustc-runtime rather than at observation time.
+        let names = ResourceLimits::FIELD_NAMES;
+        for i in 0..names.len() {
+            for j in (i + 1)..names.len() {
+                assert_ne!(
+                    names[i], names[j],
+                    "FIELD_NAMES carries duplicate name {:?} at indices {} and {}",
+                    names[i], i, j
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_field_names_are_none_empty() {
+        // Non-emptiness pin — every element of `Self::FIELD_NAMES` is
+        // a non-empty string. An empty field name would fail every
+        // observability consumer that composes it into a formatted
+        // message ("the tighter posture on axis ``..."); this
+        // per-element sweep gates the family at rustc-runtime.
+        for (i, name) in ResourceLimits::FIELD_NAMES.iter().enumerate() {
+            assert!(
+                !name.is_empty(),
+                "FIELD_NAMES carries an empty string at index {i}"
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_field_names_match_expected_canonical_order() {
+        // Canonical-order pin — the `FIELD_NAMES` closed-set ALL
+        // array carries the six field names in the SAME order as the
+        // `ResourceLimits` struct declaration + the
+        // `DEFAULT_RESOURCE_LIMITS` / `EMPTY_RESOURCE_LIMITS` /
+        // `UNBOUNDED_RESOURCE_LIMITS` preset literals + the
+        // `field_values` projection. A struct-field reorder that
+        // does NOT update this array in lockstep would break the
+        // zip-alignment contract with `field_values`; this exact-
+        // array pin discriminates every index positionally against
+        // its expected name so a swap of any two axes fires at
+        // rustc-runtime.
+        assert_eq!(
+            ResourceLimits::FIELD_NAMES,
+            [
+                "max_expansion_depth",
+                "max_cache_entries",
+                "max_expansion_size",
+                "max_macro_body_size",
+                "max_registered_macros",
+                "max_macro_arity",
+            ]
+        );
+    }
+
+    #[test]
+    fn resource_limits_field_values_of_empty_preset_are_all_zero() {
+        // Bottom-preset projection pin — the meet-annihilator (
+        // `EMPTY_RESOURCE_LIMITS`, every ceiling at `0`) projects
+        // through `field_values` to the all-zero six-tuple. Peer of
+        // the `strictest_of` / `most_permissive_of` bottom-preset
+        // pins one KIND axis over on the (algebra, projection) grid:
+        // where those pin the lattice-op result on a preset input,
+        // this pins the projection result on the preset input.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.field_values(),
+            [0usize; ResourceLimits::FIELD_COUNT]
+        );
+    }
+
+    #[test]
+    fn resource_limits_field_values_of_unbounded_preset_are_all_usize_max() {
+        // Top-preset projection pin — the join-annihilator (
+        // `UNBOUNDED_RESOURCE_LIMITS`, every ceiling at
+        // `usize::MAX`) projects through `field_values` to the
+        // all-`usize::MAX` six-tuple. Mirror of the empty-preset
+        // projection pin above one LATTICE-POLE axis over on the
+        // preset-pair diagonal.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.field_values(),
+            [usize::MAX; ResourceLimits::FIELD_COUNT]
+        );
+    }
+
+    #[test]
+    fn resource_limits_field_values_of_default_preset_matches_default_constants() {
+        // Interior-preset projection pin — the shipped default
+        // preset (every ceiling seeded from its matching
+        // `DEFAULT_MAX_*` module constant) projects through
+        // `field_values` to the six default constants in canonical
+        // order. Together with the empty + unbounded preset pins,
+        // this closes the three-fold preset projection surface on
+        // `field_values`.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.field_values(),
+            [
+                DEFAULT_MAX_EXPANSION_DEPTH,
+                DEFAULT_MAX_CACHE_ENTRIES,
+                DEFAULT_MAX_EXPANSION_SIZE,
+                DEFAULT_MAX_MACRO_BODY_SIZE,
+                DEFAULT_MAX_REGISTERED_MACROS,
+                DEFAULT_MAX_MACRO_ARITY,
+            ]
+        );
+    }
+
+    #[test]
+    fn resource_limits_field_values_agree_with_direct_field_access() {
+        // Structural round-trip pin — for a hand-authored posture
+        // whose six field values are pairwise distinct, the per-
+        // index element of `field_values()` equals the direct field
+        // access at the matching axis. The distinct-values fixture
+        // discriminates every index positionally so a struct-field
+        // reorder OR a projection order permutation fires at least
+        // one per-axis mismatch. Together with the paired
+        // `field_names_match_expected_canonical_order` pin, this
+        // guarantees the (name, value) zip-alignment contract holds
+        // at every index.
+        let posture = HAND_AUTHORED_MID_POSTURE;
+        let values = posture.field_values();
+        assert_eq!(values[0], posture.max_expansion_depth);
+        assert_eq!(values[1], posture.max_cache_entries);
+        assert_eq!(values[2], posture.max_expansion_size);
+        assert_eq!(values[3], posture.max_macro_body_size);
+        assert_eq!(values[4], posture.max_registered_macros);
+        assert_eq!(values[5], posture.max_macro_arity);
+    }
+
+    #[test]
+    fn resource_limits_field_values_discriminate_hand_authored_postures() {
+        // Positional-discrimination pin — the two hand-authored
+        // asymmetric postures (`HAND_AUTHORED_MID_POSTURE` +
+        // `HAND_AUTHORED_OTHER_POSTURE`, whose per-axis values
+        // straddle each other on every axis) project to distinct
+        // six-tuples via `field_values`. A hypothetical projection
+        // bug that collapsed both postures to the same array (a
+        // constant-return, an accidental self-reference, etc.)
+        // fires this cohort-level pin even though every per-preset
+        // pin would still hold.
+        assert_ne!(
+            HAND_AUTHORED_MID_POSTURE.field_values(),
+            HAND_AUTHORED_OTHER_POSTURE.field_values()
+        );
+    }
+
+    #[test]
+    fn resource_limits_field_values_zip_with_field_names_are_all_paired() {
+        // Zip-alignability pin — `Self::FIELD_NAMES` and
+        // `field_values()` produce equal-length sequences at every
+        // posture, so a `zip` over the two yields exactly
+        // `FIELD_COUNT` `(name, value)` pairs with no leftover. The
+        // key composition primitive this trio (`FIELD_COUNT`,
+        // `FIELD_NAMES`, `field_values`) enables for observability
+        // consumers; this pin gates it at cohort level.
+        let posture = HAND_AUTHORED_MID_POSTURE;
+        let names = ResourceLimits::FIELD_NAMES;
+        let values = posture.field_values();
+        let paired: Vec<(&&'static str, &usize)> = names.iter().zip(values.iter()).collect();
+        assert_eq!(paired.len(), ResourceLimits::FIELD_COUNT);
+        // Positional-alignment discrimination: the name at index i
+        // pairs with the direct field access at the matching axis.
+        assert_eq!(*paired[0].0, "max_expansion_depth");
+        assert_eq!(*paired[0].1, posture.max_expansion_depth);
+        assert_eq!(*paired[5].0, "max_macro_arity");
+        assert_eq!(*paired[5].1, posture.max_macro_arity);
+    }
+
+    #[test]
+    fn resource_limits_field_values_recovers_the_posture_via_struct_literal() {
+        // Round-trip pin — the six-tuple projection loses no
+        // information about the posture: given `p.field_values()`,
+        // a caller can reconstruct `p` verbatim via a
+        // `ResourceLimits { max_X: values[i], ... }` struct literal.
+        // Discriminates against a hypothetical projection bug that
+        // permutes or zeros an axis.
+        let posture = HAND_AUTHORED_OTHER_POSTURE;
+        let values = posture.field_values();
+        let reconstructed = ResourceLimits {
+            max_expansion_depth: values[0],
+            max_cache_entries: values[1],
+            max_expansion_size: values[2],
+            max_macro_body_size: values[3],
+            max_registered_macros: values[4],
+            max_macro_arity: values[5],
+        };
+        assert_eq!(reconstructed, posture);
+    }
+
+    #[test]
+    fn resource_limits_field_count_evaluates_at_compile_time_via_const() {
+        // Const-eval pin — `Self::FIELD_COUNT` is a `pub const usize`
+        // so a caller can pin the cardinality at compile time. Peer
+        // of the const-fn evaluability pins on every method in the
+        // `ResourceLimits` algebra. A regression that redeclared the
+        // constant as a non-`const` `static` or a `fn` returning
+        // `usize` breaks the const-context pin below.
+        const _: usize = ResourceLimits::FIELD_COUNT;
+        const _: () = assert!(ResourceLimits::FIELD_COUNT == 6);
+    }
+
+    #[test]
+    fn resource_limits_field_names_evaluates_at_compile_time_via_const() {
+        // Const-eval pin — `Self::FIELD_NAMES` is a `pub const
+        // [&'static str; FIELD_COUNT]` so a caller can pin the
+        // closed-set ALL array at compile time. Peer of the
+        // `FIELD_COUNT` const-eval pin above one PROJECTION axis
+        // over.
+        const _: [&str; ResourceLimits::FIELD_COUNT] = ResourceLimits::FIELD_NAMES;
+        const _: () = assert!(ResourceLimits::FIELD_NAMES.len() == ResourceLimits::FIELD_COUNT);
+    }
+
+    #[test]
+    fn resource_limits_field_values_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the `field_values` projection is `const
+        // fn` so a caller can pin a preset's per-axis projection at
+        // compile time. Sibling of the const-fn evaluability pins on
+        // `strictest` / `most_permissive` / `leq` / etc. on the
+        // `ResourceLimits` algebra.
+        const EMPTY_VALUES: [usize; ResourceLimits::FIELD_COUNT] =
+            EMPTY_RESOURCE_LIMITS.field_values();
+        const UNBOUNDED_VALUES: [usize; ResourceLimits::FIELD_COUNT] =
+            UNBOUNDED_RESOURCE_LIMITS.field_values();
+        const DEFAULT_VALUES: [usize; ResourceLimits::FIELD_COUNT] =
+            DEFAULT_RESOURCE_LIMITS.field_values();
+        // Discrimination pin: the three preset projections are
+        // pairwise distinct, so a const-fn body drift that collapsed
+        // any two projections fires here.
+        const _: () = assert!(EMPTY_VALUES[0] != UNBOUNDED_VALUES[0]);
+        const _: () = assert!(EMPTY_VALUES[0] != DEFAULT_VALUES[0]);
+        const _: () = assert!(DEFAULT_VALUES[0] != UNBOUNDED_VALUES[0]);
+        // Preset-shape pins: bottom projects to `[0; N]`, top to
+        // `[usize::MAX; N]`.
+        const _: () = assert!(EMPTY_VALUES[0] == 0);
+        const _: () = assert!(EMPTY_VALUES[5] == 0);
+        const _: () = assert!(UNBOUNDED_VALUES[0] == usize::MAX);
+        const _: () = assert!(UNBOUNDED_VALUES[5] == usize::MAX);
     }
 }

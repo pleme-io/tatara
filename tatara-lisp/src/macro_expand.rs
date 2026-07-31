@@ -4285,6 +4285,246 @@ impl ResourceLimits {
     pub const fn is_top(self) -> bool {
         UNBOUNDED_RESOURCE_LIMITS.leq(self)
     }
+
+    /// Bounded-lattice POLE membership — `self.is_pole()` holds iff
+    /// `self` is one of the two bounded-lattice pole postures:
+    /// [`EMPTY_RESOURCE_LIMITS`] (bottom) or
+    /// [`UNBOUNDED_RESOURCE_LIMITS`] (top). The DISJUNCTION corner
+    /// CLOSING the (bottom, top) pole-identity 2-cell face at its two-
+    /// arm SET-UNION — the direct order-theoretic analogue of
+    /// [`Self::is_monotone`]'s `is_ascending || is_descending`
+    /// disjunction one FACE axis over on the sequence-level surface:
+    /// where `is_monotone` folds the (ascending, descending)
+    /// directional pair into ONE positive monotonicity verdict, THIS
+    /// projection folds the (bottom, top) pole pair into ONE positive
+    /// pole-membership verdict, and [`Self::is_comparable`]'s
+    /// `leq || geq` disjunction one FACE axis further folds the
+    /// (leq, geq) directional pair into ONE positive comparability
+    /// verdict — the SAME two-arm SET-UNION shape closing three
+    /// distinct 2-cell faces at their disjunction corners with the
+    /// SAME substrate posture.
+    ///
+    /// Peer of [`Self::is_interior`] on the (pole, interior) 2-cell
+    /// partition — the two together exhaust the posture universe with
+    /// disjoint verdicts (`self.is_pole() ^ self.is_interior() == true`
+    /// on every posture) via De Morgan's law: `is_pole == is_bottom ||
+    /// is_top` and `is_interior == !is_bottom && !is_top`. The partition
+    /// is EXHAUSTIVE (every posture is either a pole or interior) and
+    /// DISJOINT (no posture is both a pole and interior).
+    ///
+    /// **Preset identity — both poles**:
+    /// `EMPTY_RESOURCE_LIMITS.is_pole() == true` and
+    /// `UNBOUNDED_RESOURCE_LIMITS.is_pole() == true` — both
+    /// distinguished bounded-lattice extrema satisfy pole membership by
+    /// their respective [`Self::is_bottom`] / [`Self::is_top`]
+    /// identities. Pinned as `resource_limits_pole_presets_are_poles`.
+    ///
+    /// **Preset rejection — DEFAULT**:
+    /// `DEFAULT_RESOURCE_LIMITS.is_pole() == false` — the shipped
+    /// posture sits strictly between the two poles (every
+    /// `DEFAULT_MAX_*` module constant is a concrete positive value
+    /// strictly less than `usize::MAX`), so neither pole predicate
+    /// fires and the disjunction folds `false`. Pinned as
+    /// `resource_limits_default_is_not_pole`.
+    ///
+    /// **Antichain rejection**:
+    /// `HAND_AUTHORED_MID_POSTURE.is_pole() == false` and
+    /// `HAND_AUTHORED_OTHER_POSTURE.is_pole() == false` — the two
+    /// hand-authored asymmetric postures sit in the lattice interior on
+    /// distinct branches (each is smaller on three axes and larger on
+    /// the other three than every other roster preset), so neither pole
+    /// predicate holds. Distinguishes it from the poles on the antichain
+    /// membership axis: the two hand-authored postures form an
+    /// INCOMPARABLE PAIR while remaining pole-non-members, so pole
+    /// membership is ORTHOGONAL to comparability. Pinned as
+    /// `resource_limits_hand_authored_postures_are_not_poles`.
+    ///
+    /// **De Morgan duality**: `self.is_pole() == !self.is_interior()`
+    /// — the pole corner is the SET-COMPLEMENT of the interior corner
+    /// on the (pole, interior) 2-cell partition. Pinned by
+    /// `resource_limits_is_pole_is_de_morgan_dual_of_is_interior`
+    /// which sweeps the canonical preset roster and confirms the
+    /// equivalence at every cell.
+    ///
+    /// **Direct-equality equivalence**: `self.is_pole() == (self ==
+    /// EMPTY_RESOURCE_LIMITS || self == UNBOUNDED_RESOURCE_LIMITS)` on
+    /// every posture — the disjunction of the two pole predicates
+    /// agrees with the disjunction of the two direct-equality-with-pole
+    /// checks a pre-lift consumer would have composed via non-`const`
+    /// [`PartialEq::eq`]. Post-lift the consumer routes through ONE
+    /// `const fn` name instead of composing the non-`const fn`
+    /// disjunction at its call site (unusable in `const _: () =
+    /// assert!(...)` contexts). Pinned as
+    /// `resource_limits_is_pole_agrees_with_direct_equality_with_pole_presets`.
+    ///
+    /// Encoded as `self.is_bottom() || self.is_top()` — one primitive
+    /// delegation each to the already-lifted pole-identity primitives,
+    /// so the two-arm pole-membership characterization lives at exactly
+    /// one implementation site. A future re-derivation of either pole
+    /// predicate (e.g. lifting a [`BoundedLattice`]-shape trait that
+    /// exposes `is_bottom` / `is_top` as trait-default methods) then
+    /// propagates to `is_pole` mechanically rather than requiring a
+    /// per-callsite fix-up.
+    ///
+    /// `const fn` for the same compile-time-pin reasons as
+    /// [`Self::is_bottom`] and [`Self::is_top`] one AGGREGATION axis
+    /// over on the pole-identity surface (`const _: () = assert!(
+    /// EMPTY_RESOURCE_LIMITS.is_pole());`), so a caller can pin pole
+    /// membership at compile time — a build-break rather than a runtime
+    /// `assert!` on the first execution.
+    ///
+    /// Pre-lift, a caller that wanted "is this posture one of the
+    /// distinguished lattice extrema?" composed
+    /// `self.is_bottom() || self.is_top()` at the callsite — a
+    /// two-primitive disjunction that appeared verbatim at every
+    /// prospective pole-membership-detection site pre-lift, matching
+    /// the PRIME-DIRECTIVE ≥2 substrate posture the recent
+    /// (is_monotone, is_non_monotone) and (is_comparable,
+    /// is_incomparable) cell-closure pairs shipped one FACE axis over.
+    /// Post-lift the pole-membership verdict binds at ONE typed method
+    /// the algebra exposes.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the pole-membership verdict on a preset-
+    /// carried resource proof is itself a typed named `bool` predicate
+    /// composing the two pole-identity primitives via the underlying
+    /// disjunction. THEORY.md §V.1 — knowable platform; the pole-
+    /// membership disjunction was an unnamed two-primitive composition
+    /// recurring at every prospective "is this posture distinguished?"
+    /// callsite pre-lift; naming it makes the (pole, interior) 2-cell
+    /// partition of the pole-identity surface a substrate-level
+    /// THEOREM proved on BOTH sides rather than one side asserted and
+    /// the other inferred at consumer sites.
+    ///
+    /// Frontier inspiration: Haskell's `Data.Bounded` typeclass
+    /// exposing `minBound` and `maxBound` alongside the derived `Eq`,
+    /// from which downstream code composes `x == minBound || x ==
+    /// maxBound` at consumer sites; Kmett's `lattices` package's
+    /// `BoundedLattice` typeclass surfacing `bottom` and `top`
+    /// observers whose set-union is exactly this projection; Julia's
+    /// `Base.extrema`-adjacent `x in (typemin(T), typemax(T))` idiom on
+    /// bounded numeric types. Translation through pleme-io primitives
+    /// is the plain `const fn` disjunction of the two already-lifted
+    /// pole-identity primitives — no new typeclass, no derive, no
+    /// supertrait bound (`Sized + Copy + 'static`-plus-`Eq` stays
+    /// untouched), no allocation, `const fn` throughout.
+    #[must_use]
+    pub const fn is_pole(self) -> bool {
+        self.is_bottom() || self.is_top()
+    }
+
+    /// Bounded-lattice INTERIOR membership — `self.is_interior()` holds
+    /// iff `self` is NEITHER bounded-lattice pole: `self` is not
+    /// [`EMPTY_RESOURCE_LIMITS`] (bottom) AND not
+    /// [`UNBOUNDED_RESOURCE_LIMITS`] (top). The MIDDLE-CELL closure of
+    /// the (pole, interior) 2-cell partition on the pole-identity
+    /// surface — the DIRECT NEGATIVE COMPLEMENT of [`Self::is_pole`]
+    /// one CELL axis over via De Morgan's law: `!(is_bottom || is_top)
+    /// == !is_bottom && !is_top`. Where [`Self::is_pole`] pins the
+    /// distinguished lattice-extremum pair, this projection pins its
+    /// EXHAUSTIVE-AND-DISJOINT complement: every non-pole posture in
+    /// the lattice interior.
+    ///
+    /// The order-theoretic peer of [`Self::is_mixed`] one FACE axis over
+    /// on the (chain, antichain, mixed) set-level surface: where
+    /// `is_mixed` closes the (chain, antichain) partition at its
+    /// previously-open interior via `!is_chain && !is_antichain`, THIS
+    /// projection closes the (bottom, top) pole partition at its
+    /// interior via `!is_bottom && !is_top`. Sibling posture to
+    /// [`Self::is_non_monotone`] one SLICE-STRUCTURE axis over on the
+    /// sequence-level surface: where `is_non_monotone` closes the
+    /// (ascending, descending, non-monotone) three-cell face at its
+    /// non-directional interior via `!is_ascending && !is_descending`,
+    /// THIS projection closes the (bottom, top, interior) three-cell
+    /// face on the singleton-posture surface via `!is_bottom && !is_top`
+    /// — the SAME two-arm CONJUNCTION-OF-NEGATIONS shape closing three
+    /// distinct middle-cell faces at their interior corners.
+    ///
+    /// **Preset identity — DEFAULT**:
+    /// `DEFAULT_RESOURCE_LIMITS.is_interior() == true` — the shipped
+    /// posture sits strictly between the two poles (every
+    /// `DEFAULT_MAX_*` module constant is a concrete positive value
+    /// strictly less than `usize::MAX`), so both pole predicates reject
+    /// and the conjunction closes. Pinned as
+    /// `resource_limits_default_is_interior`.
+    ///
+    /// **Antichain absorption**:
+    /// `HAND_AUTHORED_MID_POSTURE.is_interior() == true` and
+    /// `HAND_AUTHORED_OTHER_POSTURE.is_interior() == true` — the two
+    /// hand-authored asymmetric postures sit in the lattice interior on
+    /// distinct branches. Antichain-pair membership is ORTHOGONAL to
+    /// pole-identity: the interior contains both a chain (DEFAULT is
+    /// comparable to every other preset) and an antichain (the two
+    /// hand-authored postures are incomparable), and BOTH sit inside
+    /// the interior. Pinned as
+    /// `resource_limits_hand_authored_postures_are_interior`.
+    ///
+    /// **Preset rejection — poles**:
+    /// `EMPTY_RESOURCE_LIMITS.is_interior() == false` and
+    /// `UNBOUNDED_RESOURCE_LIMITS.is_interior() == false` — both
+    /// distinguished lattice-extremum presets fire one pole predicate
+    /// and the two-arm conjunction rejects. Pinned as
+    /// `resource_limits_pole_presets_are_not_interior`.
+    ///
+    /// **De Morgan duality**: `self.is_interior() == !self.is_pole()`
+    /// on every posture — the interior corner is the SET-COMPLEMENT of
+    /// the pole corner on the (pole, interior) 2-cell partition.
+    /// Pinned by
+    /// `resource_limits_is_interior_is_de_morgan_dual_of_is_pole`
+    /// which sweeps the canonical preset roster and confirms the
+    /// equivalence at every cell. The pole-vs-interior partition is
+    /// thus a substrate-level EXCLUSIVITY THEOREM proved on BOTH sides
+    /// rather than one side asserted.
+    ///
+    /// **Partition exhaustiveness**:
+    /// `self.is_pole() ^ self.is_interior() == true` (exactly one of
+    /// the two holds on every posture). The (pole, interior) 2-cell
+    /// partition exhausts the posture universe with disjoint verdicts.
+    /// Pinned by
+    /// `resource_limits_is_pole_and_is_interior_partition_the_posture_universe`.
+    ///
+    /// Encoded as `!self.is_bottom() && !self.is_top()` — the direct
+    /// two-arm CONJUNCTION-OF-NEGATIONS shape a pre-lift consumer
+    /// would have composed at its call site, matching the
+    /// [`Self::is_mixed`] / [`Self::is_non_monotone`] sibling shapes on
+    /// the middle-cell closure axis (both encode as `!is_A && !is_B`
+    /// with the negated positive-arm pair). The equivalent alternative
+    /// encoding `!self.is_pole()` folds through De Morgan's law and
+    /// binds ONE additional primitive delegation via [`Self::is_pole`];
+    /// the direct-conjunction form makes the middle-cell
+    /// characterization visible without a folded negation and pins the
+    /// two-primitive substrate identity structurally.
+    ///
+    /// `const fn` for the same compile-time-pin reasons as
+    /// [`Self::is_pole`] (`const _: () = assert!(
+    /// DEFAULT_RESOURCE_LIMITS.is_interior());`), so a caller can pin
+    /// interior membership at compile time — a build-break rather than
+    /// a runtime `assert!` on the first execution.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the interior-membership verdict is the De
+    /// Morgan complement of the pole disjunction, and pinning the
+    /// projection at ONE typed primitive makes the (pole, interior)
+    /// 2-cell partition of the pole-identity surface a substrate-level
+    /// EXCLUSIVITY THEOREM. THEORY.md §V.1 — knowable platform; the
+    /// interior-membership complement was an unnamed two-primitive
+    /// negated-conjunction pre-lift recurring at every prospective
+    /// "is this posture a shippable non-pole?" callsite.
+    ///
+    /// Frontier inspiration: order-theory's canonical "interior of a
+    /// bounded lattice" concept (the poset minus its distinguished
+    /// extrema, aka the "proper" elements) as canonicalized in
+    /// Birkhoff's *Lattice Theory*; Haskell's `Data.Bounded`-adjacent
+    /// idiom `x /= minBound && x /= maxBound` on `Bounded a`
+    /// carriers; the standard numeric-range idiom
+    /// `n > 0 && n < usize::MAX` for interior integer membership.
+    /// Translation through pleme-io primitives is the plain `const fn`
+    /// De Morgan complement of the two already-lifted pole-identity
+    /// primitives — no new typeclass, no derive, no supertrait bound.
+    #[must_use]
+    pub const fn is_interior(self) -> bool {
+        !self.is_bottom() && !self.is_top()
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -25376,5 +25616,202 @@ mod tests {
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.is_top());
         const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.is_top());
         const _: () = assert!(!EMPTY_RESOURCE_LIMITS.is_top());
+    }
+
+    #[test]
+    fn resource_limits_pole_presets_are_poles() {
+        // Preset identity — both bounded-lattice extrema satisfy pole
+        // membership via their respective is_bottom / is_top pole-
+        // identity primitives, and the disjunction fires on both.
+        assert!(EMPTY_RESOURCE_LIMITS.is_pole());
+        assert!(UNBOUNDED_RESOURCE_LIMITS.is_pole());
+    }
+
+    #[test]
+    fn resource_limits_default_is_not_pole() {
+        // Interior preset — the shipped posture sits strictly between
+        // the two poles (every `DEFAULT_MAX_*` is a concrete positive
+        // value strictly less than `usize::MAX`), so neither pole
+        // predicate fires and the disjunction folds `false`.
+        assert!(!DEFAULT_RESOURCE_LIMITS.is_pole());
+    }
+
+    #[test]
+    fn resource_limits_hand_authored_postures_are_not_poles() {
+        // Antichain-arm rejection — the two hand-authored asymmetric
+        // postures sit on distinct interior branches, so neither pole
+        // predicate fires. Discriminates a regression that dropped the
+        // is_top arm (`self.is_bottom()` alone) — which would still
+        // return `false` here — and a regression that swapped the
+        // disjunction to a conjunction (`is_bottom && is_top`) — which
+        // would also return `false` here but for a different structural
+        // reason (the two hand-authored postures are not lattice
+        // extrema). The pin is load-bearing in composition with the
+        // pole-presets-are-poles pin above: only a body that fires
+        // BOTH pole-identity primitives via their DISJUNCTION passes
+        // both tests.
+        for &a in &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE] {
+            assert!(
+                !a.is_pole(),
+                "hand-authored antichain posture {a:?} must not be pole",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_default_is_interior() {
+        // Interior identity — the shipped posture sits strictly between
+        // the two poles, so both pole predicates reject and the two-arm
+        // conjunction closes.
+        assert!(DEFAULT_RESOURCE_LIMITS.is_interior());
+    }
+
+    #[test]
+    fn resource_limits_hand_authored_postures_are_interior() {
+        // Antichain absorption — antichain-pair membership is
+        // ORTHOGONAL to pole-identity; the interior contains both a
+        // chain (DEFAULT is comparable to every other preset) and an
+        // antichain (the two hand-authored postures are incomparable),
+        // and BOTH sit inside the interior.
+        for &a in &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE] {
+            assert!(
+                a.is_interior(),
+                "hand-authored antichain posture {a:?} must be interior",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_pole_presets_are_not_interior() {
+        // Preset rejection — both distinguished lattice-extremum
+        // presets fire one pole predicate, so the two-arm negated
+        // conjunction of `is_interior` rejects.
+        assert!(!EMPTY_RESOURCE_LIMITS.is_interior());
+        assert!(!UNBOUNDED_RESOURCE_LIMITS.is_interior());
+    }
+
+    #[test]
+    fn resource_limits_is_pole_agrees_with_is_bottom_or_is_top() {
+        // Encoding pin — the lifted disjunction agrees with the pre-
+        // lift `self.is_bottom() || self.is_top()` composition at every
+        // preset in the roster. Post-lift the consumer routes through
+        // ONE typed `const fn` primitive; the invariant that the lift
+        // is a semantic no-op against the two-primitive composition is
+        // what makes the lift safe. A regression that swapped the
+        // disjunction to a conjunction (`&&`) would fire here on both
+        // poles (both would flip from `true` to `false` since neither
+        // pole satisfies BOTH pole predicates).
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.is_pole(),
+                a.is_bottom() || a.is_top(),
+                "is_pole must agree with (is_bottom || is_top) for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_interior_agrees_with_neither_pole() {
+        // Encoding pin — the lifted middle-cell closure agrees with the
+        // pre-lift `!self.is_bottom() && !self.is_top()` composition at
+        // every preset in the roster. A regression that swapped the
+        // conjunction to a disjunction (`||`) would fire here on every
+        // interior preset (each of the three interior presets rejects
+        // exactly one pole predicate, so the `||` alternative would
+        // return `true` at DEFAULT but the direct encoding returns
+        // `true` iff BOTH pole predicates reject — the two agree on
+        // interior AND poles under `&&`, but diverge under `||` where
+        // the `||` alternative would spuriously flag one pole as
+        // interior — since one is_bottom == false at UNBOUNDED etc.).
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.is_interior(),
+                !a.is_bottom() && !a.is_top(),
+                "is_interior must agree with (!is_bottom && !is_top) for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_pole_is_de_morgan_dual_of_is_interior() {
+        // De Morgan cross-check — the pole and interior corners are
+        // set-complements on the pole-identity 2-cell partition. Sweeps
+        // the canonical preset roster; discriminates a regression that
+        // dropped either the negation on interior or the disjunction on
+        // pole.
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.is_pole(),
+                !a.is_interior(),
+                "is_pole must equal !is_interior for {a:?}",
+            );
+            assert_eq!(
+                a.is_interior(),
+                !a.is_pole(),
+                "is_interior must equal !is_pole for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_pole_and_is_interior_partition_the_posture_universe() {
+        // Partition exhaustiveness — exactly one of the two verdicts
+        // holds on every posture. The (pole, interior) 2-cell partition
+        // is EXHAUSTIVE (every posture is a pole or interior) AND
+        // DISJOINT (no posture is both). Sweeps the canonical preset
+        // roster; discriminates any regression that would allow both
+        // (`is_pole && is_interior`) or neither (`!is_pole &&
+        // !is_interior`) on some posture.
+        for &a in STRICT_ORDER_ROSTER {
+            assert!(
+                a.is_pole() ^ a.is_interior(),
+                "(is_pole, is_interior) must partition the posture universe; failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_pole_agrees_with_direct_equality_with_pole_presets() {
+        // Method-vs-equality cross-check — the lifted pole-membership
+        // predicate agrees with the pre-lift `self ==
+        // EMPTY_RESOURCE_LIMITS || self == UNBOUNDED_RESOURCE_LIMITS`
+        // equality-with-pole-presets invocation on every preset in the
+        // roster. Post-lift the consumer routes through ONE `const fn`
+        // name instead of composing the non-`const fn` `PartialEq::eq`
+        // disjunction at its call site (which is unusable in
+        // `const _: () = assert!(...)` contexts).
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.is_pole(),
+                a == EMPTY_RESOURCE_LIMITS || a == UNBOUNDED_RESOURCE_LIMITS,
+                "is_pole must agree with equality-with-either-pole for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_pole_composes_at_compile_time_via_const_fn() {
+        // Const-fn pin — the pole-membership predicate is evaluable in
+        // const context, so a caller can pin pole membership at
+        // compile time. A regression to a runtime `fn` here would fail
+        // the `const _: () = assert!(...)` bindings below at compile
+        // time; a regression to a conjunction (`&&`) would fire the
+        // pole-presets const pins below (both would flip from `true` to
+        // `false`).
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.is_pole());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.is_pole());
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.is_pole());
+    }
+
+    #[test]
+    fn resource_limits_is_interior_composes_at_compile_time_via_const_fn() {
+        // Const-fn dual pin — the interior-membership predicate is
+        // evaluable in const context. A regression to a disjunction
+        // (`||`) would fire the pole-rejection const pins below (both
+        // poles would flip from `false` to `true` since each pole
+        // rejects exactly ONE pole predicate).
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.is_interior());
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.is_interior());
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.is_interior());
     }
 }

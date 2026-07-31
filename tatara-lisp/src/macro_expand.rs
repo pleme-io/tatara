@@ -670,6 +670,14 @@ impl ResourceLimits {
     /// zip-alignable `(name, value)` pair the substrate pins as a
     /// typed positional invariant.
     ///
+    /// The PROJECTION half of the (projection, injection) structural
+    /// bijection pair whose INJECTION peer is [`Self::from_field_values`]
+    /// (`[usize; FIELD_COUNT] → ResourceLimits`); the two carriers agree
+    /// as ISOMORPHIC typed representations of the same six-axis posture-
+    /// state and the round-trip theorem
+    /// (`Self::from_field_values(p.field_values()) == p`) is pinned by
+    /// `resource_limits_from_field_values_round_trips_field_values`.
+    ///
     /// The declaration order here mirrors the field order in the
     /// [`ResourceLimits`] struct AND the field order in
     /// [`DEFAULT_RESOURCE_LIMITS`] / [`EMPTY_RESOURCE_LIMITS`] /
@@ -721,13 +729,16 @@ impl ResourceLimits {
     /// literal below guarantees every ceiling is threaded through the
     /// projection in canonical order.
     ///
-    /// Enables future field-agnostic composition — a per-axis
-    /// pointwise operation the substrate does not yet expose (a
-    /// generic pointwise combinator taking a `fn(usize, usize) ->
-    /// usize` closure, a per-axis diff returning
-    /// `[i128; FIELD_COUNT]`, a JSON serializer that emits `{name:
+    /// Enables field-agnostic composition — a per-axis pointwise
+    /// operation composes as (project → transform-on-array → inject)
+    /// via [`Self::from_field_values`], the closed injection peer of
+    /// this projection: a caller writes `ResourceLimits::from_field_values(
+    /// posture.field_values().map(|v| v.saturating_mul(2)))` and every
+    /// axis is threaded through in canonical order without a hand-
+    /// rolled six-field struct literal. A per-axis diff returning
+    /// `[i128; FIELD_COUNT]` and a JSON serializer that emits `{name:
     /// value}` pairs zipped from [`Self::FIELD_NAMES`] and this
-    /// method's output) binds to this projection rather than
+    /// method's output likewise bind to this projection rather than
     /// re-deriving the six-field cascade.
     ///
     /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
@@ -759,6 +770,154 @@ impl ResourceLimits {
             self.max_registered_macros,
             self.max_macro_arity,
         ]
+    }
+
+    /// Lift a per-axis `[usize; FIELD_COUNT]` array back into a
+    /// [`ResourceLimits`] posture — the INJECTION peer of
+    /// [`Self::field_values`] one DIRECTION axis over on the
+    /// (projection, injection) structural bijection pair. Where
+    /// `field_values` projects a posture into its six ordered ceiling
+    /// values (`ResourceLimits → [usize; 6]`), this method injects a
+    /// six-array back into a posture (`[usize; 6] → ResourceLimits`);
+    /// together the two carry [`ResourceLimits`] and
+    /// `[usize; ResourceLimits::FIELD_COUNT]` as ISOMORPHIC typed
+    /// carriers of the same six-axis posture-state — a caller can
+    /// project through `field_values`, transform through any
+    /// array-native combinator, and inject back through this method
+    /// with no information loss on either leg.
+    ///
+    /// The index-to-axis mapping mirrors [`Self::field_values`] and
+    /// [`Self::FIELD_NAMES`] exactly: `values[0] → max_expansion_depth`,
+    /// `values[1] → max_cache_entries`, `values[2] → max_expansion_size`,
+    /// `values[3] → max_macro_body_size`, `values[4] →
+    /// max_registered_macros`, `values[5] → max_macro_arity`. The
+    /// substrate pins ONE canonical index ordering at ONE `pub const
+    /// FIELD_COUNT` + ONE `pub const FIELD_NAMES` + ONE `field_values`
+    /// projection + this ONE `from_field_values` injection, so a
+    /// struct-field reorder that broke the alignment on any of the four
+    /// sites fires the paired round-trip pin
+    /// `resource_limits_from_field_values_round_trips_field_values`.
+    ///
+    /// **Round-trip left-inverse contract**
+    /// (`Self::from_field_values(p.field_values()) == p`): for every
+    /// posture `p`, projecting through [`Self::field_values`] and
+    /// injecting back through this method recovers `p` verbatim.
+    /// Pinned by `resource_limits_from_field_values_round_trips_field_values`
+    /// on the canonical preset roster (EMPTY / DEFAULT / UNBOUNDED / MID
+    /// / OTHER). This closes the "no information loss on the projection
+    /// leg" theorem the pre-lift
+    /// `resource_limits_field_values_recovers_the_posture_via_struct_literal`
+    /// pin proved by hand-rolling the struct literal at the call site;
+    /// post-lift the injection binds through ONE typed method on the
+    /// algebra and the round-trip proves as one line.
+    ///
+    /// **Round-trip right-inverse contract**
+    /// (`Self::from_field_values(v).field_values() == v`): for every
+    /// array `v: [usize; FIELD_COUNT]`, injecting through this method
+    /// and projecting back through [`Self::field_values`] recovers `v`
+    /// verbatim. Pinned by
+    /// `resource_limits_field_values_round_trips_from_field_values` on
+    /// several discriminating fixtures (all-zero, all-`usize::MAX`,
+    /// six pairwise-distinct primes). Together with the left-inverse
+    /// contract this establishes the bijection: the two carriers agree
+    /// as sets AND as ordered sequences AND as typed values.
+    ///
+    /// **Preset round-trip contracts**: the three shipped presets inject
+    /// exactly from their per-axis constant arrays —
+    /// `Self::from_field_values([0; FIELD_COUNT]) ==
+    /// EMPTY_RESOURCE_LIMITS`, `Self::from_field_values([usize::MAX;
+    /// FIELD_COUNT]) == UNBOUNDED_RESOURCE_LIMITS`,
+    /// `Self::from_field_values([DEFAULT_MAX_EXPANSION_DEPTH, ...]) ==
+    /// DEFAULT_RESOURCE_LIMITS` — pinned by the three preset-injection
+    /// tests in the cohort. Mirror of the three preset-projection
+    /// contracts [`Self::field_values`] carries one DIRECTION axis over.
+    ///
+    /// `const fn` so a caller can inject a compile-time array into a
+    /// `pub const ResourceLimits` preset:
+    ///
+    /// ```rust,ignore
+    /// const OPERATOR_CEILINGS: [usize; ResourceLimits::FIELD_COUNT] =
+    ///     [8, 512, 4096, 2048, 256, 32];
+    /// pub const OPERATOR_RESOURCE_LIMITS: ResourceLimits =
+    ///     ResourceLimits::from_field_values(OPERATOR_CEILINGS);
+    /// ```
+    ///
+    /// Sibling posture to the const-fn evaluability every other primitive
+    /// on the [`ResourceLimits`] algebra carries ([`Self::strictest`] /
+    /// [`Self::most_permissive`] / [`Self::leq`] / [`Self::field_values`]
+    /// / etc.); the two projections together give the substrate a
+    /// compile-time round-trip through the array carrier without a
+    /// runtime hop.
+    ///
+    /// Pre-lift, a consumer wanting to reconstruct a posture from a
+    /// `[usize; FIELD_COUNT]` array (an axis-wise transform result, a
+    /// deserialized wire tuple, a field-agnostic combinator's return
+    /// value) either (a) hand-rolled the six-field
+    /// `ResourceLimits { max_expansion_depth: values[0], ... }` struct
+    /// literal at its call site — the same six-inline-primitive shape
+    /// the pre-`ResourceLimits` bundled `Expander` posture required its
+    /// callers to carry, and the same exhaustiveness gap the
+    /// `..Default::default()`-free literal on the bundled struct exists
+    /// to close (a copy-paste that permuted two indices left those two
+    /// axes swapped, and the type system did NOT gate the swap since
+    /// every field is `usize`) — or (b) collapsed the array through a
+    /// `.iter().collect::<Vec<_>>()` cascade that lost the typed
+    /// arity-guarantee entirely. Post-lift the injection binds at ONE
+    /// typed `const fn` on the algebra; a caller writes
+    /// `ResourceLimits::from_field_values(values)` and rustc's typed
+    /// array-arity checking on the parameter guarantees every ceiling
+    /// is threaded through in canonical order.
+    ///
+    /// **Enables field-agnostic pointwise composition**: with the
+    /// (projection, injection) pair now closed on the substrate, a
+    /// pointwise-map combinator over the six axes composes as one line:
+    ///
+    /// ```rust,ignore
+    /// let mut values = posture.field_values();
+    /// for v in &mut values { *v = v.saturating_mul(2); }
+    /// let doubled = ResourceLimits::from_field_values(values);
+    /// ```
+    ///
+    /// A per-axis diff between two postures returns
+    /// `[i128; FIELD_COUNT]` through the paired projection; a bulk
+    /// deserialize from a `[usize; N]` wire tuple lifts back through
+    /// this injection. Every future combinator that operates
+    /// axis-agnostically on the ceilings binds through this
+    /// (projection, injection) pair rather than re-deriving the
+    /// six-field cascade.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-array injection into a posture is itself a typed named exit
+    /// rather than a per-consumer inline struct literal. THEORY.md §V.1
+    /// — knowable platform; the injection becomes a TYPE-level
+    /// operation on the substrate algebra rather than a per-consumer
+    /// hand-rolled six-field struct literal, and together with
+    /// [`Self::field_values`] the pair pins the [`ResourceLimits`] /
+    /// `[usize; FIELD_COUNT]` bijection as a substrate-level
+    /// typed theorem.
+    ///
+    /// Frontier inspiration: Racket's `vector->struct` /
+    /// `list->struct` reconstruction functions injecting a homogeneous
+    /// sequence back into a struct instance for structural iteration
+    /// composition; Common Lisp's `make-instance` + `setf slot-value`
+    /// cascade producing the same. The pattern trades the sum-type
+    /// injection (case-per-variant) for the product-type injection
+    /// (index-per-field) — the ARRAY-INTO-STRUCT lift the projection
+    /// leg's homogenizing view needs as its inverse to close the
+    /// round-trip. Translation through pleme-io primitives: a `const
+    /// fn` taking a `[usize; N]` fixed-size array on the typed
+    /// [`ResourceLimits`] algebra rather than a runtime reflection call,
+    /// with the same sequence-into-struct closure at ONE named entry.
+    #[must_use]
+    pub const fn from_field_values(values: [usize; Self::FIELD_COUNT]) -> Self {
+        Self {
+            max_expansion_depth: values[0],
+            max_cache_entries: values[1],
+            max_expansion_size: values[2],
+            max_macro_body_size: values[3],
+            max_registered_macros: values[4],
+            max_macro_arity: values[5],
+        }
     }
 
     /// Pointwise-`min` across the six ceilings — the STRICTEST posture
@@ -26299,24 +26458,233 @@ mod tests {
     }
 
     #[test]
-    fn resource_limits_field_values_recovers_the_posture_via_struct_literal() {
-        // Round-trip pin — the six-tuple projection loses no
-        // information about the posture: given `p.field_values()`,
-        // a caller can reconstruct `p` verbatim via a
-        // `ResourceLimits { max_X: values[i], ... }` struct literal.
-        // Discriminates against a hypothetical projection bug that
-        // permutes or zeros an axis.
-        let posture = HAND_AUTHORED_OTHER_POSTURE;
-        let values = posture.field_values();
-        let reconstructed = ResourceLimits {
-            max_expansion_depth: values[0],
-            max_cache_entries: values[1],
-            max_expansion_size: values[2],
-            max_macro_body_size: values[3],
-            max_registered_macros: values[4],
-            max_macro_arity: values[5],
-        };
-        assert_eq!(reconstructed, posture);
+    fn resource_limits_from_field_values_round_trips_field_values() {
+        // Round-trip LEFT-INVERSE pin — for every posture `p`,
+        // projecting through `field_values` and injecting back through
+        // `from_field_values` recovers `p` verbatim. Closes the "no
+        // information loss on the projection leg" theorem the pre-
+        // lift consumer proved by hand-rolling the six-field struct
+        // literal at its call site; post-lift the injection binds
+        // through ONE typed method on the algebra and the round-trip
+        // proves as one line per canonical preset. Sweeps the entire
+        // canonical preset roster (three shipped presets + two hand-
+        // authored asymmetric postures) so a hypothetical injection
+        // bug that permutes or zeros an axis fires on at least one
+        // fixture even if it survives another.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                ResourceLimits::from_field_values(posture.field_values()),
+                posture
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_field_values_round_trips_from_field_values() {
+        // Round-trip RIGHT-INVERSE pin — for every array
+        // `v: [usize; FIELD_COUNT]`, injecting through
+        // `from_field_values` and projecting back through
+        // `field_values` recovers `v` verbatim. Peer of the left-
+        // inverse pin above one DIRECTION axis over on the
+        // (`ResourceLimits → [usize; N]`, `[usize; N] → ResourceLimits`)
+        // bijection. Together the two pins establish the isomorphism:
+        // both the (project → inject) and (inject → project) cycles
+        // are the identity, so the two typed carriers agree as sets
+        // AND as ordered sequences AND as typed values.
+        //
+        // Fixtures span the (all-zero, all-`usize::MAX`, six
+        // pairwise-distinct primes) triple so a hypothetical
+        // permutation bug that survives the constant-array fixtures
+        // still fires on the distinct-primes one via per-axis
+        // discrimination.
+        for values in [
+            [0usize; ResourceLimits::FIELD_COUNT],
+            [usize::MAX; ResourceLimits::FIELD_COUNT],
+            [2usize, 3, 5, 7, 11, 13],
+        ] {
+            assert_eq!(
+                ResourceLimits::from_field_values(values).field_values(),
+                values
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_from_field_values_positional_alignment_at_every_axis() {
+        // Positional-alignment pin — a hand-authored six-array whose
+        // per-index values are pairwise distinct primes injects into a
+        // posture whose per-field values match the array element at
+        // each axis position. The distinct-primes fixture
+        // discriminates every index positionally so a struct-field
+        // reorder OR an injection order permutation fires at least
+        // one per-axis mismatch. Sibling of
+        // `resource_limits_field_values_agree_with_direct_field_access`
+        // one DIRECTION axis over — that pin proves the PROJECTION
+        // aligns per-axis; this pin proves the INJECTION aligns per-
+        // axis. Together the two guarantee the canonical index-to-
+        // axis mapping the (`FIELD_NAMES`, `field_values`,
+        // `from_field_values`) family pins at ONE substrate ordering.
+        let values = [2usize, 3, 5, 7, 11, 13];
+        let posture = ResourceLimits::from_field_values(values);
+        assert_eq!(posture.max_expansion_depth, values[0]);
+        assert_eq!(posture.max_cache_entries, values[1]);
+        assert_eq!(posture.max_expansion_size, values[2]);
+        assert_eq!(posture.max_macro_body_size, values[3]);
+        assert_eq!(posture.max_registered_macros, values[4]);
+        assert_eq!(posture.max_macro_arity, values[5]);
+    }
+
+    #[test]
+    fn resource_limits_from_field_values_of_all_zero_is_empty_preset() {
+        // Bottom-preset injection pin — the all-zero six-array injects
+        // to the meet-annihilator (`EMPTY_RESOURCE_LIMITS`, every
+        // ceiling at `0`). Mirror of
+        // `resource_limits_field_values_of_empty_preset_are_all_zero`
+        // one DIRECTION axis over on the (projection, injection)
+        // bijection: where the projection pin ties the preset to the
+        // all-zero array, this pin ties the all-zero array back to
+        // the preset. Together the two close the round-trip on the
+        // BOTTOM pole of the preset-pair diagonal.
+        assert_eq!(
+            ResourceLimits::from_field_values([0usize; ResourceLimits::FIELD_COUNT]),
+            EMPTY_RESOURCE_LIMITS
+        );
+    }
+
+    #[test]
+    fn resource_limits_from_field_values_of_all_usize_max_is_unbounded_preset() {
+        // Top-preset injection pin — the all-`usize::MAX` six-array
+        // injects to the join-annihilator (`UNBOUNDED_RESOURCE_LIMITS`,
+        // every ceiling at `usize::MAX`). Mirror of the empty-preset
+        // injection pin above one LATTICE-POLE axis over on the
+        // preset-pair diagonal, and of
+        // `resource_limits_field_values_of_unbounded_preset_are_all_usize_max`
+        // one DIRECTION axis over on the (projection, injection)
+        // bijection.
+        assert_eq!(
+            ResourceLimits::from_field_values([usize::MAX; ResourceLimits::FIELD_COUNT]),
+            UNBOUNDED_RESOURCE_LIMITS
+        );
+    }
+
+    #[test]
+    fn resource_limits_from_field_values_of_default_constants_is_default_preset() {
+        // Interior-preset injection pin — the six `DEFAULT_MAX_*`
+        // module constants injected as a six-array recover the
+        // shipped default preset. Mirror of
+        // `resource_limits_field_values_of_default_preset_matches_default_constants`
+        // one DIRECTION axis over on the (projection, injection)
+        // bijection. Together with the empty + unbounded preset
+        // injection pins, this closes the three-fold preset
+        // injection surface on `from_field_values`.
+        assert_eq!(
+            ResourceLimits::from_field_values([
+                DEFAULT_MAX_EXPANSION_DEPTH,
+                DEFAULT_MAX_CACHE_ENTRIES,
+                DEFAULT_MAX_EXPANSION_SIZE,
+                DEFAULT_MAX_MACRO_BODY_SIZE,
+                DEFAULT_MAX_REGISTERED_MACROS,
+                DEFAULT_MAX_MACRO_ARITY,
+            ]),
+            DEFAULT_RESOURCE_LIMITS
+        );
+    }
+
+    #[test]
+    fn resource_limits_from_field_values_discriminates_permuted_arrays() {
+        // Permutation-sensitivity pin — two arrays that differ ONLY in
+        // the order of their elements inject to DISTINCT postures.
+        // Discriminates against a hypothetical injection bug that
+        // sorts the array before assigning (which would silently
+        // collapse every distinct-value permutation of a fixed
+        // multiset to the same posture); the assertion pattern also
+        // rules out an accidental self-reference / constant-return
+        // implementation. This is a cohort-level extension of the
+        // positional-alignment pin above: that pin catches a swap of
+        // ONE index pair; this pin catches ANY non-identity
+        // permutation.
+        let base = [2usize, 3, 5, 7, 11, 13];
+        let swapped = [3usize, 2, 5, 7, 11, 13]; // indices 0 and 1 swapped
+        assert_ne!(
+            ResourceLimits::from_field_values(base),
+            ResourceLimits::from_field_values(swapped)
+        );
+    }
+
+    #[test]
+    fn resource_limits_from_field_values_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the `from_field_values` injection is `const
+        // fn` so a caller can pin an injected posture at compile
+        // time. Sibling of the const-fn evaluability pins on
+        // `field_values` / `strictest` / `most_permissive` / `leq` /
+        // etc. on the `ResourceLimits` algebra, and of the const-
+        // context declaration pattern documented in the primitive's
+        // docstring
+        // (`pub const OPERATOR_RESOURCE_LIMITS: ResourceLimits =
+        // ResourceLimits::from_field_values(OPERATOR_CEILINGS);`).
+        // Round-trip on the three shipped presets in const context
+        // discriminates a const-fn body drift that broke the
+        // bijection at compile time.
+        const EMPTY_INJECTED: ResourceLimits =
+            ResourceLimits::from_field_values([0usize; ResourceLimits::FIELD_COUNT]);
+        const UNBOUNDED_INJECTED: ResourceLimits =
+            ResourceLimits::from_field_values([usize::MAX; ResourceLimits::FIELD_COUNT]);
+        const DEFAULT_INJECTED: ResourceLimits =
+            ResourceLimits::from_field_values(DEFAULT_RESOURCE_LIMITS.field_values());
+        // Bijection-in-const pins — each injected preset equals its
+        // named counterpart via const-eval discrimination.
+        const _: () = assert!(EMPTY_INJECTED.max_expansion_depth == 0);
+        const _: () = assert!(EMPTY_INJECTED.max_macro_arity == 0);
+        const _: () = assert!(UNBOUNDED_INJECTED.max_expansion_depth == usize::MAX);
+        const _: () = assert!(UNBOUNDED_INJECTED.max_macro_arity == usize::MAX);
+        const _: () = assert!(DEFAULT_INJECTED.max_expansion_depth == DEFAULT_MAX_EXPANSION_DEPTH);
+        const _: () = assert!(DEFAULT_INJECTED.max_macro_arity == DEFAULT_MAX_MACRO_ARITY);
+        // Runtime assertion cohort — the three const-injected presets
+        // structurally equal their named counterparts.
+        assert_eq!(EMPTY_INJECTED, EMPTY_RESOURCE_LIMITS);
+        assert_eq!(UNBOUNDED_INJECTED, UNBOUNDED_RESOURCE_LIMITS);
+        assert_eq!(DEFAULT_INJECTED, DEFAULT_RESOURCE_LIMITS);
+    }
+
+    #[test]
+    fn resource_limits_from_field_values_composes_pointwise_map_via_field_values() {
+        // Composition-primitive pin — the (`field_values`,
+        // `from_field_values`) bijection enables a per-axis pointwise
+        // map to compose as one line via a `[usize; N]::map` in the
+        // middle. This pin gates the load-bearing use case the
+        // primitive was lifted for: a caller with a `fn(usize) ->
+        // usize` axis-agnostic combinator (here `saturating_mul(2)`)
+        // reaches through the projection, transforms on the array
+        // carrier, and injects back through this method — no hand-
+        // rolled six-field struct literal, no per-axis cascade, no
+        // exhaustiveness gap.
+        let posture = HAND_AUTHORED_MID_POSTURE;
+        let doubled =
+            ResourceLimits::from_field_values(posture.field_values().map(|v| v.saturating_mul(2)));
+        // Per-axis discrimination: every axis of the injected posture
+        // equals twice the source posture's axis (no saturation on
+        // MID's small values).
+        assert_eq!(doubled.max_expansion_depth, posture.max_expansion_depth * 2);
+        assert_eq!(doubled.max_cache_entries, posture.max_cache_entries * 2);
+        assert_eq!(doubled.max_expansion_size, posture.max_expansion_size * 2);
+        assert_eq!(doubled.max_macro_body_size, posture.max_macro_body_size * 2);
+        assert_eq!(
+            doubled.max_registered_macros,
+            posture.max_registered_macros * 2
+        );
+        assert_eq!(doubled.max_macro_arity, posture.max_macro_arity * 2);
+        // Cohort-level round-trip pin — the round-trip through the
+        // identity closure recovers the source posture verbatim.
+        // Discriminates against a composition bug that dropped the
+        // identity closure on some axes.
+        let round_trip = ResourceLimits::from_field_values(posture.field_values().map(|v| v));
+        assert_eq!(round_trip, posture);
     }
 
     #[test]

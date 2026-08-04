@@ -22,7 +22,7 @@ path = "src/bin/tatara-check.rs"
 tatara-core = { path = "../tatara-core" , version = "0.2.65" }
 tatara-process = { path = "../tatara-process" , version = "0.2.65" }
 tatara-lattice = { path = "../tatara-lattice" , version = "0.2.65" }
-tatara-lisp = { path = "../tatara-lisp" , version = "0.2.65" }
+tatara-lisp = { path = "../tatara-lisp" , version = "0.3" }
 tatara-domains = { path = "../tatara-domains" , version = "0.2.65" }
 
 # Typed config + hot-reload (XDG discovery + env override + ArcSwap).

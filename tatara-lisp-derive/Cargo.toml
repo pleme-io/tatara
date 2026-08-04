@@ -1,7 +1,7 @@
 [package]
 name = "tatara-lisp-derive"
 description = "#[derive(TataraDomain)] — auto-generate a Lisp compiler from a Rust struct's fields"
-version.workspace = true
+version = "0.3.27"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 pub mod catalog;
 pub mod cluster;
 pub mod config;

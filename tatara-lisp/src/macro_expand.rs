@@ -7960,6 +7960,165 @@ impl ResourceLimits {
         !Self::is_strictly_ascending(postures) && !Self::is_strictly_descending(postures)
     }
 
+    /// The STRICT INTERSECTION corner of the (strict-monotone,
+    /// strict-non-monotone) 2-cell face on the whole-posture scalar
+    /// combinator column — `postures` is STRICTLY CONSTANT iff
+    /// [`Self::is_strictly_ascending`] AND [`Self::is_strictly_descending`]
+    /// BOTH hold. On the pointwise partial order over [`ResourceLimits`],
+    /// strict `<` and strict `>` are IRREFLEXIVE at every axis (no `x`
+    /// satisfies `x < x`), so the STRICT CONSTANT verdict collapses to
+    /// UNIFORM FALSE at arity ≥ 2: no consecutive pair can simultaneously
+    /// satisfy both `<` and `>` on every axis. Only the vacuous cases
+    /// (empty slice, singleton) accept.
+    ///
+    /// The STRICT peer of [`Self::is_constant`] one STRICTNESS axis over
+    /// on the SAME two-arm CONJUNCTION combinator shape — where
+    /// [`Self::is_constant`] binds pointwise EQUALITY across the slice via
+    /// non-strict `≤ ∧ ≥`, this projection binds the STRICT lift where
+    /// irreflexivity forbids the intersection at arity ≥ 2. Together
+    /// with [`Self::is_strictly_ascending`] and [`Self::is_strictly_descending`]
+    /// on the (constant, ascending, descending) STRICT triple, the three
+    /// projections collapse the shipped-preset triple partition onto a
+    /// (empty-or-singleton, strictly-ascending, strictly-descending,
+    /// strictly-non-monotone) refinement that the direct STRICT lift of
+    /// [`Self::is_constant`] makes typed.
+    ///
+    /// **UNIFORM-EMPTY collapse at arity ≥ 2 — LOAD-BEARING corner
+    /// discovery**: for every slice `postures` of arity ≥ 2 (any two or
+    /// more postures, distinct OR duplicated), `Self::is_strictly_constant(
+    /// postures) == false`. Two disjoint algebraic roots close this at
+    /// arity 2 and propagate through:
+    /// (1) Any two DISTINCT postures fail one of the two strict direction
+    /// arms structurally (at least one axis where they are not `<`).
+    /// (2) Any DIAGONAL DUPLICATE `[a, a]` fails BOTH strict direction
+    /// arms via per-axis IRREFLEXIVITY of `<` and `>` (no axis `i` has
+    /// `a.field_values()[i] < a.field_values()[i]`), closing the
+    /// conjunction on both arms.
+    /// At arity ≥ 3, any strictly-monotone chain includes the arity-2
+    /// projection which already fails at least one arm, so the
+    /// conjunction cannot recover. Pinned as
+    /// `resource_limits_is_strictly_constant_is_false_at_arity_two_or_more`.
+    ///
+    /// **Empty-slice vacuous truth**: `Self::is_strictly_constant(&[]) ==
+    /// true` — both underlying strict direction projections accept the
+    /// empty slice vacuously, and the conjunction closes. Pinned as
+    /// `resource_limits_is_strictly_constant_empty_slice_is_vacuously_true`.
+    ///
+    /// **Singleton vacuous truth**: `Self::is_strictly_constant(&[a]) ==
+    /// true` for every posture `a` — a one-element slice contains no
+    /// consecutive pairs, so both strict direction arms accept vacuously.
+    /// Pinned as
+    /// `resource_limits_is_strictly_constant_singleton_is_vacuously_true`.
+    ///
+    /// **Diagonal-duplicate REJECTION — LOAD-BEARING DISCRIMINATOR past
+    /// [`Self::is_constant`]**: `Self::is_strictly_constant(&[a, a]) ==
+    /// false` for every posture `a`. The non-strict peer
+    /// [`Self::is_constant`] ACCEPTS the same slice via reflexivity of
+    /// `≤` and `≥`; the STRICT peer REJECTS via irreflexivity of `<` and
+    /// `>`. This is the exact witness the strict-refines-non-strict
+    /// refinement `is_strictly_constant ⇒ is_constant` FLIPS on the
+    /// CONSTANT column (strict is STRICTLY STRONGER — false at every
+    /// arity ≥ 2 where the non-strict projection may still hold). Pinned
+    /// as `resource_limits_is_strictly_constant_of_diagonal_duplicate_is_false`.
+    ///
+    /// **Structural round-trip — `is_strictly_constant iff
+    /// is_strictly_ascending && is_strictly_descending`**: for every
+    /// slice, the scalar verdict is definitionally the CONJUNCTION of the
+    /// two underlying strict direction projections. Pinned across the 5^3
+    /// preset matrix as
+    /// `resource_limits_is_strictly_constant_iff_is_strictly_ascending_and_is_strictly_descending_on_every_shipped_slice`,
+    /// catching any future rewrite that drifts silently from the
+    /// composition contract.
+    ///
+    /// **Strict-refinement into non-strict — `is_strictly_constant ⇒
+    /// is_constant`**: for every slice, `Self::is_strictly_constant(
+    /// postures) == true` implies `Self::is_constant(postures) == true`.
+    /// Follows algebraically from the direction-row refinement `strict ⇒
+    /// non-strict` propagated through the CONJUNCTION combinator: if
+    /// both strict arms hold, both non-strict arms hold (each strict arm
+    /// refines its non-strict peer), so the non-strict conjunction holds.
+    /// The converse FAILS on every diagonal-duplicate (`is_constant`
+    /// accepts, `is_strictly_constant` rejects) — pinning
+    /// `is_strictly_constant` as STRICTLY STRONGER than
+    /// [`Self::is_constant`] on this column, the DIRECT DUAL of the
+    /// direction-row refinement one COMBINATOR axis over. Pinned as
+    /// `resource_limits_is_strictly_constant_implies_is_constant_on_every_shipped_slice`.
+    ///
+    /// **Refinement into strict-monotone — `is_strictly_constant ⇒
+    /// is_strictly_monotone`**: for every slice, `Self::is_strictly_constant(
+    /// postures) == true` implies `Self::is_strictly_monotone(postures)
+    /// == true` — the conjunction on the strict direction pair refines
+    /// the disjunction on the SAME pair (`a ∧ b ⇒ a ∨ b`). Together with
+    /// the empty/singleton acceptance at both surfaces, this pins the
+    /// STRICT INTERSECTION corner sitting INSIDE the STRICT MONOTONE cell
+    /// on the (strict-constant, strict-monotone, strict-non-monotone)
+    /// three-cell partition — where at arity ≥ 2 the strict-constant cell
+    /// is UNIFORMLY EMPTY, collapsing the three-cell partition to the
+    /// (strict-monotone, strict-non-monotone) two-cell partition [`Self::is_strictly_monotone`]
+    /// and [`Self::is_strictly_non_monotone`] already close. Pinned as
+    /// `resource_limits_is_strictly_constant_implies_is_strictly_monotone_on_every_shipped_slice`.
+    ///
+    /// **Const-fn evaluability**: the doubly-composed conjunction is
+    /// evaluable in `const` context, so a caller can pin a
+    /// strict-constant-sequence identity at compile time
+    /// (`const _: () = assert!(!ResourceLimits::is_strictly_constant(
+    /// &[EMPTY_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS]));` catches any
+    /// arity-2 regression at build time). Sibling of the const-fn
+    /// evaluability pins on the shipped scalar sequence-level projections
+    /// one STRICTNESS + COMBINATOR axis over.
+    ///
+    /// Pre-lift, a caller wanting "is this slice strictly constant?"
+    /// composed the two-primitive scalar conjunction `Self::is_strictly_ascending(
+    /// postures) && Self::is_strictly_descending(postures)` at every
+    /// prospective callsite — a two-primitive scaffolding whose UNIFORM-
+    /// EMPTY collapse at arity ≥ 2 was NOT visible at the call site and
+    /// whose exhaustiveness the type system did NOT gate. Post-lift the
+    /// scalar strict-constant verdict binds at ONE typed method the
+    /// algebra exposes, composes into a compile-time bound, and the
+    /// UNIFORM-EMPTY discovery lives at the canonical documentation site
+    /// — a ≥2 PRIME DIRECTIVE trigger, since the STRICT INTERSECTION
+    /// corner of the (constant, monotone) 2-cell face was the next
+    /// natural corner to open on the whole-posture combinator column
+    /// past the just-closed (strict-monotone, strict-non-monotone)
+    /// De Morgan 2-cell partition at [`Self::is_strictly_monotone`] and
+    /// [`Self::is_strictly_non_monotone`].
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// scalar strict-constant verdict is a typed named `bool` exit rather
+    /// than an inline doubly-composed conjunction. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the projection
+    /// composes from the shipped strict direction pair via a pure
+    /// conjunction, and the strict-refines-non-strict + refines-into-
+    /// strict-monotone contracts compose through boolean-lattice
+    /// implication across the two strict projections. THEORY.md §V.1 —
+    /// knowable platform; the strict-constant verdict becomes a
+    /// TYPE-level operation on the posture algebra rather than an inline
+    /// two-primitive scaffolding at every consumer.
+    ///
+    /// Frontier inspiration: the order-theoretic notion of a STRICTLY
+    /// CONSTANT SEQUENCE (which on a strict partial order collapses to
+    /// the empty and singleton cases via irreflexivity) — Haskell's
+    /// `strictlySorted xs && strictlySorted (reverse xs)` collapsing to
+    /// `length xs <= 1` on a strict poset; Coq's `StronglySorted lt`
+    /// intersected with `StronglySorted gt` inhabited only at `nil` and
+    /// singleton lists via `<`-irreflexivity; the general lattice
+    /// observation that the intersection of the strict-below and
+    /// strict-above chains on any poset is empty at arity ≥ 2. Translation
+    /// through pleme-io primitives: the doubly-composed conjunction
+    /// directly, with the shipped strict direction pair
+    /// [`Self::is_strictly_ascending`] + [`Self::is_strictly_descending`]
+    /// as the two primitives, no new dep, no supertrait bound (`Copy` on
+    /// [`ResourceLimits`] suffices to pass slices by value through the
+    /// inner `const fn` bodies), no allocation, `const fn` throughout.
+    /// Encoding the UNIFORM-EMPTY collapse as a typed named exit rather
+    /// than an inline scaffolding preserves the collapse as a documented
+    /// substrate theorem rather than an accidental property of the
+    /// specific `usize` carrier the algebra binds today.
+    #[must_use]
+    pub const fn is_strictly_constant(postures: &[Self]) -> bool {
+        Self::is_strictly_ascending(postures) && Self::is_strictly_descending(postures)
+    }
+
     /// Per-axis boolean `is_monotone`-projection across a slice of
     /// postures — the ATOMIC per-axis SEQUENCE-LEVEL monotone vector.
     /// `Self::axes_is_monotone(&[a, b, c])[i]` is `true` iff the projection
@@ -9235,6 +9394,223 @@ impl ResourceLimits {
         let mut i = 0;
         while i < Self::FIELD_COUNT {
             result[i] = !asc[i] && !desc[i];
+            i += 1;
+        }
+        result
+    }
+
+    /// Per-axis boolean STRICTLY-CONSTANT projection across a slice of
+    /// postures — the ATOMIC per-axis SEQUENCE-LEVEL strict-constant
+    /// vector. `Self::axes_is_strictly_constant(&[a, b, c])[i]` is `true`
+    /// iff the projection of the slice onto the `i`-th ceiling is BOTH a
+    /// strictly-increasing (`<`) AND a strictly-decreasing (`>`) `usize`
+    /// sequence on its own — a per-axis condition that per-axis strict
+    /// IRREFLEXIVITY of `<` and `>` on `usize` forbids at every axis at
+    /// arity ≥ 2. Each axis decides independently on the shipped strict
+    /// direction masks, but every axis inhabits the SAME UNIFORM-EMPTY
+    /// corner at arity ≥ 2.
+    ///
+    /// The STRICT INTERSECTION corner of the (strict-monotone,
+    /// strict-non-monotone) 2-cell face on the per-axis-mask combinator
+    /// column — the per-axis-MASK peer of [`Self::is_strictly_constant`]
+    /// one PROJECTION-KIND axis over on the SAME two-arm CONJUNCTION
+    /// combinator shape, AND the STRICT peer of [`Self::axes_is_constant`]
+    /// one STRICTNESS axis over on the SAME two-arm CONJUNCTION shape at
+    /// the per-axis-mask surface. Two peers cross the same cell on the
+    /// (direction × projection-kind × strictness × combinator) 2×2×2×2
+    /// grid: OPENING the STRICT INTERSECTION corner of the (constant,
+    /// monotone) 2-cell face into a UNIFORM-EMPTY corner at arity ≥ 2
+    /// past the just-closed (strict-monotone, strict-non-monotone)
+    /// De Morgan 2-cell partition at [`Self::axes_is_strictly_monotone`]
+    /// and [`Self::axes_is_strictly_non_monotone`].
+    ///
+    /// Encoded as a per-axis CONJUNCTION of the two shipped per-axis-mask
+    /// strict direction projections — one primitive delegation to
+    /// [`Self::axes_is_strictly_ascending`], one to
+    /// [`Self::axes_is_strictly_descending`], then a per-index `&&`-fold
+    /// across the two masks into a fresh `[bool; FIELD_COUNT]`. Because
+    /// both underlying projections delegate through [`Self::axes_lt`] /
+    /// [`Self::axes_gt`] to the pair-level per-axis strict primitives,
+    /// a future re-derivation of the pair-level primitive propagates
+    /// transparently into this method through the shipped sequence-level
+    /// per-axis-mask strict direction pair. The compositional shape
+    /// mirrors [`Self::is_strictly_constant`] one PROJECTION-KIND axis
+    /// over on the SAME two underlying strict direction projections.
+    ///
+    /// **Structural round-trip — `axes_is_strictly_constant[i] iff
+    /// axes_is_strictly_ascending[i] && axes_is_strictly_descending[i]`**:
+    /// for every slice and every axis, the mask bit is definitionally
+    /// the per-axis CONJUNCTION of the two strict direction masks; the
+    /// equality holds by CONSTRUCTION. Pinned across arity 0-3 over all
+    /// five shipped presets as
+    /// `resource_limits_axes_is_strictly_constant_iff_per_axis_conjunction_of_axes_strict_direction_masks_on_every_shipped_slice`,
+    /// catching any future rewrite of any of the three underlying
+    /// projections that silently drifts from the composition contract.
+    ///
+    /// **UNIFORM-EMPTY collapse at arity ≥ 2 — LOAD-BEARING corner
+    /// discovery per axis**: for every slice `postures` of arity ≥ 2
+    /// (any two or more postures, distinct OR duplicated),
+    /// `Self::axes_is_strictly_constant(postures) == [false; FIELD_COUNT]`.
+    /// Follows per-axis: `axes_is_strictly_ascending[i]` requires a
+    /// strict `<` chain on axis `i`; `axes_is_strictly_descending[i]`
+    /// requires a strict `>` chain; no `usize` sequence of arity ≥ 2
+    /// satisfies both on the same axis (strict `<` and strict `>` are
+    /// per-axis IRREFLEXIVE and per-axis MUTUALLY EXCLUSIVE on ordered
+    /// pairs), so the per-axis conjunction closes at every axis. This
+    /// UNIFORM-EMPTY per-axis collapse is the algebraic explanation for
+    /// why the (constant, strict-monotone, strict-non-monotone) three-
+    /// cell face already collapsed to a 2-cell partition on the STRICT
+    /// combinator column at [`Self::axes_is_strictly_monotone`] +
+    /// [`Self::axes_is_strictly_non_monotone`]: the third cell is
+    /// UNIFORMLY EMPTY at arity ≥ 2, so [`Self::axes_is_constant`] must
+    /// refine [`Self::axes_is_strictly_non_monotone`] (it cannot live in
+    /// its own third cell). Pinned as
+    /// `resource_limits_axes_is_strictly_constant_is_all_false_at_arity_two_or_more`.
+    ///
+    /// **Empty-slice all-true**: `Self::axes_is_strictly_constant(&[]) ==
+    /// [true; FIELD_COUNT]` — both underlying strict direction projections
+    /// return `[true; FIELD_COUNT]` vacuously on the empty slice, so the
+    /// per-axis conjunction opens at every axis. Peer of
+    /// [`Self::axes_is_constant`]'s empty-slice all-true one STRICTNESS
+    /// axis over. Pinned as
+    /// `resource_limits_axes_is_strictly_constant_empty_slice_is_all_true`.
+    ///
+    /// **Singleton all-true**: `Self::axes_is_strictly_constant(&[a]) ==
+    /// [true; FIELD_COUNT]` for every posture `a` — a one-element slice
+    /// contains no consecutive pairs, so both underlying strict direction
+    /// masks preserve their `true` seed at every axis and the per-axis
+    /// conjunction opens uniformly. Pinned as
+    /// `resource_limits_axes_is_strictly_constant_singleton_is_all_true`.
+    ///
+    /// **Diagonal-duplicate ALL-FALSE — LOAD-BEARING DISCRIMINATING arm
+    /// past [`Self::axes_is_constant`]**: `Self::axes_is_strictly_constant(
+    /// &[a, a]) == [false; FIELD_COUNT]` for every posture `a`. The
+    /// non-strict peer [`Self::axes_is_constant`] ACCEPTS the same slice
+    /// with all-true masks via per-axis REFLEXIVITY of `≤` and `≥`; the
+    /// STRICT peer REJECTS with all-false masks via per-axis
+    /// IRREFLEXIVITY of `<` and `>`. This is the exact per-axis witness
+    /// the strict-refines-non-strict refinement `axes_is_strictly_constant[i]
+    /// ⇒ axes_is_constant[i]` FLIPS on the CONSTANT column — strict is
+    /// STRICTLY STRONGER per-axis, false at every arity ≥ 2 where the
+    /// non-strict projection may still hold. Pinned as
+    /// `resource_limits_axes_is_strictly_constant_of_diagonal_duplicate_is_all_false`.
+    ///
+    /// **Per-axis strict-refinement into non-strict — `axes_is_strictly_constant[i]
+    /// ⇒ axes_is_constant[i]`**: for every slice and every axis, the per-
+    /// axis strict-constant bit implies the per-axis non-strict-constant
+    /// bit. Follows from the strict-refines-non-strict refinement on both
+    /// direction arms propagated through the per-axis CONJUNCTION. The
+    /// converse fails on every diagonal-duplicate (non-strict all-true,
+    /// strict all-false). Pinned as
+    /// `resource_limits_axes_is_strictly_constant_refines_axes_is_constant_per_axis_on_every_shipped_slice`.
+    ///
+    /// **Per-axis refinement into strict-monotone — `axes_is_strictly_constant[i]
+    /// ⇒ axes_is_strictly_monotone[i]`**: for every slice and every
+    /// axis, the per-axis strict-constant bit implies the per-axis
+    /// strict-monotone bit — the CONJUNCTION on the per-axis strict
+    /// direction pair refines the DISJUNCTION on the SAME pair. Together
+    /// with the UNIFORM-EMPTY collapse at arity ≥ 2, this pins the STRICT
+    /// INTERSECTION corner sitting INSIDE the strict-monotone cell of
+    /// the (strict-monotone, strict-non-monotone) per-axis-mask 2-cell
+    /// partition — only inhabited at the vacuous empty/singleton faces
+    /// where every per-axis bit is uniformly true. Pinned as
+    /// `resource_limits_axes_is_strictly_constant_refines_axes_is_strictly_monotone_per_axis_on_every_shipped_slice`.
+    ///
+    /// **Fold-agrees-scalar contract**: for every slice `postures`,
+    /// `Self::axes_is_strictly_constant(postures).iter().all(|&b| b) ==
+    /// Self::is_strictly_constant(postures)` — the per-axis `&&`-fold of
+    /// the STRICT-CONSTANT mask AGREES BIDIRECTIONALLY with the whole-
+    /// posture scalar verdict, at EVERY arity. Unlike the fold-refines-
+    /// scalar contracts on [`Self::axes_is_non_monotone`] +
+    /// [`Self::axes_is_strictly_non_monotone`] one COMBINATOR axis over
+    /// (where the [MID, OTHER] mixed-direction witness produces a fold-
+    /// scalar divergence), this UNION of the CONJUNCTION and CONSTANT
+    /// columns carries UNIFORM AGREEMENT because both projection kinds
+    /// COLLAPSE onto the SAME (vacuous, arity-≥2-empty) partition: at
+    /// arity 0/1 both surfaces uniformly ACCEPT (mask all-true, scalar
+    /// true); at arity ≥ 2 both surfaces uniformly REJECT (mask all-
+    /// false, scalar false, both via strict irreflexivity). No
+    /// mixed-direction witness can drive a divergence because the STRICT
+    /// INTERSECTION corner admits no distinct-posture inhabitants at all.
+    /// Pinned as
+    /// `resource_limits_axes_is_strictly_constant_fold_agrees_with_scalar_is_strictly_constant_on_every_shipped_slice`.
+    ///
+    /// **Pointwise-field per-axis strict-constant alignment**: for every
+    /// arity-3 slice from the 5-preset matrix, mask position `i` agrees
+    /// with the direct per-axis strict-constant verdict `(a[i] < b[i]
+    /// && b[i] < c[i]) && (a[i] > b[i] && b[i] > c[i])` on the `i`-th
+    /// `field_values` component — which is uniformly `false` by
+    /// per-axis `<`-vs-`>` mutual exclusion. Pinned as
+    /// `resource_limits_axes_is_strictly_constant_agrees_with_pointwise_field_strict_constant_projection`.
+    ///
+    /// **Const-fn evaluability**: the doubly-composed per-axis conjunction
+    /// is evaluable in `const` context, so a caller can pin a per-axis
+    /// strict-constant identity at compile time as a build-break
+    /// (`const _: () = { const M: [bool; ResourceLimits::FIELD_COUNT] =
+    /// ResourceLimits::axes_is_strictly_constant(&[DEFAULT_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS]); let mut i = 0; while i <
+    /// ResourceLimits::FIELD_COUNT { assert!(!M[i]); i += 1; } };`).
+    /// Sibling of the const-fn evaluability pins on the shipped per-
+    /// axis-mask sequence-level projections one COMBINATOR + STRICTNESS
+    /// axis over.
+    ///
+    /// Pre-lift, a caller wanting "for each axis, is this slice a
+    /// pointwise strictly-equal sequence on that axis?" composed the
+    /// doubly-primitive per-axis conjunction `let asc =
+    /// Self::axes_is_strictly_ascending(postures); let desc =
+    /// Self::axes_is_strictly_descending(postures); … let mut i = 0;
+    /// while i < Self::FIELD_COUNT { m[i] = asc[i] && desc[i]; i += 1;
+    /// } …` at every prospective callsite — a two-primitive scaffolding
+    /// whose UNIFORM-EMPTY collapse at arity ≥ 2 was NOT visible at the
+    /// call site and whose exhaustiveness the type system did NOT gate.
+    /// Post-lift the per-axis-mask strict-constant verdict binds at ONE
+    /// typed method the algebra exposes, composes into a compile-time
+    /// bound, and the doubly-conjoined per-axis substrate lives at ONE
+    /// implementation site — a ≥2 PRIME DIRECTIVE trigger, since the
+    /// STRICT INTERSECTION corner of the (constant, monotone) per-axis
+    /// 2-cell face was the next natural corner to open on the per-axis-
+    /// mask combinator column past the just-closed (strict-monotone,
+    /// strict-non-monotone) De Morgan 2-cell partition.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the per-
+    /// axis strict-constant verdict is a typed named `[bool; N]` exit
+    /// rather than an inline doubly-composed per-axis conjunction.
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// per-axis-mask strict-constant projection composes from the
+    /// shipped per-axis-mask strict direction pair via a pure per-axis
+    /// `&&`-fold, and the strict-refines-non-strict + refines-into-
+    /// strict-monotone contracts compose through boolean-lattice
+    /// implication across the two strict projections. THEORY.md §V.1 —
+    /// knowable platform; the per-axis-mask strict-constant verdict
+    /// becomes a TYPE-level operation on the posture algebra rather than
+    /// an inline two-primitive scaffolding.
+    ///
+    /// Frontier inspiration: order-theoretic AXIS-WISE STRICT CONSTANCY
+    /// on a product order — Haskell's `zipWith (&&) (zipWith (<) xs ys)
+    /// (zipWith (>) xs ys)` per-component idiom collapsing to `zipWith
+    /// (\_ _ -> False) xs ys` at arity ≥ 2 via strict `<`-vs-`>` mutual
+    /// exclusion; Idris's per-index intersection of `StronglySorted lt`
+    /// and `StronglySorted gt` on `Vec n Nat` inhabited only at `nil`
+    /// and singleton indices via `<`-irreflexivity; APL's `∧/2</⍵ ∧
+    /// ∧/2>/⍵` per-component conjunction collapsing to all-zero at
+    /// arity ≥ 2; Coq's per-component intersection of `Sorted lt` and
+    /// `Sorted gt` on a product record, inhabited only at `nil` and
+    /// singleton lists. Translation through pleme-io primitives: the
+    /// doubly-composed per-axis `&&`-fold directly, with the shipped
+    /// per-axis-mask strict direction pair
+    /// [`Self::axes_is_strictly_ascending`] +
+    /// [`Self::axes_is_strictly_descending`] as the two primitives, no
+    /// new dep, no supertrait bound (`Copy` on [`ResourceLimits`]
+    /// suffices to pass slices by value through the inner `const fn`
+    /// bodies), no allocation, `const fn` throughout.
+    #[must_use]
+    pub const fn axes_is_strictly_constant(postures: &[Self]) -> [bool; Self::FIELD_COUNT] {
+        let asc = Self::axes_is_strictly_ascending(postures);
+        let desc = Self::axes_is_strictly_descending(postures);
+        let mut result = [false; Self::FIELD_COUNT];
+        let mut i = 0;
+        while i < Self::FIELD_COUNT {
+            result[i] = asc[i] && desc[i];
             i += 1;
         }
         result
@@ -37621,6 +37997,502 @@ mod tests {
             while i < ResourceLimits::FIELD_COUNT {
                 assert!(SNM_MASK_DIAGONAL[i]);
                 assert!(SNM_MASK_ZIGZAG[i]);
+                i += 1;
+            }
+        };
+    }
+
+    // ── ResourceLimits::is_strictly_constant / ::axes_is_strictly_constant
+    //   — the STRICT INTERSECTION corner of the (strict-monotone, strict-
+    //   non-monotone) 2-cell face on both the whole-posture scalar and
+    //   per-axis-mask combinator columns. The STRICT peer of is_constant /
+    //   axes_is_constant one STRICTNESS axis over on the SAME two-arm
+    //   CONJUNCTION combinator shape. UNIFORM-EMPTY at arity ≥ 2 by
+    //   per-axis strict IRREFLEXIVITY of `<` and `>` on the underlying
+    //   usize projections, an inhabitation collapse the substrate exposes
+    //   as a typed named exit.
+    //   ─────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn resource_limits_is_strictly_constant_empty_slice_is_vacuously_true() {
+        // Empty-slice vacuous truth — both strict direction projections
+        // accept vacuously; the conjunction closes on both arms.
+        assert!(ResourceLimits::is_strictly_constant(&[]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_constant_singleton_is_vacuously_true() {
+        // Singleton vacuous truth — one-element slice contains no
+        // consecutive pairs; both strict direction projections vacuously
+        // accept. Pinned across the full shipped-preset roster.
+        for a in STRICT_ORDER_ROSTER {
+            assert!(
+                ResourceLimits::is_strictly_constant(&[*a]),
+                "is_strictly_constant(&[a]) must be true on singleton {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_constant_of_diagonal_duplicate_is_false() {
+        // Diagonal-duplicate REJECTION — LOAD-BEARING DISCRIMINATOR past
+        // is_constant: strict `<` AND strict `>` are BOTH IRREFLEXIVE, so
+        // both strict direction projections reject at the single
+        // consecutive pair and the conjunction closes on both arms. The
+        // non-strict peer ACCEPTS the same slice via reflexivity of `≤`
+        // and `≥`, pinning the strict-refines-non-strict FLIP on the
+        // CONSTANT column.
+        for a in STRICT_ORDER_ROSTER {
+            let dup = [*a, *a];
+            assert!(
+                !ResourceLimits::is_strictly_constant(&dup),
+                "is_strictly_constant(&[a, a]) must be false on {a:?}",
+            );
+            assert!(
+                ResourceLimits::is_constant(&dup),
+                "is_constant peer must accept the diagonal duplicate on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_constant_is_false_at_arity_two_or_more() {
+        // UNIFORM-EMPTY collapse at arity ≥ 2 — for every arity-2 slice
+        // over the shipped-preset roster (any two postures, distinct OR
+        // duplicated), the strict-constant verdict is uniformly false.
+        // Any DISTINCT pair fails at least one strict direction arm
+        // structurally; any DIAGONAL DUPLICATE fails both via
+        // irreflexivity. Same pattern extends to arity-3 slices via the
+        // arity-2 projection of any two consecutive elements. Pinned
+        // across the full 5×5 arity-2 matrix and 5^3 arity-3 matrix as
+        // the substrate-level UNIFORM-EMPTY corner theorem.
+        for a in STRICT_ORDER_ROSTER {
+            for b in STRICT_ORDER_ROSTER {
+                let s2 = [*a, *b];
+                assert!(
+                    !ResourceLimits::is_strictly_constant(&s2),
+                    "is_strictly_constant must be false at arity 2 on ({a:?}, {b:?})",
+                );
+                for c in STRICT_ORDER_ROSTER {
+                    let s3 = [*a, *b, *c];
+                    assert!(
+                        !ResourceLimits::is_strictly_constant(&s3),
+                        "is_strictly_constant must be false at arity 3 on ({a:?}, {b:?}, {c:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_constant_iff_is_strictly_ascending_and_is_strictly_descending_on_every_shipped_slice(
+    ) {
+        // Structural round-trip — the scalar verdict is definitionally
+        // the conjunction of the two strict direction projections.
+        // Pinned across arity 0-3 over all five shipped presets,
+        // catching any future rewrite that drifts silently from the
+        // composition contract.
+        assert_eq!(
+            ResourceLimits::is_strictly_constant(&[]),
+            ResourceLimits::is_strictly_ascending(&[])
+                && ResourceLimits::is_strictly_descending(&[]),
+        );
+        for a in STRICT_ORDER_ROSTER {
+            let s1 = [*a];
+            assert_eq!(
+                ResourceLimits::is_strictly_constant(&s1),
+                ResourceLimits::is_strictly_ascending(&s1)
+                    && ResourceLimits::is_strictly_descending(&s1),
+                "arity-1 divergence on {a:?}",
+            );
+            for b in STRICT_ORDER_ROSTER {
+                let s2 = [*a, *b];
+                assert_eq!(
+                    ResourceLimits::is_strictly_constant(&s2),
+                    ResourceLimits::is_strictly_ascending(&s2)
+                        && ResourceLimits::is_strictly_descending(&s2),
+                    "arity-2 divergence on ({a:?}, {b:?})",
+                );
+                for c in STRICT_ORDER_ROSTER {
+                    let s3 = [*a, *b, *c];
+                    assert_eq!(
+                        ResourceLimits::is_strictly_constant(&s3),
+                        ResourceLimits::is_strictly_ascending(&s3)
+                            && ResourceLimits::is_strictly_descending(&s3),
+                        "arity-3 divergence on ({a:?}, {b:?}, {c:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_constant_implies_is_constant_on_every_shipped_slice() {
+        // Strict-refines-non-strict theorem — is_strictly_constant ⇒
+        // is_constant across the full 5^3 preset matrix. Preserves the
+        // direction-row `strict ⇒ non-strict` refinement one COMBINATOR
+        // axis over via boolean-lattice implication propagated through
+        // the CONJUNCTION combinator (both strict arms ⇒ both non-strict
+        // arms via per-arm strict-refines-non-strict).
+        for a in STRICT_ORDER_ROSTER {
+            for b in STRICT_ORDER_ROSTER {
+                for c in STRICT_ORDER_ROSTER {
+                    let slice = [*a, *b, *c];
+                    if ResourceLimits::is_strictly_constant(&slice) {
+                        assert!(
+                            ResourceLimits::is_constant(&slice),
+                            "is_strictly_constant ⇒ is_constant on slice \
+                             ({a:?}, {b:?}, {c:?})",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_constant_implies_is_strictly_monotone_on_every_shipped_slice() {
+        // Intersection-refines-union theorem — is_strictly_constant ⇒
+        // is_strictly_monotone across the full 5^3 preset matrix. The
+        // conjunction on the strict direction pair refines the
+        // disjunction on the SAME pair (`a ∧ b ⇒ a ∨ b`). Together with
+        // the UNIFORM-EMPTY collapse at arity ≥ 2, pins the STRICT
+        // INTERSECTION corner sitting INSIDE the strict-monotone cell of
+        // the (strict-monotone, strict-non-monotone) 2-cell partition.
+        for a in STRICT_ORDER_ROSTER {
+            for b in STRICT_ORDER_ROSTER {
+                for c in STRICT_ORDER_ROSTER {
+                    let slice = [*a, *b, *c];
+                    if ResourceLimits::is_strictly_constant(&slice) {
+                        assert!(
+                            ResourceLimits::is_strictly_monotone(&slice),
+                            "is_strictly_constant ⇒ is_strictly_monotone on \
+                             slice ({a:?}, {b:?}, {c:?})",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_constant_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the sequence-level scalar strict-constant
+        // projection is evaluable in const context, so a caller can pin
+        // a strict-constant-sequence identity at compile time.
+        const _: bool = ResourceLimits::is_strictly_constant(&[]);
+        const _: bool = ResourceLimits::is_strictly_constant(&[EMPTY_RESOURCE_LIMITS]);
+        const _: () = assert!(ResourceLimits::is_strictly_constant(&[]));
+        const _: () = assert!(ResourceLimits::is_strictly_constant(&[
+            DEFAULT_RESOURCE_LIMITS
+        ]));
+        const _: () = assert!(!ResourceLimits::is_strictly_constant(&[
+            EMPTY_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+        const _: () = assert!(!ResourceLimits::is_strictly_constant(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_constant_empty_slice_is_all_true() {
+        // Empty-slice all-true — both underlying strict direction
+        // projections return [true; FIELD_COUNT] vacuously on the empty
+        // slice, so the per-axis conjunction opens at every axis. Peer of
+        // axes_is_constant's empty-slice all-true one STRICTNESS axis
+        // over.
+        assert_eq!(
+            ResourceLimits::axes_is_strictly_constant(&[]),
+            [true; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_constant_singleton_is_all_true() {
+        // Singleton all-true — one-element slice contains no consecutive
+        // pairs; both underlying strict direction masks preserve their
+        // `true` seed and the per-axis conjunction opens at every axis.
+        for a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                ResourceLimits::axes_is_strictly_constant(&[*a]),
+                [true; ResourceLimits::FIELD_COUNT],
+                "axes_is_strictly_constant(&[a]) must be all-true on singleton {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_constant_of_diagonal_duplicate_is_all_false() {
+        // Diagonal-duplicate ALL-FALSE — LOAD-BEARING DISCRIMINATING arm
+        // past the non-strict peer: axes_lt AND axes_gt are per-axis
+        // IRREFLEXIVE, so both underlying strict direction masks REJECT
+        // at every axis and the per-axis conjunction closes uniformly.
+        // FLIPS the sign of axes_is_constant's diagonal (all-true via
+        // reflexivity) one STRICTNESS axis over — the exact per-axis
+        // witness of the strict-refines-non-strict refinement on the
+        // CONSTANT column.
+        for a in STRICT_ORDER_ROSTER {
+            let dup = [*a, *a];
+            assert_eq!(
+                ResourceLimits::axes_is_strictly_constant(&dup),
+                [false; ResourceLimits::FIELD_COUNT],
+                "axes_is_strictly_constant(&[a, a]) must be all-false on {a:?}",
+            );
+            assert_eq!(
+                ResourceLimits::axes_is_constant(&dup),
+                [true; ResourceLimits::FIELD_COUNT],
+                "axes_is_constant peer must uniformly accept the diagonal duplicate on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_constant_is_all_false_at_arity_two_or_more() {
+        // UNIFORM-EMPTY collapse per-axis at arity ≥ 2 — for every
+        // arity-2 slice over the shipped-preset roster (any two
+        // postures, distinct OR duplicated), every per-axis-mask bit is
+        // false. Any DISTINCT pair fails at least one per-axis strict
+        // direction arm at that axis; any DIAGONAL DUPLICATE fails both
+        // per-axis via irreflexivity. Pattern extends to arity-3 slices
+        // via the arity-2 projection at every consecutive pair — no
+        // arity-3 slice can carry a per-axis STRICT `<` chain AND a
+        // per-axis STRICT `>` chain on the same axis. Pinned across the
+        // full 5×5 arity-2 matrix and 5^3 arity-3 matrix as the per-
+        // axis-mask UNIFORM-EMPTY corner theorem.
+        for a in STRICT_ORDER_ROSTER {
+            for b in STRICT_ORDER_ROSTER {
+                let s2 = [*a, *b];
+                assert_eq!(
+                    ResourceLimits::axes_is_strictly_constant(&s2),
+                    [false; ResourceLimits::FIELD_COUNT],
+                    "axes_is_strictly_constant must be all-false at arity 2 on ({a:?}, {b:?})",
+                );
+                for c in STRICT_ORDER_ROSTER {
+                    let s3 = [*a, *b, *c];
+                    assert_eq!(
+                        ResourceLimits::axes_is_strictly_constant(&s3),
+                        [false; ResourceLimits::FIELD_COUNT],
+                        "axes_is_strictly_constant must be all-false at arity 3 on ({a:?}, {b:?}, {c:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_constant_iff_per_axis_conjunction_of_axes_strict_direction_masks_on_every_shipped_slice(
+    ) {
+        // Structural round-trip — the mask bit at every axis is
+        // definitionally the per-axis CONJUNCTION of the two strict
+        // direction masks. Pinned across the full 5^3 preset matrix,
+        // catching any future rewrite of any of the three underlying
+        // projections that drifts silently from the composition contract.
+        for a in STRICT_ORDER_ROSTER {
+            for b in STRICT_ORDER_ROSTER {
+                for c in STRICT_ORDER_ROSTER {
+                    let slice = [*a, *b, *c];
+                    let sc = ResourceLimits::axes_is_strictly_constant(&slice);
+                    let asc = ResourceLimits::axes_is_strictly_ascending(&slice);
+                    let desc = ResourceLimits::axes_is_strictly_descending(&slice);
+                    for i in 0..ResourceLimits::FIELD_COUNT {
+                        assert_eq!(
+                            sc[i],
+                            asc[i] && desc[i],
+                            "axes_is_strictly_constant[{i}] must equal \
+                             axes_is_strictly_ascending[{i}] && \
+                             axes_is_strictly_descending[{i}] on slice \
+                             ({a:?}, {b:?}, {c:?})",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_constant_refines_axes_is_constant_per_axis_on_every_shipped_slice(
+    ) {
+        // Per-axis strict-refines-non-strict — axes_is_strictly_constant[i]
+        // ⇒ axes_is_constant[i] across the full 5^3 preset matrix.
+        // Follows from the per-axis strict-refines-non-strict refinement
+        // on both direction arms propagated through the per-axis
+        // CONJUNCTION. The converse fails on every diagonal-duplicate
+        // (non-strict all-true, strict all-false).
+        for a in STRICT_ORDER_ROSTER {
+            for b in STRICT_ORDER_ROSTER {
+                for c in STRICT_ORDER_ROSTER {
+                    let slice = [*a, *b, *c];
+                    let strict = ResourceLimits::axes_is_strictly_constant(&slice);
+                    let non_strict = ResourceLimits::axes_is_constant(&slice);
+                    for i in 0..ResourceLimits::FIELD_COUNT {
+                        if strict[i] {
+                            assert!(
+                                non_strict[i],
+                                "axes_is_strictly_constant[{i}] ⇒ \
+                                 axes_is_constant[{i}] on slice \
+                                 ({a:?}, {b:?}, {c:?})",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_constant_refines_axes_is_strictly_monotone_per_axis_on_every_shipped_slice(
+    ) {
+        // Per-axis intersection-refines-union — axes_is_strictly_constant[i]
+        // ⇒ axes_is_strictly_monotone[i] across the full 5^3 preset
+        // matrix. The per-axis CONJUNCTION on the strict direction pair
+        // refines the per-axis DISJUNCTION on the SAME pair. Together
+        // with the UNIFORM-EMPTY collapse at arity ≥ 2, pins the STRICT
+        // INTERSECTION corner sitting INSIDE the strict-monotone cell.
+        for a in STRICT_ORDER_ROSTER {
+            for b in STRICT_ORDER_ROSTER {
+                for c in STRICT_ORDER_ROSTER {
+                    let slice = [*a, *b, *c];
+                    let strict_const = ResourceLimits::axes_is_strictly_constant(&slice);
+                    let strict_mono = ResourceLimits::axes_is_strictly_monotone(&slice);
+                    for i in 0..ResourceLimits::FIELD_COUNT {
+                        if strict_const[i] {
+                            assert!(
+                                strict_mono[i],
+                                "axes_is_strictly_constant[{i}] ⇒ \
+                                 axes_is_strictly_monotone[{i}] on slice \
+                                 ({a:?}, {b:?}, {c:?})",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_constant_fold_agrees_with_scalar_is_strictly_constant_on_every_shipped_slice(
+    ) {
+        // Fold-AGREES-scalar contract — the per-axis `&&`-fold of the
+        // strict-constant mask AGREES BIDIRECTIONALLY with the whole-
+        // posture scalar verdict at every arity. Unlike the fold-
+        // refines-scalar contracts on axes_is_non_monotone one
+        // COMBINATOR axis over (where the [MID, OTHER] mixed-direction
+        // witness produces divergence), the STRICT INTERSECTION corner
+        // carries UNIFORM AGREEMENT because BOTH projection kinds
+        // collapse onto the SAME (vacuous / arity-≥2-empty) partition:
+        // at arity 0/1 both surfaces uniformly accept, at arity ≥ 2
+        // both surfaces uniformly reject via strict irreflexivity. No
+        // mixed-direction witness can drive divergence.
+        assert_eq!(
+            ResourceLimits::axes_is_strictly_constant(&[])
+                .iter()
+                .all(|&b| b),
+            ResourceLimits::is_strictly_constant(&[]),
+        );
+        for a in STRICT_ORDER_ROSTER {
+            let s1 = [*a];
+            assert_eq!(
+                ResourceLimits::axes_is_strictly_constant(&s1)
+                    .iter()
+                    .all(|&b| b),
+                ResourceLimits::is_strictly_constant(&s1),
+                "arity-1 fold-scalar divergence on {a:?}",
+            );
+            for b in STRICT_ORDER_ROSTER {
+                let s2 = [*a, *b];
+                assert_eq!(
+                    ResourceLimits::axes_is_strictly_constant(&s2)
+                        .iter()
+                        .all(|&b| b),
+                    ResourceLimits::is_strictly_constant(&s2),
+                    "arity-2 fold-scalar divergence on ({a:?}, {b:?})",
+                );
+                for c in STRICT_ORDER_ROSTER {
+                    let s3 = [*a, *b, *c];
+                    assert_eq!(
+                        ResourceLimits::axes_is_strictly_constant(&s3)
+                            .iter()
+                            .all(|&b| b),
+                        ResourceLimits::is_strictly_constant(&s3),
+                        "arity-3 fold-scalar divergence on ({a:?}, {b:?}, {c:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_constant_agrees_with_pointwise_field_strict_constant_projection(
+    ) {
+        // Positional-alignment cross-check — for every arity-3 slice
+        // from the 5-preset matrix, mask position `i` agrees with the
+        // direct per-axis strict-constant verdict `(a[i] < b[i] && b[i]
+        // < c[i]) && (a[i] > b[i] && b[i] > c[i])` on the `i`-th
+        // field_values component — which is uniformly false by per-axis
+        // `<`-vs-`>` mutual exclusion (irreflexivity + antisymmetry of
+        // usize strict order at arity ≥ 2).
+        for a in STRICT_ORDER_ROSTER {
+            for b in STRICT_ORDER_ROSTER {
+                for c in STRICT_ORDER_ROSTER {
+                    let slice = [*a, *b, *c];
+                    let mask = ResourceLimits::axes_is_strictly_constant(&slice);
+                    let av = a.field_values();
+                    let bv = b.field_values();
+                    let cv = c.field_values();
+                    for i in 0..ResourceLimits::FIELD_COUNT {
+                        let asc_i = av[i] < bv[i] && bv[i] < cv[i];
+                        let desc_i = av[i] > bv[i] && bv[i] > cv[i];
+                        let expected = asc_i && desc_i;
+                        assert_eq!(
+                            mask[i], expected,
+                            "axes_is_strictly_constant[{i}] must equal \
+                             pointwise field strict-constant verdict on \
+                             slice ({a:?}, {b:?}, {c:?})",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_constant_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the per-axis-mask sequence-level strict-
+        // constant projection is evaluable in const context, so a
+        // caller can pin the UNIFORM-EMPTY collapse at arity ≥ 2 as a
+        // build-time invariant. The empty and singleton fixtures pin
+        // the vacuous all-true face; the diagonal-duplicate and
+        // ascending-triple fixtures pin the UNIFORM-EMPTY corner at
+        // arity ≥ 2 as a per-axis all-false at build time.
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_strictly_constant(&[]);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_strictly_constant(&[EMPTY_RESOURCE_LIMITS]);
+        const SC_MASK_EMPTY: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_strictly_constant(&[]);
+        const SC_MASK_SINGLETON: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_strictly_constant(&[DEFAULT_RESOURCE_LIMITS]);
+        const SC_MASK_DIAGONAL: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_strictly_constant(&[
+                DEFAULT_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+            ]);
+        const SC_MASK_ASCENDING: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_strictly_constant(&[
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                UNBOUNDED_RESOURCE_LIMITS,
+            ]);
+        const _: () = {
+            let mut i = 0;
+            while i < ResourceLimits::FIELD_COUNT {
+                assert!(SC_MASK_EMPTY[i]);
+                assert!(SC_MASK_SINGLETON[i]);
+                assert!(!SC_MASK_DIAGONAL[i]);
+                assert!(!SC_MASK_ASCENDING[i]);
                 i += 1;
             }
         };

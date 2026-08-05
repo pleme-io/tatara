@@ -1590,6 +1590,180 @@ impl ResourceLimits {
         other.axes_leq(self)
     }
 
+    /// Per-axis pointwise `==` mask across the six ceilings — the ATOMIC
+    /// per-axis equality vector whose CONJUNCTION over the six positions
+    /// equals `self == other` (via the derived [`PartialEq::eq`]).
+    /// `a.axes_eq(b)[i]` is `true` iff the `i`-th ceiling of `a` matches
+    /// the `i`-th ceiling of `b`; folding the six results through `&&`
+    /// recovers `a == b` verbatim, so this projection DECOMPOSES the
+    /// single-bit equality verdict into its six per-axis witnesses
+    /// without introducing new relation semantics past what the derived
+    /// `PartialEq::eq` already carries.
+    ///
+    /// The SYMMETRIC (INTERSECTION) corner CLOSING the per-axis-mask
+    /// triad (`axes_leq`, `axes_geq`, `axes_eq`) one PROJECTION-KIND axis
+    /// over from the single-bit verdict triad (`leq`, `geq`, `==`).
+    /// Where [`Self::axes_leq`] returns the six per-axis "below" (`<=`)
+    /// witnesses and [`Self::axes_geq`] returns the six per-axis "above"
+    /// (`>=`) witnesses, this returns the six per-axis "equal" (`==`)
+    /// witnesses — the ANTISYMMETRIC INTERSECTION of the two direction-
+    /// signed masks. Antisymmetry on the pointwise partial order says
+    /// `a[i] <= b[i] && a[i] >= b[i] ⇒ a[i] == b[i]`, and the converse
+    /// is trivially reflexive, so per-axis equality is EXACTLY the
+    /// per-axis conjunction of `axes_leq` and `axes_geq`. Encoded that
+    /// way below — one primitive delegation to each of the two shipped
+    /// direction-signed masks, then a per-axis `&&` fold — so the
+    /// equality-relation encoding lives at ONE structural composition of
+    /// two shipped primitives, and a future re-derivation of `axes_leq`
+    /// (which propagates into `axes_geq` via that method's argument-flip
+    /// delegation) propagates into `axes_eq` mechanically without
+    /// requiring a per-method fix-up. The (`axes_leq`, `axes_geq`,
+    /// `axes_eq`) triad therefore sits on the SAME per-axis-mask surface
+    /// as (`leq`, `geq`, `==`) one PROJECTION-KIND axis over — every
+    /// pairwise partial-order verdict AND the equality verdict the
+    /// substrate carries at the single-bit level now carries a per-axis-
+    /// mask peer at the atomic level.
+    ///
+    /// **Conjunction-recovers-`==` contract**: for every posture pair
+    /// `(a, b)`, folding `a.axes_eq(b)` through `&&` over the six
+    /// positions equals `a == b` (via the derived `PartialEq::eq`) —
+    /// pinned by `resource_limits_axes_eq_conjunction_agrees_with_eq`
+    /// on the canonical preset roster (EMPTY / DEFAULT / UNBOUNDED /
+    /// MID / OTHER). Mirrors the analogous conjunction-recovers-`leq` /
+    /// conjunction-recovers-`geq` contracts on the two direction-signed
+    /// masks one PROJECTION-KIND axis over.
+    ///
+    /// **Positional-alignment contract**: for every posture pair
+    /// `(a, b)` and every index `i in 0..FIELD_COUNT`,
+    /// `a.axes_eq(b)[i] == (a.field_values()[i] == b.field_values()[i])`
+    /// — pinned by
+    /// `resource_limits_axes_eq_agrees_with_pointwise_field_comparison`
+    /// via cross-reference with [`Self::field_values`] on the same
+    /// discriminating roster the two SIBLING projections use. Guarantees
+    /// the per-axis mask preserves the same canonical index-to-axis
+    /// mapping the two direction-signed peers carry.
+    ///
+    /// **Antisymmetry-intersection contract**: for every posture pair
+    /// `(a, b)` and every index `i`, `a.axes_eq(b)[i] == (a.axes_leq(b)[i]
+    /// && a.axes_geq(b)[i])` — the per-axis MASK peer of the single-bit
+    /// antisymmetry law `a == b ⇔ a.leq(b) && a.geq(b)`. Pinned by
+    /// `resource_limits_axes_eq_is_intersection_of_axes_leq_and_axes_geq`
+    /// across the 25-pair matrix, so the intersection encoding is
+    /// verified at the per-axis mask level, not merely at the
+    /// fold-recovered scalar.
+    ///
+    /// **Symmetry contract**: `a.axes_eq(b) == b.axes_eq(a)` for every
+    /// posture pair — per-axis `==` is symmetric on every field, and
+    /// the intersection encoding `axes_leq(other) && axes_geq(other)`
+    /// swaps into `axes_leq(self) && axes_geq(self)` when the arguments
+    /// swap (via `axes_geq`'s own argument-flip delegation), so symmetry
+    /// propagates through the encoding. Pinned by
+    /// `resource_limits_axes_eq_is_symmetric` — the per-axis-mask peer
+    /// of the derived `PartialEq::eq` symmetry one PROJECTION-KIND axis
+    /// over.
+    ///
+    /// **Reflexivity contract**: `a.axes_eq(a) == [true; FIELD_COUNT]`
+    /// for every posture — per-axis `==` is reflexive on every field.
+    /// Pinned by `resource_limits_axes_eq_is_reflexive_on_every_axis`
+    /// on each of the three shipped presets via const-fn evaluability.
+    /// The per-axis-mask peer of the derived `PartialEq::eq` reflexivity
+    /// one PROJECTION-KIND axis over.
+    ///
+    /// **Preset pole pins**: the (bottom, top) bounded-lattice
+    /// preset-pair carries EXHAUSTIVE per-axis verdicts on the
+    /// projection — `EMPTY.axes_eq(UNBOUNDED) == [false; FIELD_COUNT]`
+    /// (every `0` differs from every [`usize::MAX`] on every axis);
+    /// `EMPTY.axes_eq(EMPTY) == [true; FIELD_COUNT]` and
+    /// `UNBOUNDED.axes_eq(UNBOUNDED) == [true; FIELD_COUNT]`
+    /// (reflexivity on every axis at each pole). Mirrors the
+    /// (bottom, top) × (leq, geq) 2×2 pole face pinned on the two
+    /// direction-signed masks one PROJECTION-KIND axis over.
+    ///
+    /// `const fn` so a caller can pin a per-axis verdict at compile
+    /// time (`const _: [bool; ResourceLimits::FIELD_COUNT] =
+    /// EMPTY_RESOURCE_LIMITS.axes_eq(UNBOUNDED_RESOURCE_LIMITS);`) —
+    /// the const-fn peer of the const-eval evaluability every other
+    /// primitive on the [`ResourceLimits`] algebra carries. `Copy` on
+    /// [`ResourceLimits`] lets the const-fn body pass `self` and
+    /// `other` by value into the delegated `axes_leq` + `axes_geq`
+    /// calls without an explicit `.clone()` (which const-fn would not
+    /// permit anyway), and `bool` is trivially `Copy` in the array
+    /// element position.
+    ///
+    /// **Enables a per-axis DIFFERING mask at ONE composition**: with
+    /// the per-axis EQUALITY mask now closed on the substrate, the
+    /// per-axis DIFFERING mask (`axes_ne`) — the "which axes disagree"
+    /// diagnostic the [`Self::axes_leq`] docstring names as a follow-up
+    /// — binds as the De Morgan complement of the six-bool array here
+    /// at ONE typed derivation. The (`axes_eq`, `axes_ne`) 2-cell
+    /// EQUALITY-vs-DIFFERENCE face becomes closable at the per-axis-
+    /// mask level exactly as the (`is_comparable`, `is_incomparable`) /
+    /// (`is_chain`, `is_antichain`) / (`is_monotone`, `is_non_monotone`)
+    /// 2-cell faces close at the single-bit verdict level one
+    /// PROJECTION-KIND axis over.
+    ///
+    /// Pre-lift, a consumer wanting per-axis equality verdicts either
+    /// (a) composed six independent `a.field_values()[i] ==
+    /// b.field_values()[i]` primitives at the call site — the same
+    /// six-inline-primitive cascade the `..Default::default()`-free
+    /// literal on the bundled struct exists to close, and a copy-paste
+    /// that dropped ONE of the six comparisons silently admitted "all
+    /// axes agree" on that axis when the type system did not gate the
+    /// drop — or (b) called the derived `PartialEq::eq` and lost the
+    /// per-axis granularity entirely (a `false` verdict with no
+    /// witness to WHICH axis differs). Post-lift the per-axis equality
+    /// mask binds at ONE typed `const fn` on the algebra, encoded as
+    /// the structural intersection of the two shipped direction-signed
+    /// per-axis masks; rustc's array-arity checking on the six-bool
+    /// return literal below guarantees every axis is threaded through
+    /// the `&&` intersection in canonical order.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-posture-pair projection into the six-bool equality vector is
+    /// itself a typed named exit rather than a per-consumer inline
+    /// six-primitive cascade OR a single-bit `PartialEq::eq` verdict
+    /// that discards the per-axis witness. THEORY.md §II.1 invariant 5
+    /// — composition preserves proofs; the pairwise equality relation
+    /// on two preset-carried resource proofs is itself decomposed into
+    /// its six per-axis witnesses at TYPE level as the STRUCTURAL
+    /// INTERSECTION of the two direction-signed per-axis masks, so
+    /// consumers reasoning about WHICH axes carry the equality bind
+    /// through ONE typed primitive rather than re-running `==` on each
+    /// or dropping to a coarse single-bit answer. THEORY.md §V.1 —
+    /// knowable platform; the per-axis pointwise `==` mask becomes a
+    /// TYPE-level operation on the posture algebra rather than a
+    /// per-consumer field-access cascade — with the per-axis
+    /// granularity baked in so the consumer cannot silently drop an
+    /// axis from the diagnostic (the array's fixed arity forces every
+    /// axis to appear).
+    ///
+    /// Frontier inspiration: Idris's `zipWith (==)` over two `Vec n
+    /// Nat` producing a `Vec n Bool` — the SYMMETRIC peer of the
+    /// `zipWith (<=)` / `zipWith (>=)` shapes [`Self::axes_leq`] /
+    /// [`Self::axes_geq`] cite, closing the per-axis relation triad at
+    /// the per-position vector level. APL / J's rank-lifted `=`
+    /// operator producing a per-position bit array between two
+    /// conformable arrays — the SAME lifted-relation shape lifted onto
+    /// typed structs. Translation through pleme-io primitives: a
+    /// `const fn` returning a `[bool; N]` fixed-size array on the
+    /// typed [`ResourceLimits`] algebra encoded as the intersection of
+    /// two already-lifted direction-signed per-axis masks, rather than
+    /// a runtime vector operation or a third inline six-primitive
+    /// cascade.
+    #[must_use]
+    pub const fn axes_eq(self, other: Self) -> [bool; Self::FIELD_COUNT] {
+        let below = self.axes_leq(other);
+        let above = self.axes_geq(other);
+        [
+            below[0] && above[0],
+            below[1] && above[1],
+            below[2] && above[2],
+            below[3] && above[3],
+            below[4] && above[4],
+            below[5] && above[5],
+        ]
+    }
+
     /// Pointwise-`min` fold across a slice of postures — the STRICTEST
     /// posture whose admissible input set is the intersection of every
     /// operand's admissible input sets. `ResourceLimits::strictest_of(&[a,
@@ -21110,6 +21284,269 @@ mod tests {
         const _: () = assert!(MASK[3]);
         const _: () = assert!(MASK[4]);
         const _: () = assert!(MASK[5]);
+    }
+
+    #[test]
+    fn resource_limits_axes_eq_conjunction_agrees_with_eq() {
+        // Fold-recovers-scalar pin — for every posture pair `(a, b)`,
+        // folding `a.axes_eq(b)` through `&&` over the six positions
+        // equals `a == b` via the derived `PartialEq::eq`. Verifies the
+        // decomposition-composition round-trip: the per-axis mask is a
+        // strictly-finer projection of the single-bit equality verdict,
+        // so re-composing it through `&&` recovers the single-bit
+        // exactly. Symmetric peer of
+        // `resource_limits_axes_leq_conjunction_agrees_with_leq` /
+        // `resource_limits_axes_geq_conjunction_agrees_with_geq` one
+        // PROJECTION-KIND axis over on the (leq, geq, eq) per-axis-mask
+        // triad.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let mask = a.axes_eq(b);
+                let mut folded = true;
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    folded = folded && mask[i];
+                    i += 1;
+                }
+                assert_eq!(
+                    folded,
+                    a == b,
+                    "axes_eq({a:?}, {b:?}) folded through && must equal ==",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_eq_agrees_with_pointwise_field_comparison() {
+        // Positional-alignment pin — for every posture pair `(a, b)` and
+        // every index `i`, `a.axes_eq(b)[i] == (a.field_values()[i] ==
+        // b.field_values()[i])`. Cross-references the per-axis mask
+        // with the canonical `field_values()` projection on the same
+        // discriminating roster the two SIBLING projections use,
+        // guaranteeing the per-axis mask preserves the same canonical
+        // index-to-axis mapping. Symmetric peer of
+        // `resource_limits_axes_leq_agrees_with_pointwise_field_comparison`
+        // / `resource_limits_axes_geq_agrees_with_pointwise_field_comparison`
+        // one PROJECTION-KIND axis over.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let mask = a.axes_eq(b);
+                let av = a.field_values();
+                let bv = b.field_values();
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    assert_eq!(
+                        mask[i],
+                        av[i] == bv[i],
+                        "axes_eq({a:?}, {b:?})[{i}] must equal field_values comparison",
+                    );
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_eq_is_intersection_of_axes_leq_and_axes_geq() {
+        // Antisymmetry-intersection pin — for every posture pair `(a,
+        // b)` and every index `i`, `a.axes_eq(b)[i] == (a.axes_leq(b)[i]
+        // && a.axes_geq(b)[i])`. The per-axis MASK peer of the
+        // single-bit antisymmetry law `a == b ⇔ a.leq(b) && a.geq(b)`.
+        // Verifies the intersection encoding at the per-axis mask
+        // level — not merely at the fold-recovered scalar, so a future
+        // re-derivation of `axes_eq` that broke the intersection on any
+        // single axis fires this pin at the offending axis before the
+        // scalar fold masks it.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let eq = a.axes_eq(b);
+                let below = a.axes_leq(b);
+                let above = a.axes_geq(b);
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    assert_eq!(
+                        eq[i],
+                        below[i] && above[i],
+                        "axes_eq({a:?}, {b:?})[{i}] must equal axes_leq[{i}] && axes_geq[{i}]",
+                    );
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_eq_is_symmetric() {
+        // Symmetry pin — `a.axes_eq(b) == b.axes_eq(a)` for every
+        // posture pair. Per-axis `==` is symmetric on every field, and
+        // the intersection encoding swaps `axes_leq`/`axes_geq` under
+        // argument flip (via `axes_geq`'s own argument-flip delegation),
+        // so symmetry propagates through the encoding. The per-axis-
+        // mask peer of the derived `PartialEq::eq` symmetry one
+        // PROJECTION-KIND axis over — where the direction-signed masks
+        // exhibit direction-flip under argument flip, this SYMMETRIC
+        // mask is INVARIANT under argument flip.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let forward = a.axes_eq(b);
+                let backward = b.axes_eq(a);
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    assert_eq!(
+                        forward[i], backward[i],
+                        "axes_eq({a:?}, {b:?})[{i}] must equal axes_eq({b:?}, {a:?})[{i}]",
+                    );
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_eq_of_empty_and_unbounded_is_all_false() {
+        // Pole-diagonal preset pin — [`EMPTY_RESOURCE_LIMITS`]
+        // (bounded-lattice bottom, every axis `0`) versus
+        // [`UNBOUNDED_RESOURCE_LIMITS`] (bounded-lattice top, every
+        // axis [`usize::MAX`]). Every per-axis verdict is `false`
+        // (`0 == usize::MAX` fails on every axis), so the mask is
+        // exhaustively false — the pole-diagonal edge case pinned at
+        // compile time via the const-fn evaluability of the projection.
+        // Symmetric peer of the two direction-signed pole pins on
+        // (`axes_leq`, `axes_geq`) at the SAME (bottom, top) preset
+        // pair one PROJECTION-KIND axis over.
+        const MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            EMPTY_RESOURCE_LIMITS.axes_eq(UNBOUNDED_RESOURCE_LIMITS);
+        const _: () = assert!(!MASK[0]);
+        const _: () = assert!(!MASK[1]);
+        const _: () = assert!(!MASK[2]);
+        const _: () = assert!(!MASK[3]);
+        const _: () = assert!(!MASK[4]);
+        const _: () = assert!(!MASK[5]);
+    }
+
+    #[test]
+    fn resource_limits_axes_eq_is_reflexive_on_every_axis() {
+        // Reflexivity pin — `a.axes_eq(a)` returns `[true; FIELD_COUNT]`
+        // on every posture, since `a.max_X == a.max_X` holds on every
+        // axis by [`usize`]'s reflexivity of `==`. Symmetric peer of
+        // `resource_limits_axes_leq_is_reflexive_on_every_axis` /
+        // `resource_limits_axes_geq_is_reflexive_on_every_axis` one
+        // PROJECTION-KIND axis over. Compile-time evaluable on each of
+        // the three shipped presets via const-fn.
+        const EMPTY_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            EMPTY_RESOURCE_LIMITS.axes_eq(EMPTY_RESOURCE_LIMITS);
+        const _: () = assert!(
+            EMPTY_MASK[0]
+                && EMPTY_MASK[1]
+                && EMPTY_MASK[2]
+                && EMPTY_MASK[3]
+                && EMPTY_MASK[4]
+                && EMPTY_MASK[5]
+        );
+        const DEFAULT_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            DEFAULT_RESOURCE_LIMITS.axes_eq(DEFAULT_RESOURCE_LIMITS);
+        const _: () = assert!(
+            DEFAULT_MASK[0]
+                && DEFAULT_MASK[1]
+                && DEFAULT_MASK[2]
+                && DEFAULT_MASK[3]
+                && DEFAULT_MASK[4]
+                && DEFAULT_MASK[5]
+        );
+        const UNBOUNDED_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            UNBOUNDED_RESOURCE_LIMITS.axes_eq(UNBOUNDED_RESOURCE_LIMITS);
+        const _: () = assert!(
+            UNBOUNDED_MASK[0]
+                && UNBOUNDED_MASK[1]
+                && UNBOUNDED_MASK[2]
+                && UNBOUNDED_MASK[3]
+                && UNBOUNDED_MASK[4]
+                && UNBOUNDED_MASK[5]
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_eq_discriminates_single_axis_difference() {
+        // Diagnostic-emission pin — when `a == b` returns `false`
+        // because ONE axis differs, `a.axes_eq(b)` returns a mask whose
+        // SINGLE `false` entry names the differing axis by index. The
+        // offending axis here is `max_expansion_depth` (index 0): `b`
+        // sits one above `EMPTY_RESOURCE_LIMITS` on that axis alone,
+        // so `EMPTY_RESOURCE_LIMITS.axes_eq(b)` returns `false` at
+        // index 0 (where `0 == 1` fails) and `true` at every other
+        // axis (where `0 == 0` holds trivially). Symmetric peer of
+        // `resource_limits_axes_leq_discriminates_single_axis_violation`
+        // / `resource_limits_axes_geq_discriminates_single_axis_violation`
+        // one PROJECTION-KIND axis over — the same observability use
+        // case lifted onto the equality mask, where the derived
+        // `PartialEq::eq` would answer `false` without a witness to
+        // WHICH axis differs.
+        let b = ResourceLimits {
+            max_expansion_depth: 1,
+            ..EMPTY_RESOURCE_LIMITS
+        };
+        let mask = EMPTY_RESOURCE_LIMITS.axes_eq(b);
+        assert!(!mask[0], "max_expansion_depth axis must be the false entry");
+        assert!(mask[1]);
+        assert!(mask[2]);
+        assert!(mask[3]);
+        assert!(mask[4]);
+        assert!(mask[5]);
+        // Cross-check: the derived-`PartialEq::eq` single-bit verdict
+        // is `false`, and the conjunction of the mask agrees.
+        assert!(EMPTY_RESOURCE_LIMITS != b);
+    }
+
+    #[test]
+    fn resource_limits_axes_eq_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the per-axis mask is evaluable in const
+        // context, so a caller can pin a preset-equality-vector
+        // identity at compile time. Symmetric peer of
+        // `resource_limits_axes_leq_evaluates_at_compile_time_via_const_fn`
+        // / `resource_limits_axes_geq_evaluates_at_compile_time_via_const_fn`
+        // one PROJECTION-KIND axis over: where those tests pin the
+        // (default, unbounded) / (unbounded, default) preset pairs on
+        // the two direction-signed masks, this pins the (default,
+        // unbounded) preset pair on the equality mask — every field of
+        // DEFAULT is strictly less than [`usize::MAX`], so every
+        // "default == unbounded" per-axis entry is `false`.
+        const MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            DEFAULT_RESOURCE_LIMITS.axes_eq(UNBOUNDED_RESOURCE_LIMITS);
+        const _: () = assert!(!MASK[0]);
+        const _: () = assert!(!MASK[1]);
+        const _: () = assert!(!MASK[2]);
+        const _: () = assert!(!MASK[3]);
+        const _: () = assert!(!MASK[4]);
+        const _: () = assert!(!MASK[5]);
     }
 
     // ── EMPTY_RESOURCE_LIMITS — bounded-lattice bottom preset ─────────

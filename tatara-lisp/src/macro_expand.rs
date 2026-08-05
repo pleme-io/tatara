@@ -7801,6 +7801,246 @@ impl ResourceLimits {
         Self::is_strictly_ascending(postures) || Self::is_strictly_descending(postures)
     }
 
+    /// Per-axis boolean `is_monotone`-projection across a slice of
+    /// postures — the ATOMIC per-axis SEQUENCE-LEVEL monotone vector.
+    /// `Self::axes_is_monotone(&[a, b, c])[i]` is `true` iff the projection
+    /// of the slice onto the `i`-th ceiling is a monotone `usize` sequence
+    /// on its own — EITHER non-decreasing (`a.field_values()[i] <=
+    /// b.field_values()[i] <= c.field_values()[i]`) OR non-increasing
+    /// (`>=` chain). Each axis decides independently, so a slice in which
+    /// axis `0` ascends and axis `1` descends carries `true` at BOTH
+    /// positions even though NEITHER whole-posture direction projection
+    /// accepts the slice.
+    ///
+    /// The per-axis-MASK peer of [`Self::is_monotone`] one PROJECTION-KIND
+    /// axis over on the sequence-level combinator surface, AND the DIRECT
+    /// PER-AXIS DISJUNCTION of the already-lifted
+    /// [`Self::axes_is_ascending`] + [`Self::axes_is_descending`] direction
+    /// pair one COMBINATOR axis over on the per-axis-mask sequence-level
+    /// surface. Two peers cross the same cell on the (direction ×
+    /// projection-kind × combinator) 2×2×2 grid: OPENING the per-axis-
+    /// mask MONOTONE-COMBINATOR column past the per-axis-mask direction
+    /// pair, mirroring the way [`Self::is_monotone`] opened the whole-
+    /// posture MONOTONE-COMBINATOR column past the whole-posture direction
+    /// pair. The strict peer [`Self::axes_is_strictly_monotone`] will
+    /// close the STRICTNESS row of this column at the next lift.
+    ///
+    /// Encoded as a per-axis disjunction of the two shipped per-axis-mask
+    /// direction projections — one primitive delegation to
+    /// [`Self::axes_is_ascending`], one to [`Self::axes_is_descending`],
+    /// then a per-index `||`-fold across the two masks into a fresh
+    /// `[bool; FIELD_COUNT]`. Because both underlying projections delegate
+    /// through [`Self::axes_leq`] / [`Self::axes_geq`] to the pair-level
+    /// per-axis `<=` primitives, a future re-derivation of the pair-level
+    /// primitive propagates transparently into this method through the
+    /// shipped sequence-level per-axis-mask direction pair.
+    ///
+    /// **Structural round-trip — `axes_is_monotone[i] iff
+    /// axes_is_ascending[i] || axes_is_descending[i]`**: for every slice
+    /// and every axis, the mask bit is definitionally the per-axis
+    /// disjunction of the two direction masks; the equality holds by
+    /// CONSTRUCTION. Pinned across arity 0-3 over all five shipped
+    /// presets, catching any future rewrite of any of the three
+    /// underlying projections that silently drifts from the composition
+    /// contract. Pinned as
+    /// `resource_limits_axes_is_monotone_iff_per_axis_disjunction_of_axes_direction_masks_on_every_shipped_slice`.
+    ///
+    /// **Scalar-REFINES-fold contract (one-directional — OPPOSITE
+    /// DIRECTION from the strict peers)**: for every slice `postures`,
+    /// `Self::is_monotone(postures) == true` implies `Self::axes_is_monotone(
+    /// postures).iter().all(|&b| b) == true` — but the CONVERSE FAILS.
+    /// Whole-posture `is_monotone` requires the SAME direction to accept
+    /// on every axis (either all-axes-`leq` at every consecutive pair OR
+    /// all-axes-`geq` at every consecutive pair), so its acceptance
+    /// entails per-axis monotonicity in that shared direction and thereby
+    /// per-axis monotonicity in EITHER direction. The converse fails
+    /// because the per-axis mask permits DIFFERENT axes to carry
+    /// DIFFERENT directions: a slice where axis 0 ascends and axis 1
+    /// descends carries `axes_is_monotone == [true, true, …]` (fold gives
+    /// `true`) while both whole-posture direction arms fail (is_monotone
+    /// gives `false`). LOAD-BEARING DIVERGENCE from [`Self::
+    /// axes_is_strictly_ascending`]'s fold-REFINES-scalar contract one
+    /// COMBINATOR axis over — the strict per-axis-mask direction
+    /// projection's fold refines its scalar in the FORWARD direction
+    /// (fold ⇒ scalar), while this per-axis-mask combinator projection's
+    /// scalar refines its fold in the REVERSE direction (scalar ⇒ fold).
+    /// The algebraic asymmetry: pair-level `lt` is not the per-axis `<`
+    /// conjunction (its per-axis mask REFINES rather than recovers its
+    /// scalar), but whole-posture direction `is_ascending` IS the per-
+    /// axis-ascending conjunction (its per-axis mask RECOVERS its scalar),
+    /// so the combinator lift (disjunction over the two whole-posture
+    /// direction verdicts vs disjunction over the two per-axis-direction
+    /// masks) shifts the refinement direction. Pinned as
+    /// `resource_limits_is_monotone_implies_per_axis_disjunction_folded_on_every_shipped_slice`
+    /// AND
+    /// `resource_limits_axes_is_monotone_fold_true_does_not_recover_is_monotone_on_the_load_bearing_mixed_direction_witness`.
+    ///
+    /// **Empty-slice all-true**: `Self::axes_is_monotone(&[]) ==
+    /// [true; FIELD_COUNT]` — both underlying direction projections
+    /// return `[true; FIELD_COUNT]` vacuously on the empty slice, so the
+    /// per-axis disjunction opens on either arm at every axis. AGREES
+    /// with all three sibling per-axis-mask sequence-level projections
+    /// ([`Self::axes_is_ascending`], [`Self::axes_is_descending`],
+    /// [`Self::axes_is_strictly_ascending`], [`Self::axes_is_strictly_descending`])
+    /// at the empty face — the per-axis-mask sequence-level verdict
+    /// surface collapses to all-true uniformly at arity 0. Pinned as
+    /// `resource_limits_axes_is_monotone_empty_slice_is_all_true`.
+    ///
+    /// **Singleton all-true**: `Self::axes_is_monotone(&[a]) ==
+    /// [true; FIELD_COUNT]` for every posture `a` — a one-element slice
+    /// contains no consecutive pairs, so both underlying direction masks
+    /// preserve their `true` seed at every axis and the per-axis
+    /// disjunction opens on either arm.
+    ///
+    /// **Diagonal-duplicate all-true**: `Self::axes_is_monotone(&[a, a]) ==
+    /// [true; FIELD_COUNT]` for every posture `a` — [`Self::axes_leq`]
+    /// AND [`Self::axes_geq`] are BOTH per-axis REFLEXIVE, so both
+    /// underlying direction masks accept at every axis and the per-axis
+    /// disjunction opens on either arm. AGREES with the non-strict per-
+    /// axis-mask direction pair
+    /// ([`Self::axes_is_ascending`], [`Self::axes_is_descending`]) at
+    /// every diagonal-duplicate slice AND DISAGREES with the strict per-
+    /// axis-mask direction pair
+    /// ([`Self::axes_is_strictly_ascending`], [`Self::axes_is_strictly_descending`])
+    /// — the strict pair rejects every diagonal duplicate uniformly (via
+    /// `axes_lt` / `axes_gt` per-axis irreflexivity) while this
+    /// projection accepts uniformly (via `axes_leq` / `axes_geq` per-
+    /// axis reflexivity feeding either arm of the disjunction). The
+    /// strictness-vs-non-strict divergence at the diagonal — the same
+    /// divergence [`Self::axes_is_ascending`] / [`Self::axes_is_strictly_ascending`]
+    /// carry one COMBINATOR axis over on the direction row — carries into
+    /// the monotone-combinator column too.
+    ///
+    /// **Ascending shipped-preset triple closure**:
+    /// `Self::axes_is_monotone(&[EMPTY_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]) ==
+    /// [true; FIELD_COUNT]` — every axis's `0 < positive-constant <
+    /// usize::MAX` projection is a non-decreasing usize chain, opening
+    /// the axes_is_ascending arm at every axis and thereby the per-axis
+    /// disjunction. DIRECT MIRROR of [`Self::axes_is_ascending`]'s
+    /// ascending closure one COMBINATOR axis over.
+    ///
+    /// **Descending shipped-preset triple closure**:
+    /// `Self::axes_is_monotone(&[UNBOUNDED_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS]) ==
+    /// [true; FIELD_COUNT]` — the reversed chain opens the
+    /// axes_is_descending arm at every axis. Peer of the ascending
+    /// closure one PERMUTATION axis over on the SAME chain — the monotone
+    /// combinator absorbs the direction into the disjunction, so both
+    /// permutations open the same all-true mask.
+    ///
+    /// **Zig-zag chain-permutation uniform rejection**:
+    /// `Self::axes_is_monotone(&[DEFAULT_RESOURCE_LIMITS,
+    /// EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]) ==
+    /// [false; FIELD_COUNT]` — every axis carries the SAME (positive →
+    /// zero → usize::MAX) zig-zag, so every axis rejects both direction
+    /// arms and the per-axis disjunction closes uniformly. INHERITED
+    /// from the per-axis direction pair one COMBINATOR axis over: since
+    /// both `axes_is_ascending` and `axes_is_descending` return all-false
+    /// on this zig-zag, so does their per-axis disjunction. Pinned in
+    /// both zig-zag permutations.
+    ///
+    /// **Load-bearing MIXED-DIRECTION witness**:
+    /// `Self::axes_is_monotone(&[HAND_AUTHORED_MID_POSTURE,
+    /// HAND_AUTHORED_OTHER_POSTURE]) == [true; FIELD_COUNT]` AND
+    /// `Self::is_monotone(&[HAND_AUTHORED_MID_POSTURE,
+    /// HAND_AUTHORED_OTHER_POSTURE]) == false` — every 2-element slice is
+    /// TRIVIALLY per-axis monotone (a single consecutive pair carries
+    /// either `<=` or `>=` or both at every axis, so either the
+    /// axes_is_ascending arm or the axes_is_descending arm accepts at
+    /// every axis and the per-axis disjunction opens uniformly), while
+    /// whole-posture `is_monotone` fails because the two direction
+    /// verdicts choose OPPOSITE axes to fail on: `MID.leq(OTHER)` fails on
+    /// the three axes where MID > OTHER, `MID.geq(OTHER)` fails on the
+    /// three axes where MID < OTHER. This is the CANONICAL converse-
+    /// failure witness for the scalar-refines-fold contract — the per-
+    /// axis mask surfaces mixed-direction per-axis monotonicity that the
+    /// whole-posture direction projection collapses into a single
+    /// direction requirement. Pinned as
+    /// `resource_limits_axes_is_monotone_fold_true_does_not_recover_is_monotone_on_the_load_bearing_mixed_direction_witness`.
+    ///
+    /// **Pointwise-field per-axis monotone alignment**: for every arity-3
+    /// slice from the 5-preset matrix, mask position `i` agrees with the
+    /// direct per-axis monotone verdict `(a[i] <= b[i] && b[i] <= c[i])
+    /// || (a[i] >= b[i] && b[i] >= c[i])` on the `i`-th `field_values`
+    /// component — the composition contract holds pointwise across the
+    /// 5^3 preset matrix. Pinned as
+    /// `resource_limits_axes_is_monotone_agrees_with_pointwise_field_monotone_projection`.
+    ///
+    /// **Per-axis refinement to strict peer** — the STRICT per-axis-mask
+    /// monotone peer [`Self::axes_is_strictly_monotone`] (to be lifted
+    /// next one STRICTNESS axis over) will REFINE this projection per
+    /// axis: any axis where the strict peer accepts must have the non-
+    /// strict peer here accept too (per-axis strict monotone ⇒ per-axis
+    /// non-strict monotone, via `axes_lt[i] ⇒ axes_leq[i]` and
+    /// `axes_gt[i] ⇒ axes_geq[i]` composed through the disjunction). The
+    /// PEER lift will pin this per-axis refinement across the 5^3
+    /// preset matrix as the same-shape refinement carried by the
+    /// direction pair at the pair-level surface one CARDINALITY axis
+    /// under.
+    ///
+    /// **Const-fn evaluability**: the doubly-composed per-axis disjunction
+    /// is evaluable in `const` context, so a caller can pin a per-axis
+    /// monotone identity at compile time as a build-break (`const _: () =
+    /// { const M: [bool; ResourceLimits::FIELD_COUNT] =
+    /// ResourceLimits::axes_is_monotone(&[EMPTY_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]); … };`).
+    /// Sibling of the const-fn evaluability pins on the shipped per-axis-
+    /// mask direction pair one COMBINATOR axis over.
+    ///
+    /// Pre-lift, a caller wanting "for each axis, is this slice a
+    /// monotone `<=` or `>=` sequence on that axis?" composed the doubly-
+    /// primitive per-axis disjunction `let asc =
+    /// Self::axes_is_ascending(postures); let desc =
+    /// Self::axes_is_descending(postures); … let mut i = 0; while i <
+    /// Self::FIELD_COUNT { m[i] = asc[i] || desc[i]; i += 1; } …` at every
+    /// prospective callsite — a two-primitive scaffolding whose
+    /// exhaustiveness the type system did NOT gate. Post-lift the per-
+    /// axis-mask monotone verdict binds at ONE typed method the algebra
+    /// exposes, composes into a compile-time bound, and the doubly-
+    /// disjoined per-axis substrate lives at ONE implementation site — a
+    /// ≥2 PRIME DIRECTIVE trigger, since the per-axis-mask MONOTONE-
+    /// COMBINATOR column past the just-closed (direction × projection-
+    /// kind × strictness) 2×2×2 face was the next natural corner to open
+    /// on the sequence-level surface.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the per-
+    /// axis monotone verdict is a typed named `[bool; N]` exit rather
+    /// than an inline doubly-composed disjunction. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the per-axis-mask
+    /// monotone projection composes from the shipped per-axis-mask
+    /// direction pair via a pure per-axis `||`-fold. THEORY.md §V.1 —
+    /// knowable platform; the per-axis-mask monotone verdict becomes a
+    /// TYPE-level operation on the posture algebra rather than an inline
+    /// two-primitive scaffolding at every consumer that decides "which
+    /// axes are monotone as usize sequences?"
+    ///
+    /// Frontier inspiration: the order-theoretic notion of AXIS-WISE
+    /// MONOTONICITY on a product order — Haskell's `zipWith` idioms over
+    /// per-component `isSorted xs || isSorted (reverse xs)` on a product-
+    /// ordered carrier; Idris's per-index monotone check on `Vec n Nat`;
+    /// APL's monadic monotonicity-per-axis operators; Coq's disjunction of
+    /// `Sorted` on both a `<=` and `>=` relation applied per component of
+    /// a product record. Translation through pleme-io primitives: the
+    /// doubly-composed per-axis `||`-fold directly, with the shipped
+    /// per-axis-mask direction pair
+    /// [`Self::axes_is_ascending`] + [`Self::axes_is_descending`] as the
+    /// two primitives, no new dep, no supertrait bound (`Copy` on
+    /// [`ResourceLimits`] suffices to pass slices by value through the
+    /// inner `const fn` bodies), no allocation, `const fn` throughout.
+    #[must_use]
+    pub const fn axes_is_monotone(postures: &[Self]) -> [bool; Self::FIELD_COUNT] {
+        let asc = Self::axes_is_ascending(postures);
+        let desc = Self::axes_is_descending(postures);
+        let mut result = [false; Self::FIELD_COUNT];
+        let mut i = 0;
+        while i < Self::FIELD_COUNT {
+            result[i] = asc[i] || desc[i];
+            i += 1;
+        }
+        result
+    }
+
     /// Bounded-lattice BOTTOM identity — `self.is_bottom()` holds iff
     /// `self.leq(EMPTY_RESOURCE_LIMITS)`, which on this pointwise partial
     /// order means every ceiling is `0`. Since [`EMPTY_RESOURCE_LIMITS`]
@@ -34063,6 +34303,306 @@ mod tests {
             let mut i = 0;
             while i < ResourceLimits::FIELD_COUNT {
                 assert!(STRICT_DESC_MASK[i]);
+                i += 1;
+            }
+        };
+    }
+
+    // ── ResourceLimits::axes_is_monotone — per-axis-mask MONOTONE-
+    //   COMBINATOR peer of the sequence-level monotone verdict, opening
+    //   the per-axis-mask monotone column past the (direction × strictness
+    //   × projection-kind) 2×2×2 face closed by the per-axis-mask
+    //   direction pairs. Load-bearing algebraic asymmetry: scalar refines
+    //   fold (OPPOSITE direction from the strict per-axis-mask direction
+    //   pair's fold-refines-scalar contract) ─────────────────────────────
+
+    #[test]
+    fn resource_limits_axes_is_monotone_empty_slice_is_all_true() {
+        // Empty-slice all-true — both underlying direction projections
+        // return [true; FIELD_COUNT] vacuously; the per-axis disjunction
+        // opens on either arm at every axis. AGREES with all four sibling
+        // per-axis-mask sequence-level projections at the empty face.
+        assert_eq!(
+            ResourceLimits::axes_is_monotone(&[]),
+            [true; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_monotone_singleton_is_all_true() {
+        // Singleton all-true — one-element slice contains no consecutive
+        // pairs; both underlying direction masks preserve `true` seed
+        // and the per-axis disjunction opens on either arm.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                ResourceLimits::axes_is_monotone(&[a]),
+                [true; ResourceLimits::FIELD_COUNT],
+                "axes_is_monotone(&[a]) must be all-true on singleton {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_monotone_of_diagonal_duplicate_is_all_true() {
+        // Diagonal-duplicate all-true — axes_leq AND axes_geq are per-
+        // axis REFLEXIVE, so both underlying direction masks accept at
+        // every axis and the per-axis disjunction opens on either arm.
+        // AGREES with the non-strict per-axis-mask direction pair AND
+        // DISAGREES with the strict per-axis-mask direction pair (which
+        // uniformly rejects diagonal duplicates via per-axis irreflexivity).
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                ResourceLimits::axes_is_monotone(&[a, a]),
+                [true; ResourceLimits::FIELD_COUNT],
+                "axes_is_monotone(&[a, a]) must be all-true on {a:?}",
+            );
+            assert_eq!(
+                ResourceLimits::axes_is_strictly_ascending(&[a, a]),
+                [false; ResourceLimits::FIELD_COUNT],
+                "strict peer must uniformly reject the diagonal duplicate on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_monotone_holds_on_the_ascending_shipped_preset_triple() {
+        // Ascending shipped-preset triple closure — every axis's `0 <
+        // positive-constant < usize::MAX` chain is a non-decreasing usize
+        // sequence, opening the axes_is_ascending arm at every axis.
+        assert_eq!(
+            ResourceLimits::axes_is_monotone(&[
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                UNBOUNDED_RESOURCE_LIMITS,
+            ]),
+            [true; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_monotone_holds_on_the_descending_shipped_preset_triple() {
+        // Descending shipped-preset triple closure — the reversed chain
+        // opens the axes_is_descending arm at every axis. Peer of the
+        // ascending closure one PERMUTATION axis over on the SAME chain
+        // — the monotone combinator absorbs direction into the
+        // disjunction, so both permutations open all-true masks.
+        assert_eq!(
+            ResourceLimits::axes_is_monotone(&[
+                UNBOUNDED_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                EMPTY_RESOURCE_LIMITS,
+            ]),
+            [true; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_monotone_rejects_the_zigzag_chain_permutation_uniformly() {
+        // Zig-zag chain-permutation uniform rejection — every axis
+        // carries the SAME (positive → zero → usize::MAX) zig-zag, so
+        // every axis rejects both direction arms and the per-axis
+        // disjunction closes uniformly. INHERITED from the per-axis
+        // direction pair one COMBINATOR axis over. Pinned in both zig-
+        // zag permutations.
+        assert_eq!(
+            ResourceLimits::axes_is_monotone(&[
+                DEFAULT_RESOURCE_LIMITS,
+                EMPTY_RESOURCE_LIMITS,
+                UNBOUNDED_RESOURCE_LIMITS,
+            ]),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+        assert_eq!(
+            ResourceLimits::axes_is_monotone(&[
+                DEFAULT_RESOURCE_LIMITS,
+                UNBOUNDED_RESOURCE_LIMITS,
+                EMPTY_RESOURCE_LIMITS,
+            ]),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_monotone_iff_per_axis_disjunction_of_axes_direction_masks_on_every_shipped_slice(
+    ) {
+        // Structural round-trip — the mask bit at every axis is
+        // definitionally the per-axis disjunction of the two direction
+        // masks. The equality holds by CONSTRUCTION; pinning it across
+        // the full 5^3 preset matrix catches any future rewrite of any
+        // of the three underlying projections that drifts silently from
+        // the composition contract.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    let mono = ResourceLimits::axes_is_monotone(&slice);
+                    let asc = ResourceLimits::axes_is_ascending(&slice);
+                    let desc = ResourceLimits::axes_is_descending(&slice);
+                    for i in 0..ResourceLimits::FIELD_COUNT {
+                        assert_eq!(
+                            mono[i],
+                            asc[i] || desc[i],
+                            "axes_is_monotone[{i}] must equal axes_is_ascending[{i}] || \
+                             axes_is_descending[{i}] on slice ({a:?}, {b:?}, {c:?})",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_monotone_agrees_with_pointwise_field_monotone_projection() {
+        // Positional-alignment cross-check — for every arity-3 slice
+        // from the 5-preset matrix, mask position `i` agrees with the
+        // direct per-axis monotone verdict `(a[i] <= b[i] && b[i] <=
+        // c[i]) || (a[i] >= b[i] && b[i] >= c[i])` on the `i`-th
+        // field_values component. Pins the composition contract
+        // pointwise across the 5^3 preset matrix at the projection
+        // boundary between the algebra and the raw pointwise usize
+        // primitives.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    let mask = ResourceLimits::axes_is_monotone(&slice);
+                    let av = a.field_values();
+                    let bv = b.field_values();
+                    let cv = c.field_values();
+                    for i in 0..ResourceLimits::FIELD_COUNT {
+                        let asc_i = av[i] <= bv[i] && bv[i] <= cv[i];
+                        let desc_i = av[i] >= bv[i] && bv[i] >= cv[i];
+                        let expected = asc_i || desc_i;
+                        assert_eq!(
+                            mask[i], expected,
+                            "axes_is_monotone[{i}] must equal pointwise field monotone verdict \
+                             on slice ({a:?}, {b:?}, {c:?})",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_monotone_implies_per_axis_disjunction_folded_on_every_shipped_slice() {
+        // Scalar-REFINES-fold contract (ONE-DIRECTIONAL, FORWARD) —
+        // whole-posture `is_monotone` acceptance implies per-axis mask
+        // fold-through-`&&` acceptance. Whole-posture `is_monotone`
+        // requires the SAME direction to accept on every axis (either
+        // all-axes-`leq` or all-axes-`geq`), so its acceptance entails
+        // per-axis monotonicity in that shared direction and thereby
+        // per-axis monotonicity in EITHER direction. Pinned across the
+        // full 5^3 preset matrix.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    if ResourceLimits::is_monotone(&slice) {
+                        let mask = ResourceLimits::axes_is_monotone(&slice);
+                        assert!(
+                            mask.iter().all(|&bit| bit),
+                            "is_monotone ⇒ fold(axes_is_monotone) on slice ({a:?}, {b:?}, {c:?}); \
+                             mask was {mask:?}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_monotone_fold_true_does_not_recover_is_monotone_on_the_load_bearing_mixed_direction_witness(
+    ) {
+        // Load-bearing CONVERSE-FAILURE pin for the scalar-refines-fold
+        // contract — `[MID, OTHER]` is the canonical mixed-direction
+        // witness: every 2-element slice is TRIVIALLY per-axis monotone
+        // (a single consecutive pair carries either `<=` or `>=` at
+        // every axis), so `axes_is_monotone` returns all-true and folds
+        // to `true`. But whole-posture `is_monotone` FAILS because the
+        // two direction verdicts choose OPPOSITE axes to fail on:
+        // MID.leq(OTHER) fails on axes {0, 2, 4} (MID > OTHER there);
+        // MID.geq(OTHER) fails on axes {1, 3, 5} (MID < OTHER there);
+        // no direction arm holds uniformly. The per-axis mask surfaces
+        // per-axis monotonicity that the whole-posture direction
+        // projection collapses into a single-direction requirement.
+        //
+        // This is the OPPOSITE-DIRECTION load-bearing algebraic
+        // discovery to `axes_is_strictly_ascending`'s converse failure:
+        // there the strict per-axis mask REFINES its scalar (fold ⇒
+        // scalar); here the whole-posture monotone scalar REFINES its
+        // per-axis fold (scalar ⇒ fold). The two directions swap
+        // because pair-level `lt` is not the per-axis `<` conjunction
+        // (its mask refines its scalar) while whole-posture `is_ascending`
+        // IS the per-axis-ascending conjunction (its mask recovers its
+        // scalar), and the disjunction combinator lifts that per-primitive
+        // asymmetry into the opposite refinement direction at the
+        // combinator surface.
+        let slice = [HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE];
+        let mask = ResourceLimits::axes_is_monotone(&slice);
+        assert_eq!(mask, [true; ResourceLimits::FIELD_COUNT]);
+        assert!(mask.iter().all(|&bit| bit));
+        assert!(!ResourceLimits::is_monotone(&slice));
+    }
+
+    #[test]
+    fn resource_limits_axes_is_monotone_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the per-axis-mask sequence-level monotone
+        // projection is evaluable in const context, so a caller can
+        // pin a per-axis-monotone identity at compile time.
+        const _: [bool; ResourceLimits::FIELD_COUNT] = ResourceLimits::axes_is_monotone(&[]);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_monotone(&[EMPTY_RESOURCE_LIMITS]);
+        const MONO_MASK_ASCENDING: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_monotone(&[
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                UNBOUNDED_RESOURCE_LIMITS,
+            ]);
+        const MONO_MASK_DESCENDING: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_monotone(&[
+                UNBOUNDED_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                EMPTY_RESOURCE_LIMITS,
+            ]);
+        const _: () = {
+            let mut i = 0;
+            while i < ResourceLimits::FIELD_COUNT {
+                assert!(MONO_MASK_ASCENDING[i]);
+                assert!(MONO_MASK_DESCENDING[i]);
                 i += 1;
             }
         };

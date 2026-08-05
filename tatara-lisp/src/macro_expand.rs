@@ -1314,6 +1314,164 @@ impl ResourceLimits {
             && self.max_macro_arity <= other.max_macro_arity
     }
 
+    /// Per-axis pointwise `<=` mask across the six ceilings — the ATOMIC
+    /// per-axis relation vector whose CONJUNCTION over the six positions
+    /// equals [`Self::leq`]. `a.axes_leq(b)[i]` is `true` iff the
+    /// `i`-th ceiling of `a` sits at or below the `i`-th ceiling of `b`;
+    /// folding the six results through `&&` recovers `a.leq(b)` verbatim,
+    /// so this projection DECOMPOSES the single-bit relation into its
+    /// six per-axis witnesses without introducing new relation semantics
+    /// past what [`Self::leq`] already carries.
+    ///
+    /// The ATOMIZATION corner of the (pairwise-relation, per-axis-mask)
+    /// projection axis one KIND-of-return over from [`Self::leq`]:
+    /// where `leq` folds the six per-axis `<=` primitives through a
+    /// six-way `&&` into a single `bool` verdict, this method returns
+    /// the SIX per-axis `bool` witnesses as a fixed-size array in
+    /// canonical struct-declaration order. Sibling posture to the
+    /// substrate-wide "closed-set ALL array + per-instance projection"
+    /// pattern the ceiling family already carries at [`Self::FIELD_NAMES`]
+    /// / [`Self::field_values`] / [`Self::from_field_values`] /
+    /// [`Self::fields`] — where those four project a SINGLE posture
+    /// (or lift an array back) at the [(name), (value), (name+value),
+    /// (value)] projection kinds, this method projects TWO postures at
+    /// the (per-axis relation-verdict) kind. Together they close the
+    /// per-axis-projection surface one INPUT-ARITY axis over: the
+    /// SINGLE-posture projections carry the six per-axis VALUES; this
+    /// TWO-posture projection carries the six per-axis PAIRWISE
+    /// RELATIONS.
+    ///
+    /// The declaration order in the returned array mirrors the field
+    /// order in the [`ResourceLimits`] struct AND the field order in
+    /// [`DEFAULT_RESOURCE_LIMITS`] / [`EMPTY_RESOURCE_LIMITS`] /
+    /// [`UNBOUNDED_RESOURCE_LIMITS`] AND the ordering in
+    /// [`Self::FIELD_NAMES`] AND the projection order in
+    /// [`Self::field_values`] AND the injection order in
+    /// [`Self::from_field_values`] AND the fusion order in
+    /// [`Self::fields`] — one canonical ordering the substrate pins
+    /// at ONE `const fn` so a consumer zipping `Self::FIELD_NAMES`
+    /// against `self.axes_leq(other)` extracts the exact same per-axis
+    /// name-to-verdict mapping every field-ordered consumer already
+    /// binds to.
+    ///
+    /// Arity pinned via [`Self::FIELD_COUNT`] rather than a bare `6`
+    /// literal, so a family extension (a seventh ceiling landing at the
+    /// struct declaration) forces this method's return-type arity to
+    /// bump in lockstep — rustc's array-arity checking rejects a
+    /// mismatch between the return-type's declared arity and the
+    /// initializer's element count.
+    ///
+    /// **Conjunction-recovers-`leq` contract**: for every posture pair
+    /// `(a, b)`, folding `a.axes_leq(b)` through `&&` over the six
+    /// positions equals `a.leq(b)` — pinned by
+    /// `resource_limits_axes_leq_conjunction_agrees_with_leq` on the
+    /// canonical preset roster (EMPTY / DEFAULT / UNBOUNDED / MID /
+    /// OTHER). This closes the "single-bit verdict is a fold over the
+    /// per-axis mask" theorem at compile time and makes the per-axis
+    /// projection the ATOMIC UNIT the pairwise relation builds up
+    /// from.
+    ///
+    /// **Positional-alignment contract**: for every posture pair
+    /// `(a, b)` and every index `i in 0..FIELD_COUNT`,
+    /// `a.axes_leq(b)[i] == (a.field_values()[i] <= b.field_values()[i])`
+    /// — pinned by
+    /// `resource_limits_axes_leq_agrees_with_pointwise_field_comparison`
+    /// via cross-reference with [`Self::field_values`] on a
+    /// discriminating fixture. Guarantees the per-axis mask preserves
+    /// the same canonical index-to-axis mapping the two SIBLING
+    /// projections carry.
+    ///
+    /// **Preset pole pins**: the (bottom, top) bounded-lattice
+    /// preset-pair carries EXHAUSTIVE per-axis verdicts on the
+    /// projection —
+    /// `EMPTY.axes_leq(UNBOUNDED) == [true; FIELD_COUNT]` (every `0`
+    /// is at most every [`usize::MAX`]);
+    /// `UNBOUNDED.axes_leq(EMPTY) == [false; FIELD_COUNT]` (every
+    /// [`usize::MAX`] strictly exceeds every `0`);
+    /// `EMPTY.axes_leq(EMPTY) == [true; FIELD_COUNT]` (reflexivity on
+    /// every axis); `UNBOUNDED.axes_leq(UNBOUNDED) == [true;
+    /// FIELD_COUNT]` (reflexivity on every axis). Pinned by the four
+    /// preset-pole tests in the cohort.
+    ///
+    /// **Diagnostic emission use case**: a consumer that decides
+    /// `!a.leq(b)` and wants to name the offending axes zips
+    /// [`Self::FIELD_NAMES`] against `a.axes_leq(b)` and filters the
+    /// `false` entries — an OBSERVABILITY surface for the leq relation
+    /// the single-bit `leq` verdict does not expose. Pre-lift, a
+    /// consumer wanting per-axis leq verdicts either (a) composed six
+    /// independent `a.field_values()[i] <= b.field_values()[i]`
+    /// primitives at the call site — the same six-inline-primitive
+    /// cascade the `..Default::default()`-free literal on the bundled
+    /// struct exists to close, and a copy-paste that dropped ONE of
+    /// the six comparisons silently admitted "all axes agree" on that
+    /// axis when the type system did not gate the drop — or (b)
+    /// derived the vector by re-running `leq` under six single-axis
+    /// posture overrides via [`Self::from_field_values`]. Post-lift the
+    /// per-axis mask binds at ONE typed `const fn` on the algebra;
+    /// rustc's array-arity checking on the six-bool return literal
+    /// below guarantees every ceiling is threaded through the `<=`
+    /// primitive in canonical order.
+    ///
+    /// `const fn` so a caller can pin a per-axis verdict at compile
+    /// time (`const _: [bool; ResourceLimits::FIELD_COUNT] =
+    /// EMPTY_RESOURCE_LIMITS.axes_leq(UNBOUNDED_RESOURCE_LIMITS);`) —
+    /// the const-fn peer of the const-eval evaluability every other
+    /// primitive on the [`ResourceLimits`] algebra carries. `Copy` on
+    /// [`ResourceLimits`] lets the const-fn body return the six-bool
+    /// array by value without an explicit `.clone()` (which const-fn
+    /// would not permit anyway), and `bool` is trivially `Copy` in
+    /// the array element position.
+    ///
+    /// **Enables field-agnostic per-axis relation composition**: with
+    /// the per-axis-mask projection now closed on the substrate, a
+    /// future per-axis relation primitive (`axes_geq`, `axes_eq`,
+    /// `axes_lt`) binds at ONE typed `const fn` returning
+    /// `[bool; FIELD_COUNT]`, and a fold-through-`&&`-recovers-scalar
+    /// pattern extends uniformly across the family. A DIFFERING-AXES
+    /// mask is `!axes_leq(a, b) || !axes_leq(b, a)` — the per-axis
+    /// disjunction of "a exceeds b on axis i" and "b exceeds a on
+    /// axis i" — recovering the "which axes disagree" diagnostic at
+    /// ONE composition of the two masks.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-posture-pair projection into the six-bool relation vector
+    /// is itself a typed named exit rather than a per-consumer inline
+    /// six-primitive cascade. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; the pairwise partial-order
+    /// relation on two preset-carried resource proofs is itself
+    /// decomposed into its six per-axis witnesses at TYPE level, so
+    /// consumers reasoning about WHICH axes carry the relation bind
+    /// through ONE typed primitive rather than re-running `<=` on
+    /// each. THEORY.md §V.1 — knowable platform; the per-axis
+    /// pointwise `<=` mask becomes a TYPE-level operation on the
+    /// posture algebra rather than a per-consumer field-access
+    /// cascade — with the per-axis granularity baked in so the
+    /// consumer cannot silently drop an axis from the diagnostic
+    /// (the array's fixed arity forces every axis to appear).
+    ///
+    /// Frontier inspiration: Idris's `zipWith (<=)` over two `Vec n
+    /// Nat` producing a `Vec n Bool` — the per-axis pairwise-relation
+    /// vector is a first-class typed value at the term level, and
+    /// downstream reductions (`fold and`, `count`, `filter`) compose
+    /// against it. APL / J's rank-lifted `≤` operator producing a
+    /// per-position bit array between two conformable arrays — the
+    /// SAME lifted-relation shape lifted onto typed structs.
+    /// Translation through pleme-io primitives: a `const fn` returning
+    /// a `[bool; N]` fixed-size array on the typed [`ResourceLimits`]
+    /// algebra rather than a runtime vector operation, with the same
+    /// per-axis-relation closure at ONE named entry.
+    #[must_use]
+    pub const fn axes_leq(self, other: Self) -> [bool; Self::FIELD_COUNT] {
+        [
+            self.max_expansion_depth <= other.max_expansion_depth,
+            self.max_cache_entries <= other.max_cache_entries,
+            self.max_expansion_size <= other.max_expansion_size,
+            self.max_macro_body_size <= other.max_macro_body_size,
+            self.max_registered_macros <= other.max_registered_macros,
+            self.max_macro_arity <= other.max_macro_arity,
+        ]
+    }
+
     /// Pointwise-`min` fold across a slice of postures — the STRICTEST
     /// posture whose admissible input set is the intersection of every
     /// operand's admissible input sets. `ResourceLimits::strictest_of(&[a,
@@ -20377,6 +20535,220 @@ mod tests {
         // concrete `DEFAULT_MAX_*` constant, so the partial order is
         // STRICT on the shipped preset pair:
         const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.leq(DEFAULT_RESOURCE_LIMITS));
+    }
+
+    #[test]
+    fn resource_limits_axes_leq_conjunction_agrees_with_leq() {
+        // Conjunction-recovers-`leq` pin — folding `a.axes_leq(b)`
+        // through `&&` over the six positions equals `a.leq(b)`. This
+        // closes the "single-bit verdict is a fold over the per-axis
+        // mask" theorem the projection's docstring names: the per-axis
+        // mask is the ATOMIC UNIT the pairwise `leq` relation builds
+        // up from, and the fold recovers the aggregated verdict at
+        // every posture pair. Iterates the canonical preset roster
+        // (EMPTY / DEFAULT / UNBOUNDED / MID / OTHER) — five distinct
+        // postures × five distinct postures = 25 ordered pairs, so
+        // every leq-comparable AND every leq-incomparable relation
+        // shape gets exercised.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let mask = a.axes_leq(b);
+                let mut folded = true;
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    folded = folded && mask[i];
+                    i += 1;
+                }
+                assert_eq!(
+                    folded,
+                    a.leq(b),
+                    "axes_leq({a:?}, {b:?}) folded through && must equal leq"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_leq_agrees_with_pointwise_field_comparison() {
+        // Positional-alignment pin — for every posture pair `(a, b)`
+        // and every index `i`, `a.axes_leq(b)[i]` equals
+        // `a.field_values()[i] <= b.field_values()[i]`. Cross-
+        // references the per-axis mask against the SIBLING
+        // [`ResourceLimits::field_values`] projection to pin the
+        // canonical index-to-axis mapping: a struct-field reorder
+        // that broke the alignment on either projection fires this
+        // pin at the offending axis. Sibling of
+        // `resource_limits_fields_agree_with_zip_of_field_names_and_field_values`
+        // one PROJECTION-KIND axis over — where THAT test pins the
+        // (name+value) fusion, this test pins the (per-axis relation)
+        // projection agrees with the (per-axis value) projection.
+        // Exercises the same 25-pair matrix as the conjunction test
+        // above so every ordered pair is covered.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let mask = a.axes_leq(b);
+                let av = a.field_values();
+                let bv = b.field_values();
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    assert_eq!(
+                        mask[i],
+                        av[i] <= bv[i],
+                        "axes_leq({a:?}, {b:?})[{i}] must equal field_values comparison"
+                    );
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_leq_of_empty_and_unbounded_is_all_true() {
+        // Bottom-to-top preset pin — [`EMPTY_RESOURCE_LIMITS`]
+        // (bounded-lattice bottom, every axis `0`) versus
+        // [`UNBOUNDED_RESOURCE_LIMITS`] (bounded-lattice top, every
+        // axis [`usize::MAX`]). Every per-axis verdict is `true`
+        // (`0 <= usize::MAX` on every axis), so the mask is
+        // exhaustively true — the pole-diagonal edge case pinned at
+        // compile time via the const-fn evaluability of the
+        // projection. Sibling of the CONCRETE-PRESET pin
+        // `resource_limits_leq_of_default_and_unbounded_is_a_strict_order`
+        // one PROJECTION-KIND axis over.
+        const MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            EMPTY_RESOURCE_LIMITS.axes_leq(UNBOUNDED_RESOURCE_LIMITS);
+        const _: () = assert!(MASK[0]);
+        const _: () = assert!(MASK[1]);
+        const _: () = assert!(MASK[2]);
+        const _: () = assert!(MASK[3]);
+        const _: () = assert!(MASK[4]);
+        const _: () = assert!(MASK[5]);
+    }
+
+    #[test]
+    fn resource_limits_axes_leq_of_unbounded_and_empty_is_all_false() {
+        // Top-to-bottom preset pin — the REVERSE direction of the
+        // bottom-to-top pin above. Every per-axis verdict is `false`
+        // (`usize::MAX <= 0` fails on every axis), so the mask is
+        // exhaustively false. Together with the bottom-to-top pin
+        // this closes the (bottom, top) × (leq-direction, opposite-
+        // direction) 2×2 pole face on the per-axis mask surface at
+        // its two EXTREMAL corners.
+        const MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            UNBOUNDED_RESOURCE_LIMITS.axes_leq(EMPTY_RESOURCE_LIMITS);
+        const _: () = assert!(!MASK[0]);
+        const _: () = assert!(!MASK[1]);
+        const _: () = assert!(!MASK[2]);
+        const _: () = assert!(!MASK[3]);
+        const _: () = assert!(!MASK[4]);
+        const _: () = assert!(!MASK[5]);
+    }
+
+    #[test]
+    fn resource_limits_axes_leq_is_reflexive_on_every_axis() {
+        // Reflexivity pin — `a.axes_leq(a)` returns `[true; FIELD_COUNT]`
+        // on every posture, since `a.max_X <= a.max_X` holds on every
+        // axis by [`usize`]'s reflexivity of `<=`. The per-axis peer
+        // of `resource_limits_leq_is_reflexive` one PROJECTION-KIND
+        // axis over: where THAT test pins the single-bit verdict at
+        // reflexivity, this test pins EVERY per-axis witness at
+        // reflexivity. Compile-time evaluable on each of the three
+        // shipped presets via const-fn.
+        const EMPTY_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            EMPTY_RESOURCE_LIMITS.axes_leq(EMPTY_RESOURCE_LIMITS);
+        const _: () = assert!(
+            EMPTY_MASK[0]
+                && EMPTY_MASK[1]
+                && EMPTY_MASK[2]
+                && EMPTY_MASK[3]
+                && EMPTY_MASK[4]
+                && EMPTY_MASK[5]
+        );
+        const DEFAULT_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            DEFAULT_RESOURCE_LIMITS.axes_leq(DEFAULT_RESOURCE_LIMITS);
+        const _: () = assert!(
+            DEFAULT_MASK[0]
+                && DEFAULT_MASK[1]
+                && DEFAULT_MASK[2]
+                && DEFAULT_MASK[3]
+                && DEFAULT_MASK[4]
+                && DEFAULT_MASK[5]
+        );
+        const UNBOUNDED_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            UNBOUNDED_RESOURCE_LIMITS.axes_leq(UNBOUNDED_RESOURCE_LIMITS);
+        const _: () = assert!(
+            UNBOUNDED_MASK[0]
+                && UNBOUNDED_MASK[1]
+                && UNBOUNDED_MASK[2]
+                && UNBOUNDED_MASK[3]
+                && UNBOUNDED_MASK[4]
+                && UNBOUNDED_MASK[5]
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_leq_discriminates_single_axis_violation() {
+        // Diagnostic-emission pin — when `a.leq(b)` returns `false`
+        // because ONE axis violates the `<=` primitive, `a.axes_leq(b)`
+        // returns a mask whose SINGLE `false` entry names the
+        // violating axis by index. The offending axis here is
+        // `max_expansion_depth` (index 0): `a` sits one above
+        // `EMPTY_RESOURCE_LIMITS` on that axis alone, so
+        // `a.axes_leq(EMPTY_RESOURCE_LIMITS)` returns `false` at
+        // index 0 and `true` at every other axis (where `0 <= 0`
+        // holds trivially). This is the OBSERVABILITY use case the
+        // projection's docstring names — the SINGLE-BIT `leq` verdict
+        // cannot expose WHICH axis violated, and the per-axis mask
+        // extracts that diagnostic at ONE typed primitive.
+        let a = ResourceLimits {
+            max_expansion_depth: 1,
+            ..EMPTY_RESOURCE_LIMITS
+        };
+        let mask = a.axes_leq(EMPTY_RESOURCE_LIMITS);
+        assert!(!mask[0], "max_expansion_depth axis must be the false entry");
+        assert!(mask[1]);
+        assert!(mask[2]);
+        assert!(mask[3]);
+        assert!(mask[4]);
+        assert!(mask[5]);
+        // Cross-check: the single-bit `leq` verdict is false, and the
+        // conjunction of the mask agrees.
+        assert!(!a.leq(EMPTY_RESOURCE_LIMITS));
+    }
+
+    #[test]
+    fn resource_limits_axes_leq_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the per-axis mask is evaluable in const
+        // context, so a caller can pin a preset-relation-vector
+        // identity at compile time. Sibling of the const-fn pins on
+        // [`Self::leq`] / [`Self::strictest`] / [`Self::most_permissive`]
+        // one PROJECTION-KIND axis over: those pin scalar verdicts /
+        // composed postures at compile time, this pins the per-axis
+        // relation vector. Exercises the const-fn evaluability at
+        // the (default, unbounded) preset pair for a mixed
+        // discriminating fixture (every field of DEFAULT is strictly
+        // less than [`usize::MAX`], so every mask entry is `true`).
+        const MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            DEFAULT_RESOURCE_LIMITS.axes_leq(UNBOUNDED_RESOURCE_LIMITS);
+        const _: () = assert!(MASK[0]);
+        const _: () = assert!(MASK[1]);
+        const _: () = assert!(MASK[2]);
+        const _: () = assert!(MASK[3]);
+        const _: () = assert!(MASK[4]);
+        const _: () = assert!(MASK[5]);
     }
 
     // ── EMPTY_RESOURCE_LIMITS — bounded-lattice bottom preset ─────────

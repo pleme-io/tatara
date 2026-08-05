@@ -4057,6 +4057,299 @@ impl ResourceLimits {
         true
     }
 
+    /// Boolean bracket-membership across a slice of lower operands AND a
+    /// slice of upper operands — `self` sits at-or-above every `lower` in
+    /// `lowers` AND at-or-below every `upper` in `uppers` on the
+    /// pointwise partial order across the six ceilings.
+    /// `a.is_within_of(&[l0, l1], &[u0, u1])` holds iff
+    /// `l0.leq(a) && l1.leq(a) && a.leq(u0) && a.leq(u1)` — the N-ary
+    /// bracket-containment predicate that `a` sits inside the joint
+    /// bracket `[most_permissive_of(lowers), strictest_of(uppers)]`
+    /// on every axis (whenever that bracket is non-empty).
+    ///
+    /// The N-ary lift of [`Self::within`] one CARDINALITY axis over on
+    /// the bracket-primitive surface: where `within` decides bracket
+    /// membership against a single `(lower, upper)` pair (three inputs
+    /// total), this decides bracket membership against `(N + M)` joint
+    /// bounds (`(1 + N + M)` inputs total). The pair (`within`,
+    /// `is_within_of`) closes the (pair-level, N-ary) row on the
+    /// bracket-membership single-bit-verdict surface, exactly the way
+    /// (`leq`, `is_lower_bound_of`) / (`geq`, `is_upper_bound_of`) /
+    /// (`lt`, `is_strict_lower_bound_of`) / (`gt`,
+    /// `is_strict_upper_bound_of`) close the SAME (pair-level, N-ary)
+    /// row on the pairwise-relation surface one ARITY axis over.
+    /// Peer of [`Self::is_lower_bound_of`] / [`Self::is_upper_bound_of`]
+    /// one PRIMITIVE-KIND axis over on the N-ary-predicate surface: the
+    /// (single-bit, pair-level) row of the (`is_lower_bound_of`,
+    /// `is_upper_bound_of`, `is_within_of`) triad EXHAUSTIVELY partitions
+    /// the direction-signed N-ary predicate space at the non-strict
+    /// face (lower-bound, upper-bound, joint-bracket) — every N-ary
+    /// bound-membership question the substrate carries at the
+    /// single-directional surface now carries a joint-bracket peer at
+    /// the two-directional surface.
+    ///
+    /// Encoded as the two-primitive
+    /// `self.is_upper_bound_of(lowers) && self.is_lower_bound_of(uppers)`
+    /// conjunction — one primitive delegation per direction to the
+    /// SHIPPED N-ary bound-membership predicates. Mirrors [`Self::within`]'s
+    /// `lower.leq(self) && self.leq(upper)` two-primitive-conjunction
+    /// encoding one CARDINALITY axis over — the same containment-
+    /// direction encoding that closes `within` at the pair-level closes
+    /// `is_within_of` at the N-ary level, with the joint bracket carried
+    /// by TWO already-lifted N-ary predicates rather than TWO pair-level
+    /// `leq` calls. The N-ary encoding lives at exactly one implementation
+    /// site, so a future re-derivation of [`Self::is_lower_bound_of`] or
+    /// [`Self::is_upper_bound_of`] (e.g. a strict-order variant reusing
+    /// the same slice-walk shape) propagates to `is_within_of`
+    /// mechanically rather than requiring a per-method fix-up.
+    ///
+    /// **Both-empty vacuous truth**: `a.is_within_of(&[], &[]) == true`
+    /// for every posture — both empty conjunctions are vacuously true, so
+    /// the outer `&&` is vacuously true. Peer of [`Self::within`]'s
+    /// extrema-bracket identity one CARDINALITY axis over: the widest
+    /// possible joint bracket admits every input. Pinned by
+    /// `resource_limits_is_within_of_both_empty_slices_is_vacuously_true`.
+    ///
+    /// **Empty-lowers reduces to `is_lower_bound_of`**: `a.is_within_of(
+    /// &[], uppers) == a.is_lower_bound_of(uppers)` for every slice —
+    /// with no lower operands the upper-bound conjunct is vacuously true
+    /// and the predicate collapses to N-ary lower-bound membership on
+    /// `uppers`. Pinned by
+    /// `resource_limits_is_within_of_empty_lowers_reduces_to_is_lower_bound_of`.
+    ///
+    /// **Empty-uppers reduces to `is_upper_bound_of`**: `a.is_within_of(
+    /// lowers, &[]) == a.is_upper_bound_of(lowers)` for every slice —
+    /// dual collapse in the OTHER direction, mirroring the empty-lowers
+    /// collapse one COMBINATOR-DIRECTION axis over. Pinned by
+    /// `resource_limits_is_within_of_empty_uppers_reduces_to_is_upper_bound_of`.
+    ///
+    /// **Single-element pair reduces to `within`**: `a.is_within_of(&[l],
+    /// &[u]) == a.within(l, u)` for every posture triple — the
+    /// (1 + 1)-input N-ary bracket collapses to the pair-level bracket-
+    /// membership predicate. Mirrors [`Self::is_lower_bound_of`]'s
+    /// single-element `a.is_lower_bound_of(&[b]) == a.leq(b)` collapse
+    /// one PRIMITIVE-KIND axis over. Pinned by
+    /// `resource_limits_is_within_of_single_element_pair_reduces_to_within`.
+    ///
+    /// **Extrema-bracket-identity**: `a.is_within_of(&[EMPTY_RESOURCE_LIMITS],
+    /// &[UNBOUNDED_RESOURCE_LIMITS]) == true` for every posture — the
+    /// widest possible non-empty joint bracket admits every input, since
+    /// `EMPTY.leq(a) == true` and `a.leq(UNBOUNDED) == true` on every
+    /// posture by the bounded-lattice pole axioms. Pinned by
+    /// `resource_limits_is_within_of_lattice_extrema_is_true`.
+    ///
+    /// **Reflexive-bracket**: `a.is_within_of(&[a], &[a]) == true` for
+    /// every posture — the zero-width bracket at `a` itself admits `a`
+    /// by reflexivity of `leq`. Peer of [`Self::within`]'s reflexive-
+    /// bracket identity one CARDINALITY axis over. Pinned by
+    /// `resource_limits_is_within_of_self_is_reflexive`.
+    ///
+    /// **Meet/join witness**: `most_permissive_of(lowers).is_within_of(
+    /// lowers, uppers) == true` iff `most_permissive_of(lowers).leq(
+    /// strictest_of(uppers))` iff the joint bracket is non-empty. The
+    /// N-ary join of the lowers is the tightest witness of the
+    /// lower-bound side; when it also sits at-or-below every upper, the
+    /// joint bracket admits at least that one witness. Pinned by
+    /// `resource_limits_is_within_of_holds_at_the_join_of_the_lowers_when_bracket_is_nonempty`.
+    ///
+    /// **Any-lower / any-upper rejection**: if any `lowers[i]` is NOT
+    /// at-or-below `self`, OR any `uppers[j]` is NOT at-or-above `self`,
+    /// then the predicate rejects. Pinned by
+    /// `resource_limits_is_within_of_rejects_when_any_lower_is_above_self`
+    /// AND `resource_limits_is_within_of_rejects_when_any_upper_is_below_self`.
+    ///
+    /// `const fn` so a caller can pin a preset-bracket-membership N-ary
+    /// verdict at compile time as a build-break.
+    ///
+    /// Pre-lift, a consumer wanting joint-bracket N-ary membership
+    /// composed the two-primitive
+    /// `self.is_upper_bound_of(lowers) && self.is_lower_bound_of(uppers)`
+    /// scaffold at every call site — a PRIME DIRECTIVE ≥2 pattern once
+    /// two consumers need it — or expanded the four-primitive
+    /// `lowers.iter().all(|l| l.leq(self)) && uppers.iter().all(|u|
+    /// self.leq(*u))` at every site. Post-lift the joint-bracket N-ary
+    /// verdict binds at ONE typed method whose signature carries the
+    /// containment direction (`lowers ≤ self ≤ uppers`, joint per side)
+    /// into the type system, and the encoding is a private implementation
+    /// detail no caller can drift from.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// joint-bracket N-ary projection into a single-bit verdict is
+    /// itself a typed named exit rather than a per-consumer inline
+    /// two-primitive scaffold. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; the joint-bracket N-ary predicate
+    /// on `(1 + N + M)` preset-carried resource proofs is decomposed
+    /// into its TWO already-lifted N-ary directional witnesses at TYPE
+    /// level. THEORY.md §V.1 — knowable platform; the joint-bracket
+    /// N-ary predicate becomes a TYPE-level operation on the posture
+    /// algebra with the two-direction closure baked in so a consumer
+    /// cannot silently drop a directional half from the check.
+    ///
+    /// Frontier inspiration: the order-theoretic definition of the
+    /// INTERVAL `[⋁L, ⋀U]` in a bounded lattice as the intersection of
+    /// the principal upper set of `⋁L` and the principal lower set of
+    /// `⋀U` — this predicate decides membership in that interval
+    /// through its two directional witnesses. Idris's `all3 between`
+    /// combinator on a `(Vec n Nat, Vec n Nat, Vec n Nat)` producing a
+    /// `Bool` — the three-slice bracket peer of the pair-level `between`.
+    /// APL / J's rank-lifted joint-bounds membership operator across two
+    /// conformable arrays. Translation through pleme-io primitives: a
+    /// `const fn` returning `bool` on the typed [`ResourceLimits`]
+    /// algebra encoded as the conjunction of two already-lifted N-ary
+    /// bound-membership predicates, rather than a runtime interval-tree
+    /// traversal or an inline four-primitive scaffold.
+    #[must_use]
+    pub const fn is_within_of(self, lowers: &[Self], uppers: &[Self]) -> bool {
+        self.is_upper_bound_of(lowers) && self.is_lower_bound_of(uppers)
+    }
+
+    /// Per-axis pointwise bracket-membership mask across a slice of lower
+    /// operands AND a slice of upper operands — the ATOMIC per-axis N-ary
+    /// joint-bracket-membership vector whose CONJUNCTION over the six
+    /// positions equals [`Self::is_within_of`].
+    /// `a.axes_is_within_of(&[l0, l1], &[u0, u1])[i]` is `true` iff the
+    /// `i`-th ceiling of `a` sits at-or-above the `i`-th ceiling of EVERY
+    /// operand in `lowers` AND at-or-below the `i`-th ceiling of EVERY
+    /// operand in `uppers`; folding the six results through `&&` recovers
+    /// `a.is_within_of(&[l0, l1], &[u0, u1])` verbatim, so this projection
+    /// DECOMPOSES the single-bit joint-bracket N-ary verdict into its six
+    /// per-axis witnesses without introducing new relation semantics past
+    /// what [`Self::is_within_of`] already carries.
+    ///
+    /// The per-axis-MASK peer of [`Self::is_within_of`] one PROJECTION-
+    /// KIND axis over on the joint-bracket-N-ary-predicate surface, AND
+    /// the N-ary peer of [`Self::axes_within`] one CARDINALITY axis over
+    /// on the per-axis-mask bracket surface. Two peers cross the same
+    /// cell on the (arity × projection-kind) grid: the (`within`,
+    /// `axes_within`, `is_within_of`, `axes_is_within_of`) quartet spans
+    /// the 2×2 face at the JOINT-BRACKET-MEMBERSHIP corner, mirroring
+    /// the (`leq`, `axes_leq`, `is_lower_bound_of`, `axes_is_lower_bound_of`)
+    /// quartet one PRIMITIVE-KIND axis over on the LOWER-BOUND N-ary-
+    /// predicate corner. Every joint-bracket-N-ary verdict the substrate
+    /// carries at the single-bit level now carries a per-axis-mask peer
+    /// at the atomic level.
+    ///
+    /// Encoded as the per-index intersection of
+    /// `self.axes_is_upper_bound_of(lowers)` (the six per-axis
+    /// "above every lower's floor" witnesses) with
+    /// `self.axes_is_lower_bound_of(uppers)` (the six per-axis "below
+    /// every upper's ceiling" witnesses). One primitive delegation per
+    /// direction to the SHIPPED per-axis N-ary bound-membership
+    /// predicates — the joint-bracket per-axis encoding lives at
+    /// exactly one implementation site, so a future re-derivation of
+    /// either [`Self::axes_is_upper_bound_of`] or
+    /// [`Self::axes_is_lower_bound_of`] propagates to
+    /// `axes_is_within_of` mechanically without a per-method fix-up.
+    /// Mirrors [`Self::axes_within`]'s per-index intersection of two
+    /// `axes_leq` calls one CARDINALITY axis over — the same
+    /// containment-direction encoding that closes `axes_within` at the
+    /// pair-level closes `axes_is_within_of` at the N-ary level, with
+    /// the joint bracket carried by TWO already-lifted per-axis N-ary
+    /// masks rather than TWO pair-level `axes_leq` masks.
+    ///
+    /// **Conjunction-recovers-`is_within_of` contract**: for every
+    /// posture `a` and slice pair `(lowers, uppers)`, folding
+    /// `a.axes_is_within_of(lowers, uppers)` through `&&` over the six
+    /// positions equals `a.is_within_of(lowers, uppers)` — pinned by
+    /// `resource_limits_axes_is_within_of_conjunction_agrees_with_is_within_of`.
+    /// The per-axis-mask peer of the analogous conjunction-recovers-
+    /// scalar contract on [`Self::axes_within`] one CARDINALITY axis
+    /// over.
+    ///
+    /// **Positional-alignment contract**: for every posture `a`, slice
+    /// pair `(lowers, uppers)`, and index `i in 0..FIELD_COUNT`,
+    /// `a.axes_is_within_of(lowers, uppers)[i] == lowers.iter().all(|l|
+    /// l.field_values()[i] <= a.field_values()[i]) && uppers.iter().all(
+    /// |u| a.field_values()[i] <= u.field_values()[i])` — pinned by
+    /// `resource_limits_axes_is_within_of_agrees_with_pointwise_field_conjunction`
+    /// via cross-reference with [`Self::field_values`]. Guarantees the
+    /// per-axis mask preserves the same canonical index-to-axis mapping
+    /// the SIBLING projections carry.
+    ///
+    /// **Intersection-encoding contract**: for every posture `a`, slice
+    /// pair `(lowers, uppers)`, and index `i`,
+    /// `a.axes_is_within_of(lowers, uppers)[i] ==
+    /// a.axes_is_upper_bound_of(lowers)[i] && a.axes_is_lower_bound_of(
+    /// uppers)[i]` — the per-axis-MASK N-ary peer of the single-bit
+    /// `is_within_of == is_upper_bound_of && is_lower_bound_of` law.
+    /// Pinned by
+    /// `resource_limits_axes_is_within_of_is_intersection_of_axes_is_bound_of_at_bounds`.
+    ///
+    /// **Both-empty vacuous truth**: `a.axes_is_within_of(&[], &[]) ==
+    /// [true; FIELD_COUNT]` for every posture — both empty conjunctions
+    /// are vacuously true on every axis. Pinned by
+    /// `resource_limits_axes_is_within_of_both_empty_slices_is_all_true`.
+    ///
+    /// **Single-element-pair reduces to `axes_within`**:
+    /// `a.axes_is_within_of(&[l], &[u]) == a.axes_within(l, u)` for
+    /// every posture triple — the `(1 + 1)`-input per-axis N-ary bracket
+    /// mask collapses to the pair-level [`Self::axes_within`] mask.
+    /// Pinned by
+    /// `resource_limits_axes_is_within_of_single_element_pair_reduces_to_axes_within`.
+    ///
+    /// **Extrema-bracket-identity**: `a.axes_is_within_of(
+    /// &[EMPTY_RESOURCE_LIMITS], &[UNBOUNDED_RESOURCE_LIMITS]) ==
+    /// [true; FIELD_COUNT]` for every posture — the widest non-empty
+    /// joint bracket admits every input on every axis. Pinned by
+    /// `resource_limits_axes_is_within_of_lattice_extrema_is_all_true`.
+    ///
+    /// **Reflexive-bracket**: `a.axes_is_within_of(&[a], &[a]) ==
+    /// [true; FIELD_COUNT]` for every posture — the zero-width bracket
+    /// at `a` itself admits `a` on every axis by reflexivity of
+    /// `axes_leq`. Pinned by
+    /// `resource_limits_axes_is_within_of_of_self_is_reflexive`.
+    ///
+    /// **Any-axis violation rejection**: if
+    /// `a.field_values()[i] < lowers[j].field_values()[i]` OR
+    /// `a.field_values()[i] > uppers[k].field_values()[i]` for any
+    /// `(i, j, k)`, then `a.axes_is_within_of(lowers, uppers)[i] ==
+    /// false` — the conjunction on that axis short-circuits and rejects.
+    /// Pinned by
+    /// `resource_limits_axes_is_within_of_discriminates_single_axis_violation`.
+    /// The DIAGNOSTIC use case the projection's docstring names — the
+    /// single-bit `is_within_of` verdict cannot expose WHICH axis failed
+    /// or on WHICH direction, and the per-axis mask extracts the axis-
+    /// level diagnostic at ONE typed exit.
+    ///
+    /// `const fn` so a caller can pin a per-axis joint-bracket-membership
+    /// N-ary verdict at compile time.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariants 3 + 5 and §V.1 — same
+    /// three anchors as [`Self::is_within_of`] one PROJECTION-KIND axis
+    /// over, with the per-axis granularity baked in via the fixed-arity
+    /// `[bool; FIELD_COUNT]` return so a consumer cannot silently drop
+    /// an axis from the joint-bracket diagnostic.
+    ///
+    /// Frontier inspiration: Idris's `zipWith3 between` composed with a
+    /// `foldMap` over two `Vec` of `Vec n Nat` producing a `Vec n Bool`
+    /// — the two-slice bracket peer of the pair-level `zipWith3 between`
+    /// shape [`Self::axes_within`] cites, closing the bracket-
+    /// containment direction pair at the per-position vector level for
+    /// the N-ary joint bracket. APL / J's rank-lifted joint-bounds
+    /// membership operator producing a per-position bit array between a
+    /// candidate and two conformable arrays of bounds. Translation
+    /// through pleme-io primitives: a `const fn` returning `[bool; N]`
+    /// on the typed [`ResourceLimits`] algebra encoded as the per-index
+    /// intersection of two already-lifted per-axis N-ary bound-membership
+    /// masks.
+    #[must_use]
+    pub const fn axes_is_within_of(
+        self,
+        lowers: &[Self],
+        uppers: &[Self],
+    ) -> [bool; Self::FIELD_COUNT] {
+        let above_lowers = self.axes_is_upper_bound_of(lowers);
+        let below_uppers = self.axes_is_lower_bound_of(uppers);
+        [
+            above_lowers[0] && below_uppers[0],
+            above_lowers[1] && below_uppers[1],
+            above_lowers[2] && below_uppers[2],
+            above_lowers[3] && below_uppers[3],
+            above_lowers[4] && below_uppers[4],
+            above_lowers[5] && below_uppers[5],
+        ]
+    }
+
     /// Strict pointwise partial-order relation across the six ceilings —
     /// `self` is STRICTLY tighter than `other` iff `self.leq(other)` AND
     /// `self != other`. `a.lt(b)` holds iff every input the `a` posture
@@ -27484,6 +27777,419 @@ mod tests {
         const _: () = assert!(
             !UNBOUNDED_RESOURCE_LIMITS.is_strict_upper_bound_of(&[UNBOUNDED_RESOURCE_LIMITS])
         );
+    }
+
+    // ── ResourceLimits::is_within_of / ::axes_is_within_of ─────────────
+    // The N-ary bracket-membership predicate pair — closes the (pair-
+    // level, N-ary) row on the bracket-membership surface at both the
+    // single-bit verdict and the per-axis-mask projection, one CARDINALITY
+    // axis over from (within, axes_within). See the method docstrings
+    // for the (arity × projection-kind) grid position.
+
+    #[test]
+    fn resource_limits_is_within_of_both_empty_slices_is_vacuously_true() {
+        // Both empty conjunctions vacuous ⇒ outer && vacuous. Sibling
+        // of `within`'s extrema-bracket identity one CARDINALITY axis
+        // over — the widest possible joint bracket admits every input.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert!(
+                a.is_within_of(&[], &[]),
+                "both-empty must be vacuously true on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_within_of_empty_lowers_reduces_to_is_lower_bound_of() {
+        // Directional collapse — with no lower operands the upper-bound
+        // conjunct is vacuously true, so the joint bracket predicate
+        // collapses to N-ary lower-bound membership on `uppers`.
+        let candidates = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+        ];
+        let uppers: [&[ResourceLimits]; 3] = [
+            &[],
+            &[DEFAULT_RESOURCE_LIMITS],
+            &[DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS],
+        ];
+        for a in candidates {
+            for u in uppers {
+                assert_eq!(
+                    a.is_within_of(&[], u),
+                    a.is_lower_bound_of(u),
+                    "empty-lowers must reduce to is_lower_bound_of on {a:?} / {u:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_within_of_empty_uppers_reduces_to_is_upper_bound_of() {
+        // Dual directional collapse — with no upper operands the lower-
+        // bound conjunct is vacuously true.
+        let candidates = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+        ];
+        let lowers: [&[ResourceLimits]; 3] = [
+            &[],
+            &[EMPTY_RESOURCE_LIMITS],
+            &[EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS],
+        ];
+        for a in candidates {
+            for l in lowers {
+                assert_eq!(
+                    a.is_within_of(l, &[]),
+                    a.is_upper_bound_of(l),
+                    "empty-uppers must reduce to is_upper_bound_of on {a:?} / {l:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_within_of_single_element_pair_reduces_to_within() {
+        // (1 + 1)-input reduces to the pair-level bracket predicate. Peer
+        // of `is_lower_bound_of`'s single-element `→ leq` collapse one
+        // PRIMITIVE-KIND axis over.
+        let roster = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for l in roster {
+                for u in roster {
+                    assert_eq!(
+                        a.is_within_of(&[l], &[u]),
+                        a.within(l, u),
+                        "single-element-pair must collapse to within on {a:?} / [{l:?}] / [{u:?}]",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_within_of_lattice_extrema_is_true() {
+        // Widest non-empty joint bracket — admits every posture on every
+        // preset by the bounded-lattice pole axioms.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert!(
+                a.is_within_of(&[EMPTY_RESOURCE_LIMITS], &[UNBOUNDED_RESOURCE_LIMITS]),
+                "widest joint bracket must admit {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_within_of_self_is_reflexive() {
+        // Zero-width bracket at `a` itself — leq-reflexivity carries in
+        // both directions, so the predicate accepts on every preset.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert!(
+                a.is_within_of(&[a], &[a]),
+                "reflexive zero-width bracket must accept on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_within_of_holds_at_the_join_of_the_lowers_when_bracket_is_nonempty() {
+        // Meet/join witness — the join of the lowers is the tightest
+        // lower-side witness; when it also sits at-or-below every upper,
+        // the joint bracket admits at least that one witness.
+        let lowers = [EMPTY_RESOURCE_LIMITS, HAND_AUTHORED_MID_POSTURE];
+        let uppers = [UNBOUNDED_RESOURCE_LIMITS];
+        let join_of_lowers = ResourceLimits::most_permissive_of(&lowers);
+        // Bracket non-empty ⇔ join_of_lowers ≤ strictest_of(uppers).
+        let bracket_nonempty = join_of_lowers.leq(ResourceLimits::strictest_of(&uppers));
+        assert!(
+            bracket_nonempty,
+            "expected non-empty joint bracket in this fixture"
+        );
+        assert!(
+            join_of_lowers.is_within_of(&lowers, &uppers),
+            "the join of the lowers must sit inside a non-empty joint bracket",
+        );
+    }
+
+    #[test]
+    fn resource_limits_is_within_of_rejects_when_any_lower_is_above_self() {
+        // Any-lower rejection — a single lower strictly above `self`
+        // fires a false verdict via the upper-bound conjunct.
+        // MID has (7, 11, 13, 17, 19, 23); DEFAULT has larger ceilings
+        // on every axis, so DEFAULT is strictly above MID.
+        assert!(
+            !HAND_AUTHORED_MID_POSTURE
+                .is_within_of(&[DEFAULT_RESOURCE_LIMITS], &[UNBOUNDED_RESOURCE_LIMITS]),
+            "any-lower-above-self must reject",
+        );
+    }
+
+    #[test]
+    fn resource_limits_is_within_of_rejects_when_any_upper_is_below_self() {
+        // Dual any-upper rejection — a single upper strictly below `self`
+        // fires a false verdict via the lower-bound conjunct.
+        assert!(
+            !DEFAULT_RESOURCE_LIMITS
+                .is_within_of(&[EMPTY_RESOURCE_LIMITS], &[HAND_AUTHORED_MID_POSTURE]),
+            "any-upper-below-self must reject",
+        );
+    }
+
+    #[test]
+    fn resource_limits_is_within_of_composes_at_compile_time_via_const_fn() {
+        // Const-fn pin — the joint-bracket N-ary predicate is evaluable
+        // in const context.
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .is_within_of(&[EMPTY_RESOURCE_LIMITS], &[UNBOUNDED_RESOURCE_LIMITS],));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.is_within_of(&[], &[]));
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS
+            .is_within_of(&[DEFAULT_RESOURCE_LIMITS], &[UNBOUNDED_RESOURCE_LIMITS],));
+    }
+
+    // ── ResourceLimits::axes_is_within_of ──────────────────────────────
+
+    #[test]
+    fn resource_limits_axes_is_within_of_conjunction_agrees_with_is_within_of() {
+        // Fold-recovers-scalar contract — the per-axis mask folds via &&
+        // to the single-bit joint-bracket verdict.
+        let roster = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        let slices: [&[ResourceLimits]; 4] = [
+            &[],
+            &[EMPTY_RESOURCE_LIMITS],
+            &[EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS],
+            &[HAND_AUTHORED_MID_POSTURE, UNBOUNDED_RESOURCE_LIMITS],
+        ];
+        for a in roster {
+            for l in slices {
+                for u in slices {
+                    let mask = a.axes_is_within_of(l, u);
+                    let folded = mask.iter().all(|&b| b);
+                    assert_eq!(
+                        folded,
+                        a.is_within_of(l, u),
+                        "fold must recover is_within_of on {a:?} / {l:?} / {u:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_within_of_agrees_with_pointwise_field_conjunction() {
+        // Positional-alignment — cross-check against the direct pointwise
+        // field-comparison scaffold, guaranteeing the mask preserves the
+        // canonical index-to-axis mapping every SIBLING projection carries.
+        let roster = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        let slices: [&[ResourceLimits]; 3] = [
+            &[],
+            &[EMPTY_RESOURCE_LIMITS, HAND_AUTHORED_MID_POSTURE],
+            &[DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS],
+        ];
+        for a in roster {
+            for l in slices {
+                for u in slices {
+                    let a_fv = a.field_values();
+                    let mask = a.axes_is_within_of(l, u);
+                    for i in 0..ResourceLimits::FIELD_COUNT {
+                        let above = l.iter().all(|p| p.field_values()[i] <= a_fv[i]);
+                        let below = u.iter().all(|p| a_fv[i] <= p.field_values()[i]);
+                        assert_eq!(
+                            mask[i],
+                            above && below,
+                            "positional mismatch at axis {i} on {a:?} / {l:?} / {u:?}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_within_of_is_intersection_of_axes_is_bound_of_at_bounds() {
+        // Intersection-encoding — the per-axis N-ary peer of the
+        // single-bit `is_within_of == is_upper_bound_of &&
+        // is_lower_bound_of` law.
+        let roster = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        let slices: [&[ResourceLimits]; 3] = [
+            &[],
+            &[EMPTY_RESOURCE_LIMITS, HAND_AUTHORED_MID_POSTURE],
+            &[DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS],
+        ];
+        for a in roster {
+            for l in slices {
+                for u in slices {
+                    let mask = a.axes_is_within_of(l, u);
+                    let above = a.axes_is_upper_bound_of(l);
+                    let below = a.axes_is_lower_bound_of(u);
+                    for i in 0..ResourceLimits::FIELD_COUNT {
+                        assert_eq!(
+                            mask[i],
+                            above[i] && below[i],
+                            "intersection-encoding mismatch at axis {i} on {a:?} / {l:?} / {u:?}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_within_of_both_empty_slices_is_all_true() {
+        // Both empty conjunctions vacuous on every axis.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+        ] {
+            assert_eq!(
+                a.axes_is_within_of(&[], &[]),
+                [true; ResourceLimits::FIELD_COUNT],
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_within_of_single_element_pair_reduces_to_axes_within() {
+        // (1 + 1)-input per-axis N-ary bracket mask collapses to
+        // pair-level `axes_within` — the per-axis peer of the single-bit
+        // `is_within_of(&[l], &[u]) == within(l, u)` collapse.
+        let roster = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for l in roster {
+                for u in roster {
+                    assert_eq!(
+                        a.axes_is_within_of(&[l], &[u]),
+                        a.axes_within(l, u),
+                        "single-element-pair per-axis must collapse to axes_within on {a:?} / [{l:?}] / [{u:?}]",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_within_of_lattice_extrema_is_all_true() {
+        // Widest non-empty joint bracket admits every posture on every axis.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                a.axes_is_within_of(&[EMPTY_RESOURCE_LIMITS], &[UNBOUNDED_RESOURCE_LIMITS]),
+                [true; ResourceLimits::FIELD_COUNT],
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_within_of_of_self_is_reflexive() {
+        // Zero-width bracket at `a` itself accepts on every axis by
+        // reflexivity of axes_leq.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                a.axes_is_within_of(&[a], &[a]),
+                [true; ResourceLimits::FIELD_COUNT],
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_within_of_discriminates_single_axis_violation() {
+        // Discriminating fixture — construct a candidate that fails ONLY
+        // on axis 0 (max_expansion_depth) against a hand-tuned bracket.
+        // Candidate: MID (7, 11, 13, 17, 19, 23).
+        // Lowers: [EMPTY (0,…), (8, 0, 0, 0, 0, 0)] — the second lower is
+        //         strictly above MID ONLY on axis 0.
+        // Uppers: [UNBOUNDED, …] — no upper violation.
+        let axis_zero_violator = ResourceLimits {
+            max_expansion_depth: 8, // > MID's 7
+            max_cache_entries: 0,
+            max_expansion_size: 0,
+            max_macro_body_size: 0,
+            max_registered_macros: 0,
+            max_macro_arity: 0,
+        };
+        let mask = HAND_AUTHORED_MID_POSTURE.axes_is_within_of(
+            &[EMPTY_RESOURCE_LIMITS, axis_zero_violator],
+            &[UNBOUNDED_RESOURCE_LIMITS],
+        );
+        // Only axis 0 must be false; every other axis must be true.
+        assert!(!mask[0], "axis 0 must fire the single-axis violation");
+        for (i, &bit) in mask.iter().enumerate().skip(1) {
+            assert!(bit, "axis {i} must remain true");
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_within_of_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin.
+        const MASK_WIDEST: [bool; ResourceLimits::FIELD_COUNT] = DEFAULT_RESOURCE_LIMITS
+            .axes_is_within_of(&[EMPTY_RESOURCE_LIMITS], &[UNBOUNDED_RESOURCE_LIMITS]);
+        const _: () = assert!(MASK_WIDEST[0]);
+        const _: () = assert!(MASK_WIDEST[5]);
+        const MASK_EMPTY: [bool; ResourceLimits::FIELD_COUNT] =
+            EMPTY_RESOURCE_LIMITS.axes_is_within_of(&[], &[]);
+        const _: () = assert!(MASK_EMPTY[0]);
     }
 
     /// The full canonical preset roster the strict-order pins sweep

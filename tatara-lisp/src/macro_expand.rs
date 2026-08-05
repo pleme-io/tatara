@@ -1764,6 +1764,170 @@ impl ResourceLimits {
         ]
     }
 
+    /// Per-axis pointwise `!=` mask across the six ceilings — the ATOMIC
+    /// per-axis DIFFERENCE vector whose DISJUNCTION over the six positions
+    /// equals `self != other` (via the derived [`PartialEq::eq`]).
+    /// `a.axes_ne(b)[i]` is `true` iff the `i`-th ceiling of `a` differs
+    /// from the `i`-th ceiling of `b`; folding the six results through
+    /// `||` recovers `a != b` verbatim, so this projection DECOMPOSES the
+    /// single-bit inequality verdict into its six per-axis witnesses
+    /// without introducing new relation semantics past what the derived
+    /// `PartialEq::eq` already carries.
+    ///
+    /// The DE MORGAN COMPLEMENT corner CLOSING the (`axes_eq`, `axes_ne`)
+    /// EQUALITY-vs-DIFFERENCE 2-cell face at the per-axis-mask surface —
+    /// exactly the follow-up the [`Self::axes_eq`] docstring names
+    /// ("**Enables a per-axis DIFFERING mask at ONE composition**").
+    /// Where [`Self::axes_eq`] returns the six per-axis EQUALITY witnesses
+    /// (`true` iff the axis agrees), this returns the six per-axis
+    /// DIFFERENCE witnesses (`true` iff the axis disagrees) — the
+    /// per-index De Morgan complement of the equality mask.
+    ///
+    /// Sits on the SAME (equal, differing) 2-cell face at the per-axis-
+    /// mask surface as `(is_comparable, is_incomparable)` /
+    /// `(is_chain, is_antichain)` / `(is_monotone, is_non_monotone)` /
+    /// `(is_bottom / is_top, is_interior)` close at the single-bit
+    /// verdict surface one PROJECTION-KIND axis over — the substrate-
+    /// wide "2-cell face closed at the De Morgan complement corner"
+    /// pattern lifted onto the per-axis-mask surface for the equality
+    /// relation.
+    ///
+    /// Encoded as the per-index negation of `self.axes_eq(other)` — one
+    /// primitive delegation to [`Self::axes_eq`], so the equality-relation
+    /// encoding lives at exactly one implementation site (`axes_eq`'s
+    /// intersection of `axes_leq` and `axes_geq`), and a future
+    /// re-derivation of `axes_eq` propagates to `axes_ne` mechanically
+    /// rather than requiring a per-method fix-up. Mirrors [`Self::axes_geq`]'s
+    /// `other.axes_leq(self)` delegation one COMBINATOR-TRANSFORM axis
+    /// over — where `axes_geq` is the argument-flip of `axes_leq`, this
+    /// is the De Morgan complement of `axes_eq`; both encodings avoid a
+    /// second inline six-primitive cascade.
+    ///
+    /// **Disjunction-recovers-`!=` contract**: for every posture pair
+    /// `(a, b)`, folding `a.axes_ne(b)` through `||` over the six
+    /// positions equals `a != b` (via the derived `PartialEq::eq`) —
+    /// pinned by `resource_limits_axes_ne_disjunction_agrees_with_ne`
+    /// on the canonical preset roster (EMPTY / DEFAULT / UNBOUNDED /
+    /// MID / OTHER). The DUAL of the analogous conjunction-recovers-`==`
+    /// contract on [`Self::axes_eq`] one COMBINATOR-TRANSFORM axis over
+    /// (from `&&`-of-`==` to `||`-of-`!=`), and the DUAL of the
+    /// conjunction-recovers-`leq` / conjunction-recovers-`geq` contracts
+    /// on the two direction-signed masks one PROJECTION-KIND axis over.
+    ///
+    /// **Positional-alignment contract**: for every posture pair
+    /// `(a, b)` and every index `i in 0..FIELD_COUNT`,
+    /// `a.axes_ne(b)[i] == (a.field_values()[i] != b.field_values()[i])`
+    /// — pinned by
+    /// `resource_limits_axes_ne_agrees_with_pointwise_field_comparison`
+    /// via cross-reference with [`Self::field_values`] on the same
+    /// discriminating roster the three SIBLING masks use. Guarantees
+    /// the per-axis mask preserves the same canonical index-to-axis
+    /// mapping the equality and direction-signed peers carry.
+    ///
+    /// **De Morgan complement contract**: for every posture pair
+    /// `(a, b)` and every index `i`, `a.axes_ne(b)[i] ==
+    /// !a.axes_eq(b)[i]` — the per-axis-mask peer of the single-bit De
+    /// Morgan complement law `a != b ⇔ !(a == b)`. Pinned by
+    /// `resource_limits_axes_ne_is_de_morgan_complement_of_axes_eq`
+    /// across the 25-pair matrix, so the complement encoding is verified
+    /// at the per-axis mask level, not merely at the disjunction-
+    /// recovered scalar.
+    ///
+    /// **Symmetry contract**: `a.axes_ne(b) == b.axes_ne(a)` for every
+    /// posture pair — per-axis `!=` is symmetric on every field, and
+    /// the complement encoding preserves symmetry from
+    /// [`Self::axes_eq`]. Pinned by `resource_limits_axes_ne_is_symmetric`
+    /// — the per-axis-mask peer of the derived `PartialEq::ne` symmetry
+    /// one PROJECTION-KIND axis over. Sibling of the symmetry pin on
+    /// [`Self::axes_eq`] under the De Morgan complement.
+    ///
+    /// **Irreflexivity contract**: `a.axes_ne(a) == [false; FIELD_COUNT]`
+    /// for every posture — per-axis `!=` is irreflexive on every field.
+    /// Pinned by `resource_limits_axes_ne_is_irreflexive_on_every_axis`
+    /// on each of the three shipped presets via const-fn evaluability.
+    /// The DUAL of the reflexivity pin on [`Self::axes_eq`] under the
+    /// De Morgan complement — where equality is reflexive on every
+    /// axis, difference is irreflexive on every axis.
+    ///
+    /// **Preset pole pins**: the (bottom, top) bounded-lattice
+    /// preset-pair carries EXHAUSTIVE per-axis verdicts on the
+    /// projection — `EMPTY.axes_ne(UNBOUNDED) == [true; FIELD_COUNT]`
+    /// (every `0` differs from every [`usize::MAX`] on every axis);
+    /// `EMPTY.axes_ne(EMPTY) == [false; FIELD_COUNT]` and
+    /// `UNBOUNDED.axes_ne(UNBOUNDED) == [false; FIELD_COUNT]`
+    /// (irreflexivity on every axis at each pole). Mirrors the
+    /// (bottom, top) × (leq, geq, eq) 2×3 pole face pinned on the
+    /// three sibling masks one PROJECTION-KIND axis over, with every
+    /// verdict inverted per the De Morgan complement.
+    ///
+    /// `const fn` so a caller can pin a per-axis verdict at compile
+    /// time (`const _: [bool; ResourceLimits::FIELD_COUNT] =
+    /// EMPTY_RESOURCE_LIMITS.axes_ne(UNBOUNDED_RESOURCE_LIMITS);`) —
+    /// the const-fn peer of the const-eval evaluability every other
+    /// primitive on the [`ResourceLimits`] algebra carries. `Copy` on
+    /// [`ResourceLimits`] lets the const-fn body pass `self` and
+    /// `other` by value into the delegated `axes_eq` call without an
+    /// explicit `.clone()` (which const-fn would not permit anyway),
+    /// and `bool` is trivially `Copy` in the array element position.
+    ///
+    /// **Diagnostic emission use case**: a consumer that decides
+    /// `a != b` and wants to name the DIFFERING axes zips
+    /// [`Self::FIELD_NAMES`] against `a.axes_ne(b)` and filters the
+    /// `true` entries — an OBSERVABILITY surface for the inequality
+    /// verdict the single-bit `!=` verdict does not expose, and the
+    /// exact "which axes disagree" diagnostic [`Self::axes_leq`]'s
+    /// docstring names as a follow-up composition. Pre-lift, a
+    /// consumer wanting per-axis inequality verdicts either (a)
+    /// composed six independent `a.field_values()[i] !=
+    /// b.field_values()[i]` primitives at the call site — the same
+    /// six-inline-primitive cascade the `..Default::default()`-free
+    /// literal on the bundled struct exists to close, and a copy-paste
+    /// that dropped ONE of the six comparisons silently admitted "no
+    /// difference" on that axis when the type system did not gate the
+    /// drop — or (b) called the derived `PartialEq::ne` and lost the
+    /// per-axis granularity entirely (a `true` verdict with no witness
+    /// to WHICH axes differ). Post-lift the per-axis difference mask
+    /// binds at ONE typed `const fn` on the algebra, encoded as the De
+    /// Morgan complement of the shipped equality mask.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-posture-pair projection into the six-bool difference vector
+    /// is itself a typed named exit rather than a per-consumer inline
+    /// six-primitive cascade OR a single-bit `PartialEq::ne` verdict
+    /// that discards the per-axis witness. THEORY.md §II.1 invariant 5
+    /// — composition preserves proofs; the pairwise inequality relation
+    /// on two preset-carried resource proofs is itself decomposed into
+    /// its six per-axis witnesses at TYPE level as the STRUCTURAL
+    /// COMPLEMENT of the equality mask, so consumers reasoning about
+    /// WHICH axes carry the difference bind through ONE typed primitive
+    /// rather than re-running `!=` on each or dropping to a coarse
+    /// single-bit answer. THEORY.md §V.1 — knowable platform; the
+    /// per-axis pointwise `!=` mask becomes a TYPE-level operation on
+    /// the posture algebra rather than a per-consumer field-access
+    /// cascade — with the per-axis granularity baked in so the
+    /// consumer cannot silently drop an axis from the diagnostic (the
+    /// array's fixed arity forces every axis to appear).
+    ///
+    /// Frontier inspiration: Idris's `zipWith (/=)` over two `Vec n
+    /// Nat` producing a `Vec n Bool` — the De Morgan COMPLEMENT peer
+    /// of the `zipWith (==)` shape [`Self::axes_eq`] cites, closing
+    /// the per-axis (equal, differing) 2-cell face at the per-position
+    /// vector level. APL / J's rank-lifted `≠` operator producing a
+    /// per-position bit array between two conformable arrays — the
+    /// SAME lifted-relation shape lifted onto typed structs.
+    /// Translation through pleme-io primitives: a `const fn` returning
+    /// a `[bool; N]` fixed-size array on the typed [`ResourceLimits`]
+    /// algebra encoded as the per-index De Morgan complement of the
+    /// already-lifted equality mask, rather than a runtime vector
+    /// operation or a fourth inline six-primitive cascade.
+    #[must_use]
+    pub const fn axes_ne(self, other: Self) -> [bool; Self::FIELD_COUNT] {
+        let equal = self.axes_eq(other);
+        [
+            !equal[0], !equal[1], !equal[2], !equal[3], !equal[4], !equal[5],
+        ]
+    }
+
     /// Pointwise-`min` fold across a slice of postures — the STRICTEST
     /// posture whose admissible input set is the intersection of every
     /// operand's admissible input sets. `ResourceLimits::strictest_of(&[a,
@@ -21547,6 +21711,265 @@ mod tests {
         const _: () = assert!(!MASK[3]);
         const _: () = assert!(!MASK[4]);
         const _: () = assert!(!MASK[5]);
+    }
+
+    #[test]
+    fn resource_limits_axes_ne_disjunction_agrees_with_ne() {
+        // Fold-recovers-scalar pin — for every posture pair `(a, b)`,
+        // folding `a.axes_ne(b)` through `||` over the six positions
+        // equals `a != b` via the derived `PartialEq::eq`. Verifies the
+        // decomposition-composition round-trip: the per-axis difference
+        // mask is a strictly-finer projection of the single-bit
+        // inequality verdict, so re-composing it through `||` recovers
+        // the single-bit exactly. The DUAL of
+        // `resource_limits_axes_eq_conjunction_agrees_with_eq` under the
+        // De Morgan complement — the `&&`-of-`==` recovery on the
+        // equality mask becomes the `||`-of-`!=` recovery on the
+        // difference mask one COMBINATOR-TRANSFORM axis over.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let mask = a.axes_ne(b);
+                let mut folded = false;
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    folded = folded || mask[i];
+                    i += 1;
+                }
+                assert_eq!(
+                    folded,
+                    a != b,
+                    "axes_ne({a:?}, {b:?}) folded through || must equal !=",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_ne_agrees_with_pointwise_field_comparison() {
+        // Positional-alignment pin — for every posture pair `(a, b)` and
+        // every index `i`, `a.axes_ne(b)[i] == (a.field_values()[i] !=
+        // b.field_values()[i])`. Cross-references the per-axis mask
+        // with the canonical `field_values()` projection on the same
+        // discriminating roster the three SIBLING masks
+        // (`axes_leq`/`axes_geq`/`axes_eq`) use, guaranteeing the
+        // per-axis mask preserves the same canonical index-to-axis
+        // mapping. Symmetric peer of
+        // `resource_limits_axes_eq_agrees_with_pointwise_field_comparison`
+        // one COMBINATOR-TRANSFORM axis over.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let mask = a.axes_ne(b);
+                let av = a.field_values();
+                let bv = b.field_values();
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    assert_eq!(
+                        mask[i],
+                        av[i] != bv[i],
+                        "axes_ne({a:?}, {b:?})[{i}] must equal field_values comparison",
+                    );
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_ne_is_de_morgan_complement_of_axes_eq() {
+        // De Morgan complement pin — for every posture pair `(a, b)`
+        // and every index `i`, `a.axes_ne(b)[i] == !a.axes_eq(b)[i]`.
+        // The per-axis MASK peer of the single-bit De Morgan complement
+        // law `a != b ⇔ !(a == b)`. Verifies the complement encoding at
+        // the per-axis mask level — not merely at the disjunction-
+        // recovered scalar, so a future re-derivation of `axes_ne` that
+        // broke the complement on any single axis fires this pin at the
+        // offending axis before the scalar disjunction masks it.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let ne = a.axes_ne(b);
+                let eq = a.axes_eq(b);
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    assert_eq!(
+                        ne[i], !eq[i],
+                        "axes_ne({a:?}, {b:?})[{i}] must equal !axes_eq[{i}]",
+                    );
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_ne_is_symmetric() {
+        // Symmetry pin — `a.axes_ne(b) == b.axes_ne(a)` for every
+        // posture pair. Per-axis `!=` is symmetric on every field, and
+        // the De Morgan complement encoding preserves symmetry from
+        // `axes_eq` (which is itself symmetric via the argument-flip
+        // delegation on `axes_geq`). The per-axis-mask peer of the
+        // derived `PartialEq::ne` symmetry one PROJECTION-KIND axis
+        // over — this SYMMETRIC mask is INVARIANT under argument flip,
+        // exactly as `axes_eq` is one COMBINATOR-TRANSFORM axis over.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let forward = a.axes_ne(b);
+                let backward = b.axes_ne(a);
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    assert_eq!(
+                        forward[i], backward[i],
+                        "axes_ne({a:?}, {b:?})[{i}] must equal axes_ne({b:?}, {a:?})[{i}]",
+                    );
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_ne_of_empty_and_unbounded_is_all_true() {
+        // Pole-diagonal preset pin — [`EMPTY_RESOURCE_LIMITS`]
+        // (bounded-lattice bottom, every axis `0`) versus
+        // [`UNBOUNDED_RESOURCE_LIMITS`] (bounded-lattice top, every
+        // axis [`usize::MAX`]). Every per-axis verdict is `true`
+        // (`0 != usize::MAX` holds on every axis), so the mask is
+        // exhaustively true — the pole-diagonal edge case pinned at
+        // compile time via the const-fn evaluability of the projection.
+        // The DUAL of `resource_limits_axes_eq_of_empty_and_unbounded_is_all_false`
+        // under the De Morgan complement — every axis that fails
+        // equality on the pole diagonal succeeds difference at the same
+        // index.
+        const MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            EMPTY_RESOURCE_LIMITS.axes_ne(UNBOUNDED_RESOURCE_LIMITS);
+        const _: () = assert!(MASK[0]);
+        const _: () = assert!(MASK[1]);
+        const _: () = assert!(MASK[2]);
+        const _: () = assert!(MASK[3]);
+        const _: () = assert!(MASK[4]);
+        const _: () = assert!(MASK[5]);
+    }
+
+    #[test]
+    fn resource_limits_axes_ne_is_irreflexive_on_every_axis() {
+        // Irreflexivity pin — `a.axes_ne(a)` returns `[false;
+        // FIELD_COUNT]` on every posture, since `a.max_X != a.max_X`
+        // fails on every axis by [`usize`]'s reflexivity of `==`. The
+        // DUAL of `resource_limits_axes_eq_is_reflexive_on_every_axis`
+        // under the De Morgan complement — where equality is reflexive
+        // on every axis, difference is irreflexive on every axis.
+        // Compile-time evaluable on each of the three shipped presets
+        // via const-fn.
+        const EMPTY_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            EMPTY_RESOURCE_LIMITS.axes_ne(EMPTY_RESOURCE_LIMITS);
+        const _: () = assert!(
+            !EMPTY_MASK[0]
+                && !EMPTY_MASK[1]
+                && !EMPTY_MASK[2]
+                && !EMPTY_MASK[3]
+                && !EMPTY_MASK[4]
+                && !EMPTY_MASK[5]
+        );
+        const DEFAULT_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            DEFAULT_RESOURCE_LIMITS.axes_ne(DEFAULT_RESOURCE_LIMITS);
+        const _: () = assert!(
+            !DEFAULT_MASK[0]
+                && !DEFAULT_MASK[1]
+                && !DEFAULT_MASK[2]
+                && !DEFAULT_MASK[3]
+                && !DEFAULT_MASK[4]
+                && !DEFAULT_MASK[5]
+        );
+        const UNBOUNDED_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            UNBOUNDED_RESOURCE_LIMITS.axes_ne(UNBOUNDED_RESOURCE_LIMITS);
+        const _: () = assert!(
+            !UNBOUNDED_MASK[0]
+                && !UNBOUNDED_MASK[1]
+                && !UNBOUNDED_MASK[2]
+                && !UNBOUNDED_MASK[3]
+                && !UNBOUNDED_MASK[4]
+                && !UNBOUNDED_MASK[5]
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_ne_discriminates_single_axis_difference() {
+        // Diagnostic-emission pin — when `a != b` returns `true` because
+        // ONE axis differs, `a.axes_ne(b)` returns a mask whose SINGLE
+        // `true` entry names the differing axis by index. The offending
+        // axis here is `max_expansion_depth` (index 0): `b` sits one
+        // above `EMPTY_RESOURCE_LIMITS` on that axis alone, so
+        // `EMPTY_RESOURCE_LIMITS.axes_ne(b)` returns `true` at index 0
+        // (where `0 != 1` holds) and `false` at every other axis (where
+        // `0 != 0` fails trivially). The DUAL of
+        // `resource_limits_axes_eq_discriminates_single_axis_difference`
+        // under the De Morgan complement — the same observability use
+        // case lifted onto the difference mask, where the derived
+        // `PartialEq::ne` would answer `true` without a witness to
+        // WHICH axes differ.
+        let b = ResourceLimits {
+            max_expansion_depth: 1,
+            ..EMPTY_RESOURCE_LIMITS
+        };
+        let mask = EMPTY_RESOURCE_LIMITS.axes_ne(b);
+        assert!(mask[0], "max_expansion_depth axis must be the true entry");
+        assert!(!mask[1]);
+        assert!(!mask[2]);
+        assert!(!mask[3]);
+        assert!(!mask[4]);
+        assert!(!mask[5]);
+        // Cross-check: the derived-`PartialEq::ne` single-bit verdict
+        // is `true`, and the disjunction of the mask agrees.
+        assert!(EMPTY_RESOURCE_LIMITS != b);
+    }
+
+    #[test]
+    fn resource_limits_axes_ne_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the per-axis mask is evaluable in const
+        // context, so a caller can pin a preset-difference-vector
+        // identity at compile time. The DUAL of
+        // `resource_limits_axes_eq_evaluates_at_compile_time_via_const_fn`
+        // under the De Morgan complement: where that test pins the
+        // (default, unbounded) preset pair as `[false; 6]` on the
+        // equality mask, this pins the same pair as `[true; 6]` on the
+        // difference mask — every field of DEFAULT is strictly less
+        // than [`usize::MAX`], so every "default != unbounded" per-axis
+        // entry is `true`.
+        const MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            DEFAULT_RESOURCE_LIMITS.axes_ne(UNBOUNDED_RESOURCE_LIMITS);
+        const _: () = assert!(MASK[0]);
+        const _: () = assert!(MASK[1]);
+        const _: () = assert!(MASK[2]);
+        const _: () = assert!(MASK[3]);
+        const _: () = assert!(MASK[4]);
+        const _: () = assert!(MASK[5]);
     }
 
     // ── EMPTY_RESOURCE_LIMITS — bounded-lattice bottom preset ─────────

@@ -3436,6 +3436,205 @@ impl ResourceLimits {
         result
     }
 
+    /// Per-axis boolean `geq`-conjunction across a slice of postures —
+    /// the ATOMIC per-axis N-ary upper-bound vector whose CONJUNCTION
+    /// over the six positions equals [`Self::is_upper_bound_of`].
+    /// `a.axes_is_upper_bound_of(&[b, c, d])[i]` is `true` iff the
+    /// `i`-th ceiling of `a` sits at-or-above the `i`-th ceiling of
+    /// EVERY operand in the slice (`b.field_values()[i] <= a.field_values()[i]
+    /// && c.field_values()[i] <= a.field_values()[i] && d.field_values()[i]
+    /// <= a.field_values()[i]`); folding the six results through `&&`
+    /// recovers `a.is_upper_bound_of(&[b, c, d])` verbatim, so this
+    /// projection DECOMPOSES the single-bit N-ary upper-bound verdict
+    /// into its six per-axis witnesses without introducing new relation
+    /// semantics past what [`Self::is_upper_bound_of`] already carries.
+    ///
+    /// The DUAL per-axis-mask N-ary predicate of
+    /// [`Self::axes_is_lower_bound_of`] one COMBINATOR-DIRECTION axis
+    /// over, AND the per-axis-MASK peer of [`Self::is_upper_bound_of`]
+    /// one PROJECTION-KIND axis over on the N-ary-predicate surface,
+    /// AND the N-ary peer of [`Self::axes_geq`] one CARDINALITY axis
+    /// over on the per-axis-mask relation surface. Three peers cross
+    /// the same cell on the (arity × projection-kind × direction) grid:
+    /// EXHAUSTIVELY CLOSING the (`is_lower_bound_of`, `is_upper_bound_of`,
+    /// `axes_is_lower_bound_of`, `axes_is_upper_bound_of`) 2×2 face on
+    /// the (direction × projection-kind) N-ary-predicate surface —
+    /// every N-ary-bound-membership verdict the substrate carries at
+    /// the single-bit level now carries a per-axis-mask peer at the
+    /// atomic level in BOTH directions. Mirrors how the pair-level
+    /// (`leq`, `geq`, `axes_leq`, `axes_geq`) quartet closes the SAME
+    /// 2×2 face one CARDINALITY axis under.
+    ///
+    /// Encoded as a per-slice-element per-axis conjunction over the
+    /// shipped [`Self::axes_geq`] mask — one primitive delegation per
+    /// operand to the pair-level per-axis-mask primitive, then a per-
+    /// index `&&`-fold across the slice. Mirrors [`Self::axes_is_lower_bound_of`]'s
+    /// per-operand `self.axes_leq(postures[j])` walk one COMBINATOR-
+    /// DIRECTION axis over — the same slice-walk shape that closes the
+    /// LOWER-BOUND per-axis-mask N-ary verdict closes the UPPER-BOUND
+    /// per-axis-mask N-ary verdict, with the direction supplied by the
+    /// pair-level primitive rather than an inline argument flip.
+    /// Because `axes_geq` itself delegates to `axes_leq` via argument
+    /// flip (`other.axes_leq(self)`), a future re-derivation of
+    /// `axes_leq` propagates transparently into this method through
+    /// TWO structural compositions of the shipped pair-level primitive
+    /// without a per-method fix-up.
+    ///
+    /// **Conjunction-recovers-`is_upper_bound_of` contract**: for every
+    /// posture `a` and slice `postures`, folding
+    /// `a.axes_is_upper_bound_of(postures)` through `&&` over the six
+    /// positions equals `a.is_upper_bound_of(postures)` — pinned by
+    /// `resource_limits_axes_is_upper_bound_of_conjunction_agrees_with_is_upper_bound_of`
+    /// on the canonical preset roster across a discriminating slice
+    /// matrix (empty, singleton, ordered pair, incomparable pair). The
+    /// per-axis-mask peer of the analogous conjunction-recovers-`geq`
+    /// contract on [`Self::axes_geq`] one CARDINALITY axis over, and
+    /// the DUAL of the conjunction-recovers-`is_lower_bound_of`
+    /// contract on [`Self::axes_is_lower_bound_of`] one COMBINATOR-
+    /// DIRECTION axis over — the atomic-recovers-composed law scales
+    /// from pair to slice with the same fold shape in both directions.
+    ///
+    /// **Positional-alignment contract**: for every posture `a`, slice
+    /// `postures`, and index `i in 0..FIELD_COUNT`,
+    /// `a.axes_is_upper_bound_of(postures)[i] == postures.iter().all(|p|
+    /// p.field_values()[i] <= a.field_values()[i])` — pinned by
+    /// `resource_limits_axes_is_upper_bound_of_agrees_with_pointwise_field_conjunction`
+    /// via cross-reference with [`Self::field_values`] on a
+    /// discriminating slice. Guarantees the per-axis mask preserves the
+    /// same canonical index-to-axis mapping the ten SIBLING projections
+    /// (`axes_leq`, `axes_geq`, `axes_lt`, `axes_gt`, `axes_eq`,
+    /// `axes_ne`, `axes_within`, `axes_cmp`, `axes_is_lower_bound_of`)
+    /// carry — the tenth per-axis-mask projection joining the family,
+    /// and the peer to `axes_is_lower_bound_of` at the N-ary-predicate
+    /// cardinality axis.
+    ///
+    /// **Empty-slice vacuous truth**: `a.axes_is_upper_bound_of(&[]) ==
+    /// [true; FIELD_COUNT]` for every posture — the empty conjunction
+    /// is vacuously true on every axis. The per-axis peer of
+    /// `is_upper_bound_of(&[]) == true` one PROJECTION-KIND axis over,
+    /// mirroring the algebraic identity that the empty aggregate
+    /// binds structurally to the identity element of the underlying
+    /// operation (`&&` here). Pinned by
+    /// `resource_limits_axes_is_upper_bound_of_empty_slice_is_all_true`.
+    ///
+    /// **Single-element identity**: `a.axes_is_upper_bound_of(&[b]) ==
+    /// a.axes_geq(b)` — the 1-input per-axis mask reduces to the
+    /// pair-level [`Self::axes_geq`] mask, mirroring
+    /// `is_upper_bound_of(&[b]) == b.leq(a)` (which equals `a.geq(b)`)
+    /// at the per-axis-mask surface. Pinned by
+    /// `resource_limits_axes_is_upper_bound_of_single_element_reduces_to_axes_geq`.
+    ///
+    /// **Join witness**: `most_permissive_of(postures)
+    /// .axes_is_upper_bound_of(postures) == [true; FIELD_COUNT]` for
+    /// every slice — the N-ary join is always an upper bound of the
+    /// slice it aggregates AT EVERY AXIS. The per-axis peer of
+    /// `is_upper_bound_of_holds_for_the_join_of_the_slice` one
+    /// PROJECTION-KIND axis over, and the DUAL of the meet-witness pin
+    /// on [`Self::axes_is_lower_bound_of`] one COMBINATOR-DIRECTION
+    /// axis over. Pinned by
+    /// `resource_limits_axes_is_upper_bound_of_holds_for_the_join_of_the_slice_at_every_axis`.
+    ///
+    /// **Universal-top witness**: `UNBOUNDED_RESOURCE_LIMITS
+    /// .axes_is_upper_bound_of(postures) == [true; FIELD_COUNT]` for
+    /// every slice — the lattice top is a common upper bound of every
+    /// set AT EVERY AXIS, since `x <= usize::MAX` holds for every
+    /// `usize x` per-axis by the lattice-top axiom. Pinned by
+    /// `resource_limits_axes_is_upper_bound_of_of_unbounded_is_universal_upper_bound_per_axis`.
+    /// The DUAL of the universal-bottom pin on
+    /// [`Self::axes_is_lower_bound_of`] one COMBINATOR-DIRECTION axis
+    /// over.
+    ///
+    /// **Any-operand rejection per axis**: if
+    /// `postures[j].field_values()[i] > a.field_values()[i]` for any
+    /// `(i, j)` pair, then `a.axes_is_upper_bound_of(postures)[i] ==
+    /// false` — the conjunction on that axis short-circuits and
+    /// rejects. Pinned by
+    /// `resource_limits_axes_is_upper_bound_of_discriminates_single_axis_violation`.
+    /// The DIAGNOSTIC use case the projection's docstring names — the
+    /// single-bit `is_upper_bound_of` verdict cannot expose WHICH axis
+    /// violated across WHICH operand, and the per-axis mask extracts
+    /// the axis-level diagnostic at ONE typed primitive (the operand-
+    /// level diagnostic still requires a per-operand walk, but the
+    /// per-axis granularity narrows the failing subset by axis at ONE
+    /// typed exit).
+    ///
+    /// `const fn` so a caller can pin a per-axis N-ary-upper-bound
+    /// verdict at compile time (`const _: [bool;
+    /// ResourceLimits::FIELD_COUNT] = UNBOUNDED_RESOURCE_LIMITS
+    /// .axes_is_upper_bound_of(&[DEFAULT_RESOURCE_LIMITS,
+    /// EMPTY_RESOURCE_LIMITS]);`) — the const-fn peer of the
+    /// const-eval evaluability every other primitive on the
+    /// [`ResourceLimits`] algebra carries. `Copy` on
+    /// [`ResourceLimits`] lets the const-fn body pass `self` and each
+    /// slice element by value into the delegated `axes_geq` call
+    /// without an explicit `.clone()` (which const-fn would not permit
+    /// anyway), and `bool` is trivially `Copy` in the array element
+    /// position — the per-index `&&` mutation on the seed array is a
+    /// stable const-fn operation on `[bool; N]`.
+    ///
+    /// Pre-lift, a consumer wanting per-axis N-ary-upper-bound verdicts
+    /// either (a) composed the six-primitive scaffolding at the call
+    /// site as six N-ary conjunctions
+    /// (`postures.iter().all(|p| p.field_values()[i] <= a.field_values()[i])`
+    /// per axis) — the same six-inline-primitive cascade the pair-level
+    /// axes_* family lifts one CARDINALITY axis over — or (b) called
+    /// [`Self::is_upper_bound_of`] and lost the per-axis granularity
+    /// the projection preserves. Post-lift the per-axis N-ary verdict
+    /// binds at ONE typed method whose signature carries the direction
+    /// (`self` is the upper bound) into the type system rather than the
+    /// consumer composing the per-axis N-ary conjunction at every call
+    /// site.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-posture-N-ary projection into the six-bool upper-bound
+    /// vector is itself a typed named exit rather than a per-consumer
+    /// inline six-primitive N-ary conjunction cascade. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the N-ary upper-
+    /// bound predicate on (1 + N) preset-carried resource proofs is
+    /// decomposed into its six per-axis witnesses at TYPE level, so
+    /// consumers reasoning about WHICH axes carry the upper-bound
+    /// membership bind through ONE typed primitive rather than
+    /// re-running N-ary conjunctions on each axis. THEORY.md §V.1 —
+    /// knowable platform; the per-axis N-ary upper-bound mask becomes
+    /// a TYPE-level operation on the posture algebra rather than a
+    /// per-consumer field-access cascade — with the per-axis
+    /// granularity baked in so the consumer cannot silently drop an
+    /// axis from the diagnostic (the array's fixed arity forces every
+    /// axis to appear).
+    ///
+    /// Frontier inspiration: Idris's `zipWith` composed with a
+    /// `foldMap` over a `Vec` of `Vec n Nat` producing a `Vec n Bool` —
+    /// the per-position N-ary conjunction the (per-axis mask × N-ary
+    /// aggregation) product cell binds at. APL / J's rank-lifted `∧/`
+    /// reduction across the leading axis of a `k × n` array producing
+    /// a length-`n` bit array with the ordering-comparator supplied by
+    /// the dual direction — the SAME lifted-N-ary-conjunction shape
+    /// lifted onto typed structs in the UPPER-BOUND direction. Common
+    /// Lisp's `every` combinator specialized per-slot to produce a
+    /// per-slot conjunction across a list of instances via the dual
+    /// direction of the pointwise `<=` — the frontier reflection-based
+    /// peer of this typed-Rust const-fn compile-time lift. Translation
+    /// through pleme-io primitives: a `const fn` returning a `[bool; N]`
+    /// fixed-size array on the typed [`ResourceLimits`] algebra encoded
+    /// as a per-index conjunction of already-lifted `axes_geq` masks,
+    /// rather than a runtime vector operation or a second inline
+    /// six-primitive N-ary cascade.
+    #[must_use]
+    pub const fn axes_is_upper_bound_of(self, postures: &[Self]) -> [bool; Self::FIELD_COUNT] {
+        let mut result = [true; Self::FIELD_COUNT];
+        let mut j = 0;
+        while j < postures.len() {
+            let mask = self.axes_geq(postures[j]);
+            let mut i = 0;
+            while i < Self::FIELD_COUNT {
+                result[i] = result[i] && mask[i];
+                i += 1;
+            }
+            j += 1;
+        }
+        result
+    }
+
     /// Boolean `lt`-conjunction across a slice of postures — `self` sits
     /// STRICTLY below every operand in `postures`.
     /// `a.is_strict_lower_bound_of(&[b, c, d])` holds iff
@@ -25846,6 +26045,302 @@ mod tests {
         // per-axis N-ary vector at their intersection.
         const MASK: [bool; ResourceLimits::FIELD_COUNT] = DEFAULT_RESOURCE_LIMITS
             .axes_is_lower_bound_of(&[UNBOUNDED_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]);
+        const _: () = assert!(MASK[0]);
+        const _: () = assert!(MASK[1]);
+        const _: () = assert!(MASK[2]);
+        const _: () = assert!(MASK[3]);
+        const _: () = assert!(MASK[4]);
+        const _: () = assert!(MASK[5]);
+    }
+
+    // ── ResourceLimits::axes_is_upper_bound_of ───────────────────────────────
+    //   Per-axis-MASK peer of `is_upper_bound_of` one PROJECTION-KIND axis
+    //   over, DUAL of `axes_is_lower_bound_of` one COMBINATOR-DIRECTION
+    //   axis over, AND N-ary peer of `axes_geq` one CARDINALITY axis over
+    //   — EXHAUSTIVELY CLOSING the (`is_lower_bound_of`, `is_upper_bound_of`,
+    //   `axes_is_lower_bound_of`, `axes_is_upper_bound_of`) 2×2 face on
+    //   the (direction × projection-kind) N-ary-predicate surface.
+
+    #[test]
+    fn resource_limits_axes_is_upper_bound_of_conjunction_agrees_with_is_upper_bound_of() {
+        // Conjunction-recovers-`is_upper_bound_of` pin — folding
+        // `a.axes_is_upper_bound_of(slice)` through `&&` over the six
+        // positions equals `a.is_upper_bound_of(slice)`. The per-axis-
+        // mask peer of `axes_geq_conjunction_agrees_with_geq` one
+        // CARDINALITY axis over, AND the DUAL of
+        // `axes_is_lower_bound_of_conjunction_agrees_with_is_lower_bound_of`
+        // one COMBINATOR-DIRECTION axis over — the atomic-recovers-
+        // composed law scales from pair to slice with the same fold
+        // shape in both directions.
+        //
+        // Iterates the canonical preset roster (EMPTY / DEFAULT /
+        // UNBOUNDED / MID / OTHER) as the `self` candidate, against a
+        // discriminating slice matrix (empty, singleton, ordered pair,
+        // incomparable pair) so every N-ary-verdict shape (accept /
+        // reject / vacuous) gets exercised at both the per-axis-mask
+        // and single-bit verdict surfaces.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        let slices: [&[ResourceLimits]; 5] = [
+            &[],
+            &[DEFAULT_RESOURCE_LIMITS],
+            &[EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS],
+            &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE],
+            &[
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                HAND_AUTHORED_MID_POSTURE,
+            ],
+        ];
+        for a in roster {
+            for slice in slices {
+                let mask = a.axes_is_upper_bound_of(slice);
+                let mut folded = true;
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    folded = folded && mask[i];
+                    i += 1;
+                }
+                assert_eq!(
+                    folded,
+                    a.is_upper_bound_of(slice),
+                    "axes_is_upper_bound_of({a:?}, {slice:?}) folded through && must equal is_upper_bound_of"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_upper_bound_of_agrees_with_pointwise_field_conjunction() {
+        // Positional-alignment pin — for every posture `a`, slice
+        // `postures`, and index `i`, `a.axes_is_upper_bound_of(postures)[i]`
+        // equals the pointwise `all(|p| p.field_values()[i] <=
+        // a.field_values()[i])`. Cross-references the per-axis mask
+        // against the SIBLING `field_values` projection to pin the
+        // canonical index-to-axis mapping — a struct-field reorder that
+        // broke the alignment on either projection fires this pin at
+        // the offending axis. Exercises the same 5-slice matrix as the
+        // conjunction test above so every ordered (posture, slice) pair
+        // is covered.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        let slices: [&[ResourceLimits]; 5] = [
+            &[],
+            &[DEFAULT_RESOURCE_LIMITS],
+            &[EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS],
+            &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE],
+            &[
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                HAND_AUTHORED_MID_POSTURE,
+            ],
+        ];
+        for a in roster {
+            for slice in slices {
+                let mask = a.axes_is_upper_bound_of(slice);
+                let av = a.field_values();
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    let mut expected = true;
+                    for p in slice {
+                        expected = expected && (p.field_values()[i] <= av[i]);
+                    }
+                    assert_eq!(
+                        mask[i],
+                        expected,
+                        "axes_is_upper_bound_of({a:?}, {slice:?})[{i}] must equal pointwise conjunction"
+                    );
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_upper_bound_of_empty_slice_is_all_true() {
+        // Empty-slice vacuous-truth pin — the empty conjunction is
+        // vacuously true on every axis, so `axes_is_upper_bound_of(&[])`
+        // returns `[true; FIELD_COUNT]`. The per-axis peer of
+        // `is_upper_bound_of_empty_slice_is_vacuously_true` one
+        // PROJECTION-KIND axis over, DUAL of the same pin on
+        // `axes_is_lower_bound_of` one COMBINATOR-DIRECTION axis over.
+        // Compile-time evaluable via const-fn on each of the three
+        // shipped presets, so the vacuous-truth identity is pinned as
+        // a build-break rather than a runtime assertion.
+        const EMPTY_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            EMPTY_RESOURCE_LIMITS.axes_is_upper_bound_of(&[]);
+        const _: () = assert!(
+            EMPTY_MASK[0]
+                && EMPTY_MASK[1]
+                && EMPTY_MASK[2]
+                && EMPTY_MASK[3]
+                && EMPTY_MASK[4]
+                && EMPTY_MASK[5]
+        );
+        const DEFAULT_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            DEFAULT_RESOURCE_LIMITS.axes_is_upper_bound_of(&[]);
+        const _: () = assert!(
+            DEFAULT_MASK[0]
+                && DEFAULT_MASK[1]
+                && DEFAULT_MASK[2]
+                && DEFAULT_MASK[3]
+                && DEFAULT_MASK[4]
+                && DEFAULT_MASK[5]
+        );
+        const UNBOUNDED_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            UNBOUNDED_RESOURCE_LIMITS.axes_is_upper_bound_of(&[]);
+        const _: () = assert!(
+            UNBOUNDED_MASK[0]
+                && UNBOUNDED_MASK[1]
+                && UNBOUNDED_MASK[2]
+                && UNBOUNDED_MASK[3]
+                && UNBOUNDED_MASK[4]
+                && UNBOUNDED_MASK[5]
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_upper_bound_of_single_element_reduces_to_axes_geq() {
+        // Single-element identity — `a.axes_is_upper_bound_of(&[b]) ==
+        // a.axes_geq(b)`. The per-axis-mask peer of the single-bit
+        // `is_upper_bound_of(&[b]) == b.leq(a)` reduction one
+        // PROJECTION-KIND axis over: at the 1-input case the N-ary
+        // predicate collapses to the pair-level relation (with the
+        // direction supplied by the per-axis primitive's own argument
+        // flip), both at the aggregated verdict AND at the per-axis
+        // mask. Peer of the same reduction on
+        // `axes_is_lower_bound_of` one COMBINATOR-DIRECTION axis over.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let n_ary_mask = a.axes_is_upper_bound_of(&[b]);
+                let pair_mask = a.axes_geq(b);
+                assert_eq!(
+                    n_ary_mask, pair_mask,
+                    "axes_is_upper_bound_of(&[b]) must equal axes_geq(b) for ({a:?}, {b:?})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_upper_bound_of_of_unbounded_is_universal_upper_bound_per_axis() {
+        // Universal-top pin — `UNBOUNDED_RESOURCE_LIMITS
+        // .axes_is_upper_bound_of(postures)` returns `[true;
+        // FIELD_COUNT]` on every slice, since `x <= usize::MAX` holds
+        // for every `usize x` per-axis by the lattice-top axiom. The
+        // per-axis-mask peer of a "universal-top is an upper bound of
+        // every slice" identity one PROJECTION-KIND axis over, DUAL of
+        // the universal-bottom pin on `axes_is_lower_bound_of` one
+        // COMBINATOR-DIRECTION axis over. Compile-time evaluable via
+        // const-fn on a discriminating slice fixture.
+        const MASK: [bool; ResourceLimits::FIELD_COUNT] = UNBOUNDED_RESOURCE_LIMITS
+            .axes_is_upper_bound_of(&[EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS]);
+        const _: () = assert!(MASK[0]);
+        const _: () = assert!(MASK[1]);
+        const _: () = assert!(MASK[2]);
+        const _: () = assert!(MASK[3]);
+        const _: () = assert!(MASK[4]);
+        const _: () = assert!(MASK[5]);
+    }
+
+    #[test]
+    fn resource_limits_axes_is_upper_bound_of_holds_for_the_join_of_the_slice_at_every_axis() {
+        // Join-witness pin — the N-ary join is always an upper bound of
+        // the slice it aggregates AT EVERY AXIS, so
+        // `most_permissive_of(postures).axes_is_upper_bound_of(postures)`
+        // returns `[true; FIELD_COUNT]`. The per-axis-mask peer of
+        // `is_upper_bound_of_holds_for_the_join_of_the_slice` one
+        // PROJECTION-KIND axis over, DUAL of the meet-witness pin on
+        // `axes_is_lower_bound_of` one COMBINATOR-DIRECTION axis over.
+        // The dual definitional link between N-ary COMBINATOR and
+        // per-axis N-ary PREDICATE: the aggregate `most_permissive_of`
+        // produces is a member of the upper-bound set this per-axis
+        // predicate characterizes, ON EVERY AXIS.
+        let slice = [
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            DEFAULT_RESOURCE_LIMITS,
+        ];
+        let joined = ResourceLimits::most_permissive_of(&slice);
+        let mask = joined.axes_is_upper_bound_of(&slice);
+        for (i, entry) in mask.iter().enumerate() {
+            assert!(
+                *entry,
+                "join({slice:?}).axes_is_upper_bound_of(slice)[{i}] must be true"
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_upper_bound_of_discriminates_single_axis_violation() {
+        // Diagnostic-emission pin — when
+        // `a.is_upper_bound_of(postures)` returns `false` because ONE
+        // axis violates the pointwise `<=` on SOME operand,
+        // `a.axes_is_upper_bound_of(postures)` returns a mask whose
+        // SINGLE `false` entry names the violating axis by index. The
+        // per-axis-mask peer of the single-bit-verdict rejection pin
+        // `is_upper_bound_of_rejects_when_any_operand_is_above_self`
+        // one PROJECTION-KIND axis over — WHERE the single-bit verdict
+        // says "some axis is below some operand" the per-axis mask
+        // exposes WHICH axis is the offender. DUAL of the same pin on
+        // `axes_is_lower_bound_of` one COMBINATOR-DIRECTION axis over.
+        //
+        // Fixture: `a` sits at UNBOUNDED on every axis except
+        // `max_expansion_depth` (axis 0), where it sits one below
+        // UNBOUNDED's `usize::MAX`, versus a slice containing UNBOUNDED
+        // itself. On axis 0 the violation `usize::MAX > a.max_expansion_depth`
+        // fires (an operand ceiling sits above `self`'s ceiling); on
+        // every other axis `usize::MAX <= usize::MAX` holds trivially.
+        // The per-axis mask therefore has a single `false` at index 0
+        // and `true` at every other position — the OBSERVABILITY use
+        // case the projection's docstring names.
+        let a = ResourceLimits {
+            max_expansion_depth: usize::MAX - 1,
+            ..UNBOUNDED_RESOURCE_LIMITS
+        };
+        let mask = a.axes_is_upper_bound_of(&[UNBOUNDED_RESOURCE_LIMITS]);
+        assert!(!mask[0], "max_expansion_depth axis must be the false entry");
+        assert!(mask[1]);
+        assert!(mask[2]);
+        assert!(mask[3]);
+        assert!(mask[4]);
+        assert!(mask[5]);
+        // Cross-check: the single-bit `is_upper_bound_of` verdict is
+        // false, and the conjunction of the mask agrees.
+        assert!(!a.is_upper_bound_of(&[UNBOUNDED_RESOURCE_LIMITS]));
+    }
+
+    #[test]
+    fn resource_limits_axes_is_upper_bound_of_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the per-axis N-ary upper-bound mask is
+        // evaluable in const context, so a caller can pin a preset-
+        // N-ary-verdict-vector identity at compile time. Sibling of
+        // the const-fn pins on [`Self::is_upper_bound_of`] one
+        // PROJECTION-KIND axis over and on [`Self::axes_geq`] one
+        // CARDINALITY axis over: those pin scalar N-ary verdicts /
+        // per-axis pairwise vectors at compile time, this pins the
+        // per-axis N-ary vector at their intersection. DUAL of the
+        // same pin on `axes_is_lower_bound_of` one COMBINATOR-
+        // DIRECTION axis over.
+        const MASK: [bool; ResourceLimits::FIELD_COUNT] = UNBOUNDED_RESOURCE_LIMITS
+            .axes_is_upper_bound_of(&[EMPTY_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS]);
         const _: () = assert!(MASK[0]);
         const _: () = assert!(MASK[1]);
         const _: () = assert!(MASK[2]);

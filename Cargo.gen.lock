@@ -1,16 +1,16 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "30a7935f11af24345975f494c649f43fa63ec283e85dc0465687e54792fe626a",
+  "cargo_lock_sha256": "aae20ea8cfe757719fdfe17b858600357bdeadfe5e5d719d7b56332a1c0ebd00",
   "manifest_sha256": {
-    "Cargo.toml": "7af227219bc2423c229dfb36d51eca18b6ac45a94755be925855dddb9a25df12",
+    "Cargo.toml": "3a143a19c9740f7f0b59c53ea2da30339a3a09bfe9cce5c80d72af3e812dc1a4",
     "ro-cli/Cargo.toml": "ac3c14c18498e8241da91c916ef10e972b0f178baa2a68cc44b65f602b259f48",
     "tatara-api/Cargo.toml": "c2759baa9eb88214d9e3508d2d554ccbda1d93474cabb55b191e127df5494455",
     "tatara-build-remote/Cargo.toml": "7776829282e273760233f534f2216b72c21742b7ff13bd267cb598fcc5fe0625",
-    "tatara-cli/Cargo.toml": "d21a54000e2b71c6c668bb10e230bb01214bfa1ff0c740a88acc62b95fe25223",
+    "tatara-cli/Cargo.toml": "61c92295a0866d707becd2610b5ba5487b626e5ee502427b8eea09fd9936be8c",
     "tatara-closed-loop-probe/Cargo.toml": "97eb3b62cdf2153e32941ef83aadb87a1750b19364dc69fae648f7af3f44ef9c",
-    "tatara-core/Cargo.toml": "fec34d4cec2573582fceb2724a0e40dbcb22e18e3fdcd09e4d65c0232fa7083b",
+    "tatara-core/Cargo.toml": "ba6d7571adbbe1407b95e2a206ea1bb64d12db25f60f9446e31bc9ffdbde20f7",
     "tatara-domains/Cargo.toml": "92d2ea1d2f1474111edaa232ca1c35984babba335122df2190be8f2856531b98",
-    "tatara-engine/Cargo.toml": "f88da5cfe21abe496f94edd799525e2257c91f1a25799f4fe448041a24316b80",
+    "tatara-engine/Cargo.toml": "e471fbbd267c13afef9d8546cd492245c4375993b916da9ae673454d7f75379b",
     "tatara-eval/Cargo.toml": "c47c19095bd8bf062de57c7b0f429e6eacd4d2c9149724404a0903a48e54b502",
     "tatara-export-worker/Cargo.toml": "6ad1496481364f66b1dbf75004bb7bb6ff10042d197ffcc38f365b54891f8027",
     "tatara-github-watcher/Cargo.toml": "94e9a47db6f4dbbe5596e1277a3557c08455a56387fb2523daa325750ad7e24c",
@@ -20,20 +20,20 @@
     "tatara-kube/Cargo.toml": "58e7ec45fb54fddb985bde8f440b48aac8d2210fb9970fb14a975b1d8597c141",
     "tatara-lattice/Cargo.toml": "2824e194c5dc4cffb6c09d11bc49831fcfdc044b1a430c15929b6462c9672682",
     "tatara-lisp-derive/Cargo.toml": "c93fe5fafe97a7f46f465c779b207b957fb03c92e593fd1974be3d2d8d617ad3",
-    "tatara-lisp/Cargo.toml": "ee887d39b6ee2405cdbbc3fc8dd2b00e440b4a5a44edce01ee098c15561d0568",
+    "tatara-lisp/Cargo.toml": "a2efa63ca62e870f88a9ab554a8c1bdb8bb2a9771a5f17bd7d867bffcf297741",
     "tatara-mcp/Cargo.toml": "440588ce76923a7902356aa86292d1a50190a75bb91c75b7c14a18b7f675091c",
     "tatara-net/Cargo.toml": "ab7fa28c8d8ad4d843672fb63e96e7fdae5e151f07eb7930e59c32f659925a62",
     "tatara-nix/Cargo.toml": "dfed556e9857ede67fcbed7d55eaf84743f00a0316ae383be240df12f71f259d",
     "tatara-operator/Cargo.toml": "f199eb6464d2c002bedbef7b5cb1a693f2d484ba042de9d429aba107ee8cac76",
     "tatara-os/Cargo.toml": "b4fa80f59595fb1147a9492af167e38758895cd003d7e1b43b14be0c2a5c38f3",
     "tatara-pkgs/Cargo.toml": "5f25a11a250cfa1f154640e2e81a95d001806dff4a708307c0be034eef082bca",
-    "tatara-pool-reconciler/Cargo.toml": "c839f22e9d8df75e770de67db1004e79747049889e85b3cb4f169850285d5281",
+    "tatara-pool-reconciler/Cargo.toml": "e81beb9c132404726a52a6645ed478cb271690852dce04dab349d937f839115b",
     "tatara-process/Cargo.toml": "c1faa64895a08881a2305751cf99c795a77e25ae1ac8e673b411ef4b125cbbd3",
-    "tatara-reconciler/Cargo.toml": "5c5bad72b64e9f89dfbda19522fb598d8897958e8b519164c6912943e40d6f6e",
+    "tatara-reconciler/Cargo.toml": "8c822db34d673e39b870a6f6b4582058ab9546714dd9cad580f7fd0a26ed35ad",
     "tatara-terreiro/Cargo.toml": "c08386ff730f541dfbf438f68dada22f1dad3b62957557d8a67131f0c4622201",
     "tatara-testing/Cargo.toml": "711da4ca4ce6b28b51af7b368442ea042079b9389defc0ce8691937712d51c49",
     "tatara-ui/Cargo.toml": "fdffeeb69f118d8f310dd94b79a463facd905e0cfc0db192ee0a8f4126aaf45f",
-    "tatara-vm/Cargo.toml": "9cd95f871710e71ed9459679e0c04f266f90bb4fe521a2314021aaab66fe702d",
+    "tatara-vm/Cargo.toml": "3a286767fa39b4b13563d8e4f738aa8bb1deeaf7903221dda50c29ccd823db11",
     "tatara-wasm/Cargo.toml": "f12f2c2a2c6bf54058cf359d7d75b37a9d4debcee3ee4675388f914bb6e3a353"
   },
   "target_resolves": {
@@ -5135,7 +5135,7 @@
           "PartialEq"
         ]
       },
-      "egaku-0.1.0-3b2af556217f4bcadc58b2f6b494f80224a10a9e": {
+      "egaku-0.1.9": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -5193,7 +5193,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "egaku-term-0.2.1-aa3fd63402577c624df499e5e3798d313e4fe6cd": {
+      "egaku-term-0.3.6": {
         "runtime_dependencies": [
           {
             "name": "crossterm",
@@ -5207,7 +5207,7 @@
           },
           {
             "name": "egaku",
-            "package_key": "egaku-0.1.0-3b2af556217f4bcadc58b2f6b494f80224a10a9e",
+            "package_key": "egaku-0.1.9",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -5218,6 +5218,16 @@
           {
             "name": "thiserror",
             "package_key": "thiserror-2.0.18",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "unicode_segmentation",
+            "package_key": "unicode-segmentation-1.13.2",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -6121,7 +6131,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "gen-macros-0.1.0-0363cc55019e21d9fbc5b96484f1f364516ef282": {
+      "gen-macros-0.1.33": {
         "runtime_dependencies": [
           {
             "name": "proc_macro2",
@@ -6199,11 +6209,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "gen-platform-0.1.0-0363cc55019e21d9fbc5b96484f1f364516ef282": {
+      "gen-platform-0.1.33": {
         "runtime_dependencies": [
           {
             "name": "gen_macros",
-            "package_key": "gen-macros-0.1.0-0363cc55019e21d9fbc5b96484f1f364516ef282",
+            "package_key": "gen-macros-0.1.33",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -6213,7 +6223,7 @@
           },
           {
             "name": "gen_types",
-            "package_key": "gen-types-0.1.0-0363cc55019e21d9fbc5b96484f1f364516ef282",
+            "package_key": "gen-types-0.1.33",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -6335,7 +6345,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "gen-types-0.1.0-0363cc55019e21d9fbc5b96484f1f364516ef282": {
+      "gen-types-0.1.33": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -7894,7 +7904,7 @@
           },
           {
             "name": "socket2",
-            "package_key": "socket2-0.5.10",
+            "package_key": "socket2-0.6.4",
             "kind": "normal",
             "features": [
               "all"
@@ -9701,44 +9711,6 @@
       },
       "maplit-1.0.2": {
         "runtime_dependencies": [],
-        "build_dependencies": [],
-        "features": []
-      },
-      "maquina-engine-0.1.0-d65a421d73676c1945ef0b276c09d5180ee26d4d": {
-        "runtime_dependencies": [
-          {
-            "name": "async_trait",
-            "package_key": "async-trait-0.1.89",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "host"
-          },
-          {
-            "name": "serde",
-            "package_key": "serde-1.0.228",
-            "kind": "normal",
-            "features": [
-              "derive"
-            ],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "thiserror",
-            "package_key": "thiserror-2.0.18",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          }
-        ],
         "build_dependencies": [],
         "features": []
       },
@@ -11565,7 +11537,7 @@
           },
           {
             "name": "socket2",
-            "package_key": "socket2-0.5.10",
+            "package_key": "socket2-0.6.4",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -11769,7 +11741,7 @@
           },
           {
             "name": "socket2",
-            "package_key": "socket2-0.5.10",
+            "package_key": "socket2-0.6.4",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -14113,7 +14085,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "shigoto-types-0.1.0-391a47959d0c29115c0fc98a7574b78105a09d65": {
+      "shigoto-types-0.1.13": {
         "runtime_dependencies": [
           {
             "name": "async_trait",
@@ -14124,6 +14096,16 @@
             "optional": false,
             "target": null,
             "tree": "host"
+          },
+          {
+            "name": "blake3",
+            "package_key": "blake3-1.8.5",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
           },
           {
             "name": "chrono",
@@ -14139,7 +14121,7 @@
           },
           {
             "name": "gen_platform",
-            "package_key": "gen-platform-0.1.6-eea15518fdff36d8b21ed753b6b161fc0d3623f6",
+            "package_key": "gen-platform-0.1.33",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -14149,7 +14131,17 @@
           },
           {
             "name": "gen_types",
-            "package_key": "gen-types-0.1.6-eea15518fdff36d8b21ed753b6b161fc0d3623f6",
+            "package_key": "gen-types-0.1.33",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "hex",
+            "package_key": "hex-0.4.3",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -14228,18 +14220,6 @@
             "tree": "host"
           },
           {
-            "name": "clap",
-            "package_key": "clap-4.6.1",
-            "kind": "normal",
-            "features": [
-              "derive"
-            ],
-            "uses_default_features": true,
-            "optional": true,
-            "target": null,
-            "tree": "target"
-          },
-          {
             "name": "figment",
             "package_key": "figment-0.10.19",
             "kind": "normal",
@@ -14289,6 +14269,154 @@
             "kind": "normal",
             "features": [
               "macos_kqueue"
+            ],
+            "uses_default_features": false,
+            "optional": false,
+            "target": "cfg(target_os = \"macos\")",
+            "tree": "target"
+          },
+          {
+            "name": "serde",
+            "package_key": "serde-1.0.228",
+            "kind": "normal",
+            "features": [
+              "derive"
+            ],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "serde_json",
+            "package_key": "serde_json-1.0.150",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "serde_yaml",
+            "package_key": "serde_yaml-0.9.34+deprecated",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "thiserror",
+            "package_key": "thiserror-2.0.18",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "tracing",
+            "package_key": "tracing-0.1.44",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          }
+        ],
+        "build_dependencies": [],
+        "features": [
+          "default"
+        ]
+      },
+      "shikumi-0.1.455": {
+        "runtime_dependencies": [
+          {
+            "name": "arc_swap",
+            "package_key": "arc-swap-1.9.1",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "async_trait",
+            "package_key": "async-trait-0.1.89",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "host"
+          },
+          {
+            "name": "clap",
+            "package_key": "clap-4.6.1",
+            "kind": "normal",
+            "features": [
+              "derive"
+            ],
+            "uses_default_features": true,
+            "optional": true,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "figment",
+            "package_key": "figment-0.10.19",
+            "kind": "normal",
+            "features": [
+              "env",
+              "toml",
+              "yaml"
+            ],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "gen_platform",
+            "package_key": "gen-platform-0.1.33",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "gen_types",
+            "package_key": "gen-types-0.1.33",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "notify",
+            "package_key": "notify-8.2.0",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "notify",
+            "package_key": "notify-8.2.0",
+            "kind": "normal",
+            "features": [
+              "macos_fsevent"
             ],
             "uses_default_features": false,
             "optional": false,
@@ -14600,24 +14728,6 @@
         ],
         "build_dependencies": [],
         "features": []
-      },
-      "socket2-0.5.10": {
-        "runtime_dependencies": [
-          {
-            "name": "libc",
-            "package_key": "libc-0.2.186",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": "cfg(unix)",
-            "tree": "target"
-          }
-        ],
-        "build_dependencies": [],
-        "features": [
-          "all"
-        ]
       },
       "socket2-0.6.4": {
         "runtime_dependencies": [
@@ -15022,7 +15132,7 @@
           "std"
         ]
       },
-      "tatara-api-0.2.157": {
+      "tatara-api-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -15115,7 +15225,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.157",
+            "package_key": "tatara-core-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15125,7 +15235,7 @@
           },
           {
             "name": "tatara_engine",
-            "package_key": "tatara-engine-0.2.157",
+            "package_key": "tatara-engine-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15220,7 +15330,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-build-remote-0.2.157": {
+      "tatara-build-remote-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -15268,7 +15378,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-cli-0.2.157": {
+      "tatara-cli-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -15391,7 +15501,7 @@
           },
           {
             "name": "egaku",
-            "package_key": "egaku-0.1.0-3b2af556217f4bcadc58b2f6b494f80224a10a9e",
+            "package_key": "egaku-0.1.9",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15401,7 +15511,7 @@
           },
           {
             "name": "egaku_term",
-            "package_key": "egaku-term-0.2.1-aa3fd63402577c624df499e5e3798d313e4fe6cd",
+            "package_key": "egaku-term-0.3.6",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15490,7 +15600,7 @@
           },
           {
             "name": "shikumi",
-            "package_key": "shikumi-0.1.0-9161fde44527ec6572640d8a77f6919583f6b342",
+            "package_key": "shikumi-0.1.455",
             "kind": "normal",
             "features": [
               "cli"
@@ -15502,7 +15612,7 @@
           },
           {
             "name": "tatara_api",
-            "package_key": "tatara-api-0.2.157",
+            "package_key": "tatara-api-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15512,7 +15622,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.157",
+            "package_key": "tatara-core-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15522,7 +15632,7 @@
           },
           {
             "name": "tatara_engine",
-            "package_key": "tatara-engine-0.2.157",
+            "package_key": "tatara-engine-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15612,7 +15722,7 @@
           },
           {
             "name": "tsunagu",
-            "package_key": "tsunagu-0.1.1-2219c0853a003bc89d98eae3ad05b369594072de",
+            "package_key": "tsunagu-0.1.2",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15637,7 +15747,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-closed-loop-probe-0.2.157": {
+      "tatara-closed-loop-probe-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -15776,7 +15886,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.157",
+            "package_key": "tatara-process-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15833,7 +15943,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-core-0.2.157": {
+      "tatara-core-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -15944,7 +16054,7 @@
           },
           {
             "name": "shikumi",
-            "package_key": "shikumi-0.1.0-9161fde44527ec6572640d8a77f6919583f6b342",
+            "package_key": "shikumi-0.1.455",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -15999,7 +16109,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-domains-0.2.157": {
+      "tatara-domains-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -16037,7 +16147,317 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-eval-0.2.157": {
+      "tatara-engine-0.2.158": {
+        "runtime_dependencies": [
+          {
+            "name": "anyhow",
+            "package_key": "anyhow-1.0.102",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "async_nats",
+            "package_key": "async-nats-0.38.0",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "async_trait",
+            "package_key": "async-trait-0.1.89",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "host"
+          },
+          {
+            "name": "bincode",
+            "package_key": "bincode-1.3.3",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "blake3",
+            "package_key": "blake3-1.8.5",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "chitchat",
+            "package_key": "chitchat-0.10.1",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "chrono",
+            "package_key": "chrono-0.4.44",
+            "kind": "normal",
+            "features": [
+              "serde"
+            ],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "dirs",
+            "package_key": "dirs-6.0.0",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "futures_core",
+            "package_key": "futures-core-0.3.32",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "hex",
+            "package_key": "hex-0.4.3",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "hostname",
+            "package_key": "hostname-0.4.2",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "mdns_sd",
+            "package_key": "mdns-sd-0.18.2",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "nix",
+            "package_key": "nix-0.29.0",
+            "kind": "normal",
+            "features": [
+              "process",
+              "signal"
+            ],
+            "uses_default_features": true,
+            "optional": false,
+            "target": "cfg(unix)",
+            "tree": "target"
+          },
+          {
+            "name": "openraft",
+            "package_key": "openraft-0.9.22",
+            "kind": "normal",
+            "features": [
+              "serde",
+              "storage-v2"
+            ],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "rand",
+            "package_key": "rand-0.9.4",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "redb",
+            "package_key": "redb-3.1.3",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "reqwest",
+            "package_key": "reqwest-0.12.28",
+            "kind": "normal",
+            "features": [
+              "json",
+              "rustls-tls",
+              "stream"
+            ],
+            "uses_default_features": false,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "serde",
+            "package_key": "serde-1.0.228",
+            "kind": "normal",
+            "features": [
+              "derive"
+            ],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "serde_json",
+            "package_key": "serde_json-1.0.150",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "serde_yaml",
+            "package_key": "serde_yaml-0.9.34+deprecated",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "sha2",
+            "package_key": "sha2-0.10.9",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "tatara_core",
+            "package_key": "tatara-core-0.2.158",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "thiserror",
+            "package_key": "thiserror-2.0.18",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "tokio",
+            "package_key": "tokio-1.52.3",
+            "kind": "normal",
+            "features": [
+              "full"
+            ],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "tokio_stream",
+            "package_key": "tokio-stream-0.1.18",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "tracing",
+            "package_key": "tracing-0.1.44",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "tracing_subscriber",
+            "package_key": "tracing-subscriber-0.3.23",
+            "kind": "normal",
+            "features": [
+              "env-filter",
+              "json"
+            ],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "uuid",
+            "package_key": "uuid-1.23.2",
+            "kind": "normal",
+            "features": [
+              "serde",
+              "v4"
+            ],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          }
+        ],
+        "build_dependencies": [],
+        "features": [
+          "default"
+        ]
+      },
+      "tatara-eval-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "bumpalo",
@@ -16085,7 +16505,7 @@
           },
           {
             "name": "tatara_nix",
-            "package_key": "tatara-nix-0.2.157",
+            "package_key": "tatara-nix-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16107,7 +16527,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-export-worker-0.2.157": {
+      "tatara-export-worker-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -16246,7 +16666,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.157",
+            "package_key": "tatara-process-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16303,7 +16723,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-github-watcher-0.2.157": {
+      "tatara-github-watcher-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -16453,7 +16873,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.157",
+            "package_key": "tatara-process-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16522,7 +16942,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-hospedeiro-0.2.157": {
+      "tatara-hospedeiro-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -16548,7 +16968,7 @@
           },
           {
             "name": "tatara_build_remote",
-            "package_key": "tatara-build-remote-0.2.157",
+            "package_key": "tatara-build-remote-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16558,7 +16978,7 @@
           },
           {
             "name": "tatara_hvf",
-            "package_key": "tatara-hvf-0.2.157",
+            "package_key": "tatara-hvf-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16568,7 +16988,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.157",
+            "package_key": "tatara-process-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16578,7 +16998,7 @@
           },
           {
             "name": "tatara_vm",
-            "package_key": "tatara-vm-0.2.157",
+            "package_key": "tatara-vm-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16588,7 +17008,7 @@
           },
           {
             "name": "tatara_wasm",
-            "package_key": "tatara-wasm-0.2.157",
+            "package_key": "tatara-wasm-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16620,7 +17040,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-init-0.2.157": {
+      "tatara-init-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "libc",
@@ -16656,7 +17076,7 @@
           },
           {
             "name": "tatara_eval",
-            "package_key": "tatara-eval-0.2.157",
+            "package_key": "tatara-eval-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16698,7 +17118,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-kube-0.2.157": {
+      "tatara-kube-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -16824,7 +17244,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.157",
+            "package_key": "tatara-core-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16884,7 +17304,7 @@
           "standalone"
         ]
       },
-      "tatara-lattice-0.2.157": {
+      "tatara-lattice-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "schemars",
@@ -16912,7 +17332,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.157",
+            "package_key": "tatara-core-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -16922,7 +17342,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.157",
+            "package_key": "tatara-process-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17032,7 +17452,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-mcp-0.2.157": {
+      "tatara-mcp-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -17058,7 +17478,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.157",
+            "package_key": "tatara-core-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17092,7 +17512,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-net-0.2.157": {
+      "tatara-net-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -17172,7 +17592,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.157",
+            "package_key": "tatara-core-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17232,7 +17652,7 @@
           "userspace"
         ]
       },
-      "tatara-nix-0.2.157": {
+      "tatara-nix-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -17278,7 +17698,7 @@
           },
           {
             "name": "tatara_lattice",
-            "package_key": "tatara-lattice-0.2.157",
+            "package_key": "tatara-lattice-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17561,7 +17981,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-os-0.2.157": {
+      "tatara-os-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -17627,7 +18047,7 @@
           },
           {
             "name": "tatara_nix",
-            "package_key": "tatara-nix-0.2.157",
+            "package_key": "tatara-nix-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17637,7 +18057,7 @@
           },
           {
             "name": "tatara_pkgs",
-            "package_key": "tatara-pkgs-0.2.157",
+            "package_key": "tatara-pkgs-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17659,7 +18079,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-pkgs-0.2.157": {
+      "tatara-pkgs-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -17705,7 +18125,7 @@
           },
           {
             "name": "tatara_nix",
-            "package_key": "tatara-nix-0.2.157",
+            "package_key": "tatara-nix-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17727,7 +18147,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-pool-reconciler-0.2.157": {
+      "tatara-pool-reconciler-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -17908,7 +18328,7 @@
           },
           {
             "name": "shigoto_types",
-            "package_key": "shigoto-types-0.1.0-391a47959d0c29115c0fc98a7574b78105a09d65",
+            "package_key": "shigoto-types-0.1.13",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17918,7 +18338,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.157",
+            "package_key": "tatara-core-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17928,7 +18348,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.157",
+            "package_key": "tatara-process-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -17985,7 +18405,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-process-0.2.157": {
+      "tatara-process-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -18111,7 +18531,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.157",
+            "package_key": "tatara-core-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18163,7 +18583,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-reconciler-0.2.157": {
+      "tatara-reconciler-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -18344,7 +18764,7 @@
           },
           {
             "name": "shikumi",
-            "package_key": "shikumi-0.1.0-9161fde44527ec6572640d8a77f6919583f6b342",
+            "package_key": "shikumi-0.1.455",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18354,7 +18774,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.157",
+            "package_key": "tatara-core-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18364,7 +18784,7 @@
           },
           {
             "name": "tatara_domains",
-            "package_key": "tatara-domains-0.2.157",
+            "package_key": "tatara-domains-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18374,7 +18794,7 @@
           },
           {
             "name": "tatara_lattice",
-            "package_key": "tatara-lattice-0.2.157",
+            "package_key": "tatara-lattice-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18394,7 +18814,7 @@
           },
           {
             "name": "tatara_process",
-            "package_key": "tatara-process-0.2.157",
+            "package_key": "tatara-process-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18451,7 +18871,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-terreiro-0.2.157": {
+      "tatara-terreiro-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -18509,7 +18929,7 @@
           },
           {
             "name": "tatara_eval",
-            "package_key": "tatara-eval-0.2.157",
+            "package_key": "tatara-eval-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18539,7 +18959,7 @@
           },
           {
             "name": "tatara_nix",
-            "package_key": "tatara-nix-0.2.157",
+            "package_key": "tatara-nix-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18549,7 +18969,7 @@
           },
           {
             "name": "tatara_ui",
-            "package_key": "tatara-ui-0.2.157",
+            "package_key": "tatara-ui-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18571,7 +18991,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-testing-0.2.157": {
+      "tatara-testing-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -18631,7 +19051,7 @@
           },
           {
             "name": "tatara_core",
-            "package_key": "tatara-core-0.2.157",
+            "package_key": "tatara-core-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18641,7 +19061,7 @@
           },
           {
             "name": "tatara_engine",
-            "package_key": "tatara-engine-0.2.157",
+            "package_key": "tatara-engine-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18690,7 +19110,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-ui-0.2.157": {
+      "tatara-ui-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -18788,7 +19208,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-vm-0.2.157": {
+      "tatara-vm-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -18802,7 +19222,7 @@
           },
           {
             "name": "gen_platform",
-            "package_key": "gen-platform-0.1.0-0363cc55019e21d9fbc5b96484f1f364516ef282",
+            "package_key": "gen-platform-0.1.33",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18812,7 +19232,7 @@
           },
           {
             "name": "gen_types",
-            "package_key": "gen-types-0.1.0-0363cc55019e21d9fbc5b96484f1f364516ef282",
+            "package_key": "gen-types-0.1.33",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18828,16 +19248,6 @@
             "uses_default_features": true,
             "optional": false,
             "target": "cfg(unix)",
-            "tree": "target"
-          },
-          {
-            "name": "maquina_engine",
-            "package_key": "maquina-engine-0.1.0-d65a421d73676c1945ef0b276c09d5180ee26d4d",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
             "tree": "target"
           },
           {
@@ -18864,7 +19274,7 @@
           },
           {
             "name": "tatara_build_remote",
-            "package_key": "tatara-build-remote-0.2.157",
+            "package_key": "tatara-build-remote-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18894,7 +19304,7 @@
           },
           {
             "name": "tatara_nix",
-            "package_key": "tatara-nix-0.2.157",
+            "package_key": "tatara-nix-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18904,7 +19314,7 @@
           },
           {
             "name": "tatara_os",
-            "package_key": "tatara-os-0.2.157",
+            "package_key": "tatara-os-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18914,7 +19324,7 @@
           },
           {
             "name": "tatara_ui",
-            "package_key": "tatara-ui-0.2.157",
+            "package_key": "tatara-ui-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18924,7 +19334,7 @@
           },
           {
             "name": "tatara_wasm",
-            "package_key": "tatara-wasm-0.2.157",
+            "package_key": "tatara-wasm-0.2.158",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -18946,7 +19356,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tatara-wasm-0.2.157": {
+      "tatara-wasm-0.2.158": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -20874,7 +21284,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tsunagu-0.1.1-2219c0853a003bc89d98eae3ad05b369594072de": {
+      "tsunagu-0.1.2": {
         "runtime_dependencies": [
           {
             "name": "dirs",
@@ -23887,28 +24297,6 @@
               "std"
             ]
           },
-          "block2-0.6.2": {
-            "runtime_dependencies": [
-              {
-                "name": "objc2",
-                "package_key": "objc2-0.6.4",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "alloc",
-              "default",
-              "std"
-            ]
-          },
           "cap-primitives-3.4.5": {
             "runtime_dependencies": [
               {
@@ -24179,64 +24567,21 @@
               "digest"
             ]
           },
-          "dispatch2-0.3.1": {
+          "fsevent-sys-4.1.0": {
             "runtime_dependencies": [
-              {
-                "name": "bitflags",
-                "package_key": "bitflags-2.11.1",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "block2",
-                "package_key": "block2-0.6.2",
-                "kind": "normal",
-                "features": [
-                  "alloc"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
               {
                 "name": "libc",
                 "package_key": "libc-0.2.186",
                 "kind": "normal",
                 "features": [],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2",
-                "package_key": "objc2-0.6.4",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": true,
+                "uses_default_features": true,
+                "optional": false,
                 "target": null,
                 "tree": "target"
               }
             ],
             "build_dependencies": [],
-            "features": [
-              "alloc",
-              "block2",
-              "default",
-              "libc",
-              "objc2",
-              "std"
-            ]
+            "features": []
           },
           "iana-time-zone-0.1.65": {
             "runtime_dependencies": [
@@ -24255,145 +24600,6 @@
             "features": [
               "fallback"
             ]
-          },
-          "kasou-0.1.0-bbfaf245e0baf0cb6b6b0b6639a56f4e87cb4955": {
-            "runtime_dependencies": [
-              {
-                "name": "block2",
-                "package_key": "block2-0.6.2",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "dispatch2",
-                "package_key": "dispatch2-0.3.1",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2",
-                "package_key": "objc2-0.6.4",
-                "kind": "normal",
-                "features": [
-                  "exception"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2_foundation",
-                "package_key": "objc2-foundation-0.3.2",
-                "kind": "normal",
-                "features": [
-                  "NSData",
-                  "NSError",
-                  "NSString",
-                  "NSURL"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2_virtualization",
-                "package_key": "objc2-virtualization-0.3.2",
-                "kind": "normal",
-                "features": [
-                  "VZBootLoader",
-                  "VZDirectoryShare",
-                  "VZDirectorySharingDeviceConfiguration",
-                  "VZDiskImageStorageDeviceAttachment",
-                  "VZEFIBootLoader",
-                  "VZEFIVariableStore",
-                  "VZEntropyDeviceConfiguration",
-                  "VZFileSerialPortAttachment",
-                  "VZGenericMachineIdentifier",
-                  "VZGenericPlatformConfiguration",
-                  "VZLinuxBootLoader",
-                  "VZMACAddress",
-                  "VZNATNetworkDeviceAttachment",
-                  "VZNetworkDeviceConfiguration",
-                  "VZPlatformConfiguration",
-                  "VZSerialPortAttachment",
-                  "VZSerialPortConfiguration",
-                  "VZSharedDirectory",
-                  "VZSingleDirectoryShare",
-                  "VZStorageDeviceAttachment",
-                  "VZStorageDeviceConfiguration",
-                  "VZVirtioBlockDeviceConfiguration",
-                  "VZVirtioConsoleDeviceSerialPortConfiguration",
-                  "VZVirtioEntropyDeviceConfiguration",
-                  "VZVirtioFileSystemDeviceConfiguration",
-                  "VZVirtioNetworkDeviceConfiguration",
-                  "VZVirtualMachine",
-                  "VZVirtualMachineConfiguration",
-                  "VZVirtualMachineDelegate",
-                  "block2",
-                  "dispatch2"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde",
-                "package_key": "serde-1.0.228",
-                "kind": "normal",
-                "features": [
-                  "derive"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "thiserror",
-                "package_key": "thiserror-2.0.18",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tokio",
-                "package_key": "tokio-1.52.3",
-                "kind": "normal",
-                "features": [
-                  "sync"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tracing",
-                "package_key": "tracing-0.1.44",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": []
           },
           "kqueue-1.1.1": {
             "runtime_dependencies": [
@@ -24474,6 +24680,16 @@
                 "features": [],
                 "uses_default_features": true,
                 "optional": false,
+                "target": "cfg(target_os = \"macos\")",
+                "tree": "target"
+              },
+              {
+                "name": "fsevent_sys",
+                "package_key": "fsevent-sys-4.1.0",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": true,
+                "optional": true,
                 "target": "cfg(target_os = \"macos\")",
                 "tree": "target"
               },
@@ -24576,649 +24792,11 @@
             ],
             "build_dependencies": [],
             "features": [
+              "fsevent-sys",
               "kqueue",
+              "macos_fsevent",
               "macos_kqueue",
               "mio"
-            ]
-          },
-          "objc2-0.6.4": {
-            "runtime_dependencies": [
-              {
-                "name": "objc2_encode",
-                "package_key": "objc2-encode-4.1.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2_exception_helper",
-                "package_key": "objc2-exception-helper-0.1.1",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "alloc",
-              "default",
-              "exception",
-              "std"
-            ]
-          },
-          "objc2-app-kit-0.3.2": {
-            "runtime_dependencies": [
-              {
-                "name": "bitflags",
-                "package_key": "bitflags-2.11.1",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2",
-                "package_key": "objc2-0.6.4",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2_foundation",
-                "package_key": "objc2-foundation-0.3.2",
-                "kind": "normal",
-                "features": [
-                  "alloc"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "NSAccessibilityProtocols",
-              "NSAnimation",
-              "NSAppearance",
-              "NSDragging",
-              "NSResponder",
-              "NSScreen",
-              "NSUserInterfaceItemIdentification",
-              "NSView",
-              "bitflags"
-            ]
-          },
-          "objc2-core-foundation-0.3.2": {
-            "runtime_dependencies": [
-              {
-                "name": "bitflags",
-                "package_key": "bitflags-2.11.1",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2",
-                "package_key": "objc2-0.6.4",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "CFArray",
-              "CFAttributedString",
-              "CFCGTypes",
-              "CFCalendar",
-              "CFCharacterSet",
-              "CFData",
-              "CFDate",
-              "CFDictionary",
-              "CFError",
-              "CFFileSecurity",
-              "CFLocale",
-              "CFMachPort",
-              "CFMessagePort",
-              "CFRunLoop",
-              "CFSet",
-              "CFStream",
-              "CFURL",
-              "bitflags",
-              "objc2"
-            ]
-          },
-          "objc2-encode-4.1.0": {
-            "runtime_dependencies": [],
-            "build_dependencies": [],
-            "features": [
-              "alloc",
-              "std"
-            ]
-          },
-          "objc2-exception-helper-0.1.1": {
-            "runtime_dependencies": [],
-            "build_dependencies": [
-              {
-                "name": "cc",
-                "package_key": "cc-1.2.63",
-                "kind": "build",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "host"
-              }
-            ],
-            "features": []
-          },
-          "objc2-foundation-0.3.2": {
-            "runtime_dependencies": [
-              {
-                "name": "bitflags",
-                "package_key": "bitflags-2.11.1",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "block2",
-                "package_key": "block2-0.6.2",
-                "kind": "normal",
-                "features": [
-                  "alloc"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "libc",
-                "package_key": "libc-0.2.186",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2",
-                "package_key": "objc2-0.6.4",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2_core_foundation",
-                "package_key": "objc2-core-foundation-0.3.2",
-                "kind": "normal",
-                "features": [
-                  "CFArray",
-                  "CFAttributedString",
-                  "CFCGTypes",
-                  "CFCalendar",
-                  "CFCharacterSet",
-                  "CFData",
-                  "CFDate",
-                  "CFDictionary",
-                  "CFError",
-                  "CFFileSecurity",
-                  "CFLocale",
-                  "CFMachPort",
-                  "CFMessagePort",
-                  "CFRunLoop",
-                  "CFSet",
-                  "CFStream",
-                  "CFURL",
-                  "objc2"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "FoundationErrors",
-              "FoundationLegacySwiftCompatibility",
-              "NSAffineTransform",
-              "NSAppleEventDescriptor",
-              "NSAppleEventManager",
-              "NSAppleScript",
-              "NSArchiver",
-              "NSArray",
-              "NSAttributedString",
-              "NSAutoreleasePool",
-              "NSBackgroundActivityScheduler",
-              "NSBundle",
-              "NSByteCountFormatter",
-              "NSByteOrder",
-              "NSCache",
-              "NSCalendar",
-              "NSCalendarDate",
-              "NSCharacterSet",
-              "NSClassDescription",
-              "NSCoder",
-              "NSComparisonPredicate",
-              "NSCompoundPredicate",
-              "NSConnection",
-              "NSData",
-              "NSDate",
-              "NSDateComponentsFormatter",
-              "NSDateFormatter",
-              "NSDateInterval",
-              "NSDateIntervalFormatter",
-              "NSDebug",
-              "NSDecimal",
-              "NSDecimalNumber",
-              "NSDictionary",
-              "NSDistantObject",
-              "NSDistributedLock",
-              "NSDistributedNotificationCenter",
-              "NSEnergyFormatter",
-              "NSEnumerator",
-              "NSError",
-              "NSException",
-              "NSExpression",
-              "NSExtensionContext",
-              "NSExtensionItem",
-              "NSExtensionRequestHandling",
-              "NSFileCoordinator",
-              "NSFileHandle",
-              "NSFileManager",
-              "NSFilePresenter",
-              "NSFileVersion",
-              "NSFileWrapper",
-              "NSFormatter",
-              "NSGarbageCollector",
-              "NSGeometry",
-              "NSHFSFileTypes",
-              "NSHTTPCookie",
-              "NSHTTPCookieStorage",
-              "NSHashTable",
-              "NSHost",
-              "NSISO8601DateFormatter",
-              "NSIndexPath",
-              "NSIndexSet",
-              "NSInflectionRule",
-              "NSInvocation",
-              "NSItemProvider",
-              "NSJSONSerialization",
-              "NSKeyValueCoding",
-              "NSKeyValueObserving",
-              "NSKeyValueSharedObservers",
-              "NSKeyedArchiver",
-              "NSLengthFormatter",
-              "NSLinguisticTagger",
-              "NSListFormatter",
-              "NSLocale",
-              "NSLocalizedNumberFormatRule",
-              "NSLock",
-              "NSMapTable",
-              "NSMassFormatter",
-              "NSMeasurement",
-              "NSMeasurementFormatter",
-              "NSMetadata",
-              "NSMetadataAttributes",
-              "NSMethodSignature",
-              "NSMorphology",
-              "NSNetServices",
-              "NSNotification",
-              "NSNotificationQueue",
-              "NSNull",
-              "NSNumberFormatter",
-              "NSObjCRuntime",
-              "NSObject",
-              "NSObjectScripting",
-              "NSOperation",
-              "NSOrderedCollectionChange",
-              "NSOrderedCollectionDifference",
-              "NSOrderedSet",
-              "NSOrthography",
-              "NSPathUtilities",
-              "NSPersonNameComponents",
-              "NSPersonNameComponentsFormatter",
-              "NSPointerArray",
-              "NSPointerFunctions",
-              "NSPort",
-              "NSPortCoder",
-              "NSPortMessage",
-              "NSPortNameServer",
-              "NSPredicate",
-              "NSProcessInfo",
-              "NSProgress",
-              "NSPropertyList",
-              "NSProtocolChecker",
-              "NSProxy",
-              "NSRange",
-              "NSRegularExpression",
-              "NSRelativeDateTimeFormatter",
-              "NSRunLoop",
-              "NSScanner",
-              "NSScriptClassDescription",
-              "NSScriptCoercionHandler",
-              "NSScriptCommand",
-              "NSScriptCommandDescription",
-              "NSScriptExecutionContext",
-              "NSScriptKeyValueCoding",
-              "NSScriptObjectSpecifiers",
-              "NSScriptStandardSuiteCommands",
-              "NSScriptSuiteRegistry",
-              "NSScriptWhoseTests",
-              "NSSet",
-              "NSSortDescriptor",
-              "NSSpellServer",
-              "NSStream",
-              "NSString",
-              "NSTask",
-              "NSTermOfAddress",
-              "NSTextCheckingResult",
-              "NSThread",
-              "NSTimeZone",
-              "NSTimer",
-              "NSURL",
-              "NSURLAuthenticationChallenge",
-              "NSURLCache",
-              "NSURLConnection",
-              "NSURLCredential",
-              "NSURLCredentialStorage",
-              "NSURLDownload",
-              "NSURLError",
-              "NSURLHandle",
-              "NSURLProtectionSpace",
-              "NSURLProtocol",
-              "NSURLRequest",
-              "NSURLResponse",
-              "NSURLSession",
-              "NSUUID",
-              "NSUbiquitousKeyValueStore",
-              "NSUndoManager",
-              "NSUnit",
-              "NSUserActivity",
-              "NSUserDefaults",
-              "NSUserNotification",
-              "NSUserScriptTask",
-              "NSValue",
-              "NSValueTransformer",
-              "NSXMLDTD",
-              "NSXMLDTDNode",
-              "NSXMLDocument",
-              "NSXMLElement",
-              "NSXMLNode",
-              "NSXMLNodeOptions",
-              "NSXMLParser",
-              "NSXPCConnection",
-              "NSZone",
-              "alloc",
-              "bitflags",
-              "block2",
-              "default",
-              "libc",
-              "objc2-core-foundation",
-              "std"
-            ]
-          },
-          "objc2-virtualization-0.3.2": {
-            "runtime_dependencies": [
-              {
-                "name": "bitflags",
-                "package_key": "bitflags-2.11.1",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "block2",
-                "package_key": "block2-0.6.2",
-                "kind": "normal",
-                "features": [
-                  "alloc"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "dispatch2",
-                "package_key": "dispatch2-0.3.1",
-                "kind": "normal",
-                "features": [
-                  "alloc",
-                  "objc2"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2",
-                "package_key": "objc2-0.6.4",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2_app_kit",
-                "package_key": "objc2-app-kit-0.3.2",
-                "kind": "normal",
-                "features": [
-                  "NSAccessibilityProtocols",
-                  "NSAnimation",
-                  "NSAppearance",
-                  "NSDragging",
-                  "NSResponder",
-                  "NSScreen",
-                  "NSUserInterfaceItemIdentification",
-                  "NSView"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2_core_foundation",
-                "package_key": "objc2-core-foundation-0.3.2",
-                "kind": "normal",
-                "features": [
-                  "CFCGTypes",
-                  "objc2"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2_foundation",
-                "package_key": "objc2-foundation-0.3.2",
-                "kind": "normal",
-                "features": [
-                  "alloc"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "VZAudioDeviceConfiguration",
-              "VZAudioInputStreamSource",
-              "VZAudioOutputStreamSink",
-              "VZBootLoader",
-              "VZBridgedNetworkDeviceAttachment",
-              "VZBridgedNetworkInterface",
-              "VZConsoleDevice",
-              "VZConsoleDeviceConfiguration",
-              "VZConsolePortConfiguration",
-              "VZDefines",
-              "VZDirectoryShare",
-              "VZDirectorySharingDevice",
-              "VZDirectorySharingDeviceConfiguration",
-              "VZDiskBlockDeviceStorageDeviceAttachment",
-              "VZDiskImageStorageDeviceAttachment",
-              "VZDiskSynchronizationMode",
-              "VZEFIBootLoader",
-              "VZEFIVariableStore",
-              "VZEntropyDeviceConfiguration",
-              "VZError",
-              "VZFileHandleNetworkDeviceAttachment",
-              "VZFileHandleSerialPortAttachment",
-              "VZFileSerialPortAttachment",
-              "VZGenericMachineIdentifier",
-              "VZGenericPlatformConfiguration",
-              "VZGraphicsDevice",
-              "VZGraphicsDeviceConfiguration",
-              "VZGraphicsDisplay",
-              "VZGraphicsDisplayConfiguration",
-              "VZHostAudioInputStreamSource",
-              "VZHostAudioOutputStreamSink",
-              "VZKeyboardConfiguration",
-              "VZLinuxBootLoader",
-              "VZLinuxRosettaAbstractSocketCachingOptions",
-              "VZLinuxRosettaCachingOptions",
-              "VZLinuxRosettaDirectoryShare",
-              "VZLinuxRosettaUnixSocketCachingOptions",
-              "VZMACAddress",
-              "VZMacAuxiliaryStorage",
-              "VZMacGraphicsDevice",
-              "VZMacGraphicsDeviceConfiguration",
-              "VZMacGraphicsDisplay",
-              "VZMacGraphicsDisplayConfiguration",
-              "VZMacHardwareModel",
-              "VZMacKeyboardConfiguration",
-              "VZMacMachineIdentifier",
-              "VZMacOSBootLoader",
-              "VZMacOSConfigurationRequirements",
-              "VZMacOSInstaller",
-              "VZMacOSRestoreImage",
-              "VZMacOSVirtualMachineStartOptions",
-              "VZMacPlatformConfiguration",
-              "VZMacTrackpadConfiguration",
-              "VZMemoryBalloonDevice",
-              "VZMemoryBalloonDeviceConfiguration",
-              "VZMultipleDirectoryShare",
-              "VZNATNetworkDeviceAttachment",
-              "VZNVMExpressControllerDeviceConfiguration",
-              "VZNetworkBlockDeviceStorageDeviceAttachment",
-              "VZNetworkDevice",
-              "VZNetworkDeviceAttachment",
-              "VZNetworkDeviceConfiguration",
-              "VZPlatformConfiguration",
-              "VZPointingDeviceConfiguration",
-              "VZSerialPortAttachment",
-              "VZSerialPortConfiguration",
-              "VZSharedDirectory",
-              "VZSingleDirectoryShare",
-              "VZSocketDevice",
-              "VZSocketDeviceConfiguration",
-              "VZSpiceAgentPortAttachment",
-              "VZStorageDevice",
-              "VZStorageDeviceAttachment",
-              "VZStorageDeviceConfiguration",
-              "VZUSBController",
-              "VZUSBControllerConfiguration",
-              "VZUSBDevice",
-              "VZUSBDeviceConfiguration",
-              "VZUSBKeyboardConfiguration",
-              "VZUSBMassStorageDevice",
-              "VZUSBMassStorageDeviceConfiguration",
-              "VZUSBScreenCoordinatePointingDeviceConfiguration",
-              "VZVirtioBlockDeviceConfiguration",
-              "VZVirtioConsoleDevice",
-              "VZVirtioConsoleDeviceConfiguration",
-              "VZVirtioConsoleDeviceSerialPortConfiguration",
-              "VZVirtioConsolePort",
-              "VZVirtioConsolePortArray",
-              "VZVirtioConsolePortConfiguration",
-              "VZVirtioConsolePortConfigurationArray",
-              "VZVirtioEntropyDeviceConfiguration",
-              "VZVirtioFileSystemDevice",
-              "VZVirtioFileSystemDeviceConfiguration",
-              "VZVirtioGraphicsDevice",
-              "VZVirtioGraphicsDeviceConfiguration",
-              "VZVirtioGraphicsScanout",
-              "VZVirtioGraphicsScanoutConfiguration",
-              "VZVirtioNetworkDeviceConfiguration",
-              "VZVirtioSocketConnection",
-              "VZVirtioSocketDevice",
-              "VZVirtioSocketDeviceConfiguration",
-              "VZVirtioSocketListener",
-              "VZVirtioSoundDeviceConfiguration",
-              "VZVirtioSoundDeviceInputStreamConfiguration",
-              "VZVirtioSoundDeviceOutputStreamConfiguration",
-              "VZVirtioSoundDeviceStreamConfiguration",
-              "VZVirtioTraditionalMemoryBalloonDevice",
-              "VZVirtioTraditionalMemoryBalloonDeviceConfiguration",
-              "VZVirtualMachine",
-              "VZVirtualMachineConfiguration",
-              "VZVirtualMachineDelegate",
-              "VZVirtualMachineStartOptions",
-              "VZVirtualMachineView",
-              "VZVmnetNetworkDeviceAttachment",
-              "VZXHCIController",
-              "VZXHCIControllerConfiguration",
-              "alloc",
-              "bitflags",
-              "block2",
-              "default",
-              "dispatch2",
-              "objc2-app-kit",
-              "objc2-core-foundation",
-              "std"
             ]
           },
           "ring-0.17.14": {
@@ -25671,327 +25249,7 @@
               "OSX_10_9"
             ]
           },
-          "tatara-engine-0.2.157": {
-            "runtime_dependencies": [
-              {
-                "name": "anyhow",
-                "package_key": "anyhow-1.0.102",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "async_nats",
-                "package_key": "async-nats-0.38.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "async_trait",
-                "package_key": "async-trait-0.1.89",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "host"
-              },
-              {
-                "name": "bincode",
-                "package_key": "bincode-1.3.3",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "blake3",
-                "package_key": "blake3-1.8.5",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "chitchat",
-                "package_key": "chitchat-0.10.1",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "chrono",
-                "package_key": "chrono-0.4.44",
-                "kind": "normal",
-                "features": [
-                  "serde"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "dirs",
-                "package_key": "dirs-6.0.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "futures_core",
-                "package_key": "futures-core-0.3.32",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "hex",
-                "package_key": "hex-0.4.3",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "hostname",
-                "package_key": "hostname-0.4.2",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "kasou",
-                "package_key": "kasou-0.1.0-bbfaf245e0baf0cb6b6b0b6639a56f4e87cb4955",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": "cfg(target_os = \"macos\")",
-                "tree": "target"
-              },
-              {
-                "name": "mdns_sd",
-                "package_key": "mdns-sd-0.18.2",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "nix",
-                "package_key": "nix-0.29.0",
-                "kind": "normal",
-                "features": [
-                  "process",
-                  "signal"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": "cfg(unix)",
-                "tree": "target"
-              },
-              {
-                "name": "openraft",
-                "package_key": "openraft-0.9.22",
-                "kind": "normal",
-                "features": [
-                  "serde",
-                  "storage-v2"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "rand",
-                "package_key": "rand-0.9.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "redb",
-                "package_key": "redb-3.1.3",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "reqwest",
-                "package_key": "reqwest-0.12.28",
-                "kind": "normal",
-                "features": [
-                  "json",
-                  "rustls-tls",
-                  "stream"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde",
-                "package_key": "serde-1.0.228",
-                "kind": "normal",
-                "features": [
-                  "derive"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde_json",
-                "package_key": "serde_json-1.0.150",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde_yaml",
-                "package_key": "serde_yaml-0.9.34+deprecated",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "sha2",
-                "package_key": "sha2-0.10.9",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tatara_core",
-                "package_key": "tatara-core-0.2.157",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "thiserror",
-                "package_key": "thiserror-2.0.18",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tokio",
-                "package_key": "tokio-1.52.3",
-                "kind": "normal",
-                "features": [
-                  "full"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tokio_stream",
-                "package_key": "tokio-stream-0.1.18",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tracing",
-                "package_key": "tracing-0.1.44",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tracing_subscriber",
-                "package_key": "tracing-subscriber-0.3.23",
-                "kind": "normal",
-                "features": [
-                  "env-filter",
-                  "json"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "uuid",
-                "package_key": "uuid-1.23.2",
-                "kind": "normal",
-                "features": [
-                  "serde",
-                  "v4"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "default"
-            ]
-          },
-          "tatara-hvf-0.2.157": {
+          "tatara-hvf-0.2.158": {
             "runtime_dependencies": [
               {
                 "name": "applevisor",
@@ -27042,7 +26300,9 @@
             ],
             "build_dependencies": [],
             "features": [
+              "fsevent-sys",
               "kqueue",
+              "macos_fsevent",
               "macos_kqueue",
               "mio"
             ]
@@ -27446,317 +26706,7 @@
             "build_dependencies": [],
             "features": []
           },
-          "tatara-engine-0.2.157": {
-            "runtime_dependencies": [
-              {
-                "name": "anyhow",
-                "package_key": "anyhow-1.0.102",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "async_nats",
-                "package_key": "async-nats-0.38.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "async_trait",
-                "package_key": "async-trait-0.1.89",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "host"
-              },
-              {
-                "name": "bincode",
-                "package_key": "bincode-1.3.3",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "blake3",
-                "package_key": "blake3-1.8.5",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "chitchat",
-                "package_key": "chitchat-0.10.1",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "chrono",
-                "package_key": "chrono-0.4.44",
-                "kind": "normal",
-                "features": [
-                  "serde"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "dirs",
-                "package_key": "dirs-6.0.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "futures_core",
-                "package_key": "futures-core-0.3.32",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "hex",
-                "package_key": "hex-0.4.3",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "hostname",
-                "package_key": "hostname-0.4.2",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "mdns_sd",
-                "package_key": "mdns-sd-0.18.2",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "nix",
-                "package_key": "nix-0.29.0",
-                "kind": "normal",
-                "features": [
-                  "process",
-                  "signal"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": "cfg(unix)",
-                "tree": "target"
-              },
-              {
-                "name": "openraft",
-                "package_key": "openraft-0.9.22",
-                "kind": "normal",
-                "features": [
-                  "serde",
-                  "storage-v2"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "rand",
-                "package_key": "rand-0.9.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "redb",
-                "package_key": "redb-3.1.3",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "reqwest",
-                "package_key": "reqwest-0.12.28",
-                "kind": "normal",
-                "features": [
-                  "json",
-                  "rustls-tls",
-                  "stream"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde",
-                "package_key": "serde-1.0.228",
-                "kind": "normal",
-                "features": [
-                  "derive"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde_json",
-                "package_key": "serde_json-1.0.150",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde_yaml",
-                "package_key": "serde_yaml-0.9.34+deprecated",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "sha2",
-                "package_key": "sha2-0.10.9",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tatara_core",
-                "package_key": "tatara-core-0.2.157",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "thiserror",
-                "package_key": "thiserror-2.0.18",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tokio",
-                "package_key": "tokio-1.52.3",
-                "kind": "normal",
-                "features": [
-                  "full"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tokio_stream",
-                "package_key": "tokio-stream-0.1.18",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tracing",
-                "package_key": "tracing-0.1.44",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tracing_subscriber",
-                "package_key": "tracing-subscriber-0.3.23",
-                "kind": "normal",
-                "features": [
-                  "env-filter",
-                  "json"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "uuid",
-                "package_key": "uuid-1.23.2",
-                "kind": "normal",
-                "features": [
-                  "serde",
-                  "v4"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "default"
-            ]
-          },
-          "tatara-hvf-0.2.157": {
+          "tatara-hvf-0.2.158": {
             "runtime_dependencies": [
               {
                 "name": "serde",
@@ -28811,7 +27761,9 @@
             ],
             "build_dependencies": [],
             "features": [
+              "fsevent-sys",
               "kqueue",
+              "macos_fsevent",
               "macos_kqueue",
               "mio"
             ]
@@ -29215,317 +28167,7 @@
             "build_dependencies": [],
             "features": []
           },
-          "tatara-engine-0.2.157": {
-            "runtime_dependencies": [
-              {
-                "name": "anyhow",
-                "package_key": "anyhow-1.0.102",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "async_nats",
-                "package_key": "async-nats-0.38.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "async_trait",
-                "package_key": "async-trait-0.1.89",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "host"
-              },
-              {
-                "name": "bincode",
-                "package_key": "bincode-1.3.3",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "blake3",
-                "package_key": "blake3-1.8.5",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "chitchat",
-                "package_key": "chitchat-0.10.1",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "chrono",
-                "package_key": "chrono-0.4.44",
-                "kind": "normal",
-                "features": [
-                  "serde"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "dirs",
-                "package_key": "dirs-6.0.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "futures_core",
-                "package_key": "futures-core-0.3.32",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "hex",
-                "package_key": "hex-0.4.3",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "hostname",
-                "package_key": "hostname-0.4.2",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "mdns_sd",
-                "package_key": "mdns-sd-0.18.2",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "nix",
-                "package_key": "nix-0.29.0",
-                "kind": "normal",
-                "features": [
-                  "process",
-                  "signal"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": "cfg(unix)",
-                "tree": "target"
-              },
-              {
-                "name": "openraft",
-                "package_key": "openraft-0.9.22",
-                "kind": "normal",
-                "features": [
-                  "serde",
-                  "storage-v2"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "rand",
-                "package_key": "rand-0.9.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "redb",
-                "package_key": "redb-3.1.3",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "reqwest",
-                "package_key": "reqwest-0.12.28",
-                "kind": "normal",
-                "features": [
-                  "json",
-                  "rustls-tls",
-                  "stream"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde",
-                "package_key": "serde-1.0.228",
-                "kind": "normal",
-                "features": [
-                  "derive"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde_json",
-                "package_key": "serde_json-1.0.150",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde_yaml",
-                "package_key": "serde_yaml-0.9.34+deprecated",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "sha2",
-                "package_key": "sha2-0.10.9",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tatara_core",
-                "package_key": "tatara-core-0.2.157",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "thiserror",
-                "package_key": "thiserror-2.0.18",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tokio",
-                "package_key": "tokio-1.52.3",
-                "kind": "normal",
-                "features": [
-                  "full"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tokio_stream",
-                "package_key": "tokio-stream-0.1.18",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tracing",
-                "package_key": "tracing-0.1.44",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tracing_subscriber",
-                "package_key": "tracing-subscriber-0.3.23",
-                "kind": "normal",
-                "features": [
-                  "env-filter",
-                  "json"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "uuid",
-                "package_key": "uuid-1.23.2",
-                "kind": "normal",
-                "features": [
-                  "serde",
-                  "v4"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "default"
-            ]
-          },
-          "tatara-hvf-0.2.157": {
+          "tatara-hvf-0.2.158": {
             "runtime_dependencies": [
               {
                 "name": "serde",
@@ -30175,28 +28817,6 @@
               "std"
             ]
           },
-          "block2-0.6.2": {
-            "runtime_dependencies": [
-              {
-                "name": "objc2",
-                "package_key": "objc2-0.6.4",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "alloc",
-              "default",
-              "std"
-            ]
-          },
           "cap-primitives-3.4.5": {
             "runtime_dependencies": [
               {
@@ -30499,64 +29119,21 @@
             "build_dependencies": [],
             "features": []
           },
-          "dispatch2-0.3.1": {
+          "fsevent-sys-4.1.0": {
             "runtime_dependencies": [
-              {
-                "name": "bitflags",
-                "package_key": "bitflags-2.11.1",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "block2",
-                "package_key": "block2-0.6.2",
-                "kind": "normal",
-                "features": [
-                  "alloc"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
               {
                 "name": "libc",
                 "package_key": "libc-0.2.186",
                 "kind": "normal",
                 "features": [],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2",
-                "package_key": "objc2-0.6.4",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": true,
+                "uses_default_features": true,
+                "optional": false,
                 "target": null,
                 "tree": "target"
               }
             ],
             "build_dependencies": [],
-            "features": [
-              "alloc",
-              "block2",
-              "default",
-              "libc",
-              "objc2",
-              "std"
-            ]
+            "features": []
           },
           "iana-time-zone-0.1.65": {
             "runtime_dependencies": [
@@ -30626,145 +29203,6 @@
                 "tree": "host"
               }
             ],
-            "features": []
-          },
-          "kasou-0.1.0-bbfaf245e0baf0cb6b6b0b6639a56f4e87cb4955": {
-            "runtime_dependencies": [
-              {
-                "name": "block2",
-                "package_key": "block2-0.6.2",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "dispatch2",
-                "package_key": "dispatch2-0.3.1",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2",
-                "package_key": "objc2-0.6.4",
-                "kind": "normal",
-                "features": [
-                  "exception"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2_foundation",
-                "package_key": "objc2-foundation-0.3.2",
-                "kind": "normal",
-                "features": [
-                  "NSData",
-                  "NSError",
-                  "NSString",
-                  "NSURL"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2_virtualization",
-                "package_key": "objc2-virtualization-0.3.2",
-                "kind": "normal",
-                "features": [
-                  "VZBootLoader",
-                  "VZDirectoryShare",
-                  "VZDirectorySharingDeviceConfiguration",
-                  "VZDiskImageStorageDeviceAttachment",
-                  "VZEFIBootLoader",
-                  "VZEFIVariableStore",
-                  "VZEntropyDeviceConfiguration",
-                  "VZFileSerialPortAttachment",
-                  "VZGenericMachineIdentifier",
-                  "VZGenericPlatformConfiguration",
-                  "VZLinuxBootLoader",
-                  "VZMACAddress",
-                  "VZNATNetworkDeviceAttachment",
-                  "VZNetworkDeviceConfiguration",
-                  "VZPlatformConfiguration",
-                  "VZSerialPortAttachment",
-                  "VZSerialPortConfiguration",
-                  "VZSharedDirectory",
-                  "VZSingleDirectoryShare",
-                  "VZStorageDeviceAttachment",
-                  "VZStorageDeviceConfiguration",
-                  "VZVirtioBlockDeviceConfiguration",
-                  "VZVirtioConsoleDeviceSerialPortConfiguration",
-                  "VZVirtioEntropyDeviceConfiguration",
-                  "VZVirtioFileSystemDeviceConfiguration",
-                  "VZVirtioNetworkDeviceConfiguration",
-                  "VZVirtualMachine",
-                  "VZVirtualMachineConfiguration",
-                  "VZVirtualMachineDelegate",
-                  "block2",
-                  "dispatch2"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde",
-                "package_key": "serde-1.0.228",
-                "kind": "normal",
-                "features": [
-                  "derive"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "thiserror",
-                "package_key": "thiserror-2.0.18",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tokio",
-                "package_key": "tokio-1.52.3",
-                "kind": "normal",
-                "features": [
-                  "sync"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tracing",
-                "package_key": "tracing-0.1.44",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
             "features": []
           },
           "kqueue-1.1.1": {
@@ -30846,6 +29284,16 @@
                 "features": [],
                 "uses_default_features": true,
                 "optional": false,
+                "target": "cfg(target_os = \"macos\")",
+                "tree": "target"
+              },
+              {
+                "name": "fsevent_sys",
+                "package_key": "fsevent-sys-4.1.0",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": true,
+                "optional": true,
                 "target": "cfg(target_os = \"macos\")",
                 "tree": "target"
               },
@@ -30948,649 +29396,11 @@
             ],
             "build_dependencies": [],
             "features": [
+              "fsevent-sys",
               "kqueue",
+              "macos_fsevent",
               "macos_kqueue",
               "mio"
-            ]
-          },
-          "objc2-0.6.4": {
-            "runtime_dependencies": [
-              {
-                "name": "objc2_encode",
-                "package_key": "objc2-encode-4.1.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2_exception_helper",
-                "package_key": "objc2-exception-helper-0.1.1",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "alloc",
-              "default",
-              "exception",
-              "std"
-            ]
-          },
-          "objc2-app-kit-0.3.2": {
-            "runtime_dependencies": [
-              {
-                "name": "bitflags",
-                "package_key": "bitflags-2.11.1",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2",
-                "package_key": "objc2-0.6.4",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2_foundation",
-                "package_key": "objc2-foundation-0.3.2",
-                "kind": "normal",
-                "features": [
-                  "alloc"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "NSAccessibilityProtocols",
-              "NSAnimation",
-              "NSAppearance",
-              "NSDragging",
-              "NSResponder",
-              "NSScreen",
-              "NSUserInterfaceItemIdentification",
-              "NSView",
-              "bitflags"
-            ]
-          },
-          "objc2-core-foundation-0.3.2": {
-            "runtime_dependencies": [
-              {
-                "name": "bitflags",
-                "package_key": "bitflags-2.11.1",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2",
-                "package_key": "objc2-0.6.4",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "CFArray",
-              "CFAttributedString",
-              "CFCGTypes",
-              "CFCalendar",
-              "CFCharacterSet",
-              "CFData",
-              "CFDate",
-              "CFDictionary",
-              "CFError",
-              "CFFileSecurity",
-              "CFLocale",
-              "CFMachPort",
-              "CFMessagePort",
-              "CFRunLoop",
-              "CFSet",
-              "CFStream",
-              "CFURL",
-              "bitflags",
-              "objc2"
-            ]
-          },
-          "objc2-encode-4.1.0": {
-            "runtime_dependencies": [],
-            "build_dependencies": [],
-            "features": [
-              "alloc",
-              "std"
-            ]
-          },
-          "objc2-exception-helper-0.1.1": {
-            "runtime_dependencies": [],
-            "build_dependencies": [
-              {
-                "name": "cc",
-                "package_key": "cc-1.2.63",
-                "kind": "build",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "host"
-              }
-            ],
-            "features": []
-          },
-          "objc2-foundation-0.3.2": {
-            "runtime_dependencies": [
-              {
-                "name": "bitflags",
-                "package_key": "bitflags-2.11.1",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "block2",
-                "package_key": "block2-0.6.2",
-                "kind": "normal",
-                "features": [
-                  "alloc"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "libc",
-                "package_key": "libc-0.2.186",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2",
-                "package_key": "objc2-0.6.4",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2_core_foundation",
-                "package_key": "objc2-core-foundation-0.3.2",
-                "kind": "normal",
-                "features": [
-                  "CFArray",
-                  "CFAttributedString",
-                  "CFCGTypes",
-                  "CFCalendar",
-                  "CFCharacterSet",
-                  "CFData",
-                  "CFDate",
-                  "CFDictionary",
-                  "CFError",
-                  "CFFileSecurity",
-                  "CFLocale",
-                  "CFMachPort",
-                  "CFMessagePort",
-                  "CFRunLoop",
-                  "CFSet",
-                  "CFStream",
-                  "CFURL",
-                  "objc2"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "FoundationErrors",
-              "FoundationLegacySwiftCompatibility",
-              "NSAffineTransform",
-              "NSAppleEventDescriptor",
-              "NSAppleEventManager",
-              "NSAppleScript",
-              "NSArchiver",
-              "NSArray",
-              "NSAttributedString",
-              "NSAutoreleasePool",
-              "NSBackgroundActivityScheduler",
-              "NSBundle",
-              "NSByteCountFormatter",
-              "NSByteOrder",
-              "NSCache",
-              "NSCalendar",
-              "NSCalendarDate",
-              "NSCharacterSet",
-              "NSClassDescription",
-              "NSCoder",
-              "NSComparisonPredicate",
-              "NSCompoundPredicate",
-              "NSConnection",
-              "NSData",
-              "NSDate",
-              "NSDateComponentsFormatter",
-              "NSDateFormatter",
-              "NSDateInterval",
-              "NSDateIntervalFormatter",
-              "NSDebug",
-              "NSDecimal",
-              "NSDecimalNumber",
-              "NSDictionary",
-              "NSDistantObject",
-              "NSDistributedLock",
-              "NSDistributedNotificationCenter",
-              "NSEnergyFormatter",
-              "NSEnumerator",
-              "NSError",
-              "NSException",
-              "NSExpression",
-              "NSExtensionContext",
-              "NSExtensionItem",
-              "NSExtensionRequestHandling",
-              "NSFileCoordinator",
-              "NSFileHandle",
-              "NSFileManager",
-              "NSFilePresenter",
-              "NSFileVersion",
-              "NSFileWrapper",
-              "NSFormatter",
-              "NSGarbageCollector",
-              "NSGeometry",
-              "NSHFSFileTypes",
-              "NSHTTPCookie",
-              "NSHTTPCookieStorage",
-              "NSHashTable",
-              "NSHost",
-              "NSISO8601DateFormatter",
-              "NSIndexPath",
-              "NSIndexSet",
-              "NSInflectionRule",
-              "NSInvocation",
-              "NSItemProvider",
-              "NSJSONSerialization",
-              "NSKeyValueCoding",
-              "NSKeyValueObserving",
-              "NSKeyValueSharedObservers",
-              "NSKeyedArchiver",
-              "NSLengthFormatter",
-              "NSLinguisticTagger",
-              "NSListFormatter",
-              "NSLocale",
-              "NSLocalizedNumberFormatRule",
-              "NSLock",
-              "NSMapTable",
-              "NSMassFormatter",
-              "NSMeasurement",
-              "NSMeasurementFormatter",
-              "NSMetadata",
-              "NSMetadataAttributes",
-              "NSMethodSignature",
-              "NSMorphology",
-              "NSNetServices",
-              "NSNotification",
-              "NSNotificationQueue",
-              "NSNull",
-              "NSNumberFormatter",
-              "NSObjCRuntime",
-              "NSObject",
-              "NSObjectScripting",
-              "NSOperation",
-              "NSOrderedCollectionChange",
-              "NSOrderedCollectionDifference",
-              "NSOrderedSet",
-              "NSOrthography",
-              "NSPathUtilities",
-              "NSPersonNameComponents",
-              "NSPersonNameComponentsFormatter",
-              "NSPointerArray",
-              "NSPointerFunctions",
-              "NSPort",
-              "NSPortCoder",
-              "NSPortMessage",
-              "NSPortNameServer",
-              "NSPredicate",
-              "NSProcessInfo",
-              "NSProgress",
-              "NSPropertyList",
-              "NSProtocolChecker",
-              "NSProxy",
-              "NSRange",
-              "NSRegularExpression",
-              "NSRelativeDateTimeFormatter",
-              "NSRunLoop",
-              "NSScanner",
-              "NSScriptClassDescription",
-              "NSScriptCoercionHandler",
-              "NSScriptCommand",
-              "NSScriptCommandDescription",
-              "NSScriptExecutionContext",
-              "NSScriptKeyValueCoding",
-              "NSScriptObjectSpecifiers",
-              "NSScriptStandardSuiteCommands",
-              "NSScriptSuiteRegistry",
-              "NSScriptWhoseTests",
-              "NSSet",
-              "NSSortDescriptor",
-              "NSSpellServer",
-              "NSStream",
-              "NSString",
-              "NSTask",
-              "NSTermOfAddress",
-              "NSTextCheckingResult",
-              "NSThread",
-              "NSTimeZone",
-              "NSTimer",
-              "NSURL",
-              "NSURLAuthenticationChallenge",
-              "NSURLCache",
-              "NSURLConnection",
-              "NSURLCredential",
-              "NSURLCredentialStorage",
-              "NSURLDownload",
-              "NSURLError",
-              "NSURLHandle",
-              "NSURLProtectionSpace",
-              "NSURLProtocol",
-              "NSURLRequest",
-              "NSURLResponse",
-              "NSURLSession",
-              "NSUUID",
-              "NSUbiquitousKeyValueStore",
-              "NSUndoManager",
-              "NSUnit",
-              "NSUserActivity",
-              "NSUserDefaults",
-              "NSUserNotification",
-              "NSUserScriptTask",
-              "NSValue",
-              "NSValueTransformer",
-              "NSXMLDTD",
-              "NSXMLDTDNode",
-              "NSXMLDocument",
-              "NSXMLElement",
-              "NSXMLNode",
-              "NSXMLNodeOptions",
-              "NSXMLParser",
-              "NSXPCConnection",
-              "NSZone",
-              "alloc",
-              "bitflags",
-              "block2",
-              "default",
-              "libc",
-              "objc2-core-foundation",
-              "std"
-            ]
-          },
-          "objc2-virtualization-0.3.2": {
-            "runtime_dependencies": [
-              {
-                "name": "bitflags",
-                "package_key": "bitflags-2.11.1",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "block2",
-                "package_key": "block2-0.6.2",
-                "kind": "normal",
-                "features": [
-                  "alloc"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "dispatch2",
-                "package_key": "dispatch2-0.3.1",
-                "kind": "normal",
-                "features": [
-                  "alloc",
-                  "objc2"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2",
-                "package_key": "objc2-0.6.4",
-                "kind": "normal",
-                "features": [
-                  "std"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2_app_kit",
-                "package_key": "objc2-app-kit-0.3.2",
-                "kind": "normal",
-                "features": [
-                  "NSAccessibilityProtocols",
-                  "NSAnimation",
-                  "NSAppearance",
-                  "NSDragging",
-                  "NSResponder",
-                  "NSScreen",
-                  "NSUserInterfaceItemIdentification",
-                  "NSView"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2_core_foundation",
-                "package_key": "objc2-core-foundation-0.3.2",
-                "kind": "normal",
-                "features": [
-                  "CFCGTypes",
-                  "objc2"
-                ],
-                "uses_default_features": false,
-                "optional": true,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "objc2_foundation",
-                "package_key": "objc2-foundation-0.3.2",
-                "kind": "normal",
-                "features": [
-                  "alloc"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "VZAudioDeviceConfiguration",
-              "VZAudioInputStreamSource",
-              "VZAudioOutputStreamSink",
-              "VZBootLoader",
-              "VZBridgedNetworkDeviceAttachment",
-              "VZBridgedNetworkInterface",
-              "VZConsoleDevice",
-              "VZConsoleDeviceConfiguration",
-              "VZConsolePortConfiguration",
-              "VZDefines",
-              "VZDirectoryShare",
-              "VZDirectorySharingDevice",
-              "VZDirectorySharingDeviceConfiguration",
-              "VZDiskBlockDeviceStorageDeviceAttachment",
-              "VZDiskImageStorageDeviceAttachment",
-              "VZDiskSynchronizationMode",
-              "VZEFIBootLoader",
-              "VZEFIVariableStore",
-              "VZEntropyDeviceConfiguration",
-              "VZError",
-              "VZFileHandleNetworkDeviceAttachment",
-              "VZFileHandleSerialPortAttachment",
-              "VZFileSerialPortAttachment",
-              "VZGenericMachineIdentifier",
-              "VZGenericPlatformConfiguration",
-              "VZGraphicsDevice",
-              "VZGraphicsDeviceConfiguration",
-              "VZGraphicsDisplay",
-              "VZGraphicsDisplayConfiguration",
-              "VZHostAudioInputStreamSource",
-              "VZHostAudioOutputStreamSink",
-              "VZKeyboardConfiguration",
-              "VZLinuxBootLoader",
-              "VZLinuxRosettaAbstractSocketCachingOptions",
-              "VZLinuxRosettaCachingOptions",
-              "VZLinuxRosettaDirectoryShare",
-              "VZLinuxRosettaUnixSocketCachingOptions",
-              "VZMACAddress",
-              "VZMacAuxiliaryStorage",
-              "VZMacGraphicsDevice",
-              "VZMacGraphicsDeviceConfiguration",
-              "VZMacGraphicsDisplay",
-              "VZMacGraphicsDisplayConfiguration",
-              "VZMacHardwareModel",
-              "VZMacKeyboardConfiguration",
-              "VZMacMachineIdentifier",
-              "VZMacOSBootLoader",
-              "VZMacOSConfigurationRequirements",
-              "VZMacOSInstaller",
-              "VZMacOSRestoreImage",
-              "VZMacOSVirtualMachineStartOptions",
-              "VZMacPlatformConfiguration",
-              "VZMacTrackpadConfiguration",
-              "VZMemoryBalloonDevice",
-              "VZMemoryBalloonDeviceConfiguration",
-              "VZMultipleDirectoryShare",
-              "VZNATNetworkDeviceAttachment",
-              "VZNVMExpressControllerDeviceConfiguration",
-              "VZNetworkBlockDeviceStorageDeviceAttachment",
-              "VZNetworkDevice",
-              "VZNetworkDeviceAttachment",
-              "VZNetworkDeviceConfiguration",
-              "VZPlatformConfiguration",
-              "VZPointingDeviceConfiguration",
-              "VZSerialPortAttachment",
-              "VZSerialPortConfiguration",
-              "VZSharedDirectory",
-              "VZSingleDirectoryShare",
-              "VZSocketDevice",
-              "VZSocketDeviceConfiguration",
-              "VZSpiceAgentPortAttachment",
-              "VZStorageDevice",
-              "VZStorageDeviceAttachment",
-              "VZStorageDeviceConfiguration",
-              "VZUSBController",
-              "VZUSBControllerConfiguration",
-              "VZUSBDevice",
-              "VZUSBDeviceConfiguration",
-              "VZUSBKeyboardConfiguration",
-              "VZUSBMassStorageDevice",
-              "VZUSBMassStorageDeviceConfiguration",
-              "VZUSBScreenCoordinatePointingDeviceConfiguration",
-              "VZVirtioBlockDeviceConfiguration",
-              "VZVirtioConsoleDevice",
-              "VZVirtioConsoleDeviceConfiguration",
-              "VZVirtioConsoleDeviceSerialPortConfiguration",
-              "VZVirtioConsolePort",
-              "VZVirtioConsolePortArray",
-              "VZVirtioConsolePortConfiguration",
-              "VZVirtioConsolePortConfigurationArray",
-              "VZVirtioEntropyDeviceConfiguration",
-              "VZVirtioFileSystemDevice",
-              "VZVirtioFileSystemDeviceConfiguration",
-              "VZVirtioGraphicsDevice",
-              "VZVirtioGraphicsDeviceConfiguration",
-              "VZVirtioGraphicsScanout",
-              "VZVirtioGraphicsScanoutConfiguration",
-              "VZVirtioNetworkDeviceConfiguration",
-              "VZVirtioSocketConnection",
-              "VZVirtioSocketDevice",
-              "VZVirtioSocketDeviceConfiguration",
-              "VZVirtioSocketListener",
-              "VZVirtioSoundDeviceConfiguration",
-              "VZVirtioSoundDeviceInputStreamConfiguration",
-              "VZVirtioSoundDeviceOutputStreamConfiguration",
-              "VZVirtioSoundDeviceStreamConfiguration",
-              "VZVirtioTraditionalMemoryBalloonDevice",
-              "VZVirtioTraditionalMemoryBalloonDeviceConfiguration",
-              "VZVirtualMachine",
-              "VZVirtualMachineConfiguration",
-              "VZVirtualMachineDelegate",
-              "VZVirtualMachineStartOptions",
-              "VZVirtualMachineView",
-              "VZVmnetNetworkDeviceAttachment",
-              "VZXHCIController",
-              "VZXHCIControllerConfiguration",
-              "alloc",
-              "bitflags",
-              "block2",
-              "default",
-              "dispatch2",
-              "objc2-app-kit",
-              "objc2-core-foundation",
-              "std"
             ]
           },
           "ring-0.17.14": {
@@ -32023,327 +29833,7 @@
               "OSX_10_9"
             ]
           },
-          "tatara-engine-0.2.157": {
-            "runtime_dependencies": [
-              {
-                "name": "anyhow",
-                "package_key": "anyhow-1.0.102",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "async_nats",
-                "package_key": "async-nats-0.38.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "async_trait",
-                "package_key": "async-trait-0.1.89",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "host"
-              },
-              {
-                "name": "bincode",
-                "package_key": "bincode-1.3.3",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "blake3",
-                "package_key": "blake3-1.8.5",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "chitchat",
-                "package_key": "chitchat-0.10.1",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "chrono",
-                "package_key": "chrono-0.4.44",
-                "kind": "normal",
-                "features": [
-                  "serde"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "dirs",
-                "package_key": "dirs-6.0.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "futures_core",
-                "package_key": "futures-core-0.3.32",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "hex",
-                "package_key": "hex-0.4.3",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "hostname",
-                "package_key": "hostname-0.4.2",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "kasou",
-                "package_key": "kasou-0.1.0-bbfaf245e0baf0cb6b6b0b6639a56f4e87cb4955",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": "cfg(target_os = \"macos\")",
-                "tree": "target"
-              },
-              {
-                "name": "mdns_sd",
-                "package_key": "mdns-sd-0.18.2",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "nix",
-                "package_key": "nix-0.29.0",
-                "kind": "normal",
-                "features": [
-                  "process",
-                  "signal"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": "cfg(unix)",
-                "tree": "target"
-              },
-              {
-                "name": "openraft",
-                "package_key": "openraft-0.9.22",
-                "kind": "normal",
-                "features": [
-                  "serde",
-                  "storage-v2"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "rand",
-                "package_key": "rand-0.9.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "redb",
-                "package_key": "redb-3.1.3",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "reqwest",
-                "package_key": "reqwest-0.12.28",
-                "kind": "normal",
-                "features": [
-                  "json",
-                  "rustls-tls",
-                  "stream"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde",
-                "package_key": "serde-1.0.228",
-                "kind": "normal",
-                "features": [
-                  "derive"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde_json",
-                "package_key": "serde_json-1.0.150",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde_yaml",
-                "package_key": "serde_yaml-0.9.34+deprecated",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "sha2",
-                "package_key": "sha2-0.10.9",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tatara_core",
-                "package_key": "tatara-core-0.2.157",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "thiserror",
-                "package_key": "thiserror-2.0.18",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tokio",
-                "package_key": "tokio-1.52.3",
-                "kind": "normal",
-                "features": [
-                  "full"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tokio_stream",
-                "package_key": "tokio-stream-0.1.18",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tracing",
-                "package_key": "tracing-0.1.44",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tracing_subscriber",
-                "package_key": "tracing-subscriber-0.3.23",
-                "kind": "normal",
-                "features": [
-                  "env-filter",
-                  "json"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "uuid",
-                "package_key": "uuid-1.23.2",
-                "kind": "normal",
-                "features": [
-                  "serde",
-                  "v4"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "default"
-            ]
-          },
-          "tatara-hvf-0.2.157": {
+          "tatara-hvf-0.2.158": {
             "runtime_dependencies": [
               {
                 "name": "serde",
@@ -33488,7 +30978,9 @@
             ],
             "build_dependencies": [],
             "features": [
+              "fsevent-sys",
               "kqueue",
+              "macos_fsevent",
               "macos_kqueue",
               "mio"
             ]
@@ -33872,317 +31364,7 @@
             "build_dependencies": [],
             "features": []
           },
-          "tatara-engine-0.2.157": {
-            "runtime_dependencies": [
-              {
-                "name": "anyhow",
-                "package_key": "anyhow-1.0.102",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "async_nats",
-                "package_key": "async-nats-0.38.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "async_trait",
-                "package_key": "async-trait-0.1.89",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "host"
-              },
-              {
-                "name": "bincode",
-                "package_key": "bincode-1.3.3",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "blake3",
-                "package_key": "blake3-1.8.5",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "chitchat",
-                "package_key": "chitchat-0.10.1",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "chrono",
-                "package_key": "chrono-0.4.44",
-                "kind": "normal",
-                "features": [
-                  "serde"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "dirs",
-                "package_key": "dirs-6.0.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "futures_core",
-                "package_key": "futures-core-0.3.32",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "hex",
-                "package_key": "hex-0.4.3",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "hostname",
-                "package_key": "hostname-0.4.2",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "mdns_sd",
-                "package_key": "mdns-sd-0.18.2",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "nix",
-                "package_key": "nix-0.29.0",
-                "kind": "normal",
-                "features": [
-                  "process",
-                  "signal"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": "cfg(unix)",
-                "tree": "target"
-              },
-              {
-                "name": "openraft",
-                "package_key": "openraft-0.9.22",
-                "kind": "normal",
-                "features": [
-                  "serde",
-                  "storage-v2"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "rand",
-                "package_key": "rand-0.9.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "redb",
-                "package_key": "redb-3.1.3",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "reqwest",
-                "package_key": "reqwest-0.12.28",
-                "kind": "normal",
-                "features": [
-                  "json",
-                  "rustls-tls",
-                  "stream"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde",
-                "package_key": "serde-1.0.228",
-                "kind": "normal",
-                "features": [
-                  "derive"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde_json",
-                "package_key": "serde_json-1.0.150",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde_yaml",
-                "package_key": "serde_yaml-0.9.34+deprecated",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "sha2",
-                "package_key": "sha2-0.10.9",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tatara_core",
-                "package_key": "tatara-core-0.2.157",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "thiserror",
-                "package_key": "thiserror-2.0.18",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tokio",
-                "package_key": "tokio-1.52.3",
-                "kind": "normal",
-                "features": [
-                  "full"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tokio_stream",
-                "package_key": "tokio-stream-0.1.18",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tracing",
-                "package_key": "tracing-0.1.44",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tracing_subscriber",
-                "package_key": "tracing-subscriber-0.3.23",
-                "kind": "normal",
-                "features": [
-                  "env-filter",
-                  "json"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "uuid",
-                "package_key": "uuid-1.23.2",
-                "kind": "normal",
-                "features": [
-                  "serde",
-                  "v4"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "default"
-            ]
-          },
-          "tatara-hvf-0.2.157": {
+          "tatara-hvf-0.2.158": {
             "runtime_dependencies": [
               {
                 "name": "serde",
@@ -35341,7 +32523,9 @@
             ],
             "build_dependencies": [],
             "features": [
+              "fsevent-sys",
               "kqueue",
+              "macos_fsevent",
               "macos_kqueue",
               "mio"
             ]
@@ -35725,317 +32909,7 @@
             "build_dependencies": [],
             "features": []
           },
-          "tatara-engine-0.2.157": {
-            "runtime_dependencies": [
-              {
-                "name": "anyhow",
-                "package_key": "anyhow-1.0.102",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "async_nats",
-                "package_key": "async-nats-0.38.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "async_trait",
-                "package_key": "async-trait-0.1.89",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "host"
-              },
-              {
-                "name": "bincode",
-                "package_key": "bincode-1.3.3",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "blake3",
-                "package_key": "blake3-1.8.5",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "chitchat",
-                "package_key": "chitchat-0.10.1",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "chrono",
-                "package_key": "chrono-0.4.44",
-                "kind": "normal",
-                "features": [
-                  "serde"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "dirs",
-                "package_key": "dirs-6.0.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "futures_core",
-                "package_key": "futures-core-0.3.32",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "hex",
-                "package_key": "hex-0.4.3",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "hostname",
-                "package_key": "hostname-0.4.2",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "mdns_sd",
-                "package_key": "mdns-sd-0.18.2",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "nix",
-                "package_key": "nix-0.29.0",
-                "kind": "normal",
-                "features": [
-                  "process",
-                  "signal"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": "cfg(unix)",
-                "tree": "target"
-              },
-              {
-                "name": "openraft",
-                "package_key": "openraft-0.9.22",
-                "kind": "normal",
-                "features": [
-                  "serde",
-                  "storage-v2"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "rand",
-                "package_key": "rand-0.9.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "redb",
-                "package_key": "redb-3.1.3",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "reqwest",
-                "package_key": "reqwest-0.12.28",
-                "kind": "normal",
-                "features": [
-                  "json",
-                  "rustls-tls",
-                  "stream"
-                ],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde",
-                "package_key": "serde-1.0.228",
-                "kind": "normal",
-                "features": [
-                  "derive"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde_json",
-                "package_key": "serde_json-1.0.150",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "serde_yaml",
-                "package_key": "serde_yaml-0.9.34+deprecated",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "sha2",
-                "package_key": "sha2-0.10.9",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tatara_core",
-                "package_key": "tatara-core-0.2.157",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "thiserror",
-                "package_key": "thiserror-2.0.18",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tokio",
-                "package_key": "tokio-1.52.3",
-                "kind": "normal",
-                "features": [
-                  "full"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tokio_stream",
-                "package_key": "tokio-stream-0.1.18",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tracing",
-                "package_key": "tracing-0.1.44",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "tracing_subscriber",
-                "package_key": "tracing-subscriber-0.3.23",
-                "kind": "normal",
-                "features": [
-                  "env-filter",
-                  "json"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "uuid",
-                "package_key": "uuid-1.23.2",
-                "kind": "normal",
-                "features": [
-                  "serde",
-                  "v4"
-                ],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": [
-              "default"
-            ]
-          },
-          "tatara-hvf-0.2.157": {
+          "tatara-hvf-0.2.158": {
             "runtime_dependencies": [
               {
                 "name": "serde",
@@ -36786,9 +33660,6 @@
     "block-buffer-0.10.4": {
       "edition": "2018"
     },
-    "block2-0.6.2": {
-      "edition": "2021"
-    },
     "borsh-1.6.1": {
       "edition": "2018",
       "build_script": "build.rs",
@@ -37066,9 +33937,6 @@
     "dirs-sys-next-0.1.2": {
       "edition": "2018"
     },
-    "dispatch2-0.3.1": {
-      "edition": "2021"
-    },
     "displaydoc-0.2.6": {
       "edition": "2021",
       "proc_macro": true
@@ -37094,10 +33962,10 @@
       "edition": "2021",
       "proc_macro": true
     },
-    "egaku-0.1.0-3b2af556217f4bcadc58b2f6b494f80224a10a9e": {
+    "egaku-0.1.9": {
       "edition": "2024"
     },
-    "egaku-term-0.2.1-aa3fd63402577c624df499e5e3798d313e4fe6cd": {
+    "egaku-term-0.3.6": {
       "edition": "2024"
     },
     "either-1.16.0": {
@@ -37169,6 +34037,9 @@
     "fs-set-times-0.20.3": {
       "edition": "2021"
     },
+    "fsevent-sys-4.1.0": {
+      "edition": "2018"
+    },
     "funty-2.0.0": {
       "edition": "2018"
     },
@@ -37213,7 +34084,7 @@
     "fxprof-processed-profile-0.6.0": {
       "edition": "2021"
     },
-    "gen-macros-0.1.0-0363cc55019e21d9fbc5b96484f1f364516ef282": {
+    "gen-macros-0.1.33": {
       "edition": "2024",
       "proc_macro": true
     },
@@ -37221,13 +34092,13 @@
       "edition": "2024",
       "proc_macro": true
     },
-    "gen-platform-0.1.0-0363cc55019e21d9fbc5b96484f1f364516ef282": {
+    "gen-platform-0.1.33": {
       "edition": "2024"
     },
     "gen-platform-0.1.6-eea15518fdff36d8b21ed753b6b161fc0d3623f6": {
       "edition": "2024"
     },
-    "gen-types-0.1.0-0363cc55019e21d9fbc5b96484f1f364516ef282": {
+    "gen-types-0.1.33": {
       "edition": "2024"
     },
     "gen-types-0.1.6-eea15518fdff36d8b21ed753b6b161fc0d3623f6": {
@@ -37430,9 +34301,6 @@
       "build_script": "build.rs",
       "links": "k8s-openapi-0.24.0"
     },
-    "kasou-0.1.0-bbfaf245e0baf0cb6b6b0b6639a56f4e87cb4955": {
-      "edition": "2024"
-    },
     "kqueue-1.1.1": {
       "edition": "2021"
     },
@@ -37508,9 +34376,6 @@
     "maplit-1.0.2": {
       "edition": "2015"
     },
-    "maquina-engine-0.1.0-d65a421d73676c1945ef0b276c09d5180ee26d4d": {
-      "edition": "2024"
-    },
     "matchers-0.2.0": {
       "edition": "2018"
     },
@@ -37576,30 +34441,6 @@
     "num-traits-0.2.19": {
       "edition": "2021",
       "build_script": "build.rs"
-    },
-    "objc2-0.6.4": {
-      "edition": "2021",
-      "build_script": "build.rs"
-    },
-    "objc2-app-kit-0.3.2": {
-      "edition": "2021"
-    },
-    "objc2-core-foundation-0.3.2": {
-      "edition": "2021"
-    },
-    "objc2-encode-4.1.0": {
-      "edition": "2021"
-    },
-    "objc2-exception-helper-0.1.1": {
-      "edition": "2021",
-      "build_script": "build.rs",
-      "links": "objc2_exception_helper_0_1"
-    },
-    "objc2-foundation-0.3.2": {
-      "edition": "2021"
-    },
-    "objc2-virtualization-0.3.2": {
-      "edition": "2021"
     },
     "object-0.36.7": {
       "edition": "2018",
@@ -38017,10 +34858,13 @@
     "shellexpand-2.1.2": {
       "edition": "2015"
     },
-    "shigoto-types-0.1.0-391a47959d0c29115c0fc98a7574b78105a09d65": {
+    "shigoto-types-0.1.13": {
       "edition": "2024"
     },
     "shikumi-0.1.0-9161fde44527ec6572640d8a77f6919583f6b342": {
+      "edition": "2024"
+    },
+    "shikumi-0.1.455": {
       "edition": "2024"
     },
     "shlex-2.0.1": {
@@ -38056,9 +34900,6 @@
     },
     "socket-pktinfo-0.3.2": {
       "edition": "2018"
-    },
-    "socket2-0.5.10": {
-      "edition": "2021"
     },
     "socket2-0.6.4": {
       "edition": "2021"
@@ -38115,21 +34956,21 @@
       "edition": "2018",
       "build_script": "build.rs"
     },
-    "tatara-api-0.2.157": {
+    "tatara-api-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_api",
         "path": "src/lib.rs"
       }
     },
-    "tatara-build-remote-0.2.157": {
+    "tatara-build-remote-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_build_remote",
         "path": "src/lib.rs"
       }
     },
-    "tatara-cli-0.2.157": {
+    "tatara-cli-0.2.158": {
       "edition": "2021",
       "binaries": [
         {
@@ -38138,7 +34979,7 @@
         }
       ]
     },
-    "tatara-closed-loop-probe-0.2.157": {
+    "tatara-closed-loop-probe-0.2.158": {
       "edition": "2021",
       "binaries": [
         {
@@ -38147,21 +34988,21 @@
         }
       ]
     },
-    "tatara-core-0.2.157": {
+    "tatara-core-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_core",
         "path": "src/lib.rs"
       }
     },
-    "tatara-domains-0.2.157": {
+    "tatara-domains-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_domains",
         "path": "src/lib.rs"
       }
     },
-    "tatara-engine-0.2.157": {
+    "tatara-engine-0.2.158": {
       "edition": "2021",
       "build_script": "build.rs",
       "lib_target": {
@@ -38169,14 +35010,14 @@
         "path": "src/lib.rs"
       }
     },
-    "tatara-eval-0.2.157": {
+    "tatara-eval-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_eval",
         "path": "src/lib.rs"
       }
     },
-    "tatara-export-worker-0.2.157": {
+    "tatara-export-worker-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_export_worker",
@@ -38189,7 +35030,7 @@
         }
       ]
     },
-    "tatara-github-watcher-0.2.157": {
+    "tatara-github-watcher-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_github_watcher",
@@ -38202,21 +35043,21 @@
         }
       ]
     },
-    "tatara-hospedeiro-0.2.157": {
+    "tatara-hospedeiro-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_hospedeiro",
         "path": "src/lib.rs"
       }
     },
-    "tatara-hvf-0.2.157": {
+    "tatara-hvf-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_hvf",
         "path": "src/lib.rs"
       }
     },
-    "tatara-init-0.2.157": {
+    "tatara-init-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_init",
@@ -38229,7 +35070,7 @@
         }
       ]
     },
-    "tatara-kube-0.2.157": {
+    "tatara-kube-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_kube",
@@ -38242,7 +35083,7 @@
         }
       ]
     },
-    "tatara-lattice-0.2.157": {
+    "tatara-lattice-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_lattice",
@@ -38264,21 +35105,21 @@
         "path": "src/lib.rs"
       }
     },
-    "tatara-mcp-0.2.157": {
+    "tatara-mcp-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_mcp",
         "path": "src/lib.rs"
       }
     },
-    "tatara-net-0.2.157": {
+    "tatara-net-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_net",
         "path": "src/lib.rs"
       }
     },
-    "tatara-nix-0.2.157": {
+    "tatara-nix-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_nix",
@@ -38302,21 +35143,21 @@
         }
       ]
     },
-    "tatara-os-0.2.157": {
+    "tatara-os-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_os",
         "path": "src/lib.rs"
       }
     },
-    "tatara-pkgs-0.2.157": {
+    "tatara-pkgs-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_pkgs",
         "path": "src/lib.rs"
       }
     },
-    "tatara-pool-reconciler-0.2.157": {
+    "tatara-pool-reconciler-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_pool_reconciler",
@@ -38329,7 +35170,7 @@
         }
       ]
     },
-    "tatara-process-0.2.157": {
+    "tatara-process-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_process",
@@ -38342,7 +35183,7 @@
         }
       ]
     },
-    "tatara-reconciler-0.2.157": {
+    "tatara-reconciler-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_reconciler",
@@ -38363,7 +35204,7 @@
         }
       ]
     },
-    "tatara-terreiro-0.2.157": {
+    "tatara-terreiro-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_terreiro",
@@ -38376,21 +35217,21 @@
         }
       ]
     },
-    "tatara-testing-0.2.157": {
+    "tatara-testing-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_testing",
         "path": "src/lib.rs"
       }
     },
-    "tatara-ui-0.2.157": {
+    "tatara-ui-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_ui",
         "path": "src/lib.rs"
       }
     },
-    "tatara-vm-0.2.157": {
+    "tatara-vm-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_vm",
@@ -38407,7 +35248,7 @@
         }
       ]
     },
-    "tatara-wasm-0.2.157": {
+    "tatara-wasm-0.2.158": {
       "edition": "2021",
       "lib_target": {
         "name": "tatara_wasm",
@@ -38541,7 +35382,7 @@
     "tryhard-0.5.2": {
       "edition": "2018"
     },
-    "tsunagu-0.1.1-2219c0853a003bc89d98eae3ad05b369594072de": {
+    "tsunagu-0.1.2": {
       "edition": "2024"
     },
     "tungstenite-0.29.0": {
@@ -38801,19 +35642,10 @@
     }
   },
   "git_nar_sha256": {
-    "egaku-0.1.0-3b2af556217f4bcadc58b2f6b494f80224a10a9e": "sha256-ePVYMlkmM6RhLBcsI/74HijzFQCnJrlbqOgMJv84YWQ=",
-    "egaku-term-0.2.1-aa3fd63402577c624df499e5e3798d313e4fe6cd": "sha256-TPkic618wVchwFh+Lux35zyikJ3HbX8bTUJlS87fEgo=",
-    "gen-macros-0.1.0-0363cc55019e21d9fbc5b96484f1f364516ef282": "sha256-xEoWHdYqKyxsndqB8U0YRyVlFMOpppRqIpbSxwbUWEw=",
     "gen-macros-0.1.6-eea15518fdff36d8b21ed753b6b161fc0d3623f6": "sha256-vFH1p5Kdlop4JZIOsAWCi3NHKRU5an0uH0rkvDVEZPk=",
-    "gen-platform-0.1.0-0363cc55019e21d9fbc5b96484f1f364516ef282": "sha256-xEoWHdYqKyxsndqB8U0YRyVlFMOpppRqIpbSxwbUWEw=",
     "gen-platform-0.1.6-eea15518fdff36d8b21ed753b6b161fc0d3623f6": "sha256-vFH1p5Kdlop4JZIOsAWCi3NHKRU5an0uH0rkvDVEZPk=",
-    "gen-types-0.1.0-0363cc55019e21d9fbc5b96484f1f364516ef282": "sha256-xEoWHdYqKyxsndqB8U0YRyVlFMOpppRqIpbSxwbUWEw=",
     "gen-types-0.1.6-eea15518fdff36d8b21ed753b6b161fc0d3623f6": "sha256-vFH1p5Kdlop4JZIOsAWCi3NHKRU5an0uH0rkvDVEZPk=",
-    "kasou-0.1.0-bbfaf245e0baf0cb6b6b0b6639a56f4e87cb4955": "sha256-pcr1XCIMjE8ZzdFLmE0RqZPBQTmYX87syQpl1oBzrrc=",
-    "maquina-engine-0.1.0-d65a421d73676c1945ef0b276c09d5180ee26d4d": "sha256-lAjTERFvjPpC5K2tBdKxT7McP21mGqQX64thEyoF1ZQ=",
-    "shigoto-types-0.1.0-391a47959d0c29115c0fc98a7574b78105a09d65": "sha256-Kr3puH1GvINctgqvYyMRuBVtKWLlhKiQi2tfqUgirc8=",
-    "shikumi-0.1.0-9161fde44527ec6572640d8a77f6919583f6b342": "sha256-+i3dDX8R+NRqGx59TlEhg8ou5sH+xRZ2HXMSq/QfTLY=",
-    "tsunagu-0.1.1-2219c0853a003bc89d98eae3ad05b369594072de": "sha256-TfiZRLXx7D0bftYfxX54XgRjvAII2SY8RVLFGDrxquM="
+    "shikumi-0.1.0-9161fde44527ec6572640d8a77f6919583f6b342": "sha256-+i3dDX8R+NRqGx59TlEhg8ou5sH+xRZ2HXMSq/QfTLY="
   },
   "flake_metadata": {}
 }

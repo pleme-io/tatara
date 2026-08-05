@@ -2660,6 +2660,206 @@ impl ResourceLimits {
         ]
     }
 
+    /// Per-axis pointwise [`Ordering`] verdict across the six ceilings —
+    /// the ATOMIC per-axis FULL-VERDICT vector JOINTLY LIFTING the five
+    /// per-axis-mask relation peers (`axes_leq` / `axes_geq` / `axes_eq`
+    /// / `axes_lt` / `axes_gt`) into ONE richer typed primitive.
+    /// `a.axes_cmp(b)[i]` is [`Ordering::Less`] iff the `i`-th ceiling of
+    /// `a` sits strictly below the `i`-th ceiling of `b`,
+    /// [`Ordering::Greater`] iff strictly above, and [`Ordering::Equal`]
+    /// otherwise; the three-cell `Less` / `Equal` / `Greater` verdict
+    /// EXHAUSTIVELY partitions the per-axis relation space at ONE typed
+    /// exit, whereas the five per-axis-mask peers each carry only a
+    /// single bit of the same verdict at a distinct binary projection.
+    ///
+    /// The FULL-VERDICT corner CLOSING the per-axis-mask surface one
+    /// PROJECTION-KIND axis over from [`Self::partial_cmp`]. Where
+    /// `partial_cmp` returns [`Option<Ordering>`] at the single-bit
+    /// verdict surface (with `None` reserved for the pointwise-
+    /// incomparable case where each posture dominates on some axes and
+    /// underlies on others), this returns a bare [`Ordering`] per axis —
+    /// per-axis on totally-ordered [`usize`] scalars the incomparable
+    /// case CANNOT arise, so the [`Option`] wrapper the joint verdict
+    /// needs collapses away at the per-axis mask level. The
+    /// (`partial_cmp`, `axes_cmp`) pair therefore sits on the same
+    /// (single-bit verdict, per-axis mask) row on the FULL-VERDICT
+    /// primitive surface as (`leq`, `axes_leq`) / (`geq`, `axes_geq`) /
+    /// (`eq`, `axes_eq`) / (`ne`, `axes_ne`) / (`lt`, `axes_lt`) /
+    /// (`gt`, `axes_gt`) / (`within`, `axes_within`) close at the
+    /// per-relation single-bit surfaces one PROJECTION-KIND axis over.
+    ///
+    /// Encoded as one delegation each to [`Self::axes_lt`] and
+    /// [`Self::axes_gt`], then a per-axis three-cell dispatch on the two
+    /// direction-signed masks (`lt[i] → Less`, `gt[i] → Greater`, `else
+    /// → Equal`) via a `const` `while` walk on the fixed-arity result
+    /// array seeded from [`Ordering::Equal`]. One primitive delegation
+    /// per direction to the two shipped strict-relation masks, so the
+    /// strict-relation encoding lives at exactly ONE structural
+    /// composition of two shipped primitives and a future re-derivation
+    /// of `axes_lt` (which propagates into `axes_gt` via that method's
+    /// argument-flip delegation) propagates into `axes_cmp` mechanically
+    /// without requiring a per-method fix-up. Mirrors [`Self::partial_cmp`]'s
+    /// two-primitive `leq` / `other.leq(self)` encoding one PROJECTION-
+    /// KIND axis over — the same trichotomy dispatch on two direction-
+    /// signed comparisons that closes the single-bit verdict closes the
+    /// per-axis mask verdict, with the (self, other) argument order
+    /// preserved so the consumer cannot silently swap the two sides.
+    ///
+    /// **Positional-alignment contract**: for every posture pair `(a, b)`
+    /// and every index `i in 0..FIELD_COUNT`,
+    /// `a.axes_cmp(b)[i] == a.field_values()[i].cmp(&b.field_values()[i])`
+    /// — pinned by
+    /// `resource_limits_axes_cmp_agrees_with_pointwise_field_ord_cmp`
+    /// via cross-reference with [`Self::field_values`] and [`Ord::cmp`]
+    /// on the same discriminating roster the seven SIBLING per-axis-mask
+    /// projections use. Guarantees the per-axis verdict preserves the
+    /// same canonical index-to-axis mapping the seven sibling per-axis-
+    /// mask projections carry, at the finest-grain three-cell resolution
+    /// the underlying [`Ord`] instance on [`usize`] admits.
+    ///
+    /// **Trichotomy-projection contract**: for every posture pair `(a,
+    /// b)` and every index `i`, the three per-axis-mask peers project
+    /// EXHAUSTIVELY out of `axes_cmp`:
+    /// `a.axes_lt(b)[i] == matches!(a.axes_cmp(b)[i], Ordering::Less)`,
+    /// `a.axes_gt(b)[i] == matches!(a.axes_cmp(b)[i], Ordering::Greater)`,
+    /// `a.axes_eq(b)[i] == matches!(a.axes_cmp(b)[i], Ordering::Equal)`.
+    /// Pinned by
+    /// `resource_limits_axes_cmp_trichotomy_projects_to_axes_lt_axes_gt_axes_eq`
+    /// across the 25-pair matrix, so the trichotomy encoding is verified
+    /// at the per-axis verdict level, not merely at the fold-recovered
+    /// scalar. Also pins the non-strict peers via the reflexive-closure
+    /// laws `axes_leq == axes_lt || axes_eq` and `axes_geq == axes_gt ||
+    /// axes_eq` — the FULL-VERDICT surface exhausts every per-axis
+    /// relation projection the substrate carries at the per-axis-mask
+    /// level.
+    ///
+    /// **Antisymmetry-reverse contract**: for every posture pair `(a, b)`
+    /// and every index `i`, `a.axes_cmp(b)[i] == b.axes_cmp(a)[i].reverse()`
+    /// — the per-axis MASK peer of [`Ord::cmp`]'s antisymmetry law
+    /// `a.cmp(b) == b.cmp(a).reverse()` at the per-axis level. Pinned
+    /// by `resource_limits_axes_cmp_argument_flip_is_reverse_per_axis`
+    /// across the 25-pair matrix. The peer of [`Self::axes_geq`]'s
+    /// argument-flip encoding as `other.axes_leq(self)` and
+    /// [`Self::axes_gt`]'s argument-flip encoding as `other.axes_lt(self)`
+    /// one FULL-VERDICT-vs-BINARY-PROJECTION axis over.
+    ///
+    /// **Reflexivity contract**: `a.axes_cmp(a) == [Ordering::Equal;
+    /// FIELD_COUNT]` for every posture — per-axis [`Ord::cmp`] on
+    /// [`usize`] is reflexive on every field. Pinned by
+    /// `resource_limits_axes_cmp_is_reflexive_on_every_axis` on each of
+    /// the three shipped presets via const-fn evaluability. The per-axis-
+    /// mask peer of the reflexivity pins on [`Self::axes_leq`] /
+    /// [`Self::axes_geq`] / [`Self::axes_eq`] one FULL-VERDICT-vs-BINARY-
+    /// PROJECTION axis over.
+    ///
+    /// **Preset pole pins**: the (bottom, top) bounded-lattice preset-
+    /// pair carries EXHAUSTIVE per-axis verdicts on the projection —
+    /// `EMPTY.axes_cmp(UNBOUNDED) == [Ordering::Less; FIELD_COUNT]`
+    /// (every `0` is strictly below every [`usize::MAX`] on every axis);
+    /// `UNBOUNDED.axes_cmp(EMPTY) == [Ordering::Greater; FIELD_COUNT]`
+    /// (the antisymmetric-reverse); `EMPTY.axes_cmp(EMPTY) ==
+    /// [Ordering::Equal; FIELD_COUNT]` and `UNBOUNDED.axes_cmp(UNBOUNDED)
+    /// == [Ordering::Equal; FIELD_COUNT]` (reflexivity on every axis at
+    /// each pole). Pinned by
+    /// `resource_limits_axes_cmp_of_lattice_extrema_carries_directional_verdicts`.
+    /// Mirrors the (bottom, top) × (leq, geq, lt, gt, eq) 2×5 pole face
+    /// pinned on the five sibling masks one PROJECTION-KIND axis over,
+    /// with every binary verdict promoted to the FULL trichotomy verdict.
+    ///
+    /// **Diagnostic emission use case**: a consumer that decides `a !=
+    /// b` and wants to name BOTH the differing axes AND the direction
+    /// each differing axis carries zips [`Self::FIELD_NAMES`] against
+    /// `a.axes_cmp(b)` and filters the non-`Equal` entries — an
+    /// OBSERVABILITY surface for the joint direction-signed inequality
+    /// verdict the single-bit `partial_cmp` verdict (which collapses
+    /// direction on incomparable postures to `None`) does not expose,
+    /// and richer than the four direction-signed binary masks composed
+    /// (which force the consumer to interleave two masks per axis to
+    /// recover the direction). The three-cell per-axis verdict binds
+    /// direction at ONE typed primitive rather than four coordinated
+    /// binary projections.
+    ///
+    /// `const fn` so a caller can pin a per-axis FULL-VERDICT projection
+    /// at compile time (`const _: [Ordering; ResourceLimits::FIELD_COUNT]
+    /// = EMPTY_RESOURCE_LIMITS.axes_cmp(UNBOUNDED_RESOURCE_LIMITS);`) —
+    /// the const-fn peer of the const-eval evaluability every other
+    /// primitive on the [`ResourceLimits`] algebra carries. [`Copy`] on
+    /// both [`ResourceLimits`] and [`Ordering`] lets the const-fn body
+    /// pass `self` and `other` by value into the delegated `axes_lt` /
+    /// `axes_gt` calls without an explicit `.clone()` (which const-fn
+    /// would not permit anyway), and lets the fixed-arity result array
+    /// seed from `[Ordering::Equal; Self::FIELD_COUNT]` before the
+    /// per-axis three-cell dispatch overwrites the `Less` / `Greater`
+    /// entries.
+    ///
+    /// Pre-lift, a consumer wanting per-axis direction-signed verdicts
+    /// either (a) composed BOTH [`Self::axes_lt`] AND [`Self::axes_gt`]
+    /// at the call site and interleaved the two masks per axis into a
+    /// trichotomy — the same six-inline-primitive cascade the axes_*
+    /// family lifts one arity axis over, and a copy-paste that dropped
+    /// the `gt` mask or reversed the direction pairs silently distorted
+    /// the direction verdict — or (b) called the derived [`Ord::cmp`] on
+    /// each field of [`Self::field_values`] and lost the typed-array
+    /// arity gate that the fixed-arity `[Ordering; FIELD_COUNT]` result
+    /// forces every consumer to acknowledge. Post-lift the per-axis
+    /// FULL-VERDICT projection binds at ONE typed `const fn` on the
+    /// algebra, encoded as the trichotomy dispatch on the two shipped
+    /// direction-signed masks.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-posture-pair projection into the six-[`Ordering`] verdict
+    /// vector is itself a typed named exit rather than a per-consumer
+    /// inline six-primitive [`Ord::cmp`] cascade OR a coarser binary-
+    /// mask composition that discards the trichotomy structure. THEORY.md
+    /// §II.1 invariant 5 — composition preserves proofs; the joint
+    /// direction-signed pairwise relation on two preset-carried resource
+    /// proofs is decomposed into its six per-axis FULL-VERDICT witnesses
+    /// at TYPE level, so consumers reasoning about WHICH axes carry the
+    /// difference AND in what direction bind through ONE typed primitive
+    /// rather than composing two per-axis-mask projections per axis or
+    /// re-running [`Ord::cmp`] on each field-accessor cascade. THEORY.md
+    /// §V.1 — knowable platform; the per-axis FULL-VERDICT projection
+    /// becomes a TYPE-level operation on the posture algebra rather than
+    /// a per-consumer field-access cascade — with the per-axis
+    /// granularity baked in so the consumer cannot silently drop an axis
+    /// from the diagnostic (the array's fixed arity forces every axis to
+    /// appear) AND with the direction encoded at TYPE level as a
+    /// three-cell [`Ordering`] rather than a coarser binary bit.
+    ///
+    /// Frontier inspiration: Idris's `zipWith compare` over two `Vec n
+    /// Nat` producing a `Vec n Ordering` — the FULL-VERDICT peer of the
+    /// binary-projection `zipWith (<=)` / `zipWith (>)` / `zipWith (==)`
+    /// shapes the (`axes_leq`, `axes_gt`, `axes_eq`) family cites, closing
+    /// the per-axis relation projection at its finest three-cell
+    /// resolution rather than at any single binary bit. Haskell's `Data
+    /// .Ord.comparing` combinator returning a per-field [`Ordering`] on a
+    /// projection, generalized to a per-position vector on a structural
+    /// projection. APL / J's rank-lifted `⋆` three-way compare producing
+    /// a per-position ternary array between two conformable arrays — the
+    /// SAME lifted-trichotomy shape lifted onto typed structs.
+    /// Translation through pleme-io primitives: a `const fn` returning a
+    /// `[Ordering; N]` fixed-size array on the typed [`ResourceLimits`]
+    /// algebra encoded as the per-index trichotomy dispatch on the two
+    /// already-lifted direction-signed strict masks, rather than a
+    /// runtime vector operation or a second inline six-primitive
+    /// [`Ord::cmp`] cascade.
+    #[must_use]
+    pub const fn axes_cmp(self, other: Self) -> [Ordering; Self::FIELD_COUNT] {
+        let lt = self.axes_lt(other);
+        let gt = self.axes_gt(other);
+        let mut result = [Ordering::Equal; Self::FIELD_COUNT];
+        let mut i = 0;
+        while i < Self::FIELD_COUNT {
+            if lt[i] {
+                result[i] = Ordering::Less;
+            } else if gt[i] {
+                result[i] = Ordering::Greater;
+            }
+            i += 1;
+        }
+        result
+    }
+
     /// Boolean `leq`-conjunction across a slice of postures — `self` sits
     /// at-or-below every operand in `postures`. `a.is_lower_bound_of(&[b,
     /// c, d])` holds iff `a.leq(b) && a.leq(c) && a.leq(d)`: on every
@@ -24169,6 +24369,256 @@ mod tests {
         const _: () = assert!(REFLEXIVE_MASK[3]);
         const _: () = assert!(REFLEXIVE_MASK[4]);
         const _: () = assert!(REFLEXIVE_MASK[5]);
+    }
+
+    // ── ResourceLimits::axes_cmp ──────────────────────────────────────
+    //   FULL-VERDICT per-axis-mask corner one PROJECTION-KIND axis over
+    //   from `partial_cmp`, jointly lifting the five per-axis-mask
+    //   direction-signed peers (axes_leq / axes_geq / axes_eq / axes_lt
+    //   / axes_gt) into ONE richer [`Ordering`] per axis. See the
+    //   docstring on `ResourceLimits::axes_cmp` for the (single-bit
+    //   verdict, per-axis mask) × (binary projection, FULL trichotomy)
+    //   placement.
+
+    #[test]
+    fn resource_limits_axes_cmp_agrees_with_pointwise_field_ord_cmp() {
+        // Positional-alignment pin — for every posture pair `(a, b)` and
+        // every index `i`, `a.axes_cmp(b)[i] ==
+        // a.field_values()[i].cmp(&b.field_values()[i])`. Cross-references
+        // the per-axis FULL-VERDICT with the canonical `field_values()`
+        // projection under `Ord::cmp` on the same discriminating roster
+        // the seven SIBLING per-axis-mask projections use, guaranteeing
+        // the per-axis verdict preserves the same canonical index-to-axis
+        // mapping at the finest three-cell resolution. Peer of
+        // `resource_limits_axes_leq_agrees_with_pointwise_field_comparison`
+        // one FULL-VERDICT-vs-BINARY-PROJECTION axis over.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let verdict = a.axes_cmp(b);
+                let av = a.field_values();
+                let bv = b.field_values();
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    assert_eq!(
+                        verdict[i],
+                        av[i].cmp(&bv[i]),
+                        "axes_cmp({a:?}, {b:?})[{i}] must equal field_values Ord::cmp",
+                    );
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_cmp_trichotomy_projects_to_axes_lt_axes_gt_axes_eq() {
+        // Trichotomy-projection pin — for every posture pair `(a, b)`
+        // and every index `i`, the three per-axis-mask peers project
+        // EXHAUSTIVELY out of `axes_cmp` via `Ordering` pattern-match:
+        // `axes_lt[i] == matches!(axes_cmp[i], Less)`,
+        // `axes_gt[i] == matches!(axes_cmp[i], Greater)`,
+        // `axes_eq[i] == matches!(axes_cmp[i], Equal)`. Verifies the
+        // trichotomy encoding at the per-axis verdict level, not merely
+        // at any fold-recovered scalar — the three binary projections
+        // exhaust the [`Ordering`] surface exactly. Peer of
+        // `resource_limits_axes_lt_is_intersection_of_axes_leq_and_not_axes_geq`
+        // and `resource_limits_axes_eq_is_intersection_of_axes_leq_and_axes_geq`
+        // one FULL-VERDICT-vs-BINARY-PROJECTION axis over, closing the
+        // (`axes_lt`, `axes_gt`, `axes_eq`) triad as EXHAUSTIVE binary
+        // projections of the FULL trichotomy.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let verdict = a.axes_cmp(b);
+                let lt = a.axes_lt(b);
+                let gt = a.axes_gt(b);
+                let eq = a.axes_eq(b);
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    assert_eq!(
+                        lt[i],
+                        matches!(verdict[i], Ordering::Less),
+                        "axes_lt({a:?}, {b:?})[{i}] must project as Ordering::Less from axes_cmp",
+                    );
+                    assert_eq!(
+                        gt[i],
+                        matches!(verdict[i], Ordering::Greater),
+                        "axes_gt({a:?}, {b:?})[{i}] must project as Ordering::Greater from axes_cmp",
+                    );
+                    assert_eq!(
+                        eq[i],
+                        matches!(verdict[i], Ordering::Equal),
+                        "axes_eq({a:?}, {b:?})[{i}] must project as Ordering::Equal from axes_cmp",
+                    );
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_cmp_argument_flip_is_reverse_per_axis() {
+        // Antisymmetry-reverse pin — for every posture pair `(a, b)` and
+        // every index `i`, `a.axes_cmp(b)[i] == b.axes_cmp(a)[i].reverse()`.
+        // The per-axis MASK peer of `Ord::cmp`'s antisymmetry law
+        // `a.cmp(b) == b.cmp(a).reverse()`, verified at the per-axis
+        // verdict level across the 25-pair matrix. Peer of the direction-
+        // flip pins on `axes_geq` (encoded as `other.axes_leq(self)`) and
+        // `axes_gt` (encoded as `other.axes_lt(self)`) one FULL-VERDICT-
+        // vs-BINARY-PROJECTION axis over — where the binary peers flip
+        // via argument-swap, the FULL trichotomy peer flips via the
+        // structural `Ordering::reverse()` on the verdict itself.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let forward = a.axes_cmp(b);
+                let reverse = b.axes_cmp(a);
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    assert_eq!(
+                        forward[i],
+                        reverse[i].reverse(),
+                        "axes_cmp({a:?}, {b:?})[{i}] must equal axes_cmp({b:?}, {a:?})[{i}].reverse()",
+                    );
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_cmp_is_reflexive_on_every_axis() {
+        // Reflexive-verdict pin — every posture's per-axis FULL-VERDICT
+        // against itself is `Ordering::Equal` on every axis, since
+        // `Ord::cmp` on `usize` is reflexive at every field. Peer of
+        // the reflexivity pins on `axes_leq` / `axes_geq` / `axes_eq` one
+        // FULL-VERDICT-vs-BINARY-PROJECTION axis over.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ] {
+            let verdict = a.axes_cmp(a);
+            let mut i = 0;
+            while i < ResourceLimits::FIELD_COUNT {
+                assert_eq!(
+                    verdict[i],
+                    Ordering::Equal,
+                    "axes_cmp(a, a)[{i}] must be Ordering::Equal by reflexivity; a={a:?}",
+                );
+                i += 1;
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_cmp_of_lattice_extrema_carries_directional_verdicts() {
+        // Preset-pole pin — the (bottom, top) bounded-lattice preset-pair
+        // carries EXHAUSTIVE per-axis FULL-VERDICTs on the projection.
+        // EMPTY vs UNBOUNDED — every 0 is strictly below every
+        // usize::MAX, so every axis carries `Ordering::Less`.
+        let empty_vs_unbounded = EMPTY_RESOURCE_LIMITS.axes_cmp(UNBOUNDED_RESOURCE_LIMITS);
+        let mut i = 0;
+        while i < ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                empty_vs_unbounded[i],
+                Ordering::Less,
+                "EMPTY.axes_cmp(UNBOUNDED)[{i}] must be Ordering::Less",
+            );
+            i += 1;
+        }
+        // Antisymmetric reverse — UNBOUNDED vs EMPTY carries the
+        // reversed direction on every axis.
+        let unbounded_vs_empty = UNBOUNDED_RESOURCE_LIMITS.axes_cmp(EMPTY_RESOURCE_LIMITS);
+        let mut i = 0;
+        while i < ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                unbounded_vs_empty[i],
+                Ordering::Greater,
+                "UNBOUNDED.axes_cmp(EMPTY)[{i}] must be Ordering::Greater",
+            );
+            i += 1;
+        }
+        // Reflexivity witnesses on each pole — pole vs itself is Equal
+        // on every axis.
+        let empty_vs_empty = EMPTY_RESOURCE_LIMITS.axes_cmp(EMPTY_RESOURCE_LIMITS);
+        let unbounded_vs_unbounded = UNBOUNDED_RESOURCE_LIMITS.axes_cmp(UNBOUNDED_RESOURCE_LIMITS);
+        let mut i = 0;
+        while i < ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                empty_vs_empty[i],
+                Ordering::Equal,
+                "EMPTY.axes_cmp(EMPTY)[{i}] must be Ordering::Equal",
+            );
+            assert_eq!(
+                unbounded_vs_unbounded[i],
+                Ordering::Equal,
+                "UNBOUNDED.axes_cmp(UNBOUNDED)[{i}] must be Ordering::Equal",
+            );
+            i += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_cmp_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the per-axis FULL-VERDICT projection is
+        // evaluable in const context, so a caller can pin a preset-pair
+        // per-axis trichotomy verdict at compile time. Sibling of the
+        // const-fn evaluability pins on `partial_cmp` and every other
+        // `axes_*` primitive one PRIMITIVE-KIND / PROJECTION-KIND axis
+        // over.
+        //
+        // Below-pole arm — every axis of EMPTY is strictly below every
+        // axis of UNBOUNDED (0 < usize::MAX per-axis).
+        const BELOW_POLE: [Ordering; ResourceLimits::FIELD_COUNT] =
+            EMPTY_RESOURCE_LIMITS.axes_cmp(UNBOUNDED_RESOURCE_LIMITS);
+        const _: () = assert!(matches!(BELOW_POLE[0], Ordering::Less));
+        const _: () = assert!(matches!(BELOW_POLE[1], Ordering::Less));
+        const _: () = assert!(matches!(BELOW_POLE[2], Ordering::Less));
+        const _: () = assert!(matches!(BELOW_POLE[3], Ordering::Less));
+        const _: () = assert!(matches!(BELOW_POLE[4], Ordering::Less));
+        const _: () = assert!(matches!(BELOW_POLE[5], Ordering::Less));
+        // Above-pole arm — the antisymmetric reverse of the below-pole
+        // verdict.
+        const ABOVE_POLE: [Ordering; ResourceLimits::FIELD_COUNT] =
+            UNBOUNDED_RESOURCE_LIMITS.axes_cmp(EMPTY_RESOURCE_LIMITS);
+        const _: () = assert!(matches!(ABOVE_POLE[0], Ordering::Greater));
+        const _: () = assert!(matches!(ABOVE_POLE[1], Ordering::Greater));
+        const _: () = assert!(matches!(ABOVE_POLE[2], Ordering::Greater));
+        const _: () = assert!(matches!(ABOVE_POLE[3], Ordering::Greater));
+        const _: () = assert!(matches!(ABOVE_POLE[4], Ordering::Greater));
+        const _: () = assert!(matches!(ABOVE_POLE[5], Ordering::Greater));
+        // Reflexivity arm — DEFAULT against itself is Equal on every
+        // axis.
+        const REFLEXIVE: [Ordering; ResourceLimits::FIELD_COUNT] =
+            DEFAULT_RESOURCE_LIMITS.axes_cmp(DEFAULT_RESOURCE_LIMITS);
+        const _: () = assert!(matches!(REFLEXIVE[0], Ordering::Equal));
+        const _: () = assert!(matches!(REFLEXIVE[1], Ordering::Equal));
+        const _: () = assert!(matches!(REFLEXIVE[2], Ordering::Equal));
+        const _: () = assert!(matches!(REFLEXIVE[3], Ordering::Equal));
+        const _: () = assert!(matches!(REFLEXIVE[4], Ordering::Equal));
+        const _: () = assert!(matches!(REFLEXIVE[5], Ordering::Equal));
     }
 
     // ── ResourceLimits::is_lower_bound_of / is_upper_bound_of ─────────

@@ -29,7 +29,7 @@ blake3 = "1"
 
 # Feature-gated interop with iac-forge's canonical SExpr (for BLAKE3
 # attestation + render cache reuse). Turn on with `--features iac-forge`.
-iac-forge = { git = "https://github.com/pleme-io/iac-forge", optional = true , version = "0.1" }
+iac-forge = { version = "0.1", optional = true }
 
 [features]
 default = []

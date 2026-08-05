@@ -9,6 +9,7 @@ license.workspace = true
 [features]
 default = []
 grpc = ["dep:tonic", "dep:prost", "dep:prost-types", "dep:tonic-build"]
+kasou = ["dep:kasou"]
 
 [dependencies]
 tatara-core = { path = "../tatara-core" , version = "0.2.65" }
@@ -79,7 +80,7 @@ nix = { version = "0.29", features = ["signal", "process"] }
 
 # macOS VM platform
 [target.'cfg(target_os = "macos")'.dependencies]
-kasou = { git = "https://github.com/pleme-io/kasou" , version = "0.1" }
+kasou = { git = "https://github.com/pleme-io/kasou", version = "0.1", optional = true }
 
 # gRPC (optional)
 tonic = { version = "0.12", features = ["transport"], optional = true }

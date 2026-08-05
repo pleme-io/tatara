@@ -18,7 +18,7 @@ tatara-process = { path = "../tatara-process" , version = "0.2.65" }
 # typed action). Rev-pinned bare git (tatara already deps shikumi/gen-platform
 # via git; this binary is not a crates.io library); the re-homed
 # decision::Decision is not on crates.io 0.1.0 yet.
-shigoto-types = { git = "https://github.com/pleme-io/shigoto", rev = "391a47959d0c29115c0fc98a7574b78105a09d65" , version = "0.1" }
+shigoto-types = "0.1"
 
 # Kubernetes
 kube = { version = "0.99", features = ["runtime", "derive", "client"] }

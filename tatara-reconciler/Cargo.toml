@@ -30,7 +30,7 @@ tatara-domains = { path = "../tatara-domains" , version = "0.2.65" }
 # sandbox uses tatara/src as the root context, so external path deps
 # can't resolve. Use a path override during local-only iteration via
 # `[patch."https://github.com/pleme-io/shikumi"]` in this file.
-shikumi = { git = "https://github.com/pleme-io/shikumi" , version = "0.1" }
+shikumi = "0.1"
 
 # For tatara-check — CustomResourceExt + serde_yaml come from deps above.
 

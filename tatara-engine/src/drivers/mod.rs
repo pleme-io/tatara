@@ -1,5 +1,5 @@
 pub mod exec;
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "kasou"))]
 pub mod kasou;
 pub mod kube;
 pub mod nix;
@@ -72,7 +72,7 @@ impl DriverRegistry {
             drivers.push(Box::new(nix_build));
         }
 
-        #[cfg(target_os = "macos")]
+        #[cfg(all(target_os = "macos", feature = "kasou"))]
         {
             let kasou_driver = kasou::KasouDriver::new();
             if kasou_driver.available().await {

@@ -14,7 +14,10 @@ use std::sync::{Mutex, OnceLock};
 use serde::de::DeserializeOwned;
 
 use crate::ast::{Atom, Sexp};
-use crate::error::{ExpectedKwargShape, KwargPath, LispError, Result, SexpShape, SexpWitness};
+use crate::error::{
+    ExpectedKwargShape, KwargPath, LispError, NumericLiteral, NumericWidth, Result, SexpShape,
+    SexpWitness,
+};
 
 /// A Rust type compilable from a Lisp form.
 pub trait TataraDomain: Sized {
@@ -1195,6 +1198,23 @@ fn type_err_at(key: &str, idx: usize, expected: ExpectedKwargShape, got: &Sexp) 
     type_mismatch(kwarg_item_form(key, idx), expected, got)
 }
 
+/// Range-axis sibling of [`type_err`] — the kwarg's `Sexp` shape was
+/// RIGHT but the value does not fit the field's Rust width. Pairs the
+/// same `kwarg_form(_)` typed path with the typed `NumericWidth` target
+/// and the author's literal, returning [`LispError::KwargOutOfRange`].
+///
+/// Named beside `type_err` / `type_err_at` deliberately: the three are
+/// the typed-entry kwarg gate's whole rejection vocabulary — shape,
+/// per-item shape, and range — so a reader who finds one finds all
+/// three, and a future span lift touches one neighbourhood.
+fn range_err(key: &str, target: NumericWidth, value: NumericLiteral) -> LispError {
+    LispError::KwargOutOfRange {
+        form: kwarg_form(key),
+        target,
+        value,
+    }
+}
+
 /// Required atomic-kwarg extractor — fronts every typed-atom public
 /// `extract_X` helper (`extract_string`, `extract_int`, `extract_float`,
 /// `extract_bool`). The four byte-identical inline shapes —
@@ -1398,6 +1418,153 @@ pub fn extract_float(kw: &Kwargs<'_>, key: &str) -> Result<f64> {
 
 pub fn extract_optional_float(kw: &Kwargs<'_>, key: &str) -> Result<Option<f64>> {
     extract_optional_atom(kw, key, ExpectedKwargShape::Number, Sexp::as_float)
+}
+
+// ── The narrowing axis: a wide reader value → the field's Rust width ──
+//
+// `extract_int` returns `i64` and `extract_float` returns `f64` — the
+// widest thing the reader can hand back on each axis. A field declared
+// `u32` / `i32` / `usize` / `f32` is NARROWER, and the projection from
+// the reader's width to the field's is a partial function: `70000` has
+// no `u16`, `-1` has no `u32`, `1e300` has no `f32`.
+//
+// `#[derive(TataraDomain)]` used to close that gap with a raw Rust `as`
+// cast appended to the extractor call — `extract_int(&kw, "port")? as
+// u32`. `as` is TOTAL by truncating: it wraps, sign-flips, or saturates
+// to `inf` and reports nothing. So an author who wrote a number the
+// field could not hold got a DIFFERENT number in the struct, silently,
+// with a green build and a green parse. That is precisely the class the
+// typed-entry gate exists to reject, leaking through the one hole the
+// gate did not cover.
+//
+// The fix is one typed primitive, here, rather than a check at each of
+// the derive's four numeric arms — same lift as the `extract_via_serde`
+// family below, and for the same reason: a hand-written `TataraDomain`
+// impl and a derived one must take the identical error path, and the
+// next upgrade (a span, a suggested-value hint) has to land in ONE
+// place.
+//
+// The target width rides the TYPE, not an argument. `NarrowNumeric`'s
+// associated `WIDTH` const means the derive emits
+// `extract_int_narrowed::<u32>(&kw, key)?` and cannot mislabel the
+// diagnostic, because it never names the width at all — the impl does.
+// A future `classify` arm for a width with no impl is a compile error
+// at the consumer, not a mislabeled runtime message.
+
+/// A narrower numeric type reachable from the reader's wide `Wide`
+/// value — `i64` on the int axis, `f64` on the float axis.
+///
+/// Implemented for exactly the seven widths `#[derive(TataraDomain)]`
+/// recognises, which is what makes [`NumericWidth`] a genuinely closed
+/// set: the enum's variants and this trait's impls are the same list,
+/// generated from the same macro invocation below.
+pub trait NarrowNumeric<Wide>: Sized + Copy {
+    /// This type's identity in the typed diagnostic — the value that
+    /// rides [`LispError::KwargOutOfRange`]'s `target` slot.
+    const WIDTH: NumericWidth;
+
+    /// The partial projection. `None` means "this wide value has no
+    /// representation at this width" and becomes a typed rejection;
+    /// it never means "here is a nearby value instead".
+    fn narrow(wide: Wide) -> Option<Self>;
+}
+
+/// Emit the `NarrowNumeric<i64>` impls for the integer widths. Each is
+/// `TryFrom<i64>` verbatim — the std conversion is already the exact
+/// partial function we want (rejects too-large AND negative-into-
+/// unsigned), so the impl delegates rather than re-deriving bounds
+/// arithmetic that could disagree with std.
+macro_rules! impl_narrow_int {
+    ($($ty:ty => $width:ident),+ $(,)?) => {$(
+        impl NarrowNumeric<i64> for $ty {
+            const WIDTH: NumericWidth = NumericWidth::$width;
+            fn narrow(wide: i64) -> Option<Self> {
+                <$ty as ::core::convert::TryFrom<i64>>::try_from(wide).ok()
+            }
+        }
+    )+};
+}
+
+impl_narrow_int! {
+    i32 => I32,
+    i64 => I64,
+    u32 => U32,
+    u64 => U64,
+    usize => Usize,
+}
+
+impl NarrowNumeric<f64> for f64 {
+    const WIDTH: NumericWidth = NumericWidth::F64;
+    fn narrow(wide: f64) -> Option<Self> {
+        Some(wide)
+    }
+}
+
+impl NarrowNumeric<f64> for f32 {
+    const WIDTH: NumericWidth = NumericWidth::F32;
+    /// Rejects exactly one thing: a FINITE `f64` whose magnitude
+    /// overflows to `inf` at `f32`. Precision loss inside the range is
+    /// accepted — an `f32` field asked for `f32` precision, and
+    /// rejecting `0.1` would make the type unusable. An input that was
+    /// already `inf` / `NaN` passes through unchanged, because `as`
+    /// preserved it faithfully; the corruption case is only the finite
+    /// value that becomes infinite.
+    fn narrow(wide: f64) -> Option<Self> {
+        #[allow(clippy::cast_possible_truncation)]
+        let narrowed = wide as f32;
+        if narrowed.is_finite() || !wide.is_finite() {
+            Some(narrowed)
+        } else {
+            None
+        }
+    }
+}
+
+/// Required integer kwarg projected into the field's own width —
+/// [`extract_int`] followed by the typed [`NarrowNumeric`] projection,
+/// with [`LispError::KwargOutOfRange`] on a value the width cannot
+/// hold. The narrowing replacement for `extract_int(&kw, key)? as T`.
+pub fn extract_int_narrowed<T: NarrowNumeric<i64>>(kw: &Kwargs<'_>, key: &str) -> Result<T> {
+    let wide = extract_int(kw, key)?;
+    T::narrow(wide).ok_or_else(|| range_err(key, T::WIDTH, NumericLiteral::Int(wide)))
+}
+
+/// `Option` sibling of [`extract_int_narrowed`]. An ABSENT kwarg stays
+/// `None`; a PRESENT but out-of-range one is a rejection, never a
+/// `None` — silently dropping a value the author wrote would be the
+/// same corruption in a different costume.
+pub fn extract_optional_int_narrowed<T: NarrowNumeric<i64>>(
+    kw: &Kwargs<'_>,
+    key: &str,
+) -> Result<Option<T>> {
+    let Some(wide) = extract_optional_int(kw, key)? else {
+        return Ok(None);
+    };
+    T::narrow(wide)
+        .map(Some)
+        .ok_or_else(|| range_err(key, T::WIDTH, NumericLiteral::Int(wide)))
+}
+
+/// Float-axis sibling of [`extract_int_narrowed`] — [`extract_float`]
+/// followed by the typed [`NarrowNumeric`] projection. The narrowing
+/// replacement for `extract_float(&kw, key)? as T`.
+pub fn extract_float_narrowed<T: NarrowNumeric<f64>>(kw: &Kwargs<'_>, key: &str) -> Result<T> {
+    let wide = extract_float(kw, key)?;
+    T::narrow(wide).ok_or_else(|| range_err(key, T::WIDTH, NumericLiteral::Float(wide)))
+}
+
+/// `Option` sibling of [`extract_float_narrowed`]; same absent-vs-
+/// out-of-range split as [`extract_optional_int_narrowed`].
+pub fn extract_optional_float_narrowed<T: NarrowNumeric<f64>>(
+    kw: &Kwargs<'_>,
+    key: &str,
+) -> Result<Option<T>> {
+    let Some(wide) = extract_optional_float(kw, key)? else {
+        return Ok(None);
+    };
+    T::narrow(wide)
+        .map(Some)
+        .ok_or_else(|| range_err(key, T::WIDTH, NumericLiteral::Float(wide)))
 }
 
 pub fn extract_bool(kw: &Kwargs<'_>, key: &str) -> Result<bool> {
@@ -1999,6 +2166,231 @@ mod tests {
     fn derive_errors_on_missing_required() {
         let forms = read(r#"(defmonitor :name "x" :query "q")"#).unwrap();
         assert!(MonitorSpec::compile_from_sexp(&forms[0]).is_err());
+    }
+
+    // ── G3 — the RANGE gate on the four numeric arms ────────────────
+    //
+    // The range gate, sibling to the duplicate-kwarg and
+    // unknown-kwarg gates: every form in this block
+    // used to COMPILE SUCCESSFULLY and put a number in the struct that
+    // the author never wrote. The derive emitted `extract_int(&kw,
+    // key)? as u32`, and Rust's `as` is total by truncating — it wraps,
+    // sign-flips, and saturates to `inf` without a word. So the failure
+    // was not a bad diagnostic; it was silent data corruption behind a
+    // green build.
+    //
+    // Each test below names the exact wrong value the pre-fix code
+    // produced, so the test doubles as the record of what regressed if
+    // the narrowing is ever backed out: restore the `as` casts and
+    // every one of these fails at `expect_err`.
+
+    /// A domain whose numeric fields are all NARROWER than the reader's
+    /// wide `i64` / `f64` — the shape the `as` cast corrupted. Covers
+    /// both axes and both required/optional arms, i.e. all four numeric
+    /// branches of `extractor_for`.
+    #[derive(DeriveTataraDomain, Serialize, Debug, PartialEq)]
+    #[tatara(keyword = "defnarrow")]
+    struct NarrowSpec {
+        port: u32,
+        offset: i32,
+        scale: f32,
+        retries: Option<u32>,
+        ratio: Option<f32>,
+    }
+
+    fn narrow_form(body: &str) -> LispError {
+        let forms = read(body).expect("reads");
+        NarrowSpec::compile_from_sexp(&forms[0])
+            .expect_err("an out-of-range numeric literal must not parse")
+    }
+
+    /// The in-range case must still parse — a range gate that rejects
+    /// valid input is worse than the truncation it replaced. Includes a
+    /// value that LOSES PRECISION at `f32` (`0.1`) to pin that lossy-
+    /// but-representable is accepted: an `f32` field asked for `f32`.
+    #[test]
+    fn narrowing_accepts_every_in_range_value_including_lossy_f32() {
+        let forms = read(
+            r"(defnarrow :port 8080 :offset -42 :scale 0.1 :retries 3 :ratio 2.5)",
+        )
+        .expect("reads");
+        let spec = NarrowSpec::compile_from_sexp(&forms[0]).expect("in-range values must parse");
+        assert_eq!(
+            spec,
+            NarrowSpec {
+                port: 8080,
+                offset: -42,
+                #[allow(clippy::cast_possible_truncation)]
+                scale: 0.1_f64 as f32,
+                retries: Some(3),
+                ratio: Some(2.5),
+            }
+        );
+    }
+
+    /// `u32` overflow. Pre-fix: `4294967296 as u32` == `0`, and the
+    /// struct came back holding a port of zero.
+    #[test]
+    fn int_above_the_target_width_is_rejected_not_truncated() {
+        let err = narrow_form(r"(defnarrow :port 4294967296 :offset 0 :scale 1.0)");
+        let LispError::KwargOutOfRange {
+            form,
+            target,
+            value,
+        } = &err
+        else {
+            panic!("expected KwargOutOfRange, got {err:?}");
+        };
+        assert_eq!(form, &KwargPath::named("port"));
+        assert_eq!(*target, NumericWidth::U32);
+        assert_eq!(*value, NumericLiteral::Int(4_294_967_296));
+    }
+
+    /// A NEGATIVE literal into an unsigned width. Pre-fix: `-1 as u32`
+    /// == `4294967295` — not a truncation but a sign flip, and the
+    /// worst of the family because the resulting number looks plausible.
+    #[test]
+    fn negative_int_into_an_unsigned_width_is_rejected_not_sign_flipped() {
+        let err = narrow_form(r"(defnarrow :port -1 :offset 0 :scale 1.0)");
+        assert!(
+            matches!(
+                &err,
+                LispError::KwargOutOfRange { target: NumericWidth::U32, value: NumericLiteral::Int(-1), .. }
+            ),
+            "expected a u32 range rejection of -1, got {err:?}"
+        );
+    }
+
+    /// `i32` overflow — the signed sibling. Pre-fix: `2147483648 as i32`
+    /// == `-2147483648`, a positive literal landing as a negative field.
+    #[test]
+    fn int_above_the_signed_target_width_is_rejected_not_wrapped() {
+        let err = narrow_form(r"(defnarrow :port 0 :offset 2147483648 :scale 1.0)");
+        assert!(
+            matches!(
+                &err,
+                LispError::KwargOutOfRange {
+                    target: NumericWidth::I32,
+                    value: NumericLiteral::Int(2_147_483_648),
+                    ..
+                }
+            ),
+            "expected an i32 range rejection, got {err:?}"
+        );
+    }
+
+    /// `f32` overflow. Pre-fix: `1e300 as f32` == `inf`, so a finite
+    /// input became a non-finite field and every downstream arithmetic
+    /// on it produced `inf`/`NaN`.
+    #[test]
+    fn float_above_the_target_width_is_rejected_not_saturated_to_infinity() {
+        let err = narrow_form(r"(defnarrow :port 0 :offset 0 :scale 1.0e300)");
+        let LispError::KwargOutOfRange { target, value, .. } = &err else {
+            panic!("expected KwargOutOfRange, got {err:?}");
+        };
+        assert_eq!(*target, NumericWidth::F32);
+        assert!(
+            matches!(value, NumericLiteral::Float(x) if (*x - 1.0e300).abs() < f64::EPSILON),
+            "the diagnostic must echo the author's own literal, got {value:?}"
+        );
+    }
+
+    /// The OPTIONAL arms carry the same gate. A present-but-out-of-range
+    /// optional is a rejection, never a quiet `None` — dropping the
+    /// value would be the same corruption in a different costume.
+    #[test]
+    fn optional_numeric_arms_reject_out_of_range_rather_than_yielding_none() {
+        let int_err =
+            narrow_form(r"(defnarrow :port 0 :offset 0 :scale 1.0 :retries 4294967296)");
+        assert!(
+            matches!(
+                &int_err,
+                LispError::KwargOutOfRange { target: NumericWidth::U32, .. }
+            ),
+            "expected an Option<u32> range rejection, got {int_err:?}"
+        );
+
+        let float_err = narrow_form(r"(defnarrow :port 0 :offset 0 :scale 1.0 :ratio 1.0e300)");
+        assert!(
+            matches!(
+                &float_err,
+                LispError::KwargOutOfRange { target: NumericWidth::F32, .. }
+            ),
+            "expected an Option<f32> range rejection, got {float_err:?}"
+        );
+    }
+
+    /// An ABSENT optional is still `None` — the gate fires on presence,
+    /// not on the field's existence.
+    #[test]
+    fn absent_optional_numeric_kwargs_stay_none_under_the_range_gate() {
+        let forms = read(r"(defnarrow :port 1 :offset 1 :scale 1.0)").expect("reads");
+        let spec = NarrowSpec::compile_from_sexp(&forms[0]).expect("absent optionals are legal");
+        assert_eq!(spec.retries, None);
+        assert_eq!(spec.ratio, None);
+    }
+
+    /// The rendered diagnostic names the kwarg, the value, and the
+    /// width — the three facts an author needs to fix the source. Pinned
+    /// because this is the operator-facing surface, not just the variant.
+    #[test]
+    fn the_range_diagnostic_names_kwarg_value_and_target_width() {
+        let err = narrow_form(r"(defnarrow :port 4294967296 :offset 0 :scale 1.0)");
+        assert_eq!(
+            err.to_string(),
+            "compile error in :port: 4294967296 is out of range for u32"
+        );
+    }
+
+    /// The IDENTITY widths must not have become rejections: `i64` and
+    /// `f64` fields route through the same `NarrowNumeric` projection
+    /// with a total impl, so `i64::MIN` still parses. `MonitorSpec`'s
+    /// `threshold: f64` / `window_seconds: Option<i64>` are the fields
+    /// under test — the same two the pre-fix code cast with a no-op
+    /// `as i64` / `as f64`.
+    #[test]
+    fn identity_widths_stay_total_under_the_range_gate() {
+        let forms = read(
+            r#"(defmonitor :name "n" :query "q" :threshold 1.0 :window-seconds -9223372036854775808)"#,
+        )
+        .expect("reads");
+        let spec = MonitorSpec::compile_from_sexp(&forms[0])
+            .expect("i64::MIN is representable at the identity width");
+        assert_eq!(spec.window_seconds, Some(i64::MIN));
+    }
+
+    /// The typed width identity is sourced from the TYPE, not from a
+    /// literal the derive interpolated — `NarrowNumeric::WIDTH` is the
+    /// single producer, so a mislabeled diagnostic is unconstructible
+    /// rather than merely untested.
+    #[test]
+    fn every_supported_width_reports_its_own_typed_identity() {
+        assert_eq!(<i32 as NarrowNumeric<i64>>::WIDTH, NumericWidth::I32);
+        assert_eq!(<i64 as NarrowNumeric<i64>>::WIDTH, NumericWidth::I64);
+        assert_eq!(<u32 as NarrowNumeric<i64>>::WIDTH, NumericWidth::U32);
+        assert_eq!(<u64 as NarrowNumeric<i64>>::WIDTH, NumericWidth::U64);
+        assert_eq!(<usize as NarrowNumeric<i64>>::WIDTH, NumericWidth::Usize);
+        assert_eq!(<f32 as NarrowNumeric<f64>>::WIDTH, NumericWidth::F32);
+        assert_eq!(<f64 as NarrowNumeric<f64>>::WIDTH, NumericWidth::F64);
+    }
+
+    /// `f32`'s narrowing rejects exactly one thing — a FINITE input that
+    /// overflows — and passes an already-non-finite input through. A
+    /// naive `is_finite()` guard would have rejected an authored `inf`
+    /// that `as` had preserved correctly, which would be a regression
+    /// dressed as a fix.
+    #[test]
+    fn f32_narrowing_rejects_only_finite_overflow() {
+        assert_eq!(<f32 as NarrowNumeric<f64>>::narrow(1.0), Some(1.0_f32));
+        assert_eq!(<f32 as NarrowNumeric<f64>>::narrow(1.0e300), None);
+        assert_eq!(<f32 as NarrowNumeric<f64>>::narrow(-1.0e300), None);
+        assert_eq!(
+            <f32 as NarrowNumeric<f64>>::narrow(f64::INFINITY),
+            Some(f32::INFINITY)
+        );
+        assert!(<f32 as NarrowNumeric<f64>>::narrow(f64::NAN)
+            .expect("NaN passes through")
+            .is_nan());
     }
 
     #[test]

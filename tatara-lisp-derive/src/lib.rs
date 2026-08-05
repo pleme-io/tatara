@@ -22,8 +22,8 @@
 //!         Ok(Self {
 //!             name: extract_string(&kw, "name")?.to_string(),
 //!             query: extract_string(&kw, "query")?.to_string(),
-//!             threshold: extract_float(&kw, "threshold")?,
-//!             window_seconds: extract_optional_int(&kw, "window-seconds")?,
+//!             threshold: extract_float_narrowed::<f64>(&kw, "threshold")?,
+//!             window_seconds: extract_optional_int_narrowed::<i64>(&kw, "window-seconds")?,
 //!         })
 //!     }
 //! }
@@ -39,6 +39,15 @@
 //!   - `i64`, `i32`, `u32`, `usize`, `u64`, `Option<i64>`
 //!   - `f64`, `f32`, `Option<f64>`
 //!   - `bool`, `Option<bool>`
+//!
+//! Every numeric field goes through `tatara_lisp::domain`'s
+//! `NarrowNumeric` projection, NOT a Rust `as` cast: the reader hands
+//! back the widest value on each axis (`i64` / `f64`) and the field's
+//! own width is recovered by a partial conversion that returns
+//! `LispError::KwargOutOfRange` rather than truncating. The identity
+//! widths (`i64`, `f64`) route through the same call with a total impl,
+//! so the emission is uniform across all seven widths and this derive
+//! contains no numeric `as` cast at all.
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
@@ -1103,28 +1112,50 @@ fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2
         Kind::VecString => quote! {
             ::tatara_lisp::domain::extract_string_list(&kw, #key)?
         },
+        // ── The four numeric arms: NARROWED, never `as`-cast ──
+        //
+        // These four used to emit the reader's wide value followed by a
+        // raw Rust `as` downcast — `extract_int(&kw, "port")? as u32`.
+        // `as` is total by truncating, so `:port 4294967296` landed as
+        // `0` and `:port -1` as `4294967295`, in the struct, silently,
+        // with nothing red anywhere. The author read back a number they
+        // never wrote.
+        //
+        // The width now rides the TURBOFISH into
+        // `tatara_lisp::domain`'s `NarrowNumeric` projection, which
+        // returns `LispError::KwargOutOfRange` for a value the field
+        // cannot hold. Two consequences worth naming: this derive no
+        // longer contains the word `as` on any numeric path (there is
+        // no truncation left to regress), and the emitted code names
+        // the width exactly ONCE — as a type — so the diagnostic's
+        // `target` cannot drift from the field's actual Rust type.
+        //
+        // `rust_ty` is still the `Kind::Int` / `Kind::Float` payload,
+        // now spliced as the generic argument rather than as a cast
+        // target; the `classify` unit pins on those payloads keep
+        // their meaning unchanged.
         Kind::Int(rust_ty) => {
-            let cast: TokenStream2 = rust_ty.parse().unwrap();
+            let narrowed: TokenStream2 = rust_ty.parse().unwrap();
             quote! {
-                ::tatara_lisp::domain::extract_int(&kw, #key)? as #cast
+                ::tatara_lisp::domain::extract_int_narrowed::<#narrowed>(&kw, #key)?
             }
         }
         Kind::OptionalInt(rust_ty) => {
-            let cast: TokenStream2 = rust_ty.parse().unwrap();
+            let narrowed: TokenStream2 = rust_ty.parse().unwrap();
             quote! {
-                ::tatara_lisp::domain::extract_optional_int(&kw, #key)?.map(|n| n as #cast)
+                ::tatara_lisp::domain::extract_optional_int_narrowed::<#narrowed>(&kw, #key)?
             }
         }
         Kind::Float(rust_ty) => {
-            let cast: TokenStream2 = rust_ty.parse().unwrap();
+            let narrowed: TokenStream2 = rust_ty.parse().unwrap();
             quote! {
-                ::tatara_lisp::domain::extract_float(&kw, #key)? as #cast
+                ::tatara_lisp::domain::extract_float_narrowed::<#narrowed>(&kw, #key)?
             }
         }
         Kind::OptionalFloat(rust_ty) => {
-            let cast: TokenStream2 = rust_ty.parse().unwrap();
+            let narrowed: TokenStream2 = rust_ty.parse().unwrap();
             quote! {
-                ::tatara_lisp::domain::extract_optional_float(&kw, #key)?.map(|n| n as #cast)
+                ::tatara_lisp::domain::extract_optional_float_narrowed::<#narrowed>(&kw, #key)?
             }
         }
         Kind::Bool => quote! {
@@ -1461,12 +1492,14 @@ mod classify_tests {
     fn every_supported_integer_width_classifies_as_kind_int_with_the_matching_type_literal() {
         // The five integer widths the derive supports each project to
         // `Kind::Int(<literal>)` with the width name threaded through
-        // the payload — the payload IS the `as <ty>` cast the emitted
-        // extractor performs on `extract_int`'s `i64` return. A
+        // the payload — the payload IS the turbofish the emitted
+        // extractor narrows `extract_int`'s `i64` return into (it was
+        // an `as <ty>` cast until the narrowing landed). A
         // regression that (a) narrowed the supported set to a subset,
         // (b) mis-labeled ONE width's payload (e.g. `u32` → `"i32"`),
         // or (c) dropped the payload entirely would silently swap the
-        // emitted cast at every consumer's `compile_from_args` body.
+        // emitted target width at every consumer's `compile_from_args`
+        // body.
         assert!(matches!(classify(&parse_ty("i64")), Kind::Int("i64")));
         assert!(matches!(classify(&parse_ty("i32")), Kind::Int("i32")));
         assert!(matches!(classify(&parse_ty("u32")), Kind::Int("u32")));
@@ -1478,7 +1511,7 @@ mod classify_tests {
     fn every_supported_float_width_classifies_as_kind_float_with_the_matching_type_literal() {
         // Sibling of the integer-width pin — `f64` / `f32` each route
         // through `Kind::Float(<literal>)`, threading the width name
-        // through the payload for the emitted `as <ty>` cast on
+        // through the payload for the emitted narrowing turbofish on
         // `extract_float`'s `f64` return. A regression that dropped
         // `f32` from the supported set (folding it into the
         // fall-through arm) would silently rewire every `f32` field to

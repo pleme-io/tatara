@@ -88,6 +88,7 @@ const _: () = crate::ast::assert_str_array_pairwise_distinct(&KwargPathKind::LAB
 const _: () = crate::ast::assert_str_array_pairwise_distinct(&ExpectedKwargShape::LABELS);
 const _: () = crate::ast::assert_str_array_pairwise_distinct(&SexpShape::LABELS);
 const _: () = crate::ast::assert_str_array_pairwise_distinct(&StructuralKind::LABELS);
+const _: () = crate::ast::assert_str_array_pairwise_distinct(&NumericWidth::LABELS);
 
 // Compile-time NONEMPTY-CARDINALITY-LOWER-BOUND witnesses — one
 // `const _: () = crate::ast::assert_str_array_all_nonempty(&…)` per
@@ -129,6 +130,7 @@ const _: () = crate::ast::assert_str_array_all_nonempty(&KwargPathKind::LABELS);
 const _: () = crate::ast::assert_str_array_all_nonempty(&ExpectedKwargShape::LABELS);
 const _: () = crate::ast::assert_str_array_all_nonempty(&SexpShape::LABELS);
 const _: () = crate::ast::assert_str_array_all_nonempty(&StructuralKind::LABELS);
+const _: () = crate::ast::assert_str_array_all_nonempty(&NumericWidth::LABELS);
 
 // Compile-time ASCII-BYTE-RANGE witnesses — one `const _: () =
 // crate::ast::assert_str_array_all_ascii(&…)` per family-wide
@@ -167,6 +169,7 @@ const _: () = crate::ast::assert_str_array_all_ascii(&KwargPathKind::LABELS);
 const _: () = crate::ast::assert_str_array_all_ascii(&ExpectedKwargShape::LABELS);
 const _: () = crate::ast::assert_str_array_all_ascii(&SexpShape::LABELS);
 const _: () = crate::ast::assert_str_array_all_ascii(&StructuralKind::LABELS);
+const _: () = crate::ast::assert_str_array_all_ascii(&NumericWidth::LABELS);
 
 // Compile-time SUBSET-embedding witnesses — the THREE family-wide
 // `[&'static str; N]` sub-vocabularies of the substrate's twelve-arm
@@ -802,6 +805,144 @@ const _: () = crate::ast::assert_str_array_slice_equals_str_array::<2, 2, 0>(
     &StructuralKind::LABELS,
     &["nil", "list"],
 );
+const _: () = crate::ast::assert_str_array_slice_equals_str_array::<7, 7, 0>(
+    &NumericWidth::LABELS,
+    &["i32", "i64", "u32", "u64", "usize", "f32", "f64"],
+);
+
+/// The closed set of Rust numeric widths a `#[derive(TataraDomain)]`
+/// field can lower a numeric kwarg into — the exact seven the derive's
+/// `classify` recognises (`Kind::Int("i32" | "i64" | "u32" | "u64" |
+/// "usize")` ⊎ `Kind::Float("f32" | "f64")`), encoded as a TYPE so the
+/// width identity riding [`LispError::KwargOutOfRange.target`] is
+/// load-bearing data rather than a `&'static str` the proc macro
+/// interpolated into a message.
+///
+/// The set is closed by CONSTRUCTION on the derive's side: the derive's
+/// `Kind::Int` / `Kind::Float` payload is the only producer, and a
+/// hypothetical eighth width (`i8`, `u16`, `i128`) is not reachable
+/// until `classify` grows an arm for it — at which point the emitted
+/// `::tatara_lisp::error::NumericWidth::<Variant>` path fails to
+/// resolve, which is the compile error we want rather than a silently
+/// mislabeled diagnostic. Sibling closed-set lift to
+/// [`ExpectedKwargShape`] (the shape axis of the same typed-entry
+/// kwarg gate), [`KwargPath`], [`SexpShape`], [`MacroDefHead`],
+/// [`UnquoteForm`] and [`CompilerSpecIoStage`].
+///
+/// Theory anchor: THEORY.md §V.1 — knowable platform; a diagnostic that
+/// names the offending value but not the width it failed to fit is
+/// structurally incomplete, and the width is exactly the fact the
+/// author needs to fix the source. THEORY.md §II.1 invariant 1 — typed
+/// entry; the target width is part of the proof of WHICH numeric gate
+/// rejected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, tatara_lisp_derive::ClosedSet)]
+#[closed_set(via = "label", display, generate_unknown = "numeric width")]
+pub enum NumericWidth {
+    /// `"i32"` — signed 32-bit; the `extract_int` → `i32` narrowing.
+    I32,
+    /// `"i64"` — signed 64-bit; the IDENTITY narrowing on the int axis
+    /// (`extract_int` already returns `i64`), retained as a variant so
+    /// the derive's width payload maps totally onto this enum rather
+    /// than through an `Option`.
+    I64,
+    /// `"u32"` — unsigned 32-bit; rejects both the too-large and the
+    /// NEGATIVE literal, the second of which a raw `as` cast turned
+    /// into a huge positive number.
+    U32,
+    /// `"u64"` — unsigned 64-bit; the range is a strict superset of
+    /// `i64`'s positive half, so only the negative literal is
+    /// rejectable here.
+    U64,
+    /// `"usize"` — pointer-width unsigned. Rejects the negative
+    /// literal always, and the too-large literal on a 32-bit target.
+    Usize,
+    /// `"f32"` — single-precision; rejects a literal whose magnitude
+    /// overflows to `inf`. Precision LOSS within range is accepted (it
+    /// is what an `f32` field asked for); only unrepresentable
+    /// magnitude is a rejection.
+    F32,
+    /// `"f64"` — double-precision; the IDENTITY narrowing on the float
+    /// axis (`extract_float` already returns `f64`).
+    F64,
+}
+
+impl NumericWidth {
+    /// The closed set of seven reachable target widths — single source
+    /// of truth driving [`Self::label`] / [`fmt::Display`] and the
+    /// derive-generated `FromStr` decode sweep. Adding an eighth width
+    /// lands at one `ALL` entry + one [`Self::label`] arm, arity-forced
+    /// by the `[Self; 7]` literal.
+    pub const ALL: [Self; 7] = [
+        Self::I32,
+        Self::I64,
+        Self::U32,
+        Self::U64,
+        Self::Usize,
+        Self::F32,
+        Self::F64,
+    ];
+
+    /// The seven canonical labels in [`Self::ALL`] order — the Rust
+    /// type names themselves, so the diagnostic quotes the source the
+    /// author would have to edit. Pinned against a literal array by the
+    /// `assert_str_array_slice_equals_str_array` const above.
+    pub const LABELS: [&'static str; 7] = [
+        Self::I32.label(),
+        Self::I64.label(),
+        Self::U32.label(),
+        Self::U64.label(),
+        Self::Usize.label(),
+        Self::F32.label(),
+        Self::F64.label(),
+    ];
+
+    /// Canonical `&'static str` projection — the Rust type name.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::I32 => "i32",
+            Self::I64 => "i64",
+            Self::U32 => "u32",
+            Self::U64 => "u64",
+            Self::Usize => "usize",
+            Self::F32 => "f32",
+            Self::F64 => "f64",
+        }
+    }
+}
+
+/// The author's numeric literal, carried at the extractor's OWN width
+/// so [`LispError::KwargOutOfRange`] echoes exactly what was written.
+///
+/// Two variants because the typed-entry numeric surface has exactly two
+/// extractors — `extract_int` (`-> i64`) and `extract_float` (`-> f64`)
+/// — and neither width losslessly carries the other: an `i64` above
+/// 2^53 does not survive a round-trip through `f64`, and a fractional
+/// `f64` does not survive one through `i64`. Collapsing them onto one
+/// carrier would corrupt the very number the diagnostic exists to
+/// quote, which is the same class of bug this variant was added to fix.
+///
+/// NOT a [`crate::ClosedSet`]: the variants carry DATA, so
+/// there is no `&'static str` label to key `ALL` / `FromStr` on. The
+/// closed-set idiom applies to label-valued enums; this is a typed sum
+/// over payloads and gets a plain `Display`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum NumericLiteral {
+    /// A literal read through `Sexp::as_int` — the int axis.
+    Int(i64),
+    /// A literal read through `Sexp::as_float` — the number axis, which
+    /// accepts both `Sexp::Atom(Float(_))` and `Sexp::Atom(Int(_))`.
+    Float(f64),
+}
+
+impl ::core::fmt::Display for NumericLiteral {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+        match self {
+            Self::Int(n) => write!(f, "{n}"),
+            Self::Float(x) => write!(f, "{x}"),
+        }
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum LispError {
@@ -883,6 +1024,49 @@ pub enum LispError {
         form: KwargPath,
         expected: ExpectedKwargShape,
         got: SexpShape,
+    },
+    /// Structural RANGE rejection — the kwarg's value carried the RIGHT
+    /// `Sexp` shape (an int where an int was wanted, a number where a
+    /// number was wanted) but does not fit the field's narrower Rust
+    /// width. The typed-entry numeric gate's second axis, orthogonal to
+    /// [`Self::TypeMismatch`]'s shape axis.
+    ///
+    /// WHY this is NOT a `TypeMismatch`. Both of that variant's
+    /// descriptive slots are shape-valued — `expected:
+    /// ExpectedKwargShape` and `got: SexpShape` — so an out-of-range
+    /// `:port 70000` on a `u16`-ish field would render the vacuous
+    /// `expected int, got int`. The shapes AGREE; it is the WIDTH that
+    /// disagrees, and `SexpShape` has no vocabulary for a width. The two
+    /// rejection modes are genuinely distinct gates on the same value
+    /// and get distinct variant identities, so an authoring surface can
+    /// tell "you wrote a string" from "you wrote a number too big for
+    /// this field" by pattern-match rather than by parsing a message.
+    ///
+    /// `form` is the same typed `KwargPath` every other typed-entry
+    /// rejection carries, so `KwargPath::Named(_)` / `Item { .. }` /
+    /// `Slot(_)` bind structurally here exactly as they do on
+    /// `TypeMismatch`. `target` is the typed closed-set
+    /// [`NumericWidth`] — the seven Rust numeric widths
+    /// `#[derive(TataraDomain)]` can lower a kwarg into — so the width
+    /// identity is load-bearing data rather than a `&'static str` the
+    /// derive interpolated. `value` is the typed [`NumericLiteral`]
+    /// carrying the author's number at the extractor's OWN width (`i64`
+    /// for the int axis, `f64` for the float axis), so the diagnostic
+    /// echoes exactly what was written with no lossy re-projection —
+    /// an `i64` above 2^53 would not survive a round-trip through `f64`.
+    ///
+    /// Before this variant existed the derive emitted a raw `as`
+    /// downcast after `extract_int` / `extract_float`, so an
+    /// out-of-range literal was silently TRUNCATED (or sign-flipped, or
+    /// saturated to `inf`) into the field and the author got a wrong
+    /// number with no diagnostic at all. Rejecting is the typed-entry
+    /// posture: a value the field cannot represent never enters the
+    /// domain struct.
+    #[error("compile error in {form}: {value} is out of range for {target}")]
+    KwargOutOfRange {
+        form: KwargPath,
+        target: NumericWidth,
+        value: NumericLiteral,
     },
     /// Structural head-mismatch — the `(head ...)` of a top-level form
     /// didn't match `T::KEYWORD`. Both sides are first-class fields, not
@@ -9318,6 +9502,11 @@ impl LispError {
             | Self::Type { .. }
             | Self::Compile { .. }
             | Self::TypeMismatch { .. }
+            // Positionless for the same reason as its shape-axis sibling
+            // `TypeMismatch`: the kwarg `Sexp` the numeric gate rejected
+            // carries no span yet. When `Sexp` gains spans both arms move
+            // together — they are one gate on two axes.
+            | Self::KwargOutOfRange { .. }
             | Self::HeadMismatch { .. }
             | Self::Unknown { .. }
             | Self::Missing(_)

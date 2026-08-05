@@ -23630,7 +23630,7 @@ pub trait ClosedSet: Sized + Copy + 'static {
     /// unambiguous?" site pre-lift. THEORY.md §VI.1 — generation over
     /// composition; the projection emerges from the composition of
     /// the two substrate primitives [`Self::has_unique_bimodal_variant`]
-    /// + [`Self::sorted_bimodal_variant`] with the `if _ { _ } else
+    /// and [`Self::sorted_bimodal_variant`] with the `if _ { _ } else
     /// { None }` combinator on `Option<Self>`, not as a per-
     /// implementor hand-rolled body.
     ///
@@ -37231,7 +37231,7 @@ pub trait ClosedSet: Sized + Copy + 'static {
     /// it's unambiguous" site pre-lift. THEORY.md §VI.1 — generation
     /// over composition; the projection emerges from the composition
     /// of TWO substrate primitives ([`Self::has_unique_missing_variant`]
-    /// + [`Self::missing_variants`]) with the
+    /// and [`Self::missing_variants`]) with the
     /// `if _ { _ } else { vec![] }` combinator on `Vec<Self>`.
     ///
     /// Frontier inspiration: R's
@@ -58523,8 +58523,7 @@ where
         // `T::ALL[T::CARDINALITY - 1]` at its miss entry. A `None`-
         // drift override bifurcates here at
         // `None != Some(T::ALL[T::CARDINALITY - 1])`.
-        let single_missing: ::std::vec::Vec<T> =
-            T::ALL[..T::CARDINALITY - 1].iter().copied().collect();
+        let single_missing: ::std::vec::Vec<T> = T::ALL[..T::CARDINALITY - 1].to_vec();
         let single_missing_unique_missing = T::unique_missing_variant(&single_missing);
         let expected_single_missing_unique_missing: Option<T> =
             if T::has_unique_missing_variant(&single_missing) {
@@ -58686,8 +58685,7 @@ where
         // `count_repeating_variants == 0`) — the two SURFACES pin
         // uniqueness at DIFFERENT fixtures on the mult-band
         // trichotomy's two extremal bands.
-        let single_missing_isuniq: ::std::vec::Vec<T> =
-            T::ALL[..T::CARDINALITY - 1].iter().copied().collect();
+        let single_missing_isuniq: ::std::vec::Vec<T> = T::ALL[..T::CARDINALITY - 1].to_vec();
         for (target_slot, target) in T::ALL.iter().copied().enumerate() {
             let target_label = <T as ClosedSet>::label(target);
             let expected = target_slot == T::CARDINALITY - 1;
@@ -59049,8 +59047,7 @@ where
         // `T::unique_missing_variant` lands on. The two projections
         // return the SAME `Some(T::ALL[T::CARDINALITY - 1])` on this
         // positive fixture BY UNIQUENESS of the missing witness.
-        let sorted_single_missing: ::std::vec::Vec<T> =
-            T::ALL[..T::CARDINALITY - 1].iter().copied().collect();
+        let sorted_single_missing: ::std::vec::Vec<T> = T::ALL[..T::CARDINALITY - 1].to_vec();
         assert_eq!(
             T::sorted_unique_missing_variant(&sorted_single_missing),
             T::unique_missing_variant(&sorted_single_missing),
@@ -62704,6 +62701,15 @@ where
 }
 
 #[cfg(test)]
+// clippy::assertions_on_constants + iter_cloned_collect suppressed at the
+// test-module boundary: the cohort's `assert!(<T as ClosedSet>::CARDINALITY
+// >= N)` shape asserts a fixture invariant at the point-of-use as
+// documentation-in-the-body rather than a `const { assert!(…) }` wrapper the
+// reader has to unwrap, and the `.iter().copied().collect::<Vec<_>>()`
+// projections mirror the paper-form the docstrings above each fixture call
+// out at the same shape the rest of the file uses — collapsing either to the
+// clippy-preferred sugar would obscure the theorem-per-line pattern.
+#[allow(clippy::assertions_on_constants, clippy::iter_cloned_collect)]
 mod tests {
     use super::ClosedSet;
 

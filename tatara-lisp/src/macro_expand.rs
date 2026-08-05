@@ -1472,6 +1472,124 @@ impl ResourceLimits {
         ]
     }
 
+    /// Per-axis pointwise `>=` mask across the six ceilings — the ATOMIC
+    /// per-axis relation vector whose CONJUNCTION over the six positions
+    /// equals [`Self::geq`]. `a.axes_geq(b)[i]` is `true` iff the
+    /// `i`-th ceiling of `a` sits at or above the `i`-th ceiling of `b`;
+    /// folding the six results through `&&` recovers `a.geq(b)` verbatim,
+    /// so this projection DECOMPOSES the single-bit relation into its
+    /// six per-axis witnesses without introducing new relation semantics
+    /// past what [`Self::geq`] already carries.
+    ///
+    /// The DIRECTION peer of [`Self::axes_leq`] one DIRECTION axis over
+    /// on the per-axis-mask surface — where `axes_leq` returns the six
+    /// per-axis "below" (`<=`) witnesses, this returns the six per-axis
+    /// "above" (`>=`) witnesses. Together the two close the (below,
+    /// above) direction pair on the per-axis-mask non-strict pairwise-
+    /// relation surface, exactly as [`Self::leq`] / [`Self::geq`] close
+    /// the SAME (below, above) direction pair on the single-bit verdict
+    /// surface one PROJECTION-KIND axis over. The (`axes_leq`,
+    /// `axes_geq`) pair therefore sits on the same DIRECTION axis as
+    /// (`leq`, `geq`) one PROJECTION-KIND axis over — every pairwise
+    /// partial-order verdict the substrate carries at the single-bit
+    /// level now carries a per-axis-mask peer at the atomic level.
+    ///
+    /// Encoded as `other.axes_leq(self)` — one primitive delegation to
+    /// [`Self::axes_leq`], so the non-strict-relation encoding lives at
+    /// exactly one implementation site (`axes_leq`'s six per-axis `<=`
+    /// primitives), and a future re-derivation of `axes_leq` (e.g. to a
+    /// different pointwise comparison) propagates to `axes_geq`
+    /// mechanically rather than requiring a per-method fix-up. Mirrors
+    /// [`Self::geq`]'s `other.leq(self)` delegation one PROJECTION-KIND
+    /// axis over — the same argument-flip encoding that closes the
+    /// (leq, geq) dual on the single-bit verdict surface closes the
+    /// (axes_leq, axes_geq) dual on the per-axis-mask surface.
+    ///
+    /// **Conjunction-recovers-`geq` contract**: for every posture pair
+    /// `(a, b)`, folding `a.axes_geq(b)` through `&&` over the six
+    /// positions equals `a.geq(b)` — pinned by
+    /// `resource_limits_axes_geq_conjunction_agrees_with_geq` on the
+    /// canonical preset roster (EMPTY / DEFAULT / UNBOUNDED / MID /
+    /// OTHER). Mirrors the analogous conjunction-recovers-`leq`
+    /// contract on [`Self::axes_leq`] one DIRECTION axis over.
+    ///
+    /// **Positional-alignment contract**: for every posture pair
+    /// `(a, b)` and every index `i in 0..FIELD_COUNT`,
+    /// `a.axes_geq(b)[i] == (a.field_values()[i] >= b.field_values()[i])`
+    /// — pinned by
+    /// `resource_limits_axes_geq_agrees_with_pointwise_field_comparison`
+    /// via cross-reference with [`Self::field_values`] on a
+    /// discriminating fixture. Guarantees the per-axis mask preserves
+    /// the same canonical index-to-axis mapping the two SIBLING
+    /// projections carry.
+    ///
+    /// **Direction-flip contract**: for every posture pair `(a, b)`
+    /// and every index `i`, `a.axes_geq(b)[i] == b.axes_leq(a)[i]` —
+    /// the per-axis MASK peer of the single-bit `a.geq(b) == b.leq(a)`
+    /// direction-flip law. Pinned by
+    /// `resource_limits_axes_geq_is_argument_flipped_axes_leq` across
+    /// the same 25-pair matrix, so the delegation encoding is verified
+    /// at the per-axis mask level, not merely at the fold-recovered
+    /// scalar.
+    ///
+    /// **Preset pole pins**: the (bottom, top) bounded-lattice
+    /// preset-pair carries EXHAUSTIVE per-axis verdicts on the
+    /// projection —
+    /// `EMPTY.axes_geq(UNBOUNDED) == [false; FIELD_COUNT]` (every `0`
+    /// is strictly below every [`usize::MAX`]);
+    /// `UNBOUNDED.axes_geq(EMPTY) == [true; FIELD_COUNT]` (every
+    /// [`usize::MAX`] sits at or above every `0`);
+    /// `EMPTY.axes_geq(EMPTY) == [true; FIELD_COUNT]` (reflexivity on
+    /// every axis); `UNBOUNDED.axes_geq(UNBOUNDED) == [true;
+    /// FIELD_COUNT]` (reflexivity on every axis). Mirrors the
+    /// (bottom, top) × (leq-direction, opposite-direction) 2×2 pole
+    /// face pinned on [`Self::axes_leq`] with the direction-flip
+    /// applied.
+    ///
+    /// `const fn` so a caller can pin a per-axis verdict at compile
+    /// time (`const _: [bool; ResourceLimits::FIELD_COUNT] =
+    /// UNBOUNDED_RESOURCE_LIMITS.axes_geq(EMPTY_RESOURCE_LIMITS);`) —
+    /// the const-fn peer of the const-eval evaluability every other
+    /// primitive on the [`ResourceLimits`] algebra carries. `Copy` on
+    /// [`ResourceLimits`] lets the const-fn body pass `self` and
+    /// `other` by value into the delegated `axes_leq` call without an
+    /// explicit `.clone()` (which const-fn would not permit anyway),
+    /// and `bool` is trivially `Copy` in the array element position.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-posture-pair projection into the six-bool relation vector
+    /// is itself a typed named exit rather than a per-consumer inline
+    /// six-primitive cascade. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; the pairwise partial-order
+    /// relation on two preset-carried resource proofs is decomposed
+    /// into its six per-axis witnesses at TYPE level in both directions
+    /// (below and above), so consumers reasoning about WHICH axes carry
+    /// the relation bind through ONE typed primitive per direction
+    /// rather than re-running the comparison on each. THEORY.md §V.1 —
+    /// knowable platform; the per-axis pointwise `>=` mask becomes a
+    /// TYPE-level operation on the posture algebra rather than a per-
+    /// consumer field-access cascade — with the per-axis granularity
+    /// baked in so the consumer cannot silently drop an axis from the
+    /// diagnostic (the array's fixed arity forces every axis to
+    /// appear).
+    ///
+    /// Frontier inspiration: Idris's `zipWith (>=)` over two `Vec n
+    /// Nat` producing a `Vec n Bool` — the DIRECTION peer of the
+    /// `zipWith (<=)` shape [`Self::axes_leq`] cites, closing the
+    /// non-strict pairwise-relation direction pair at the per-position
+    /// vector level. APL / J's rank-lifted `≥` operator producing a
+    /// per-position bit array between two conformable arrays — the
+    /// SAME lifted-relation shape lifted onto typed structs.
+    /// Translation through pleme-io primitives: a `const fn` returning
+    /// a `[bool; N]` fixed-size array on the typed [`ResourceLimits`]
+    /// algebra encoded as an argument-flipped call to the already-
+    /// lifted `axes_leq`, rather than a runtime vector operation or a
+    /// second inline six-primitive cascade.
+    #[must_use]
+    pub const fn axes_geq(self, other: Self) -> [bool; Self::FIELD_COUNT] {
+        other.axes_leq(self)
+    }
+
     /// Pointwise-`min` fold across a slice of postures — the STRICTEST
     /// posture whose admissible input set is the intersection of every
     /// operand's admissible input sets. `ResourceLimits::strictest_of(&[a,
@@ -20743,6 +20861,249 @@ mod tests {
         // less than [`usize::MAX`], so every mask entry is `true`).
         const MASK: [bool; ResourceLimits::FIELD_COUNT] =
             DEFAULT_RESOURCE_LIMITS.axes_leq(UNBOUNDED_RESOURCE_LIMITS);
+        const _: () = assert!(MASK[0]);
+        const _: () = assert!(MASK[1]);
+        const _: () = assert!(MASK[2]);
+        const _: () = assert!(MASK[3]);
+        const _: () = assert!(MASK[4]);
+        const _: () = assert!(MASK[5]);
+    }
+
+    #[test]
+    fn resource_limits_axes_geq_conjunction_agrees_with_geq() {
+        // Conjunction-recovers-`geq` pin — folding `a.axes_geq(b)`
+        // through `&&` over the six positions equals `a.geq(b)`. Direction
+        // peer of `resource_limits_axes_leq_conjunction_agrees_with_leq`
+        // one DIRECTION axis over on the per-axis-mask surface — where
+        // that test pins the "below" per-axis mask against the single-bit
+        // `leq` fold, this pins the "above" per-axis mask against the
+        // single-bit `geq` fold. Iterates the same canonical preset
+        // roster (EMPTY / DEFAULT / UNBOUNDED / MID / OTHER) so every
+        // 25-pair combination is exercised.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let mask = a.axes_geq(b);
+                let mut folded = true;
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    folded = folded && mask[i];
+                    i += 1;
+                }
+                assert_eq!(
+                    folded,
+                    a.geq(b),
+                    "axes_geq({a:?}, {b:?}) folded through && must equal geq"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_geq_agrees_with_pointwise_field_comparison() {
+        // Positional-alignment pin — for every posture pair `(a, b)`
+        // and every index `i`, `a.axes_geq(b)[i]` equals
+        // `a.field_values()[i] >= b.field_values()[i]`. Cross-references
+        // the per-axis mask against the SIBLING
+        // [`ResourceLimits::field_values`] projection to pin the
+        // canonical index-to-axis mapping for the "above" direction:
+        // a struct-field reorder that broke the alignment on either
+        // projection fires this pin at the offending axis. Direction
+        // peer of
+        // `resource_limits_axes_leq_agrees_with_pointwise_field_comparison`
+        // one DIRECTION axis over.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let mask = a.axes_geq(b);
+                let av = a.field_values();
+                let bv = b.field_values();
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    assert_eq!(
+                        mask[i],
+                        av[i] >= bv[i],
+                        "axes_geq({a:?}, {b:?})[{i}] must equal field_values comparison"
+                    );
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_geq_is_argument_flipped_axes_leq() {
+        // Direction-flip pin — for every posture pair `(a, b)` and every
+        // index `i`, `a.axes_geq(b)[i] == b.axes_leq(a)[i]`. The per-
+        // axis MASK peer of the single-bit `a.geq(b) == b.leq(a)`
+        // direction-flip law that encodes [`Self::geq`] as
+        // `other.leq(self)`. Verifies the delegation encoding at the
+        // per-axis mask level — not merely at the fold-recovered scalar,
+        // so a future re-derivation of `axes_geq` that broke the
+        // argument-flip on any single axis fires this pin at the
+        // offending axis before the scalar fold masks it.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let above = a.axes_geq(b);
+                let below = b.axes_leq(a);
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    assert_eq!(
+                        above[i], below[i],
+                        "axes_geq({a:?}, {b:?})[{i}] must equal axes_leq({b:?}, {a:?})[{i}]"
+                    );
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_geq_of_empty_and_unbounded_is_all_false() {
+        // Bottom-to-top preset pin — [`EMPTY_RESOURCE_LIMITS`]
+        // (bounded-lattice bottom, every axis `0`) versus
+        // [`UNBOUNDED_RESOURCE_LIMITS`] (bounded-lattice top, every
+        // axis [`usize::MAX`]). Every per-axis verdict is `false`
+        // (`0 >= usize::MAX` fails on every axis), so the mask is
+        // exhaustively false — the pole-diagonal edge case pinned at
+        // compile time via the const-fn evaluability of the projection.
+        // Direction peer of
+        // `resource_limits_axes_leq_of_empty_and_unbounded_is_all_true`
+        // one DIRECTION axis over.
+        const MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            EMPTY_RESOURCE_LIMITS.axes_geq(UNBOUNDED_RESOURCE_LIMITS);
+        const _: () = assert!(!MASK[0]);
+        const _: () = assert!(!MASK[1]);
+        const _: () = assert!(!MASK[2]);
+        const _: () = assert!(!MASK[3]);
+        const _: () = assert!(!MASK[4]);
+        const _: () = assert!(!MASK[5]);
+    }
+
+    #[test]
+    fn resource_limits_axes_geq_of_unbounded_and_empty_is_all_true() {
+        // Top-to-bottom preset pin — the REVERSE direction of the
+        // bottom-to-top pin above. Every per-axis verdict is `true`
+        // (`usize::MAX >= 0` holds on every axis), so the mask is
+        // exhaustively true. Together with the bottom-to-top pin this
+        // closes the (bottom, top) × (geq-direction, opposite-direction)
+        // 2×2 pole face on the per-axis mask surface at its two EXTREMAL
+        // corners — the DIRECTION peer of the same pole face on
+        // [`Self::axes_leq`] with the two verdicts inverted per the
+        // direction-flip encoding.
+        const MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            UNBOUNDED_RESOURCE_LIMITS.axes_geq(EMPTY_RESOURCE_LIMITS);
+        const _: () = assert!(MASK[0]);
+        const _: () = assert!(MASK[1]);
+        const _: () = assert!(MASK[2]);
+        const _: () = assert!(MASK[3]);
+        const _: () = assert!(MASK[4]);
+        const _: () = assert!(MASK[5]);
+    }
+
+    #[test]
+    fn resource_limits_axes_geq_is_reflexive_on_every_axis() {
+        // Reflexivity pin — `a.axes_geq(a)` returns `[true; FIELD_COUNT]`
+        // on every posture, since `a.max_X >= a.max_X` holds on every
+        // axis by [`usize`]'s reflexivity of `>=`. Direction peer of
+        // `resource_limits_axes_leq_is_reflexive_on_every_axis` one
+        // DIRECTION axis over. Compile-time evaluable on each of the
+        // three shipped presets via const-fn.
+        const EMPTY_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            EMPTY_RESOURCE_LIMITS.axes_geq(EMPTY_RESOURCE_LIMITS);
+        const _: () = assert!(
+            EMPTY_MASK[0]
+                && EMPTY_MASK[1]
+                && EMPTY_MASK[2]
+                && EMPTY_MASK[3]
+                && EMPTY_MASK[4]
+                && EMPTY_MASK[5]
+        );
+        const DEFAULT_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            DEFAULT_RESOURCE_LIMITS.axes_geq(DEFAULT_RESOURCE_LIMITS);
+        const _: () = assert!(
+            DEFAULT_MASK[0]
+                && DEFAULT_MASK[1]
+                && DEFAULT_MASK[2]
+                && DEFAULT_MASK[3]
+                && DEFAULT_MASK[4]
+                && DEFAULT_MASK[5]
+        );
+        const UNBOUNDED_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            UNBOUNDED_RESOURCE_LIMITS.axes_geq(UNBOUNDED_RESOURCE_LIMITS);
+        const _: () = assert!(
+            UNBOUNDED_MASK[0]
+                && UNBOUNDED_MASK[1]
+                && UNBOUNDED_MASK[2]
+                && UNBOUNDED_MASK[3]
+                && UNBOUNDED_MASK[4]
+                && UNBOUNDED_MASK[5]
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_geq_discriminates_single_axis_violation() {
+        // Diagnostic-emission pin — when `a.geq(b)` returns `false`
+        // because ONE axis violates the `>=` primitive, `a.axes_geq(b)`
+        // returns a mask whose SINGLE `false` entry names the
+        // violating axis by index. The offending axis here is
+        // `max_expansion_depth` (index 0): `b` sits one above
+        // `EMPTY_RESOURCE_LIMITS` on that axis alone, so
+        // `EMPTY_RESOURCE_LIMITS.axes_geq(b)` returns `false` at index
+        // 0 (where `0 >= 1` fails) and `true` at every other axis
+        // (where `0 >= 0` holds trivially). Direction peer of
+        // `resource_limits_axes_leq_discriminates_single_axis_violation`
+        // one DIRECTION axis over — the same observability use case
+        // lifted onto the "above" mask.
+        let b = ResourceLimits {
+            max_expansion_depth: 1,
+            ..EMPTY_RESOURCE_LIMITS
+        };
+        let mask = EMPTY_RESOURCE_LIMITS.axes_geq(b);
+        assert!(!mask[0], "max_expansion_depth axis must be the false entry");
+        assert!(mask[1]);
+        assert!(mask[2]);
+        assert!(mask[3]);
+        assert!(mask[4]);
+        assert!(mask[5]);
+        // Cross-check: the single-bit `geq` verdict is false, and the
+        // conjunction of the mask agrees.
+        assert!(!EMPTY_RESOURCE_LIMITS.geq(b));
+    }
+
+    #[test]
+    fn resource_limits_axes_geq_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the per-axis mask is evaluable in const
+        // context, so a caller can pin a preset-relation-vector
+        // identity at compile time. Direction peer of
+        // `resource_limits_axes_leq_evaluates_at_compile_time_via_const_fn`
+        // one DIRECTION axis over: where that test pins the
+        // (default, unbounded) preset pair on the "below" mask, this
+        // pins the (unbounded, default) reverse pair on the "above"
+        // mask — every field of DEFAULT is strictly less than
+        // [`usize::MAX`], so every "unbounded ≥ default" per-axis
+        // entry is `true`.
+        const MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            UNBOUNDED_RESOURCE_LIMITS.axes_geq(DEFAULT_RESOURCE_LIMITS);
         const _: () = assert!(MASK[0]);
         const _: () = assert!(MASK[1]);
         const _: () = assert!(MASK[2]);

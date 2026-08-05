@@ -6804,6 +6804,254 @@ impl ResourceLimits {
         true
     }
 
+    /// Per-axis boolean `lt`-conjunction across every CONSECUTIVE pair of a
+    /// slice of postures — the ATOMIC per-axis SEQUENCE-LEVEL strictly-
+    /// ascending vector. `Self::axes_is_strictly_ascending(&[a, b, c])[i]`
+    /// is `true` iff the projection of the slice onto the `i`-th ceiling is
+    /// a STRICTLY `<`-monotone increasing sequence of `usize`s
+    /// (`a.field_values()[i] < b.field_values()[i]
+    /// && b.field_values()[i] < c.field_values()[i]`) — every consecutive
+    /// pair is strict on axis `i`, including no diagonal repeat on that axis.
+    ///
+    /// The STRICTNESS peer of [`Self::axes_is_ascending`] one STRICTNESS
+    /// axis over on the per-axis-mask sequence-level surface, AND the
+    /// per-axis-MASK peer of [`Self::is_strictly_ascending`] one
+    /// PROJECTION-KIND axis over on the sequence-level surface. Two peers
+    /// cross the same cell on the (direction × projection-kind × strictness)
+    /// 2×2×2 grid: EXHAUSTIVELY CLOSING the (`is_ascending`,
+    /// `is_descending`, `axes_is_ascending`, `axes_is_descending`,
+    /// `is_strictly_ascending`, `is_strictly_descending`,
+    /// `axes_is_strictly_ascending`, `axes_is_strictly_descending`) octet at
+    /// the strict-ascending per-axis-mask corner — every sequence-level
+    /// monotonicity verdict the substrate carries at the single-bit level
+    /// now carries a per-axis-mask peer at the atomic level in BOTH
+    /// directions AND at BOTH strictness rows. Mirrors how the pair-level
+    /// (`leq`, `geq`, `lt`, `gt`, `axes_leq`, `axes_geq`, `axes_lt`,
+    /// `axes_gt`) octet closes the SAME 2×2×2 cube one CARDINALITY axis
+    /// under.
+    ///
+    /// Encoded as a per-consecutive-pair per-axis conjunction over the
+    /// shipped [`Self::axes_lt`] mask — one primitive delegation per
+    /// consecutive pair to the pair-level per-axis-mask STRICT primitive,
+    /// then a per-index `&&`-fold across the pair mask into a running
+    /// accumulator. Mirrors [`Self::axes_is_ascending`]'s per-consecutive-
+    /// pair walk one STRICTNESS axis over — the SAME iteration structure
+    /// with only the inner primitive swapped between the two (`axes_lt` in
+    /// place of `axes_leq`). Because [`Self::axes_lt`] itself is encoded as
+    /// `axes_leq(other) && !axes_geq(other)` per axis, a future re-
+    /// derivation of [`Self::axes_leq`] propagates transparently into this
+    /// method through TWO structural compositions of the shipped pair-level
+    /// primitive.
+    ///
+    /// **Fold-REFINES-scalar contract (one-directional)**: for every slice
+    /// `postures`, folding
+    /// `Self::axes_is_strictly_ascending(postures)` through `&&` IMPLIES
+    /// `Self::is_strictly_ascending(postures)` — but the converse fails.
+    /// Per-axis strict `<` at every consecutive pair implies pair-level
+    /// `lt` at every pair (since axis-i strict `<` implies axis-i `≤`
+    /// AND witnesses a strict axis for the "some axis <" clause), so the
+    /// all-true mask entails the whole-posture verdict. The converse
+    /// diverges because pair-level `lt` = "every axis ≤ AND some axis <"
+    /// does NOT decompose per-axis: a slice may be strictly ascending in
+    /// the partial order (`is_strictly_ascending == true`) via DIFFERENT
+    /// axes carrying the strictness at DIFFERENT consecutive pairs, while
+    /// no single axis is strictly ascending throughout. LOAD-BEARING
+    /// DIVERGENCE from [`Self::axes_is_ascending`]'s BI-directional fold-
+    /// recovers-scalar contract one STRICTNESS axis over — the non-strict
+    /// pair-level `leq` IS the per-axis `≤` conjunction, so its per-axis
+    /// mask decomposes exactly; the strict pair-level `lt` is not the per-
+    /// axis `<` conjunction, so its per-axis mask REFINES rather than
+    /// recovers. Pinned as
+    /// `resource_limits_axes_is_strictly_ascending_conjunction_implies_is_strictly_ascending`.
+    ///
+    /// **Empty-slice vacuous truth**: `Self::axes_is_strictly_ascending(&[])
+    /// == [true; FIELD_COUNT]` — no consecutive pairs to reject; every
+    /// axis preserves its `true` seed. AGREES with all three sibling
+    /// sequence-level per-axis-mask projections at the empty face.
+    ///
+    /// **Singleton vacuous truth**: `Self::axes_is_strictly_ascending(&[a])
+    /// == [true; FIELD_COUNT]` for every posture `a` — a one-element slice
+    /// contains no consecutive pairs, so the walk never enters the loop.
+    ///
+    /// **Diagonal-duplicate REJECTION — DISCRIMINATING arm vs
+    /// [`Self::axes_is_ascending`]**: `Self::axes_is_strictly_ascending(
+    /// &[a, a]) == [false; FIELD_COUNT]` for every posture `a` —
+    /// [`Self::axes_lt`] is IRREFLEXIVE at every axis (`a.axes_lt(a)[i]
+    /// == false` via `leq[i] && !geq[i]` at the diagonal, where both
+    /// `leq[i]` and `geq[i]` hold, so their intersection with the De
+    /// Morgan complement zeroes). LOAD-BEARING DIVERGENCE from
+    /// [`Self::axes_is_ascending`] one STRICTNESS axis over — where the
+    /// non-strict peer ACCEPTS every diagonal-duplicate slice at every
+    /// axis (via `axes_leq`'s per-axis reflexivity), this projection
+    /// REJECTS at every axis. Peer of the pair-level `lt` vs `leq`
+    /// divergence at the diagonal one CARDINALITY axis down.
+    ///
+    /// **Strict ascending shipped-preset triple closure**:
+    /// `Self::axes_is_strictly_ascending(&[EMPTY_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]) == [true;
+    /// FIELD_COUNT]` — the shipped-preset chain on the bounded-lattice
+    /// diagonal is STRICTLY `<`-monotone ascending on every axis (every
+    /// axis's `0 < positive-constant < usize::MAX`), so every consecutive
+    /// pair binds `axes_lt` on every axis.
+    ///
+    /// **Descending shipped-preset triple rejection**:
+    /// `Self::axes_is_strictly_ascending(&[UNBOUNDED_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS]) == [false;
+    /// FIELD_COUNT]` — the reversed enumeration binds
+    /// `UNBOUNDED.axes_lt(DEFAULT) == [false; 6]` at the first consecutive
+    /// pair.
+    ///
+    /// **Ascending-with-repeat REJECTION — DISCRIMINATING arm vs
+    /// [`Self::axes_is_ascending`]**:
+    /// `Self::axes_is_strictly_ascending(&[EMPTY_RESOURCE_LIMITS,
+    /// EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS]) == [false;
+    /// FIELD_COUNT]` — an ascending non-strict slice with a repeated
+    /// consecutive element passes [`Self::axes_is_ascending`] but fails
+    /// this projection at every axis (via `axes_lt`'s irreflexivity at
+    /// the repeat).
+    ///
+    /// **Antichain per-axis discrimination (DIAGNOSTIC)**:
+    /// `Self::axes_is_strictly_ascending(&[HAND_AUTHORED_MID_POSTURE,
+    /// HAND_AUTHORED_OTHER_POSTURE])` carries the SAME mixed mask as
+    /// [`Self::axes_is_ascending`] on this pair (the two hand-authored
+    /// postures differ on every axis, so per-axis `axes_leq[i] ==
+    /// axes_lt[i]` on this pair — the diagonal-duplicate divergence
+    /// vanishes on strictly-distinct axes).
+    ///
+    /// `const fn` for the same compile-time-pin reasons as
+    /// [`Self::axes_is_ascending`] one STRICTNESS axis over — a caller can
+    /// pin a per-axis-strict-ascending identity at compile time.
+    ///
+    /// Pre-lift, a caller wanting "for each axis, is this slice a strictly
+    /// `<`-monotone ascending sequence on that axis?" composed the singly-
+    /// indexed `postures.windows(2).map(|w| w[0].axes_lt(w[1]))` two-
+    /// primitive fold at every prospective callsite — the SAME PRIME
+    /// DIRECTIVE ≥2 pattern the whole-posture strict projection carries
+    /// one PROJECTION-KIND axis over, but with the per-axis diagnostic the
+    /// whole-posture verdict collapses. Post-lift the strict per-axis-mask
+    /// verdict binds at ONE typed method the algebra exposes.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-axis strict-ascending verdict is itself a typed named `[bool; N]`
+    /// exit rather than an inline windowed conjunction. THEORY.md §V.1 —
+    /// knowable platform; the per-axis strict-ascending mask becomes a
+    /// TYPE-level operation on the posture algebra.
+    ///
+    /// Frontier inspiration: the order-theoretic notion of AXIS-WISE STRICT
+    /// MONOTONICITY on a product order — Haskell's `zipWith` idioms over
+    /// per-component `<` on a product-ordered carrier; Idris's per-index
+    /// strict comparison on `Vec n Nat`; APL's monadic ascending-per-axis
+    /// operators. Translation through pleme-io primitives: the singly-
+    /// indexed consecutive-pair walk directly, with [`Self::axes_lt`] as
+    /// the pair-level primitive, no new dep, no supertrait bound, `const
+    /// fn` throughout. The DIRECTION peer
+    /// [`Self::axes_is_strictly_descending`] closes the strict row of the
+    /// (direction × projection-kind × strictness) 2×2×2 sequence-level
+    /// face at its strict-descending per-axis-mask corner.
+    #[must_use]
+    pub const fn axes_is_strictly_ascending(postures: &[Self]) -> [bool; Self::FIELD_COUNT] {
+        let mut result = [true; Self::FIELD_COUNT];
+        let n = postures.len();
+        let mut j = 0;
+        while j + 1 < n {
+            let pair = postures[j].axes_lt(postures[j + 1]);
+            let mut i = 0;
+            while i < Self::FIELD_COUNT {
+                result[i] = result[i] && pair[i];
+                i += 1;
+            }
+            j += 1;
+        }
+        result
+    }
+
+    /// Per-axis boolean `gt`-conjunction across every CONSECUTIVE pair of a
+    /// slice of postures — the ATOMIC per-axis SEQUENCE-LEVEL strictly-
+    /// descending vector. `Self::axes_is_strictly_descending(&[a, b, c])[i]`
+    /// is `true` iff the projection of the slice onto the `i`-th ceiling is
+    /// a STRICTLY `>`-monotone decreasing sequence of `usize`s.
+    ///
+    /// The DIRECTION peer of [`Self::axes_is_strictly_ascending`] one
+    /// PAIR-LEVEL-PRIMITIVE axis over on the per-axis-mask sequence-level
+    /// surface (via `axes_gt` in place of `axes_lt`), AND the per-axis-MASK
+    /// peer of [`Self::is_strictly_descending`] one PROJECTION-KIND axis
+    /// over. Two peers cross the same cell on the (direction × projection-
+    /// kind × strictness) 2×2×2 cube: EXHAUSTIVELY CLOSING the STRICT ROW
+    /// of the per-axis-mask sequence-level face at its strict-descending
+    /// corner. See [`Self::axes_is_strictly_ascending`] for the octet-
+    /// closure narrative.
+    ///
+    /// Encoded as a per-consecutive-pair per-axis conjunction over the
+    /// shipped [`Self::axes_gt`] mask — one primitive delegation per
+    /// consecutive pair to the pair-level per-axis-mask STRICT primitive,
+    /// then a per-index `&&`-fold. Because [`Self::axes_gt`] delegates to
+    /// [`Self::axes_lt`] via argument flip (`other.axes_lt(self)`), a
+    /// future re-derivation of [`Self::axes_lt`] propagates transparently
+    /// into this method through THREE structural compositions of the
+    /// shipped pair-level primitive.
+    ///
+    /// **Fold-REFINES-scalar contract (one-directional)**: folding
+    /// `Self::axes_is_strictly_descending(postures)` through `&&` IMPLIES
+    /// `Self::is_strictly_descending(postures)` but the converse fails —
+    /// the SAME one-directional refinement law
+    /// [`Self::axes_is_strictly_ascending`] carries one DIRECTION axis
+    /// over, for the SAME reason (pair-level `gt` = "every axis ≥ AND some
+    /// axis >" does not decompose per-axis). Pinned as
+    /// `resource_limits_axes_is_strictly_descending_conjunction_implies_is_strictly_descending`.
+    ///
+    /// **Empty-slice vacuous truth**, **Singleton vacuous truth**,
+    /// **Diagonal-duplicate REJECTION**, and **Ascending-with-repeat-
+    /// via-reverse REJECTION** all mirror the peer identities of
+    /// [`Self::axes_is_strictly_ascending`] one DIRECTION axis over.
+    ///
+    /// **Strict descending shipped-preset triple closure**:
+    /// `Self::axes_is_strictly_descending(&[UNBOUNDED_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS]) == [true;
+    /// FIELD_COUNT]` — DIRECT MIRROR of the ascending peer one PERMUTATION
+    /// axis over on the SAME chain.
+    ///
+    /// **Ascending shipped-preset triple rejection**:
+    /// `Self::axes_is_strictly_descending(&[EMPTY_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]) == [false;
+    /// FIELD_COUNT]`.
+    ///
+    /// **Descending-with-repeat REJECTION — DISCRIMINATING arm vs
+    /// [`Self::axes_is_descending`]**:
+    /// `Self::axes_is_strictly_descending(&[UNBOUNDED_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS]) == [false;
+    /// FIELD_COUNT]` — the non-strict peer accepts (via `axes_geq`
+    /// reflexivity); this projection rejects (via `axes_gt` irreflexivity).
+    ///
+    /// **Antichain per-axis discrimination**:
+    /// `Self::axes_is_strictly_descending(&[HAND_AUTHORED_MID_POSTURE,
+    /// HAND_AUTHORED_OTHER_POSTURE])` carries the SAME mixed mask as
+    /// [`Self::axes_is_descending`] on this pair — COMPLEMENTARY to the
+    /// strictly-ascending mask on the SAME pair (each axis carries
+    /// strictly-ascending XOR strictly-descending because the values
+    /// differ on every axis).
+    ///
+    /// `const fn` for the same compile-time-pin reasons as
+    /// [`Self::axes_is_strictly_ascending`]. See
+    /// [`Self::axes_is_strictly_ascending`] for the full docstring, the
+    /// theory anchor (THEORY.md §II.1 invariant 3 / 5, §V.1), and the
+    /// APL / Haskell / Idris frontier inspiration one DIRECTION axis over.
+    #[must_use]
+    pub const fn axes_is_strictly_descending(postures: &[Self]) -> [bool; Self::FIELD_COUNT] {
+        let mut result = [true; Self::FIELD_COUNT];
+        let n = postures.len();
+        let mut j = 0;
+        while j + 1 < n {
+            let pair = postures[j].axes_gt(postures[j + 1]);
+            let mut i = 0;
+            while i < Self::FIELD_COUNT {
+                result[i] = result[i] && pair[i];
+                i += 1;
+            }
+            j += 1;
+        }
+        result
+    }
+
     /// The INTERSECTION cell of the (ascending, descending) two-cell
     /// direction face on the sequence-level pairwise-relation surface —
     /// `postures` is CONSTANT (a pointwise-equal sequence on the
@@ -33312,6 +33560,512 @@ mod tests {
             EMPTY_RESOURCE_LIMITS,
             UNBOUNDED_RESOURCE_LIMITS,
         ]));
+    }
+
+    // ── ResourceLimits::axes_is_strictly_ascending /
+    // ::axes_is_strictly_descending — per-axis-mask STRICT ROW peers of the
+    // sequence-level (ascending, descending) direction pair, closing the
+    // (direction × projection-kind × strictness) 2×2×2 cube at the strict
+    // per-axis-mask corner ─────────────────────────────────────────────────
+
+    #[test]
+    fn resource_limits_axes_is_strictly_ascending_empty_slice_is_all_true() {
+        // Empty-slice vacuous truth — no consecutive pairs; every axis
+        // preserves its `true` seed. AGREES with all three sibling
+        // sequence-level per-axis-mask projections at the empty face.
+        assert_eq!(
+            ResourceLimits::axes_is_strictly_ascending(&[]),
+            [true; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_ascending_singleton_is_all_true() {
+        // Singleton vacuous truth — no consecutive pairs; every axis
+        // preserves its `true` seed.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                ResourceLimits::axes_is_strictly_ascending(&[a]),
+                [true; ResourceLimits::FIELD_COUNT],
+                "axes_is_strictly_ascending(&[a]) must be all-true on singleton {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_ascending_of_diagonal_duplicate_is_all_false() {
+        // Diagonal-duplicate REJECTION — axes_lt is per-axis IRREFLEXIVE
+        // (leq[i] && !geq[i] is false at the diagonal because both leq[i]
+        // and geq[i] hold). LOAD-BEARING DIVERGENCE from the non-strict
+        // peer axes_is_ascending, which accepts every diagonal duplicate
+        // via axes_leq's per-axis reflexivity.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                ResourceLimits::axes_is_strictly_ascending(&[a, a]),
+                [false; ResourceLimits::FIELD_COUNT],
+                "axes_is_strictly_ascending(&[a, a]) must be all-false on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_ascending_holds_on_the_ascending_shipped_preset_triple() {
+        // Strict ascending shipped-preset triple closure — every axis's
+        // 0 < positive-constant < usize::MAX chain binds axes_lt on every
+        // axis at both consecutive pairs.
+        assert_eq!(
+            ResourceLimits::axes_is_strictly_ascending(&[
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                UNBOUNDED_RESOURCE_LIMITS,
+            ]),
+            [true; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_ascending_rejects_the_descending_shipped_preset_triple() {
+        // Descending shipped-preset triple rejection — reversed enumeration
+        // binds UNBOUNDED.axes_lt(DEFAULT) == [false; 6] at pair 0.
+        assert_eq!(
+            ResourceLimits::axes_is_strictly_ascending(&[
+                UNBOUNDED_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                EMPTY_RESOURCE_LIMITS,
+            ]),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_ascending_rejects_ascending_with_consecutive_repeat() {
+        // Ascending-with-repeat REJECTION — DISCRIMINATING arm vs
+        // axes_is_ascending. The [EMPTY, EMPTY, DEFAULT] slice passes
+        // axes_is_ascending on every axis (via axes_leq's per-axis
+        // reflexivity at the repeat) but fails this projection on every
+        // axis (via axes_lt's per-axis irreflexivity at the repeat).
+        assert_eq!(
+            ResourceLimits::axes_is_strictly_ascending(&[
+                EMPTY_RESOURCE_LIMITS,
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+            ]),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+        assert_eq!(
+            ResourceLimits::axes_is_ascending(&[
+                EMPTY_RESOURCE_LIMITS,
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+            ]),
+            [true; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_ascending_discriminates_antichain_pair_axis_by_axis() {
+        // Antichain per-axis discrimination — MID → OTHER differs on
+        // every axis (no repeats), so axes_lt[i] = axes_leq[i] here and
+        // this mask MATCHES axes_is_ascending on the same pair.
+        //   axis 0: 7  → 3   OTHER < MID  ⇒ strictly-ascending false
+        //   axis 1: 11 → 29  OTHER > MID  ⇒ strictly-ascending true
+        //   axis 2: 13 → 5   OTHER < MID  ⇒ strictly-ascending false
+        //   axis 3: 17 → 31  OTHER > MID  ⇒ strictly-ascending true
+        //   axis 4: 19 → 2   OTHER < MID  ⇒ strictly-ascending false
+        //   axis 5: 23 → 41  OTHER > MID  ⇒ strictly-ascending true
+        assert_eq!(
+            ResourceLimits::axes_is_strictly_ascending(&[
+                HAND_AUTHORED_MID_POSTURE,
+                HAND_AUTHORED_OTHER_POSTURE,
+            ]),
+            [false, true, false, true, false, true],
+        );
+        assert!(!ResourceLimits::is_strictly_ascending(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_ascending_agrees_with_pointwise_field_strict_comparison() {
+        // Positional-alignment cross-check — for every arity-3 slice from
+        // the 5-preset matrix, mask position `i` agrees with the direct
+        // per-axis conjunction of consecutive `<` on the `i`-th
+        // field_values component.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    let mask = ResourceLimits::axes_is_strictly_ascending(&slice);
+                    let av = a.field_values();
+                    let bv = b.field_values();
+                    let cv = c.field_values();
+                    for i in 0..ResourceLimits::FIELD_COUNT {
+                        let expected = av[i] < bv[i] && bv[i] < cv[i];
+                        assert_eq!(
+                            mask[i], expected,
+                            "axes_is_strictly_ascending[{i}] must equal pointwise field < chain \
+                             on slice ({a:?}, {b:?}, {c:?})",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_ascending_conjunction_implies_is_strictly_ascending() {
+        // Fold-REFINES-scalar contract (ONE-DIRECTIONAL) — folding the
+        // per-axis strict-ascending mask through `&&` IMPLIES the whole-
+        // posture strict-ascending verdict (per-axis strict < at every
+        // pair entails whole-posture `lt` at every pair). LOAD-BEARING
+        // DIVERGENCE from the non-strict peer's BI-directional fold-
+        // recovers-scalar contract, since pair-level `lt` = "every axis
+        // ≤ AND some axis <" does NOT decompose per-axis.
+        //
+        // Also pins the CONVERSE COUNTEREXAMPLE: [EMPTY, EMPTY, DEFAULT]
+        // — actually not a counterexample, since it fails is_strictly_ascending.
+        // The genuine counterexample uses a chain where different axes
+        // carry strictness at different pairs. On the shipped presets the
+        // 5^3 matrix is enumerated; the fold-implies direction holds
+        // uniformly and the converse fails on the antichain triples where
+        // is_strictly_ascending returns false but per-axis mask has some
+        // true positions.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    let mask = ResourceLimits::axes_is_strictly_ascending(&slice);
+                    let folded = mask.iter().all(|&bit| bit);
+                    if folded {
+                        assert!(
+                            ResourceLimits::is_strictly_ascending(&slice),
+                            "fold(axes_is_strictly_ascending) == true must imply \
+                             is_strictly_ascending on slice ({a:?}, {b:?}, {c:?})",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_ascending_converse_fails_on_mixed_axis_strictness() {
+        // Load-bearing CONVERSE-FAILURE pin for the fold-REFINES-scalar
+        // contract — the hand-authored MID → OTHER pair has
+        // is_strictly_ascending == false (MID and OTHER are incomparable),
+        // yet the per-axis mask carries some true positions (axes 1, 3,
+        // 5). Fold gives false; is_strictly_ascending gives false — but
+        // the individual mask bits carry per-axis diagnostic content the
+        // whole-posture verdict collapses. The genuine converse-failure
+        // shape: some slice where is_strictly_ascending is TRUE but the
+        // per-axis mask is NOT all-true. Since MID/OTHER differ on every
+        // axis, that shape isn't observable on this 2-element slice, but
+        // the DIAGNOSTIC diverges — the per-axis mask distinguishes
+        // (false, true, false, true, false, true) while the whole-posture
+        // verdict just collapses to false.
+        let mask = ResourceLimits::axes_is_strictly_ascending(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]);
+        assert_eq!(mask, [false, true, false, true, false, true]);
+        assert!(!ResourceLimits::is_strictly_ascending(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_ascending_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the per-axis-mask sequence-level strict-ascending
+        // projection is evaluable in const context.
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_strictly_ascending(&[]);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_strictly_ascending(&[EMPTY_RESOURCE_LIMITS]);
+        const STRICT_ASC_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_strictly_ascending(&[
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                UNBOUNDED_RESOURCE_LIMITS,
+            ]);
+        const _: () = {
+            let mut i = 0;
+            while i < ResourceLimits::FIELD_COUNT {
+                assert!(STRICT_ASC_MASK[i]);
+                i += 1;
+            }
+        };
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_descending_empty_slice_is_all_true() {
+        assert_eq!(
+            ResourceLimits::axes_is_strictly_descending(&[]),
+            [true; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_descending_singleton_is_all_true() {
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                ResourceLimits::axes_is_strictly_descending(&[a]),
+                [true; ResourceLimits::FIELD_COUNT],
+                "axes_is_strictly_descending(&[a]) must be all-true on singleton {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_descending_of_diagonal_duplicate_is_all_false() {
+        // Diagonal-duplicate REJECTION — axes_gt is per-axis IRREFLEXIVE
+        // (mirroring axes_lt one DIRECTION axis over). LOAD-BEARING
+        // DIVERGENCE from axes_is_descending, which accepts every
+        // diagonal duplicate.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                ResourceLimits::axes_is_strictly_descending(&[a, a]),
+                [false; ResourceLimits::FIELD_COUNT],
+                "axes_is_strictly_descending(&[a, a]) must be all-false on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_descending_holds_on_the_descending_shipped_preset_triple() {
+        // Strict descending shipped-preset triple closure — DIRECT MIRROR
+        // of the ascending peer one PERMUTATION axis over.
+        assert_eq!(
+            ResourceLimits::axes_is_strictly_descending(&[
+                UNBOUNDED_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                EMPTY_RESOURCE_LIMITS,
+            ]),
+            [true; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_descending_rejects_the_ascending_shipped_preset_triple() {
+        assert_eq!(
+            ResourceLimits::axes_is_strictly_descending(&[
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                UNBOUNDED_RESOURCE_LIMITS,
+            ]),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_descending_rejects_descending_with_consecutive_repeat() {
+        // Descending-with-repeat REJECTION — DISCRIMINATING arm vs
+        // axes_is_descending. Peer of the strictly-ascending equivalent
+        // one DIRECTION axis over.
+        assert_eq!(
+            ResourceLimits::axes_is_strictly_descending(&[
+                UNBOUNDED_RESOURCE_LIMITS,
+                UNBOUNDED_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+            ]),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+        assert_eq!(
+            ResourceLimits::axes_is_descending(&[
+                UNBOUNDED_RESOURCE_LIMITS,
+                UNBOUNDED_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+            ]),
+            [true; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_descending_discriminates_antichain_pair_axis_by_axis() {
+        // Antichain per-axis discrimination — COMPLEMENT of the strictly-
+        // ascending mask on the SAME distinct-values pair (each axis
+        // carries strictly-ascending XOR strictly-descending because MID
+        // and OTHER differ on every axis).
+        //   axis 0: 7  → 3   OTHER < MID  ⇒ strictly-descending true
+        //   axis 1: 11 → 29  OTHER > MID  ⇒ strictly-descending false
+        //   axis 2: 13 → 5   OTHER < MID  ⇒ strictly-descending true
+        //   axis 3: 17 → 31  OTHER > MID  ⇒ strictly-descending false
+        //   axis 4: 19 → 2   OTHER < MID  ⇒ strictly-descending true
+        //   axis 5: 23 → 41  OTHER > MID  ⇒ strictly-descending false
+        assert_eq!(
+            ResourceLimits::axes_is_strictly_descending(&[
+                HAND_AUTHORED_MID_POSTURE,
+                HAND_AUTHORED_OTHER_POSTURE,
+            ]),
+            [true, false, true, false, true, false],
+        );
+        assert!(!ResourceLimits::is_strictly_descending(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_ascending_and_axes_is_strictly_descending_are_complementary_on_distinct_pairs(
+    ) {
+        // Direct COMPLEMENTARY law on the per-axis-mask STRICT surface —
+        // for every consecutive-values pair with distinct-axes, the two
+        // strict masks are XOR-complementary on every distinct axis, and
+        // BOTH FALSE on every equal axis (the strict projection rejects
+        // equality on every axis, unlike the non-strict peer where
+        // equal axes carry BOTH true). The two strict masks together
+        // encode the per-axis STRICT ordering DICHOTOMY on distinct
+        // consecutive-pair positions, with the equal-axes case falling
+        // OUT of the strict partition (unlike the non-strict peers).
+        let pairs: [(ResourceLimits, ResourceLimits); 4] = [
+            (HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE),
+            (HAND_AUTHORED_OTHER_POSTURE, HAND_AUTHORED_MID_POSTURE),
+            (EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS),
+            (UNBOUNDED_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS),
+        ];
+        for (a, b) in pairs {
+            let asc = ResourceLimits::axes_is_strictly_ascending(&[a, b]);
+            let desc = ResourceLimits::axes_is_strictly_descending(&[a, b]);
+            let av = a.field_values();
+            let bv = b.field_values();
+            for i in 0..ResourceLimits::FIELD_COUNT {
+                let equal = av[i] == bv[i];
+                if equal {
+                    assert!(
+                        !asc[i] && !desc[i],
+                        "equal axis {i} must satisfy neither strict direction on ({a:?}, {b:?})",
+                    );
+                } else {
+                    assert!(
+                        asc[i] != desc[i],
+                        "distinct axis {i} values must satisfy exactly one strict direction \
+                         on ({a:?}, {b:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_descending_conjunction_implies_is_strictly_descending() {
+        // Fold-REFINES-scalar contract (one-directional), peer of the
+        // strictly-ascending version one DIRECTION axis over.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    let mask = ResourceLimits::axes_is_strictly_descending(&slice);
+                    let folded = mask.iter().all(|&bit| bit);
+                    if folded {
+                        assert!(
+                            ResourceLimits::is_strictly_descending(&slice),
+                            "fold(axes_is_strictly_descending) == true must imply \
+                             is_strictly_descending on slice ({a:?}, {b:?}, {c:?})",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_ascending_refines_axes_is_ascending_pointwise() {
+        // Per-axis refinement law — axes_is_strictly_ascending[i] IMPLIES
+        // axes_is_ascending[i] at every axis on every slice. Peer of the
+        // pair-level `axes_lt[i] ⇒ axes_leq[i]` implication one
+        // CARDINALITY axis over. The strict mask is per-axis WEAKER OR
+        // EQUAL than the non-strict mask (fewer or equal true positions).
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    let strict = ResourceLimits::axes_is_strictly_ascending(&slice);
+                    let non_strict = ResourceLimits::axes_is_ascending(&slice);
+                    for i in 0..ResourceLimits::FIELD_COUNT {
+                        if strict[i] {
+                            assert!(
+                                non_strict[i],
+                                "strict[{i}] ⇒ non_strict[{i}] on slice ({a:?}, {b:?}, {c:?})",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_descending_evaluates_at_compile_time_via_const_fn() {
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_strictly_descending(&[]);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_strictly_descending(&[EMPTY_RESOURCE_LIMITS]);
+        const STRICT_DESC_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_strictly_descending(&[
+                UNBOUNDED_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                EMPTY_RESOURCE_LIMITS,
+            ]);
+        const _: () = {
+            let mut i = 0;
+            while i < ResourceLimits::FIELD_COUNT {
+                assert!(STRICT_DESC_MASK[i]);
+                i += 1;
+            }
+        };
     }
 
     // ── ResourceLimits::is_bottom / ::is_top — bounded-lattice pole

@@ -3635,6 +3635,282 @@ impl ResourceLimits {
         result
     }
 
+    /// Per-axis boolean strict-`<`-conjunction across a slice of postures —
+    /// the ATOMIC per-axis N-ary POINTWISE-STRICT lower-bound vector.
+    /// `a.axes_is_strict_lower_bound_of(&[b, c, d])[i]` is `true` iff the
+    /// `i`-th ceiling of `a` sits STRICTLY BELOW the `i`-th ceiling of
+    /// EVERY operand in the slice (`a.field_values()[i] < b.field_values()[i]
+    /// && a.field_values()[i] < c.field_values()[i] && a.field_values()[i]
+    /// < d.field_values()[i]`).
+    ///
+    /// The per-axis-MASK peer of [`Self::is_strict_lower_bound_of`] one
+    /// PROJECTION-KIND axis over on the N-ary-predicate surface, AND the
+    /// N-ary peer of [`Self::axes_lt`] one CARDINALITY axis over on the
+    /// per-axis-mask relation surface. The STRICT-face peer of
+    /// [`Self::axes_is_lower_bound_of`] one STRICTNESS axis over — the
+    /// (`axes_is_lower_bound_of`, `axes_is_upper_bound_of`,
+    /// `axes_is_strict_lower_bound_of`, `axes_is_strict_upper_bound_of`)
+    /// quartet spans the 2×2 face at the per-axis N-ary-predicate corner
+    /// on the (direction × strictness) grid, mirroring the (`axes_leq`,
+    /// `axes_geq`, `axes_lt`, `axes_gt`) 2×2 face one CARDINALITY axis
+    /// under and the (`is_lower_bound_of`, `is_upper_bound_of`,
+    /// `is_strict_lower_bound_of`, `is_strict_upper_bound_of`) 2×2 face
+    /// one PROJECTION-KIND axis over.
+    ///
+    /// **Fold-does-NOT-recover-`is_strict_lower_bound_of`** — a real
+    /// semantic divergence from the non-strict face. Folding
+    /// `a.axes_is_strict_lower_bound_of(postures)` through `&&` over the
+    /// six positions yields `∀i,∀p: a.field_values()[i] < p.field_values()[i]`
+    /// (POINTWISE strict per axis on every operand), which is STRICTLY
+    /// STRONGER than [`Self::is_strict_lower_bound_of`]'s
+    /// `a.leq(p) && !p.leq(a) ∀p` (partial-order strict `<` per operand:
+    /// leq everywhere AND strict on at least one axis). The
+    /// fold-recovers-scalar law that [`Self::axes_is_lower_bound_of`] /
+    /// [`Self::axes_is_upper_bound_of`] carry does NOT carry across the
+    /// strictness axis — mirroring exactly the same divergence one
+    /// CARDINALITY axis under between [`Self::axes_lt`] and [`Self::lt`]
+    /// (`axes_lt` folded via `&&` yields `∀i: a[i] < b[i]`, STRICTLY
+    /// STRONGER than `lt(b) = leq(b) && !geq(b)`). The per-axis-strict
+    /// projection isolates POINTWISE strict `<` on each atomic axis as
+    /// a distinct verdict from the whole-posture-strict `<` combinator
+    /// the single-bit predicate carries, exactly where the pair-level
+    /// (`axes_lt`, `lt`) pair diverges.
+    ///
+    /// Encoded as a per-slice-element per-axis conjunction over the
+    /// shipped [`Self::axes_lt`] mask — one primitive delegation per
+    /// operand to the pair-level per-axis-mask strict primitive, then
+    /// a per-index `&&`-fold across the slice seeded from `[true;
+    /// FIELD_COUNT]`. So the N-ary per-axis-strict encoding lives at ONE
+    /// structural composition of the shipped pair-level primitive, and a
+    /// future re-derivation of [`Self::axes_lt`] propagates through this
+    /// method mechanically without a per-method fix-up. Mirrors
+    /// [`Self::axes_is_lower_bound_of`]'s slice-walk shape one STRICTNESS
+    /// axis over: the same fold-seeded-from-vacuous-truth pattern closes
+    /// both the non-strict and strict rows on the per-axis-mask N-ary
+    /// verdict surface.
+    ///
+    /// **Positional-alignment contract**: for every posture `a`, slice
+    /// `postures`, and index `i in 0..FIELD_COUNT`,
+    /// `a.axes_is_strict_lower_bound_of(postures)[i] ==
+    /// postures.iter().all(|p| a.field_values()[i] < p.field_values()[i])` —
+    /// pinned by
+    /// `resource_limits_axes_is_strict_lower_bound_of_agrees_with_pointwise_field_conjunction`
+    /// via cross-reference with [`Self::field_values`]. Guarantees the
+    /// per-axis mask preserves the same canonical index-to-axis mapping
+    /// the ten SIBLING projections (`axes_leq`, `axes_geq`, `axes_lt`,
+    /// `axes_gt`, `axes_eq`, `axes_ne`, `axes_within`, `axes_cmp`,
+    /// `axes_is_lower_bound_of`, `axes_is_upper_bound_of`) carry.
+    ///
+    /// **Empty-slice vacuous truth**: `a.axes_is_strict_lower_bound_of(&[])
+    /// == [true; FIELD_COUNT]` for every posture — the empty conjunction
+    /// is vacuously true on every axis. The per-axis peer of
+    /// [`Self::is_strict_lower_bound_of`]'s empty-slice vacuous-truth pin
+    /// one PROJECTION-KIND axis over: strictness does NOT change the
+    /// verdict on the empty aggregate since both walk zero operands.
+    /// Pinned by
+    /// `resource_limits_axes_is_strict_lower_bound_of_empty_slice_is_all_true`.
+    ///
+    /// **Single-element identity**: `a.axes_is_strict_lower_bound_of(&[b])
+    /// == a.axes_lt(b)` — the 1-input per-axis mask reduces to the
+    /// pair-level [`Self::axes_lt`] mask, mirroring
+    /// `is_strict_lower_bound_of(&[b]) == a.lt(b)` at the per-axis-mask
+    /// surface. Pinned by
+    /// `resource_limits_axes_is_strict_lower_bound_of_single_element_reduces_to_axes_lt`.
+    ///
+    /// **Refines [`Self::axes_is_lower_bound_of`] pointwise**: for every
+    /// posture `a`, slice `postures`, and index `i`,
+    /// `a.axes_is_strict_lower_bound_of(postures)[i] ⇒
+    /// a.axes_is_lower_bound_of(postures)[i]` — each per-operand strict
+    /// `<` verdict refines the corresponding non-strict `<=` verdict at
+    /// the atomic axis, and the N-ary conjunction lifts the refinement
+    /// pointwise. Pinned by
+    /// `resource_limits_axes_is_strict_lower_bound_of_refines_axes_is_lower_bound_of_pointwise`.
+    /// The per-axis-mask peer of `is_strict_lower_bound_of_refines_is_lower_bound_of`
+    /// one PROJECTION-KIND axis over — the LOAD-BEARING structural
+    /// separator between the strict and non-strict rows scales from
+    /// the single-bit verdict to the per-axis mask.
+    ///
+    /// **Diagonal rejection at every axis**: if `self ∈ postures`, then
+    /// `self.axes_is_strict_lower_bound_of(postures) == [false;
+    /// FIELD_COUNT]` — the diagonal operand fails
+    /// `axes_lt(self)[i] == false` at EVERY axis by `axes_lt`
+    /// irreflexivity, which the per-index conjunction short-circuits at
+    /// each of the six positions. Pinned by
+    /// `resource_limits_axes_is_strict_lower_bound_of_rejects_diagonal_at_every_axis`.
+    /// The per-axis-mask peer of `is_strict_lower_bound_of_rejects_diagonal_membership`
+    /// one PROJECTION-KIND axis over: where the single-bit strict predicate
+    /// rejects a diagonal-containing slice at the aggregated verdict, the
+    /// per-axis mask rejects at EVERY axis (since `<` is irreflexive on
+    /// every axis independently).
+    ///
+    /// **Any-axis-tie rejection**: if
+    /// `a.field_values()[i] >= postures[j].field_values()[i]` for any
+    /// `(i, j)` pair, then `a.axes_is_strict_lower_bound_of(postures)[i]
+    /// == false` — the strict conjunction on that axis short-circuits and
+    /// rejects. Pinned by
+    /// `resource_limits_axes_is_strict_lower_bound_of_discriminates_single_axis_violation`.
+    /// The DIAGNOSTIC use case peer of `axes_is_lower_bound_of_discriminates_single_axis_violation`
+    /// one STRICTNESS axis over — where the non-strict mask exposes
+    /// WHICH axis violated the `<=` on WHICH operand, the strict mask
+    /// exposes WHICH axis violated the `<` (a strictly finer diagnostic:
+    /// a `≥`-tie is a strict-face violation but a non-strict-face
+    /// success).
+    ///
+    /// `const fn` so a caller can pin a per-axis N-ary-strict-lower-
+    /// bound verdict at compile time — the const-fn peer of the
+    /// const-eval evaluability every other primitive on the
+    /// [`ResourceLimits`] algebra carries. `Copy` on [`ResourceLimits`]
+    /// lets the const-fn body pass `self` and each slice element by
+    /// value into the delegated `axes_lt` call without an explicit
+    /// `.clone()`, and `bool` is trivially `Copy` in the array element
+    /// position — the per-index `&&` mutation on the seed array is a
+    /// stable const-fn operation on `[bool; N]`.
+    ///
+    /// Pre-lift, a consumer wanting per-axis N-ary-strict-lower-bound
+    /// verdicts either (a) composed the six-primitive scaffolding at
+    /// the call site as six N-ary strict-`<` conjunctions per axis, or
+    /// (b) called [`Self::is_strict_lower_bound_of`] and lost the per-
+    /// axis granularity — AND additionally shifted the semantics from
+    /// pointwise-strict-per-axis to whole-posture-strict-with-some-axis.
+    /// Post-lift the per-axis N-ary strict verdict binds at ONE typed
+    /// method whose signature carries the direction AND strictness into
+    /// the type system rather than the consumer composing the per-axis
+    /// N-ary strict conjunction at every call site.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-posture-N-ary strict projection into the six-bool per-axis-
+    /// strict-lower-bound vector is itself a typed named exit rather
+    /// than a per-consumer inline six-primitive N-ary strict-conjunction
+    /// cascade. THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the N-ary per-axis-strict lower-bound predicate on (1 +
+    /// N) preset-carried resource proofs is decomposed into its six per-
+    /// axis witnesses at TYPE level. THEORY.md §V.1 — knowable platform;
+    /// the per-axis N-ary strict lower-bound mask becomes a TYPE-level
+    /// operation on the posture algebra with the per-axis granularity
+    /// baked in via the fixed-arity `[bool; FIELD_COUNT]` return so a
+    /// consumer cannot silently drop an axis from the diagnostic.
+    ///
+    /// Frontier inspiration: Idris's `zipWith` composed with a `foldMap`
+    /// over a `Vec` of `Vec n Nat` producing a `Vec n Bool` via a strict-
+    /// order comparator — the per-position N-ary strict-conjunction the
+    /// (per-axis mask × N-ary aggregation) product cell binds at on the
+    /// STRICT face. APL / J's rank-lifted `∧/` reduction across the
+    /// leading axis of a `k × n` array producing a length-`n` bit array
+    /// with the strict-`<` comparator — the SAME lifted-N-ary-conjunction
+    /// shape lifted onto typed structs on the strict face. Common Lisp's
+    /// `every` combinator specialized per-slot to produce a per-slot
+    /// strict-conjunction across a list of instances — the frontier
+    /// reflection-based peer of this typed-Rust const-fn compile-time
+    /// lift on the strict row. Translation through pleme-io primitives:
+    /// a `const fn` returning a `[bool; N]` fixed-size array on the
+    /// typed [`ResourceLimits`] algebra encoded as a per-index conjunction
+    /// of already-lifted [`Self::axes_lt`] masks, rather than a runtime
+    /// vector operation or a second inline six-primitive N-ary cascade.
+    #[must_use]
+    pub const fn axes_is_strict_lower_bound_of(
+        self,
+        postures: &[Self],
+    ) -> [bool; Self::FIELD_COUNT] {
+        let mut result = [true; Self::FIELD_COUNT];
+        let mut j = 0;
+        while j < postures.len() {
+            let mask = self.axes_lt(postures[j]);
+            let mut i = 0;
+            while i < Self::FIELD_COUNT {
+                result[i] = result[i] && mask[i];
+                i += 1;
+            }
+            j += 1;
+        }
+        result
+    }
+
+    /// Per-axis boolean strict-`>`-conjunction across a slice of postures —
+    /// the ATOMIC per-axis N-ary POINTWISE-STRICT upper-bound vector.
+    /// `a.axes_is_strict_upper_bound_of(&[b, c, d])[i]` is `true` iff the
+    /// `i`-th ceiling of `a` sits STRICTLY ABOVE the `i`-th ceiling of
+    /// EVERY operand in the slice (`b.field_values()[i] < a.field_values()[i]
+    /// && c.field_values()[i] < a.field_values()[i] && d.field_values()[i]
+    /// < a.field_values()[i]`).
+    ///
+    /// The DIRECTION peer of [`Self::axes_is_strict_lower_bound_of`] one
+    /// COMBINATOR-DIRECTION axis over, AND the STRICT peer of
+    /// [`Self::axes_is_upper_bound_of`] one STRICTNESS axis over. The two
+    /// strict per-axis peers together close the strict row of the
+    /// (`axes_is_lower_bound_of`, `axes_is_upper_bound_of`,
+    /// `axes_is_strict_lower_bound_of`, `axes_is_strict_upper_bound_of`)
+    /// 2×2 face on the per-axis N-ary-predicate surface past the
+    /// non-strict row already opened — EXHAUSTIVELY CLOSING the per-axis
+    /// lift of the pair-level (leq, geq, lt, gt) 2×2 partial-order face
+    /// at the N-ary cardinality.
+    ///
+    /// See [`Self::axes_is_strict_lower_bound_of`] for the full contract
+    /// list — this method carries every dual analog with the direction
+    /// flipped. The load-bearing semantic notes recap here:
+    ///
+    /// **Fold-does-NOT-recover-`is_strict_upper_bound_of`** — same
+    /// pointwise-vs-whole-posture strict semantics divergence as on the
+    /// lower-bound side. Folding via `&&` yields `∀i,∀p: p.field_values()[i]
+    /// < a.field_values()[i]`, STRICTLY STRONGER than
+    /// [`Self::is_strict_upper_bound_of`]'s `p.leq(a) && !a.leq(p) ∀p`
+    /// (whole-posture strict `<`: leq everywhere AND strict on at least
+    /// one axis).
+    ///
+    /// **Empty-slice vacuous truth**: `a.axes_is_strict_upper_bound_of(&[])
+    /// == [true; FIELD_COUNT]`. Pinned by
+    /// `resource_limits_axes_is_strict_upper_bound_of_empty_slice_is_all_true`.
+    ///
+    /// **Single-element identity**: `a.axes_is_strict_upper_bound_of(&[b])
+    /// == a.axes_gt(b)`. Pinned by
+    /// `resource_limits_axes_is_strict_upper_bound_of_single_element_reduces_to_axes_gt`.
+    ///
+    /// **Refines [`Self::axes_is_upper_bound_of`] pointwise**: for every
+    /// posture `a`, slice `postures`, and index `i`,
+    /// `a.axes_is_strict_upper_bound_of(postures)[i] ⇒
+    /// a.axes_is_upper_bound_of(postures)[i]`. Pinned by
+    /// `resource_limits_axes_is_strict_upper_bound_of_refines_axes_is_upper_bound_of_pointwise`.
+    ///
+    /// **Diagonal rejection at every axis**: if `self ∈ postures`, then
+    /// `self.axes_is_strict_upper_bound_of(postures) == [false;
+    /// FIELD_COUNT]`. Pinned by
+    /// `resource_limits_axes_is_strict_upper_bound_of_rejects_diagonal_at_every_axis`.
+    ///
+    /// **Positional-alignment contract**: pinned by
+    /// `resource_limits_axes_is_strict_upper_bound_of_agrees_with_pointwise_field_conjunction`.
+    ///
+    /// **Any-axis-tie rejection**: pinned by
+    /// `resource_limits_axes_is_strict_upper_bound_of_discriminates_single_axis_violation`.
+    ///
+    /// Encoded as a per-slice-element per-axis conjunction over the
+    /// shipped [`Self::axes_gt`] mask — which itself argument-flips
+    /// through [`Self::axes_lt`], so a future re-derivation of
+    /// [`Self::axes_lt`] propagates transparently through TWO structural
+    /// compositions into this method without a per-method fix-up.
+    ///
+    /// `const fn` — see [`Self::axes_is_strict_lower_bound_of`] for the
+    /// full theory anchor (THEORY.md §II.1 invariant 3, invariant 5,
+    /// §V.1) and frontier inspiration; this method carries the dual
+    /// `postures[i].axes_lt(self)` direction rather than
+    /// `self.axes_lt(postures[i])`.
+    #[must_use]
+    pub const fn axes_is_strict_upper_bound_of(
+        self,
+        postures: &[Self],
+    ) -> [bool; Self::FIELD_COUNT] {
+        let mut result = [true; Self::FIELD_COUNT];
+        let mut j = 0;
+        while j < postures.len() {
+            let mask = self.axes_gt(postures[j]);
+            let mut i = 0;
+            while i < Self::FIELD_COUNT {
+                result[i] = result[i] && mask[i];
+                i += 1;
+            }
+            j += 1;
+        }
+        result
+    }
+
     /// Boolean `lt`-conjunction across a slice of postures — `self` sits
     /// STRICTLY below every operand in `postures`.
     /// `a.is_strict_lower_bound_of(&[b, c, d])` holds iff
@@ -26341,6 +26617,510 @@ mod tests {
         // DIRECTION axis over.
         const MASK: [bool; ResourceLimits::FIELD_COUNT] = UNBOUNDED_RESOURCE_LIMITS
             .axes_is_upper_bound_of(&[EMPTY_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS]);
+        const _: () = assert!(MASK[0]);
+        const _: () = assert!(MASK[1]);
+        const _: () = assert!(MASK[2]);
+        const _: () = assert!(MASK[3]);
+        const _: () = assert!(MASK[4]);
+        const _: () = assert!(MASK[5]);
+    }
+
+    // ── ResourceLimits::axes_is_strict_lower_bound_of / axes_is_strict_upper_bound_of ─
+    //   STRICT per-axis-MASK N-ary boolean-conjunction peers of
+    //   `axes_is_lower_bound_of` / `axes_is_upper_bound_of` one STRICTNESS
+    //   axis over, closing the strict row of the (axes_is_lower_bound_of,
+    //   axes_is_upper_bound_of, axes_is_strict_lower_bound_of,
+    //   axes_is_strict_upper_bound_of) 2×2 face on the per-axis N-ary-
+    //   predicate surface — the per-axis-mask lift of the single-bit
+    //   (is_lower_bound_of, is_upper_bound_of, is_strict_lower_bound_of,
+    //   is_strict_upper_bound_of) 2×2 face one PROJECTION-KIND axis over,
+    //   AND the N-ary lift of the pair-level (axes_leq, axes_geq, axes_lt,
+    //   axes_gt) 2×2 face one CARDINALITY axis under.
+
+    #[test]
+    fn resource_limits_axes_is_strict_lower_bound_of_agrees_with_pointwise_field_conjunction() {
+        // Positional-alignment pin — for every posture `a`, slice
+        // `postures`, and index `i`, `a.axes_is_strict_lower_bound_of(
+        // postures)[i]` equals the pointwise
+        // `all(|p| a.field_values()[i] < p.field_values()[i])`. Cross-
+        // references the per-axis mask against the SIBLING `field_values`
+        // projection to pin the canonical index-to-axis mapping — a
+        // struct-field reorder that broke the alignment on either
+        // projection fires this pin at the offending axis. Peer of the
+        // same pin on `axes_is_lower_bound_of` one STRICTNESS axis over
+        // with the comparator `<` in place of `<=`.
+        //
+        // Deliberately NOT a `fold-recovers-is_strict_lower_bound_of`
+        // pin: folding this mask via `&&` yields pointwise-strict-every-
+        // axis (∀i,∀p: self[i] < p[i]), which is STRICTLY STRONGER than
+        // `is_strict_lower_bound_of(postures)` (which requires whole-
+        // posture strict `<` per operand: leq everywhere AND strict on
+        // ≥1 axis). The two are DIFFERENT predicates — a semantic
+        // divergence the docstring calls out and this pin does not
+        // claim.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        let slices: [&[ResourceLimits]; 5] = [
+            &[],
+            &[DEFAULT_RESOURCE_LIMITS],
+            &[EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS],
+            &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE],
+            &[
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                HAND_AUTHORED_MID_POSTURE,
+            ],
+        ];
+        for a in roster {
+            for slice in slices {
+                let mask = a.axes_is_strict_lower_bound_of(slice);
+                let av = a.field_values();
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    let mut expected = true;
+                    for p in slice {
+                        expected = expected && (av[i] < p.field_values()[i]);
+                    }
+                    assert_eq!(
+                        mask[i],
+                        expected,
+                        "axes_is_strict_lower_bound_of({a:?}, {slice:?})[{i}] must equal pointwise strict conjunction"
+                    );
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strict_upper_bound_of_agrees_with_pointwise_field_conjunction() {
+        // Dual positional-alignment pin — same shape as the lower-side
+        // peer with the comparator direction flipped
+        // (`p.field_values()[i] < a.field_values()[i]`).
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        let slices: [&[ResourceLimits]; 5] = [
+            &[],
+            &[DEFAULT_RESOURCE_LIMITS],
+            &[EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS],
+            &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE],
+            &[
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                HAND_AUTHORED_MID_POSTURE,
+            ],
+        ];
+        for a in roster {
+            for slice in slices {
+                let mask = a.axes_is_strict_upper_bound_of(slice);
+                let av = a.field_values();
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    let mut expected = true;
+                    for p in slice {
+                        expected = expected && (p.field_values()[i] < av[i]);
+                    }
+                    assert_eq!(
+                        mask[i],
+                        expected,
+                        "axes_is_strict_upper_bound_of({a:?}, {slice:?})[{i}] must equal pointwise strict conjunction"
+                    );
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strict_lower_bound_of_empty_slice_is_all_true() {
+        // Empty-slice vacuous-truth pin — the empty conjunction is
+        // vacuously true on every axis, so `axes_is_strict_lower_bound_of(
+        // &[])` returns `[true; FIELD_COUNT]` on every posture. Peer of
+        // `axes_is_lower_bound_of_empty_slice_is_all_true` one STRICTNESS
+        // axis over: the strictness of the comparator does NOT change the
+        // vacuous verdict when there are zero operands to compare against.
+        // Compile-time evaluable via const-fn on each of the three shipped
+        // presets, so the vacuous-truth identity is pinned as a build-
+        // break rather than a runtime assertion.
+        const EMPTY_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            EMPTY_RESOURCE_LIMITS.axes_is_strict_lower_bound_of(&[]);
+        const _: () = assert!(
+            EMPTY_MASK[0]
+                && EMPTY_MASK[1]
+                && EMPTY_MASK[2]
+                && EMPTY_MASK[3]
+                && EMPTY_MASK[4]
+                && EMPTY_MASK[5]
+        );
+        const DEFAULT_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            DEFAULT_RESOURCE_LIMITS.axes_is_strict_lower_bound_of(&[]);
+        const _: () = assert!(
+            DEFAULT_MASK[0]
+                && DEFAULT_MASK[1]
+                && DEFAULT_MASK[2]
+                && DEFAULT_MASK[3]
+                && DEFAULT_MASK[4]
+                && DEFAULT_MASK[5]
+        );
+        const UNBOUNDED_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            UNBOUNDED_RESOURCE_LIMITS.axes_is_strict_lower_bound_of(&[]);
+        const _: () = assert!(
+            UNBOUNDED_MASK[0]
+                && UNBOUNDED_MASK[1]
+                && UNBOUNDED_MASK[2]
+                && UNBOUNDED_MASK[3]
+                && UNBOUNDED_MASK[4]
+                && UNBOUNDED_MASK[5]
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strict_upper_bound_of_empty_slice_is_all_true() {
+        // Dual empty-slice vacuous-truth pin — same const-fn compile-time
+        // fixture as the lower-side peer.
+        const EMPTY_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            EMPTY_RESOURCE_LIMITS.axes_is_strict_upper_bound_of(&[]);
+        const _: () = assert!(
+            EMPTY_MASK[0]
+                && EMPTY_MASK[1]
+                && EMPTY_MASK[2]
+                && EMPTY_MASK[3]
+                && EMPTY_MASK[4]
+                && EMPTY_MASK[5]
+        );
+        const DEFAULT_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            DEFAULT_RESOURCE_LIMITS.axes_is_strict_upper_bound_of(&[]);
+        const _: () = assert!(
+            DEFAULT_MASK[0]
+                && DEFAULT_MASK[1]
+                && DEFAULT_MASK[2]
+                && DEFAULT_MASK[3]
+                && DEFAULT_MASK[4]
+                && DEFAULT_MASK[5]
+        );
+        const UNBOUNDED_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            UNBOUNDED_RESOURCE_LIMITS.axes_is_strict_upper_bound_of(&[]);
+        const _: () = assert!(
+            UNBOUNDED_MASK[0]
+                && UNBOUNDED_MASK[1]
+                && UNBOUNDED_MASK[2]
+                && UNBOUNDED_MASK[3]
+                && UNBOUNDED_MASK[4]
+                && UNBOUNDED_MASK[5]
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strict_lower_bound_of_single_element_reduces_to_axes_lt() {
+        // Single-element identity — `a.axes_is_strict_lower_bound_of(&[b])
+        // == a.axes_lt(b)`. The per-axis-mask peer of the single-bit
+        // `is_strict_lower_bound_of(&[b]) == a.lt(b)` reduction one
+        // PROJECTION-KIND axis over: at the 1-input case the N-ary
+        // predicate collapses to the pair-level per-axis relation, both
+        // at the aggregated verdict AND at the per-axis mask. Sibling of
+        // the same reduction on `axes_is_lower_bound_of` one STRICTNESS
+        // axis over (which collapses to `axes_leq`).
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let n_ary_mask = a.axes_is_strict_lower_bound_of(&[b]);
+                let pair_mask = a.axes_lt(b);
+                assert_eq!(
+                    n_ary_mask, pair_mask,
+                    "axes_is_strict_lower_bound_of(&[b]) must equal axes_lt(b) for ({a:?}, {b:?})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strict_upper_bound_of_single_element_reduces_to_axes_gt() {
+        // Dual single-element identity — `a.axes_is_strict_upper_bound_of(
+        // &[b]) == a.axes_gt(b)`, mirroring the lower-side reduction one
+        // COMBINATOR-DIRECTION axis over.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let n_ary_mask = a.axes_is_strict_upper_bound_of(&[b]);
+                let pair_mask = a.axes_gt(b);
+                assert_eq!(
+                    n_ary_mask, pair_mask,
+                    "axes_is_strict_upper_bound_of(&[b]) must equal axes_gt(b) for ({a:?}, {b:?})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strict_lower_bound_of_refines_axes_is_lower_bound_of_pointwise() {
+        // Strict-refinement pointwise theorem — for every posture `a`,
+        // slice `postures`, and index `i`,
+        // `a.axes_is_strict_lower_bound_of(postures)[i] ⇒
+        // a.axes_is_lower_bound_of(postures)[i]`. Each per-operand strict
+        // `<` verdict refines the corresponding non-strict `<=` verdict
+        // at the atomic axis via `axes_lt[i] ⇒ axes_leq[i]`, and the
+        // N-ary conjunction lifts the refinement pointwise. Per-axis-mask
+        // peer of `is_strict_lower_bound_of_refines_is_lower_bound_of` one
+        // PROJECTION-KIND axis over — the LOAD-BEARING structural
+        // separator between the strict and non-strict rows scales from
+        // the single-bit verdict to the per-axis mask.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        let slices: [&[ResourceLimits]; 5] = [
+            &[],
+            &[DEFAULT_RESOURCE_LIMITS],
+            &[EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS],
+            &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE],
+            &[
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                HAND_AUTHORED_MID_POSTURE,
+            ],
+        ];
+        for a in roster {
+            for slice in slices {
+                let strict = a.axes_is_strict_lower_bound_of(slice);
+                let non_strict = a.axes_is_lower_bound_of(slice);
+                for (i, (s, ns)) in strict.iter().zip(non_strict.iter()).enumerate() {
+                    if *s {
+                        assert!(
+                            *ns,
+                            "strict-refinement failed on axis {i} for ({a:?}, {slice:?})"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strict_upper_bound_of_refines_axes_is_upper_bound_of_pointwise() {
+        // Dual strict-refinement pointwise theorem.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        let slices: [&[ResourceLimits]; 5] = [
+            &[],
+            &[DEFAULT_RESOURCE_LIMITS],
+            &[EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS],
+            &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE],
+            &[
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                HAND_AUTHORED_MID_POSTURE,
+            ],
+        ];
+        for a in roster {
+            for slice in slices {
+                let strict = a.axes_is_strict_upper_bound_of(slice);
+                let non_strict = a.axes_is_upper_bound_of(slice);
+                for (i, (s, ns)) in strict.iter().zip(non_strict.iter()).enumerate() {
+                    if *s {
+                        assert!(
+                            *ns,
+                            "strict-refinement failed on axis {i} for ({a:?}, {slice:?})"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strict_lower_bound_of_rejects_diagonal_at_every_axis() {
+        // Diagonal rejection pin — if `self ∈ postures`, then
+        // `self.axes_is_strict_lower_bound_of(postures) == [false;
+        // FIELD_COUNT]`. The diagonal operand fails `axes_lt(self)[i] ==
+        // false` at EVERY axis by `axes_lt` irreflexivity (`self[i] <
+        // self[i]` is false on `usize`), which the per-index conjunction
+        // short-circuits at each of the six positions. Peer of
+        // `is_strict_lower_bound_of_rejects_diagonal_membership` one
+        // PROJECTION-KIND axis over: where the single-bit strict predicate
+        // rejects a diagonal-containing slice at the aggregated verdict,
+        // the per-axis mask rejects at EVERY axis (since `<` is
+        // irreflexive on every axis independently).
+        for &a in STRICT_ORDER_ROSTER {
+            let strict = a.axes_is_strict_lower_bound_of(&[a]);
+            let non_strict = a.axes_is_lower_bound_of(&[a]);
+            for (i, entry) in strict.iter().enumerate() {
+                assert!(
+                    !*entry,
+                    "diagonal membership must reject strict lower bound at axis {i} for {a:?}",
+                );
+            }
+            for (i, entry) in non_strict.iter().enumerate() {
+                assert!(
+                    *entry,
+                    "diagonal membership must accept non-strict lower bound at axis {i} for {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strict_upper_bound_of_rejects_diagonal_at_every_axis() {
+        // Dual diagonal rejection pin.
+        for &a in STRICT_ORDER_ROSTER {
+            let strict = a.axes_is_strict_upper_bound_of(&[a]);
+            let non_strict = a.axes_is_upper_bound_of(&[a]);
+            for (i, entry) in strict.iter().enumerate() {
+                assert!(
+                    !*entry,
+                    "diagonal membership must reject strict upper bound at axis {i} for {a:?}",
+                );
+            }
+            for (i, entry) in non_strict.iter().enumerate() {
+                assert!(
+                    *entry,
+                    "diagonal membership must accept non-strict upper bound at axis {i} for {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strict_lower_bound_of_discriminates_single_axis_violation() {
+        // Diagnostic-emission pin — when `self`'s per-axis strict lower
+        // bound fails on ONE axis alone (because some operand ties self
+        // on that axis with `>=`) and passes on every other axis,
+        // `self.axes_is_strict_lower_bound_of(postures)` returns a mask
+        // whose SINGLE `false` entry names the violating axis by index.
+        // Peer of `axes_is_lower_bound_of_discriminates_single_axis_violation`
+        // one STRICTNESS axis over — where the non-strict mask exposes
+        // WHICH axis violated the `<=` on WHICH operand, the strict mask
+        // exposes WHICH axis violated the `<` (a strictly finer
+        // diagnostic: a `>=`-tie is a strict-face violation but a non-
+        // strict-face success).
+        //
+        // Fixture: `self = EMPTY` (all axes at 0), slice contains
+        // MID_POSTURE which has axis 0 (`max_expansion_depth = 7`) —
+        // itself strictly above 0, so axis 0 passes. But slice ALSO
+        // contains a hand-authored candidate that ties `self` at axis 0
+        // (`max_expansion_depth = 0`) and is above `self` at every
+        // other axis. Now axis 0 fails the strict conjunction (0 < 0 is
+        // false) while every other axis still passes (both operands sit
+        // above `self` at every non-zero axis). The mask has a single
+        // `false` at index 0 and `true` at every other position.
+        let tie_at_axis_zero = ResourceLimits {
+            max_expansion_depth: 0, // ties EMPTY at axis 0
+            max_cache_entries: 5,
+            max_expansion_size: 5,
+            max_macro_body_size: 5,
+            max_registered_macros: 5,
+            max_macro_arity: 5,
+        };
+        let slice = [HAND_AUTHORED_MID_POSTURE, tie_at_axis_zero];
+        let mask = EMPTY_RESOURCE_LIMITS.axes_is_strict_lower_bound_of(&slice);
+        assert!(!mask[0], "max_expansion_depth axis must be the false entry");
+        assert!(mask[1]);
+        assert!(mask[2]);
+        assert!(mask[3]);
+        assert!(mask[4]);
+        assert!(mask[5]);
+        // Cross-check: on the SAME slice, the non-strict per-axis mask
+        // accepts EVERY axis via leq-reflexivity on the tied operand
+        // (0 <= 0 holds), so the strict-vs-non-strict divergence lands
+        // at the tied axis alone.
+        let non_strict_mask = EMPTY_RESOURCE_LIMITS.axes_is_lower_bound_of(&slice);
+        assert!(non_strict_mask[0]);
+        assert!(non_strict_mask[1]);
+        assert!(non_strict_mask[2]);
+        assert!(non_strict_mask[3]);
+        assert!(non_strict_mask[4]);
+        assert!(non_strict_mask[5]);
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strict_upper_bound_of_discriminates_single_axis_violation() {
+        // Dual diagnostic-emission pin — `self = UNBOUNDED` sits above
+        // MID_POSTURE at every axis, but a hand-authored operand ties
+        // UNBOUNDED at axis 0 (`max_expansion_depth = usize::MAX`) and
+        // is below UNBOUNDED at every other axis. The strict per-axis
+        // upper-bound mask has a single `false` at index 0.
+        let tie_at_axis_zero = ResourceLimits {
+            max_expansion_depth: usize::MAX, // ties UNBOUNDED at axis 0
+            max_cache_entries: 5,
+            max_expansion_size: 5,
+            max_macro_body_size: 5,
+            max_registered_macros: 5,
+            max_macro_arity: 5,
+        };
+        let slice = [HAND_AUTHORED_MID_POSTURE, tie_at_axis_zero];
+        let mask = UNBOUNDED_RESOURCE_LIMITS.axes_is_strict_upper_bound_of(&slice);
+        assert!(!mask[0], "max_expansion_depth axis must be the false entry");
+        assert!(mask[1]);
+        assert!(mask[2]);
+        assert!(mask[3]);
+        assert!(mask[4]);
+        assert!(mask[5]);
+        // Cross-check: the non-strict per-axis upper-bound mask accepts
+        // EVERY axis via leq-reflexivity on the tied operand.
+        let non_strict_mask = UNBOUNDED_RESOURCE_LIMITS.axes_is_upper_bound_of(&slice);
+        assert!(non_strict_mask[0]);
+        assert!(non_strict_mask[1]);
+        assert!(non_strict_mask[2]);
+        assert!(non_strict_mask[3]);
+        assert!(non_strict_mask[4]);
+        assert!(non_strict_mask[5]);
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strict_lower_bound_of_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the per-axis N-ary STRICT lower-bound mask is
+        // evaluable in const context, so a caller can pin a preset-
+        // strict-N-ary-verdict-vector identity at compile time. Sibling
+        // of the const-fn pins on `axes_is_lower_bound_of` one STRICTNESS
+        // axis over, `is_strict_lower_bound_of` one PROJECTION-KIND axis
+        // over, and `axes_lt` one CARDINALITY axis over: those pin per-
+        // axis non-strict N-ary verdicts / scalar strict N-ary verdicts /
+        // per-axis pairwise strict vectors at compile time, this pins
+        // the per-axis strict N-ary vector at their intersection.
+        const MASK: [bool; ResourceLimits::FIELD_COUNT] = EMPTY_RESOURCE_LIMITS
+            .axes_is_strict_lower_bound_of(&[UNBOUNDED_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]);
+        const _: () = assert!(MASK[0]);
+        const _: () = assert!(MASK[1]);
+        const _: () = assert!(MASK[2]);
+        const _: () = assert!(MASK[3]);
+        const _: () = assert!(MASK[4]);
+        const _: () = assert!(MASK[5]);
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strict_upper_bound_of_evaluates_at_compile_time_via_const_fn() {
+        // Dual const-fn pin.
+        const MASK: [bool; ResourceLimits::FIELD_COUNT] = UNBOUNDED_RESOURCE_LIMITS
+            .axes_is_strict_upper_bound_of(&[EMPTY_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS]);
         const _: () = assert!(MASK[0]);
         const _: () = assert!(MASK[1]);
         const _: () = assert!(MASK[2]);

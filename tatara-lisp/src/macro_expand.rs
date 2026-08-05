@@ -1928,6 +1928,207 @@ impl ResourceLimits {
         ]
     }
 
+    /// Pointwise `==` predicate across the six ceilings — `self` equals
+    /// `other` iff every axis's ceiling agrees. `a.eq(b)` holds iff
+    /// every per-axis ceiling of `a` matches `b`'s at the same index,
+    /// which is exactly the six-fold conjunction of [`Self::axes_eq`].
+    ///
+    /// The whole-posture PROJECTION-KIND peer of [`Self::axes_eq`] one
+    /// PROJECTION-KIND axis over on the (per-axis mask, single-bit
+    /// verdict) surface — where `axes_eq` returns the six per-axis
+    /// witnesses of equality, this folds them through `&&` into ONE
+    /// verdict. Sibling of [`Self::leq`] / [`Self::geq`] / [`Self::lt`]
+    /// / [`Self::gt`] one PROJECTION-KIND axis over from `axes_leq` /
+    /// `axes_geq` / `axes_lt` / `axes_gt` on the SAME per-axis-mask →
+    /// whole-posture-verdict fold. Together with [`Self::ne`] closes
+    /// the (eq, ne) two-cell face at the whole-posture-verdict surface
+    /// for `const fn` use — the face previously delivered only through
+    /// the derived non-`const` [`PartialEq::eq`] / [`PartialEq::ne`].
+    ///
+    /// **Conjunction-recovers-`axes_eq` contract**: for every posture
+    /// pair `(a, b)`, `a.eq(b) == a.axes_eq(b) folded through &&` —
+    /// the fold-recovers-scalar law on the equality mask, verified at
+    /// the whole-posture-verdict level. Pinned by
+    /// `resource_limits_eq_agrees_with_axes_eq_conjunction`.
+    ///
+    /// **Derived-`PartialEq::eq` agreement**: for every posture pair
+    /// `(a, b)`, `a.eq(b) == (a == b)` via the derived [`PartialEq`].
+    /// The `const fn` primitive REACHES the SAME single-bit verdict
+    /// the derived non-`const` implementation carries, so a caller
+    /// choosing between the two picks the `const fn` for compile-time
+    /// evaluation and picks derived `==` for the operator sugar — no
+    /// semantic split. Pinned by
+    /// `resource_limits_eq_agrees_with_derived_partial_eq`.
+    ///
+    /// Reflexive (`a.eq(a) == true`), symmetric (`a.eq(b) == b.eq(a)`),
+    /// transitive (`a.eq(b) && b.eq(c) → a.eq(c)`) — the three
+    /// equivalence-relation axioms hold by construction on the
+    /// six-fold `&&` over the reflexive-symmetric-transitive
+    /// per-axis `==` on `usize`.
+    ///
+    /// **Bounded-lattice pole pins**:
+    /// `EMPTY_RESOURCE_LIMITS.eq(EMPTY_RESOURCE_LIMITS) == true`,
+    /// `UNBOUNDED_RESOURCE_LIMITS.eq(UNBOUNDED_RESOURCE_LIMITS) == true`,
+    /// `EMPTY_RESOURCE_LIMITS.eq(UNBOUNDED_RESOURCE_LIMITS) == false`
+    /// (every axis's `0` differs from every axis's [`usize::MAX`]).
+    /// Pinned by `resource_limits_eq_pole_pins`.
+    ///
+    /// **Antisymmetry closure with `leq`**: `a.leq(b) && b.leq(a) →
+    /// a.eq(b)` — the pointwise partial order's antisymmetry axiom
+    /// binds through `axes_eq_is_intersection_of_axes_leq_and_axes_geq`
+    /// one PROJECTION-KIND axis over: if every axis's `a <= b` AND
+    /// every axis's `b <= a`, then every axis's `a == b`, and the
+    /// whole-posture verdict follows. Pinned by
+    /// `resource_limits_eq_agrees_with_leq_antisymmetry`.
+    ///
+    /// Encoded as the fold `axes_eq[0] && ... && axes_eq[5]` — one
+    /// primitive delegation to [`Self::axes_eq`], so the whole-posture
+    /// equality lives at exactly one implementation site (the
+    /// per-axis mask's six inline `==` primitives), and a future
+    /// re-derivation of `axes_eq` propagates to `eq` mechanically
+    /// rather than requiring a per-method fix-up. Mirrors [`Self::leq`]'s
+    /// direct six-fold `<=` conjunction one PROJECTION-KIND axis over
+    /// (which delegates to inline field access rather than a shipped
+    /// mask primitive because `axes_leq` did not exist when `leq`
+    /// was originally shaped — the `axes_eq`-delegating shape here
+    /// picks up the more recent lifting discipline).
+    ///
+    /// `const fn` so a caller can pin a preset-equality identity at
+    /// compile time (`const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+    /// .eq(DEFAULT_RESOURCE_LIMITS));`) — the whole-posture-verdict
+    /// peer of the `const fn` evaluability every per-axis-mask
+    /// primitive on the algebra carries. Derived [`PartialEq::eq`] is
+    /// NOT `const fn` (Rust reserves that composition for stable
+    /// specialization), so the `const`-context equality check binds
+    /// through this method alone.
+    ///
+    /// Pre-lift, a caller wanting to pin a preset equality at compile
+    /// time either (a) inlined six per-axis `a.max_X == b.max_X` primitives
+    /// stitched into a six-fold `&&` at the const-expression site (the
+    /// same six-inline-primitive shape the pre-`ResourceLimits`
+    /// bundled Expander posture required its callers to carry, and
+    /// the same exhaustiveness gap a dropped `==` would not gate) OR
+    /// (b) fell back to a runtime `assert_eq!` after the const site,
+    /// losing the build-break property. Post-lift the equality
+    /// verdict binds at ONE typed `const fn` on the algebra.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// pair-level whole-posture equality verdict is itself a typed
+    /// named exit rather than a per-consumer inline six-primitive
+    /// conjunction or a non-`const` `PartialEq::eq` fallback.
+    /// THEORY.md §V.1 — knowable platform; the pointwise `==`
+    /// combinator becomes a `const`-evaluable TYPE-level operation on
+    /// the posture algebra.
+    ///
+    /// Frontier inspiration: [`PartialEq::eq`] on total-eq carriers —
+    /// stdlib's `Eq` trait binds equality at the whole-value level
+    /// but is not `const fn` on derived implementations; the
+    /// bounded-lattice pointwise generalization here is straightforward
+    /// on the per-axis mask and closes the (eq, ne) whole-posture-
+    /// verdict pair for `const` use. Translation through pleme-io
+    /// primitives is the plain fold below, no trait indirection.
+    #[must_use]
+    pub const fn eq(self, other: Self) -> bool {
+        let mask = self.axes_eq(other);
+        mask[0] && mask[1] && mask[2] && mask[3] && mask[4] && mask[5]
+    }
+
+    /// Pointwise `!=` predicate across the six ceilings — `self`
+    /// differs from `other` iff SOME axis's ceiling disagrees.
+    /// `a.ne(b)` holds iff at least one per-axis ceiling of `a` does
+    /// not match `b`'s at the same index, which is exactly the
+    /// six-fold disjunction of [`Self::axes_ne`].
+    ///
+    /// The DE MORGAN COMPLEMENT of [`Self::eq`] on the whole-posture-
+    /// verdict surface — `a.ne(b) == !a.eq(b)` — and the whole-posture
+    /// PROJECTION-KIND peer of [`Self::axes_ne`] one PROJECTION-KIND
+    /// axis over on the (per-axis mask, single-bit verdict) surface.
+    /// Together with [`Self::eq`] closes the (eq, ne) two-cell face
+    /// at the whole-posture-verdict surface for `const fn` use.
+    /// Sibling of the two-cell (comparable, incomparable) /
+    /// (chain, antichain) / (monotone, non_monotone) / (bottom, top ∈
+    /// pole) partitions previously lifted on the same substrate one
+    /// FACE axis over.
+    ///
+    /// **Disjunction-recovers-`axes_ne` contract**: for every posture
+    /// pair `(a, b)`, `a.ne(b) == a.axes_ne(b) folded through ||` —
+    /// the fold-recovers-scalar law on the difference mask, verified
+    /// at the whole-posture-verdict level. Pinned by
+    /// `resource_limits_ne_agrees_with_axes_ne_disjunction`. The DUAL
+    /// of `resource_limits_eq_agrees_with_axes_eq_conjunction` under
+    /// the De Morgan complement.
+    ///
+    /// **De Morgan complement contract**: for every posture pair
+    /// `(a, b)`, `a.ne(b) == !a.eq(b)` — the whole-posture-verdict
+    /// peer of `axes_ne == !axes_eq` per axis, verified at the
+    /// single-bit level after the fold. Pinned by
+    /// `resource_limits_ne_is_de_morgan_complement_of_eq`.
+    ///
+    /// **Derived-`PartialEq::ne` agreement**: for every posture pair
+    /// `(a, b)`, `a.ne(b) == (a != b)` via the derived [`PartialEq`].
+    /// The `const fn` primitive REACHES the SAME single-bit verdict
+    /// the derived non-`const` implementation carries. Pinned by
+    /// `resource_limits_ne_agrees_with_derived_partial_ne`.
+    ///
+    /// Irreflexive (`a.ne(a) == false`), symmetric (`a.ne(b) ==
+    /// b.ne(a)`) — the two axioms hold by construction on the
+    /// symmetric-irreflexive per-axis `!=` on `usize` and the
+    /// De Morgan complement of the equivalence relation on `eq`.
+    /// NOT transitive: `a.ne(b) && b.ne(c)` does NOT imply
+    /// `a.ne(c)` (the two disagreements may cancel — `a` and `c` can
+    /// each differ from `b` on distinct axes and still agree with
+    /// each other everywhere). The (symmetric, irreflexive,
+    /// non-transitive) posture is the classical inequality-relation
+    /// signature on any equivalence-relation carrier.
+    ///
+    /// **Bounded-lattice pole pins**:
+    /// `EMPTY_RESOURCE_LIMITS.ne(UNBOUNDED_RESOURCE_LIMITS) == true`
+    /// (every axis's `0` differs from every axis's [`usize::MAX`]);
+    /// `EMPTY_RESOURCE_LIMITS.ne(EMPTY_RESOURCE_LIMITS) == false`,
+    /// `UNBOUNDED_RESOURCE_LIMITS.ne(UNBOUNDED_RESOURCE_LIMITS) == false`
+    /// (irreflexivity on every pole). Pinned by
+    /// `resource_limits_ne_pole_pins`.
+    ///
+    /// Encoded as the fold `axes_ne[0] || ... || axes_ne[5]` — one
+    /// primitive delegation to [`Self::axes_ne`], so the whole-posture
+    /// difference lives at exactly one implementation site (the
+    /// per-axis difference mask's De Morgan complement of `axes_eq`),
+    /// and a future re-derivation of `axes_eq` propagates to `ne`
+    /// mechanically through `axes_ne`. Mirrors [`Self::eq`]'s
+    /// six-fold `&&` conjunction over `axes_eq` one COMBINATOR-TRANSFORM
+    /// axis over — the `&&`-of-`==` recovery on the equality mask
+    /// becomes the `||`-of-`!=` recovery on the difference mask,
+    /// exactly the same substrate law the (axes_eq, axes_ne) pair
+    /// carries at the per-axis-mask surface one PROJECTION-KIND axis
+    /// down.
+    ///
+    /// `const fn` so a caller can pin a preset-difference identity
+    /// at compile time (`const _: () = assert!(EMPTY_RESOURCE_LIMITS
+    /// .ne(UNBOUNDED_RESOURCE_LIMITS));`) — the whole-posture-verdict
+    /// peer of the `const fn` evaluability every per-axis-mask
+    /// primitive on the algebra carries.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
+    /// the pair-level whole-posture difference verdict is itself
+    /// a typed named exit rather than a per-consumer inline
+    /// six-primitive disjunction or a non-`const` `PartialEq::ne`
+    /// fallback. THEORY.md §V.1 — knowable platform; the pointwise
+    /// `!=` combinator becomes a `const`-evaluable TYPE-level
+    /// operation on the posture algebra.
+    ///
+    /// Frontier inspiration: [`PartialEq::ne`] on total-eq carriers,
+    /// which stdlib defines with a default `!self.eq(other)` body
+    /// — the SAME De Morgan complement shape one substrate over.
+    /// The `const fn` lift here closes the gap that Rust's derived
+    /// PartialEq leaves open on `const`-context evaluation.
+    /// Translation through pleme-io primitives is the plain fold
+    /// below, no trait indirection.
+    #[must_use]
+    pub const fn ne(self, other: Self) -> bool {
+        let mask = self.axes_ne(other);
+        mask[0] || mask[1] || mask[2] || mask[3] || mask[4] || mask[5]
+    }
+
     /// Per-axis pointwise `<` mask across the six ceilings — the ATOMIC
     /// per-axis strict-below relation vector. `a.axes_lt(b)[i]` is
     /// `true` iff the `i`-th ceiling of `a` sits strictly below the
@@ -22474,6 +22675,301 @@ mod tests {
         const _: () = assert!(MASK[3]);
         const _: () = assert!(MASK[4]);
         const _: () = assert!(MASK[5]);
+    }
+
+    // ── ResourceLimits::eq / ::ne — whole-posture verdict peers of
+    //    axes_eq / axes_ne, closing the (eq, ne) 2-cell face at the
+    //    single-bit verdict surface for `const fn` use ────────────────
+
+    #[test]
+    fn resource_limits_eq_agrees_with_axes_eq_conjunction() {
+        // Fold-recovers-scalar pin — for every posture pair `(a, b)`,
+        // `a.eq(b)` equals the six-fold `&&` of `a.axes_eq(b)` over the
+        // canonical struct-declaration index order. The whole-posture
+        // PROJECTION-KIND peer of
+        // `resource_limits_axes_eq_conjunction_agrees_with_eq` one
+        // PROJECTION-KIND axis over: that test verifies the fold via
+        // derived `PartialEq::eq`; THIS test verifies the fold against
+        // the just-lifted `const fn` peer that closes the same verdict
+        // for `const`-context use.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let mask = a.axes_eq(b);
+                let mut folded = true;
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    folded = folded && mask[i];
+                    i += 1;
+                }
+                assert_eq!(
+                    folded,
+                    a.eq(b),
+                    "axes_eq({a:?}, {b:?}) folded through && must equal eq()",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_eq_agrees_with_derived_partial_eq() {
+        // Derived-PartialEq agreement pin — `a.eq(b)` (the `const fn`
+        // primitive) equals `a == b` (the derived non-`const`
+        // implementation) on every ordered pair in the discriminating
+        // roster. Guarantees the `const`-context lift REACHES the same
+        // single-bit verdict the runtime implementation carries, so a
+        // caller choosing between the two picks by `const`-eligibility,
+        // not by semantic drift.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                assert_eq!(a.eq(b), a == b, "eq({a:?}, {b:?}) must equal derived ==",);
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_eq_is_reflexive() {
+        // Reflexivity pin — `a.eq(a) == true` on every canonical roster
+        // preset. The reflexivity axiom of the equivalence relation
+        // holds by construction on the six-fold `&&` over the reflexive
+        // per-axis `==` on `usize`.
+        for a in STRICT_ORDER_ROSTER {
+            let a = *a;
+            assert!(a.eq(a), "eq must be reflexive on {a:?}");
+        }
+    }
+
+    #[test]
+    fn resource_limits_eq_is_symmetric() {
+        // Symmetry pin — `a.eq(b) == b.eq(a)` on every ordered pair.
+        // Per-axis `==` is symmetric on every field, and the six-fold
+        // conjunction preserves symmetry through the fold.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                assert_eq!(
+                    a.eq(b),
+                    b.eq(a),
+                    "eq({a:?}, {b:?}) must equal eq({b:?}, {a:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_eq_agrees_with_leq_antisymmetry() {
+        // Antisymmetry-closure pin — `a.leq(b) && b.leq(a) == a.eq(b)`
+        // on every ordered pair. The pointwise partial order's
+        // antisymmetry axiom binds through
+        // `axes_eq_is_intersection_of_axes_leq_and_axes_geq` one
+        // PROJECTION-KIND axis over: if every axis's `a <= b` AND
+        // every axis's `b <= a`, then every axis's `a == b`, and the
+        // whole-posture verdict follows through the fold.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                assert_eq!(
+                    a.leq(b) && b.leq(a),
+                    a.eq(b),
+                    "leq({a:?}, {b:?}) && leq({b:?}, {a:?}) must equal eq",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_eq_pole_pins() {
+        // Bounded-lattice pole pins — reflexivity on each pole and
+        // strict disagreement between the two poles. Compile-time
+        // evaluable via the `const fn` primitive.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.eq(EMPTY_RESOURCE_LIMITS));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.eq(UNBOUNDED_RESOURCE_LIMITS));
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.eq(UNBOUNDED_RESOURCE_LIMITS));
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.eq(EMPTY_RESOURCE_LIMITS));
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.eq(DEFAULT_RESOURCE_LIMITS));
+    }
+
+    #[test]
+    fn resource_limits_eq_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the whole-posture verdict is evaluable in
+        // `const` context, so a caller can pin a preset-equality
+        // identity as a build-break rather than a runtime `assert!`
+        // on the first execution. The whole-posture-verdict peer of
+        // `resource_limits_axes_eq_evaluates_at_compile_time_via_const_fn`
+        // one PROJECTION-KIND axis over.
+        const REFLEXIVE_EMPTY: bool = EMPTY_RESOURCE_LIMITS.eq(EMPTY_RESOURCE_LIMITS);
+        const _: () = assert!(REFLEXIVE_EMPTY);
+        const REFLEXIVE_DEFAULT: bool = DEFAULT_RESOURCE_LIMITS.eq(DEFAULT_RESOURCE_LIMITS);
+        const _: () = assert!(REFLEXIVE_DEFAULT);
+        const REFLEXIVE_UNBOUNDED: bool = UNBOUNDED_RESOURCE_LIMITS.eq(UNBOUNDED_RESOURCE_LIMITS);
+        const _: () = assert!(REFLEXIVE_UNBOUNDED);
+        const CROSS_POLE_DISAGREE: bool = EMPTY_RESOURCE_LIMITS.eq(UNBOUNDED_RESOURCE_LIMITS);
+        const _: () = assert!(!CROSS_POLE_DISAGREE);
+    }
+
+    #[test]
+    fn resource_limits_ne_agrees_with_axes_ne_disjunction() {
+        // Fold-recovers-scalar pin — for every posture pair `(a, b)`,
+        // `a.ne(b)` equals the six-fold `||` of `a.axes_ne(b)`. The
+        // whole-posture PROJECTION-KIND peer of
+        // `resource_limits_axes_ne_disjunction_agrees_with_ne` one
+        // PROJECTION-KIND axis over. The DUAL of
+        // `resource_limits_eq_agrees_with_axes_eq_conjunction` under
+        // the De Morgan complement.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                let mask = a.axes_ne(b);
+                let mut folded = false;
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    folded = folded || mask[i];
+                    i += 1;
+                }
+                assert_eq!(
+                    folded,
+                    a.ne(b),
+                    "axes_ne({a:?}, {b:?}) folded through || must equal ne()",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_ne_is_de_morgan_complement_of_eq() {
+        // De Morgan complement pin — `a.ne(b) == !a.eq(b)` on every
+        // ordered pair. The whole-posture-verdict peer of the
+        // per-axis-mask `axes_ne == !axes_eq` complement one
+        // PROJECTION-KIND axis over, verified at the single-bit
+        // level after the fold.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                assert_eq!(a.ne(b), !a.eq(b), "ne({a:?}, {b:?}) must equal !eq",);
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_ne_agrees_with_derived_partial_ne() {
+        // Derived-PartialEq agreement pin — `a.ne(b)` (the `const fn`
+        // primitive) equals `a != b` (the derived non-`const`
+        // implementation) on every ordered pair in the discriminating
+        // roster. The DUAL of
+        // `resource_limits_eq_agrees_with_derived_partial_eq` one
+        // COMBINATOR-TRANSFORM axis over.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                assert_eq!(a.ne(b), a != b, "ne({a:?}, {b:?}) must equal derived !=",);
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_ne_is_irreflexive() {
+        // Irreflexivity pin — `a.ne(a) == false` on every canonical
+        // roster preset. The irreflexivity axiom of the inequality
+        // relation holds by the reflexivity of `eq` under the De
+        // Morgan complement.
+        for a in STRICT_ORDER_ROSTER {
+            let a = *a;
+            assert!(!a.ne(a), "ne must be irreflexive on {a:?}");
+        }
+    }
+
+    #[test]
+    fn resource_limits_ne_is_symmetric() {
+        // Symmetry pin — `a.ne(b) == b.ne(a)` on every ordered pair.
+        // Per-axis `!=` is symmetric on every field, and the six-fold
+        // disjunction preserves symmetry through the fold.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for b in roster {
+                assert_eq!(
+                    a.ne(b),
+                    b.ne(a),
+                    "ne({a:?}, {b:?}) must equal ne({b:?}, {a:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_ne_pole_pins() {
+        // Bounded-lattice pole pins — strict disagreement between the
+        // two poles and irreflexivity on each. Compile-time evaluable
+        // via the `const fn` primitive. The DUAL of
+        // `resource_limits_eq_pole_pins` under the De Morgan complement.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.ne(UNBOUNDED_RESOURCE_LIMITS));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.ne(EMPTY_RESOURCE_LIMITS));
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.ne(EMPTY_RESOURCE_LIMITS));
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.ne(UNBOUNDED_RESOURCE_LIMITS));
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.ne(DEFAULT_RESOURCE_LIMITS));
+    }
+
+    #[test]
+    fn resource_limits_ne_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the whole-posture difference verdict is
+        // evaluable in `const` context, so a caller can pin a preset-
+        // difference identity at compile time. The DUAL of
+        // `resource_limits_eq_evaluates_at_compile_time_via_const_fn`
+        // under the De Morgan complement.
+        const CROSS_POLE_DIFFERS: bool = EMPTY_RESOURCE_LIMITS.ne(UNBOUNDED_RESOURCE_LIMITS);
+        const _: () = assert!(CROSS_POLE_DIFFERS);
+        const IRREFLEXIVE_EMPTY: bool = EMPTY_RESOURCE_LIMITS.ne(EMPTY_RESOURCE_LIMITS);
+        const _: () = assert!(!IRREFLEXIVE_EMPTY);
+        const IRREFLEXIVE_DEFAULT: bool = DEFAULT_RESOURCE_LIMITS.ne(DEFAULT_RESOURCE_LIMITS);
+        const _: () = assert!(!IRREFLEXIVE_DEFAULT);
     }
 
     // ── ResourceLimits::axes_lt / ::axes_gt — strict per-axis masks ────

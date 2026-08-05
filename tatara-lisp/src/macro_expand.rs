@@ -7801,6 +7801,165 @@ impl ResourceLimits {
         Self::is_strictly_ascending(postures) || Self::is_strictly_descending(postures)
     }
 
+    /// The STRICT peer of [`Self::is_non_monotone`] one STRICTNESS axis over
+    /// on the sequence-level pairwise-relation surface — `true` iff NEITHER
+    /// strict-direction projection [`Self::is_strictly_ascending`] NOR
+    /// [`Self::is_strictly_descending`] accepts. The DIRECT STRICT-
+    /// REFINEMENT PEER of [`Self::is_non_monotone`] one STRICTNESS axis
+    /// over via the same negation-conjunction shape rebound onto the two
+    /// strict direction projections: `is_strictly_non_monotone ==
+    /// !is_strictly_ascending && !is_strictly_descending`. The DE MORGAN
+    /// COMPLEMENT peer of [`Self::is_strictly_monotone`] one COMBINATOR
+    /// axis over on the SAME two underlying strict direction projections:
+    /// `is_strictly_non_monotone == !is_strictly_monotone` for every slice
+    /// via `!(a || b) == !a && !b`. Opens the STRICTNESS row on the
+    /// (is_non_monotone) column of the sequence-level pairwise-relation
+    /// surface, mirroring the (is_monotone, is_strictly_monotone)
+    /// STRICTNESS row that was closed at [`Self::is_strictly_monotone`]
+    /// one COMBINATOR axis over.
+    ///
+    /// Pins:
+    ///
+    /// **De Morgan complement — `is_strictly_non_monotone iff
+    /// !is_strictly_monotone`**: for every slice, the two combinator
+    /// corners on the SAME two underlying strict direction projections
+    /// partition every slice's verdict into exactly two disjoint arms.
+    /// Follows algebraically from De Morgan: `!(strict_asc || strict_desc)
+    /// == !strict_asc && !strict_desc`. Pinned as
+    /// `resource_limits_is_strictly_non_monotone_iff_negation_of_is_strictly_monotone_on_every_shipped_slice`.
+    ///
+    /// **Refinement-INVERSION theorem — `is_non_monotone ⇒
+    /// is_strictly_non_monotone`**: for every slice,
+    /// `Self::is_non_monotone(postures) == true` implies
+    /// `Self::is_strictly_non_monotone(postures) == true`, since each non-
+    /// strict direction projection is REFINED BY (accepts strictly more
+    /// slices than) the matching strict direction projection
+    /// ([`Self::is_ascending`] ⇐ [`Self::is_strictly_ascending`] and
+    /// [`Self::is_descending`] ⇐ [`Self::is_strictly_descending`]), so
+    /// negating both direction projections reverses the refinement:
+    /// `!is_ascending ⇒ !is_strictly_ascending` and `!is_descending ⇒
+    /// !is_strictly_descending`, and the conjunction of the strict
+    /// negations follows. LOAD-BEARING INVERSION from the direction row's
+    /// forward refinement one COMBINATOR axis over: on the direction row,
+    /// `is_strictly_ascending ⇒ is_ascending`; on this negation-
+    /// conjunction row, `is_non_monotone ⇒ is_strictly_non_monotone` —
+    /// the same STRICTNESS refinement flipped by the negation. Pinned as
+    /// `resource_limits_is_non_monotone_implies_is_strictly_non_monotone_on_every_shipped_slice`.
+    ///
+    /// **Empty-slice vacuous falsehood**: `Self::is_strictly_non_monotone(
+    /// &[]) == false` — both strict direction projections accept vacuously
+    /// on the empty slice and the negation-conjunction closes on both
+    /// arms. Sibling of [`Self::is_non_monotone`]'s empty-slice falsehood
+    /// one STRICTNESS axis over. Pinned as
+    /// `resource_limits_is_strictly_non_monotone_empty_slice_is_false`.
+    ///
+    /// **Singleton vacuous falsehood**: `Self::is_strictly_non_monotone(
+    /// &[a]) == false` for every posture `a`, since a one-element slice
+    /// contains no consecutive pairs and both strict direction projections
+    /// vacuously accept.
+    ///
+    /// **Diagonal-duplicate acceptance — DISCRIMINATING arm past
+    /// [`Self::is_non_monotone`]**: `Self::is_strictly_non_monotone(&[a,
+    /// a]) == true` for every posture `a`, since `lt` and `gt` are BOTH
+    /// IRREFLEXIVE — both strict direction projections reject at the
+    /// single consecutive pair, opening the negation-conjunction on both
+    /// arms. LOAD-BEARING discriminating arm past
+    /// [`Self::is_non_monotone`] one STRICTNESS axis over — the non-strict
+    /// negation-conjunction REJECTS on every diagonal-duplicate slice
+    /// (both `leq` and `geq` are reflexive), so the two projections
+    /// diverge exactly on the diagonal-duplicate slices — the same
+    /// STRICTNESS-refinement separator that distinguishes
+    /// [`Self::is_strictly_monotone`] from [`Self::is_monotone`] one
+    /// COMBINATOR axis over, with the direction of divergence FLIPPED by
+    /// the negation-conjunction. Pinned as
+    /// `resource_limits_is_strictly_non_monotone_of_diagonal_duplicate_is_true`.
+    ///
+    /// **Ascending shipped-preset triple rejection**:
+    /// `Self::is_strictly_non_monotone(&[EMPTY_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]) == false` —
+    /// the strictly increasing chain opens the `is_strictly_ascending`
+    /// arm, so the negation-conjunction closes. Peer of the descending
+    /// rejection one PERMUTATION axis over.
+    ///
+    /// **Descending shipped-preset triple rejection**:
+    /// `Self::is_strictly_non_monotone(&[UNBOUNDED_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS]) == false` — the
+    /// reversed strictly decreasing chain opens the `is_strictly_descending`
+    /// arm, closing the negation-conjunction.
+    ///
+    /// **Hand-authored antichain-pair acceptance**:
+    /// `Self::is_strictly_non_monotone(&[HAND_AUTHORED_MID_POSTURE,
+    /// HAND_AUTHORED_OTHER_POSTURE]) == true` — the two hand-authored
+    /// asymmetric postures are incomparable, so both strict direction
+    /// projections reject on the single consecutive pair and the
+    /// negation-conjunction opens on both arms. Pinned in both orderings.
+    ///
+    /// **Zig-zag chain-permutation acceptance**:
+    /// `Self::is_strictly_non_monotone(&[DEFAULT_RESOURCE_LIMITS,
+    /// EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]) == true`. Both
+    /// strict direction projections reject the zig-zag chain
+    /// (`DEFAULT.lt(EMPTY) == false` at pair `(0, 1)` and `EMPTY.gt(
+    /// UNBOUNDED) == false` at pair `(1, 2)` — falsifying strict-ascending
+    /// at index 0 and strict-descending at index 1), so the negation-
+    /// conjunction opens on both arms. Pinned in both zig-zag permutations.
+    ///
+    /// **Structural round-trip — `is_strictly_non_monotone iff
+    /// !is_strictly_ascending && !is_strictly_descending`**: for every
+    /// slice, the projection is definitionally the negation-conjunction
+    /// of the two strict direction projections; the equality holds by
+    /// construction. Pinned across arity 0-3 over all five shipped
+    /// presets. Pinned as
+    /// `resource_limits_is_strictly_non_monotone_iff_negation_conjunction_of_is_strictly_ascending_and_is_strictly_descending_on_every_shipped_slice`.
+    ///
+    /// **Const-fn evaluability**: the doubly-negation-conjoined corner is
+    /// evaluable in `const` context, so a caller can bind a strict-non-
+    /// monotone-sequence identity at compile time as a build-break
+    /// (`const _: () = assert!(ResourceLimits::is_strictly_non_monotone(
+    /// &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE]));`).
+    ///
+    /// Pre-lift, a caller wanting "is this slice neither strictly
+    /// ascending nor strictly descending?" composed the doubly-primitive
+    /// negation-conjunction `!Self::is_strictly_ascending(postures) &&
+    /// !Self::is_strictly_descending(postures)` at every prospective
+    /// callsite — a two-primitive scaffolding whose exhaustiveness the
+    /// type system did NOT gate. Post-lift the strict-non-monotone verdict
+    /// binds at ONE typed method the algebra exposes, composes into a
+    /// compile-time bound, and the doubly-conjoined-with-negation substrate
+    /// lives at ONE implementation site — a ≥2 PRIME DIRECTIVE trigger,
+    /// since the strict peer of the (is_monotone, is_non_monotone) 2-cell
+    /// combinator-dual face's negation-conjunction corner was the next
+    /// natural corner to open on the sequence-level surface after the
+    /// disjunction corner closed at [`Self::is_strictly_monotone`] one
+    /// COMBINATOR axis over.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the sequence-level strict-non-monotone verdict on N
+    /// preset-carried resource proofs is itself a typed named `bool`
+    /// predicate composing them via the underlying sequence-level
+    /// [`Self::is_strictly_ascending`] + [`Self::is_strictly_descending`]
+    /// projections. THEORY.md §V.1 — knowable platform; the doubly-
+    /// conjoined-with-negation strict projection becomes a TYPE-level
+    /// operation on the posture algebra rather than an inline
+    /// `!is_strictly_ascending && !is_strictly_descending` scaffolding at
+    /// every consumer that decides "is this slice neither strictly
+    /// ascending nor strictly descending?"
+    ///
+    /// Frontier inspiration: the order-theoretic notion of a STRICTLY
+    /// NON-MONOTONE SEQUENCE on a poset — Haskell's `not (strictlySorted
+    /// xs) && not (strictlySorted (reverse xs))` idiom; Coq's negation of
+    /// `StronglySorted lt` on both directions; Julia's `!issorted(v,
+    /// lt=<) && !issorted(v, lt=>)` composition; APL's `~∧/2</⍵ ~∧/2>/⍵`
+    /// strict-non-monotonicity gauge. Translation through pleme-io
+    /// primitives: the doubly-conjoined-with-negation sequence-level
+    /// projection composes directly from the two strict-direction
+    /// projections, no new dep, no supertrait bound (`Copy` on
+    /// [`ResourceLimits`] suffices to pass slices by value through the
+    /// inner `const fn` bodies), no allocation, `const fn` throughout.
+    #[must_use]
+    pub const fn is_strictly_non_monotone(postures: &[Self]) -> bool {
+        !Self::is_strictly_ascending(postures) && !Self::is_strictly_descending(postures)
+    }
+
     /// Per-axis boolean `is_monotone`-projection across a slice of
     /// postures — the ATOMIC per-axis SEQUENCE-LEVEL monotone vector.
     /// `Self::axes_is_monotone(&[a, b, c])[i]` is `true` iff the projection
@@ -8762,6 +8921,316 @@ impl ResourceLimits {
     pub const fn axes_is_non_monotone(postures: &[Self]) -> [bool; Self::FIELD_COUNT] {
         let asc = Self::axes_is_ascending(postures);
         let desc = Self::axes_is_descending(postures);
+        let mut result = [false; Self::FIELD_COUNT];
+        let mut i = 0;
+        while i < Self::FIELD_COUNT {
+            result[i] = !asc[i] && !desc[i];
+            i += 1;
+        }
+        result
+    }
+
+    /// Per-axis boolean STRICTLY-NON-MONOTONE projection across a slice
+    /// of postures — the ATOMIC per-axis SEQUENCE-LEVEL strict-non-
+    /// monotone vector. `Self::axes_is_strictly_non_monotone(&[a, b,
+    /// c])[i]` is `true` iff the projection of the slice onto the `i`-th
+    /// ceiling is NEITHER a strictly-increasing (`<`) nor a strictly-
+    /// decreasing (`>`) `usize` sequence on its own — every axis
+    /// independently decides whether its usize projection fails BOTH
+    /// strict-direction predicates. Each axis decides independently, so
+    /// a slice that carries a strict zig-zag on axis `0` while axis `1`
+    /// strictly ascends binds `true` at position `0` and `false` at
+    /// position `1` even though the whole-posture
+    /// [`Self::is_strictly_non_monotone`] verdict collapses to `true` as
+    /// soon as neither shared strict direction accepts across every axis.
+    ///
+    /// The STRICT peer of [`Self::axes_is_non_monotone`] one STRICTNESS
+    /// axis over on the per-axis-mask sequence-level surface — the SAME
+    /// per-axis negation-conjunction shape rebound onto the two STRICT
+    /// per-axis-mask direction projections
+    /// [`Self::axes_is_strictly_ascending`] +
+    /// [`Self::axes_is_strictly_descending`] rather than their non-strict
+    /// peers. AND the DE MORGAN COMPLEMENT corner of the (strict-monotone,
+    /// strict-non-monotone) 2-cell face on the per-axis-mask sequence-
+    /// level COMBINATOR column, one COMBINATOR axis over from
+    /// [`Self::axes_is_strictly_monotone`] (the DISJUNCTION corner) on
+    /// the SAME two underlying per-axis-mask strict direction primitives:
+    /// `axes_is_strictly_non_monotone[i] ==
+    /// !axes_is_strictly_monotone[i]` for every slice via `!(a || b) ==
+    /// !a && !b`. AND the per-axis-MASK peer of
+    /// [`Self::is_strictly_non_monotone`] one PROJECTION-KIND axis over.
+    /// Three peers cross the same cell on the (direction × projection-
+    /// kind × strictness × combinator) 2×2×2×2 grid: OPENING the
+    /// STRICTNESS row of the per-axis-mask non-monotone-combinator corner
+    /// past the just-closed non-strict corner at
+    /// [`Self::axes_is_non_monotone`], mirroring the way
+    /// [`Self::axes_is_strictly_monotone`] opened the STRICTNESS row of
+    /// the per-axis-mask monotone-combinator corner past the non-strict
+    /// [`Self::axes_is_monotone`] one COMBINATOR axis under.
+    ///
+    /// Encoded as a per-axis NEGATION-CONJUNCTION of the two shipped
+    /// per-axis-mask STRICT direction projections — one primitive
+    /// delegation to [`Self::axes_is_strictly_ascending`], one to
+    /// [`Self::axes_is_strictly_descending`], then a per-index `!x &&
+    /// !y`-fold across the two masks into a fresh `[bool; FIELD_COUNT]`.
+    /// Because both underlying projections delegate through
+    /// [`Self::axes_lt`] / [`Self::axes_gt`] to the pair-level per-axis
+    /// strict primitives, a future re-derivation of the pair-level
+    /// primitive propagates transparently into this method through the
+    /// shipped sequence-level per-axis-mask strict direction pair. The
+    /// compositional shape mirrors [`Self::axes_is_non_monotone`] one
+    /// STRICTNESS axis over on the SAME `!x && !y`-fold, and mirrors
+    /// [`Self::is_strictly_non_monotone`] one PROJECTION-KIND axis over
+    /// on the SAME two underlying strict direction projections — a copy-
+    /// paste that dropped one primitive or slipped in the non-strict
+    /// direction pair would leave the strict-non-monotone verdict
+    /// silently one-sided or non-strict, exactly the failure modes this
+    /// compositional shape rules out by construction.
+    ///
+    /// **Structural round-trip — `axes_is_strictly_non_monotone[i] iff
+    /// !axes_is_strictly_ascending[i] &&
+    /// !axes_is_strictly_descending[i]`**: for every slice and every
+    /// axis, the mask bit is definitionally the per-axis NEGATION-
+    /// CONJUNCTION of the two strict direction masks; the equality holds
+    /// by CONSTRUCTION. Pinned across arity 0-3 over all five shipped
+    /// presets, catching any future rewrite of any of the three
+    /// underlying projections that silently drifts from the composition
+    /// contract. Pinned as
+    /// `resource_limits_axes_is_strictly_non_monotone_iff_per_axis_negation_conjunction_of_axes_strict_direction_masks_on_every_shipped_slice`.
+    ///
+    /// **De Morgan complement — `axes_is_strictly_non_monotone[i] iff
+    /// !axes_is_strictly_monotone[i]`**: for every slice and every axis,
+    /// `Self::axes_is_strictly_non_monotone(postures)[i] ==
+    /// !Self::axes_is_strictly_monotone(postures)[i]` — the two per-
+    /// axis-mask strict combinator corners partition every axis's verdict
+    /// into exactly two disjoint arms. Follows algebraically from De
+    /// Morgan on the underlying strict direction projections: `!(strict_asc
+    /// || strict_desc) == !strict_asc && !strict_desc` per axis. Pinned
+    /// as
+    /// `resource_limits_axes_is_strictly_non_monotone_iff_negation_of_axes_is_strictly_monotone_on_every_shipped_slice`.
+    ///
+    /// **Per-axis refinement-INVERSION — `axes_is_non_monotone[i] ⇒
+    /// axes_is_strictly_non_monotone[i]`**: for every slice and every
+    /// axis, `Self::axes_is_non_monotone(postures)[i] == true` implies
+    /// `Self::axes_is_strictly_non_monotone(postures)[i] == true` — the
+    /// non-strict per-axis-mask non-monotone verdict REFINES the strict
+    /// peer per axis, DIRECTION-INVERTED from the strict-refines-non-
+    /// strict pattern the direction row carries one COMBINATOR axis over.
+    /// Follows per-axis from the boolean-lattice contrapositive of the
+    /// underlying `strict_dir[i] ⇒ non_strict_dir[i]` refinements: `!
+    /// non_strict_asc[i] ⇒ !strict_asc[i]` and `!non_strict_desc[i] ⇒
+    /// !strict_desc[i]`, and the conjunction composes. LOAD-BEARING
+    /// INVERSION: on the DIRECTION row of the per-axis-mask surface,
+    /// `axes_is_strictly_ascending[i] ⇒ axes_is_ascending[i]`; on this
+    /// NEGATION-CONJUNCTION column, `axes_is_non_monotone[i] ⇒
+    /// axes_is_strictly_non_monotone[i]` — the same STRICTNESS refinement
+    /// FLIPPED by the negation-conjunction. Pinned as
+    /// `resource_limits_axes_is_non_monotone_refines_axes_is_strictly_non_monotone_per_axis_on_every_shipped_slice`.
+    ///
+    /// **Per-axis 2-cell partition + constant refinement**: for every
+    /// slice and every axis, EXACTLY ONE of
+    /// `Self::axes_is_strictly_monotone(postures)[i]` and
+    /// `Self::axes_is_strictly_non_monotone(postures)[i]` is `true` —
+    /// the two per-axis-mask STRICT combinator corners form a clean De
+    /// Morgan 2-cell partition on the per-axis strict-verdict surface at
+    /// every arity. `Self::axes_is_constant(postures)[i]` (defined on
+    /// the NON-STRICT direction pair one STRICTNESS axis under) REFINES
+    /// the strict-non-monotone cell at arity ≥ 2 rather than sitting in
+    /// a disjoint third cell: a constant projection at arity ≥ 2
+    /// carries a repetition that irreflexivity of strict `<` / `>`
+    /// rules out, so `axes_is_constant[i] ⇒ axes_is_strictly_non_monotone[i]`
+    /// at arity ≥ 2. LOAD-BEARING DISCOVERY: the same three-cell face
+    /// that partitions cleanly on the NON-STRICT combinator column at
+    /// (axes_is_constant, axes_is_monotone \ !axes_is_constant,
+    /// axes_is_non_monotone) COLLAPSES on the STRICT column into
+    /// (axes_is_strictly_monotone, axes_is_strictly_non_monotone) where
+    /// axes_is_constant now refines the second cell. At arity 0 or 1
+    /// the refinement is vacuous (both strict direction masks accept,
+    /// so strict-non-monotone is all-false and the implication holds
+    /// trivially). Pinned across arity 2-3 as
+    /// `resource_limits_axes_is_constant_refines_axes_is_strictly_non_monotone_per_axis_from_arity_two_on_every_shipped_slice`.
+    ///
+    /// **Empty-slice all-false**: `Self::axes_is_strictly_non_monotone(
+    /// &[]) == [false; FIELD_COUNT]` — both underlying strict direction
+    /// projections return `[true; FIELD_COUNT]` vacuously on the empty
+    /// slice, so the per-axis negation-conjunction closes at every axis.
+    /// DE MORGAN DUAL of [`Self::axes_is_strictly_monotone`]'s empty-slice
+    /// all-true one COMBINATOR axis over, AND the direct per-axis-mask
+    /// peer of [`Self::is_strictly_non_monotone`]'s empty-slice `false`
+    /// one PROJECTION-KIND axis over. Pinned as
+    /// `resource_limits_axes_is_strictly_non_monotone_empty_slice_is_all_false`.
+    ///
+    /// **Singleton all-false**: `Self::axes_is_strictly_non_monotone(&[a])
+    /// == [false; FIELD_COUNT]` for every posture `a` — a one-element
+    /// slice contains no consecutive pairs, so both underlying strict
+    /// direction masks preserve their `true` seed at every axis and the
+    /// per-axis negation-conjunction closes.
+    ///
+    /// **Diagonal-duplicate ALL-TRUE — LOAD-BEARING DISCRIMINATING arm
+    /// past the non-strict peer**: `Self::axes_is_strictly_non_monotone(
+    /// &[a, a]) == [true; FIELD_COUNT]` for every posture `a` —
+    /// [`Self::axes_lt`] AND [`Self::axes_gt`] are BOTH per-axis
+    /// IRREFLEXIVE, so both underlying strict direction masks REJECT at
+    /// every axis and the per-axis negation-conjunction OPENS uniformly.
+    /// FLIPS the sign of [`Self::axes_is_non_monotone`]'s diagonal
+    /// verdict one STRICTNESS axis over — the non-strict peer closes to
+    /// all-false on the diagonal (both non-strict direction masks accept
+    /// via per-axis reflexivity), while this strict peer opens to all-
+    /// true (both strict direction masks reject via per-axis
+    /// irreflexivity). The SAME strictness-vs-non-strict divergence at
+    /// the diagonal the direction row carries at
+    /// ([`Self::axes_is_ascending`], [`Self::axes_is_strictly_ascending`])
+    /// one COMBINATOR axis under, INVERTED by the negation-conjunction.
+    /// Pinned as
+    /// `resource_limits_axes_is_strictly_non_monotone_of_diagonal_duplicate_is_all_true`.
+    ///
+    /// **Ascending shipped-preset triple all-false**:
+    /// `Self::axes_is_strictly_non_monotone(&[EMPTY_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS]) == [false;
+    /// FIELD_COUNT]` — every axis's `0 < positive-constant < usize::MAX`
+    /// projection is a STRICTLY increasing usize chain, so the
+    /// `axes_is_strictly_ascending` arm accepts at every axis and the
+    /// per-axis negation-conjunction closes uniformly. Peer of the
+    /// descending permutation rejection one DIRECTION axis over.
+    ///
+    /// **Descending shipped-preset triple all-false**:
+    /// `Self::axes_is_strictly_non_monotone(&[UNBOUNDED_RESOURCE_LIMITS,
+    /// DEFAULT_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS]) == [false;
+    /// FIELD_COUNT]` — the reversed strictly-decreasing chain accepts
+    /// the `axes_is_strictly_descending` arm at every axis, closing the
+    /// per-axis negation-conjunction uniformly.
+    ///
+    /// **Zig-zag chain-permutation uniform ACCEPTANCE — DISCRIMINATING
+    /// positive-arm catch**: `Self::axes_is_strictly_non_monotone(&[
+    /// DEFAULT_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS]) == [true; FIELD_COUNT]` — every axis
+    /// carries the SAME (positive → zero → usize::MAX) strict zig-zag,
+    /// so every axis rejects BOTH strict direction arms and the per-axis
+    /// negation-conjunction opens uniformly. LOAD-BEARING: pins the
+    /// projection as the POSITIVE arm on a slice that is a CHAIN (per-
+    /// axis strict comparability holds pointwise between consecutive
+    /// elements individually) but neither strictly ascending nor strictly
+    /// descending AS A SEQUENCE on any axis. Pinned in both zig-zag
+    /// permutations as
+    /// `resource_limits_axes_is_strictly_non_monotone_holds_on_the_zigzag_chain_permutation`.
+    ///
+    /// **Load-bearing MIXED-DIRECTION witness — TOTAL AGREEMENT with
+    /// scalar**: `Self::axes_is_strictly_non_monotone(&[
+    /// HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE]) ==
+    /// [false; FIELD_COUNT]` AND `Self::is_strictly_non_monotone(&[
+    /// HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE]) == true`
+    /// — the two hand-authored postures DIFFER on every axis, so at
+    /// every axis EITHER `axes_lt[i]` OR `axes_gt[i]` accepts (usize
+    /// trichotomy between distinct values partitions each axis into `<`
+    /// or `>`), and the per-axis negation-conjunction closes uniformly.
+    /// Whole-posture `is_strictly_non_monotone` OPENS because the two
+    /// hand-authored postures are incomparable — three axes have
+    /// `MID > OTHER` (falsifying `is_strictly_ascending` via `MID.lt(
+    /// OTHER) == false`) and three axes have `MID < OTHER` (falsifying
+    /// `is_strictly_descending` via `MID.gt(OTHER) == false`), so
+    /// `!false && !false == true`. This is the STRICT peer of the SAME
+    /// CANONICAL fold-scalar DIVERGENCE witness
+    /// [`Self::axes_is_non_monotone`] carries one STRICTNESS axis under
+    /// — the SAME [MID, OTHER] slice that WITNESSES the non-strict
+    /// negation-conjunction column's fold-refines-scalar refinement
+    /// (`axes_is_non_monotone == [false; FIELD_COUNT]` while
+    /// `is_non_monotone == true`) WITNESSES this STRICT negation-
+    /// conjunction column's fold-refines-scalar refinement in the SAME
+    /// direction (`axes_is_strictly_non_monotone == [false; FIELD_COUNT]`
+    /// while `is_strictly_non_monotone == true`) — the STRICTNESS lift
+    /// PRESERVES the fold-refines-scalar refinement direction because
+    /// both `axes_is_non_monotone` and `axes_is_strictly_non_monotone`
+    /// close at every axis for a 2-element slice of DISTINCT postures
+    /// (every axis is trichotomously ordered `<`, `>`, or `=`), while
+    /// the whole-posture scalar OPENS both times for the SAME reason —
+    /// direction mismatch across axes. Pinned as
+    /// `resource_limits_is_strictly_non_monotone_true_does_not_recover_axes_is_strictly_non_monotone_fold_on_the_load_bearing_mixed_direction_witness`.
+    ///
+    /// **Fold-REFINES-scalar contract (one-directional)**: for every
+    /// slice `postures`, `Self::axes_is_strictly_non_monotone(postures).
+    /// iter().all(|&b| b) == true` implies `Self::is_strictly_non_monotone(
+    /// postures) == true` — if every axis carries a per-axis strict zig-
+    /// zag (fold true), then neither whole-posture strict direction
+    /// projection can accept (each requires ALL axes to accept its strict
+    /// direction, and no axis accepts either), so
+    /// `!is_strictly_ascending && !is_strictly_descending ==
+    /// is_strictly_non_monotone` holds. The converse fails on the
+    /// [MID, OTHER] witness pinned above — the STRICT peer of the SAME
+    /// fold-refines-scalar refinement [`Self::axes_is_non_monotone`]
+    /// carries one STRICTNESS axis under, preserved intact by the
+    /// STRICTNESS lift. Pinned as
+    /// `resource_limits_axes_is_strictly_non_monotone_fold_true_implies_is_strictly_non_monotone_on_every_shipped_slice`.
+    ///
+    /// **Pointwise-field per-axis strict-non-monotone alignment**: for
+    /// every arity-3 slice from the 5-preset matrix, mask position `i`
+    /// agrees with the direct per-axis strict-non-monotone verdict
+    /// `!(a[i] < b[i] && b[i] < c[i]) && !(a[i] > b[i] && b[i] > c[i])`
+    /// on the `i`-th `field_values` component — the composition contract
+    /// holds pointwise across the 5^3 preset matrix. Pinned as
+    /// `resource_limits_axes_is_strictly_non_monotone_agrees_with_pointwise_field_strict_non_monotone_projection`.
+    ///
+    /// **Const-fn evaluability**: the doubly-composed per-axis negation-
+    /// conjunction over the two strict direction projections is evaluable
+    /// in `const` context, so a caller can pin a per-axis strict-non-
+    /// monotone identity at compile time as a build-break (`const _: () =
+    /// { const M: [bool; ResourceLimits::FIELD_COUNT] =
+    /// ResourceLimits::axes_is_strictly_non_monotone(&[
+    /// DEFAULT_RESOURCE_LIMITS, EMPTY_RESOURCE_LIMITS,
+    /// UNBOUNDED_RESOURCE_LIMITS]); … };`). Sibling of the const-fn
+    /// evaluability pins on the shipped per-axis-mask sequence-level
+    /// projections one COMBINATOR / STRICTNESS axis over.
+    ///
+    /// Pre-lift, a caller wanting "for each axis, is this slice neither
+    /// strictly ascending nor strictly descending on that axis?"
+    /// composed the doubly-primitive per-axis negation-conjunction
+    /// `let asc = Self::axes_is_strictly_ascending(postures); let desc =
+    /// Self::axes_is_strictly_descending(postures); … let mut i = 0;
+    /// while i < Self::FIELD_COUNT { m[i] = !asc[i] && !desc[i]; i +=
+    /// 1; } …` at every prospective callsite — a two-primitive
+    /// scaffolding whose exhaustiveness the type system did NOT gate.
+    /// Post-lift the per-axis-mask strict-non-monotone verdict binds at
+    /// ONE typed method the algebra exposes, composes into a compile-
+    /// time bound, and the doubly-conjoined-with-negation per-axis
+    /// substrate lives at ONE implementation site — a ≥2 PRIME DIRECTIVE
+    /// trigger, since the STRICTNESS row of the per-axis-mask non-
+    /// monotone-combinator corner past the just-closed non-strict corner
+    /// at [`Self::axes_is_non_monotone`] was the next natural row to
+    /// open on the sequence-level surface.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the per-
+    /// axis strict-non-monotone verdict is a typed named `[bool; N]`
+    /// exit rather than an inline doubly-composed strict-negation-
+    /// conjunction. THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the per-axis-mask strict-non-monotone projection composes
+    /// from the shipped per-axis-mask strict direction pair via a pure
+    /// per-axis `!x && !y`-fold, and the De Morgan complement contract
+    /// composes through boolean-lattice duality across the two strict
+    /// projections. THEORY.md §V.1 — knowable platform; the per-axis-
+    /// mask strict-non-monotone verdict becomes a TYPE-level operation
+    /// on the posture algebra rather than an inline two-primitive
+    /// scaffolding at every consumer that decides "which axes are
+    /// neither strictly ascending nor strictly descending across this
+    /// slice?"
+    ///
+    /// Frontier inspiration: order-theoretic AXIS-WISE STRICT NON-
+    /// MONOTONICITY on a product order — Haskell's `zipWith` idioms over
+    /// per-component `not (strictlySorted xs) && not (strictlySorted
+    /// (reverse xs))` on a product-ordered carrier; Idris's per-index
+    /// `neither-strictly-sorted` check on `Vec n Nat`; APL's `~∧/2</⍵
+    /// ~∧/2>/⍵` axis-wise strict-non-monotonicity operator; Coq's per-
+    /// component intersection of `~ Sorted lt` and `~ Sorted gt` on a
+    /// product record. Translation through pleme-io primitives: the
+    /// doubly-composed per-axis `!x && !y`-fold directly, with the
+    /// shipped per-axis-mask strict direction pair
+    /// [`Self::axes_is_strictly_ascending`] +
+    /// [`Self::axes_is_strictly_descending`] as the two primitives, no
+    /// new dep, no supertrait bound (`Copy` on [`ResourceLimits`]
+    /// suffices to pass slices by value through the inner `const fn`
+    /// bodies), no allocation, `const fn` throughout.
+    #[must_use]
+    pub const fn axes_is_strictly_non_monotone(postures: &[Self]) -> [bool; Self::FIELD_COUNT] {
+        let asc = Self::axes_is_strictly_ascending(postures);
+        let desc = Self::axes_is_strictly_descending(postures);
         let mut result = [false; Self::FIELD_COUNT];
         let mut i = 0;
         while i < Self::FIELD_COUNT {
@@ -36443,6 +36912,715 @@ mod tests {
             while i < ResourceLimits::FIELD_COUNT {
                 assert!(!NM_MASK_HOMOGENEOUS[i]);
                 assert!(NM_MASK_ZIGZAG[i]);
+                i += 1;
+            }
+        };
+    }
+
+    // ── ResourceLimits::is_strictly_non_monotone /
+    //   ::axes_is_strictly_non_monotone — STRICT peers of
+    //   is_non_monotone + axes_is_non_monotone one STRICTNESS axis over
+    //   via `!is_strictly_ascending && !is_strictly_descending` (scalar)
+    //   and `!axes_is_strictly_ascending[i] &&
+    //   !axes_is_strictly_descending[i]` (per-axis-mask). De Morgan
+    //   complements of is_strictly_monotone + axes_is_strictly_monotone
+    //   one COMBINATOR axis over on the SAME two strict direction
+    //   primitives. Open the STRICTNESS row of the (monotone,
+    //   non-monotone) 2-cell combinator-dual face at both the scalar and
+    //   per-axis-mask surfaces past the just-closed non-strict
+    //   axes_is_non_monotone corner. LOAD-BEARING INVERSION: the
+    //   direction row carries `strict ⇒ non-strict`; this negation-
+    //   conjunction column FLIPS the direction to `non-strict ⇒ strict`
+    //   at both projection kinds.
+    //   ─────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn resource_limits_is_strictly_non_monotone_empty_slice_is_false() {
+        // Empty-slice vacuous falsehood — both strict direction
+        // projections accept vacuously; the negation-conjunction closes
+        // on both arms. Sibling of is_non_monotone's empty-slice
+        // falsehood one STRICTNESS axis over.
+        assert!(!ResourceLimits::is_strictly_non_monotone(&[]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_non_monotone_singleton_is_false() {
+        // Singleton vacuous falsehood — one-element slice contains no
+        // consecutive pairs; both strict direction projections
+        // vacuously accept.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert!(
+                !ResourceLimits::is_strictly_non_monotone(&[a]),
+                "is_strictly_non_monotone(&[a]) must be false on singleton {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_non_monotone_of_diagonal_duplicate_is_true() {
+        // Diagonal-duplicate acceptance — LOAD-BEARING DISCRIMINATING
+        // arm past is_non_monotone: `lt` AND `gt` are BOTH IRREFLEXIVE,
+        // so both strict direction projections reject at the single
+        // consecutive pair and the negation-conjunction opens on both
+        // arms. FLIPS the sign of is_non_monotone's diagonal verdict
+        // (all-false via reflexivity) one STRICTNESS axis over.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert!(
+                ResourceLimits::is_strictly_non_monotone(&[a, a]),
+                "is_strictly_non_monotone(&[a, a]) must be true on {a:?}",
+            );
+            assert!(
+                !ResourceLimits::is_non_monotone(&[a, a]),
+                "is_non_monotone peer must reject the diagonal duplicate on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_non_monotone_rejects_the_ascending_shipped_preset_triple() {
+        // Ascending shipped-preset triple rejection — the strictly
+        // increasing chain opens is_strictly_ascending, closing the
+        // negation-conjunction. Peer of the descending rejection one
+        // PERMUTATION axis over.
+        assert!(!ResourceLimits::is_strictly_non_monotone(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_non_monotone_rejects_the_descending_shipped_preset_triple() {
+        // Descending shipped-preset triple rejection — the reversed
+        // strictly-decreasing chain opens is_strictly_descending,
+        // closing the negation-conjunction.
+        assert!(!ResourceLimits::is_strictly_non_monotone(&[
+            UNBOUNDED_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_non_monotone_accepts_the_hand_authored_antichain_pair() {
+        // Antichain-pair acceptance — the two incomparable hand-authored
+        // asymmetric postures fail BOTH strict direction projections on
+        // the single consecutive pair; the negation-conjunction opens on
+        // both arms. Pinned in both orderings.
+        assert!(ResourceLimits::is_strictly_non_monotone(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+        assert!(ResourceLimits::is_strictly_non_monotone(&[
+            HAND_AUTHORED_OTHER_POSTURE,
+            HAND_AUTHORED_MID_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_non_monotone_holds_on_the_zigzag_chain_permutation() {
+        // Zig-zag chain-permutation acceptance — both strict direction
+        // projections reject on the zig-zag; the negation-conjunction
+        // opens on both arms. Pinned in both zig-zag permutations.
+        assert!(ResourceLimits::is_strictly_non_monotone(&[
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        assert!(ResourceLimits::is_strictly_non_monotone(&[
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_non_monotone_iff_negation_conjunction_of_is_strictly_ascending_and_is_strictly_descending_on_every_shipped_slice(
+    ) {
+        // Structural round-trip — the scalar verdict is definitionally
+        // the negation-conjunction of the two strict direction
+        // projections. Pinned across arity 0-3 over all five shipped
+        // presets, catching any future rewrite that drifts silently
+        // from the composition contract.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        assert_eq!(
+            ResourceLimits::is_strictly_non_monotone(&[]),
+            !ResourceLimits::is_strictly_ascending(&[])
+                && !ResourceLimits::is_strictly_descending(&[]),
+        );
+        for a in presets {
+            let s1 = [a];
+            assert_eq!(
+                ResourceLimits::is_strictly_non_monotone(&s1),
+                !ResourceLimits::is_strictly_ascending(&s1)
+                    && !ResourceLimits::is_strictly_descending(&s1),
+                "arity-1 divergence on {a:?}",
+            );
+            for b in presets {
+                let s2 = [a, b];
+                assert_eq!(
+                    ResourceLimits::is_strictly_non_monotone(&s2),
+                    !ResourceLimits::is_strictly_ascending(&s2)
+                        && !ResourceLimits::is_strictly_descending(&s2),
+                    "arity-2 divergence on ({a:?}, {b:?})",
+                );
+                for c in presets {
+                    let s3 = [a, b, c];
+                    assert_eq!(
+                        ResourceLimits::is_strictly_non_monotone(&s3),
+                        !ResourceLimits::is_strictly_ascending(&s3)
+                            && !ResourceLimits::is_strictly_descending(&s3),
+                        "arity-3 divergence on ({a:?}, {b:?}, {c:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_non_monotone_iff_negation_of_is_strictly_monotone_on_every_shipped_slice(
+    ) {
+        // De Morgan complement — the scalar strict-non-monotone verdict
+        // is definitionally the complement of the scalar strict-monotone
+        // verdict at is_strictly_monotone one COMBINATOR axis over.
+        // Follows from De Morgan on the underlying strict direction
+        // projections `!(a || b) == !a && !b`. Pinned across the full
+        // 5^3 preset matrix as the load-bearing partition contract for
+        // the (strict-monotone, strict-non-monotone) 2-cell face on the
+        // scalar combinator column.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        ResourceLimits::is_strictly_non_monotone(&slice),
+                        !ResourceLimits::is_strictly_monotone(&slice),
+                        "is_strictly_non_monotone must equal \
+                         !is_strictly_monotone on slice ({a:?}, {b:?}, {c:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_non_monotone_implies_is_strictly_non_monotone_on_every_shipped_slice() {
+        // Refinement-INVERSION theorem — is_non_monotone ⇒
+        // is_strictly_non_monotone across the full 5^3 preset matrix.
+        // LOAD-BEARING: on the direction row, `strict ⇒ non-strict`;
+        // on this negation-conjunction column, the direction FLIPS.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    if ResourceLimits::is_non_monotone(&slice) {
+                        assert!(
+                            ResourceLimits::is_strictly_non_monotone(&slice),
+                            "is_non_monotone ⇒ is_strictly_non_monotone on \
+                             slice ({a:?}, {b:?}, {c:?})",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_non_monotone_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the sequence-level scalar strict-non-monotone
+        // projection is evaluable in const context, so a caller can pin
+        // a strict-non-monotone-sequence identity at compile time.
+        const _: bool = ResourceLimits::is_strictly_non_monotone(&[]);
+        const _: bool = ResourceLimits::is_strictly_non_monotone(&[EMPTY_RESOURCE_LIMITS]);
+        const _: () = assert!(!ResourceLimits::is_strictly_non_monotone(&[
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ]));
+        const _: () = assert!(ResourceLimits::is_strictly_non_monotone(&[
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ]));
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_non_monotone_empty_slice_is_all_false() {
+        // Empty-slice all-false — both underlying strict direction
+        // projections return [true; FIELD_COUNT] vacuously; the per-
+        // axis negation-conjunction closes at every axis. DE MORGAN
+        // DUAL of axes_is_strictly_monotone's empty-slice all-true one
+        // COMBINATOR axis over.
+        assert_eq!(
+            ResourceLimits::axes_is_strictly_non_monotone(&[]),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_non_monotone_singleton_is_all_false() {
+        // Singleton all-false — one-element slice contains no
+        // consecutive pairs; both underlying strict direction masks
+        // preserve the `true` seed and the per-axis negation-
+        // conjunction closes at every axis.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                ResourceLimits::axes_is_strictly_non_monotone(&[a]),
+                [false; ResourceLimits::FIELD_COUNT],
+                "axes_is_strictly_non_monotone(&[a]) must be all-false on singleton {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_non_monotone_of_diagonal_duplicate_is_all_true() {
+        // Diagonal-duplicate ALL-TRUE — LOAD-BEARING DISCRIMINATING arm
+        // past the non-strict peer: axes_lt AND axes_gt are per-axis
+        // IRREFLEXIVE, so both underlying strict direction masks REJECT
+        // at every axis and the per-axis negation-conjunction OPENS
+        // uniformly. FLIPS the sign of axes_is_non_monotone's diagonal
+        // (all-false via reflexivity) one STRICTNESS axis over.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                ResourceLimits::axes_is_strictly_non_monotone(&[a, a]),
+                [true; ResourceLimits::FIELD_COUNT],
+                "axes_is_strictly_non_monotone(&[a, a]) must be all-true on {a:?}",
+            );
+            assert_eq!(
+                ResourceLimits::axes_is_non_monotone(&[a, a]),
+                [false; ResourceLimits::FIELD_COUNT],
+                "axes_is_non_monotone peer must uniformly reject the diagonal duplicate on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_non_monotone_rejects_the_ascending_shipped_preset_triple() {
+        // Ascending shipped-preset triple all-false — every axis's
+        // `0 < positive-constant < usize::MAX` projection is a
+        // STRICTLY increasing usize chain, so axes_is_strictly_ascending
+        // accepts at every axis and the per-axis negation-conjunction
+        // closes uniformly.
+        assert_eq!(
+            ResourceLimits::axes_is_strictly_non_monotone(&[
+                EMPTY_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                UNBOUNDED_RESOURCE_LIMITS,
+            ]),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_non_monotone_rejects_the_descending_shipped_preset_triple()
+    {
+        // Descending shipped-preset triple all-false — the reversed
+        // strictly-decreasing chain accepts the axes_is_strictly_descending
+        // arm at every axis, closing the per-axis negation-conjunction.
+        assert_eq!(
+            ResourceLimits::axes_is_strictly_non_monotone(&[
+                UNBOUNDED_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+                EMPTY_RESOURCE_LIMITS,
+            ]),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_non_monotone_holds_on_the_zigzag_chain_permutation() {
+        // Zig-zag chain-permutation uniform ACCEPTANCE — every axis
+        // carries the SAME (positive → zero → usize::MAX) zig-zag, so
+        // every axis rejects BOTH strict direction arms and the per-
+        // axis negation-conjunction opens uniformly. LOAD-BEARING
+        // positive arm on a slice that is neither strictly ascending
+        // nor strictly descending as a sequence on any axis. Pinned in
+        // both zig-zag permutations.
+        assert_eq!(
+            ResourceLimits::axes_is_strictly_non_monotone(&[
+                DEFAULT_RESOURCE_LIMITS,
+                EMPTY_RESOURCE_LIMITS,
+                UNBOUNDED_RESOURCE_LIMITS,
+            ]),
+            [true; ResourceLimits::FIELD_COUNT],
+        );
+        assert_eq!(
+            ResourceLimits::axes_is_strictly_non_monotone(&[
+                DEFAULT_RESOURCE_LIMITS,
+                UNBOUNDED_RESOURCE_LIMITS,
+                EMPTY_RESOURCE_LIMITS,
+            ]),
+            [true; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_non_monotone_iff_per_axis_negation_conjunction_of_axes_strict_direction_masks_on_every_shipped_slice(
+    ) {
+        // Structural round-trip — the mask bit at every axis is
+        // definitionally the per-axis NEGATION-CONJUNCTION of the two
+        // strict direction masks. Pinned across the full 5^3 preset
+        // matrix, catching any future rewrite of any of the three
+        // underlying projections that drifts silently from the
+        // composition contract.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    let nm = ResourceLimits::axes_is_strictly_non_monotone(&slice);
+                    let asc = ResourceLimits::axes_is_strictly_ascending(&slice);
+                    let desc = ResourceLimits::axes_is_strictly_descending(&slice);
+                    for i in 0..ResourceLimits::FIELD_COUNT {
+                        assert_eq!(
+                            nm[i],
+                            !asc[i] && !desc[i],
+                            "axes_is_strictly_non_monotone[{i}] must equal \
+                             !axes_is_strictly_ascending[{i}] && \
+                             !axes_is_strictly_descending[{i}] on slice \
+                             ({a:?}, {b:?}, {c:?})",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_non_monotone_iff_negation_of_axes_is_strictly_monotone_on_every_shipped_slice(
+    ) {
+        // De Morgan complement — the per-axis negation-conjunction bit
+        // is definitionally the per-axis complement of the per-axis
+        // disjunction bit at axes_is_strictly_monotone one COMBINATOR
+        // axis over. Follows from De Morgan on the underlying strict
+        // direction projections `!(a || b) == !a && !b` per axis.
+        // Pinned across the full 5^3 preset matrix as the load-bearing
+        // per-axis partition contract for the (strict-monotone,
+        // strict-non-monotone) 2-cell face on the per-axis-mask
+        // combinator column.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    let nm = ResourceLimits::axes_is_strictly_non_monotone(&slice);
+                    let mono = ResourceLimits::axes_is_strictly_monotone(&slice);
+                    for i in 0..ResourceLimits::FIELD_COUNT {
+                        assert_eq!(
+                            nm[i], !mono[i],
+                            "axes_is_strictly_non_monotone[{i}] must equal \
+                             !axes_is_strictly_monotone[{i}] on slice \
+                             ({a:?}, {b:?}, {c:?})",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_non_monotone_refines_axes_is_strictly_non_monotone_per_axis_on_every_shipped_slice(
+    ) {
+        // Per-axis refinement-INVERSION — axes_is_non_monotone[i] ⇒
+        // axes_is_strictly_non_monotone[i] across the full 5^3 preset
+        // matrix. LOAD-BEARING: on the direction row, `strict ⇒
+        // non-strict`; on this negation-conjunction column, the
+        // direction FLIPS to `non-strict ⇒ strict`, via the boolean-
+        // lattice contrapositive of the underlying strict-refines-non-
+        // strict direction refinements.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    let non_strict = ResourceLimits::axes_is_non_monotone(&slice);
+                    let strict = ResourceLimits::axes_is_strictly_non_monotone(&slice);
+                    for i in 0..ResourceLimits::FIELD_COUNT {
+                        if non_strict[i] {
+                            assert!(
+                                strict[i],
+                                "axes_is_non_monotone[{i}] ⇒ \
+                                 axes_is_strictly_non_monotone[{i}] on slice \
+                                 ({a:?}, {b:?}, {c:?})",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_non_monotone_agrees_with_pointwise_field_strict_non_monotone_projection(
+    ) {
+        // Positional-alignment cross-check — for every arity-3 slice
+        // from the 5-preset matrix, mask position `i` agrees with the
+        // direct per-axis strict-non-monotone verdict `!(a[i] < b[i]
+        // && b[i] < c[i]) && !(a[i] > b[i] && b[i] > c[i])` on the
+        // `i`-th field_values component.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    let mask = ResourceLimits::axes_is_strictly_non_monotone(&slice);
+                    let av = a.field_values();
+                    let bv = b.field_values();
+                    let cv = c.field_values();
+                    for i in 0..ResourceLimits::FIELD_COUNT {
+                        let asc_i = av[i] < bv[i] && bv[i] < cv[i];
+                        let desc_i = av[i] > bv[i] && bv[i] > cv[i];
+                        let expected = !asc_i && !desc_i;
+                        assert_eq!(
+                            mask[i], expected,
+                            "axes_is_strictly_non_monotone[{i}] must equal \
+                             pointwise field strict-non-monotone verdict on \
+                             slice ({a:?}, {b:?}, {c:?})",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_constant_refines_axes_is_strictly_non_monotone_per_axis_from_arity_two_on_every_shipped_slice(
+    ) {
+        // Per-axis 2-cell partition + constant refinement — the strict
+        // pair (axes_is_strictly_monotone, axes_is_strictly_non_monotone)
+        // forms a clean De Morgan 2-cell partition at every arity, and
+        // axes_is_constant (on the NON-STRICT direction pair one
+        // STRICTNESS axis under) REFINES the strict-non-monotone cell at
+        // arity ≥ 2 rather than sitting in a disjoint third cell: a
+        // constant projection at arity ≥ 2 carries a repetition that
+        // irreflexivity of strict `<` / `>` rules out, so
+        // axes_is_constant[i] ⇒ axes_is_strictly_non_monotone[i]. At
+        // arity 0 or 1 the refinement is vacuous (strict-non-monotone
+        // is all-false everywhere). LOAD-BEARING: the same three-cell
+        // face that partitions cleanly on the NON-STRICT combinator
+        // column COLLAPSES on the STRICT column into a 2-cell partition
+        // with constant refining one cell.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                let s2 = [a, b];
+                let cst = ResourceLimits::axes_is_constant(&s2);
+                let strict_mono = ResourceLimits::axes_is_strictly_monotone(&s2);
+                let strict_nm = ResourceLimits::axes_is_strictly_non_monotone(&s2);
+                for i in 0..ResourceLimits::FIELD_COUNT {
+                    assert_eq!(
+                        usize::from(strict_mono[i]) + usize::from(strict_nm[i]),
+                        1,
+                        "(strict-monotone, strict-non-monotone) must \
+                         partition axis {i} on arity-2 slice ({a:?}, \
+                         {b:?}) — got strict_monotone={}, \
+                         strict_non_monotone={}",
+                        strict_mono[i],
+                        strict_nm[i],
+                    );
+                    if cst[i] {
+                        assert!(
+                            strict_nm[i],
+                            "axes_is_constant[{i}] ⇒ \
+                             axes_is_strictly_non_monotone[{i}] on \
+                             arity-2 slice ({a:?}, {b:?})",
+                        );
+                    }
+                }
+                for c in presets {
+                    let s3 = [a, b, c];
+                    let cst = ResourceLimits::axes_is_constant(&s3);
+                    let strict_mono = ResourceLimits::axes_is_strictly_monotone(&s3);
+                    let strict_nm = ResourceLimits::axes_is_strictly_non_monotone(&s3);
+                    for i in 0..ResourceLimits::FIELD_COUNT {
+                        assert_eq!(
+                            usize::from(strict_mono[i]) + usize::from(strict_nm[i]),
+                            1,
+                            "(strict-monotone, strict-non-monotone) must \
+                             partition axis {i} on arity-3 slice ({a:?}, \
+                             {b:?}, {c:?}) — got strict_monotone={}, \
+                             strict_non_monotone={}",
+                            strict_mono[i],
+                            strict_nm[i],
+                        );
+                        if cst[i] {
+                            assert!(
+                                strict_nm[i],
+                                "axes_is_constant[{i}] ⇒ \
+                                 axes_is_strictly_non_monotone[{i}] on \
+                                 arity-3 slice ({a:?}, {b:?}, {c:?})",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_non_monotone_fold_true_implies_is_strictly_non_monotone_on_every_shipped_slice(
+    ) {
+        // Fold-REFINES-scalar contract (one-directional) — if every
+        // axis carries a per-axis strict zig-zag (fold true), then
+        // neither whole-posture strict direction projection can
+        // accept, so is_strictly_non_monotone holds. The converse
+        // fails on the [MID, OTHER] witness, pinned in a separate
+        // discriminating test.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    let mask = ResourceLimits::axes_is_strictly_non_monotone(&slice);
+                    let folded = mask.iter().all(|&bit| bit);
+                    if folded {
+                        assert!(
+                            ResourceLimits::is_strictly_non_monotone(&slice),
+                            "fold(axes_is_strictly_non_monotone) true must \
+                             imply is_strictly_non_monotone on slice \
+                             ({a:?}, {b:?}, {c:?})",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_non_monotone_true_does_not_recover_axes_is_strictly_non_monotone_fold_on_the_load_bearing_mixed_direction_witness(
+    ) {
+        // Canonical fold-scalar DIVERGENCE witness (STRICT peer) — the
+        // scalar-refines-fold direction FAILS on [MID, OTHER] under
+        // the strict combinator column too. Every 2-element slice of
+        // DISTINCT postures partitions each axis trichotomously into
+        // `<` or `>`, so at every axis EITHER axes_lt[i] OR axes_gt[i]
+        // accepts and the per-axis negation-conjunction closes
+        // uniformly (fold false). Whole-posture is_strictly_non_monotone
+        // OPENS because the two hand-authored postures are incomparable
+        // — three axes have MID > OTHER (falsifying is_strictly_ascending)
+        // and three axes have MID < OTHER (falsifying is_strictly_descending).
+        // The STRICTNESS lift PRESERVES the fold-refines-scalar
+        // refinement direction from the non-strict axes_is_non_monotone
+        // one STRICTNESS axis under.
+        let slice = [HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE];
+        let mask = ResourceLimits::axes_is_strictly_non_monotone(&slice);
+        assert_eq!(mask, [false; ResourceLimits::FIELD_COUNT]);
+        assert!(!mask.iter().any(|&bit| bit));
+        assert!(ResourceLimits::is_strictly_non_monotone(&slice));
+        // Sibling: axes_is_strictly_monotone opens all-true while
+        // is_strictly_monotone is false on the SAME slice — the STRICT
+        // peer of the axes_is_monotone divergence one STRICTNESS axis
+        // under.
+        let mono_mask = ResourceLimits::axes_is_strictly_monotone(&slice);
+        assert_eq!(mono_mask, [true; ResourceLimits::FIELD_COUNT]);
+        assert!(!ResourceLimits::is_strictly_monotone(&slice));
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_non_monotone_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the per-axis-mask sequence-level strict-non-
+        // monotone projection is evaluable in const context, so a
+        // caller can pin a per-axis strict-non-monotone identity at
+        // compile time.
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_strictly_non_monotone(&[]);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_strictly_non_monotone(&[EMPTY_RESOURCE_LIMITS]);
+        const SNM_MASK_DIAGONAL: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_strictly_non_monotone(&[
+                DEFAULT_RESOURCE_LIMITS,
+                DEFAULT_RESOURCE_LIMITS,
+            ]);
+        const SNM_MASK_ZIGZAG: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::axes_is_strictly_non_monotone(&[
+                DEFAULT_RESOURCE_LIMITS,
+                EMPTY_RESOURCE_LIMITS,
+                UNBOUNDED_RESOURCE_LIMITS,
+            ]);
+        const _: () = {
+            let mut i = 0;
+            while i < ResourceLimits::FIELD_COUNT {
+                assert!(SNM_MASK_DIAGONAL[i]);
+                assert!(SNM_MASK_ZIGZAG[i]);
                 i += 1;
             }
         };

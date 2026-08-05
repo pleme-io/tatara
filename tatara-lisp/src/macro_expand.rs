@@ -2489,6 +2489,177 @@ impl ResourceLimits {
         lower.leq(self) && self.leq(upper)
     }
 
+    /// Per-axis pointwise bracket-membership mask across the six ceilings —
+    /// the ATOMIC per-axis containment vector whose CONJUNCTION over the
+    /// six positions equals [`Self::within`]. `a.axes_within(lower,
+    /// upper)[i]` is `true` iff the `i`-th ceiling of `a` sits at or above
+    /// `lower`'s AND at or below `upper`'s `i`-th ceiling; folding the six
+    /// results through `&&` recovers `a.within(lower, upper)` verbatim, so
+    /// this projection DECOMPOSES the single-bit bracket-membership verdict
+    /// into its six per-axis witnesses without introducing new relation
+    /// semantics past what [`Self::within`] already carries.
+    ///
+    /// The per-axis MASK peer of [`Self::within`] one PROJECTION-KIND axis
+    /// over on the bracket-primitive surface: where `within` decides the
+    /// single-bit three-input bracket-containment verdict between `self`
+    /// and a `[lower, upper]` bracket, this returns the six per-axis
+    /// witnesses of that containment. Together the pair (`within`,
+    /// `axes_within`) closes the (single-bit verdict, per-axis mask) row on
+    /// the bracket-membership surface, exactly the way (`leq`, `axes_leq`)
+    /// / (`geq`, `axes_geq`) / (`eq`, `axes_eq`) / (`ne`, `axes_ne`) /
+    /// (`lt`, `axes_lt`) / (`gt`, `axes_gt`) close the SAME
+    /// (single-bit verdict, per-axis mask) row on the pairwise-relation
+    /// surface one ARITY axis over (two-input pairwise → three-input
+    /// bracket). Peer of [`Self::clamp`] one PRIMITIVE-KIND axis over on
+    /// the (combinator, predicate) × (single-bit, per-axis) face of the
+    /// bracket-primitive surface: where `clamp` PROJECTS an arbitrary input
+    /// into the bracket at the WHOLE-POSTURE level and `within` DECIDES
+    /// bracket membership at the single-bit level, `axes_within` DECIDES
+    /// bracket membership at the per-axis level — the finest-grain view
+    /// of the bracket-containment structure.
+    ///
+    /// Encoded as the per-index intersection of `lower.axes_leq(self)`
+    /// (the six per-axis "above the floor" witnesses) with
+    /// `self.axes_leq(upper)` (the six per-axis "below the ceiling"
+    /// witnesses). One primitive delegation per direction to
+    /// [`Self::axes_leq`] — the non-strict pairwise-mask encoding lives at
+    /// exactly one implementation site, so a future re-derivation of
+    /// `axes_leq` (e.g. to a different pointwise comparison) propagates to
+    /// `axes_within` mechanically rather than requiring a per-method
+    /// fix-up. Mirrors the single-bit `within`'s `lower.leq(self) &&
+    /// self.leq(upper)` two-primitive-conjunction encoding one PROJECTION-
+    /// KIND axis over — the same containment-direction encoding that
+    /// closes `within` at the single-bit level closes `axes_within` at the
+    /// per-axis level, with the (lower, upper) parameter order preserved
+    /// so the consumer cannot silently swap the two bounds.
+    ///
+    /// **Conjunction-recovers-`within` contract**: for every posture
+    /// triple `(a, lower, upper)`, folding `a.axes_within(lower, upper)`
+    /// through `&&` over the six positions equals `a.within(lower,
+    /// upper)` — pinned by
+    /// `resource_limits_axes_within_conjunction_agrees_with_within` on the
+    /// canonical preset roster. Mirrors the analogous conjunction-recovers-
+    /// scalar contracts on `axes_leq` / `axes_geq` / `axes_eq` / `axes_ne`
+    /// / `axes_lt` / `axes_gt` one ARITY axis over.
+    ///
+    /// **Positional-alignment contract**: for every posture triple
+    /// `(a, lower, upper)` and every index `i in 0..FIELD_COUNT`,
+    /// `a.axes_within(lower, upper)[i] == (lower.field_values()[i] <=
+    /// a.field_values()[i] && a.field_values()[i] <= upper.field_values()
+    /// [i])` — pinned by
+    /// `resource_limits_axes_within_agrees_with_pointwise_field_comparison`
+    /// via cross-reference with [`Self::field_values`]. Guarantees the
+    /// per-axis mask preserves the same canonical index-to-axis mapping
+    /// the SIBLING projections carry.
+    ///
+    /// **Intersection-encoding contract**: for every posture triple
+    /// `(a, lower, upper)` and every index `i`,
+    /// `a.axes_within(lower, upper)[i] == lower.axes_leq(a)[i] &&
+    /// a.axes_leq(upper)[i]` — the per-axis MASK peer of the single-bit
+    /// `within(a, lower, upper) == lower.leq(a) && a.leq(upper)` law.
+    /// Pinned by
+    /// `resource_limits_axes_within_is_intersection_of_axes_leq_at_bounds`
+    /// so the intersection encoding is verified at the per-axis mask
+    /// level, not merely at the fold-recovered scalar.
+    ///
+    /// **Extrema-bracket-identity contract**: `a.axes_within(
+    /// EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS) == [true;
+    /// FIELD_COUNT]` for every posture — the widest possible bracket
+    /// admits every input on every axis, since `EMPTY.leq(a) == true` and
+    /// `a.leq(UNBOUNDED) == true` on every axis by the bounded-lattice
+    /// pole axioms. The per-axis MASK peer of `within`'s extrema-bracket
+    /// identity one PROJECTION-KIND axis over. Pinned by
+    /// `resource_limits_axes_within_of_lattice_extrema_is_all_true`.
+    ///
+    /// **Reflexive-bracket contract**: `a.axes_within(a, a) == [true;
+    /// FIELD_COUNT]` for every posture — the zero-width bracket at `a`
+    /// itself admits `a` on every axis by reflexivity of `axes_leq`. The
+    /// per-axis MASK peer of `within`'s reflexive-bracket identity one
+    /// PROJECTION-KIND axis over. Pinned by
+    /// `resource_limits_axes_within_of_self_is_reflexive`.
+    ///
+    /// **Equal-bounds-collapses-to-axes_eq contract**: `a.axes_within(x,
+    /// x) == a.axes_eq(x)` for every posture pair — the zero-width
+    /// bracket admits `a` on axis `i` iff `a`'s `i`-th ceiling equals
+    /// `x`'s, which is exactly [`Self::axes_eq`]'s per-axis verdict. Pinned
+    /// by `resource_limits_axes_within_of_equal_bounds_agrees_with_axes_eq`
+    /// — the per-axis MASK peer of `within`'s degenerate-bracket collapse
+    /// (`a.within(x, x) ⇔ a == x`) one PROJECTION-KIND axis over.
+    ///
+    /// **Diagnostic emission use case**: a consumer that decides
+    /// `!a.within(lower, upper)` and wants to name the offending axes zips
+    /// [`Self::FIELD_NAMES`] against `a.axes_within(lower, upper)` and
+    /// filters the `false` entries — an OBSERVABILITY surface for the
+    /// bracket-membership predicate the single-bit `within` verdict does
+    /// not expose. The same OBSERVABILITY use case the pairwise-mask
+    /// family carries at the two-input relation surface, lifted onto the
+    /// three-input bracket relation.
+    ///
+    /// `const fn` so a caller can pin a preset-bracket-membership per-axis
+    /// verdict at compile time (`const _: [bool;
+    /// ResourceLimits::FIELD_COUNT] = DEFAULT_RESOURCE_LIMITS.axes_within(
+    /// EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS);`) — the const-fn
+    /// peer of the const-eval evaluability every other primitive on the
+    /// [`ResourceLimits`] algebra carries. `Copy` on [`ResourceLimits`]
+    /// lets the const-fn body pass `self`, `lower`, and `upper` by value
+    /// into the delegated `axes_leq` calls without an explicit `.clone()`
+    /// (which const-fn would not permit anyway), and `bool` is trivially
+    /// `Copy` in the array element position.
+    ///
+    /// Pre-lift, a caller wanting per-axis bracket-membership verdicts
+    /// either (a) composed the six-primitive scaffolding at the call site
+    /// as six `(lower.field_values()[i] <= a.field_values()[i]) &&
+    /// (a.field_values()[i] <= upper.field_values()[i])` conjunctions — the
+    /// same six-inline-primitive cascade the axes_* family lifts one arity
+    /// axis over — or (b) computed the two masks and AND-ed them per
+    /// position at the consumer, replicating the intersection encoding at
+    /// every call site. Post-lift the per-axis mask binds at ONE typed
+    /// method whose signature carries the containment direction (`lower ≤
+    /// self ≤ upper`) into the type system rather than the consumer
+    /// composing the per-position conjunction at every call site.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-posture-triple projection into the six-bool bracket-membership
+    /// vector is itself a typed named exit rather than a per-consumer
+    /// inline six-primitive cascade. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; the bracket-membership predicate on
+    /// three preset-carried resource proofs is decomposed into its six
+    /// per-axis witnesses at TYPE level, so consumers reasoning about
+    /// WHICH axes carry the bracket-membership verdict bind through ONE
+    /// typed primitive rather than re-running the two-primitive
+    /// conjunction on each axis. THEORY.md §V.1 — knowable platform; the
+    /// per-axis pointwise bracket-membership mask becomes a TYPE-level
+    /// operation on the posture algebra rather than a per-consumer field-
+    /// access cascade — with the per-axis granularity baked in so the
+    /// consumer cannot silently drop an axis from the diagnostic (the
+    /// array's fixed arity forces every axis to appear).
+    ///
+    /// Frontier inspiration: Idris's `zipWith3 between` over three
+    /// `Vec n Nat` producing a `Vec n Bool` — the three-input bracket
+    /// peer of the two-input `zipWith (<=)` shape [`Self::axes_leq`]
+    /// cites, closing the bracket-containment direction pair at the
+    /// per-position vector level. APL / J's rank-lifted `∧.≤` two-argument
+    /// bracket operator producing a per-position bit array between three
+    /// conformable arrays — the SAME lifted-bracket shape lifted onto
+    /// typed structs. Translation through pleme-io primitives: a
+    /// `const fn` returning a `[bool; N]` fixed-size array on the typed
+    /// [`ResourceLimits`] algebra encoded as the per-index intersection of
+    /// two already-lifted `axes_leq` calls, rather than a runtime vector
+    /// operation or a second inline six-primitive cascade.
+    #[must_use]
+    pub const fn axes_within(self, lower: Self, upper: Self) -> [bool; Self::FIELD_COUNT] {
+        let above_lower = lower.axes_leq(self);
+        let below_upper = self.axes_leq(upper);
+        [
+            above_lower[0] && below_upper[0],
+            above_lower[1] && below_upper[1],
+            above_lower[2] && below_upper[2],
+            above_lower[3] && below_upper[3],
+            above_lower[4] && below_upper[4],
+            above_lower[5] && below_upper[5],
+        ]
+    }
+
     /// Boolean `leq`-conjunction across a slice of postures — `self` sits
     /// at-or-below every operand in `postures`. `a.is_lower_bound_of(&[b,
     /// c, d])` holds iff `a.leq(b) && a.leq(c) && a.leq(d)`: on every
@@ -23738,6 +23909,266 @@ mod tests {
             ),
             "the within-gated candidate's arity ceiling MUST reach the register-time check; got: {err:?}",
         );
+    }
+
+    // ── ResourceLimits::axes_within — per-axis bracket-membership mask ─
+    //   The per-axis MASK peer of `within` one PROJECTION-KIND axis over,
+    //   closing the (single-bit verdict, per-axis mask) row on the
+    //   bracket-membership surface. See the docstring on
+    //   `ResourceLimits::axes_within` for the placement on the
+    //   (combinator, predicate) × (single-bit, per-axis) face.
+
+    #[test]
+    fn resource_limits_axes_within_conjunction_agrees_with_within() {
+        // Fold-recovers-scalar pin — for every posture triple
+        // `(a, lower, upper)`, folding `a.axes_within(lower, upper)`
+        // through `&&` over the six positions equals `a.within(lower,
+        // upper)` verbatim. Verifies the decomposition-composition
+        // round-trip: the per-axis mask is a strictly-finer projection of
+        // the single-bit bracket-membership verdict, so re-composing it
+        // through `&&` recovers the single-bit exactly. Symmetric peer of
+        // `resource_limits_axes_leq_conjunction_agrees_with_leq` /
+        // `resource_limits_axes_eq_conjunction_agrees_with_eq` one ARITY
+        // axis over on the bracket surface.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for lower in roster {
+                for upper in roster {
+                    let mask = a.axes_within(lower, upper);
+                    let mut folded = true;
+                    let mut i = 0;
+                    while i < ResourceLimits::FIELD_COUNT {
+                        folded = folded && mask[i];
+                        i += 1;
+                    }
+                    assert_eq!(
+                        folded,
+                        a.within(lower, upper),
+                        "axes_within({a:?}, {lower:?}, {upper:?}) folded through && must equal within",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_within_agrees_with_pointwise_field_comparison() {
+        // Positional-alignment pin — for every posture triple
+        // `(a, lower, upper)` and every index `i`,
+        // `a.axes_within(lower, upper)[i] == (lower.field_values()[i] <=
+        // a.field_values()[i] && a.field_values()[i] <=
+        // upper.field_values()[i])`. Cross-references the per-axis mask
+        // with the canonical `field_values()` projection on the same
+        // discriminating roster the SIBLING projections use, guaranteeing
+        // the per-axis mask preserves the same canonical index-to-axis
+        // mapping. Symmetric peer of
+        // `resource_limits_axes_leq_agrees_with_pointwise_field_comparison`
+        // one ARITY axis over.
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for lower in roster {
+                for upper in roster {
+                    let mask = a.axes_within(lower, upper);
+                    let av = a.field_values();
+                    let lv = lower.field_values();
+                    let uv = upper.field_values();
+                    let mut i = 0;
+                    while i < ResourceLimits::FIELD_COUNT {
+                        assert_eq!(
+                            mask[i],
+                            lv[i] <= av[i] && av[i] <= uv[i],
+                            "axes_within({a:?}, {lower:?}, {upper:?})[{i}] must equal field_values bracket comparison",
+                        );
+                        i += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_within_is_intersection_of_axes_leq_at_bounds() {
+        // Intersection-encoding pin — for every posture triple
+        // `(a, lower, upper)` and every index `i`,
+        // `a.axes_within(lower, upper)[i] == lower.axes_leq(a)[i] &&
+        // a.axes_leq(upper)[i]`. The per-axis MASK peer of the single-bit
+        // `within(a, lower, upper) == lower.leq(a) && a.leq(upper)` law.
+        // Verifies the intersection encoding at the per-axis mask level —
+        // not merely at the fold-recovered scalar, so a future
+        // re-derivation of `axes_within` that broke the intersection on
+        // any single axis fires this pin at the offending axis before the
+        // scalar fold masks it. Symmetric peer of
+        // `resource_limits_axes_eq_is_intersection_of_axes_leq_and_axes_geq`
+        // one ARITY axis over (pairwise → bracket).
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for lower in roster {
+                for upper in roster {
+                    let within = a.axes_within(lower, upper);
+                    let above_lower = lower.axes_leq(a);
+                    let below_upper = a.axes_leq(upper);
+                    let mut i = 0;
+                    while i < ResourceLimits::FIELD_COUNT {
+                        assert_eq!(
+                            within[i],
+                            above_lower[i] && below_upper[i],
+                            "axes_within({a:?}, {lower:?}, {upper:?})[{i}] must equal lower.axes_leq(a)[{i}] && a.axes_leq(upper)[{i}]",
+                        );
+                        i += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_within_of_lattice_extrema_is_all_true() {
+        // Extrema-bracket-identity pin — every posture sits within the
+        // widest possible bracket `[EMPTY_RESOURCE_LIMITS,
+        // UNBOUNDED_RESOURCE_LIMITS]` on every axis, since `EMPTY.leq(a)
+        // == true` and `a.leq(UNBOUNDED) == true` per-axis by the
+        // bounded-lattice pole axioms. The per-axis MASK peer of
+        // `resource_limits_within_with_lattice_extrema_is_true` one
+        // PROJECTION-KIND axis over — the per-axis view of the "clamp is
+        // the identity" property.
+        for a in [
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ] {
+            let mask = a.axes_within(EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS);
+            let mut i = 0;
+            while i < ResourceLimits::FIELD_COUNT {
+                assert!(
+                    mask[i],
+                    "axes_within(a, EMPTY, UNBOUNDED)[{i}] must be true; a={a:?}",
+                );
+                i += 1;
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_within_of_self_is_reflexive() {
+        // Reflexive-bracket pin — every posture sits within the
+        // zero-width bracket at itself on every axis, since `a.axes_leq(a)
+        // == [true; FIELD_COUNT]` on every posture by reflexivity of the
+        // per-axis mask. The per-axis MASK peer of
+        // `resource_limits_within_of_self_is_reflexive` one PROJECTION-
+        // KIND axis over.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ] {
+            let mask = a.axes_within(a, a);
+            let mut i = 0;
+            while i < ResourceLimits::FIELD_COUNT {
+                assert!(
+                    mask[i],
+                    "axes_within(a, a, a)[{i}] must be true by reflexivity of axes_leq; a={a:?}",
+                );
+                i += 1;
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_within_of_equal_bounds_agrees_with_axes_eq() {
+        // Equal-bounds-collapses-to-axes_eq pin — `a.axes_within(x, x) ==
+        // a.axes_eq(x)` for every posture pair. The zero-width bracket
+        // admits `a` on axis `i` iff `a`'s `i`-th ceiling equals `x`'s on
+        // that axis (antisymmetry of `axes_leq` at the per-axis level:
+        // `lower.axes_leq(a)[i] && a.axes_leq(upper)[i]` with
+        // `lower == upper == x` collapses to `x.axes_leq(a)[i] &&
+        // a.axes_leq(x)[i]`, i.e. `axes_eq(a, x)[i]`). The per-axis MASK
+        // peer of `resource_limits_within_of_equal_bounds_iff_equal_to_bound`
+        // one PROJECTION-KIND axis over.
+        let bounds = [
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            DEFAULT_RESOURCE_LIMITS,
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ];
+        for x in bounds {
+            for a in bounds {
+                let bracket = a.axes_within(x, x);
+                let eq = a.axes_eq(x);
+                let mut i = 0;
+                while i < ResourceLimits::FIELD_COUNT {
+                    assert_eq!(
+                        bracket[i], eq[i],
+                        "axes_within(a, x, x)[{i}] must equal axes_eq(a, x)[{i}]; a={a:?} x={x:?}",
+                    );
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_within_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the per-axis bracket-membership mask is
+        // evaluable in const context, so a caller can pin a preset-
+        // bracket-membership per-axis identity at compile time. Sibling
+        // of the const-fn evaluability pins on `within` and every other
+        // `axes_*` primitive one PRIMITIVE-KIND / PROJECTION-KIND axis
+        // over.
+        //
+        // Extrema arm — every axis of DEFAULT sits within [EMPTY,
+        // UNBOUNDED] since 0 <= any DEFAULT_MAX_* <= usize::MAX per-axis.
+        const EXTREMA_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            DEFAULT_RESOURCE_LIMITS.axes_within(EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS);
+        const _: () = assert!(EXTREMA_MASK[0]);
+        const _: () = assert!(EXTREMA_MASK[1]);
+        const _: () = assert!(EXTREMA_MASK[2]);
+        const _: () = assert!(EXTREMA_MASK[3]);
+        const _: () = assert!(EXTREMA_MASK[4]);
+        const _: () = assert!(EXTREMA_MASK[5]);
+        // Above-upper arm — every axis of UNBOUNDED sits strictly above
+        // DEFAULT's ceiling (DEFAULT_MAX_* < usize::MAX per-axis), so the
+        // [EMPTY, DEFAULT] bracket rejects UNBOUNDED on every axis.
+        const ABOVE_UPPER_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            UNBOUNDED_RESOURCE_LIMITS.axes_within(EMPTY_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS);
+        const _: () = assert!(!ABOVE_UPPER_MASK[0]);
+        const _: () = assert!(!ABOVE_UPPER_MASK[1]);
+        const _: () = assert!(!ABOVE_UPPER_MASK[2]);
+        const _: () = assert!(!ABOVE_UPPER_MASK[3]);
+        const _: () = assert!(!ABOVE_UPPER_MASK[4]);
+        const _: () = assert!(!ABOVE_UPPER_MASK[5]);
+        // Reflexive-bracket arm — DEFAULT sits within [DEFAULT, DEFAULT]
+        // on every axis by reflexivity of axes_leq.
+        const REFLEXIVE_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            DEFAULT_RESOURCE_LIMITS.axes_within(DEFAULT_RESOURCE_LIMITS, DEFAULT_RESOURCE_LIMITS);
+        const _: () = assert!(REFLEXIVE_MASK[0]);
+        const _: () = assert!(REFLEXIVE_MASK[1]);
+        const _: () = assert!(REFLEXIVE_MASK[2]);
+        const _: () = assert!(REFLEXIVE_MASK[3]);
+        const _: () = assert!(REFLEXIVE_MASK[4]);
+        const _: () = assert!(REFLEXIVE_MASK[5]);
     }
 
     // ── ResourceLimits::is_lower_bound_of / is_upper_bound_of ─────────

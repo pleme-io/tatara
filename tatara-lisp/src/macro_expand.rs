@@ -13702,6 +13702,167 @@ impl ResourceLimits {
             None => None,
         }
     }
+
+    /// Whole-posture CONTIGUITY-OF-POLAR predicate —
+    /// `self.polar_axis_is_contiguous()` returns `Some(true)` iff every
+    /// position between [`Self::first_polar_axis_index`] and
+    /// [`Self::last_polar_axis_index`] inclusive is itself a polar axis
+    /// (equivalently: [`Self::polar_axis_gap_count`] `== Some(0)`),
+    /// `Some(false)` iff the polar-axis subset is SPARSE inside its own
+    /// bracket, or `None` iff no axis is polar. The COMPOUND-CELL peer of
+    /// [`Self::bottom_axis_is_contiguous`] one CELL-KIND axis over on the
+    /// BOOLEAN CONTIGUITY column — jointly the (polar_axis_is_contiguous,
+    /// interior_axis_is_contiguous) COMPOUND pair CLOSES the CONTIGUITY
+    /// column on the (bottom, top, polar, interior) 4-cell axis-family,
+    /// the same way (polar_axis_gap_count, interior_axis_gap_count)
+    /// closed the GAP column one PROJECTION-KIND axis over.
+    ///
+    /// **GAP-EQUALS-ZERO-DERIVATION identity — LOAD-BEARING structural
+    /// pin**: on every posture, `polar_axis_is_contiguous() ==
+    /// polar_axis_gap_count().map(|k| k == 0)`. Composes structurally
+    /// through the just-lifted COMPOUND GAP projection; the substrate
+    /// never re-scans the per-axis mask. Pinned via
+    /// `resource_limits_polar_axis_is_contiguous_equals_gap_count_is_some_zero`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.polar_axis_is_contiguous()
+    /// == Some(true)` (every axis at bottom pole; polar bracket
+    /// SATURATED at CONTIGUOUS); `UNBOUNDED_RESOURCE_LIMITS
+    /// .polar_axis_is_contiguous() == Some(true)` (every axis at top
+    /// pole; polar bracket ALSO SATURATED at CONTIGUOUS — BOTH saturated
+    /// pole presets fire the COMPOUND polar CONTIGUITY at the CONTIGUOUS
+    /// pole, unlike the atomic cells where each preset saturates only
+    /// ONE atomic CONTIGUITY at `Some(true)`); `DEFAULT_RESOURCE_LIMITS
+    /// .polar_axis_is_contiguous() == None` (every axis strictly
+    /// interior, no polar bracket); `HAND_AUTHORED_MID_POSTURE
+    /// .polar_axis_is_contiguous() == None` (same);
+    /// `HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_contiguous() == None`
+    /// (same).
+    ///
+    /// **ANY-fold bridge**: `a.polar_axis_is_contiguous().is_some() ⇔
+    /// a.has_polar_axis()`. Pinned via
+    /// `resource_limits_polar_axis_is_contiguous_is_some_iff_has_polar_axis`.
+    ///
+    /// **SINGLE-FIRE COINCIDENCE pin**: `a.polar_axis_is_contiguous() ==
+    /// Some(true)` when `a.count_polar_axes() == 1` — a lone polar axis
+    /// is trivially contiguous on the compound polar cell.
+    ///
+    /// **COMPOUND-CELL SATURATION contrast — LOAD-BEARING pin**: unlike
+    /// the atomic cells where `EMPTY` and `UNBOUNDED` each pin
+    /// (Some(true), None) on their (same, dual) atomic CONTIGUITY pair,
+    /// on the COMPOUND (polar, interior) row `EMPTY.polar_axis_is_
+    /// contiguous() == Some(true) && EMPTY.interior_axis_is_contiguous()
+    /// == None`; `UNBOUNDED.polar_axis_is_contiguous() == Some(true) &&
+    /// UNBOUNDED.interior_axis_is_contiguous() == None`; `DEFAULT
+    /// .polar_axis_is_contiguous() == None && DEFAULT
+    /// .interior_axis_is_contiguous() == Some(true)`. BOTH saturated
+    /// pole presets fire the polar CONTIGUITY at the CONTIGUOUS pole
+    /// while the DEFAULT preset fires the interior CONTIGUITY at the
+    /// CONTIGUOUS pole — the COMPOUND cell partitions the preset triple
+    /// into (2-polar-saturated, 1-interior-saturated) rather than the
+    /// atomic cells' (1-saturated-each, 1-both-absent) partition. Mirror
+    /// of the compound GAP column's `resource_limits_compound_gap_
+    /// count_saturation_partitions_preset_triple_by_pole` pin one
+    /// PROJECTION-KIND axis over on the boolean surface. Pinned via
+    /// `resource_limits_compound_is_contiguous_saturation_partitions_preset_triple_by_pole`.
+    ///
+    /// **BOOLEAN COLLAPSE — LOAD-BEARING pin dual**: the (`Some(true)`,
+    /// `Some(false)`, `None`) trichotomy PARTITIONS every posture into
+    /// (contiguous-polar-bracket, sparse-polar-bracket, no-polar-axis)
+    /// as a first-class three-valued `Option<bool>`, structurally
+    /// coarser than the compound GAP surface's `Option<usize>` (where
+    /// `Some(k)` with `k > 0` collapses to `Some(false)`) but strictly
+    /// finer than the (has-polar, no-polar) two-cell ANY-fold surface.
+    /// Sits ONE PROJECTION-KIND axis LOWER on the algebraic tower than
+    /// the compound GAP column, the mirror position of how (has_polar_
+    /// axis, count_polar_axes) straddles the ANY-fold and ARITHMETIC-
+    /// COUNT columns.
+    ///
+    /// `const fn` so a caller can pin the polar-axis CONTIGUITY verdict
+    /// at compile time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.polar_axis_is_contiguous(), Some(true)));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// compound CONTIGUITY predicate is a named typed exit `Option<bool>`
+    /// rather than an inline `self.polar_axis_gap_count().map(|k| k == 0)`
+    /// per-consumer predicate. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs (the CONTIGUITY is a structural
+    /// derivation from the compound GAP projection via `Option::map`
+    /// under one equality comparison). THEORY.md §V.1 — knowable
+    /// platform.
+    ///
+    /// Frontier inspiration: same as [`Self::bottom_axis_is_contiguous`],
+    /// on the COMPOUND POLAR mask formed via De Morgan disjunction of
+    /// the atomic (bottom, top) masks. Translation through pleme-io
+    /// primitives: the plain `const fn` DERIVATION from the already-
+    /// lifted [`Self::polar_axis_gap_count`], one equality comparison
+    /// under `Option::map`, no new per-axis scan, no allocation.
+    #[must_use]
+    pub const fn polar_axis_is_contiguous(self) -> Option<bool> {
+        match self.polar_axis_gap_count() {
+            Some(k) => Some(k == 0),
+            None => None,
+        }
+    }
+
+    /// Whole-posture CONTIGUITY-OF-INTERIOR predicate —
+    /// `self.interior_axis_is_contiguous()` returns `Some(true)` iff
+    /// every position between [`Self::first_interior_axis_index`] and
+    /// [`Self::last_interior_axis_index`] inclusive is itself an
+    /// interior axis (equivalently: [`Self::interior_axis_gap_count`]
+    /// `== Some(0)`), `Some(false)` iff the interior-axis subset is
+    /// SPARSE inside its own bracket, or `None` iff no axis is strictly
+    /// interior. The COMPOUND-CELL DUAL of
+    /// [`Self::polar_axis_is_contiguous`] one CELL-KIND axis over via
+    /// the (polar, interior) pointwise De Morgan complement — jointly
+    /// the (polar_axis_is_contiguous, interior_axis_is_contiguous)
+    /// COMPOUND pair CLOSES the CONTIGUITY column on the (bottom, top,
+    /// polar, interior) 4-cell axis-family.
+    ///
+    /// **GAP-EQUALS-ZERO-DERIVATION identity dual**: on every posture,
+    /// `interior_axis_is_contiguous() == interior_axis_gap_count()
+    /// .map(|k| k == 0)`. Pinned via
+    /// `resource_limits_interior_axis_is_contiguous_equals_gap_count_is_some_zero`.
+    ///
+    /// **Preset pins**: `DEFAULT_RESOURCE_LIMITS
+    /// .interior_axis_is_contiguous() == Some(true)` (every axis
+    /// strictly interior; interior bracket SATURATED at CONTIGUOUS);
+    /// `EMPTY_RESOURCE_LIMITS.interior_axis_is_contiguous() == None` (no
+    /// interior); `UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_contiguous()
+    /// == None` (no interior); `HAND_AUTHORED_MID_POSTURE
+    /// .interior_axis_is_contiguous() == Some(true)` (every field
+    /// strictly interior; contiguous); `HAND_AUTHORED_OTHER_POSTURE
+    /// .interior_axis_is_contiguous() == Some(true)` (same).
+    ///
+    /// **ANY-fold bridge dual**: `a.interior_axis_is_contiguous()
+    /// .is_some() ⇔ a.has_interior_axis()`. Pinned via
+    /// `resource_limits_interior_axis_is_contiguous_is_some_iff_has_interior_axis`.
+    ///
+    /// **SINGLE-FIRE COINCIDENCE pin dual**:
+    /// `a.interior_axis_is_contiguous() == Some(true)` when
+    /// `a.count_interior_axes() == 1`.
+    ///
+    /// **COMPOUND-CELL SATURATION contrast — LOAD-BEARING pin dual**:
+    /// same joint saturation partition as
+    /// [`Self::polar_axis_is_contiguous`] — BOTH saturated pole presets
+    /// fire the polar CONTIGUITY at `Some(true)` while `DEFAULT` fires
+    /// the interior CONTIGUITY at `Some(true)`. Pinned via
+    /// `resource_limits_compound_is_contiguous_saturation_partitions_preset_triple_by_pole`.
+    ///
+    /// `const fn` so a caller can pin the interior-axis CONTIGUITY
+    /// verdict at compile time.
+    ///
+    /// Theory anchor: same as [`Self::polar_axis_is_contiguous`], on the
+    /// De Morgan dual COMPOUND cell.
+    ///
+    /// Frontier inspiration: same as [`Self::polar_axis_is_contiguous`],
+    /// on the DUAL COMPOUND mask.
+    #[must_use]
+    pub const fn interior_axis_is_contiguous(self) -> Option<bool> {
+        match self.interior_axis_gap_count() {
+            Some(k) => Some(k == 0),
+            None => None,
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -50244,5 +50405,315 @@ mod tests {
             .bottom_axis_is_contiguous()
             .is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_is_contiguous().is_none());
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_contiguous_preset_pins_saturate_both_saturated_poles_at_contiguous(
+    ) {
+        // Preset pins on the COMPOUND polar CONTIGUITY cell — LOAD-
+        // BEARING asymmetry with the atomic cells. BOTH saturated pole
+        // presets pack all six axes at a single pole, so BOTH pin the
+        // COMPOUND polar CONTIGUITY at Some(true). This is the
+        // DIVERGENCE from the atomic (bottom, top) presets where each
+        // saturates only ONE atomic CONTIGUITY at Some(true). On the
+        // compound polar cell, both `EMPTY` and `UNBOUNDED` pin the
+        // CONTIGUOUS pole because both have every axis polar.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.polar_axis_is_contiguous(), Some(true));
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_contiguous(),
+            Some(true)
+        );
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_contiguous(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.polar_axis_is_contiguous(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_contiguous(), None);
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_contiguous_preset_pins_saturate_default_at_contiguous_and_poles_at_absent(
+    ) {
+        // Preset pins dual on the COMPOUND interior CONTIGUITY cell —
+        // the DEFAULT preset pins every axis strictly interior, so the
+        // interior bracket saturates at CONTIGUOUS. The two saturated
+        // pole presets pin every axis polar, so neither has any
+        // interior axis; interior CONTIGUITY verdict is None. The two
+        // hand-authored postures pin every field strictly interior, so
+        // both fire the interior bracket at CONTIGUOUS.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_contiguous(),
+            Some(true)
+        );
+        assert_eq!(EMPTY_RESOURCE_LIMITS.interior_axis_is_contiguous(), None);
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_contiguous(),
+            None
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.interior_axis_is_contiguous(),
+            Some(true),
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.interior_axis_is_contiguous(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_compound_is_contiguous_saturation_partitions_preset_triple_by_pole() {
+        // COMPOUND-CELL SATURATION contrast on the CONTIGUITY column —
+        // LOAD-BEARING pin. Unlike the atomic cells' (1-saturated-each,
+        // 1-both-absent) preset partition, the COMPOUND (polar,
+        // interior) row partitions the preset triple as
+        // (2-polar-saturated, 1-interior-saturated). BOTH saturated
+        // pole presets fire the polar CONTIGUITY at Some(true) while
+        // the DEFAULT preset fires the interior CONTIGUITY at
+        // Some(true). Mirror of the compound GAP column's
+        // `resource_limits_compound_gap_count_saturation_partitions_preset_triple_by_pole`
+        // pin one PROJECTION-KIND axis over on the boolean surface.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.polar_axis_is_contiguous(), Some(true));
+        assert_eq!(EMPTY_RESOURCE_LIMITS.interior_axis_is_contiguous(), None);
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_contiguous(),
+            Some(true)
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_contiguous(),
+            None
+        );
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_contiguous(), None);
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_contiguous(),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_contiguous_equals_gap_count_is_some_zero() {
+        // GAP-EQUALS-ZERO-DERIVATION identity — the COMPOUND polar
+        // CONTIGUITY predicate is structurally `gap.map(|k| k == 0)` on
+        // every posture. Pinned across the COMPOUND-GAP roster so a
+        // future rewrite of either projection that silently drifts from
+        // the composition contract fires this pin.
+        for a in COMPOUND_GAP_ROSTER {
+            let expected = a.polar_axis_gap_count().map(|k| k == 0);
+            assert_eq!(
+                a.polar_axis_is_contiguous(),
+                expected,
+                "polar_is_contiguous = polar_gap.map(|k| k == 0) identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_contiguous_equals_gap_count_is_some_zero() {
+        // Structural-identity dual on the interior COMPOUND cell.
+        for a in COMPOUND_GAP_ROSTER {
+            let expected = a.interior_axis_gap_count().map(|k| k == 0);
+            assert_eq!(
+                a.interior_axis_is_contiguous(),
+                expected,
+                "interior_is_contiguous = interior_gap.map(|k| k == 0) identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_contiguous_is_some_iff_has_polar_axis() {
+        // ANY-fold bridge — the polar CONTIGUITY verdict is defined iff
+        // the polar-axis subset is non-empty. Composes structurally
+        // through the just-lifted compound GAP bridge one PROJECTION-
+        // KIND axis over.
+        for a in COMPOUND_GAP_ROSTER {
+            assert_eq!(
+                a.polar_axis_is_contiguous().is_some(),
+                a.has_polar_axis(),
+                "polar_is_contiguous.is_some() != has_polar_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_contiguous_is_some_iff_has_interior_axis() {
+        // ANY-fold bridge dual on the interior COMPOUND cell.
+        for a in COMPOUND_GAP_ROSTER {
+            assert_eq!(
+                a.interior_axis_is_contiguous().is_some(),
+                a.has_interior_axis(),
+                "interior_is_contiguous.is_some() != has_interior_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_compound_is_contiguous_trichotomy_partitions_shipped_postures() {
+        // BOOLEAN COLLAPSE — LOAD-BEARING pin. The (Some(true),
+        // Some(false), None) trichotomy PARTITIONS every posture into
+        // (contiguous-bracket, sparse-bracket, no-axis) at BOTH
+        // COMPOUND cells. Witnesses at each cell:
+        //   polar_axis_is_contiguous:
+        //     Some(true):  EMPTY, UNBOUNDED (saturated poles),
+        //                  CONTIGUOUS_POLAR (contiguous non-preset),
+        //                  ENDPOINTS_ONLY_INTERIOR (polar_gap=0).
+        //     Some(false): SPARSE_POLAR (polar_gap=2),
+        //                  ENDPOINTS_ONLY_POLAR (polar_gap=4),
+        //                  CONTIGUOUS_INTERIOR (polar_gap=3).
+        //     None:        DEFAULT, HAND_AUTHORED_MID, HAND_AUTHORED_OTHER.
+        //   interior_axis_is_contiguous:
+        //     Some(true):  DEFAULT, HAND_AUTHORED_MID, HAND_AUTHORED_OTHER
+        //                  (saturated interior), CONTIGUOUS_INTERIOR
+        //                  (contiguous non-preset), CONTIGUOUS_POLAR
+        //                  (interior_gap=0), ENDPOINTS_ONLY_POLAR
+        //                  (interior_gap=0).
+        //     Some(false): SPARSE_POLAR (interior_gap=1),
+        //                  ENDPOINTS_ONLY_INTERIOR (interior_gap=4).
+        //     None:        EMPTY, UNBOUNDED (saturated polar poles).
+        assert_eq!(EMPTY_RESOURCE_LIMITS.polar_axis_is_contiguous(), Some(true));
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_contiguous(),
+            Some(true)
+        );
+        assert_eq!(
+            CONTIGUOUS_POLAR_POSTURE.polar_axis_is_contiguous(),
+            Some(true)
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_INTERIOR_POSTURE.polar_axis_is_contiguous(),
+            Some(true),
+        );
+        assert_eq!(SPARSE_POLAR_POSTURE.polar_axis_is_contiguous(), Some(false));
+        assert_eq!(
+            ENDPOINTS_ONLY_POLAR_POSTURE.polar_axis_is_contiguous(),
+            Some(false),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_POSTURE.polar_axis_is_contiguous(),
+            Some(false),
+        );
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_contiguous(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.polar_axis_is_contiguous(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_contiguous(), None);
+
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_contiguous(),
+            Some(true)
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.interior_axis_is_contiguous(),
+            Some(true),
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.interior_axis_is_contiguous(),
+            Some(true),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_POSTURE.interior_axis_is_contiguous(),
+            Some(true),
+        );
+        assert_eq!(
+            CONTIGUOUS_POLAR_POSTURE.interior_axis_is_contiguous(),
+            Some(true),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_POLAR_POSTURE.interior_axis_is_contiguous(),
+            Some(true),
+        );
+        assert_eq!(
+            SPARSE_POLAR_POSTURE.interior_axis_is_contiguous(),
+            Some(false)
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_INTERIOR_POSTURE.interior_axis_is_contiguous(),
+            Some(false),
+        );
+        assert_eq!(EMPTY_RESOURCE_LIMITS.interior_axis_is_contiguous(), None);
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_contiguous(),
+            None
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_contiguous_of_singleton_polar_axis_is_some_true() {
+        // SINGLE-FIRE COINCIDENCE pin — a lone polar axis at any of the
+        // six positions gives (polar_span, polar_count, polar_gap) ==
+        // (1, 1, 0); trivially contiguous on the COMPOUND polar cell.
+        // Build a singleton by pinning one field to a pole (0 for
+        // bottom OR usize::MAX for top) and the other five to strict-
+        // interior values.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            for pole in [0_usize, usize::MAX] {
+                let mut fields = [41_usize, 43, 47, 53, 59, 61];
+                fields[position] = pole;
+                let singleton_polar = ResourceLimits {
+                    max_expansion_depth: fields[0],
+                    max_cache_entries: fields[1],
+                    max_expansion_size: fields[2],
+                    max_macro_body_size: fields[3],
+                    max_registered_macros: fields[4],
+                    max_macro_arity: fields[5],
+                };
+                assert_eq!(singleton_polar.count_polar_axes(), 1);
+                assert_eq!(
+                    singleton_polar.polar_axis_is_contiguous(),
+                    Some(true),
+                    "singleton polar at position {position} pole {pole} not Some(true)",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_contiguous_of_singleton_interior_axis_is_some_true() {
+        // SINGLE-FIRE COINCIDENCE pin dual — a lone interior axis at
+        // any of the six positions is trivially contiguous on the
+        // COMPOUND interior cell. Build a singleton by pinning five
+        // fields alternately to pole values and one to a strict-
+        // interior value.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let poles = [0_usize, usize::MAX, 0, usize::MAX, 0, usize::MAX];
+            let mut fields = poles;
+            fields[position] = 41;
+            let singleton_interior = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_interior.count_interior_axes(), 1);
+            assert_eq!(
+                singleton_interior.interior_axis_is_contiguous(),
+                Some(true),
+                "singleton interior at position {position} not Some(true)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_compound_is_contiguous_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the COMPOUND cell — both CONTIGUITY
+        // projections are evaluable in const context so a caller can
+        // pin compound bracket-contiguity identities at compile time
+        // as build-breaks. Mirror of the compound GAP const-fn pin
+        // one PROJECTION-KIND axis over on the boolean surface.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_contiguous(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_contiguous(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_contiguous(),
+            Some(true)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .interior_axis_is_contiguous()
+            .is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .interior_axis_is_contiguous()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_contiguous().is_none());
     }
 }

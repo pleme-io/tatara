@@ -14013,6 +14013,188 @@ impl ResourceLimits {
             None => None,
         }
     }
+
+    /// Whole-posture SPARSITY-OF-POLAR predicate —
+    /// `self.polar_axis_is_sparse()` returns `Some(true)` iff at least
+    /// one position between [`Self::first_polar_axis_index`] and
+    /// [`Self::last_polar_axis_index`] inclusive is NOT a polar axis
+    /// (equivalently: [`Self::polar_axis_gap_count`] returns `Some(k)`
+    /// with `k > 0`), `Some(false)` iff the polar-axis subset is fully
+    /// CONTIGUOUS inside its own bracket, or `None` iff no axis is
+    /// polar. The COMPOUND-CELL peer of [`Self::bottom_axis_is_sparse`]
+    /// one CELL-KIND axis over on the BOOLEAN SPARSE column — jointly
+    /// the (polar_axis_is_sparse, interior_axis_is_sparse) COMPOUND
+    /// pair CLOSES the SPARSE column on the (bottom, top, polar,
+    /// interior) 4-cell axis-family, the same way (polar_axis_is_
+    /// contiguous, interior_axis_is_contiguous) closed the CONTIGUITY
+    /// column one COMBINATOR-KIND axis over.
+    ///
+    /// **DE-MORGAN-COMPLEMENT identity — LOAD-BEARING structural pin**:
+    /// on every posture, `polar_axis_is_sparse() ==
+    /// polar_axis_is_contiguous().map(|b| !b)`. Composes structurally
+    /// through the just-lifted COMPOUND CONTIGUITY projection; the
+    /// substrate never re-scans the per-axis mask NOR re-derives the
+    /// gap count. Pinned via
+    /// `resource_limits_polar_axis_is_sparse_equals_is_contiguous_complement`.
+    ///
+    /// **GAP-COUNT-IS-POSITIVE identity — LOAD-BEARING structural pin
+    /// dual**: on every posture, `polar_axis_is_sparse() ==
+    /// polar_axis_gap_count().map(|k| k > 0)`. The COMPOUND SPARSE
+    /// cell straddles the COMPOUND CONTIGUITY and COMPOUND GAP columns
+    /// ONE PROJECTION-KIND axis apart via two structurally-equivalent
+    /// derivations, the mirror position of how the atomic SPARSE cell
+    /// straddled the atomic CONTIGUITY and atomic GAP columns. Pinned
+    /// via
+    /// `resource_limits_polar_axis_is_sparse_equals_gap_count_is_some_positive`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.polar_axis_is_sparse()
+    /// == Some(false)` (saturated bottom pole packs the polar bracket
+    /// CONTIGUOUS, so NOT sparse); `UNBOUNDED_RESOURCE_LIMITS
+    /// .polar_axis_is_sparse() == Some(false)` (saturated top pole
+    /// packs the polar bracket ALSO CONTIGUOUS — BOTH saturated pole
+    /// presets pin the COMPOUND polar SPARSITY at NOT SPARSE, unlike
+    /// the atomic cells where each saturated pole presets pins its own
+    /// atomic SPARSITY at NOT SPARSE and the OTHER at absent);
+    /// `DEFAULT_RESOURCE_LIMITS.polar_axis_is_sparse() == None` (every
+    /// axis strictly interior, no polar bracket);
+    /// `HAND_AUTHORED_MID_POSTURE.polar_axis_is_sparse() == None`
+    /// (same); `HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_sparse() ==
+    /// None` (same).
+    ///
+    /// **ANY-fold bridge**: `a.polar_axis_is_sparse().is_some() ⇔
+    /// a.has_polar_axis()`. Pinned via
+    /// `resource_limits_polar_axis_is_sparse_is_some_iff_has_polar_axis`.
+    ///
+    /// **SINGLE-FIRE COINCIDENCE pin**: `a.polar_axis_is_sparse() ==
+    /// Some(false)` when `a.count_polar_axes() == 1` — a lone polar
+    /// axis is trivially contiguous on the COMPOUND polar cell, hence
+    /// NOT sparse (structural De Morgan complement of the COMPOUND
+    /// CONTIGUITY singleton pin).
+    ///
+    /// **COMPOUND-CELL SATURATION contrast — LOAD-BEARING pin**: unlike
+    /// the atomic cells where each saturated pole preset pins `(Some(
+    /// false), None)` on its (same-cell, dual-cell) SPARSITY pair, on
+    /// the COMPOUND (polar, interior) row `EMPTY.polar_axis_is_sparse()
+    /// == Some(false) && EMPTY.interior_axis_is_sparse() == None`;
+    /// `UNBOUNDED.polar_axis_is_sparse() == Some(false) && UNBOUNDED
+    /// .interior_axis_is_sparse() == None`; `DEFAULT.polar_axis_is_
+    /// sparse() == None && DEFAULT.interior_axis_is_sparse() == Some(
+    /// false)`. BOTH saturated pole presets fire the polar SPARSITY at
+    /// NOT SPARSE while the DEFAULT preset fires the interior SPARSITY
+    /// at NOT SPARSE — the COMPOUND cell partitions the preset triple
+    /// into (2-polar-saturated-not-sparse, 1-interior-saturated-not-
+    /// sparse) rather than the atomic cells' (1-saturated-each-not-
+    /// sparse, 1-both-absent) partition. Pointwise De Morgan complement
+    /// of the compound CONTIGUITY column's
+    /// `resource_limits_compound_is_contiguous_saturation_partitions_preset_triple_by_pole`
+    /// pin one COMBINATOR-KIND axis over on the boolean SPARSE surface.
+    /// Pinned via
+    /// `resource_limits_compound_is_sparse_saturation_partitions_preset_triple_by_pole`.
+    ///
+    /// **BOOLEAN COLLAPSE — LOAD-BEARING pin dual**: the (`Some(true)`,
+    /// `Some(false)`, `None`) trichotomy PARTITIONS every posture into
+    /// (sparse-polar-bracket, contiguous-polar-bracket, no-polar-axis)
+    /// — the exact DE MORGAN DUAL of the COMPOUND CONTIGUITY trichotomy
+    /// with the `Some(true)` / `Some(false)` cells swapped and the
+    /// `None` cell fixed. Sits ONE COMBINATOR-KIND axis LATERAL to the
+    /// COMPOUND CONTIGUITY column on the algebraic tower (both
+    /// `Option<bool>`; identical projection-kind altitude), the mirror
+    /// position of how the atomic SPARSE cell sat lateral to the atomic
+    /// CONTIGUITY cell.
+    ///
+    /// `const fn` so a caller can pin the polar-axis SPARSITY verdict
+    /// at compile time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.polar_axis_is_sparse(), Some(false)));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// COMPOUND SPARSE predicate is a named typed exit `Option<bool>`
+    /// rather than an inline `self.polar_axis_is_contiguous().map(|b|
+    /// !b)` per-consumer negation. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs (the COMPOUND SPARSE cell is a
+    /// structural derivation from the COMPOUND CONTIGUITY projection
+    /// via `Option::map` under one boolean negation). THEORY.md §V.1 —
+    /// knowable platform.
+    ///
+    /// Frontier inspiration: same as [`Self::bottom_axis_is_sparse`],
+    /// on the COMPOUND POLAR mask formed via De Morgan disjunction of
+    /// the atomic (bottom, top) masks. Translation through pleme-io
+    /// primitives: the plain `const fn` DERIVATION from the just-lifted
+    /// [`Self::polar_axis_is_contiguous`], one boolean negation under
+    /// `Option::map`, no new per-axis scan, no gap re-derivation, no
+    /// allocation.
+    #[must_use]
+    pub const fn polar_axis_is_sparse(self) -> Option<bool> {
+        match self.polar_axis_is_contiguous() {
+            Some(b) => Some(!b),
+            None => None,
+        }
+    }
+
+    /// Whole-posture SPARSITY-OF-INTERIOR predicate —
+    /// `self.interior_axis_is_sparse()` returns `Some(true)` iff at
+    /// least one position between [`Self::first_interior_axis_index`]
+    /// and [`Self::last_interior_axis_index`] inclusive is NOT an
+    /// interior axis (equivalently: [`Self::interior_axis_gap_count`]
+    /// returns `Some(k)` with `k > 0`), `Some(false)` iff the
+    /// interior-axis subset is fully CONTIGUOUS inside its own bracket,
+    /// or `None` iff no axis is strictly interior. The COMPOUND-CELL
+    /// DUAL of [`Self::polar_axis_is_sparse`] one CELL-KIND axis over
+    /// via the (polar, interior) pointwise De Morgan complement —
+    /// jointly the (polar_axis_is_sparse, interior_axis_is_sparse)
+    /// COMPOUND pair CLOSES the SPARSE column on the (bottom, top,
+    /// polar, interior) 4-cell axis-family.
+    ///
+    /// **DE-MORGAN-COMPLEMENT identity dual**: on every posture,
+    /// `interior_axis_is_sparse() == interior_axis_is_contiguous()
+    /// .map(|b| !b)`. Pinned via
+    /// `resource_limits_interior_axis_is_sparse_equals_is_contiguous_complement`.
+    ///
+    /// **GAP-COUNT-IS-POSITIVE identity dual**: on every posture,
+    /// `interior_axis_is_sparse() == interior_axis_gap_count()
+    /// .map(|k| k > 0)`. Pinned via
+    /// `resource_limits_interior_axis_is_sparse_equals_gap_count_is_some_positive`.
+    ///
+    /// **Preset pins**: `DEFAULT_RESOURCE_LIMITS.interior_axis_is_
+    /// sparse() == Some(false)` (every axis strictly interior; interior
+    /// bracket SATURATED at CONTIGUOUS, hence NOT sparse);
+    /// `EMPTY_RESOURCE_LIMITS.interior_axis_is_sparse() == None` (no
+    /// interior); `UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_sparse()
+    /// == None` (no interior); `HAND_AUTHORED_MID_POSTURE
+    /// .interior_axis_is_sparse() == Some(false)` (every field strictly
+    /// interior; contiguous, NOT sparse); `HAND_AUTHORED_OTHER_POSTURE
+    /// .interior_axis_is_sparse() == Some(false)` (same).
+    ///
+    /// **ANY-fold bridge dual**: `a.interior_axis_is_sparse().is_some()
+    /// ⇔ a.has_interior_axis()`. Pinned via
+    /// `resource_limits_interior_axis_is_sparse_is_some_iff_has_interior_axis`.
+    ///
+    /// **SINGLE-FIRE COINCIDENCE pin dual**:
+    /// `a.interior_axis_is_sparse() == Some(false)` when
+    /// `a.count_interior_axes() == 1`.
+    ///
+    /// **COMPOUND-CELL SATURATION contrast — LOAD-BEARING pin dual**:
+    /// same joint saturation partition as [`Self::polar_axis_is_sparse`]
+    /// — BOTH saturated pole presets fire the polar SPARSITY at
+    /// `Some(false)` while `DEFAULT` fires the interior SPARSITY at
+    /// `Some(false)`. Pointwise De Morgan complement of the compound
+    /// CONTIGUITY column's saturation partition. Pinned via
+    /// `resource_limits_compound_is_sparse_saturation_partitions_preset_triple_by_pole`.
+    ///
+    /// `const fn` so a caller can pin the interior-axis SPARSITY
+    /// verdict at compile time.
+    ///
+    /// Theory anchor: same as [`Self::polar_axis_is_sparse`], on the De
+    /// Morgan dual COMPOUND cell.
+    ///
+    /// Frontier inspiration: same as [`Self::polar_axis_is_sparse`], on
+    /// the DUAL COMPOUND mask.
+    #[must_use]
+    pub const fn interior_axis_is_sparse(self) -> Option<bool> {
+        match self.interior_axis_is_contiguous() {
+            Some(b) => Some(!b),
+            None => None,
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -51157,5 +51339,333 @@ mod tests {
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_sparse().is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.bottom_axis_is_sparse().is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_is_sparse().is_none());
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_sparse_preset_pins_saturate_both_saturated_poles_at_not_sparse(
+    ) {
+        // Preset pins on the COMPOUND polar SPARSITY cell — LOAD-
+        // BEARING asymmetry with the atomic cells. BOTH saturated pole
+        // presets pack all six axes at a single pole, so BOTH pin the
+        // COMPOUND polar SPARSITY at Some(false) (contiguous bracket,
+        // hence NOT sparse). Pointwise De Morgan complement of the
+        // COMPOUND polar CONTIGUITY preset pin — Some(true) becomes
+        // Some(false), None stays None.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.polar_axis_is_sparse(), Some(false));
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_sparse(),
+            Some(false)
+        );
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_sparse(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.polar_axis_is_sparse(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_sparse(), None);
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_sparse_preset_pins_saturate_default_at_not_sparse_and_poles_at_absent(
+    ) {
+        // Preset pins dual on the COMPOUND interior SPARSITY cell —
+        // the DEFAULT preset pins every axis strictly interior, so the
+        // interior bracket saturates at CONTIGUOUS, hence NOT sparse.
+        // The two saturated pole presets pin every axis polar, so
+        // neither has any interior axis; interior SPARSITY verdict is
+        // None. The two hand-authored postures pin every field strictly
+        // interior, so both fire the interior bracket at Some(false).
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_sparse(),
+            Some(false)
+        );
+        assert_eq!(EMPTY_RESOURCE_LIMITS.interior_axis_is_sparse(), None);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_sparse(), None);
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.interior_axis_is_sparse(),
+            Some(false),
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.interior_axis_is_sparse(),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn resource_limits_compound_is_sparse_saturation_partitions_preset_triple_by_pole() {
+        // COMPOUND-CELL SATURATION contrast on the SPARSE column —
+        // LOAD-BEARING pin. Unlike the atomic cells' (1-saturated-each-
+        // not-sparse, 1-both-absent) preset partition, the COMPOUND
+        // (polar, interior) row partitions the preset triple as
+        // (2-polar-saturated-not-sparse, 1-interior-saturated-not-
+        // sparse). BOTH saturated pole presets fire the polar SPARSITY
+        // at Some(false) while the DEFAULT preset fires the interior
+        // SPARSITY at Some(false). Pointwise De Morgan complement of
+        // the compound CONTIGUITY column's
+        // `resource_limits_compound_is_contiguous_saturation_partitions_preset_triple_by_pole`
+        // pin one COMBINATOR-KIND axis over on the boolean surface.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.polar_axis_is_sparse(), Some(false));
+        assert_eq!(EMPTY_RESOURCE_LIMITS.interior_axis_is_sparse(), None);
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_sparse(),
+            Some(false)
+        );
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_sparse(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_sparse(), None);
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_sparse(),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_sparse_equals_is_contiguous_complement() {
+        // DE-MORGAN-COMPLEMENT identity — the COMPOUND polar SPARSE
+        // predicate is structurally `polar_is_contiguous.map(|b| !b)`
+        // on every posture. Pinned across the COMPOUND-GAP roster so a
+        // future rewrite of either projection that silently drifts
+        // from the complement contract fires this pin. Mirror of the
+        // atomic
+        // `resource_limits_bottom_axis_is_sparse_equals_is_contiguous_complement`
+        // pin one CELL-KIND axis over on the boolean surface.
+        for a in COMPOUND_GAP_ROSTER {
+            let expected = a.polar_axis_is_contiguous().map(|b| !b);
+            assert_eq!(
+                a.polar_axis_is_sparse(),
+                expected,
+                "polar_is_sparse = polar_is_contiguous.map(|b| !b) identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_sparse_equals_is_contiguous_complement() {
+        // Structural De Morgan complement identity dual on the interior
+        // COMPOUND cell.
+        for a in COMPOUND_GAP_ROSTER {
+            let expected = a.interior_axis_is_contiguous().map(|b| !b);
+            assert_eq!(
+                a.interior_axis_is_sparse(),
+                expected,
+                "interior_is_sparse = interior_is_contiguous.map(|b| !b) identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_sparse_equals_gap_count_is_some_positive() {
+        // GAP-COUNT-IS-POSITIVE identity — the COMPOUND polar SPARSE
+        // cell straddles the COMPOUND CONTIGUITY and COMPOUND GAP
+        // columns ONE PROJECTION-KIND axis apart via two structurally-
+        // equivalent derivations; this pin closes the equivalence with
+        // the COMPOUND GAP column directly.
+        for a in COMPOUND_GAP_ROSTER {
+            let expected = a.polar_axis_gap_count().map(|k| k > 0);
+            assert_eq!(
+                a.polar_axis_is_sparse(),
+                expected,
+                "polar_is_sparse = polar_gap.map(|k| k > 0) identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_sparse_equals_gap_count_is_some_positive() {
+        // GAP-COUNT-IS-POSITIVE identity dual on the interior COMPOUND
+        // cell.
+        for a in COMPOUND_GAP_ROSTER {
+            let expected = a.interior_axis_gap_count().map(|k| k > 0);
+            assert_eq!(
+                a.interior_axis_is_sparse(),
+                expected,
+                "interior_is_sparse = interior_gap.map(|k| k > 0) identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_sparse_is_some_iff_has_polar_axis() {
+        // ANY-fold bridge — the COMPOUND polar SPARSE verdict is
+        // defined iff the polar-axis subset is non-empty. Composes
+        // structurally through the just-lifted COMPOUND CONTIGUITY
+        // bridge one COMBINATOR-KIND axis over (boolean negation
+        // preserves is_some).
+        for a in COMPOUND_GAP_ROSTER {
+            assert_eq!(
+                a.polar_axis_is_sparse().is_some(),
+                a.has_polar_axis(),
+                "polar_is_sparse.is_some() != has_polar_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_sparse_is_some_iff_has_interior_axis() {
+        // ANY-fold bridge dual on the interior COMPOUND cell.
+        for a in COMPOUND_GAP_ROSTER {
+            assert_eq!(
+                a.interior_axis_is_sparse().is_some(),
+                a.has_interior_axis(),
+                "interior_is_sparse.is_some() != has_interior_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_compound_is_sparse_trichotomy_partitions_shipped_postures() {
+        // BOOLEAN COLLAPSE — LOAD-BEARING pin. The Option<bool>
+        // trichotomy partitions every posture into (sparse-bracket,
+        // contiguous-bracket, no-axis) at BOTH COMPOUND cells — the
+        // exact De Morgan DUAL of the COMPOUND CONTIGUITY trichotomy
+        // with the Some(true)/Some(false) cells swapped and the None
+        // cell fixed. Witnesses at each cell:
+        //   polar_axis_is_sparse:
+        //     Some(true):  SPARSE_POLAR (polar_gap=2),
+        //                  ENDPOINTS_ONLY_POLAR (polar_gap=4),
+        //                  CONTIGUOUS_INTERIOR (polar_gap=3).
+        //     Some(false): EMPTY, UNBOUNDED (saturated poles),
+        //                  CONTIGUOUS_POLAR (contiguous non-preset),
+        //                  ENDPOINTS_ONLY_INTERIOR (polar_gap=0).
+        //     None:        DEFAULT, HAND_AUTHORED_MID, HAND_AUTHORED_OTHER.
+        //   interior_axis_is_sparse:
+        //     Some(true):  SPARSE_POLAR (interior_gap=1),
+        //                  ENDPOINTS_ONLY_INTERIOR (interior_gap=4).
+        //     Some(false): DEFAULT, HAND_AUTHORED_MID, HAND_AUTHORED_OTHER
+        //                  (saturated interior), CONTIGUOUS_INTERIOR
+        //                  (contiguous non-preset), CONTIGUOUS_POLAR
+        //                  (interior_gap=0), ENDPOINTS_ONLY_POLAR
+        //                  (interior_gap=0).
+        //     None:        EMPTY, UNBOUNDED (saturated polar poles).
+        assert_eq!(SPARSE_POLAR_POSTURE.polar_axis_is_sparse(), Some(true));
+        assert_eq!(
+            ENDPOINTS_ONLY_POLAR_POSTURE.polar_axis_is_sparse(),
+            Some(true),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_POSTURE.polar_axis_is_sparse(),
+            Some(true),
+        );
+        assert_eq!(EMPTY_RESOURCE_LIMITS.polar_axis_is_sparse(), Some(false));
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_sparse(),
+            Some(false)
+        );
+        assert_eq!(CONTIGUOUS_POLAR_POSTURE.polar_axis_is_sparse(), Some(false));
+        assert_eq!(
+            ENDPOINTS_ONLY_INTERIOR_POSTURE.polar_axis_is_sparse(),
+            Some(false),
+        );
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_sparse(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.polar_axis_is_sparse(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_sparse(), None);
+
+        assert_eq!(SPARSE_POLAR_POSTURE.interior_axis_is_sparse(), Some(true));
+        assert_eq!(
+            ENDPOINTS_ONLY_INTERIOR_POSTURE.interior_axis_is_sparse(),
+            Some(true),
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_sparse(),
+            Some(false)
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.interior_axis_is_sparse(),
+            Some(false),
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.interior_axis_is_sparse(),
+            Some(false),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_POSTURE.interior_axis_is_sparse(),
+            Some(false),
+        );
+        assert_eq!(
+            CONTIGUOUS_POLAR_POSTURE.interior_axis_is_sparse(),
+            Some(false),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_POLAR_POSTURE.interior_axis_is_sparse(),
+            Some(false),
+        );
+        assert_eq!(EMPTY_RESOURCE_LIMITS.interior_axis_is_sparse(), None);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_sparse(), None);
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_sparse_of_singleton_polar_axis_is_some_false() {
+        // SINGLE-FIRE COINCIDENCE pin — a lone polar axis at any of the
+        // six positions gives (polar_span, polar_count, polar_gap) ==
+        // (1, 1, 0); trivially CONTIGUOUS on the COMPOUND polar cell,
+        // hence NOT SPARSE. Structural De Morgan complement of the
+        // COMPOUND polar CONTIGUITY singleton pin.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            for pole in [0_usize, usize::MAX] {
+                let mut fields = [41_usize, 43, 47, 53, 59, 61];
+                fields[position] = pole;
+                let singleton_polar = ResourceLimits {
+                    max_expansion_depth: fields[0],
+                    max_cache_entries: fields[1],
+                    max_expansion_size: fields[2],
+                    max_macro_body_size: fields[3],
+                    max_registered_macros: fields[4],
+                    max_macro_arity: fields[5],
+                };
+                assert_eq!(singleton_polar.count_polar_axes(), 1);
+                assert_eq!(
+                    singleton_polar.polar_axis_is_sparse(),
+                    Some(false),
+                    "singleton polar at position {position} pole {pole} not Some(false)",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_sparse_of_singleton_interior_axis_is_some_false() {
+        // SINGLE-FIRE COINCIDENCE pin dual — a lone interior axis at
+        // any of the six positions is trivially CONTIGUOUS on the
+        // COMPOUND interior cell, hence NOT SPARSE.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let poles = [0_usize, usize::MAX, 0, usize::MAX, 0, usize::MAX];
+            let mut fields = poles;
+            fields[position] = 41;
+            let singleton_interior = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_interior.count_interior_axes(), 1);
+            assert_eq!(
+                singleton_interior.interior_axis_is_sparse(),
+                Some(false),
+                "singleton interior at position {position} not Some(false)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_compound_is_sparse_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the COMPOUND cell — both SPARSITY projections
+        // are evaluable in const context so a caller can pin compound
+        // bracket-sparsity identities at compile time as build-breaks.
+        // Mirror of the compound CONTIGUITY const-fn pin one COMBINATOR-
+        // KIND axis over on the boolean surface.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_sparse(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_sparse(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_sparse(),
+            Some(false)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.interior_axis_is_sparse().is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .interior_axis_is_sparse()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_sparse().is_none());
     }
 }

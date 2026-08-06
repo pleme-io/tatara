@@ -13146,6 +13146,210 @@ impl ResourceLimits {
             _ => None,
         }
     }
+
+    /// Whole-posture INDEX-GAP-COUNT-OF-BOTTOM projection —
+    /// `self.bottom_axis_gap_count()` returns
+    /// `Some(bottom_axis_index_span - count_bottom_axes)` (the count of
+    /// positions strictly inside the closed index interval
+    /// `[first_bottom_axis_index, last_bottom_axis_index]` that are NOT
+    /// themselves bottom axes) when at least one axis is at the bottom
+    /// pole, OR `None` when no axis is at the bottom pole. The DERIVED-
+    /// USIZE SPARSITY-DISCRIMINATOR peer of [`Self::bottom_axis_index_span`]
+    /// and [`Self::count_bottom_axes`] on the atomic BOTTOM cell, opening
+    /// the GAP column past the just-closed SPAN column on the atomic
+    /// (bottom, top) row with the LOAD-BEARING CONTIGUOUS-vs-SPARSE
+    /// decision the (COUNT, SPAN) pair only expresses as an INEQUALITY
+    /// (`span ≥ count`) that the GAP surface expresses as a POSITIONAL
+    /// `usize` `gap == span - count`.
+    ///
+    /// A STRICT REFINEMENT of the SPAN column: two postures with the SAME
+    /// `bottom_axis_index_span() == Some(4)` but with three bottom axes at
+    /// positions `(0, 1, 2)` versus at positions `(0, 2, 3)` give the
+    /// SAME `span` verdict (4) but DIFFERENT `count` verdicts (3 in both,
+    /// but adjacency differs) — actually equal because count is 3 in
+    /// both. The refinement is best expressed as: two postures with the
+    /// SAME `count == 3` at positions `(0, 1, 2)` (span 3, gap 0) vs
+    /// `(0, 2, 5)` (span 6, gap 3) give the SAME `count` but DIFFERENT
+    /// `span` AND DIFFERENT `gap`; the (span, count, gap) triple JOINTLY
+    /// pins the CONTIGUITY of the bottom-axis subset within its bracket,
+    /// where each of the three PROJECTION KINDS carries a distinct
+    /// discriminator none of the others carries alone. The GAP
+    /// PROJECTION KIND is the FIRST usize on the atomic BOTTOM cell whose
+    /// preset trichotomy CROSSES the (contiguous, sparse) boundary at a
+    /// pinnable const-fn value rather than through an inequality.
+    ///
+    /// **FIRST-LAST-COUNT-DERIVATION identity — LOAD-BEARING structural
+    /// pin**: on every posture, `bottom_axis_gap_count() == match
+    /// bottom_axis_index_span() { Some(w) => Some(w -
+    /// count_bottom_axes()), None => None, }`. Composes structurally
+    /// through the just-lifted SPAN + already-lifted COUNT projections;
+    /// the substrate never re-scans the per-axis mask. Pinned via
+    /// `resource_limits_bottom_axis_gap_count_equals_span_minus_count`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.bottom_axis_gap_count() ==
+    /// Some(0)` (every axis at bottom pole; span == count ==
+    /// `FIELD_COUNT`, so the GAP saturates at zero — the CONTIGUOUS
+    /// pole); `UNBOUNDED_RESOURCE_LIMITS.bottom_axis_gap_count() == None`
+    /// (no axis at bottom pole; NEITHER contiguous NOR sparse, gap
+    /// undefined); `DEFAULT_RESOURCE_LIMITS.bottom_axis_gap_count() ==
+    /// None`.
+    ///
+    /// **ANY-fold bridge**: `a.bottom_axis_gap_count().is_some() ⇔
+    /// a.has_bottom_axis()`. When the ANY-fold verdict opens the GAP
+    /// projection is defined; when it closes the GAP is `None`. Pinned
+    /// via `resource_limits_bottom_axis_gap_count_is_some_iff_has_bottom_axis`.
+    ///
+    /// **COUNT bridge**: `a.bottom_axis_gap_count().is_none() ⇔
+    /// a.count_bottom_axes() == 0`. Pinned via
+    /// `resource_limits_bottom_axis_gap_count_is_none_iff_count_bottom_axes_is_zero`.
+    ///
+    /// **CONTIGUOUS-vs-SPARSE DISCRIMINATOR — LOAD-BEARING pin**:
+    /// `a.bottom_axis_gap_count() == Some(0)` iff the bottom-axis set is
+    /// CONTIGUOUS in the index array, i.e. every position between
+    /// `first_bottom_axis_index()` and `last_bottom_axis_index()`
+    /// inclusive is itself a bottom axis. When `Some(k)` with `k > 0`,
+    /// there are EXACTLY `k` positions strictly inside the bottom-axis
+    /// bracket that are NOT bottom axes — the SPARSITY count. This is the
+    /// EXACT CONTIGUITY DECISION neither the SPAN alone nor the COUNT
+    /// alone can express: the (COUNT, SPAN) pair carries only the
+    /// INEQUALITY `span ≥ count`; the GAP carries the equivalent
+    /// POSITIONAL `usize` `gap == span - count`, on the same const-fn
+    /// evaluability plane. Pinned via
+    /// `resource_limits_bottom_axis_gap_count_is_some_zero_iff_bottom_axes_are_contiguous`.
+    ///
+    /// **SINGLE-FIRE COINCIDENCE pin**: `a.bottom_axis_gap_count() ==
+    /// Some(0)` when `a.count_bottom_axes() == 1` — the singleton case is
+    /// trivially contiguous (span 1, count 1, gap 0). Pinned via
+    /// `resource_limits_bottom_axis_gap_count_of_singleton_bottom_axis_is_some_zero`.
+    ///
+    /// **FULL-SPAN pin**: `a.bottom_axis_gap_count() ==
+    /// Some(FIELD_COUNT - a.count_bottom_axes())` when
+    /// `a.bottom_axis_index_span() == Some(FIELD_COUNT)`, i.e. the two
+    /// bottom endpoints anchor position 0 and position `FIELD_COUNT - 1`
+    /// and the GAP measures how many of the `FIELD_COUNT` positions
+    /// inside the maximal bracket are non-bottom. Pinned via
+    /// `resource_limits_bottom_axis_gap_count_of_full_span_equals_field_count_minus_count`.
+    ///
+    /// **Range bound**: when `Some(k)`, `0 ≤ k ≤ FIELD_COUNT - 1`. The
+    /// lower bound is tight (attained by every contiguous bottom-axis
+    /// subset); the upper bound is tight (attained by the two-endpoint
+    /// bottom-axis subset with all interior positions non-bottom on a
+    /// posture with `FIELD_COUNT ≥ 3`). Pinned via
+    /// `resource_limits_bottom_axis_gap_count_is_bounded_by_field_count_minus_one_when_some`.
+    ///
+    /// **SPARSITY-COMPLEMENT identity**: on every posture with `Some(w) ==
+    /// a.bottom_axis_index_span()` (equivalently, `a.has_bottom_axis()`),
+    /// `a.bottom_axis_gap_count() + Some(a.count_bottom_axes()) ==
+    /// Some(w)` — the bottom bracket is partitioned by the (bottom, non-
+    /// bottom) two-cell split of its `w` positions into `count` bottom
+    /// positions and `gap` non-bottom positions, structurally exhaustive.
+    /// Pinned via
+    /// `resource_limits_bottom_axis_gap_count_plus_count_bottom_axes_equals_bottom_axis_index_span_when_some`.
+    ///
+    /// `const fn` so a caller can pin the exact bottom-axis gap at
+    /// compile time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.bottom_axis_gap_count(), Some(0)));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; THEORY.md
+    /// §II.1 invariant 5 — composition preserves proofs (the GAP adds a
+    /// CONTIGUITY-sensitive discriminator that upgrades the SPAN ≥ COUNT
+    /// INEQUALITY into an EQUATION `gap == span - count`, expressible as
+    /// a first-class `Option<usize>` typed exit); THEORY.md §V.1 —
+    /// knowable platform.
+    ///
+    /// Frontier inspiration: APL's `(⌈/⍸P) - (⌊/⍸P) + 1 - +/P` bracket-
+    /// width-minus-count fold on a per-position predicate; Haskell's
+    /// `liftA2 (\s c -> s - c) (bracketSpan p xs) (Just (length . filter p
+    /// $ xs))` bracket-sparsity metric; classical run-length-encoding
+    /// literature's "hole count" primitive on a boolean sequence — the
+    /// count of `0`s strictly between the first and last `1`. Translation
+    /// through pleme-io primitives: the plain `const fn` DERIVATION from
+    /// the already-lifted (bottom_axis_index_span, count_bottom_axes)
+    /// pair, one subtraction under the `Option::Some` arm, no new
+    /// per-axis scan, no allocation.
+    #[must_use]
+    pub const fn bottom_axis_gap_count(self) -> Option<usize> {
+        match self.bottom_axis_index_span() {
+            Some(w) => Some(w - self.count_bottom_axes()),
+            None => None,
+        }
+    }
+
+    /// Whole-posture INDEX-GAP-COUNT-OF-TOP projection —
+    /// `self.top_axis_gap_count()` returns
+    /// `Some(top_axis_index_span - count_top_axes)` (the count of
+    /// positions strictly inside the closed index interval
+    /// `[first_top_axis_index, last_top_axis_index]` that are NOT
+    /// themselves top axes) when at least one axis is at the top pole,
+    /// OR `None` when no axis is at the top pole. The ATOMIC-CELL DUAL of
+    /// [`Self::bottom_axis_gap_count`] one CELL axis over on the DERIVED-
+    /// USIZE GAP column — jointly the (bottom_axis_gap_count,
+    /// top_axis_gap_count) atomic pair OPENS the GAP column past the
+    /// just-closed SPAN column on the atomic (bottom, top) row, the same
+    /// way (bottom_axis_index_span, top_axis_index_span) opened the SPAN
+    /// column past the (INDEX-OF-FIRST, INDEX-OF-LAST) columns one
+    /// PROJECTION-KIND axis over.
+    ///
+    /// **FIRST-LAST-COUNT-DERIVATION identity dual**: on every posture,
+    /// `top_axis_gap_count() == match top_axis_index_span() { Some(w) =>
+    /// Some(w - count_top_axes()), None => None, }`. Pinned via
+    /// `resource_limits_top_axis_gap_count_equals_span_minus_count`.
+    ///
+    /// **Preset pins**: `UNBOUNDED_RESOURCE_LIMITS.top_axis_gap_count() ==
+    /// Some(0)` (every axis at top pole; span == count == `FIELD_COUNT`,
+    /// so the GAP saturates at zero — the CONTIGUOUS pole);
+    /// `EMPTY_RESOURCE_LIMITS.top_axis_gap_count() == None` (no axis at
+    /// top); `DEFAULT_RESOURCE_LIMITS.top_axis_gap_count() == None`.
+    ///
+    /// **ANY-fold bridge**: `a.top_axis_gap_count().is_some() ⇔
+    /// a.has_top_axis()`. Pinned via
+    /// `resource_limits_top_axis_gap_count_is_some_iff_has_top_axis`.
+    ///
+    /// **COUNT bridge**: `a.top_axis_gap_count().is_none() ⇔
+    /// a.count_top_axes() == 0`. Pinned via
+    /// `resource_limits_top_axis_gap_count_is_none_iff_count_top_axes_is_zero`.
+    ///
+    /// **CONTIGUOUS-vs-SPARSE DISCRIMINATOR dual**:
+    /// `a.top_axis_gap_count() == Some(0)` iff the top-axis set is
+    /// CONTIGUOUS. Pinned via
+    /// `resource_limits_top_axis_gap_count_is_some_zero_iff_top_axes_are_contiguous`.
+    ///
+    /// **SINGLE-FIRE COINCIDENCE pin dual**: `a.top_axis_gap_count() ==
+    /// Some(0)` when `a.count_top_axes() == 1`.
+    ///
+    /// **FULL-SPAN pin dual**: `a.top_axis_gap_count() ==
+    /// Some(FIELD_COUNT - a.count_top_axes())` when
+    /// `a.top_axis_index_span() == Some(FIELD_COUNT)`.
+    ///
+    /// **Range bound dual**: when `Some(k)`, `0 ≤ k ≤ FIELD_COUNT - 1`.
+    ///
+    /// **CROSS-CELL SATURATION contrast — LOAD-BEARING pin**: at the
+    /// SATURATED pole preset for EACH atomic cell, the OTHER cell's GAP
+    /// is `None` and the SAME cell's GAP is `Some(0)`:
+    /// `EMPTY_RESOURCE_LIMITS.bottom_axis_gap_count() == Some(0) &&
+    /// EMPTY_RESOURCE_LIMITS.top_axis_gap_count() == None`;
+    /// `UNBOUNDED_RESOURCE_LIMITS.top_axis_gap_count() == Some(0) &&
+    /// UNBOUNDED_RESOURCE_LIMITS.bottom_axis_gap_count() == None`. The
+    /// SATURATED pole is UNIFORMLY CONTIGUOUS on its own cell and
+    /// UNIFORMLY ABSENT on the dual cell — the (Some(0), None) opposite-
+    /// pole pair pins the (contiguous, absent) two-cell partition at the
+    /// preset pole. Pinned via
+    /// `resource_limits_atomic_gap_count_saturation_pole_partitions_into_contiguous_and_absent`.
+    ///
+    /// `const fn` so a caller can pin the exact top-axis gap at compile
+    /// time.
+    ///
+    /// Theory anchor: same as [`Self::bottom_axis_gap_count`].
+    ///
+    /// Frontier inspiration: same as [`Self::bottom_axis_gap_count`], on
+    /// the DUAL atomic mask.
+    #[must_use]
+    pub const fn top_axis_gap_count(self) -> Option<usize> {
+        match self.top_axis_index_span() {
+            Some(w) => Some(w - self.count_top_axes()),
+            None => None,
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -48489,5 +48693,419 @@ mod tests {
         const _: () = assert!(EMPTY_VALUES[5] == 0);
         const _: () = assert!(UNBOUNDED_VALUES[0] == usize::MAX);
         const _: () = assert!(UNBOUNDED_VALUES[5] == usize::MAX);
+    }
+
+    /// Test-local SPARSE bottom-axis posture — bottom axes at positions
+    /// `(0, 2, 5)`, non-bottom at positions `(1, 3, 4)`. Span = 6 (from
+    /// 0 to 5 inclusive), count = 3, gap = 3. Chosen so the (span, count,
+    /// gap) triple is (6, 3, 3), witnessing the LOAD-BEARING sparsity
+    /// mid-value neither the SATURATED preset pins nor a CONTIGUOUS
+    /// pin can pin — a proper interior point of the CONTIGUOUS-vs-SPARSE
+    /// discriminator.
+    const SPARSE_BOTTOM_POSTURE: ResourceLimits = ResourceLimits {
+        max_expansion_depth: 0, // bottom at 0
+        max_cache_entries: 17,
+        max_expansion_size: 0, // bottom at 2
+        max_macro_body_size: 23,
+        max_registered_macros: 29,
+        max_macro_arity: 0, // bottom at 5
+    };
+
+    /// Test-local CONTIGUOUS-run bottom-axis posture — bottom axes at
+    /// positions `(1, 2, 3)`, non-bottom at positions `(0, 4, 5)`. Span
+    /// = 3, count = 3, gap = 0. The CONTIGUOUS DISCRIMINATOR at a non-
+    /// preset non-saturated bracket, pinning that the (span, count, gap)
+    /// = (3, 3, 0) triple can be achieved at an INTERIOR position rather
+    /// than only at the saturated pole preset EMPTY.
+    const CONTIGUOUS_INTERIOR_BOTTOM_POSTURE: ResourceLimits = ResourceLimits {
+        max_expansion_depth: 41,
+        max_cache_entries: 0,   // bottom at 1
+        max_expansion_size: 0,  // bottom at 2
+        max_macro_body_size: 0, // bottom at 3
+        max_registered_macros: 47,
+        max_macro_arity: 53,
+    };
+
+    /// Test-local ENDPOINTS-ONLY bottom-axis posture — bottom axes at
+    /// positions `(0, 5)` only, non-bottom at `(1, 2, 3, 4)`. Span = 6,
+    /// count = 2, gap = 4. The MAXIMAL SPARSE case on FIELD_COUNT = 6:
+    /// the two-endpoint bottom-axis set with all interior positions
+    /// non-bottom saturates the SPARSITY at `FIELD_COUNT - 2 = 4`. Pins
+    /// the tight upper bound of the GAP range at `FIELD_COUNT - count`.
+    const ENDPOINTS_ONLY_BOTTOM_POSTURE: ResourceLimits = ResourceLimits {
+        max_expansion_depth: 0, // bottom at 0
+        max_cache_entries: 59,
+        max_expansion_size: 61,
+        max_macro_body_size: 67,
+        max_registered_macros: 71,
+        max_macro_arity: 0, // bottom at 5
+    };
+
+    #[test]
+    fn resource_limits_bottom_axis_gap_count_preset_pins_saturate_at_contiguous_and_absent() {
+        // Preset pins — the SATURATED-bottom-pole preset EMPTY packs all
+        // six axes into positions `[0, 5]`; span = 6 = count so gap = 0
+        // (the CONTIGUOUS pole). The absent-bottom presets UNBOUNDED and
+        // DEFAULT and both hand-authored postures carry no bottom axis;
+        // gap = None.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.bottom_axis_gap_count(), Some(0));
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_gap_count(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.bottom_axis_gap_count(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.bottom_axis_gap_count(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.bottom_axis_gap_count(), None);
+    }
+
+    #[test]
+    fn resource_limits_top_axis_gap_count_preset_pins_saturate_at_contiguous_and_absent() {
+        // Preset pins dual — the SATURATED-top-pole preset UNBOUNDED
+        // packs all six axes at `usize::MAX` across positions `[0, 5]`;
+        // span = 6 = count so gap = 0. The absent-top presets EMPTY and
+        // DEFAULT and both hand-authored postures carry no top axis; gap
+        // = None.
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.top_axis_gap_count(), Some(0));
+        assert_eq!(EMPTY_RESOURCE_LIMITS.top_axis_gap_count(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.top_axis_gap_count(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.top_axis_gap_count(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.top_axis_gap_count(), None);
+    }
+
+    #[test]
+    fn resource_limits_atomic_gap_count_saturation_pole_partitions_into_contiguous_and_absent() {
+        // CROSS-CELL SATURATION contrast — the two saturated pole presets
+        // each pin (Some(0), None) on their (same-cell, dual-cell) GAP
+        // pair. The saturated pole is UNIFORMLY CONTIGUOUS on its own cell
+        // and UNIFORMLY ABSENT on the dual cell. Substrate-level
+        // consistency pin against any future preset-drift.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.bottom_axis_gap_count(), Some(0));
+        assert_eq!(EMPTY_RESOURCE_LIMITS.top_axis_gap_count(), None);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.top_axis_gap_count(), Some(0));
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_gap_count(), None);
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_gap_count_equals_span_minus_count_on_every_shipped_posture() {
+        // FIRST-LAST-COUNT-DERIVATION identity — the projection is
+        // structurally `span - count` when span is Some, or None
+        // otherwise. Pinned across every shipped preset + hand-authored +
+        // test-local posture so a future rewrite of any of the three
+        // underlying projections that silently drifts from the composition
+        // contract fires this pin.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let expected = a
+                .bottom_axis_index_span()
+                .map(|w| w - a.count_bottom_axes());
+            assert_eq!(
+                a.bottom_axis_gap_count(),
+                expected,
+                "gap = span - count identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_gap_count_equals_span_minus_count_on_every_shipped_posture() {
+        // Structural-identity dual — same shape on the top cell. Since
+        // no shipped test-local posture is designed for the top cell,
+        // we sweep the presets + hand-authored + the bottom-focused
+        // locals (all of which have top-axis span None, testing the
+        // None-arm identity, plus UNBOUNDED which has the Some(0) arm).
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let expected = a.top_axis_index_span().map(|w| w - a.count_top_axes());
+            assert_eq!(
+                a.top_axis_gap_count(),
+                expected,
+                "gap = span - count identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_gap_count_is_some_iff_has_bottom_axis() {
+        // ANY-fold bridge — the GAP projection is defined iff at least
+        // one bottom axis exists. Pinned across every shipped preset +
+        // hand-authored + test-local posture.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.bottom_axis_gap_count().is_some(),
+                a.has_bottom_axis(),
+                "gap is_some vs has_bottom_axis bridge failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_gap_count_is_some_iff_has_top_axis() {
+        // ANY-fold bridge dual.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.top_axis_gap_count().is_some(),
+                a.has_top_axis(),
+                "gap is_some vs has_top_axis bridge failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_gap_count_is_none_iff_count_bottom_axes_is_zero() {
+        // COUNT bridge — the GAP projection is None iff the count is
+        // zero. Pinned across every shipped posture.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.bottom_axis_gap_count().is_none(),
+                a.count_bottom_axes() == 0,
+                "gap is_none vs count == 0 bridge failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_gap_count_is_none_iff_count_top_axes_is_zero() {
+        // COUNT bridge dual.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.top_axis_gap_count().is_none(),
+                a.count_top_axes() == 0,
+                "gap is_none vs count == 0 bridge failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_gap_count_is_some_zero_iff_bottom_axes_are_contiguous() {
+        // CONTIGUOUS-vs-SPARSE DISCRIMINATOR — LOAD-BEARING pin. Gap
+        // Some(0) is the exact contiguity verdict; any Some(k) with k >
+        // 0 witnesses the sparsity count. Pinned on hand-picked witnesses
+        // representing every regime.
+        // CONTIGUOUS regime — three witnesses:
+        //   * EMPTY (saturated pole, span == count == FIELD_COUNT, gap 0)
+        //   * CONTIGUOUS_INTERIOR (interior three-run, span == count == 3, gap 0)
+        //   * Singleton — the (1, 1, 0) triple, pinned via one-axis
+        //     bottom posture inline.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.bottom_axis_gap_count(), Some(0));
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.bottom_axis_gap_count(),
+            Some(0),
+        );
+        let singleton_bottom = ResourceLimits {
+            max_expansion_depth: 41,
+            max_cache_entries: 43,
+            max_expansion_size: 0, // sole bottom axis at position 2
+            max_macro_body_size: 47,
+            max_registered_macros: 53,
+            max_macro_arity: 59,
+        };
+        assert_eq!(singleton_bottom.bottom_axis_gap_count(), Some(0));
+        assert_eq!(singleton_bottom.count_bottom_axes(), 1);
+
+        // SPARSE regime — gap > 0 exactly on the two test-local sparse
+        // witnesses; the (span, count, gap) triples pin the DENSITY at
+        // interior points of the CONTIGUOUS-vs-SPARSE surface.
+        assert_eq!(SPARSE_BOTTOM_POSTURE.bottom_axis_gap_count(), Some(3));
+        assert_eq!(SPARSE_BOTTOM_POSTURE.bottom_axis_index_span(), Some(6));
+        assert_eq!(SPARSE_BOTTOM_POSTURE.count_bottom_axes(), 3);
+
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_gap_count(),
+            Some(4)
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_index_span(),
+            Some(6)
+        );
+        assert_eq!(ENDPOINTS_ONLY_BOTTOM_POSTURE.count_bottom_axes(), 2);
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_gap_count_of_singleton_bottom_axis_is_some_zero() {
+        // SINGLE-FIRE COINCIDENCE pin — a lone bottom axis at any of the
+        // six positions gives (span, count, gap) == (1, 1, 0); the
+        // singleton case is trivially contiguous on the GAP surface.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let mut values = [17_usize; 6];
+            values[position] = 0;
+            let posture = ResourceLimits {
+                max_expansion_depth: values[0],
+                max_cache_entries: values[1],
+                max_expansion_size: values[2],
+                max_macro_body_size: values[3],
+                max_registered_macros: values[4],
+                max_macro_arity: values[5],
+            };
+            assert_eq!(
+                posture.bottom_axis_gap_count(),
+                Some(0),
+                "singleton bottom at position {position} gave non-zero gap",
+            );
+            assert_eq!(posture.count_bottom_axes(), 1);
+            assert_eq!(posture.bottom_axis_index_span(), Some(1));
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_gap_count_of_full_span_equals_field_count_minus_count() {
+        // FULL-SPAN pin — when span saturates at FIELD_COUNT (bottom
+        // axes anchor position 0 AND position FIELD_COUNT - 1), the GAP
+        // equals FIELD_COUNT - count. Two witnesses at the FULL-SPAN
+        // corner:
+        //   * EMPTY (count == FIELD_COUNT, gap == 0)
+        //   * ENDPOINTS_ONLY (count == 2, gap == FIELD_COUNT - 2 == 4)
+        // The two pins jointly span the FULL-SPAN row of the GAP surface
+        // from CONTIGUOUS (gap 0) to MAXIMAL-SPARSE (gap FIELD_COUNT - 2).
+        assert_eq!(EMPTY_RESOURCE_LIMITS.bottom_axis_index_span(), Some(6));
+        assert_eq!(EMPTY_RESOURCE_LIMITS.count_bottom_axes(), 6);
+        assert_eq!(EMPTY_RESOURCE_LIMITS.bottom_axis_gap_count(), Some(0));
+
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_index_span(),
+            Some(6),
+        );
+        assert_eq!(ENDPOINTS_ONLY_BOTTOM_POSTURE.count_bottom_axes(), 2);
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_gap_count(),
+            Some(6 - 2),
+        );
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_gap_count_is_bounded_by_field_count_minus_one_when_some() {
+        // Range bound — when Some(k), 0 <= k <= FIELD_COUNT - 1. Pinned
+        // across the shipped presets + hand-authored + test-local
+        // postures; the tight upper bound witness is ENDPOINTS_ONLY at
+        // FIELD_COUNT - 2 = 4 which is < FIELD_COUNT - 1 = 5. The
+        // absolute upper bound of FIELD_COUNT - 1 = 5 is unreachable on
+        // this cell (would require count == 1 with span == FIELD_COUNT,
+        // impossible since a singleton bottom cannot span the whole
+        // field). Pinning the loose bound catches any future rewrite
+        // that returns a GAP value out of `0..FIELD_COUNT`.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if let Some(k) = a.bottom_axis_gap_count() {
+                assert!(
+                    k < ResourceLimits::FIELD_COUNT,
+                    "gap {k} out of `0..FIELD_COUNT` on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_gap_count_plus_count_bottom_axes_equals_bottom_axis_index_span_when_some(
+    ) {
+        // SPARSITY-COMPLEMENT identity — for every posture where the
+        // GAP is Some(k), `gap + count == span`. The bottom bracket is
+        // partitioned into (count) bottom positions and (gap) non-bottom
+        // positions, structurally exhaustive.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if let (Some(gap), Some(span)) = (a.bottom_axis_gap_count(), a.bottom_axis_index_span())
+            {
+                let count = a.count_bottom_axes();
+                assert_eq!(
+                    gap + count,
+                    span,
+                    "gap + count != span on {a:?}: gap={gap} count={count} span={span}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_gap_count_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — both GAP projections are evaluable in const
+        // context so a caller can pin bracket-sparsity identities at
+        // compile time as build-breaks. Sibling of the const-fn
+        // evaluability pins on bottom_axis_index_span + top_axis_index_span
+        // + count_bottom_axes + count_top_axes one PROJECTION-KIND axis
+        // over.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_gap_count(),
+            Some(0)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.top_axis_gap_count().is_none());
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_gap_count(),
+            Some(0)
+        ));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_gap_count().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.bottom_axis_gap_count().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_gap_count().is_none());
     }
 }

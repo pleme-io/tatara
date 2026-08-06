@@ -10540,6 +10540,272 @@ impl ResourceLimits {
         }
         result
     }
+
+    /// Whole-posture AXIALLY-POLAR predicate — `self.is_axially_polar()`
+    /// holds iff EVERY axis of `self` sits at SOME pole
+    /// (`self.field_values()[i] == 0 || self.field_values()[i] == usize::MAX`
+    /// for every `i in 0..FIELD_COUNT`). The single-bit ALL-fold peer of
+    /// [`Self::axes_is_pole`] one PROJECTION-KIND axis over, formalizing
+    /// the LOAD-BEARING semantic-gap the shipped
+    /// `axes_is_pole_fold_may_exceed_is_pole_on_mixed_pole_posture` pin
+    /// documented on the previous run: the per-axis pole-mask carries a
+    /// STRICTLY STRONGER pole-membership semantic than the whole-posture
+    /// [`Self::is_pole`] verdict, and this projection binds that stronger
+    /// semantic at ONE typed named `bool` primitive rather than leaving
+    /// consumers to compose the fold at every call site.
+    ///
+    /// Strictly stronger than [`Self::is_pole`]: `self.is_axially_polar()
+    /// ⇒ self.is_pole() || self` is a MIXED-POLE posture (some axes at
+    /// `0`, other axes at `usize::MAX`). Where `is_pole` fires ONLY on
+    /// the two named preset extrema [`EMPTY_RESOURCE_LIMITS`] +
+    /// [`UNBOUNDED_RESOURCE_LIMITS`] (uniform-pole), THIS projection
+    /// ALSO fires on every mixed-pole composite the substrate admits —
+    /// the 2⁶ = 64 hypercube-vertex postures of the six-axis `[0,
+    /// usize::MAX]^6` bounded lattice, of which the two preset extrema
+    /// are just the (all-`0`, all-`usize::MAX`) diagonal.
+    ///
+    /// The direct PROJECTION-KIND peer of [`Self::axes_is_pole`] one
+    /// PROJECTION-KIND axis over — where `axes_is_pole` decomposes the
+    /// pole-membership question into six per-axis bits, THIS projection
+    /// re-COMPOSES the six bits into ONE single-bit verdict via the
+    /// per-axis `&&` fold. Sibling of [`Self::is_bottom`] +
+    /// [`Self::is_top`]'s composition through [`Self::leq`] on the same
+    /// pole-identity surface one COMBINATOR axis over: those two lift
+    /// the pointwise `min`/`max` law into whole-posture pole membership
+    /// via a single `leq` call, while THIS projection lifts the per-axis
+    /// pole-mask into whole-posture axial polarity via the per-axis
+    /// conjunction.
+    ///
+    /// Encoded as the per-axis `&&` fold over [`Self::axes_is_pole`] —
+    /// one primitive delegation to the just-lifted per-axis-mask primitive
+    /// with the ALL-fold quantifier applied, so a future re-derivation of
+    /// `axes_is_pole` propagates to `is_axially_polar` mechanically rather
+    /// than requiring a per-method fix-up. The equivalent alternative
+    /// encoding `!self.has_interior_axis()` (via a not-yet-lifted
+    /// existential dual) would bind ONE additional primitive; the direct
+    /// ALL-fold form matches [`Self::axes_is_interior`]'s per-axis
+    /// conjunction-of-negations shape verbatim on the DUAL cell.
+    ///
+    /// **Preset pins**: both bounded-lattice extrema fire the ALL-fold
+    /// verdict — `EMPTY_RESOURCE_LIMITS.is_axially_polar() == true`
+    /// (every `0` fires the bottom arm at every axis) and
+    /// `UNBOUNDED_RESOURCE_LIMITS.is_axially_polar() == true` (every
+    /// `usize::MAX` fires the top arm at every axis). `DEFAULT_RESOURCE_LIMITS
+    /// .is_axially_polar() == false` (every `DEFAULT_MAX_*` is a positive
+    /// constant strictly less than `usize::MAX`, so neither arm fires at
+    /// any axis).
+    ///
+    /// **Hand-authored asymmetric rejection**: both
+    /// [`HAND_AUTHORED_MID_POSTURE`] and [`HAND_AUTHORED_OTHER_POSTURE`]
+    /// have every field at a distinct positive value strictly less than
+    /// [`usize::MAX`], so neither the bottom nor the top pole arm fires
+    /// at any axis and `is_axially_polar() == false` on both.
+    ///
+    /// **Mixed-pole load-bearing arm**: a posture with `max_expansion_depth
+    /// == usize::MAX` and every other axis at `0` (composed via
+    /// `strictest_of([UNBOUNDED, EMPTY-in-five-axes])`) satisfies
+    /// `is_axially_polar() == true` — every axis fires SOME pole arm
+    /// (one at top, five at bottom) — while `is_pole() == false` (the
+    /// whole posture is neither the EMPTY nor the UNBOUNDED preset). The
+    /// LOAD-BEARING discriminator between the WEAKER whole-posture
+    /// `is_pole` and the STRONGER axial `is_axially_polar` semantics.
+    /// Pinned as
+    /// `resource_limits_is_axially_polar_fires_on_mixed_pole_posture_where_is_pole_rejects`.
+    ///
+    /// **Fold-agreement contract**: for every posture `a`,
+    /// `a.is_axially_polar() == a.axes_is_pole().iter().all(|&bit| bit)`
+    /// — pinning the projection body as definitionally the ALL-fold over
+    /// [`Self::axes_is_pole`]. Pinned via
+    /// `resource_limits_is_axially_polar_agrees_with_axes_is_pole_all_fold`.
+    ///
+    /// **is_pole ⇒ is_axially_polar contract**: on every posture,
+    /// `a.is_pole() ⇒ a.is_axially_polar()` — the whole-posture pole
+    /// verdict implies the axial polarity verdict (both preset extrema
+    /// carry axially-polar per-axis-mask closures). The converse fails
+    /// on mixed-pole postures, pinning the STRICTLY STRONGER direction.
+    /// Pinned via
+    /// `resource_limits_is_pole_implies_is_axially_polar_on_every_shipped_posture`.
+    ///
+    /// **is_axially_polar ⇔ !is_axially_interior contract** (via the
+    /// paired [`Self::is_axially_interior`] projection): the two
+    /// predicates form an EXHAUSTIVE-AND-DISJOINT 2-cell partition of
+    /// the posture universe at the AXIAL-QUANTIFIER surface — every
+    /// posture is either axially-polar (every axis at pole) or
+    /// axially-interior (some axis in strict interior). Pinned via
+    /// `resource_limits_is_axially_polar_and_is_axially_interior_partition_every_posture`.
+    ///
+    /// `const fn` so a caller can pin axial polarity at compile time
+    /// (`const _: bool = EMPTY_RESOURCE_LIMITS.is_axially_polar();`) —
+    /// sibling of the const-fn evaluability pins on
+    /// [`Self::axes_is_pole`] one PROJECTION-KIND axis over.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-posture axial-polarity verdict is a named typed exit rather
+    /// than an inline `axes_is_pole().iter().all(...)` per-consumer fold.
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// axial-polarity predicate is the ALL-fold of the shipped per-axis
+    /// pole-mask, and the (`is_pole`, `is_axially_polar`) pair
+    /// crystallizes the WEAKER-vs-STRONGER pole semantics as TWO named
+    /// typed predicates on the algebra rather than one predicate with
+    /// two silently-competing readings. THEORY.md §V.1 — knowable
+    /// platform; the axial polarity binds at ONE typed method
+    /// structurally forced by the array's fixed arity.
+    ///
+    /// Frontier inspiration: APL's `∧/(0=⍵)∨(⍵=⌈/⍵)` per-position
+    /// pole-membership disjunction folded through `∧/` (universal
+    /// quantifier over positions). Idris's `all (\x -> x == 0 || x ==
+    /// maxBound) v` over `Vec n Nat` yielding `Bool`. Haskell's `all id
+    /// . zipWith (\x -> x == minBound || x == maxBound)` on a bounded
+    /// numeric vector — the ALL-fold consuming the per-axis pole-mask
+    /// into ONE single-bit verdict. Kmett's `lattices` package's
+    /// `bottom || top` scalar-level pole disjunction lifted through a
+    /// per-position `all`-fold. Translation through pleme-io primitives
+    /// is the plain `const fn` per-axis `&&` fold over the already-
+    /// lifted [`Self::axes_is_pole`] mask, no new dep, no typeclass
+    /// indirection, no allocation.
+    #[must_use]
+    pub const fn is_axially_polar(self) -> bool {
+        let mask = self.axes_is_pole();
+        let mut i = 0;
+        while i < Self::FIELD_COUNT {
+            if !mask[i] {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
+
+    /// Whole-posture AXIALLY-INTERIOR predicate — `self.is_axially_interior()`
+    /// holds iff EVERY axis of `self` sits STRICTLY BETWEEN the two poles
+    /// (`0 < self.field_values()[i] < usize::MAX` for every `i in
+    /// 0..FIELD_COUNT`). The single-bit ALL-fold peer of
+    /// [`Self::axes_is_interior`] one PROJECTION-KIND axis over, and the
+    /// De Morgan DUAL of [`Self::is_axially_polar`] one CELL axis over
+    /// via `!(a || b) == !a && !b` lifted through the ALL-fold.
+    ///
+    /// Strictly stronger than [`Self::is_interior`]: `self.is_axially_interior()
+    /// ⇒ self.is_interior()`. Where `is_interior` fires whenever the
+    /// whole posture is neither the EMPTY nor the UNBOUNDED preset
+    /// (admitting mixed-pole composites), THIS projection ONLY fires
+    /// when every axis is strictly interior — rejecting every mixed-pole
+    /// posture the weaker `is_interior` admits. The converse fails on
+    /// mixed-pole postures (`[0, usize::MAX, ...]`): `is_interior ==
+    /// true` (not a preset) but `is_axially_interior == false` (axes at
+    /// poles).
+    ///
+    /// The MIDDLE-CELL peer of [`Self::is_axially_polar`] on the AXIAL-
+    /// QUANTIFIER surface — the two together close the (polar, interior)
+    /// 2-cell partition at the whole-posture ALL-fold projection kind,
+    /// mirroring the (pole, interior) 2-cell partition [`Self::is_pole`]
+    /// / [`Self::is_interior`] close at the whole-posture PRESET
+    /// projection kind one QUANTIFIER axis over, and the (pole, interior)
+    /// 2-cell partition [`Self::axes_is_pole`] / [`Self::axes_is_interior`]
+    /// close at the per-axis-mask projection kind one PROJECTION-KIND
+    /// axis over. The SAME two-arm CONJUNCTION-OF-NEGATIONS shape
+    /// closing interior membership at all three projection kinds.
+    ///
+    /// Encoded as the per-axis `&&` fold over [`Self::axes_is_interior`] —
+    /// one primitive delegation to the just-lifted per-axis-mask primitive
+    /// with the ALL-fold quantifier applied. The equivalent alternative
+    /// encoding `!self.is_axially_polar()` (via De Morgan complement of
+    /// the paired ALL-fold verdict on the DUAL per-axis mask) is
+    /// structurally equivalent AND pinned as a substrate theorem via
+    /// `resource_limits_is_axially_interior_is_de_morgan_dual_of_is_axially_polar`.
+    /// The direct ALL-fold form matches [`Self::is_axially_polar`]'s
+    /// shape verbatim on the DUAL per-axis mask.
+    ///
+    /// **Preset pins**: `DEFAULT_RESOURCE_LIMITS.is_axially_interior()
+    /// == true` (every shipped `DEFAULT_MAX_*` is a positive constant
+    /// strictly less than `usize::MAX`, so no axis is at a pole);
+    /// `EMPTY_RESOURCE_LIMITS.is_axially_interior() == false` (every
+    /// axis is at `0`); `UNBOUNDED_RESOURCE_LIMITS.is_axially_interior()
+    /// == false` (every axis is at `usize::MAX`).
+    ///
+    /// **Hand-authored asymmetric closure**: both
+    /// [`HAND_AUTHORED_MID_POSTURE`] and [`HAND_AUTHORED_OTHER_POSTURE`]
+    /// have every field at a distinct positive value strictly less than
+    /// [`usize::MAX`], so `is_axially_interior() == true` on both. Peer
+    /// posture to the axially-polar hand-authored rejection.
+    ///
+    /// **Mixed-pole load-bearing rejection**: the same mixed-pole posture
+    /// that fires `is_axially_polar` (composed via
+    /// `strictest_of([UNBOUNDED, EMPTY-in-five-axes])`) satisfies
+    /// `is_axially_interior() == false` (every axis is at SOME pole)
+    /// while `is_interior() == true` (the whole posture is neither the
+    /// EMPTY nor the UNBOUNDED preset). The LOAD-BEARING discriminator
+    /// between the WEAKER whole-posture `is_interior` and the STRONGER
+    /// axial `is_axially_interior` semantics. Pinned as
+    /// `resource_limits_is_axially_interior_rejects_on_mixed_pole_posture_where_is_interior_holds`.
+    ///
+    /// **Fold-agreement contract**: for every posture `a`,
+    /// `a.is_axially_interior() == a.axes_is_interior().iter().all(|&bit|
+    /// bit)` — pinning the projection body as definitionally the ALL-fold
+    /// over [`Self::axes_is_interior`]. Pinned via
+    /// `resource_limits_is_axially_interior_agrees_with_axes_is_interior_all_fold`.
+    ///
+    /// **is_axially_interior ⇒ is_interior contract**: on every posture,
+    /// `a.is_axially_interior() ⇒ a.is_interior()` — the axial-interior
+    /// verdict implies the whole-posture interior verdict (any posture
+    /// with every axis strictly interior is trivially not the EMPTY nor
+    /// the UNBOUNDED preset). The converse fails on mixed-pole postures,
+    /// pinning the STRICTLY STRONGER direction. Pinned via
+    /// `resource_limits_is_axially_interior_implies_is_interior_on_every_shipped_posture`.
+    ///
+    /// **De Morgan duality**: for every posture `a`, `a.is_axially_interior()
+    /// == !a.is_axially_polar()` — the two axial-quantifier predicates
+    /// are De Morgan duals via the paired
+    /// [`Self::axes_is_pole`]/[`Self::axes_is_interior`] per-axis-mask
+    /// partition folded through the SAME ALL-fold quantifier
+    /// (`all(!x) == !any(x)` on Boolean vectors reduces here to
+    /// `all(!pole) == !any(pole)`, and since `pole[i] || interior[i]`
+    /// AND `!pole[i] == interior[i]` at every axis, the two ALL-folds
+    /// compose as complements). Pinned via
+    /// `resource_limits_is_axially_interior_is_de_morgan_dual_of_is_axially_polar`.
+    ///
+    /// **Partition exhaustiveness**: for every posture `a`,
+    /// `a.is_axially_polar() ^ a.is_axially_interior() == true` — the
+    /// two axial-quantifier verdicts partition the posture universe with
+    /// disjoint verdicts. Pinned via
+    /// `resource_limits_is_axially_polar_and_is_axially_interior_partition_every_posture`.
+    ///
+    /// `const fn` so a caller can pin axial interiority at compile time
+    /// (`const _: bool = DEFAULT_RESOURCE_LIMITS.is_axially_interior();`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-posture axial-interior verdict is a named typed exit rather
+    /// than an inline `axes_is_interior().iter().all(...)` per-consumer
+    /// fold. THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// the (`is_axially_polar`, `is_axially_interior`) pair closes the
+    /// axial-quantifier partition as a substrate-level EXCLUSIVITY
+    /// THEOREM proved on BOTH sides at TYPE level via the De Morgan
+    /// dual, and the (`is_interior`, `is_axially_interior`) pair
+    /// crystallizes the WEAKER-vs-STRONGER interior semantics as TWO
+    /// named typed predicates on the algebra rather than one predicate
+    /// with two silently-competing readings. THEORY.md §V.1 — knowable
+    /// platform.
+    ///
+    /// Frontier inspiration: order theory's canonical "strict interior
+    /// of a bounded lattice" concept lifted to a whole-posture ALL-fold
+    /// via APL's `∧/(∼(0=⍵)∧∼(⍵=⌈/⍵))` per-position strict-interior
+    /// disjunction folded through `∧/`. Idris's `all (\x -> x /= 0 && x
+    /// /= maxBound) v`. Haskell's `all id . zipWith (\x -> x /= minBound
+    /// && x /= maxBound)` on a bounded numeric vector. Translation
+    /// through pleme-io primitives is the plain `const fn` per-axis
+    /// `&&` fold over the already-lifted [`Self::axes_is_interior`]
+    /// mask.
+    #[must_use]
+    pub const fn is_axially_interior(self) -> bool {
+        let mask = self.axes_is_interior();
+        let mut i = 0;
+        while i < Self::FIELD_COUNT {
+            if !mask[i] {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -40005,6 +40271,300 @@ mod tests {
         assert_eq!(DEFAULT_MASK, [true; ResourceLimits::FIELD_COUNT]);
         assert_eq!(EMPTY_MASK, [false; ResourceLimits::FIELD_COUNT]);
         assert_eq!(UNBOUNDED_MASK, [false; ResourceLimits::FIELD_COUNT]);
+    }
+
+    #[test]
+    fn resource_limits_is_axially_polar_of_pole_presets_is_true() {
+        // Preset identity — both bounded-lattice extrema fire the ALL-
+        // fold verdict on `axes_is_pole`: EMPTY carries every axis at `0`
+        // (bottom pole) and UNBOUNDED carries every axis at `usize::MAX`
+        // (top pole), so the per-axis conjunction closes uniformly on
+        // both. Peer of `axes_is_pole_of_pole_presets_is_all_true` one
+        // PROJECTION-KIND axis over on the same preset roster.
+        assert!(EMPTY_RESOURCE_LIMITS.is_axially_polar());
+        assert!(UNBOUNDED_RESOURCE_LIMITS.is_axially_polar());
+    }
+
+    #[test]
+    fn resource_limits_is_axially_polar_of_default_is_false() {
+        // Interior preset — every `DEFAULT_MAX_*` is a concrete positive
+        // constant strictly less than `usize::MAX`, so neither pole arm
+        // fires at any axis and the ALL-fold rejects. Peer of
+        // `axes_is_pole_of_default_is_all_false`.
+        assert!(!DEFAULT_RESOURCE_LIMITS.is_axially_polar());
+    }
+
+    #[test]
+    fn resource_limits_is_axially_polar_of_hand_authored_postures_is_false() {
+        // Antichain rejection — the two hand-authored asymmetric
+        // postures sit in the lattice interior on distinct branches; no
+        // axis fires either pole arm. Peer of
+        // `axes_is_pole_of_hand_authored_postures_is_all_false`.
+        for &a in &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE] {
+            assert!(
+                !a.is_axially_polar(),
+                "hand-authored antichain posture {a:?} must reject is_axially_polar",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_interior_of_default_is_true() {
+        // Preset identity — every `DEFAULT_MAX_*` sits strictly between
+        // the two poles, so both per-axis pole arms reject at every axis
+        // and the ALL-fold on the per-axis interior mask closes uniformly.
+        assert!(DEFAULT_RESOURCE_LIMITS.is_axially_interior());
+    }
+
+    #[test]
+    fn resource_limits_is_axially_interior_of_pole_presets_is_false() {
+        // Preset rejection — both bounded-lattice extrema fire ONE pole
+        // arm at every axis, so the per-axis interior mask is all-false
+        // and the ALL-fold rejects.
+        assert!(!EMPTY_RESOURCE_LIMITS.is_axially_interior());
+        assert!(!UNBOUNDED_RESOURCE_LIMITS.is_axially_interior());
+    }
+
+    #[test]
+    fn resource_limits_is_axially_interior_of_hand_authored_postures_is_true() {
+        // Antichain absorption — both hand-authored postures have every
+        // field at a positive-mid value strictly less than `usize::MAX`,
+        // so the per-axis interior mask is all-true and the ALL-fold
+        // closes.
+        for &a in &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE] {
+            assert!(
+                a.is_axially_interior(),
+                "hand-authored posture {a:?} must satisfy is_axially_interior",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_polar_agrees_with_axes_is_pole_all_fold() {
+        // Fold-agreement contract — the whole-posture axial-polarity
+        // verdict agrees with the direct ALL-fold over `axes_is_pole`
+        // on every preset. Pins the projection body as definitionally
+        // the ALL-fold; a regression that flipped the quantifier to
+        // ANY or reversed the mask polarity would fire here on the
+        // canonical roster.
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.is_axially_polar(),
+                a.axes_is_pole().iter().all(|&bit| bit),
+                "is_axially_polar must equal all-fold over axes_is_pole for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_interior_agrees_with_axes_is_interior_all_fold() {
+        // Fold-agreement dual — same shape, dual mask.
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.is_axially_interior(),
+                a.axes_is_interior().iter().all(|&bit| bit),
+                "is_axially_interior must equal all-fold over axes_is_interior for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_interior_is_de_morgan_dual_of_is_axially_polar() {
+        // De Morgan cross-check — the two axial-quantifier predicates
+        // are set-complements on every posture. Pins the (axially-polar,
+        // axially-interior) 2-cell partition at the whole-posture
+        // ALL-fold projection kind as a substrate-level EXCLUSIVITY
+        // THEOREM proved on BOTH sides at TYPE level.
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.is_axially_polar(),
+                !a.is_axially_interior(),
+                "is_axially_polar must equal !is_axially_interior for {a:?}",
+            );
+            assert_eq!(
+                a.is_axially_interior(),
+                !a.is_axially_polar(),
+                "is_axially_interior must equal !is_axially_polar for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_polar_and_is_axially_interior_partition_every_posture() {
+        // Partition exhaustiveness — exactly one of the two verdicts
+        // holds on every posture. The axial-quantifier 2-cell partition
+        // exhausts the posture universe with disjoint verdicts. Sweeps
+        // the canonical preset roster PLUS a mixed-pole composite that
+        // discriminates the STRICTLY STRONGER axial semantics from the
+        // weaker whole-posture preset semantics.
+        let mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 0,
+            max_macro_body_size: 0,
+            max_registered_macros: 0,
+            max_macro_arity: 0,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&mixed_pole))
+        {
+            assert!(
+                a.is_axially_polar() ^ a.is_axially_interior(),
+                "(is_axially_polar, is_axially_interior) must partition {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_pole_implies_is_axially_polar_on_every_shipped_posture() {
+        // Direction contract — the whole-posture pole verdict IMPLIES
+        // the axial polarity verdict on every posture: both bounded-
+        // lattice extrema carry axially-polar per-axis closures. Pins
+        // the STRICTLY STRONGER direction; the converse fails on
+        // mixed-pole postures, pinned in the paired discriminator
+        // below.
+        for &a in STRICT_ORDER_ROSTER {
+            if a.is_pole() {
+                assert!(
+                    a.is_axially_polar(),
+                    "is_pole must imply is_axially_polar on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_interior_implies_is_interior_on_every_shipped_posture() {
+        // Direction contract dual — the axial-interior verdict IMPLIES
+        // the whole-posture interior verdict on every posture: any
+        // posture with every axis strictly interior is trivially not
+        // the EMPTY nor the UNBOUNDED preset. Pins the STRICTLY
+        // STRONGER direction; the converse fails on mixed-pole
+        // postures, pinned in the paired discriminator below.
+        for &a in STRICT_ORDER_ROSTER {
+            if a.is_axially_interior() {
+                assert!(
+                    a.is_interior(),
+                    "is_axially_interior must imply is_interior on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_polar_fires_on_mixed_pole_posture_where_is_pole_rejects() {
+        // LOAD-BEARING semantic-gap witness — the mixed-pole posture
+        // with `max_expansion_depth == usize::MAX` and every other axis
+        // at `0` fires the STRONGER axial-polarity verdict (every axis
+        // at SOME pole — one at top, five at bottom) but rejects the
+        // WEAKER whole-posture pole verdict (neither the EMPTY nor the
+        // UNBOUNDED preset). Pins the STRICTLY STRONGER direction of
+        // the (is_pole, is_axially_polar) pair as its OWN typed
+        // primitive rather than an inline consumer fold; a consumer
+        // reaching for `is_pole` on a mixed-pole posture and expecting
+        // pole membership silently observes `false`, while the same
+        // consumer reaching for `is_axially_polar` correctly observes
+        // `true` on every axis of the same posture. Formalizes the
+        // semantic gap the paired `axes_is_pole_fold_may_exceed_is_pole`
+        // pin already documented at the per-axis-mask surface, now
+        // named at the single-bit ALL-fold verdict surface.
+        let mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 0,
+            max_macro_body_size: 0,
+            max_registered_macros: 0,
+            max_macro_arity: 0,
+        };
+        assert!(
+            mixed_pole.is_axially_polar(),
+            "mixed-pole posture must fire is_axially_polar",
+        );
+        assert!(
+            !mixed_pole.is_pole(),
+            "mixed-pole posture must NOT satisfy is_pole (neither pole preset)",
+        );
+    }
+
+    #[test]
+    fn resource_limits_is_axially_interior_rejects_on_mixed_pole_posture_where_is_interior_holds() {
+        // Dual load-bearing semantic-gap witness — the same mixed-pole
+        // posture satisfies `is_interior == true` (whole posture is
+        // neither the EMPTY nor the UNBOUNDED preset) but every axis
+        // sits at SOME pole, so `is_axially_interior == false`. Pins
+        // the STRICTLY STRONGER direction of the (is_interior,
+        // is_axially_interior) pair as its OWN typed primitive; a
+        // consumer reaching for `is_interior` on a mixed-pole posture
+        // and expecting per-axis interiority silently observes `true`,
+        // while the same consumer reaching for `is_axially_interior`
+        // correctly observes `false` on every axis at pole.
+        let mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 0,
+            max_macro_body_size: 0,
+            max_registered_macros: 0,
+            max_macro_arity: 0,
+        };
+        assert!(
+            !mixed_pole.is_axially_interior(),
+            "mixed-pole posture must reject is_axially_interior",
+        );
+        assert!(
+            mixed_pole.is_interior(),
+            "mixed-pole posture must satisfy is_interior (neither pole preset)",
+        );
+    }
+
+    #[test]
+    fn resource_limits_is_axially_polar_composes_at_compile_time_via_const_fn() {
+        // CONST-FN pin — axial polarity is evaluable in const context,
+        // so a caller can pin the ALL-fold verdict at compile time.
+        // Sibling of the const-fn evaluability pins on `axes_is_pole`
+        // one PROJECTION-KIND axis over. Uses `const _: () = assert!(…)`
+        // rather than intermediate `const BOOL: bool` bindings to sidestep
+        // clippy's `assertions_on_constants` lint at the assert callsite.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.is_axially_polar());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.is_axially_polar());
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.is_axially_polar());
+    }
+
+    #[test]
+    fn resource_limits_is_axially_interior_composes_at_compile_time_via_const_fn() {
+        // CONST-FN dual pin — same shape, dual cell.
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.is_axially_interior());
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.is_axially_interior());
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.is_axially_interior());
+    }
+
+    #[test]
+    fn resource_limits_is_axially_polar_agrees_with_pointwise_field_at_either_pole() {
+        // Positional-alignment cross-check — the ALL-fold verdict agrees
+        // with the direct all-fold over the pointwise `field == 0 ||
+        // field == usize::MAX` verdict on every preset AND on the
+        // mixed-pole composite. Pins the canonical index-to-axis mapping
+        // holds at the ALL-fold surface too.
+        let mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 0,
+            max_macro_body_size: 0,
+            max_registered_macros: 0,
+            max_macro_arity: 0,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&mixed_pole))
+        {
+            let values = a.field_values();
+            let expected = values.iter().all(|&v| v == 0 || v == usize::MAX);
+            assert_eq!(
+                a.is_axially_polar(),
+                expected,
+                "is_axially_polar must agree with all-fold over pointwise pole verdict for {a:?}",
+            );
+        }
     }
 
     // ── Field-inspection primitives: FIELD_COUNT + FIELD_NAMES +

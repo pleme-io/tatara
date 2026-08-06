@@ -14642,6 +14642,188 @@ impl ResourceLimits {
             c => Some(c > 1),
         }
     }
+
+    /// Whole-posture MULTI-OF-POLAR predicate —
+    /// `self.polar_axis_is_multi()` returns `Some(true)` iff TWO OR MORE
+    /// axes of `self` sit at any pole (bottom or top; equivalently:
+    /// [`Self::count_polar_axes`] `> 1`), `Some(false)` iff EXACTLY one
+    /// axis is polar (the SINGLE-FIRE regime, either sole-bottom OR
+    /// sole-top), or `None` iff no axis is polar. The COMPOUND-CELL DUAL
+    /// of [`Self::bottom_axis_is_multi`] one CELL-KIND axis over on the
+    /// MULTI column — jointly the (polar_axis_is_multi,
+    /// interior_axis_is_multi) COMPOUND pair CLOSES the MULTI column on
+    /// the (bottom, top, polar, interior) 4-cell axis-family opened by
+    /// [`Self::bottom_axis_is_multi`] + [`Self::top_axis_is_multi`] one
+    /// CELL-KIND axis under.
+    ///
+    /// **DE-MORGAN-COMPLEMENT identity — LOAD-BEARING structural pin**:
+    /// on every posture, `polar_axis_is_multi() ==
+    /// polar_axis_is_singleton().map(|b| !b)`. The MULTI predicate is
+    /// the pointwise boolean complement of the SINGLETON predicate on
+    /// its `Some(_)` cells, mirroring exactly how the atomic (bottom,
+    /// top) MULTI cells derive from the atomic SINGLETON cells one
+    /// CELL-KIND axis under. Pinned via
+    /// `resource_limits_polar_axis_is_multi_equals_is_singleton_complement`.
+    ///
+    /// **COUNT-GREATER-THAN-ONE identity — LOAD-BEARING structural pin**:
+    /// on every posture, `polar_axis_is_multi() == { let c =
+    /// self.count_polar_axes(); if c == 0 { None } else { Some(c > 1) }
+    /// }`. Composes structurally through the COMPOUND polar COUNT
+    /// projection; the substrate never re-scans the per-axis mask.
+    /// Pinned via
+    /// `resource_limits_polar_axis_is_multi_equals_count_greater_than_one`.
+    ///
+    /// **ATOMIC-DISJUNCTION-SUM identity — LOAD-BEARING structural pin**:
+    /// on every posture, `polar_axis_is_multi() == { let s =
+    /// self.count_bottom_axes() + self.count_top_axes(); if s == 0 {
+    /// None } else { Some(s > 1) } }`. This lifts the COMPOUND polar
+    /// MULTI verdict into a strictly-atomic derivation over the disjoint
+    /// atomic count pair via the just-lifted
+    /// `polar_count == bottom_count + top_count` DISJOINT-UNION identity
+    /// (one PROJECTION-KIND axis under on the COUNT column) —
+    /// specifically, the COMPOUND MULTI regime is BROADER than the
+    /// ATOMIC MULTI pair: `polar_axis_is_multi() == Some(true)` fires
+    /// whenever `bottom_axis_is_multi() == Some(true)` OR
+    /// `top_axis_is_multi() == Some(true)` OR `(bottom_axis_is_singleton()
+    /// == Some(true) AND top_axis_is_singleton() == Some(true))` (the
+    /// SPLIT-SINGLETON case at atomic count == 1 on each cell, where
+    /// neither atomic MULTI fires but the compound polar MULTI does).
+    /// Pinned via
+    /// `resource_limits_polar_axis_is_multi_equals_atomic_count_sum_greater_than_one`
+    /// and
+    /// `resource_limits_polar_axis_is_multi_true_iff_atomic_multi_disjunction_or_split_singleton`.
+    ///
+    /// **MULTI-EXCLUDES-SINGLETON — LOAD-BEARING mutual-exclusion pin**:
+    /// on every posture, NOT (`polar_axis_is_multi() == Some(true) &&
+    /// polar_axis_is_singleton() == Some(true)`). The MULTI and
+    /// SINGLETON typed exits at the COMPOUND polar cell jointly PARTITION
+    /// the has-polar-axis regime into two mutually-exclusive strict
+    /// cells. Pinned via
+    /// `resource_limits_polar_axis_is_multi_true_implies_is_singleton_false`.
+    ///
+    /// **Preset pins — LOAD-BEARING COMPOUND-CELL SATURATION contrast**:
+    /// `EMPTY_RESOURCE_LIMITS.polar_axis_is_multi() == Some(true)`
+    /// (saturated bottom pole packs SIX axes at position 0, polar count
+    /// == 6 > 1); `UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_multi() ==
+    /// Some(true)` (saturated top pole packs SIX axes at usize::MAX,
+    /// polar count == 6 > 1); `DEFAULT_RESOURCE_LIMITS
+    /// .polar_axis_is_multi() == None` (every field strictly interior);
+    /// `HAND_AUTHORED_MID_POSTURE.polar_axis_is_multi() == None`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_multi() == None`. Same
+    /// COMPOUND-CELL SATURATION shape as the polar (SPAN, GAP,
+    /// CONTIGUITY, SPARSE, SINGLETON) columns — the polar bracket is
+    /// `2-polar-saturated-multi` on the same two saturated pole presets,
+    /// and the SINGLETON column's `Some(false)` cells on those same two
+    /// presets are the pointwise DE MORGAN DUAL of these MULTI
+    /// `Some(true)` cells.
+    ///
+    /// **ANY-fold bridge**: `a.polar_axis_is_multi().is_some() ⇔
+    /// a.has_polar_axis()`. Pinned via
+    /// `resource_limits_polar_axis_is_multi_is_some_iff_has_polar_axis`.
+    ///
+    /// **BOOLEAN COLLAPSE — LOAD-BEARING pin**: the (`Some(true)`,
+    /// `Some(false)`, `None`) trichotomy PARTITIONS every posture into
+    /// (multi-polar, single-polar, no-polar) at the COMPOUND polar cell
+    /// — a distinct three-cell partition NOT expressible by any (SPAN,
+    /// GAP, CONTIGUITY, SPARSE) COMPOUND column: a compound polar posture
+    /// with a sparse-2 polar run AND a compound polar posture with a
+    /// single-fire polar axis BOTH pin the CONTIGUITY column at
+    /// `Some(false)` / `Some(true)` respectively while the MULTI column
+    /// separates them into `Some(true)` and `Some(false)` — the DE
+    /// MORGAN DUAL image of the SINGLETON column's trichotomy with the
+    /// `Some(_)` cells swapped, fixing the `None` cell.
+    ///
+    /// `const fn` so a caller can pin the polar-axis MULTI verdict at
+    /// compile time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.polar_axis_is_multi(), Some(true)));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// COMPOUND polar MULTI predicate is a named typed exit
+    /// `Option<bool>` rather than a per-consumer
+    /// `self.count_polar_axes() > 1` inline strict inequality test that
+    /// discards the has-axis-at-all distinction. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs (the COMPOUND MULTI
+    /// cell is a structural derivation from the COMPOUND polar COUNT
+    /// projection via one usize strict-inequality and one is-zero split,
+    /// no new per-axis scan, no allocation). THEORY.md §V.1 — knowable
+    /// platform: every axis-family cell on the MULTI column is either a
+    /// first-class typed exit or a De Morgan reflection of one.
+    ///
+    /// Frontier inspiration: same as [`Self::bottom_axis_is_multi`], on
+    /// the DUAL COMPOUND polar mask. Racket's `(list? l)` non-nil-cons
+    /// predicate lifted from the atomic `(pair? l)` shape.
+    #[must_use]
+    pub const fn polar_axis_is_multi(self) -> Option<bool> {
+        match self.count_polar_axes() {
+            0 => None,
+            c => Some(c > 1),
+        }
+    }
+
+    /// Whole-posture MULTI-OF-INTERIOR predicate —
+    /// `self.interior_axis_is_multi()` returns `Some(true)` iff TWO OR
+    /// MORE axes of `self` sit strictly interior (equivalently:
+    /// [`Self::count_interior_axes`] `> 1`), `Some(false)` iff EXACTLY
+    /// one axis is strictly interior, or `None` iff no axis is interior.
+    /// The COMPOUND-CELL DUAL of [`Self::polar_axis_is_multi`] one
+    /// CELL-KIND axis over via the (polar, interior) disjoint complement
+    /// — jointly the (polar_axis_is_multi, interior_axis_is_multi)
+    /// COMPOUND pair CLOSES the MULTI column on the (bottom, top, polar,
+    /// interior) 4-cell axis-family.
+    ///
+    /// **DE-MORGAN-COMPLEMENT identity dual**: on every posture,
+    /// `interior_axis_is_multi() ==
+    /// interior_axis_is_singleton().map(|b| !b)`. Pinned via
+    /// `resource_limits_interior_axis_is_multi_equals_is_singleton_complement`.
+    ///
+    /// **COUNT-GREATER-THAN-ONE identity dual**: on every posture,
+    /// `interior_axis_is_multi() == { let c =
+    /// self.count_interior_axes(); if c == 0 { None } else { Some(c > 1)
+    /// } }`. Pinned via
+    /// `resource_limits_interior_axis_is_multi_equals_count_greater_than_one`.
+    ///
+    /// **MULTI-EXCLUDES-SINGLETON — LOAD-BEARING mutual-exclusion pin
+    /// dual**: on every posture, NOT (`interior_axis_is_multi() ==
+    /// Some(true) && interior_axis_is_singleton() == Some(true)`).
+    /// Pinned via
+    /// `resource_limits_interior_axis_is_multi_true_implies_is_singleton_false`.
+    ///
+    /// **Preset pins — LOAD-BEARING COMPOUND-CELL SATURATION contrast
+    /// dual**: `DEFAULT_RESOURCE_LIMITS.interior_axis_is_multi() ==
+    /// Some(true)` (saturated interior packs SIX axes strictly interior,
+    /// count == 6 > 1); `EMPTY_RESOURCE_LIMITS.interior_axis_is_multi()
+    /// == None` (no interior); `UNBOUNDED_RESOURCE_LIMITS
+    /// .interior_axis_is_multi() == None` (no interior);
+    /// `HAND_AUTHORED_MID_POSTURE.interior_axis_is_multi() == Some(true)`
+    /// (every field strictly interior, count == 6);
+    /// `HAND_AUTHORED_OTHER_POSTURE.interior_axis_is_multi() ==
+    /// Some(true)` (same). Same COMPOUND-CELL SATURATION shape as the
+    /// interior (CONTIGUITY, SPARSE, GAP, SINGLETON) columns — the
+    /// interior bracket is `saturated-multi` on the same three
+    /// interior-saturated postures (`DEFAULT`, `HAND_AUTHORED_MID`,
+    /// `HAND_AUTHORED_OTHER`), and the SINGLETON column's `Some(false)`
+    /// cells on those three postures are the pointwise DE MORGAN DUAL
+    /// of these MULTI `Some(true)` cells.
+    ///
+    /// **ANY-fold bridge dual**: `a.interior_axis_is_multi().is_some() ⇔
+    /// a.has_interior_axis()`. Pinned via
+    /// `resource_limits_interior_axis_is_multi_is_some_iff_has_interior_axis`.
+    ///
+    /// `const fn` so a caller can pin the interior-axis MULTI verdict
+    /// at compile time.
+    ///
+    /// Theory anchor: same as [`Self::polar_axis_is_multi`], on the
+    /// DUAL COMPOUND cell.
+    ///
+    /// Frontier inspiration: same as [`Self::bottom_axis_is_multi`] on
+    /// the DUAL COMPOUND interior mask.
+    #[must_use]
+    pub const fn interior_axis_is_multi(self) -> Option<bool> {
+        match self.count_interior_axes() {
+            0 => None,
+            c => Some(c > 1),
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -53208,5 +53390,369 @@ mod tests {
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_multi().is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.bottom_axis_is_multi().is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_is_multi().is_none());
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_multi_preset_pins_saturate_both_saturated_poles_at_multi() {
+        // Preset pins on the COMPOUND polar MULTI cell — LOAD-BEARING
+        // COMPOUND-CELL SATURATION contrast with the atomic cells. BOTH
+        // saturated pole presets pack all six axes at a single pole
+        // (hence six polar axes; count > 1), so BOTH pin polar MULTI at
+        // Some(true). The DEFAULT preset has zero polar axes; MULTI is
+        // None. Same (2-polar-saturated-multi, 1-interior-saturated-
+        // absent) partition shape carried by the COMPOUND (SPARSE,
+        // CONTIGUITY, GAP, SINGLETON) columns one PROJECTION-KIND axis
+        // under; the pointwise De Morgan complement image of the
+        // SINGLETON column's (Some(false), Some(false), None) preset
+        // partition swapping Some(false) → Some(true) on the two
+        // saturated-pole cells, fixing the None cell.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.polar_axis_is_multi(), Some(true));
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_multi(), Some(true));
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_multi(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.polar_axis_is_multi(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_multi(), None);
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_multi_preset_pins_saturate_default_at_multi_and_poles_at_absent(
+    ) {
+        // Preset pins dual on the COMPOUND interior MULTI cell — the
+        // DEFAULT preset pins every axis strictly interior (count == 6),
+        // so the interior MULTI verdict is Some(true). The two saturated
+        // pole presets pin every axis polar, so neither has any interior
+        // axis; interior MULTI verdict is None. The two hand-authored
+        // postures pin every field strictly interior, so both fire the
+        // interior MULTI at Some(true). Same COMPOUND-CELL SATURATION
+        // shape as the interior CONTIGUITY, SPARSE, GAP, and SINGLETON
+        // columns one PROJECTION-KIND axis under; pointwise De Morgan
+        // complement image of the SINGLETON column's three Some(false)
+        // interior-saturated cells swapped to Some(true).
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.interior_axis_is_multi(), Some(true));
+        assert_eq!(EMPTY_RESOURCE_LIMITS.interior_axis_is_multi(), None);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_multi(), None);
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.interior_axis_is_multi(),
+            Some(true),
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.interior_axis_is_multi(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_compound_is_multi_saturation_partitions_preset_triple_by_pole() {
+        // COMPOUND-CELL SATURATION contrast on the MULTI column —
+        // LOAD-BEARING pin. Unlike the atomic cells' (1-saturated-each-
+        // multi, 1-both-absent) preset partition, the COMPOUND (polar,
+        // interior) row partitions the preset triple as
+        // (2-polar-saturated-multi, 1-interior-saturated-multi). BOTH
+        // saturated pole presets fire the polar MULTI at Some(true) while
+        // the DEFAULT preset fires the interior MULTI at Some(true). The
+        // pointwise De Morgan complement image of the SINGLETON column's
+        // saturation partition — the Some(_) cells swap Some(false) ↔
+        // Some(true), fixing the None cells.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.polar_axis_is_multi(), Some(true));
+        assert_eq!(EMPTY_RESOURCE_LIMITS.interior_axis_is_multi(), None);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_multi(), Some(true));
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_multi(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_multi(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.interior_axis_is_multi(), Some(true));
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_multi_equals_is_singleton_complement() {
+        // DE-MORGAN-COMPLEMENT identity on the COMPOUND polar cell — the
+        // MULTI predicate is the pointwise boolean complement of the
+        // SINGLETON predicate on its Some(_) cells (None fixes to None).
+        // The substrate never re-derives the count; the MULTI cell is a
+        // plain Option::map negation of the just-lifted COMPOUND
+        // SINGLETON typed exit. Mirrors the atomic (bottom, top) De
+        // Morgan pair one CELL-KIND axis under.
+        for a in COMPOUND_GAP_ROSTER {
+            assert_eq!(
+                a.polar_axis_is_multi(),
+                a.polar_axis_is_singleton().map(|b| !b),
+                "polar_is_multi != polar_is_singleton.map(!) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_multi_equals_is_singleton_complement() {
+        // DE-MORGAN-COMPLEMENT identity dual on the COMPOUND interior
+        // cell.
+        for a in COMPOUND_GAP_ROSTER {
+            assert_eq!(
+                a.interior_axis_is_multi(),
+                a.interior_axis_is_singleton().map(|b| !b),
+                "interior_is_multi != interior_is_singleton.map(!) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_multi_equals_count_greater_than_one() {
+        // COUNT-GREATER-THAN-ONE identity — the COMPOUND polar MULTI
+        // predicate is structurally derived from count_polar_axes on
+        // every posture: None iff count == 0, Some(count > 1) otherwise.
+        // Pinned across the COMPOUND-GAP roster so a future rewrite of
+        // either projection that silently drifts from the count-greater-
+        // than-one contract fires this pin. Mirror of the atomic
+        // `resource_limits_bottom_axis_is_multi_equals_count_greater_than_one`
+        // pin one CELL-KIND axis over on the boolean surface.
+        for a in COMPOUND_GAP_ROSTER {
+            let c = a.count_polar_axes();
+            let expected = if c == 0 { None } else { Some(c > 1) };
+            assert_eq!(
+                a.polar_axis_is_multi(),
+                expected,
+                "polar_is_multi = count-greater-than-one identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_multi_equals_count_greater_than_one() {
+        // COUNT-GREATER-THAN-ONE identity dual on the interior COMPOUND
+        // cell.
+        for a in COMPOUND_GAP_ROSTER {
+            let c = a.count_interior_axes();
+            let expected = if c == 0 { None } else { Some(c > 1) };
+            assert_eq!(
+                a.interior_axis_is_multi(),
+                expected,
+                "interior_is_multi = count-greater-than-one identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_multi_equals_atomic_count_sum_greater_than_one() {
+        // ATOMIC-DISJUNCTION-SUM identity — LOAD-BEARING structural pin.
+        // The COMPOUND polar MULTI verdict lifts through the disjoint
+        // atomic count pair via the just-lifted `polar_count ==
+        // bottom_count + top_count` DISJOINT-UNION identity (one
+        // PROJECTION-KIND axis under on the COUNT column): on every
+        // posture, polar_axis_is_multi() == { let s = count_bottom_axes()
+        // + count_top_axes(); if s == 0 { None } else { Some(s > 1) } }.
+        // The substrate expresses the COMPOUND MULTI verdict strictly
+        // as arithmetic over the atomic counts — a future rewrite that
+        // silently drifts polar_count away from the atomic sum fires
+        // this pin.
+        for a in COMPOUND_GAP_ROSTER {
+            let s = a.count_bottom_axes() + a.count_top_axes();
+            let expected = if s == 0 { None } else { Some(s > 1) };
+            assert_eq!(
+                a.polar_axis_is_multi(),
+                expected,
+                "polar_is_multi = atomic-count-sum-greater-than-one identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_multi_true_iff_atomic_multi_disjunction_or_split_singleton() {
+        // ATOMIC-DISJUNCTION-OR-SPLIT-SINGLETON bridge — LOAD-BEARING
+        // structural pin. The COMPOUND polar MULTI regime is BROADER
+        // than the atomic MULTI pair: polar_axis_is_multi() ==
+        // Some(true) fires whenever bottom_axis_is_multi() == Some(true)
+        // OR top_axis_is_multi() == Some(true) OR (bottom_axis_is_
+        // singleton() == Some(true) AND top_axis_is_singleton() ==
+        // Some(true)). The SPLIT-SINGLETON case (one bottom + one top,
+        // atomic count == 1 on each cell, neither atomic MULTI fires
+        // but the compound polar MULTI does) is the LOAD-BEARING cell
+        // this bridge names — the COMPOUND cell strictly REFINES the
+        // atomic pair at the SPLIT-SINGLETON endpoint. Contrapositive of
+        // the SINGLETON column's XOR-atomic-singleton bridge one
+        // COMBINATOR-KIND axis over.
+        for a in COMPOUND_GAP_ROSTER {
+            let bottom_multi_true = a.bottom_axis_is_multi() == Some(true);
+            let top_multi_true = a.top_axis_is_multi() == Some(true);
+            let split_singleton = a.bottom_axis_is_singleton() == Some(true)
+                && a.top_axis_is_singleton() == Some(true);
+            let bridge_rhs = bottom_multi_true || top_multi_true || split_singleton;
+            let bridge_lhs = a.polar_axis_is_multi() == Some(true);
+            assert_eq!(
+                bridge_lhs, bridge_rhs,
+                "polar_is_multi Some(true) != (bottom_multi OR top_multi OR split-singleton) on {a:?}",
+            );
+        }
+        // Direct witness of the SPLIT-SINGLETON cell — construct a
+        // posture with exactly one bottom axis + exactly one top axis at
+        // distinct positions; both atomic MULTI cells fire Some(false),
+        // both atomic SINGLETON cells fire Some(true), and the compound
+        // polar MULTI fires Some(true) because polar_count == 2.
+        for bottom_pos in 0..ResourceLimits::FIELD_COUNT {
+            for top_pos in 0..ResourceLimits::FIELD_COUNT {
+                if bottom_pos == top_pos {
+                    continue;
+                }
+                let mut fields = [41_usize, 43, 47, 53, 59, 61];
+                fields[bottom_pos] = 0;
+                fields[top_pos] = usize::MAX;
+                let split_polar = ResourceLimits {
+                    max_expansion_depth: fields[0],
+                    max_cache_entries: fields[1],
+                    max_expansion_size: fields[2],
+                    max_macro_body_size: fields[3],
+                    max_registered_macros: fields[4],
+                    max_macro_arity: fields[5],
+                };
+                assert_eq!(split_polar.count_polar_axes(), 2);
+                assert_eq!(split_polar.count_bottom_axes(), 1);
+                assert_eq!(split_polar.count_top_axes(), 1);
+                assert_eq!(split_polar.bottom_axis_is_multi(), Some(false));
+                assert_eq!(split_polar.top_axis_is_multi(), Some(false));
+                assert_eq!(split_polar.bottom_axis_is_singleton(), Some(true));
+                assert_eq!(split_polar.top_axis_is_singleton(), Some(true));
+                assert_eq!(
+                    split_polar.polar_axis_is_multi(),
+                    Some(true),
+                    "split-singleton polar at bottom={bottom_pos} top={top_pos} not Some(true)",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_multi_is_some_iff_has_polar_axis() {
+        // ANY-fold bridge — the COMPOUND polar MULTI verdict is defined
+        // iff the polar-axis subset is non-empty. Composes structurally
+        // through the just-lifted COMPOUND COUNT bridge one PROJECTION-
+        // KIND axis over.
+        for a in COMPOUND_GAP_ROSTER {
+            assert_eq!(
+                a.polar_axis_is_multi().is_some(),
+                a.has_polar_axis(),
+                "polar_is_multi.is_some() != has_polar_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_multi_is_some_iff_has_interior_axis() {
+        // ANY-fold bridge dual on the interior COMPOUND cell.
+        for a in COMPOUND_GAP_ROSTER {
+            assert_eq!(
+                a.interior_axis_is_multi().is_some(),
+                a.has_interior_axis(),
+                "interior_is_multi.is_some() != has_interior_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_multi_true_implies_is_singleton_false() {
+        // MULTI-IMPLIES-NOT-SINGLETON bridge on the COMPOUND polar cell
+        // — LOAD-BEARING mutual-exclusion pin. On every posture,
+        // is_multi == Some(true) ⇒ is_singleton == Some(false). The
+        // COMPOUND polar MULTI and SINGLETON typed exits jointly
+        // PARTITION the has-polar-axis regime into two mutually-
+        // exclusive strict cells. Contrapositive of the SINGLE-FIRE-
+        // IMPLIES-NOT-MULTI pin one boolean row over.
+        for a in COMPOUND_GAP_ROSTER {
+            if matches!(a.polar_axis_is_multi(), Some(true)) {
+                assert_eq!(
+                    a.polar_axis_is_singleton(),
+                    Some(false),
+                    "polar_is_multi == Some(true) but polar_is_singleton != Some(false) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_multi_true_implies_is_singleton_false() {
+        // MULTI-IMPLIES-NOT-SINGLETON bridge dual on the COMPOUND
+        // interior cell.
+        for a in COMPOUND_GAP_ROSTER {
+            if matches!(a.interior_axis_is_multi(), Some(true)) {
+                assert_eq!(
+                    a.interior_axis_is_singleton(),
+                    Some(false),
+                    "interior_is_multi == Some(true) but interior_is_singleton != Some(false) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_multi_false_at_lone_polar_axis() {
+        // SINGLE-FIRE COINCIDENCE pin dual on the COMPOUND polar cell —
+        // a lone polar axis at any of the six positions × either pole
+        // gives count_polar_axes == 1, so the COMPOUND polar MULTI
+        // verdict is Some(false). Structural pointwise De Morgan
+        // complement of the polar SINGLETON column's SINGLE-FIRE
+        // Some(true) sweep at the same positions × poles.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            for pole in [0_usize, usize::MAX] {
+                let mut fields = [41_usize, 43, 47, 53, 59, 61];
+                fields[position] = pole;
+                let singleton_polar = ResourceLimits {
+                    max_expansion_depth: fields[0],
+                    max_cache_entries: fields[1],
+                    max_expansion_size: fields[2],
+                    max_macro_body_size: fields[3],
+                    max_registered_macros: fields[4],
+                    max_macro_arity: fields[5],
+                };
+                assert_eq!(singleton_polar.count_polar_axes(), 1);
+                assert_eq!(
+                    singleton_polar.polar_axis_is_multi(),
+                    Some(false),
+                    "singleton polar at position {position} pole {pole} not Some(false)",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_multi_false_at_lone_interior_axis() {
+        // SINGLE-FIRE COINCIDENCE pin dual on the COMPOUND interior
+        // cell.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let poles = [0_usize, usize::MAX, 0, usize::MAX, 0, usize::MAX];
+            let mut fields = poles;
+            fields[position] = 41;
+            let singleton_interior = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_interior.count_interior_axes(), 1);
+            assert_eq!(
+                singleton_interior.interior_axis_is_multi(),
+                Some(false),
+                "singleton interior at position {position} not Some(false)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_compound_is_multi_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the COMPOUND cell — both MULTI projections are
+        // evaluable in const context so a caller can pin compound
+        // count-greater-than-one identities at compile time as build-
+        // breaks. Mirror of the compound SINGLETON const-fn pins one
+        // COMBINATOR-KIND axis over on the boolean surface.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_multi(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_multi(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_multi(),
+            Some(true)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.interior_axis_is_multi().is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_multi().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_multi().is_none());
     }
 }

@@ -14334,6 +14334,160 @@ impl ResourceLimits {
             c => Some(c == 1),
         }
     }
+
+    /// Whole-posture SINGLETON-OF-POLAR predicate —
+    /// `self.polar_axis_is_singleton()` returns `Some(true)` iff EXACTLY
+    /// one axis of `self` sits at either pole (equivalently:
+    /// [`Self::count_polar_axes`] `== 1`), `Some(false)` iff two or more
+    /// axes are polar, or `None` iff no axis is polar. The COMPOUND-CELL
+    /// DUAL of [`Self::bottom_axis_is_singleton`] one CELL-KIND axis over
+    /// on the SINGLETON column — jointly the (polar_axis_is_singleton,
+    /// interior_axis_is_singleton) COMPOUND pair CLOSES the SINGLETON
+    /// column on the (bottom, top, polar, interior) 4-cell axis-family
+    /// past the just-opened atomic (bottom, top) SINGLETON pair, opened
+    /// by [`Self::bottom_axis_is_singleton`] +
+    /// [`Self::top_axis_is_singleton`] one CELL-KIND axis under.
+    ///
+    /// **COUNT-EQUALS-ONE identity — LOAD-BEARING structural pin**: on
+    /// every posture, `polar_axis_is_singleton() == { let c =
+    /// self.count_polar_axes(); if c == 0 { None } else { Some(c == 1) }
+    /// }`. Composes structurally through the already-lifted COMPOUND
+    /// COUNT projection; the substrate never re-scans the per-axis mask.
+    /// Pinned via
+    /// `resource_limits_polar_axis_is_singleton_equals_count_equals_one`.
+    ///
+    /// **ATOMIC-DISJUNCTION XOR bridge — LOAD-BEARING structural pin**:
+    /// on every posture, `polar_axis_is_singleton() == Some(true) ⇔
+    /// (bottom_axis_is_singleton() == Some(true) &&
+    /// top_axis_is_singleton() == None) || (bottom_axis_is_singleton()
+    /// == None && top_axis_is_singleton() == Some(true))`. The polar
+    /// cell is the DISJOINT UNION of the two atomic cells (a polar axis
+    /// is either bottom OR top, not both), so `polar_count ==
+    /// bottom_count + top_count` and the polar-singleton regime
+    /// partitions into the two atomic mutually-exclusive singleton
+    /// regimes. The COMPOUND cell strictly REFINES its two atomic
+    /// components at the SINGLE-FIRE endpoint. Pinned via
+    /// `resource_limits_polar_axis_is_singleton_true_iff_exactly_one_atomic_singleton`.
+    ///
+    /// **SINGLE-FIRE-IMPLIES-CONTIGUOUS bridge — LOAD-BEARING structural
+    /// pin dual**: on every posture, `polar_axis_is_singleton() ==
+    /// Some(true) ⇒ polar_axis_is_contiguous() == Some(true)`. Mirror of
+    /// the atomic
+    /// [`Self::bottom_axis_is_singleton`] SINGLE-FIRE-IMPLIES-CONTIGUOUS
+    /// bridge one CELL-KIND axis over. Pinned via
+    /// `resource_limits_polar_axis_is_singleton_true_implies_is_contiguous_true`.
+    ///
+    /// **Preset pins — LOAD-BEARING COMPOUND-CELL SATURATION contrast**:
+    /// `EMPTY_RESOURCE_LIMITS.polar_axis_is_singleton() == Some(false)`
+    /// (saturated bottom pole packs SIX axes polar; count == 6, NOT
+    /// singleton); `UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_singleton()
+    /// == Some(false)` (saturated top pole packs SIX axes polar; count
+    /// == 6, NOT singleton); `DEFAULT_RESOURCE_LIMITS
+    /// .polar_axis_is_singleton() == None` (no polar axis). Unlike the
+    /// atomic cells' (1-saturated-each-not-singleton, 1-both-absent)
+    /// preset partition, the COMPOUND polar cell partitions the preset
+    /// triple as (2-polar-saturated-not-singleton, 1-interior-saturated-
+    /// absent) — the same COMPOUND-CELL SATURATION shape carried by the
+    /// COMPOUND CONTIGUITY, SPARSE, and GAP columns one PROJECTION-KIND
+    /// axis under.
+    ///
+    /// **ANY-fold bridge**: `a.polar_axis_is_singleton().is_some() ⇔
+    /// a.has_polar_axis()`. Pinned via
+    /// `resource_limits_polar_axis_is_singleton_is_some_iff_has_polar_axis`.
+    ///
+    /// **BOOLEAN COLLAPSE — LOAD-BEARING pin**: the (`Some(true)`,
+    /// `Some(false)`, `None`) trichotomy PARTITIONS every posture into
+    /// (singleton-polar, multi-polar, no-polar) at the COMPOUND polar
+    /// cell — a distinct three-cell partition NOT expressible by any
+    /// (SPAN, GAP, CONTIGUITY, SPARSE) COMPOUND column: a compound
+    /// polar posture with a contiguous run of two AND a compound polar
+    /// posture with a single-fire polar axis BOTH pin the CONTIGUITY
+    /// column at `Some(true)` while the SINGLETON column separates them
+    /// into `Some(false)` and `Some(true)`. The mirror position of how
+    /// the atomic (bottom, top) SINGLETON pair separates
+    /// (COUNT, SPAN)-equivalent postures the boolean CONTIGUITY column
+    /// merges.
+    ///
+    /// `const fn` so a caller can pin the polar-axis SINGLETON verdict
+    /// at compile time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.polar_axis_is_singleton(), Some(false)));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// COMPOUND polar SINGLETON predicate is a named typed exit
+    /// `Option<bool>` rather than a per-consumer
+    /// `self.count_polar_axes() == 1` inline equality test that discards
+    /// the has-axis-at-all distinction. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs (the SINGLETON cell is a structural
+    /// derivation from the COMPOUND COUNT projection via one usize
+    /// equality and one is-zero split, no new per-axis scan, no
+    /// allocation). THEORY.md §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: same as [`Self::bottom_axis_is_singleton`]
+    /// on the DUAL COMPOUND mask.
+    #[must_use]
+    pub const fn polar_axis_is_singleton(self) -> Option<bool> {
+        match self.count_polar_axes() {
+            0 => None,
+            c => Some(c == 1),
+        }
+    }
+
+    /// Whole-posture SINGLETON-OF-INTERIOR predicate —
+    /// `self.interior_axis_is_singleton()` returns `Some(true)` iff
+    /// EXACTLY one axis of `self` sits strictly interior (equivalently:
+    /// [`Self::count_interior_axes`] `== 1`), `Some(false)` iff two or
+    /// more axes are strictly interior, or `None` iff no axis is
+    /// interior. The COMPOUND-CELL DUAL of [`Self::polar_axis_is_singleton`]
+    /// one CELL-KIND axis over via the (polar, interior) disjoint
+    /// complement — jointly the (polar_axis_is_singleton,
+    /// interior_axis_is_singleton) COMPOUND pair CLOSES the SINGLETON
+    /// column on the (bottom, top, polar, interior) 4-cell axis-family.
+    ///
+    /// **COUNT-EQUALS-ONE identity dual**: on every posture,
+    /// `interior_axis_is_singleton() == { let c =
+    /// self.count_interior_axes(); if c == 0 { None } else { Some(c == 1)
+    /// } }`. Pinned via
+    /// `resource_limits_interior_axis_is_singleton_equals_count_equals_one`.
+    ///
+    /// **SINGLE-FIRE-IMPLIES-CONTIGUOUS bridge dual**: on every posture,
+    /// `interior_axis_is_singleton() == Some(true) ⇒
+    /// interior_axis_is_contiguous() == Some(true)`. Pinned via
+    /// `resource_limits_interior_axis_is_singleton_true_implies_is_contiguous_true`.
+    ///
+    /// **Preset pins — LOAD-BEARING COMPOUND-CELL SATURATION contrast
+    /// dual**: `DEFAULT_RESOURCE_LIMITS.interior_axis_is_singleton() ==
+    /// Some(false)` (saturated interior packs SIX axes strictly
+    /// interior; count == 6, NOT singleton); `EMPTY_RESOURCE_LIMITS
+    /// .interior_axis_is_singleton() == None` (no interior);
+    /// `UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_singleton() == None`
+    /// (no interior); `HAND_AUTHORED_MID_POSTURE
+    /// .interior_axis_is_singleton() == Some(false)` (every field
+    /// strictly interior; count == 6, NOT singleton);
+    /// `HAND_AUTHORED_OTHER_POSTURE.interior_axis_is_singleton() ==
+    /// Some(false)` (same). Same COMPOUND-CELL SATURATION shape as the
+    /// interior CONTIGUITY, SPARSE, and GAP columns — the interior
+    /// bracket is `saturated-not-singleton` on the same three postures
+    /// (`DEFAULT`, `HAND_AUTHORED_MID`, `HAND_AUTHORED_OTHER`).
+    ///
+    /// **ANY-fold bridge dual**: `a.interior_axis_is_singleton().is_some()
+    /// ⇔ a.has_interior_axis()`. Pinned via
+    /// `resource_limits_interior_axis_is_singleton_is_some_iff_has_interior_axis`.
+    ///
+    /// `const fn` so a caller can pin the interior-axis SINGLETON
+    /// verdict at compile time.
+    ///
+    /// Theory anchor: same as [`Self::polar_axis_is_singleton`], on the
+    /// DUAL COMPOUND cell.
+    ///
+    /// Frontier inspiration: same as [`Self::bottom_axis_is_singleton`]
+    /// on the DUAL COMPOUND mask.
+    #[must_use]
+    pub const fn interior_axis_is_singleton(self) -> Option<bool> {
+        match self.count_interior_axes() {
+            0 => None,
+            c => Some(c == 1),
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -52149,5 +52303,449 @@ mod tests {
             .is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.bottom_axis_is_singleton().is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_is_singleton().is_none());
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_singleton_preset_pins_saturate_both_saturated_poles_at_multi()
+    {
+        // Preset pins on the COMPOUND polar SINGLETON cell — LOAD-
+        // BEARING COMPOUND-CELL SATURATION contrast with the atomic
+        // cells. BOTH saturated pole presets pack all six axes at a
+        // single pole (hence six polar axes), so BOTH pin the polar
+        // SINGLETON at Some(false) (multi-polar, NOT singleton). The
+        // DEFAULT preset has zero polar axes; SINGLETON is None. Same
+        // (2-polar-saturated-not-singleton, 1-interior-saturated-absent)
+        // partition shape carried by the COMPOUND (SPARSE, CONTIGUITY,
+        // GAP) columns one PROJECTION-KIND axis under, translated through
+        // the COUNT-EQUALS-ONE derivation.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.polar_axis_is_singleton(), Some(false));
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_singleton(),
+            Some(false)
+        );
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_singleton(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.polar_axis_is_singleton(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_singleton(), None);
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_singleton_preset_pins_saturate_default_at_multi_and_poles_at_absent(
+    ) {
+        // Preset pins dual on the COMPOUND interior SINGLETON cell —
+        // the DEFAULT preset pins every axis strictly interior (count
+        // == 6), so the interior SINGLETON verdict is Some(false)
+        // (multi-interior, NOT singleton). The two saturated pole
+        // presets pin every axis polar, so neither has any interior
+        // axis; interior SINGLETON verdict is None. The two hand-
+        // authored postures pin every field strictly interior, so both
+        // fire the interior SINGLETON at Some(false). Same COMPOUND-
+        // CELL SATURATION shape as the interior CONTIGUITY, SPARSE, and
+        // GAP columns one PROJECTION-KIND axis under.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_singleton(),
+            Some(false)
+        );
+        assert_eq!(EMPTY_RESOURCE_LIMITS.interior_axis_is_singleton(), None);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_singleton(), None);
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.interior_axis_is_singleton(),
+            Some(false),
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.interior_axis_is_singleton(),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn resource_limits_compound_is_singleton_saturation_partitions_preset_triple_by_pole() {
+        // COMPOUND-CELL SATURATION contrast on the SINGLETON column —
+        // LOAD-BEARING pin. Unlike the atomic cells' (1-saturated-each-
+        // not-singleton, 1-both-absent) preset partition, the COMPOUND
+        // (polar, interior) row partitions the preset triple as
+        // (2-polar-saturated-not-singleton, 1-interior-saturated-not-
+        // singleton). BOTH saturated pole presets fire the polar
+        // SINGLETON at Some(false) while the DEFAULT preset fires the
+        // interior SINGLETON at Some(false). Same COMPOUND-CELL
+        // SATURATION shape as the compound (CONTIGUITY, SPARSE, GAP)
+        // columns' saturation partition one PROJECTION-KIND axis under
+        // on the boolean surface.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.polar_axis_is_singleton(), Some(false));
+        assert_eq!(EMPTY_RESOURCE_LIMITS.interior_axis_is_singleton(), None);
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_singleton(),
+            Some(false)
+        );
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_singleton(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_singleton(), None);
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_singleton(),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_singleton_equals_count_equals_one() {
+        // COUNT-EQUALS-ONE identity — the COMPOUND polar SINGLETON
+        // predicate is structurally derived from count_polar_axes on
+        // every posture: None iff count == 0, Some(count == 1)
+        // otherwise. Pinned across the COMPOUND-GAP roster so a future
+        // rewrite of either projection that silently drifts from the
+        // count-equals-one contract fires this pin. Mirror of the atomic
+        // `resource_limits_bottom_axis_is_singleton_equals_count_equals_one`
+        // pin one CELL-KIND axis over on the boolean surface.
+        for a in COMPOUND_GAP_ROSTER {
+            let c = a.count_polar_axes();
+            let expected = if c == 0 { None } else { Some(c == 1) };
+            assert_eq!(
+                a.polar_axis_is_singleton(),
+                expected,
+                "polar_is_singleton = count-equals-one identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_singleton_equals_count_equals_one() {
+        // COUNT-EQUALS-ONE identity dual on the interior COMPOUND cell.
+        for a in COMPOUND_GAP_ROSTER {
+            let c = a.count_interior_axes();
+            let expected = if c == 0 { None } else { Some(c == 1) };
+            assert_eq!(
+                a.interior_axis_is_singleton(),
+                expected,
+                "interior_is_singleton = count-equals-one identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_singleton_is_some_iff_has_polar_axis() {
+        // ANY-fold bridge — the COMPOUND polar SINGLETON verdict is
+        // defined iff the polar-axis subset is non-empty. Composes
+        // structurally through the just-lifted COMPOUND COUNT bridge
+        // one PROJECTION-KIND axis over.
+        for a in COMPOUND_GAP_ROSTER {
+            assert_eq!(
+                a.polar_axis_is_singleton().is_some(),
+                a.has_polar_axis(),
+                "polar_is_singleton.is_some() != has_polar_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_singleton_is_some_iff_has_interior_axis() {
+        // ANY-fold bridge dual on the interior COMPOUND cell.
+        for a in COMPOUND_GAP_ROSTER {
+            assert_eq!(
+                a.interior_axis_is_singleton().is_some(),
+                a.has_interior_axis(),
+                "interior_is_singleton.is_some() != has_interior_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_singleton_true_iff_exactly_one_atomic_singleton() {
+        // ATOMIC-DISJUNCTION XOR bridge — LOAD-BEARING structural pin.
+        // The polar cell is the DISJOINT UNION of the two atomic cells
+        // (a polar axis is either bottom OR top, not both), so
+        // `polar_count == bottom_count + top_count` and the polar-
+        // singleton regime partitions into the two atomic mutually-
+        // exclusive singleton regimes. Concretely:
+        // polar_axis_is_singleton() == Some(true) iff
+        //   (bottom_axis_is_singleton() == Some(true) AND
+        //    top_axis_is_singleton() == None) OR
+        //   (bottom_axis_is_singleton() == None AND
+        //    top_axis_is_singleton() == Some(true)).
+        // The COMPOUND cell strictly REFINES its two atomic components
+        // at the SINGLE-FIRE endpoint. Pinned across every position ×
+        // every pole; each combination fires exactly one arm of the
+        // XOR disjunction.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            for pole in [0_usize, usize::MAX] {
+                let mut fields = [41_usize, 43, 47, 53, 59, 61];
+                fields[position] = pole;
+                let singleton_polar = ResourceLimits {
+                    max_expansion_depth: fields[0],
+                    max_cache_entries: fields[1],
+                    max_expansion_size: fields[2],
+                    max_macro_body_size: fields[3],
+                    max_registered_macros: fields[4],
+                    max_macro_arity: fields[5],
+                };
+                let bottom_is_singleton_true =
+                    singleton_polar.bottom_axis_is_singleton() == Some(true);
+                let top_is_singleton_true = singleton_polar.top_axis_is_singleton() == Some(true);
+                let bottom_is_absent = singleton_polar.bottom_axis_is_singleton().is_none();
+                let top_is_absent = singleton_polar.top_axis_is_singleton().is_none();
+                let xor_lhs = (bottom_is_singleton_true && top_is_absent)
+                    || (top_is_singleton_true && bottom_is_absent);
+                assert!(
+                    xor_lhs,
+                    "singleton polar at position {position} pole {pole} did not fire exactly one atomic singleton arm",
+                );
+                assert_eq!(singleton_polar.polar_axis_is_singleton(), Some(true));
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_singleton_true_at_lone_polar_axis() {
+        // SINGLE-FIRE COINCIDENCE pin — a lone polar axis at any of the
+        // six positions × either pole gives count_polar_axes == 1, so
+        // the COMPOUND polar SINGLETON verdict is Some(true).
+        // Structural translation of the atomic
+        // `resource_limits_bottom_axis_is_singleton_true_at_lone_bottom_axis`
+        // pin to the COMPOUND polar cell, swept across both poles.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            for pole in [0_usize, usize::MAX] {
+                let mut fields = [41_usize, 43, 47, 53, 59, 61];
+                fields[position] = pole;
+                let singleton_polar = ResourceLimits {
+                    max_expansion_depth: fields[0],
+                    max_cache_entries: fields[1],
+                    max_expansion_size: fields[2],
+                    max_macro_body_size: fields[3],
+                    max_registered_macros: fields[4],
+                    max_macro_arity: fields[5],
+                };
+                assert_eq!(singleton_polar.count_polar_axes(), 1);
+                assert_eq!(
+                    singleton_polar.polar_axis_is_singleton(),
+                    Some(true),
+                    "singleton polar at position {position} pole {pole} not Some(true)",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_singleton_true_at_lone_interior_axis() {
+        // SINGLE-FIRE COINCIDENCE pin dual — a lone interior axis at
+        // any of the six positions gives count_interior_axes == 1, so
+        // the COMPOUND interior SINGLETON verdict is Some(true).
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let poles = [0_usize, usize::MAX, 0, usize::MAX, 0, usize::MAX];
+            let mut fields = poles;
+            fields[position] = 41;
+            let singleton_interior = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_interior.count_interior_axes(), 1);
+            assert_eq!(
+                singleton_interior.interior_axis_is_singleton(),
+                Some(true),
+                "singleton interior at position {position} not Some(true)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_singleton_true_implies_is_contiguous_true() {
+        // SINGLE-FIRE-IMPLIES-CONTIGUOUS bridge on the COMPOUND polar
+        // cell — LOAD-BEARING structural pin. On every posture,
+        // polar_axis_is_singleton == Some(true) ⇒
+        // polar_axis_is_contiguous == Some(true). The SINGLETON typed
+        // exit at the COMPOUND polar cell is the STRUCTURAL DOMAIN
+        // where the (CONTIGUITY, SPARSE, GAP) COMPOUND polar column
+        // collapses uniformly at the trivially-contiguous endpoint.
+        // Converse witness — a contiguous non-singleton compound polar
+        // posture pins is_singleton at Some(false) despite is_contiguous
+        // == Some(true), which is precisely why the SINGLETON column
+        // carries LOAD-BEARING information the CONTIGUITY column cannot.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            for pole in [0_usize, usize::MAX] {
+                let mut fields = [41_usize, 43, 47, 53, 59, 61];
+                fields[position] = pole;
+                let singleton_polar = ResourceLimits {
+                    max_expansion_depth: fields[0],
+                    max_cache_entries: fields[1],
+                    max_expansion_size: fields[2],
+                    max_macro_body_size: fields[3],
+                    max_registered_macros: fields[4],
+                    max_macro_arity: fields[5],
+                };
+                assert_eq!(singleton_polar.polar_axis_is_singleton(), Some(true));
+                assert_eq!(
+                    singleton_polar.polar_axis_is_contiguous(),
+                    Some(true),
+                    "singleton polar at position {position} pole {pole} not is_contiguous == Some(true)",
+                );
+            }
+        }
+        // Converse witness — contiguous non-singleton polar posture pins
+        // is_singleton at Some(false) despite is_contiguous == Some(true).
+        assert_eq!(
+            CONTIGUOUS_POLAR_POSTURE.polar_axis_is_contiguous(),
+            Some(true),
+        );
+        assert_eq!(
+            CONTIGUOUS_POLAR_POSTURE.polar_axis_is_singleton(),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_singleton_true_implies_is_contiguous_true() {
+        // SINGLE-FIRE-IMPLIES-CONTIGUOUS bridge dual on the COMPOUND
+        // interior cell.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let poles = [0_usize, usize::MAX, 0, usize::MAX, 0, usize::MAX];
+            let mut fields = poles;
+            fields[position] = 41;
+            let singleton_interior = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_interior.interior_axis_is_singleton(), Some(true));
+            assert_eq!(
+                singleton_interior.interior_axis_is_contiguous(),
+                Some(true),
+                "singleton interior at position {position} not is_contiguous == Some(true)",
+            );
+        }
+        // Converse witness — contiguous non-singleton interior posture
+        // pins is_singleton at Some(false) despite is_contiguous ==
+        // Some(true).
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_POSTURE.interior_axis_is_contiguous(),
+            Some(true),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_POSTURE.interior_axis_is_singleton(),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn resource_limits_compound_is_singleton_trichotomy_partitions_shipped_postures() {
+        // BOOLEAN COLLAPSE — LOAD-BEARING pin. The Option<bool>
+        // trichotomy partitions every posture into (singleton-cell,
+        // multi-cell, no-axis) at BOTH COMPOUND cells — a distinct
+        // three-cell partition NOT expressible by any (SPAN, GAP,
+        // CONTIGUITY, SPARSE) COMPOUND column: the CONTIGUOUS-POLAR
+        // posture (polar_count == 2, contiguous) and a hand-constructed
+        // singleton polar posture (polar_count == 1) BOTH fire the polar
+        // CONTIGUITY column at Some(true) while the SINGLETON column
+        // separates them into Some(false) and Some(true).
+        // Witnesses at each cell:
+        //   polar_axis_is_singleton:
+        //     Some(true):  swept exhaustively in
+        //                  `resource_limits_polar_axis_is_singleton_true_at_lone_polar_axis`.
+        //     Some(false): EMPTY, UNBOUNDED (saturated poles, count=6),
+        //                  SPARSE_POLAR (count=2),
+        //                  ENDPOINTS_ONLY_POLAR (count=2),
+        //                  ENDPOINTS_ONLY_INTERIOR (count=4),
+        //                  CONTIGUOUS_POLAR (count=2),
+        //                  CONTIGUOUS_INTERIOR (count=3).
+        //     None:        DEFAULT, HAND_AUTHORED_MID, HAND_AUTHORED_OTHER.
+        //   interior_axis_is_singleton:
+        //     Some(true):  swept exhaustively in
+        //                  `resource_limits_interior_axis_is_singleton_true_at_lone_interior_axis`.
+        //     Some(false): DEFAULT (count=6), HAND_AUTHORED_MID (count=6),
+        //                  HAND_AUTHORED_OTHER (count=6),
+        //                  SPARSE_POLAR (count=4),
+        //                  ENDPOINTS_ONLY_POLAR (count=4),
+        //                  ENDPOINTS_ONLY_INTERIOR (count=2),
+        //                  CONTIGUOUS_POLAR (count=4),
+        //                  CONTIGUOUS_INTERIOR (count=3).
+        //     None:        EMPTY, UNBOUNDED (saturated polar poles).
+        assert_eq!(EMPTY_RESOURCE_LIMITS.polar_axis_is_singleton(), Some(false));
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_singleton(),
+            Some(false)
+        );
+        assert_eq!(SPARSE_POLAR_POSTURE.polar_axis_is_singleton(), Some(false));
+        assert_eq!(
+            ENDPOINTS_ONLY_POLAR_POSTURE.polar_axis_is_singleton(),
+            Some(false),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_INTERIOR_POSTURE.polar_axis_is_singleton(),
+            Some(false),
+        );
+        assert_eq!(
+            CONTIGUOUS_POLAR_POSTURE.polar_axis_is_singleton(),
+            Some(false),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_POSTURE.polar_axis_is_singleton(),
+            Some(false),
+        );
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_singleton(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.polar_axis_is_singleton(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_singleton(), None);
+
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_singleton(),
+            Some(false)
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.interior_axis_is_singleton(),
+            Some(false),
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.interior_axis_is_singleton(),
+            Some(false),
+        );
+        assert_eq!(
+            SPARSE_POLAR_POSTURE.interior_axis_is_singleton(),
+            Some(false),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_POLAR_POSTURE.interior_axis_is_singleton(),
+            Some(false),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_INTERIOR_POSTURE.interior_axis_is_singleton(),
+            Some(false),
+        );
+        assert_eq!(
+            CONTIGUOUS_POLAR_POSTURE.interior_axis_is_singleton(),
+            Some(false),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_POSTURE.interior_axis_is_singleton(),
+            Some(false),
+        );
+        assert_eq!(EMPTY_RESOURCE_LIMITS.interior_axis_is_singleton(), None);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_singleton(), None);
+    }
+
+    #[test]
+    fn resource_limits_compound_is_singleton_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the COMPOUND cell — both SINGLETON projections
+        // are evaluable in const context so a caller can pin compound
+        // count-equals-one identities at compile time as build-breaks.
+        // Mirror of the compound (SPARSE, CONTIGUITY, GAP) const-fn pins
+        // one PROJECTION-KIND axis over on the boolean surface.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_singleton(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_singleton(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_singleton(),
+            Some(false)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.interior_axis_is_singleton().is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .interior_axis_is_singleton()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_singleton().is_none());
     }
 }

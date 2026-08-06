@@ -2210,10 +2210,8 @@ mod tests {
     /// but-representable is accepted: an `f32` field asked for `f32`.
     #[test]
     fn narrowing_accepts_every_in_range_value_including_lossy_f32() {
-        let forms = read(
-            r"(defnarrow :port 8080 :offset -42 :scale 0.1 :retries 3 :ratio 2.5)",
-        )
-        .expect("reads");
+        let forms = read(r"(defnarrow :port 8080 :offset -42 :scale 0.1 :retries 3 :ratio 2.5)")
+            .expect("reads");
         let spec = NarrowSpec::compile_from_sexp(&forms[0]).expect("in-range values must parse");
         assert_eq!(
             spec,
@@ -2255,7 +2253,11 @@ mod tests {
         assert!(
             matches!(
                 &err,
-                LispError::KwargOutOfRange { target: NumericWidth::U32, value: NumericLiteral::Int(-1), .. }
+                LispError::KwargOutOfRange {
+                    target: NumericWidth::U32,
+                    value: NumericLiteral::Int(-1),
+                    ..
+                }
             ),
             "expected a u32 range rejection of -1, got {err:?}"
         );
@@ -2300,12 +2302,14 @@ mod tests {
     /// value would be the same corruption in a different costume.
     #[test]
     fn optional_numeric_arms_reject_out_of_range_rather_than_yielding_none() {
-        let int_err =
-            narrow_form(r"(defnarrow :port 0 :offset 0 :scale 1.0 :retries 4294967296)");
+        let int_err = narrow_form(r"(defnarrow :port 0 :offset 0 :scale 1.0 :retries 4294967296)");
         assert!(
             matches!(
                 &int_err,
-                LispError::KwargOutOfRange { target: NumericWidth::U32, .. }
+                LispError::KwargOutOfRange {
+                    target: NumericWidth::U32,
+                    ..
+                }
             ),
             "expected an Option<u32> range rejection, got {int_err:?}"
         );
@@ -2314,7 +2318,10 @@ mod tests {
         assert!(
             matches!(
                 &float_err,
-                LispError::KwargOutOfRange { target: NumericWidth::F32, .. }
+                LispError::KwargOutOfRange {
+                    target: NumericWidth::F32,
+                    ..
+                }
             ),
             "expected an Option<f32> range rejection, got {float_err:?}"
         );

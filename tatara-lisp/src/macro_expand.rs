@@ -11104,6 +11104,236 @@ impl ResourceLimits {
         }
         false
     }
+
+    /// Whole-posture EXISTENTIAL-BOTTOM predicate — `self.has_bottom_axis()`
+    /// holds iff AT LEAST ONE axis of `self` sits at the bottom pole
+    /// (`self.field_values()[i] == 0` for some `i in 0..FIELD_COUNT`). The
+    /// single-bit ANY-fold peer of [`Self::axes_is_bottom`] one
+    /// PROJECTION-KIND axis over, and the direct EXISTENTIAL-QUANTIFIER
+    /// peer of [`Self::is_bottom`] one QUANTIFIER-KIND axis over — where
+    /// `is_bottom` binds the UNIVERSAL-QUANTIFIER (every axis at bottom
+    /// via `leq(EMPTY)`), THIS projection binds the EXISTENTIAL-QUANTIFIER
+    /// (some axis at bottom) at ONE typed named `bool` primitive rather
+    /// than leaving consumers to compose the per-axis `.any()` fold at
+    /// every call site.
+    ///
+    /// The ATOMIC-CELL SPLIT of [`Self::has_polar_axis`] one CELL axis
+    /// over on the EXISTENTIAL-QUANTIFIER row of the axial-quantifier
+    /// surface: where `has_polar_axis` folds the COMPOUND pole cell
+    /// (`bottom || top`) into ONE existential verdict, THIS projection
+    /// isolates the BOTTOM sub-cell as its own single-bit verdict.
+    /// Together with the paired [`Self::has_top_axis`] the two atomic
+    /// ANY-folds DECOMPOSE the compound pole ANY-fold as a substrate-
+    /// level theorem: `has_polar_axis == has_bottom_axis || has_top_axis`
+    /// on every posture (pinned by
+    /// `resource_limits_has_polar_axis_decomposes_as_has_bottom_axis_or_has_top_axis`).
+    /// This mirrors how [`Self::is_pole`] one QUANTIFIER-KIND axis over
+    /// decomposes as `is_bottom || is_top` at the whole-posture UNIVERSAL
+    /// surface — the SAME two-arm SET-UNION shape lifted through the
+    /// dual quantifier.
+    ///
+    /// Strictly WEAKER than [`Self::is_bottom`]: `self.is_bottom() ⇒
+    /// self.has_bottom_axis()` (every-axis-at-bottom trivially implies
+    /// some-axis-at-bottom). Where `is_bottom` fires ONLY on the single
+    /// [`EMPTY_RESOURCE_LIMITS`] pole, THIS projection ALSO fires on
+    /// mixed-pole composites (posture with one axis at `0` and every
+    /// other at `usize::MAX`, or any posture with at least one bottom-
+    /// pole axis regardless of the others) — the LOAD-BEARING WEAKER-
+    /// vs-STRONGER discriminator at the atomic-bottom sub-cell.
+    ///
+    /// **Cross-cell exclusivity**: `self.is_top() ⇒ !self.has_bottom_axis()`
+    /// on every posture — `is_top` requires every axis to hit
+    /// `usize::MAX`, and `usize::MAX != 0` on `usize`, so no axis can
+    /// simultaneously be at the top pole AND at the bottom pole. Pinned
+    /// via `resource_limits_is_top_implies_not_has_bottom_axis_on_every_posture`.
+    /// The DUAL exclusivity `is_bottom ⇒ !has_top_axis` holds by the
+    /// symmetric argument at the paired [`Self::has_top_axis`] surface.
+    /// A single posture cannot be at BOTH universal poles, so exactly
+    /// one of `has_bottom_axis` / `has_top_axis` fires (never both, and
+    /// never neither at a universal pole preset), formalizing the
+    /// (bottom, top) pole-identity's cross-cell disjointness as a
+    /// theorem at the ANY-fold surface too.
+    ///
+    /// Encoded as the per-axis `||` fold over [`Self::axes_is_bottom`]
+    /// with short-circuit on the first bottom axis — one primitive
+    /// delegation to the shipped per-axis-mask primitive with the ANY-
+    /// fold quantifier applied. A future re-derivation of
+    /// `axes_is_bottom` (a `BoundedLattice`-shape trait exposing
+    /// per-axis pole verdicts as defaults, a substrate-wide switch to
+    /// bitmask-encoded axis masks, etc.) propagates to `has_bottom_axis`
+    /// mechanically rather than requiring a per-method fix-up.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.has_bottom_axis() == true`
+    /// (every axis at bottom; the first fires the disjunct);
+    /// `UNBOUNDED_RESOURCE_LIMITS.has_bottom_axis() == false` (every axis
+    /// at `usize::MAX`, none at `0`); `DEFAULT_RESOURCE_LIMITS
+    /// .has_bottom_axis() == false` (every `DEFAULT_MAX_*` is a positive
+    /// constant strictly greater than `0`).
+    ///
+    /// **Hand-authored asymmetric rejection**: both
+    /// [`HAND_AUTHORED_MID_POSTURE`] and [`HAND_AUTHORED_OTHER_POSTURE`]
+    /// have every field at a distinct positive value strictly greater
+    /// than `0`, so no axis fires the bottom disjunct and
+    /// `has_bottom_axis() == false` on both.
+    ///
+    /// **Truly-mixed-pole load-bearing arm**: a posture with one axis
+    /// at `0` (bottom pole) and one axis at `usize::MAX` (top pole)
+    /// satisfies BOTH `has_bottom_axis() == true` AND
+    /// `has_top_axis() == true` — a middle cell the (is_bottom, is_top)
+    /// UNIVERSAL pair structurally cannot represent (they are mutually
+    /// exclusive on any struct with `FIELD_COUNT > 0` since a single
+    /// axis cannot be both `0` and `usize::MAX`). Pinned via
+    /// `resource_limits_has_bottom_axis_and_has_top_axis_both_fire_on_truly_mixed_pole_posture`.
+    ///
+    /// **Fold-agreement contract**: for every posture `a`,
+    /// `a.has_bottom_axis() == a.axes_is_bottom().iter().any(|&bit| bit)`
+    /// — pinning the projection body as definitionally the ANY-fold over
+    /// [`Self::axes_is_bottom`]. Pinned via
+    /// `resource_limits_has_bottom_axis_agrees_with_axes_is_bottom_any_fold`.
+    ///
+    /// **is_bottom ⇒ has_bottom_axis contract**: on every posture,
+    /// `a.is_bottom() ⇒ a.has_bottom_axis()` — the universal ALL-fold
+    /// verdict implies the existential ANY-fold verdict on the same
+    /// cell. Pinned via
+    /// `resource_limits_is_bottom_implies_has_bottom_axis_on_every_posture`.
+    ///
+    /// `const fn` so a caller can pin existential bottom-membership at
+    /// compile time (`const _: () = assert!(EMPTY_RESOURCE_LIMITS
+    /// .has_bottom_axis());`) — sibling of the const-fn evaluability
+    /// pins on [`Self::is_bottom`] one QUANTIFIER-KIND axis over and
+    /// [`Self::has_polar_axis`] one CELL-KIND axis over.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-posture existential-bottom verdict is a named typed exit
+    /// rather than an inline `axes_is_bottom().iter().any(...)` per-
+    /// consumer fold at each call site. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; the (has_bottom_axis, has_top_axis)
+    /// pair SPLITS [`Self::has_polar_axis`]'s compound pole verdict into
+    /// its two atomic sub-verdicts, so a consumer that needs to
+    /// discriminate "some axis at bottom" from "some axis at top" (a
+    /// resource-degradation alarm that fires ONLY on bottom saturation,
+    /// distinct from "some axis at some pole") binds to ONE typed
+    /// primitive per sub-cell rather than composing
+    /// `axes_is_bottom().iter().any(...)` inline at each site. The
+    /// paired decomposition theorem `has_polar_axis == has_bottom_axis
+    /// || has_top_axis` closes the atomic-cell split as a substrate-
+    /// level identity. THEORY.md §V.1 — knowable platform; the
+    /// existential-bottom verdict binds at ONE typed method structurally
+    /// forced by the ANY-fold over the fixed-arity `axes_is_bottom` mask.
+    ///
+    /// Frontier inspiration: APL's `∨/(0=⍵)` per-position bottom-equality
+    /// disjunction folded through `∨/` (existential quantifier over
+    /// positions); Idris's `any (\x -> x == 0) v` over `Vec n Nat`
+    /// yielding `Bool`; Haskell's `any (== minBound)` on a bounded
+    /// numeric vector — the ANY-fold consuming the per-axis bottom-mask
+    /// into ONE single-bit verdict. Kmett's `lattices` package's
+    /// `bottom` scalar-level pole identity lifted through a per-position
+    /// `any`-fold. Translation through pleme-io primitives is the plain
+    /// `const fn` per-axis `||` fold over the already-lifted
+    /// [`Self::axes_is_bottom`] mask, no new dep, no typeclass
+    /// indirection, no allocation.
+    #[must_use]
+    pub const fn has_bottom_axis(self) -> bool {
+        let mask = self.axes_is_bottom();
+        let mut i = 0;
+        while i < Self::FIELD_COUNT {
+            if mask[i] {
+                return true;
+            }
+            i += 1;
+        }
+        false
+    }
+
+    /// Whole-posture EXISTENTIAL-TOP predicate — `self.has_top_axis()`
+    /// holds iff AT LEAST ONE axis of `self` sits at the top pole
+    /// (`self.field_values()[i] == usize::MAX` for some `i in
+    /// 0..FIELD_COUNT`). The single-bit ANY-fold peer of
+    /// [`Self::axes_is_top`] one PROJECTION-KIND axis over, and the
+    /// direct EXISTENTIAL-QUANTIFIER peer of [`Self::is_top`] one
+    /// QUANTIFIER-KIND axis over. The ATOMIC-CELL SPLIT dual of
+    /// [`Self::has_bottom_axis`] one CELL axis over — the two atomic
+    /// ANY-folds jointly DECOMPOSE [`Self::has_polar_axis`]'s compound
+    /// pole verdict as `has_polar_axis == has_bottom_axis || has_top_axis`
+    /// (pinned by
+    /// `resource_limits_has_polar_axis_decomposes_as_has_bottom_axis_or_has_top_axis`).
+    ///
+    /// Strictly WEAKER than [`Self::is_top`]: `self.is_top() ⇒
+    /// self.has_top_axis()`. Where `is_top` fires ONLY on the single
+    /// [`UNBOUNDED_RESOURCE_LIMITS`] pole, THIS projection ALSO fires on
+    /// mixed-pole composites and on any posture with at least one top-
+    /// pole axis regardless of the others — the LOAD-BEARING WEAKER-
+    /// vs-STRONGER discriminator at the atomic-top sub-cell.
+    ///
+    /// **Cross-cell exclusivity**: `self.is_bottom() ⇒ !self.has_top_axis()`
+    /// on every posture — `is_bottom` requires every axis to hit `0`,
+    /// and `0 != usize::MAX` on `usize`, so no axis can simultaneously
+    /// be at bottom AND at top. Pinned via
+    /// `resource_limits_is_bottom_implies_not_has_top_axis_on_every_posture`.
+    ///
+    /// Encoded as the per-axis `||` fold over [`Self::axes_is_top`]
+    /// with short-circuit on the first top axis — matching
+    /// [`Self::has_bottom_axis`]'s shape verbatim on the DUAL per-axis
+    /// mask, and mirroring [`Self::has_polar_axis`]'s shape one CELL
+    /// axis over on the compound cell.
+    ///
+    /// **Preset pins**: `UNBOUNDED_RESOURCE_LIMITS.has_top_axis() == true`
+    /// (every axis at top; the first fires the disjunct);
+    /// `EMPTY_RESOURCE_LIMITS.has_top_axis() == false` (every axis at
+    /// `0`, none at `usize::MAX`); `DEFAULT_RESOURCE_LIMITS.has_top_axis()
+    /// == false` (every `DEFAULT_MAX_*` is a positive constant strictly
+    /// less than `usize::MAX`).
+    ///
+    /// **Hand-authored asymmetric rejection**: both
+    /// [`HAND_AUTHORED_MID_POSTURE`] and [`HAND_AUTHORED_OTHER_POSTURE`]
+    /// have every field at a distinct positive value strictly less than
+    /// [`usize::MAX`], so no axis fires the top disjunct.
+    ///
+    /// **Truly-mixed-pole load-bearing arm**: a posture with one axis at
+    /// `0` and one axis at `usize::MAX` fires BOTH `has_bottom_axis` AND
+    /// `has_top_axis` — the middle cell the (is_bottom, is_top)
+    /// UNIVERSAL pair structurally cannot represent. Pinned jointly with
+    /// the paired `has_bottom_axis` above via
+    /// `resource_limits_has_bottom_axis_and_has_top_axis_both_fire_on_truly_mixed_pole_posture`.
+    ///
+    /// **Fold-agreement contract**: for every posture `a`,
+    /// `a.has_top_axis() == a.axes_is_top().iter().any(|&bit| bit)`.
+    /// Pinned via
+    /// `resource_limits_has_top_axis_agrees_with_axes_is_top_any_fold`.
+    ///
+    /// **is_top ⇒ has_top_axis contract**: on every posture,
+    /// `a.is_top() ⇒ a.has_top_axis()`. Pinned via
+    /// `resource_limits_is_top_implies_has_top_axis_on_every_posture`.
+    ///
+    /// `const fn` so a caller can pin existential top-membership at
+    /// compile time (`const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+    /// .has_top_axis());`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// (has_bottom_axis, has_top_axis) atomic-cell split decomposes the
+    /// compound `has_polar_axis` pole verdict); THEORY.md §V.1 —
+    /// knowable platform.
+    ///
+    /// Frontier inspiration: APL's `∨/(⍵=⌈/⍵)` per-position top-equality
+    /// disjunction folded through `∨/`; Idris's `any (== maxBound)` over
+    /// a bounded numeric vector; Haskell's `any (== maxBound)` — the
+    /// ANY-fold consuming the per-axis top-mask into ONE single-bit
+    /// verdict. Translation through pleme-io primitives is the plain
+    /// `const fn` per-axis `||` fold over the already-lifted
+    /// [`Self::axes_is_top`] mask.
+    #[must_use]
+    pub const fn has_top_axis(self) -> bool {
+        let mask = self.axes_is_top();
+        let mut i = 0;
+        while i < Self::FIELD_COUNT {
+            if mask[i] {
+                return true;
+            }
+            i += 1;
+        }
+        false
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -41212,6 +41442,365 @@ mod tests {
                 a.has_polar_axis(),
                 expected,
                 "has_polar_axis must agree with any-fold over pointwise pole verdict for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_has_bottom_axis_of_empty_preset_is_true() {
+        // Preset closure — the bottom-pole extremum fires the ANY-fold
+        // verdict: every axis is at `0`, so the very first axis fires
+        // the disjunct and the ANY-fold short-circuits `true`. Peer of
+        // `is_bottom_holds_on_empty_preset` one QUANTIFIER-KIND axis
+        // over — the ALL-fold and ANY-fold coincide on a uniform-bottom
+        // posture at this preset.
+        assert!(EMPTY_RESOURCE_LIMITS.has_bottom_axis());
+    }
+
+    #[test]
+    fn resource_limits_has_bottom_axis_of_unbounded_preset_is_false() {
+        // Cross-pole rejection — the OPPOSITE (top) pole rejects on
+        // every axis (`usize::MAX != 0` on every axis), so the ANY-fold
+        // traverses the whole mask without a match. LOAD-BEARING
+        // discriminator across the (bottom, top) preset pair at the
+        // ANY-fold surface.
+        assert!(!UNBOUNDED_RESOURCE_LIMITS.has_bottom_axis());
+    }
+
+    #[test]
+    fn resource_limits_has_bottom_axis_of_default_is_false() {
+        // Preset rejection — every shipped `DEFAULT_MAX_*` is a positive
+        // constant strictly greater than `0`, so no axis fires the
+        // bottom disjunct and the ANY-fold traverses the whole mask
+        // without a match.
+        assert!(!DEFAULT_RESOURCE_LIMITS.has_bottom_axis());
+    }
+
+    #[test]
+    fn resource_limits_has_top_axis_of_unbounded_preset_is_true() {
+        // Preset closure dual — same shape, dual cell.
+        assert!(UNBOUNDED_RESOURCE_LIMITS.has_top_axis());
+    }
+
+    #[test]
+    fn resource_limits_has_top_axis_of_empty_preset_is_false() {
+        // Cross-pole rejection dual — every axis at `0`, none at
+        // `usize::MAX`.
+        assert!(!EMPTY_RESOURCE_LIMITS.has_top_axis());
+    }
+
+    #[test]
+    fn resource_limits_has_top_axis_of_default_is_false() {
+        // Preset rejection dual — every `DEFAULT_MAX_*` is a positive
+        // constant strictly less than `usize::MAX`.
+        assert!(!DEFAULT_RESOURCE_LIMITS.has_top_axis());
+    }
+
+    #[test]
+    fn resource_limits_has_bottom_axis_of_hand_authored_postures_is_false() {
+        // Antichain absorption — both hand-authored antichain postures
+        // sit strictly inside the lattice on distinct branches, with
+        // every field at a positive-mid value strictly greater than `0`
+        // AND strictly less than `usize::MAX`. Neither pole disjunct
+        // fires at any axis, so both atomic ANY-folds reject on both.
+        for &a in &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE] {
+            assert!(
+                !a.has_bottom_axis(),
+                "hand-authored antichain posture {a:?} must reject has_bottom_axis",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_has_top_axis_of_hand_authored_postures_is_false() {
+        // Antichain absorption dual — same shape, dual cell.
+        for &a in &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE] {
+            assert!(
+                !a.has_top_axis(),
+                "hand-authored antichain posture {a:?} must reject has_top_axis",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_has_bottom_axis_agrees_with_axes_is_bottom_any_fold() {
+        // Fold-agreement contract — the whole-posture existential-bottom
+        // verdict agrees with the direct ANY-fold over `axes_is_bottom`
+        // on every preset. Pins the projection body as definitionally
+        // the ANY-fold; a regression that flipped the quantifier to ALL
+        // or reversed the mask polarity would fire here on the canonical
+        // roster. Peer of `has_polar_axis_agrees_with_axes_is_pole_any_fold`
+        // one CELL-KIND axis over.
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.has_bottom_axis(),
+                a.axes_is_bottom().iter().any(|&bit| bit),
+                "has_bottom_axis must equal any-fold over axes_is_bottom for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_has_top_axis_agrees_with_axes_is_top_any_fold() {
+        // Fold-agreement dual — same shape, dual mask.
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.has_top_axis(),
+                a.axes_is_top().iter().any(|&bit| bit),
+                "has_top_axis must equal any-fold over axes_is_top for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_bottom_implies_has_bottom_axis_on_every_posture() {
+        // Universal-implies-existential contract — the ALL-fold verdict
+        // IMPLIES the ANY-fold verdict on the SAME cell: if every axis
+        // is at bottom then trivially some axis is at bottom. Pins the
+        // STRICTLY WEAKER direction of the (has_bottom_axis, is_bottom)
+        // pair; the converse fails on mixed-pole composites (a posture
+        // with some but not all axes at `0`), pinned in the paired
+        // truly-mixed load-bearing arm below. Peer of
+        // `is_axially_polar_implies_has_polar_axis_on_every_posture`
+        // one CELL-KIND axis over.
+        for &a in STRICT_ORDER_ROSTER {
+            if a.is_bottom() {
+                assert!(
+                    a.has_bottom_axis(),
+                    "is_bottom must imply has_bottom_axis on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_top_implies_has_top_axis_on_every_posture() {
+        // Universal-implies-existential dual — same shape, dual cell.
+        for &a in STRICT_ORDER_ROSTER {
+            if a.is_top() {
+                assert!(a.has_top_axis(), "is_top must imply has_top_axis on {a:?}",);
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_bottom_implies_not_has_top_axis_on_every_posture() {
+        // Cross-cell EXCLUSIVITY contract — `is_bottom` requires every
+        // axis to hit `0`, and `0 != usize::MAX` on `usize`, so no axis
+        // can simultaneously be at bottom AND at top. Pins the (bottom,
+        // top) pole-identity's cross-cell disjointness as a theorem at
+        // the ANY-fold surface: a posture at the universal bottom pole
+        // cannot have ANY axis at the top pole. Sweeps
+        // STRICT_ORDER_ROSTER (only EMPTY fires the antecedent).
+        for &a in STRICT_ORDER_ROSTER {
+            if a.is_bottom() {
+                assert!(
+                    !a.has_top_axis(),
+                    "is_bottom must imply !has_top_axis on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_top_implies_not_has_bottom_axis_on_every_posture() {
+        // Cross-cell EXCLUSIVITY dual — same shape, dual cell.
+        for &a in STRICT_ORDER_ROSTER {
+            if a.is_top() {
+                assert!(
+                    !a.has_bottom_axis(),
+                    "is_top must imply !has_bottom_axis on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_has_polar_axis_decomposes_as_has_bottom_axis_or_has_top_axis() {
+        // LOAD-BEARING DECOMPOSITION theorem — the compound pole ANY-fold
+        // decomposes as the disjunction of the two atomic pole ANY-folds:
+        // `has_polar_axis == has_bottom_axis || has_top_axis` on every
+        // posture. The direct order-theoretic analogue of
+        // `is_pole == is_bottom || is_top` one QUANTIFIER-KIND axis over
+        // — the SAME two-arm SET-UNION shape lifted through the DUAL
+        // quantifier (universal ALL-fold → existential ANY-fold).
+        // Together with the paired fold-agreement contracts above and
+        // the mask-level `axes_is_pole ⇔ axes_is_bottom || axes_is_top`
+        // decomposition one PROJECTION-KIND axis over, this closes the
+        // (bottom, top, pole) atomic-cell split on the EXISTENTIAL row
+        // of the axial-quantifier surface as a substrate-level identity.
+        // Sweeps STRICT_ORDER_ROSTER PLUS a mixed-pole composite PLUS a
+        // truly-mixed-pole composite where BOTH atomic ANY-folds fire.
+        let mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 0,
+            max_macro_body_size: 0,
+            max_registered_macros: 0,
+            max_macro_arity: 0,
+        };
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&mixed_pole))
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.has_polar_axis(),
+                a.has_bottom_axis() || a.has_top_axis(),
+                "has_polar_axis must decompose as has_bottom_axis || has_top_axis for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_has_bottom_axis_and_has_top_axis_both_fire_on_truly_mixed_pole_posture() {
+        // LOAD-BEARING (T, T) middle-cell witness — a posture with one
+        // axis at `0` (bottom pole) and one axis at `usize::MAX` (top
+        // pole) fires BOTH atomic ANY-folds simultaneously — a cell the
+        // (is_bottom, is_top) UNIVERSAL pair structurally cannot
+        // represent (they are mutually exclusive on any struct with
+        // `FIELD_COUNT > 0` because a single axis cannot simultaneously
+        // be `0` AND `usize::MAX`, so at most one of the two universal
+        // ALL-folds fires on any posture). Formalizes the (bottom, top)
+        // pole-identity's WEAKER-vs-STRONGER semantic gap at the
+        // ANY-fold surface as ITS OWN typed primitive pair: a resource-
+        // degradation alarm that fires ONLY when SOME axis is at the
+        // bottom pole (distinct from "every axis at bottom") binds to
+        // `has_bottom_axis` as ONE named `bool`; a saturation alarm
+        // that fires ONLY when SOME axis is at the top pole binds to
+        // `has_top_axis`; a truly-mixed-pole discriminator
+        // ("saturation on one axis and starvation on another —
+        // dangerously unbalanced posture") binds to `has_bottom_axis()
+        // && has_top_axis()` — inheriting const-fn compile-time
+        // evaluability. Peer of the truly-mixed-polar-and-interior
+        // witness one CELL-KIND axis over.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        assert!(
+            truly_mixed_pole.has_bottom_axis(),
+            "truly-mixed-pole posture must fire has_bottom_axis (max_cache_entries at bottom)",
+        );
+        assert!(
+            truly_mixed_pole.has_top_axis(),
+            "truly-mixed-pole posture must fire has_top_axis (max_expansion_depth at top)",
+        );
+        assert!(
+            !truly_mixed_pole.is_bottom(),
+            "truly-mixed-pole posture must reject is_bottom (not every axis at 0)",
+        );
+        assert!(
+            !truly_mixed_pole.is_top(),
+            "truly-mixed-pole posture must reject is_top (not every axis at MAX)",
+        );
+    }
+
+    #[test]
+    fn resource_limits_has_bottom_axis_composes_at_compile_time_via_const_fn() {
+        // CONST-FN pin — existential bottom-membership is evaluable in
+        // const context, so a caller can pin the ANY-fold verdict at
+        // compile time. Sibling of the const-fn evaluability pins on
+        // `is_bottom` one QUANTIFIER-KIND axis over and `has_polar_axis`
+        // one CELL-KIND axis over. Uses `const _: () = assert!(…)` rather
+        // than intermediate `const BOOL: bool` bindings to sidestep
+        // clippy's `assertions_on_constants` lint at the assert callsite.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.has_bottom_axis());
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.has_bottom_axis());
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.has_bottom_axis());
+    }
+
+    #[test]
+    fn resource_limits_has_top_axis_composes_at_compile_time_via_const_fn() {
+        // CONST-FN dual pin — same shape, dual cell.
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.has_top_axis());
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.has_top_axis());
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.has_top_axis());
+    }
+
+    #[test]
+    fn resource_limits_has_bottom_axis_agrees_with_pointwise_field_at_zero() {
+        // Positional-alignment cross-check — the ANY-fold verdict agrees
+        // with the direct any-fold over the pointwise `field == 0`
+        // verdict on every preset AND on the mixed-pole composite AND
+        // on the truly-mixed-pole composite. Pins the canonical index-
+        // to-axis mapping holds at the atomic ANY-fold surface too.
+        // Peer of `has_polar_axis_agrees_with_pointwise_field_at_either_pole`
+        // one CELL-KIND axis over.
+        let mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 0,
+            max_macro_body_size: 0,
+            max_registered_macros: 0,
+            max_macro_arity: 0,
+        };
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&mixed_pole))
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            let values = a.field_values();
+            let expected = values.contains(&0);
+            assert_eq!(
+                a.has_bottom_axis(),
+                expected,
+                "has_bottom_axis must agree with any-fold over pointwise `== 0` verdict for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_has_top_axis_agrees_with_pointwise_field_at_max() {
+        // Positional-alignment dual — same shape, dual pointwise
+        // verdict.
+        let mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 0,
+            max_macro_body_size: 0,
+            max_registered_macros: 0,
+            max_macro_arity: 0,
+        };
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&mixed_pole))
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            let values = a.field_values();
+            let expected = values.contains(&usize::MAX);
+            assert_eq!(
+                a.has_top_axis(),
+                expected,
+                "has_top_axis must agree with any-fold over pointwise `== usize::MAX` verdict for {a:?}",
             );
         }
     }

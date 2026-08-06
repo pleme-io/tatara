@@ -11929,6 +11929,246 @@ impl ResourceLimits {
         }
         None
     }
+
+    /// Whole-posture INDEX-OF-FIRST-POLAR projection —
+    /// `self.first_polar_axis_index()` returns `Some(i)` for the least
+    /// `i` such that `self.field_values()[i] == 0 ||
+    /// self.field_values()[i] == usize::MAX`, or `None` when no axis is
+    /// at either pole. The INDEX-KIND peer of [`Self::has_polar_axis`]
+    /// and [`Self::count_polar_axes`] one PROJECTION-KIND axis over,
+    /// AND the COMPOUND-CELL peer of [`Self::first_bottom_axis_index`]
+    /// and [`Self::first_top_axis_index`] one CELL-KIND axis over —
+    /// jointly the (first_bottom_axis_index, first_top_axis_index,
+    /// first_polar_axis_index) triple opens the INDEX column on the
+    /// (bottom, top, polar) 3-cell axis-family the same way the
+    /// (has_bottom_axis, has_top_axis, has_polar_axis) triple opens it
+    /// one PROJECTION-KIND axis over on the boolean ANY-fold column
+    /// and the (count_bottom_axes, count_top_axes, count_polar_axes)
+    /// triple opens it one PROJECTION-KIND axis over on the arithmetic
+    /// COUNT column.
+    ///
+    /// A STRICT REFINEMENT of BOTH boolean-existence and arithmetic-
+    /// count verdicts on the same compound cell:
+    /// `first_polar_axis_index().is_some() ⇔ has_polar_axis()`;
+    /// `first_polar_axis_index().is_none() ⇔ count_polar_axes() == 0`.
+    /// Discriminates postures the COUNT-fold conflates: two postures
+    /// with the SAME `count_polar_axes() == 1` but with the polar axis
+    /// at DIFFERENT indices give DIFFERENT INDEX verdicts (`Some(0)`
+    /// vs `Some(3)`).
+    ///
+    /// **ATOMIC-INDEX MINIMUM identity**: on every posture,
+    /// `first_polar_axis_index() == min_option(first_bottom_axis_index(),
+    /// first_top_axis_index())` where `min_option` picks the least-
+    /// index `Some` among the two `Option<usize>` values (both `Some`
+    /// → pick the smaller index; one `Some` → that one; both `None` →
+    /// `None`). Because `axes_is_pole()[i] == axes_is_bottom()[i] ||
+    /// axes_is_top()[i]` pointwise, the first-hit of the OR-fold is
+    /// the minimum of the two per-cell first-hits. The INDEX form of
+    /// the boolean disjunction `has_polar_axis == has_bottom_axis ||
+    /// has_top_axis` and the arithmetic sum `count_polar_axes ==
+    /// count_bottom_axes + count_top_axes` (valid because at any
+    /// single axis at most one atomic pole holds, so the (bottom, top)
+    /// per-axis masks are DISJOINT) one PROJECTION-KIND axis over.
+    /// Pinned via
+    /// `resource_limits_first_polar_axis_index_equals_min_of_first_bottom_and_first_top`.
+    ///
+    /// Encoded as the per-axis short-circuiting scan over
+    /// [`Self::axes_is_pole`] — matching the shape of both
+    /// [`Self::first_bottom_axis_index`] and [`Self::first_top_axis_index`]
+    /// verbatim on the DISJUNCTION-of-atomic-masks compound.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.first_polar_axis_index()
+    /// == Some(0)` (every axis at bottom pole; first-hit at index 0);
+    /// `UNBOUNDED_RESOURCE_LIMITS.first_polar_axis_index() == Some(0)`
+    /// (every axis at top pole; first-hit at index 0);
+    /// `DEFAULT_RESOURCE_LIMITS.first_polar_axis_index() == None`
+    /// (every `DEFAULT_MAX_*` strictly interior).
+    ///
+    /// **Fold-agreement contract**: for every posture `a`,
+    /// `a.first_polar_axis_index() ==
+    /// a.axes_is_pole().iter().position(|&bit| bit)`. Pinned via
+    /// `resource_limits_first_polar_axis_index_agrees_with_axes_is_pole_position`.
+    ///
+    /// **ANY-fold bridge**: `a.first_polar_axis_index().is_some() ⇔
+    /// a.has_polar_axis()`. Pinned via
+    /// `resource_limits_first_polar_axis_index_is_some_iff_has_polar_axis`.
+    ///
+    /// **COUNT bridge**: `a.first_polar_axis_index().is_none() ⇔
+    /// a.count_polar_axes() == 0`. Pinned via
+    /// `resource_limits_first_polar_axis_index_is_none_iff_count_polar_axes_is_zero`.
+    ///
+    /// **ALL-fold pin**: `a.is_axially_polar() ⇒
+    /// a.first_polar_axis_index() == Some(0)`. Pinned via
+    /// `resource_limits_first_polar_axis_index_when_is_axially_polar_is_some_zero`.
+    ///
+    /// **Range bound**: when `Some(i)`, `i < Self::FIELD_COUNT` by
+    /// construction of the scan.
+    ///
+    /// `const fn` so a caller can pin the exact first-polar index at
+    /// compile time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.first_polar_axis_index(), Some(0)));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// index-of-first-polar projection is a named typed exit
+    /// `Option<usize>` rather than an inline `axes_is_pole().iter().
+    /// position(...)` per-consumer fold. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; the (has, count, first) INDEX
+    /// projection strictly REFINES both the boolean ANY-fold and the
+    /// arithmetic COUNT-fold with positional discriminators neither
+    /// can access on the COMPOUND polar cell, AND the ATOMIC-INDEX
+    /// MINIMUM identity carries the OR-decomposition of the compound
+    /// mask into the atomic (bottom, top) cells at the INDEX surface
+    /// as MIN-of-Option, exactly the way the boolean ANY-fold column
+    /// carries it as OR and the arithmetic COUNT column carries it as
+    /// SUM. THEORY.md §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: APL's `⍸((0=⍵)∨(⍵=⌈/⍵))` per-position
+    /// polar-index projection returning the sequence of indices of
+    /// matches; Haskell's `Data.List.findIndex (\x -> x == 0 || x ==
+    /// maxBound)` returning `Maybe Int`; Idris's `findIndex (\x -> x
+    /// == 0 || x == maxBound) v` over `Vec n Nat`; classical bitset
+    /// `ffs` on the OR of two atomic-cell bitsets, equivalent to
+    /// `min(ffs(a), ffs(b))` on the two atomic-cell find-first
+    /// results. Translation through pleme-io primitives is the plain
+    /// `const fn` short-circuiting per-axis scan over the already-
+    /// lifted [`Self::axes_is_pole`] mask — no new dep, no typeclass
+    /// indirection, no allocation.
+    #[must_use]
+    pub const fn first_polar_axis_index(self) -> Option<usize> {
+        let mask = self.axes_is_pole();
+        let mut i = 0;
+        while i < Self::FIELD_COUNT {
+            if mask[i] {
+                return Some(i);
+            }
+            i += 1;
+        }
+        None
+    }
+
+    /// Whole-posture INDEX-OF-FIRST-INTERIOR projection —
+    /// `self.first_interior_axis_index()` returns `Some(i)` for the
+    /// least `i` such that `0 < self.field_values()[i] < usize::MAX`,
+    /// or `None` when no axis is strictly interior (i.e. every axis
+    /// sits at some pole). The INDEX-KIND peer of
+    /// [`Self::has_interior_axis`] and [`Self::count_interior_axes`]
+    /// one PROJECTION-KIND axis over, and the COMPOUND-CELL DUAL of
+    /// [`Self::first_polar_axis_index`] on the DUAL per-axis mask —
+    /// jointly the (first_polar_axis_index, first_interior_axis_index)
+    /// pair closes the INDEX column of the (polar, interior) COMPOUND
+    /// 2-cell partition the same way (has_polar_axis, has_interior_axis)
+    /// closes the ANY-fold column and (count_polar_axes,
+    /// count_interior_axes) closes the COUNT-fold column.
+    ///
+    /// A strict REFINEMENT of BOTH boolean-existence and arithmetic-
+    /// count verdicts on the same cell:
+    /// `first_interior_axis_index().is_some() ⇔ has_interior_axis()`;
+    /// `first_interior_axis_index().is_none() ⇔ count_interior_axes()
+    /// == 0`.
+    ///
+    /// **CROSS-CELL DE MORGAN INDEX PIN — LOAD-BEARING refinement of
+    /// the boolean De Morgan pair**: on every posture, exactly one of
+    /// three holds at the whole-posture level:
+    ///
+    ///   * `first_polar_axis_index() == None` — no axis polar, so
+    ///     `first_interior_axis_index() == Some(0)` (index 0 is
+    ///     interior since it is not polar, and every subsequent axis
+    ///     is either interior or lower-indexed than the first
+    ///     interior); this is the `is_axially_interior` regime.
+    ///   * `first_interior_axis_index() == None` — no axis interior,
+    ///     so `first_polar_axis_index() == Some(0)`; this is the
+    ///     `is_axially_polar` regime.
+    ///   * both `Some(_)` — the two indices are DISTINCT (a single
+    ///     axis is either polar OR interior, never both) AND their
+    ///     minimum equals `0` (the first-position axis is either
+    ///     polar or interior, so at least one of the two first-hits
+    ///     is at index 0); the two indices split the (polar,
+    ///     interior) axes at the whole-posture level.
+    ///
+    /// The INDEX form of the boolean De Morgan pair
+    /// `has_interior_axis == !is_axially_polar` — where the boolean
+    /// column carries "polar-everywhere ⊕ some-interior" as a
+    /// two-cell XOR, the INDEX column carries the same information
+    /// PLUS the positional identity of the first witness on either
+    /// side. Pinned via
+    /// `resource_limits_first_polar_and_first_interior_form_de_morgan_index_pair`.
+    ///
+    /// **CROSS-CELL DISJOINTNESS**: on every posture and at any
+    /// single axis `i`, exactly one of `axes_is_pole()[i]` and
+    /// `axes_is_interior()[i]` holds — a single axis is either at
+    /// some pole OR strictly interior, never both, never neither.
+    /// The (polar, interior) per-axis masks are EXHAUSTIVELY AND
+    /// DISJOINTLY partitioned; equivalently `axes_is_interior()[i]
+    /// == !axes_is_pole()[i]` pointwise. The INDEX-level consequence
+    /// is that the two first-hits are ALWAYS at DIFFERENT indices
+    /// when both are `Some`. Pinned via
+    /// `resource_limits_first_polar_and_first_interior_when_both_some_are_distinct`.
+    ///
+    /// Encoded as the per-axis short-circuiting scan over
+    /// [`Self::axes_is_interior`] — matching [`Self::first_polar_axis_index`]'s
+    /// shape verbatim on the DUAL per-axis mask.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.first_interior_axis_index()
+    /// == None` (every axis at bottom pole, none strictly interior);
+    /// `UNBOUNDED_RESOURCE_LIMITS.first_interior_axis_index() == None`
+    /// (every axis at top pole);
+    /// `DEFAULT_RESOURCE_LIMITS.first_interior_axis_index() == Some(0)`
+    /// (every `DEFAULT_MAX_*` strictly interior; first-hit at index 0).
+    ///
+    /// **Hand-authored asymmetric saturation**: both
+    /// [`HAND_AUTHORED_MID_POSTURE`] and [`HAND_AUTHORED_OTHER_POSTURE`]
+    /// have every field at a distinct positive value strictly less
+    /// than `usize::MAX`, so every axis is strictly interior and the
+    /// projection returns `Some(0)` on both.
+    ///
+    /// **Fold-agreement contract**: for every posture `a`,
+    /// `a.first_interior_axis_index() ==
+    /// a.axes_is_interior().iter().position(|&bit| bit)`. Pinned via
+    /// `resource_limits_first_interior_axis_index_agrees_with_axes_is_interior_position`.
+    ///
+    /// **ANY-fold bridge**: `a.first_interior_axis_index().is_some() ⇔
+    /// a.has_interior_axis()`. Pinned via
+    /// `resource_limits_first_interior_axis_index_is_some_iff_has_interior_axis`.
+    ///
+    /// **COUNT bridge**: `a.first_interior_axis_index().is_none() ⇔
+    /// a.count_interior_axes() == 0`. Pinned via
+    /// `resource_limits_first_interior_axis_index_is_none_iff_count_interior_axes_is_zero`.
+    ///
+    /// **ALL-fold pin**: `a.is_axially_interior() ⇒
+    /// a.first_interior_axis_index() == Some(0)`. Pinned via
+    /// `resource_limits_first_interior_axis_index_when_is_axially_interior_is_some_zero`.
+    ///
+    /// `const fn` so a caller can pin the exact first-interior index
+    /// at compile time.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs
+    /// (the (first_polar, first_interior) INDEX pair strictly REFINES
+    /// both the boolean (has_polar, has_interior) De Morgan pair and
+    /// the arithmetic (count_polar, count_interior) partition-sum
+    /// pair with positional discriminators neither can access);
+    /// THEORY.md §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: APL's `⍸((⍵≠0)∧(⍵≠⌈/⍵))` per-position
+    /// strict-interior-index projection; Haskell's
+    /// `Data.List.findIndex (\x -> x /= 0 && x /= maxBound)`; Idris's
+    /// `findIndex (\x -> x /= 0 && x /= maxBound) v`; classical
+    /// bitset `ffs` on the complement of the OR of the two pole
+    /// bitsets. Translation through pleme-io primitives is the plain
+    /// `const fn` short-circuiting per-axis scan over the already-
+    /// lifted [`Self::axes_is_interior`] mask.
+    #[must_use]
+    pub const fn first_interior_axis_index(self) -> Option<usize> {
+        let mask = self.axes_is_interior();
+        let mut i = 0;
+        while i < Self::FIELD_COUNT {
+            if mask[i] {
+                return Some(i);
+            }
+            i += 1;
+        }
+        None
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -43699,6 +43939,339 @@ mod tests {
         ));
         const _: () = assert!(EMPTY_RESOURCE_LIMITS.first_top_axis_index().is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.first_top_axis_index().is_none());
+    }
+
+    #[test]
+    fn resource_limits_first_polar_axis_index_of_empty_preset_is_some_zero() {
+        // COMPOUND-CELL preset pin — every axis at bottom pole, so
+        // first-polar-hit at index 0. Sibling of the same pin on
+        // first_bottom_axis_index one CELL-KIND axis over.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.first_polar_axis_index(), Some(0),);
+    }
+
+    #[test]
+    fn resource_limits_first_polar_axis_index_of_unbounded_preset_is_some_zero() {
+        // COMPOUND-CELL preset pin — every axis at top pole, so
+        // first-polar-hit at index 0. The (empty, unbounded)
+        // preset-pair AGREE at the compound polar cell where the
+        // atomic (bottom, top) preset-pins DISAGREE (empty → Some(0)
+        // on first_bottom, None on first_top; unbounded → None on
+        // first_bottom, Some(0) on first_top). LOAD-BEARING witness
+        // that the compound cell is the OR of the atomic cells.
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.first_polar_axis_index(), Some(0),);
+    }
+
+    #[test]
+    fn resource_limits_first_polar_axis_index_of_default_is_none() {
+        // COMPOUND-CELL preset pin — every DEFAULT_MAX_* strictly
+        // interior, so no polar axis and the projection returns None.
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.first_polar_axis_index(), None,);
+    }
+
+    #[test]
+    fn resource_limits_first_polar_axis_index_of_hand_authored_postures_is_none() {
+        // Hand-authored asymmetric saturation — every field strictly
+        // between 0 and usize::MAX, so no polar axis on either
+        // hand-authored posture. Discriminates the (polar) COMPOUND
+        // cell from BOTH atomic cells consistently.
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.first_polar_axis_index(), None,);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.first_polar_axis_index(), None,);
+    }
+
+    #[test]
+    fn resource_limits_first_interior_axis_index_of_default_is_some_zero() {
+        // COMPOUND-CELL preset pin — every DEFAULT_MAX_* strictly
+        // interior, so first-interior-hit at index 0.
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.first_interior_axis_index(), Some(0),);
+    }
+
+    #[test]
+    fn resource_limits_first_interior_axis_index_of_polar_presets_is_none() {
+        // COMPOUND-CELL preset pin — every axis at some pole on both
+        // (empty, unbounded) presets, so no interior axis on either.
+        // Dual to the (empty, unbounded)-AGREEMENT pin on
+        // first_polar_axis_index one CELL-KIND axis over.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.first_interior_axis_index(), None,);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.first_interior_axis_index(), None,);
+    }
+
+    #[test]
+    fn resource_limits_first_interior_axis_index_of_hand_authored_postures_is_some_zero() {
+        // Hand-authored asymmetric saturation — every field strictly
+        // interior on both, so first-interior-hit at index 0. Dual to
+        // the None-verdict on first_polar_axis_index on the SAME two
+        // postures, pinning the two projections diverge exactly
+        // opposite on the hand-authored roster.
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.first_interior_axis_index(),
+            Some(0),
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.first_interior_axis_index(),
+            Some(0),
+        );
+    }
+
+    #[test]
+    fn resource_limits_first_polar_axis_index_agrees_with_axes_is_pole_position() {
+        // Fold-agreement contract — INDEX-OF-FIRST-POLAR agrees with
+        // the Iterator `position` fold on the underlying per-axis
+        // pole mask on every shipped preset.
+        for a in STRICT_ORDER_ROSTER {
+            let expected = a.axes_is_pole().iter().position(|&bit| bit);
+            assert_eq!(
+                a.first_polar_axis_index(),
+                expected,
+                "first_polar_axis_index disagrees with axes_is_pole().position on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_interior_axis_index_agrees_with_axes_is_interior_position() {
+        // Fold-agreement contract on the DUAL cell.
+        for a in STRICT_ORDER_ROSTER {
+            let expected = a.axes_is_interior().iter().position(|&bit| bit);
+            assert_eq!(
+                a.first_interior_axis_index(),
+                expected,
+                "first_interior_axis_index disagrees with axes_is_interior().position on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_polar_axis_index_is_some_iff_has_polar_axis() {
+        // ANY-fold bridge — INDEX witness parity with the boolean
+        // ANY-fold verdict on the COMPOUND polar cell.
+        for a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.first_polar_axis_index().is_some(),
+                a.has_polar_axis(),
+                "is_some / has_polar_axis disagree on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_interior_axis_index_is_some_iff_has_interior_axis() {
+        // ANY-fold bridge on the DUAL cell.
+        for a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.first_interior_axis_index().is_some(),
+                a.has_interior_axis(),
+                "is_some / has_interior_axis disagree on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_polar_axis_index_is_none_iff_count_polar_axes_is_zero() {
+        // COUNT bridge — INDEX-none parity with COUNT-zero on the
+        // COMPOUND polar cell.
+        for a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.first_polar_axis_index().is_none(),
+                a.count_polar_axes() == 0,
+                "is_none / (count==0) disagree on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_interior_axis_index_is_none_iff_count_interior_axes_is_zero() {
+        // COUNT bridge on the DUAL cell.
+        for a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.first_interior_axis_index().is_none(),
+                a.count_interior_axes() == 0,
+                "is_none / (count==0) disagree on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_polar_axis_index_when_is_axially_polar_is_some_zero() {
+        // ALL-fold pin — if every axis is polar, the first-hit is at
+        // index 0 (equivalent to Some(0)).
+        for a in STRICT_ORDER_ROSTER {
+            if a.is_axially_polar() {
+                assert_eq!(
+                    a.first_polar_axis_index(),
+                    Some(0),
+                    "is_axially_polar accepts but first_polar_axis_index != Some(0) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_interior_axis_index_when_is_axially_interior_is_some_zero() {
+        // ALL-fold pin on the DUAL cell.
+        for a in STRICT_ORDER_ROSTER {
+            if a.is_axially_interior() {
+                assert_eq!(
+                    a.first_interior_axis_index(),
+                    Some(0),
+                    "is_axially_interior accepts but first_interior_axis_index != Some(0) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_polar_axis_index_equals_min_of_first_bottom_and_first_top() {
+        // ATOMIC-INDEX MINIMUM identity — first_polar_axis_index is
+        // the min-of-Option of the two atomic first-hits. LOAD-BEARING
+        // structural pin — the INDEX form of the boolean disjunction
+        // has_polar == has_bottom || has_top and the arithmetic sum
+        // count_polar == count_bottom + count_top (valid because the
+        // atomic per-axis masks are DISJOINT on every posture).
+        for a in STRICT_ORDER_ROSTER {
+            let expected = match (a.first_bottom_axis_index(), a.first_top_axis_index()) {
+                (Some(b), Some(t)) => Some(if b <= t { b } else { t }),
+                (Some(b), None) => Some(b),
+                (None, Some(t)) => Some(t),
+                (None, None) => None,
+            };
+            assert_eq!(
+                a.first_polar_axis_index(),
+                expected,
+                "first_polar_axis_index != min(first_bottom, first_top) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_polar_and_first_interior_form_de_morgan_index_pair() {
+        // CROSS-CELL DE MORGAN INDEX pin — exactly one of three
+        // regimes holds on every posture: (1) is_axially_interior
+        // (first_polar is None, first_interior is Some(0));
+        // (2) is_axially_polar (first_interior is None, first_polar
+        // is Some(0)); (3) both Some(_) at distinct indices whose
+        // minimum is 0.
+        for a in STRICT_ORDER_ROSTER {
+            let fp = a.first_polar_axis_index();
+            let fi = a.first_interior_axis_index();
+            match (fp, fi) {
+                (None, Some(i)) => {
+                    assert_eq!(
+                        i, 0,
+                        "when first_polar is None (is_axially_interior regime), \
+                         first_interior must be Some(0); posture {a:?} gave Some({i})",
+                    );
+                    assert!(
+                        a.is_axially_interior(),
+                        "first_polar None ⇒ is_axially_interior on {a:?}",
+                    );
+                }
+                (Some(i), None) => {
+                    assert_eq!(
+                        i, 0,
+                        "when first_interior is None (is_axially_polar regime), \
+                         first_polar must be Some(0); posture {a:?} gave Some({i})",
+                    );
+                    assert!(
+                        a.is_axially_polar(),
+                        "first_interior None ⇒ is_axially_polar on {a:?}",
+                    );
+                }
+                (Some(p), Some(i)) => {
+                    assert_ne!(
+                        p, i,
+                        "when both Some, indices must be distinct (an axis is either \
+                         polar or interior, never both); posture {a:?} gave Some({p}), Some({i})",
+                    );
+                    let min = if p <= i { p } else { i };
+                    assert_eq!(
+                        min, 0,
+                        "when both Some, one first-hit must be at index 0 (the axis at \
+                         index 0 is either polar or interior); posture {a:?} gave \
+                         Some({p}), Some({i}) with min {min}",
+                    );
+                }
+                (None, None) => panic!(
+                    "impossible regime — every posture has at least one polar or \
+                     interior axis by the (polar, interior) exhaustive partition; \
+                     posture {a:?} broke the partition",
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_polar_and_first_interior_when_both_some_are_distinct() {
+        // CROSS-CELL DISJOINTNESS at the INDEX surface — the two
+        // first-hits, when both present, are always at DIFFERENT
+        // indices because a single axis cannot be simultaneously
+        // polar AND interior on any posture. The INDEX form of the
+        // pointwise mask complement axes_is_interior == !axes_is_pole.
+        for a in STRICT_ORDER_ROSTER {
+            if let (Some(p), Some(i)) = (a.first_polar_axis_index(), a.first_interior_axis_index())
+            {
+                assert_ne!(
+                    p, i,
+                    "cross-cell disjointness violated on {a:?}: \
+                     first_polar {p} == first_interior {i}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_polar_axis_index_bounded_by_field_count() {
+        // Range bound — when Some(i), i < FIELD_COUNT.
+        for a in STRICT_ORDER_ROSTER {
+            if let Some(i) = a.first_polar_axis_index() {
+                assert!(
+                    i < ResourceLimits::FIELD_COUNT,
+                    "first_polar_axis_index Some({i}) exceeds FIELD_COUNT on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_interior_axis_index_bounded_by_field_count() {
+        // Range bound on the DUAL cell.
+        for a in STRICT_ORDER_ROSTER {
+            if let Some(i) = a.first_interior_axis_index() {
+                assert!(
+                    i < ResourceLimits::FIELD_COUNT,
+                    "first_interior_axis_index Some({i}) exceeds FIELD_COUNT on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_polar_axis_index_composes_at_compile_time_via_const_fn() {
+        // CONST-FN pin — INDEX-OF-FIRST-POLAR is evaluable in const
+        // context, so a caller can pin the exact positional witness at
+        // compile time. Uses `matches!` in const rather than `==` on
+        // `Option<usize>` because `Option::eq` is not `const`.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.first_polar_axis_index(),
+            Some(0)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.first_polar_axis_index(),
+            Some(0)
+        ));
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.first_polar_axis_index().is_none());
+    }
+
+    #[test]
+    fn resource_limits_first_interior_axis_index_composes_at_compile_time_via_const_fn() {
+        // CONST-FN dual pin — same shape, dual cell.
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.first_interior_axis_index(),
+            Some(0)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.first_interior_axis_index().is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .first_interior_axis_index()
+            .is_none());
     }
 
     // ── Field-inspection primitives: FIELD_COUNT + FIELD_NAMES +

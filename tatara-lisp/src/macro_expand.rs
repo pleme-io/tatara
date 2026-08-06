@@ -14195,6 +14195,145 @@ impl ResourceLimits {
             None => None,
         }
     }
+
+    /// Whole-posture SINGLETON-OF-BOTTOM predicate —
+    /// `self.bottom_axis_is_singleton()` returns `Some(true)` iff EXACTLY
+    /// one axis of `self` sits at the bottom pole (equivalently:
+    /// [`Self::count_bottom_axes`] `== 1`), `Some(false)` iff two or more
+    /// axes are at the bottom pole, or `None` iff no axis is at the
+    /// bottom pole. The COUNT-EQUALS-ONE peer of
+    /// [`Self::bottom_axis_is_contiguous`] one PROJECTION-KIND axis over —
+    /// jointly the (bottom_axis_is_singleton, top_axis_is_singleton)
+    /// atomic pair OPENS the SINGLETON column past the just-closed SPARSE
+    /// column on the atomic (bottom, top) row, PROMOTING the LOAD-BEARING
+    /// `SINGLE-FIRE COINCIDENCE` regime — cited as a per-method corollary
+    /// across every already-lifted (SPAN, GAP, CONTIGUITY, SPARSE) atomic
+    /// projection — to a first-class typed exit rather than an inline
+    /// `self.count_bottom_axes() == 1` per-consumer equality test.
+    ///
+    /// **COUNT-EQUALS-ONE identity — LOAD-BEARING structural pin**: on
+    /// every posture, `bottom_axis_is_singleton() == { let c =
+    /// self.count_bottom_axes(); if c == 0 { None } else { Some(c == 1) }
+    /// }`. Composes structurally through the just-lifted COUNT projection;
+    /// the substrate never re-scans the per-axis mask. Pinned via
+    /// `resource_limits_bottom_axis_is_singleton_equals_count_equals_one`.
+    ///
+    /// **SINGLE-FIRE-IMPLIES-CONTIGUOUS bridge — LOAD-BEARING structural
+    /// pin**: on every posture, `bottom_axis_is_singleton() == Some(true)
+    /// ⇒ bottom_axis_is_contiguous() == Some(true)`. The SINGLE-FIRE
+    /// regime is the STRUCTURAL DOMAIN where the (SPAN, GAP, CONTIGUITY,
+    /// SPARSE) column collapses uniformly at the trivially-contiguous
+    /// endpoint; the SINGLETON predicate is the typed exit for that
+    /// collapse cell. Pinned via
+    /// `resource_limits_bottom_axis_is_singleton_true_implies_is_contiguous_true`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.bottom_axis_is_singleton()
+    /// == Some(false)` (saturated bottom pole packs SIX axes at 0, so NOT
+    /// singleton); `UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_singleton()
+    /// == None` (no bottom axis); `DEFAULT_RESOURCE_LIMITS
+    /// .bottom_axis_is_singleton() == None` (no bottom axis).
+    ///
+    /// **ANY-fold bridge**: `a.bottom_axis_is_singleton().is_some() ⇔
+    /// a.has_bottom_axis()`. Pinned via
+    /// `resource_limits_bottom_axis_is_singleton_is_some_iff_has_bottom_axis`.
+    ///
+    /// **BOOLEAN COLLAPSE — LOAD-BEARING pin**: the (`Some(true)`,
+    /// `Some(false)`, `None`) trichotomy PARTITIONS every posture into
+    /// (singleton-bottom, multi-bottom, no-bottom) — a distinct
+    /// three-cell partition NOT expressible by any (SPAN, GAP, CONTIGUITY,
+    /// SPARSE) column: a `count == 3` posture with a contiguous run and a
+    /// `count == 1` posture BOTH fire the CONTIGUITY column at
+    /// `Some(true)` while the SINGLETON column separates them into
+    /// `Some(false)` and `Some(true)`. The mirror position of how the
+    /// GAP column separated (COUNT, SPAN)-equivalent postures the boolean
+    /// CONTIGUITY column merged. Pinned via
+    /// `resource_limits_bottom_axis_is_singleton_trichotomy_partitions_shipped_postures`.
+    ///
+    /// `const fn` so a caller can pin the bottom-axis SINGLETON verdict
+    /// at compile time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.bottom_axis_is_singleton(), Some(false)));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// SINGLETON predicate is a named typed exit `Option<bool>` rather
+    /// than a per-consumer `self.count_bottom_axes() == 1` inline
+    /// equality test that discards the has-axis-at-all distinction.
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// SINGLETON cell is a structural derivation from the COUNT
+    /// projection via one usize equality and one is-zero split, no new
+    /// per-axis scan, no allocation). THEORY.md §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: Idris's `Vect 1 a` (a typed exit for
+    /// singleton vectors distinct from `Vect 0 a` and `Vect (S k) a`);
+    /// Haskell's `Data.Semigroup.Foldable.foldMap1` singleton dispatch;
+    /// APL's `(1=≢⍵)` singleton-length primitive; Racket's
+    /// `(singleton? lst)` contract predicate. Translation through
+    /// pleme-io primitives: the plain `const fn` DERIVATION from the
+    /// already-lifted [`Self::count_bottom_axes`], one usize equality
+    /// under a two-arm match on the zero split, no new per-axis scan, no
+    /// allocation.
+    #[must_use]
+    pub const fn bottom_axis_is_singleton(self) -> Option<bool> {
+        match self.count_bottom_axes() {
+            0 => None,
+            c => Some(c == 1),
+        }
+    }
+
+    /// Whole-posture SINGLETON-OF-TOP predicate —
+    /// `self.top_axis_is_singleton()` returns `Some(true)` iff EXACTLY
+    /// one axis of `self` sits at the top pole (equivalently:
+    /// [`Self::count_top_axes`] `== 1`), `Some(false)` iff two or more
+    /// axes are at the top pole, or `None` iff no axis is at the top
+    /// pole. The ATOMIC-CELL DUAL of [`Self::bottom_axis_is_singleton`]
+    /// one CELL axis over on the SINGLETON column — jointly the
+    /// (bottom_axis_is_singleton, top_axis_is_singleton) atomic pair
+    /// OPENS the SINGLETON column past the just-closed SPARSE column on
+    /// the atomic (bottom, top) row.
+    ///
+    /// **COUNT-EQUALS-ONE identity dual**: on every posture,
+    /// `top_axis_is_singleton() == { let c = self.count_top_axes(); if
+    /// c == 0 { None } else { Some(c == 1) } }`. Pinned via
+    /// `resource_limits_top_axis_is_singleton_equals_count_equals_one`.
+    ///
+    /// **SINGLE-FIRE-IMPLIES-CONTIGUOUS bridge dual**: on every posture,
+    /// `top_axis_is_singleton() == Some(true) ⇒ top_axis_is_contiguous()
+    /// == Some(true)`. Pinned via
+    /// `resource_limits_top_axis_is_singleton_true_implies_is_contiguous_true`.
+    ///
+    /// **Preset pins**: `UNBOUNDED_RESOURCE_LIMITS.top_axis_is_singleton()
+    /// == Some(false)` (saturated top pole packs SIX axes at
+    /// `usize::MAX`, so NOT singleton); `EMPTY_RESOURCE_LIMITS
+    /// .top_axis_is_singleton() == None` (no top axis);
+    /// `DEFAULT_RESOURCE_LIMITS.top_axis_is_singleton() == None`.
+    ///
+    /// **ANY-fold bridge**: `a.top_axis_is_singleton().is_some() ⇔
+    /// a.has_top_axis()`. Pinned via
+    /// `resource_limits_top_axis_is_singleton_is_some_iff_has_top_axis`.
+    ///
+    /// **CROSS-CELL SATURATION contrast — LOAD-BEARING pin**: at the
+    /// SATURATED pole preset for EACH atomic cell, the OTHER cell's
+    /// SINGLETON is `None` and the SAME cell's SINGLETON is `Some(false)`
+    /// (the saturated pole packs FIELD_COUNT axes, strictly greater than
+    /// one). The saturated pole is UNIFORMLY MULTI on its own cell and
+    /// UNIFORMLY ABSENT on the dual cell — the exact same partition shape
+    /// as the atomic (SPARSE, CONTIGUITY, GAP) columns on their own
+    /// saturated-pole preset row. Pinned via
+    /// `resource_limits_atomic_is_singleton_saturation_pole_partitions_into_multi_and_absent`.
+    ///
+    /// `const fn` so a caller can pin the top-axis SINGLETON verdict at
+    /// compile time.
+    ///
+    /// Theory anchor: same as [`Self::bottom_axis_is_singleton`].
+    ///
+    /// Frontier inspiration: same as [`Self::bottom_axis_is_singleton`],
+    /// on the DUAL atomic mask.
+    #[must_use]
+    pub const fn top_axis_is_singleton(self) -> Option<bool> {
+        match self.count_top_axes() {
+            0 => None,
+            c => Some(c == 1),
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -51667,5 +51806,348 @@ mod tests {
             .interior_axis_is_sparse()
             .is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_sparse().is_none());
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_singleton_preset_pins_saturate_at_multi_and_absent() {
+        // Preset pins — the SATURATED-bottom-pole preset EMPTY packs SIX
+        // axes at position 0, so NOT singleton (count == 6, singleton ==
+        // Some(false)). The absent-bottom presets UNBOUNDED and DEFAULT
+        // and both hand-authored postures carry no bottom axis; the
+        // SINGLETON verdict is None. Distinct partition shape from the
+        // (CONTIGUITY, SPARSE, GAP) columns: those pin EMPTY at the
+        // trivially-contiguous endpoint; the SINGLETON column pins EMPTY
+        // at the strictly-non-singleton MULTI endpoint.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_singleton(),
+            Some(false)
+        );
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_singleton(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.bottom_axis_is_singleton(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.bottom_axis_is_singleton(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.bottom_axis_is_singleton(), None);
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_singleton_preset_pins_saturate_at_multi_and_absent() {
+        // Preset pins dual — the SATURATED-top-pole preset UNBOUNDED
+        // packs SIX axes at usize::MAX, so NOT singleton (count == 6,
+        // singleton == Some(false)). The absent-top presets and hand-
+        // authored postures carry no top axis; the SINGLETON verdict is
+        // None.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_singleton(),
+            Some(false)
+        );
+        assert_eq!(EMPTY_RESOURCE_LIMITS.top_axis_is_singleton(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.top_axis_is_singleton(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.top_axis_is_singleton(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.top_axis_is_singleton(), None);
+    }
+
+    #[test]
+    fn resource_limits_atomic_is_singleton_saturation_pole_partitions_into_multi_and_absent() {
+        // CROSS-CELL SATURATION contrast on the SINGLETON column — the
+        // two saturated pole presets each pin (Some(false), None) on
+        // their (same-cell, dual-cell) SINGLETON pair. The saturated pole
+        // is UNIFORMLY MULTI on its own cell (count == FIELD_COUNT > 1)
+        // and UNIFORMLY ABSENT on the dual cell — the exact same
+        // partition shape as the atomic (SPARSE, CONTIGUITY, GAP) columns
+        // on their own saturated-pole preset row, translated through the
+        // COUNT-EQUALS-ONE derivation.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_singleton(),
+            Some(false)
+        );
+        assert_eq!(EMPTY_RESOURCE_LIMITS.top_axis_is_singleton(), None);
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_singleton(),
+            Some(false)
+        );
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_singleton(), None);
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_singleton_equals_count_equals_one() {
+        // COUNT-EQUALS-ONE identity — the SINGLETON predicate is
+        // structurally derived from count_bottom_axes on every posture:
+        // None iff count == 0, Some(count == 1) otherwise. Pinned across
+        // every shipped preset + hand-authored + test-local posture so a
+        // future rewrite of either projection that silently drifts from
+        // the count-equals-one contract fires this pin.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let c = a.count_bottom_axes();
+            let expected = if c == 0 { None } else { Some(c == 1) };
+            assert_eq!(
+                a.bottom_axis_is_singleton(),
+                expected,
+                "is_singleton = count-equals-one identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_singleton_equals_count_equals_one() {
+        // COUNT-EQUALS-ONE identity dual on the top cell.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let c = a.count_top_axes();
+            let expected = if c == 0 { None } else { Some(c == 1) };
+            assert_eq!(
+                a.top_axis_is_singleton(),
+                expected,
+                "is_singleton = count-equals-one identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_singleton_is_some_iff_has_bottom_axis() {
+        // ANY-fold bridge — the SINGLETON verdict is defined iff the
+        // bottom-axis subset is non-empty. Identical shape to every
+        // already-lifted (SPAN, GAP, CONTIGUITY, SPARSE) atomic-cell
+        // is_some ⇔ has-axis bridge, closing the (span, gap, contiguity,
+        // sparse, singleton) atomic column pentad's uniform ANY-fold
+        // bridge contract.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.bottom_axis_is_singleton().is_some(),
+                a.has_bottom_axis(),
+                "is_singleton.is_some() != has_bottom_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_singleton_is_some_iff_has_top_axis() {
+        // ANY-fold bridge dual on the top cell.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.top_axis_is_singleton().is_some(),
+                a.has_top_axis(),
+                "is_singleton.is_some() != has_top_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_singleton_trichotomy_partitions_shipped_postures() {
+        // BOOLEAN COLLAPSE — LOAD-BEARING pin. The Option<bool>
+        // trichotomy partitions every posture into (singleton-bottom,
+        // multi-bottom, no-bottom) — a distinct three-cell partition NOT
+        // expressible by any (SPAN, GAP, CONTIGUITY, SPARSE) atomic
+        // column: SPARSE_BOTTOM (count = 3, contiguous = Some(false)),
+        // CONTIGUOUS_INTERIOR_BOTTOM (count = 3, contiguous = Some(true)),
+        // and EMPTY (count = 6, contiguous = Some(true)) all fire the
+        // SINGLETON column at Some(false) despite disagreeing on
+        // (CONTIGUITY, SPARSE); a hand-constructed singleton posture
+        // fires Some(true); the absent-bottom presets fire None.
+        // Witnesses at each cell:
+        //   * multi-bottom (Some(false)): EMPTY (count = 6),
+        //     SPARSE_BOTTOM (count = 3), CONTIGUOUS_INTERIOR_BOTTOM
+        //     (count = 3), ENDPOINTS_ONLY_BOTTOM (count = 2).
+        //   * no-bottom (None): UNBOUNDED, DEFAULT, HAND_AUTHORED_MID,
+        //     HAND_AUTHORED_OTHER.
+        //   * singleton-bottom (Some(true)): tested exhaustively in the
+        //     SINGLE-FIRE COINCIDENCE pin below.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_singleton(),
+            Some(false)
+        );
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE.bottom_axis_is_singleton(),
+            Some(false)
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.bottom_axis_is_singleton(),
+            Some(false),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_is_singleton(),
+            Some(false),
+        );
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_singleton(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.bottom_axis_is_singleton(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.bottom_axis_is_singleton(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.bottom_axis_is_singleton(), None);
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_singleton_true_at_lone_bottom_axis() {
+        // SINGLE-FIRE COINCIDENCE pin — a lone bottom axis at any of the
+        // six positions gives count == 1, so the SINGLETON verdict is
+        // Some(true). The FIRST typed exit for the SINGLE-FIRE regime
+        // cited across every (SPAN, GAP, CONTIGUITY, SPARSE) atomic-cell
+        // singleton pin — the substrate now expresses "count == 1" as a
+        // NAMED typed predicate rather than a per-method inline usize
+        // equality on the COUNT projection.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            fields[position] = 0;
+            let singleton_bottom = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_bottom.count_bottom_axes(), 1);
+            assert_eq!(
+                singleton_bottom.bottom_axis_is_singleton(),
+                Some(true),
+                "singleton bottom at position {position} not Some(true)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_singleton_true_at_lone_top_axis() {
+        // SINGLE-FIRE COINCIDENCE pin dual — a lone top axis at any of
+        // the six positions gives count == 1, so the SINGLETON verdict
+        // is Some(true).
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            fields[position] = usize::MAX;
+            let singleton_top = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_top.count_top_axes(), 1);
+            assert_eq!(
+                singleton_top.top_axis_is_singleton(),
+                Some(true),
+                "singleton top at position {position} not Some(true)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_singleton_true_implies_is_contiguous_true() {
+        // SINGLE-FIRE-IMPLIES-CONTIGUOUS bridge — LOAD-BEARING structural
+        // pin. On every posture, is_singleton == Some(true) ⇒
+        // is_contiguous == Some(true). The SINGLETON typed exit is the
+        // STRUCTURAL DOMAIN where the (CONTIGUITY, SPARSE, GAP) column
+        // collapses uniformly at the trivially-contiguous endpoint. Pinned
+        // across every position × every shipped preset — the converse
+        // does NOT hold (CONTIGUOUS_INTERIOR_BOTTOM_POSTURE is contiguous
+        // but not singleton, count = 3), which is precisely why the
+        // SINGLETON column carries LOAD-BEARING information the CONTIGUITY
+        // column cannot.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            fields[position] = 0;
+            let singleton_bottom = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_bottom.bottom_axis_is_singleton(), Some(true));
+            assert_eq!(
+                singleton_bottom.bottom_axis_is_contiguous(),
+                Some(true),
+                "singleton bottom at position {position} not is_contiguous == Some(true)",
+            );
+        }
+        // Converse witness — contiguous non-singleton posture pins
+        // is_singleton at Some(false) despite is_contiguous == Some(true).
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.bottom_axis_is_contiguous(),
+            Some(true),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.bottom_axis_is_singleton(),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_singleton_true_implies_is_contiguous_true() {
+        // SINGLE-FIRE-IMPLIES-CONTIGUOUS bridge dual on the top cell.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            fields[position] = usize::MAX;
+            let singleton_top = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_top.top_axis_is_singleton(), Some(true));
+            assert_eq!(
+                singleton_top.top_axis_is_contiguous(),
+                Some(true),
+                "singleton top at position {position} not is_contiguous == Some(true)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_is_singleton_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — both SINGLETON projections are evaluable in
+        // const context so a caller can pin count-equals-one identities
+        // at compile time as build-breaks. Mirror of the atomic (SPARSE,
+        // CONTIGUITY, GAP) const-fn pins one PROJECTION-KIND axis over
+        // on the boolean surface.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_singleton(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_singleton(),
+            Some(false)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.top_axis_is_singleton().is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .bottom_axis_is_singleton()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.bottom_axis_is_singleton().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_is_singleton().is_none());
     }
 }

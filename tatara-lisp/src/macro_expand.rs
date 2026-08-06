@@ -10038,6 +10038,275 @@ impl ResourceLimits {
     pub const fn is_interior(self) -> bool {
         !self.is_bottom() && !self.is_top()
     }
+
+    /// Per-axis bounded-lattice BOTTOM-identity mask across the six
+    /// ceilings — the ATOMIC per-axis pole-identity vector whose
+    /// CONJUNCTION over the six positions equals [`Self::is_bottom`].
+    /// `a.axes_is_bottom()[i]` is `true` iff the `i`-th ceiling of `a`
+    /// is exactly `0` (bottom on that axis); folding the six results
+    /// through `&&` recovers `a.is_bottom()` verbatim, so this
+    /// projection DECOMPOSES the single-bit pole-identity into its six
+    /// per-axis witnesses without introducing new pole-identity
+    /// semantics past what [`Self::is_bottom`] already carries.
+    ///
+    /// The DIRECT PROJECTION-KIND peer of [`Self::is_bottom`] one
+    /// PROJECTION-KIND axis over on the pole-identity surface — where
+    /// `is_bottom` returns the single-bit "posture-is-bottom" verdict,
+    /// this returns the six per-axis "axis-is-at-bottom" witnesses.
+    /// Sibling posture to how [`Self::axes_leq`] returns the six
+    /// per-axis "below" witnesses whose conjunction is [`Self::leq`],
+    /// one PREDICATE-KIND axis over from pole identity to pairwise
+    /// relation. Together with [`Self::axes_is_top`] the pair closes
+    /// the (bottom, top) × (scalar, per-axis-mask) 2×2 pole-identity
+    /// face, mirroring the (leq, geq) × (scalar, per-axis-mask) 2×2
+    /// non-strict pairwise-relation face one PREDICATE-KIND axis over.
+    ///
+    /// Encoded as `self.axes_leq(EMPTY_RESOURCE_LIMITS)` — one
+    /// primitive delegation to [`Self::axes_leq`] with the bottom
+    /// preset threaded on the RHS. On the pointwise partial order,
+    /// `a.field_i <= 0` on `usize` iff `a.field_i == 0`, so the mask
+    /// entries decode structurally to per-axis EQUALITY-with-`0`
+    /// without a separate per-field cascade. The `axes_leq`-with-pole
+    /// composition binds the pole-identity mask to the SAME per-axis
+    /// primitive the (axes_leq, axes_geq, axes_lt, axes_gt) 2×2
+    /// per-axis pairwise face is built from, and mirrors how
+    /// [`Self::is_bottom`] one PROJECTION-KIND axis over binds through
+    /// the single-bit [`Self::leq`] primitive with the same pole
+    /// preset on the RHS.
+    ///
+    /// **Bottom-preset closure**:
+    /// `EMPTY_RESOURCE_LIMITS.axes_is_bottom() == [true; FIELD_COUNT]`
+    /// — the bottom preset itself hits its pole verdict on EVERY axis
+    /// via `axes_leq`'s reflexivity. Peer posture to
+    /// [`Self::is_bottom`]'s bottom-preset closure one PROJECTION-KIND
+    /// axis over. Pinned as
+    /// `resource_limits_axes_is_bottom_holds_on_every_axis_at_the_shipped_bottom_preset`.
+    ///
+    /// **Top-preset rejection**:
+    /// `UNBOUNDED_RESOURCE_LIMITS.axes_is_bottom() == [false;
+    /// FIELD_COUNT]` — the OPPOSITE pole rejects on EVERY axis
+    /// (`usize::MAX <= 0` fails on every axis). LOAD-BEARING
+    /// discriminator across the (bottom, top) preset-pair AT THE
+    /// PER-AXIS GRANULARITY. Pinned as
+    /// `resource_limits_axes_is_bottom_rejects_on_every_axis_at_the_shipped_top_preset`.
+    ///
+    /// **Default-preset rejection**:
+    /// `DEFAULT_RESOURCE_LIMITS.axes_is_bottom() == [false;
+    /// FIELD_COUNT]` — every `DEFAULT_MAX_*` module constant is a
+    /// POSITIVE value strictly greater than `0`, so the mask rejects
+    /// on every axis. Pinned as
+    /// `resource_limits_axes_is_bottom_rejects_on_every_axis_at_the_shipped_default_preset`.
+    ///
+    /// **Conjunction-recovers-`is_bottom` contract**: for every
+    /// posture `a`, folding `a.axes_is_bottom()` through `&&` over the
+    /// six positions equals `a.is_bottom()` — sweep the canonical
+    /// preset roster (EMPTY / DEFAULT / UNBOUNDED / MID / OTHER) and
+    /// confirm the fold agreement axis-by-axis. Mirrors the analogous
+    /// conjunction-recovers-`leq` contract on [`Self::axes_leq`] one
+    /// PREDICATE-KIND axis over. Pinned as
+    /// `resource_limits_axes_is_bottom_conjunction_agrees_with_is_bottom_on_every_shipped_posture`.
+    ///
+    /// **Positional-alignment contract**: for every posture `a` and
+    /// every index `i in 0..FIELD_COUNT`,
+    /// `a.axes_is_bottom()[i] == (a.field_values()[i] == 0)` — pinned
+    /// via cross-reference with [`Self::field_values`] on the same
+    /// canonical roster, so the per-axis mask preserves the canonical
+    /// index-to-axis mapping the two SIBLING projections carry.
+    /// Pinned as
+    /// `resource_limits_axes_is_bottom_agrees_with_pointwise_field_equals_zero`.
+    ///
+    /// **`axes_leq`-with-pole equivalence contract**: for every
+    /// posture `a`, `a.axes_is_bottom() ==
+    /// a.axes_leq(EMPTY_RESOURCE_LIMITS)` element-by-element — pinning
+    /// the projection body as definitionally the `axes_leq`-with-pole
+    /// composition. Pinned as
+    /// `resource_limits_axes_is_bottom_is_axes_leq_empty_on_every_shipped_posture`.
+    ///
+    /// **Hand-authored asymmetric rejection**: both
+    /// [`HAND_AUTHORED_MID_POSTURE`] and [`HAND_AUTHORED_OTHER_POSTURE`]
+    /// have every field at a distinct positive value, so
+    /// `MID.axes_is_bottom() == [false; FIELD_COUNT]` AND
+    /// `OTHER.axes_is_bottom() == [false; FIELD_COUNT]`. Pinned as
+    /// `resource_limits_axes_is_bottom_rejects_on_every_axis_at_the_hand_authored_asymmetric_postures`.
+    ///
+    /// `const fn` so a caller can pin a per-axis pole-mask at compile
+    /// time (`const _: [bool; ResourceLimits::FIELD_COUNT] =
+    /// EMPTY_RESOURCE_LIMITS.axes_is_bottom();`) — the const-fn peer
+    /// of the const-eval evaluability [`Self::is_bottom`] carries one
+    /// PROJECTION-KIND axis over. `Copy` on [`ResourceLimits`] lets
+    /// the const-fn body pass `self` by value into the delegated
+    /// [`Self::axes_leq`] call, and `bool` is trivially `Copy` in the
+    /// array element position.
+    ///
+    /// Pre-lift, a caller wanting per-axis pole diagnostics — an
+    /// observability serializer that flags "the posture is at the
+    /// bottom pole on `max_cache_entries` but not on the other five
+    /// axes," a per-axis test-harness that pins the pole membership
+    /// axis-by-axis — composed `a.field_values().map(|v| v == 0)` at
+    /// its call site with no compile-time gate that the mapping
+    /// discipline holds axis-by-axis, OR composed a six-primitive
+    /// per-field boolean literal that a future seventh ceiling would
+    /// leave silently under-checked. Post-lift the per-axis pole mask
+    /// binds at ONE typed `const fn` primitive on the algebra,
+    /// composes through the same `axes_leq` primitive the (axes_leq,
+    /// axes_geq) direction pair is built from, and inherits the six-
+    /// primitive `axes_leq` body — a ≥2 PRIME DIRECTIVE trigger, since
+    /// the pole-mask projection at the per-axis surface was
+    /// previously composable only as a per-consumer inline field
+    /// cascade.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-posture projection into the six-bool pole-mask is itself a
+    /// typed named exit rather than a per-consumer inline
+    /// six-primitive cascade. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; the pole-identity on a
+    /// preset-carried resource proof is decomposed into its six
+    /// per-axis witnesses at TYPE level, so consumers reasoning about
+    /// WHICH axes carry the pole identity bind through ONE typed
+    /// primitive rather than re-running the comparison on each.
+    /// THEORY.md §V.1 — knowable platform; the per-axis pole mask
+    /// becomes a TYPE-level operation on the posture algebra rather
+    /// than a per-consumer field-access cascade — with the per-axis
+    /// granularity baked in so the consumer cannot silently drop an
+    /// axis (the array's fixed arity forces every axis to appear).
+    ///
+    /// Frontier inspiration: Idris's `zipWith (== 0)` over a `Vec n
+    /// Nat` producing a `Vec n Bool` — the SPECIALIZED `axes_leq
+    /// EMPTY` shape [`Self::axes_leq`] cites, closing the pole-
+    /// identity direction at the per-position level with the pole
+    /// preset on the RHS; APL's `0=⍵` per-position equality
+    /// projection on a numeric vector. Translation through pleme-io
+    /// primitives is the plain `const fn` [`Self::axes_leq`] call
+    /// against the already-shipped [`EMPTY_RESOURCE_LIMITS`] bottom
+    /// preset — no typeclass indirection.
+    #[must_use]
+    pub const fn axes_is_bottom(self) -> [bool; Self::FIELD_COUNT] {
+        self.axes_leq(EMPTY_RESOURCE_LIMITS)
+    }
+
+    /// Per-axis bounded-lattice TOP-identity mask across the six
+    /// ceilings — the ATOMIC per-axis pole-identity vector whose
+    /// CONJUNCTION over the six positions equals [`Self::is_top`].
+    /// `a.axes_is_top()[i]` is `true` iff the `i`-th ceiling of `a`
+    /// is exactly [`usize::MAX`] (top on that axis); folding the six
+    /// results through `&&` recovers `a.is_top()` verbatim, so this
+    /// projection DECOMPOSES the single-bit pole-identity into its
+    /// six per-axis witnesses without introducing new pole-identity
+    /// semantics past what [`Self::is_top`] already carries.
+    ///
+    /// The DIRECT PROJECTION-KIND peer of [`Self::is_top`] one
+    /// PROJECTION-KIND axis over on the pole-identity surface, AND
+    /// the LATTICE-POLE peer of [`Self::axes_is_bottom`] one
+    /// LATTICE-POLE axis over on the per-axis-mask surface. Together
+    /// with [`Self::axes_is_bottom`] the pair closes the (bottom,
+    /// top) × (scalar, per-axis-mask) 2×2 pole-identity face,
+    /// mirroring the (leq, geq) × (scalar, per-axis-mask) 2×2
+    /// non-strict pairwise-relation face one PREDICATE-KIND axis
+    /// over.
+    ///
+    /// Encoded as `UNBOUNDED_RESOURCE_LIMITS.axes_leq(self)` — one
+    /// primitive delegation to [`Self::axes_leq`] with the top
+    /// preset threaded on the LHS. On the pointwise partial order,
+    /// `usize::MAX <= a.field_i` on `usize` iff `a.field_i ==
+    /// usize::MAX`, so the mask entries decode structurally to
+    /// per-axis EQUALITY-with-[`usize::MAX`] without a separate
+    /// per-field cascade. The DUAL threading direction from
+    /// [`Self::axes_is_bottom`] mirrors how
+    /// `UNBOUNDED.leq(a)` is the geq-family projection of
+    /// `a.leq(UNBOUNDED)` on the same partial order at the SINGLE-BIT
+    /// level.
+    ///
+    /// **Top-preset closure**:
+    /// `UNBOUNDED_RESOURCE_LIMITS.axes_is_top() == [true;
+    /// FIELD_COUNT]` — the top preset itself hits its pole verdict on
+    /// EVERY axis via `axes_leq`'s reflexivity. Peer posture to
+    /// [`Self::is_top`]'s top-preset closure one PROJECTION-KIND axis
+    /// over. Pinned as
+    /// `resource_limits_axes_is_top_holds_on_every_axis_at_the_shipped_top_preset`.
+    ///
+    /// **Bottom-preset rejection**:
+    /// `EMPTY_RESOURCE_LIMITS.axes_is_top() == [false; FIELD_COUNT]`
+    /// — the OPPOSITE pole rejects on EVERY axis (`usize::MAX <= 0`
+    /// fails on every axis). LOAD-BEARING discriminator across the
+    /// (bottom, top) preset-pair AT THE PER-AXIS GRANULARITY. Pinned
+    /// as
+    /// `resource_limits_axes_is_top_rejects_on_every_axis_at_the_shipped_bottom_preset`.
+    ///
+    /// **Default-preset rejection**:
+    /// `DEFAULT_RESOURCE_LIMITS.axes_is_top() == [false;
+    /// FIELD_COUNT]` — every `DEFAULT_MAX_*` module constant is a
+    /// concrete positive value strictly LESS than [`usize::MAX`], so
+    /// `UNBOUNDED.axes_leq(DEFAULT)` fails on every axis. Pinned as
+    /// `resource_limits_axes_is_top_rejects_on_every_axis_at_the_shipped_default_preset`.
+    ///
+    /// **Conjunction-recovers-`is_top` contract**: for every posture
+    /// `a`, folding `a.axes_is_top()` through `&&` over the six
+    /// positions equals `a.is_top()` — sweep the canonical preset
+    /// roster (EMPTY / DEFAULT / UNBOUNDED / MID / OTHER) and confirm
+    /// the fold agreement axis-by-axis. Sibling posture to the
+    /// conjunction-recovers-`is_bottom` contract on
+    /// [`Self::axes_is_bottom`] one LATTICE-POLE axis over. Pinned as
+    /// `resource_limits_axes_is_top_conjunction_agrees_with_is_top_on_every_shipped_posture`.
+    ///
+    /// **Positional-alignment contract**: for every posture `a` and
+    /// every index `i in 0..FIELD_COUNT`,
+    /// `a.axes_is_top()[i] == (a.field_values()[i] == usize::MAX)` —
+    /// pinned via cross-reference with [`Self::field_values`] on the
+    /// same canonical roster. Pinned as
+    /// `resource_limits_axes_is_top_agrees_with_pointwise_field_equals_max`.
+    ///
+    /// **`axes_leq`-with-pole equivalence contract**: for every
+    /// posture `a`, `a.axes_is_top() ==
+    /// UNBOUNDED_RESOURCE_LIMITS.axes_leq(a)` element-by-element —
+    /// pinning the projection body as definitionally the
+    /// `axes_leq`-with-pole composition on the DUAL threading
+    /// direction from [`Self::axes_is_bottom`]. Pinned as
+    /// `resource_limits_axes_is_top_is_unbounded_axes_leq_self_on_every_shipped_posture`.
+    ///
+    /// **Hand-authored asymmetric rejection**: both
+    /// [`HAND_AUTHORED_MID_POSTURE`] and [`HAND_AUTHORED_OTHER_POSTURE`]
+    /// have every field at a distinct positive value strictly less
+    /// than [`usize::MAX`], so
+    /// `MID.axes_is_top() == [false; FIELD_COUNT]` AND
+    /// `OTHER.axes_is_top() == [false; FIELD_COUNT]`. Pinned as
+    /// `resource_limits_axes_is_top_rejects_on_every_axis_at_the_hand_authored_asymmetric_postures`.
+    ///
+    /// **Per-axis pole disjointness**: for every posture `a` and
+    /// every index `i`, `a.axes_is_bottom()[i] && a.axes_is_top()[i]
+    /// == false` — the per-axis bottom and top masks are DISJOINT at
+    /// every position because `0 != usize::MAX` on `usize`. The
+    /// disjointness holds AT EVERY AXIS, refining the single-bit
+    /// [`Self::is_bottom`] / [`Self::is_top`] disjointness one
+    /// PROJECTION-KIND axis over. Pinned as
+    /// `resource_limits_axes_is_bottom_and_axes_is_top_are_disjoint_at_every_axis_on_every_shipped_posture`.
+    ///
+    /// `const fn` so a caller can pin a per-axis top-pole mask at
+    /// compile time. Sibling of the const-fn evaluability pin on
+    /// [`Self::axes_is_bottom`] one LATTICE-POLE axis over.
+    ///
+    /// Pre-lift, same story as [`Self::axes_is_bottom`] with the
+    /// mapping projection flipped to `a.field_values().map(|v| v ==
+    /// usize::MAX)`. Post-lift the per-axis top-pole mask binds at
+    /// ONE typed `const fn` primitive on the algebra, threading
+    /// through [`Self::axes_leq`] on the DUAL direction from
+    /// [`Self::axes_is_bottom`] — a ≥2 PRIME DIRECTIVE trigger
+    /// following the axes_is_bottom lift.
+    ///
+    /// Theory anchor: same as [`Self::axes_is_bottom`] — THEORY.md
+    /// §II.1 invariants 3 + 5, THEORY.md §V.1.
+    ///
+    /// Frontier inspiration: Idris's `zipWith (== maxBound)` over a
+    /// `Vec n Nat` producing a `Vec n Bool`; APL's `⍵≥⌈/⍵` per-
+    /// position saturation projection on a numeric vector.
+    /// Translation through pleme-io primitives is the plain `const
+    /// fn` [`Self::axes_leq`] call against the already-shipped
+    /// [`UNBOUNDED_RESOURCE_LIMITS`] top preset with the direction
+    /// REVERSED against [`Self::axes_is_bottom`] — no typeclass
+    /// indirection.
+    #[must_use]
+    pub const fn axes_is_top(self) -> [bool; Self::FIELD_COUNT] {
+        UNBOUNDED_RESOURCE_LIMITS.axes_leq(self)
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -38907,6 +39176,259 @@ mod tests {
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.is_interior());
         const _: () = assert!(!EMPTY_RESOURCE_LIMITS.is_interior());
         const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.is_interior());
+    }
+
+    // ── axes_is_bottom / axes_is_top — the per-axis pole-identity mask
+    // pair, PROJECTION-KIND peers of `is_bottom` / `is_top` one
+    // PROJECTION-KIND axis over on the pole-identity surface. Each
+    // projection composes through the existing `axes_leq` primitive
+    // with the pole preset threaded on the direction-matching side
+    // (bottom on the RHS via `self.axes_leq(EMPTY)`, top on the LHS
+    // via `UNBOUNDED.axes_leq(self)`). Together the two projections
+    // close the (bottom, top) × (scalar, per-axis-mask) 2×2
+    // pole-identity face.
+
+    #[test]
+    fn resource_limits_axes_is_bottom_holds_on_every_axis_at_the_shipped_bottom_preset() {
+        // BOTTOM-PRESET CLOSURE: the bottom preset hits its per-axis
+        // pole verdict on EVERY axis via `axes_leq`'s reflexivity.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.axes_is_bottom(),
+            [true; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_bottom_rejects_on_every_axis_at_the_shipped_top_preset() {
+        // TOP-PRESET REJECTION: the OPPOSITE pole rejects on EVERY
+        // axis (`usize::MAX <= 0` fails on every axis). LOAD-BEARING
+        // discriminator at per-axis granularity.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.axes_is_bottom(),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_bottom_rejects_on_every_axis_at_the_shipped_default_preset() {
+        // DEFAULT-PRESET REJECTION: every `DEFAULT_MAX_*` module
+        // constant is a POSITIVE value strictly greater than `0`, so
+        // the mask rejects on every axis.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.axes_is_bottom(),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_bottom_rejects_on_every_axis_at_the_hand_authored_asymmetric_postures(
+    ) {
+        // HAND-AUTHORED ASYMMETRIC REJECTION: every axis of each
+        // hand-authored posture is a distinct positive value, so the
+        // bottom-pole mask rejects on every axis of both.
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.axes_is_bottom(),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.axes_is_bottom(),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_bottom_conjunction_agrees_with_is_bottom_on_every_shipped_posture() {
+        // CONJUNCTION-RECOVERS-IS_BOTTOM CONTRACT: folding the six
+        // per-axis witnesses through `&&` recovers the single-bit
+        // `is_bottom` verdict — pinning the (scalar,
+        // per-axis-mask) 2-cell face on the bottom-pole projection.
+        // Sibling posture to the conjunction-recovers-`leq` contract
+        // on `axes_leq` one PREDICATE-KIND axis over.
+        for &a in STRICT_ORDER_ROSTER {
+            let mask = a.axes_is_bottom();
+            let folded = mask.iter().all(|&b| b);
+            assert_eq!(
+                folded,
+                a.is_bottom(),
+                "axes_is_bottom conjunction drifted from is_bottom on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_bottom_agrees_with_pointwise_field_equals_zero() {
+        // POSITIONAL-ALIGNMENT CONTRACT: each per-axis mask entry
+        // agrees with the pointwise `field_i == 0` projection through
+        // `field_values`. Guarantees the mask preserves the canonical
+        // index-to-axis mapping the substrate carries.
+        for &a in STRICT_ORDER_ROSTER {
+            let mask = a.axes_is_bottom();
+            let values = a.field_values();
+            for i in 0..ResourceLimits::FIELD_COUNT {
+                assert_eq!(
+                    mask[i],
+                    values[i] == 0,
+                    "axes_is_bottom[{i}] drifted from field_values[{i}] == 0 on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_bottom_is_axes_leq_empty_on_every_shipped_posture() {
+        // AXES_LEQ-WITH-POLE EQUIVALENCE: the projection body is
+        // definitionally `self.axes_leq(EMPTY_RESOURCE_LIMITS)`.
+        // Sweep the canonical preset roster and confirm the two
+        // masks agree element-by-element.
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.axes_is_bottom(),
+                a.axes_leq(EMPTY_RESOURCE_LIMITS),
+                "axes_is_bottom drifted from axes_leq(EMPTY) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_bottom_composes_at_compile_time_via_const_fn() {
+        // CONST-FN PIN: the per-axis bottom-pole mask is evaluable in
+        // const context. Sibling of the const-fn evaluability pin on
+        // `is_bottom` one PROJECTION-KIND axis over.
+        const _: [bool; ResourceLimits::FIELD_COUNT] = EMPTY_RESOURCE_LIMITS.axes_is_bottom();
+        const _: [bool; ResourceLimits::FIELD_COUNT] = DEFAULT_RESOURCE_LIMITS.axes_is_bottom();
+        const _: [bool; ResourceLimits::FIELD_COUNT] = UNBOUNDED_RESOURCE_LIMITS.axes_is_bottom();
+    }
+
+    #[test]
+    fn resource_limits_axes_is_top_holds_on_every_axis_at_the_shipped_top_preset() {
+        // TOP-PRESET CLOSURE: the top preset hits its per-axis pole
+        // verdict on EVERY axis via `axes_leq`'s reflexivity. Peer
+        // posture to the bottom-pole closure one LATTICE-POLE axis
+        // over on the per-axis-mask surface.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.axes_is_top(),
+            [true; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_top_rejects_on_every_axis_at_the_shipped_bottom_preset() {
+        // BOTTOM-PRESET REJECTION: the OPPOSITE pole rejects on
+        // EVERY axis (`usize::MAX <= 0` fails on every axis).
+        // LOAD-BEARING discriminator at per-axis granularity.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.axes_is_top(),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_top_rejects_on_every_axis_at_the_shipped_default_preset() {
+        // DEFAULT-PRESET REJECTION: every `DEFAULT_MAX_*` module
+        // constant is a concrete positive value strictly LESS than
+        // `usize::MAX`, so the top-pole mask rejects on every axis.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.axes_is_top(),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_top_rejects_on_every_axis_at_the_hand_authored_asymmetric_postures()
+    {
+        // HAND-AUTHORED ASYMMETRIC REJECTION: every axis of each
+        // hand-authored posture is a distinct positive value strictly
+        // less than `usize::MAX`, so the top-pole mask rejects on
+        // every axis of both.
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.axes_is_top(),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.axes_is_top(),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_top_conjunction_agrees_with_is_top_on_every_shipped_posture() {
+        // CONJUNCTION-RECOVERS-IS_TOP CONTRACT: folding the six
+        // per-axis witnesses through `&&` recovers the single-bit
+        // `is_top` verdict — pinning the (scalar, per-axis-mask)
+        // 2-cell face on the top-pole projection.
+        for &a in STRICT_ORDER_ROSTER {
+            let mask = a.axes_is_top();
+            let folded = mask.iter().all(|&b| b);
+            assert_eq!(
+                folded,
+                a.is_top(),
+                "axes_is_top conjunction drifted from is_top on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_top_agrees_with_pointwise_field_equals_max() {
+        // POSITIONAL-ALIGNMENT CONTRACT: each per-axis mask entry
+        // agrees with the pointwise `field_i == usize::MAX`
+        // projection through `field_values`. Peer of the analogous
+        // pin on `axes_is_bottom` one LATTICE-POLE axis over.
+        for &a in STRICT_ORDER_ROSTER {
+            let mask = a.axes_is_top();
+            let values = a.field_values();
+            for i in 0..ResourceLimits::FIELD_COUNT {
+                assert_eq!(
+                    mask[i],
+                    values[i] == usize::MAX,
+                    "axes_is_top[{i}] drifted from field_values[{i}] == usize::MAX on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_top_is_unbounded_axes_leq_self_on_every_shipped_posture() {
+        // AXES_LEQ-WITH-POLE EQUIVALENCE (DUAL direction): the
+        // projection body is definitionally
+        // `UNBOUNDED_RESOURCE_LIMITS.axes_leq(self)` — the DUAL
+        // threading direction from `axes_is_bottom`.
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.axes_is_top(),
+                UNBOUNDED_RESOURCE_LIMITS.axes_leq(a),
+                "axes_is_top drifted from UNBOUNDED.axes_leq(_) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_bottom_and_axes_is_top_are_disjoint_at_every_axis_on_every_shipped_posture(
+    ) {
+        // PER-AXIS POLE-DISJOINTNESS: `axes_is_bottom[i] &&
+        // axes_is_top[i] == false` on EVERY axis because `0 !=
+        // usize::MAX` on `usize`. The disjointness holds axis-by-axis,
+        // refining the single-bit `is_bottom` / `is_top`
+        // disjointness one PROJECTION-KIND axis over.
+        for &a in STRICT_ORDER_ROSTER {
+            let bottom = a.axes_is_bottom();
+            let top = a.axes_is_top();
+            for i in 0..ResourceLimits::FIELD_COUNT {
+                assert!(
+                    !(bottom[i] && top[i]),
+                    "axes_is_bottom[{i}] && axes_is_top[{i}] both held on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_top_composes_at_compile_time_via_const_fn() {
+        // CONST-FN PIN: the per-axis top-pole mask is evaluable in
+        // const context. Sibling of the const-fn evaluability pin on
+        // `axes_is_bottom` one LATTICE-POLE axis over.
+        const _: [bool; ResourceLimits::FIELD_COUNT] = UNBOUNDED_RESOURCE_LIMITS.axes_is_top();
+        const _: [bool; ResourceLimits::FIELD_COUNT] = DEFAULT_RESOURCE_LIMITS.axes_is_top();
+        const _: [bool; ResourceLimits::FIELD_COUNT] = EMPTY_RESOURCE_LIMITS.axes_is_top();
     }
 
     // ── Field-inspection primitives: FIELD_COUNT + FIELD_NAMES +

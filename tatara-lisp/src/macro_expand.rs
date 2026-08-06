@@ -13350,6 +13350,227 @@ impl ResourceLimits {
             None => None,
         }
     }
+
+    /// Whole-posture INDEX-GAP-COUNT-OF-POLAR projection —
+    /// `self.polar_axis_gap_count()` returns
+    /// `Some(polar_axis_index_span - count_polar_axes)` (the count of
+    /// positions strictly inside the closed index interval
+    /// `[first_polar_axis_index, last_polar_axis_index]` that are NOT
+    /// themselves polar axes — equivalently the count of STRICTLY-INTERIOR
+    /// axes sandwiched between the leftmost and rightmost polar axes)
+    /// when at least one axis is at some pole, OR `None` when every axis
+    /// sits strictly in the interior. The DERIVED-USIZE SPARSITY peer of
+    /// [`Self::polar_axis_index_span`] and [`Self::count_polar_axes`] on
+    /// the COMPOUND POLAR cell one CELL-KIND axis over from the atomic
+    /// [`Self::bottom_axis_gap_count`] + [`Self::top_axis_gap_count`]
+    /// pair, opening the GAP column past the just-closed SPAN column on
+    /// the COMPOUND (polar, interior) row with the same LOAD-BEARING
+    /// CONTIGUOUS-vs-SPARSE decision the atomic cells' `(count, span)`
+    /// pair expresses only as an INEQUALITY (`span ≥ count`) that the
+    /// GAP surface expresses as a POSITIONAL `usize` `gap == span -
+    /// count`.
+    ///
+    /// A STRICT REFINEMENT of the SPAN column on the COMPOUND polar cell:
+    /// two postures with the SAME `count_polar_axes() == 2` at positions
+    /// `(0, 1)` (span 2, gap 0) versus `(0, 5)` (span 6, gap 4) give the
+    /// SAME `count` verdict but DIFFERENT `span` verdicts AND DIFFERENT
+    /// `gap` verdicts; the (span, count, gap) triple JOINTLY pins the
+    /// CONTIGUITY of the polar-axis subset within its bracket at the
+    /// COMPOUND cell in the SAME way the atomic (bottom, top) pair
+    /// closes on its atomic brackets. The GAP PROJECTION KIND is the
+    /// FIRST usize on the COMPOUND POLAR cell whose preset trichotomy
+    /// pins CONTIGUOUS at BOTH saturated poles (`EMPTY` and `UNBOUNDED`
+    /// each pack all six axes at a single pole so span == count ==
+    /// FIELD_COUNT and gap saturates at zero, unlike the atomic-cell
+    /// trichotomy where each saturated preset pins one atomic gap at
+    /// zero and the OTHER at None).
+    ///
+    /// **SPAN-MINUS-COUNT-DERIVATION identity — LOAD-BEARING structural
+    /// pin**: on every posture, `polar_axis_gap_count() == match
+    /// polar_axis_index_span() { Some(w) => Some(w -
+    /// count_polar_axes()), None => None, }`. Composes structurally
+    /// through the just-lifted SPAN + already-lifted COUNT projections;
+    /// the substrate never re-scans the per-axis mask. Pinned via
+    /// `resource_limits_polar_axis_gap_count_equals_span_minus_count`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.polar_axis_gap_count() ==
+    /// Some(0)` (every axis at bottom pole; polar span == polar count
+    /// == `FIELD_COUNT`, so the GAP saturates at zero — the CONTIGUOUS
+    /// pole); `UNBOUNDED_RESOURCE_LIMITS.polar_axis_gap_count() ==
+    /// Some(0)` (every axis at top pole; polar span == polar count ==
+    /// `FIELD_COUNT`, so the GAP ALSO saturates at zero — BOTH saturated
+    /// pole presets are UNIFORMLY CONTIGUOUS on the COMPOUND polar
+    /// cell, unlike the atomic cells where each saturated preset
+    /// SATURATES only its own atomic gap); `DEFAULT_RESOURCE_LIMITS
+    /// .polar_axis_gap_count() == None` (every axis strictly interior,
+    /// no polar bracket); `HAND_AUTHORED_MID_POSTURE.polar_axis_gap_count()
+    /// == None` (same); `HAND_AUTHORED_OTHER_POSTURE.polar_axis_gap_count()
+    /// == None` (same).
+    ///
+    /// **ANY-fold bridge**: `a.polar_axis_gap_count().is_some() ⇔
+    /// a.has_polar_axis()`. Pinned via
+    /// `resource_limits_polar_axis_gap_count_is_some_iff_has_polar_axis`.
+    ///
+    /// **COUNT bridge**: `a.polar_axis_gap_count().is_none() ⇔
+    /// a.count_polar_axes() == 0`. Pinned via
+    /// `resource_limits_polar_axis_gap_count_is_none_iff_count_polar_axes_is_zero`.
+    ///
+    /// **CONTIGUOUS-vs-SPARSE DISCRIMINATOR — LOAD-BEARING pin**:
+    /// `a.polar_axis_gap_count() == Some(0)` iff the polar-axis set is
+    /// CONTIGUOUS in the index array, i.e. every position between
+    /// `first_polar_axis_index()` and `last_polar_axis_index()`
+    /// inclusive is itself a polar axis. When `Some(k)` with `k > 0`,
+    /// there are EXACTLY `k` STRICTLY-INTERIOR axes sandwiched between
+    /// the polar endpoints — the COMPOUND POLAR sparsity count.
+    /// Pinned via
+    /// `resource_limits_polar_axis_gap_count_is_some_zero_iff_polar_axes_are_contiguous`.
+    ///
+    /// **SINGLE-FIRE COINCIDENCE pin**: `a.polar_axis_gap_count() ==
+    /// Some(0)` when `a.count_polar_axes() == 1` — a lone polar axis has
+    /// span 1, count 1, gap 0.
+    ///
+    /// **Range bound**: when `Some(k)`, `0 ≤ k ≤ FIELD_COUNT - 2`.
+    ///
+    /// **COMPOUND-COMPLEMENT identity — LOAD-BEARING joint pin**:
+    /// on every posture where BOTH `polar_axis_gap_count() == Some(pg)`
+    /// AND `interior_axis_gap_count() == Some(ig)` are `Some`
+    /// (equivalently: at least one polar AND at least one interior axis
+    /// — a TRULY-MIXED posture), the joint identity
+    /// `pg + ig + FIELD_COUNT == polar_axis_index_span() +
+    /// interior_axis_index_span()` holds. Structurally this LIFTS the
+    /// SPAN column's INCLUSION-EXCLUSION union-covers-`≥`-FIELD_COUNT
+    /// inequality into an EQUATION: the sum of the two brackets'
+    /// interior-fill counts EXACTLY absorbs the SLACK past FIELD_COUNT
+    /// the two brackets' spans jointly cover, because interior positions
+    /// inside the polar bracket ARE polar-gaps and polar positions
+    /// inside the interior bracket ARE interior-gaps. Pinned via
+    /// `resource_limits_compound_gap_count_sum_equals_span_sum_minus_field_count`.
+    ///
+    /// **SPARSITY-COMPLEMENT identity dual**: on every posture with
+    /// `Some(w) == polar_axis_index_span()`, `polar_axis_gap_count() +
+    /// Some(count_polar_axes()) == Some(w)` — structurally exhaustive
+    /// partition of the polar bracket's `w` positions into `count`
+    /// polar positions and `gap` non-polar positions. Pinned via
+    /// `resource_limits_polar_axis_gap_count_plus_count_polar_axes_equals_polar_axis_index_span_when_some`.
+    ///
+    /// `const fn` so a caller can pin the exact polar-axis gap at
+    /// compile time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.polar_axis_gap_count(), Some(0)));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// COMPOUND GAP is a structural derivation from the (COMPOUND SPAN,
+    /// COMPOUND COUNT) pair via one `Option::map` subtraction under the
+    /// Some arm); THEORY.md §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: same as [`Self::bottom_axis_gap_count`], on
+    /// the COMPOUND POLAR mask formed via De Morgan disjunction of the
+    /// atomic (bottom, top) masks. Translation through pleme-io
+    /// primitives: the plain `const fn` DERIVATION from the already-
+    /// lifted (polar_axis_index_span, count_polar_axes) pair, one
+    /// subtraction under the `Option::Some` arm, no new per-axis scan,
+    /// no allocation.
+    #[must_use]
+    pub const fn polar_axis_gap_count(self) -> Option<usize> {
+        match self.polar_axis_index_span() {
+            Some(w) => Some(w - self.count_polar_axes()),
+            None => None,
+        }
+    }
+
+    /// Whole-posture INDEX-GAP-COUNT-OF-INTERIOR projection —
+    /// `self.interior_axis_gap_count()` returns
+    /// `Some(interior_axis_index_span - count_interior_axes)` (the count
+    /// of positions strictly inside the closed index interval
+    /// `[first_interior_axis_index, last_interior_axis_index]` that are
+    /// NOT themselves strictly-interior axes — equivalently the count of
+    /// POLAR axes sandwiched between the leftmost and rightmost interior
+    /// axes) when at least one axis is strictly interior, OR `None` when
+    /// every axis sits at some pole. The COMPOUND-CELL DUAL of
+    /// [`Self::polar_axis_gap_count`] one CELL-KIND axis over via the
+    /// (polar, interior) pointwise De Morgan complement — jointly the
+    /// (polar_axis_gap_count, interior_axis_gap_count) COMPOUND pair
+    /// CLOSES the GAP column on the (bottom, top, polar, interior) 4-cell
+    /// axis-family, opening the last column past the just-closed SPAN
+    /// column on the COMPOUND (polar, interior) row.
+    ///
+    /// **SPAN-MINUS-COUNT-DERIVATION identity dual**: on every posture,
+    /// `interior_axis_gap_count() == match interior_axis_index_span() {
+    /// Some(w) => Some(w - count_interior_axes()), None => None, }`.
+    /// Pinned via
+    /// `resource_limits_interior_axis_gap_count_equals_span_minus_count`.
+    ///
+    /// **Preset pins**: `DEFAULT_RESOURCE_LIMITS.interior_axis_gap_count()
+    /// == Some(0)` (every axis strictly interior; span == count ==
+    /// FIELD_COUNT, gap saturates at zero); `EMPTY_RESOURCE_LIMITS
+    /// .interior_axis_gap_count() == None` (every axis at bottom pole;
+    /// no interior); `UNBOUNDED_RESOURCE_LIMITS.interior_axis_gap_count()
+    /// == None` (every axis at top pole; no interior);
+    /// `HAND_AUTHORED_MID_POSTURE.interior_axis_gap_count() == Some(0)`
+    /// (every field strictly between 0 and usize::MAX; the interior
+    /// bracket saturates at gap zero); `HAND_AUTHORED_OTHER_POSTURE
+    /// .interior_axis_gap_count() == Some(0)` (same).
+    ///
+    /// **ANY-fold bridge dual**: `a.interior_axis_gap_count().is_some()
+    /// ⇔ a.has_interior_axis()`. Pinned via
+    /// `resource_limits_interior_axis_gap_count_is_some_iff_has_interior_axis`.
+    ///
+    /// **COUNT bridge dual**: `a.interior_axis_gap_count().is_none() ⇔
+    /// a.count_interior_axes() == 0`. Pinned via
+    /// `resource_limits_interior_axis_gap_count_is_none_iff_count_interior_axes_is_zero`.
+    ///
+    /// **CONTIGUOUS-vs-SPARSE DISCRIMINATOR dual**:
+    /// `a.interior_axis_gap_count() == Some(0)` iff the interior-axis
+    /// set is CONTIGUOUS. Pinned via
+    /// `resource_limits_interior_axis_gap_count_is_some_zero_iff_interior_axes_are_contiguous`.
+    ///
+    /// **SINGLE-FIRE COINCIDENCE pin dual**:
+    /// `a.interior_axis_gap_count() == Some(0)` when
+    /// `a.count_interior_axes() == 1`.
+    ///
+    /// **Range bound dual**: when `Some(k)`, `0 ≤ k ≤ FIELD_COUNT - 2`.
+    ///
+    /// **CROSS-CELL COMPOUND SATURATION contrast — LOAD-BEARING pin**:
+    /// unlike the atomic cells where `EMPTY` and `UNBOUNDED` each pin
+    /// (Some(0), None) on their (same, dual) atomic GAP pair, on the
+    /// COMPOUND (polar, interior) row `EMPTY.polar_axis_gap_count() ==
+    /// Some(0) && EMPTY.interior_axis_gap_count() == None`;
+    /// `UNBOUNDED.polar_axis_gap_count() == Some(0) &&
+    /// UNBOUNDED.interior_axis_gap_count() == None`;
+    /// `DEFAULT.polar_axis_gap_count() == None &&
+    /// DEFAULT.interior_axis_gap_count() == Some(0)`. BOTH saturated
+    /// pole presets fire the polar GAP at the CONTIGUOUS pole while the
+    /// DEFAULT preset fires the interior GAP at the CONTIGUOUS pole —
+    /// the COMPOUND cell partitions the preset triple into (2-polar-
+    /// saturated, 1-interior-saturated) rather than the atomic cells'
+    /// (1-saturated-each, 1-both-absent) partition. Pinned via
+    /// `resource_limits_compound_gap_count_saturation_partitions_preset_triple_by_pole`.
+    ///
+    /// **COMPOUND-COMPLEMENT identity — LOAD-BEARING joint pin dual**:
+    /// same joint identity as [`Self::polar_axis_gap_count`] — when both
+    /// are Some, `polar_gap + interior_gap + FIELD_COUNT == polar_span +
+    /// interior_span`.
+    ///
+    /// **SPARSITY-COMPLEMENT identity dual**: on every posture with
+    /// `Some(w) == interior_axis_index_span()`, `interior_axis_gap_count()
+    /// + Some(count_interior_axes()) == Some(w)`. Pinned via
+    /// `resource_limits_interior_axis_gap_count_plus_count_interior_axes_equals_interior_axis_index_span_when_some`.
+    ///
+    /// `const fn` so a caller can pin the exact interior-axis gap at
+    /// compile time.
+    ///
+    /// Theory anchor: same as [`Self::polar_axis_gap_count`], on the De
+    /// Morgan dual COMPOUND cell.
+    ///
+    /// Frontier inspiration: same as [`Self::polar_axis_gap_count`], on
+    /// the DUAL COMPOUND mask.
+    #[must_use]
+    pub const fn interior_axis_gap_count(self) -> Option<usize> {
+        match self.interior_axis_index_span() {
+            Some(w) => Some(w - self.count_interior_axes()),
+            None => None,
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -49107,5 +49328,533 @@ mod tests {
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_gap_count().is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.bottom_axis_gap_count().is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_gap_count().is_none());
+    }
+
+    /// Test-local SPARSE polar posture — polar axes at positions
+    /// `(0, 3)`, interior at `(1, 2, 4, 5)`. Bottom pole at 0, top pole
+    /// at 3, interior between. `polar_span = 4, polar_count = 2,
+    /// polar_gap = 2`. `interior_span = 5` (interior at 1..=5 modulo the
+    /// polar at 3), `interior_count = 4`, `interior_gap = 1`. Witnesses
+    /// the COMPOUND (polar, interior) MID-SPARSITY regime that neither
+    /// the shipped presets nor the hand-authored postures can supply on
+    /// their own.
+    const SPARSE_POLAR_POSTURE: ResourceLimits = ResourceLimits {
+        max_expansion_depth: 0, // bottom (polar) at position 0
+        max_cache_entries: 5,
+        max_expansion_size: 7,
+        max_macro_body_size: usize::MAX, // top (polar) at position 3
+        max_registered_macros: 13,
+        max_macro_arity: 17,
+    };
+
+    /// Test-local ENDPOINTS-ONLY polar posture — polar axes at
+    /// positions `(0, 5)`, interior at `(1, 2, 3, 4)`. Bottom pole at 0,
+    /// top pole at 5. `polar_span = 6` (FULL SPAN), `polar_count = 2`,
+    /// `polar_gap = 4`. `interior_span = 4, interior_count = 4,
+    /// interior_gap = 0` (interior axes at positions 1..=4 are
+    /// contiguous). Pins the TIGHT UPPER BOUND of the polar GAP at
+    /// FIELD_COUNT - 2 = 4 at the COMPOUND polar cell, mirror of
+    /// [`ENDPOINTS_ONLY_BOTTOM_POSTURE`] one CELL-KIND axis over.
+    const ENDPOINTS_ONLY_POLAR_POSTURE: ResourceLimits = ResourceLimits {
+        max_expansion_depth: 0, // bottom (polar) at position 0
+        max_cache_entries: 5,
+        max_expansion_size: 7,
+        max_macro_body_size: 11,
+        max_registered_macros: 13,
+        max_macro_arity: usize::MAX, // top (polar) at position 5
+    };
+
+    /// Test-local ENDPOINTS-ONLY interior posture — interior axes at
+    /// positions `(0, 5)`, polar at `(1, 2, 3, 4)`. `interior_span = 6`
+    /// (FULL SPAN), `interior_count = 2`, `interior_gap = 4`.
+    /// `polar_span = 4, polar_count = 4, polar_gap = 0`. Pins the TIGHT
+    /// UPPER BOUND of the interior GAP at FIELD_COUNT - 2 = 4 at the
+    /// COMPOUND interior cell.
+    const ENDPOINTS_ONLY_INTERIOR_POSTURE: ResourceLimits = ResourceLimits {
+        max_expansion_depth: 5,            // interior at position 0
+        max_cache_entries: 0,              // bottom (polar) at position 1
+        max_expansion_size: 0,             // bottom (polar) at position 2
+        max_macro_body_size: usize::MAX,   // top (polar) at position 3
+        max_registered_macros: usize::MAX, // top (polar) at position 4
+        max_macro_arity: 17,               // interior at position 5
+    };
+
+    /// Test-local CONTIGUOUS-run polar posture — polar axes at
+    /// positions `(0, 1)`, interior at `(2, 3, 4, 5)`. `polar_span = 2 =
+    /// polar_count`, so `polar_gap = 0`. Non-preset non-saturated
+    /// CONTIGUOUS pin at the COMPOUND polar cell — the (2, 2, 0) triple
+    /// on the polar bracket at an INTERIOR (non-preset) position.
+    const CONTIGUOUS_POLAR_POSTURE: ResourceLimits = ResourceLimits {
+        max_expansion_depth: 0,        // bottom (polar) at position 0
+        max_cache_entries: usize::MAX, // top (polar) at position 1
+        max_expansion_size: 7,
+        max_macro_body_size: 11,
+        max_registered_macros: 13,
+        max_macro_arity: 17,
+    };
+
+    /// Test-local CONTIGUOUS-run interior posture — interior axes at
+    /// positions `(1, 2, 3)`, polar at `(0, 4, 5)`. `interior_span = 3 =
+    /// interior_count`, so `interior_gap = 0`. Non-preset non-saturated
+    /// CONTIGUOUS pin at the COMPOUND interior cell.
+    const CONTIGUOUS_INTERIOR_POSTURE: ResourceLimits = ResourceLimits {
+        max_expansion_depth: 0,            // bottom (polar) at position 0
+        max_cache_entries: 5,              // interior at position 1
+        max_expansion_size: 7,             // interior at position 2
+        max_macro_body_size: 11,           // interior at position 3
+        max_registered_macros: usize::MAX, // top (polar) at position 4
+        max_macro_arity: usize::MAX,       // top (polar) at position 5
+    };
+
+    /// Test-local COMPOUND-SPARSITY roster — every posture the COMPOUND
+    /// GAP sweep quantifies over. Presets + hand-authored postures give
+    /// the SATURATED-pole regime; the local sparse/contiguous/endpoints-
+    /// only postures give the INTERIOR of the CONTIGUOUS-vs-SPARSE
+    /// surface at both the polar AND interior COMPOUND cells.
+    const COMPOUND_GAP_ROSTER: &[ResourceLimits] = &[
+        EMPTY_RESOURCE_LIMITS,
+        DEFAULT_RESOURCE_LIMITS,
+        UNBOUNDED_RESOURCE_LIMITS,
+        HAND_AUTHORED_MID_POSTURE,
+        HAND_AUTHORED_OTHER_POSTURE,
+        SPARSE_POLAR_POSTURE,
+        ENDPOINTS_ONLY_POLAR_POSTURE,
+        ENDPOINTS_ONLY_INTERIOR_POSTURE,
+        CONTIGUOUS_POLAR_POSTURE,
+        CONTIGUOUS_INTERIOR_POSTURE,
+    ];
+
+    #[test]
+    fn resource_limits_polar_axis_gap_count_preset_pins_saturate_both_saturated_poles_at_contiguous(
+    ) {
+        // Preset pins on the COMPOUND polar cell — LOAD-BEARING
+        // asymmetry with the atomic cells. BOTH saturated pole presets
+        // pack all six axes at a single pole, so BOTH pin polar_gap =
+        // Some(0) (CONTIGUOUS). This is the DIVERGENCE from the atomic
+        // (bottom, top) presets where each saturates only ONE atomic
+        // gap. On the compound polar cell, both `EMPTY` and `UNBOUNDED`
+        // pin the CONTIGUOUS pole because both have every axis polar.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.polar_axis_gap_count(), Some(0));
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.polar_axis_gap_count(), Some(0));
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.polar_axis_gap_count(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.polar_axis_gap_count(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.polar_axis_gap_count(), None);
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_gap_count_preset_pins_saturate_default_and_hand_authored_at_contiguous(
+    ) {
+        // Preset pins on the COMPOUND interior cell — DEFAULT +
+        // hand-authored postures all have every field strictly between
+        // 0 and usize::MAX, so all three saturate interior_gap = Some(0)
+        // (CONTIGUOUS). Both saturated pole presets carry no interior
+        // axis; interior_gap = None.
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.interior_axis_gap_count(), Some(0));
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.interior_axis_gap_count(), Some(0));
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.interior_axis_gap_count(),
+            Some(0)
+        );
+        assert_eq!(EMPTY_RESOURCE_LIMITS.interior_axis_gap_count(), None);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.interior_axis_gap_count(), None);
+    }
+
+    #[test]
+    fn resource_limits_compound_gap_count_saturation_partitions_preset_triple_by_pole() {
+        // CROSS-CELL COMPOUND SATURATION contrast — the shipped preset
+        // triple partitions by pole at the COMPOUND cell into
+        // (2-polar-saturated, 1-interior-saturated) rather than the
+        // atomic cells' (1-saturated-each, 1-both-absent) partition.
+        // Substrate-level pin against any future preset-drift on the
+        // compound cell.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.polar_axis_gap_count(), Some(0));
+        assert_eq!(EMPTY_RESOURCE_LIMITS.interior_axis_gap_count(), None);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.polar_axis_gap_count(), Some(0));
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.interior_axis_gap_count(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.polar_axis_gap_count(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.interior_axis_gap_count(), Some(0));
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_gap_count_equals_span_minus_count() {
+        // SPAN-MINUS-COUNT-DERIVATION identity on the COMPOUND polar
+        // cell. Sweeps every roster posture — presets + hand-authored +
+        // test-local mid-sparsity + endpoints-only + contiguous
+        // witnesses.
+        for a in COMPOUND_GAP_ROSTER {
+            let expected = a.polar_axis_index_span().map(|w| w - a.count_polar_axes());
+            assert_eq!(
+                a.polar_axis_gap_count(),
+                expected,
+                "polar gap = span - count identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_gap_count_equals_span_minus_count() {
+        // SPAN-MINUS-COUNT-DERIVATION identity dual on the COMPOUND
+        // interior cell.
+        for a in COMPOUND_GAP_ROSTER {
+            let expected = a
+                .interior_axis_index_span()
+                .map(|w| w - a.count_interior_axes());
+            assert_eq!(
+                a.interior_axis_gap_count(),
+                expected,
+                "interior gap = span - count identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_gap_count_is_some_iff_has_polar_axis() {
+        // ANY-fold bridge on the COMPOUND polar cell.
+        for a in COMPOUND_GAP_ROSTER {
+            assert_eq!(
+                a.polar_axis_gap_count().is_some(),
+                a.has_polar_axis(),
+                "polar gap is_some vs has_polar_axis bridge failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_gap_count_is_some_iff_has_interior_axis() {
+        // ANY-fold bridge dual on the COMPOUND interior cell.
+        for a in COMPOUND_GAP_ROSTER {
+            assert_eq!(
+                a.interior_axis_gap_count().is_some(),
+                a.has_interior_axis(),
+                "interior gap is_some vs has_interior_axis bridge failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_gap_count_is_none_iff_count_polar_axes_is_zero() {
+        // COUNT bridge on the COMPOUND polar cell.
+        for a in COMPOUND_GAP_ROSTER {
+            assert_eq!(
+                a.polar_axis_gap_count().is_none(),
+                a.count_polar_axes() == 0,
+                "polar gap is_none vs count == 0 bridge failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_gap_count_is_none_iff_count_interior_axes_is_zero() {
+        // COUNT bridge dual on the COMPOUND interior cell.
+        for a in COMPOUND_GAP_ROSTER {
+            assert_eq!(
+                a.interior_axis_gap_count().is_none(),
+                a.count_interior_axes() == 0,
+                "interior gap is_none vs count == 0 bridge failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_gap_count_is_some_zero_iff_polar_axes_are_contiguous() {
+        // CONTIGUOUS-vs-SPARSE DISCRIMINATOR on the COMPOUND polar cell.
+        // CONTIGUOUS regime pins (gap = Some(0)):
+        //   * EMPTY / UNBOUNDED (saturated poles, span == count ==
+        //     FIELD_COUNT)
+        //   * CONTIGUOUS_POLAR (adjacent polar at positions 0, 1)
+        //   * Singleton — one polar axis at some position (span 1,
+        //     count 1, gap 0).
+        assert_eq!(EMPTY_RESOURCE_LIMITS.polar_axis_gap_count(), Some(0));
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.polar_axis_gap_count(), Some(0));
+        assert_eq!(CONTIGUOUS_POLAR_POSTURE.polar_axis_gap_count(), Some(0));
+        assert_eq!(CONTIGUOUS_POLAR_POSTURE.count_polar_axes(), 2);
+        assert_eq!(CONTIGUOUS_POLAR_POSTURE.polar_axis_index_span(), Some(2));
+
+        let singleton_polar_at_two = ResourceLimits {
+            max_expansion_depth: 41,
+            max_cache_entries: 43,
+            max_expansion_size: 0, // sole polar (bottom) axis at position 2
+            max_macro_body_size: 47,
+            max_registered_macros: 53,
+            max_macro_arity: 59,
+        };
+        assert_eq!(singleton_polar_at_two.polar_axis_gap_count(), Some(0));
+        assert_eq!(singleton_polar_at_two.count_polar_axes(), 1);
+
+        // SPARSE regime pins (gap > 0):
+        //   * SPARSE_POLAR (polar at 0, 3 with interior between; span 4,
+        //     count 2, gap 2)
+        //   * ENDPOINTS_ONLY_POLAR (polar at 0, 5 with interior between;
+        //     span 6, count 2, gap 4).
+        assert_eq!(SPARSE_POLAR_POSTURE.polar_axis_gap_count(), Some(2));
+        assert_eq!(SPARSE_POLAR_POSTURE.polar_axis_index_span(), Some(4));
+        assert_eq!(SPARSE_POLAR_POSTURE.count_polar_axes(), 2);
+
+        assert_eq!(ENDPOINTS_ONLY_POLAR_POSTURE.polar_axis_gap_count(), Some(4));
+        assert_eq!(
+            ENDPOINTS_ONLY_POLAR_POSTURE.polar_axis_index_span(),
+            Some(6)
+        );
+        assert_eq!(ENDPOINTS_ONLY_POLAR_POSTURE.count_polar_axes(), 2);
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_gap_count_is_some_zero_iff_interior_axes_are_contiguous() {
+        // CONTIGUOUS-vs-SPARSE DISCRIMINATOR dual on the COMPOUND
+        // interior cell. CONTIGUOUS regime pins:
+        //   * DEFAULT / hand-authored (every axis interior, span ==
+        //     count == FIELD_COUNT)
+        //   * CONTIGUOUS_INTERIOR (interior at positions 1, 2, 3;
+        //     span 3, count 3, gap 0)
+        //   * ENDPOINTS_ONLY_POLAR (interior at positions 1, 2, 3, 4;
+        //     span 4, count 4, gap 0)
+        //   * Singleton — one interior axis at some position.
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.interior_axis_gap_count(), Some(0));
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.interior_axis_gap_count(), Some(0));
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.interior_axis_gap_count(),
+            Some(0)
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_POSTURE.interior_axis_gap_count(),
+            Some(0)
+        );
+        assert_eq!(CONTIGUOUS_INTERIOR_POSTURE.count_interior_axes(), 3);
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_POSTURE.interior_axis_index_span(),
+            Some(3)
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_POLAR_POSTURE.interior_axis_gap_count(),
+            Some(0)
+        );
+        assert_eq!(ENDPOINTS_ONLY_POLAR_POSTURE.count_interior_axes(), 4);
+        assert_eq!(
+            ENDPOINTS_ONLY_POLAR_POSTURE.interior_axis_index_span(),
+            Some(4)
+        );
+
+        // SPARSE regime pins:
+        //   * SPARSE_POLAR (interior at 1, 2, 4, 5; span 5, count 4, gap 1)
+        //   * ENDPOINTS_ONLY_INTERIOR (interior at 0, 5; span 6, count 2,
+        //     gap 4).
+        assert_eq!(SPARSE_POLAR_POSTURE.interior_axis_gap_count(), Some(1));
+        assert_eq!(SPARSE_POLAR_POSTURE.interior_axis_index_span(), Some(5));
+        assert_eq!(SPARSE_POLAR_POSTURE.count_interior_axes(), 4);
+
+        assert_eq!(
+            ENDPOINTS_ONLY_INTERIOR_POSTURE.interior_axis_gap_count(),
+            Some(4)
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_INTERIOR_POSTURE.interior_axis_index_span(),
+            Some(6)
+        );
+        assert_eq!(ENDPOINTS_ONLY_INTERIOR_POSTURE.count_interior_axes(), 2);
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_gap_count_of_singleton_polar_axis_is_some_zero() {
+        // SINGLE-FIRE COINCIDENCE pin on the COMPOUND polar cell — a
+        // lone polar (bottom OR top) axis at any of the six positions
+        // gives (span, count, gap) == (1, 1, 0). Sweeps both bottom-
+        // (value 0) AND top- (value usize::MAX) placements at all six
+        // positions, so the compound polar cell's SINGLE-FIRE
+        // COINCIDENCE lifts both atomic peers.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            for polar_value in [0_usize, usize::MAX] {
+                let mut values = [17_usize; 6];
+                values[position] = polar_value;
+                let posture = ResourceLimits {
+                    max_expansion_depth: values[0],
+                    max_cache_entries: values[1],
+                    max_expansion_size: values[2],
+                    max_macro_body_size: values[3],
+                    max_registered_macros: values[4],
+                    max_macro_arity: values[5],
+                };
+                assert_eq!(
+                    posture.polar_axis_gap_count(),
+                    Some(0),
+                    "singleton polar at position {position} value {polar_value} gave non-zero \
+                     gap",
+                );
+                assert_eq!(posture.count_polar_axes(), 1);
+                assert_eq!(posture.polar_axis_index_span(), Some(1));
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_gap_count_of_singleton_interior_axis_is_some_zero() {
+        // SINGLE-FIRE COINCIDENCE pin dual on the COMPOUND interior
+        // cell — a lone strictly-interior axis at any of the six
+        // positions gives (span, count, gap) == (1, 1, 0). The other
+        // five axes sit at some pole (mixed between bottom and top so
+        // the (polar_gap, interior_gap) pair discriminates independently
+        // of the polar-axis arrangement).
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let mut values = [0_usize; 6];
+            values[0] = 0; // bottom
+            values[1] = usize::MAX; // top
+            values[2] = 0;
+            values[3] = usize::MAX;
+            values[4] = 0;
+            values[5] = usize::MAX;
+            values[position] = 17; // lone interior at target position
+            let posture = ResourceLimits {
+                max_expansion_depth: values[0],
+                max_cache_entries: values[1],
+                max_expansion_size: values[2],
+                max_macro_body_size: values[3],
+                max_registered_macros: values[4],
+                max_macro_arity: values[5],
+            };
+            assert_eq!(
+                posture.interior_axis_gap_count(),
+                Some(0),
+                "singleton interior at position {position} gave non-zero gap",
+            );
+            assert_eq!(posture.count_interior_axes(), 1);
+            assert_eq!(posture.interior_axis_index_span(), Some(1));
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_gap_count_is_bounded_by_field_count_minus_one_when_some() {
+        // Range bound on the COMPOUND polar cell — when Some(k),
+        // 0 <= k <= FIELD_COUNT - 2. Tight upper bound witness at
+        // ENDPOINTS_ONLY_POLAR with gap = 4 == FIELD_COUNT - 2.
+        for a in COMPOUND_GAP_ROSTER {
+            if let Some(k) = a.polar_axis_gap_count() {
+                assert!(
+                    k <= ResourceLimits::FIELD_COUNT - 2,
+                    "polar gap {k} out of `0..=FIELD_COUNT - 2` on {a:?}",
+                );
+            }
+        }
+        assert_eq!(
+            ENDPOINTS_ONLY_POLAR_POSTURE.polar_axis_gap_count(),
+            Some(ResourceLimits::FIELD_COUNT - 2),
+        );
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_gap_count_is_bounded_by_field_count_minus_one_when_some() {
+        // Range bound dual on the COMPOUND interior cell — tight upper
+        // bound witness at ENDPOINTS_ONLY_INTERIOR with gap = 4 ==
+        // FIELD_COUNT - 2.
+        for a in COMPOUND_GAP_ROSTER {
+            if let Some(k) = a.interior_axis_gap_count() {
+                assert!(
+                    k <= ResourceLimits::FIELD_COUNT - 2,
+                    "interior gap {k} out of `0..=FIELD_COUNT - 2` on {a:?}",
+                );
+            }
+        }
+        assert_eq!(
+            ENDPOINTS_ONLY_INTERIOR_POSTURE.interior_axis_gap_count(),
+            Some(ResourceLimits::FIELD_COUNT - 2),
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_gap_count_plus_count_polar_axes_equals_polar_axis_index_span_when_some(
+    ) {
+        // SPARSITY-COMPLEMENT identity on the COMPOUND polar cell —
+        // when Some, `gap + count == span`. Structurally exhaustive
+        // partition of the polar bracket's positions into polar and
+        // interior sub-positions.
+        for a in COMPOUND_GAP_ROSTER {
+            if let (Some(gap), Some(span)) = (a.polar_axis_gap_count(), a.polar_axis_index_span()) {
+                let count = a.count_polar_axes();
+                assert_eq!(
+                    gap + count,
+                    span,
+                    "polar gap + count != span on {a:?}: gap={gap} count={count} span={span}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_gap_count_plus_count_interior_axes_equals_interior_axis_index_span_when_some(
+    ) {
+        // SPARSITY-COMPLEMENT identity dual on the COMPOUND interior
+        // cell.
+        for a in COMPOUND_GAP_ROSTER {
+            if let (Some(gap), Some(span)) =
+                (a.interior_axis_gap_count(), a.interior_axis_index_span())
+            {
+                let count = a.count_interior_axes();
+                assert_eq!(
+                    gap + count,
+                    span,
+                    "interior gap + count != span on {a:?}: gap={gap} count={count} \
+                     span={span}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_compound_gap_count_sum_equals_span_sum_minus_field_count() {
+        // COMPOUND-COMPLEMENT identity — LOAD-BEARING joint pin that
+        // LIFTS the SPAN column's INCLUSION-EXCLUSION union-covers-≥-
+        // FIELD_COUNT INEQUALITY into an EQUATION at the GAP surface:
+        // on every posture where BOTH gaps are Some (equivalently:
+        // TRULY-MIXED — at least one polar AND at least one interior),
+        // `polar_gap + interior_gap + FIELD_COUNT == polar_span +
+        // interior_span`. Witnessed at the TRULY-MIXED sparse polar
+        // posture (polar_gap=2, interior_gap=1, polar_span=4,
+        // interior_span=5; 2 + 1 + 6 == 4 + 5 == 9), the ENDPOINTS-
+        // ONLY POLAR / INTERIOR postures, and the CONTIGUOUS_INTERIOR
+        // and CONTIGUOUS_POLAR postures.
+        for a in COMPOUND_GAP_ROSTER {
+            if let (Some(pg), Some(ig), Some(ps), Some(is_)) = (
+                a.polar_axis_gap_count(),
+                a.interior_axis_gap_count(),
+                a.polar_axis_index_span(),
+                a.interior_axis_index_span(),
+            ) {
+                assert_eq!(
+                    pg + ig + ResourceLimits::FIELD_COUNT,
+                    ps + is_,
+                    "polar_gap + interior_gap + FIELD_COUNT != polar_span + interior_span on \
+                     {a:?}: pg={pg} ig={ig} ps={ps} is_={is_}",
+                );
+            }
+        }
+        // Explicit pin on the TRULY-MIXED sparse witness — the
+        // NON-TRIVIAL arm where both spans exceed FIELD_COUNT / 2 and
+        // both gaps are strictly positive.
+        assert_eq!(SPARSE_POLAR_POSTURE.polar_axis_gap_count(), Some(2));
+        assert_eq!(SPARSE_POLAR_POSTURE.interior_axis_gap_count(), Some(1));
+        assert_eq!(SPARSE_POLAR_POSTURE.polar_axis_index_span(), Some(4));
+        assert_eq!(SPARSE_POLAR_POSTURE.interior_axis_index_span(), Some(5));
+    }
+
+    #[test]
+    fn resource_limits_compound_gap_count_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the COMPOUND cell — both GAP projections are
+        // evaluable in const context so a caller can pin compound
+        // bracket-sparsity identities at compile time as build-breaks.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_gap_count(),
+            Some(0)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_gap_count(),
+            Some(0)
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_gap_count(),
+            Some(0)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.interior_axis_gap_count().is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .interior_axis_gap_count()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_axis_gap_count().is_none());
     }
 }

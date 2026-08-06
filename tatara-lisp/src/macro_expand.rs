@@ -11518,6 +11518,237 @@ impl ResourceLimits {
         }
         count
     }
+
+    /// Whole-posture ARITHMETIC-POLAR tally — `self.count_polar_axes()`
+    /// returns the number of axes of `self` sitting at SOME pole
+    /// (`self.field_values()[i] == 0 || self.field_values()[i] ==
+    /// usize::MAX`), in `0..=Self::FIELD_COUNT`. The ARITHMETIC-QUANTIFIER
+    /// peer of [`Self::has_polar_axis`] one QUANTIFIER-KIND axis over,
+    /// and the COMPOUND-CELL peer of [`Self::count_bottom_axes`] +
+    /// [`Self::count_top_axes`] one CELL-COMPOUND axis over — jointly the
+    /// (count_bottom_axes, count_top_axes, count_polar_axes) triple
+    /// carries the arithmetic form of the (has_bottom_axis, has_top_axis,
+    /// has_polar_axis) boolean ANY-fold triple.
+    ///
+    /// A strict REFINEMENT of BOTH boolean-quantifier verdicts on the
+    /// same cell: `count_polar_axes() > 0 ⇔ has_polar_axis()` and
+    /// `count_polar_axes() == Self::FIELD_COUNT ⇔ is_axially_polar()` —
+    /// the (ALL-fold, ANY-fold, COUNT) triple sits at ONE typed arithmetic
+    /// primitive on the COMPOUND pole cell, mirroring the (is_bottom,
+    /// has_bottom_axis, count_bottom_axes) triple on the atomic BOTTOM
+    /// sub-cell one CELL axis over.
+    ///
+    /// **ARITHMETIC-DECOMPOSITION theorem**: on every posture,
+    /// `count_polar_axes() == count_bottom_axes() + count_top_axes()`.
+    /// A single axis cannot simultaneously be at BOTH poles (`0 !=
+    /// usize::MAX` on `usize`), so the two atomic pole tallies partition
+    /// a DISJOINT subset of the polar-axis set and their sum equals the
+    /// compound polar tally exactly. The ARITHMETIC form of the boolean
+    /// DECOMPOSITION theorem `has_polar_axis == has_bottom_axis ||
+    /// has_top_axis` one QUANTIFIER-KIND axis over via disjoint-mask
+    /// Boolean-OR-to-arithmetic-PLUS lift. Pinned via
+    /// `resource_limits_count_polar_axes_decomposes_as_count_bottom_axes_plus_count_top_axes`
+    /// as a first-class equation on typed arithmetic primitives — the
+    /// prior `resource_limits_count_bottom_and_count_top_sum_equals_count_polar_axes`
+    /// pin expressed the same equation through the raw
+    /// `axes_is_pole().filter(...).count()` inline fold; THIS pin binds
+    /// the compound side to the named typed exit instead.
+    ///
+    /// **Cross-cell ARITHMETIC-COVER identity**: on every posture,
+    /// `count_polar_axes() + count_interior_axes() == Self::FIELD_COUNT`.
+    /// A single axis is either at SOME pole OR strictly in the interior
+    /// (never both, never neither), so the (polar, interior) axis sets
+    /// EXHAUSTIVELY AND DISJOINTLY partition the axis set and their
+    /// tallies sum to the axis cardinality exactly — a STRONGER identity
+    /// than the atomic-cell inequality `count_bottom_axes +
+    /// count_top_axes <= FIELD_COUNT` (which is bounded but not
+    /// saturated on interior-containing postures). The ARITHMETIC form of
+    /// the boolean cover-exhaustiveness theorem `has_polar_axis ||
+    /// has_interior_axis == true` on every posture one QUANTIFIER-KIND
+    /// axis over — Boolean cover on disjoint indicator masks lifts to
+    /// arithmetic EQUALITY (not inequality) on the corresponding index
+    /// counts because the compound cells partition the axis set
+    /// exhaustively. Pinned via
+    /// `resource_limits_count_polar_and_count_interior_sum_equals_field_count`.
+    ///
+    /// **Discriminates postures the ANY-fold conflates**: the boolean
+    /// ANY-fold surface fires the SAME `true` verdict on a truly-mixed
+    /// posture (one axis at bottom, one at top, four interior) as on
+    /// a near-fully-polar posture (five axes at bottom, one at top,
+    /// zero interior) — the two are ANY-fold-equivalent on
+    /// `has_polar_axis`, but the arithmetic tally NAMES their distinct
+    /// arrangements as distinct `usize` values (`2` vs `6`). The COUNT
+    /// projection is the LOAD-BEARING WEAKER-vs-STRONGER discriminator
+    /// the boolean ANY-fold surface cannot access at the COMPOUND pole
+    /// cell.
+    ///
+    /// Encoded as the per-axis `+= 1` count over [`Self::axes_is_pole`]
+    /// with no short-circuit — matching [`Self::count_bottom_axes`]'s
+    /// shape verbatim on the COMPOUND per-axis mask (the disjoint union
+    /// of `axes_is_bottom` + `axes_is_top`). The equivalent alternative
+    /// encoding `self.count_bottom_axes() + self.count_top_axes()` is
+    /// structurally equivalent AND pinned as a substrate theorem via the
+    /// decomposition contract above; the direct COUNT-fold form matches
+    /// [`Self::has_polar_axis`]'s shape one QUANTIFIER-KIND axis over on
+    /// the SAME per-axis mask, so a future re-derivation of
+    /// `axes_is_pole` propagates to `count_polar_axes` mechanically.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.count_polar_axes() ==
+    /// Self::FIELD_COUNT` (every axis at bottom, all polar);
+    /// `UNBOUNDED_RESOURCE_LIMITS.count_polar_axes() == Self::FIELD_COUNT`
+    /// (every axis at top, all polar); `DEFAULT_RESOURCE_LIMITS
+    /// .count_polar_axes() == 0` (every `DEFAULT_MAX_*` strictly interior).
+    ///
+    /// **Fold-agreement contract**: for every posture `a`,
+    /// `a.count_polar_axes() == a.axes_is_pole().iter().filter(|&&bit|
+    /// bit).count()`. Pinned via
+    /// `resource_limits_count_polar_axes_agrees_with_axes_is_pole_filter_count`.
+    ///
+    /// **ANY-fold bridge**: `a.count_polar_axes() > 0 ⇔ a.has_polar_axis()`.
+    /// Pinned via `resource_limits_count_polar_axes_gt_zero_iff_has_polar_axis`.
+    /// **ALL-fold bridge**: `a.count_polar_axes() == Self::FIELD_COUNT
+    /// ⇔ a.is_axially_polar()`. Pinned via
+    /// `resource_limits_count_polar_axes_saturates_iff_is_axially_polar`.
+    ///
+    /// `const fn` so a caller can pin the exact polar-axis tally at
+    /// compile time (`const _: () = assert!(EMPTY_RESOURCE_LIMITS
+    /// .count_polar_axes() == ResourceLimits::FIELD_COUNT);`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// arithmetic polar-axis tally is a named typed exit rather than an
+    /// inline `axes_is_pole().iter().filter(...).count()` per-consumer
+    /// fold. THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// the (count_polar_axes, count_interior_axes) arithmetic pair closes
+    /// the ARITHMETIC-QUANTIFIER row on the COMPOUND (polar, interior)
+    /// 2-cell partition with the LOAD-BEARING EXHAUSTIVE-PARTITION
+    /// identity `count_polar + count_interior == FIELD_COUNT` on every
+    /// posture — the ARITHMETIC form of the boolean cover-exhaustiveness
+    /// theorem lifted through disjoint-mask sum-of-cardinalities.
+    /// THEORY.md §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: APL's `+/((0=⍵)∨(⍵=⌈/⍵))` per-position
+    /// pole-membership summation folded through `+/` — the arithmetic
+    /// dual of `∨/` at the same per-position compound mask. Idris's
+    /// `count (\x -> x == 0 || x == maxBound) v` over `Vec n Nat`
+    /// yielding `Fin (S n)`. Haskell's `length . filter (\x -> x ==
+    /// minBound || x == maxBound)` on a bounded numeric vector. Classical
+    /// order theory's canonical "boundary of a bounded lattice" concept
+    /// lifted to a whole-posture arithmetic tally via `|B| = |{i :
+    /// axis_i ∈ {⊥, ⊤}}|` — the cardinality of the pole set as a first-
+    /// class arithmetic exit, complementary to the interior cardinality
+    /// `|I| = N - |B|`. Translation through pleme-io primitives is the
+    /// plain `const fn` per-axis `+= 1` fold over the already-lifted
+    /// [`Self::axes_is_pole`] mask.
+    #[must_use]
+    pub const fn count_polar_axes(self) -> usize {
+        let mask = self.axes_is_pole();
+        let mut i = 0;
+        let mut count = 0;
+        while i < Self::FIELD_COUNT {
+            if mask[i] {
+                count += 1;
+            }
+            i += 1;
+        }
+        count
+    }
+
+    /// Whole-posture ARITHMETIC-INTERIOR tally —
+    /// `self.count_interior_axes()` returns the number of axes of `self`
+    /// sitting STRICTLY BETWEEN the two poles (`0 <
+    /// self.field_values()[i] < usize::MAX`), in `0..=Self::FIELD_COUNT`.
+    /// The ARITHMETIC-QUANTIFIER peer of [`Self::has_interior_axis`] one
+    /// QUANTIFIER-KIND axis over, and the COMPOUND-CELL DUAL of
+    /// [`Self::count_polar_axes`] on the DUAL per-axis mask.
+    ///
+    /// A strict REFINEMENT of BOTH boolean-quantifier verdicts on the
+    /// same cell: `count_interior_axes() > 0 ⇔ has_interior_axis()` and
+    /// `count_interior_axes() == Self::FIELD_COUNT ⇔ is_axially_interior()`.
+    ///
+    /// **ARITHMETIC-COMPLEMENT identity**: on every posture,
+    /// `count_interior_axes() == Self::FIELD_COUNT - count_polar_axes()`.
+    /// A single axis is either at SOME pole OR strictly in the interior
+    /// (never both, never neither), so the (polar, interior) axis sets
+    /// EXHAUSTIVELY AND DISJOINTLY partition the axis set and their
+    /// tallies sum to the axis cardinality exactly. The ARITHMETIC form
+    /// of the boolean De Morgan complement `has_interior_axis ==
+    /// !is_axially_polar` on every posture one QUANTIFIER-KIND axis over
+    /// — Boolean complement on the disjoint-and-exhaustive per-axis
+    /// (polar, interior) partition lifts to arithmetic SUBTRACTION from
+    /// the axis cardinality on the corresponding index counts. Pinned
+    /// jointly with the paired [`Self::count_polar_axes`] via
+    /// `resource_limits_count_polar_and_count_interior_sum_equals_field_count`.
+    ///
+    /// **Discriminates postures the ANY-fold conflates**: the boolean
+    /// ANY-fold surface fires the SAME `true` verdict on a barely-
+    /// interior posture (five axes at some pole, one axis strictly
+    /// interior) as on a barely-polar posture (five axes strictly
+    /// interior, one axis at some pole) — the two are ANY-fold-equivalent
+    /// on `has_interior_axis`, but the arithmetic tally NAMES their
+    /// distinct arrangements as distinct `usize` values (`1` vs `5`).
+    /// The COUNT projection is the LOAD-BEARING WEAKER-vs-STRONGER
+    /// discriminator the boolean ANY-fold surface cannot access at the
+    /// COMPOUND interior cell.
+    ///
+    /// Encoded as the per-axis `+= 1` count over [`Self::axes_is_interior`]
+    /// — matching [`Self::count_polar_axes`]'s shape verbatim on the DUAL
+    /// per-axis mask.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.count_interior_axes() ==
+    /// 0` (every axis at bottom pole, none strictly interior);
+    /// `UNBOUNDED_RESOURCE_LIMITS.count_interior_axes() == 0` (every
+    /// axis at top pole); `DEFAULT_RESOURCE_LIMITS.count_interior_axes()
+    /// == Self::FIELD_COUNT` (every `DEFAULT_MAX_*` strictly interior).
+    ///
+    /// **Hand-authored asymmetric saturation**: both
+    /// [`HAND_AUTHORED_MID_POSTURE`] and [`HAND_AUTHORED_OTHER_POSTURE`]
+    /// have every field at a distinct positive value strictly less than
+    /// `usize::MAX`, so every axis is strictly interior and the tally
+    /// saturates at `Self::FIELD_COUNT` on both.
+    ///
+    /// **Fold-agreement contract**: for every posture `a`,
+    /// `a.count_interior_axes() == a.axes_is_interior().iter().filter(|&&bit|
+    /// bit).count()`. Pinned via
+    /// `resource_limits_count_interior_axes_agrees_with_axes_is_interior_filter_count`.
+    ///
+    /// **ANY-fold bridge**: `a.count_interior_axes() > 0 ⇔ a.has_interior_axis()`.
+    /// **ALL-fold bridge**: `a.count_interior_axes() == Self::FIELD_COUNT
+    /// ⇔ a.is_axially_interior()`.
+    ///
+    /// `const fn` so a caller can pin the exact interior-axis tally at
+    /// compile time.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; THEORY.md
+    /// §II.1 invariant 5 — composition preserves proofs (the
+    /// (count_polar_axes, count_interior_axes) pair closes the ARITHMETIC-
+    /// QUANTIFIER row on the COMPOUND (polar, interior) 2-cell partition
+    /// with the LOAD-BEARING EXHAUSTIVE-PARTITION identity
+    /// `count_polar_axes + count_interior_axes == FIELD_COUNT` — the
+    /// ARITHMETIC form of the boolean cover-exhaustiveness lifted through
+    /// disjoint-mask sum-of-cardinalities); THEORY.md §V.1 — knowable
+    /// platform.
+    ///
+    /// Frontier inspiration: APL's `+/(∼(0=⍵)∧∼(⍵=⌈/⍵))` per-position
+    /// strict-interior summation folded through `+/`. Idris's `count
+    /// (\x -> x /= 0 && x /= maxBound) v`. Haskell's `length . filter
+    /// (\x -> x /= minBound && x /= maxBound)`. Classical order theory's
+    /// canonical interior-cardinality `|I| = N - |B|` as complementary
+    /// to the pole-set cardinality. Translation through pleme-io
+    /// primitives is the plain `const fn` per-axis `+= 1` fold over the
+    /// already-lifted [`Self::axes_is_interior`] mask.
+    #[must_use]
+    pub const fn count_interior_axes(self) -> usize {
+        let mask = self.axes_is_interior();
+        let mut i = 0;
+        let mut count = 0;
+        while i < Self::FIELD_COUNT {
+            if mask[i] {
+                count += 1;
+            }
+            i += 1;
+        }
+        count
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -42407,6 +42638,469 @@ mod tests {
                 a.count_top_axes(),
                 expected,
                 "count_top_axes must equal filter-count over pointwise `== usize::MAX` verdict for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_polar_axes_of_empty_preset_saturates() {
+        // Preset closure — every axis of EMPTY is at bottom (a pole), so
+        // the compound-cell arithmetic tally saturates at the axis
+        // cardinality `FIELD_COUNT`. The COMPOUND-CELL peer of
+        // `count_bottom_axes_of_empty_preset_saturates` one CELL-COMPOUND
+        // axis over: the atomic bottom saturation `FIELD_COUNT` lifts
+        // through the compound polar cell to the same `FIELD_COUNT` (the
+        // top tally contributes zero on this preset).
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.count_polar_axes(),
+            ResourceLimits::FIELD_COUNT,
+        );
+    }
+
+    #[test]
+    fn resource_limits_count_polar_axes_of_unbounded_preset_saturates() {
+        // Preset closure — every axis of UNBOUNDED is at top (also a
+        // pole), so the compound polar tally ALSO saturates at
+        // `FIELD_COUNT` on this dual preset. LOAD-BEARING JOINT-EXTREMUM
+        // witness — unlike the atomic (count_bottom, count_top) pair
+        // which fires ZERO on one preset and SATURATES on the other, the
+        // compound polar tally SATURATES on BOTH preset extrema because
+        // both are entirely on some pole. The compound-cell aggregation
+        // collapses the (bottom, top) polar-cell distinction at the
+        // arithmetic tally surface.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.count_polar_axes(),
+            ResourceLimits::FIELD_COUNT,
+        );
+    }
+
+    #[test]
+    fn resource_limits_count_polar_axes_of_default_is_zero() {
+        // Preset rejection — every shipped `DEFAULT_MAX_*` is a positive
+        // constant strictly between `0` and `usize::MAX`, so no axis is
+        // at any pole and the compound polar tally is exactly `0`.
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.count_polar_axes(), 0);
+    }
+
+    #[test]
+    fn resource_limits_count_interior_axes_of_empty_preset_is_zero() {
+        // Preset rejection — every axis of EMPTY is at bottom pole
+        // (`0`), so no axis is strictly interior and the interior tally
+        // is exactly `0`. The COMPOUND-CELL peer of the atomic
+        // `count_top_axes_of_empty_preset_is_zero` one CELL-COMPOUND axis
+        // over: the atomic top-cell tally at zero on this preset lifts
+        // through the compound interior cell (which also excludes the
+        // bottom cell) to the same zero.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.count_interior_axes(), 0);
+    }
+
+    #[test]
+    fn resource_limits_count_interior_axes_of_unbounded_preset_is_zero() {
+        // Preset rejection dual — every axis at top pole, none strictly
+        // interior.
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.count_interior_axes(), 0);
+    }
+
+    #[test]
+    fn resource_limits_count_interior_axes_of_default_saturates() {
+        // Preset closure — every shipped `DEFAULT_MAX_*` is a positive
+        // constant strictly interior, so the interior tally saturates
+        // at `FIELD_COUNT`. LOAD-BEARING CROSS-PRESET DISCRIMINATOR:
+        // where the (count_bottom, count_top) atomic pair fires the same
+        // `(0, 0)` on DEFAULT as on both HAND_AUTHORED_* postures, THIS
+        // pin discriminates them by binding DEFAULT to the same
+        // saturation the hand-authored postures also carry (see
+        // `count_interior_axes_of_hand_authored_postures_saturates`
+        // below).
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.count_interior_axes(),
+            ResourceLimits::FIELD_COUNT,
+        );
+    }
+
+    #[test]
+    fn resource_limits_count_polar_axes_of_hand_authored_postures_is_zero() {
+        // Antichain absorption — both hand-authored antichain postures
+        // sit strictly inside the lattice on distinct branches, with
+        // every field at a positive-mid value strictly between `0` and
+        // `usize::MAX`. No axis is at any pole, so the compound polar
+        // tally is `0` on both.
+        for &a in &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE] {
+            assert_eq!(
+                a.count_polar_axes(),
+                0,
+                "hand-authored antichain posture {a:?} must count 0 polar axes",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_interior_axes_of_hand_authored_postures_saturates() {
+        // Antichain absorption dual — every axis of both hand-authored
+        // postures is strictly interior, so the interior tally saturates
+        // at `FIELD_COUNT` on both. The DUAL of
+        // `count_polar_axes_of_hand_authored_postures_is_zero` at the
+        // COMPOUND-CELL surface, matching the arithmetic COMPLEMENT
+        // identity `count_polar + count_interior == FIELD_COUNT` on
+        // every posture.
+        for &a in &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE] {
+            assert_eq!(
+                a.count_interior_axes(),
+                ResourceLimits::FIELD_COUNT,
+                "hand-authored antichain posture {a:?} must count FIELD_COUNT interior axes",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_polar_axes_agrees_with_axes_is_pole_filter_count() {
+        // Fold-agreement contract — the whole-posture compound polar
+        // arithmetic tally agrees with the direct filter-count over
+        // `axes_is_pole` on every preset. Pins the projection body as
+        // definitionally the arithmetic COUNT-fold over the per-axis
+        // pole-mask; a regression that dropped the increment (leaving
+        // the body at the ANY-fold return of `true`) or that walked the
+        // wrong mask would fire here.
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.count_polar_axes(),
+                a.axes_is_pole().iter().filter(|&&bit| bit).count(),
+                "count_polar_axes must equal filter-count over axes_is_pole for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_interior_axes_agrees_with_axes_is_interior_filter_count() {
+        // Fold-agreement dual — same shape, dual mask.
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.count_interior_axes(),
+                a.axes_is_interior().iter().filter(|&&bit| bit).count(),
+                "count_interior_axes must equal filter-count over axes_is_interior for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_polar_axes_gt_zero_iff_has_polar_axis() {
+        // ANY-fold bridge — the boolean ANY-fold verdict is the
+        // POSITIVITY of the arithmetic tally: some axis fires iff the
+        // tally is strictly positive. Pins the (COUNT, ANY-fold)
+        // refinement bridge on the COMPOUND polar cell on every preset
+        // AND on a truly-mixed-pole composite so the middle cell the
+        // (is_axially_polar, is_axially_interior) universal pair cannot
+        // represent is swept too. Peer of
+        // `count_bottom_axes_gt_zero_iff_has_bottom_axis` one CELL-COMPOUND
+        // axis over.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.count_polar_axes() > 0,
+                a.has_polar_axis(),
+                "count_polar_axes() > 0 must equal has_polar_axis() for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_interior_axes_gt_zero_iff_has_interior_axis() {
+        // ANY-fold bridge dual — same shape, dual cell.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.count_interior_axes() > 0,
+                a.has_interior_axis(),
+                "count_interior_axes() > 0 must equal has_interior_axis() for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_polar_axes_saturates_iff_is_axially_polar() {
+        // ALL-fold bridge — the boolean ALL-fold verdict is the
+        // SATURATION of the arithmetic tally: every axis fires iff the
+        // tally equals the axis cardinality. Pins the (COUNT, ALL-fold)
+        // refinement bridge on the COMPOUND polar cell on every preset
+        // AND on the same truly-mixed composite. The dual of the ANY-fold
+        // bridge one QUANTIFIER-KIND axis over via `== FIELD_COUNT`.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.count_polar_axes() == ResourceLimits::FIELD_COUNT,
+                a.is_axially_polar(),
+                "count_polar_axes() == FIELD_COUNT must equal is_axially_polar() for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_interior_axes_saturates_iff_is_axially_interior() {
+        // ALL-fold bridge dual — same shape, dual cell.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.count_interior_axes() == ResourceLimits::FIELD_COUNT,
+                a.is_axially_interior(),
+                "count_interior_axes() == FIELD_COUNT must equal is_axially_interior() for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_polar_axes_decomposes_as_count_bottom_axes_plus_count_top_axes() {
+        // ARITHMETIC-DECOMPOSITION theorem — the compound polar tally
+        // decomposes as the SUM of the two atomic pole tallies:
+        // `count_polar_axes == count_bottom_axes + count_top_axes` on
+        // every posture. A single axis cannot be at BOTH poles (`0 !=
+        // usize::MAX`), so the two atomic disjoint-axis subsets
+        // partition the polar-axis set exactly and their sum equals the
+        // compound polar tally at the mask level. The ARITHMETIC form
+        // of the boolean DECOMPOSITION theorem `has_polar_axis ==
+        // has_bottom_axis || has_top_axis` one QUANTIFIER-KIND axis
+        // over via disjoint-mask Boolean-OR-to-arithmetic-PLUS lift.
+        // The peer `count_bottom_and_count_top_sum_equals_count_polar_axes`
+        // expressed the same equation with the compound side as the raw
+        // `axes_is_pole().filter().count()` inline fold; THIS pin binds
+        // the compound side to the named typed exit
+        // `count_polar_axes()` instead — closing the ARITHMETIC-
+        // DECOMPOSITION theorem as an equation on TYPED ARITHMETIC
+        // PRIMITIVES.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.count_polar_axes(),
+                a.count_bottom_axes() + a.count_top_axes(),
+                "count_polar_axes must equal count_bottom_axes + count_top_axes for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_polar_and_count_interior_sum_equals_field_count() {
+        // EXHAUSTIVE-PARTITION identity — the (polar, interior) axis sets
+        // EXHAUSTIVELY AND DISJOINTLY partition the axis set on every
+        // posture, so their tallies sum to the axis cardinality exactly.
+        // A single axis is either at SOME pole OR strictly in the
+        // interior — never both (the two masks are complementary at
+        // each axis) and never neither (the two masks cover every axis
+        // at each axis). The ARITHMETIC form of the boolean cover-
+        // exhaustiveness theorem `has_polar_axis || has_interior_axis ==
+        // true` one QUANTIFIER-KIND axis over via disjoint-and-exhaustive
+        // partition sum-of-cardinalities — STRICTLY STRONGER than the
+        // atomic-cell inequality `count_bottom_axes + count_top_axes <=
+        // FIELD_COUNT` (which is bounded but not saturated on interior-
+        // containing postures). The compound cells' complementarity
+        // saturates the analogous compound-cell sum on EVERY posture.
+        // The ARITHMETIC form of the boolean De Morgan complement
+        // `has_interior_axis == !is_axially_polar` at the arithmetic
+        // surface via `count_interior_axes == FIELD_COUNT -
+        // count_polar_axes`.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.count_polar_axes() + a.count_interior_axes(),
+                ResourceLimits::FIELD_COUNT,
+                "count_polar_axes + count_interior_axes must equal FIELD_COUNT for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_polar_axes_and_count_interior_axes_discriminate_mixed_postures_the_any_fold_conflates(
+    ) {
+        // LOAD-BEARING ARITHMETIC-vs-BOOLEAN discriminator — the boolean
+        // ANY-fold surface fires the SAME `(true, true)` verdict on a
+        // barely-interior posture (five polar, one interior) as on a
+        // barely-polar posture (one polar, five interior) — but the
+        // arithmetic tallies `(count_polar_axes, count_interior_axes)`
+        // name their distinct arrangements as distinct `(usize, usize)`
+        // pairs (`(5, 1)` vs `(1, 5)`). Pins the COUNT projection as
+        // the WEAKER-vs-STRONGER refinement of the ANY-fold surface at
+        // the COMPOUND (polar, interior) cell. Peer of
+        // `count_bottom_axes_and_count_top_axes_discriminate_mixed_pole_postures_the_any_fold_conflates`
+        // one CELL-COMPOUND axis over.
+        let mostly_polar = ResourceLimits {
+            max_expansion_depth: 0,
+            max_cache_entries: 0,
+            max_expansion_size: 0,
+            max_macro_body_size: usize::MAX,
+            max_registered_macros: usize::MAX,
+            max_macro_arity: 42,
+        };
+        let mostly_interior = ResourceLimits {
+            max_expansion_depth: 42,
+            max_cache_entries: 43,
+            max_expansion_size: 44,
+            max_macro_body_size: 45,
+            max_registered_macros: 46,
+            max_macro_arity: usize::MAX,
+        };
+        // Both fire the SAME boolean (true, true) — the ANY-fold surface
+        // cannot discriminate them at the COMPOUND cell.
+        assert!(mostly_polar.has_polar_axis());
+        assert!(mostly_polar.has_interior_axis());
+        assert!(mostly_interior.has_polar_axis());
+        assert!(mostly_interior.has_interior_axis());
+        // But the arithmetic tallies DISCRIMINATE — (5, 1) vs (1, 5).
+        assert_eq!(mostly_polar.count_polar_axes(), 5);
+        assert_eq!(mostly_polar.count_interior_axes(), 1);
+        assert_eq!(mostly_interior.count_polar_axes(), 1);
+        assert_eq!(mostly_interior.count_interior_axes(), 5);
+        // And the arithmetic-pair projection distinguishes them.
+        assert_ne!(
+            (
+                mostly_polar.count_polar_axes(),
+                mostly_polar.count_interior_axes(),
+            ),
+            (
+                mostly_interior.count_polar_axes(),
+                mostly_interior.count_interior_axes(),
+            ),
+            "arithmetic tallies must discriminate mostly-polar (5, 1) from mostly-interior (1, 5)",
+        );
+    }
+
+    #[test]
+    fn resource_limits_count_polar_axes_composes_at_compile_time_via_const_fn() {
+        // CONST-FN pin — arithmetic polar-axis tally is evaluable in
+        // const context, so a caller can pin the exact tally at compile
+        // time. Sibling of the const-fn evaluability pins on
+        // `count_bottom_axes` one CELL-COMPOUND axis over.
+        const _: () =
+            assert!(EMPTY_RESOURCE_LIMITS.count_polar_axes() == ResourceLimits::FIELD_COUNT);
+        const _: () =
+            assert!(UNBOUNDED_RESOURCE_LIMITS.count_polar_axes() == ResourceLimits::FIELD_COUNT);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.count_polar_axes() == 0);
+    }
+
+    #[test]
+    fn resource_limits_count_interior_axes_composes_at_compile_time_via_const_fn() {
+        // CONST-FN dual pin — same shape, dual cell.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.count_interior_axes() == 0);
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.count_interior_axes() == 0);
+        const _: () =
+            assert!(DEFAULT_RESOURCE_LIMITS.count_interior_axes() == ResourceLimits::FIELD_COUNT);
+    }
+
+    #[test]
+    fn resource_limits_count_polar_axes_agrees_with_pointwise_field_at_some_pole_count() {
+        // Positional-alignment cross-check — the arithmetic polar tally
+        // agrees with the direct filter-count over the pointwise `field
+        // == 0 || field == usize::MAX` verdict on every preset AND on the
+        // truly-mixed-pole composite. Pins the canonical index-to-axis
+        // mapping holds at the compound arithmetic tally surface too.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            let values = a.field_values();
+            let expected = values
+                .iter()
+                .filter(|&&v| v == 0 || v == usize::MAX)
+                .count();
+            assert_eq!(
+                a.count_polar_axes(),
+                expected,
+                "count_polar_axes must equal filter-count over pointwise `== 0 || == usize::MAX` verdict for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_interior_axes_agrees_with_pointwise_field_strictly_interior_count() {
+        // Positional-alignment dual — the arithmetic interior tally
+        // agrees with the direct filter-count over the pointwise `0 <
+        // field < usize::MAX` verdict.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            let values = a.field_values();
+            let expected = values
+                .iter()
+                .filter(|&&v| v != 0 && v != usize::MAX)
+                .count();
+            assert_eq!(
+                a.count_interior_axes(),
+                expected,
+                "count_interior_axes must equal filter-count over pointwise strictly-interior verdict for {a:?}",
             );
         }
     }

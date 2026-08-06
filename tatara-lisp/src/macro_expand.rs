@@ -14488,6 +14488,160 @@ impl ResourceLimits {
             c => Some(c == 1),
         }
     }
+
+    /// Whole-posture MULTI-OF-BOTTOM predicate —
+    /// `self.bottom_axis_is_multi()` returns `Some(true)` iff TWO OR MORE
+    /// axes of `self` sit at the bottom pole (equivalently:
+    /// [`Self::count_bottom_axes`] `> 1`), `Some(false)` iff EXACTLY one
+    /// axis is at the bottom pole (the SINGLE-FIRE regime), or `None` iff
+    /// no axis is at the bottom pole. The COUNT-GREATER-THAN-ONE peer of
+    /// [`Self::bottom_axis_is_singleton`] one COMBINATOR-KIND axis over —
+    /// jointly the (bottom_axis_is_multi, top_axis_is_multi) atomic pair
+    /// OPENS the MULTI column past the just-closed SINGLETON column on
+    /// the atomic (bottom, top) row via POINTWISE NEGATION of the
+    /// SINGLETON verdict on Some(_) cells (fixing None).
+    ///
+    /// **DE-MORGAN-COMPLEMENT identity — LOAD-BEARING structural pin**:
+    /// on every posture, `bottom_axis_is_multi() ==
+    /// bottom_axis_is_singleton().map(|b| !b)`. The MULTI predicate is
+    /// the pointwise boolean complement of the SINGLETON predicate on
+    /// its `Some(_)` cells, mirroring exactly how the SPARSE column
+    /// derives from the CONTIGUITY column one PROJECTION-KIND row under.
+    /// Pinned via
+    /// `resource_limits_bottom_axis_is_multi_equals_is_singleton_complement`.
+    ///
+    /// **COUNT-GREATER-THAN-ONE identity — LOAD-BEARING structural pin**:
+    /// on every posture, `bottom_axis_is_multi() == { let c =
+    /// self.count_bottom_axes(); if c == 0 { None } else { Some(c > 1) }
+    /// }`. Composes structurally through the COUNT projection; the
+    /// substrate never re-scans the per-axis mask. Pinned via
+    /// `resource_limits_bottom_axis_is_multi_equals_count_greater_than_one`.
+    ///
+    /// **MULTI-EXCLUDES-SINGLETON — LOAD-BEARING mutual-exclusion pin**:
+    /// on every posture, NOT (`bottom_axis_is_multi() == Some(true) &&
+    /// bottom_axis_is_singleton() == Some(true)`). The MULTI and
+    /// SINGLETON typed exits jointly PARTITION the has-bottom-axis
+    /// regime into two mutually-exclusive strict cells — the substrate
+    /// now expresses the (SINGLE-FIRE, MULTI-FIRE) dichotomy as two
+    /// NAMED typed exits rather than a single-count inline equality
+    /// disjoined at every consumer.
+    ///
+    /// **MULTI-IMPLIES-NOT-SINGLETON bridge**: on every posture,
+    /// `bottom_axis_is_multi() == Some(true) ⇒ bottom_axis_is_singleton()
+    /// == Some(false)`. Pinned via
+    /// `resource_limits_bottom_axis_is_multi_true_implies_is_singleton_false`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.bottom_axis_is_multi() ==
+    /// Some(true)` (saturated bottom pole packs SIX axes at 0, count > 1);
+    /// `UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_multi() == None` (no
+    /// bottom axis); `DEFAULT_RESOURCE_LIMITS.bottom_axis_is_multi() ==
+    /// None` (no bottom axis). Distinct partition shape from the
+    /// SINGLETON column: EMPTY fires MULTI at `Some(true)` while
+    /// SINGLETON pins it at `Some(false)` — the pointwise complement of
+    /// SATURATED at the multi-fire endpoint.
+    ///
+    /// **ANY-fold bridge**: `a.bottom_axis_is_multi().is_some() ⇔
+    /// a.has_bottom_axis()`. Pinned via
+    /// `resource_limits_bottom_axis_is_multi_is_some_iff_has_bottom_axis`.
+    ///
+    /// **BOOLEAN COLLAPSE — LOAD-BEARING pin**: the (`Some(true)`,
+    /// `Some(false)`, `None`) trichotomy PARTITIONS every posture into
+    /// (multi-bottom, single-bottom, no-bottom) — the DE MORGAN DUAL
+    /// image of the SINGLETON column's (singleton-bottom, multi-bottom,
+    /// no-bottom) partition with the Some(_) cells swapped, fixing the
+    /// None cell.
+    ///
+    /// `const fn` so a caller can pin the bottom-axis MULTI verdict at
+    /// compile time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.bottom_axis_is_multi(), Some(true)));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// MULTI predicate is a named typed exit `Option<bool>` rather than
+    /// a per-consumer `self.count_bottom_axes() > 1` inline strict
+    /// inequality test that discards the has-axis-at-all distinction.
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// MULTI cell is a structural derivation from the COUNT projection
+    /// via one usize strict-inequality and one is-zero split, no new
+    /// per-axis scan, no allocation). THEORY.md §V.1 — knowable
+    /// platform.
+    ///
+    /// Frontier inspiration: Racket's `(pair? lst)` (multi-element
+    /// predicate distinct from `(null? lst)` and `(list? '(x))`);
+    /// Haskell's `Data.List.NonEmpty` versus a plain `[a]` (the NonEmpty
+    /// tail carries the ≥2 witness); APL's `(1<≢⍵)` multi-length
+    /// primitive; Lean's `List.Nonempty` refinement type. Translation
+    /// through pleme-io primitives: the plain `const fn` DERIVATION
+    /// from the already-lifted [`Self::count_bottom_axes`], one usize
+    /// strict-inequality under a two-arm match on the zero split, no
+    /// new per-axis scan, no allocation.
+    #[must_use]
+    pub const fn bottom_axis_is_multi(self) -> Option<bool> {
+        match self.count_bottom_axes() {
+            0 => None,
+            c => Some(c > 1),
+        }
+    }
+
+    /// Whole-posture MULTI-OF-TOP predicate —
+    /// `self.top_axis_is_multi()` returns `Some(true)` iff TWO OR MORE
+    /// axes of `self` sit at the top pole (equivalently:
+    /// [`Self::count_top_axes`] `> 1`), `Some(false)` iff EXACTLY one
+    /// axis is at the top pole, or `None` iff no axis is at the top
+    /// pole. The ATOMIC-CELL DUAL of [`Self::bottom_axis_is_multi`] one
+    /// PROJECTION-KIND axis over on the MULTI column — jointly the
+    /// (bottom_axis_is_multi, top_axis_is_multi) atomic pair OPENS the
+    /// MULTI column past the just-closed SINGLETON column on the atomic
+    /// (bottom, top) row.
+    ///
+    /// **DE-MORGAN-COMPLEMENT identity dual**: on every posture,
+    /// `top_axis_is_multi() == top_axis_is_singleton().map(|b| !b)`.
+    /// Pinned via
+    /// `resource_limits_top_axis_is_multi_equals_is_singleton_complement`.
+    ///
+    /// **COUNT-GREATER-THAN-ONE identity dual**: on every posture,
+    /// `top_axis_is_multi() == { let c = self.count_top_axes(); if c ==
+    /// 0 { None } else { Some(c > 1) } }`. Pinned via
+    /// `resource_limits_top_axis_is_multi_equals_count_greater_than_one`.
+    ///
+    /// **MULTI-IMPLIES-NOT-SINGLETON bridge dual**: on every posture,
+    /// `top_axis_is_multi() == Some(true) ⇒ top_axis_is_singleton() ==
+    /// Some(false)`. Pinned via
+    /// `resource_limits_top_axis_is_multi_true_implies_is_singleton_false`.
+    ///
+    /// **Preset pins**: `UNBOUNDED_RESOURCE_LIMITS.top_axis_is_multi()
+    /// == Some(true)` (saturated top pole packs SIX axes at
+    /// `usize::MAX`, count > 1); `EMPTY_RESOURCE_LIMITS
+    /// .top_axis_is_multi() == None` (no top axis);
+    /// `DEFAULT_RESOURCE_LIMITS.top_axis_is_multi() == None`.
+    ///
+    /// **ANY-fold bridge**: `a.top_axis_is_multi().is_some() ⇔
+    /// a.has_top_axis()`. Pinned via
+    /// `resource_limits_top_axis_is_multi_is_some_iff_has_top_axis`.
+    ///
+    /// **CROSS-CELL SATURATION contrast — LOAD-BEARING pin**: at the
+    /// SATURATED pole preset for EACH atomic cell, the SAME cell's MULTI
+    /// verdict is `Some(true)` (saturated pole packs FIELD_COUNT axes,
+    /// strictly greater than one) and the OTHER cell's MULTI verdict is
+    /// `None`. The saturated pole is UNIFORMLY MULTI on its own cell
+    /// and UNIFORMLY ABSENT on the dual cell — the De Morgan complement
+    /// image of the SINGLETON column's (Some(false), None) saturation
+    /// partition. Pinned via
+    /// `resource_limits_atomic_is_multi_saturation_pole_partitions_into_multi_and_absent`.
+    ///
+    /// `const fn` so a caller can pin the top-axis MULTI verdict at
+    /// compile time.
+    ///
+    /// Theory anchor: same as [`Self::bottom_axis_is_multi`].
+    ///
+    /// Frontier inspiration: same as [`Self::bottom_axis_is_multi`], on
+    /// the DUAL atomic mask.
+    #[must_use]
+    pub const fn top_axis_is_multi(self) -> Option<bool> {
+        match self.count_top_axes() {
+            0 => None,
+            c => Some(c > 1),
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -52747,5 +52901,312 @@ mod tests {
             .interior_axis_is_singleton()
             .is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_singleton().is_none());
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_multi_preset_pins_saturate_at_multi_and_absent() {
+        // Preset pins — the SATURATED-bottom-pole preset EMPTY packs SIX
+        // axes at position 0, so MULTI is Some(true). The absent-bottom
+        // presets UNBOUNDED and DEFAULT and both hand-authored postures
+        // carry no bottom axis; the MULTI verdict is None. Pointwise
+        // De Morgan complement image of the SINGLETON column's
+        // (Some(false), None) preset partition — the Some(_) cell is
+        // swapped from Some(false) to Some(true) while the None cell is
+        // fixed, opening the multi-fire endpoint distinctly from the
+        // singleton column's single-fire pin.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.bottom_axis_is_multi(), Some(true));
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_multi(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.bottom_axis_is_multi(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.bottom_axis_is_multi(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.bottom_axis_is_multi(), None);
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_multi_preset_pins_saturate_at_multi_and_absent() {
+        // Preset pins dual — the SATURATED-top-pole preset UNBOUNDED
+        // packs SIX axes at usize::MAX, so MULTI is Some(true). The
+        // absent-top presets and hand-authored postures carry no top
+        // axis; the MULTI verdict is None.
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.top_axis_is_multi(), Some(true));
+        assert_eq!(EMPTY_RESOURCE_LIMITS.top_axis_is_multi(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.top_axis_is_multi(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.top_axis_is_multi(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.top_axis_is_multi(), None);
+    }
+
+    #[test]
+    fn resource_limits_atomic_is_multi_saturation_pole_partitions_into_multi_and_absent() {
+        // CROSS-CELL SATURATION contrast on the MULTI column — the
+        // two saturated pole presets each pin (Some(true), None) on
+        // their (same-cell, dual-cell) MULTI pair. The saturated pole is
+        // UNIFORMLY MULTI on its own cell (count == FIELD_COUNT > 1) and
+        // UNIFORMLY ABSENT on the dual cell — the exact De Morgan
+        // complement image of the SINGLETON column's saturation
+        // partition on the Some(_) cell, fixing the None cell.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.bottom_axis_is_multi(), Some(true));
+        assert_eq!(EMPTY_RESOURCE_LIMITS.top_axis_is_multi(), None);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.top_axis_is_multi(), Some(true));
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_multi(), None);
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_multi_equals_is_singleton_complement() {
+        // DE-MORGAN-COMPLEMENT identity — the MULTI predicate is the
+        // pointwise boolean complement of the SINGLETON predicate on
+        // its Some(_) cells (None fixes to None). The substrate never
+        // re-derives the count; the MULTI cell is a plain Option::map
+        // negation of the just-lifted SINGLETON typed exit. Mirrors the
+        // atomic (SPARSE, CONTIGUITY) De Morgan pair one PROJECTION-KIND
+        // row under, translated up onto the COUNT-EQUALS-N surface.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.bottom_axis_is_multi(),
+                a.bottom_axis_is_singleton().map(|b| !b),
+                "is_multi != is_singleton.map(!) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_multi_equals_is_singleton_complement() {
+        // DE-MORGAN-COMPLEMENT identity dual on the top cell.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.top_axis_is_multi(),
+                a.top_axis_is_singleton().map(|b| !b),
+                "is_multi != is_singleton.map(!) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_multi_equals_count_greater_than_one() {
+        // COUNT-GREATER-THAN-ONE identity — the MULTI predicate is
+        // structurally derived from count_bottom_axes on every posture:
+        // None iff count == 0, Some(count > 1) otherwise. Pinned across
+        // every shipped preset + hand-authored + test-local posture so a
+        // future rewrite of either projection that silently drifts from
+        // the count-greater-than-one contract fires this pin.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let c = a.count_bottom_axes();
+            let expected = if c == 0 { None } else { Some(c > 1) };
+            assert_eq!(
+                a.bottom_axis_is_multi(),
+                expected,
+                "is_multi = count-greater-than-one identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_multi_equals_count_greater_than_one() {
+        // COUNT-GREATER-THAN-ONE identity dual on the top cell.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let c = a.count_top_axes();
+            let expected = if c == 0 { None } else { Some(c > 1) };
+            assert_eq!(
+                a.top_axis_is_multi(),
+                expected,
+                "is_multi = count-greater-than-one identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_multi_is_some_iff_has_bottom_axis() {
+        // ANY-fold bridge — the MULTI verdict is defined iff the
+        // bottom-axis subset is non-empty. Identical shape to every
+        // already-lifted (SPAN, GAP, CONTIGUITY, SPARSE, SINGLETON)
+        // atomic-cell is_some ⇔ has-axis bridge, closing the (span,
+        // gap, contiguity, sparse, singleton, multi) atomic column
+        // sextet's uniform ANY-fold bridge contract.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.bottom_axis_is_multi().is_some(),
+                a.has_bottom_axis(),
+                "is_multi.is_some() != has_bottom_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_multi_is_some_iff_has_top_axis() {
+        // ANY-fold bridge dual on the top cell.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.top_axis_is_multi().is_some(),
+                a.has_top_axis(),
+                "is_multi.is_some() != has_top_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_multi_true_implies_is_singleton_false() {
+        // MULTI-IMPLIES-NOT-SINGLETON bridge — LOAD-BEARING mutual-
+        // exclusion pin. On every posture, is_multi == Some(true) ⇒
+        // is_singleton == Some(false). The MULTI and SINGLETON typed
+        // exits jointly PARTITION the has-bottom-axis regime into two
+        // mutually-exclusive strict cells; the substrate never confuses
+        // the multi-fire and single-fire regimes at the same has-axis
+        // posture. Contrapositive of the SINGLE-FIRE-IMPLIES-NOT-MULTI
+        // pin one boolean row over.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if matches!(a.bottom_axis_is_multi(), Some(true)) {
+                assert_eq!(
+                    a.bottom_axis_is_singleton(),
+                    Some(false),
+                    "is_multi == Some(true) but is_singleton != Some(false) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_multi_true_implies_is_singleton_false() {
+        // MULTI-IMPLIES-NOT-SINGLETON bridge dual on the top cell.
+        for a in [UNBOUNDED_RESOURCE_LIMITS] {
+            if matches!(a.top_axis_is_multi(), Some(true)) {
+                assert_eq!(
+                    a.top_axis_is_singleton(),
+                    Some(false),
+                    "is_multi == Some(true) but is_singleton != Some(false) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_multi_false_at_lone_bottom_axis() {
+        // SINGLE-FIRE COINCIDENCE pin dual — a lone bottom axis at any
+        // of the six positions gives count == 1, so the MULTI verdict
+        // is Some(false). Pointwise De Morgan complement of the
+        // SINGLETON column's SINGLE-FIRE Some(true) pin.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            fields[position] = 0;
+            let singleton_bottom = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_bottom.count_bottom_axes(), 1);
+            assert_eq!(
+                singleton_bottom.bottom_axis_is_multi(),
+                Some(false),
+                "singleton bottom at position {position} not Some(false)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_multi_false_at_lone_top_axis() {
+        // SINGLE-FIRE COINCIDENCE pin dual on the top cell.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            fields[position] = usize::MAX;
+            let singleton_top = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_top.count_top_axes(), 1);
+            assert_eq!(
+                singleton_top.top_axis_is_multi(),
+                Some(false),
+                "singleton top at position {position} not Some(false)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_is_multi_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the atomic cells — both MULTI projections are
+        // evaluable in const context so a caller can pin the atomic
+        // count-greater-than-one identities at compile time as
+        // build-breaks. Mirror of the atomic SINGLETON const-fn pins
+        // one COMBINATOR-KIND axis over on the boolean surface.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_multi(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_multi(),
+            Some(true)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.top_axis_is_multi().is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_multi().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.bottom_axis_is_multi().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_is_multi().is_none());
     }
 }

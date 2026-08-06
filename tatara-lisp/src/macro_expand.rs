@@ -12671,6 +12671,238 @@ impl ResourceLimits {
         }
         None
     }
+
+    /// Whole-posture INDEX-SPAN-OF-BOTTOM projection —
+    /// `self.bottom_axis_index_span()` returns
+    /// `Some(last_bottom_axis_index - first_bottom_axis_index + 1)` (the
+    /// WIDTH of the closed index interval `[first_bottom, last_bottom]`,
+    /// counting BOTH endpoints AND every position strictly between them,
+    /// regardless of whether every position between them is itself
+    /// bottom) when at least one axis is at the bottom pole, OR `None`
+    /// when no axis is at the bottom pole. The EXTENT peer of
+    /// [`Self::first_bottom_axis_index`] + [`Self::last_bottom_axis_index`]
+    /// one PROJECTION-KIND axis over on the DERIVED-USIZE column, AND
+    /// the DENSITY-SENSITIVE peer of [`Self::count_bottom_axes`] one
+    /// PROJECTION-KIND axis over: the (COUNT, SPAN) pair jointly
+    /// discriminates CONTIGUOUS from SPARSE arrangements the COUNT
+    /// alone CONFLATES.
+    ///
+    /// A STRICT REFINEMENT of the COUNT-fold on the SAME atomic cell in
+    /// a SECOND direction the COUNT alone cannot supply: two postures
+    /// with the SAME `count_bottom_axes() == 2` but with the two
+    /// bottom axes at (0, 1) versus (0, `FIELD_COUNT - 1`) give the
+    /// SAME `count` verdict but DIFFERENT `span` verdicts (`Some(2)`
+    /// versus `Some(FIELD_COUNT)`), pinning the SPAN as the DENSITY-
+    /// SENSITIVE refinement of COUNT the same way the (FIRST, LAST)
+    /// pair adds POSITIONAL discriminators atop the COUNT-fold. Also a
+    /// STRICT REFINEMENT of the (FIRST, LAST) endpoint pair one
+    /// direction over: the pair `(Some(0), Some(5))` and the pair
+    /// `(Some(2), Some(4))` yield DIFFERENT SPAN verdicts (`Some(6)`
+    /// versus `Some(3)`), where SPAN condenses the TWO endpoint
+    /// witnesses into ONE cardinality the (COUNT) alone conflates and
+    /// the (FIRST, LAST) pair scatters.
+    ///
+    /// **FIRST-LAST-DERIVATION identity — LOAD-BEARING structural pin**:
+    /// on every posture, `bottom_axis_index_span() == match
+    /// (first_bottom_axis_index(), last_bottom_axis_index()) {
+    /// (Some(f), Some(l)) => Some(l - f + 1), _ => None, }`. The
+    /// (FIRST, LAST) pair uniquely determines the SPAN — SPAN is a
+    /// DERIVED USIZE projection reading the two already-lifted
+    /// endpoints and returning their bracket width, NOT a new per-axis
+    /// scan. Pinned via
+    /// `resource_limits_bottom_axis_index_span_equals_last_minus_first_plus_one`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.bottom_axis_index_span()
+    /// == Some(FIELD_COUNT)` (every axis at bottom pole; SPAN
+    /// SATURATES at the full field width `FIELD_COUNT`);
+    /// `UNBOUNDED_RESOURCE_LIMITS.bottom_axis_index_span() == None` (no
+    /// axis at bottom pole; the empty-cell None);
+    /// `DEFAULT_RESOURCE_LIMITS.bottom_axis_index_span() == None`
+    /// (every `DEFAULT_MAX_*` strictly interior).
+    ///
+    /// **ANY-fold bridge**: `a.bottom_axis_index_span().is_some() ⇔
+    /// a.has_bottom_axis()`. Pinned via
+    /// `resource_limits_bottom_axis_index_span_is_some_iff_has_bottom_axis`.
+    ///
+    /// **COUNT bridge**: `a.bottom_axis_index_span().is_none() ⇔
+    /// a.count_bottom_axes() == 0`. The EMPTINESS of the SPAN
+    /// projection AGREES with the EMPTINESS of the COUNT projection
+    /// AGREES with the FALSENESS of the ANY-fold. Pinned via
+    /// `resource_limits_bottom_axis_index_span_is_none_iff_count_bottom_axes_is_zero`.
+    ///
+    /// **SINGLE-FIRE COINCIDENCE pin**: `a.bottom_axis_index_span() ==
+    /// Some(1) ⇔ a.count_bottom_axes() == 1 ⇔
+    /// a.first_bottom_axis_index() == a.last_bottom_axis_index() &&
+    /// a.first_bottom_axis_index().is_some()`. The SINGLE-FIRE regime
+    /// is DEGENERATE in three COINCIDING senses at once: COUNT is 1,
+    /// SPAN is 1, and FIRST equals LAST. Pinned via
+    /// `resource_limits_bottom_axis_index_span_is_some_one_iff_count_bottom_axes_is_one`.
+    ///
+    /// **FULL-SPAN pin — LOAD-BEARING boundary-saturation identity**:
+    /// `a.bottom_axis_index_span() == Some(FIELD_COUNT) ⇔
+    /// a.first_bottom_axis_index() == Some(0) &&
+    /// a.last_bottom_axis_index() == Some(FIELD_COUNT - 1)`. The
+    /// full-width SPAN is the ENDPOINT-SATURATION at BOTH sides of the
+    /// available index range; the atomic cell REACHES both boundaries
+    /// (the LEFT endpoint at position 0, the RIGHT endpoint at
+    /// position `FIELD_COUNT - 1`) but the SPAN alone does not imply
+    /// every position between is bottom — the (SPAN, COUNT) pair
+    /// discriminates further. Pinned via
+    /// `resource_limits_bottom_axis_index_span_is_some_field_count_iff_first_is_zero_and_last_is_last`.
+    ///
+    /// **SPAN ≥ COUNT inequality — LOAD-BEARING DENSITY-DISCRIMINATOR**:
+    /// on every posture, `a.bottom_axis_index_span() ≥
+    /// Some(a.count_bottom_axes())` when the SPAN is `Some(_)`
+    /// (COUNT is also non-zero in that regime by the two COUNT-bridge
+    /// pins agreeing), with EQUALITY exactly when the bottom axes are
+    /// CONTIGUOUS in the axis sequence (every axis at every position
+    /// between `first_bottom` and `last_bottom` inclusive is itself
+    /// bottom) and STRICT INEQUALITY exactly when the bottom axes are
+    /// SPARSE (at least one non-bottom axis sits strictly between
+    /// `first_bottom` and `last_bottom`). This is the NEW cardinality
+    /// verdict the SPAN column adds past the (FIRST, LAST, COUNT)
+    /// triple: it names the CONTIGUOUS-vs-SPARSE distinction that
+    /// none of the three prior columns can express alone. Pinned via
+    /// `resource_limits_bottom_axis_index_span_ge_count_bottom_axes_when_some`.
+    ///
+    /// **Range bound**: when `Some(w)`, `1 ≤ w ≤ FIELD_COUNT` by
+    /// construction (both endpoints sit in `[0, FIELD_COUNT)` and
+    /// `first ≤ last` by the SANDWICH pin).
+    ///
+    /// `const fn` so a caller can pin the exact bottom-axis index span
+    /// at compile time.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// index-span-of-bottom projection is a named typed exit
+    /// `Option<usize>` rather than an inline
+    /// `first.zip(last).map(|(f, l)| l - f + 1)` per-consumer bracket-
+    /// width fold. THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the (COUNT, SPAN) pair on the same atomic cell adds a
+    /// DENSITY-SENSITIVE discriminator neither COUNT alone nor
+    /// (FIRST, LAST) alone can supply, closing the CONTIGUOUS-vs-
+    /// SPARSE decision at the compile-time surface. THEORY.md §V.1 —
+    /// knowable platform; the SPAN projection is a `const fn`
+    /// operation on the posture algebra returning a const-evaluable
+    /// `Option<usize>`.
+    ///
+    /// Frontier inspiration: APL's `(⌈/⍸P) - (⌊/⍸P) + 1` interval-
+    /// width over the set of indices where the predicate holds;
+    /// Haskell's `liftA2 (\f l -> l - f + 1) (findIndex p xs)
+    /// (fmap (\i -> length xs - 1 - i) (findIndex p (reverse xs)))`
+    /// at the bracket-width fold; classical bitset "trailing-zero-
+    /// clearing" `bit_width(x) - trailing_zeros(x)` on the atomic
+    /// bitset yielding the same INDEX-BRACKET width one primitive
+    /// further from the raw bit pattern. Translation through pleme-io
+    /// primitives is the plain `const fn` DERIVATION from the already-
+    /// lifted (first_bottom_axis_index, last_bottom_axis_index) pair —
+    /// no new per-axis scan, no allocation, one subtraction + one
+    /// increment.
+    #[must_use]
+    pub const fn bottom_axis_index_span(self) -> Option<usize> {
+        match (
+            self.first_bottom_axis_index(),
+            self.last_bottom_axis_index(),
+        ) {
+            (Some(f), Some(l)) => Some(l - f + 1),
+            _ => None,
+        }
+    }
+
+    /// Whole-posture INDEX-SPAN-OF-TOP projection —
+    /// `self.top_axis_index_span()` returns
+    /// `Some(last_top_axis_index - first_top_axis_index + 1)` (the
+    /// WIDTH of the closed index interval `[first_top, last_top]`)
+    /// when at least one axis is at the top pole, OR `None` when no
+    /// axis is at the top pole. The EXTENT peer of
+    /// [`Self::first_top_axis_index`] + [`Self::last_top_axis_index`]
+    /// one PROJECTION-KIND axis over on the DERIVED-USIZE column, AND
+    /// the ATOMIC-CELL DUAL of [`Self::bottom_axis_index_span`] one
+    /// CELL axis over — jointly the (bottom_axis_index_span,
+    /// top_axis_index_span) atomic pair OPENS the SPAN column past
+    /// the just-closed (INDEX-OF-FIRST, INDEX-OF-LAST) columns on the
+    /// atomic (bottom, top) row, the same way (first_bottom_axis_index,
+    /// first_top_axis_index) opened the INDEX column past the (COUNT,
+    /// ANY-fold, ALL-fold) columns one PROJECTION-KIND axis over on
+    /// the same atomic row.
+    ///
+    /// A STRICT REFINEMENT of the COUNT-fold on the SAME atomic cell
+    /// in a SECOND direction: two postures with the SAME
+    /// `count_top_axes() == 2` but with the two top axes at (0, 1)
+    /// versus (0, `FIELD_COUNT - 1`) give the SAME `count` verdict but
+    /// DIFFERENT `span` verdicts, pinning the SPAN as the DENSITY-
+    /// SENSITIVE refinement of COUNT.
+    ///
+    /// **FIRST-LAST-DERIVATION identity — LOAD-BEARING structural pin
+    /// dual**: on every posture, `top_axis_index_span() == match
+    /// (first_top_axis_index(), last_top_axis_index()) {
+    /// (Some(f), Some(l)) => Some(l - f + 1), _ => None, }`. Pinned
+    /// via `resource_limits_top_axis_index_span_equals_last_minus_first_plus_one`.
+    ///
+    /// **Preset pins**: `UNBOUNDED_RESOURCE_LIMITS.top_axis_index_span()
+    /// == Some(FIELD_COUNT)` (every axis at top pole; SPAN saturates
+    /// at the full field width); `EMPTY_RESOURCE_LIMITS
+    /// .top_axis_index_span() == None` (no axis at top);
+    /// `DEFAULT_RESOURCE_LIMITS.top_axis_index_span() == None`.
+    ///
+    /// **ANY-fold bridge**: `a.top_axis_index_span().is_some() ⇔
+    /// a.has_top_axis()`. Pinned via
+    /// `resource_limits_top_axis_index_span_is_some_iff_has_top_axis`.
+    ///
+    /// **COUNT bridge**: `a.top_axis_index_span().is_none() ⇔
+    /// a.count_top_axes() == 0`. Pinned via
+    /// `resource_limits_top_axis_index_span_is_none_iff_count_top_axes_is_zero`.
+    ///
+    /// **SINGLE-FIRE COINCIDENCE pin dual**: `a.top_axis_index_span()
+    /// == Some(1) ⇔ a.count_top_axes() == 1 ⇔
+    /// a.first_top_axis_index() == a.last_top_axis_index() &&
+    /// a.first_top_axis_index().is_some()`. Pinned via
+    /// `resource_limits_top_axis_index_span_is_some_one_iff_count_top_axes_is_one`.
+    ///
+    /// **FULL-SPAN pin dual**: `a.top_axis_index_span() ==
+    /// Some(FIELD_COUNT) ⇔ a.first_top_axis_index() == Some(0) &&
+    /// a.last_top_axis_index() == Some(FIELD_COUNT - 1)`. Pinned via
+    /// `resource_limits_top_axis_index_span_is_some_field_count_iff_first_is_zero_and_last_is_last`.
+    ///
+    /// **SPAN ≥ COUNT inequality dual — LOAD-BEARING DENSITY-
+    /// DISCRIMINATOR**: on every posture, `a.top_axis_index_span() ≥
+    /// Some(a.count_top_axes())` when the SPAN is `Some(_)`, with
+    /// EQUALITY exactly when the top axes are CONTIGUOUS. Pinned via
+    /// `resource_limits_top_axis_index_span_ge_count_top_axes_when_some`.
+    ///
+    /// **CROSS-CELL DISJOINTNESS at the SPAN surface**: on every
+    /// posture, the intersection of the (first_bottom, last_bottom)
+    /// closed interval with the (first_top, last_top) closed interval
+    /// need NOT be empty (the two atomic BRACKETS can overlap in the
+    /// index range even though the two per-axis MASKS are disjoint;
+    /// e.g. bottom at (0, 3) and top at (1, 2) yields overlapping
+    /// closed intervals `[0, 3]` and `[1, 2]` even though no axis is
+    /// simultaneously bottom AND top). The SPAN column measures BOTH
+    /// bracket widths and preserves their disjoint-mask origin even
+    /// under bracket overlap. This is the INDEX-INTERVAL form of the
+    /// pointwise cross-cell disjointness on the atomic (bottom, top)
+    /// masks one PROJECTION-KIND axis over from `axes_is_bottom
+    /// && axes_is_top == [false; FIELD_COUNT]`.
+    ///
+    /// **Range bound dual**: when `Some(w)`, `1 ≤ w ≤ FIELD_COUNT`.
+    ///
+    /// `const fn` so a caller can pin the exact top-axis index span at
+    /// compile time.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// SPAN adds a DENSITY-sensitive discriminator neither COUNT nor
+    /// the (FIRST, LAST) endpoint pair can supply on their own);
+    /// THEORY.md §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: same as [`Self::bottom_axis_index_span`],
+    /// on the DUAL atomic mask.
+    #[must_use]
+    pub const fn top_axis_index_span(self) -> Option<usize> {
+        match (self.first_top_axis_index(), self.last_top_axis_index()) {
+            (Some(f), Some(l)) => Some(l - f + 1),
+            _ => None,
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -46057,6 +46289,600 @@ mod tests {
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
             .last_interior_axis_index()
             .is_none());
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_index_span_of_empty_preset_is_some_field_count() {
+        // Atomic-cell preset closure — every axis at bottom on EMPTY,
+        // so the SPAN saturates at the full field width `FIELD_COUNT`
+        // (LEFT endpoint at index 0, RIGHT endpoint at index
+        // `FIELD_COUNT - 1`, both endpoints inclusive gives
+        // `FIELD_COUNT` positions). The DERIVED-USIZE peer of the
+        // preset pin on `count_bottom_axes` one PROJECTION-KIND axis
+        // over: the ALL-fold saturation `is_bottom` REFINES to the
+        // maximal SPAN verdict `Some(FIELD_COUNT)` at the SPAN surface
+        // the same way it REFINES to `Some(0)` at the FIRST scan and
+        // `Some(FIELD_COUNT - 1)` at the LAST scan.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_index_span(),
+            Some(ResourceLimits::FIELD_COUNT),
+        );
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_index_span_of_unbounded_preset_is_none() {
+        // Cross-pole rejection at the SPAN surface — every axis at
+        // top pole on UNBOUNDED, no bottom axis, so both endpoints of
+        // the bottom bracket are None and the SPAN returns None. The
+        // DERIVED-USIZE peer of the same rejection on
+        // `count_bottom_axes` (which is 0) and on
+        // `first_bottom_axis_index` / `last_bottom_axis_index` (both
+        // None).
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_index_span(), None);
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_index_span_of_default_is_none() {
+        // Preset rejection — every shipped `DEFAULT_MAX_*` is
+        // strictly positive, so no bottom axis fires and the SPAN is
+        // None.
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.bottom_axis_index_span(), None);
+    }
+
+    #[test]
+    fn resource_limits_top_axis_index_span_of_unbounded_preset_is_some_field_count() {
+        // Atomic-cell preset closure dual — every axis at top pole on
+        // UNBOUNDED, so the top SPAN saturates at `FIELD_COUNT`.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_index_span(),
+            Some(ResourceLimits::FIELD_COUNT),
+        );
+    }
+
+    #[test]
+    fn resource_limits_top_axis_index_span_of_empty_preset_is_none() {
+        // Cross-pole rejection dual — every axis at bottom pole on
+        // EMPTY, no top axis, so the top SPAN is None.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.top_axis_index_span(), None);
+    }
+
+    #[test]
+    fn resource_limits_top_axis_index_span_of_default_is_none() {
+        // Preset rejection dual — every `DEFAULT_MAX_*` strictly less
+        // than `usize::MAX`.
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.top_axis_index_span(), None);
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_index_span_of_hand_authored_postures_is_none() {
+        // Antichain absorption — both hand-authored antichain
+        // postures sit strictly inside the lattice, so neither fires
+        // bottom on any axis and both SPAN projections are None.
+        for &a in &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE] {
+            assert_eq!(
+                a.bottom_axis_index_span(),
+                None,
+                "hand-authored antichain posture {a:?} must return None from bottom_axis_index_span",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_index_span_of_hand_authored_postures_is_none() {
+        // Antichain absorption dual — every field strictly less than
+        // `usize::MAX`.
+        for &a in &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE] {
+            assert_eq!(
+                a.top_axis_index_span(),
+                None,
+                "hand-authored antichain posture {a:?} must return None from top_axis_index_span",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_index_span_equals_last_minus_first_plus_one() {
+        // FIRST-LAST-DERIVATION identity — LOAD-BEARING structural pin
+        // that names the SPAN as the DERIVED USIZE projection of the
+        // already-lifted (first, last) endpoint pair. A regression
+        // that recomputed the SPAN via a divergent per-axis scan
+        // (e.g. counting bits instead of reading the bracket width)
+        // would fire here on any posture with a SPARSE bottom bracket
+        // (count < span). Sweeps every preset AND the truly-mixed-
+        // pole composite AND a two-bottom-axes-at-0-and-3 discriminator
+        // whose SPAN is 4 but COUNT is 2 — the smallest posture that
+        // separates the SPAN-vs-COUNT identities.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let two_bottom_axes_at_zero_and_three = ResourceLimits {
+            max_expansion_depth: 0,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: 0,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &two_bottom_axes_at_zero_and_three])
+        {
+            let expected = match (a.first_bottom_axis_index(), a.last_bottom_axis_index()) {
+                (Some(f), Some(l)) => Some(l - f + 1),
+                _ => None,
+            };
+            assert_eq!(
+                a.bottom_axis_index_span(),
+                expected,
+                "bottom_axis_index_span must equal last - first + 1 (when both Some) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_index_span_equals_last_minus_first_plus_one() {
+        // FIRST-LAST-DERIVATION identity dual — same shape, dual cell.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let two_top_axes_at_zero_and_three = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: usize::MAX,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &two_top_axes_at_zero_and_three])
+        {
+            let expected = match (a.first_top_axis_index(), a.last_top_axis_index()) {
+                (Some(f), Some(l)) => Some(l - f + 1),
+                _ => None,
+            };
+            assert_eq!(
+                a.top_axis_index_span(),
+                expected,
+                "top_axis_index_span must equal last - first + 1 (when both Some) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_index_span_is_some_iff_has_bottom_axis() {
+        // ANY-fold bridge — the boolean ANY-fold verdict is the
+        // SOMENESS of the SPAN projection: some axis fires bottom iff
+        // the SPAN is Some(_). Sibling of the same bridge on
+        // `first_bottom_axis_index` and `last_bottom_axis_index` one
+        // PROJECTION-KIND axis over: all three INDEX-family
+        // projections COINCIDE with the ANY-fold on SOMENESS because
+        // a non-empty bracket has BOTH endpoints AND a positive width.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.bottom_axis_index_span().is_some(),
+                a.has_bottom_axis(),
+                "bottom_axis_index_span().is_some() must equal has_bottom_axis() for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_index_span_is_some_iff_has_top_axis() {
+        // ANY-fold bridge dual — same shape, dual cell.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.top_axis_index_span().is_some(),
+                a.has_top_axis(),
+                "top_axis_index_span().is_some() must equal has_top_axis() for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_index_span_is_none_iff_count_bottom_axes_is_zero() {
+        // COUNT bridge — the arithmetic COUNT verdict at zero is the
+        // NONENESS of the SPAN projection. Peer of the ANY-fold bridge
+        // one PROJECTION-KIND axis over via `Option::is_none ⇔ count
+        // == 0`.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.bottom_axis_index_span().is_none(),
+                a.count_bottom_axes() == 0,
+                "bottom_axis_index_span().is_none() must equal (count_bottom_axes() == 0) for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_index_span_is_none_iff_count_top_axes_is_zero() {
+        // COUNT bridge dual — same shape, dual cell.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.top_axis_index_span().is_none(),
+                a.count_top_axes() == 0,
+                "top_axis_index_span().is_none() must equal (count_top_axes() == 0) for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_index_span_is_some_one_iff_count_bottom_axes_is_one() {
+        // SINGLE-FIRE COINCIDENCE pin — the SINGLE-FIRE regime
+        // COINCIDES with `SPAN == Some(1)` COINCIDES with `COUNT == 1`
+        // COINCIDES with `FIRST == LAST`. Discriminates the three
+        // projections' agreement at the DEGENERATE cardinality: any
+        // regression that shifted the SPAN body's `+ 1` to `+ 0` (or
+        // dropped it entirely) would violate this pin at every count-
+        // 1 posture, and any regression that returned Some(0) on the
+        // empty cell would violate it at every count-0 posture.
+        // Sweeps every preset AND a truly-mixed-pole composite AND a
+        // single-bottom-axis discriminator whose count is exactly 1.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let single_bottom_axis_at_two = ResourceLimits {
+            max_expansion_depth: 5,
+            max_cache_entries: 7,
+            max_expansion_size: 0,
+            max_macro_body_size: 11,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &single_bottom_axis_at_two])
+        {
+            assert_eq!(
+                a.bottom_axis_index_span() == Some(1),
+                a.count_bottom_axes() == 1,
+                "bottom_axis_index_span() == Some(1) must equal (count_bottom_axes() == 1) for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_index_span_is_some_one_iff_count_top_axes_is_one() {
+        // SINGLE-FIRE COINCIDENCE pin dual.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let single_top_axis_at_two = ResourceLimits {
+            max_expansion_depth: 5,
+            max_cache_entries: 7,
+            max_expansion_size: usize::MAX,
+            max_macro_body_size: 11,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &single_top_axis_at_two])
+        {
+            assert_eq!(
+                a.top_axis_index_span() == Some(1),
+                a.count_top_axes() == 1,
+                "top_axis_index_span() == Some(1) must equal (count_top_axes() == 1) for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_index_span_is_some_field_count_iff_first_is_zero_and_last_is_last(
+    ) {
+        // FULL-SPAN pin — the maximal SPAN `Some(FIELD_COUNT)` is
+        // EXACTLY the ENDPOINT-SATURATION at BOTH sides of the
+        // available index range: FIRST at position 0 AND LAST at
+        // position `FIELD_COUNT - 1`. LOAD-BEARING boundary-saturation
+        // identity — the SPAN projection reaches its maximum iff BOTH
+        // endpoints touch the outer boundaries of the field-count
+        // range. Sweeps every preset AND the truly-mixed-pole composite
+        // AND a sparse-full-span discriminator (two bottom axes at
+        // positions 0 and `FIELD_COUNT - 1`, no bottom axis anywhere
+        // in between; SPAN is `FIELD_COUNT` but COUNT is only 2 — the
+        // pin holds on FULL SPAN, not on FULL COUNT, so this posture
+        // discriminates the two).
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let sparse_full_span_bottom = ResourceLimits {
+            max_expansion_depth: 0,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: 11,
+            max_registered_macros: 13,
+            max_macro_arity: 0,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &sparse_full_span_bottom])
+        {
+            let lhs = a.bottom_axis_index_span() == Some(ResourceLimits::FIELD_COUNT);
+            let rhs = a.first_bottom_axis_index() == Some(0)
+                && a.last_bottom_axis_index() == Some(ResourceLimits::FIELD_COUNT - 1);
+            assert_eq!(
+                lhs, rhs,
+                "bottom_axis_index_span() == Some(FIELD_COUNT) must equal (first == Some(0) && \
+                 last == Some(FIELD_COUNT - 1)) for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_index_span_is_some_field_count_iff_first_is_zero_and_last_is_last()
+    {
+        // FULL-SPAN pin dual.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let sparse_full_span_top = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: 11,
+            max_registered_macros: 13,
+            max_macro_arity: usize::MAX,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &sparse_full_span_top])
+        {
+            let lhs = a.top_axis_index_span() == Some(ResourceLimits::FIELD_COUNT);
+            let rhs = a.first_top_axis_index() == Some(0)
+                && a.last_top_axis_index() == Some(ResourceLimits::FIELD_COUNT - 1);
+            assert_eq!(
+                lhs, rhs,
+                "top_axis_index_span() == Some(FIELD_COUNT) must equal (first == Some(0) && \
+                 last == Some(FIELD_COUNT - 1)) for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_index_span_ge_count_bottom_axes_when_some() {
+        // SPAN ≥ COUNT inequality — LOAD-BEARING DENSITY-DISCRIMINATOR
+        // that names the NEW cardinality verdict the SPAN column adds
+        // past the (FIRST, LAST, COUNT) triple: the bottom axes are
+        // CONTIGUOUS in the axis sequence iff SPAN equals COUNT, and
+        // SPARSE iff SPAN is STRICTLY GREATER than COUNT. A single
+        // usize inequality names the "no non-bottom axis sits strictly
+        // between the two endpoints" verdict that none of the three
+        // prior columns can express alone. Sweeps every preset AND the
+        // truly-mixed-pole composite AND a two-bottom-axes-at-0-and-3
+        // SPARSE discriminator (SPAN = 4, COUNT = 2, so SPAN > COUNT
+        // STRICTLY) AND a two-bottom-axes-at-0-and-1 CONTIGUOUS
+        // discriminator (SPAN = 2, COUNT = 2, so SPAN == COUNT).
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let sparse_bottom_at_zero_and_three = ResourceLimits {
+            max_expansion_depth: 0,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: 0,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        let contiguous_bottom_at_zero_and_one = ResourceLimits {
+            max_expansion_depth: 0,
+            max_cache_entries: 0,
+            max_expansion_size: 7,
+            max_macro_body_size: 11,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        for &a in STRICT_ORDER_ROSTER.iter().chain([
+            &truly_mixed_pole,
+            &sparse_bottom_at_zero_and_three,
+            &contiguous_bottom_at_zero_and_one,
+        ]) {
+            if let Some(span) = a.bottom_axis_index_span() {
+                let count = a.count_bottom_axes();
+                assert!(
+                    span >= count,
+                    "bottom_axis_index_span Some({span}) must be ≥ count_bottom_axes {count} on {a:?}",
+                );
+            }
+        }
+        // CONTIGUOUS discriminator — pin the EQUALITY at a witness.
+        assert_eq!(
+            contiguous_bottom_at_zero_and_one.bottom_axis_index_span(),
+            Some(2),
+        );
+        assert_eq!(contiguous_bottom_at_zero_and_one.count_bottom_axes(), 2);
+        // SPARSE discriminator — pin the STRICT INEQUALITY at a
+        // witness (SPAN 4 > COUNT 2 on a two-bottom-axes-at-0-and-3
+        // posture).
+        assert_eq!(
+            sparse_bottom_at_zero_and_three.bottom_axis_index_span(),
+            Some(4),
+        );
+        assert_eq!(sparse_bottom_at_zero_and_three.count_bottom_axes(), 2);
+    }
+
+    #[test]
+    fn resource_limits_top_axis_index_span_ge_count_top_axes_when_some() {
+        // SPAN ≥ COUNT inequality dual — same shape, dual cell.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let sparse_top_at_zero_and_three = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: usize::MAX,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        let contiguous_top_at_zero_and_one = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: usize::MAX,
+            max_expansion_size: 7,
+            max_macro_body_size: 11,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        for &a in STRICT_ORDER_ROSTER.iter().chain([
+            &truly_mixed_pole,
+            &sparse_top_at_zero_and_three,
+            &contiguous_top_at_zero_and_one,
+        ]) {
+            if let Some(span) = a.top_axis_index_span() {
+                let count = a.count_top_axes();
+                assert!(
+                    span >= count,
+                    "top_axis_index_span Some({span}) must be ≥ count_top_axes {count} on {a:?}",
+                );
+            }
+        }
+        assert_eq!(
+            contiguous_top_at_zero_and_one.top_axis_index_span(),
+            Some(2)
+        );
+        assert_eq!(contiguous_top_at_zero_and_one.count_top_axes(), 2);
+        assert_eq!(sparse_top_at_zero_and_three.top_axis_index_span(), Some(4));
+        assert_eq!(sparse_top_at_zero_and_three.count_top_axes(), 2);
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_index_span_bounded_by_field_count() {
+        // Range-bound pin — when `Some(w)`, `1 ≤ w ≤ FIELD_COUNT` by
+        // construction (both endpoints sit in `[0, FIELD_COUNT)` and
+        // `first ≤ last` by the SANDWICH pin, so `l - f + 1 ∈ [1,
+        // FIELD_COUNT]`). A regression that returned Some(0) on any
+        // posture (from a broken FIRST > LAST branch or a wrong-sign
+        // subtraction) or Some(w) for w > FIELD_COUNT (from a stale
+        // constant) would fire here.
+        for &a in STRICT_ORDER_ROSTER {
+            if let Some(w) = a.bottom_axis_index_span() {
+                assert!(
+                    (1..=ResourceLimits::FIELD_COUNT).contains(&w),
+                    "bottom_axis_index_span Some({w}) out of range [1, FIELD_COUNT] on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_index_span_bounded_by_field_count() {
+        // Range-bound dual.
+        for &a in STRICT_ORDER_ROSTER {
+            if let Some(w) = a.top_axis_index_span() {
+                assert!(
+                    (1..=ResourceLimits::FIELD_COUNT).contains(&w),
+                    "top_axis_index_span Some({w}) out of range [1, FIELD_COUNT] on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_index_span_composes_at_compile_time_via_const_fn() {
+        // CONST-FN pin — the SPAN projection is evaluable in const
+        // context, so a caller can pin the exact bracket width at
+        // compile time. Uses `matches!` in const rather than `==` on
+        // `Option<usize>` because `Option::eq` is not `const`.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_index_span(),
+            Some(w) if w == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_index_span().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.bottom_axis_index_span().is_none());
+    }
+
+    #[test]
+    fn resource_limits_top_axis_index_span_composes_at_compile_time_via_const_fn() {
+        // CONST-FN dual pin.
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_index_span(),
+            Some(w) if w == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.top_axis_index_span().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_index_span().is_none());
     }
 
     // ── Field-inspection primitives: FIELD_COUNT + FIELD_NAMES +

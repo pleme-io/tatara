@@ -13571,6 +13571,137 @@ impl ResourceLimits {
             None => None,
         }
     }
+
+    /// Whole-posture CONTIGUITY-OF-BOTTOM predicate —
+    /// `self.bottom_axis_is_contiguous()` returns `Some(true)` iff every
+    /// position between [`Self::first_bottom_axis_index`] and
+    /// [`Self::last_bottom_axis_index`] inclusive is itself a bottom axis
+    /// (equivalently: [`Self::bottom_axis_gap_count`] `== Some(0)`),
+    /// `Some(false)` iff the bottom-axis subset is SPARSE inside its own
+    /// bracket, or `None` iff no axis is at the bottom pole. The BOOLEAN
+    /// PREDICATE peer of [`Self::bottom_axis_gap_count`] one PROJECTION-
+    /// KIND axis over on the atomic BOTTOM cell — jointly the
+    /// (bottom_axis_is_contiguous, top_axis_is_contiguous) atomic pair
+    /// OPENS the CONTIGUITY column past the just-closed GAP column, the
+    /// same way (bottom_axis_gap_count, top_axis_gap_count) opened the
+    /// GAP column past the SPAN column one PROJECTION-KIND axis over.
+    ///
+    /// **GAP-EQUALS-ZERO-DERIVATION identity — LOAD-BEARING structural
+    /// pin**: on every posture, `bottom_axis_is_contiguous() ==
+    /// bottom_axis_gap_count().map(|k| k == 0)`. Composes structurally
+    /// through the just-lifted GAP projection; the substrate never re-
+    /// scans the per-axis mask. Pinned via
+    /// `resource_limits_bottom_axis_is_contiguous_equals_gap_count_is_some_zero`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.bottom_axis_is_contiguous()
+    /// == Some(true)` (saturated bottom pole is trivially contiguous);
+    /// `UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_contiguous() == None`
+    /// (no bottom axis); `DEFAULT_RESOURCE_LIMITS.bottom_axis_is_contiguous()
+    /// == None`.
+    ///
+    /// **ANY-fold bridge**: `a.bottom_axis_is_contiguous().is_some() ⇔
+    /// a.has_bottom_axis()`. Pinned via
+    /// `resource_limits_bottom_axis_is_contiguous_is_some_iff_has_bottom_axis`.
+    ///
+    /// **SINGLE-FIRE COINCIDENCE pin**: `a.bottom_axis_is_contiguous() ==
+    /// Some(true)` when `a.count_bottom_axes() == 1` — the singleton
+    /// case is trivially contiguous.
+    ///
+    /// **BOOLEAN COLLAPSE — LOAD-BEARING pin**: the (`Some(true)`,
+    /// `Some(false)`, `None`) trichotomy PARTITIONS every posture into
+    /// (contiguous-bottom-bracket, sparse-bottom-bracket, no-bottom-axis)
+    /// as a first-class three-valued `Option<bool>`, structurally coarser
+    /// than the GAP surface's `Option<usize>` (where `Some(k)` with `k >
+    /// 0` collapses to `Some(false)`) but strictly finer than the
+    /// (has-bottom, no-bottom) two-cell ANY-fold surface. Sits ONE
+    /// PROJECTION-KIND axis LOWER on the algebraic tower than the GAP
+    /// column (`Option<bool>` refines `Option<usize>` via `.map(|k| k ==
+    /// 0)`), the mirror position of how the (has_bottom_axis,
+    /// count_bottom_axes) pair straddles the ANY-fold and ARITHMETIC-
+    /// COUNT columns one PROJECTION-KIND axis apart. Pinned via
+    /// `resource_limits_bottom_axis_is_contiguous_trichotomy_partitions_shipped_postures`.
+    ///
+    /// `const fn` so a caller can pin the bottom-axis CONTIGUITY verdict
+    /// at compile time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.bottom_axis_is_contiguous(), Some(true)));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// CONTIGUITY predicate is a named typed exit `Option<bool>` rather
+    /// than an inline `self.bottom_axis_gap_count().map(|k| k == 0)`
+    /// per-consumer predicate. THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs (the CONTIGUITY is a structural derivation from
+    /// the GAP projection via `Option::map` under one equality
+    /// comparison). THEORY.md §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: APL's `∧/(⌊/⍸P + ⍳(⌈/⍸P - ⌊/⍸P + 1)) ∈ ⍸P`
+    /// bracket-fully-populated predicate; Racket contract `(->
+    /// list? boolean?)` on a monotonic predicate list checking
+    /// no-holes; run-length encoding's "run is a single run" primitive.
+    /// Translation through pleme-io primitives: the plain `const fn`
+    /// DERIVATION from the just-lifted [`Self::bottom_axis_gap_count`],
+    /// one equality comparison under `Option::map`, no new per-axis scan,
+    /// no allocation.
+    #[must_use]
+    pub const fn bottom_axis_is_contiguous(self) -> Option<bool> {
+        match self.bottom_axis_gap_count() {
+            Some(k) => Some(k == 0),
+            None => None,
+        }
+    }
+
+    /// Whole-posture CONTIGUITY-OF-TOP predicate —
+    /// `self.top_axis_is_contiguous()` returns `Some(true)` iff every
+    /// position between [`Self::first_top_axis_index`] and
+    /// [`Self::last_top_axis_index`] inclusive is itself a top axis
+    /// (equivalently: [`Self::top_axis_gap_count`] `== Some(0)`),
+    /// `Some(false)` iff the top-axis subset is SPARSE inside its own
+    /// bracket, or `None` iff no axis is at the top pole. The ATOMIC-CELL
+    /// DUAL of [`Self::bottom_axis_is_contiguous`] one CELL axis over on
+    /// the BOOLEAN CONTIGUITY column — jointly the (bottom_axis_is_
+    /// contiguous, top_axis_is_contiguous) atomic pair OPENS the
+    /// CONTIGUITY column past the just-closed GAP column on the atomic
+    /// (bottom, top) row.
+    ///
+    /// **GAP-EQUALS-ZERO-DERIVATION identity dual**: on every posture,
+    /// `top_axis_is_contiguous() == top_axis_gap_count().map(|k| k == 0)`.
+    /// Pinned via
+    /// `resource_limits_top_axis_is_contiguous_equals_gap_count_is_some_zero`.
+    ///
+    /// **Preset pins**: `UNBOUNDED_RESOURCE_LIMITS.top_axis_is_contiguous()
+    /// == Some(true)` (saturated top pole is trivially contiguous);
+    /// `EMPTY_RESOURCE_LIMITS.top_axis_is_contiguous() == None` (no top
+    /// axis); `DEFAULT_RESOURCE_LIMITS.top_axis_is_contiguous() == None`.
+    ///
+    /// **ANY-fold bridge**: `a.top_axis_is_contiguous().is_some() ⇔
+    /// a.has_top_axis()`. Pinned via
+    /// `resource_limits_top_axis_is_contiguous_is_some_iff_has_top_axis`.
+    ///
+    /// **SINGLE-FIRE COINCIDENCE pin dual**: `a.top_axis_is_contiguous()
+    /// == Some(true)` when `a.count_top_axes() == 1`.
+    ///
+    /// **CROSS-CELL SATURATION contrast — LOAD-BEARING pin**: at the
+    /// SATURATED pole preset for EACH atomic cell, the OTHER cell's
+    /// CONTIGUITY is `None` and the SAME cell's CONTIGUITY is `Some(true)`.
+    /// The saturated pole is UNIFORMLY CONTIGUOUS on its own cell and
+    /// UNIFORMLY ABSENT on the dual cell — mirror of the atomic GAP
+    /// column's (Some(0), None) opposite-pole pair on the boolean
+    /// PROJECTION-KIND axis. Pinned via
+    /// `resource_limits_atomic_is_contiguous_saturation_pole_partitions_into_contiguous_and_absent`.
+    ///
+    /// `const fn` so a caller can pin the top-axis CONTIGUITY verdict at
+    /// compile time.
+    ///
+    /// Theory anchor: same as [`Self::bottom_axis_is_contiguous`].
+    ///
+    /// Frontier inspiration: same as [`Self::bottom_axis_is_contiguous`],
+    /// on the DUAL atomic mask.
+    #[must_use]
+    pub const fn top_axis_is_contiguous(self) -> Option<bool> {
+        match self.top_axis_gap_count() {
+            Some(k) => Some(k == 0),
+            None => None,
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -49856,5 +49987,262 @@ mod tests {
             .interior_axis_gap_count()
             .is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_axis_gap_count().is_none());
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_contiguous_preset_pins_saturate_at_contiguous_and_absent() {
+        // Preset pins — the SATURATED-bottom-pole preset EMPTY packs all
+        // six axes at position 0..=5; the bottom bracket is trivially
+        // contiguous. The absent-bottom presets and hand-authored
+        // postures carry no bottom axis; the CONTIGUITY verdict is None.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_contiguous(),
+            Some(true)
+        );
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_contiguous(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.bottom_axis_is_contiguous(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.bottom_axis_is_contiguous(), None);
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.bottom_axis_is_contiguous(),
+            None
+        );
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_contiguous_preset_pins_saturate_at_contiguous_and_absent() {
+        // Preset pins dual — the SATURATED-top-pole preset UNBOUNDED
+        // packs all six axes at usize::MAX; the top bracket is trivially
+        // contiguous. The absent-top presets and hand-authored postures
+        // carry no top axis; the CONTIGUITY verdict is None.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_contiguous(),
+            Some(true)
+        );
+        assert_eq!(EMPTY_RESOURCE_LIMITS.top_axis_is_contiguous(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.top_axis_is_contiguous(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.top_axis_is_contiguous(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.top_axis_is_contiguous(), None);
+    }
+
+    #[test]
+    fn resource_limits_atomic_is_contiguous_saturation_pole_partitions_into_contiguous_and_absent()
+    {
+        // CROSS-CELL SATURATION contrast on the CONTIGUITY column — the
+        // two saturated pole presets each pin (Some(true), None) on
+        // their (same-cell, dual-cell) CONTIGUITY pair. The saturated
+        // pole is UNIFORMLY CONTIGUOUS on its own cell and UNIFORMLY
+        // ABSENT on the dual cell — mirror of the atomic GAP column's
+        // (Some(0), None) opposite-pole pair on the boolean projection.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_contiguous(),
+            Some(true)
+        );
+        assert_eq!(EMPTY_RESOURCE_LIMITS.top_axis_is_contiguous(), None);
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_contiguous(),
+            Some(true)
+        );
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_contiguous(), None);
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_contiguous_equals_gap_count_is_some_zero() {
+        // GAP-EQUALS-ZERO-DERIVATION identity — the CONTIGUITY predicate
+        // is structurally `gap.map(|k| k == 0)` on every posture. Pinned
+        // across every shipped preset + hand-authored + test-local
+        // posture so a future rewrite of either projection that silently
+        // drifts from the composition contract fires this pin.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let expected = a.bottom_axis_gap_count().map(|k| k == 0);
+            assert_eq!(
+                a.bottom_axis_is_contiguous(),
+                expected,
+                "is_contiguous = gap.map(|k| k == 0) identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_contiguous_equals_gap_count_is_some_zero() {
+        // Structural-identity dual — same shape on the top cell.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let expected = a.top_axis_gap_count().map(|k| k == 0);
+            assert_eq!(
+                a.top_axis_is_contiguous(),
+                expected,
+                "is_contiguous = gap.map(|k| k == 0) identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_contiguous_is_some_iff_has_bottom_axis() {
+        // ANY-fold bridge — the CONTIGUITY verdict is defined iff the
+        // bottom-axis subset is non-empty. Composes structurally through
+        // the just-lifted GAP bridge one PROJECTION-KIND axis over.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.bottom_axis_is_contiguous().is_some(),
+                a.has_bottom_axis(),
+                "is_contiguous.is_some() != has_bottom_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_contiguous_is_some_iff_has_top_axis() {
+        // ANY-fold bridge dual on the top cell.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.top_axis_is_contiguous().is_some(),
+                a.has_top_axis(),
+                "is_contiguous.is_some() != has_top_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_contiguous_trichotomy_partitions_shipped_postures() {
+        // BOOLEAN COLLAPSE — LOAD-BEARING pin. The Option<bool>
+        // trichotomy partitions every posture into (contiguous-bottom,
+        // sparse-bottom, no-bottom); the three verdicts are jointly
+        // exhaustive AND pairwise disjoint on the shipped + test-local
+        // roster. Witnesses at each cell:
+        //   * contiguous-bottom (Some(true)): EMPTY (saturated pole),
+        //     CONTIGUOUS_INTERIOR_BOTTOM (contiguous non-preset run).
+        //   * sparse-bottom (Some(false)): SPARSE_BOTTOM (gap = 3),
+        //     ENDPOINTS_ONLY_BOTTOM (gap = 4).
+        //   * no-bottom (None): UNBOUNDED, DEFAULT, HAND_AUTHORED_MID,
+        //     HAND_AUTHORED_OTHER.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_contiguous(),
+            Some(true)
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.bottom_axis_is_contiguous(),
+            Some(true),
+        );
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE.bottom_axis_is_contiguous(),
+            Some(false)
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_is_contiguous(),
+            Some(false),
+        );
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_contiguous(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.bottom_axis_is_contiguous(), None);
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_contiguous_of_singleton_bottom_axis_is_some_true() {
+        // SINGLE-FIRE COINCIDENCE pin — a lone bottom axis at any of the
+        // six positions gives (span, count, gap) == (1, 1, 0); the
+        // singleton case is trivially contiguous on the CONTIGUITY
+        // surface.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            fields[position] = 0;
+            let singleton_bottom = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_bottom.count_bottom_axes(), 1);
+            assert_eq!(
+                singleton_bottom.bottom_axis_is_contiguous(),
+                Some(true),
+                "singleton bottom at position {position} not Some(true)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_contiguous_of_singleton_top_axis_is_some_true() {
+        // SINGLE-FIRE COINCIDENCE pin dual — a lone top axis at any of
+        // the six positions is trivially contiguous.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            fields[position] = usize::MAX;
+            let singleton_top = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_top.count_top_axes(), 1);
+            assert_eq!(
+                singleton_top.top_axis_is_contiguous(),
+                Some(true),
+                "singleton top at position {position} not Some(true)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_is_contiguous_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — both CONTIGUITY projections are evaluable in
+        // const context so a caller can pin bracket-contiguity identities
+        // at compile time as build-breaks. Mirror of the atomic GAP
+        // const-fn pin one PROJECTION-KIND axis over.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_contiguous(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_contiguous(),
+            Some(true)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.top_axis_is_contiguous().is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .bottom_axis_is_contiguous()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .bottom_axis_is_contiguous()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_is_contiguous().is_none());
     }
 }

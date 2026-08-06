@@ -12169,6 +12169,226 @@ impl ResourceLimits {
         }
         None
     }
+
+    /// Whole-posture INDEX-OF-LAST-BOTTOM projection —
+    /// `self.last_bottom_axis_index()` returns `Some(i)` for the
+    /// GREATEST `i` such that `self.field_values()[i] == 0`, or `None`
+    /// when no axis is at the bottom pole. The INDEX-OF-LAST peer of
+    /// [`Self::first_bottom_axis_index`] one SCAN-DIRECTION axis over
+    /// on the same atomic BOTTOM cell — jointly the
+    /// (first_bottom_axis_index, last_bottom_axis_index) pair opens
+    /// the INDEX-OF-LAST column past the just-closed INDEX-OF-FIRST
+    /// column with the LOAD-BEARING DIRECTIONAL discriminator neither
+    /// the ANY-fold, the COUNT-fold, nor the INDEX-OF-FIRST surface
+    /// can access at the atomic BOTTOM cell: two postures with the
+    /// SAME `count_bottom_axes() == 2` and with the SAME
+    /// `first_bottom_axis_index() == Some(0)` but with the SECOND
+    /// bottom axis at DIFFERENT indices give DIFFERENT INDEX-OF-LAST
+    /// verdicts (e.g. `Some(3)` vs `Some(5)`), so the LAST projection
+    /// discriminates positional arrangements the FIRST projection at
+    /// the same cell CONFLATES.
+    ///
+    /// A STRICT REFINEMENT of BOTH boolean-existence and arithmetic-
+    /// count verdicts on the same cell:
+    /// `last_bottom_axis_index().is_some() ⇔ has_bottom_axis()`;
+    /// `last_bottom_axis_index().is_none() ⇔ count_bottom_axes() == 0`.
+    ///
+    /// **FIRST-vs-LAST SANDWICH — LOAD-BEARING two-way pin**: on every
+    /// posture, `first_bottom_axis_index() ≤ last_bottom_axis_index()`
+    /// when both are `Some(_)` (both `None` on postures with no bottom
+    /// axis by the COUNT bridge). The two projections COINCIDE exactly
+    /// when `count_bottom_axes() == 1` (the single-fire regime where
+    /// the LEAST and the GREATEST hit are the SAME index); they
+    /// STRICTLY DIVERGE (`first_bottom < last_bottom`) exactly when
+    /// `count_bottom_axes() ≥ 2` (the multi-fire regime that the two
+    /// INDEX projections jointly witness — the FIRST names the LEFT
+    /// endpoint, the LAST names the RIGHT endpoint of the bottom-axis
+    /// bracket). Pinned via
+    /// `resource_limits_first_le_last_bottom_axis_index_when_both_some`
+    /// and
+    /// `resource_limits_first_eq_last_bottom_axis_index_iff_count_bottom_axes_is_one`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.last_bottom_axis_index()
+    /// == Some(FIELD_COUNT - 1)` (every axis at bottom pole; last-hit
+    /// at the greatest index — the DUAL of the FIRST-BOTTOM preset pin
+    /// that lands at `Some(0)`); `UNBOUNDED_RESOURCE_LIMITS.
+    /// last_bottom_axis_index() == None` (no axis at bottom);
+    /// `DEFAULT_RESOURCE_LIMITS.last_bottom_axis_index() == None`
+    /// (every `DEFAULT_MAX_*` strictly greater than `0`).
+    ///
+    /// **Fold-agreement contract**: for every posture `a`,
+    /// `a.last_bottom_axis_index() ==
+    /// a.axes_is_bottom().iter().rposition(|&bit| bit)`. Pinned via
+    /// `resource_limits_last_bottom_axis_index_agrees_with_axes_is_bottom_rposition`.
+    ///
+    /// **ANY-fold bridge**: `a.last_bottom_axis_index().is_some() ⇔
+    /// a.has_bottom_axis()`. Pinned via
+    /// `resource_limits_last_bottom_axis_index_is_some_iff_has_bottom_axis`.
+    ///
+    /// **COUNT bridge**: `a.last_bottom_axis_index().is_none() ⇔
+    /// a.count_bottom_axes() == 0`. Pinned via
+    /// `resource_limits_last_bottom_axis_index_is_none_iff_count_bottom_axes_is_zero`.
+    ///
+    /// **ALL-fold pin**: `a.is_bottom() ⇒
+    /// a.last_bottom_axis_index() == Some(FIELD_COUNT - 1)`. Pinned
+    /// via `resource_limits_last_bottom_axis_index_when_is_bottom_is_some_last`.
+    ///
+    /// **Range bound**: when `Some(i)`, `i < Self::FIELD_COUNT` by
+    /// construction of the reverse scan.
+    ///
+    /// `const fn` so a caller can pin the exact last-bottom index at
+    /// compile time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.last_bottom_axis_index(),
+    /// Some(i) if i + 1 == ResourceLimits::FIELD_COUNT));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// index-of-last-bottom projection is a named typed exit
+    /// `Option<usize>` rather than an inline `axes_is_bottom().iter().
+    /// rposition(...)` per-consumer fold. THEORY.md §II.1 invariant 5
+    /// — composition preserves proofs; the (INDEX-OF-FIRST,
+    /// INDEX-OF-LAST) DIRECTION-pair strictly REFINES both the boolean
+    /// ANY-fold and the arithmetic COUNT-fold with the LEFT/RIGHT
+    /// bracket endpoints on the atomic BOTTOM cell — POSITIONAL
+    /// discriminators the ANY-fold cannot access at all and the
+    /// COUNT-fold can only access as cardinality. THEORY.md §V.1 —
+    /// knowable platform; the INDEX-OF-LAST projection is a TYPE-level
+    /// operation on the posture algebra returning a `const`-evaluable
+    /// `Option<usize>`.
+    ///
+    /// Frontier inspiration: APL's `⌈/⍸(0=⍵)` reduce-max-over-indices
+    /// projection returning the greatest position at which the
+    /// predicate holds. Haskell's `Data.List.findIndices (== 0)` piped
+    /// into `last` (with `Nothing` on empty), or equivalently
+    /// `Data.List.findIndex (== 0) . reverse` with the reversed-list
+    /// index re-mapped. Rust's own `[bool].iter().rposition(|&b| b)`
+    /// returning `Option<usize>` — the canonical reverse-`position`
+    /// fold on `Iterator`. Idris's `findIndices (== 0) v` last-hit
+    /// projection over `Vec n Nat`. Classical bitset "find-last-set"
+    /// (`fls` / `msb`) operation on bounded integer bitsets — the same
+    /// INDEX-OF-LAST-BIT projection at the machine primitive surface,
+    /// the DIRECTION-KIND peer of `ffs`. Translation through pleme-io
+    /// primitives is the plain `const fn` short-circuiting reverse
+    /// per-axis scan over the already-lifted [`Self::axes_is_bottom`]
+    /// mask — no new dep, no typeclass indirection, no allocation.
+    #[must_use]
+    pub const fn last_bottom_axis_index(self) -> Option<usize> {
+        let mask = self.axes_is_bottom();
+        let mut i = Self::FIELD_COUNT;
+        while i > 0 {
+            i -= 1;
+            if mask[i] {
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    /// Whole-posture INDEX-OF-LAST-TOP projection —
+    /// `self.last_top_axis_index()` returns `Some(i)` for the GREATEST
+    /// `i` such that `self.field_values()[i] == usize::MAX`, or `None`
+    /// when no axis is at the top pole. The INDEX-OF-LAST peer of
+    /// [`Self::first_top_axis_index`] one SCAN-DIRECTION axis over on
+    /// the same atomic TOP cell, and the ATOMIC-CELL DUAL of
+    /// [`Self::last_bottom_axis_index`] one CELL axis over — jointly
+    /// the (last_bottom_axis_index, last_top_axis_index) atomic pair
+    /// carries the INDEX-OF-LAST form of the (first_bottom_axis_index,
+    /// first_top_axis_index) atomic pair and, one PROJECTION-KIND axis
+    /// further, of the (has_bottom_axis, has_top_axis) boolean
+    /// ANY-fold pair and the (count_bottom_axes, count_top_axes)
+    /// arithmetic COUNT pair.
+    ///
+    /// A STRICT REFINEMENT of BOTH boolean-existence and arithmetic-
+    /// count verdicts on the same cell: `last_top_axis_index().
+    /// is_some() ⇔ has_top_axis()`; `last_top_axis_index().is_none() ⇔
+    /// count_top_axes() == 0`. Discriminates positional arrangements
+    /// the FIRST projection at the same cell CONFLATES: two postures
+    /// with the SAME `count_top_axes() == 2` and the SAME
+    /// `first_top_axis_index() == Some(0)` but with the SECOND top
+    /// axis at DIFFERENT indices give DIFFERENT `last_top_axis_index`
+    /// verdicts.
+    ///
+    /// **CROSS-CELL DISJOINTNESS**: on every posture, at any single
+    /// axis `i`, at MOST one of `last_bottom_axis_index() == Some(i)`
+    /// and `last_top_axis_index() == Some(i)` can hold (a single axis
+    /// cannot be simultaneously at both poles because `0 != usize::MAX`
+    /// on `usize`). The INDEX-OF-LAST form of the atomic (first, first)
+    /// cross-cell exclusivity pair one SCAN-DIRECTION axis over — when
+    /// BOTH `last_bottom_axis_index()` and `last_top_axis_index()` fire
+    /// `Some(_)` on the same posture, their `Some` payloads are
+    /// DISTINCT indices.
+    ///
+    /// Encoded as the per-axis short-circuiting REVERSE scan over
+    /// [`Self::axes_is_top`] — matching [`Self::last_bottom_axis_index`]'s
+    /// shape verbatim on the DUAL per-axis mask.
+    ///
+    /// **Preset pins**: `UNBOUNDED_RESOURCE_LIMITS.last_top_axis_index()
+    /// == Some(FIELD_COUNT - 1)` (every axis at top pole; last-hit at
+    /// the greatest index — the DUAL of the FIRST-TOP preset pin that
+    /// lands at `Some(0)`); `EMPTY_RESOURCE_LIMITS.last_top_axis_index()
+    /// == None` (no axis at top); `DEFAULT_RESOURCE_LIMITS.
+    /// last_top_axis_index() == None` (every `DEFAULT_MAX_*` strictly
+    /// less than `usize::MAX`).
+    ///
+    /// **Fold-agreement contract**: for every posture `a`,
+    /// `a.last_top_axis_index() ==
+    /// a.axes_is_top().iter().rposition(|&bit| bit)`. Pinned via
+    /// `resource_limits_last_top_axis_index_agrees_with_axes_is_top_rposition`.
+    ///
+    /// **ANY-fold bridge**: `a.last_top_axis_index().is_some() ⇔
+    /// a.has_top_axis()`. Pinned via
+    /// `resource_limits_last_top_axis_index_is_some_iff_has_top_axis`.
+    ///
+    /// **COUNT bridge**: `a.last_top_axis_index().is_none() ⇔
+    /// a.count_top_axes() == 0`. Pinned via
+    /// `resource_limits_last_top_axis_index_is_none_iff_count_top_axes_is_zero`.
+    ///
+    /// **ALL-fold pin**: `a.is_top() ⇒
+    /// a.last_top_axis_index() == Some(FIELD_COUNT - 1)`. Pinned via
+    /// `resource_limits_last_top_axis_index_when_is_top_is_some_last`.
+    ///
+    /// **FIRST-vs-LAST SANDWICH pin (DUAL)**: on every posture,
+    /// `first_top_axis_index() ≤ last_top_axis_index()` when both are
+    /// `Some(_)`; the two projections COINCIDE exactly when
+    /// `count_top_axes() == 1` and DIVERGE (`first_top < last_top`)
+    /// exactly when `count_top_axes() ≥ 2`. Pinned via
+    /// `resource_limits_first_le_last_top_axis_index_when_both_some`
+    /// and
+    /// `resource_limits_first_eq_last_top_axis_index_iff_count_top_axes_is_one`.
+    ///
+    /// `const fn` so a caller can pin the exact last-top index at
+    /// compile time.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// (INDEX-OF-FIRST, INDEX-OF-LAST) DIRECTION-pair strictly REFINES
+    /// both ANY and COUNT with LEFT/RIGHT bracket endpoints neither
+    /// can access, and the atomic-cell (last_bottom, last_top) pair
+    /// carries the INDEX-OF-LAST form of the atomic-cell (first_bottom,
+    /// first_top) cross-cell exclusivity on the DUAL scan direction);
+    /// THEORY.md §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: APL's `⌈/⍸(⍵=⌈/⍵)` reduce-max-over-
+    /// indices projection returning the greatest position at which the
+    /// top predicate holds. Haskell's `Data.List.findIndex (== maxBound)
+    /// . reverse` with the reversed-list index re-mapped. Rust's
+    /// `[bool].iter().rposition(|&b| b)` on the top mask. Idris's
+    /// `findIndices (== maxBound) v` last-hit projection. Classical
+    /// bitset `fls` / `msb` on the top-mask bitset. Translation
+    /// through pleme-io primitives is the plain `const fn` short-
+    /// circuiting REVERSE per-axis scan over the already-lifted
+    /// [`Self::axes_is_top`] mask.
+    #[must_use]
+    pub const fn last_top_axis_index(self) -> Option<usize> {
+        let mask = self.axes_is_top();
+        let mut i = Self::FIELD_COUNT;
+        while i > 0 {
+            i -= 1;
+            if mask[i] {
+                return Some(i);
+            }
+        }
+        None
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -44272,6 +44492,622 @@ mod tests {
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
             .first_interior_axis_index()
             .is_none());
+    }
+
+    #[test]
+    fn resource_limits_last_bottom_axis_index_of_empty_preset_is_some_last() {
+        // Preset closure — every axis of EMPTY is at bottom (`0`), so
+        // the reverse scan first-fire lands at the greatest index
+        // `FIELD_COUNT - 1`. The DIRECTION-KIND peer of
+        // `resource_limits_first_bottom_axis_index_of_empty_preset_is_some_zero`
+        // one SCAN-DIRECTION axis over: the ALL-fold saturation
+        // `is_bottom` REFINES to the positional witness `Some(0)` at
+        // the FIRST scan surface and to `Some(FIELD_COUNT - 1)` at the
+        // LAST scan surface, the two endpoints of the fully-populated
+        // bottom-axis bracket.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.last_bottom_axis_index(),
+            Some(ResourceLimits::FIELD_COUNT - 1),
+        );
+    }
+
+    #[test]
+    fn resource_limits_last_bottom_axis_index_of_unbounded_preset_is_none() {
+        // Cross-pole rejection at the INDEX-OF-LAST surface — the
+        // OPPOSITE (top) pole means no axis fires bottom, so the
+        // reverse scan exhausts without a hit and returns `None`. The
+        // DIRECTION-KIND peer of the same rejection on the FIRST scan
+        // one SCAN-DIRECTION axis over.
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.last_bottom_axis_index(), None);
+    }
+
+    #[test]
+    fn resource_limits_last_bottom_axis_index_of_default_is_none() {
+        // Preset rejection — every shipped `DEFAULT_MAX_*` is a
+        // positive constant strictly greater than `0`, so no axis fires
+        // bottom and the reverse INDEX scan returns `None`.
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.last_bottom_axis_index(), None);
+    }
+
+    #[test]
+    fn resource_limits_last_top_axis_index_of_unbounded_preset_is_some_last() {
+        // Preset closure dual — every axis of UNBOUNDED is at top
+        // (`usize::MAX`), so the reverse scan first-fire lands at the
+        // greatest index `FIELD_COUNT - 1`.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.last_top_axis_index(),
+            Some(ResourceLimits::FIELD_COUNT - 1),
+        );
+    }
+
+    #[test]
+    fn resource_limits_last_top_axis_index_of_empty_preset_is_none() {
+        // Cross-pole rejection dual — every axis at bottom, none at
+        // top, so the reverse top-INDEX scan returns `None`.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.last_top_axis_index(), None);
+    }
+
+    #[test]
+    fn resource_limits_last_top_axis_index_of_default_is_none() {
+        // Preset rejection dual — every `DEFAULT_MAX_*` is a positive
+        // constant strictly less than `usize::MAX`.
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.last_top_axis_index(), None);
+    }
+
+    #[test]
+    fn resource_limits_last_bottom_axis_index_of_hand_authored_postures_is_none() {
+        // Antichain absorption — both hand-authored antichain postures
+        // sit strictly inside the lattice with every field at a
+        // positive-mid value strictly greater than `0`. Neither fires
+        // bottom on any axis, so both reverse INDEX scans return `None`.
+        for &a in &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE] {
+            assert_eq!(
+                a.last_bottom_axis_index(),
+                None,
+                "hand-authored antichain posture {a:?} must return None from last_bottom_axis_index",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_last_top_axis_index_of_hand_authored_postures_is_none() {
+        // Antichain absorption dual — every field strictly less than
+        // `usize::MAX`.
+        for &a in &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE] {
+            assert_eq!(
+                a.last_top_axis_index(),
+                None,
+                "hand-authored antichain posture {a:?} must return None from last_top_axis_index",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_last_bottom_axis_index_agrees_with_axes_is_bottom_rposition() {
+        // Fold-agreement contract — the whole-posture INDEX-OF-LAST
+        // reverse scan agrees with the direct `iter().rposition(...)`
+        // over `axes_is_bottom` on every preset AND on the truly-
+        // mixed-pole composite AND on a two-bottom-axis discriminator.
+        // Pins the projection body as definitionally the canonical
+        // `rposition` short-circuit fold over the per-axis bottom-mask;
+        // a regression that walked the wrong direction (returning the
+        // FIRST hit instead of the LAST) would fire here on any
+        // posture with two-or-more bottom axes at distinct indices.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let two_bottom_axes_at_zero_and_three = ResourceLimits {
+            max_expansion_depth: 0,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: 0,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &two_bottom_axes_at_zero_and_three])
+        {
+            assert_eq!(
+                a.last_bottom_axis_index(),
+                a.axes_is_bottom().iter().rposition(|&bit| bit),
+                "last_bottom_axis_index must equal iter().rposition over axes_is_bottom for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_last_top_axis_index_agrees_with_axes_is_top_rposition() {
+        // Fold-agreement dual — same shape, dual mask.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let two_top_axes_at_zero_and_three = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: usize::MAX,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &two_top_axes_at_zero_and_three])
+        {
+            assert_eq!(
+                a.last_top_axis_index(),
+                a.axes_is_top().iter().rposition(|&bit| bit),
+                "last_top_axis_index must equal iter().rposition over axes_is_top for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_last_bottom_axis_index_is_some_iff_has_bottom_axis() {
+        // ANY-fold bridge — the boolean ANY-fold verdict is the
+        // SOMENESS of the reverse-INDEX projection: some axis fires
+        // bottom iff the reverse scan returns `Some(_)`. Sibling of the
+        // same bridge on `first_bottom_axis_index` one SCAN-DIRECTION
+        // axis over: both endpoints of the bottom-axis bracket
+        // COINCIDE with the ANY-fold verdict on SOMENESS because a
+        // non-empty bracket has both a LEFT and a RIGHT endpoint.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.last_bottom_axis_index().is_some(),
+                a.has_bottom_axis(),
+                "last_bottom_axis_index().is_some() must equal has_bottom_axis() for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_last_top_axis_index_is_some_iff_has_top_axis() {
+        // ANY-fold bridge dual — same shape, dual cell.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.last_top_axis_index().is_some(),
+                a.has_top_axis(),
+                "last_top_axis_index().is_some() must equal has_top_axis() for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_last_bottom_axis_index_is_none_iff_count_bottom_axes_is_zero() {
+        // COUNT bridge — the arithmetic COUNT verdict at zero is the
+        // NONENESS of the reverse-INDEX projection: the reverse scan
+        // returns `None` iff the arithmetic tally is exactly `0`. Peer
+        // of the ANY-fold bridge one PROJECTION-KIND axis over via the
+        // equivalence `Option::is_none ⇔ count == 0`.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.last_bottom_axis_index().is_none(),
+                a.count_bottom_axes() == 0,
+                "last_bottom_axis_index().is_none() must equal (count_bottom_axes() == 0) for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_last_top_axis_index_is_none_iff_count_top_axes_is_zero() {
+        // COUNT bridge dual — same shape, dual cell.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.last_top_axis_index().is_none(),
+                a.count_top_axes() == 0,
+                "last_top_axis_index().is_none() must equal (count_top_axes() == 0) for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_last_bottom_axis_index_when_is_bottom_is_some_last() {
+        // ALL-fold pin — when EVERY axis fires bottom (the ALL-fold
+        // verdict `is_bottom` holds), the reverse scan first-fire
+        // lands at the greatest index `FIELD_COUNT - 1` because that
+        // axis is among the firing set (in fact every axis is). Pins
+        // that ALL-fold saturation implies the INDEX-OF-LAST reverse-
+        // fire lands at position `FIELD_COUNT - 1`. Sibling of the
+        // FIRST-scan ALL-fold pin one SCAN-DIRECTION axis over that
+        // lands at position `0`; together they NAIL both endpoints of
+        // the fully-populated bottom bracket.
+        assert!(EMPTY_RESOURCE_LIMITS.is_bottom());
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.last_bottom_axis_index(),
+            Some(ResourceLimits::FIELD_COUNT - 1),
+        );
+    }
+
+    #[test]
+    fn resource_limits_last_top_axis_index_when_is_top_is_some_last() {
+        // ALL-fold pin dual — same shape, dual cell.
+        assert!(UNBOUNDED_RESOURCE_LIMITS.is_top());
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.last_top_axis_index(),
+            Some(ResourceLimits::FIELD_COUNT - 1),
+        );
+    }
+
+    #[test]
+    fn resource_limits_first_le_last_bottom_axis_index_when_both_some() {
+        // LOAD-BEARING FIRST-vs-LAST SANDWICH pin — on every posture,
+        // when both INDEX-OF-FIRST and INDEX-OF-LAST on the atomic
+        // BOTTOM cell fire `Some(_)`, the FIRST index is ≤ the LAST
+        // index by definition of the DIRECTION pair (LEFT endpoint ≤
+        // RIGHT endpoint of the bracket). Sweeps every preset, the
+        // truly-mixed-pole composite, and the two-bottom-at-0-and-3
+        // discriminator to cover single-fire (equality) and multi-fire
+        // (strict inequality) regimes uniformly.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let two_bottom_axes_at_zero_and_three = ResourceLimits {
+            max_expansion_depth: 0,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: 0,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &two_bottom_axes_at_zero_and_three])
+        {
+            if let (Some(f), Some(l)) = (a.first_bottom_axis_index(), a.last_bottom_axis_index()) {
+                assert!(
+                    f <= l,
+                    "first_bottom_axis_index Some({f}) must be ≤ last_bottom_axis_index Some({l}) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_le_last_top_axis_index_when_both_some() {
+        // LOAD-BEARING FIRST-vs-LAST SANDWICH pin DUAL — same shape,
+        // dual cell.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let two_top_axes_at_zero_and_three = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: usize::MAX,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &two_top_axes_at_zero_and_three])
+        {
+            if let (Some(f), Some(l)) = (a.first_top_axis_index(), a.last_top_axis_index()) {
+                assert!(
+                    f <= l,
+                    "first_top_axis_index Some({f}) must be ≤ last_top_axis_index Some({l}) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_eq_last_bottom_axis_index_iff_count_bottom_axes_is_one() {
+        // LOAD-BEARING SINGLE-FIRE COINCIDENCE pin — the FIRST and
+        // LAST index on the atomic BOTTOM cell COINCIDE (i.e. both
+        // `Some(i)` for the same `i`) EXACTLY when the arithmetic COUNT
+        // is `1` (the single-fire regime where the LEFT and RIGHT
+        // endpoints of a one-element bracket are the same point). The
+        // multi-fire regime (count ≥ 2) strictly DIVERGES (first <
+        // last) and the zero-fire regime is (None, None) — none of
+        // which agree with each other via `==`. Discriminates the
+        // (first, last) DIRECTION-pair as the ONE-BOTTOM signature at
+        // the INDEX surface.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let two_bottom_axes_at_zero_and_three = ResourceLimits {
+            max_expansion_depth: 0,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: 0,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &two_bottom_axes_at_zero_and_three])
+        {
+            assert_eq!(
+                a.first_bottom_axis_index() == a.last_bottom_axis_index()
+                    && a.first_bottom_axis_index().is_some(),
+                a.count_bottom_axes() == 1,
+                "single-fire coincidence pin violated on {a:?}: \
+                 (first_bottom == last_bottom && first_bottom.is_some()) must equal \
+                 (count_bottom_axes == 1)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_eq_last_top_axis_index_iff_count_top_axes_is_one() {
+        // LOAD-BEARING SINGLE-FIRE COINCIDENCE pin DUAL — same shape,
+        // dual cell.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let two_top_axes_at_zero_and_three = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: usize::MAX,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &two_top_axes_at_zero_and_three])
+        {
+            assert_eq!(
+                a.first_top_axis_index() == a.last_top_axis_index()
+                    && a.first_top_axis_index().is_some(),
+                a.count_top_axes() == 1,
+                "single-fire coincidence pin violated on {a:?}: \
+                 (first_top == last_top && first_top.is_some()) must equal \
+                 (count_top_axes == 1)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_last_bottom_axis_index_discriminates_positional_arrangements_the_first_scan_conflates(
+    ) {
+        // LOAD-BEARING FIRST-vs-LAST discriminator — the INDEX-OF-FIRST
+        // surface fires the SAME `Some(0)` verdict on a two-bottom
+        // posture with axes at (0, 3) as on a two-bottom posture with
+        // axes at (0, 5) — the FIRST endpoint is the same but the
+        // RIGHT endpoints DIFFER. The INDEX-OF-LAST projection NAMES
+        // their distinct RIGHT endpoints as distinct `Some(3)` vs
+        // `Some(5)` verdicts. Pins the INDEX-OF-LAST projection as the
+        // STRICTLY STRONGER refinement of the (COUNT, INDEX-OF-FIRST)
+        // pair on the multi-fire regime: (INDEX-OF-FIRST,
+        // INDEX-OF-LAST) is a strict information hierarchy over
+        // (COUNT, INDEX-OF-FIRST) at count ≥ 2 — the LAST names the
+        // RIGHT endpoint that (COUNT, INDEX-OF-FIRST) jointly cannot.
+        let two_bottom_at_zero_and_three = ResourceLimits {
+            max_expansion_depth: 0,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: 0,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        let two_bottom_at_zero_and_five = ResourceLimits {
+            max_expansion_depth: 0,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: 11,
+            max_registered_macros: 13,
+            max_macro_arity: 0,
+        };
+        // Both fire the SAME arithmetic count and the SAME FIRST index
+        // — the (COUNT, INDEX-OF-FIRST) pair cannot discriminate them.
+        assert_eq!(two_bottom_at_zero_and_three.count_bottom_axes(), 2);
+        assert_eq!(two_bottom_at_zero_and_five.count_bottom_axes(), 2);
+        assert_eq!(
+            two_bottom_at_zero_and_three.first_bottom_axis_index(),
+            Some(0),
+        );
+        assert_eq!(
+            two_bottom_at_zero_and_five.first_bottom_axis_index(),
+            Some(0),
+        );
+        // But the INDEX-OF-LAST projections DISCRIMINATE — Some(3) vs
+        // Some(5).
+        assert_eq!(
+            two_bottom_at_zero_and_three.last_bottom_axis_index(),
+            Some(3),
+        );
+        assert_eq!(
+            two_bottom_at_zero_and_five.last_bottom_axis_index(),
+            Some(5),
+        );
+        assert_ne!(
+            two_bottom_at_zero_and_three.last_bottom_axis_index(),
+            two_bottom_at_zero_and_five.last_bottom_axis_index(),
+            "INDEX-OF-LAST must discriminate distinct RIGHT-endpoint arrangements the \
+             (COUNT, INDEX-OF-FIRST) pair conflates",
+        );
+    }
+
+    #[test]
+    fn resource_limits_last_top_axis_index_discriminates_positional_arrangements_the_first_scan_conflates(
+    ) {
+        // LOAD-BEARING FIRST-vs-LAST discriminator DUAL — same shape,
+        // dual cell.
+        let two_top_at_zero_and_three = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: usize::MAX,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        let two_top_at_zero_and_five = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: 11,
+            max_registered_macros: 13,
+            max_macro_arity: usize::MAX,
+        };
+        assert_eq!(two_top_at_zero_and_three.count_top_axes(), 2);
+        assert_eq!(two_top_at_zero_and_five.count_top_axes(), 2);
+        assert_eq!(two_top_at_zero_and_three.first_top_axis_index(), Some(0));
+        assert_eq!(two_top_at_zero_and_five.first_top_axis_index(), Some(0));
+        assert_eq!(two_top_at_zero_and_three.last_top_axis_index(), Some(3));
+        assert_eq!(two_top_at_zero_and_five.last_top_axis_index(), Some(5));
+        assert_ne!(
+            two_top_at_zero_and_three.last_top_axis_index(),
+            two_top_at_zero_and_five.last_top_axis_index(),
+            "INDEX-OF-LAST must discriminate distinct RIGHT-endpoint arrangements the \
+             (COUNT, INDEX-OF-FIRST) pair conflates",
+        );
+    }
+
+    #[test]
+    fn resource_limits_last_bottom_and_last_top_axis_indices_differ_on_truly_mixed_pole_posture() {
+        // CROSS-CELL DISJOINTNESS witness at the INDEX-OF-LAST surface
+        // — on the truly-mixed-pole posture (one axis at top at index
+        // 0, one axis at bottom at index 1, rest interior), BOTH
+        // reverse INDEX projections fire `Some(_)` but their `Some`
+        // payloads are DISTINCT indices — a single axis cannot
+        // simultaneously be at both poles because `0 != usize::MAX` on
+        // `usize`. Peer of the same disjointness witness on the FIRST
+        // scan one SCAN-DIRECTION axis over.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        assert_eq!(truly_mixed_pole.last_top_axis_index(), Some(0));
+        assert_eq!(truly_mixed_pole.last_bottom_axis_index(), Some(1));
+        assert_ne!(
+            truly_mixed_pole.last_bottom_axis_index(),
+            truly_mixed_pole.last_top_axis_index(),
+            "last_bottom_axis_index and last_top_axis_index must land on distinct indices \
+             on a truly-mixed-pole posture (a single axis cannot be at both poles)",
+        );
+    }
+
+    #[test]
+    fn resource_limits_last_bottom_axis_index_bounded_by_field_count() {
+        // Range-bound pin — when `Some(i)`, `i` is strictly less than
+        // `FIELD_COUNT` by construction of the per-axis reverse scan.
+        // A regression that walked past the end of the mask or that
+        // returned a hardcoded stale index would fire here.
+        for &a in STRICT_ORDER_ROSTER {
+            if let Some(i) = a.last_bottom_axis_index() {
+                assert!(
+                    i < ResourceLimits::FIELD_COUNT,
+                    "last_bottom_axis_index index {i} out of range on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_last_top_axis_index_bounded_by_field_count() {
+        // Range-bound dual.
+        for &a in STRICT_ORDER_ROSTER {
+            if let Some(i) = a.last_top_axis_index() {
+                assert!(
+                    i < ResourceLimits::FIELD_COUNT,
+                    "last_top_axis_index index {i} out of range on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_last_bottom_axis_index_composes_at_compile_time_via_const_fn() {
+        // CONST-FN pin — INDEX-OF-LAST-BOTTOM is evaluable in const
+        // context, so a caller can pin the exact positional witness at
+        // compile time. Uses `matches!` in const rather than `==` on
+        // `Option<usize>` because `Option::eq` is not `const`.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.last_bottom_axis_index(),
+            Some(i) if i + 1 == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.last_bottom_axis_index().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.last_bottom_axis_index().is_none());
+    }
+
+    #[test]
+    fn resource_limits_last_top_axis_index_composes_at_compile_time_via_const_fn() {
+        // CONST-FN dual pin — same shape, dual cell.
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.last_top_axis_index(),
+            Some(i) if i + 1 == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.last_top_axis_index().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.last_top_axis_index().is_none());
     }
 
     // ── Field-inspection primitives: FIELD_COUNT + FIELD_NAMES +

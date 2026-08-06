@@ -11334,6 +11334,190 @@ impl ResourceLimits {
         }
         false
     }
+
+    /// Whole-posture ARITHMETIC-BOTTOM tally — `self.count_bottom_axes()`
+    /// returns the number of axes of `self` sitting at the bottom pole
+    /// (`self.field_values()[i] == 0`), in `0..=Self::FIELD_COUNT`. The
+    /// ARITHMETIC-QUANTIFIER peer of [`Self::has_bottom_axis`] one
+    /// QUANTIFIER-KIND axis over — where `has_bottom_axis` collapses the
+    /// per-axis pole-mask to ONE bit (SOME axis fires), THIS projection
+    /// preserves the CARDINALITY (HOW MANY axes fire). A strict
+    /// REFINEMENT of BOTH boolean-quantifier verdicts on the same cell:
+    /// `count_bottom_axes() > 0 ⇔ has_bottom_axis()` and
+    /// `count_bottom_axes() == Self::FIELD_COUNT ⇔ is_bottom()` — the
+    /// (ALL-fold, ANY-fold, COUNT) triple sits at ONE typed arithmetic
+    /// primitive, so a consumer that needs "how many axes are starved?"
+    /// (a degradation-fraction gauge, a per-axis-quorum threshold like
+    /// `count_bottom_axes() >= Self::FIELD_COUNT / 2`, a mixed-pole
+    /// severity ranker) binds to ONE `usize` primitive rather than
+    /// composing `axes_is_bottom().iter().filter(|b| **b).count()`
+    /// inline at every call site.
+    ///
+    /// **Cross-cell ARITHMETIC inequality**: on every posture,
+    /// `count_bottom_axes() + count_top_axes() <= Self::FIELD_COUNT` —
+    /// the ARITHMETIC form of the boolean cross-cell exclusivity pair
+    /// (`is_bottom ⇒ !has_top_axis`, `is_top ⇒ !has_bottom_axis`) one
+    /// QUANTIFIER-KIND axis over. A single axis cannot simultaneously
+    /// be at BOTH poles (`0 != usize::MAX` on `usize`), so the disjoint-
+    /// cell tally sum is bounded by the axis cardinality. Pinned by
+    /// `resource_limits_count_bottom_and_count_top_sum_bounded_by_field_count`.
+    ///
+    /// Encoded as the per-axis `+= 1` count over [`Self::axes_is_bottom`]
+    /// with no short-circuit (the count is total by definition) —
+    /// matching [`Self::has_bottom_axis`]'s DELEGATION-TO-PER-AXIS-MASK
+    /// shape verbatim one QUANTIFIER-KIND axis over on the SAME per-axis
+    /// mask. A future re-derivation of `axes_is_bottom` propagates to
+    /// `count_bottom_axes` mechanically.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.count_bottom_axes() ==
+    /// Self::FIELD_COUNT` (every axis at bottom);
+    /// `UNBOUNDED_RESOURCE_LIMITS.count_bottom_axes() == 0` (every axis
+    /// at top); `DEFAULT_RESOURCE_LIMITS.count_bottom_axes() == 0`
+    /// (every `DEFAULT_MAX_*` is a positive constant strictly greater
+    /// than `0`).
+    ///
+    /// **Truly-mixed-pole load-bearing witness**: a posture with EXACTLY
+    /// one axis at `0` (bottom pole) AND EXACTLY one axis at `usize::MAX`
+    /// (top pole) — the rest strictly interior — satisfies
+    /// `count_bottom_axes() == 1` AND `count_top_axes() == 1` AND
+    /// `count_bottom_axes() + count_top_axes() == 2 < Self::FIELD_COUNT`.
+    /// The ARITHMETIC form of the (T, T) middle cell the (is_bottom,
+    /// is_top) UNIVERSAL pair structurally cannot represent — and
+    /// distinct from the (has_bottom_axis, has_top_axis) boolean pair,
+    /// which fires the SAME (true, true) verdict on the truly-mixed
+    /// posture as on a posture with FIVE axes at bottom and one axis at
+    /// top. The COUNT projection discriminates these two ANY-fold-
+    /// equivalent postures — the LOAD-BEARING WEAKER-vs-STRONGER
+    /// discriminator the boolean ANY-fold surface cannot access. Pinned
+    /// via
+    /// `resource_limits_count_bottom_axes_and_count_top_axes_discriminate_mixed_pole_postures_the_any_fold_conflates`.
+    ///
+    /// **Fold-agreement contract**: for every posture `a`,
+    /// `a.count_bottom_axes() == a.axes_is_bottom().iter().filter(|&&bit|
+    /// bit).count()`. Pinned via
+    /// `resource_limits_count_bottom_axes_agrees_with_axes_is_bottom_filter_count`.
+    ///
+    /// **ANY-fold bridge**: `a.count_bottom_axes() > 0 ⇔ a.has_bottom_axis()`.
+    /// Pinned via `resource_limits_count_bottom_axes_gt_zero_iff_has_bottom_axis`.
+    /// **ALL-fold bridge**: `a.count_bottom_axes() == Self::FIELD_COUNT
+    /// ⇔ a.is_bottom()`. Pinned via
+    /// `resource_limits_count_bottom_axes_saturates_iff_is_bottom`.
+    ///
+    /// `const fn` so a caller can pin the exact bottom-axis tally at
+    /// compile time (`const _: () = assert!(EMPTY_RESOURCE_LIMITS
+    /// .count_bottom_axes() == ResourceLimits::FIELD_COUNT);`) — sibling
+    /// of the const-fn evaluability pins on [`Self::is_bottom`] and
+    /// [`Self::has_bottom_axis`] one QUANTIFIER-KIND axis over each.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// arithmetic bottom-axis tally is a named typed exit rather than an
+    /// inline `axes_is_bottom().iter().filter(...).count()` per-consumer
+    /// fold. THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// the (count_bottom_axes, count_top_axes) arithmetic pair strictly
+    /// REFINES the (has_bottom_axis, has_top_axis) boolean pair —
+    /// carrying the (ALL, ANY, COUNT) three-level quantifier ladder as
+    /// THREE named typed primitives per atomic cell rather than
+    /// collapsing the arithmetic count into the boolean ANY-fold at each
+    /// consumer.
+    ///
+    /// Frontier inspiration: APL's `+/(0=⍵)` per-position bottom-equality
+    /// summation folded through `+/` — the arithmetic dual of `∨/` at the
+    /// same per-position mask. Idris's `count (== 0) v` over `Vec n Nat`
+    /// yielding `Fin (S n)`. Haskell's `length . filter (== minBound)`
+    /// on a bounded numeric vector. Kmett's `lattices` package's
+    /// per-position pole-membership lifted through position-counting.
+    /// Translation through pleme-io primitives is the plain `const fn`
+    /// per-axis `+= 1` fold over the already-lifted
+    /// [`Self::axes_is_bottom`] mask — no new dep, no typeclass
+    /// indirection, no allocation.
+    #[must_use]
+    pub const fn count_bottom_axes(self) -> usize {
+        let mask = self.axes_is_bottom();
+        let mut i = 0;
+        let mut count = 0;
+        while i < Self::FIELD_COUNT {
+            if mask[i] {
+                count += 1;
+            }
+            i += 1;
+        }
+        count
+    }
+
+    /// Whole-posture ARITHMETIC-TOP tally — `self.count_top_axes()`
+    /// returns the number of axes of `self` sitting at the top pole
+    /// (`self.field_values()[i] == usize::MAX`), in
+    /// `0..=Self::FIELD_COUNT`. The ARITHMETIC-QUANTIFIER peer of
+    /// [`Self::has_top_axis`] one QUANTIFIER-KIND axis over and the
+    /// ATOMIC-CELL DUAL of [`Self::count_bottom_axes`] one CELL axis
+    /// over — jointly the (count_bottom_axes, count_top_axes) atomic
+    /// pair carries the ARITHMETIC form of the (has_bottom_axis,
+    /// has_top_axis) boolean ANY-fold pair.
+    ///
+    /// A strict REFINEMENT of BOTH boolean-quantifier verdicts on the
+    /// same cell: `count_top_axes() > 0 ⇔ has_top_axis()` and
+    /// `count_top_axes() == Self::FIELD_COUNT ⇔ is_top()`. Together with
+    /// the paired [`Self::count_bottom_axes`], the two atomic
+    /// arithmetic tallies bound each other: `count_bottom_axes() +
+    /// count_top_axes() <= Self::FIELD_COUNT` on every posture (a single
+    /// axis cannot be BOTH `0` AND `usize::MAX`), the ARITHMETIC form
+    /// of the boolean cross-cell exclusivity pair one QUANTIFIER-KIND
+    /// axis over.
+    ///
+    /// **Discriminates postures the ANY-fold conflates**: the boolean
+    /// ANY-fold surface fires the SAME `(true, true)` verdict on a
+    /// truly-mixed-pole posture (one axis at `0`, one at `usize::MAX`,
+    /// rest interior) as on a posture with five axes at bottom and one
+    /// axis at top — the two are ANY-fold-equivalent but arithmetically
+    /// distinct (the former is `(1, 1)`, the latter `(5, 1)`). The
+    /// COUNT projection is the LOAD-BEARING WEAKER-vs-STRONGER
+    /// discriminator the boolean ANY-fold surface cannot access.
+    ///
+    /// Encoded as the per-axis `+= 1` count over [`Self::axes_is_top`] —
+    /// matching [`Self::count_bottom_axes`]'s shape verbatim on the DUAL
+    /// per-axis mask.
+    ///
+    /// **Preset pins**: `UNBOUNDED_RESOURCE_LIMITS.count_top_axes() ==
+    /// Self::FIELD_COUNT`; `EMPTY_RESOURCE_LIMITS.count_top_axes() ==
+    /// 0`; `DEFAULT_RESOURCE_LIMITS.count_top_axes() == 0`.
+    ///
+    /// **Fold-agreement contract**: for every posture `a`,
+    /// `a.count_top_axes() == a.axes_is_top().iter().filter(|&&bit|
+    /// bit).count()`. Pinned via
+    /// `resource_limits_count_top_axes_agrees_with_axes_is_top_filter_count`.
+    ///
+    /// **ANY-fold bridge**: `a.count_top_axes() > 0 ⇔ a.has_top_axis()`.
+    /// **ALL-fold bridge**: `a.count_top_axes() == Self::FIELD_COUNT ⇔
+    /// a.is_top()`.
+    ///
+    /// `const fn` so a caller can pin the exact top-axis tally at
+    /// compile time.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; THEORY.md
+    /// §II.1 invariant 5 — composition preserves proofs (the arithmetic
+    /// pair strictly REFINES the boolean ANY-fold pair with a
+    /// discriminator the boolean surface cannot access); THEORY.md §V.1
+    /// — knowable platform.
+    ///
+    /// Frontier inspiration: APL's `+/(⍵=⌈/⍵)` per-position top-equality
+    /// summation folded through `+/`. Idris's `count (== maxBound) v`
+    /// over a bounded numeric vector. Haskell's `length . filter (==
+    /// maxBound)`. Translation through pleme-io primitives is the plain
+    /// `const fn` per-axis `+= 1` fold over the already-lifted
+    /// [`Self::axes_is_top`] mask.
+    #[must_use]
+    pub const fn count_top_axes(self) -> usize {
+        let mask = self.axes_is_top();
+        let mut i = 0;
+        let mut count = 0;
+        while i < Self::FIELD_COUNT {
+            if mask[i] {
+                count += 1;
+            }
+            i += 1;
+        }
+        count
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -41801,6 +41985,428 @@ mod tests {
                 a.has_top_axis(),
                 expected,
                 "has_top_axis must agree with any-fold over pointwise `== usize::MAX` verdict for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_bottom_axes_of_empty_preset_saturates() {
+        // Preset closure — every axis of EMPTY is at `0`, so the
+        // arithmetic tally saturates at the axis cardinality
+        // `FIELD_COUNT`. The ARITHMETIC form of
+        // `has_bottom_axis_of_empty_preset_is_true` one QUANTIFIER-KIND
+        // axis over: the ANY-fold verdict `true` REFINES to the exact
+        // arithmetic value `FIELD_COUNT` at the ALL-fold-uniform preset.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.count_bottom_axes(),
+            ResourceLimits::FIELD_COUNT,
+        );
+    }
+
+    #[test]
+    fn resource_limits_count_bottom_axes_of_unbounded_preset_is_zero() {
+        // Cross-pole rejection at the arithmetic surface — the OPPOSITE
+        // (top) pole rejects on every axis, so the tally is exactly
+        // `0`.  The ARITHMETIC form of
+        // `has_bottom_axis_of_unbounded_preset_is_false` (boolean
+        // `false` REFINES to the exact arithmetic value `0`).
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.count_bottom_axes(), 0);
+    }
+
+    #[test]
+    fn resource_limits_count_bottom_axes_of_default_is_zero() {
+        // Preset rejection — every shipped `DEFAULT_MAX_*` is a positive
+        // constant strictly greater than `0`, so no axis contributes to
+        // the tally.
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.count_bottom_axes(), 0);
+    }
+
+    #[test]
+    fn resource_limits_count_top_axes_of_unbounded_preset_saturates() {
+        // Preset closure dual — same shape, dual cell.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.count_top_axes(),
+            ResourceLimits::FIELD_COUNT,
+        );
+    }
+
+    #[test]
+    fn resource_limits_count_top_axes_of_empty_preset_is_zero() {
+        // Cross-pole rejection dual — every axis at `0`, none at
+        // `usize::MAX`.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.count_top_axes(), 0);
+    }
+
+    #[test]
+    fn resource_limits_count_top_axes_of_default_is_zero() {
+        // Preset rejection dual — every `DEFAULT_MAX_*` is a positive
+        // constant strictly less than `usize::MAX`.
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.count_top_axes(), 0);
+    }
+
+    #[test]
+    fn resource_limits_count_bottom_axes_of_hand_authored_postures_is_zero() {
+        // Antichain absorption — both hand-authored antichain postures
+        // sit strictly inside the lattice on distinct branches, with
+        // every field at a positive-mid value strictly greater than `0`
+        // AND strictly less than `usize::MAX`. Neither atomic pole tally
+        // fires at any axis, so both count `0` on both.
+        for &a in &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE] {
+            assert_eq!(
+                a.count_bottom_axes(),
+                0,
+                "hand-authored antichain posture {a:?} must count 0 bottom axes",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_top_axes_of_hand_authored_postures_is_zero() {
+        // Antichain absorption dual — same shape, dual cell.
+        for &a in &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE] {
+            assert_eq!(
+                a.count_top_axes(),
+                0,
+                "hand-authored antichain posture {a:?} must count 0 top axes",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_bottom_axes_agrees_with_axes_is_bottom_filter_count() {
+        // Fold-agreement contract — the whole-posture arithmetic bottom
+        // tally agrees with the direct filter-count over `axes_is_bottom`
+        // on every preset. Pins the projection body as definitionally
+        // the arithmetic COUNT-fold over the per-axis bottom-mask; a
+        // regression that dropped the increment (leaving the body at
+        // the ANY-fold return of `true`) or that walked the wrong mask
+        // would fire here.
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.count_bottom_axes(),
+                a.axes_is_bottom().iter().filter(|&&bit| bit).count(),
+                "count_bottom_axes must equal filter-count over axes_is_bottom for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_top_axes_agrees_with_axes_is_top_filter_count() {
+        // Fold-agreement dual — same shape, dual mask.
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.count_top_axes(),
+                a.axes_is_top().iter().filter(|&&bit| bit).count(),
+                "count_top_axes must equal filter-count over axes_is_top for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_bottom_axes_gt_zero_iff_has_bottom_axis() {
+        // ANY-fold bridge — the boolean ANY-fold verdict is the
+        // POSITIVITY of the arithmetic tally: some axis fires iff the
+        // tally is strictly positive. Pins the (COUNT, ANY-fold)
+        // refinement bridge on every preset AND on a truly-mixed-pole
+        // composite so the middle cell the (is_bottom, is_top) universal
+        // pair cannot represent is swept too. Peer of
+        // `is_bottom_implies_has_bottom_axis_on_every_posture` one
+        // QUANTIFIER-KIND axis over — the arithmetic quantifier bridges
+        // to the existential one via `> 0`.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.count_bottom_axes() > 0,
+                a.has_bottom_axis(),
+                "count_bottom_axes() > 0 must equal has_bottom_axis() for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_top_axes_gt_zero_iff_has_top_axis() {
+        // ANY-fold bridge dual — same shape, dual cell.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.count_top_axes() > 0,
+                a.has_top_axis(),
+                "count_top_axes() > 0 must equal has_top_axis() for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_bottom_axes_saturates_iff_is_bottom() {
+        // ALL-fold bridge — the boolean ALL-fold verdict is the
+        // SATURATION of the arithmetic tally: every axis fires iff the
+        // tally equals the axis cardinality. Pins the (COUNT, ALL-fold)
+        // refinement bridge on every preset AND on the same truly-mixed
+        // composite. The dual of the ANY-fold bridge one QUANTIFIER-KIND
+        // axis over via `== FIELD_COUNT`.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.count_bottom_axes() == ResourceLimits::FIELD_COUNT,
+                a.is_bottom(),
+                "count_bottom_axes() == FIELD_COUNT must equal is_bottom() for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_top_axes_saturates_iff_is_top() {
+        // ALL-fold bridge dual — same shape, dual cell.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.count_top_axes() == ResourceLimits::FIELD_COUNT,
+                a.is_top(),
+                "count_top_axes() == FIELD_COUNT must equal is_top() for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_bottom_and_count_top_sum_bounded_by_field_count() {
+        // Cross-cell ARITHMETIC inequality — a single axis cannot be
+        // simultaneously at BOTH poles (`0 != usize::MAX` on `usize`),
+        // so the two atomic pole tallies at a given posture partition
+        // a DISJOINT subset of the axis set and their sum is bounded
+        // by the axis cardinality. The ARITHMETIC form of the boolean
+        // cross-cell exclusivity pair (`is_bottom ⇒ !has_top_axis`,
+        // `is_top ⇒ !has_bottom_axis`) one QUANTIFIER-KIND axis over —
+        // a NEW substrate-level identity qualitatively distinct from
+        // the boolean pair because it discriminates arithmetic
+        // arrangements the boolean pair conflates (both the truly-mixed
+        // (1, 1) and the near-degenerate (5, 1) satisfy the boolean
+        // pair, but only the arithmetic sum names their distinct
+        // tallies). Sweeps every preset AND the truly-mixed-pole
+        // composite.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert!(
+                a.count_bottom_axes() + a.count_top_axes() <= ResourceLimits::FIELD_COUNT,
+                "count_bottom_axes + count_top_axes must be bounded by FIELD_COUNT for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_bottom_and_count_top_sum_equals_count_polar_axes() {
+        // ARITHMETIC DECOMPOSITION theorem — the compound pole tally
+        // decomposes as the SUM of the two atomic pole tallies:
+        // `count_bottom_axes + count_top_axes ==
+        // axes_is_pole().iter().filter(...).count()` on every posture.
+        // A single axis cannot be at BOTH poles (proven by the paired
+        // inequality above), so the two atomic disjoint-axis subsets
+        // partition the polar-axis set exactly; their sum equals the
+        // compound polar tally at the mask level. The ARITHMETIC form
+        // of the boolean DECOMPOSITION theorem `has_polar_axis ==
+        // has_bottom_axis || has_top_axis` one QUANTIFIER-KIND axis
+        // over (Boolean `||` on disjoint indicator masks lifts to
+        // arithmetic `+` on the corresponding index counts).
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            let polar_count = a.axes_is_pole().iter().filter(|&&bit| bit).count();
+            assert_eq!(
+                a.count_bottom_axes() + a.count_top_axes(),
+                polar_count,
+                "count_bottom_axes + count_top_axes must equal filter-count over axes_is_pole for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_bottom_axes_and_count_top_axes_discriminate_mixed_pole_postures_the_any_fold_conflates(
+    ) {
+        // LOAD-BEARING ARITHMETIC-vs-BOOLEAN discriminator — the boolean
+        // ANY-fold surface fires the SAME `(true, true)` verdict on a
+        // truly-mixed (1, 1) posture (one axis at bottom, one at top,
+        // rest interior) as on a near-degenerate (5, 1) posture (five
+        // axes at bottom, one at top) — but the arithmetic tallies
+        // `(count_bottom_axes, count_top_axes)` names their distinct
+        // arrangements as distinct `(usize, usize)` pairs.  Pins the
+        // COUNT projection as the WEAKER-vs-STRONGER refinement of the
+        // ANY-fold surface: the (COUNT, ANY-fold) pair is a strict
+        // information hierarchy on the atomic-pole family. Peer of the
+        // truly-mixed-pole (T, T) middle-cell witness one QUANTIFIER-KIND
+        // axis over.
+        let truly_mixed = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let near_degenerate = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 0,
+            max_macro_body_size: 0,
+            max_registered_macros: 0,
+            max_macro_arity: 0,
+        };
+        // Both fire the SAME boolean (true, true) — the ANY-fold
+        // surface cannot discriminate them.
+        assert!(truly_mixed.has_bottom_axis());
+        assert!(truly_mixed.has_top_axis());
+        assert!(near_degenerate.has_bottom_axis());
+        assert!(near_degenerate.has_top_axis());
+        // But the arithmetic tallies DISCRIMINATE — (1, 1) vs (5, 1).
+        assert_eq!(truly_mixed.count_bottom_axes(), 1);
+        assert_eq!(truly_mixed.count_top_axes(), 1);
+        assert_eq!(near_degenerate.count_bottom_axes(), 5);
+        assert_eq!(near_degenerate.count_top_axes(), 1);
+        // And the arithmetic-pair projection distinguishes them.
+        assert_ne!(
+            (
+                truly_mixed.count_bottom_axes(),
+                truly_mixed.count_top_axes(),
+            ),
+            (
+                near_degenerate.count_bottom_axes(),
+                near_degenerate.count_top_axes(),
+            ),
+            "arithmetic tallies must discriminate truly-mixed (1, 1) from near-degenerate (5, 1)",
+        );
+    }
+
+    #[test]
+    fn resource_limits_count_bottom_axes_composes_at_compile_time_via_const_fn() {
+        // CONST-FN pin — arithmetic bottom-axis tally is evaluable in
+        // const context, so a caller can pin the exact tally at
+        // compile time. Sibling of the const-fn evaluability pins on
+        // `has_bottom_axis` one QUANTIFIER-KIND axis over.
+        const _: () =
+            assert!(EMPTY_RESOURCE_LIMITS.count_bottom_axes() == ResourceLimits::FIELD_COUNT);
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.count_bottom_axes() == 0);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.count_bottom_axes() == 0);
+    }
+
+    #[test]
+    fn resource_limits_count_top_axes_composes_at_compile_time_via_const_fn() {
+        // CONST-FN dual pin — same shape, dual cell.
+        const _: () =
+            assert!(UNBOUNDED_RESOURCE_LIMITS.count_top_axes() == ResourceLimits::FIELD_COUNT);
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.count_top_axes() == 0);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.count_top_axes() == 0);
+    }
+
+    #[test]
+    fn resource_limits_count_bottom_axes_agrees_with_pointwise_field_at_zero_count() {
+        // Positional-alignment cross-check — the arithmetic bottom
+        // tally agrees with the direct filter-count over the pointwise
+        // `field == 0` verdict on every preset AND on the truly-mixed-
+        // pole composite. Pins the canonical index-to-axis mapping
+        // holds at the arithmetic tally surface too. Peer of
+        // `has_bottom_axis_agrees_with_pointwise_field_at_zero` one
+        // QUANTIFIER-KIND axis over.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            let values = a.field_values();
+            let expected = values.iter().filter(|&&v| v == 0).count();
+            assert_eq!(
+                a.count_bottom_axes(),
+                expected,
+                "count_bottom_axes must equal filter-count over pointwise `== 0` verdict for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_top_axes_agrees_with_pointwise_field_at_max_count() {
+        // Positional-alignment dual — same shape, dual pointwise
+        // verdict.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            let values = a.field_values();
+            let expected = values.iter().filter(|&&v| v == usize::MAX).count();
+            assert_eq!(
+                a.count_top_axes(),
+                expected,
+                "count_top_axes must equal filter-count over pointwise `== usize::MAX` verdict for {a:?}",
             );
         }
     }

@@ -10307,6 +10307,239 @@ impl ResourceLimits {
     pub const fn axes_is_top(self) -> [bool; Self::FIELD_COUNT] {
         UNBOUNDED_RESOURCE_LIMITS.axes_leq(self)
     }
+
+    /// Per-axis pointwise POLE-membership mask — the ATOMIC per-axis
+    /// pole-membership vector whose CONJUNCTION over the six positions
+    /// equals [`Self::is_pole`] only when EVERY axis is at the SAME pole
+    /// (a load-bearing gap from the scalar `is_pole` semantics — see the
+    /// per-axis-fold-refines-scalar contract below). `a.axes_is_pole()[i]`
+    /// is `true` iff the `i`-th ceiling of `a` sits at EITHER pole on the
+    /// pointwise partial order (`a[i] == 0` or `a[i] == usize::MAX`) —
+    /// the per-axis DISJUNCTION of the two just-lifted per-axis-mask
+    /// pole-identity primitives.
+    ///
+    /// The DISJUNCTION corner CLOSING the (bottom, top) per-axis-mask
+    /// pole pair the (`axes_is_bottom`, `axes_is_top`) pair opened one
+    /// COMBINATOR axis over — the direct order-theoretic per-axis-mask
+    /// peer of [`Self::is_pole`]'s `is_bottom || is_top` disjunction one
+    /// PROJECTION-KIND axis over on the pole-membership surface. Where
+    /// `is_pole` folds the (bottom, top) pole pair into ONE positive
+    /// pole-membership verdict on the whole posture, THIS projection
+    /// folds the (bottom, top) per-axis-mask pole pair into ONE positive
+    /// pole-membership verdict PER AXIS — the SAME two-arm SET-UNION
+    /// shape closing the pole-membership 2-cell face at both projection
+    /// kinds.
+    ///
+    /// Peer of [`Self::axes_is_interior`] on the per-axis-mask (pole,
+    /// interior) 2-cell partition — the two together exhaust the per-
+    /// axis posture universe with disjoint verdicts (`a.axes_is_pole()[i]
+    /// ^ a.axes_is_interior()[i] == true` on every axis of every
+    /// posture) via De Morgan's law: `axes_is_pole[i] == axes_is_bottom[i]
+    /// || axes_is_top[i]` and `axes_is_interior[i] == !axes_is_bottom[i]
+    /// && !axes_is_top[i]`. The per-axis partition is EXHAUSTIVE (every
+    /// axis of every posture is either at a pole or in the interior) and
+    /// DISJOINT (no axis can be both at a pole and in the interior).
+    ///
+    /// **Per-axis-fold-refines-scalar contract** (NON-trivial —
+    /// LOAD-BEARING semantic gap from the scalar shape): folding
+    /// `a.axes_is_pole()` through `&&` recovers whether EVERY axis is at
+    /// SOME pole, which is STRICTLY STRONGER than `a.is_pole() ==
+    /// (a.is_bottom() || a.is_top())`. A posture with `max_expansion_depth
+    /// == 0` and `max_cache_entries == usize::MAX` (a mixed-pole posture
+    /// composed by `strictest_of([EMPTY, UNBOUNDED-in-one-axis])`) carries
+    /// `axes_is_pole == [true; FIELD_COUNT]` (every axis is at SOME pole)
+    /// but `is_pole == false` (the whole posture is neither the bottom
+    /// preset nor the top preset). The (axes_is_pole, is_pole) pair
+    /// therefore does NOT satisfy the `axes_X.iter().all(|&b| b) ==
+    /// X()` fold-recovers-scalar law the other per-axis-mask peers
+    /// (`axes_leq`, `axes_is_bottom`, `axes_is_top`) satisfy — the DE
+    /// MORGAN DUAL of the disjunction on the interior surface is the
+    /// only law that survives, pinned via
+    /// `resource_limits_axes_is_pole_is_de_morgan_dual_of_axes_is_interior`.
+    /// Documented explicitly so a consumer expecting the standard fold-
+    /// contract does not silently observe `[true; 6]` and infer `is_pole
+    /// == true` on a mixed-pole posture. Pinned via
+    /// `resource_limits_axes_is_pole_fold_may_exceed_is_pole_on_mixed_pole_posture`.
+    ///
+    /// **Positional-alignment contract**: for every posture `a` and
+    /// every index `i in 0..FIELD_COUNT`,
+    /// `a.axes_is_pole()[i] == (a.field_values()[i] == 0 || a.field_values()[i] == usize::MAX)`
+    /// — pinned by
+    /// `resource_limits_axes_is_pole_agrees_with_pointwise_field_at_either_pole`.
+    ///
+    /// **Preset pole pins**: both bounded-lattice extrema carry
+    /// EXHAUSTIVE per-axis pole verdicts —
+    /// `EMPTY_RESOURCE_LIMITS.axes_is_pole() == [true; FIELD_COUNT]`
+    /// (every `0` fires the bottom arm at every axis) and
+    /// `UNBOUNDED_RESOURCE_LIMITS.axes_is_pole() == [true; FIELD_COUNT]`
+    /// (every `usize::MAX` fires the top arm at every axis).
+    /// `DEFAULT_RESOURCE_LIMITS.axes_is_pole() == [false; FIELD_COUNT]`
+    /// (every `DEFAULT_MAX_*` is a positive constant strictly less than
+    /// `usize::MAX`, so neither arm fires at any axis).
+    ///
+    /// Encoded as the per-axis `||` of the two already-lifted per-axis-
+    /// mask pole-identity primitives — one primitive delegation each,
+    /// so the per-axis pole-membership encoding lives at exactly one
+    /// structural composition of two shipped primitives, and a future
+    /// re-derivation of either underlying primitive propagates to
+    /// `axes_is_pole` mechanically rather than requiring a per-method
+    /// fix-up. Mirrors [`Self::is_pole`]'s `self.is_bottom() ||
+    /// self.is_top()` delegation one PROJECTION-KIND axis over — the
+    /// same two-arm SET-UNION encoding that closes pole membership on
+    /// the single-bit verdict surface closes it on the per-axis-mask
+    /// surface.
+    ///
+    /// `const fn` so a caller can pin a per-axis pole-mask at compile
+    /// time (`const _: [bool; ResourceLimits::FIELD_COUNT] =
+    /// EMPTY_RESOURCE_LIMITS.axes_is_pole();`). `Copy` on
+    /// [`ResourceLimits`] lets the const-fn body call the two
+    /// delegated per-axis-mask primitives by-value.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-posture projection into the six-bool pole-membership vector
+    /// is itself a typed named exit rather than a per-consumer inline
+    /// six-primitive per-axis disjunction. THEORY.md §II.1 invariant 5
+    /// — composition preserves proofs; the per-axis pole-membership
+    /// verdict decomposes cleanly through the DE MORGAN dual to
+    /// [`Self::axes_is_interior`], and the two projections together
+    /// close the per-axis-mask (pole, interior) 2-cell partition as a
+    /// SUBSTRATE-LEVEL EXCLUSIVITY THEOREM. THEORY.md §V.1 — knowable
+    /// platform; the per-axis pole-mask becomes a TYPE-level operation
+    /// on the posture algebra with per-axis granularity structurally
+    /// forced by the array's fixed arity.
+    ///
+    /// Frontier inspiration: Idris's `zipWith (\x -> x == 0 || x == maxBound)`
+    /// over a `Vec n Nat` producing a `Vec n Bool` — the per-axis pole-
+    /// membership disjunction lifted onto typed structs. APL's `(0=⍵) ∨
+    /// (⍵≥⌈/⍵)` per-position pole projection on a numeric vector.
+    /// Kmett's `lattices` package's `bottom || top` pole disjunction at
+    /// the value level lifted to a per-position vector. Translation
+    /// through pleme-io primitives is the plain `const fn` per-axis
+    /// disjunction of the two already-lifted per-axis-mask pole-identity
+    /// primitives, no new dep, no typeclass indirection, no allocation.
+    #[must_use]
+    pub const fn axes_is_pole(self) -> [bool; Self::FIELD_COUNT] {
+        let bot = self.axes_is_bottom();
+        let top = self.axes_is_top();
+        let mut result = [false; Self::FIELD_COUNT];
+        let mut i = 0;
+        while i < Self::FIELD_COUNT {
+            result[i] = bot[i] || top[i];
+            i += 1;
+        }
+        result
+    }
+
+    /// Per-axis pointwise INTERIOR-membership mask — the MIDDLE-CELL
+    /// closure of the per-axis-mask (pole, interior) 2-cell partition on
+    /// the pole-identity surface. `a.axes_is_interior()[i]` is `true`
+    /// iff the `i`-th ceiling of `a` sits STRICTLY BETWEEN the two poles
+    /// (`0 < a[i] < usize::MAX` — neither at the bottom nor at the top
+    /// on that axis) — the per-axis DE MORGAN COMPLEMENT of
+    /// [`Self::axes_is_pole`] via `!(a || b) == !a && !b`.
+    ///
+    /// The MIDDLE-CELL closure of the per-axis-mask (pole, interior)
+    /// 2-cell partition — the DIRECT NEGATIVE COMPLEMENT of
+    /// [`Self::axes_is_pole`] one CELL axis over. Where `axes_is_pole`
+    /// pins the distinguished per-axis lattice-extremum witnesses at
+    /// each axis, this projection pins its EXHAUSTIVE-AND-DISJOINT
+    /// complement: every non-pole axis of every posture in the lattice
+    /// interior.
+    ///
+    /// The order-theoretic per-axis-mask peer of [`Self::is_interior`]
+    /// one PROJECTION-KIND axis over on the pole-identity surface: where
+    /// `is_interior` closes the (bottom, top, interior) three-cell face
+    /// at its non-pole interior via `!is_bottom && !is_top` on the whole
+    /// posture, THIS projection closes the SAME three-cell face at each
+    /// axis via `!axes_is_bottom[i] && !axes_is_top[i]` — the SAME two-
+    /// arm CONJUNCTION-OF-NEGATIONS shape closing the middle-cell
+    /// partition at both projection kinds.
+    ///
+    /// **Per-axis-fold-refines-scalar contract** (NON-trivial —
+    /// LOAD-BEARING semantic gap from the scalar shape): folding
+    /// `a.axes_is_interior()` through `&&` recovers whether EVERY axis
+    /// is in the interior, which is STRICTLY STRONGER than `a.is_interior()
+    /// == (!a.is_bottom() && !a.is_top())`. `DEFAULT_RESOURCE_LIMITS`
+    /// satisfies BOTH `is_interior == true` AND `axes_is_interior ==
+    /// [true; FIELD_COUNT]` (every axis is in the interior), but a
+    /// mixed-pole posture with `max_expansion_depth == 0` and every
+    /// other axis at `usize::MAX` satisfies `is_interior == true`
+    /// (neither pole preset) but `axes_is_interior == [false; FIELD_COUNT]`
+    /// (every axis is at SOME pole — the bottom on `max_expansion_depth`,
+    /// the top on the other five). The (axes_is_interior, is_interior)
+    /// pair therefore does NOT satisfy the `axes_X.iter().all(|&b| b) ==
+    /// X()` fold-recovers-scalar law — pinned via
+    /// `resource_limits_axes_is_interior_fold_may_be_stricter_than_is_interior_on_mixed_pole_posture`.
+    ///
+    /// **Positional-alignment contract**: for every posture `a` and
+    /// every index `i in 0..FIELD_COUNT`,
+    /// `a.axes_is_interior()[i] == (a.field_values()[i] > 0 && a.field_values()[i] < usize::MAX)`
+    /// — pinned by
+    /// `resource_limits_axes_is_interior_agrees_with_pointwise_field_in_strict_interior`.
+    ///
+    /// **Preset pins**: `DEFAULT_RESOURCE_LIMITS.axes_is_interior() ==
+    /// [true; FIELD_COUNT]` (every shipped `DEFAULT_MAX_*` is a
+    /// positive constant strictly less than `usize::MAX`);
+    /// `EMPTY_RESOURCE_LIMITS.axes_is_interior() == [false; FIELD_COUNT]`
+    /// and `UNBOUNDED_RESOURCE_LIMITS.axes_is_interior() == [false;
+    /// FIELD_COUNT]` (both poles reject at every axis).
+    ///
+    /// **Per-axis-mask De Morgan duality**: for every posture `a` and
+    /// every index `i`, `a.axes_is_pole()[i] == !a.axes_is_interior()[i]`
+    /// — the per-axis (pole, interior) 2-cell partition is a SUBSTRATE-
+    /// LEVEL EXCLUSIVITY THEOREM proved on BOTH sides at TYPE level.
+    /// Pinned by
+    /// `resource_limits_axes_is_pole_is_de_morgan_dual_of_axes_is_interior`.
+    ///
+    /// **Per-axis-mask partition exhaustiveness**: for every posture
+    /// `a` and every index `i`, `a.axes_is_pole()[i] ^
+    /// a.axes_is_interior()[i] == true`. Pinned by
+    /// `resource_limits_axes_is_pole_and_axes_is_interior_partition_every_axis`.
+    ///
+    /// Encoded as the per-axis `&&` of the negations of the two
+    /// already-lifted per-axis-mask pole-identity primitives — one
+    /// primitive delegation each, so the per-axis interior-membership
+    /// encoding lives at exactly one structural composition. Mirrors
+    /// [`Self::is_interior`]'s `!self.is_bottom() && !self.is_top()`
+    /// delegation one PROJECTION-KIND axis over — the same two-arm
+    /// CONJUNCTION-OF-NEGATIONS shape closing interior membership on
+    /// the single-bit verdict surface closes it on the per-axis-mask
+    /// surface. The equivalent alternative encoding `!self.axes_is_pole()[i]`
+    /// (per-axis) folds through De Morgan's law and binds ONE additional
+    /// primitive delegation via [`Self::axes_is_pole`]; the direct
+    /// conjunction-of-negations form matches the sibling
+    /// [`Self::is_interior`] scalar shape verbatim.
+    ///
+    /// `const fn` so a caller can pin a per-axis interior-mask at
+    /// compile time (`const _: [bool; ResourceLimits::FIELD_COUNT] =
+    /// DEFAULT_RESOURCE_LIMITS.axes_is_interior();`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs (the
+    /// per-axis interior-membership verdict is the DE MORGAN COMPLEMENT
+    /// of `axes_is_pole`, and the two projections together close the
+    /// per-axis-mask (pole, interior) 2-cell partition as a substrate-
+    /// level EXCLUSIVITY THEOREM); THEORY.md §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: order theory's canonical "interior of a
+    /// bounded lattice" concept lifted to a per-position vector via
+    /// APL's `∼(0=⍵)∧∼(⍵=⌈/⍵)` per-position strict-interior projection.
+    /// Idris's `zipWith (\x -> x /= 0 && x /= maxBound)` over `Vec n
+    /// Nat`. Translation through pleme-io primitives is the plain
+    /// `const fn` per-axis De Morgan complement of the two already-
+    /// lifted per-axis-mask pole-identity primitives.
+    #[must_use]
+    pub const fn axes_is_interior(self) -> [bool; Self::FIELD_COUNT] {
+        let bot = self.axes_is_bottom();
+        let top = self.axes_is_top();
+        let mut result = [false; Self::FIELD_COUNT];
+        let mut i = 0;
+        while i < Self::FIELD_COUNT {
+            result[i] = !bot[i] && !top[i];
+            i += 1;
+        }
+        result
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -39429,6 +39662,349 @@ mod tests {
         const _: [bool; ResourceLimits::FIELD_COUNT] = UNBOUNDED_RESOURCE_LIMITS.axes_is_top();
         const _: [bool; ResourceLimits::FIELD_COUNT] = DEFAULT_RESOURCE_LIMITS.axes_is_top();
         const _: [bool; ResourceLimits::FIELD_COUNT] = EMPTY_RESOURCE_LIMITS.axes_is_top();
+    }
+
+    // ── ResourceLimits::axes_is_pole / ::axes_is_interior — per-axis-mask
+    //   pole-MEMBERSHIP peers of is_pole / is_interior one PROJECTION-KIND
+    //   axis over, CLOSING the per-axis-mask (pole, interior) 2-cell
+    //   partition on the pole-identity surface via disjunction of the
+    //   just-lifted (axes_is_bottom, axes_is_top) pair + its De Morgan
+    //   complement. Mirrors the (is_pole, is_interior) 2-cell partition
+    //   on the single-bit verdict surface one PROJECTION-KIND axis over.
+
+    #[test]
+    fn resource_limits_axes_is_pole_of_pole_presets_is_all_true() {
+        // Preset identity — both bounded-lattice extrema carry all-true
+        // per-axis pole masks: EMPTY fires the bottom arm at every axis
+        // and UNBOUNDED fires the top arm at every axis, so the per-axis
+        // disjunction opens uniformly on both.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.axes_is_pole(),
+            [true; ResourceLimits::FIELD_COUNT],
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.axes_is_pole(),
+            [true; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_pole_of_default_is_all_false() {
+        // Interior preset — every `DEFAULT_MAX_*` is a concrete positive
+        // constant strictly less than `usize::MAX`, so neither arm of
+        // the per-axis disjunction fires at any axis.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.axes_is_pole(),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_pole_of_hand_authored_postures_is_all_false() {
+        // Antichain rejection — the two hand-authored asymmetric
+        // postures sit in the lattice interior on distinct branches;
+        // no axis fires either pole arm. Pins the (pole, interior)
+        // per-axis partition on the antichain roster arm.
+        for &a in &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE] {
+            assert_eq!(
+                a.axes_is_pole(),
+                [false; ResourceLimits::FIELD_COUNT],
+                "hand-authored antichain posture {a:?} must carry an all-false axes_is_pole mask",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_interior_of_default_is_all_true() {
+        // Preset identity — every `DEFAULT_MAX_*` sits strictly between
+        // the two poles, so both per-axis pole arms reject at every axis
+        // and the per-axis conjunction-of-negations closes uniformly.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.axes_is_interior(),
+            [true; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_interior_of_pole_presets_is_all_false() {
+        // Preset rejection — both bounded-lattice extrema fire one pole
+        // arm at every axis, so the per-axis conjunction-of-negations
+        // rejects at every axis.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.axes_is_interior(),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.axes_is_interior(),
+            [false; ResourceLimits::FIELD_COUNT],
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_interior_of_hand_authored_postures_is_all_true() {
+        // Antichain absorption — the two hand-authored asymmetric
+        // postures sit strictly between the poles on every axis (each
+        // field is a positive-mid composite strictly less than
+        // `usize::MAX`), so neither per-axis pole arm fires and the
+        // per-axis conjunction-of-negations closes uniformly.
+        for &a in &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE] {
+            assert_eq!(
+                a.axes_is_interior(),
+                [true; ResourceLimits::FIELD_COUNT],
+                "hand-authored posture {a:?} must carry an all-true axes_is_interior mask",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_pole_agrees_with_disjunction_of_axes_is_bottom_and_axes_is_top() {
+        // Delegation contract — the per-axis pole mask agrees with the
+        // direct per-axis `||` of the two shipped pole-identity masks
+        // on every preset. Pins the disjunction encoding is a semantic
+        // no-op against a pre-lift consumer that composed the two
+        // per-axis-mask primitives at its call site.
+        for &a in STRICT_ORDER_ROSTER {
+            let pole = a.axes_is_pole();
+            let bot = a.axes_is_bottom();
+            let top = a.axes_is_top();
+            for i in 0..ResourceLimits::FIELD_COUNT {
+                assert_eq!(
+                    pole[i],
+                    bot[i] || top[i],
+                    "axes_is_pole[{i}] must equal axes_is_bottom[{i}] || axes_is_top[{i}] for {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_interior_agrees_with_negated_conjunction_of_axes_is_bottom_and_axes_is_top(
+    ) {
+        // Delegation contract — the per-axis interior mask agrees with
+        // the direct per-axis `!bot && !top` conjunction on every preset.
+        for &a in STRICT_ORDER_ROSTER {
+            let interior = a.axes_is_interior();
+            let bot = a.axes_is_bottom();
+            let top = a.axes_is_top();
+            for i in 0..ResourceLimits::FIELD_COUNT {
+                assert_eq!(
+                    interior[i],
+                    !bot[i] && !top[i],
+                    "axes_is_interior[{i}] must equal !axes_is_bottom[{i}] && !axes_is_top[{i}] \
+                     for {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_pole_agrees_with_pointwise_field_at_either_pole() {
+        // Positional-alignment cross-check — mask position `i` agrees
+        // with the direct per-axis `field == 0 || field == usize::MAX`
+        // verdict on the `i`-th `field_values` component. Pins the
+        // canonical index-to-axis mapping.
+        for &a in STRICT_ORDER_ROSTER {
+            let mask = a.axes_is_pole();
+            let values = a.field_values();
+            for i in 0..ResourceLimits::FIELD_COUNT {
+                assert_eq!(
+                    mask[i],
+                    values[i] == 0 || values[i] == usize::MAX,
+                    "axes_is_pole[{i}] must equal pointwise `field ∈ {{0, usize::MAX}}` verdict \
+                     for {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_interior_agrees_with_pointwise_field_in_strict_interior() {
+        // Positional-alignment dual — mask position `i` agrees with
+        // the direct per-axis `field > 0 && field < usize::MAX` verdict.
+        for &a in STRICT_ORDER_ROSTER {
+            let mask = a.axes_is_interior();
+            let values = a.field_values();
+            for i in 0..ResourceLimits::FIELD_COUNT {
+                assert_eq!(
+                    mask[i],
+                    values[i] > 0 && values[i] < usize::MAX,
+                    "axes_is_interior[{i}] must equal pointwise `0 < field < usize::MAX` verdict \
+                     for {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_pole_is_de_morgan_dual_of_axes_is_interior() {
+        // De Morgan cross-check — the per-axis pole and interior masks
+        // are set-complements at every axis of every posture. Pins the
+        // per-axis (pole, interior) 2-cell partition as a substrate-
+        // level EXCLUSIVITY THEOREM proved on BOTH sides at TYPE level.
+        for &a in STRICT_ORDER_ROSTER {
+            let pole = a.axes_is_pole();
+            let interior = a.axes_is_interior();
+            for i in 0..ResourceLimits::FIELD_COUNT {
+                assert_eq!(
+                    pole[i], !interior[i],
+                    "axes_is_pole[{i}] must equal !axes_is_interior[{i}] for {a:?}",
+                );
+                assert_eq!(
+                    interior[i], !pole[i],
+                    "axes_is_interior[{i}] must equal !axes_is_pole[{i}] for {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_pole_and_axes_is_interior_partition_every_axis() {
+        // Partition exhaustiveness — exactly one of the two per-axis
+        // verdicts holds at every axis of every posture. The per-axis
+        // (pole, interior) 2-cell partition exhausts the per-axis
+        // posture universe with disjoint verdicts. Sweeps the canonical
+        // preset roster; discriminates any regression that would allow
+        // both (`axes_is_pole[i] && axes_is_interior[i]`) or neither
+        // (`!axes_is_pole[i] && !axes_is_interior[i]`) at some axis.
+        for &a in STRICT_ORDER_ROSTER {
+            let pole = a.axes_is_pole();
+            let interior = a.axes_is_interior();
+            for i in 0..ResourceLimits::FIELD_COUNT {
+                assert!(
+                    pole[i] ^ interior[i],
+                    "(axes_is_pole[{i}], axes_is_interior[{i}]) must partition axis {i} on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_pole_fold_may_exceed_is_pole_on_mixed_pole_posture() {
+        // LOAD-BEARING semantic-gap witness — the (axes_is_pole,
+        // is_pole) pair does NOT satisfy the standard fold-recovers-
+        // scalar law the other per-axis-mask peers satisfy. Compose a
+        // mixed-pole posture via `strictest_of([EMPTY, one-axis-at-
+        // UNBOUNDED])` — every axis sits at SOME pole (five at the
+        // bottom via EMPTY, one at the top via the UNBOUNDED-lifted
+        // axis), so `axes_is_pole == [true; FIELD_COUNT]` and its fold
+        // is `true`. But the whole posture is neither the EMPTY preset
+        // (one axis is `usize::MAX`) nor the UNBOUNDED preset (five
+        // axes are `0`), so `is_pole == false`. Pins the documented
+        // per-axis-fold-refines-scalar contract from the axes_is_pole
+        // doc comment; a consumer expecting the standard fold-contract
+        // could silently observe `[true; 6]` and infer `is_pole == true`
+        // on a mixed-pole posture without this test firing on any
+        // future regression that drifts the two projections back into
+        // agreement.
+        let mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 0,
+            max_macro_body_size: 0,
+            max_registered_macros: 0,
+            max_macro_arity: 0,
+        };
+        let mask = mixed_pole.axes_is_pole();
+        assert_eq!(
+            mask,
+            [true; ResourceLimits::FIELD_COUNT],
+            "mixed-pole posture must carry all-true axes_is_pole",
+        );
+        assert!(
+            mask.iter().all(|&bit| bit),
+            "fold(axes_is_pole) must be true on the mixed-pole posture",
+        );
+        assert!(
+            !mixed_pole.is_pole(),
+            "mixed-pole posture must NOT satisfy is_pole (neither pole preset)",
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_interior_fold_may_be_stricter_than_is_interior_on_mixed_pole_posture(
+    ) {
+        // Dual load-bearing semantic-gap witness — the (axes_is_interior,
+        // is_interior) pair does NOT satisfy the standard fold-recovers-
+        // scalar law. The same mixed-pole posture satisfies
+        // `is_interior == true` (neither pole preset — five axes at `0`,
+        // one at `usize::MAX`, no reason to fire `is_bottom` or `is_top`
+        // as whole-posture predicates) but every axis sits at SOME pole,
+        // so `axes_is_interior == [false; FIELD_COUNT]` and its fold is
+        // `false`. Pins the documented per-axis-fold-may-be-stricter-
+        // than-scalar contract.
+        let mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 0,
+            max_macro_body_size: 0,
+            max_registered_macros: 0,
+            max_macro_arity: 0,
+        };
+        let mask = mixed_pole.axes_is_interior();
+        assert_eq!(
+            mask,
+            [false; ResourceLimits::FIELD_COUNT],
+            "mixed-pole posture must carry all-false axes_is_interior",
+        );
+        assert!(
+            mixed_pole.is_interior(),
+            "mixed-pole posture must satisfy is_interior (neither pole preset)",
+        );
+    }
+
+    #[test]
+    fn resource_limits_axes_is_pole_agrees_with_scalar_is_pole_when_fold_true_on_uniform_pole_posture(
+    ) {
+        // Positive-arm bridge — on postures where the per-axis mask is
+        // UNIFORMLY at the SAME pole (both bounded-lattice extrema
+        // qualify), the fold-recovers-scalar law holds: EMPTY.axes_is_pole
+        // folds true AND EMPTY.is_pole is true; UNBOUNDED symmetric.
+        // Pins the fold-refines-scalar direction is TIGHT on the two
+        // uniform-pole roster witnesses even though it can diverge on a
+        // mixed-pole composite (pinned in the paired
+        // fold_may_exceed test above).
+        for &a in &[EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS] {
+            let mask = a.axes_is_pole();
+            assert!(
+                mask.iter().all(|&bit| bit),
+                "fold(axes_is_pole) must be true on uniform-pole preset {a:?}",
+            );
+            assert!(
+                a.is_pole(),
+                "uniform-pole preset {a:?} must satisfy is_pole",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_pole_composes_at_compile_time_via_const_fn() {
+        // CONST-FN PIN — the per-axis pole mask is evaluable in const
+        // context, so a caller can pin per-axis pole membership at
+        // compile time. Sibling of the const-fn evaluability pins on
+        // `axes_is_bottom` / `axes_is_top` one COMBINATOR axis over.
+        const EMPTY_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            EMPTY_RESOURCE_LIMITS.axes_is_pole();
+        const UNBOUNDED_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            UNBOUNDED_RESOURCE_LIMITS.axes_is_pole();
+        const DEFAULT_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            DEFAULT_RESOURCE_LIMITS.axes_is_pole();
+        assert_eq!(EMPTY_MASK, [true; ResourceLimits::FIELD_COUNT]);
+        assert_eq!(UNBOUNDED_MASK, [true; ResourceLimits::FIELD_COUNT]);
+        assert_eq!(DEFAULT_MASK, [false; ResourceLimits::FIELD_COUNT]);
+    }
+
+    #[test]
+    fn resource_limits_axes_is_interior_composes_at_compile_time_via_const_fn() {
+        // CONST-FN dual pin — same shape, dual cell.
+        const DEFAULT_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            DEFAULT_RESOURCE_LIMITS.axes_is_interior();
+        const EMPTY_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            EMPTY_RESOURCE_LIMITS.axes_is_interior();
+        const UNBOUNDED_MASK: [bool; ResourceLimits::FIELD_COUNT] =
+            UNBOUNDED_RESOURCE_LIMITS.axes_is_interior();
+        assert_eq!(DEFAULT_MASK, [true; ResourceLimits::FIELD_COUNT]);
+        assert_eq!(EMPTY_MASK, [false; ResourceLimits::FIELD_COUNT]);
+        assert_eq!(UNBOUNDED_MASK, [false; ResourceLimits::FIELD_COUNT]);
     }
 
     // ── Field-inspection primitives: FIELD_COUNT + FIELD_NAMES +

@@ -12903,6 +12903,249 @@ impl ResourceLimits {
             _ => None,
         }
     }
+
+    /// Whole-posture INDEX-SPAN-OF-POLAR projection —
+    /// `self.polar_axis_index_span()` returns
+    /// `Some(last_polar_axis_index - first_polar_axis_index + 1)` (the
+    /// WIDTH of the closed index interval `[first_polar, last_polar]`,
+    /// counting BOTH endpoints AND every position strictly between them,
+    /// regardless of whether every position between them is itself
+    /// polar) when at least one axis is at a pole, OR `None` when every
+    /// axis is strictly interior. The COMPOUND-CELL peer of
+    /// [`Self::bottom_axis_index_span`] + [`Self::top_axis_index_span`]
+    /// one CELL-KIND axis over on the DERIVED-USIZE column, AND the
+    /// EXTENT peer of [`Self::first_polar_axis_index`] +
+    /// [`Self::last_polar_axis_index`] one PROJECTION-KIND axis over on
+    /// the COMPOUND (polar, interior) row — jointly the
+    /// (polar_axis_index_span, interior_axis_index_span) COMPOUND pair
+    /// OPENS the SPAN column on the compound row past the just-shipped
+    /// (bottom_axis_index_span, top_axis_index_span) atomic row, the
+    /// same way (first_polar_axis_index, first_interior_axis_index)
+    /// opened the INDEX-OF-FIRST column past (first_bottom, first_top)
+    /// and (last_polar, last_interior) opened the INDEX-OF-LAST column
+    /// past (last_bottom, last_top).
+    ///
+    /// A STRICT REFINEMENT of the COUNT-fold on the SAME compound cell
+    /// in a SECOND direction: two postures with the SAME
+    /// `count_polar_axes() == 2` but with the two polar axes at (0, 1)
+    /// versus (0, `FIELD_COUNT - 1`) give the SAME `count` verdict but
+    /// DIFFERENT `span` verdicts, pinning the SPAN as the DENSITY-
+    /// SENSITIVE refinement of COUNT the same way the (FIRST, LAST) pair
+    /// adds POSITIONAL discriminators atop the COUNT-fold.
+    ///
+    /// **FIRST-LAST-DERIVATION identity — LOAD-BEARING structural pin**:
+    /// on every posture, `polar_axis_index_span() == match
+    /// (first_polar_axis_index(), last_polar_axis_index()) {
+    /// (Some(f), Some(l)) => Some(l - f + 1), _ => None, }`. The
+    /// (FIRST, LAST) pair on the COMPOUND cell uniquely determines the
+    /// SPAN — SPAN is a DERIVED USIZE projection reading the two
+    /// already-lifted compound endpoints and returning their bracket
+    /// width, NOT a new per-axis scan. Pinned via
+    /// `resource_limits_polar_axis_index_span_equals_last_minus_first_plus_one`.
+    ///
+    /// **COMPOUND-vs-ATOMIC saturation contrast — LOAD-BEARING**: BOTH
+    /// `EMPTY_RESOURCE_LIMITS` (every axis at bottom, so every axis
+    /// polar) AND `UNBOUNDED_RESOURCE_LIMITS` (every axis at top, so
+    /// every axis polar) saturate `polar_axis_index_span()` at
+    /// `Some(FIELD_COUNT)` — where on the ATOMIC (bottom, top) row EACH
+    /// preset saturates only ONE of the two atomic spans and returns
+    /// `None` on the other. The COMPOUND cell UNIONS the two atomic
+    /// hits, and a truly-mixed-pole composite where SOME axes fire
+    /// bottom AND SOME axes fire top ALSO saturates the compound SPAN
+    /// even though NEITHER atomic SPAN saturates on that composite.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.polar_axis_index_span()
+    /// == Some(FIELD_COUNT)` (every axis at bottom pole; every axis
+    /// polar); `UNBOUNDED_RESOURCE_LIMITS.polar_axis_index_span() ==
+    /// Some(FIELD_COUNT)` (every axis at top pole; every axis polar);
+    /// `DEFAULT_RESOURCE_LIMITS.polar_axis_index_span() == None` (every
+    /// `DEFAULT_MAX_*` strictly interior; no polar axis).
+    ///
+    /// **ANY-fold bridge**: `a.polar_axis_index_span().is_some() ⇔
+    /// a.has_polar_axis()`. Pinned via
+    /// `resource_limits_polar_axis_index_span_is_some_iff_has_polar_axis`.
+    ///
+    /// **COUNT bridge**: `a.polar_axis_index_span().is_none() ⇔
+    /// a.count_polar_axes() == 0`. The EMPTINESS of the SPAN projection
+    /// AGREES with the EMPTINESS of the COUNT projection AGREES with
+    /// the FALSENESS of the ANY-fold on the COMPOUND cell. Pinned via
+    /// `resource_limits_polar_axis_index_span_is_none_iff_count_polar_axes_is_zero`.
+    ///
+    /// **SINGLE-FIRE COINCIDENCE pin**: `a.polar_axis_index_span() ==
+    /// Some(1) ⇔ a.count_polar_axes() == 1 ⇔
+    /// a.first_polar_axis_index() == a.last_polar_axis_index() &&
+    /// a.first_polar_axis_index().is_some()`. Pinned via
+    /// `resource_limits_polar_axis_index_span_is_some_one_iff_count_polar_axes_is_one`.
+    ///
+    /// **FULL-SPAN pin — LOAD-BEARING boundary-saturation identity**:
+    /// `a.polar_axis_index_span() == Some(FIELD_COUNT) ⇔
+    /// a.first_polar_axis_index() == Some(0) &&
+    /// a.last_polar_axis_index() == Some(FIELD_COUNT - 1)`. The full-
+    /// width SPAN is the ENDPOINT-SATURATION at BOTH sides of the
+    /// available index range on the COMPOUND cell. Pinned via
+    /// `resource_limits_polar_axis_index_span_is_some_field_count_iff_first_is_zero_and_last_is_last`.
+    ///
+    /// **SPAN ≥ COUNT inequality — LOAD-BEARING DENSITY-DISCRIMINATOR**:
+    /// on every posture, `a.polar_axis_index_span() ≥
+    /// Some(a.count_polar_axes())` when the SPAN is `Some(_)`, with
+    /// EQUALITY exactly when the polar axes are CONTIGUOUS in the axis
+    /// sequence and STRICT INEQUALITY exactly when they are SPARSE.
+    /// Pinned via
+    /// `resource_limits_polar_axis_index_span_ge_count_polar_axes_when_some`.
+    ///
+    /// **CROSS-CELL SPAN DE MORGAN pin — LOAD-BEARING refinement of the
+    /// (polar, interior) De Morgan complement at the SPAN surface**: on
+    /// every posture, exactly one of three regimes holds at the whole-
+    /// posture SPAN level:
+    ///
+    ///   * `polar_axis_index_span() == None` — no axis polar, so
+    ///     `interior_axis_index_span() == Some(FIELD_COUNT)` (every
+    ///     axis interior; the interior bracket SATURATES).
+    ///   * `interior_axis_index_span() == None` — no axis interior, so
+    ///     `polar_axis_index_span() == Some(FIELD_COUNT)` (every axis
+    ///     polar; the polar bracket SATURATES).
+    ///   * both `Some(_)` — the two brackets partition their per-axis
+    ///     masks disjointly AND EXHAUSTIVELY (per the (polar, interior)
+    ///     De Morgan pointwise pair), and BOTH SPANs include the
+    ///     endpoints of their respective sub-sequences.
+    ///
+    /// The `Option::is_some`-vs-`Option::is_none` XOR of the compound
+    /// pair reproduces the boolean `has_polar_axis()` De Morgan
+    /// complement `has_interior_axis()`, and the `Some(FIELD_COUNT)`
+    /// saturation of one side coincides with the `None` verdict of the
+    /// other. Pinned via
+    /// `resource_limits_polar_and_interior_axis_index_spans_form_de_morgan_saturation_pair`.
+    ///
+    /// **Range bound**: when `Some(w)`, `1 ≤ w ≤ FIELD_COUNT` by
+    /// construction (both endpoints sit in `[0, FIELD_COUNT)` and
+    /// `first ≤ last` by the SANDWICH pin on the COMPOUND cell).
+    ///
+    /// `const fn` so a caller can pin the exact polar-axis index span
+    /// at compile time.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// index-span-of-polar projection is a named typed exit
+    /// `Option<usize>` rather than an inline
+    /// `first.zip(last).map(|(f, l)| l - f + 1)` per-consumer bracket-
+    /// width fold on the COMPOUND cell. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; the (COUNT, SPAN) pair on the
+    /// COMPOUND cell adds a DENSITY-SENSITIVE discriminator neither the
+    /// COUNT alone nor the (FIRST, LAST) endpoint pair can supply on
+    /// their own, closing the CONTIGUOUS-vs-SPARSE decision at the
+    /// compile-time surface for the COMPOUND (polar, interior)
+    /// partition. THEORY.md §V.1 — knowable platform; the SPAN
+    /// projection is a `const fn` operation on the posture algebra
+    /// returning a const-evaluable `Option<usize>`.
+    ///
+    /// Frontier inspiration: same as [`Self::bottom_axis_index_span`],
+    /// lifted from the ATOMIC cell to the COMPOUND (polar, interior)
+    /// cell via the (first_polar, last_polar) compound endpoint pair —
+    /// APL's `(⌈/⍸P) - (⌊/⍸P) + 1` interval-width fold with `P` the
+    /// compound predicate `(axes_is_pole)`. Translation through pleme-
+    /// io primitives is the plain `const fn` DERIVATION from the
+    /// already-lifted (first_polar_axis_index, last_polar_axis_index)
+    /// pair — no new per-axis scan, no allocation, one subtraction +
+    /// one increment.
+    #[must_use]
+    pub const fn polar_axis_index_span(self) -> Option<usize> {
+        match (self.first_polar_axis_index(), self.last_polar_axis_index()) {
+            (Some(f), Some(l)) => Some(l - f + 1),
+            _ => None,
+        }
+    }
+
+    /// Whole-posture INDEX-SPAN-OF-INTERIOR projection —
+    /// `self.interior_axis_index_span()` returns
+    /// `Some(last_interior_axis_index - first_interior_axis_index + 1)`
+    /// (the WIDTH of the closed index interval `[first_interior,
+    /// last_interior]`) when at least one axis is strictly interior, OR
+    /// `None` when every axis sits at some pole. The EXTENT peer of
+    /// [`Self::first_interior_axis_index`] +
+    /// [`Self::last_interior_axis_index`] one PROJECTION-KIND axis over
+    /// on the DERIVED-USIZE column, AND the COMPOUND-CELL DUAL of
+    /// [`Self::polar_axis_index_span`] one COMBINATOR axis over via the
+    /// (polar, interior) pointwise De Morgan complement — jointly the
+    /// (polar_axis_index_span, interior_axis_index_span) COMPOUND pair
+    /// CLOSES the SPAN column on the compound row.
+    ///
+    /// A STRICT REFINEMENT of the COUNT-fold on the SAME compound cell
+    /// in a SECOND direction the COUNT alone cannot supply: two
+    /// postures with the SAME `count_interior_axes() == 2` but with the
+    /// two interior axes at (0, 1) versus (0, `FIELD_COUNT - 1`) give
+    /// the SAME `count` verdict but DIFFERENT `span` verdicts.
+    ///
+    /// **FIRST-LAST-DERIVATION identity dual**: on every posture,
+    /// `interior_axis_index_span() == match
+    /// (first_interior_axis_index(), last_interior_axis_index()) {
+    /// (Some(f), Some(l)) => Some(l - f + 1), _ => None, }`. Pinned via
+    /// `resource_limits_interior_axis_index_span_equals_last_minus_first_plus_one`.
+    ///
+    /// **Preset pins**: `DEFAULT_RESOURCE_LIMITS.interior_axis_index_span()
+    /// == Some(FIELD_COUNT)` (every `DEFAULT_MAX_*` strictly interior;
+    /// the interior bracket SATURATES at the full field width);
+    /// `EMPTY_RESOURCE_LIMITS.interior_axis_index_span() == None` (every
+    /// axis at bottom pole; no interior axis);
+    /// `UNBOUNDED_RESOURCE_LIMITS.interior_axis_index_span() == None`
+    /// (every axis at top pole; no interior axis).
+    ///
+    /// **Hand-authored asymmetric saturation**: both
+    /// [`HAND_AUTHORED_MID_POSTURE`] and [`HAND_AUTHORED_OTHER_POSTURE`]
+    /// have every field strictly between `0` and `usize::MAX`, so
+    /// `interior_axis_index_span()` returns `Some(FIELD_COUNT)` on both
+    /// — the compound-cell dual of the two hand-authored postures'
+    /// `Some(FIELD_COUNT - 1)` verdict on `last_interior_axis_index`
+    /// (interior bracket covers every position from 0 to FIELD_COUNT-1
+    /// inclusive on both postures).
+    ///
+    /// **ANY-fold bridge**: `a.interior_axis_index_span().is_some() ⇔
+    /// a.has_interior_axis()`. Pinned via
+    /// `resource_limits_interior_axis_index_span_is_some_iff_has_interior_axis`.
+    ///
+    /// **COUNT bridge**: `a.interior_axis_index_span().is_none() ⇔
+    /// a.count_interior_axes() == 0`. Pinned via
+    /// `resource_limits_interior_axis_index_span_is_none_iff_count_interior_axes_is_zero`.
+    ///
+    /// **SINGLE-FIRE COINCIDENCE pin dual**:
+    /// `a.interior_axis_index_span() == Some(1) ⇔
+    /// a.count_interior_axes() == 1 ⇔
+    /// a.first_interior_axis_index() == a.last_interior_axis_index() &&
+    /// a.first_interior_axis_index().is_some()`. Pinned via
+    /// `resource_limits_interior_axis_index_span_is_some_one_iff_count_interior_axes_is_one`.
+    ///
+    /// **FULL-SPAN pin dual**:
+    /// `a.interior_axis_index_span() == Some(FIELD_COUNT) ⇔
+    /// a.first_interior_axis_index() == Some(0) &&
+    /// a.last_interior_axis_index() == Some(FIELD_COUNT - 1)`. Pinned
+    /// via
+    /// `resource_limits_interior_axis_index_span_is_some_field_count_iff_first_is_zero_and_last_is_last`.
+    ///
+    /// **SPAN ≥ COUNT inequality dual**: on every posture,
+    /// `a.interior_axis_index_span() ≥ Some(a.count_interior_axes())`
+    /// when the SPAN is `Some(_)`, with EQUALITY exactly when the
+    /// interior axes are CONTIGUOUS. Pinned via
+    /// `resource_limits_interior_axis_index_span_ge_count_interior_axes_when_some`.
+    ///
+    /// **Range bound dual**: when `Some(w)`, `1 ≤ w ≤ FIELD_COUNT`.
+    ///
+    /// `const fn` so a caller can pin the exact interior-axis index
+    /// span at compile time.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// THEORY.md §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: same as [`Self::polar_axis_index_span`],
+    /// on the De Morgan dual COMPOUND cell.
+    #[must_use]
+    pub const fn interior_axis_index_span(self) -> Option<usize> {
+        match (
+            self.first_interior_axis_index(),
+            self.last_interior_axis_index(),
+        ) {
+            (Some(f), Some(l)) => Some(l - f + 1),
+            _ => None,
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -46883,6 +47126,677 @@ mod tests {
         ));
         const _: () = assert!(EMPTY_RESOURCE_LIMITS.top_axis_index_span().is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_index_span().is_none());
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_index_span_of_empty_preset_is_some_field_count() {
+        // COMPOUND-cell preset closure — every axis at bottom on EMPTY,
+        // hence every axis polar, so the polar SPAN saturates at the
+        // full field width `FIELD_COUNT`. The COMPOUND-CELL DUAL of
+        // `bottom_axis_index_span` on this same preset (both saturate
+        // together because the polar cell UNIONS the bottom cell) AND
+        // the CROSS-PRESET DUAL of the same verdict on
+        // `UNBOUNDED_RESOURCE_LIMITS.polar_axis_index_span` (which also
+        // saturates because every axis at top pole is still polar).
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_index_span(),
+            Some(ResourceLimits::FIELD_COUNT),
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_index_span_of_unbounded_preset_is_some_field_count() {
+        // COMPOUND-cell preset closure dual — every axis at top pole on
+        // UNBOUNDED, hence every axis polar, so the polar SPAN saturates
+        // at `FIELD_COUNT`. The KEY COMPOUND-vs-ATOMIC contrast: on
+        // ATOMIC (bottom, top) row, EACH preset saturates only ONE of
+        // the two atomic spans; on the COMPOUND (polar, interior) row,
+        // BOTH `EMPTY` and `UNBOUNDED` saturate the polar span. The
+        // COMPOUND cell is the UNION of the two atomic cells.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_index_span(),
+            Some(ResourceLimits::FIELD_COUNT),
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_index_span_of_default_is_none() {
+        // Preset rejection on the COMPOUND cell — every shipped
+        // `DEFAULT_MAX_*` is strictly positive AND strictly less than
+        // `usize::MAX`, so no polar axis fires and the polar SPAN is
+        // None. The COMPOUND rejection AGREES with the atomic
+        // (`bottom_axis_index_span`, `top_axis_index_span`) BOTH-none
+        // regime at DEFAULT.
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.polar_axis_index_span(), None);
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_index_span_of_default_is_some_field_count() {
+        // COMPOUND-cell preset closure DUAL — every `DEFAULT_MAX_*`
+        // strictly interior on DEFAULT, so the interior SPAN saturates
+        // at `FIELD_COUNT`. The COMPOUND-CELL DUAL of the polar SPAN's
+        // `None` verdict at DEFAULT: exactly one of (polar_span,
+        // interior_span) fires per the (polar, interior) De Morgan
+        // partition, and DEFAULT falls entirely into the interior cell.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_index_span(),
+            Some(ResourceLimits::FIELD_COUNT),
+        );
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_index_span_of_empty_preset_is_none() {
+        // Preset rejection on the COMPOUND interior cell — every axis
+        // at bottom pole on EMPTY, no interior axis, so the interior
+        // SPAN is None. Dual of the polar SPAN's saturation on the same
+        // preset.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.interior_axis_index_span(), None);
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_index_span_of_unbounded_preset_is_none() {
+        // Preset rejection dual — every axis at top pole on UNBOUNDED,
+        // no interior axis.
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.interior_axis_index_span(), None);
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_index_span_of_hand_authored_postures_is_some_field_count() {
+        // Antichain saturation — both hand-authored antichain postures
+        // have every field strictly between 0 and `usize::MAX`, so
+        // every axis is strictly interior and the interior SPAN
+        // saturates at `FIELD_COUNT` on both. The COMPOUND-CELL DUAL of
+        // the atomic (bottom_span, top_span) BOTH-None verdict on the
+        // same two postures — the antichain postures fall entirely into
+        // the interior cell, so the polar SPAN is None and the interior
+        // SPAN maxes.
+        for &a in &[HAND_AUTHORED_MID_POSTURE, HAND_AUTHORED_OTHER_POSTURE] {
+            assert_eq!(
+                a.interior_axis_index_span(),
+                Some(ResourceLimits::FIELD_COUNT),
+                "hand-authored antichain posture {a:?} must return Some(FIELD_COUNT) from \
+                 interior_axis_index_span",
+            );
+            assert_eq!(
+                a.polar_axis_index_span(),
+                None,
+                "hand-authored antichain posture {a:?} must return None from \
+                 polar_axis_index_span",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_index_span_equals_last_minus_first_plus_one() {
+        // FIRST-LAST-DERIVATION identity on the COMPOUND cell —
+        // LOAD-BEARING structural pin that names the polar SPAN as the
+        // DERIVED USIZE projection of the already-lifted (first_polar,
+        // last_polar) endpoint pair. Sweeps every preset AND a
+        // truly-mixed-pole composite (some bottom, some top, none
+        // interior — the compound SPAN saturates at FIELD_COUNT even
+        // though NEITHER atomic SPAN saturates) AND a sparse-polar
+        // discriminator (polar axes at positions 0 and 3 with an
+        // interior axis at position 1 or 2 in between — SPAN = 4 but
+        // COUNT_POLAR = 2).
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let sparse_polar_at_zero_and_three = ResourceLimits {
+            max_expansion_depth: 0,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: usize::MAX,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &sparse_polar_at_zero_and_three])
+        {
+            let expected = match (a.first_polar_axis_index(), a.last_polar_axis_index()) {
+                (Some(f), Some(l)) => Some(l - f + 1),
+                _ => None,
+            };
+            assert_eq!(
+                a.polar_axis_index_span(),
+                expected,
+                "polar_axis_index_span must equal last - first + 1 (when both Some) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_index_span_equals_last_minus_first_plus_one() {
+        // FIRST-LAST-DERIVATION identity dual on the COMPOUND cell.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let sparse_interior_at_zero_and_three = ResourceLimits {
+            max_expansion_depth: 5,
+            max_cache_entries: 0,
+            max_expansion_size: 0,
+            max_macro_body_size: 11,
+            max_registered_macros: 0,
+            max_macro_arity: 0,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &sparse_interior_at_zero_and_three])
+        {
+            let expected = match (a.first_interior_axis_index(), a.last_interior_axis_index()) {
+                (Some(f), Some(l)) => Some(l - f + 1),
+                _ => None,
+            };
+            assert_eq!(
+                a.interior_axis_index_span(),
+                expected,
+                "interior_axis_index_span must equal last - first + 1 (when both Some) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_index_span_is_some_iff_has_polar_axis() {
+        // ANY-fold bridge on the COMPOUND cell — the boolean ANY-fold
+        // verdict is the SOMENESS of the polar SPAN projection. Sibling
+        // of the same bridge on `first_polar_axis_index` and
+        // `last_polar_axis_index` one PROJECTION-KIND axis over.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.polar_axis_index_span().is_some(),
+                a.has_polar_axis(),
+                "polar_axis_index_span().is_some() must equal has_polar_axis() for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_index_span_is_some_iff_has_interior_axis() {
+        // ANY-fold bridge dual.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.interior_axis_index_span().is_some(),
+                a.has_interior_axis(),
+                "interior_axis_index_span().is_some() must equal has_interior_axis() for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_index_span_is_none_iff_count_polar_axes_is_zero() {
+        // COUNT bridge on the COMPOUND cell.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.polar_axis_index_span().is_none(),
+                a.count_polar_axes() == 0,
+                "polar_axis_index_span().is_none() must equal (count_polar_axes() == 0) for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_index_span_is_none_iff_count_interior_axes_is_zero() {
+        // COUNT bridge dual.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain(core::iter::once(&truly_mixed_pole))
+        {
+            assert_eq!(
+                a.interior_axis_index_span().is_none(),
+                a.count_interior_axes() == 0,
+                "interior_axis_index_span().is_none() must equal (count_interior_axes() == 0) \
+                 for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_index_span_is_some_one_iff_count_polar_axes_is_one() {
+        // SINGLE-FIRE COINCIDENCE pin on the COMPOUND cell — SPAN,
+        // COUNT, and (FIRST == LAST) all COINCIDE at the DEGENERATE
+        // cardinality of one polar axis. Adds a single-polar-axis
+        // discriminator (five interior axes + one bottom axis at
+        // position 2) — SPAN 1, COUNT 1, FIRST == LAST == 2.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let single_polar_axis_at_two = ResourceLimits {
+            max_expansion_depth: 5,
+            max_cache_entries: 7,
+            max_expansion_size: 0,
+            max_macro_body_size: 11,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &single_polar_axis_at_two])
+        {
+            assert_eq!(
+                a.polar_axis_index_span() == Some(1),
+                a.count_polar_axes() == 1,
+                "polar_axis_index_span() == Some(1) must equal (count_polar_axes() == 1) for \
+                 {a:?}",
+            );
+        }
+        assert_eq!(single_polar_axis_at_two.polar_axis_index_span(), Some(1));
+        assert_eq!(single_polar_axis_at_two.count_polar_axes(), 1);
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_index_span_is_some_one_iff_count_interior_axes_is_one() {
+        // SINGLE-FIRE COINCIDENCE pin dual.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let single_interior_axis_at_two = ResourceLimits {
+            max_expansion_depth: 0,
+            max_cache_entries: usize::MAX,
+            max_expansion_size: 7,
+            max_macro_body_size: usize::MAX,
+            max_registered_macros: 0,
+            max_macro_arity: usize::MAX,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &single_interior_axis_at_two])
+        {
+            assert_eq!(
+                a.interior_axis_index_span() == Some(1),
+                a.count_interior_axes() == 1,
+                "interior_axis_index_span() == Some(1) must equal (count_interior_axes() == 1) \
+                 for {a:?}",
+            );
+        }
+        assert_eq!(
+            single_interior_axis_at_two.interior_axis_index_span(),
+            Some(1),
+        );
+        assert_eq!(single_interior_axis_at_two.count_interior_axes(), 1);
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_index_span_is_some_field_count_iff_first_is_zero_and_last_is_last(
+    ) {
+        // FULL-SPAN pin on the COMPOUND cell — the maximal polar SPAN
+        // `Some(FIELD_COUNT)` is EXACTLY the ENDPOINT-SATURATION at
+        // BOTH sides of the available index range on the COMPOUND cell.
+        // Sweeps a sparse-full-span discriminator (polar axes at both
+        // ends of the index range, interior in between; SPAN =
+        // FIELD_COUNT but COUNT_POLAR < FIELD_COUNT — the pin holds on
+        // FULL SPAN, not on FULL COUNT).
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let sparse_full_span_polar = ResourceLimits {
+            max_expansion_depth: 0,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: 11,
+            max_registered_macros: 13,
+            max_macro_arity: usize::MAX,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &sparse_full_span_polar])
+        {
+            let lhs = a.polar_axis_index_span() == Some(ResourceLimits::FIELD_COUNT);
+            let rhs = a.first_polar_axis_index() == Some(0)
+                && a.last_polar_axis_index() == Some(ResourceLimits::FIELD_COUNT - 1);
+            assert_eq!(
+                lhs, rhs,
+                "polar_axis_index_span() == Some(FIELD_COUNT) must equal (first == Some(0) && \
+                 last == Some(FIELD_COUNT - 1)) for {a:?}",
+            );
+        }
+        // Witness pin — the SPARSE full-span discriminator saturates
+        // SPAN at FIELD_COUNT but has COUNT strictly less than
+        // FIELD_COUNT (only two polar axes, at positions 0 and
+        // FIELD_COUNT - 1).
+        assert_eq!(
+            sparse_full_span_polar.polar_axis_index_span(),
+            Some(ResourceLimits::FIELD_COUNT),
+        );
+        assert_eq!(sparse_full_span_polar.count_polar_axes(), 2);
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_index_span_is_some_field_count_iff_first_is_zero_and_last_is_last(
+    ) {
+        // FULL-SPAN pin dual.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let sparse_full_span_interior = ResourceLimits {
+            max_expansion_depth: 5,
+            max_cache_entries: 0,
+            max_expansion_size: 7,
+            max_macro_body_size: 11,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &sparse_full_span_interior])
+        {
+            let lhs = a.interior_axis_index_span() == Some(ResourceLimits::FIELD_COUNT);
+            let rhs = a.first_interior_axis_index() == Some(0)
+                && a.last_interior_axis_index() == Some(ResourceLimits::FIELD_COUNT - 1);
+            assert_eq!(
+                lhs, rhs,
+                "interior_axis_index_span() == Some(FIELD_COUNT) must equal (first == Some(0) \
+                 && last == Some(FIELD_COUNT - 1)) for {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_index_span_ge_count_polar_axes_when_some() {
+        // SPAN ≥ COUNT inequality on the COMPOUND cell — LOAD-BEARING
+        // DENSITY-DISCRIMINATOR that names the NEW cardinality verdict
+        // the SPAN column adds past (FIRST, LAST, COUNT) for the
+        // COMPOUND polar cell. CONTIGUOUS iff SPAN == COUNT, SPARSE iff
+        // SPAN > COUNT.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let sparse_polar_at_zero_and_three = ResourceLimits {
+            max_expansion_depth: 0,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: usize::MAX,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        let contiguous_polar_at_zero_and_one = ResourceLimits {
+            max_expansion_depth: 0,
+            max_cache_entries: usize::MAX,
+            max_expansion_size: 7,
+            max_macro_body_size: 11,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        for &a in STRICT_ORDER_ROSTER.iter().chain([
+            &truly_mixed_pole,
+            &sparse_polar_at_zero_and_three,
+            &contiguous_polar_at_zero_and_one,
+        ]) {
+            if let Some(span) = a.polar_axis_index_span() {
+                let count = a.count_polar_axes();
+                assert!(
+                    span >= count,
+                    "polar_axis_index_span Some({span}) must be ≥ count_polar_axes {count} on \
+                     {a:?}",
+                );
+            }
+        }
+        // CONTIGUOUS witness — one bottom polar axis at 0 and one top
+        // polar axis at 1 (both polar, adjacent). SPAN 2, COUNT 2.
+        assert_eq!(
+            contiguous_polar_at_zero_and_one.polar_axis_index_span(),
+            Some(2),
+        );
+        assert_eq!(contiguous_polar_at_zero_and_one.count_polar_axes(), 2);
+        // SPARSE witness — polar axes at 0 (bottom) and 3 (top), with
+        // interior axes strictly between. SPAN 4, COUNT 2.
+        assert_eq!(
+            sparse_polar_at_zero_and_three.polar_axis_index_span(),
+            Some(4),
+        );
+        assert_eq!(sparse_polar_at_zero_and_three.count_polar_axes(), 2);
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_index_span_ge_count_interior_axes_when_some() {
+        // SPAN ≥ COUNT inequality dual on the COMPOUND cell.
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let sparse_interior_at_zero_and_three = ResourceLimits {
+            max_expansion_depth: 5,
+            max_cache_entries: 0,
+            max_expansion_size: 0,
+            max_macro_body_size: 11,
+            max_registered_macros: 0,
+            max_macro_arity: 0,
+        };
+        let contiguous_interior_at_zero_and_one = ResourceLimits {
+            max_expansion_depth: 5,
+            max_cache_entries: 7,
+            max_expansion_size: 0,
+            max_macro_body_size: 0,
+            max_registered_macros: 0,
+            max_macro_arity: 0,
+        };
+        for &a in STRICT_ORDER_ROSTER.iter().chain([
+            &truly_mixed_pole,
+            &sparse_interior_at_zero_and_three,
+            &contiguous_interior_at_zero_and_one,
+        ]) {
+            if let Some(span) = a.interior_axis_index_span() {
+                let count = a.count_interior_axes();
+                assert!(
+                    span >= count,
+                    "interior_axis_index_span Some({span}) must be ≥ count_interior_axes {count} \
+                     on {a:?}",
+                );
+            }
+        }
+        assert_eq!(
+            contiguous_interior_at_zero_and_one.interior_axis_index_span(),
+            Some(2),
+        );
+        assert_eq!(contiguous_interior_at_zero_and_one.count_interior_axes(), 2);
+        assert_eq!(
+            sparse_interior_at_zero_and_three.interior_axis_index_span(),
+            Some(4),
+        );
+        assert_eq!(sparse_interior_at_zero_and_three.count_interior_axes(), 2);
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_index_span_bounded_by_field_count() {
+        // Range-bound pin on the COMPOUND cell — when `Some(w)`,
+        // `1 ≤ w ≤ FIELD_COUNT`.
+        for &a in STRICT_ORDER_ROSTER {
+            if let Some(w) = a.polar_axis_index_span() {
+                assert!(
+                    (1..=ResourceLimits::FIELD_COUNT).contains(&w),
+                    "polar_axis_index_span Some({w}) out of range [1, FIELD_COUNT] on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_index_span_bounded_by_field_count() {
+        // Range-bound dual on the COMPOUND cell.
+        for &a in STRICT_ORDER_ROSTER {
+            if let Some(w) = a.interior_axis_index_span() {
+                assert!(
+                    (1..=ResourceLimits::FIELD_COUNT).contains(&w),
+                    "interior_axis_index_span Some({w}) out of range [1, FIELD_COUNT] on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_and_interior_axis_index_spans_form_de_morgan_saturation_pair() {
+        // CROSS-CELL SPAN DE MORGAN pin — LOAD-BEARING refinement of
+        // the (polar, interior) De Morgan complement at the SPAN
+        // surface. Three regimes hold at the whole-posture SPAN level:
+        // (1) polar_span None → interior_span Some(FIELD_COUNT); (2)
+        // interior_span None → polar_span Some(FIELD_COUNT); (3) both
+        // Some → both endpoints exist AND their SPANs BOTH ≥ 1 with
+        // their sum ≥ FIELD_COUNT (the two brackets cover the full
+        // index range together, possibly with overlap).
+        let truly_mixed_pole = ResourceLimits {
+            max_expansion_depth: usize::MAX,
+            max_cache_entries: 0,
+            max_expansion_size: 42,
+            max_macro_body_size: 100,
+            max_registered_macros: 200,
+            max_macro_arity: 300,
+        };
+        let mixed_polar_interior = ResourceLimits {
+            max_expansion_depth: 0,
+            max_cache_entries: 5,
+            max_expansion_size: 7,
+            max_macro_body_size: usize::MAX,
+            max_registered_macros: 13,
+            max_macro_arity: 17,
+        };
+        for &a in STRICT_ORDER_ROSTER
+            .iter()
+            .chain([&truly_mixed_pole, &mixed_polar_interior])
+        {
+            let ps = a.polar_axis_index_span();
+            let is_ = a.interior_axis_index_span();
+            match (ps, is_) {
+                (None, other) => {
+                    assert_eq!(
+                        other,
+                        Some(ResourceLimits::FIELD_COUNT),
+                        "polar_span None must imply interior_span Some(FIELD_COUNT) on {a:?}",
+                    );
+                }
+                (other, None) => {
+                    assert_eq!(
+                        other,
+                        Some(ResourceLimits::FIELD_COUNT),
+                        "interior_span None must imply polar_span Some(FIELD_COUNT) on {a:?}",
+                    );
+                }
+                (Some(p), Some(i)) => {
+                    assert!(p >= 1, "polar_span Some({p}) must be ≥ 1 on {a:?}");
+                    assert!(i >= 1, "interior_span Some({i}) must be ≥ 1 on {a:?}");
+                    // Bracket-union pin — the two compound brackets
+                    // JOINTLY cover the full index range because the
+                    // (polar, interior) per-axis masks EXHAUSTIVELY
+                    // partition every axis. Sum of spans ≥ FIELD_COUNT
+                    // (with equality exactly when the two brackets are
+                    // adjacent and non-overlapping, strict inequality
+                    // when they overlap).
+                    assert!(
+                        p + i >= ResourceLimits::FIELD_COUNT,
+                        "polar_span {p} + interior_span {i} must jointly cover ≥ FIELD_COUNT on \
+                         {a:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_index_span_composes_at_compile_time_via_const_fn() {
+        // CONST-FN pin on the COMPOUND cell — the polar SPAN projection
+        // is evaluable in const context. Both `EMPTY` and `UNBOUNDED`
+        // pin the compound saturation at compile time, mirroring their
+        // asymmetric atomic-cell saturation.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_index_span(),
+            Some(w) if w == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_index_span(),
+            Some(w) if w == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_axis_index_span().is_none());
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_index_span_composes_at_compile_time_via_const_fn() {
+        // CONST-FN dual pin.
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_index_span(),
+            Some(w) if w == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.interior_axis_index_span().is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .interior_axis_index_span()
+            .is_none());
     }
 
     // ── Field-inspection primitives: FIELD_COUNT + FIELD_NAMES +

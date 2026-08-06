@@ -13863,6 +13863,156 @@ impl ResourceLimits {
             None => None,
         }
     }
+
+    /// Whole-posture SPARSITY-OF-BOTTOM predicate —
+    /// `self.bottom_axis_is_sparse()` returns `Some(true)` iff at least
+    /// one position between [`Self::first_bottom_axis_index`] and
+    /// [`Self::last_bottom_axis_index`] inclusive is NOT a bottom axis
+    /// (equivalently: [`Self::bottom_axis_gap_count`] returns `Some(k)`
+    /// with `k > 0`), `Some(false)` iff the bottom-axis subset is fully
+    /// CONTIGUOUS inside its own bracket, or `None` iff no axis is at
+    /// the bottom pole. The DE MORGAN COMPLEMENT peer of
+    /// [`Self::bottom_axis_is_contiguous`] one COMBINATOR-KIND axis over
+    /// on the atomic BOTTOM cell — jointly the (bottom_axis_is_sparse,
+    /// top_axis_is_sparse) atomic pair OPENS the SPARSE column past the
+    /// just-closed CONTIGUITY column on the atomic (bottom, top) row via
+    /// the pointwise `Option::map(|b| !b)` combinator, the same way
+    /// (axes_is_non_monotone, axes_is_non_monotone) opened the NON-
+    /// MONOTONE column past the MONOTONE column one COMBINATOR-KIND axis
+    /// over on the per-axis-mask surface.
+    ///
+    /// **DE-MORGAN-COMPLEMENT identity — LOAD-BEARING structural pin**:
+    /// on every posture, `bottom_axis_is_sparse() ==
+    /// bottom_axis_is_contiguous().map(|b| !b)`. Composes structurally
+    /// through the just-lifted CONTIGUITY projection; the substrate
+    /// never re-scans the per-axis mask NOR re-derives the gap count.
+    /// Pinned via
+    /// `resource_limits_bottom_axis_is_sparse_equals_is_contiguous_complement`.
+    ///
+    /// **GAP-COUNT-IS-POSITIVE identity — LOAD-BEARING structural pin
+    /// dual**: on every posture, `bottom_axis_is_sparse() ==
+    /// bottom_axis_gap_count().map(|k| k > 0)`. The SPARSE cell straddles
+    /// the CONTIGUITY and GAP columns ONE PROJECTION-KIND axis apart via
+    /// two structurally-equivalent derivations. Pinned via
+    /// `resource_limits_bottom_axis_is_sparse_equals_gap_count_is_some_positive`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.bottom_axis_is_sparse() ==
+    /// Some(false)` (saturated bottom pole is trivially contiguous, so
+    /// NOT sparse); `UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_sparse() ==
+    /// None` (no bottom axis); `DEFAULT_RESOURCE_LIMITS
+    /// .bottom_axis_is_sparse() == None`.
+    ///
+    /// **ANY-fold bridge**: `a.bottom_axis_is_sparse().is_some() ⇔
+    /// a.has_bottom_axis()`. Pinned via
+    /// `resource_limits_bottom_axis_is_sparse_is_some_iff_has_bottom_axis`.
+    ///
+    /// **SINGLE-FIRE COINCIDENCE pin**: `a.bottom_axis_is_sparse() ==
+    /// Some(false)` when `a.count_bottom_axes() == 1` — the singleton
+    /// case is trivially contiguous, hence NOT sparse (structural De
+    /// Morgan complement of the CONTIGUITY singleton pin).
+    ///
+    /// **BOOLEAN COLLAPSE — LOAD-BEARING pin**: the (`Some(true)`,
+    /// `Some(false)`, `None`) trichotomy PARTITIONS every posture into
+    /// (sparse-bottom-bracket, contiguous-bottom-bracket, no-bottom-
+    /// axis) — the exact DE MORGAN DUAL of the CONTIGUITY trichotomy
+    /// with the `Some(true)` / `Some(false)` cells swapped and the
+    /// `None` cell fixed. Sits ONE COMBINATOR-KIND axis LATERAL to the
+    /// CONTIGUITY column on the algebraic tower (both `Option<bool>`;
+    /// identical projection-kind altitude), and the mirror position of
+    /// how (axes_is_monotone, axes_is_non_monotone) straddled the
+    /// MONOTONE and NON-MONOTONE columns one COMBINATOR-KIND axis apart
+    /// at the per-axis-mask surface. Pinned via
+    /// `resource_limits_bottom_axis_is_sparse_trichotomy_partitions_shipped_postures`.
+    ///
+    /// `const fn` so a caller can pin the bottom-axis SPARSITY verdict
+    /// at compile time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.bottom_axis_is_sparse(), Some(false)));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// SPARSE predicate is a named typed exit `Option<bool>` rather
+    /// than an inline `self.bottom_axis_is_contiguous().map(|b| !b)`
+    /// per-consumer negation. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs (the SPARSE cell is a structural
+    /// derivation from the CONTIGUITY projection via `Option::map`
+    /// under one boolean negation). THEORY.md §V.1 — knowable
+    /// platform.
+    ///
+    /// Frontier inspiration: APL's `∨/(⌊/⍸P + ⍳(⌈/⍸P - ⌊/⍸P + 1)) ∉ ⍸P`
+    /// bracket-has-a-hole predicate; Racket contract `(-> list?
+    /// boolean?)` on a monotonic predicate list checking has-holes;
+    /// run-length encoding's "run is at least two runs" primitive.
+    /// Translation through pleme-io primitives: the plain `const fn`
+    /// DERIVATION from the just-lifted [`Self::bottom_axis_is_contiguous`],
+    /// one boolean negation under `Option::map`, no new per-axis scan,
+    /// no gap re-derivation, no allocation.
+    #[must_use]
+    pub const fn bottom_axis_is_sparse(self) -> Option<bool> {
+        match self.bottom_axis_is_contiguous() {
+            Some(b) => Some(!b),
+            None => None,
+        }
+    }
+
+    /// Whole-posture SPARSITY-OF-TOP predicate —
+    /// `self.top_axis_is_sparse()` returns `Some(true)` iff at least
+    /// one position between [`Self::first_top_axis_index`] and
+    /// [`Self::last_top_axis_index`] inclusive is NOT a top axis
+    /// (equivalently: [`Self::top_axis_gap_count`] returns `Some(k)`
+    /// with `k > 0`), `Some(false)` iff the top-axis subset is fully
+    /// CONTIGUOUS inside its own bracket, or `None` iff no axis is at
+    /// the top pole. The ATOMIC-CELL DUAL of
+    /// [`Self::bottom_axis_is_sparse`] one CELL axis over on the
+    /// BOOLEAN SPARSE column — jointly the (bottom_axis_is_sparse,
+    /// top_axis_is_sparse) atomic pair OPENS the SPARSE column past
+    /// the just-closed CONTIGUITY column on the atomic (bottom, top)
+    /// row.
+    ///
+    /// **DE-MORGAN-COMPLEMENT identity dual**: on every posture,
+    /// `top_axis_is_sparse() == top_axis_is_contiguous().map(|b| !b)`.
+    /// Pinned via
+    /// `resource_limits_top_axis_is_sparse_equals_is_contiguous_complement`.
+    ///
+    /// **GAP-COUNT-IS-POSITIVE identity dual**: on every posture,
+    /// `top_axis_is_sparse() == top_axis_gap_count().map(|k| k > 0)`.
+    /// Pinned via
+    /// `resource_limits_top_axis_is_sparse_equals_gap_count_is_some_positive`.
+    ///
+    /// **Preset pins**: `UNBOUNDED_RESOURCE_LIMITS.top_axis_is_sparse()
+    /// == Some(false)` (saturated top pole is trivially contiguous, so
+    /// NOT sparse); `EMPTY_RESOURCE_LIMITS.top_axis_is_sparse() == None`
+    /// (no top axis); `DEFAULT_RESOURCE_LIMITS.top_axis_is_sparse() ==
+    /// None`.
+    ///
+    /// **ANY-fold bridge**: `a.top_axis_is_sparse().is_some() ⇔
+    /// a.has_top_axis()`. Pinned via
+    /// `resource_limits_top_axis_is_sparse_is_some_iff_has_top_axis`.
+    ///
+    /// **SINGLE-FIRE COINCIDENCE pin dual**: `a.top_axis_is_sparse() ==
+    /// Some(false)` when `a.count_top_axes() == 1`.
+    ///
+    /// **CROSS-CELL SATURATION contrast — LOAD-BEARING pin**: at the
+    /// SATURATED pole preset for EACH atomic cell, the OTHER cell's
+    /// SPARSITY is `None` and the SAME cell's SPARSITY is `Some(false)`.
+    /// The saturated pole is UNIFORMLY NOT SPARSE on its own cell and
+    /// UNIFORMLY ABSENT on the dual cell — pointwise De Morgan complement
+    /// of the atomic CONTIGUITY column's (Some(true), None) opposite-pole
+    /// pair on the boolean COMBINATOR-KIND axis. Pinned via
+    /// `resource_limits_atomic_is_sparse_saturation_pole_partitions_into_not_sparse_and_absent`.
+    ///
+    /// `const fn` so a caller can pin the top-axis SPARSITY verdict at
+    /// compile time.
+    ///
+    /// Theory anchor: same as [`Self::bottom_axis_is_sparse`].
+    ///
+    /// Frontier inspiration: same as [`Self::bottom_axis_is_sparse`],
+    /// on the DUAL atomic mask.
+    #[must_use]
+    pub const fn top_axis_is_sparse(self) -> Option<bool> {
+        match self.top_axis_is_contiguous() {
+            Some(b) => Some(!b),
+            None => None,
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -50715,5 +50865,297 @@ mod tests {
             .interior_axis_is_contiguous()
             .is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_contiguous().is_none());
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_sparse_preset_pins_saturate_at_not_sparse_and_absent() {
+        // Preset pins — the SATURATED-bottom-pole preset EMPTY packs all
+        // six axes at position 0..=5; the bottom bracket is trivially
+        // contiguous, hence NOT sparse. The absent-bottom presets and
+        // hand-authored postures carry no bottom axis; the SPARSITY
+        // verdict is None. Pointwise De Morgan complement of the atomic
+        // CONTIGUITY preset pin — Some(true) becomes Some(false), None
+        // stays None.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.bottom_axis_is_sparse(), Some(false));
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_sparse(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.bottom_axis_is_sparse(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.bottom_axis_is_sparse(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.bottom_axis_is_sparse(), None);
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_sparse_preset_pins_saturate_at_not_sparse_and_absent() {
+        // Preset pins dual — the SATURATED-top-pole preset UNBOUNDED
+        // packs all six axes at usize::MAX; the top bracket is trivially
+        // contiguous, hence NOT sparse. The absent-top presets and hand-
+        // authored postures carry no top axis; the SPARSITY verdict is
+        // None.
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.top_axis_is_sparse(), Some(false));
+        assert_eq!(EMPTY_RESOURCE_LIMITS.top_axis_is_sparse(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.top_axis_is_sparse(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.top_axis_is_sparse(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.top_axis_is_sparse(), None);
+    }
+
+    #[test]
+    fn resource_limits_atomic_is_sparse_saturation_pole_partitions_into_not_sparse_and_absent() {
+        // CROSS-CELL SATURATION contrast on the SPARSE column — the two
+        // saturated pole presets each pin (Some(false), None) on their
+        // (same-cell, dual-cell) SPARSITY pair. The saturated pole is
+        // UNIFORMLY NOT SPARSE on its own cell and UNIFORMLY ABSENT on
+        // the dual cell — pointwise De Morgan complement of the atomic
+        // CONTIGUITY column's (Some(true), None) opposite-pole pair on
+        // the boolean COMBINATOR-KIND axis.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.bottom_axis_is_sparse(), Some(false));
+        assert_eq!(EMPTY_RESOURCE_LIMITS.top_axis_is_sparse(), None);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.top_axis_is_sparse(), Some(false));
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_sparse(), None);
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_sparse_equals_is_contiguous_complement() {
+        // DE-MORGAN-COMPLEMENT identity — the SPARSE predicate is
+        // structurally `is_contiguous.map(|b| !b)` on every posture.
+        // Pinned across every shipped preset + hand-authored + test-
+        // local posture so a future rewrite of either projection that
+        // silently drifts from the complement contract fires this pin.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let expected = a.bottom_axis_is_contiguous().map(|b| !b);
+            assert_eq!(
+                a.bottom_axis_is_sparse(),
+                expected,
+                "is_sparse = is_contiguous.map(|b| !b) identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_sparse_equals_is_contiguous_complement() {
+        // De Morgan complement identity dual — same shape on the top
+        // cell.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let expected = a.top_axis_is_contiguous().map(|b| !b);
+            assert_eq!(
+                a.top_axis_is_sparse(),
+                expected,
+                "is_sparse = is_contiguous.map(|b| !b) identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_sparse_equals_gap_count_is_some_positive() {
+        // GAP-COUNT-IS-POSITIVE identity — the SPARSE cell straddles
+        // the CONTIGUITY and GAP columns ONE PROJECTION-KIND axis apart
+        // via two structurally-equivalent derivations; this pin closes
+        // the equivalence with the GAP column directly.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let expected = a.bottom_axis_gap_count().map(|k| k > 0);
+            assert_eq!(
+                a.bottom_axis_is_sparse(),
+                expected,
+                "is_sparse = gap_count.map(|k| k > 0) identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_sparse_equals_gap_count_is_some_positive() {
+        // GAP-COUNT-IS-POSITIVE identity dual on the top cell.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let expected = a.top_axis_gap_count().map(|k| k > 0);
+            assert_eq!(
+                a.top_axis_is_sparse(),
+                expected,
+                "is_sparse = gap_count.map(|k| k > 0) identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_sparse_is_some_iff_has_bottom_axis() {
+        // ANY-fold bridge — the SPARSE verdict is defined iff the
+        // bottom-axis subset is non-empty. Composes structurally
+        // through the just-lifted CONTIGUITY bridge one COMBINATOR-KIND
+        // axis over (boolean negation preserves is_some).
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.bottom_axis_is_sparse().is_some(),
+                a.has_bottom_axis(),
+                "is_sparse.is_some() != has_bottom_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_sparse_is_some_iff_has_top_axis() {
+        // ANY-fold bridge dual on the top cell.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.top_axis_is_sparse().is_some(),
+                a.has_top_axis(),
+                "is_sparse.is_some() != has_top_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_sparse_trichotomy_partitions_shipped_postures() {
+        // BOOLEAN COLLAPSE — LOAD-BEARING pin. The Option<bool>
+        // trichotomy partitions every posture into (sparse-bottom,
+        // contiguous-bottom, no-bottom) — the exact De Morgan DUAL of
+        // the CONTIGUITY trichotomy with the Some(true)/Some(false)
+        // cells swapped and the None cell fixed. Witnesses at each
+        // cell:
+        //   * sparse-bottom (Some(true)): SPARSE_BOTTOM (gap = 3),
+        //     ENDPOINTS_ONLY_BOTTOM (gap = 4).
+        //   * contiguous-bottom (Some(false)): EMPTY (saturated pole),
+        //     CONTIGUOUS_INTERIOR_BOTTOM (contiguous non-preset run).
+        //   * no-bottom (None): UNBOUNDED, DEFAULT, HAND_AUTHORED_MID,
+        //     HAND_AUTHORED_OTHER.
+        assert_eq!(SPARSE_BOTTOM_POSTURE.bottom_axis_is_sparse(), Some(true));
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_is_sparse(),
+            Some(true),
+        );
+        assert_eq!(EMPTY_RESOURCE_LIMITS.bottom_axis_is_sparse(), Some(false));
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.bottom_axis_is_sparse(),
+            Some(false),
+        );
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_sparse(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.bottom_axis_is_sparse(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.bottom_axis_is_sparse(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.bottom_axis_is_sparse(), None);
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_sparse_of_singleton_bottom_axis_is_some_false() {
+        // SINGLE-FIRE COINCIDENCE pin — a lone bottom axis at any of the
+        // six positions gives (span, count, gap) == (1, 1, 0); the
+        // singleton case is trivially CONTIGUOUS, hence NOT SPARSE.
+        // Structural De Morgan complement of the CONTIGUITY singleton
+        // pin.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            fields[position] = 0;
+            let singleton_bottom = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_bottom.count_bottom_axes(), 1);
+            assert_eq!(
+                singleton_bottom.bottom_axis_is_sparse(),
+                Some(false),
+                "singleton bottom at position {position} not Some(false)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_sparse_of_singleton_top_axis_is_some_false() {
+        // SINGLE-FIRE COINCIDENCE pin dual — a lone top axis at any of
+        // the six positions is trivially CONTIGUOUS, hence NOT SPARSE.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            fields[position] = usize::MAX;
+            let singleton_top = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_top.count_top_axes(), 1);
+            assert_eq!(
+                singleton_top.top_axis_is_sparse(),
+                Some(false),
+                "singleton top at position {position} not Some(false)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_is_sparse_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — both SPARSITY projections are evaluable in
+        // const context so a caller can pin bracket-sparsity identities
+        // at compile time as build-breaks. Mirror of the atomic
+        // CONTIGUITY const-fn pin one COMBINATOR-KIND axis over on the
+        // boolean surface.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_sparse(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_sparse(),
+            Some(false)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.top_axis_is_sparse().is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_sparse().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.bottom_axis_is_sparse().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_is_sparse().is_none());
     }
 }

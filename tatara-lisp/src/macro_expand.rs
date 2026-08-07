@@ -15004,6 +15004,201 @@ impl ResourceLimits {
             c => Some(c == Self::FIELD_COUNT),
         }
     }
+
+    /// Whole-posture SATURATED-OF-POLAR predicate —
+    /// `self.polar_axis_is_saturated()` returns `Some(true)` iff EVERY axis
+    /// of `self` sits at some pole (equivalently:
+    /// [`Self::count_polar_axes`] `== FIELD_COUNT`, equivalently:
+    /// [`Self::is_axially_polar`], equivalently: no interior axis),
+    /// `Some(false)` iff at least ONE axis is polar but not all six, or
+    /// `None` iff no axis is polar. The COMPOUND-CELL peer of
+    /// [`Self::bottom_axis_is_saturated`] one CELL-KIND axis over on the
+    /// SATURATED column — jointly the (polar_axis_is_saturated,
+    /// interior_axis_is_saturated) COMPOUND pair CLOSES the SATURATED
+    /// column on the (bottom, top, polar, interior) 4-cell axis-family
+    /// opened by [`Self::bottom_axis_is_saturated`] +
+    /// [`Self::top_axis_is_saturated`] one CELL-KIND axis under.
+    ///
+    /// **COUNT-EQUALS-FIELD_COUNT identity — LOAD-BEARING structural pin**:
+    /// on every posture, `polar_axis_is_saturated() == { let c =
+    /// self.count_polar_axes(); if c == 0 { None } else { Some(c ==
+    /// Self::FIELD_COUNT) } }`. Composes structurally through the COMPOUND
+    /// polar COUNT projection; the substrate never re-scans the per-axis
+    /// mask. Pinned via
+    /// `resource_limits_polar_axis_is_saturated_equals_count_equals_field_count`.
+    ///
+    /// **IS-AXIALLY-POLAR bridge — LOAD-BEARING structural pin**: on every
+    /// posture, `polar_axis_is_saturated() == Some(true) ⇔
+    /// self.is_axially_polar()`. The COMPOUND polar SATURATION verdict IS
+    /// the whole-posture ALL-fold polar verdict when it fires — the
+    /// substrate crystallizes the (COUNT-BASED, ALL-fold-BASED) equivalence
+    /// as ONE named typed exit rather than two silently-competing
+    /// derivations on the algebra. Pinned via
+    /// `resource_limits_polar_axis_is_saturated_true_iff_is_axially_polar`.
+    ///
+    /// **COMPOUND-COMPLEMENT-EXHAUSTIVE-PARTITION identity — LOAD-BEARING
+    /// structural pin**: on every posture, `polar_axis_is_saturated() ==
+    /// Some(true) ⇔ !self.has_interior_axis()`. Since `count_polar +
+    /// count_interior == FIELD_COUNT` on every posture (the EXHAUSTIVE-
+    /// PARTITION identity one QUANTIFIER-KIND axis under), polar-saturation
+    /// on the SELF compound cell is equivalent to interior-absence on the
+    /// DUAL compound cell — the DE MORGAN dual of the atomic (bottom, top)
+    /// DISJOINT-UNION mutual-exclusion pin at the EXHAUSTIVE-PARTITION
+    /// endpoint, tightened from "at most one saturates" on the atomic pair
+    /// to "self-saturation IS dual-absence" on the compound pair. Pinned
+    /// via `resource_limits_polar_axis_is_saturated_true_iff_no_interior_axis`.
+    ///
+    /// **SATURATED-IMPLIES-MULTI bridge — LOAD-BEARING refinement pin**:
+    /// on every posture, `polar_axis_is_saturated() == Some(true) ⇒
+    /// polar_axis_is_multi() == Some(true)`. The SATURATED regime is
+    /// strictly stronger than the MULTI regime (`count == FIELD_COUNT ⇒
+    /// count > 1` because FIELD_COUNT == 6 > 1). Pinned via
+    /// `resource_limits_polar_axis_is_saturated_true_implies_is_multi_true`.
+    ///
+    /// **SATURATED-EXCLUDES-SINGLETON — LOAD-BEARING mutual-exclusion pin**:
+    /// on every posture, NOT (`polar_axis_is_saturated() == Some(true) &&
+    /// polar_axis_is_singleton() == Some(true)`). Pinned via
+    /// `resource_limits_polar_axis_is_saturated_true_implies_is_singleton_false`.
+    ///
+    /// **COMPOUND-SATURATION-TRIPARTITE partition — LOAD-BEARING structural
+    /// pin**: on every posture, the (polar_axis_is_saturated,
+    /// interior_axis_is_saturated) pair falls into EXACTLY ONE of three
+    /// cells:
+    ///
+    /// - `(Some(true), None)` iff every axis is polar,
+    /// - `(None, Some(true))` iff every axis is interior,
+    /// - `(Some(false), Some(false))` iff the posture has BOTH a polar and
+    ///   an interior axis.
+    ///
+    /// The six other possible pair-values — `(Some(true), Some(true))`
+    /// (would need `count_polar == count_interior == FIELD_COUNT` at the
+    /// joint EXHAUSTIVE-PARTITION contradiction 12 == 6); `(None, None)`
+    /// (would need every axis to be NEITHER polar NOR interior,
+    /// contradicting the partition); and the four `(Some(_), None)` /
+    /// `(None, Some(_))` cross-mismatches — NEVER fire, a strictly-tighter
+    /// partition than the atomic (bottom, top) pair one CELL-KIND axis
+    /// under whose `(None, None)` cell DOES fire on every interior-only
+    /// posture. Pinned via
+    /// `resource_limits_compound_is_saturated_tripartite_partition_by_exhaustive_polar_interior_split`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.polar_axis_is_saturated() ==
+    /// Some(true)` (six polar axes, all bottom);
+    /// `UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_saturated() == Some(true)`
+    /// (six polar axes, all top); `DEFAULT_RESOURCE_LIMITS
+    /// .polar_axis_is_saturated() == None` (every field strictly interior);
+    /// `HAND_AUTHORED_MID_POSTURE.polar_axis_is_saturated() == None`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_saturated() == None`.
+    /// Same COMPOUND-CELL SATURATION shape as the polar (SPAN, GAP,
+    /// CONTIGUITY, SPARSE, SINGLETON, MULTI) columns — the polar bracket
+    /// is `2-polar-saturated` on the same two saturated pole presets.
+    ///
+    /// **ANY-fold bridge**: `a.polar_axis_is_saturated().is_some() ⇔
+    /// a.has_polar_axis()`. Pinned via
+    /// `resource_limits_polar_axis_is_saturated_is_some_iff_has_polar_axis`.
+    ///
+    /// `const fn` so a caller can pin the polar-axis SATURATED verdict at
+    /// compile time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.polar_axis_is_saturated(), Some(true)));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// COMPOUND polar SATURATED predicate is a named typed exit
+    /// `Option<bool>` rather than a per-consumer
+    /// `self.count_polar_axes() == Self::FIELD_COUNT` inline equality test
+    /// that discards the has-axis-at-all distinction AND an
+    /// `self.is_axially_polar()` inline ALL-fold call that discards the
+    /// count-based derivation. THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs (the COMPOUND SATURATED cell is a structural
+    /// derivation from the COMPOUND polar COUNT projection via one usize
+    /// equality against `Self::FIELD_COUNT` and one is-zero split, no new
+    /// per-axis scan, no allocation). THEORY.md §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: same as [`Self::bottom_axis_is_saturated`], on
+    /// the DUAL COMPOUND polar mask. Boolean-algebra complementation lifted
+    /// to `Option<bool>`: the (polar, interior) COMPOUND pair is a
+    /// complementary partition of the whole posture (`count_polar +
+    /// count_interior == FIELD_COUNT`), so the SATURATION predicate on ONE
+    /// compound cell IS the ABSENCE predicate on the DUAL compound cell —
+    /// the tri-state `Option<bool>` exit lifts the complement identity to
+    /// a first-class typed observer.
+    #[must_use]
+    pub const fn polar_axis_is_saturated(self) -> Option<bool> {
+        match self.count_polar_axes() {
+            0 => None,
+            c => Some(c == Self::FIELD_COUNT),
+        }
+    }
+
+    /// Whole-posture SATURATED-OF-INTERIOR predicate —
+    /// `self.interior_axis_is_saturated()` returns `Some(true)` iff EVERY
+    /// axis of `self` sits STRICTLY BETWEEN the two poles (equivalently:
+    /// [`Self::count_interior_axes`] `== FIELD_COUNT`, equivalently:
+    /// [`Self::is_axially_interior`], equivalently: no polar axis),
+    /// `Some(false)` iff at least ONE axis is strictly interior but not
+    /// all six, or `None` iff no axis is interior. The COMPOUND-CELL DUAL
+    /// of [`Self::polar_axis_is_saturated`] one CELL-KIND axis over via the
+    /// (polar, interior) EXHAUSTIVE PARTITION — jointly the
+    /// (polar_axis_is_saturated, interior_axis_is_saturated) COMPOUND pair
+    /// CLOSES the SATURATED column on the (bottom, top, polar, interior)
+    /// 4-cell axis-family.
+    ///
+    /// **COUNT-EQUALS-FIELD_COUNT identity dual**: on every posture,
+    /// `interior_axis_is_saturated() == { let c =
+    /// self.count_interior_axes(); if c == 0 { None } else { Some(c ==
+    /// Self::FIELD_COUNT) } }`. Pinned via
+    /// `resource_limits_interior_axis_is_saturated_equals_count_equals_field_count`.
+    ///
+    /// **IS-AXIALLY-INTERIOR bridge dual**: on every posture,
+    /// `interior_axis_is_saturated() == Some(true) ⇔
+    /// self.is_axially_interior()`. Pinned via
+    /// `resource_limits_interior_axis_is_saturated_true_iff_is_axially_interior`.
+    ///
+    /// **COMPOUND-COMPLEMENT-EXHAUSTIVE-PARTITION identity dual**: on every
+    /// posture, `interior_axis_is_saturated() == Some(true) ⇔
+    /// !self.has_polar_axis()`. Same EXHAUSTIVE-PARTITION derivation as on
+    /// the SELF compound cell. Pinned via
+    /// `resource_limits_interior_axis_is_saturated_true_iff_no_polar_axis`.
+    ///
+    /// **SATURATED-IMPLIES-MULTI bridge dual**: on every posture,
+    /// `interior_axis_is_saturated() == Some(true) ⇒
+    /// interior_axis_is_multi() == Some(true)`. Pinned via
+    /// `resource_limits_interior_axis_is_saturated_true_implies_is_multi_true`.
+    ///
+    /// **SATURATED-EXCLUDES-SINGLETON mutual-exclusion pin dual**: on every
+    /// posture, NOT (`interior_axis_is_saturated() == Some(true) &&
+    /// interior_axis_is_singleton() == Some(true)`). Pinned via
+    /// `resource_limits_interior_axis_is_saturated_true_implies_is_singleton_false`.
+    ///
+    /// **Preset pins**: `DEFAULT_RESOURCE_LIMITS.interior_axis_is_saturated()
+    /// == Some(true)` (every field strictly interior);
+    /// `EMPTY_RESOURCE_LIMITS.interior_axis_is_saturated() == None` (no
+    /// interior); `UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_saturated()
+    /// == None`; `HAND_AUTHORED_MID_POSTURE.interior_axis_is_saturated() ==
+    /// Some(true)`; `HAND_AUTHORED_OTHER_POSTURE
+    /// .interior_axis_is_saturated() == Some(true)`. Same COMPOUND-CELL
+    /// SATURATION shape as the interior (CONTIGUITY, SPARSE, GAP,
+    /// SINGLETON, MULTI) columns — the interior bracket is
+    /// `1-interior-saturated + 2-hand-authored-saturated` on the same three
+    /// interior-saturated postures.
+    ///
+    /// **ANY-fold bridge dual**: `a.interior_axis_is_saturated().is_some()
+    /// ⇔ a.has_interior_axis()`. Pinned via
+    /// `resource_limits_interior_axis_is_saturated_is_some_iff_has_interior_axis`.
+    ///
+    /// `const fn` so a caller can pin the interior-axis SATURATED verdict
+    /// at compile time.
+    ///
+    /// Theory anchor: same as [`Self::polar_axis_is_saturated`], on the
+    /// DUAL COMPOUND cell.
+    ///
+    /// Frontier inspiration: same as [`Self::polar_axis_is_saturated`], on
+    /// the DUAL COMPOUND interior mask.
+    #[must_use]
+    pub const fn interior_axis_is_saturated(self) -> Option<bool> {
+        match self.count_interior_axes() {
+            0 => None,
+            c => Some(c == Self::FIELD_COUNT),
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -54331,5 +54526,502 @@ mod tests {
             .is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.bottom_axis_is_saturated().is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_is_saturated().is_none());
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_saturated_preset_pins_saturate_both_saturated_poles_at_saturated(
+    ) {
+        // Preset pins on the COMPOUND polar SATURATED cell — LOAD-BEARING
+        // COMPOUND-CELL SATURATION contrast with the atomic cells. BOTH
+        // saturated pole presets pack all six axes at a single pole (hence
+        // six polar axes, count == FIELD_COUNT), so BOTH pin polar
+        // SATURATED at Some(true). The DEFAULT preset and both hand-
+        // authored postures have zero polar axes; SATURATED is None. Same
+        // (2-polar-saturated, 1-interior-saturated, 2-hand-authored-
+        // absent) partition shape carried by the COMPOUND (SPARSE,
+        // CONTIGUITY, GAP, SINGLETON, MULTI) columns one COMBINATOR-KIND
+        // axis under.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.polar_axis_is_saturated(), Some(true),);
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_saturated(),
+            Some(true),
+        );
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_saturated(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.polar_axis_is_saturated(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_saturated(), None);
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_saturated_preset_pins_saturate_default_and_hand_authored_at_saturated(
+    ) {
+        // Preset pins dual on the COMPOUND interior SATURATED cell — the
+        // DEFAULT preset pins every axis strictly interior (count ==
+        // FIELD_COUNT), so interior SATURATED is Some(true). Both hand-
+        // authored postures pin every field strictly interior, so both
+        // fire interior SATURATED at Some(true). The two saturated pole
+        // presets pin every axis polar, so neither has any interior axis;
+        // SATURATED is None.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_saturated(),
+            Some(true),
+        );
+        assert_eq!(EMPTY_RESOURCE_LIMITS.interior_axis_is_saturated(), None);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_saturated(), None,);
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.interior_axis_is_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.interior_axis_is_saturated(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_saturated_equals_count_equals_field_count() {
+        // COUNT-EQUALS-FIELD_COUNT identity on the COMPOUND polar cell —
+        // the SATURATED predicate is structurally derived from
+        // count_polar_axes on every posture: None iff count == 0,
+        // Some(count == FIELD_COUNT) otherwise. Pinned across every
+        // shipped preset + hand-authored + test-local mixed posture so a
+        // future rewrite of either projection that silently drifts from
+        // the count-equals-field-count contract fires this pin.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let c = a.count_polar_axes();
+            let expected = if c == 0 {
+                None
+            } else {
+                Some(c == ResourceLimits::FIELD_COUNT)
+            };
+            assert_eq!(
+                a.polar_axis_is_saturated(),
+                expected,
+                "polar_is_saturated = count-equals-field-count identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_saturated_equals_count_equals_field_count() {
+        // COUNT-EQUALS-FIELD_COUNT identity dual on the COMPOUND interior
+        // cell.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let c = a.count_interior_axes();
+            let expected = if c == 0 {
+                None
+            } else {
+                Some(c == ResourceLimits::FIELD_COUNT)
+            };
+            assert_eq!(
+                a.interior_axis_is_saturated(),
+                expected,
+                "interior_is_saturated = count-equals-field-count identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_saturated_true_iff_is_axially_polar() {
+        // IS-AXIALLY-POLAR bridge — LOAD-BEARING structural pin. The
+        // COMPOUND polar SATURATION verdict IS the whole-posture ALL-fold
+        // polar verdict at its Some(true) firing — count_polar ==
+        // FIELD_COUNT means every axis is at a pole, which is precisely
+        // is_axially_polar(). Crystallizes the (COUNT-BASED, ALL-fold-
+        // BASED) polar-uniformity equivalence as ONE typed theorem the
+        // substrate proves once.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                matches!(a.polar_axis_is_saturated(), Some(true)),
+                a.is_axially_polar(),
+                "polar_is_saturated == Some(true) != is_axially_polar() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_saturated_true_iff_is_axially_interior() {
+        // IS-AXIALLY-INTERIOR bridge dual — the COMPOUND interior
+        // SATURATION verdict IS the whole-posture ALL-fold interior
+        // verdict at its Some(true) firing.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                matches!(a.interior_axis_is_saturated(), Some(true)),
+                a.is_axially_interior(),
+                "interior_is_saturated == Some(true) != is_axially_interior() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_saturated_true_iff_no_interior_axis() {
+        // COMPOUND-COMPLEMENT-EXHAUSTIVE-PARTITION identity on the
+        // COMPOUND polar cell — LOAD-BEARING structural pin. Since
+        // count_polar + count_interior == FIELD_COUNT on every posture,
+        // polar-saturation on the SELF compound cell is equivalent to
+        // interior-absence on the DUAL compound cell — the DE MORGAN dual
+        // of the atomic (bottom, top) DISJOINT-UNION mutual-exclusion pin
+        // at the EXHAUSTIVE-PARTITION endpoint, tightened from "at most
+        // one saturates" on the atomic pair to "self-saturation IS dual-
+        // absence" on the compound pair.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                matches!(a.polar_axis_is_saturated(), Some(true)),
+                !a.has_interior_axis(),
+                "polar_is_saturated == Some(true) != !has_interior_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_saturated_true_iff_no_polar_axis() {
+        // COMPOUND-COMPLEMENT-EXHAUSTIVE-PARTITION identity dual on the
+        // COMPOUND interior cell.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                matches!(a.interior_axis_is_saturated(), Some(true)),
+                !a.has_polar_axis(),
+                "interior_is_saturated == Some(true) != !has_polar_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_saturated_is_some_iff_has_polar_axis() {
+        // ANY-fold bridge on the COMPOUND polar cell — the SATURATED
+        // verdict is defined iff the polar subset is non-empty. Identical
+        // shape to every already-lifted (SPAN, GAP, CONTIGUITY, SPARSE,
+        // SINGLETON, MULTI) compound-cell is_some ⇔ has-axis bridge,
+        // closing the (span, gap, contiguity, sparse, singleton, multi,
+        // saturated) COMPOUND column septet's uniform ANY-fold bridge
+        // contract.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.polar_axis_is_saturated().is_some(),
+                a.has_polar_axis(),
+                "polar_is_saturated.is_some() != has_polar_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_saturated_is_some_iff_has_interior_axis() {
+        // ANY-fold bridge dual on the COMPOUND interior cell.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.interior_axis_is_saturated().is_some(),
+                a.has_interior_axis(),
+                "interior_is_saturated.is_some() != has_interior_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_saturated_true_implies_is_multi_true() {
+        // SATURATED-IMPLIES-MULTI bridge on the COMPOUND polar cell — the
+        // SATURATED regime (count == FIELD_COUNT) strictly refines the
+        // MULTI regime (count > 1) since FIELD_COUNT == 6 > 1.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if matches!(a.polar_axis_is_saturated(), Some(true)) {
+                assert_eq!(
+                    a.polar_axis_is_multi(),
+                    Some(true),
+                    "polar_is_saturated == Some(true) but polar_is_multi != Some(true) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_saturated_true_implies_is_multi_true() {
+        // SATURATED-IMPLIES-MULTI bridge dual on the COMPOUND interior
+        // cell.
+        for a in [
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            if matches!(a.interior_axis_is_saturated(), Some(true)) {
+                assert_eq!(
+                    a.interior_axis_is_multi(),
+                    Some(true),
+                    "interior_is_saturated == Some(true) but interior_is_multi != Some(true) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_saturated_true_implies_is_singleton_false() {
+        // SATURATED-EXCLUDES-SINGLETON mutual-exclusion pin on the
+        // COMPOUND polar cell.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if matches!(a.polar_axis_is_saturated(), Some(true)) {
+                assert_eq!(
+                    a.polar_axis_is_singleton(),
+                    Some(false),
+                    "polar_is_saturated == Some(true) but polar_is_singleton != Some(false) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_saturated_true_implies_is_singleton_false() {
+        // SATURATED-EXCLUDES-SINGLETON mutual-exclusion pin dual on the
+        // COMPOUND interior cell.
+        for a in [
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            if matches!(a.interior_axis_is_saturated(), Some(true)) {
+                assert_eq!(
+                    a.interior_axis_is_singleton(),
+                    Some(false),
+                    "interior_is_saturated == Some(true) but interior_is_singleton != Some(false) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_compound_is_saturated_tripartite_partition_by_exhaustive_polar_interior_split(
+    ) {
+        // COMPOUND-SATURATION-TRIPARTITE partition — LOAD-BEARING structural
+        // pin. On every posture, the (polar_axis_is_saturated,
+        // interior_axis_is_saturated) pair falls into EXACTLY ONE of three
+        // cells: (Some(true), None) iff every axis is polar; (None,
+        // Some(true)) iff every axis is interior; (Some(false),
+        // Some(false)) iff at least one polar AND at least one interior
+        // axis exists. The six other pair-values NEVER fire — a strictly-
+        // tighter partition than the atomic (bottom, top) pair one CELL-
+        // KIND axis under whose (None, None) cell DOES fire on every
+        // interior-only posture.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let pair = (a.polar_axis_is_saturated(), a.interior_axis_is_saturated());
+            let axially_polar = a.is_axially_polar();
+            let axially_interior = a.is_axially_interior();
+            let has_polar = a.has_polar_axis();
+            let has_interior = a.has_interior_axis();
+            match pair {
+                (Some(true), None) => {
+                    assert!(
+                        axially_polar && !has_interior,
+                        "(Some(true), None) cell fired but not axially polar on {a:?}",
+                    );
+                }
+                (None, Some(true)) => {
+                    assert!(
+                        axially_interior && !has_polar,
+                        "(None, Some(true)) cell fired but not axially interior on {a:?}",
+                    );
+                }
+                (Some(false), Some(false)) => {
+                    assert!(
+                        has_polar && has_interior,
+                        "(Some(false), Some(false)) cell fired but no mixed axes on {a:?}",
+                    );
+                }
+                other => panic!(
+                    "compound SATURATED pair {other:?} landed outside the tripartite partition on {a:?}",
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_saturated_false_at_mixed_polar_interior_posture() {
+        // NON-SATURATION pin at the mixed regime on the COMPOUND polar
+        // cell — a posture with a lone polar axis at any of the six
+        // positions × either pole (and interior on the remaining five)
+        // gives count_polar == 1, strictly less than FIELD_COUNT == 6, so
+        // the COMPOUND polar SATURATED verdict is Some(false). The strict
+        // refinement endpoint of the SATURATED column at the single-fire
+        // non-preset postures.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            for pole in [0_usize, usize::MAX] {
+                let mut fields = [41_usize, 43, 47, 53, 59, 61];
+                fields[position] = pole;
+                let singleton_polar = ResourceLimits {
+                    max_expansion_depth: fields[0],
+                    max_cache_entries: fields[1],
+                    max_expansion_size: fields[2],
+                    max_macro_body_size: fields[3],
+                    max_registered_macros: fields[4],
+                    max_macro_arity: fields[5],
+                };
+                assert_eq!(singleton_polar.count_polar_axes(), 1);
+                assert_eq!(
+                    singleton_polar.polar_axis_is_saturated(),
+                    Some(false),
+                    "singleton polar at position {position} pole {pole} not Some(false)",
+                );
+                assert_eq!(
+                    singleton_polar.interior_axis_is_saturated(),
+                    Some(false),
+                    "singleton polar at position {position} pole {pole} — interior not Some(false)",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_saturated_false_at_mixed_polar_interior_posture() {
+        // NON-SATURATION pin dual on the COMPOUND interior cell — a
+        // posture with a lone interior axis at any of the six positions
+        // (and polar on the remaining five) gives count_interior == 1,
+        // strictly less than FIELD_COUNT.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let poles = [0_usize, usize::MAX, 0, usize::MAX, 0, usize::MAX];
+            let mut fields = poles;
+            fields[position] = 41;
+            let singleton_interior = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_interior.count_interior_axes(), 1);
+            assert_eq!(
+                singleton_interior.interior_axis_is_saturated(),
+                Some(false),
+                "singleton interior at position {position} not Some(false)",
+            );
+            assert_eq!(
+                singleton_interior.polar_axis_is_saturated(),
+                Some(false),
+                "singleton interior at position {position} — polar not Some(false)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_compound_is_saturated_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the COMPOUND cell — both SATURATED projections
+        // are evaluable in const context so a caller can pin the compound
+        // count-equals-field-count identities at compile time as build-
+        // breaks. Mirror of the atomic (SATURATED) const-fn pins one CELL-
+        // KIND axis under.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.interior_axis_is_saturated().is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .interior_axis_is_saturated()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_saturated().is_none());
     }
 }

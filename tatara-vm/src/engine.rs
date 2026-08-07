@@ -12,6 +12,11 @@
 //! reports the engine as unavailable so the host-agnostic build of tatara-vm
 //! stays dependency-light.
 
+// Gated with the dependency it names. `maquina-engine` is `optional = true`,
+// so an unconditional `use` here made the DEFAULT build fail with E0432
+// `unresolved import maquina_engine` — the exact opposite of this module's
+// stated purpose, which is to keep the featureless build dependency-light.
+#[cfg(all(target_os = "macos", feature = "engines"))]
 use maquina_engine::MaquinaEngine;
 
 use crate::config::Hypervisor;
@@ -46,9 +51,19 @@ pub fn engine_for(h: &Hypervisor) -> Result<Box<dyn MaquinaEngine>, EngineSelect
 
 /// Fallback when no engine backend is compiled in (default build / non-macOS).
 ///
+/// The success type is [`std::convert::Infallible`] rather than
+/// `Box<dyn MaquinaEngine>`, and that is the honest signature: without the
+/// `engines` feature the `maquina-engine` crate is not linked at all, so there
+/// is no engine type to name — and no engine can ever be produced. An
+/// uninhabited `Ok` says exactly that at the type level instead of promising a
+/// value this build can never construct.
+///
+/// The previous signature named `MaquinaEngine` unconditionally, which is what
+/// forced the ungated `use` above and broke the default build.
+///
 /// # Errors
 /// Always [`EngineSelectError::Unavailable`].
 #[cfg(not(all(target_os = "macos", feature = "engines")))]
-pub fn engine_for(_h: &Hypervisor) -> Result<Box<dyn MaquinaEngine>, EngineSelectError> {
+pub fn engine_for(_h: &Hypervisor) -> Result<std::convert::Infallible, EngineSelectError> {
     Err(EngineSelectError::Unavailable)
 }

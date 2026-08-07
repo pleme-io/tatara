@@ -34,6 +34,12 @@ pub mod config;
 pub mod darwin_rootfs;
 pub mod engine;
 pub mod guest;
+// `maquina` is ENTIRELY a projection onto `maquina_engine::VmShape`, so it
+// cannot exist without the optional dependency. It was declared unconditionally
+// while `maquina-engine` is `optional = true`, which is why the default build
+// failed with E0432 `unresolved import maquina_engine` — the module compiled,
+// the crate was never linked. Gated to match the dependency that defines it.
+#[cfg(feature = "engines")]
 pub mod maquina;
 pub mod rootfs;
 pub mod vfkit;

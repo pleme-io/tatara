@@ -1,20 +1,24 @@
 //! `tatara top` — live cluster monitor (Nodes + Jobs + Allocations).
 //!
 //! Rendered through `egaku-term`: bordered_block_with for each section,
-//! manually painted column-aligned rows for the tabular bodies. The poll
-//! loop is unchanged — `event::poll(Duration::from_secs(refresh_secs))`
+//! column-aligned rows painted into the frame buffer for the tabular bodies.
+//! The poll loop is unchanged — `event::poll(Duration::from_secs(refresh_secs))`
 //! drives both the refresh cadence and the keyboard read.
+//!
+//! ## Double-buffered, not written straight to the terminal
+//!
+//! egaku-term's draw API is `Buffer`-based and infallible: all of `draw::*`
+//! takes `&mut Buffer`, none takes `&mut Terminal`, and `Terminal` exposes no
+//! buffer of its own. So a frame is composed into a back buffer and shipped by
+//! [`render_diff`], which emits only the cells that actually changed — the same
+//! shape egaku-term's own `app.rs` run loop uses. Cursor moves and colour
+//! escapes are the renderer's business now, not this module's.
 
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-use crossterm::style::{Attribute, Color};
+use crossterm::style::Color;
 use egaku::Rect;
-use egaku_term::crossterm::{
-    QueueableCommand,
-    cursor::MoveTo,
-    style::{Print, ResetColor, SetAttribute, SetBackgroundColor, SetForegroundColor},
-};
-use egaku_term::{Terminal, draw, theme::Palette};
+use egaku_term::{Buffer, Style, Terminal, draw, render::render_diff, theme::Palette};
 use std::time::Duration;
 
 use super::context::{active_endpoint, endpoint_to_server};
@@ -24,23 +28,6 @@ const STATUS_GREEN: Color = Color::Rgb { r: 163, g: 190, b: 140 };
 const STATUS_YELLOW: Color = Color::Rgb { r: 235, g: 203, b: 139 };
 const STATUS_RED: Color = Color::Rgb { r: 191, g: 97, b: 106 };
 const HELP_FG: Color = Color::Rgb { r: 76, g: 86, b: 106 };
-
-/// Style triple — fg / optional bg / attribute.
-#[derive(Clone, Copy)]
-struct Style {
-    fg: Color,
-    bg: Option<Color>,
-    attr: Attribute,
-}
-
-impl Style {
-    const fn fg(c: Color) -> Self {
-        Self { fg: c, bg: None, attr: Attribute::Reset }
-    }
-    const fn bold(self) -> Self {
-        Self { attr: Attribute::Bold, ..self }
-    }
-}
 
 pub async fn run(
     node_filter: Option<&str>,
@@ -63,6 +50,17 @@ async fn run_loop(
     node_filter: Option<&str>,
     refresh_secs: u64,
 ) -> Result<()> {
+    // Double buffer. `prev` is what the terminal currently shows, `back` is the
+    // frame being composed; render_diff emits only the delta between them, so a
+    // refresh that changes one status cell writes one cell. The old code did a
+    // full clear + full repaint every tick, which is what made the whole screen
+    // flicker at the refresh cadence.
+    let (mut cols, mut rows) = term.size().map_err(map_err)?;
+    let mut prev = Buffer::empty(cols, rows);
+    let mut back = Buffer::empty(cols, rows);
+    term.clear()?;
+    term.flush()?;
+
     loop {
         let nodes = fetch_nodes(client, server).await.unwrap_or_default();
         let jobs = fetch_jobs(client, server).await.unwrap_or_default();
@@ -80,9 +78,26 @@ async fn run_loop(
             nodes.iter().collect()
         };
 
-        term.clear()?;
-        draw_frame(term, &filtered_nodes, &jobs, &allocs, refresh_secs)?;
+        // A resize invalidates both buffers: prev must describe a screen of the
+        // same shape or the diff is meaningless, so re-allocate and force a full
+        // repaint by clearing the terminal too.
+        let (w, h) = term.size().map_err(map_err)?;
+        if (w, h) != (cols, rows) {
+            cols = w;
+            rows = h;
+            prev = Buffer::empty(cols, rows);
+            back = Buffer::empty(cols, rows);
+            term.clear()?;
+        }
+
+        back.reset();
+        draw_frame(&mut back, cols, rows, &filtered_nodes, &jobs, &allocs, refresh_secs);
+        // sync_output() read BEFORE term.out() — the latter borrows mutably,
+        // so reading it inline is an E0502.
+        let sync = term.sync_output();
+        render_diff(term.out(), &prev, &back, sync)?;
         term.flush()?;
+        std::mem::swap(&mut prev, &mut back);
 
         if event::poll(Duration::from_secs(refresh_secs))? {
             if let Event::Key(key) = event::read()? {
@@ -96,17 +111,24 @@ async fn run_loop(
     }
 }
 
+/// Compose one frame into `buf`.
+///
+/// Takes `cols`/`rows` explicitly rather than asking the terminal: a `Buffer`
+/// carries its own dimensions, and the caller already had to read the size to
+/// detect a resize. Passing them keeps this function pure — it touches no I/O,
+/// which is why it no longer returns a `Result`.
 fn draw_frame(
-    term: &mut Terminal,
+    buf: &mut Buffer,
+    cols: u16,
+    rows: u16,
     nodes: &[&serde_json::Value],
     jobs: &[serde_json::Value],
     allocs: &[serde_json::Value],
     refresh_secs: u64,
-) -> Result<()> {
+) {
     let pal = palette();
-    let (cols, rows) = term.size().map_err(map_err)?;
     if cols < 20 || rows < 10 {
-        return Ok(());
+        return;
     }
     let cols_f = f32::from(cols);
     let rows_f = f32::from(rows);
@@ -130,47 +152,42 @@ fn draw_frame(
         jobs.len(),
         allocs.len()
     );
-    draw::bordered_block_with(term, title_rect, &title, true, &pal).map_err(map_err)?;
+    draw::bordered_block_with(buf, title_rect, &title, true, &pal);
 
     // Nodes table
-    draw::bordered_block_with(term, nodes_rect, " Nodes ", false, &pal).map_err(map_err)?;
+    draw::bordered_block_with(buf, nodes_rect, " Nodes ", false, &pal);
     let nodes_inner = draw::block_inner(nodes_rect);
-    draw_nodes_table(term, nodes_inner, nodes)?;
+    draw_nodes_table(buf, nodes_inner, nodes);
 
     // Help bar
     let help_text = format!(" q: quit | refresh every {refresh_secs}s ");
-    draw::bordered_block_with(term, help_rect, &help_text, false, &pal).map_err(map_err)?;
+    draw::bordered_block_with(buf, help_rect, &help_text, false, &pal);
 
     // Jobs table
     let jobs_label = format!(" Jobs ({}) ", jobs.len());
-    draw::bordered_block_with(term, jobs_rect, &jobs_label, false, &pal).map_err(map_err)?;
+    draw::bordered_block_with(buf, jobs_rect, &jobs_label, false, &pal);
     let jobs_inner = draw::block_inner(jobs_rect);
-    draw_jobs_table(term, jobs_inner, jobs)?;
-    Ok(())
+    draw_jobs_table(buf, jobs_inner, jobs);
 }
 
-fn draw_nodes_table(
-    term: &mut Terminal,
-    rect: Rect,
-    nodes: &[&serde_json::Value],
-) -> Result<()> {
+fn draw_nodes_table(buf: &mut Buffer, rect: Rect, nodes: &[&serde_json::Value]) {
     let widths = [12u16, 20, 12, 12, 8, 10];
     let header = ["ID", "HOSTNAME", "CPU (MHz)", "MEM (MB)", "ALLOCS", "STATUS"];
 
     let (ix, iy, iw, ih) = cells(rect);
     if iw == 0 || ih == 0 {
-        return Ok(());
+        return;
     }
 
-    paint_row(term, ix, iy, iw, &widths, &header, Style::fg(HEADER_FG).bold(), None)?;
+    paint_row(buf, ix, iy, iw, &widths, &header, Style::DEFAULT.fg(HEADER_FG).bold(), None);
 
     for (i, n) in nodes.iter().enumerate().take(usize::from(ih).saturating_sub(1)) {
         let row = u16::try_from(i + 1).unwrap_or(u16::MAX);
         let status = n.get("status").and_then(|s| s.as_str()).unwrap_or("ready");
         let status_style = match status {
-            "ready" => Style::fg(STATUS_GREEN),
-            "draining" => Style::fg(STATUS_YELLOW),
-            _ => Style::fg(STATUS_RED),
+            "ready" => Style::DEFAULT.fg(STATUS_GREEN),
+            "draining" => Style::DEFAULT.fg(STATUS_YELLOW),
+            _ => Style::DEFAULT.fg(STATUS_RED),
         };
 
         let cells_text = [
@@ -186,41 +203,36 @@ fn draw_nodes_table(
         ];
         let cells_ref: Vec<&str> = cells_text.iter().map(String::as_str).collect();
         paint_row(
-            term,
+            buf,
             ix,
             iy + row,
             iw,
             &widths,
             &cells_ref,
-            Style::fg(Color::Rgb { r: 216, g: 222, b: 233 }),
+            Style::DEFAULT.fg(Color::Rgb { r: 216, g: 222, b: 233 }),
             Some((5, status_style)),
-        )?;
+        );
     }
-    Ok(())
 }
 
-fn draw_jobs_table(
-    term: &mut Terminal,
-    rect: Rect,
-    jobs: &[serde_json::Value],
-) -> Result<()> {
+fn draw_jobs_table(buf: &mut Buffer, rect: Rect, jobs: &[serde_json::Value]) {
     let widths = [20u16, 10, 10, 8, 10];
     let header = ["ID", "TYPE", "STATUS", "GROUPS", "VERSION"];
 
     let (ix, iy, iw, ih) = cells(rect);
     if iw == 0 || ih == 0 {
-        return Ok(());
+        return;
     }
 
-    paint_row(term, ix, iy, iw, &widths, &header, Style::fg(HEADER_FG).bold(), None)?;
+    paint_row(buf, ix, iy, iw, &widths, &header, Style::DEFAULT.fg(HEADER_FG).bold(), None);
 
     for (i, j) in jobs.iter().enumerate().take(usize::from(ih).saturating_sub(1).min(20)) {
         let row = u16::try_from(i + 1).unwrap_or(u16::MAX);
         let status = j["status"].as_str().unwrap_or("?");
         let status_style = match status {
-            "running" => Style::fg(STATUS_GREEN),
-            "pending" => Style::fg(STATUS_YELLOW),
-            _ => Style::fg(STATUS_RED),
+            "running" => Style::DEFAULT.fg(STATUS_GREEN),
+            "pending" => Style::DEFAULT.fg(STATUS_YELLOW),
+            _ => Style::DEFAULT.fg(STATUS_RED),
         };
 
         let cells_text = [
@@ -234,24 +246,23 @@ fn draw_jobs_table(
         ];
         let cells_ref: Vec<&str> = cells_text.iter().map(String::as_str).collect();
         paint_row(
-            term,
+            buf,
             ix,
             iy + row,
             iw,
             &widths,
             &cells_ref,
-            Style::fg(Color::Rgb { r: 216, g: 222, b: 233 }),
+            Style::DEFAULT.fg(Color::Rgb { r: 216, g: 222, b: 233 }),
             Some((2, status_style)),
-        )?;
+        );
     }
-    Ok(())
 }
 
 /// Paint a row of column-aligned cells. Each cell is left-aligned and
 /// padded/truncated to its declared width. `accent` overrides the default
 /// style for one specific column index (used for status colors).
 fn paint_row(
-    term: &mut Terminal,
+    buf: &mut Buffer,
     col: u16,
     row: u16,
     max_w: u16,
@@ -259,7 +270,7 @@ fn paint_row(
     cells_text: &[&str],
     default: Style,
     accent: Option<(usize, Style)>,
-) -> Result<()> {
+) {
     let mut x = col;
     for (i, (text, &w)) in cells_text.iter().zip(widths.iter()).enumerate() {
         if x.saturating_sub(col) >= max_w {
@@ -272,38 +283,9 @@ fn paint_row(
         };
         let chars: String = text.chars().take(usize::from(cell_w)).collect();
         let padded = format!("{chars:<width$}", width = usize::from(cell_w));
-        paint_styled(term, x, row, cell_w, &padded, style)?;
+        buf.set_stringn(x, row, &padded, cell_w, style);
         x += cell_w + 1;
     }
-    Ok(())
-}
-
-fn paint_styled(
-    term: &mut Terminal,
-    col: u16,
-    row: u16,
-    max: u16,
-    text: &str,
-    style: Style,
-) -> Result<()> {
-    if max == 0 {
-        return Ok(());
-    }
-    term.out()
-        .queue(MoveTo(col, row))?
-        .queue(SetForegroundColor(style.fg))?;
-    if let Some(bg) = style.bg {
-        term.out().queue(SetBackgroundColor(bg))?;
-    }
-    if !matches!(style.attr, Attribute::Reset) {
-        term.out().queue(SetAttribute(style.attr))?;
-    }
-    term.out().queue(Print(text))?;
-    if !matches!(style.attr, Attribute::Reset) {
-        term.out().queue(SetAttribute(Attribute::Reset))?;
-    }
-    term.out().queue(ResetColor)?;
-    Ok(())
 }
 
 fn palette() -> Palette {

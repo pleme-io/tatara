@@ -5,6 +5,34 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+# Phase 0 freeze, THIRD half (theory/TATARA-LISP-CONSOLIDATION.md). The two
+# named halves — ../tatara-lisp and ../tatara-lisp-derive — were frozen because
+# this workspace and pleme-io/tatara-lisp share a crates.io namespace. This
+# crate was missed, and it is the one that actually EXPORTS the broken edge:
+# it consumes the frozen derive by PATH (which has closed_set) while declaring
+# `tatara-lisp-derive = "0.3"`, so every publish resolves consumers to
+# pleme-io/tatara-lisp's derive — which has no closed_set at all.
+#
+# Measured 2026-08-07: ALL 26 published versions (0.2.157 … 0.2.187) fail for
+# every consumer with `error[E0432]: unresolved import
+# crate::boundary::UnknownConditionKind` and 74 siblings, because
+# #[closed_set(…, generate_unknown = "must-reach phase")] (src/spec.rs:62)
+# emits types the published derive cannot generate. None is yanked, and there
+# is no good version to fall back to — the crate has never been buildable from
+# crates.io. That is what blocks `caixa` and, transitively, `mado`.
+#
+# This is the same miss, a third time: ../tatara-lisp/Cargo.toml's own comment
+# records that freezing the derive alone made "the seal read as applied while
+# the larger half of the pair stayed publishable". Same shape here.
+#
+# Not a workaround and not the fix. The fix is Phase 5: tatara-process moves
+# onto `tatara-closed-set` in pleme-io/tatara-lisp's workspace (the crate Phase
+# 2 step 1 already landed), and caixa's direct and transitive deps flip in the
+# SAME commit or the two-Sexp diamond fires. Until then, freezing stops this
+# workspace from minting more artifacts that cannot build for anyone. The
+# workspace is at 0.2.200 while crates.io tops out at 0.2.187, so 13 bumps have
+# already failed to ship — this makes that intent explicit rather than accidental.
+publish = false
 
 [dependencies]
 tatara-core = { path = "../tatara-core" , version = "0.2.65" }

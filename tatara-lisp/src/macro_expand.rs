@@ -11105,6 +11105,195 @@ impl ResourceLimits {
         false
     }
 
+    /// Whole-posture STRICTLY-MIXED predicate — `self.is_strictly_mixed()`
+    /// holds iff `self` has BOTH at least one polar axis AND at least one
+    /// interior axis (equivalently: `self.has_polar_axis() &&
+    /// self.has_interior_axis()`; equivalently: neither
+    /// [`Self::is_axially_polar`] nor [`Self::is_axially_interior`] fires,
+    /// yet the (has_polar_axis, has_interior_axis) COVER still holds
+    /// trivially). The direct COMBINATOR-KIND peer of the (has_polar_axis,
+    /// has_interior_axis) EXISTENTIAL pair one COMBINATOR axis over —
+    /// where the pair asserts the two independent ANY-fold verdicts, THIS
+    /// projection folds them through boolean `&&` into ONE named typed
+    /// exit at the (T, T) middle cell of the (has_polar_axis,
+    /// has_interior_axis) 3-cell partition — the LOAD-BEARING "truly-
+    /// mixed" corner every prior commit body has cited by name without a
+    /// first-class named primitive to bind against.
+    ///
+    /// Jointly with [`Self::is_axially_uniform`], the pair opens the
+    /// MIXITY column at the whole-posture single-bit verdict surface
+    /// past the just-closed SATURATED column on the (bottom, top, polar,
+    /// interior) 4-cell axis-family. The (is_strictly_mixed,
+    /// is_axially_uniform) pair PARTITIONS the whole-posture universe
+    /// into a two-cell EXHAUSTIVE-AND-DISJOINT MIXITY partition — every
+    /// posture fires exactly one.
+    ///
+    /// Encoded as the boolean `&&` of the two ANY-fold verdicts — one
+    /// primitive delegation to the shipped [`Self::has_polar_axis`] and
+    /// [`Self::has_interior_axis`] each. The equivalent alternative
+    /// encoding `!self.is_axially_polar() && !self.is_axially_interior()`
+    /// (via the cross-quantifier De Morgan complements
+    /// `has_interior_axis == !is_axially_polar` and dual) is structurally
+    /// equivalent AND pinned as a substrate theorem via
+    /// `resource_limits_is_strictly_mixed_agrees_with_negations_of_axially_uniform_arms`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.is_strictly_mixed() ==
+    /// false` (every axis at bottom, no interior);
+    /// `UNBOUNDED_RESOURCE_LIMITS.is_strictly_mixed() == false` (every
+    /// axis at top, no interior); `DEFAULT_RESOURCE_LIMITS
+    /// .is_strictly_mixed() == false` (every axis interior, no pole);
+    /// `HAND_AUTHORED_MID_POSTURE.is_strictly_mixed() == false` (every
+    /// field distinct positive < usize::MAX, every axis interior);
+    /// `HAND_AUTHORED_OTHER_POSTURE.is_strictly_mixed() == false` (same
+    /// shape). Three axially-uniform postures on each arm of the (polar,
+    /// interior) 2-cell partition, ZERO fires among the shipped presets
+    /// — the truly-mixed corner is a strict GENERATIVE fixture the
+    /// presets deliberately avoid.
+    ///
+    /// **Truly-mixed test-local witnesses**: the three shipped test-local
+    /// truly-mixed postures — `SPARSE_BOTTOM_POSTURE`,
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE`, and
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE` — each carry some bottom-pole
+    /// axes AND some interior axes (bottom counts 3, 3, 2 respectively),
+    /// so ALL THREE fire `is_strictly_mixed() == true`. The FIRST first-
+    /// class named typed pin on the load-bearing "truly-mixed" corner
+    /// that has appeared verbatim in every prior commit body as an
+    /// informal reference to the (T, T) middle cell.
+    ///
+    /// **ANY-fold conjunction contract**: for every posture `a`,
+    /// `a.is_strictly_mixed() == (a.has_polar_axis() &&
+    /// a.has_interior_axis())`. Pinned via
+    /// `resource_limits_is_strictly_mixed_equals_has_polar_and_has_interior`.
+    ///
+    /// **ALL-fold complement contract**: for every posture `a`,
+    /// `a.is_strictly_mixed() == (!a.is_axially_polar() &&
+    /// !a.is_axially_interior())`. Pinned via
+    /// `resource_limits_is_strictly_mixed_agrees_with_negations_of_axially_uniform_arms`.
+    ///
+    /// **Uniform complement contract**: for every posture `a`,
+    /// `a.is_strictly_mixed() == !a.is_axially_uniform()`. Pinned via
+    /// `resource_limits_is_strictly_mixed_is_de_morgan_complement_of_is_axially_uniform`.
+    ///
+    /// **COUNT ARITHMETIC form**: for every posture `a`,
+    /// `a.is_strictly_mixed() == (0 < a.count_polar_axes() &&
+    /// a.count_polar_axes() < Self::FIELD_COUNT)` — via the count-
+    /// exhaustive-partition identity `count_polar + count_interior ==
+    /// FIELD_COUNT` combined with the ANY-fold conjunction contract, so
+    /// truly-mixedness is EXACTLY polar-count strictly between the two
+    /// extrema of the partition. Pinned via
+    /// `resource_limits_is_strictly_mixed_equals_polar_count_strictly_between_zero_and_field_count`.
+    ///
+    /// `const fn` so a caller can pin whole-posture strict-mixedness at
+    /// compile time.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// truly-mixed corner verdict is a named typed exit rather than an
+    /// inline `has_polar_axis() && has_interior_axis()` per-consumer
+    /// conjunction. THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the (is_strictly_mixed, is_axially_uniform) pair opens
+    /// the MIXITY column at the whole-posture single-bit verdict surface
+    /// as the direct COMBINATOR-KIND peer of the (has_polar_axis,
+    /// has_interior_axis) EXISTENTIAL pair.
+    ///
+    /// Frontier inspiration: Boolean-algebra conjunction over dual
+    /// ANY-folds lifted through the (polar, interior) EXHAUSTIVE
+    /// PARTITION. APL's `(∨/(0=⍵)∨(⍵=⌈/⍵)) ∧ ∨/(0<⍵)∧(⍵<⌈/⍵)` two-arm
+    /// conjunction. Idris's `any pole v && any interior v`. Kmett's
+    /// `lattices` package's "some endpoint AND some strictly-interior"
+    /// corner lifted to a first-class named primitive. Translation
+    /// through pleme-io primitives: plain `const fn` `&&` on the two
+    /// already-lifted `has_*_axis` ANY-folds, no new dep, no typeclass
+    /// indirection, no allocation.
+    #[must_use]
+    pub const fn is_strictly_mixed(self) -> bool {
+        self.has_polar_axis() && self.has_interior_axis()
+    }
+
+    /// Whole-posture AXIALLY-UNIFORM predicate — `self.is_axially_uniform()`
+    /// holds iff EVERY axis of `self` shares the SAME axial classification
+    /// (either every axis at a pole, or every axis interior — equivalently:
+    /// `self.is_axially_polar() || self.is_axially_interior()`;
+    /// equivalently: `!self.is_strictly_mixed()`). The direct De Morgan
+    /// complement of [`Self::is_strictly_mixed`] one COMBINATOR-KIND axis
+    /// over, jointly the (is_strictly_mixed, is_axially_uniform) pair
+    /// PARTITIONS the whole-posture universe into a two-cell EXHAUSTIVE-
+    /// AND-DISJOINT MIXITY partition — every posture fires exactly one.
+    ///
+    /// The direct COMBINATOR-KIND peer of the (is_axially_polar,
+    /// is_axially_interior) UNIVERSAL pair one COMBINATOR axis over —
+    /// where the pair asserts the two independent ALL-fold verdicts, THIS
+    /// projection folds them through boolean `||` into ONE named typed
+    /// exit at the union of the (T, F) and (F, T) cells (the (T, T) cell
+    /// is structurally unreachable — a single posture cannot
+    /// simultaneously satisfy both ALL-folds since `count_polar +
+    /// count_interior == FIELD_COUNT > 0`, so at most one of the two
+    /// arms can saturate at `FIELD_COUNT`).
+    ///
+    /// Encoded as the boolean `||` of the two ALL-fold verdicts — one
+    /// primitive delegation to the shipped [`Self::is_axially_polar`]
+    /// and [`Self::is_axially_interior`] each. The equivalent alternative
+    /// encoding `!self.is_strictly_mixed()` is structurally equivalent
+    /// AND pinned as a substrate theorem via
+    /// `resource_limits_is_axially_uniform_is_de_morgan_complement_of_is_strictly_mixed`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.is_axially_uniform() ==
+    /// true` (every axis at bottom pole, is_axially_polar arm fires);
+    /// `UNBOUNDED_RESOURCE_LIMITS.is_axially_uniform() == true` (every
+    /// axis at top pole, is_axially_polar arm fires);
+    /// `DEFAULT_RESOURCE_LIMITS.is_axially_uniform() == true` (every axis
+    /// interior, is_axially_interior arm fires);
+    /// `HAND_AUTHORED_MID_POSTURE.is_axially_uniform() == true`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.is_axially_uniform() == true`. ALL
+    /// FIVE shipped preset + hand-authored postures fire the UNIFORM
+    /// arm — the shipped fixture set is deliberately AXIALLY-UNIFORM,
+    /// with the truly-mixed corner witnessed only by the three test-
+    /// local `*_BOTTOM_POSTURE` fixtures.
+    ///
+    /// **Truly-mixed test-local anti-witnesses**: the three shipped
+    /// test-local truly-mixed postures each reject
+    /// `is_axially_uniform() == false` — proving the two-cell partition
+    /// is genuinely two-cell rather than degenerating to a one-cell
+    /// tautology on the shipped fixture set.
+    ///
+    /// **ALL-fold disjunction contract**: for every posture `a`,
+    /// `a.is_axially_uniform() == (a.is_axially_polar() ||
+    /// a.is_axially_interior())`. Pinned via
+    /// `resource_limits_is_axially_uniform_equals_axially_polar_or_axially_interior`.
+    ///
+    /// **De Morgan complement contract**: for every posture `a`,
+    /// `a.is_axially_uniform() == !a.is_strictly_mixed()`. Pinned via
+    /// `resource_limits_is_axially_uniform_is_de_morgan_complement_of_is_strictly_mixed`.
+    ///
+    /// **MIXITY partition exhaustive-and-disjoint contract**: for every
+    /// posture `a`, EXACTLY ONE of `a.is_strictly_mixed()` and
+    /// `a.is_axially_uniform()` holds — the two-cell partition covers
+    /// every posture (exhaustive) with no overlap (disjoint). Pinned via
+    /// `resource_limits_is_strictly_mixed_xor_is_axially_uniform_partitions_every_posture`.
+    ///
+    /// **COUNT ARITHMETIC form**: for every posture `a`,
+    /// `a.is_axially_uniform() == (a.count_polar_axes() == 0 ||
+    /// a.count_polar_axes() == Self::FIELD_COUNT)` — via the count-
+    /// exhaustive-partition identity, axial uniformity is EXACTLY polar-
+    /// count at one of the two partition extrema. Pinned via
+    /// `resource_limits_is_axially_uniform_equals_polar_count_at_partition_extremum`.
+    ///
+    /// `const fn` so a caller can pin whole-posture axial uniformity at
+    /// compile time.
+    ///
+    /// Theory anchor: same as [`Self::is_strictly_mixed`], on the
+    /// COMPLEMENT half of the MIXITY partition.
+    ///
+    /// Frontier inspiration: same as [`Self::is_strictly_mixed`], through
+    /// the De Morgan complement — the ALL-fold disjunction `all(pole) ||
+    /// all(interior)` sits at Kmett's `lattices` "every-endpoint OR
+    /// every-strictly-interior" uniformity notion, and the two-cell
+    /// EXHAUSTIVE-AND-DISJOINT MIXITY partition is the classical
+    /// PROPER-vs-IMPROPER split from combinatorial pole-set theory.
+    #[must_use]
+    pub const fn is_axially_uniform(self) -> bool {
+        self.is_axially_polar() || self.is_axially_interior()
+    }
+
     /// Whole-posture EXISTENTIAL-BOTTOM predicate — `self.has_bottom_axis()`
     /// holds iff AT LEAST ONE axis of `self` sits at the bottom pole
     /// (`self.field_values()[i] == 0` for some `i in 0..FIELD_COUNT`). The
@@ -55023,5 +55212,283 @@ mod tests {
             .interior_axis_is_saturated()
             .is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_saturated().is_none());
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_mixed_preset_pins_reject_every_shipped_uniform_fixture() {
+        // Preset pins — all five shipped preset + hand-authored postures
+        // are AXIALLY-UNIFORM (either every axis polar or every axis
+        // interior), so NONE fires the truly-mixed corner. Pins the
+        // uniform-fixture arm of the MIXITY partition against any future
+        // preset-drift that accidentally introduces a mixed axis.
+        assert!(!EMPTY_RESOURCE_LIMITS.is_strictly_mixed());
+        assert!(!UNBOUNDED_RESOURCE_LIMITS.is_strictly_mixed());
+        assert!(!DEFAULT_RESOURCE_LIMITS.is_strictly_mixed());
+        assert!(!HAND_AUTHORED_MID_POSTURE.is_strictly_mixed());
+        assert!(!HAND_AUTHORED_OTHER_POSTURE.is_strictly_mixed());
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_mixed_test_local_witnesses_fire_on_truly_mixed_postures() {
+        // Truly-mixed witnesses — the three test-local `*_BOTTOM_POSTURE`
+        // fixtures each carry some bottom-pole axes AND some interior
+        // axes (bottom counts 3, 3, 2 respectively), so all three fire
+        // `is_strictly_mixed() == true`. The FIRST first-class named
+        // typed pin on the (T, T) middle cell of the (has_polar_axis,
+        // has_interior_axis) 3-cell partition every prior commit body
+        // has cited by name.
+        assert!(SPARSE_BOTTOM_POSTURE.is_strictly_mixed());
+        assert!(CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.is_strictly_mixed());
+        assert!(ENDPOINTS_ONLY_BOTTOM_POSTURE.is_strictly_mixed());
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_mixed_equals_has_polar_and_has_interior() {
+        // ANY-fold conjunction contract — LOAD-BEARING structural pin.
+        // The truly-mixed verdict IS the boolean `&&` of the two
+        // existential ANY-fold verdicts, per definition. Crystallizes
+        // the (has_polar_axis, has_interior_axis) middle-cell corner as
+        // ONE typed theorem the substrate proves once.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.is_strictly_mixed(),
+                a.has_polar_axis() && a.has_interior_axis(),
+                "is_strictly_mixed != has_polar_axis && has_interior_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_mixed_agrees_with_negations_of_axially_uniform_arms() {
+        // ALL-fold complement contract — the truly-mixed verdict equals
+        // the boolean `&&` of the two negated ALL-fold verdicts, via the
+        // cross-quantifier De Morgan complements `has_interior_axis ==
+        // !is_axially_polar` and `has_polar_axis == !is_axially_interior`
+        // shipped as substrate theorems on the paired projections.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.is_strictly_mixed(),
+                !a.is_axially_polar() && !a.is_axially_interior(),
+                "is_strictly_mixed != !is_axially_polar && !is_axially_interior on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_mixed_is_de_morgan_complement_of_is_axially_uniform() {
+        // Uniform complement contract — LOAD-BEARING structural pin.
+        // The (is_strictly_mixed, is_axially_uniform) pair is EXACTLY a
+        // boolean complementary pair on the whole-posture single-bit
+        // verdict surface, PARTITIONING every posture into a two-cell
+        // EXHAUSTIVE-AND-DISJOINT MIXITY partition.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.is_strictly_mixed(),
+                !a.is_axially_uniform(),
+                "is_strictly_mixed != !is_axially_uniform on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_mixed_equals_polar_count_strictly_between_zero_and_field_count()
+    {
+        // COUNT ARITHMETIC form — via the count-exhaustive-partition
+        // identity `count_polar + count_interior == FIELD_COUNT`, truly-
+        // mixedness is EXACTLY polar-count strictly between the two
+        // extrema of the partition. Crystallizes the connection between
+        // the boolean MIXITY verdict and the usize COUNT surface.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let cp = a.count_polar_axes();
+            assert_eq!(
+                a.is_strictly_mixed(),
+                0 < cp && cp < ResourceLimits::FIELD_COUNT,
+                "is_strictly_mixed != (0 < count_polar_axes < FIELD_COUNT) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_uniform_preset_pins_fire_on_every_shipped_uniform_fixture() {
+        // Preset pins — all five shipped preset + hand-authored postures
+        // are AXIALLY-UNIFORM, so ALL FIVE fire the uniform arm. Dual of
+        // the strictly-mixed preset-rejection pin above.
+        assert!(EMPTY_RESOURCE_LIMITS.is_axially_uniform());
+        assert!(UNBOUNDED_RESOURCE_LIMITS.is_axially_uniform());
+        assert!(DEFAULT_RESOURCE_LIMITS.is_axially_uniform());
+        assert!(HAND_AUTHORED_MID_POSTURE.is_axially_uniform());
+        assert!(HAND_AUTHORED_OTHER_POSTURE.is_axially_uniform());
+    }
+
+    #[test]
+    fn resource_limits_is_axially_uniform_test_local_anti_witnesses_reject_truly_mixed_postures() {
+        // Truly-mixed anti-witnesses — the three test-local `*_BOTTOM_POSTURE`
+        // fixtures each reject `is_axially_uniform() == false`, proving
+        // the two-cell MIXITY partition is genuinely two-cell rather
+        // than degenerating to a one-cell tautology on the shipped
+        // fixture set.
+        assert!(!SPARSE_BOTTOM_POSTURE.is_axially_uniform());
+        assert!(!CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.is_axially_uniform());
+        assert!(!ENDPOINTS_ONLY_BOTTOM_POSTURE.is_axially_uniform());
+    }
+
+    #[test]
+    fn resource_limits_is_axially_uniform_equals_axially_polar_or_axially_interior() {
+        // ALL-fold disjunction contract — LOAD-BEARING structural pin.
+        // The uniform verdict IS the boolean `||` of the two universal
+        // ALL-fold verdicts, per definition. Crystallizes the (T, F) ∪
+        // (F, T) cell union of the (is_axially_polar, is_axially_interior)
+        // pair as ONE typed theorem.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.is_axially_uniform(),
+                a.is_axially_polar() || a.is_axially_interior(),
+                "is_axially_uniform != is_axially_polar || is_axially_interior on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_uniform_is_de_morgan_complement_of_is_strictly_mixed() {
+        // De Morgan complement contract dual — the uniform verdict IS
+        // the boolean negation of the truly-mixed verdict, and jointly
+        // the pair EXACTLY partitions the whole-posture universe.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.is_axially_uniform(),
+                !a.is_strictly_mixed(),
+                "is_axially_uniform != !is_strictly_mixed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_strictly_mixed_xor_is_axially_uniform_partitions_every_posture() {
+        // MIXITY partition exhaustive-and-disjoint contract — LOAD-BEARING
+        // structural pin. Every posture fires EXACTLY ONE of
+        // is_strictly_mixed and is_axially_uniform — the two-cell
+        // partition covers every posture (exhaustive) with no overlap
+        // (disjoint). Encoded as the boolean XOR.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert!(
+                a.is_strictly_mixed() ^ a.is_axially_uniform(),
+                "MIXITY partition failed exclusive-or on {a:?}: mixed={} uniform={}",
+                a.is_strictly_mixed(),
+                a.is_axially_uniform(),
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_uniform_equals_polar_count_at_partition_extremum() {
+        // COUNT ARITHMETIC form dual — via the count-exhaustive-partition
+        // identity, axial uniformity is EXACTLY polar-count at one of
+        // the two partition extrema (0 or FIELD_COUNT). Crystallizes
+        // the connection between the boolean MIXITY verdict and the
+        // usize COUNT surface on the DUAL half of the partition.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let cp = a.count_polar_axes();
+            assert_eq!(
+                a.is_axially_uniform(),
+                cp == 0 || cp == ResourceLimits::FIELD_COUNT,
+                "is_axially_uniform != (count_polar_axes at partition extremum) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_mixity_predicates_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin on the MIXITY column — both predicates are
+        // evaluable in const context so a caller can pin the truly-
+        // mixed / uniform corners at compile time as build-breaks.
+        // Mirror of the const-fn evaluability pins on the (SATURATED)
+        // pair one COMBINATOR-KIND axis under and the (is_axially_polar,
+        // is_axially_interior) ALL-fold pair one COMBINATOR axis over.
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.is_strictly_mixed());
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.is_strictly_mixed());
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.is_strictly_mixed());
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.is_axially_uniform());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.is_axially_uniform());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.is_axially_uniform());
     }
 }

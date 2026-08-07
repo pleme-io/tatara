@@ -11939,6 +11939,217 @@ impl ResourceLimits {
         count
     }
 
+    /// Whole-posture ARITHMETIC-MIXITY-DEPTH tally — `self.count_mixity_axes()`
+    /// returns the size of the MINORITY arm of the (polar, interior)
+    /// exhaustive-and-disjoint partition, in `0..=Self::FIELD_COUNT / 2`.
+    /// Encoded as `min(self.count_polar_axes(), self.count_interior_axes())`.
+    /// The ARITHMETIC-QUANTIFIER refinement of [`Self::is_strictly_mixed`]
+    /// one QUANTIFIER-KIND axis over — where `is_strictly_mixed` binds the
+    /// SINGLE-BIT verdict "some axes polar AND some axes interior", THIS
+    /// projection binds the usize MEASURE of "how far from uniform the
+    /// posture sits", giving the same corner-verdict a numeric depth.
+    ///
+    /// A strict REFINEMENT of the boolean MIXITY verdict on the same corner:
+    /// `count_mixity_axes() > 0 ⇔ is_strictly_mixed()` and
+    /// `count_mixity_axes() == 0 ⇔ is_axially_uniform()` — the (boolean
+    /// MIXITY, arithmetic MIXITY-DEPTH) pair sits at ONE typed arithmetic
+    /// primitive on the whole-posture universe, mirroring the (has_polar_axis,
+    /// count_polar_axes) refinement one QUANTIFIER-KIND axis under on the
+    /// polar cell.
+    ///
+    /// **MIXITY-DEPTH-SUM identity**: on every posture, `count_mixity_axes() +
+    /// count_uniformity_axes() == Self::FIELD_COUNT`. Since one axis is
+    /// either polar or interior (never both, never neither — see the
+    /// `count_polar_axes + count_interior_axes == FIELD_COUNT` cross-cell
+    /// arithmetic-cover identity), the (min, max) pair on the two arm
+    /// tallies IS a permutation of the (polar, interior) pair, and their
+    /// sum is preserved. The ARITHMETIC form of the (is_strictly_mixed,
+    /// is_axially_uniform) De Morgan complement one QUANTIFIER-KIND axis
+    /// over — Boolean complement on a two-cell partition lifts to
+    /// arithmetic PERMUTATION on the corresponding index counts. Pinned
+    /// jointly with the paired [`Self::count_uniformity_axes`] via
+    /// `resource_limits_count_mixity_and_count_uniformity_sum_equals_field_count`.
+    ///
+    /// **Bounded above by half the axis cardinality**: on every posture,
+    /// `count_mixity_axes() <= Self::FIELD_COUNT / 2`. The min-of-two-
+    /// non-negatives-that-sum-to-N inequality forces the minority arm to
+    /// fit within `floor(N / 2)` — the STRUCTURAL bound the substrate
+    /// proves once so downstream consumers of "how minority is minority"
+    /// bind to a witnessed upper edge rather than restating it. Pinned via
+    /// `resource_limits_count_mixity_axes_bounded_above_by_field_count_half`.
+    ///
+    /// **Discriminates postures the boolean MIXITY conflates**: the
+    /// boolean `is_strictly_mixed()` surface fires the SAME `true` verdict
+    /// on a barely-mixed posture (one axis at some pole, five axes strictly
+    /// interior) as on an evenly-mixed posture (three axes polar, three
+    /// axes interior) — the two are BOOLEAN-MIXITY-equivalent, but the
+    /// arithmetic MIXITY-DEPTH tally NAMES their distinct arrangements as
+    /// distinct `usize` values (`1` vs `3`). The MIXITY-DEPTH projection
+    /// is the LOAD-BEARING BARELY-vs-EVENLY discriminator the boolean
+    /// MIXITY surface cannot access at the whole-posture single-bit
+    /// verdict cell.
+    ///
+    /// Encoded as `min(self.count_polar_axes(), self.count_interior_axes())`
+    /// — the arithmetic form of "size of the minority arm" via plain
+    /// `const fn` `if a < b { a } else { b }` on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies. No new mask fold, no per-axis loop.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.count_mixity_axes() == 0`
+    /// (every axis at bottom pole, minority arm empty);
+    /// `UNBOUNDED_RESOURCE_LIMITS.count_mixity_axes() == 0` (every axis at
+    /// top pole, minority arm empty); `DEFAULT_RESOURCE_LIMITS
+    /// .count_mixity_axes() == 0` (every `DEFAULT_MAX_*` strictly interior,
+    /// minority arm empty); `HAND_AUTHORED_MID_POSTURE.count_mixity_axes()
+    /// == 0`; `HAND_AUTHORED_OTHER_POSTURE.count_mixity_axes() == 0`. All
+    /// five uniform fixtures saturate the minority arm at the zero floor.
+    ///
+    /// **Min-fold agreement contract**: for every posture `a`,
+    /// `a.count_mixity_axes() == min(a.count_polar_axes(),
+    /// a.count_interior_axes())`. Pinned via
+    /// `resource_limits_count_mixity_axes_equals_min_of_polar_and_interior_counts`.
+    ///
+    /// **Boolean-MIXITY bridge**: `a.count_mixity_axes() > 0 ⇔
+    /// a.is_strictly_mixed()`. Pinned via
+    /// `resource_limits_count_mixity_axes_gt_zero_iff_is_strictly_mixed`.
+    /// **Boolean-UNIFORMITY bridge**: `a.count_mixity_axes() == 0 ⇔
+    /// a.is_axially_uniform()`. Pinned via
+    /// `resource_limits_count_mixity_axes_eq_zero_iff_is_axially_uniform`.
+    ///
+    /// `const fn` so a caller can pin the exact MIXITY depth at compile
+    /// time (`const _: () = assert!(EMPTY_RESOURCE_LIMITS
+    /// .count_mixity_axes() == 0);`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// MIXITY-depth tally is a named typed exit rather than an inline
+    /// `min(a.count_polar_axes(), a.count_interior_axes())` per-consumer
+    /// composition. THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the (count_mixity_axes, count_uniformity_axes) arithmetic
+    /// pair refines the just-shipped (is_strictly_mixed, is_axially_uniform)
+    /// boolean pair one QUANTIFIER-KIND axis over with the LOAD-BEARING
+    /// MIXITY-DEPTH-SUM identity `count_mixity + count_uniformity ==
+    /// FIELD_COUNT` on every posture. THEORY.md §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: classical order theory's canonical "distance
+    /// to a uniform lattice endomorphism" lifted to whole-posture
+    /// arithmetic via `depth(a) = min(|P|, |I|)` — the cardinality of the
+    /// minority arm of the axial-classification bipartition as a first-
+    /// class arithmetic exit. APL's `⌊/ (+/mask, +/~mask)` — the arithmetic
+    /// dual of `∧/` at the same axial mask. Haskell's `min (length polar)
+    /// (length interior)` on a bounded-partition vector. Idris's `min :
+    /// Fin (S n) -> Fin (S n) -> Fin (S n)` on the two arm tallies of a
+    /// disjoint-and-exhaustive partition. Translation through pleme-io
+    /// primitives is the plain `const fn` `if cp < ci { cp } else { ci }`
+    /// on the two already-lifted [`Self::count_polar_axes`] +
+    /// [`Self::count_interior_axes`] tallies.
+    #[must_use]
+    pub const fn count_mixity_axes(self) -> usize {
+        let cp = self.count_polar_axes();
+        let ci = self.count_interior_axes();
+        if cp < ci {
+            cp
+        } else {
+            ci
+        }
+    }
+
+    /// Whole-posture ARITHMETIC-UNIFORMITY-DEPTH tally —
+    /// `self.count_uniformity_axes()` returns the size of the MAJORITY arm
+    /// of the (polar, interior) exhaustive-and-disjoint partition, in
+    /// `Self::FIELD_COUNT.div_ceil(2)..=Self::FIELD_COUNT`. Encoded as
+    /// `max(self.count_polar_axes(), self.count_interior_axes())`. The
+    /// ARITHMETIC-QUANTIFIER refinement of [`Self::is_axially_uniform`]
+    /// one QUANTIFIER-KIND axis over, and the ARITHMETIC-COMPLEMENT peer
+    /// of [`Self::count_mixity_axes`] on the DUAL arm — where
+    /// `count_mixity_axes` binds the MINORITY tally, THIS projection binds
+    /// the MAJORITY tally at ONE typed arithmetic primitive.
+    ///
+    /// A strict REFINEMENT of the boolean UNIFORMITY verdict on the same
+    /// corner: `count_uniformity_axes() == Self::FIELD_COUNT ⇔
+    /// is_axially_uniform()` and `count_uniformity_axes() <
+    /// Self::FIELD_COUNT ⇔ is_strictly_mixed()`.
+    ///
+    /// **ARITHMETIC-COMPLEMENT identity**: on every posture,
+    /// `count_uniformity_axes() == Self::FIELD_COUNT - count_mixity_axes()`.
+    /// The DUAL projection of the MIXITY-DEPTH-SUM identity on the paired
+    /// [`Self::count_mixity_axes`] — Boolean complement on the
+    /// (mixity, uniformity) partition of the axial-classification arms
+    /// lifts to arithmetic SUBTRACTION from the axis cardinality on the
+    /// corresponding index counts. Pinned jointly via
+    /// `resource_limits_count_mixity_and_count_uniformity_sum_equals_field_count`.
+    ///
+    /// **Bounded below by the ceiling half of the axis cardinality**: on
+    /// every posture, `count_uniformity_axes() >= count_mixity_axes()`.
+    /// The max-geq-min inequality forces the majority arm to at least
+    /// match the minority arm on every posture — the STRUCTURAL bound the
+    /// substrate proves once. Pinned via
+    /// `resource_limits_count_uniformity_axes_geq_count_mixity_axes_on_every_posture`.
+    ///
+    /// **Discriminates postures the boolean UNIFORMITY conflates**: the
+    /// boolean `is_axially_uniform()` surface fires the SAME `true`
+    /// verdict on `EMPTY_RESOURCE_LIMITS` (six axes polar, zero interior)
+    /// as on `DEFAULT_RESOURCE_LIMITS` (zero axes polar, six axes interior)
+    /// — the two are BOOLEAN-UNIFORMITY-equivalent at the majority arm's
+    /// SATURATION extremum, but the UNIFORMITY-DEPTH tally NAMES the
+    /// majority arm cardinality directly. On non-uniform postures the
+    /// UNIFORMITY-DEPTH projection is the LOAD-BEARING NEAR-UNIFORM-vs-
+    /// EVENLY-MIXED discriminator the boolean UNIFORMITY surface cannot
+    /// access — a posture at `count_uniformity_axes() == 5` (one axis
+    /// minority) is BOOLEAN-MIXED-equivalent to a posture at
+    /// `count_uniformity_axes() == 3` (evenly split), but the arithmetic
+    /// tally names them apart at `5` vs `3`.
+    ///
+    /// Encoded as `max(self.count_polar_axes(), self.count_interior_axes())`
+    /// — the arithmetic form of "size of the majority arm" via plain
+    /// `const fn` `if a < b { b } else { a }` on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies, matching [`Self::count_mixity_axes`]'s
+    /// shape verbatim on the DUAL arm-selection combinator.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.count_uniformity_axes() ==
+    /// Self::FIELD_COUNT` (every axis at bottom, majority = polar = 6);
+    /// `UNBOUNDED_RESOURCE_LIMITS.count_uniformity_axes() ==
+    /// Self::FIELD_COUNT` (every axis at top, majority = polar = 6);
+    /// `DEFAULT_RESOURCE_LIMITS.count_uniformity_axes() == Self::FIELD_COUNT`
+    /// (every axis interior, majority = interior = 6);
+    /// `HAND_AUTHORED_MID_POSTURE.count_uniformity_axes() ==
+    /// Self::FIELD_COUNT`; `HAND_AUTHORED_OTHER_POSTURE
+    /// .count_uniformity_axes() == Self::FIELD_COUNT`. All five uniform
+    /// fixtures saturate the majority arm at the top extremum.
+    ///
+    /// **Max-fold agreement contract**: for every posture `a`,
+    /// `a.count_uniformity_axes() == max(a.count_polar_axes(),
+    /// a.count_interior_axes())`. Pinned via
+    /// `resource_limits_count_uniformity_axes_equals_max_of_polar_and_interior_counts`.
+    ///
+    /// **Boolean-UNIFORMITY bridge**: `a.count_uniformity_axes() ==
+    /// Self::FIELD_COUNT ⇔ a.is_axially_uniform()`. Pinned via
+    /// `resource_limits_count_uniformity_axes_saturates_iff_is_axially_uniform`.
+    ///
+    /// `const fn` so a caller can pin the exact UNIFORMITY depth at
+    /// compile time (`const _: () = assert!(EMPTY_RESOURCE_LIMITS
+    /// .count_uniformity_axes() == ResourceLimits::FIELD_COUNT);`).
+    ///
+    /// Theory anchor: same as [`Self::count_mixity_axes`], on the DUAL
+    /// arm-selection combinator. The (count_mixity_axes,
+    /// count_uniformity_axes) pair jointly ARITHMETIZES the (mixity,
+    /// uniformity) axial partition of the whole-posture universe with the
+    /// LOAD-BEARING (min, max) SUM-PRESERVING permutation identity.
+    ///
+    /// Frontier inspiration: same as [`Self::count_mixity_axes`], through
+    /// the DUAL max-arm-selection combinator on the two arm tallies of
+    /// the exhaustive-and-disjoint (polar, interior) axial partition.
+    /// APL's `⌈/ (+/mask, +/~mask)` — the DUAL of `⌊/` on the same axial
+    /// tally pair. Haskell's `max (length polar) (length interior)`.
+    #[must_use]
+    pub const fn count_uniformity_axes(self) -> usize {
+        let cp = self.count_polar_axes();
+        let ci = self.count_interior_axes();
+        if cp < ci {
+            ci
+        } else {
+            cp
+        }
+    }
+
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
     /// `self.first_bottom_axis_index()` returns `Some(i)` for the least
     /// `i` such that `self.field_values()[i] == 0`, or `None` when no
@@ -55490,5 +55701,317 @@ mod tests {
         const _: () = assert!(EMPTY_RESOURCE_LIMITS.is_axially_uniform());
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.is_axially_uniform());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.is_axially_uniform());
+    }
+
+    #[test]
+    fn resource_limits_count_mixity_axes_preset_pins_saturate_at_zero_on_every_uniform_fixture() {
+        // Preset pins — all five shipped preset + hand-authored postures
+        // are AXIALLY-UNIFORM, so the MINORITY arm is empty on every
+        // one and `count_mixity_axes` saturates at the zero floor.
+        // Pins the uniform-fixture arm of the MIXITY-DEPTH surface
+        // against any future preset-drift that accidentally introduces a
+        // minority-arm axis.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.count_mixity_axes(), 0);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.count_mixity_axes(), 0);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.count_mixity_axes(), 0);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.count_mixity_axes(), 0);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.count_mixity_axes(), 0);
+    }
+
+    #[test]
+    fn resource_limits_count_mixity_axes_test_local_witnesses_fire_positive_on_truly_mixed_postures(
+    ) {
+        // Truly-mixed witnesses — the three test-local `*_BOTTOM_POSTURE`
+        // fixtures each carry a non-empty minority arm. SPARSE and
+        // CONTIGUOUS_INTERIOR each have 3 polar (bottom) + 3 interior
+        // → mixity = min(3, 3) = 3 (evenly split, both arms equal).
+        // ENDPOINTS_ONLY has 2 polar (bottom) + 4 interior → mixity =
+        // min(2, 4) = 2. Pins the arithmetic-refinement arm of the
+        // MIXITY-DEPTH surface against the just-shipped boolean
+        // `is_strictly_mixed` — where the boolean fires uniformly `true`
+        // across the three, the arithmetic depth names them apart as
+        // (3, 3, 2).
+        assert_eq!(SPARSE_BOTTOM_POSTURE.count_mixity_axes(), 3);
+        assert_eq!(CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.count_mixity_axes(), 3);
+        assert_eq!(ENDPOINTS_ONLY_BOTTOM_POSTURE.count_mixity_axes(), 2);
+    }
+
+    #[test]
+    fn resource_limits_count_uniformity_axes_preset_pins_saturate_at_field_count_on_every_uniform_fixture(
+    ) {
+        // Preset pins — the DUAL of the mixity zero-saturation pin. All
+        // five uniform fixtures saturate the MAJORITY arm at the top
+        // extremum `Self::FIELD_COUNT` because the majority arm equals
+        // the whole axis set on any uniform posture.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.count_uniformity_axes(),
+            ResourceLimits::FIELD_COUNT,
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.count_uniformity_axes(),
+            ResourceLimits::FIELD_COUNT,
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.count_uniformity_axes(),
+            ResourceLimits::FIELD_COUNT,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.count_uniformity_axes(),
+            ResourceLimits::FIELD_COUNT,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.count_uniformity_axes(),
+            ResourceLimits::FIELD_COUNT,
+        );
+    }
+
+    #[test]
+    fn resource_limits_count_uniformity_axes_test_local_witnesses_fire_at_majority_arm_size() {
+        // Truly-mixed witnesses on the DUAL arm — SPARSE and
+        // CONTIGUOUS_INTERIOR each have 3 polar + 3 interior → uniformity
+        // = max(3, 3) = 3 (evenly split saturates both arms at the same
+        // count). ENDPOINTS_ONLY has 2 polar + 4 interior → uniformity =
+        // max(2, 4) = 4. Pins the MAJORITY-arm reading of the same
+        // three postures, giving the (mixity, uniformity) pair the exact
+        // (3, 3), (3, 3), (2, 4) shape the (min, max) permutation
+        // preserves.
+        assert_eq!(SPARSE_BOTTOM_POSTURE.count_uniformity_axes(), 3);
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.count_uniformity_axes(),
+            3,
+        );
+        assert_eq!(ENDPOINTS_ONLY_BOTTOM_POSTURE.count_uniformity_axes(), 4);
+    }
+
+    #[test]
+    fn resource_limits_count_mixity_axes_equals_min_of_polar_and_interior_counts() {
+        // Min-fold agreement contract — LOAD-BEARING structural pin. The
+        // MIXITY-DEPTH IS the min-fold of the two ARITHMETIC-QUANTIFIER
+        // tallies on the (polar, interior) axial partition, per
+        // definition. Crystallizes the min-selection combinator as ONE
+        // typed theorem the substrate proves once.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let cp = a.count_polar_axes();
+            let ci = a.count_interior_axes();
+            assert_eq!(
+                a.count_mixity_axes(),
+                std::cmp::min(cp, ci),
+                "count_mixity_axes != min(count_polar_axes, count_interior_axes) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_uniformity_axes_equals_max_of_polar_and_interior_counts() {
+        // Max-fold agreement contract — the DUAL of the min-fold
+        // agreement pin. The UNIFORMITY-DEPTH IS the max-fold of the
+        // two ARITHMETIC-QUANTIFIER tallies, per definition.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let cp = a.count_polar_axes();
+            let ci = a.count_interior_axes();
+            assert_eq!(
+                a.count_uniformity_axes(),
+                std::cmp::max(cp, ci),
+                "count_uniformity_axes != max(count_polar_axes, count_interior_axes) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_mixity_and_count_uniformity_sum_equals_field_count() {
+        // MIXITY-DEPTH-SUM identity — LOAD-BEARING structural pin. The
+        // (min, max) pair on the two arm tallies IS a permutation of
+        // the (polar, interior) tally pair, so the sum equals the
+        // cross-cell arithmetic-cover cardinality `Self::FIELD_COUNT`
+        // on every posture. The ARITHMETIC form of the (is_strictly_mixed,
+        // is_axially_uniform) De Morgan complement lifted through
+        // disjoint-cover sum-of-cardinalities one QUANTIFIER-KIND axis
+        // over.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.count_mixity_axes() + a.count_uniformity_axes(),
+                ResourceLimits::FIELD_COUNT,
+                "count_mixity_axes + count_uniformity_axes != FIELD_COUNT on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_uniformity_axes_geq_count_mixity_axes_on_every_posture() {
+        // Max-geq-min inequality contract — LOAD-BEARING structural pin.
+        // The majority arm always at least matches the minority arm on
+        // every posture — a substrate theorem the (min, max) combinator
+        // pair proves once for every downstream consumer of "how balanced
+        // is the axial partition".
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert!(
+                a.count_uniformity_axes() >= a.count_mixity_axes(),
+                "count_uniformity_axes < count_mixity_axes on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_mixity_axes_bounded_above_by_field_count_half() {
+        // Bounded-above-by-half contract — the min-of-two-non-negatives-
+        // that-sum-to-N inequality forces the minority arm to fit within
+        // `Self::FIELD_COUNT / 2` on every posture. Pins the STRUCTURAL
+        // upper edge of the MIXITY-DEPTH range as a substrate theorem
+        // rather than a per-consumer restatement.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert!(
+                a.count_mixity_axes() <= ResourceLimits::FIELD_COUNT / 2,
+                "count_mixity_axes > FIELD_COUNT / 2 on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_mixity_axes_gt_zero_iff_is_strictly_mixed() {
+        // Boolean-MIXITY bridge — the ARITHMETIC-REFINEMENT bridge to
+        // the just-shipped boolean MIXITY verdict one QUANTIFIER-KIND
+        // axis over. Crystallizes that the (boolean MIXITY, arithmetic
+        // MIXITY-DEPTH) pair is a genuine refinement rather than a
+        // parallel re-derivation.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.count_mixity_axes() > 0,
+                a.is_strictly_mixed(),
+                "(count_mixity_axes > 0) != is_strictly_mixed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_mixity_axes_eq_zero_iff_is_axially_uniform() {
+        // Boolean-UNIFORMITY bridge — the DUAL bridge on the zero-floor
+        // arm of the MIXITY-DEPTH surface, pinning that the axial-
+        // uniformity boolean verdict IS the empty-minority-arm arithmetic
+        // verdict.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.count_mixity_axes() == 0,
+                a.is_axially_uniform(),
+                "(count_mixity_axes == 0) != is_axially_uniform on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_uniformity_axes_saturates_iff_is_axially_uniform() {
+        // Boolean-UNIFORMITY bridge on the DUAL arm — the axial-
+        // uniformity boolean verdict IS the majority-arm-saturates-at-
+        // FIELD_COUNT arithmetic verdict. Crystallizes the ALL-fold
+        // bridge on the UNIFORMITY-DEPTH surface as the ARITHMETIC form
+        // of the whole-posture universal-quantifier verdict at the top
+        // extremum of the majority-arm tally range.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.count_uniformity_axes() == ResourceLimits::FIELD_COUNT,
+                a.is_axially_uniform(),
+                "(count_uniformity_axes == FIELD_COUNT) != is_axially_uniform on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_mixity_depth_projections_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin on the MIXITY-DEPTH column — both arithmetic
+        // projections are evaluable in const context so a caller can
+        // pin the exact minority / majority arm cardinality at compile
+        // time as build-breaks. Mirror of the const-fn evaluability
+        // pins on the (count_polar_axes, count_interior_axes) pair one
+        // QUANTIFIER-KIND axis under and the (is_strictly_mixed,
+        // is_axially_uniform) pair one QUANTIFIER-KIND axis over.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.count_mixity_axes() == 0);
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.count_mixity_axes() == 0);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.count_mixity_axes() == 0);
+        const _: () =
+            assert!(EMPTY_RESOURCE_LIMITS.count_uniformity_axes() == ResourceLimits::FIELD_COUNT);
+        const _: () = assert!(
+            UNBOUNDED_RESOURCE_LIMITS.count_uniformity_axes() == ResourceLimits::FIELD_COUNT
+        );
+        const _: () =
+            assert!(DEFAULT_RESOURCE_LIMITS.count_uniformity_axes() == ResourceLimits::FIELD_COUNT);
     }
 }

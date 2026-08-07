@@ -2417,16 +2417,6 @@ dependencies = [
 
 [[package]]
 name = "gen-macros"
-version = "0.1.6"
-source = "git+https://github.com/pleme-io/gen#eea15518fdff36d8b21ed753b6b161fc0d3623f6"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
-name = "gen-macros"
 version = "0.1.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "01a65672c144a3365d0e0c1949102eb8149ebc8bee4f702decf699f0d12e4b22"
@@ -2438,39 +2428,12 @@ dependencies = [
 
 [[package]]
 name = "gen-platform"
-version = "0.1.6"
-source = "git+https://github.com/pleme-io/gen#eea15518fdff36d8b21ed753b6b161fc0d3623f6"
-dependencies = [
- "gen-macros 0.1.6",
- "gen-types 0.1.6",
- "inventory",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "gen-platform"
 version = "0.1.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6a9878a6592876a0d813f1b476e74d8b6213447d7d07876de51311aed454a00"
 dependencies = [
- "gen-macros 0.1.33",
- "gen-types 0.1.33",
- "inventory",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "gen-types"
-version = "0.1.6"
-source = "git+https://github.com/pleme-io/gen#eea15518fdff36d8b21ed753b6b161fc0d3623f6"
-dependencies = [
- "blake3",
- "chrono",
- "indexmap 2.14.0",
+ "gen-macros",
+ "gen-types",
  "inventory",
  "serde",
  "serde_json",
@@ -3295,7 +3258,8 @@ dependencies = [
 [[package]]
 name = "kasou"
 version = "0.1.0"
-source = "git+https://github.com/pleme-io/kasou#bbfaf245e0baf0cb6b6b0b6639a56f4e87cb4955"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e069200d48aa07e47afe8e6360da0d6f1c26a9c82ab141eb50a9089f3c149d84"
 dependencies = [
  "block2",
  "dispatch2",
@@ -3558,8 +3522,9 @@ checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
 
 [[package]]
 name = "maquina-engine"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/maquina-engine#d65a421d73676c1945ef0b276c09d5180ee26d4d"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fbdfa51ea96c1196e4042cc9de933b949370e84a3b0b2b5cc16a85e99bc1d804"
 dependencies = [
  "async-trait",
  "kasou",
@@ -5008,7 +4973,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "shikumi 0.1.0",
+ "shikumi",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -5562,31 +5527,13 @@ dependencies = [
  "async-trait",
  "blake3",
  "chrono",
- "gen-platform 0.1.33",
- "gen-types 0.1.33",
+ "gen-platform",
+ "gen-types",
  "hex",
  "schemars 0.8.22",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
-]
-
-[[package]]
-name = "shikumi"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/shikumi#9161fde44527ec6572640d8a77f6919583f6b342"
-dependencies = [
- "arc-swap",
- "async-trait",
- "figment",
- "gen-platform 0.1.6",
- "gen-types 0.1.6",
- "notify",
- "serde",
- "serde_json",
- "serde_yaml",
- "thiserror 2.0.18",
- "tracing",
 ]
 
 [[package]]
@@ -5599,8 +5546,8 @@ dependencies = [
  "async-trait",
  "clap",
  "figment",
- "gen-platform 0.1.33",
- "gen-types 0.1.33",
+ "gen-platform",
+ "gen-types",
  "notify",
  "serde",
  "serde_json",
@@ -5969,7 +5916,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "shikumi 0.1.455",
+ "shikumi",
  "tatara-api",
  "tatara-core",
  "tatara-engine",
@@ -6041,7 +5988,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "shikumi 0.1.455",
+ "shikumi",
  "thiserror 2.0.18",
  "toml",
  "tracing",
@@ -6426,7 +6373,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "shikumi 0.1.455",
+ "shikumi",
  "tatara-core",
  "tatara-domains",
  "tatara-lattice",
@@ -6492,8 +6439,8 @@ name = "tatara-vm"
 version = "0.2.202"
 dependencies = [
  "blake3",
- "gen-platform 0.1.33",
- "gen-types 0.1.33",
+ "gen-platform",
+ "gen-types",
  "libc",
  "maquina-engine",
  "serde",
@@ -6524,8 +6471,9 @@ dependencies = [
 
 [[package]]
 name = "tateru"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/tateru#4c58ac3759800b3b3d3e07cc803d1c68ac5c9d39"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44d8bcf63adb03bf4e9f077909d73110e97dcb0d32ca72052e751c006aefc399"
 dependencies = [
  "libc",
  "serde",

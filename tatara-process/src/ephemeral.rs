@@ -30,7 +30,7 @@
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use tatara_lisp_derive::TataraDomain as DeriveTataraDomain;
+use tatara_lisp::DeriveTataraDomain;
 
 use crate::boundary::{Boundary, Condition};
 use crate::classification::{

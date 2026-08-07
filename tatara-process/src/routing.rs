@@ -34,7 +34,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use tatara_lisp_derive::TataraDomain as DeriveTataraDomain;
+use tatara_lisp::DeriveTataraDomain;
 
 /// Declared external edges (DNS + Ingress) this Process exposes.
 ///

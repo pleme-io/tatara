@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "e801dfdebd9c4aaed47d8e8e4f115b52a2f46e1533f2cdce3ef2c00641aa3665",
+  "cargo_lock_sha256": "c37bdee84e928db7310b8c3bd8668d4ff373d424b003c8edc7ef94cb3cf01947",
   "manifest_sha256": {
     "Cargo.toml": "65a571f5b165334dda697a85aceb7a0b1a8ffe4b71ae6f86a4ee4a15404370d6",
     "ro-cli/Cargo.toml": "ac3c14c18498e8241da91c916ef10e972b0f178baa2a68cc44b65f602b259f48",
@@ -28,7 +28,7 @@
     "tatara-os/Cargo.toml": "b4fa80f59595fb1147a9492af167e38758895cd003d7e1b43b14be0c2a5c38f3",
     "tatara-pkgs/Cargo.toml": "5f25a11a250cfa1f154640e2e81a95d001806dff4a708307c0be034eef082bca",
     "tatara-pool-reconciler/Cargo.toml": "e81beb9c132404726a52a6645ed478cb271690852dce04dab349d937f839115b",
-    "tatara-process/Cargo.toml": "c1faa64895a08881a2305751cf99c795a77e25ae1ac8e673b411ef4b125cbbd3",
+    "tatara-process/Cargo.toml": "9bd244a530a632d2aec21880b1d6145c15b8b2991f83f84c6f75d0df0a0c932f",
     "tatara-reconciler/Cargo.toml": "8c822db34d673e39b870a6f6b4582058ab9546714dd9cad580f7fd0a26ed35ad",
     "tatara-terreiro/Cargo.toml": "c08386ff730f541dfbf438f68dada22f1dad3b62957557d8a67131f0c4622201",
     "tatara-testing/Cargo.toml": "711da4ca4ce6b28b51af7b368442ea042079b9389defc0ce8691937712d51c49",
@@ -15943,6 +15943,60 @@
         "build_dependencies": [],
         "features": []
       },
+      "tatara-closed-set-0.3.37": {
+        "runtime_dependencies": [
+          {
+            "name": "tatara_closed_set_derive",
+            "package_key": "tatara-closed-set-derive-0.3.37",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "host"
+          }
+        ],
+        "build_dependencies": [],
+        "features": []
+      },
+      "tatara-closed-set-derive-0.3.37": {
+        "runtime_dependencies": [
+          {
+            "name": "proc_macro2",
+            "package_key": "proc-macro2-1.0.106",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "quote",
+            "package_key": "quote-1.0.45",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "syn",
+            "package_key": "syn-2.0.117",
+            "kind": "normal",
+            "features": [
+              "full"
+            ],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          }
+        ],
+        "build_dependencies": [],
+        "features": []
+      },
       "tatara-core-0.2.201": {
         "runtime_dependencies": [
           {
@@ -18530,6 +18584,16 @@
             "tree": "target"
           },
           {
+            "name": "tatara_closed_set",
+            "package_key": "tatara-closed-set-0.3.37",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
             "name": "tatara_core",
             "package_key": "tatara-core-0.2.201",
             "kind": "normal",
@@ -18548,16 +18612,6 @@
             "optional": false,
             "target": null,
             "tree": "target"
-          },
-          {
-            "name": "tatara_lisp_derive",
-            "package_key": "tatara-lisp-derive-0.3.27",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "host"
           },
           {
             "name": "thiserror",
@@ -34987,6 +35041,13 @@
           "path": "src/main.rs"
         }
       ]
+    },
+    "tatara-closed-set-0.3.37": {
+      "edition": "2021"
+    },
+    "tatara-closed-set-derive-0.3.37": {
+      "edition": "2021",
+      "proc_macro": true
     },
     "tatara-core-0.2.201": {
       "edition": "2021",

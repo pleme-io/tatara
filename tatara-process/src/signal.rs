@@ -116,7 +116,7 @@ pub struct UnknownSignal(pub String);
     Deserialize,
     JsonSchema,
     Default,
-    tatara_lisp::DeriveClosedSet,
+    tatara_closed_set::DeriveClosedSet,
 )]
 #[serde(rename_all = "PascalCase")]
 #[closed_set(via = "as_str", generate_unknown, display)]
@@ -184,7 +184,7 @@ impl SighupStrategy {
 // `impl tatara_lisp::ClosedSet for SighupStrategy` +
 // `impl std::fmt::Display for SighupStrategy` +
 // `pub struct UnknownSighupStrategy(pub String)` are all generated
-// by `#[derive(tatara_lisp::DeriveClosedSet)]` + `#[closed_set(via =
+// by `#[derive(tatara_closed_set::DeriveClosedSet)]` + `#[closed_set(via =
 // "as_str", generate_unknown, display)]` on the enum declaration
 // above. `label` delegates to the inherent
 // `SighupStrategy::as_str` — the PascalCase wire-vocabulary
@@ -283,12 +283,12 @@ mod tests {
     /// `sighup_strategy_all_is_unique_and_complete` +
     /// `sighup_strategy_roundtrip_via_as_str` + the empty-input arm of
     /// `unknown_sighup_strategy_errors`. `FromStr` delegates to
-    /// `<Self as tatara_lisp::ClosedSet>::parse_label`, so this helper
+    /// `<Self as tatara_closed_set::ClosedSet>::parse_label`, so this helper
     /// exercises the same code path the reconciler hits when parsing a
     /// CRD `enum:`-validated value back to the typed strategy.
     #[test]
     fn sighup_strategy_is_well_formed_closed_set() {
-        tatara_lisp::assert_closed_set_well_formed::<SighupStrategy>();
+        tatara_closed_set::assert_closed_set_well_formed::<SighupStrategy>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase

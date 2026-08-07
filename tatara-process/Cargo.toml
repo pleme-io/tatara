@@ -5,40 +5,50 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-# Phase 0 freeze, THIRD half (theory/TATARA-LISP-CONSOLIDATION.md). The two
-# named halves — ../tatara-lisp and ../tatara-lisp-derive — were frozen because
-# this workspace and pleme-io/tatara-lisp share a crates.io namespace. This
-# crate was missed, and it is the one that actually EXPORTS the broken edge:
-# it consumes the frozen derive by PATH (which has closed_set) while declaring
-# `tatara-lisp-derive = "0.3"`, so every publish resolves consumers to
-# pleme-io/tatara-lisp's derive — which has no closed_set at all.
+# UNFROZEN 2026-08-07. The freeze applied hours earlier in this session stopped
+# this crate minting artifacts that could not build for anyone; the underlying
+# defect is now fixed, so the freeze is no longer what is protecting consumers.
 #
-# Measured 2026-08-07: ALL 26 published versions (0.2.157 … 0.2.187) fail for
-# every consumer with `error[E0432]: unresolved import
-# crate::boundary::UnknownConditionKind` and 74 siblings, because
-# #[closed_set(…, generate_unknown = "must-reach phase")] (src/spec.rs:62)
-# emits types the published derive cannot generate. None is yanked, and there
-# is no good version to fall back to — the crate has never been buildable from
-# crates.io. That is what blocks `caixa` and, transitively, `mado`.
+# The defect, for the record: all 26 published versions (0.2.157-0.2.187) failed
+# for every consumer with `error[E0432]: unresolved import
+# crate::boundary::UnknownConditionKind` and 74 siblings. This crate consumed
+# the LOCAL tatara-lisp-derive (which has closed_set) while declaring
+# `tatara-lisp-derive = "0.3"`, pointing consumers at pleme-io/tatara-lisp's
+# derive, which has no closed_set at all. Path is what you build; version is
+# what you ship, and the two had drifted apart completely.
 #
-# This is the same miss, a third time: ../tatara-lisp/Cargo.toml's own comment
-# records that freezing the derive alone made "the seal read as applied while
-# the larger half of the pair stayed publishable". Same shape here.
-#
-# Not a workaround and not the fix. The fix is Phase 5: tatara-process moves
-# onto `tatara-closed-set` in pleme-io/tatara-lisp's workspace (the crate Phase
-# 2 step 1 already landed), and caixa's direct and transitive deps flip in the
-# SAME commit or the two-Sexp diamond fires. Until then, freezing stops this
-# workspace from minting more artifacts that cannot build for anyone. The
-# workspace is at 0.2.200 while crates.io tops out at 0.2.187, so 13 bumps have
-# already failed to ship — this makes that intent explicit rather than accidental.
-publish = false
-
+# Fixed by taking the closed-set half from the PUBLISHED `tatara-closed-set`
+# (Phase 2 step 1's crate, live at 0.3.37) and reaching TataraDomain through
+# tatara-lisp's own re-export instead of a direct derive dep. Proven by a FULL
+# `cargo package` verify — which compiles the packaged crate against published
+# deps and is exactly the gate that would have caught this at any point in the
+# last 26 releases.
 [dependencies]
 tatara-core = { path = "../tatara-core" , version = "0.2.65" }
 # Lisp surface — `#[derive(TataraDomain)]` + `compile_source` live here now.
 tatara-lisp = { path = "../tatara-lisp" , version = "0.3" }
-tatara-lisp-derive = { path = "../tatara-lisp-derive" , version = "0.3" }
+# The closed-set half now comes from the PUBLISHED crate, not the frozen local
+# derive. This is the whole defect: the local derive has closed_set, the crate
+# its `version` pointed at (pleme-io/tatara-lisp's tatara-lisp-derive) does not,
+# so every published tatara-process resolved consumers to a derive that cannot
+# emit what this crate's #[closed_set(..., generate_unknown)] attributes need.
+# tatara-closed-set 0.3.37 is Phase 2 step 1's crate, live on crates.io.
+#
+# `tatara-lisp` deliberately STAYS on path: this crate uses only compile_named,
+# domain and format_diagnostic from it, all three of which exist in the
+# published 0.3.27 too, so the path/version pair resolves correctly either way.
+# Moving it to the registry is what would fire the two-Sexp diamond —
+# tatara-reconciler takes both tatara-process and path tatara-lisp — and that
+# is the workspace sweep, which this change deliberately does not require.
+tatara-closed-set = "0.3"
+# NO direct tatara-lisp-derive dep. `TataraDomain` is reached through
+# tatara-lisp's own re-export (`DeriveTataraDomain`), which BOTH the local
+# tatara-lisp and the published 0.3.27 provide identically. A direct dep cannot
+# work: published tatara-lisp pins its derive `=0.3.27`, so any caret here
+# conflicts at package time ("all possible versions conflict with previously
+# selected packages"). Letting tatara-lisp own that edge is also the structural
+# fix Phase 3 step 1 asks for — the derive is reached through the crate that
+# declares it, never re-crossed independently.
 
 # K8s + CRD derive
 kube = { version = "0.99", features = ["runtime", "derive", "client"] }

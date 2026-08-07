@@ -56,7 +56,7 @@ pub struct DependsOn {
     Deserialize,
     JsonSchema,
     Default,
-    tatara_lisp::DeriveClosedSet,
+    tatara_closed_set::DeriveClosedSet,
 )]
 #[serde(rename_all = "PascalCase")]
 #[closed_set(via = "as_str", display, generate_unknown = "must-reach phase")]
@@ -111,7 +111,7 @@ impl MustReachPhase {
 // `impl tatara_lisp::ClosedSet for MustReachPhase` +
 // `impl fmt::Display for MustReachPhase` +
 // `pub struct UnknownMustReachPhase(pub String)` are all generated
-// by `#[derive(tatara_lisp::DeriveClosedSet)]` + `#[closed_set(via =
+// by `#[derive(tatara_closed_set::DeriveClosedSet)]` + `#[closed_set(via =
 // "as_str", display, generate_unknown = "must-reach phase")]` on
 // the enum declaration above. `label` delegates to the inherent
 // `MustReachPhase::as_str` — the PascalCase wire-vocabulary
@@ -200,12 +200,12 @@ mod tests {
     /// `must_reach_phase_all_is_unique_and_complete` +
     /// `must_reach_phase_roundtrip_via_as_str` + the empty-input arm
     /// of `unknown_must_reach_phase_errors`. `FromStr` delegates to
-    /// `<Self as tatara_lisp::ClosedSet>::parse_label`, so this helper
+    /// `<Self as tatara_closed_set::ClosedSet>::parse_label`, so this helper
     /// exercises the same code path the reconciler hits when parsing
     /// a CRD `enum:`-validated value back to the typed checkpoint.
     #[test]
     fn must_reach_phase_is_well_formed_closed_set() {
-        tatara_lisp::assert_closed_set_well_formed::<MustReachPhase>();
+        tatara_closed_set::assert_closed_set_well_formed::<MustReachPhase>();
     }
 
     /// CANONICAL-KEY CONTRACT: `as_str` matches serde's PascalCase

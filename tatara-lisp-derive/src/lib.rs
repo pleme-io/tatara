@@ -1219,6 +1219,7 @@ fn classify(ty: &Type) -> Kind {
                 "u32" => return Kind::Int("u32"),
                 "u64" => return Kind::Int("u64"),
                 "usize" => return Kind::Int("usize"),
+                "isize" => return Kind::Int("isize"),
                 "f64" => return Kind::Float("f64"),
                 "f32" => return Kind::Float("f32"),
                 "Option" => return classify_option(last),
@@ -1490,7 +1491,7 @@ mod classify_tests {
 
     #[test]
     fn every_supported_integer_width_classifies_as_kind_int_with_the_matching_type_literal() {
-        // The five integer widths the derive supports each project to
+        // The six integer widths the derive supports each project to
         // `Kind::Int(<literal>)` with the width name threaded through
         // the payload — the payload IS the turbofish the emitted
         // extractor narrows `extract_int`'s `i64` return into (it was
@@ -1500,11 +1501,18 @@ mod classify_tests {
         // or (c) dropped the payload entirely would silently swap the
         // emitted target width at every consumer's `compile_from_args`
         // body.
+        //
+        // `isize` sits on the SIGNED half of the pointer-width column
+        // one SIGNEDNESS axis over from `usize`; both narrow through
+        // `TryFrom<i64>` on the `NarrowNumeric<i64>` trait so their
+        // (classify → extract → narrow) chains are byte-identical modulo
+        // the width payload the derive threads through `Kind::Int(_)`.
         assert!(matches!(classify(&parse_ty("i64")), Kind::Int("i64")));
         assert!(matches!(classify(&parse_ty("i32")), Kind::Int("i32")));
         assert!(matches!(classify(&parse_ty("u32")), Kind::Int("u32")));
         assert!(matches!(classify(&parse_ty("u64")), Kind::Int("u64")));
         assert!(matches!(classify(&parse_ty("usize")), Kind::Int("usize")));
+        assert!(matches!(classify(&parse_ty("isize")), Kind::Int("isize")));
     }
 
     #[test]
@@ -1551,6 +1559,10 @@ mod classify_tests {
         assert!(matches!(
             classify(&parse_ty("Option<u32>")),
             Kind::OptionalInt("u32")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<isize>")),
+            Kind::OptionalInt("isize")
         ));
         assert!(matches!(
             classify(&parse_ty("Option<f64>")),

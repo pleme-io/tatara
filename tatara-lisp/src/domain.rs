@@ -1454,7 +1454,7 @@ pub fn extract_optional_float(kw: &Kwargs<'_>, key: &str) -> Result<Option<f64>>
 /// A narrower numeric type reachable from the reader's wide `Wide`
 /// value — `i64` on the int axis, `f64` on the float axis.
 ///
-/// Implemented for exactly the seven widths `#[derive(TataraDomain)]`
+/// Implemented for exactly the eight widths `#[derive(TataraDomain)]`
 /// recognises, which is what makes [`NumericWidth`] a genuinely closed
 /// set: the enum's variants and this trait's impls are the same list,
 /// generated from the same macro invocation below.
@@ -1491,6 +1491,7 @@ impl_narrow_int! {
     u32 => U32,
     u64 => U64,
     usize => Usize,
+    isize => Isize,
 }
 
 impl NarrowNumeric<f64> for f64 {
@@ -2377,6 +2378,7 @@ mod tests {
         assert_eq!(<u32 as NarrowNumeric<i64>>::WIDTH, NumericWidth::U32);
         assert_eq!(<u64 as NarrowNumeric<i64>>::WIDTH, NumericWidth::U64);
         assert_eq!(<usize as NarrowNumeric<i64>>::WIDTH, NumericWidth::Usize);
+        assert_eq!(<isize as NarrowNumeric<i64>>::WIDTH, NumericWidth::Isize);
         assert_eq!(<f32 as NarrowNumeric<f64>>::WIDTH, NumericWidth::F32);
         assert_eq!(<f64 as NarrowNumeric<f64>>::WIDTH, NumericWidth::F64);
     }
@@ -2398,6 +2400,54 @@ mod tests {
         assert!(<f32 as NarrowNumeric<f64>>::narrow(f64::NAN)
             .expect("NaN passes through")
             .is_nan());
+    }
+
+    /// A domain whose numeric fields are the pointer-width pair —
+    /// `isize` is the SIGNED peer of `usize` on the pointer-width column.
+    /// Pin the full (classify → extract → narrow → derive) chain for the
+    /// new peer: an in-range signed authored literal parses through the
+    /// same `NarrowNumeric` primitive `usize` already binds to, and the
+    /// derive routes `isize` to `extract_int_narrowed::<isize>` (not the
+    /// serde bridge) so the rejection shape on out-of-range on a 32-bit
+    /// target would surface as `LispError::KwargOutOfRange { target:
+    /// NumericWidth::Isize, .. }` rather than the mystery serde message
+    /// the `Kind::Deserialize` fallthrough emitted before the classify
+    /// arm existed.
+    #[derive(DeriveTataraDomain, Serialize, Debug, PartialEq)]
+    #[tatara(keyword = "defpointer")]
+    struct PointerSpec {
+        offset: isize,
+        capacity: Option<isize>,
+    }
+
+    /// The peer of `narrowing_accepts_every_in_range_value_including_
+    /// lossy_f32` on the pointer-width signed column — an authored
+    /// negative literal parses through `extract_int_narrowed::<isize>`
+    /// and a `None` for the optional isize slot stays absent. On any
+    /// target the range `[-4096, 4096]` fits in `isize`, so the test
+    /// is architecture-independent.
+    #[test]
+    fn pointer_width_signed_isize_field_parses_in_range_literal_through_the_narrowing_gate() {
+        let forms = read(r"(defpointer :offset -42 :capacity 4096)").expect("reads");
+        let spec = PointerSpec::compile_from_sexp(&forms[0]).expect("in-range values must parse");
+        assert_eq!(
+            spec,
+            PointerSpec {
+                offset: -42,
+                capacity: Some(4096),
+            }
+        );
+
+        let absent = read(r"(defpointer :offset 0)").expect("reads");
+        let spec_absent =
+            PointerSpec::compile_from_sexp(&absent[0]).expect("absent optionals are legal");
+        assert_eq!(
+            spec_absent,
+            PointerSpec {
+                offset: 0,
+                capacity: None,
+            }
+        );
     }
 
     #[test]

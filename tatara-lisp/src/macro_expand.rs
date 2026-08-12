@@ -15421,6 +15421,354 @@ impl ResourceLimits {
         }
     }
 
+    /// Whole-posture ARM-AGNOSTIC MAX-fold projection —
+    /// `self.axial_majority_count()` returns
+    /// `max(count_polar_axes(), count_interior_axes())`, the tally of
+    /// whichever COMPOUND (polar, interior) arm dominates (or the
+    /// SHARED tally when the two arms tie). The MAX-fold, ARM-AGNOSTIC
+    /// COUNT PEER of the ARM-SPECIFIC
+    /// (`count_polar_axes`, `count_interior_axes`) pair one
+    /// PROJECTION-KIND axis over on the COMPOUND (polar, interior)
+    /// tally pair, and the CENTRAL-TENDENCY BINARY-STATISTIC PEER of
+    /// [`Self::axial_skew`] one COMBINATOR-KIND axis over — where
+    /// [`Self::axial_skew`] reads the paired tallies through the
+    /// UNDIRECTED ABSOLUTE-DIFFERENCE fold `|a - b|` (a
+    /// DISPERSION statistic centered on `0`), THIS projection reads
+    /// the SAME paired tallies through the UNDIRECTED MAX-fold
+    /// `max(a, b)` (a CENTRAL-TENDENCY statistic centered on the
+    /// winning arm's tally).
+    ///
+    /// A STRICT REFINEMENT of BOTH the ARM-SPECIFIC COUNT projections
+    /// through the DEFINITIONAL upper-bound pair
+    /// `axial_majority_count() >= count_polar_axes()` and
+    /// `axial_majority_count() >= count_interior_axes()` — the MAX
+    /// dominates both operands. Discards ARM-IDENTITY on the
+    /// strict-majority regime (both polar-majority and interior-
+    /// majority arms fire the SAME magnitude for the winning arm),
+    /// which the ARM-SPECIFIC pair carries by dispatching to
+    /// distinct exits.
+    ///
+    /// A CENTRAL-TENDENCY COMPLEMENT of [`Self::axial_skew`] under
+    /// the paired MAX+ABS-DIFF closure: for every posture,
+    /// `2 * axial_majority_count() == FIELD_COUNT + axial_skew()`.
+    /// The identity holds because `max(a, b) = (a + b + |a - b|) / 2`
+    /// on non-negative `usize` and `count_polar + count_interior ==
+    /// FIELD_COUNT` on the EXHAUSTIVE COMPOUND partition — dividing
+    /// the arithmetic identity through by `2` (LEGAL on the SAME
+    /// PARITY: `FIELD_COUNT = 6` is even and `axial_skew` is always
+    /// even when the two summands share parity) gives
+    /// `axial_majority_count() = (FIELD_COUNT + axial_skew()) / 2`.
+    /// This lifts a paired (CENTRAL-TENDENCY, DISPERSION) statistic
+    /// bijection into ONE substrate theorem readable from either
+    /// direction: given `axial_majority_count`, `axial_skew` is
+    /// `2 * majority_count - FIELD_COUNT`; given `axial_skew`,
+    /// `axial_majority_count` is `(FIELD_COUNT + skew) / 2`.
+    ///
+    /// **Range bound**: for every posture `a`, `FIELD_COUNT / 2 <=
+    /// a.axial_majority_count() <= FIELD_COUNT`. The lower bound
+    /// `axial_majority_count() >= FIELD_COUNT / 2 == 3` follows from
+    /// the EXHAUSTIVE COMPOUND partition: two non-negative summands
+    /// summing to `FIELD_COUNT` cannot both fall strictly below the
+    /// average `FIELD_COUNT / 2`. The upper bound
+    /// `axial_majority_count() <= FIELD_COUNT` follows from the
+    /// component upper bounds — each of `count_polar_axes` and
+    /// `count_interior_axes` lies in `0..=FIELD_COUNT` so their MAX
+    /// does too, and the SUM identity forces the upper corner to be
+    /// reached only when the OTHER arm's count is `0` (a SATURATED
+    /// posture). Pinned via
+    /// `resource_limits_axial_majority_count_value_lies_in_half_field_count_through_field_count`.
+    ///
+    /// **MAX-defining identity**: for every posture `a`,
+    /// `a.axial_majority_count() ==
+    /// a.count_polar_axes().max(a.count_interior_axes())`. LOAD-
+    /// BEARING substrate theorem tying the ARM-AGNOSTIC MAX exit to
+    /// the std-canonical [`usize::max`] combinator on the paired
+    /// ARM-SPECIFIC tallies. The `const fn` body inlines the MAX as
+    /// an `if p >= i { p } else { i }` split because [`Ord::max`] on
+    /// `usize` is not `const`-stable on tatara-lisp's supported Rust
+    /// versions — matching [`Self::axial_ordering`]'s inline
+    /// trichotomy pattern one PROJECTION-KIND axis over. Pinned via
+    /// `resource_limits_axial_majority_count_equals_max_of_count_polar_and_count_interior`.
+    ///
+    /// **DEFINITIONAL upper-bound pair — LOAD-BEARING refinement
+    /// pin**: on every posture `a`, `a.axial_majority_count() >=
+    /// a.count_polar_axes()` AND `a.axial_majority_count() >=
+    /// a.count_interior_axes()`. The MAX dominates both operands by
+    /// definition — the substrate names this pair to make downstream
+    /// consumers' upper-bound reasoning discharge into ONE inequality
+    /// against the ARM-AGNOSTIC exit rather than TWO against the
+    /// ARM-SPECIFIC pair. Pinned via
+    /// `resource_limits_axial_majority_count_dominates_both_arm_specific_counts`.
+    ///
+    /// **CENTRAL-TENDENCY + DISPERSION bridge to axial_skew**: on
+    /// every posture `a`, `2 * a.axial_majority_count() ==
+    /// ResourceLimits::FIELD_COUNT + a.axial_skew()`. The paired
+    /// (CENTRAL-TENDENCY MAX, DISPERSION ABS-DIFF) statistics compose
+    /// bijectively through the SUM+DIFF halving identity on the
+    /// EXHAUSTIVE COMPOUND partition. Pinned via
+    /// `resource_limits_axial_majority_count_twice_equals_field_count_plus_axial_skew`.
+    ///
+    /// **Bridge to majority_lead — LOAD-BEARING structural pin**:
+    /// on every posture `a`, `a.axial_majority_count() ==
+    /// (ResourceLimits::FIELD_COUNT + a.majority_lead().unwrap_or(0)) / 2`.
+    /// The ARM-AGNOSTIC CENTRAL-TENDENCY reading equals the CENTRAL
+    /// halfway `FIELD_COUNT / 2` shifted by half the ARM-AGNOSTIC
+    /// LEAD magnitude — collapsing `majority_lead == None` at the
+    /// balance corner to a zero-shift back to the CENTRAL halfway
+    /// value. Pinned via
+    /// `resource_limits_axial_majority_count_equals_half_field_count_plus_half_majority_lead_unwrap`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.axial_majority_count()
+    /// == 6` (polar-uniform → count_polar = 6, count_interior = 0
+    /// → max = 6); `UNBOUNDED_RESOURCE_LIMITS.axial_majority_count()
+    /// == 6` (same polar-uniform); `DEFAULT_RESOURCE_LIMITS
+    /// .axial_majority_count() == 6` (interior-uniform → count_polar
+    /// = 0, count_interior = 6 → max = 6);
+    /// `HAND_AUTHORED_MID_POSTURE.axial_majority_count() == 6` (same
+    /// interior-uniform); `HAND_AUTHORED_OTHER_POSTURE
+    /// .axial_majority_count() == 6` (same). All FIVE shipped
+    /// uniform fixtures fire the SATURATED tally at `6 =
+    /// FIELD_COUNT`, matching [`Self::axial_skew`]'s SATURATED
+    /// preset partition one COMBINATOR-KIND axis under — both
+    /// ARM-AGNOSTIC statistics collapse the ARM-IDENTITY of the
+    /// uniform arm onto a single SATURATED cell.
+    ///
+    /// **Truly-mixed test-local witnesses — LOAD-BEARING NON-
+    /// SATURATED CENTRAL-TENDENCY pin**: `SPARSE_BOTTOM_POSTURE
+    /// .axial_majority_count() == 3` (3-polar + 3-interior tie → max
+    /// = 3 at the balance corner — the LOWER-BOUND cell of the
+    /// range); `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE
+    /// .axial_majority_count() == 3` (same 3-3 tie);
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE.axial_majority_count() == 4`
+    /// (2-polar + 4-interior interior-strict split → max = 4 at the
+    /// interior arm). Together the three truly-mixed fixtures reach
+    /// the LOWER-BOUND `FIELD_COUNT / 2 == 3` cell (2 fixtures) and
+    /// the INTERIOR `4` cell (1 fixture) that no shipped uniform
+    /// preset can reach — pinning the range interval as INHABITED at
+    /// its boundaries and at least one interior point.
+    ///
+    /// Encoded as the plain `const fn` `if p >= i { p } else { i }`
+    /// inline MAX split on the two already-lifted ARITHMETIC-
+    /// QUANTIFIER tallies — no `Ord::max` (not const-stable), no
+    /// `usize::abs_diff` indirection through the SUM+DIFF halving
+    /// bridge, no new dep, no typeclass indirection, no per-axis
+    /// loop, no allocation.
+    ///
+    /// `const fn` so a caller can pin the exact ARM-AGNOSTIC MAX
+    /// tally at compile time as a build-break (`const _: () =
+    /// assert!(EMPTY_RESOURCE_LIMITS.axial_majority_count() == 6);`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// ARM-AGNOSTIC MAX-fold projection is a named typed `usize`
+    /// exit rather than an inline `count_polar_axes().max(
+    /// count_interior_axes())` per-consumer combinator. THEORY.md
+    /// §II.1 invariant 5 — composition preserves proofs; the
+    /// ARM-AGNOSTIC MAX-fold opens the CENTRAL-TENDENCY column past
+    /// the just-closed SIGNUM-KIND (`Ordering`) column on the SAME
+    /// COMPOUND (polar, interior) tally pair with the LOAD-BEARING
+    /// SUM+DIFF halving bijection tying the (MAX, ABS-DIFF) pair
+    /// into ONE bidirectional statistic-derivation theorem —
+    /// `axial_majority_count` and `axial_skew` compute each other
+    /// through `FIELD_COUNT` via the paired arithmetic identity.
+    /// THEORY.md §V.1 — knowable platform; the MAX-fold verdict is
+    /// a TYPE-level operation on the posture algebra returning a
+    /// `const`-evaluable `usize`.
+    ///
+    /// Frontier inspiration: classical descriptive statistics'
+    /// canonical CENTRAL-TENDENCY / DISPERSION pair (mean-and-
+    /// stdev, median-and-IQR, MODE-and-range) — the paired
+    /// (MAX-of-two-arms, ABS-DIFF-of-two-arms) closure is the
+    /// TWO-ARM instance of the same statistical duality restricted
+    /// to a two-point sample. Voting-theory's canonical "winner's
+    /// tally" figure paired with the "victory margin" — the same
+    /// (winning-arm-count, margin) pair the substrate lifts through
+    /// the paired (axial_majority_count, axial_skew) exits.
+    /// Haskell's `max (length polar) (length interior)` on the two
+    /// arm sub-vector counts. APL's `⌈/(+/mask)(+/~mask)` MAX-fold
+    /// on the paired axial tally reduction. Idris's
+    /// `max (count p v) (count (not . p) v)` returning `Nat` at the
+    /// type of the paired arm-tally MAX. Rust's own `[a, b].iter().
+    /// max()` and [`Ord::max`] on `usize` — the direct MAX-fold on
+    /// the paired arm tally, inlined as the const-legal `if p >= i`
+    /// split here. Translation through pleme-io primitives: plain
+    /// `const fn` inline MAX split on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies — no new dep, no typeclass
+    /// indirection, no per-axis loop, no allocation.
+    #[must_use]
+    pub const fn axial_majority_count(self) -> usize {
+        let p = self.count_polar_axes();
+        let i = self.count_interior_axes();
+        if p >= i {
+            p
+        } else {
+            i
+        }
+    }
+
+    /// Whole-posture ARM-AGNOSTIC MIN-fold projection —
+    /// `self.axial_minority_count()` returns
+    /// `min(count_polar_axes(), count_interior_axes())`, the tally
+    /// of whichever COMPOUND (polar, interior) arm loses (or the
+    /// SHARED tally when the two arms tie). The DUAL of
+    /// [`Self::axial_majority_count`] one COMBINATOR-KIND axis over
+    /// on the SAME COMPOUND (polar, interior) tally pair — where
+    /// the MAX-fold picks the WINNING arm's tally, the MIN-fold
+    /// picks the LOSING arm's tally, and the two fold-choices
+    /// exhaust the ARM-AGNOSTIC CENTRAL-TENDENCY readings on the
+    /// paired arms.
+    ///
+    /// The (max, min) closure on the paired COUNT tally: jointly
+    /// the (axial_majority_count, axial_minority_count) pair
+    /// CLOSES the ARM-AGNOSTIC CENTRAL-TENDENCY column past the
+    /// just-opened MAX-fold, with the LOAD-BEARING
+    /// EXHAUSTIVE-PARTITION SUM identity `axial_majority_count() +
+    /// axial_minority_count() == FIELD_COUNT` reading the paired
+    /// (max, min) exits as ONE arithmetic-partition of
+    /// `FIELD_COUNT` into the winning-arm and losing-arm halves.
+    /// The (max, min) pair transports the (a, b) ARM-SPECIFIC pair
+    /// through an ARM-IDENTITY-DISCARDING order-preserving
+    /// permutation — the SAME two `usize` values, re-labeled by
+    /// magnitude rank rather than by arm identity.
+    ///
+    /// A STRICT REFINEMENT of BOTH the ARM-SPECIFIC COUNT
+    /// projections through the DEFINITIONAL lower-bound pair
+    /// `axial_minority_count() <= count_polar_axes()` and
+    /// `axial_minority_count() <= count_interior_axes()` — the MIN
+    /// is dominated by both operands. Discards ARM-IDENTITY on the
+    /// strict-majority regime the DUAL way [`Self::axial_majority_count`]
+    /// does — both polar-majority and interior-majority arms fire
+    /// the SAME losing-arm tally, which the ARM-SPECIFIC pair
+    /// carries by dispatching to distinct exits.
+    ///
+    /// **Range bound**: for every posture `a`, `0 <=
+    /// a.axial_minority_count() <= FIELD_COUNT / 2`. The lower
+    /// bound `axial_minority_count() >= 0` is trivial on non-
+    /// negative `usize`. The upper bound `axial_minority_count() <=
+    /// FIELD_COUNT / 2 == 3` follows from the EXHAUSTIVE COMPOUND
+    /// partition dual to [`Self::axial_majority_count`]'s lower
+    /// bound: two non-negative summands summing to `FIELD_COUNT`
+    /// cannot both strictly exceed the average `FIELD_COUNT / 2`.
+    /// The (majority >= half, minority <= half) pair bracket every
+    /// posture into `[minority, majority] ⊆ [0, FIELD_COUNT]` with
+    /// the halfway line as the SHARED tight bound on both sides.
+    /// Pinned via
+    /// `resource_limits_axial_minority_count_value_lies_in_zero_through_half_field_count`.
+    ///
+    /// **MIN-defining identity**: for every posture `a`,
+    /// `a.axial_minority_count() ==
+    /// a.count_polar_axes().min(a.count_interior_axes())`. Pinned
+    /// via
+    /// `resource_limits_axial_minority_count_equals_min_of_count_polar_and_count_interior`.
+    ///
+    /// **EXHAUSTIVE-PARTITION SUM identity — LOAD-BEARING
+    /// closure pin**: on every posture `a`,
+    /// `a.axial_majority_count() + a.axial_minority_count() ==
+    /// ResourceLimits::FIELD_COUNT`. The (max, min) pair
+    /// partitions `FIELD_COUNT` into the winning-arm and losing-arm
+    /// halves — the SAME two values `count_polar_axes` and
+    /// `count_interior_axes` re-ordered by magnitude with their
+    /// EXHAUSTIVE partition sum invariant preserved. Pinned via
+    /// `resource_limits_axial_majority_count_plus_minority_count_equals_field_count`.
+    ///
+    /// **DIFFERENCE identity to axial_skew**: on every posture `a`,
+    /// `a.axial_majority_count() - a.axial_minority_count() ==
+    /// a.axial_skew()`. The paired (max, min) difference IS the
+    /// ABSOLUTE-DIFFERENCE `|a - b|` on the ORIGINAL ARM-SPECIFIC
+    /// tallies — the substrate theorem tying the DISPERSION
+    /// statistic to the (max, min) CENTRAL-TENDENCY pair via
+    /// `max(a, b) - min(a, b) == |a - b|`. Pinned via
+    /// `resource_limits_axial_majority_count_minus_minority_count_equals_axial_skew`.
+    ///
+    /// **DEFINITIONAL upper-bound pair — LOAD-BEARING refinement
+    /// pin**: on every posture `a`, `a.axial_minority_count() <=
+    /// a.count_polar_axes()` AND `a.axial_minority_count() <=
+    /// a.count_interior_axes()`. The MIN is dominated by both
+    /// operands by definition — the DUAL of [`Self::axial_majority_count`]'s
+    /// upper-bound pair. Pinned via
+    /// `resource_limits_axial_minority_count_dominated_by_both_arm_specific_counts`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.axial_minority_count()
+    /// == 0` (polar-uniform → count_polar = 6, count_interior = 0
+    /// → min = 0); `UNBOUNDED_RESOURCE_LIMITS.axial_minority_count()
+    /// == 0` (same polar-uniform); `DEFAULT_RESOURCE_LIMITS
+    /// .axial_minority_count() == 0` (interior-uniform → count_polar
+    /// = 0, count_interior = 6 → min = 0);
+    /// `HAND_AUTHORED_MID_POSTURE.axial_minority_count() == 0` (same
+    /// interior-uniform); `HAND_AUTHORED_OTHER_POSTURE
+    /// .axial_minority_count() == 0` (same). All FIVE shipped
+    /// uniform fixtures fire the SATURATED-DUAL tally at `0`,
+    /// matching [`Self::axial_majority_count`]'s SATURATED preset
+    /// partition one COMBINATOR-KIND axis over — the (max, min)
+    /// pair jointly reads every uniform preset as the pair `(6, 0)`,
+    /// pinning the SUM identity's saturated corner.
+    ///
+    /// **Truly-mixed test-local witnesses — LOAD-BEARING NON-
+    /// SATURATED MIN pin**: `SPARSE_BOTTOM_POSTURE
+    /// .axial_minority_count() == 3` (3-polar + 3-interior tie → min
+    /// = 3 at the balance corner — the UPPER-BOUND cell of the range
+    /// where max and min COINCIDE); `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE
+    /// .axial_minority_count() == 3` (same 3-3 tie);
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE.axial_minority_count() == 2`
+    /// (2-polar + 4-interior interior-strict split → min = 2 at the
+    /// polar arm). Together the three truly-mixed fixtures pin the
+    /// UPPER-BOUND `FIELD_COUNT / 2 == 3` cell (2 fixtures) at the
+    /// balance corner where `axial_majority_count == axial_minority_count`
+    /// and the interior `2` cell (1 fixture), witnessing the (max,
+    /// min) pair as JOINTLY-EQUAL at the balance corner and JOINTLY-
+    /// STRICTLY-SPLIT at strict-majority postures.
+    ///
+    /// Encoded as the plain `const fn` `if p <= i { p } else { i }`
+    /// inline MIN split on the two already-lifted ARITHMETIC-
+    /// QUANTIFIER tallies — matching [`Self::axial_majority_count`]'s
+    /// shape verbatim on the DUAL comparison operator. No `Ord::min`
+    /// (not const-stable), no `usize::abs_diff` indirection, no new
+    /// dep, no typeclass indirection, no per-axis loop, no
+    /// allocation.
+    ///
+    /// `const fn` so a caller can pin the exact ARM-AGNOSTIC MIN
+    /// tally at compile time as a build-break (`const _: () =
+    /// assert!(EMPTY_RESOURCE_LIMITS.axial_minority_count() == 0);`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// ARM-AGNOSTIC MIN-fold projection is a named typed `usize`
+    /// exit rather than an inline `count_polar_axes().min(
+    /// count_interior_axes())` per-consumer combinator. THEORY.md
+    /// §II.1 invariant 5 — composition preserves proofs; the (max,
+    /// min) pair closes the ARM-AGNOSTIC CENTRAL-TENDENCY column
+    /// with the LOAD-BEARING EXHAUSTIVE-PARTITION SUM identity
+    /// `majority_count + minority_count == FIELD_COUNT` binding
+    /// them into ONE arithmetic-partition of the field-count.
+    /// THEORY.md §V.1 — knowable platform; the MIN-fold verdict is
+    /// a TYPE-level operation on the posture algebra returning a
+    /// `const`-evaluable `usize`.
+    ///
+    /// Frontier inspiration: classical descriptive statistics' MIN
+    /// order statistic — the DUAL of the MAX under the same rank
+    /// order that [`Self::axial_majority_count`] carries. Voting-
+    /// theory's canonical "loser's tally" figure paired with the
+    /// "winner's tally" — the (majority, minority) pair the substrate
+    /// lifts through the paired (axial_majority_count,
+    /// axial_minority_count) exits. Haskell's `min (length polar)
+    /// (length interior)`. APL's `⌊/(+/mask)(+/~mask)` MIN-fold on
+    /// the paired axial tally. Idris's `min (count p v) (count (not
+    /// . p) v)` returning `Nat`. Rust's own `[a, b].iter().min()`
+    /// and [`Ord::min`] — the direct MIN-fold on the paired arm
+    /// tally, inlined as the const-legal `if p <= i` split here.
+    /// Translation through pleme-io primitives: plain `const fn`
+    /// inline MIN split on the two already-lifted ARITHMETIC-
+    /// QUANTIFIER tallies — no new dep, no typeclass indirection, no
+    /// per-axis loop, no allocation.
+    #[must_use]
+    pub const fn axial_minority_count(self) -> usize {
+        let p = self.count_polar_axes();
+        let i = self.count_interior_axes();
+        if p <= i {
+            p
+        } else {
+            i
+        }
+    }
+
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
     /// `self.first_bottom_axis_index()` returns `Some(i)` for the least
     /// `i` such that `self.field_values()[i] == 0`, or `None` when no
@@ -63721,5 +64069,364 @@ mod tests {
             ENDPOINTS_ONLY_BOTTOM_POSTURE.atomic_then_axial_ordering(),
             Ordering::Greater,
         ));
+    }
+
+    #[test]
+    fn resource_limits_axial_majority_count_preset_pins_saturate_on_every_uniform_fixture() {
+        // Preset pins on the ARM-AGNOSTIC MAX-fold — every uniform
+        // preset saturates the WINNING arm's tally at `FIELD_COUNT =
+        // 6`. Where the ARM-SPECIFIC (count_polar_axes,
+        // count_interior_axes) pair partitions the five uniform
+        // fixtures into (polar-arm-saturated at (6, 0), interior-arm-
+        // saturated at (0, 6)), discarding arm identity via MAX
+        // collapses BOTH arms onto the SAME saturated `6` cell.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.axial_majority_count(), 6);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.axial_majority_count(), 6);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.axial_majority_count(), 6);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.axial_majority_count(), 6);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.axial_majority_count(), 6);
+    }
+
+    #[test]
+    fn resource_limits_axial_minority_count_preset_pins_saturate_dual_on_every_uniform_fixture() {
+        // DUAL preset pins on the ARM-AGNOSTIC MIN-fold — every
+        // uniform preset saturates the LOSING arm's tally at `0`.
+        // The DUAL SATURATED corner: the SAME two-value pair `(6, 0)`
+        // that the MAX-fold reads as `6` (winning) the MIN-fold reads
+        // as `0` (losing). Together the (max, min) preset pair fires
+        // `(6, 0)` on every shipped uniform, exhausting the paired
+        // saturated corner of the (majority, minority) closure.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.axial_minority_count(), 0);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.axial_minority_count(), 0);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.axial_minority_count(), 0);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.axial_minority_count(), 0);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.axial_minority_count(), 0);
+    }
+
+    #[test]
+    fn resource_limits_axial_majority_and_minority_count_truly_mixed_witnesses_pin_balance_corner_and_endpoints_split(
+    ) {
+        // Truly-mixed witnesses on the paired (MAX, MIN) exits — the
+        // two 3+3 tie fixtures COINCIDE `max == min == 3` at the
+        // balance corner (the LOWER-BOUND of the MAX range and the
+        // UPPER-BOUND of the MIN range — the HALFWAY line where the
+        // two paired statistics meet). ENDPOINTS_ONLY carries a
+        // 2-polar + 4-interior split so the pair fires `(max, min) =
+        // (4, 2)` — the SOLE shipped fixture pinning a STRICTLY-SPLIT
+        // (max, min) pair with both values STRICTLY inside their
+        // respective ranges.
+        assert_eq!(SPARSE_BOTTOM_POSTURE.axial_majority_count(), 3);
+        assert_eq!(SPARSE_BOTTOM_POSTURE.axial_minority_count(), 3);
+        assert_eq!(CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.axial_majority_count(), 3);
+        assert_eq!(CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.axial_minority_count(), 3);
+        assert_eq!(ENDPOINTS_ONLY_BOTTOM_POSTURE.axial_majority_count(), 4);
+        assert_eq!(ENDPOINTS_ONLY_BOTTOM_POSTURE.axial_minority_count(), 2);
+    }
+
+    #[test]
+    fn resource_limits_axial_majority_count_equals_max_of_count_polar_and_count_interior() {
+        // MAX-defining identity — LOAD-BEARING substrate theorem
+        // tying the ARM-AGNOSTIC MAX exit to the std-canonical
+        // [`Ord::max`] combinator on the paired ARM-SPECIFIC
+        // tallies. The `const fn` body inlines the MAX as an
+        // `if p >= i { p } else { i }` split because `Ord::max` on
+        // `usize` is not `const`-stable on tatara-lisp's supported
+        // Rust versions — this test pins the equivalence against
+        // the (non-const) `Ord::max` reference.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_majority_count(),
+                a.count_polar_axes().max(a.count_interior_axes()),
+                "axial_majority_count() != count_polar_axes().max(count_interior_axes()) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_minority_count_equals_min_of_count_polar_and_count_interior() {
+        // MIN-defining identity — the DUAL of the MAX identity.
+        // The `const fn` body inlines the MIN as an `if p <= i { p }
+        // else { i }` split; this test pins the equivalence against
+        // the (non-const) `Ord::min` reference.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_minority_count(),
+                a.count_polar_axes().min(a.count_interior_axes()),
+                "axial_minority_count() != count_polar_axes().min(count_interior_axes()) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_majority_count_dominates_both_arm_specific_counts() {
+        // DEFINITIONAL upper-bound pair — LOAD-BEARING refinement
+        // pin. The MAX dominates both operands by definition; the
+        // substrate names this pair to make downstream consumers'
+        // upper-bound reasoning discharge into ONE inequality
+        // against the ARM-AGNOSTIC exit rather than TWO against the
+        // ARM-SPECIFIC pair.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert!(
+                a.axial_majority_count() >= a.count_polar_axes(),
+                "axial_majority_count() < count_polar_axes() on {a:?}",
+            );
+            assert!(
+                a.axial_majority_count() >= a.count_interior_axes(),
+                "axial_majority_count() < count_interior_axes() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_minority_count_dominated_by_both_arm_specific_counts() {
+        // DEFINITIONAL lower-bound pair — LOAD-BEARING refinement
+        // pin dual. The MIN is dominated by both operands by
+        // definition; the DUAL of the MAX upper-bound pair.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert!(
+                a.axial_minority_count() <= a.count_polar_axes(),
+                "axial_minority_count() > count_polar_axes() on {a:?}",
+            );
+            assert!(
+                a.axial_minority_count() <= a.count_interior_axes(),
+                "axial_minority_count() > count_interior_axes() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_majority_count_plus_minority_count_equals_field_count() {
+        // EXHAUSTIVE-PARTITION SUM identity — LOAD-BEARING closure
+        // pin. The (max, min) pair partitions `FIELD_COUNT` into
+        // winning-arm and losing-arm halves: the SAME two values
+        // `count_polar_axes` and `count_interior_axes` re-ordered by
+        // magnitude rank, whose sum invariant (`count_polar +
+        // count_interior == FIELD_COUNT` on the EXHAUSTIVE COMPOUND
+        // partition) transports through the permutation. Ties the
+        // (majority, minority) closure to the EXHAUSTIVE-PARTITION
+        // theorem as ONE bidirectional statistic-derivation on the
+        // COMPOUND (polar, interior) tally pair.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_majority_count() + a.axial_minority_count(),
+                ResourceLimits::FIELD_COUNT,
+                "axial_majority_count() + axial_minority_count() != FIELD_COUNT on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_majority_count_minus_minority_count_equals_axial_skew() {
+        // DIFFERENCE identity to axial_skew — the paired (max, min)
+        // difference IS the ABSOLUTE-DIFFERENCE `|a - b|` on the
+        // ORIGINAL ARM-SPECIFIC tallies. Ties the DISPERSION
+        // statistic to the (max, min) CENTRAL-TENDENCY pair via
+        // `max(a, b) - min(a, b) == |a - b|` — the SAME identity
+        // the SUM+DIFF halving bridge uses in dual form.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_majority_count() - a.axial_minority_count(),
+                a.axial_skew(),
+                "axial_majority_count() - axial_minority_count() != axial_skew() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_majority_count_twice_equals_field_count_plus_axial_skew() {
+        // CENTRAL-TENDENCY + DISPERSION halving bridge — LOAD-BEARING
+        // substrate theorem tying `axial_majority_count` and
+        // `axial_skew` bidirectionally through `FIELD_COUNT`:
+        // `2 * majority_count == FIELD_COUNT + skew` iff
+        // `majority_count == (FIELD_COUNT + skew) / 2` on the
+        // EXHAUSTIVE COMPOUND partition. The identity `max(a, b) =
+        // (a + b + |a - b|) / 2` restricted to the case where
+        // `a + b == FIELD_COUNT`. Legal without loss of precision
+        // because `axial_skew` is always even when `FIELD_COUNT` is
+        // even (both summands `count_polar` and `count_interior`
+        // share parity forced by their fixed sum).
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                2 * a.axial_majority_count(),
+                ResourceLimits::FIELD_COUNT + a.axial_skew(),
+                "2 * axial_majority_count() != FIELD_COUNT + axial_skew() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_majority_count_equals_half_field_count_plus_half_majority_lead_unwrap()
+    {
+        // Bridge to majority_lead — the ARM-AGNOSTIC CENTRAL-TENDENCY
+        // reading equals the CENTRAL halfway `FIELD_COUNT / 2`
+        // shifted by half the ARM-AGNOSTIC LEAD magnitude, with the
+        // balance corner (`majority_lead == None`) collapsed via
+        // `unwrap_or(0)` to a zero-shift back to the CENTRAL halfway
+        // value. Ties the (axial_majority_count, majority_lead)
+        // ARM-AGNOSTIC pair through the SAME halving bridge that
+        // ties the (axial_majority_count, axial_skew) pair one
+        // COMBINATOR-KIND axis under.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_majority_count(),
+                (ResourceLimits::FIELD_COUNT + a.majority_lead().unwrap_or(0)) / 2,
+                "axial_majority_count() != (FIELD_COUNT + majority_lead().unwrap_or(0)) / 2 on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_majority_count_value_lies_in_half_field_count_through_field_count() {
+        // Range bound contract — LOAD-BEARING structural pin. The
+        // MAX-fold value lies in `FIELD_COUNT / 2 ..= FIELD_COUNT`:
+        // the lower bound follows from the EXHAUSTIVE COMPOUND
+        // partition (two non-negative summands summing to FIELD_COUNT
+        // cannot both fall strictly below the average FIELD_COUNT /
+        // 2), the upper bound from the SATURATED preset arm where
+        // the OTHER arm's count is `0`.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let k = a.axial_majority_count();
+            assert!(
+                (ResourceLimits::FIELD_COUNT / 2..=ResourceLimits::FIELD_COUNT).contains(&k),
+                "axial_majority_count() = {k} out of [{}, {}] on {a:?}",
+                ResourceLimits::FIELD_COUNT / 2,
+                ResourceLimits::FIELD_COUNT,
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_minority_count_value_lies_in_zero_through_half_field_count() {
+        // Range bound contract dual — the MIN-fold value lies in
+        // `0 ..= FIELD_COUNT / 2`: the lower bound is trivial on
+        // non-negative `usize`, the upper bound follows from the
+        // EXHAUSTIVE COMPOUND partition dual to the MAX lower
+        // bound (two non-negative summands summing to FIELD_COUNT
+        // cannot both strictly exceed the average).
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let k = a.axial_minority_count();
+            assert!(
+                k <= ResourceLimits::FIELD_COUNT / 2,
+                "axial_minority_count() = {k} exceeds FIELD_COUNT / 2 = {} on {a:?}",
+                ResourceLimits::FIELD_COUNT / 2,
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_majority_count_and_minority_count_evaluate_at_compile_time_via_const_fn(
+    ) {
+        // Const-fn pin on the paired ARM-AGNOSTIC CENTRAL-TENDENCY
+        // closure — both (max, min) exits evaluate in const context
+        // so a caller can pin the exact paired tally at compile time
+        // as build-breaks. Mirror of the const-fn evaluability pins
+        // on the (axial_skew, majority_lead) DISPERSION closure one
+        // COMBINATOR-KIND axis under.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.axial_majority_count() == 6);
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.axial_majority_count() == 6);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.axial_majority_count() == 6);
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.axial_minority_count() == 0);
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.axial_minority_count() == 0);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.axial_minority_count() == 0);
     }
 }

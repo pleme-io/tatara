@@ -19973,6 +19973,213 @@ impl ResourceLimits {
             c => Some(c == Self::FIELD_COUNT),
         }
     }
+
+    /// Whole-posture STRICTLY-MULTI-OF-BOTTOM predicate —
+    /// `self.bottom_axis_is_strictly_multi()` returns `Some(true)` iff
+    /// TWO OR MORE but NOT ALL axes of `self` sit at the bottom pole
+    /// (equivalently: `1 < [`Self::count_bottom_axes`]() < Self::FIELD_COUNT`),
+    /// `Some(false)` iff EXACTLY one axis is at the bottom pole OR every
+    /// axis is at the bottom pole (the two count endpoints of the
+    /// has-bottom-axis regime), or `None` iff no axis is at the bottom
+    /// pole. Opens the STRICTLY-MULTI column past the just-closed
+    /// SATURATED column on the atomic (bottom, top) tally pair one
+    /// COMBINATOR-KIND axis over — jointly the
+    /// (bottom_axis_is_strictly_multi, top_axis_is_strictly_multi)
+    /// atomic pair carves the SATURATED endpoint out of the MULTI cell,
+    /// naming the strictly-between-endpoints refinement the plain MULTI
+    /// verdict conflates with its own SATURATED endpoint.
+    ///
+    /// **COUNT-STRICTLY-BETWEEN-ONE-AND-FIELD_COUNT identity —
+    /// LOAD-BEARING structural pin**: on every posture,
+    /// `bottom_axis_is_strictly_multi() == { let c =
+    /// self.count_bottom_axes(); if c == 0 { None } else { Some(c > 1 &&
+    /// c < Self::FIELD_COUNT) } }`. Composes structurally through the
+    /// COUNT projection; the substrate never re-scans the per-axis mask.
+    /// Pinned via
+    /// `resource_limits_bottom_axis_is_strictly_multi_equals_count_strictly_between_one_and_field_count`.
+    ///
+    /// **MULTI-AND-NOT-SATURATED identity — LOAD-BEARING structural
+    /// pin**: on every posture, `bottom_axis_is_strictly_multi() == {
+    /// match (self.bottom_axis_is_multi(), self.bottom_axis_is_saturated()) {
+    /// (None, _) | (_, None) => None, (Some(m), Some(s)) => Some(m &&
+    /// !s), } }`. The STRICTLY-MULTI cell IS the intersection of the
+    /// MULTI cell's `Some(true)` regime with the SATURATED cell's
+    /// `Some(false)` regime — the substrate crystallizes the (MULTI \
+    /// SATURATED) set-difference at ONE named typed exit rather than at
+    /// every consumer that would otherwise chain the two prior verdicts.
+    /// Pinned via
+    /// `resource_limits_bottom_axis_is_strictly_multi_equals_multi_and_not_saturated`.
+    ///
+    /// **STRICTLY-MULTI-IMPLIES-MULTI bridge — LOAD-BEARING refinement
+    /// pin**: on every posture, `bottom_axis_is_strictly_multi() ==
+    /// Some(true) ⇒ bottom_axis_is_multi() == Some(true)`. The
+    /// STRICTLY-MULTI regime is strictly stronger than the MULTI regime
+    /// (`1 < c < FIELD_COUNT ⇒ c > 1`), naming the strict refinement as
+    /// a typed theorem rather than a per-consumer chain. Pinned via
+    /// `resource_limits_bottom_axis_is_strictly_multi_true_implies_is_multi_true`.
+    ///
+    /// **STRICTLY-MULTI-EXCLUDES-SATURATED — LOAD-BEARING
+    /// mutual-exclusion pin**: on every posture, NOT
+    /// (`bottom_axis_is_strictly_multi() == Some(true) &&
+    /// bottom_axis_is_saturated() == Some(true)`). The STRICTLY-MULTI
+    /// cell is defined precisely to carve the SATURATED endpoint out of
+    /// MULTI; the two cells partition the MULTI Some(true) regime into
+    /// the strictly-between-endpoints arm and the maximum-cardinality
+    /// endpoint arm. Pinned via
+    /// `resource_limits_bottom_axis_is_strictly_multi_true_implies_is_saturated_false`.
+    ///
+    /// **STRICTLY-MULTI-EXCLUDES-SINGLETON — LOAD-BEARING
+    /// mutual-exclusion pin**: on every posture, NOT
+    /// (`bottom_axis_is_strictly_multi() == Some(true) &&
+    /// bottom_axis_is_singleton() == Some(true)`). The lower endpoint of
+    /// the STRICTLY-MULTI cell (`c > 1`) is strictly greater than the
+    /// SINGLETON cell (`c == 1`), so the two cells partition the
+    /// has-bottom-axis regime into disjoint arms at the lower endpoint
+    /// too. Pinned via
+    /// `resource_limits_bottom_axis_is_strictly_multi_true_implies_is_singleton_false`.
+    ///
+    /// **Preset pins — LOAD-BEARING SATURATION contrast**:
+    /// `EMPTY_RESOURCE_LIMITS.bottom_axis_is_strictly_multi() ==
+    /// Some(false)` (saturated bottom pole packs SIX axes at 0, count ==
+    /// FIELD_COUNT — the SATURATED endpoint, NOT strictly between);
+    /// `UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_strictly_multi() ==
+    /// None` (no bottom axis); `DEFAULT_RESOURCE_LIMITS
+    /// .bottom_axis_is_strictly_multi() == None`. Distinguishes from the
+    /// MULTI column's saturation-pole preset: MULTI fires Some(true) at
+    /// EMPTY (count > 1) while STRICTLY-MULTI fires Some(false) at EMPTY
+    /// (count == FIELD_COUNT, at the saturated endpoint not strictly
+    /// between).
+    ///
+    /// **ANY-fold bridge**:
+    /// `a.bottom_axis_is_strictly_multi().is_some() ⇔
+    /// a.has_bottom_axis()`. Pinned via
+    /// `resource_limits_bottom_axis_is_strictly_multi_is_some_iff_has_bottom_axis`.
+    ///
+    /// **BOOLEAN COLLAPSE — LOAD-BEARING pin**: the (`Some(true)`,
+    /// `Some(false)`, `None`) trichotomy PARTITIONS every posture into
+    /// (strictly-between-one-and-six-bottom, endpoint-bottom, no-bottom)
+    /// where the endpoint arm merges the SINGLETON `c == 1` and
+    /// SATURATED `c == FIELD_COUNT` cells one COMBINATOR-KIND axis
+    /// under. Distinct from the MULTI column's (Some(true), Some(false),
+    /// None) trichotomy which splits at `c > 1` vs `c == 1` and
+    /// conflates the strictly-between-endpoints regime with the
+    /// SATURATED endpoint.
+    ///
+    /// `const fn` so a caller can pin the bottom-axis STRICTLY-MULTI
+    /// verdict at compile time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.bottom_axis_is_strictly_multi(),
+    /// Some(false)));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// STRICTLY-MULTI predicate is a named typed exit `Option<bool>`
+    /// rather than a per-consumer `self.count_bottom_axes() > 1 &&
+    /// self.count_bottom_axes() < Self::FIELD_COUNT` inline
+    /// range-inequality that discards the has-axis-at-all distinction
+    /// AND a paired `self.bottom_axis_is_multi() == Some(true) &&
+    /// self.bottom_axis_is_saturated() == Some(false)` two-projection
+    /// chain that carries the set-difference at the call site. THEORY.md
+    /// §II.1 invariant 5 — composition preserves proofs (the
+    /// STRICTLY-MULTI cell is a structural derivation from the COUNT
+    /// projection via one usize range check and one is-zero split, no
+    /// new per-axis scan, no allocation). THEORY.md §V.1 — knowable
+    /// platform.
+    ///
+    /// Frontier inspiration: Racket's `(and (list? l) (not (single? l))
+    /// (not (full? l)))` open-interval refinement; APL's `(1<≢⍵)∧(≢⍵<∆)`
+    /// two-clause open-interval predicate; Lean's `List.Nonempty ∧
+    /// List.length < N` refinement at the strict upper endpoint.
+    /// Translation through pleme-io primitives: the plain `const fn`
+    /// DERIVATION from the already-lifted [`Self::count_bottom_axes`],
+    /// one usize range check under a two-arm match on the zero split, no
+    /// new per-axis scan, no allocation.
+    #[must_use]
+    pub const fn bottom_axis_is_strictly_multi(self) -> Option<bool> {
+        match self.count_bottom_axes() {
+            0 => None,
+            c => Some(c > 1 && c < Self::FIELD_COUNT),
+        }
+    }
+
+    /// Whole-posture STRICTLY-MULTI-OF-TOP predicate —
+    /// `self.top_axis_is_strictly_multi()` returns `Some(true)` iff TWO
+    /// OR MORE but NOT ALL axes of `self` sit at the top pole
+    /// (equivalently: `1 < [`Self::count_top_axes`]() < Self::FIELD_COUNT`),
+    /// `Some(false)` iff EXACTLY one axis is at the top pole OR every
+    /// axis is at the top pole (the two count endpoints of the
+    /// has-top-axis regime), or `None` iff no axis is at the top pole.
+    /// The ATOMIC-CELL DUAL of [`Self::bottom_axis_is_strictly_multi`]
+    /// one PROJECTION-KIND axis over on the STRICTLY-MULTI column —
+    /// jointly the (bottom_axis_is_strictly_multi,
+    /// top_axis_is_strictly_multi) atomic pair OPENS the STRICTLY-MULTI
+    /// column past the just-closed SATURATED column on the atomic
+    /// (bottom, top) row.
+    ///
+    /// **COUNT-STRICTLY-BETWEEN-ONE-AND-FIELD_COUNT identity dual**: on
+    /// every posture, `top_axis_is_strictly_multi() == { let c =
+    /// self.count_top_axes(); if c == 0 { None } else { Some(c > 1 && c
+    /// < Self::FIELD_COUNT) } }`. Pinned via
+    /// `resource_limits_top_axis_is_strictly_multi_equals_count_strictly_between_one_and_field_count`.
+    ///
+    /// **MULTI-AND-NOT-SATURATED identity dual**: on every posture,
+    /// `top_axis_is_strictly_multi()` composes structurally through the
+    /// atomic MULTI and SATURATED verdicts as the SAME `(Some(m),
+    /// Some(s)) => Some(m && !s)` intersection one PROJECTION-KIND axis
+    /// over. Pinned via
+    /// `resource_limits_top_axis_is_strictly_multi_equals_multi_and_not_saturated`.
+    ///
+    /// **STRICTLY-MULTI-IMPLIES-MULTI bridge dual**: on every posture,
+    /// `top_axis_is_strictly_multi() == Some(true) ⇒
+    /// top_axis_is_multi() == Some(true)`. Pinned via
+    /// `resource_limits_top_axis_is_strictly_multi_true_implies_is_multi_true`.
+    ///
+    /// **STRICTLY-MULTI-EXCLUDES-SATURATED mutual-exclusion pin dual**:
+    /// on every posture, NOT (`top_axis_is_strictly_multi() ==
+    /// Some(true) && top_axis_is_saturated() == Some(true)`). Pinned via
+    /// `resource_limits_top_axis_is_strictly_multi_true_implies_is_saturated_false`.
+    ///
+    /// **STRICTLY-MULTI-EXCLUDES-SINGLETON mutual-exclusion pin dual**:
+    /// on every posture, NOT (`top_axis_is_strictly_multi() == Some(true)
+    /// && top_axis_is_singleton() == Some(true)`). Pinned via
+    /// `resource_limits_top_axis_is_strictly_multi_true_implies_is_singleton_false`.
+    ///
+    /// **Preset pins**: `UNBOUNDED_RESOURCE_LIMITS.top_axis_is_strictly_multi()
+    /// == Some(false)` (saturated top pole packs SIX axes at usize::MAX,
+    /// count == FIELD_COUNT — the SATURATED endpoint);
+    /// `EMPTY_RESOURCE_LIMITS.top_axis_is_strictly_multi() == None` (no
+    /// top axis); `DEFAULT_RESOURCE_LIMITS.top_axis_is_strictly_multi()
+    /// == None`.
+    ///
+    /// **CROSS-CELL SATURATION contrast — LOAD-BEARING pin**: at the
+    /// SATURATED pole preset for EACH atomic cell, the SAME cell's
+    /// STRICTLY-MULTI verdict is `Some(false)` (the pole preset packs
+    /// FIELD_COUNT axes at that cell, hitting the upper endpoint of the
+    /// open interval — NOT strictly between) and the OTHER cell's
+    /// STRICTLY-MULTI verdict is `None`. Distinct from the MULTI
+    /// column's (Some(true), None) saturation partition on the same
+    /// preset row — the STRICTLY-MULTI column swaps the same-cell
+    /// verdict from Some(true) to Some(false) exactly because the
+    /// upper-endpoint exclusion fires at the saturated cardinality.
+    /// Pinned via
+    /// `resource_limits_atomic_is_strictly_multi_saturation_pole_partitions_into_upper_endpoint_and_absent`.
+    ///
+    /// **ANY-fold bridge dual**: `a.top_axis_is_strictly_multi().is_some()
+    /// ⇔ a.has_top_axis()`. Pinned via
+    /// `resource_limits_top_axis_is_strictly_multi_is_some_iff_has_top_axis`.
+    ///
+    /// `const fn` so a caller can pin the top-axis STRICTLY-MULTI
+    /// verdict at compile time.
+    ///
+    /// Theory anchor: same as [`Self::bottom_axis_is_strictly_multi`].
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::bottom_axis_is_strictly_multi`], on the DUAL atomic mask.
+    #[must_use]
+    pub const fn top_axis_is_strictly_multi(self) -> Option<bool> {
+        match self.count_top_axes() {
+            0 => None,
+            c => Some(c > 1 && c < Self::FIELD_COUNT),
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -66089,5 +66296,490 @@ mod tests {
         const _: () = assert!(EMPTY_RESOURCE_LIMITS.atomic_signed_majority_count() == 6);
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.atomic_signed_majority_count() == -6);
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.atomic_signed_majority_count() == 0);
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_strictly_multi_preset_pins_saturate_at_upper_endpoint_and_absent(
+    ) {
+        // Preset pins — LOAD-BEARING SATURATION contrast against the
+        // MULTI column. The SATURATED-bottom-pole preset EMPTY packs
+        // SIX axes at position 0 (count == FIELD_COUNT), hitting the
+        // UPPER ENDPOINT of the open interval `(1, FIELD_COUNT)` — NOT
+        // strictly between — so STRICTLY-MULTI is Some(false) here.
+        // Contrast with the MULTI column's Some(true) at the same
+        // saturation preset row: the STRICTLY-MULTI column swaps the
+        // same-cell verdict from Some(true) to Some(false) exactly
+        // because the upper-endpoint exclusion fires at count ==
+        // FIELD_COUNT. The absent-bottom presets UNBOUNDED and DEFAULT
+        // and both hand-authored postures carry no bottom axis; the
+        // STRICTLY-MULTI verdict is None.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_strictly_multi(),
+            Some(false),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_strictly_multi(),
+            None,
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.bottom_axis_is_strictly_multi(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.bottom_axis_is_strictly_multi(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.bottom_axis_is_strictly_multi(),
+            None,
+        );
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_strictly_multi_preset_pins_saturate_at_upper_endpoint_and_absent(
+    ) {
+        // Preset pins dual — the SATURATED-top-pole preset UNBOUNDED
+        // packs SIX axes at usize::MAX (count == FIELD_COUNT), hitting
+        // the UPPER ENDPOINT of the open interval — Some(false). The
+        // absent-top presets and hand-authored postures carry no top
+        // axis; the STRICTLY-MULTI verdict is None.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_strictly_multi(),
+            Some(false),
+        );
+        assert_eq!(EMPTY_RESOURCE_LIMITS.top_axis_is_strictly_multi(), None,);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.top_axis_is_strictly_multi(), None,);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.top_axis_is_strictly_multi(), None,);
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.top_axis_is_strictly_multi(),
+            None,
+        );
+    }
+
+    #[test]
+    fn resource_limits_atomic_is_strictly_multi_saturation_pole_partitions_into_upper_endpoint_and_absent(
+    ) {
+        // CROSS-CELL SATURATION contrast on the STRICTLY-MULTI column
+        // — the two saturated pole presets each pin (Some(false), None)
+        // on their (same-cell, dual-cell) STRICTLY-MULTI pair. The
+        // saturated pole hits the UPPER ENDPOINT on its own cell (count
+        // == FIELD_COUNT, excluded from the open interval) and is
+        // UNIFORMLY ABSENT on the dual cell — distinct from the MULTI
+        // column's (Some(true), None) partition on the same preset row.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_strictly_multi(),
+            Some(false),
+        );
+        assert_eq!(EMPTY_RESOURCE_LIMITS.top_axis_is_strictly_multi(), None,);
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_strictly_multi(),
+            Some(false),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_strictly_multi(),
+            None,
+        );
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_strictly_multi_equals_count_strictly_between_one_and_field_count(
+    ) {
+        // COUNT-STRICTLY-BETWEEN-ONE-AND-FIELD_COUNT identity — the
+        // STRICTLY-MULTI predicate is structurally derived from
+        // count_bottom_axes on every posture: None iff count == 0,
+        // Some(c > 1 && c < FIELD_COUNT) otherwise. Pinned across every
+        // shipped preset + hand-authored + test-local posture so a
+        // future rewrite of either projection that silently drifts from
+        // the open-interval contract fires this pin.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let c = a.count_bottom_axes();
+            let expected = if c == 0 {
+                None
+            } else {
+                Some(c > 1 && c < ResourceLimits::FIELD_COUNT)
+            };
+            assert_eq!(
+                a.bottom_axis_is_strictly_multi(),
+                expected,
+                "is_strictly_multi = count-strictly-between contract failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_strictly_multi_equals_count_strictly_between_one_and_field_count(
+    ) {
+        // COUNT-STRICTLY-BETWEEN-ONE-AND-FIELD_COUNT identity dual on
+        // the top cell.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let c = a.count_top_axes();
+            let expected = if c == 0 {
+                None
+            } else {
+                Some(c > 1 && c < ResourceLimits::FIELD_COUNT)
+            };
+            assert_eq!(
+                a.top_axis_is_strictly_multi(),
+                expected,
+                "is_strictly_multi = count-strictly-between contract failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_strictly_multi_equals_multi_and_not_saturated() {
+        // MULTI-AND-NOT-SATURATED identity — LOAD-BEARING structural
+        // pin. The STRICTLY-MULTI cell IS the intersection of MULTI's
+        // Some(true) regime with SATURATED's Some(false) regime; the
+        // substrate crystallizes the (MULTI \ SATURATED) set-difference
+        // at ONE named typed exit. A future rewrite of either projection
+        // that silently drifts from the two-projection intersection
+        // fires this pin.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let expected = match (a.bottom_axis_is_multi(), a.bottom_axis_is_saturated()) {
+                (None, _) | (_, None) => None,
+                (Some(m), Some(s)) => Some(m && !s),
+            };
+            assert_eq!(
+                a.bottom_axis_is_strictly_multi(),
+                expected,
+                "is_strictly_multi != (is_multi && !is_saturated) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_strictly_multi_equals_multi_and_not_saturated() {
+        // MULTI-AND-NOT-SATURATED identity dual on the top cell.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let expected = match (a.top_axis_is_multi(), a.top_axis_is_saturated()) {
+                (None, _) | (_, None) => None,
+                (Some(m), Some(s)) => Some(m && !s),
+            };
+            assert_eq!(
+                a.top_axis_is_strictly_multi(),
+                expected,
+                "is_strictly_multi != (is_multi && !is_saturated) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_strictly_multi_is_some_iff_has_bottom_axis() {
+        // ANY-fold bridge — the STRICTLY-MULTI verdict is defined iff
+        // the bottom-axis subset is non-empty. Identical shape to every
+        // already-lifted (SPAN, GAP, CONTIGUITY, SPARSE, SINGLETON,
+        // MULTI, SATURATED) atomic-cell is_some ⇔ has-axis bridge,
+        // extending the atomic-column septet's uniform ANY-fold bridge
+        // contract to an octet.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.bottom_axis_is_strictly_multi().is_some(),
+                a.has_bottom_axis(),
+                "is_strictly_multi.is_some() != has_bottom_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_strictly_multi_is_some_iff_has_top_axis() {
+        // ANY-fold bridge dual on the top cell.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.top_axis_is_strictly_multi().is_some(),
+                a.has_top_axis(),
+                "is_strictly_multi.is_some() != has_top_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_strictly_multi_true_implies_is_multi_true() {
+        // STRICTLY-MULTI-IMPLIES-MULTI bridge — LOAD-BEARING refinement
+        // pin. The STRICTLY-MULTI regime (1 < c < FIELD_COUNT) is
+        // strictly stronger than the MULTI regime (c > 1). Names the
+        // strict refinement as a typed theorem so the substrate never
+        // treats the open-interval regime as a distinct-from-MULTI
+        // regime that requires a separate MULTI check.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if matches!(a.bottom_axis_is_strictly_multi(), Some(true)) {
+                assert_eq!(
+                    a.bottom_axis_is_multi(),
+                    Some(true),
+                    "is_strictly_multi == Some(true) but is_multi != Some(true) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_strictly_multi_true_implies_is_multi_true() {
+        // STRICTLY-MULTI-IMPLIES-MULTI bridge dual — since no shipped
+        // preset or hand-authored posture places a strictly-multi top
+        // count, this sweep is a defensive pin against a future preset
+        // or fixture that would introduce one.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let mut fields = [usize::MAX; ResourceLimits::FIELD_COUNT];
+            fields[position] = 41;
+            let strictly_multi_top = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(strictly_multi_top.count_top_axes(), 5);
+            assert_eq!(
+                strictly_multi_top.top_axis_is_strictly_multi(),
+                Some(true),
+                "strictly-multi top at hole {position} not Some(true)",
+            );
+            assert_eq!(
+                strictly_multi_top.top_axis_is_multi(),
+                Some(true),
+                "strictly-multi top at hole {position} not lifted to is_multi Some(true)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_strictly_multi_true_implies_is_saturated_false() {
+        // STRICTLY-MULTI-EXCLUDES-SATURATED — LOAD-BEARING
+        // mutual-exclusion pin. The STRICTLY-MULTI cell is defined
+        // precisely to carve the SATURATED endpoint out of MULTI; the
+        // two cells partition the MULTI Some(true) regime into the
+        // strictly-between-endpoints arm and the maximum-cardinality
+        // endpoint arm, and the substrate never confuses them.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if matches!(a.bottom_axis_is_strictly_multi(), Some(true)) {
+                assert_eq!(
+                    a.bottom_axis_is_saturated(),
+                    Some(false),
+                    "is_strictly_multi == Some(true) but is_saturated != Some(false) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_strictly_multi_true_implies_is_saturated_false() {
+        // STRICTLY-MULTI-EXCLUDES-SATURATED mutual-exclusion pin dual.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let mut fields = [usize::MAX; ResourceLimits::FIELD_COUNT];
+            fields[position] = 41;
+            let strictly_multi_top = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            if matches!(strictly_multi_top.top_axis_is_strictly_multi(), Some(true)) {
+                assert_eq!(
+                    strictly_multi_top.top_axis_is_saturated(),
+                    Some(false),
+                    "strictly-multi top at hole {position} not paired with is_saturated Some(false)",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_strictly_multi_true_implies_is_singleton_false() {
+        // STRICTLY-MULTI-EXCLUDES-SINGLETON — LOAD-BEARING
+        // mutual-exclusion pin. The lower endpoint of the
+        // STRICTLY-MULTI cell (`c > 1`) is strictly greater than the
+        // SINGLETON cell (`c == 1`), so the two cells partition the
+        // has-bottom-axis regime into disjoint arms at the lower
+        // endpoint too.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if matches!(a.bottom_axis_is_strictly_multi(), Some(true)) {
+                assert_eq!(
+                    a.bottom_axis_is_singleton(),
+                    Some(false),
+                    "is_strictly_multi == Some(true) but is_singleton != Some(false) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_strictly_multi_true_implies_is_singleton_false() {
+        // STRICTLY-MULTI-EXCLUDES-SINGLETON mutual-exclusion pin dual.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let mut fields = [usize::MAX; ResourceLimits::FIELD_COUNT];
+            fields[position] = 41;
+            let strictly_multi_top = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            if matches!(strictly_multi_top.top_axis_is_strictly_multi(), Some(true)) {
+                assert_eq!(
+                    strictly_multi_top.top_axis_is_singleton(),
+                    Some(false),
+                    "strictly-multi top at hole {position} not paired with is_singleton Some(false)",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_strictly_multi_false_at_lone_bottom_axis() {
+        // LOWER-ENDPOINT NON-STRICTLY-MULTI pin — at the single-fire
+        // regime (count == 1, the SINGLETON endpoint), the
+        // STRICTLY-MULTI verdict is Some(false). Pins the exact
+        // boundary between the SINGLETON cell and the STRICTLY-MULTI
+        // cell on the count axis at c == 1.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            fields[position] = 0;
+            let singleton_bottom = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_bottom.count_bottom_axes(), 1);
+            assert_eq!(
+                singleton_bottom.bottom_axis_is_strictly_multi(),
+                Some(false),
+                "singleton bottom at position {position} not Some(false)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_strictly_multi_false_at_lone_top_axis() {
+        // LOWER-ENDPOINT NON-STRICTLY-MULTI pin dual on the top cell.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            fields[position] = usize::MAX;
+            let singleton_top = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_top.count_top_axes(), 1);
+            assert_eq!(
+                singleton_top.top_axis_is_strictly_multi(),
+                Some(false),
+                "singleton top at position {position} not Some(false)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_is_strictly_multi_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the STRICTLY-MULTI atomic pair — both
+        // projections are evaluable in const context so a caller can
+        // pin the exact SATURATED-endpoint corners at compile time as
+        // build-breaks. Mirror of the const-fn evaluability pins on
+        // the (SINGLETON, MULTI, SATURATED) atomic-column septet one
+        // COMBINATOR-KIND axis under.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_strictly_multi(),
+            Some(false)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.top_axis_is_strictly_multi().is_none());
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_strictly_multi(),
+            Some(false)
+        ));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .bottom_axis_is_strictly_multi()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .bottom_axis_is_strictly_multi()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .top_axis_is_strictly_multi()
+            .is_none());
     }
 }

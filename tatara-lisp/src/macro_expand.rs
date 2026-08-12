@@ -13429,6 +13429,118 @@ impl ResourceLimits {
         }
     }
 
+    /// Whole-posture SIGNUM-TRICHOTOMY reading on the COMPOUND (polar,
+    /// interior) tally pair — `self.axial_ordering()` returns
+    /// [`Ordering::Greater`] iff `count_polar_axes() >
+    /// count_interior_axes()` (polar-majority), [`Ordering::Less`] iff
+    /// `count_polar_axes() < count_interior_axes()` (interior-majority),
+    /// and [`Ordering::Equal`] at the balance corner
+    /// `count_polar_axes() == count_interior_axes()`. The PROJECTION-KIND
+    /// peer of [`Self::axial_signed_skew`] one MAGNITUDE-STRIPPED axis
+    /// over: where the SIGNED reading carries the (arm, magnitude) pair
+    /// as one `isize`, this reading carries the (arm) fact alone as one
+    /// std-canonical [`Ordering`] sum type — the same SIGNUM projection
+    /// the SIGNED reading exposes via `.signum()` promoted to a named
+    /// typed exit on the substrate algebra.
+    ///
+    /// Bijection with the (polar_is_majority, interior_is_majority,
+    /// is_axially_balanced) three-boolean partition: the ternary
+    /// [`Ordering`] exit collapses the three independent boolean
+    /// predicates into ONE match-exhaustive sum type — rustc's
+    /// exhaustive-match checking guarantees a downstream `match` on
+    /// `axial_ordering()` cannot forget the balance leg. The three
+    /// booleans partition every posture into EXACTLY ONE of
+    /// {polar-majority, interior-majority, tie}; the [`Ordering`] exit
+    /// names the partition legs at the TYPE level so a per-leg
+    /// consumer's exhaustiveness is checked by rustc rather than by a
+    /// hand-rolled `!a && !b` tie-fall-through.
+    ///
+    /// **Bridges** (all pinned in the test cohort):
+    /// - `axial_ordering().is_gt() ⇔ polar_is_majority()`
+    /// - `axial_ordering().is_lt() ⇔ interior_is_majority()`
+    /// - `axial_ordering().is_eq() ⇔ is_axially_balanced()`
+    /// - `axial_ordering() == axial_signed_skew().cmp(&0)` — the
+    ///   SIGNED-CARDINAL reading's SIGNUM projection (the `isize::cmp`
+    ///   against zero) collapses the (arm, magnitude) pair to the
+    ///   (arm) fact this [`Ordering`] reading carries directly.
+    ///
+    /// Encoded as the plain trichotomy dispatch on the two already-
+    /// lifted ARITHMETIC-QUANTIFIER tallies. [`Ord::cmp`] on `usize` is
+    /// not `const`-stable on tatara-lisp's supported Rust versions, so
+    /// the body inlines the trichotomy as three const-context-legal
+    /// comparisons — matching the shape of the SIGNED-KIND
+    /// [`Self::axial_signed_skew`] body one PROJECTION axis over.
+    ///
+    /// **Preset pins**:
+    /// - `EMPTY_RESOURCE_LIMITS.axial_ordering() == Ordering::Greater`
+    ///   (every axis at the bottom pole → polar = 6 > 0 = interior).
+    /// - `UNBOUNDED_RESOURCE_LIMITS.axial_ordering() == Ordering::Greater`
+    ///   (every axis at the top pole → same polar = 6 > 0 = interior —
+    ///   the two SATURATED-polar preset arms COLLAPSE onto the SAME
+    ///   polar-majority verdict via the UNSIGNED SIGNUM, exactly the
+    ///   way [`Self::axial_signed_skew`]'s UNSIGNED-ABSOLUTE-VALUE fold
+    ///   collapses them onto the SAME `+6` cell).
+    /// - `DEFAULT_RESOURCE_LIMITS.axial_ordering() == Ordering::Less`
+    ///   (every axis strictly interior → polar = 0 < 6 = interior).
+    ///
+    /// **Truly-mixed test-local witnesses**:
+    /// - `SPARSE_BOTTOM_POSTURE.axial_ordering() == Ordering::Equal`
+    ///   (3 polar + 3 interior — the balance leg at a truly-mixed
+    ///   posture the preset uniform pins cannot reach).
+    /// - `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.axial_ordering() ==
+    ///   Ordering::Equal` (same 3-3 balance corner via the CONTIGUOUS
+    ///   bottom-run witness).
+    /// - `ENDPOINTS_ONLY_BOTTOM_POSTURE.axial_ordering() ==
+    ///   Ordering::Less` (2 polar + 4 interior — the interior-majority
+    ///   truly-mixed corner).
+    ///
+    /// Together the eight fixtures cover every [`Ordering`] variant
+    /// (Greater ← 2 uniform-polar preset postures; Less ← 3 interior-
+    /// uniform preset + 1 truly-mixed; Equal ← 2 truly-mixed), pinning
+    /// the SIGNUM PARTITION as SURJECTIVE onto the fixture set.
+    ///
+    /// `const fn` so a caller can pin the SIGNUM verdict at compile
+    /// time as a build-break (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.axial_ordering(), Ordering::Greater));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// SIGNUM-TRICHOTOMY reading is a named typed exit rather than an
+    /// inline three-way if-else per consumer, and the exit type is the
+    /// std-canonical [`Ordering`] sum whose match-exhaustiveness rustc
+    /// verifies at every downstream dispatch site. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the SIGNUM projection
+    /// opens the SIGNUM-TRICHOTOMY-KIND (`Ordering`) column on the
+    /// COMPOUND (polar, interior) tally pair peer to the already-shipped
+    /// (STRICT-INEQUALITY-BOOLEAN, EQUALITY-BOOLEAN, SIGNED-CARDINAL,
+    /// UNSIGNED-CARDINAL) projections. THEORY.md §V.1 — knowable
+    /// platform; the SIGNUM verdict is a TYPE-level operation on the
+    /// posture algebra returning a `const`-evaluable [`Ordering`].
+    ///
+    /// Frontier inspiration: Haskell's `compare :: a -> a -> Ordering`
+    /// returning the ternary sum type directly instead of a pair of
+    /// booleans (`LT`/`EQ`/`GT`); Idris's `Ordering` inductive with
+    /// three nullary constructors serving the same trichotomy
+    /// discriminant; the STL's `<=>` three-way comparison operator
+    /// (C++20 / `std::partial_ordering`) exposing the trichotomy as
+    /// ONE named exit rather than the three legs of an if-else chain.
+    /// Translation through pleme-io primitives: plain `const fn`
+    /// dispatch through inline trichotomy comparisons on the two
+    /// already-lifted ARITHMETIC-QUANTIFIER tallies, returning the
+    /// std-canonical [`core::cmp::Ordering`] — no new dep, no typeclass
+    /// indirection, no per-axis loop, no allocation.
+    #[must_use]
+    pub const fn axial_ordering(self) -> Ordering {
+        let p = self.count_polar_axes();
+        let i = self.count_interior_axes();
+        if p > i {
+            Ordering::Greater
+        } else if p < i {
+            Ordering::Less
+        } else {
+            Ordering::Equal
+        }
+    }
+
     /// Whole-posture BOTTOM-STRICT-MAJORITY predicate —
     /// `self.bottom_is_majority()` holds iff the bottom-arm tally
     /// STRICTLY EXCEEDS the top-arm tally on the ATOMIC (bottom, top)
@@ -60384,6 +60496,261 @@ mod tests {
         const _: () = assert!(EMPTY_RESOURCE_LIMITS.axial_signed_skew() == 6);
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.axial_signed_skew() == 6);
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.axial_signed_skew() == -6);
+    }
+
+    #[test]
+    fn resource_limits_axial_ordering_preset_pins_saturated_polar_arms_collapse_onto_greater() {
+        // SIGNUM-TRICHOTOMY preset pins on the COMPOUND (polar,
+        // interior) tally pair — LOAD-BEARING structural pin. The
+        // two saturated-polar preset arms (EMPTY = all-bottom;
+        // UNBOUNDED = all-top) COLLAPSE onto the SAME
+        // `Ordering::Greater` verdict via the UNSIGNED SIGNUM (both
+        // read polar = 6 > 0 = interior); the three interior-uniform
+        // preset postures (DEFAULT + both hand-authored) fire
+        // `Ordering::Less` at polar = 0 < 6 = interior. Same UNSIGNED-
+        // ABSOLUTE-VALUE collapse as `axial_signed_skew`'s `+6`
+        // saturation pin one PROJECTION-KIND axis over — the SIGNUM
+        // exit is the (arm) fact stripped of the SIGNED reading's
+        // magnitude.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.axial_ordering(), Ordering::Greater);
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.axial_ordering(),
+            Ordering::Greater,
+        );
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.axial_ordering(), Ordering::Less);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.axial_ordering(), Ordering::Less);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.axial_ordering(), Ordering::Less,);
+    }
+
+    #[test]
+    fn resource_limits_axial_ordering_truly_mixed_witnesses_pin_balance_leg_and_interior_majority()
+    {
+        // Truly-mixed witnesses on the SIGNUM-TRICHOTOMY reading —
+        // LOAD-BEARING structural pin. The balance leg
+        // (`Ordering::Equal`) is inhabited by the two truly-mixed
+        // (3 polar, 3 interior) fixtures; the interior-majority leg
+        // (`Ordering::Less`) is inhabited additionally by the
+        // ENDPOINTS_ONLY (2 polar, 4 interior) truly-mixed fixture.
+        // Pins the SIGNUM PARTITION as reaching the `Equal` leg on
+        // fixtures the preset uniform pins cannot — the balance corner
+        // is a truly-mixed-only cell on the COMPOUND partition.
+        assert_eq!(SPARSE_BOTTOM_POSTURE.axial_ordering(), Ordering::Equal);
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.axial_ordering(),
+            Ordering::Equal,
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.axial_ordering(),
+            Ordering::Less,
+        );
+    }
+
+    #[test]
+    fn resource_limits_axial_ordering_is_gt_iff_polar_is_majority() {
+        // POLAR-MAJORITY bridge — LOAD-BEARING structural pin.
+        // `Ordering::is_gt` on the SIGNUM-TRICHOTOMY reading holds
+        // iff the paired boolean `polar_is_majority` verdict fires,
+        // pinning the SIGNUM's Greater leg as the direct typed peer of
+        // the STRICT-INEQUALITY-BOOLEAN reading `count_polar_axes() >
+        // count_interior_axes()`.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_ordering().is_gt(),
+                a.polar_is_majority(),
+                "axial_ordering().is_gt() != polar_is_majority() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_ordering_is_lt_iff_interior_is_majority() {
+        // INTERIOR-MAJORITY bridge — LOAD-BEARING structural pin. Dual
+        // of the polar-majority bridge: `Ordering::is_lt` on the SIGNUM
+        // reading holds iff the paired boolean `interior_is_majority`
+        // verdict fires, pinning the SIGNUM's Less leg as the direct
+        // typed peer of the STRICT-INEQUALITY-BOOLEAN reading
+        // `count_polar_axes() < count_interior_axes()`.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_ordering().is_lt(),
+                a.interior_is_majority(),
+                "axial_ordering().is_lt() != interior_is_majority() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_ordering_is_eq_iff_is_axially_balanced() {
+        // BALANCE-LEG bridge — LOAD-BEARING structural pin. The SIGNUM
+        // reading's `Ordering::is_eq` verdict holds iff the paired
+        // boolean `is_axially_balanced` verdict fires — the tie leg of
+        // the STRICT-TOTAL-ORDER TRICHOTOMY on the (polar, interior)
+        // tally pair. Together with the polar/interior bridges above,
+        // the three-boolean partition (polar-majority, interior-
+        // majority, tie) is proven ISOMORPHIC to the ternary
+        // [`Ordering`] partition via the pairwise `is_gt`/`is_lt`/
+        // `is_eq` legs.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_ordering().is_eq(),
+                a.is_axially_balanced(),
+                "axial_ordering().is_eq() != is_axially_balanced() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_ordering_equals_axial_signed_skew_cmp_zero() {
+        // SIGNED-CARDINAL → SIGNUM bridge — LOAD-BEARING structural
+        // pin. `axial_signed_skew().cmp(&0)` reads the SIGN of the
+        // SIGNED CARDINAL reading as the same `Ordering` sum this
+        // SIGNUM-TRICHOTOMY reading returns directly. Pins the SIGNUM
+        // exit as the MAGNITUDE-STRIPPED peer of the SIGNED-CARDINAL
+        // reading one PROJECTION-KIND axis over: the SIGNED reading
+        // carries the (arm, magnitude) pair as one `isize`; the SIGNUM
+        // reading carries the (arm) fact alone as one [`Ordering`].
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_ordering(),
+                a.axial_signed_skew().cmp(&0),
+                "axial_ordering() != axial_signed_skew().cmp(&0) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_ordering_partitions_every_posture_into_exactly_one_leg() {
+        // TRICHOTOMY EXHAUSTIVENESS pin — LOAD-BEARING structural pin.
+        // Every posture returns EXACTLY ONE of the three [`Ordering`]
+        // variants (Less, Equal, Greater), and the returned variant
+        // matches ONE of the three boolean-partition legs
+        // (interior_is_majority, is_axially_balanced,
+        // polar_is_majority). Proved structurally by rustc's `match`
+        // exhaustiveness: any missing arm here is a compile error, so
+        // the pin is a TYPE-level theorem of the SIGNUM ↔ boolean-
+        // partition isomorphism.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let matches_partition_leg = match a.axial_ordering() {
+                Ordering::Greater => a.polar_is_majority(),
+                Ordering::Less => a.interior_is_majority(),
+                Ordering::Equal => a.is_axially_balanced(),
+            };
+            assert!(
+                matches_partition_leg,
+                "axial_ordering() leg mismatches boolean partition on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_ordering_partition_is_surjective_onto_fixture_set() {
+        // SIGNUM SURJECTIVITY pin — LOAD-BEARING structural pin. All
+        // three [`Ordering`] variants are reached across the eight-
+        // fixture posture set: `Greater` at the saturated-polar
+        // preset arms (EMPTY, UNBOUNDED); `Less` at every interior-
+        // uniform preset (DEFAULT + both hand-authored) plus the
+        // ENDPOINTS_ONLY truly-mixed fixture; `Equal` at both truly-
+        // mixed 3-3 fixtures (SPARSE_BOTTOM, CONTIGUOUS_INTERIOR).
+        // Prevents a future SIGNUM regression that silently collapses
+        // the three-leg partition onto a two-leg codomain — every leg
+        // has a fixture witness.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        let mut saw_greater = false;
+        let mut saw_less = false;
+        let mut saw_equal = false;
+        for a in postures {
+            match a.axial_ordering() {
+                Ordering::Greater => saw_greater = true,
+                Ordering::Less => saw_less = true,
+                Ordering::Equal => saw_equal = true,
+            }
+        }
+        assert!(saw_greater, "no fixture reached Ordering::Greater leg");
+        assert!(saw_less, "no fixture reached Ordering::Less leg");
+        assert!(saw_equal, "no fixture reached Ordering::Equal leg");
+    }
+
+    #[test]
+    fn resource_limits_axial_ordering_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the SIGNUM-TRICHOTOMY reading — the
+        // [`Ordering`] verdict is evaluable in const context so a
+        // caller can pin the exact SATURATED corner at compile time
+        // as a build-break. Mirror of the const-fn evaluability pins
+        // on the SIGNED-KIND `axial_signed_skew` one PROJECTION axis
+        // under. Uses `matches!` because `Ordering` is not `PartialEq`
+        // in a `const`-comparable form on stable Rust — `matches!` is
+        // the const-context-legal shape.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.axial_ordering(),
+            Ordering::Greater,
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.axial_ordering(),
+            Ordering::Greater,
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.axial_ordering(),
+            Ordering::Less,
+        ));
     }
 
     #[test]

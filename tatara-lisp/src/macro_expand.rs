@@ -20180,6 +20180,211 @@ impl ResourceLimits {
             c => Some(c > 1 && c < Self::FIELD_COUNT),
         }
     }
+
+    /// Whole-posture STRICTLY-MULTI-OF-POLAR predicate —
+    /// `self.polar_axis_is_strictly_multi()` returns `Some(true)` iff TWO
+    /// OR MORE but NOT ALL axes of `self` sit at either pole
+    /// (equivalently: `1 < [`Self::count_polar_axes`]() < Self::FIELD_COUNT`),
+    /// `Some(false)` iff EXACTLY one axis is polar OR every axis is polar
+    /// (the two count endpoints of the has-polar-axis regime), or `None`
+    /// iff no axis is polar. The COMPOUND-CELL peer of
+    /// [`Self::bottom_axis_is_strictly_multi`] one CELL-KIND axis over on
+    /// the STRICTLY-MULTI column — jointly the
+    /// (polar_axis_is_strictly_multi, interior_axis_is_strictly_multi)
+    /// COMPOUND pair CLOSES the STRICTLY-MULTI column on the (bottom,
+    /// top, polar, interior) 4-cell axis-family, one CELL-KIND axis over
+    /// from the just-shipped atomic (bottom_axis_is_strictly_multi,
+    /// top_axis_is_strictly_multi) pair.
+    ///
+    /// **COUNT-STRICTLY-BETWEEN-ONE-AND-FIELD_COUNT identity —
+    /// LOAD-BEARING structural pin**: on every posture,
+    /// `polar_axis_is_strictly_multi() == { let c =
+    /// self.count_polar_axes(); if c == 0 { None } else { Some(c > 1 &&
+    /// c < Self::FIELD_COUNT) } }`. Composes structurally through the
+    /// COMPOUND polar COUNT projection; the substrate never re-scans the
+    /// per-axis mask. Pinned via
+    /// `resource_limits_polar_axis_is_strictly_multi_equals_count_strictly_between_one_and_field_count`.
+    ///
+    /// **MULTI-AND-NOT-SATURATED identity — LOAD-BEARING structural
+    /// pin**: on every posture, `polar_axis_is_strictly_multi() == {
+    /// match (self.polar_axis_is_multi(), self.polar_axis_is_saturated()) {
+    /// (None, _) | (_, None) => None, (Some(m), Some(s)) => Some(m &&
+    /// !s), } }`. The STRICTLY-MULTI cell IS the intersection of the
+    /// COMPOUND polar MULTI regime with the COMPOUND polar SATURATED
+    /// complement — the substrate names the (MULTI \ SATURATED) set-
+    /// difference at ONE typed exit rather than the two-projection chain
+    /// consumers otherwise inline. Pinned via
+    /// `resource_limits_polar_axis_is_strictly_multi_equals_multi_and_not_saturated`.
+    ///
+    /// **STRICTLY-MULTI-IMPLIES-MULTI bridge — LOAD-BEARING refinement
+    /// pin**: on every posture, `polar_axis_is_strictly_multi() ==
+    /// Some(true) ⇒ polar_axis_is_multi() == Some(true)`. Pinned via
+    /// `resource_limits_polar_axis_is_strictly_multi_true_implies_is_multi_true`.
+    ///
+    /// **STRICTLY-MULTI-EXCLUDES-SATURATED — LOAD-BEARING mutual-
+    /// exclusion pin**: on every posture, NOT
+    /// (`polar_axis_is_strictly_multi() == Some(true) &&
+    /// polar_axis_is_saturated() == Some(true)`). The STRICTLY-MULTI cell
+    /// is defined precisely to carve the SATURATED endpoint out of MULTI
+    /// on the COMPOUND polar cell; the two cells partition the polar
+    /// MULTI Some(true) regime into the strictly-between-endpoints arm
+    /// and the maximum-cardinality endpoint arm. Pinned via
+    /// `resource_limits_polar_axis_is_strictly_multi_true_implies_is_saturated_false`.
+    ///
+    /// **STRICTLY-MULTI-EXCLUDES-SINGLETON mutual-exclusion pin**: on
+    /// every posture, NOT (`polar_axis_is_strictly_multi() == Some(true)
+    /// && polar_axis_is_singleton() == Some(true)`). Pinned via
+    /// `resource_limits_polar_axis_is_strictly_multi_true_implies_is_singleton_false`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.polar_axis_is_strictly_multi()
+    /// == Some(false)` (saturated bottom pole packs SIX polar axes, count
+    /// == FIELD_COUNT — the SATURATED endpoint of the open interval);
+    /// `UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_strictly_multi() ==
+    /// Some(false)` (saturated top pole packs SIX polar axes);
+    /// `DEFAULT_RESOURCE_LIMITS.polar_axis_is_strictly_multi() == None`
+    /// (no polar axis); `HAND_AUTHORED_MID_POSTURE
+    /// .polar_axis_is_strictly_multi() == None` (no polar axis);
+    /// `HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_strictly_multi() ==
+    /// None`. Same (2-polar-saturated, 1-interior-saturated,
+    /// 2-hand-authored-absent) preset partition shape carried by the
+    /// COMPOUND (SPARSE, CONTIGUITY, GAP, SINGLETON, MULTI, SATURATED)
+    /// columns one COMBINATOR-KIND axis under, with the polar SATURATED
+    /// arm swapped from Some(true) to Some(false) exactly at the upper-
+    /// endpoint exclusion.
+    ///
+    /// **CROSS-CELL SATURATION contrast — LOAD-BEARING pin**: at each of
+    /// the two saturated pole presets, the (polar, interior)
+    /// STRICTLY-MULTI pair is (Some(false), None); at the interior-
+    /// saturation preset DEFAULT (and the two hand-authored postures)
+    /// the pair is (None, Some(false)). Distinct from the COMPOUND MULTI
+    /// column's (Some(true), None) and (None, Some(true)) partitions on
+    /// the same three preset rows — the STRICTLY-MULTI column swaps the
+    /// same-cell verdict from Some(true) to Some(false) exactly because
+    /// the upper-endpoint exclusion fires at the saturated cardinality.
+    /// Pinned via
+    /// `resource_limits_compound_is_strictly_multi_saturation_pole_partitions_into_upper_endpoint_and_absent`.
+    ///
+    /// **ANY-fold bridge**: `a.polar_axis_is_strictly_multi().is_some()
+    /// ⇔ a.has_polar_axis()`. Pinned via
+    /// `resource_limits_polar_axis_is_strictly_multi_is_some_iff_has_polar_axis`.
+    ///
+    /// `const fn` so a caller can pin the polar-axis STRICTLY-MULTI
+    /// verdict at compile time.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// COMPOUND polar STRICTLY-MULTI predicate is a named typed exit
+    /// `Option<bool>` rather than a per-consumer `{ let c =
+    /// self.count_polar_axes(); c > 1 && c < Self::FIELD_COUNT }` inline
+    /// range-inequality that discards the has-axis-at-all distinction
+    /// AND a paired `polar_axis_is_multi() == Some(true) &&
+    /// polar_axis_is_saturated() == Some(false)` two-projection chain
+    /// that carries the set-difference at the call site. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs (the COMPOUND
+    /// STRICTLY-MULTI cell is a structural derivation from the COMPOUND
+    /// polar COUNT projection via one usize range check and one is-zero
+    /// split, no new per-axis scan, no allocation). THEORY.md §V.1 —
+    /// knowable platform: every axis-family cell on the STRICTLY-MULTI
+    /// column is a first-class typed exit rather than a two-projection
+    /// chain the consumer authors to distinguish the SATURATED endpoint
+    /// from the strictly-between-endpoints regime.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::bottom_axis_is_strictly_multi`], on the DUAL COMPOUND
+    /// polar mask. Racket's `(and (list? l) (not (single? l)) (not
+    /// (full? l)))` open-interval refinement over a fixed-size container
+    /// lifted from the atomic (bottom, top) reading to the COMPOUND
+    /// (polar, interior) reading; APL's `(1<≢⍵)∧(≢⍵<∆)` two-clause open-
+    /// interval predicate on the COMPOUND polar projection; Lean's
+    /// `List.Nonempty ∧ List.length < N` refinement at the strict upper
+    /// endpoint of the polar tally.
+    #[must_use]
+    pub const fn polar_axis_is_strictly_multi(self) -> Option<bool> {
+        match self.count_polar_axes() {
+            0 => None,
+            c => Some(c > 1 && c < Self::FIELD_COUNT),
+        }
+    }
+
+    /// Whole-posture STRICTLY-MULTI-OF-INTERIOR predicate —
+    /// `self.interior_axis_is_strictly_multi()` returns `Some(true)` iff
+    /// TWO OR MORE but NOT ALL axes of `self` sit strictly between the
+    /// two poles (equivalently: `1 < [`Self::count_interior_axes`]() <
+    /// Self::FIELD_COUNT`), `Some(false)` iff EXACTLY one axis is
+    /// strictly interior OR every axis is strictly interior (the two
+    /// count endpoints of the has-interior-axis regime), or `None` iff
+    /// no axis is interior. The COMPOUND-CELL DUAL of
+    /// [`Self::polar_axis_is_strictly_multi`] one CELL-KIND axis over
+    /// via the (polar, interior) disjoint complement — jointly the
+    /// (polar_axis_is_strictly_multi, interior_axis_is_strictly_multi)
+    /// COMPOUND pair CLOSES the STRICTLY-MULTI column on the (bottom,
+    /// top, polar, interior) 4-cell axis-family.
+    ///
+    /// **COUNT-STRICTLY-BETWEEN-ONE-AND-FIELD_COUNT identity dual**: on
+    /// every posture, `interior_axis_is_strictly_multi() == { let c =
+    /// self.count_interior_axes(); if c == 0 { None } else { Some(c > 1
+    /// && c < Self::FIELD_COUNT) } }`. Pinned via
+    /// `resource_limits_interior_axis_is_strictly_multi_equals_count_strictly_between_one_and_field_count`.
+    ///
+    /// **MULTI-AND-NOT-SATURATED identity dual**: on every posture,
+    /// `interior_axis_is_strictly_multi()` composes structurally through
+    /// the COMPOUND interior MULTI and SATURATED verdicts as the SAME
+    /// `(Some(m), Some(s)) => Some(m && !s)` intersection one CELL-KIND
+    /// axis over. Pinned via
+    /// `resource_limits_interior_axis_is_strictly_multi_equals_multi_and_not_saturated`.
+    ///
+    /// **STRICTLY-MULTI-IMPLIES-MULTI bridge dual**: on every posture,
+    /// `interior_axis_is_strictly_multi() == Some(true) ⇒
+    /// interior_axis_is_multi() == Some(true)`. Pinned via
+    /// `resource_limits_interior_axis_is_strictly_multi_true_implies_is_multi_true`.
+    ///
+    /// **STRICTLY-MULTI-EXCLUDES-SATURATED mutual-exclusion pin dual**:
+    /// on every posture, NOT (`interior_axis_is_strictly_multi() ==
+    /// Some(true) && interior_axis_is_saturated() == Some(true)`). Pinned
+    /// via
+    /// `resource_limits_interior_axis_is_strictly_multi_true_implies_is_saturated_false`.
+    ///
+    /// **STRICTLY-MULTI-EXCLUDES-SINGLETON mutual-exclusion pin dual**:
+    /// on every posture, NOT (`interior_axis_is_strictly_multi() ==
+    /// Some(true) && interior_axis_is_singleton() == Some(true)`). Pinned
+    /// via
+    /// `resource_limits_interior_axis_is_strictly_multi_true_implies_is_singleton_false`.
+    ///
+    /// **Preset pins**: `DEFAULT_RESOURCE_LIMITS
+    /// .interior_axis_is_strictly_multi() == Some(false)` (every field
+    /// strictly interior, count == FIELD_COUNT — the SATURATED endpoint);
+    /// `EMPTY_RESOURCE_LIMITS.interior_axis_is_strictly_multi() == None`
+    /// (no interior); `UNBOUNDED_RESOURCE_LIMITS
+    /// .interior_axis_is_strictly_multi() == None`;
+    /// `HAND_AUTHORED_MID_POSTURE.interior_axis_is_strictly_multi() ==
+    /// Some(false)`; `HAND_AUTHORED_OTHER_POSTURE
+    /// .interior_axis_is_strictly_multi() == Some(false)`. Same
+    /// COMPOUND-CELL SATURATION shape as the interior (CONTIGUITY,
+    /// SPARSE, GAP, SINGLETON, MULTI, SATURATED) columns — the interior
+    /// bracket flips from `saturated-multi` Some(true) on those three
+    /// interior-saturated postures to `saturated-endpoint-excluded`
+    /// Some(false) at the STRICTLY-MULTI column's upper-endpoint pin.
+    ///
+    /// **ANY-fold bridge dual**:
+    /// `a.interior_axis_is_strictly_multi().is_some() ⇔
+    /// a.has_interior_axis()`. Pinned via
+    /// `resource_limits_interior_axis_is_strictly_multi_is_some_iff_has_interior_axis`.
+    ///
+    /// `const fn` so a caller can pin the interior-axis STRICTLY-MULTI
+    /// verdict at compile time.
+    ///
+    /// Theory anchor: same as [`Self::polar_axis_is_strictly_multi`], on
+    /// the DUAL COMPOUND interior cell.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::polar_axis_is_strictly_multi`], on the DUAL COMPOUND
+    /// interior mask.
+    #[must_use]
+    pub const fn interior_axis_is_strictly_multi(self) -> Option<bool> {
+        match self.count_interior_axes() {
+            0 => None,
+            c => Some(c > 1 && c < Self::FIELD_COUNT),
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -66780,6 +66985,598 @@ mod tests {
             .is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS
             .top_axis_is_strictly_multi()
+            .is_none());
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_strictly_multi_preset_pins_saturate_at_upper_endpoint_and_absent(
+    ) {
+        // Preset pins on the COMPOUND polar STRICTLY-MULTI cell —
+        // LOAD-BEARING COMPOUND-CELL SATURATION contrast against the
+        // MULTI column. BOTH saturated pole presets pack SIX polar axes
+        // (count == FIELD_COUNT), hitting the UPPER ENDPOINT of the open
+        // interval `(1, FIELD_COUNT)` — Some(false). The DEFAULT preset
+        // and both hand-authored postures carry no polar axis; the
+        // STRICTLY-MULTI verdict is None. Same (2-polar-saturated,
+        // 1-interior-saturated, 2-hand-authored-absent) preset partition
+        // shape carried by the COMPOUND (SPARSE, CONTIGUITY, GAP,
+        // SINGLETON, MULTI, SATURATED) columns one COMBINATOR-KIND axis
+        // under, with the polar SATURATED arm swapped from Some(true) to
+        // Some(false) exactly at the upper-endpoint exclusion.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_strictly_multi(),
+            Some(false),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_strictly_multi(),
+            Some(false),
+        );
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_strictly_multi(), None);
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.polar_axis_is_strictly_multi(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_strictly_multi(),
+            None,
+        );
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_strictly_multi_preset_pins_saturate_at_upper_endpoint_and_absent(
+    ) {
+        // Preset pins dual on the COMPOUND interior STRICTLY-MULTI cell
+        // — the DEFAULT preset pins every axis strictly interior (count
+        // == FIELD_COUNT), hitting the UPPER ENDPOINT of the open
+        // interval — Some(false). Both hand-authored postures pin every
+        // field strictly interior at the same upper endpoint. The two
+        // saturated pole presets carry no interior axis; the
+        // STRICTLY-MULTI verdict is None.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_strictly_multi(),
+            Some(false),
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.interior_axis_is_strictly_multi(),
+            None
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_strictly_multi(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.interior_axis_is_strictly_multi(),
+            Some(false),
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.interior_axis_is_strictly_multi(),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn resource_limits_compound_is_strictly_multi_saturation_pole_partitions_into_upper_endpoint_and_absent(
+    ) {
+        // CROSS-CELL SATURATION contrast on the COMPOUND STRICTLY-MULTI
+        // column — each of the two saturated pole presets pins
+        // (Some(false), None) on the (polar, interior) STRICTLY-MULTI
+        // pair (the polar cell hits the upper endpoint of the open
+        // interval at count == FIELD_COUNT and the interior cell is
+        // UNIFORMLY ABSENT); the interior-saturation preset DEFAULT
+        // pins (None, Some(false)) on the same pair (the polar cell is
+        // UNIFORMLY ABSENT and the interior cell hits the upper endpoint
+        // at count == FIELD_COUNT). Distinct from the COMPOUND MULTI
+        // column's (Some(true), None) and (None, Some(true)) partitions
+        // on the same three preset rows — the STRICTLY-MULTI column swaps
+        // the same-cell verdict from Some(true) to Some(false) exactly
+        // because the upper-endpoint exclusion fires at the saturated
+        // cardinality.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_strictly_multi(),
+            Some(false),
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.interior_axis_is_strictly_multi(),
+            None
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_strictly_multi(),
+            Some(false),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_strictly_multi(),
+            None,
+        );
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_strictly_multi(), None);
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_strictly_multi(),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_strictly_multi_equals_count_strictly_between_one_and_field_count(
+    ) {
+        // COUNT-STRICTLY-BETWEEN-ONE-AND-FIELD_COUNT identity on the
+        // COMPOUND polar cell — the STRICTLY-MULTI predicate is
+        // structurally derived from count_polar_axes on every posture:
+        // None iff count == 0, Some(c > 1 && c < FIELD_COUNT) otherwise.
+        // Pinned across every shipped preset + hand-authored + test-local
+        // mixed posture so a future rewrite of either projection that
+        // silently drifts from the open-interval contract fires this pin.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let c = a.count_polar_axes();
+            let expected = if c == 0 {
+                None
+            } else {
+                Some(c > 1 && c < ResourceLimits::FIELD_COUNT)
+            };
+            assert_eq!(
+                a.polar_axis_is_strictly_multi(),
+                expected,
+                "polar_is_strictly_multi = count-strictly-between contract failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_strictly_multi_equals_count_strictly_between_one_and_field_count(
+    ) {
+        // COUNT-STRICTLY-BETWEEN-ONE-AND-FIELD_COUNT identity dual on
+        // the COMPOUND interior cell.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let c = a.count_interior_axes();
+            let expected = if c == 0 {
+                None
+            } else {
+                Some(c > 1 && c < ResourceLimits::FIELD_COUNT)
+            };
+            assert_eq!(
+                a.interior_axis_is_strictly_multi(),
+                expected,
+                "interior_is_strictly_multi = count-strictly-between contract failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_strictly_multi_equals_multi_and_not_saturated() {
+        // MULTI-AND-NOT-SATURATED identity on the COMPOUND polar cell —
+        // LOAD-BEARING structural pin. The COMPOUND STRICTLY-MULTI cell
+        // IS the intersection of the COMPOUND polar MULTI's Some(true)
+        // regime with the COMPOUND polar SATURATED's Some(false) regime;
+        // the substrate crystallizes the (MULTI \ SATURATED) set-
+        // difference at ONE named typed exit. A future rewrite of either
+        // projection that silently drifts from the two-projection
+        // intersection fires this pin.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let expected = match (a.polar_axis_is_multi(), a.polar_axis_is_saturated()) {
+                (None, _) | (_, None) => None,
+                (Some(m), Some(s)) => Some(m && !s),
+            };
+            assert_eq!(
+                a.polar_axis_is_strictly_multi(),
+                expected,
+                "polar_is_strictly_multi != (polar_is_multi && !polar_is_saturated) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_strictly_multi_equals_multi_and_not_saturated() {
+        // MULTI-AND-NOT-SATURATED identity dual on the COMPOUND interior
+        // cell.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let expected = match (a.interior_axis_is_multi(), a.interior_axis_is_saturated()) {
+                (None, _) | (_, None) => None,
+                (Some(m), Some(s)) => Some(m && !s),
+            };
+            assert_eq!(
+                a.interior_axis_is_strictly_multi(),
+                expected,
+                "interior_is_strictly_multi != (interior_is_multi && !interior_is_saturated) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_strictly_multi_is_some_iff_has_polar_axis() {
+        // ANY-fold bridge on the COMPOUND polar cell — the
+        // STRICTLY-MULTI verdict is defined iff the polar subset is
+        // non-empty. Identical shape to every already-lifted (SPAN, GAP,
+        // CONTIGUITY, SPARSE, SINGLETON, MULTI, SATURATED) compound-cell
+        // is_some ⇔ has-axis bridge, extending the COMPOUND polar-column
+        // septet's uniform ANY-fold bridge contract to an octet.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.polar_axis_is_strictly_multi().is_some(),
+                a.has_polar_axis(),
+                "polar_is_strictly_multi.is_some() != has_polar_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_strictly_multi_is_some_iff_has_interior_axis() {
+        // ANY-fold bridge dual on the COMPOUND interior cell.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.interior_axis_is_strictly_multi().is_some(),
+                a.has_interior_axis(),
+                "interior_is_strictly_multi.is_some() != has_interior_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_strictly_multi_true_implies_is_multi_true() {
+        // STRICTLY-MULTI-IMPLIES-MULTI bridge on the COMPOUND polar
+        // cell — LOAD-BEARING refinement pin. The STRICTLY-MULTI regime
+        // (1 < c < FIELD_COUNT) is strictly stronger than the MULTI
+        // regime (c > 1). The three test-local `*_BOTTOM_POSTURE`
+        // fixtures each carry a strictly-multi polar count (2 or 3),
+        // firing the antecedent non-vacuously.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if matches!(a.polar_axis_is_strictly_multi(), Some(true)) {
+                assert_eq!(
+                    a.polar_axis_is_multi(),
+                    Some(true),
+                    "polar_is_strictly_multi == Some(true) but polar_is_multi != Some(true) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_strictly_multi_true_implies_is_multi_true() {
+        // STRICTLY-MULTI-IMPLIES-MULTI bridge dual on the COMPOUND
+        // interior cell. The three test-local `*_BOTTOM_POSTURE`
+        // fixtures each carry a strictly-multi interior count as well
+        // (interior count 3, 3, 4 respectively), firing the antecedent
+        // non-vacuously.
+        let postures = [
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if matches!(a.interior_axis_is_strictly_multi(), Some(true)) {
+                assert_eq!(
+                    a.interior_axis_is_multi(),
+                    Some(true),
+                    "interior_is_strictly_multi == Some(true) but interior_is_multi != Some(true) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_strictly_multi_true_implies_is_saturated_false() {
+        // STRICTLY-MULTI-EXCLUDES-SATURATED — LOAD-BEARING mutual-
+        // exclusion pin on the COMPOUND polar cell. The STRICTLY-MULTI
+        // cell is defined precisely to carve the SATURATED endpoint out
+        // of MULTI; the two cells partition the polar MULTI Some(true)
+        // regime into the strictly-between-endpoints arm and the maximum-
+        // cardinality endpoint arm, and the substrate never confuses
+        // them.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if matches!(a.polar_axis_is_strictly_multi(), Some(true)) {
+                assert_eq!(
+                    a.polar_axis_is_saturated(),
+                    Some(false),
+                    "polar_is_strictly_multi == Some(true) but polar_is_saturated != Some(false) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_strictly_multi_true_implies_is_saturated_false() {
+        // STRICTLY-MULTI-EXCLUDES-SATURATED mutual-exclusion pin dual
+        // on the COMPOUND interior cell.
+        let postures = [
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if matches!(a.interior_axis_is_strictly_multi(), Some(true)) {
+                assert_eq!(
+                    a.interior_axis_is_saturated(),
+                    Some(false),
+                    "interior_is_strictly_multi == Some(true) but interior_is_saturated != Some(false) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_strictly_multi_true_implies_is_singleton_false() {
+        // STRICTLY-MULTI-EXCLUDES-SINGLETON mutual-exclusion pin on the
+        // COMPOUND polar cell. The lower endpoint of the STRICTLY-MULTI
+        // cell (`c > 1`) is strictly greater than the SINGLETON cell
+        // (`c == 1`), so the two cells partition the has-polar-axis
+        // regime into disjoint arms at the lower endpoint too.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if matches!(a.polar_axis_is_strictly_multi(), Some(true)) {
+                assert_eq!(
+                    a.polar_axis_is_singleton(),
+                    Some(false),
+                    "polar_is_strictly_multi == Some(true) but polar_is_singleton != Some(false) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_strictly_multi_true_implies_is_singleton_false() {
+        // STRICTLY-MULTI-EXCLUDES-SINGLETON mutual-exclusion pin dual on
+        // the COMPOUND interior cell.
+        let postures = [
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if matches!(a.interior_axis_is_strictly_multi(), Some(true)) {
+                assert_eq!(
+                    a.interior_axis_is_singleton(),
+                    Some(false),
+                    "interior_is_strictly_multi == Some(true) but interior_is_singleton != Some(false) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_strictly_multi_false_at_lone_polar_axis() {
+        // LOWER-ENDPOINT NON-STRICTLY-MULTI pin on the COMPOUND polar
+        // cell — at the single-fire regime (count_polar == 1, the
+        // SINGLETON endpoint), the STRICTLY-MULTI verdict is Some(false).
+        // Pins the exact boundary between the SINGLETON cell and the
+        // STRICTLY-MULTI cell on the polar count axis at c == 1, swept
+        // across every position × either pole.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            for pole in [0_usize, usize::MAX] {
+                let mut fields = [41_usize, 43, 47, 53, 59, 61];
+                fields[position] = pole;
+                let singleton_polar = ResourceLimits {
+                    max_expansion_depth: fields[0],
+                    max_cache_entries: fields[1],
+                    max_expansion_size: fields[2],
+                    max_macro_body_size: fields[3],
+                    max_registered_macros: fields[4],
+                    max_macro_arity: fields[5],
+                };
+                assert_eq!(singleton_polar.count_polar_axes(), 1);
+                assert_eq!(
+                    singleton_polar.polar_axis_is_strictly_multi(),
+                    Some(false),
+                    "singleton polar at position {position} pole {pole} not Some(false)",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_strictly_multi_false_at_lone_interior_axis() {
+        // LOWER-ENDPOINT NON-STRICTLY-MULTI pin dual on the COMPOUND
+        // interior cell — a posture with a lone interior axis at any of
+        // the six positions (and polar on the remaining five) gives
+        // count_interior == 1, so the STRICTLY-MULTI verdict is
+        // Some(false).
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let poles = [0_usize, usize::MAX, 0, usize::MAX, 0, usize::MAX];
+            let mut fields = poles;
+            fields[position] = 41;
+            let singleton_interior = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(singleton_interior.count_interior_axes(), 1);
+            assert_eq!(
+                singleton_interior.interior_axis_is_strictly_multi(),
+                Some(false),
+                "singleton interior at position {position} not Some(false)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_strictly_multi_true_at_strictly_multi_polar_axis() {
+        // STRICTLY-MULTI-FIRING pin on the COMPOUND polar cell — at each
+        // position × either pole, a fixture with EXACTLY TWO polar axes
+        // (the target position at the pole plus one fixed neighbour at
+        // the opposite pole) hits count_polar == 2, strictly between 1
+        // and FIELD_COUNT, firing STRICTLY-MULTI at Some(true). Ensures
+        // the antecedent of the STRICTLY-MULTI-IMPLIES-MULTI bridge
+        // fires non-vacuously across the polar mask.
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            for pole in [0_usize, usize::MAX] {
+                let anchor = if position == 0 { 1 } else { 0 };
+                let anchor_pole = if pole == 0 { usize::MAX } else { 0 };
+                let mut fields = [41_usize, 43, 47, 53, 59, 61];
+                fields[position] = pole;
+                fields[anchor] = anchor_pole;
+                let two_polar = ResourceLimits {
+                    max_expansion_depth: fields[0],
+                    max_cache_entries: fields[1],
+                    max_expansion_size: fields[2],
+                    max_macro_body_size: fields[3],
+                    max_registered_macros: fields[4],
+                    max_macro_arity: fields[5],
+                };
+                assert_eq!(two_polar.count_polar_axes(), 2);
+                assert_eq!(
+                    two_polar.polar_axis_is_strictly_multi(),
+                    Some(true),
+                    "two-polar at (position {position}, pole {pole}) not Some(true)",
+                );
+                assert_eq!(
+                    two_polar.polar_axis_is_multi(),
+                    Some(true),
+                    "two-polar at (position {position}, pole {pole}) not lifted to polar_is_multi Some(true)",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_strictly_multi_true_at_strictly_multi_interior_axis() {
+        // STRICTLY-MULTI-FIRING pin dual on the COMPOUND interior cell.
+        // At each position, a fixture with EXACTLY TWO interior axes
+        // (the target position and one fixed neighbour, both interior;
+        // all other positions polar) hits count_interior == 2, firing
+        // STRICTLY-MULTI at Some(true).
+        for position in 0..ResourceLimits::FIELD_COUNT {
+            let anchor = if position == 0 { 1 } else { 0 };
+            let poles = [0_usize, usize::MAX, 0, usize::MAX, 0, usize::MAX];
+            let mut fields = poles;
+            fields[position] = 41;
+            fields[anchor] = 43;
+            let two_interior = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(two_interior.count_interior_axes(), 2);
+            assert_eq!(
+                two_interior.interior_axis_is_strictly_multi(),
+                Some(true),
+                "two-interior at position {position} not Some(true)",
+            );
+            assert_eq!(
+                two_interior.interior_axis_is_multi(),
+                Some(true),
+                "two-interior at position {position} not lifted to interior_is_multi Some(true)",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_compound_is_strictly_multi_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the COMPOUND STRICTLY-MULTI pair — both
+        // projections are evaluable in const context so a caller can
+        // pin the exact SATURATED-endpoint corners on the (polar,
+        // interior) 4-cell axis-family at compile time as build-breaks.
+        // Mirror of the atomic (STRICTLY-MULTI) const-fn pins one CELL-
+        // KIND axis under, closing the compile-time evaluability contract
+        // on the STRICTLY-MULTI column across all four cells.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_strictly_multi(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_strictly_multi(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_strictly_multi(),
+            Some(false)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .interior_axis_is_strictly_multi()
+            .is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .interior_axis_is_strictly_multi()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .polar_axis_is_strictly_multi()
             .is_none());
     }
 }

@@ -12988,6 +12988,278 @@ impl ResourceLimits {
         }
     }
 
+    /// Whole-posture UNDIRECTED-CARDINAL-DISTANCE projection —
+    /// `self.axial_skew()` returns the ABSOLUTE magnitude
+    /// `|self.count_polar_axes() - self.count_interior_axes()|` on the
+    /// (polar, interior) axial partition. Always defined, always `usize`,
+    /// always in `0..=Self::FIELD_COUNT`. The ARM-AGNOSTIC UNDIRECTED
+    /// peer of the just-shipped (polar_lead, interior_lead) DIRECTED
+    /// `Option<usize>` pair one PROJECTION-KIND axis over — where the
+    /// DIRECTED pair carries WHICH arm dominates AND by how much through
+    /// two `Option<usize>` exits at most one of which fires, THIS
+    /// projection carries the SAME magnitude ARM-AGNOSTICALLY through
+    /// one `usize` exit that fires universally.
+    ///
+    /// A DIRECT SUM lift of the DIRECTED-LEAD pair one COMBINATOR-KIND
+    /// axis over: `axial_skew() == polar_lead().unwrap_or(0) +
+    /// interior_lead().unwrap_or(0)` on every posture — the SUM identity
+    /// holds because at most one of the two DIRECTED-LEAD arms fires
+    /// `Some(_)` (per the paired
+    /// [`Self::polar_lead`]/[`Self::interior_lead`] mutual-exclusion pin),
+    /// so the sum collapses to whichever arm holds (or 0 at the balance
+    /// corner where both fire `None`). ARM-agnostic where the DIRECTED
+    /// pair is arm-selecting: a downstream consumer of "the majority
+    /// margin size" reads one `usize` rather than two `Option<usize>`
+    /// disjunctions.
+    ///
+    /// A STRICT WEAKENING of the DIRECTED-LEAD pair on the arm-identity
+    /// axis: the DIRECTED pair discriminates polar-dominant from
+    /// interior-dominant AT the SAME lead magnitude (a 4-polar-2-interior
+    /// split gives `polar_lead == Some(2)` and a 2-polar-4-interior split
+    /// gives `interior_lead == Some(2)`, but BOTH give `axial_skew ==
+    /// 2`). Discards arm identity, keeps the CARDINAL magnitude — the
+    /// classical "absolute-value" folding of a SIGNED integer difference
+    /// to its magnitude.
+    ///
+    /// **ZERO-bridge to balance**: `axial_skew() == 0 ⇔
+    /// is_axially_balanced()` — the ZERO cell of the UNDIRECTED CARDINAL
+    /// projection coincides exactly with the balance leg of the paired
+    /// STRICT-TOTAL-ORDER trichotomy on the SAME two-arm tally. Pinned via
+    /// `resource_limits_axial_skew_is_zero_iff_is_axially_balanced`.
+    ///
+    /// **SUM-agreement identity**: for every posture `a`, `a.axial_skew()
+    /// == a.polar_lead().unwrap_or(0) + a.interior_lead().unwrap_or(0)`
+    /// — LOAD-BEARING substrate theorem tying the UNDIRECTED CARDINAL
+    /// exit to the paired DIRECTED-LEAD Option-pair via the mutual-
+    /// exclusion pin. Pinned via
+    /// `resource_limits_axial_skew_equals_sum_of_polar_lead_and_interior_lead`.
+    ///
+    /// **abs_diff-agreement identity**: `axial_skew() ==
+    /// count_polar_axes().abs_diff(count_interior_axes())` — the
+    /// UNDIRECTED CARDINAL projection is the standard ABSOLUTE-DIFFERENCE
+    /// of the two ARITHMETIC-QUANTIFIER tallies. Pinned via
+    /// `resource_limits_axial_skew_equals_polar_count_abs_diff_interior_count`.
+    ///
+    /// **Range bound**: `0 <= axial_skew() <= Self::FIELD_COUNT` by
+    /// construction — the lower bound is a non-negative `usize`, the
+    /// upper bound follows from the EXHAUSTIVE-PARTITION identity
+    /// `count_polar + count_interior == FIELD_COUNT` (an absolute
+    /// difference of two non-negatives summing to FIELD_COUNT cannot
+    /// exceed FIELD_COUNT itself).
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.axial_skew() == 6` (polar
+    /// = 6, interior = 0 → skew = 6 — the SATURATED UNDIRECTED corner);
+    /// `UNBOUNDED_RESOURCE_LIMITS.axial_skew() == 6` (same magnitude on
+    /// the DUAL arm — the arm-agnostic reading collapses BOTH polar-
+    /// uniform saturated presets to the SAME `6`);
+    /// `DEFAULT_RESOURCE_LIMITS.axial_skew() == 6`;
+    /// `HAND_AUTHORED_MID_POSTURE.axial_skew() == 6`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.axial_skew() == 6`. All FIVE shipped
+    /// uniform fixtures fire the SATURATED CARDINAL corner at `6 =
+    /// FIELD_COUNT` — the ARM-AGNOSTIC reading of the paired DIRECTED-
+    /// LEAD preset-pin partition: where the DIRECTED pair partitions
+    /// them into (polar-arm-saturated, interior-arm-saturated),
+    /// discarding arm identity collapses BOTH arms to the SAME saturated
+    /// magnitude.
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .axial_skew() == 0` (3 + 3 tie);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.axial_skew() == 0` (same
+    /// 3 + 3 tie); `ENDPOINTS_ONLY_BOTTOM_POSTURE.axial_skew() == 2`
+    /// (2 + 4 interior-strict split, magnitude 2). The LOAD-BEARING
+    /// NON-SATURATED CARDINAL witness at `2` — where the paired DIRECTED
+    /// pair reads it as `Some(2)` on the interior arm only,
+    /// `axial_skew()` reads it as `2` universally. Together with the
+    /// two `0` tie witnesses, the three truly-mixed fixtures pin BOTH
+    /// the zero leg AND a non-saturated positive leg of the UNDIRECTED
+    /// CARDINAL range.
+    ///
+    /// Encoded as the plain `const fn` `abs_diff` on the two already-
+    /// lifted ARITHMETIC-QUANTIFIER tallies — one primitive delegation
+    /// each to [`Self::count_polar_axes`] and [`Self::count_interior_axes`],
+    /// composed through `usize::abs_diff` (a `const fn` since Rust 1.60).
+    /// No new dep, no per-axis loop, no allocation.
+    ///
+    /// `const fn` so a caller can pin the exact skew at compile time
+    /// (`const _: () = assert!(EMPTY_RESOURCE_LIMITS.axial_skew() == 6);`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// UNDIRECTED CARDINAL projection is a named typed `usize` exit
+    /// rather than an inline `self.count_polar_axes()
+    /// .abs_diff(self.count_interior_axes())` per-consumer combinator.
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// (axial_skew, majority_lead) pair CLOSES the CARDINAL-DISTANCE
+    /// column past the just-opened (polar_lead, interior_lead) DIRECTED-
+    /// LEAD pair on the SAME two-arm tally with the LOAD-BEARING ARM-
+    /// AGNOSTIC magnitude — the CARDINAL projection reading the SIGNED
+    /// integer difference through its ABSOLUTE-VALUE fold that the
+    /// DIRECTED pair expresses only through two `Option<usize>` exits.
+    /// THEORY.md §V.1 — knowable platform; the UNDIRECTED CARDINAL
+    /// verdict is a TYPE-level operation on the posture algebra
+    /// returning a `const`-evaluable `usize`.
+    ///
+    /// Frontier inspiration: classical integer algebra's canonical
+    /// "absolute-value" fold on the SIGNED integer difference of the
+    /// two arm tallies — the DIRECT lift of `|a - b|` from `Z` to
+    /// `usize` through the total `abs_diff` combinator. APL's
+    /// `|(+/mask) - (+/~mask)|` unsigned magnitude on the paired axial
+    /// tally. Haskell's `abs (length polar - length interior)`.
+    /// Idris's `abs ((count p v) - (count (not . p) v))` returning
+    /// `Nat` at the type of the paired arm-tally absolute difference.
+    /// Voting-theory's canonical "victory margin" (or "winning margin
+    /// size") figure on a two-candidate election — the ARM-AGNOSTIC
+    /// magnitude figure discarding winner identity but keeping the
+    /// winning-margin size. Translation through pleme-io primitives:
+    /// plain `const fn` `usize::abs_diff` on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies, no `i64` bridge, no `checked_sub`
+    /// indirection, no new dep, no typeclass indirection, no per-axis
+    /// loop, no allocation.
+    #[must_use]
+    pub const fn axial_skew(self) -> usize {
+        self.count_polar_axes().abs_diff(self.count_interior_axes())
+    }
+
+    /// Whole-posture ARM-AGNOSTIC DIRECTED-LEAD projection —
+    /// `self.majority_lead()` returns `Some(k)` for the CARDINAL magnitude
+    /// `k = self.axial_skew()` iff SOME strict-majority arm fires on the
+    /// (polar, interior) axial partition, and `None` at the balance
+    /// corner. The direct OR-FOLD of the paired (polar_lead,
+    /// interior_lead) DIRECTED `Option<usize>` pair one COMBINATOR-KIND
+    /// axis over — where the DIRECTED pair carries two arm-selecting
+    /// `Option<usize>` exits at most one of which fires, THIS projection
+    /// folds them through `Option::or` into ONE named typed exit that
+    /// fires at the union of the two SOME cells.
+    ///
+    /// The `Option<usize>` peer of [`Self::axial_skew`] on the DUAL
+    /// combinator — jointly the (axial_skew, majority_lead) pair CLOSES
+    /// the CARDINAL-DISTANCE column past the just-opened (polar_lead,
+    /// interior_lead) DIRECTED-LEAD pair. Where [`Self::axial_skew`]
+    /// reads the CARDINAL magnitude UNIVERSALLY through `usize` (folding
+    /// the balance corner to `0`), THIS projection reads the SAME
+    /// magnitude through `Option<usize>` (distinguishing the balance
+    /// corner as `None`) — matching [`Self::has_majority_axis`] on the
+    /// existence axis lifted to the CARDINAL magnitude on the SAME
+    /// balance-vs-majority partition.
+    ///
+    /// A STRICT REFINEMENT of BOTH the BOOLEAN MAJORITY-EXISTENCE
+    /// verdict AND the UNDIRECTED CARDINAL `usize` projection on the
+    /// same tally pair: the SOME-bridge is `majority_lead().is_some() ⇔
+    /// has_majority_axis()`; the NONE-bridge is `majority_lead().is_none()
+    /// ⇔ is_axially_balanced()`; the VALUE-bridge on the SOME arm is
+    /// `majority_lead().unwrap() == axial_skew()`. Discriminates
+    /// postures the boolean MAJORITY-EXISTENCE conflates: two majority-
+    /// firing postures with the SAME `has_majority_axis() == true` but
+    /// DIFFERENT majority magnitudes give DIFFERENT `Some(k)` values.
+    ///
+    /// A STRICT WEAKENING of the DIRECTED-LEAD pair on the arm-identity
+    /// axis: the DIRECTED pair discriminates polar-dominant from
+    /// interior-dominant at the SAME lead magnitude, THIS projection
+    /// discards arm identity keeping only the CARDINAL magnitude
+    /// paired with the majority-existence verdict.
+    ///
+    /// **SOME-bridge to majority existence**: for every posture `a`,
+    /// `a.majority_lead().is_some() ⇔ a.has_majority_axis()`. Pinned via
+    /// `resource_limits_majority_lead_is_some_iff_has_majority_axis`.
+    ///
+    /// **NONE-bridge to balance**: for every posture `a`,
+    /// `a.majority_lead().is_none() ⇔ a.is_axially_balanced()`. Pinned via
+    /// `resource_limits_majority_lead_is_none_iff_is_axially_balanced`.
+    ///
+    /// **OR-fold decomposition**: for every posture `a`,
+    /// `a.majority_lead() == a.polar_lead().or(a.interior_lead())` —
+    /// LOAD-BEARING substrate theorem tying the ARM-AGNOSTIC exit to the
+    /// paired DIRECTED-LEAD Option-pair via the CROSS-CELL mutual-
+    /// exclusion pin (at most one of the two arms fires `Some`, so `or`
+    /// picks the winning arm's magnitude or leaves `None` at the balance
+    /// corner). Pinned via
+    /// `resource_limits_majority_lead_equals_polar_lead_or_interior_lead`.
+    ///
+    /// **VALUE-agreement bridge to axial_skew**: for every posture `a`,
+    /// `a.majority_lead().unwrap_or(0) == a.axial_skew()` — LOAD-BEARING
+    /// substrate theorem tying the two CARDINAL-DISTANCE projections
+    /// through the `unwrap_or(0)` collapse of the balance corner. Pinned
+    /// via `resource_limits_majority_lead_unwrap_or_zero_equals_axial_skew`.
+    ///
+    /// **Range bound**: when `Some(k)`, `1 <= k <= Self::FIELD_COUNT`
+    /// by construction — the lower bound `k >= 1` follows from the
+    /// SOME-bridge (majority-existence forces a strict inequality, so
+    /// `axial_skew >= 1`), the upper bound from the EXHAUSTIVE-PARTITION
+    /// identity. Pinned via
+    /// `resource_limits_majority_lead_value_lies_in_one_through_field_count`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.majority_lead() == Some(6)`
+    /// (polar-uniform → polar_lead saturates → majority_lead saturates);
+    /// `UNBOUNDED_RESOURCE_LIMITS.majority_lead() == Some(6)`;
+    /// `DEFAULT_RESOURCE_LIMITS.majority_lead() == Some(6)` (interior-
+    /// uniform → interior_lead saturates → majority_lead saturates — the
+    /// DUAL arm-uniform case collapses to the SAME saturated `Some(6)`
+    /// under the ARM-AGNOSTIC OR-fold);
+    /// `HAND_AUTHORED_MID_POSTURE.majority_lead() == Some(6)`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.majority_lead() == Some(6)`. All
+    /// FIVE shipped uniform fixtures fire the SATURATED lead at `Some(6)`
+    /// — the ARM-AGNOSTIC reading of the paired DIRECTED-LEAD saturated-
+    /// arm partition.
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .majority_lead() == None` (3 + 3 tie);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.majority_lead() == None`
+    /// (same 3 + 3 tie); `ENDPOINTS_ONLY_BOTTOM_POSTURE.majority_lead()
+    /// == Some(2)` (2 + 4 interior-strict split). The LOAD-BEARING
+    /// NON-SATURATED CARDINAL witness on the ARM-AGNOSTIC arm —
+    /// ENDPOINTS_ONLY is the sole shipped fixture pinning a `Some(k)`
+    /// with `1 <= k < FIELD_COUNT`, matching the paired
+    /// [`Self::interior_lead`] pin on the DIRECTED interior arm.
+    ///
+    /// Encoded as the plain `const fn` `if self.axial_skew() == 0 {
+    /// None } else { Some(self.axial_skew()) }` on the just-lifted
+    /// UNDIRECTED CARDINAL projection — one primitive delegation each
+    /// to [`Self::axial_skew`], composed through the ZERO-bridge to the
+    /// balance leg. The equivalent alternative encodings
+    /// `self.polar_lead().or(self.interior_lead())` (Option::or is
+    /// `const fn` since Rust 1.61) and `if self.has_majority_axis() {
+    /// Some(self.axial_skew()) } else { None }` are all structurally
+    /// equivalent AND pinned as substrate theorems in the paired
+    /// contracts above.
+    ///
+    /// `const fn` so a caller can pin the exact ARM-AGNOSTIC lead at
+    /// compile time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.majority_lead(), Some(6)));`).
+    ///
+    /// Theory anchor: same as [`Self::axial_skew`], on the DUAL
+    /// `Option<usize>` shape. The (axial_skew, majority_lead) pair
+    /// jointly CLOSES the CARDINAL-DISTANCE column past the just-opened
+    /// (polar_lead, interior_lead) DIRECTED-LEAD pair — LOAD-BEARING
+    /// because the DIRECTED pair reads "polar leads by k" and "interior
+    /// leads by k" through two exits at most one of which fires; the
+    /// ARM-AGNOSTIC pair reads "the majority arm (whichever it is)
+    /// leads by k" through one exit that fires universally at the two
+    /// majority legs and rejects the balance leg. Naming the ARM-
+    /// AGNOSTIC reading turns a per-call-site `polar_lead().or(
+    /// interior_lead())` disjunction into ONE typed exit.
+    ///
+    /// Frontier inspiration: same as [`Self::axial_skew`], through the
+    /// DUAL `Option<usize>` combinator that distinguishes the balance
+    /// corner. Haskell's `Data.List.NonEmpty` idiom of lifting `[a]` to
+    /// `Maybe (NonEmpty a)` to mark the empty case at the type — here
+    /// the "empty" case is the balance corner, marked as `None`. APL's
+    /// guarded `|(+/mask) - (+/~mask)` under a `⊃` guard on the paired
+    /// axial tally. Voting-theory's canonical "victory margin (if any)"
+    /// figure that reads `Nothing` on a tied election and `Just k` on
+    /// a strict-plurality winner — the ARM-AGNOSTIC magnitude with a
+    /// typed tie-marker. Translation through pleme-io primitives: plain
+    /// `const fn` conditional on the just-lifted [`Self::axial_skew`],
+    /// no `unwrap_or`/`filter` chain, no new dep, no typeclass
+    /// indirection, no per-axis loop, no allocation.
+    #[must_use]
+    pub const fn majority_lead(self) -> Option<usize> {
+        let skew = self.axial_skew();
+        if skew == 0 {
+            None
+        } else {
+            Some(skew)
+        }
+    }
+
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
     /// `self.first_bottom_axis_index()` returns `Some(i)` for the least
     /// `i` such that `self.field_values()[i] == 0`, or `None` when no
@@ -57996,5 +58268,328 @@ mod tests {
         const _: () = assert!(EMPTY_RESOURCE_LIMITS.interior_lead().is_none());
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.interior_lead().is_none());
         const _: () = assert!(matches!(DEFAULT_RESOURCE_LIMITS.interior_lead(), Some(6)));
+    }
+
+    #[test]
+    fn resource_limits_axial_skew_preset_pins_saturate_on_every_uniform_fixture() {
+        // Preset pins on the UNDIRECTED-CARDINAL closure of the
+        // CARDINAL-DISTANCE column — the ARM-AGNOSTIC magnitude collapses
+        // BOTH polar-uniform and interior-uniform saturated preset
+        // arms to the SAME `6 = FIELD_COUNT`. Where the paired DIRECTED
+        // (polar_lead, interior_lead) pair partitions the five uniform
+        // fixtures into (polar-arm-saturated, interior-arm-saturated),
+        // discarding arm identity collapses BOTH arms onto the SAME
+        // saturated CARDINAL corner.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.axial_skew(), 6);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.axial_skew(), 6);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.axial_skew(), 6);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.axial_skew(), 6);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.axial_skew(), 6);
+    }
+
+    #[test]
+    fn resource_limits_majority_lead_preset_pins_saturate_on_every_uniform_fixture() {
+        // DUAL preset pins on the ARM-AGNOSTIC `Option<usize>` shape —
+        // all FIVE uniform fixtures fire the SATURATED lead at `Some(6)`
+        // via the OR-fold of the paired DIRECTED-LEAD saturated arms.
+        // Mirror of [`axial_skew`]'s preset partition on the DUAL
+        // `Option<usize>` shape that distinguishes the balance corner.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.majority_lead(), Some(6));
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.majority_lead(), Some(6));
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.majority_lead(), Some(6));
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.majority_lead(), Some(6));
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.majority_lead(), Some(6));
+    }
+
+    #[test]
+    fn resource_limits_axial_skew_test_local_witnesses_pin_zero_on_ties_and_two_on_endpoints() {
+        // Truly-mixed witnesses on the UNDIRECTED CARDINAL projection —
+        // SPARSE and CONTIGUOUS_INTERIOR each carry a perfect 3+3 tie
+        // so `axial_skew` fires the ZERO corner; ENDPOINTS_ONLY carries
+        // a 2+4 interior-strict split so `axial_skew` fires `2`. The
+        // LOAD-BEARING NON-SATURATED CARDINAL pin — every uniform preset
+        // saturates at `6`, the two tie fixtures fire `0`, and
+        // ENDPOINTS_ONLY is the sole shipped fixture pinning a positive
+        // non-saturated CARDINAL magnitude on the UNDIRECTED arm.
+        assert_eq!(SPARSE_BOTTOM_POSTURE.axial_skew(), 0);
+        assert_eq!(CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.axial_skew(), 0);
+        assert_eq!(ENDPOINTS_ONLY_BOTTOM_POSTURE.axial_skew(), 2);
+    }
+
+    #[test]
+    fn resource_limits_majority_lead_test_local_witnesses_reject_on_ties_fire_two_on_endpoints() {
+        // DUAL truly-mixed witnesses on the ARM-AGNOSTIC
+        // `Option<usize>` projection — the two 3+3 tie fixtures each
+        // fire `None` (the balance leg is now typed as `None` rather
+        // than `0`); ENDPOINTS_ONLY fires `Some(2)` on the SAME
+        // non-saturated positive CARDINAL magnitude as `axial_skew`.
+        assert_eq!(SPARSE_BOTTOM_POSTURE.majority_lead(), None);
+        assert_eq!(CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.majority_lead(), None);
+        assert_eq!(ENDPOINTS_ONLY_BOTTOM_POSTURE.majority_lead(), Some(2));
+    }
+
+    #[test]
+    fn resource_limits_axial_skew_is_zero_iff_is_axially_balanced() {
+        // ZERO-bridge — LOAD-BEARING structural pin. The ZERO cell of
+        // the UNDIRECTED CARDINAL projection coincides exactly with the
+        // balance leg of the paired STRICT-TOTAL-ORDER trichotomy on the
+        // SAME two-arm tally. Ties the (axial_skew == 0) discriminator
+        // to the shipped [`is_axially_balanced`] typed exit.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_skew() == 0,
+                a.is_axially_balanced(),
+                "axial_skew() == 0 != is_axially_balanced() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_skew_equals_sum_of_polar_lead_and_interior_lead() {
+        // SUM-agreement identity — LOAD-BEARING structural pin. On every
+        // posture, the ARM-AGNOSTIC CARDINAL magnitude EQUALS the SUM
+        // of the two DIRECTED-LEAD magnitudes with `None` collapsed to
+        // `0`. Holds universally because at most one DIRECTED arm fires
+        // `Some(_)` (per the paired [`polar_lead`]/[`interior_lead`]
+        // mutual-exclusion pin), so the sum collapses to the single
+        // winning arm's magnitude — or `0` at the balance corner where
+        // both fire `None`. The direct SUM lift of the DIRECTED-LEAD
+        // pair to the UNDIRECTED CARDINAL exit.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_skew(),
+                a.polar_lead().unwrap_or(0) + a.interior_lead().unwrap_or(0),
+                "axial_skew() != polar_lead().unwrap_or(0) + interior_lead().unwrap_or(0) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_skew_equals_polar_count_abs_diff_interior_count() {
+        // abs_diff-agreement identity — the UNDIRECTED CARDINAL
+        // projection IS the standard ABSOLUTE-DIFFERENCE of the two
+        // ARITHMETIC-QUANTIFIER tallies. Crystallizes the delegation
+        // through [`usize::abs_diff`] as ONE typed theorem the substrate
+        // proves once for every downstream consumer of "how far apart
+        // are the two arm tallies".
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_skew(),
+                a.count_polar_axes().abs_diff(a.count_interior_axes()),
+                "axial_skew() != count_polar_axes.abs_diff(count_interior_axes) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_skew_value_lies_in_zero_through_field_count() {
+        // Range bound contract — LOAD-BEARING structural pin. The
+        // UNDIRECTED CARDINAL projection lies in `0..=FIELD_COUNT`: the
+        // lower bound is a non-negative `usize`, the upper bound follows
+        // from the EXHAUSTIVE-PARTITION identity `count_polar +
+        // count_interior == FIELD_COUNT` (an absolute difference of two
+        // non-negatives summing to FIELD_COUNT cannot exceed FIELD_COUNT
+        // itself).
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let k = a.axial_skew();
+            assert!(
+                k <= ResourceLimits::FIELD_COUNT,
+                "axial_skew() = {k} exceeds FIELD_COUNT = {} on {a:?}",
+                ResourceLimits::FIELD_COUNT,
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_majority_lead_is_some_iff_has_majority_axis() {
+        // SOME-bridge — LOAD-BEARING structural pin. The ARM-AGNOSTIC
+        // DIRECTED-LEAD `Option` fires `Some(_)` iff the paired boolean
+        // MAJORITY-EXISTENCE verdict fires — the CARDINAL projection
+        // strictly REFINES the boolean projection on the ARM-AGNOSTIC
+        // combinator, with the CARDINAL value carrying the magnitude
+        // the boolean fold structurally cannot access.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.majority_lead().is_some(),
+                a.has_majority_axis(),
+                "majority_lead().is_some() != has_majority_axis() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_majority_lead_is_none_iff_is_axially_balanced() {
+        // NONE-bridge — the ARM-AGNOSTIC DIRECTED-LEAD `Option` fires
+        // `None` iff the paired boolean BALANCE verdict fires. Ties the
+        // `Option::None` cell to the balance leg of the paired
+        // STRICT-TOTAL-ORDER trichotomy on the SAME two-arm tally.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.majority_lead().is_none(),
+                a.is_axially_balanced(),
+                "majority_lead().is_none() != is_axially_balanced() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_majority_lead_equals_polar_lead_or_interior_lead() {
+        // OR-fold decomposition — LOAD-BEARING structural pin. On every
+        // posture, the ARM-AGNOSTIC exit EQUALS the OR-fold of the paired
+        // DIRECTED-LEAD Option-pair — the `Option::or` combinator picks
+        // whichever arm fires `Some(_)` (at most one per the mutual-
+        // exclusion pin) or leaves `None` at the balance corner. The
+        // CROSS-CELL reading of the DIRECTED-to-ARM-AGNOSTIC lift.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.majority_lead(),
+                a.polar_lead().or(a.interior_lead()),
+                "majority_lead() != polar_lead().or(interior_lead()) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_majority_lead_unwrap_or_zero_equals_axial_skew() {
+        // VALUE-agreement bridge to axial_skew — LOAD-BEARING structural
+        // pin. The two CARDINAL-DISTANCE projections agree on the SAME
+        // magnitude after collapsing the balance corner: `majority_lead
+        // ().unwrap_or(0)` folds `None` back to `0` at the balance leg
+        // where `axial_skew()` already reads `0`. Substrate theorem
+        // tying the two closure exits through the `unwrap_or(0)`
+        // collapse.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.majority_lead().unwrap_or(0),
+                a.axial_skew(),
+                "majority_lead().unwrap_or(0) != axial_skew() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_majority_lead_value_lies_in_one_through_field_count() {
+        // Range bound contract — when `Some(k)`, `1 <= k <=
+        // FIELD_COUNT`. The lower bound `k >= 1` follows from the
+        // SOME-bridge (majority-existence forces a strict inequality on
+        // the two tallies so `axial_skew >= 1`); the upper bound from
+        // the EXHAUSTIVE-PARTITION identity as in the paired
+        // [`axial_skew`] range bound.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if let Some(k) = a.majority_lead() {
+                assert!(
+                    (1..=ResourceLimits::FIELD_COUNT).contains(&k),
+                    "majority_lead() = Some({k}) out of [1, {}] on {a:?}",
+                    ResourceLimits::FIELD_COUNT,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_undirected_cardinal_distance_projections_evaluate_at_compile_time_via_const_fn(
+    ) {
+        // Const-fn pin on the CLOSED CARDINAL-DISTANCE column — both
+        // UNDIRECTED-CARDINAL closure projections are evaluable in const
+        // context so a caller can pin the exact ARM-AGNOSTIC magnitude
+        // at compile time as build-breaks. Mirror of the const-fn
+        // evaluability pins on the (polar_lead, interior_lead) pair one
+        // COMBINATOR-KIND axis under.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.axial_skew() == 6);
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.axial_skew() == 6);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.axial_skew() == 6);
+        const _: () = assert!(matches!(EMPTY_RESOURCE_LIMITS.majority_lead(), Some(6)));
+        const _: () = assert!(matches!(UNBOUNDED_RESOURCE_LIMITS.majority_lead(), Some(6)));
+        const _: () = assert!(matches!(DEFAULT_RESOURCE_LIMITS.majority_lead(), Some(6)));
     }
 }

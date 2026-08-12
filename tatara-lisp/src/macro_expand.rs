@@ -16324,6 +16324,206 @@ impl ResourceLimits {
         }
     }
 
+    /// Whole-posture SIGNED-KIND ATOMIC ARM-AGNOSTIC CENTRAL-TENDENCY
+    /// MAX-fold projection — `self.atomic_signed_majority_count()`
+    /// returns the winning atomic arm's tally on the ATOMIC (bottom,
+    /// top) pair signed by which arm wins: `+count_bottom_axes()` when
+    /// bottom wins (or ties), `-count_top_axes()` when top strictly
+    /// wins. The SIGNED-KIND peer of [`Self::atomic_majority_count`]
+    /// one SIGNEDNESS axis over on the SAME ATOMIC (bottom, top) tally
+    /// pair, the direct CELL-KIND peer of
+    /// [`Self::axial_signed_majority_count`] one CELL-KIND axis over
+    /// on the ATOMIC (bottom, top) tally pair rather than the COMPOUND
+    /// (polar, interior) pair, and the CENTRAL-TENDENCY MAX peer of
+    /// [`Self::atomic_signed_skew`] one COMBINATOR-KIND axis over on
+    /// the same SIGNED-KIND ATOMIC CARDINAL column — jointly the
+    /// (atomic_signed_skew, atomic_signed_majority_count) pair carries
+    /// the SIGNED reading on BOTH the DISPERSION (ABS-DIFF) and
+    /// CENTRAL-TENDENCY (MAX) statistics of the paired ATOMIC tally.
+    ///
+    /// A STRICT REFINEMENT of [`Self::atomic_majority_count`] on the
+    /// arm-identity axis: the UNSIGNED atomic MAX-fold collapses BOTH
+    /// strict-atomic-majority arms onto the SAME positive magnitude
+    /// (discarding arm identity), THIS projection reads BOTH arm
+    /// identity (via the sign) AND magnitude (via the absolute value)
+    /// as ONE `isize`. The `>=` tie convention picks the `+` sign at
+    /// EVERY atomic-balanced corner (`count_bottom == count_top`),
+    /// including the atomically-empty `(0, 0)` corner where every
+    /// axially-interior posture lives, matching
+    /// [`Self::atomic_majority_count`]'s tie convention verbatim so
+    /// `atomic_signed_majority_count().unsigned_abs()` agrees with
+    /// [`Self::atomic_majority_count`] on every posture.
+    ///
+    /// **ABSOLUTE-VALUE bridge to atomic_majority_count**: for every
+    /// posture `a`, `a.atomic_signed_majority_count().unsigned_abs()
+    /// == a.atomic_majority_count()`. LOAD-BEARING substrate theorem
+    /// tying the SIGNED ATOMIC CENTRAL-TENDENCY reading to the UNSIGNED
+    /// ATOMIC CENTRAL-TENDENCY reading through the canonical
+    /// `isize::unsigned_abs` fold — the DIRECT proof that this
+    /// projection strictly REFINES `atomic_majority_count` by splitting
+    /// each magnitude cell onto its (positive, negative) arm-identity
+    /// partition, with EVERY atomic-balance corner (including the
+    /// atomically-empty (0, 0) corner) grouped into the positive arm
+    /// by the `>=` tie convention. Pinned via
+    /// `resource_limits_atomic_signed_majority_count_unsigned_abs_equals_atomic_majority_count`.
+    ///
+    /// **POSITIVE-SIGN bridge to non-top-majority-with-bottom-axis**:
+    /// for every posture `a`, `a.atomic_signed_majority_count() > 0 ⇔
+    /// !a.top_is_majority() && a.has_bottom_axis()`. The SIGNED ATOMIC
+    /// CENTRAL-TENDENCY reading fires a STRICTLY positive value iff
+    /// the top arm does NOT strictly lead AND at least one axis sits
+    /// at the bottom pole — the `>= 0` non-strict positive half further
+    /// filtered to non-zero by the `has_bottom_axis` cofactor because
+    /// the `>=` tie convention picks the `+0` (not the `-0`) branch at
+    /// the atomically-empty corner. NARROWER than
+    /// [`Self::axial_signed_majority_count`]`() > 0` because THIS
+    /// projection's positive branch reaches the ZERO cell at the (0, 0)
+    /// atomic-empty corner where the axial reading is STRUCTURALLY
+    /// bounded below by `FIELD_COUNT / 2`. Pinned via
+    /// `resource_limits_atomic_signed_majority_count_positive_iff_not_top_is_majority_and_has_bottom_axis`.
+    ///
+    /// **NEGATIVE-SIGN bridge to top-majority**: for every posture `a`,
+    /// `a.atomic_signed_majority_count() < 0 ⇔ a.top_is_majority()`.
+    /// The SIGNED ATOMIC CENTRAL-TENDENCY reading fires a strictly
+    /// negative value iff the top atomic arm strictly leads on the
+    /// paired ARITHMETIC-QUANTIFIER tally. Matches
+    /// [`Self::atomic_signed_skew`]'s negative-sign bridge verbatim
+    /// one COMBINATOR-KIND axis over. Pinned via
+    /// `resource_limits_atomic_signed_majority_count_negative_iff_top_is_majority`.
+    ///
+    /// **ZERO-KEY bridge — LOAD-BEARING CELL-KIND-DIFFERENCE pin**:
+    /// on every posture `a`, `a.atomic_signed_majority_count() == 0 ⇔
+    /// a.is_axially_interior()`. The exact structural gap between the
+    /// atomic and axial SIGNED CENTRAL-TENDENCY readings: the axial
+    /// version's `count_polar + count_interior == FIELD_COUNT > 0`
+    /// partition forces one arm's tally strictly positive
+    /// (NEVER-ZERO), but the ATOMIC (bottom, top) sub-partition
+    /// coincides with the polar cell (`bottom + top ==
+    /// count_polar_axes`) and CAN saturate at `0 + 0` on every axially-
+    /// interior posture. There the `>=` tie convention picks the `+0`
+    /// branch, which the ZERO-KEY reading identifies as the DIRECT
+    /// image of the axially-interior cell — the DUAL-DIRECTION
+    /// characterisation `count_polar_axes == 0 ⇔ is_axially_interior`.
+    /// Pinned via
+    /// `resource_limits_atomic_signed_majority_count_zero_iff_is_axially_interior`.
+    ///
+    /// **NON-NEGATIVE-AT-BALANCE tie convention pin**: for every
+    /// posture `a`, `a.is_atomically_balanced() ⇒
+    /// a.atomic_signed_majority_count() >= 0`. The `>=` tie convention
+    /// picks the `+` sign at EVERY atomic-balance corner — including
+    /// the atomically-empty `(0, 0)` corner where the `+` branch fires
+    /// `+0`, matching [`Self::atomic_majority_count`]'s tie choice
+    /// verbatim. Pinned via
+    /// `resource_limits_atomic_signed_majority_count_non_negative_at_atomically_balanced`.
+    ///
+    /// **Magnitude ≤ count_polar_axes bound — LOAD-BEARING atomic
+    /// tightening pin**: for every posture `a`,
+    /// `a.atomic_signed_majority_count().unsigned_abs() <=
+    /// a.count_polar_axes()`. Direct consequence of the ABSOLUTE-VALUE
+    /// bridge composed with the atomic MAX's own upper bound
+    /// `atomic_majority_count() <= count_polar_axes()` — the SIGNED
+    /// ATOMIC CENTRAL-TENDENCY reading lies in
+    /// `[-count_polar_axes, count_polar_axes] ⊆ [-FIELD_COUNT,
+    /// FIELD_COUNT]`, and unlike the axial version there is NO
+    /// unreachable middle strip: the closed interval covers every
+    /// integer in it INCLUDING the ZERO cell. Pinned via
+    /// `resource_limits_atomic_signed_majority_count_magnitude_bounded_by_count_polar_axes`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS
+    /// .atomic_signed_majority_count() == 6` (atomic-bottom-uniform,
+    /// (6, 0) → b >= t → `+6`);
+    /// `UNBOUNDED_RESOURCE_LIMITS.atomic_signed_majority_count() == -6`
+    /// (atomic-top-uniform, (0, 6) → b < t → `-6`);
+    /// `DEFAULT_RESOURCE_LIMITS.atomic_signed_majority_count() == 0`
+    /// (interior-uniform, (0, 0) → b >= t → `+0`);
+    /// `HAND_AUTHORED_MID_POSTURE.atomic_signed_majority_count() == 0`
+    /// (same interior-uniform);
+    /// `HAND_AUTHORED_OTHER_POSTURE.atomic_signed_majority_count()
+    /// == 0` (same). The five uniform presets SPLIT onto THREE distinct
+    /// SIGNED reads (`+6`, `-6`, `0`) — where the axial peer merged
+    /// three interior-uniform presets onto `-6`, the atomic peer
+    /// carries them at the `0` corner and the two atomic-uniform
+    /// presets split by sign onto `+6` and `-6`. The (three-uniform-
+    /// on-zero, two-atomic-uniform-signed) preset partition IS the
+    /// CELL-KIND-DIFFERENCE at the shipped preset family.
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .atomic_signed_majority_count() == 3` (3-bottom + 0-top → b >=
+    /// t → `+3`); `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE
+    /// .atomic_signed_majority_count() == 3` (same 3-bottom + 0-top →
+    /// `+3`); `ENDPOINTS_ONLY_BOTTOM_POSTURE
+    /// .atomic_signed_majority_count() == 2` (2-bottom + 0-top → b >=
+    /// t → `+2`). Every truly-mixed BOTTOM-CARRYING fixture fires a
+    /// STRICTLY positive value on the atomic SIGNED read because the
+    /// paired tally is imbalanced onto the bottom arm — pinning the
+    /// LOAD-BEARING atomic-bottom-strict-majority regime where
+    /// `atomic_signed_majority_count() > 0` fires the winning bottom
+    /// arm's tally.
+    ///
+    /// Encoded as the plain `const fn` sign-split delegation on the
+    /// two already-lifted ATOMIC ARITHMETIC-QUANTIFIER tallies —
+    /// matching [`Self::axial_signed_majority_count`]'s shape verbatim
+    /// on the DUAL (ATOMIC vs COMPOUND) cell, matching
+    /// [`Self::atomic_signed_skew`]'s shape verbatim on the DUAL
+    /// (MAX vs ABS-DIFF) statistic, and matching
+    /// [`Self::atomic_majority_count`]'s `>=` tie convention verbatim
+    /// on the DUAL (SIGNED vs UNSIGNED) column. No `Ord::max`, no
+    /// `isize::abs` indirection, no new dep, no typeclass indirection,
+    /// no per-axis loop, no allocation.
+    ///
+    /// `const fn` so a caller can pin the exact SIGNED ATOMIC CENTRAL-
+    /// TENDENCY value at compile time as a build-break (`const _: () =
+    /// assert!(EMPTY_RESOURCE_LIMITS.atomic_signed_majority_count() ==
+    /// 6);`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// SIGNED ATOMIC CENTRAL-TENDENCY projection is a named typed
+    /// `isize` exit rather than an inline sign-split MAX-fold on the
+    /// paired atomic tallies per consumer. THEORY.md §II.1 invariant
+    /// 5 — composition preserves proofs; the CELL-KIND peer OPENS the
+    /// SIGNEDNESS axis on the ATOMIC (bottom, top) CENTRAL-TENDENCY
+    /// MAX column with the LOAD-BEARING ABSOLUTE-VALUE fold agreeing
+    /// with [`Self::atomic_majority_count`] and the ZERO-KEY bridge
+    /// discriminating the axially-interior corner the axial peer's
+    /// NEVER-ZERO structure cannot reach. THEORY.md §V.1 — knowable
+    /// platform; the SIGNED ATOMIC CENTRAL-TENDENCY verdict is a
+    /// TYPE-level operation on the posture algebra returning a
+    /// `const`-evaluable `isize`.
+    ///
+    /// Frontier inspiration: classical descriptive statistics' SIGNED-
+    /// MAX statistic on a paired two-arm tally with the sign
+    /// discriminating the winning arm — the DIRECT peer of the SIGNED-
+    /// DIFFERENCE statistic [`Self::atomic_signed_skew`] carries one
+    /// COMBINATOR-KIND axis under on the SAME atomic cell. Voting-
+    /// theory's "winning tally with directional sign" figure that
+    /// reads `+k` on a strict bottom win with `k` bottom votes and
+    /// `-k` on a strict top win with `k` top votes, discriminating
+    /// the winner by sign — the SIGNED atomic MAX peer of the SIGNED
+    /// atomic MARGIN. Haskell's `if b >= t then b else -t` on the
+    /// paired atomic arm tally lifted from `Int` to `Integer`. APL's
+    /// `((+/⍵=0) ≥ (+/⍵=⌈/⍵)) × (+/⍵=0) - ((+/⍵=0) < (+/⍵=⌈/⍵))
+    /// × (+/⍵=⌈/⍵)` SIGNED atomic MAX-fold on the paired atomic
+    /// tally. Idris's `max (count (== 0) v) (count (== maxBound) v)`
+    /// signed by `sign (count (== 0) v - count (== maxBound) v)`.
+    /// Translation through pleme-io primitives: plain `const fn`
+    /// sign-split delegation on the two already-lifted ATOMIC
+    /// ARITHMETIC-QUANTIFIER tallies — no new dep, no typeclass
+    /// indirection, no per-axis loop, no allocation.
+    #[must_use]
+    pub const fn atomic_signed_majority_count(self) -> isize {
+        let b = self.count_bottom_axes();
+        let t = self.count_top_axes();
+        // Both `b` and `t` lie in `0..=FIELD_COUNT` (= 6), so the
+        // `as isize` cast never wraps on any target Rust supports
+        // (`isize::MAX` far exceeds FIELD_COUNT on every target).
+        #[allow(clippy::cast_possible_wrap)]
+        if b >= t {
+            b as isize
+        } else {
+            -(t as isize)
+        }
+    }
+
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
     /// `self.first_bottom_axis_index()` returns `Some(i)` for the least
     /// `i` such that `self.field_values()[i] == 0`, or `None` when no
@@ -65618,5 +65818,276 @@ mod tests {
         const _: () = assert!(EMPTY_RESOURCE_LIMITS.axial_signed_majority_count() == 6);
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.axial_signed_majority_count() == 6);
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.axial_signed_majority_count() == -6);
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_majority_count_preset_pins_split_atomic_saturated_corner_on_arm_identity_and_collapse_interior_to_zero(
+    ) {
+        // Preset pins on the SIGNED-KIND ATOMIC CENTRAL-TENDENCY
+        // reading. The five uniform presets SPLIT onto THREE distinct
+        // SIGNED reads: `+6` at the atomic-bottom-uniform corner
+        // (EMPTY at (6, 0)), `-6` at the atomic-top-uniform corner
+        // (UNBOUNDED at (0, 6)), and `0` at every interior-uniform
+        // corner (DEFAULT / HAND_AUTHORED_* at (0, 0) via the `>=`
+        // tie convention). Where the AXIAL SIGNED CENTRAL-TENDENCY
+        // peer merged the three interior-uniform presets onto the
+        // saturated `-6`, THIS atomic reading collapses them all to
+        // the `+0` corner — the LOAD-BEARING CELL-KIND-DIFFERENCE at
+        // the shipped preset family that distinguishes the atomic
+        // MAX from the axial MAX on the SIGNED read.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.atomic_signed_majority_count(), 6);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.atomic_signed_majority_count(), -6);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.atomic_signed_majority_count(), 0);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.atomic_signed_majority_count(), 0);
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.atomic_signed_majority_count(),
+            0
+        );
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_majority_count_test_local_witnesses_pin_positive_bottom_arm_tally_on_every_truly_mixed_fixture(
+    ) {
+        // Truly-mixed witnesses on the SIGNED-KIND ATOMIC CENTRAL-
+        // TENDENCY projection — every truly-mixed BOTTOM-CARRYING
+        // fixture carries the (count_bottom, count_top) atomic pair
+        // as (3, 0), (3, 0), (2, 0) respectively, so the SIGNED MAX
+        // fires the STRICTLY positive bottom tally `+3`, `+3`, `+2`.
+        // Where the AXIAL SIGNED CENTRAL-TENDENCY peer fires `+3`,
+        // `+3`, `-4` at the compound (3, 3), (3, 3), (2, 4) partition
+        // (with the endpoints fixture flipped negative by interior-
+        // strict-majority), the ATOMIC SIGNED read fires POSITIVE on
+        // every truly-mixed fixture because the (bottom, top) sub-
+        // partition of the polar cell is imbalanced onto the bottom
+        // arm on all three fixtures — the DIRECT proof that the
+        // atomic and axial SIGNED reads DISAGREE on the sign of the
+        // endpoints fixture even though they agree on the magnitude
+        // of the two tie fixtures via the `>=` tie convention.
+        assert_eq!(SPARSE_BOTTOM_POSTURE.atomic_signed_majority_count(), 3);
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.atomic_signed_majority_count(),
+            3,
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.atomic_signed_majority_count(),
+            2,
+        );
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_majority_count_unsigned_abs_equals_atomic_majority_count() {
+        // ABSOLUTE-VALUE bridge to atomic_majority_count — LOAD-
+        // BEARING structural pin. On every posture, the SIGNED ATOMIC
+        // CENTRAL-TENDENCY reading agrees with the UNSIGNED ATOMIC
+        // CENTRAL-TENDENCY reading after collapsing the sign through
+        // `isize::unsigned_abs`. Ties the SIGNED-KIND projection to
+        // the UNSIGNED-KIND projection through the canonical
+        // `unsigned_abs` fold — the DIRECT proof that this projection
+        // strictly REFINES `atomic_majority_count` by splitting each
+        // magnitude cell onto its (positive, negative) arm-identity
+        // partition, with EVERY atomic-balance corner (including the
+        // atomically-empty (0, 0) corner) grouped into the positive
+        // arm by the `>=` tie convention.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_signed_majority_count().unsigned_abs(),
+                a.atomic_majority_count(),
+                "atomic_signed_majority_count().unsigned_abs() != atomic_majority_count() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_majority_count_positive_iff_not_top_is_majority_and_has_bottom_axis(
+    ) {
+        // POSITIVE-SIGN bridge — LOAD-BEARING structural pin. The
+        // SIGNED ATOMIC CENTRAL-TENDENCY reading fires a STRICTLY
+        // positive value iff the top arm does NOT strictly lead AND
+        // at least one axis sits at the bottom pole. The `>= 0` non-
+        // strict positive half is further filtered to non-zero by the
+        // `has_bottom_axis` cofactor because the `>=` tie convention
+        // picks the `+0` (not the `-0`) branch at the atomically-
+        // empty corner. NARROWER than the axial peer's `> 0 ⇔
+        // !interior_is_majority` because THIS projection's positive
+        // branch reaches the ZERO cell at the (0, 0) atomic-empty
+        // corner where the axial reading is STRUCTURALLY bounded
+        // below by `FIELD_COUNT / 2`.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_signed_majority_count() > 0,
+                !a.top_is_majority() && a.has_bottom_axis(),
+                "atomic_signed_majority_count() > 0 != (!top_is_majority() && has_bottom_axis()) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_majority_count_negative_iff_top_is_majority() {
+        // NEGATIVE-SIGN bridge to top-majority — LOAD-BEARING
+        // structural pin. The SIGNED ATOMIC CENTRAL-TENDENCY reading
+        // fires a strictly negative value iff the top atomic arm
+        // strictly leads on the paired ARITHMETIC-QUANTIFIER tally.
+        // Matches `atomic_signed_skew`'s negative-sign bridge
+        // verbatim one COMBINATOR-KIND axis over on the DUAL (MAX vs
+        // ABS-DIFF) statistic.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_signed_majority_count() < 0,
+                a.top_is_majority(),
+                "atomic_signed_majority_count() < 0 != top_is_majority() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_majority_count_zero_iff_is_axially_interior() {
+        // ZERO-KEY bridge — LOAD-BEARING CELL-KIND-DIFFERENCE pin.
+        // The exact structural gap between the atomic and axial
+        // SIGNED CENTRAL-TENDENCY readings: the axial version's
+        // `count_polar + count_interior == FIELD_COUNT > 0` partition
+        // forces one arm's tally strictly positive (NEVER-ZERO), but
+        // the ATOMIC (bottom, top) sub-partition coincides with the
+        // polar cell (`bottom + top == count_polar_axes`) and CAN
+        // saturate at `0 + 0` on every axially-interior posture. The
+        // ZERO-KEY reading identifies the ZERO cell as the DIRECT
+        // image of the axially-interior corner through the DUAL-
+        // DIRECTION characterisation `count_polar_axes == 0 ⇔
+        // is_axially_interior`.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_signed_majority_count() == 0,
+                a.is_axially_interior(),
+                "atomic_signed_majority_count() == 0 != is_axially_interior() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_majority_count_non_negative_at_atomically_balanced() {
+        // NON-NEGATIVE-AT-BALANCE tie convention pin — the `>=` tie
+        // convention picks the `+` sign at EVERY atomic-balance
+        // corner, including the atomically-empty `(0, 0)` corner
+        // where the `+` branch fires `+0`. Matches
+        // `atomic_majority_count`'s tie choice verbatim on the DUAL
+        // (SIGNED vs UNSIGNED) column — the two atomic MAX projections
+        // agree on the `+` sign at every atomic-tie corner.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.is_atomically_balanced() {
+                let k = a.atomic_signed_majority_count();
+                assert!(
+                    k >= 0,
+                    "atomic_signed_majority_count() = {k} < 0 at atomic-balanced posture {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_majority_count_magnitude_bounded_by_count_polar_axes() {
+        // Magnitude ≤ count_polar_axes bound — LOAD-BEARING atomic
+        // tightening pin. Direct consequence of the ABSOLUTE-VALUE
+        // bridge composed with the atomic MAX's own upper bound
+        // `atomic_majority_count() <= count_polar_axes()` — the
+        // SIGNED ATOMIC CENTRAL-TENDENCY reading lies in
+        // `[-count_polar_axes, count_polar_axes] ⊆ [-FIELD_COUNT,
+        // FIELD_COUNT]`, and unlike the axial version there is NO
+        // unreachable middle strip: the closed interval covers every
+        // integer in it INCLUDING the ZERO cell. Pins BOTH the tight
+        // per-posture bound and the coarse workspace-wide bound so
+        // downstream reasoning can pick either.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let k = a.atomic_signed_majority_count();
+            let polar = a.count_polar_axes();
+            assert!(
+                k.unsigned_abs() <= polar,
+                "|atomic_signed_majority_count()| = {} > count_polar_axes() = {polar} on {a:?}",
+                k.unsigned_abs(),
+            );
+            let upper = ResourceLimits::FIELD_COUNT as isize;
+            let lower = -upper;
+            assert!(
+                (lower..=upper).contains(&k),
+                "atomic_signed_majority_count() = {k} out of [{lower}, {upper}] on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_majority_count_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the SIGNED-KIND ATOMIC CENTRAL-TENDENCY
+        // closure — the SIGNED atomic reading is evaluable in const
+        // context so a caller can pin the exact SIGNED atomic
+        // SATURATED corner (atomic-bottom-uniform `+6` vs atomic-
+        // top-uniform `-6`) at compile time as build-breaks, plus
+        // the interior-uniform `+0` corner unique to the atomic
+        // reading. Mirror of the const-fn evaluability pins on the
+        // (atomic_majority_count, atomic_minority_count) UNSIGNED
+        // ATOMIC CENTRAL-TENDENCY closure one SIGNEDNESS axis under,
+        // on the (atomic_skew, atomic_signed_skew) SIGNEDNESS pair
+        // one COMBINATOR-KIND axis under, and on
+        // `axial_signed_majority_count` one CELL-KIND axis over.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.atomic_signed_majority_count() == 6);
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.atomic_signed_majority_count() == -6);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.atomic_signed_majority_count() == 0);
     }
 }

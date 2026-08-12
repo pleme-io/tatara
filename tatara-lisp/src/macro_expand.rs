@@ -13260,6 +13260,175 @@ impl ResourceLimits {
         }
     }
 
+    /// Whole-posture SIGNED-KIND DIRECTED-CARDINAL projection —
+    /// `self.axial_signed_skew()` returns `count_polar_axes() -
+    /// count_interior_axes()` read as an `isize` where the SIGN carries
+    /// which arm dominates and the MAGNITUDE carries by how much.
+    /// `+k` iff polar strictly leads by `k`, `-k` iff interior strictly
+    /// leads by `k`, `0` at the balance corner. The SIGNED-KIND peer of
+    /// [`Self::axial_skew`] one SIGNEDNESS axis over on the same
+    /// CARDINAL-DISTANCE column that just closed via the UNDIRECTED
+    /// `usize` and ARM-AGNOSTIC `Option<usize>` reads.
+    ///
+    /// A STRICT REFINEMENT of BOTH the UNDIRECTED `usize` and the
+    /// ARM-AGNOSTIC `Option<usize>` closure exits: the ABSOLUTE-VALUE
+    /// bridge is `axial_signed_skew().unsigned_abs() == axial_skew()`;
+    /// the SIGN-TRICHOTOMY bridge partitions every posture into
+    /// `axial_signed_skew() > 0 ⇔ polar_is_majority()`,
+    /// `axial_signed_skew() < 0 ⇔ interior_is_majority()`,
+    /// `axial_signed_skew() == 0 ⇔ is_axially_balanced()`. Where the
+    /// UNDIRECTED CARDINAL projection folds BOTH strict-majority arms
+    /// onto the SAME positive magnitude (discarding arm identity) and
+    /// the ARM-AGNOSTIC `Option<usize>` projection folds them onto the
+    /// SAME `Some(k)` cell (discarding arm identity, distinguishing
+    /// the balance corner), THIS projection reads BOTH arm identity
+    /// (via the sign) AND magnitude (via the absolute value) as ONE
+    /// `isize` — the CARDINAL-DISTANCE reading the paired
+    /// (polar_lead, interior_lead) DIRECTED `Option<usize>` pair
+    /// expresses as a DISJUNCTION of two arm-selecting cells that this
+    /// SIGNED integer expresses as ONE arithmetic value.
+    ///
+    /// A STRICT REFINEMENT of the DIRECTED-LEAD `Option<usize>` pair
+    /// on the discriminator axis: the DIRECTED pair carries the
+    /// arm-identity + magnitude verdict as TWO exits at most one of
+    /// which fires `Some(_)`, THIS projection carries the SAME
+    /// verdict as ONE typed exit — a downstream consumer that needed
+    /// both facts reads one `isize` (with `.signum()` selecting the
+    /// arm and `.unsigned_abs()` selecting the magnitude) rather
+    /// than composing the two paired arms through
+    /// `polar_lead().or(interior_lead().map(...))` or a match on the
+    /// DIRECTED pair.
+    ///
+    /// **ABSOLUTE-VALUE bridge to axial_skew**: for every posture `a`,
+    /// `a.axial_signed_skew().unsigned_abs() == a.axial_skew()`.
+    /// LOAD-BEARING substrate theorem tying the SIGNED CARDINAL
+    /// reading to the UNDIRECTED CARDINAL reading through the
+    /// canonical `isize::unsigned_abs` fold. Pinned via
+    /// `resource_limits_axial_signed_skew_unsigned_abs_equals_axial_skew`.
+    ///
+    /// **POSITIVE-SIGN bridge to polar-majority**: for every posture
+    /// `a`, `a.axial_signed_skew() > 0 ⇔ a.polar_is_majority()`.
+    /// Pinned via
+    /// `resource_limits_axial_signed_skew_positive_iff_polar_is_majority`.
+    ///
+    /// **NEGATIVE-SIGN bridge to interior-majority**: for every
+    /// posture `a`, `a.axial_signed_skew() < 0 ⇔
+    /// a.interior_is_majority()`. Pinned via
+    /// `resource_limits_axial_signed_skew_negative_iff_interior_is_majority`.
+    ///
+    /// **ZERO-SIGN bridge to balance**: for every posture `a`,
+    /// `a.axial_signed_skew() == 0 ⇔ a.is_axially_balanced()`. Pinned
+    /// via `resource_limits_axial_signed_skew_zero_iff_is_axially_balanced`.
+    ///
+    /// **SIGNUM-TRICHOTOMY bridge**: for every posture `a`,
+    /// `a.axial_signed_skew().signum()` reads the three legs of the
+    /// STRICT-TOTAL-ORDER trichotomy as `{+1, 0, -1}` — the direct
+    /// SIGN projection of the (polar_is_majority, is_axially_balanced,
+    /// interior_is_majority) three-cell partition. Pinned via
+    /// `resource_limits_axial_signed_skew_signum_partitions_majority_trichotomy`.
+    ///
+    /// **VALUE-agreement bridge to (polar_lead, interior_lead)**:
+    /// for every posture `a`, `a.axial_signed_skew() ==
+    /// a.polar_lead().unwrap_or(0) as isize -
+    /// a.interior_lead().unwrap_or(0) as isize`. LOAD-BEARING
+    /// substrate theorem tying the SIGNED CARDINAL reading to the
+    /// DIRECTED-LEAD pair through the DIFFERENCE of the two arms with
+    /// balance corners collapsed to `0`. Pinned via
+    /// `resource_limits_axial_signed_skew_equals_polar_lead_minus_interior_lead`.
+    ///
+    /// **Range bound**: for every posture `a`,
+    /// `-(FIELD_COUNT as isize) <= a.axial_signed_skew() <= FIELD_COUNT
+    /// as isize`. Lower bound follows from the SATURATED interior-arm
+    /// case where `count_polar == 0` and `count_interior == FIELD_COUNT`;
+    /// upper bound from the DUAL SATURATED polar-arm case. Pinned via
+    /// `resource_limits_axial_signed_skew_value_lies_in_neg_field_count_through_field_count`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.axial_signed_skew() ==
+    /// 6` (every axis at bottom → polar-uniform, polar arm saturates
+    /// with `+6` sign);
+    /// `UNBOUNDED_RESOURCE_LIMITS.axial_signed_skew() == 6` (every
+    /// axis at top → polar-uniform, polar arm saturates with `+6`
+    /// sign);
+    /// `DEFAULT_RESOURCE_LIMITS.axial_signed_skew() == -6` (every axis
+    /// strictly between the poles → interior-uniform, interior arm
+    /// saturates with `-6` sign);
+    /// `HAND_AUTHORED_MID_POSTURE.axial_signed_skew() == -6`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.axial_signed_skew() == -6`. The
+    /// five uniform fixtures split the SATURATED corner into the
+    /// TWO signed reads `+6` (polar-uniform) and `-6` (interior-uniform)
+    /// that the UNDIRECTED `axial_skew` merged onto the SAME `+6`
+    /// cell.
+    ///
+    /// **Truly-mixed test-local witnesses**:
+    /// `SPARSE_BOTTOM_POSTURE.axial_signed_skew() == 0` (3 + 3 tie);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.axial_signed_skew() == 0`
+    /// (same 3 + 3 tie);
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE.axial_signed_skew() == -2`
+    /// (2 polar + 4 interior → interior-strict split with sign `-2`).
+    /// The LOAD-BEARING NON-SATURATED SIGNED witness on the interior-
+    /// dominant arm — where the UNDIRECTED `axial_skew` fires the
+    /// magnitude `2` merged from BOTH arms, THIS projection fires the
+    /// arm-labeled `-2` that discriminates it from a hypothetical
+    /// 4-polar + 2-interior split that would fire `+2`.
+    ///
+    /// Encoded as the plain `const fn` split on the SIGN of the paired
+    /// tally comparison, delegating to `usize::abs_diff` on each arm
+    /// and casting through `as isize` — safe by the range-bound pin
+    /// (both counts are bounded by `FIELD_COUNT = 6`, so the
+    /// difference fits `isize` on every target). No `checked_sub`
+    /// indirection, no `i64` bridge, no per-axis loop, no allocation.
+    ///
+    /// `const fn` so a caller can pin the exact SIGNED CARDINAL skew
+    /// at compile time (`const _: () = assert!(
+    /// EMPTY_RESOURCE_LIMITS.axial_signed_skew() == 6);`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// SIGNED CARDINAL projection is a named typed `isize` exit
+    /// rather than an inline sign-split subtraction per consumer.
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// the SIGNED-KIND peer CLOSES the SIGNEDNESS axis on the
+    /// CARDINAL-DISTANCE column with the LOAD-BEARING ABSOLUTE-VALUE
+    /// fold agreeing with [`Self::axial_skew`] and the SIGN
+    /// discriminating the polar-majority / interior-majority arms
+    /// the UNDIRECTED reading structurally cannot access.
+    /// THEORY.md §V.1 — knowable platform; the SIGNED CARDINAL
+    /// verdict is a TYPE-level operation on the posture algebra
+    /// returning a `const`-evaluable `isize`.
+    ///
+    /// Frontier inspiration: classical integer algebra's canonical
+    /// SIGNED integer difference `p - i` on `Z` lifted through
+    /// `usize::abs_diff` under a `p >= i` guard so the SIGNED read
+    /// stays in `isize` without crossing `checked_sub`. APL's
+    /// `(+/mask) - (+/~mask)` SIGNED direct difference on the paired
+    /// axial tally — the very shape this projection carries at a
+    /// bounded `isize`. Voting-theory's canonical "signed margin"
+    /// figure that reads `+k` on a strict polar win and `-k` on a
+    /// strict interior win, discriminating the winner as the sign.
+    /// Haskell's `length polar - length interior` on the two arm
+    /// sub-vectors lifted from `Int` to `Integer`, with the arm
+    /// identity carried by the sign the UNSIGNED `abs` fold discards.
+    /// Idris's `count p v - count (not . p) v` returning `Int` at the
+    /// type of the paired arm-tally signed difference. Translation
+    /// through pleme-io primitives: plain `const fn` sign-split
+    /// delegation on `usize::abs_diff` — no new dep, no typeclass
+    /// indirection, no per-axis loop, no allocation.
+    #[must_use]
+    pub const fn axial_signed_skew(self) -> isize {
+        let p = self.count_polar_axes();
+        let i = self.count_interior_axes();
+        // Both `p` and `i` lie in `0..=FIELD_COUNT` (= 6), so the
+        // absolute difference fits `isize` on every target Rust
+        // supports (`isize::MAX >= 2^15 - 1 = 32_767` on 16-bit,
+        // 2^31 - 1 on 32-bit, 2^63 - 1 on 64-bit — all vastly
+        // exceed FIELD_COUNT). The `as isize` cast never wraps.
+        #[allow(clippy::cast_possible_wrap)]
+        if p >= i {
+            p.abs_diff(i) as isize
+        } else {
+            -(p.abs_diff(i) as isize)
+        }
+    }
+
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
     /// `self.first_bottom_axis_index()` returns `Some(i)` for the least
     /// `i` such that `self.field_values()[i] == 0`, or `None` when no
@@ -58591,5 +58760,269 @@ mod tests {
         const _: () = assert!(matches!(EMPTY_RESOURCE_LIMITS.majority_lead(), Some(6)));
         const _: () = assert!(matches!(UNBOUNDED_RESOURCE_LIMITS.majority_lead(), Some(6)));
         const _: () = assert!(matches!(DEFAULT_RESOURCE_LIMITS.majority_lead(), Some(6)));
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_skew_preset_pins_split_saturated_corner_on_arm_identity() {
+        // Preset pins on the SIGNED-KIND peer of the UNDIRECTED CARDINAL
+        // closure — the SIGNED read RESOLVES the arm-identity ambiguity
+        // that `axial_skew` merged. Where `axial_skew` fires the SAME
+        // `+6` on every uniform preset (BOTH polar-uniform and
+        // interior-uniform arms saturate to the same UNSIGNED magnitude),
+        // the SIGNED reading splits the SATURATED corner onto the TWO
+        // signed reads `+6` (polar-uniform: EMPTY / UNBOUNDED) and `-6`
+        // (interior-uniform: DEFAULT / HAND_AUTHORED_*). The LOAD-BEARING
+        // arm-labeling the UNSIGNED CARDINAL structurally cannot access.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.axial_signed_skew(), 6);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.axial_signed_skew(), 6);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.axial_signed_skew(), -6);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.axial_signed_skew(), -6);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.axial_signed_skew(), -6);
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_skew_test_local_witnesses_pin_zero_on_ties_and_neg_two_on_endpoints(
+    ) {
+        // Truly-mixed witnesses on the SIGNED-KIND projection — the two
+        // 3+3 ties each fire the ZERO cell (balance corner has no sign);
+        // ENDPOINTS_ONLY carries a 2 + 4 interior-strict split so the
+        // SIGNED reading fires `-2`. The LOAD-BEARING SIGNED-CARDINAL
+        // witness on the interior-dominant arm — where `axial_skew`
+        // fires the UNSIGNED `2` merged from BOTH arms, THIS projection
+        // fires the arm-labeled `-2` that would fire `+2` on the DUAL
+        // 4-polar + 2-interior split.
+        assert_eq!(SPARSE_BOTTOM_POSTURE.axial_signed_skew(), 0);
+        assert_eq!(CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.axial_signed_skew(), 0);
+        assert_eq!(ENDPOINTS_ONLY_BOTTOM_POSTURE.axial_signed_skew(), -2);
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_skew_unsigned_abs_equals_axial_skew() {
+        // ABSOLUTE-VALUE bridge to axial_skew — LOAD-BEARING structural
+        // pin. On every posture, the SIGNED CARDINAL reading agrees
+        // with the UNDIRECTED CARDINAL reading after collapsing the sign
+        // through `isize::unsigned_abs`. Ties the SIGNED SIGNED-KIND
+        // projection to the UNSIGNED UNDIRECTED-CARDINAL projection
+        // through the canonical `unsigned_abs` fold — the DIRECT
+        // proof that this projection strictly REFINES `axial_skew` by
+        // splitting each magnitude cell onto its (positive, negative)
+        // arm-identity partition.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_signed_skew().unsigned_abs(),
+                a.axial_skew(),
+                "axial_signed_skew().unsigned_abs() != axial_skew() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_skew_positive_iff_polar_is_majority() {
+        // POSITIVE-SIGN bridge to polar-majority — LOAD-BEARING
+        // structural pin. The SIGNED CARDINAL reading fires a strictly
+        // positive value iff the polar arm strictly leads on the paired
+        // ARITHMETIC-QUANTIFIER tally. Ties the `> 0` cell of the SIGNED
+        // reading to the polar leg of the paired STRICT-TOTAL-ORDER
+        // trichotomy on the SAME two-arm tally.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_signed_skew() > 0,
+                a.polar_is_majority(),
+                "axial_signed_skew() > 0 != polar_is_majority() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_skew_negative_iff_interior_is_majority() {
+        // NEGATIVE-SIGN bridge to interior-majority — LOAD-BEARING
+        // structural pin. The SIGNED CARDINAL reading fires a strictly
+        // negative value iff the interior arm strictly leads on the
+        // paired ARITHMETIC-QUANTIFIER tally. Ties the `< 0` cell of the
+        // SIGNED reading to the interior leg of the paired STRICT-
+        // TOTAL-ORDER trichotomy on the SAME two-arm tally.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_signed_skew() < 0,
+                a.interior_is_majority(),
+                "axial_signed_skew() < 0 != interior_is_majority() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_skew_zero_iff_is_axially_balanced() {
+        // ZERO-SIGN bridge to balance — LOAD-BEARING structural pin.
+        // The SIGNED CARDINAL reading fires the ZERO cell iff the paired
+        // STRICT-TOTAL-ORDER trichotomy fires the balance leg. Ties the
+        // `== 0` cell of the SIGNED reading to the shipped
+        // [`is_axially_balanced`] typed exit — matching the paired
+        // [`axial_skew`] ZERO-bridge on the UNSIGNED reading.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_signed_skew() == 0,
+                a.is_axially_balanced(),
+                "axial_signed_skew() == 0 != is_axially_balanced() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_skew_signum_partitions_majority_trichotomy() {
+        // SIGNUM-TRICHOTOMY bridge — LOAD-BEARING structural pin. The
+        // SIGNED CARDINAL reading's SIGNUM projection reads the three
+        // legs of the STRICT-TOTAL-ORDER trichotomy on the paired
+        // ARITHMETIC-QUANTIFIER tally as `{+1, 0, -1}` — the direct
+        // SIGN projection of the (polar_is_majority, is_axially_balanced,
+        // interior_is_majority) three-cell partition. Substrate theorem
+        // tying the SIGNED CARDINAL closure to the paired boolean
+        // MAJORITY-KIND closure through the canonical `signum` fold.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let expected: isize = if a.polar_is_majority() {
+                1
+            } else if a.interior_is_majority() {
+                -1
+            } else {
+                0
+            };
+            assert_eq!(
+                a.axial_signed_skew().signum(),
+                expected,
+                "axial_signed_skew().signum() != trichotomy leg on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_skew_equals_polar_lead_minus_interior_lead() {
+        // VALUE-agreement bridge to (polar_lead, interior_lead) —
+        // LOAD-BEARING structural pin. On every posture, the SIGNED
+        // CARDINAL reading EQUALS the DIFFERENCE of the two DIRECTED-
+        // LEAD magnitudes with `None` collapsed to `0`. Holds
+        // universally because at most one DIRECTED arm fires `Some(_)`
+        // (per the paired [`polar_lead`]/[`interior_lead`] mutual-
+        // exclusion pin), so the difference collapses to the winning
+        // arm's magnitude with the winning arm's sign — or `0` at the
+        // balance corner where both fire `None`. The direct SIGNED
+        // DIFFERENCE lift of the DIRECTED-LEAD pair to the SIGNED
+        // CARDINAL exit.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let p = a.polar_lead().unwrap_or(0);
+            let i = a.interior_lead().unwrap_or(0);
+            // Both `p` and `i` are usize bounded by FIELD_COUNT = 6,
+            // so the DIFFERENCE fits `isize` on every target.
+            let expected = if p >= i {
+                (p - i) as isize
+            } else {
+                -((i - p) as isize)
+            };
+            assert_eq!(
+                a.axial_signed_skew(),
+                expected,
+                "axial_signed_skew() != polar_lead - interior_lead on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_skew_value_lies_in_neg_field_count_through_field_count() {
+        // Range bound contract — LOAD-BEARING structural pin. The
+        // SIGNED CARDINAL projection lies in `-(FIELD_COUNT as isize)
+        // ..=(FIELD_COUNT as isize)`. Lower bound from the SATURATED
+        // interior-arm case (`count_polar == 0`, `count_interior ==
+        // FIELD_COUNT`); upper bound from the DUAL SATURATED polar-arm
+        // case (`count_polar == FIELD_COUNT`, `count_interior == 0`).
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let k = a.axial_signed_skew();
+            let upper = ResourceLimits::FIELD_COUNT as isize;
+            let lower = -upper;
+            assert!(
+                (lower..=upper).contains(&k),
+                "axial_signed_skew() = {k} out of [{lower}, {upper}] on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_skew_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the SIGNED-KIND CARDINAL-DISTANCE closure —
+        // the SIGNED reading is evaluable in const context so a caller
+        // can pin the exact SIGNED SATURATED corner (polar-uniform
+        // `+6` vs interior-uniform `-6`) at compile time as build-breaks.
+        // Mirror of the const-fn evaluability pins on the UNSIGNED
+        // (axial_skew, majority_lead) pair one SIGNEDNESS axis under.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.axial_signed_skew() == 6);
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.axial_signed_skew() == 6);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.axial_signed_skew() == -6);
     }
 }

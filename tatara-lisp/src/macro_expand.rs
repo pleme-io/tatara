@@ -15769,6 +15769,385 @@ impl ResourceLimits {
         }
     }
 
+    /// Whole-posture ATOMIC ARM-AGNOSTIC MAX-fold projection —
+    /// `self.atomic_majority_count()` returns
+    /// `max(count_bottom_axes(), count_top_axes())`, the tally of
+    /// whichever ATOMIC (bottom, top) arm wins (or their SHARED
+    /// tally when the two arms tie). The direct CELL-KIND peer of
+    /// [`Self::axial_majority_count`] one CELL-KIND axis over on
+    /// the ATOMIC (bottom, top) tally pair rather than the COMPOUND
+    /// (polar, interior) pair — jointly the (axial_majority_count,
+    /// atomic_majority_count) pair carries the ARM-AGNOSTIC MAX-fold
+    /// reading on BOTH levels of the (COMPOUND → ATOMIC) refinement
+    /// chain the (axial_skew, atomic_skew) UNDIRECTED CARDINAL pair
+    /// carries one COMBINATOR-KIND axis under.
+    ///
+    /// A STRICT WEAKENING of the ARM-SPECIFIC (count_bottom_axes,
+    /// count_top_axes) pair on the arm-identity axis — the ARM-
+    /// SPECIFIC pair discriminates bottom-dominant from top-dominant
+    /// at the SAME winning-arm tally, THIS projection discards arm
+    /// identity keeping only the CARDINAL tally of whichever arm
+    /// wins. Reaches the SAME (bottom, top) SATURATED cell through
+    /// both `EMPTY_RESOURCE_LIMITS` (all-bottom, wins at 6) and
+    /// `UNBOUNDED_RESOURCE_LIMITS` (all-top, wins at 6) where the
+    /// ARM-SPECIFIC pair separates the two into `(6, 0)` and `(0,
+    /// 6)`. The DUAL of [`Self::atomic_minority_count`] one
+    /// COMBINATOR-KIND axis over on the same ATOMIC tally pair — the
+    /// (max, min) closure on the paired ATOMIC COUNT tally.
+    ///
+    /// **MAX-defining identity**: for every posture `a`,
+    /// `a.atomic_majority_count() ==
+    /// a.count_bottom_axes().max(a.count_top_axes())`. Pinned via
+    /// `resource_limits_atomic_majority_count_equals_max_of_count_bottom_and_count_top`.
+    ///
+    /// **DEFINITIONAL upper-bound pair — LOAD-BEARING refinement
+    /// pin**: on every posture `a`, `a.atomic_majority_count() >=
+    /// a.count_bottom_axes()` AND `a.atomic_majority_count() >=
+    /// a.count_top_axes()`. The MAX dominates both operands by
+    /// definition. Pinned via
+    /// `resource_limits_atomic_majority_count_dominates_both_arm_specific_counts`.
+    ///
+    /// **EXHAUSTIVE-PARTITION SUM identity to count_polar_axes —
+    /// LOAD-BEARING closure pin**: on every posture `a`,
+    /// `a.atomic_majority_count() + a.atomic_minority_count() ==
+    /// a.count_polar_axes()`. The (max, min) pair partitions
+    /// `count_polar_axes()` into the winning-arm and losing-arm
+    /// halves — the SAME two values `count_bottom_axes` and
+    /// `count_top_axes` re-ordered by magnitude with their
+    /// EXHAUSTIVE atomic-partition SUM invariant preserved
+    /// (`count_bottom + count_top == count_polar` from the ATOMIC
+    /// sub-decomposition of the polar cell). Pinned via
+    /// `resource_limits_atomic_majority_count_plus_minority_count_equals_count_polar_axes`.
+    /// **The paired sum identity distinguishes THIS closure from the
+    /// COMPOUND (axial) closure one CELL-KIND axis under**: the axial
+    /// pair sums to `FIELD_COUNT` (the COMPOUND partition is
+    /// EXHAUSTIVE across the whole posture); the atomic pair sums to
+    /// `count_polar_axes()` (the ATOMIC partition is EXHAUSTIVE only
+    /// across the polar sub-cell, not the whole posture).
+    ///
+    /// **DIFFERENCE identity to atomic_skew**: on every posture `a`,
+    /// `a.atomic_majority_count() - a.atomic_minority_count() ==
+    /// a.atomic_skew()`. The paired (max, min) difference IS the
+    /// ABSOLUTE-DIFFERENCE `|a - b|` on the ORIGINAL ARM-SPECIFIC
+    /// atomic tallies — the substrate theorem tying the DISPERSION
+    /// statistic to the (max, min) CENTRAL-TENDENCY pair via `max(a,
+    /// b) - min(a, b) == |a - b|`, matching the axial identity
+    /// verbatim one CELL-KIND axis under. Pinned via
+    /// `resource_limits_atomic_majority_count_minus_minority_count_equals_atomic_skew`.
+    ///
+    /// **CENTRAL-TENDENCY + DISPERSION halving identity — LOAD-
+    /// BEARING BIDIRECTIONAL bridge**: on every posture `a`, `2 *
+    /// a.atomic_majority_count() == a.count_polar_axes() +
+    /// a.atomic_skew()`. Direct consequence of the SUM identity
+    /// `majority + minority == count_polar` and the DIFF identity
+    /// `majority - minority == atomic_skew`: adding both gives `2 *
+    /// majority == count_polar + skew`. Ties the ATOMIC MAX to the
+    /// ATOMIC ABS-DIFF as ONE bidirectional statistic-derivation on
+    /// the atomic sub-partition — given `atomic_majority_count`,
+    /// `atomic_skew` is `2 * majority - count_polar`; given
+    /// `atomic_skew` and `count_polar`, `atomic_majority_count` is
+    /// `(count_polar + skew) / 2`. Legal without loss of precision
+    /// because `atomic_skew` shares parity with `count_polar` on
+    /// every posture (both `count_bottom` and `count_top` share
+    /// parity when their sum is fixed, so their difference is even
+    /// iff their sum is even). Pinned via
+    /// `resource_limits_atomic_majority_count_twice_equals_count_polar_plus_atomic_skew`.
+    ///
+    /// **Bridge to atomic_majority_lead**: on every posture `a`,
+    /// `a.atomic_majority_count() == (a.count_polar_axes() +
+    /// a.atomic_majority_lead().unwrap_or(0)) / 2`. The ARM-AGNOSTIC
+    /// CENTRAL-TENDENCY reading equals the ATOMIC halfway
+    /// `count_polar_axes() / 2` shifted by half the ARM-AGNOSTIC
+    /// ATOMIC LEAD magnitude, with the atomic balance corner
+    /// (`atomic_majority_lead == None`) collapsed via `unwrap_or(0)`
+    /// to a zero-shift back to the atomic halfway value. Ties the
+    /// (atomic_majority_count, atomic_majority_lead) ARM-AGNOSTIC
+    /// pair through the SAME halving bridge that ties the
+    /// (axial_majority_count, majority_lead) pair one CELL-KIND axis
+    /// under. Pinned via
+    /// `resource_limits_atomic_majority_count_equals_half_count_polar_plus_half_atomic_majority_lead_unwrap`.
+    ///
+    /// **Range bound**: for every posture `a`, `0 <=
+    /// a.atomic_majority_count() <= Self::FIELD_COUNT`. The lower
+    /// bound `atomic_majority_count() >= 0` is trivial on non-
+    /// negative `usize`. The upper bound `atomic_majority_count() <=
+    /// FIELD_COUNT` follows from the ATOMIC-DECOMPOSITION theorem
+    /// `count_bottom + count_top == count_polar <= FIELD_COUNT`
+    /// dominating either operand of the MAX-fold. Pinned via
+    /// `resource_limits_atomic_majority_count_value_lies_in_zero_through_field_count`.
+    /// **The paired range bound distinguishes THIS closure from the
+    /// COMPOUND (axial) closure one CELL-KIND axis under**: the
+    /// axial MAX-fold lower bound is `FIELD_COUNT / 2` (two summands
+    /// summing to FIELD_COUNT cannot both fall strictly below the
+    /// average); the atomic MAX-fold lower bound relaxes to `0`
+    /// because `count_polar` itself can drop to `0` on interior-
+    /// uniform postures where the atomic partition is empty on both
+    /// arms. The (BROADER-RANGE atomic, TIGHTER-RANGE axial) pair
+    /// mirrors the (BROADER atomic-tie, TIGHTER compound-tie)
+    /// partition pattern the rest of the atomic-vs-compound family
+    /// exhibits.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.atomic_majority_count()
+    /// == 6` (atomic-bottom-uniform → count_bottom = 6, count_top =
+    /// 0 → max = 6); `UNBOUNDED_RESOURCE_LIMITS.atomic_majority_count()
+    /// == 6` (atomic-top-uniform → count_bottom = 0, count_top = 6
+    /// → max = 6); `DEFAULT_RESOURCE_LIMITS.atomic_majority_count()
+    /// == 0` (interior-uniform → count_bottom = 0, count_top = 0 →
+    /// max = 0); `HAND_AUTHORED_MID_POSTURE.atomic_majority_count()
+    /// == 0` (same interior-uniform);
+    /// `HAND_AUTHORED_OTHER_POSTURE.atomic_majority_count() == 0`
+    /// (same). EXACTLY TWO of the five uniform fixtures fire the
+    /// SATURATED atomic MAX at `6` — matching the BROADER atomic-tie
+    /// corner rejecting the ARM-AGNOSTIC atomic reading on every
+    /// interior-uniform posture the COMPOUND `axial_majority_count`
+    /// merges onto the SAME saturated `6` cell.
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .atomic_majority_count() == 3` (3-bottom + 0-top → max = 3);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.atomic_majority_count()
+    /// == 3` (same 3-bottom + 0-top); `ENDPOINTS_ONLY_BOTTOM_POSTURE
+    /// .atomic_majority_count() == 2` (2-bottom + 0-top → max = 2).
+    /// The LOAD-BEARING NON-SATURATED atomic MAX witnesses — ALL
+    /// THREE truly-mixed BOTTOM-CARRYING fixtures fire `k` with `1
+    /// <= k < FIELD_COUNT`, pinning THREE distinct non-saturated
+    /// ARM-AGNOSTIC atomic MAX values where the compound
+    /// `axial_majority_count` pins only ONE (the `4` on
+    /// ENDPOINTS_ONLY) because two of the three fixtures sit at the
+    /// compound tie at `3`.
+    ///
+    /// Encoded as the plain `const fn` `if b >= t { b } else { t }`
+    /// inline MAX split on the two already-lifted ATOMIC ARITHMETIC-
+    /// QUANTIFIER tallies — matching [`Self::axial_majority_count`]'s
+    /// shape verbatim on the DUAL ATOMIC cell. No `Ord::max` (not
+    /// const-stable), no `usize::abs_diff` indirection through the
+    /// SUM+DIFF halving bridge, no new dep, no typeclass indirection,
+    /// no per-axis loop, no allocation.
+    ///
+    /// `const fn` so a caller can pin the exact ARM-AGNOSTIC atomic
+    /// MAX tally at compile time as a build-break (`const _: () =
+    /// assert!(EMPTY_RESOURCE_LIMITS.atomic_majority_count() == 6);`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// ARM-AGNOSTIC atomic MAX-fold projection is a named typed
+    /// `usize` exit rather than an inline `count_bottom_axes().max(
+    /// count_top_axes())` per-consumer combinator. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the (atomic_max,
+    /// atomic_skew) pair on the SAME ATOMIC (bottom, top) tally
+    /// pair with the LOAD-BEARING SUM+DIFF halving bijection tying
+    /// the (atomic MAX, atomic ABS-DIFF) pair into ONE bidirectional
+    /// statistic-derivation theorem — `atomic_majority_count` and
+    /// `atomic_skew` compute each other through `count_polar_axes`
+    /// via the paired arithmetic identity. THEORY.md §V.1 —
+    /// knowable platform; the atomic MAX-fold verdict is a TYPE-
+    /// level operation on the posture algebra returning a
+    /// `const`-evaluable `usize`.
+    ///
+    /// Frontier inspiration: classical descriptive statistics'
+    /// canonical CENTRAL-TENDENCY / DISPERSION pair (mean-and-
+    /// stdev, median-and-IQR, MODE-and-range) restricted to the
+    /// ATOMIC (bottom, top) sub-partition of the polar cell — the
+    /// (MAX-of-two-arms, ABS-DIFF-of-two-arms) closure is the TWO-
+    /// ARM instance of the same statistical duality on the atomic
+    /// sub-partition rather than the whole-posture COMPOUND
+    /// partition. Haskell's `max (length bottom) (length top)` on
+    /// the two atomic arm sub-vector counts. APL's `⌈/(+/⍵=0)(+/
+    /// ⍵=⌈/⍵)` MAX-fold on the paired atomic tally reduction.
+    /// Idris's `max (count (== 0) v) (count (== maxBound) v)`
+    /// returning `Nat`. Rust's own `[a, b].iter().max()` and
+    /// [`Ord::max`] on `usize` — the direct MAX-fold on the paired
+    /// atomic arm tally, inlined as the const-legal `if b >= t`
+    /// split here. Translation through pleme-io primitives: plain
+    /// `const fn` inline MAX split on the two already-lifted ATOMIC
+    /// ARITHMETIC-QUANTIFIER tallies — no new dep, no typeclass
+    /// indirection, no per-axis loop, no allocation.
+    #[must_use]
+    pub const fn atomic_majority_count(self) -> usize {
+        let b = self.count_bottom_axes();
+        let t = self.count_top_axes();
+        if b >= t {
+            b
+        } else {
+            t
+        }
+    }
+
+    /// Whole-posture ATOMIC ARM-AGNOSTIC MIN-fold projection —
+    /// `self.atomic_minority_count()` returns
+    /// `min(count_bottom_axes(), count_top_axes())`, the tally of
+    /// whichever ATOMIC (bottom, top) arm loses (or the SHARED
+    /// tally when the two arms tie). The DUAL of
+    /// [`Self::atomic_majority_count`] one COMBINATOR-KIND axis over
+    /// on the SAME ATOMIC (bottom, top) tally pair — where the MAX-
+    /// fold picks the WINNING atomic arm's tally, the MIN-fold picks
+    /// the LOSING atomic arm's tally, and the two fold-choices
+    /// exhaust the ARM-AGNOSTIC CENTRAL-TENDENCY readings on the
+    /// paired atomic arms. The direct CELL-KIND peer of
+    /// [`Self::axial_minority_count`] one CELL-KIND axis over on
+    /// the ATOMIC (bottom, top) tally pair rather than the COMPOUND
+    /// (polar, interior) pair.
+    ///
+    /// The (max, min) closure on the paired ATOMIC COUNT tally:
+    /// jointly the (atomic_majority_count, atomic_minority_count)
+    /// pair CLOSES the ARM-AGNOSTIC CENTRAL-TENDENCY column on the
+    /// ATOMIC (bottom, top) tally pair past the just-opened MAX-fold,
+    /// with the LOAD-BEARING EXHAUSTIVE-ATOMIC-PARTITION SUM identity
+    /// `atomic_majority_count() + atomic_minority_count() ==
+    /// count_polar_axes()` reading the paired (max, min) exits as
+    /// ONE arithmetic-partition of `count_polar_axes()` into the
+    /// winning-arm and losing-arm halves. The (max, min) pair
+    /// transports the (b, t) ARM-SPECIFIC atomic pair through an
+    /// ARM-IDENTITY-DISCARDING order-preserving permutation — the
+    /// SAME two `usize` values, re-labeled by magnitude rank rather
+    /// than by arm identity.
+    ///
+    /// A STRICT REFINEMENT of BOTH the ARM-SPECIFIC atomic COUNT
+    /// projections through the DEFINITIONAL lower-bound pair
+    /// `atomic_minority_count() <= count_bottom_axes()` and
+    /// `atomic_minority_count() <= count_top_axes()` — the MIN is
+    /// dominated by both operands. Discards ARM-IDENTITY on the
+    /// atomic strict-majority regime the DUAL way
+    /// [`Self::atomic_majority_count`] does — both bottom-majority
+    /// and top-majority arms fire the SAME losing-arm tally, which
+    /// the ARM-SPECIFIC pair carries by dispatching to distinct
+    /// exits.
+    ///
+    /// **Range bound**: for every posture `a`, `0 <=
+    /// a.atomic_minority_count() <= Self::FIELD_COUNT / 2`. The
+    /// lower bound `atomic_minority_count() >= 0` is trivial on non-
+    /// negative `usize`. The upper bound `atomic_minority_count() <=
+    /// FIELD_COUNT / 2 == 3` follows from the ATOMIC partition
+    /// `minority <= count_polar / 2 <= FIELD_COUNT / 2` — the MIN of
+    /// two summands of a non-negative sum cannot exceed half the
+    /// sum. The (majority <= FIELD_COUNT, minority <= FIELD_COUNT /
+    /// 2) pair bracket every posture into `[minority, majority] ⊆
+    /// [0, FIELD_COUNT]` with the halfway line as the tight
+    /// atomic-minority bound. Pinned via
+    /// `resource_limits_atomic_minority_count_value_lies_in_zero_through_half_field_count`.
+    ///
+    /// **MIN-defining identity**: for every posture `a`,
+    /// `a.atomic_minority_count() ==
+    /// a.count_bottom_axes().min(a.count_top_axes())`. Pinned via
+    /// `resource_limits_atomic_minority_count_equals_min_of_count_bottom_and_count_top`.
+    ///
+    /// **EXHAUSTIVE-ATOMIC-PARTITION SUM identity — LOAD-BEARING
+    /// closure pin**: on every posture `a`,
+    /// `a.atomic_majority_count() + a.atomic_minority_count() ==
+    /// a.count_polar_axes()`. The (max, min) pair partitions
+    /// `count_polar_axes()` into the winning-arm and losing-arm
+    /// halves — the SAME two values `count_bottom_axes` and
+    /// `count_top_axes` re-ordered by magnitude with their
+    /// EXHAUSTIVE atomic-partition sum invariant preserved. Pinned
+    /// via
+    /// `resource_limits_atomic_majority_count_plus_minority_count_equals_count_polar_axes`.
+    ///
+    /// **DIFFERENCE identity to atomic_skew**: on every posture `a`,
+    /// `a.atomic_majority_count() - a.atomic_minority_count() ==
+    /// a.atomic_skew()`. The paired (max, min) difference IS the
+    /// ABSOLUTE-DIFFERENCE `|b - t|` on the ORIGINAL ARM-SPECIFIC
+    /// atomic tallies — the substrate theorem tying the atomic
+    /// DISPERSION statistic to the (max, min) atomic CENTRAL-
+    /// TENDENCY pair via `max(a, b) - min(a, b) == |a - b|`, matching
+    /// the axial identity verbatim one CELL-KIND axis under. Pinned
+    /// via
+    /// `resource_limits_atomic_majority_count_minus_minority_count_equals_atomic_skew`.
+    ///
+    /// **DEFINITIONAL upper-bound pair — LOAD-BEARING refinement
+    /// pin**: on every posture `a`, `a.atomic_minority_count() <=
+    /// a.count_bottom_axes()` AND `a.atomic_minority_count() <=
+    /// a.count_top_axes()`. The MIN is dominated by both operands by
+    /// definition — the DUAL of [`Self::atomic_majority_count`]'s
+    /// upper-bound pair. Pinned via
+    /// `resource_limits_atomic_minority_count_dominated_by_both_arm_specific_counts`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.atomic_minority_count()
+    /// == 0` (atomic-bottom-uniform → count_bottom = 6, count_top =
+    /// 0 → min = 0); `UNBOUNDED_RESOURCE_LIMITS.atomic_minority_count()
+    /// == 0` (atomic-top-uniform → count_bottom = 0, count_top = 6
+    /// → min = 0); `DEFAULT_RESOURCE_LIMITS.atomic_minority_count()
+    /// == 0` (interior-uniform → both zero → min = 0);
+    /// `HAND_AUTHORED_MID_POSTURE.atomic_minority_count() == 0` (same
+    /// interior-uniform); `HAND_AUTHORED_OTHER_POSTURE
+    /// .atomic_minority_count() == 0` (same). All FIVE shipped
+    /// uniform fixtures fire the SATURATED-DUAL atomic tally at
+    /// `0`, matching [`Self::atomic_majority_count`]'s SATURATED
+    /// preset partition one COMBINATOR-KIND axis over — the (max,
+    /// min) atomic pair jointly reads every atomic-uniform preset as
+    /// the pair `(6, 0)` and every interior-uniform preset as the
+    /// pair `(0, 0)`, pinning both the SUM identity's saturated and
+    /// empty corners.
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .atomic_minority_count() == 0` (3-bottom + 0-top → min = 0);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.atomic_minority_count() ==
+    /// 0` (same 3-bottom + 0-top); `ENDPOINTS_ONLY_BOTTOM_POSTURE
+    /// .atomic_minority_count() == 0` (2-bottom + 0-top → min = 0).
+    /// All three truly-mixed fixtures carry `count_top == 0` so the
+    /// MIN saturates at `0` on the losing atomic arm — the LOAD-
+    /// BEARING SATURATED-EMPTY witness on the atomic MIN where the
+    /// atomic partition falls entirely onto the bottom arm and the
+    /// top arm carries the empty count. The COMPOUND `axial_minority_count`
+    /// pins non-saturated `3, 3, 2` at the compound tie on the SAME
+    /// three fixtures because the (polar, interior) partition splits
+    /// evenly there; the ATOMIC pair reads the SAME three fixtures
+    /// through the (bottom, top) partition which is imbalanced onto
+    /// the bottom arm.
+    ///
+    /// Encoded as the plain `const fn` `if b <= t { b } else { t }`
+    /// inline MIN split on the two already-lifted ATOMIC ARITHMETIC-
+    /// QUANTIFIER tallies — matching [`Self::atomic_majority_count`]'s
+    /// shape verbatim on the DUAL comparison operator, matching
+    /// [`Self::axial_minority_count`]'s shape verbatim on the DUAL
+    /// ATOMIC cell. No `Ord::min` (not const-stable), no
+    /// `usize::abs_diff` indirection, no new dep, no typeclass
+    /// indirection, no per-axis loop, no allocation.
+    ///
+    /// `const fn` so a caller can pin the exact ARM-AGNOSTIC atomic
+    /// MIN tally at compile time as a build-break (`const _: () =
+    /// assert!(EMPTY_RESOURCE_LIMITS.atomic_minority_count() == 0);`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// ARM-AGNOSTIC atomic MIN-fold projection is a named typed
+    /// `usize` exit rather than an inline `count_bottom_axes().min(
+    /// count_top_axes())` per-consumer combinator. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the (max, min)
+    /// atomic pair closes the ARM-AGNOSTIC CENTRAL-TENDENCY column
+    /// on the ATOMIC (bottom, top) tally pair with the LOAD-BEARING
+    /// EXHAUSTIVE-ATOMIC-PARTITION SUM identity `majority_count +
+    /// minority_count == count_polar_axes` binding them into ONE
+    /// arithmetic-partition of `count_polar_axes`. THEORY.md §V.1
+    /// — knowable platform; the atomic MIN-fold verdict is a TYPE-
+    /// level operation on the posture algebra returning a
+    /// `const`-evaluable `usize`.
+    ///
+    /// Frontier inspiration: classical descriptive statistics' MIN
+    /// order statistic on the ATOMIC sub-partition of the polar
+    /// cell — the DUAL of the atomic MAX under the same rank order
+    /// [`Self::atomic_majority_count`] carries. Voting-theory's
+    /// canonical "loser's tally" figure on a two-atomic-arm election
+    /// paired with the "winner's tally" — the (majority, minority)
+    /// pair the substrate lifts through the paired
+    /// (atomic_majority_count, atomic_minority_count) exits.
+    /// Haskell's `min (length bottom) (length top)`. APL's `⌊/(+/
+    /// ⍵=0)(+/⍵=⌈/⍵)` MIN-fold on the paired atomic tally. Idris's
+    /// `min (count (== 0) v) (count (== maxBound) v)` returning
+    /// `Nat`. Rust's own `[a, b].iter().min()` and [`Ord::min`] —
+    /// the direct MIN-fold on the paired atomic arm tally, inlined
+    /// as the const-legal `if b <= t` split here. Translation
+    /// through pleme-io primitives: plain `const fn` inline MIN
+    /// split on the two already-lifted ATOMIC ARITHMETIC-QUANTIFIER
+    /// tallies — no new dep, no typeclass indirection, no per-axis
+    /// loop, no allocation.
+    #[must_use]
+    pub const fn atomic_minority_count(self) -> usize {
+        let b = self.count_bottom_axes();
+        let t = self.count_top_axes();
+        if b <= t {
+            b
+        } else {
+            t
+        }
+    }
+
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
     /// `self.first_bottom_axis_index()` returns `Some(i)` for the least
     /// `i` such that `self.field_values()[i] == 0`, or `None` when no
@@ -64428,5 +64807,404 @@ mod tests {
         const _: () = assert!(EMPTY_RESOURCE_LIMITS.axial_minority_count() == 0);
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.axial_minority_count() == 0);
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.axial_minority_count() == 0);
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_count_preset_pins_saturate_on_atomic_poles_reject_on_interior_uniform(
+    ) {
+        // Preset pins on the ARM-AGNOSTIC atomic MAX-fold — EXACTLY
+        // TWO of the five uniform presets fire the SATURATED atomic
+        // MAX at `FIELD_COUNT`: EMPTY (atomic-bottom-uniform, (6, 0)
+        // → max = 6) and UNBOUNDED (atomic-top-uniform, (0, 6) →
+        // max = 6). The three interior-uniform presets sit at the
+        // atomic zero-tie corner and reject with `0` (both atomic
+        // tallies zero, so max = 0). The LOAD-BEARING BROADER
+        // atomic-tie corner rejecting the ARM-AGNOSTIC atomic MAX
+        // on every interior-uniform posture the COMPOUND
+        // `axial_majority_count` merges onto the SAME saturated `6`
+        // cell.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.atomic_majority_count(), 6);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.atomic_majority_count(), 6);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.atomic_majority_count(), 0);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.atomic_majority_count(), 0);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.atomic_majority_count(), 0);
+    }
+
+    #[test]
+    fn resource_limits_atomic_minority_count_preset_pins_saturate_at_zero_on_every_uniform_fixture()
+    {
+        // DUAL preset pins on the ARM-AGNOSTIC atomic MIN-fold —
+        // every uniform preset saturates the LOSING atomic arm's
+        // tally at `0`. Both atomic-uniform presets (EMPTY at (6,
+        // 0), UNBOUNDED at (0, 6)) collapse to `min = 0` on the
+        // empty atomic arm; the three interior-uniform presets
+        // collapse to `min = 0` on the (0, 0) atomic pair. Every
+        // shipped uniform fires `min = 0` — the atomic MIN pin
+        // matches the axial MIN pin verbatim on the shipped preset
+        // family one CELL-KIND axis under.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.atomic_minority_count(), 0);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.atomic_minority_count(), 0);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.atomic_minority_count(), 0);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.atomic_minority_count(), 0);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.atomic_minority_count(), 0);
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_and_minority_count_truly_mixed_witnesses_pin_bottom_dominant_atomic_partition(
+    ) {
+        // Truly-mixed witnesses on the paired atomic (MAX, MIN)
+        // exits — all three truly-mixed BOTTOM-CARRYING fixtures
+        // carry the (count_bottom, count_top) atomic pair as (3, 0),
+        // (3, 0), (2, 0), so (max, min) fires (3, 0), (3, 0), (2, 0)
+        // respectively. Where the COMPOUND (axial) pair reads the
+        // SAME three fixtures at the compound tie (3, 3), (3, 3),
+        // (4, 2), the ATOMIC pair reads them as strict atomic-
+        // bottom-majority splits with the losing top arm saturated
+        // at the empty count. Pins THREE distinct non-saturated
+        // atomic MAX values against a UNIFORM atomic MIN, mirroring
+        // the atomic_skew truly-mixed pin one COMBINATOR-KIND axis
+        // under.
+        assert_eq!(SPARSE_BOTTOM_POSTURE.atomic_majority_count(), 3);
+        assert_eq!(SPARSE_BOTTOM_POSTURE.atomic_minority_count(), 0);
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.atomic_majority_count(),
+            3
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.atomic_minority_count(),
+            0
+        );
+        assert_eq!(ENDPOINTS_ONLY_BOTTOM_POSTURE.atomic_majority_count(), 2);
+        assert_eq!(ENDPOINTS_ONLY_BOTTOM_POSTURE.atomic_minority_count(), 0);
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_count_equals_max_of_count_bottom_and_count_top() {
+        // MAX-defining identity on the atomic pair — LOAD-BEARING
+        // substrate theorem tying the ARM-AGNOSTIC atomic MAX exit
+        // to the std-canonical [`Ord::max`] combinator on the paired
+        // ARM-SPECIFIC atomic tallies. The `const fn` body inlines
+        // the MAX as an `if b >= t { b } else { t }` split because
+        // `Ord::max` on `usize` is not `const`-stable — this test
+        // pins the equivalence against the (non-const) `Ord::max`
+        // reference on the DUAL ATOMIC cell.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_majority_count(),
+                a.count_bottom_axes().max(a.count_top_axes()),
+                "atomic_majority_count() != count_bottom_axes().max(count_top_axes()) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_minority_count_equals_min_of_count_bottom_and_count_top() {
+        // MIN-defining identity on the atomic pair — the DUAL of the
+        // atomic MAX identity. The `const fn` body inlines the MIN
+        // as an `if b <= t { b } else { t }` split; this test pins
+        // the equivalence against the (non-const) `Ord::min`
+        // reference on the DUAL ATOMIC cell.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_minority_count(),
+                a.count_bottom_axes().min(a.count_top_axes()),
+                "atomic_minority_count() != count_bottom_axes().min(count_top_axes()) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_count_dominates_both_arm_specific_counts() {
+        // DEFINITIONAL upper-bound pair on the atomic pair — LOAD-
+        // BEARING refinement pin. The atomic MAX dominates both
+        // atomic operands by definition; the substrate names this
+        // pair to make downstream consumers' upper-bound reasoning
+        // discharge into ONE inequality against the ARM-AGNOSTIC
+        // atomic exit rather than TWO against the ARM-SPECIFIC
+        // atomic pair. Mirror of the axial dominance pin on the
+        // DUAL ATOMIC cell.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert!(
+                a.atomic_majority_count() >= a.count_bottom_axes(),
+                "atomic_majority_count() < count_bottom_axes() on {a:?}",
+            );
+            assert!(
+                a.atomic_majority_count() >= a.count_top_axes(),
+                "atomic_majority_count() < count_top_axes() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_minority_count_dominated_by_both_arm_specific_counts() {
+        // DEFINITIONAL lower-bound pair on the atomic pair — LOAD-
+        // BEARING refinement pin dual. The atomic MIN is dominated
+        // by both atomic operands by definition; the DUAL of the
+        // atomic MAX upper-bound pair.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert!(
+                a.atomic_minority_count() <= a.count_bottom_axes(),
+                "atomic_minority_count() > count_bottom_axes() on {a:?}",
+            );
+            assert!(
+                a.atomic_minority_count() <= a.count_top_axes(),
+                "atomic_minority_count() > count_top_axes() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_count_plus_minority_count_equals_count_polar_axes() {
+        // EXHAUSTIVE-ATOMIC-PARTITION SUM identity — LOAD-BEARING
+        // closure pin. The atomic (max, min) pair partitions
+        // `count_polar_axes()` into winning-arm and losing-arm
+        // halves: the SAME two values `count_bottom_axes` and
+        // `count_top_axes` re-ordered by magnitude rank, whose sum
+        // invariant `count_bottom + count_top == count_polar` on the
+        // EXHAUSTIVE ATOMIC-sub-partition of the polar cell
+        // transports through the permutation. The paired atomic
+        // (majority, minority) closure sums to `count_polar_axes()`
+        // — NOT `FIELD_COUNT` — the LOAD-BEARING difference from the
+        // axial closure one CELL-KIND axis under whose paired sum
+        // exhausts the whole-posture COMPOUND partition.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_majority_count() + a.atomic_minority_count(),
+                a.count_polar_axes(),
+                "atomic_majority_count() + atomic_minority_count() != count_polar_axes() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_count_minus_minority_count_equals_atomic_skew() {
+        // DIFFERENCE identity to atomic_skew — the paired atomic
+        // (max, min) difference IS the ABSOLUTE-DIFFERENCE `|b - t|`
+        // on the ORIGINAL ARM-SPECIFIC atomic tallies. Ties the
+        // atomic DISPERSION statistic to the (max, min) atomic
+        // CENTRAL-TENDENCY pair via `max(a, b) - min(a, b) == |a -
+        // b|` — the SAME identity the axial pair uses in dual form
+        // one CELL-KIND axis under.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_majority_count() - a.atomic_minority_count(),
+                a.atomic_skew(),
+                "atomic_majority_count() - atomic_minority_count() != atomic_skew() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_count_twice_equals_count_polar_plus_atomic_skew() {
+        // ATOMIC CENTRAL-TENDENCY + DISPERSION halving bridge —
+        // LOAD-BEARING substrate theorem tying `atomic_majority_count`
+        // and `atomic_skew` bidirectionally through
+        // `count_polar_axes()`: `2 * atomic_majority == count_polar
+        // + atomic_skew` iff `atomic_majority == (count_polar +
+        // atomic_skew) / 2` on the EXHAUSTIVE ATOMIC-sub-partition.
+        // The identity `max(a, b) = (a + b + |a - b|) / 2`
+        // restricted to the case where `a + b == count_polar`. Legal
+        // without loss of precision because `atomic_skew` shares
+        // parity with `count_polar` on every posture (both
+        // `count_bottom` and `count_top` share parity when their sum
+        // is fixed). Distinguishes the ATOMIC halving from the
+        // COMPOUND halving one CELL-KIND axis under: the axial
+        // bridge halves `FIELD_COUNT + skew`, the atomic bridge
+        // halves `count_polar_axes() + atomic_skew` — the CENTRAL
+        // reference-value shifts from the whole-posture cardinality
+        // to the polar-sub-cell cardinality across the CELL-KIND
+        // axis.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                2 * a.atomic_majority_count(),
+                a.count_polar_axes() + a.atomic_skew(),
+                "2 * atomic_majority_count() != count_polar_axes() + atomic_skew() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_count_equals_half_count_polar_plus_half_atomic_majority_lead_unwrap(
+    ) {
+        // Bridge to atomic_majority_lead — the ARM-AGNOSTIC atomic
+        // CENTRAL-TENDENCY reading equals the atomic halfway
+        // `count_polar_axes() / 2` shifted by half the ARM-AGNOSTIC
+        // atomic LEAD magnitude, with the atomic balance corner
+        // (`atomic_majority_lead == None`) collapsed via
+        // `unwrap_or(0)` to a zero-shift back to the atomic halfway
+        // value. Ties the (atomic_majority_count,
+        // atomic_majority_lead) ARM-AGNOSTIC pair through the SAME
+        // halving bridge that ties the (axial_majority_count,
+        // majority_lead) pair one CELL-KIND axis under.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_majority_count(),
+                (a.count_polar_axes() + a.atomic_majority_lead().unwrap_or(0)) / 2,
+                "atomic_majority_count() != (count_polar_axes() + atomic_majority_lead().unwrap_or(0)) / 2 on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_count_value_lies_in_zero_through_field_count() {
+        // Range bound contract on the atomic MAX — LOAD-BEARING
+        // structural pin. The atomic MAX-fold value lies in `0 ..=
+        // FIELD_COUNT`: the lower bound relaxes to `0` (unlike the
+        // axial MAX which is bounded below by `FIELD_COUNT / 2`)
+        // because `count_polar` itself drops to `0` on interior-
+        // uniform postures where the atomic partition is empty; the
+        // upper bound follows from `count_polar <= FIELD_COUNT`
+        // dominating either operand of the MAX-fold. The BROADER
+        // atomic range pin distinguishes THIS closure from the
+        // TIGHTER axial range one CELL-KIND axis under.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let k = a.atomic_majority_count();
+            assert!(
+                k <= ResourceLimits::FIELD_COUNT,
+                "atomic_majority_count() = {k} exceeds FIELD_COUNT = {} on {a:?}",
+                ResourceLimits::FIELD_COUNT,
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_minority_count_value_lies_in_zero_through_half_field_count() {
+        // Range bound contract on the atomic MIN — the atomic MIN-
+        // fold value lies in `0 ..= FIELD_COUNT / 2`: the lower
+        // bound is trivial on non-negative `usize`, the upper bound
+        // follows from the ATOMIC partition `min <= count_polar / 2
+        // <= FIELD_COUNT / 2` — the MIN of two summands of a non-
+        // negative sum cannot exceed half the sum, chained through
+        // `count_polar <= FIELD_COUNT`. Matches the axial MIN upper
+        // bound one CELL-KIND axis under verbatim on the DUAL
+        // ATOMIC cell.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let k = a.atomic_minority_count();
+            assert!(
+                k <= ResourceLimits::FIELD_COUNT / 2,
+                "atomic_minority_count() = {k} exceeds FIELD_COUNT / 2 = {} on {a:?}",
+                ResourceLimits::FIELD_COUNT / 2,
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_count_and_minority_count_evaluate_at_compile_time_via_const_fn(
+    ) {
+        // Const-fn pin on the paired ARM-AGNOSTIC atomic CENTRAL-
+        // TENDENCY closure — both atomic (max, min) exits evaluate
+        // in const context so a caller can pin the exact paired
+        // atomic tally at compile time as build-breaks. Mirror of
+        // the const-fn evaluability pins on the (atomic_skew,
+        // atomic_majority_lead) atomic DISPERSION closure one
+        // COMBINATOR-KIND axis under, and on the (axial_majority_count,
+        // axial_minority_count) axial CENTRAL-TENDENCY closure one
+        // CELL-KIND axis under.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.atomic_majority_count() == 6);
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.atomic_majority_count() == 6);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.atomic_majority_count() == 0);
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.atomic_minority_count() == 0);
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.atomic_minority_count() == 0);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.atomic_minority_count() == 0);
     }
 }

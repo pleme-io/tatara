@@ -14901,6 +14901,173 @@ impl ResourceLimits {
         }
     }
 
+    /// Whole-posture SIGNUM-TRICHOTOMY reading on the ATOMIC (bottom,
+    /// top) tally pair — `self.atomic_ordering()` returns
+    /// [`Ordering::Greater`] iff `count_bottom_axes() >
+    /// count_top_axes()` (bottom-majority), [`Ordering::Less`] iff
+    /// `count_bottom_axes() < count_top_axes()` (top-majority), and
+    /// [`Ordering::Equal`] at the atomic balance corner
+    /// `count_bottom_axes() == count_top_axes()`. The PROJECTION-KIND
+    /// peer of [`Self::atomic_signed_skew`] one MAGNITUDE-STRIPPED
+    /// axis over on the atomic pair and the direct CELL-KIND peer of
+    /// [`Self::axial_ordering`] one CELL-KIND axis over on the
+    /// ATOMIC (bottom, top) pair rather than the COMPOUND (polar,
+    /// interior) pair — jointly the (axial_ordering, atomic_ordering)
+    /// pair carries the SIGNUM-TRICHOTOMY `Ordering` reading on BOTH
+    /// levels of the (COMPOUND → ATOMIC) refinement chain the
+    /// (axial_signed_skew, atomic_signed_skew) SIGNED-CARDINAL pair
+    /// carries one PROJECTION-KIND axis under.
+    ///
+    /// Bijection with the (bottom_is_majority, top_is_majority,
+    /// is_atomically_balanced) three-boolean partition on the atomic
+    /// pair: the ternary [`Ordering`] exit collapses the three
+    /// independent boolean predicates into ONE match-exhaustive sum
+    /// type — rustc's exhaustive-match checking guarantees a
+    /// downstream `match` on `atomic_ordering()` cannot forget the
+    /// atomic balance leg. The three booleans partition every posture
+    /// into EXACTLY ONE of {bottom-majority, top-majority, atomic
+    /// tie}; the [`Ordering`] exit names the partition legs at the
+    /// TYPE level so a per-leg consumer's exhaustiveness is checked
+    /// by rustc rather than by a hand-rolled `!a && !b`
+    /// tie-fall-through.
+    ///
+    /// **Bridges** (all pinned in the test cohort):
+    /// - `atomic_ordering().is_gt() ⇔ bottom_is_majority()`
+    /// - `atomic_ordering().is_lt() ⇔ top_is_majority()`
+    /// - `atomic_ordering().is_eq() ⇔ is_atomically_balanced()`
+    /// - `atomic_ordering() == atomic_signed_skew().cmp(&0)` — the
+    ///   atomic SIGNED-CARDINAL reading's SIGNUM projection (the
+    ///   `isize::cmp` against zero) collapses the (arm, magnitude)
+    ///   pair to the (arm) fact this [`Ordering`] reading carries
+    ///   directly on the atomic pair.
+    ///
+    /// CONTRAST with the COMPOUND [`Self::axial_ordering`]: the
+    /// polar-interior tally always sums to `FIELD_COUNT` (exhaustive
+    /// partition), so [`Self::axial_ordering`]'s balance leg
+    /// (`Ordering::Equal`) requires a truly-mixed posture. The
+    /// atomic (bottom, top) tally sums to `count_polar_axes()` which
+    /// can be zero, so THIS reading's atomic balance leg is
+    /// inhabited by EVERY interior-uniform posture (both atomic
+    /// counts at `0`) in addition to any truly-mixed atomic-tied
+    /// posture. The SAME LOAD-BEARING BROADER TIE LEG the atomic-KIND
+    /// MAJORITY (bottom_is_majority, top_is_majority), DIRECTED-LEAD
+    /// (bottom_lead, top_lead), UNDIRECTED-CARDINAL (atomic_skew,
+    /// atomic_majority_lead) and SIGNED-CARDINAL (atomic_signed_skew)
+    /// exits already pin — the CELL axis names the structural
+    /// difference between the atomic and compound trichotomies at
+    /// the SIGNUM exit.
+    ///
+    /// The polar-uniform corner (that [`Self::axial_ordering`] merged
+    /// onto the SAME `Ordering::Greater` cell via polar-arm
+    /// saturation) SPLITS at the atomic surface into BOTTOM-uniform
+    /// (`Ordering::Greater`) and TOP-uniform (`Ordering::Less`) — the
+    /// LOAD-BEARING atomic-arm-identity split the compound SIGNUM
+    /// reading could not access — while the interior-uniform arm
+    /// (that [`Self::axial_ordering`] fires at `Ordering::Less`
+    /// because the compound interior arm SATURATES) COLLAPSES to the
+    /// atomic balance leg (`Ordering::Equal`) here because the atomic
+    /// (bottom, top) tally is `(0, 0)` on every interior-uniform
+    /// posture. The (axial_ordering, atomic_ordering) pair thus
+    /// discriminates the five uniform fixtures into `{Greater, Less,
+    /// Less, Less, Less}` (compound) vs `{Greater, Less, Equal,
+    /// Equal, Equal}` (atomic) — the SAME LOAD-BEARING CELL-KIND
+    /// discriminating contrast the paired UNSIGNED-CARDINAL,
+    /// DIRECTED-LEAD, and SIGNED-CARDINAL atomic-vs-compound
+    /// projection pairs already pin, transported to the SIGNUM-KIND
+    /// exit.
+    ///
+    /// Encoded as the plain trichotomy dispatch on the two already-
+    /// lifted ATOMIC ARITHMETIC-QUANTIFIER tallies. [`Ord::cmp`] on
+    /// `usize` is not `const`-stable on tatara-lisp's supported Rust
+    /// versions, so the body inlines the trichotomy as three
+    /// const-context-legal comparisons — matching the shape of the
+    /// COMPOUND [`Self::axial_ordering`] body one CELL-KIND axis over.
+    ///
+    /// **Preset pins**:
+    /// - `EMPTY_RESOURCE_LIMITS.atomic_ordering() == Ordering::Greater`
+    ///   (bottom-uniform: 6 bottom + 0 top → strictly-bottom-majority).
+    /// - `UNBOUNDED_RESOURCE_LIMITS.atomic_ordering() == Ordering::Less`
+    ///   (top-uniform: 0 bottom + 6 top → strictly-top-majority —
+    ///   the LOAD-BEARING atomic-arm-identity split the compound
+    ///   [`Self::axial_ordering`] merges onto the SAME
+    ///   `Ordering::Greater` cell).
+    /// - `DEFAULT_RESOURCE_LIMITS.atomic_ordering() == Ordering::Equal`
+    ///   (interior-uniform: both atomic counts at 0 → atomic balance
+    ///   corner — the LOAD-BEARING BROADER TIE LEG that
+    ///   [`Self::axial_ordering`] fires at `Ordering::Less` because
+    ///   the compound interior arm saturates).
+    /// - `HAND_AUTHORED_MID_POSTURE.atomic_ordering() == Ordering::Equal`
+    ///   (same atomic balance corner at (0, 0)).
+    /// - `HAND_AUTHORED_OTHER_POSTURE.atomic_ordering() ==
+    ///   Ordering::Equal` (same).
+    ///
+    /// **Truly-mixed test-local witnesses**:
+    /// - `SPARSE_BOTTOM_POSTURE.atomic_ordering() == Ordering::Greater`
+    ///   (3 bottom + 0 top → atomic bottom-majority — the LOAD-BEARING
+    ///   witness that the atomic trichotomy fires `Greater` on
+    ///   truly-mixed atomic-bottom-carrying postures whose COMPOUND
+    ///   (polar, interior) tally sits at the balance corner).
+    /// - `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.atomic_ordering() ==
+    ///   Ordering::Greater` (same 3 + 0 atomic split).
+    /// - `ENDPOINTS_ONLY_BOTTOM_POSTURE.atomic_ordering() ==
+    ///   Ordering::Greater` (2 + 0 → still atomic bottom-majority).
+    ///
+    /// Together the eight fixtures cover every [`Ordering`] variant
+    /// (Greater ← the bottom-uniform preset arm + all three
+    /// truly-mixed bottom-carrying witnesses; Less ← the top-uniform
+    /// preset arm alone; Equal ← the three interior-uniform preset
+    /// postures whose atomic tally sits at (0, 0)), pinning the
+    /// atomic SIGNUM PARTITION as SURJECTIVE onto the fixture set.
+    ///
+    /// `const fn` so a caller can pin the atomic SIGNUM verdict at
+    /// compile time as a build-break (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.atomic_ordering(), Ordering::Greater));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// atomic SIGNUM-TRICHOTOMY reading is a named typed exit rather
+    /// than an inline three-way if-else per consumer on the atomic
+    /// pair, and the exit type is the std-canonical [`Ordering`] sum
+    /// whose match-exhaustiveness rustc verifies at every downstream
+    /// dispatch site. THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the SIGNUM-KIND `Ordering` projection CLOSES
+    /// the CELL-KIND axis on the SIGNUM-TRICHOTOMY column with the
+    /// LOAD-BEARING BROADER atomic-tie corner absorbing every
+    /// interior-uniform posture the compound [`Self::axial_ordering`]
+    /// partitions into its interior-majority arm. THEORY.md §V.1 —
+    /// knowable platform; the atomic SIGNUM verdict is a TYPE-level
+    /// operation on the posture algebra returning a
+    /// `const`-evaluable [`Ordering`].
+    ///
+    /// Frontier inspiration: same as [`Self::axial_ordering`],
+    /// through the DUAL (atomic vs compound) CELL-KIND combinator on
+    /// the two atomic pole tallies of the DISJOINT-BUT-NOT-EXHAUSTIVE
+    /// (bottom, top) atomic sub-partition of the polar cell. Haskell's
+    /// `compare :: a -> a -> Ordering` returning the ternary sum type
+    /// directly instead of a pair of booleans (`LT`/`EQ`/`GT`); Idris's
+    /// `Ordering` inductive with three nullary constructors serving
+    /// the same trichotomy discriminant; the STL's `<=>` three-way
+    /// comparison operator (C++20 / `std::partial_ordering`) exposing
+    /// the trichotomy as ONE named exit rather than the three legs
+    /// of an if-else chain. Translation through pleme-io primitives:
+    /// plain `const fn` dispatch through inline trichotomy
+    /// comparisons on the two already-lifted ATOMIC ARITHMETIC-
+    /// QUANTIFIER tallies, returning the std-canonical
+    /// [`core::cmp::Ordering`] — no new dep, no typeclass indirection,
+    /// no per-axis loop, no allocation, mirroring the encoding shape
+    /// [`Self::axial_ordering`] uses one CELL-KIND axis over.
+    #[must_use]
+    pub const fn atomic_ordering(self) -> Ordering {
+        let b = self.count_bottom_axes();
+        let t = self.count_top_axes();
+        if b > t {
+            Ordering::Greater
+        } else if b < t {
+            Ordering::Less
+        } else {
+            Ordering::Equal
+        }
+    }
+
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
     /// `self.first_bottom_axis_index()` returns `Some(i)` for the least
     /// `i` such that `self.field_values()[i] == 0`, or `None` when no
@@ -62411,5 +62578,323 @@ mod tests {
         const _: () = assert!(EMPTY_RESOURCE_LIMITS.atomic_signed_skew() == 6);
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.atomic_signed_skew() == -6);
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.atomic_signed_skew() == 0);
+    }
+
+    #[test]
+    fn resource_limits_atomic_ordering_preset_pins_split_polar_uniform_arms_on_atomic_arm_identity()
+    {
+        // ATOMIC SIGNUM-TRICHOTOMY preset pins on the ATOMIC (bottom,
+        // top) tally pair — LOAD-BEARING structural pin. The polar-
+        // uniform corner (that [`Self::axial_ordering`] merged onto
+        // the SAME `Ordering::Greater` cell via polar-arm saturation)
+        // SPLITS at the atomic surface into BOTTOM-uniform
+        // (`Ordering::Greater`) and TOP-uniform (`Ordering::Less`) —
+        // the LOAD-BEARING atomic-arm-identity split the compound
+        // SIGNUM could not access. The three interior-uniform preset
+        // postures (DEFAULT + both hand-authored) COLLAPSE to
+        // `Ordering::Equal` at the atomic balance corner because the
+        // atomic (bottom, top) tally is `(0, 0)` — the LOAD-BEARING
+        // BROADER TIE LEG that the compound `axial_ordering` fires at
+        // `Ordering::Less` because the compound interior arm
+        // saturates. Same LOAD-BEARING CELL-KIND discriminating
+        // contrast as `atomic_signed_skew`'s SIGNED preset split
+        // (`+6, -6, 0, 0, 0`) one PROJECTION-KIND axis over — the
+        // SIGNUM exit strips the SIGNED reading's magnitude.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.atomic_ordering(), Ordering::Greater);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.atomic_ordering(), Ordering::Less);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.atomic_ordering(), Ordering::Equal);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.atomic_ordering(), Ordering::Equal);
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.atomic_ordering(),
+            Ordering::Equal
+        );
+    }
+
+    #[test]
+    fn resource_limits_atomic_ordering_truly_mixed_witnesses_pin_greater_leg_on_bottom_carrying() {
+        // Truly-mixed witnesses on the ATOMIC SIGNUM-TRICHOTOMY reading
+        // — LOAD-BEARING structural pin. All three shipped truly-mixed
+        // fixtures carry bottom axes with zero top axes, so all three
+        // fire `Ordering::Greater` at atomic-bottom-majority. Pins the
+        // atomic SIGNUM PARTITION as firing `Greater` on truly-mixed
+        // atomic-bottom-carrying postures whose COMPOUND (polar,
+        // interior) tally sits at the balance corner — the LOAD-BEARING
+        // (COMPOUND=Equal, ATOMIC=Greater) split the CELL-KIND axis
+        // names between the paired (axial_ordering, atomic_ordering)
+        // SIGNUM readings.
+        assert_eq!(SPARSE_BOTTOM_POSTURE.atomic_ordering(), Ordering::Greater);
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.atomic_ordering(),
+            Ordering::Greater,
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.atomic_ordering(),
+            Ordering::Greater,
+        );
+    }
+
+    #[test]
+    fn resource_limits_atomic_ordering_is_gt_iff_bottom_is_majority() {
+        // BOTTOM-MAJORITY bridge — LOAD-BEARING structural pin.
+        // `Ordering::is_gt` on the atomic SIGNUM-TRICHOTOMY reading
+        // holds iff the paired boolean `bottom_is_majority` verdict
+        // fires, pinning the atomic SIGNUM's Greater leg as the direct
+        // typed peer of the STRICT-INEQUALITY-BOOLEAN reading
+        // `count_bottom_axes() > count_top_axes()`. Mirror of the
+        // `axial_ordering().is_gt() ⇔ polar_is_majority()` bridge one
+        // CELL-KIND axis over on the atomic (bottom, top) pair.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_ordering().is_gt(),
+                a.bottom_is_majority(),
+                "atomic_ordering().is_gt() != bottom_is_majority() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_ordering_is_lt_iff_top_is_majority() {
+        // TOP-MAJORITY bridge — LOAD-BEARING structural pin. Dual of
+        // the bottom-majority bridge: `Ordering::is_lt` on the atomic
+        // SIGNUM reading holds iff the paired boolean `top_is_majority`
+        // verdict fires, pinning the atomic SIGNUM's Less leg as the
+        // direct typed peer of the STRICT-INEQUALITY-BOOLEAN reading
+        // `count_bottom_axes() < count_top_axes()`. Mirror of the
+        // `axial_ordering().is_lt() ⇔ interior_is_majority()` bridge
+        // one CELL-KIND axis over on the atomic (bottom, top) pair.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_ordering().is_lt(),
+                a.top_is_majority(),
+                "atomic_ordering().is_lt() != top_is_majority() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_ordering_is_eq_iff_is_atomically_balanced() {
+        // ATOMIC BALANCE-LEG bridge — LOAD-BEARING structural pin. The
+        // atomic SIGNUM reading's `Ordering::is_eq` verdict holds iff
+        // the paired boolean `is_atomically_balanced` verdict fires —
+        // the tie leg of the STRICT-TOTAL-ORDER TRICHOTOMY on the
+        // atomic (bottom, top) tally pair. Together with the
+        // bottom/top bridges above, the three-boolean atomic partition
+        // (bottom-majority, top-majority, atomic-tie) is proven
+        // ISOMORPHIC to the ternary [`Ordering`] partition via the
+        // pairwise `is_gt`/`is_lt`/`is_eq` legs — the direct atomic-
+        // CELL peer of the `axial_ordering().is_eq() ⇔
+        // is_axially_balanced()` bridge on the compound (polar,
+        // interior) pair. The BROADER atomic tie leg (three fixtures
+        // vs. compound's two) is the LOAD-BEARING CELL-KIND
+        // discriminating contrast.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_ordering().is_eq(),
+                a.is_atomically_balanced(),
+                "atomic_ordering().is_eq() != is_atomically_balanced() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_ordering_equals_atomic_signed_skew_cmp_zero() {
+        // ATOMIC SIGNED-CARDINAL → SIGNUM bridge — LOAD-BEARING
+        // structural pin. `atomic_signed_skew().cmp(&0)` reads the SIGN
+        // of the atomic SIGNED CARDINAL reading as the same `Ordering`
+        // sum this atomic SIGNUM-TRICHOTOMY reading returns directly.
+        // Pins the atomic SIGNUM exit as the MAGNITUDE-STRIPPED peer
+        // of the atomic SIGNED-CARDINAL reading one PROJECTION-KIND
+        // axis over: the atomic SIGNED reading carries the (arm,
+        // magnitude) pair as one `isize`; the atomic SIGNUM reading
+        // carries the (arm) fact alone as one [`Ordering`]. Mirror of
+        // the `axial_ordering() == axial_signed_skew().cmp(&0)`
+        // bridge one CELL-KIND axis over on the compound (polar,
+        // interior) tally pair.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_ordering(),
+                a.atomic_signed_skew().cmp(&0),
+                "atomic_ordering() != atomic_signed_skew().cmp(&0) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_ordering_partitions_every_posture_into_exactly_one_leg() {
+        // ATOMIC TRICHOTOMY EXHAUSTIVENESS pin — LOAD-BEARING
+        // structural pin. Every posture returns EXACTLY ONE of the
+        // three [`Ordering`] variants (Less, Equal, Greater), and the
+        // returned variant matches ONE of the three atomic boolean-
+        // partition legs (top_is_majority, is_atomically_balanced,
+        // bottom_is_majority). Proved structurally by rustc's `match`
+        // exhaustiveness: any missing arm here is a compile error, so
+        // the pin is a TYPE-level theorem of the atomic SIGNUM ↔
+        // atomic boolean-partition isomorphism.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let matches_partition_leg = match a.atomic_ordering() {
+                Ordering::Greater => a.bottom_is_majority(),
+                Ordering::Less => a.top_is_majority(),
+                Ordering::Equal => a.is_atomically_balanced(),
+            };
+            assert!(
+                matches_partition_leg,
+                "atomic_ordering() leg mismatches atomic boolean partition on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_ordering_partition_is_surjective_onto_fixture_set() {
+        // ATOMIC SIGNUM SURJECTIVITY pin — LOAD-BEARING structural
+        // pin. All three [`Ordering`] variants are reached across the
+        // eight-fixture posture set: `Greater` at the bottom-uniform
+        // preset arm (EMPTY) plus all three truly-mixed bottom-
+        // carrying fixtures (SPARSE_BOTTOM, CONTIGUOUS_INTERIOR_BOTTOM,
+        // ENDPOINTS_ONLY_BOTTOM); `Less` at the top-uniform preset
+        // arm alone (UNBOUNDED); `Equal` at the three interior-uniform
+        // preset postures (DEFAULT + both hand-authored) whose atomic
+        // tally sits at (0, 0). Prevents a future atomic SIGNUM
+        // regression that silently collapses the three-leg partition
+        // onto a two-leg codomain — every leg has a fixture witness.
+        // Contrasts with `axial_ordering`'s coverage which reaches
+        // `Greater` on only the two saturated-polar preset arms and
+        // `Equal` on only the two truly-mixed 3-3 fixtures — the
+        // atomic reading redistributes the fixtures across the SIGNUM
+        // legs per the LOAD-BEARING CELL-KIND contrast.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        let mut saw_greater = false;
+        let mut saw_less = false;
+        let mut saw_equal = false;
+        for a in postures {
+            match a.atomic_ordering() {
+                Ordering::Greater => saw_greater = true,
+                Ordering::Less => saw_less = true,
+                Ordering::Equal => saw_equal = true,
+            }
+        }
+        assert!(saw_greater, "no fixture reached Ordering::Greater leg");
+        assert!(saw_less, "no fixture reached Ordering::Less leg");
+        assert!(saw_equal, "no fixture reached Ordering::Equal leg");
+    }
+
+    #[test]
+    fn resource_limits_atomic_ordering_cell_kind_split_from_axial_ordering_on_uniform_fixtures() {
+        // CELL-KIND (ATOMIC vs COMPOUND) discriminating contrast pin —
+        // LOAD-BEARING structural pin. The five uniform preset
+        // fixtures partition the (axial_ordering, atomic_ordering) pair
+        // into a distinct sequence of `Ordering` verdicts on each
+        // side, witnessing the LOAD-BEARING CELL-KIND split at the
+        // SIGNUM exit: the polar-uniform corner
+        // (EMPTY=Greater/UNBOUNDED=Greater on compound) splits into
+        // (EMPTY=Greater/UNBOUNDED=Less on atomic) via the arm-identity
+        // discrimination the atomic reading recovers, while the
+        // interior-uniform arm (all three=Less on compound) collapses
+        // to (all three=Equal on atomic) via the atomic balance
+        // corner both `count_bottom == 0 == count_top` reduces to. The
+        // SIGNUM peer of the `axial_signed_skew` vs
+        // `atomic_signed_skew` `{+6, -6, +6, -6, -6}` vs `{+6, -6, 0,
+        // 0, 0}` SIGNED contrast one PROJECTION-KIND axis under —
+        // this test carries the SAME contrast at the SIGNUM
+        // codomain.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.axial_ordering(), Ordering::Greater);
+        assert_eq!(EMPTY_RESOURCE_LIMITS.atomic_ordering(), Ordering::Greater);
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.axial_ordering(),
+            Ordering::Greater,
+        );
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.atomic_ordering(), Ordering::Less);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.axial_ordering(), Ordering::Less);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.atomic_ordering(), Ordering::Equal);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.axial_ordering(), Ordering::Less);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.atomic_ordering(), Ordering::Equal);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.axial_ordering(), Ordering::Less);
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.atomic_ordering(),
+            Ordering::Equal,
+        );
+    }
+
+    #[test]
+    fn resource_limits_atomic_ordering_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the ATOMIC SIGNUM-TRICHOTOMY reading — the
+        // atomic [`Ordering`] verdict is evaluable in const context so
+        // a caller can pin the exact atomic arm at compile time as a
+        // build-break, including the LOAD-BEARING atomic-arm-identity
+        // split (bottom-uniform=`Greater`, top-uniform=`Less`) the
+        // compound `axial_ordering` merged onto the SAME `Greater`
+        // cell. Uses `matches!` because `Ordering` is not `PartialEq`
+        // in a `const`-comparable form on stable Rust — `matches!` is
+        // the const-context-legal shape.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.atomic_ordering(),
+            Ordering::Greater,
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.atomic_ordering(),
+            Ordering::Less,
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.atomic_ordering(),
+            Ordering::Equal,
+        ));
     }
 }

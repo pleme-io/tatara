@@ -12401,6 +12401,274 @@ impl ResourceLimits {
         self.count_interior_axes() > self.count_polar_axes()
     }
 
+    /// Whole-posture AXIALLY-BALANCED predicate — `self.is_axially_balanced()`
+    /// holds iff the polar-arm tally EXACTLY EQUALS the interior-arm tally
+    /// on the (polar, interior) axial partition — `self.count_polar_axes()
+    /// == self.count_interior_axes()`. The direct EQUALITY-KIND peer of
+    /// the just-shipped ([`Self::polar_is_majority`],
+    /// [`Self::interior_is_majority`]) STRICT-INEQUALITY pair one
+    /// COMPARISON-KIND axis over — jointly with the paired
+    /// [`Self::has_majority_axis`] the two projections CLOSE the
+    /// MAJORITY-KIND column, naming the TIE leg the paired strict-
+    /// majority pair leaves as a discriminated readable-but-unnamed
+    /// verdict.
+    ///
+    /// The THIRD leg of the STRICT-TOTAL-ORDER TRICHOTOMY (polar-
+    /// majority, interior-majority, TIE) — where the paired
+    /// (polar_is_majority, interior_is_majority) pair covers the two
+    /// STRICT-INEQUALITY directions, THIS projection covers the EQUALITY
+    /// leg the pair jointly rejects. Fires exactly at the corner
+    /// `count_polar_axes() == count_interior_axes()` — the balance point
+    /// of the two-arm tally where neither strict-majority arm wins.
+    ///
+    /// Mutually exclusive with BOTH [`Self::polar_is_majority`] AND
+    /// [`Self::interior_is_majority`]: a `==` and a `>` on the same two
+    /// `usize`s cannot both hold. Jointly EXHAUSTIVE with the pair on
+    /// the total-order trichotomy: exactly one of `polar_is_majority`,
+    /// `interior_is_majority`, or `is_axially_balanced` holds on every
+    /// posture. The direct De Morgan complement of
+    /// [`Self::has_majority_axis`] one COMBINATOR-KIND axis over: the
+    /// (is_axially_balanced, has_majority_axis) pair PARTITIONS every
+    /// posture into a two-cell EXHAUSTIVE-AND-DISJOINT MAJORITY-
+    /// EXISTENCE partition.
+    ///
+    /// Encoded as the plain `const fn` `self.count_polar_axes() ==
+    /// self.count_interior_axes()` on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies — matching
+    /// [`Self::polar_is_majority`]'s shape verbatim on the EQUALITY-KIND
+    /// combinator. The equivalent alternative encodings `!self
+    /// .has_majority_axis()`, `!self.polar_is_majority() && !self
+    /// .interior_is_majority()`, and (via the EXHAUSTIVE-PARTITION
+    /// identity `count_polar + count_interior == FIELD_COUNT`) `2 *
+    /// self.count_polar_axes() == Self::FIELD_COUNT` are all
+    /// structurally equivalent AND pinned as substrate theorems in the
+    /// paired contracts below.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.is_axially_balanced() ==
+    /// false` (every axis at bottom pole → polar = 6, interior = 0 → no
+    /// tie); `UNBOUNDED_RESOURCE_LIMITS.is_axially_balanced() == false`
+    /// (every axis at top pole → same asymmetry);
+    /// `DEFAULT_RESOURCE_LIMITS.is_axially_balanced() == false` (every
+    /// axis strictly interior → polar = 0, interior = 6 → no tie);
+    /// `HAND_AUTHORED_MID_POSTURE.is_axially_balanced() == false`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.is_axially_balanced() == false`. ALL
+    /// FIVE shipped uniform fixtures REJECT the balance verdict — the
+    /// shipped fixture set is deliberately AXIALLY-UNIFORM, and every
+    /// axially-uniform posture saturates one of the two arms at
+    /// FIELD_COUNT so the other arm sits at 0. The balance corner is
+    /// witnessed exclusively by test-local truly-mixed fixtures.
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .is_axially_balanced() == true` (3 polar + 3 interior at
+    /// FIELD_COUNT = 6 → perfect tie);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.is_axially_balanced() ==
+    /// true` (same 3 + 3 tie); `ENDPOINTS_ONLY_BOTTOM_POSTURE
+    /// .is_axially_balanced() == false` (2 polar + 4 interior →
+    /// interior strictly dominates → no tie). The LOAD-BEARING truly-
+    /// mixed balance witnesses — where the paired (polar_is_majority,
+    /// interior_is_majority) pair rejects all three of SPARSE and
+    /// CONTIGUOUS_INTERIOR (ties) and accepts only ENDPOINTS_ONLY
+    /// (interior-dominant), THIS projection accepts exactly the two
+    /// ties, pinning the two-arm trichotomy at the truly-mixed corner
+    /// with two-thirds coverage on the balance leg.
+    ///
+    /// **Equality-agreement contract**: for every posture `a`,
+    /// `a.is_axially_balanced() == (a.count_polar_axes() ==
+    /// a.count_interior_axes())`. Pinned via
+    /// `resource_limits_is_axially_balanced_equals_polar_count_eq_interior_count`.
+    ///
+    /// **De Morgan complement contract**: for every posture `a`,
+    /// `a.is_axially_balanced() == !a.has_majority_axis()`. Pinned via
+    /// `resource_limits_is_axially_balanced_is_de_morgan_complement_of_has_majority_axis`.
+    ///
+    /// **Strict-majority-pair rejection contract**: for every posture
+    /// `a`, `a.is_axially_balanced() ⇒ !a.polar_is_majority() && !a
+    /// .interior_is_majority()`. Pinned via
+    /// `resource_limits_is_axially_balanced_implies_neither_strict_majority_arm_fires`.
+    ///
+    /// **Trichotomy closure contract**: for every posture `a`, EXACTLY
+    /// ONE of `a.polar_is_majority()`, `a.interior_is_majority()`,
+    /// `a.is_axially_balanced()` holds. Pinned via
+    /// `resource_limits_polar_is_majority_interior_is_majority_and_is_axially_balanced_partition_every_posture`.
+    ///
+    /// **Half-FIELD-COUNT arithmetic form**: for every posture `a`,
+    /// `a.is_axially_balanced() == (2 * a.count_polar_axes() ==
+    /// Self::FIELD_COUNT)` — via the EXHAUSTIVE-PARTITION identity
+    /// `count_polar + count_interior == FIELD_COUNT`, the tie leg is
+    /// EXACTLY the polar-count-at-the-partition-midpoint corner.
+    /// Corollary: `is_axially_balanced() == false` on every struct with
+    /// ODD `FIELD_COUNT` (no integer midpoint), so any downstream
+    /// consumer of the balance verdict on an odd-FIELD-COUNT typescape
+    /// slice reads a compile-time-const `false` rather than a runtime
+    /// comparison. Pinned via
+    /// `resource_limits_is_axially_balanced_equals_double_polar_count_matches_field_count`.
+    ///
+    /// `const fn` so a caller can pin the balance verdict at compile
+    /// time (`const _: () = assert!(!EMPTY_RESOURCE_LIMITS
+    /// .is_axially_balanced());`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// balance verdict is a named typed `bool` exit rather than an
+    /// inline `self.count_polar_axes() == self.count_interior_axes()`
+    /// per-consumer comparison. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; the (is_axially_balanced,
+    /// has_majority_axis) pair CLOSES the MAJORITY-KIND column past the
+    /// just-shipped (polar_is_majority, interior_is_majority) STRICT-
+    /// INEQUALITY pair on the SAME two-arm tally pair with the LOAD-
+    /// BEARING EQUALITY leg the pair jointly rejects. THEORY.md §V.1 —
+    /// knowable platform; the MAJORITY-KIND verdict is a TYPE-level
+    /// operation on the posture algebra returning a `const`-evaluable
+    /// `bool`.
+    ///
+    /// Frontier inspiration: classical order theory's canonical
+    /// "equality" combinator on the two-arm exhaustive-and-disjoint
+    /// partition lifted to whole-posture arithmetic via `polar ==
+    /// interior`. APL's `(+/mask) = (+/~mask)` direct arithmetic-
+    /// equality combinator on the paired axial tally. Haskell's
+    /// `length polar == length interior` on the two arm sub-vectors.
+    /// Idris's `(count p v) == (count (not . p) v)` returning `Bool` at
+    /// the type of the paired arm-tally equality. Voting-theory's
+    /// canonical "perfect-tie" leg of the strict-plurality trichotomy
+    /// on a two-candidate election. Translation through pleme-io
+    /// primitives: plain `const fn` `self.count_polar_axes() ==
+    /// self.count_interior_axes()` on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies, no new dep, no typeclass
+    /// indirection, no per-axis loop, no allocation.
+    #[must_use]
+    pub const fn is_axially_balanced(self) -> bool {
+        self.count_polar_axes() == self.count_interior_axes()
+    }
+
+    /// Whole-posture STRICT-MAJORITY-EXISTENCE predicate —
+    /// `self.has_majority_axis()` holds iff SOME strict-majority arm
+    /// fires on the (polar, interior) axial partition —
+    /// `self.count_polar_axes() != self.count_interior_axes()`,
+    /// equivalently `self.polar_is_majority() ||
+    /// self.interior_is_majority()`. The direct De Morgan complement of
+    /// [`Self::is_axially_balanced`] one COMBINATOR-KIND axis over,
+    /// jointly the (is_axially_balanced, has_majority_axis) pair
+    /// PARTITIONS the whole-posture universe into a two-cell EXHAUSTIVE-
+    /// AND-DISJOINT MAJORITY-EXISTENCE partition — every posture fires
+    /// exactly one.
+    ///
+    /// The direct COMBINATOR-KIND peer of the just-shipped
+    /// (polar_is_majority, interior_is_majority) STRICT-INEQUALITY pair
+    /// one COMBINATOR axis over — where the pair asserts the two
+    /// independent DIRECTED strict-majority verdicts, THIS projection
+    /// folds them through boolean `||` into ONE named typed exit at the
+    /// union of the (T, F) and (F, T) cells (the (T, T) cell is
+    /// structurally unreachable — a single posture cannot simultaneously
+    /// satisfy both strict-majority arms since `<` and `>` on the same
+    /// two `usize`s cannot both hold, per the paired
+    /// [`Self::polar_is_majority`] and [`Self::interior_is_majority`]
+    /// mutual-exclusion pin). The SAME two-arm SET-UNION shape as
+    /// [`Self::is_axially_uniform`] lifted through the STRICT-MAJORITY
+    /// combinator instead of the STRICT-ALL combinator.
+    ///
+    /// Strictly WEAKER than [`Self::is_axially_uniform`]:
+    /// `self.is_axially_uniform() ⇒ self.has_majority_axis()` — any
+    /// axially-uniform posture saturates one arm at FIELD_COUNT so the
+    /// other sits at 0, forcing a strict inequality. The converse fails
+    /// on truly-mixed postures with an unequal tally (the
+    /// ENDPOINTS_ONLY 2-polar-4-interior split has
+    /// `has_majority_axis == true` but `is_axially_uniform == false`).
+    /// Strictly STRONGER than each of [`Self::has_polar_axis`] and
+    /// [`Self::has_interior_axis`]: at every axially-uniform posture,
+    /// exactly one of the two ANY-fold verdicts fires alongside
+    /// has_majority_axis; at every strict-majority truly-mixed posture,
+    /// BOTH ANY-fold verdicts fire (there is at least one polar and at
+    /// least one interior axis) alongside has_majority_axis on the
+    /// strictly-larger arm.
+    ///
+    /// Encoded as the boolean `!=` of the two ARITHMETIC-QUANTIFIER
+    /// tallies — one primitive delegation to the shipped
+    /// [`Self::count_polar_axes`] and [`Self::count_interior_axes`] each.
+    /// The equivalent alternative encodings `self.polar_is_majority()
+    /// || self.interior_is_majority()`, `!self.is_axially_balanced()`,
+    /// and (via the EXHAUSTIVE-PARTITION identity) `2 *
+    /// self.count_polar_axes() != Self::FIELD_COUNT` are all
+    /// structurally equivalent AND pinned as substrate theorems in the
+    /// paired contracts below.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.has_majority_axis() ==
+    /// true` (polar = 6, interior = 0 → polar_is_majority fires);
+    /// `UNBOUNDED_RESOURCE_LIMITS.has_majority_axis() == true` (same
+    /// asymmetry); `DEFAULT_RESOURCE_LIMITS.has_majority_axis() == true`
+    /// (polar = 0, interior = 6 → interior_is_majority fires);
+    /// `HAND_AUTHORED_MID_POSTURE.has_majority_axis() == true`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.has_majority_axis() == true`. ALL
+    /// FIVE shipped uniform fixtures fire the MAJORITY-EXISTENCE arm —
+    /// the DUAL preset-pin reading of the paired
+    /// [`Self::is_axially_balanced`] preset pins, mirroring how
+    /// [`Self::is_axially_uniform`] fires on all five uniform fixtures
+    /// through the same axially-uniform ⇒ strict-inequality bridge.
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .has_majority_axis() == false` (3 + 3 tie);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.has_majority_axis() == false`
+    /// (same 3 + 3 tie); `ENDPOINTS_ONLY_BOTTOM_POSTURE
+    /// .has_majority_axis() == true` (2 + 4 interior-strict).
+    /// Proves the two-cell partition is genuinely two-cell rather than
+    /// degenerating to a one-cell tautology on the shipped fixture set —
+    /// the balance corner is inhabited by exactly two of the three
+    /// truly-mixed witnesses, the strict-majority arm by exactly one.
+    ///
+    /// **Inequality-agreement contract**: for every posture `a`,
+    /// `a.has_majority_axis() == (a.count_polar_axes() !=
+    /// a.count_interior_axes())`. Pinned via
+    /// `resource_limits_has_majority_axis_equals_polar_count_ne_interior_count`.
+    ///
+    /// **Strict-majority-pair decomposition contract**: for every
+    /// posture `a`, `a.has_majority_axis() == (a.polar_is_majority() ||
+    /// a.interior_is_majority())`. Pinned via
+    /// `resource_limits_has_majority_axis_decomposes_as_polar_or_interior_is_majority`.
+    ///
+    /// **De Morgan complement contract**: for every posture `a`,
+    /// `a.has_majority_axis() == !a.is_axially_balanced()`. Pinned via
+    /// `resource_limits_has_majority_axis_is_de_morgan_complement_of_is_axially_balanced`.
+    ///
+    /// **MAJORITY-EXISTENCE partition exhaustive-and-disjoint contract**:
+    /// for every posture `a`, EXACTLY ONE of `a.is_axially_balanced()`
+    /// and `a.has_majority_axis()` holds — the two-cell partition
+    /// covers every posture (exhaustive) with no overlap (disjoint).
+    /// Pinned via
+    /// `resource_limits_is_axially_balanced_xor_has_majority_axis_partitions_every_posture`.
+    ///
+    /// **is_axially_uniform ⇒ has_majority_axis contract**: on every
+    /// posture, `a.is_axially_uniform() ⇒ a.has_majority_axis()` — the
+    /// STRICT-ALL uniformity verdict implies the STRICT-MAJORITY
+    /// existence verdict on the same partition. Pinned via
+    /// `resource_limits_is_axially_uniform_implies_has_majority_axis_on_every_shipped_posture`.
+    ///
+    /// `const fn` so a caller can pin the majority-existence verdict at
+    /// compile time (`const _: () = assert!(EMPTY_RESOURCE_LIMITS
+    /// .has_majority_axis());`).
+    ///
+    /// Theory anchor: same as [`Self::is_axially_balanced`], on the
+    /// COMPLEMENT half of the MAJORITY-EXISTENCE partition. The
+    /// (is_axially_balanced, has_majority_axis) pair jointly closes the
+    /// MAJORITY-KIND column past the just-shipped (polar_is_majority,
+    /// interior_is_majority) STRICT-INEQUALITY pair on the SAME two-arm
+    /// tally pair — LOAD-BEARING because the two DIRECTED strict-
+    /// majority verdicts leave the balance corner as a discriminated
+    /// verdict readable only through the paired conjunction `!a
+    /// .polar_is_majority() && !a.interior_is_majority()`; naming the
+    /// two legs (balance + majority-existence) turns three call-site
+    /// comparisons into two typed exits.
+    ///
+    /// Frontier inspiration: same as [`Self::is_axially_balanced`],
+    /// through the De Morgan complement — the STRICT-MAJORITY
+    /// disjunction `polar > interior || interior > polar` sits at
+    /// Kmett's `lattices` "some-strict-majority" existence notion, the
+    /// paired inequality `polar != interior` is APL's `(+/mask) ≠ (+/
+    /// ~mask)` direct arithmetic-inequality combinator, and the two-
+    /// cell EXHAUSTIVE-AND-DISJOINT MAJORITY-EXISTENCE partition is the
+    /// classical STRICT-vs-TIE split from voting-theory tie-detection.
+    #[must_use]
+    pub const fn has_majority_axis(self) -> bool {
+        self.count_polar_axes() != self.count_interior_axes()
+    }
+
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
     /// `self.first_bottom_axis_index()` returns `Some(i)` for the least
     /// `i` such that `self.field_values()[i] == 0`, or `None` when no
@@ -56620,5 +56888,368 @@ mod tests {
         const _: () = assert!(!EMPTY_RESOURCE_LIMITS.interior_is_majority());
         const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.interior_is_majority());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.interior_is_majority());
+    }
+
+    #[test]
+    fn resource_limits_is_axially_balanced_preset_pins_reject_on_every_uniform_fixture() {
+        // Preset pins — ALL FIVE shipped uniform fixtures reject the
+        // balance verdict because every axially-uniform posture
+        // saturates one arm at FIELD_COUNT so the other sits at 0 —
+        // `polar != interior` at every uniform corner. The balance
+        // corner is inhabited exclusively by test-local truly-mixed
+        // fixtures. Mirror of the (polar_is_majority,
+        // interior_is_majority) preset pin on the EQUALITY-KIND
+        // trichotomy leg.
+        assert!(!EMPTY_RESOURCE_LIMITS.is_axially_balanced());
+        assert!(!UNBOUNDED_RESOURCE_LIMITS.is_axially_balanced());
+        assert!(!DEFAULT_RESOURCE_LIMITS.is_axially_balanced());
+        assert!(!HAND_AUTHORED_MID_POSTURE.is_axially_balanced());
+        assert!(!HAND_AUTHORED_OTHER_POSTURE.is_axially_balanced());
+    }
+
+    #[test]
+    fn resource_limits_has_majority_axis_preset_pins_fire_on_every_uniform_fixture() {
+        // DUAL preset pins — ALL FIVE shipped uniform fixtures fire
+        // the MAJORITY-EXISTENCE arm on the direct De Morgan
+        // complement of `is_axially_balanced`. Mirror of
+        // [`is_axially_uniform`]'s five-uniform-fixtures pin on the
+        // STRICT-MAJORITY combinator instead of the STRICT-ALL
+        // combinator — the axially-uniform ⇒ strict-inequality bridge
+        // one QUANTIFIER-STRENGTH axis over.
+        assert!(EMPTY_RESOURCE_LIMITS.has_majority_axis());
+        assert!(UNBOUNDED_RESOURCE_LIMITS.has_majority_axis());
+        assert!(DEFAULT_RESOURCE_LIMITS.has_majority_axis());
+        assert!(HAND_AUTHORED_MID_POSTURE.has_majority_axis());
+        assert!(HAND_AUTHORED_OTHER_POSTURE.has_majority_axis());
+    }
+
+    #[test]
+    fn resource_limits_is_axially_balanced_test_local_witnesses_fire_on_two_ties_reject_on_dominant(
+    ) {
+        // Truly-mixed witnesses on the balance leg — SPARSE and
+        // CONTIGUOUS_INTERIOR each carry a perfect 3-polar-3-interior
+        // tie on FIELD_COUNT = 6 so the strict `==` fires;
+        // ENDPOINTS_ONLY carries a 2-polar-4-interior interior-
+        // dominant balance so the strict `==` rejects. LOAD-BEARING
+        // truly-mixed balance witnesses: exactly two of the three
+        // test-local truly-mixed fixtures sit on the balance leg, and
+        // THIS projection names both apart from the interior-dominant
+        // one.
+        assert!(SPARSE_BOTTOM_POSTURE.is_axially_balanced());
+        assert!(CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.is_axially_balanced());
+        assert!(!ENDPOINTS_ONLY_BOTTOM_POSTURE.is_axially_balanced());
+    }
+
+    #[test]
+    fn resource_limits_has_majority_axis_test_local_witnesses_reject_on_two_ties_fire_on_dominant()
+    {
+        // Truly-mixed witnesses on the DUAL arm — SPARSE and
+        // CONTIGUOUS_INTERIOR reject at the 3-3 tie; ENDPOINTS_ONLY
+        // fires at the 2-4 interior-dominant balance. The DUAL
+        // reading of the balance test-local witness pin — exactly one
+        // of the three truly-mixed fixtures sits on the strict-
+        // majority leg, and THIS projection names it apart from the
+        // two ties.
+        assert!(!SPARSE_BOTTOM_POSTURE.has_majority_axis());
+        assert!(!CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.has_majority_axis());
+        assert!(ENDPOINTS_ONLY_BOTTOM_POSTURE.has_majority_axis());
+    }
+
+    #[test]
+    fn resource_limits_is_axially_balanced_equals_polar_count_eq_interior_count() {
+        // Equality-agreement contract — LOAD-BEARING structural pin.
+        // The balance verdict IS the `==` comparison on the two
+        // ARITHMETIC-QUANTIFIER tallies, per definition. Crystallizes
+        // the EQUALITY combinator as ONE typed theorem the substrate
+        // proves once for every downstream consumer of "does the two-
+        // arm tally balance".
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.is_axially_balanced(),
+                a.count_polar_axes() == a.count_interior_axes(),
+                "is_axially_balanced != (count_polar_axes == count_interior_axes) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_has_majority_axis_equals_polar_count_ne_interior_count() {
+        // Inequality-agreement contract on the DUAL arm — LOAD-
+        // BEARING structural pin. Mirror of the balance definitional
+        // pin on the DUAL comparison direction.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.has_majority_axis(),
+                a.count_polar_axes() != a.count_interior_axes(),
+                "has_majority_axis != (count_polar_axes != count_interior_axes) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_has_majority_axis_decomposes_as_polar_or_interior_is_majority() {
+        // Strict-majority-pair decomposition contract — LOAD-BEARING
+        // structural pin. Pins the alternative encoding through the
+        // paired (polar_is_majority, interior_is_majority) STRICT-
+        // INEQUALITY pair, showing the MAJORITY-EXISTENCE verdict is
+        // EXACTLY the two-arm SET-UNION of the DIRECTED strict-
+        // majority verdicts through boolean `||`. Substrate theorem
+        // that ties the (`!=`) direct arithmetic form to the (`||`)
+        // STRICT-INEQUALITY-fold form as one identity.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.has_majority_axis(),
+                a.polar_is_majority() || a.interior_is_majority(),
+                "has_majority_axis != (polar_is_majority || interior_is_majority) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_balanced_is_de_morgan_complement_of_has_majority_axis() {
+        // De Morgan complement contract — LOAD-BEARING structural pin.
+        // Pins the two-cell partition as literally the negation
+        // relationship between the two arms, so a downstream consumer
+        // can rewrite either projection as the negation of the other
+        // as a substrate theorem.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.is_axially_balanced(),
+                !a.has_majority_axis(),
+                "is_axially_balanced != !has_majority_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_has_majority_axis_is_de_morgan_complement_of_is_axially_balanced() {
+        // Reverse De Morgan pin — mirror of the paired
+        // is_axially_balanced pin on the DUAL direction, closing the
+        // two-way negation relationship as a symmetric theorem.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.has_majority_axis(),
+                !a.is_axially_balanced(),
+                "has_majority_axis != !is_axially_balanced on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_balanced_implies_neither_strict_majority_arm_fires() {
+        // Strict-majority-pair rejection contract — the balance verdict
+        // trivially rejects both strict-majority arms (an `==` and a
+        // `>` on the same two `usize`s cannot both hold), pinning the
+        // three-way disjointness of the trichotomy legs at the balance
+        // corner.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.is_axially_balanced() {
+                assert!(
+                    !a.polar_is_majority(),
+                    "polar_is_majority fires with is_axially_balanced on {a:?}",
+                );
+                assert!(
+                    !a.interior_is_majority(),
+                    "interior_is_majority fires with is_axially_balanced on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_balanced_xor_has_majority_axis_partitions_every_posture() {
+        // MAJORITY-EXISTENCE partition exhaustive-and-disjoint contract
+        // — LOAD-BEARING structural pin. EXACTLY ONE of `is_axially
+        // _balanced` and `has_majority_axis` holds on every posture,
+        // pinning the two-cell partition as genuinely partitioning
+        // (exhaustive AND disjoint) rather than merely covering or
+        // merely disjoint.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let fires = usize::from(a.is_axially_balanced()) + usize::from(a.has_majority_axis());
+            assert_eq!(
+                fires, 1,
+                "MAJORITY-EXISTENCE partition did not partition {a:?} (fires = {fires})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_is_majority_interior_is_majority_and_is_axially_balanced_partition_every_posture(
+    ) {
+        // Trichotomy closure contract — LOAD-BEARING structural pin.
+        // EXACTLY ONE of the three legs (polar-majority, interior-
+        // majority, balance) holds on every posture, pinning the total-
+        // order trichotomy with the balance leg now named as a first-
+        // class typed exit rather than a discriminated conjunction
+        // `!polar_is_majority() && !interior_is_majority()`. Mirror of
+        // the paired
+        // `resource_limits_polar_is_majority_interior_is_majority_and_tie_partition_every_posture`
+        // with the tie leg lifted from `count_polar_axes() ==
+        // count_interior_axes()` per-consumer to `is_axially_balanced()`
+        // typed exit.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let fires = usize::from(a.polar_is_majority())
+                + usize::from(a.interior_is_majority())
+                + usize::from(a.is_axially_balanced());
+            assert_eq!(
+                fires, 1,
+                "trichotomy legs did not partition {a:?} (fires = {fires})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_uniform_implies_has_majority_axis_on_every_shipped_posture() {
+        // STRICT-ALL ⇒ STRICT-MAJORITY existence refinement — any
+        // axially-uniform posture saturates one arm at FIELD_COUNT so
+        // the other sits at 0, forcing a strict inequality. Pins the
+        // direction of the (STRICT-ALL, STRICT-MAJORITY-EXISTENCE)
+        // refinement one QUANTIFIER-STRENGTH axis over on the same
+        // partition; the converse fails on truly-mixed postures with
+        // an unequal tally (ENDPOINTS_ONLY is
+        // `has_majority_axis && !is_axially_uniform`).
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.is_axially_uniform() {
+                assert!(
+                    a.has_majority_axis(),
+                    "is_axially_uniform without has_majority_axis on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_balanced_equals_double_polar_count_matches_field_count() {
+        // Half-FIELD-COUNT arithmetic form — LOAD-BEARING structural
+        // pin. Via the EXHAUSTIVE-PARTITION identity `count_polar +
+        // count_interior == FIELD_COUNT`, the balance leg is EXACTLY
+        // the polar-count-at-the-partition-midpoint corner. Corollary:
+        // `is_axially_balanced() == false` on every struct with ODD
+        // FIELD_COUNT, so any downstream consumer of the balance
+        // verdict on an odd-FIELD-COUNT typescape slice reads a
+        // compile-time-const `false`.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.is_axially_balanced(),
+                2 * a.count_polar_axes() == ResourceLimits::FIELD_COUNT,
+                "is_axially_balanced != (2 * count_polar_axes == FIELD_COUNT) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_majority_existence_projections_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin on the closed MAJORITY-KIND column — both
+        // boolean projections are evaluable in const context so a
+        // caller can pin the balance vs strict-majority verdict at
+        // compile time as build-breaks. Mirror of the const-fn
+        // evaluability pins on the (polar_is_majority,
+        // interior_is_majority) pair one COMPARISON-KIND axis under.
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.is_axially_balanced());
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.is_axially_balanced());
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.is_axially_balanced());
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.has_majority_axis());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.has_majority_axis());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.has_majority_axis());
     }
 }

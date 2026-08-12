@@ -14262,6 +14262,311 @@ impl ResourceLimits {
         }
     }
 
+    /// Whole-posture ATOMIC UNDIRECTED-CARDINAL skew projection —
+    /// `self.atomic_skew()` returns the UNSIGNED `usize` magnitude of the
+    /// atomic-arm imbalance `count_bottom_axes().abs_diff(count_top_axes
+    /// ())` on the ATOMIC (bottom, top) axial partition of the polar
+    /// cell. `0` at the atomic balance corner, `k > 0` on every atomic-
+    /// majority posture — folding BOTH strict-majority arms onto the
+    /// SAME positive magnitude and DISCARDING arm identity. The direct
+    /// CELL-KIND peer of [`Self::axial_skew`] one CELL-KIND axis over on
+    /// the ATOMIC (bottom, top) pair rather than the COMPOUND (polar,
+    /// interior) pair — jointly the (axial_skew, atomic_skew) pair
+    /// carries the UNDIRECTED CARDINAL magnitude reading on BOTH levels
+    /// of the (COMPOUND → ATOMIC) refinement chain the (polar_is_majority,
+    /// bottom_is_majority) MAJORITY-KIND pair carries one QUANTIFIER-
+    /// STRENGTH axis over.
+    ///
+    /// A STRICT WEAKENING of the paired (bottom_lead, top_lead)
+    /// DIRECTED-LEAD `Option<usize>` pair on the arm-identity axis: the
+    /// DIRECTED pair discriminates atomic-bottom-dominant from
+    /// atomic-top-dominant at the SAME lead magnitude through TWO
+    /// arm-selecting exits at most one of which fires `Some`, THIS
+    /// projection discards arm identity keeping only the CARDINAL
+    /// magnitude on ONE typed `usize` exit. The direct SUM-FOLD of the
+    /// paired (bottom_lead, top_lead) `Option<usize>` pair through
+    /// `Option::unwrap_or(0)` on each cell — the CROSS-CELL mutual-
+    /// exclusion pin (at most one of the two arms fires `Some`) makes
+    /// the sum fold pick the winning arm's magnitude or collapse to `0`
+    /// at the atomic balance corner.
+    ///
+    /// A STRICT REFINEMENT of the paired boolean atomic MAJORITY-
+    /// EXISTENCE verdict on the same tally pair: the ZERO-bridge is
+    /// `atomic_skew() == 0 ⇔ is_atomically_balanced()`; the POSITIVE-
+    /// bridge is `atomic_skew() > 0 ⇔ has_atomic_majority()`. Where the
+    /// boolean projection fires ONE bit at the atomic-majority-exists
+    /// legs, THIS projection fires the CARDINAL magnitude the boolean
+    /// reading structurally cannot access. Discriminates postures the
+    /// boolean has_atomic_majority conflates: two atomic-majority-firing
+    /// postures with the SAME `has_atomic_majority() == true` but
+    /// DIFFERENT majority magnitudes (e.g. a `(0, 6)` split and a
+    /// `(0, 2)` split) give DIFFERENT `atomic_skew()` values (`6` vs
+    /// `2`).
+    ///
+    /// **ATOMIC-DEFINITIONAL bridge**: for every posture `a`,
+    /// `a.atomic_skew() == a.count_bottom_axes().abs_diff(a
+    /// .count_top_axes())`. LOAD-BEARING substrate theorem tying the
+    /// UNSIGNED magnitude reading to the paired atomic tallies through
+    /// the canonical `usize::abs_diff` combinator. Pinned via
+    /// `resource_limits_atomic_skew_equals_bottom_count_abs_diff_top_count`.
+    ///
+    /// **ZERO-bridge to atomic balance**: for every posture `a`,
+    /// `a.atomic_skew() == 0 ⇔ a.is_atomically_balanced()`. Pinned via
+    /// `resource_limits_atomic_skew_is_zero_iff_is_atomically_balanced`.
+    ///
+    /// **SUM-fold decomposition to DIRECTED-LEAD pair**: for every
+    /// posture `a`, `a.atomic_skew() == a.bottom_lead().unwrap_or(0) +
+    /// a.top_lead().unwrap_or(0)`. LOAD-BEARING substrate theorem tying
+    /// the ARM-AGNOSTIC magnitude exit to the paired DIRECTED-LEAD
+    /// Option-pair through the CROSS-CELL mutual-exclusion pin — at most
+    /// one summand is non-zero, so the sum picks the winning arm's
+    /// magnitude or leaves `0` at the atomic balance corner. Pinned via
+    /// `resource_limits_atomic_skew_equals_sum_of_bottom_lead_and_top_lead`.
+    ///
+    /// **Range bound**: for every posture `a`, `0 <= a.atomic_skew() <=
+    /// Self::FIELD_COUNT`. The lower bound is structural from
+    /// `usize::abs_diff` (`abs_diff` is a total non-negative fold); the
+    /// upper bound follows from BOTH atomic tallies lying in `[0,
+    /// FIELD_COUNT]` and the saturated atomic-uniform arm case (either
+    /// `(FIELD_COUNT, 0)` or `(0, FIELD_COUNT)`) hitting the ceiling.
+    /// Pinned via
+    /// `resource_limits_atomic_skew_value_lies_in_zero_through_field_count`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.atomic_skew() == 6`
+    /// (bottom-uniform → 6 - 0 = 6);
+    /// `UNBOUNDED_RESOURCE_LIMITS.atomic_skew() == 6` (top-uniform →
+    /// 0 - 6 through `abs_diff` = 6); `DEFAULT_RESOURCE_LIMITS
+    /// .atomic_skew() == 0` (interior-uniform, atomic zero-tie);
+    /// `HAND_AUTHORED_MID_POSTURE.atomic_skew() == 0`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.atomic_skew() == 0`. The five
+    /// uniform fixtures split the SATURATED corner into the TWO atomic-
+    /// pole-uniform presets (EMPTY, UNBOUNDED) firing `6` and the THREE
+    /// interior-uniform presets firing `0` — the LOAD-BEARING BROADER
+    /// atomic-tie corner rejecting BOTH atomic arms on every interior-
+    /// uniform posture the compound `axial_skew` merges onto the SAME
+    /// saturated `6` cell.
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .atomic_skew() == 3` (3 bottom + 0 top);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.atomic_skew() == 3` (same
+    /// 3 + 0); `ENDPOINTS_ONLY_BOTTOM_POSTURE.atomic_skew() == 2` (2 +
+    /// 0 → the LOAD-BEARING NON-SATURATED CARDINAL witness). ALL THREE
+    /// truly-mixed BOTTOM-CARRYING fixtures fire the atomic bottom arm
+    /// with `Some(k)` on the DIRECTED-LEAD pair; THIS projection folds
+    /// them onto the SAME `k` cell — pinning THREE distinct non-saturated
+    /// atomic-skew values (`3`, `3`, `2`) that the compound `axial_skew`
+    /// pins only ONE of (`2`) because two of the three fixtures sit at
+    /// the compound tie.
+    ///
+    /// Encoded as the plain `const fn` `usize::abs_diff` on the two
+    /// already-lifted ARITHMETIC-QUANTIFIER tallies — one primitive
+    /// delegation, mirroring [`Self::axial_skew`]'s shape verbatim on
+    /// the DUAL atomic combinator. No `i64` bridge, no `checked_sub`
+    /// indirection, no per-axis loop, no allocation.
+    ///
+    /// `const fn` so a caller can pin the exact atomic UNDIRECTED
+    /// CARDINAL skew at compile time (`const _: () = assert!(
+    /// EMPTY_RESOURCE_LIMITS.atomic_skew() == 6);`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// atomic UNDIRECTED CARDINAL projection is a named typed `usize`
+    /// exit rather than an inline `count_bottom_axes().abs_diff(
+    /// count_top_axes())` per-consumer subtraction. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the (axial_skew,
+    /// atomic_skew) pair jointly carries the UNDIRECTED CARDINAL
+    /// magnitude reading on BOTH levels of the (COMPOUND → ATOMIC)
+    /// refinement chain the (polar_is_majority, bottom_is_majority)
+    /// MAJORITY-KIND pair carries one QUANTIFIER-STRENGTH axis over.
+    /// THEORY.md §V.1 — knowable platform; the atomic UNDIRECTED
+    /// CARDINAL verdict is a TYPE-level operation on the posture
+    /// algebra returning a `const`-evaluable `usize`.
+    ///
+    /// Frontier inspiration: same as [`Self::axial_skew`], through the
+    /// DUAL (atomic vs compound) CELL-KIND combinator on the two atomic
+    /// pole tallies of the DISJOINT-BUT-NOT-EXHAUSTIVE (bottom, top)
+    /// atomic sub-partition of the polar cell. APL's `|(+/⍵=0) -
+    /// (+/⍵=⌈/⍵)|` UNSIGNED atomic-pole difference. Haskell's `abs
+    /// (length bottom - length top)` on the atomic pole arms.
+    /// Voting-theory's canonical "victory margin" figure on a two-
+    /// candidate election restricted to the two atomic-pole vote arms
+    /// (with a third abstain arm for the interior cell) — the ARM-
+    /// AGNOSTIC magnitude figure discarding winner identity but keeping
+    /// the winning-margin size on the atomic sub-partition. Translation
+    /// through pleme-io primitives: plain `const fn` `usize::abs_diff`
+    /// on the two already-lifted ARITHMETIC-QUANTIFIER tallies, no
+    /// `i64` bridge, no `checked_sub` indirection, no new dep, no
+    /// typeclass indirection, no per-axis loop, no allocation.
+    #[must_use]
+    pub const fn atomic_skew(self) -> usize {
+        self.count_bottom_axes().abs_diff(self.count_top_axes())
+    }
+
+    /// Whole-posture ATOMIC ARM-AGNOSTIC DIRECTED-LEAD projection —
+    /// `self.atomic_majority_lead()` returns `Some(k)` for the CARDINAL
+    /// magnitude `k = self.atomic_skew()` iff SOME atomic strict-
+    /// majority arm fires on the ATOMIC (bottom, top) axial partition
+    /// of the polar cell, and `None` at the atomic balance corner. The
+    /// direct OR-FOLD of the paired (bottom_lead, top_lead) DIRECTED
+    /// `Option<usize>` pair one COMBINATOR-KIND axis over — where the
+    /// DIRECTED pair carries two arm-selecting `Option<usize>` exits at
+    /// most one of which fires, THIS projection folds them through
+    /// `Option::or` into ONE named typed exit that fires at the union
+    /// of the two SOME cells.
+    ///
+    /// The `Option<usize>` peer of [`Self::atomic_skew`] on the DUAL
+    /// combinator — jointly the (atomic_skew, atomic_majority_lead)
+    /// pair CLOSES the CARDINAL-DISTANCE column on the ATOMIC (bottom,
+    /// top) tally pair past the just-opened (bottom_lead, top_lead)
+    /// DIRECTED-LEAD pair. Where [`Self::atomic_skew`] reads the
+    /// CARDINAL magnitude UNIVERSALLY through `usize` (folding the
+    /// atomic balance corner to `0`), THIS projection reads the SAME
+    /// magnitude through `Option<usize>` (distinguishing the atomic
+    /// balance corner as `None`) — matching [`Self::has_atomic_majority`]
+    /// on the existence axis lifted to the CARDINAL magnitude on the
+    /// SAME atomic-balance-vs-atomic-majority partition.
+    ///
+    /// The direct CELL-KIND peer of [`Self::majority_lead`] one CELL-
+    /// KIND axis over on the ATOMIC (bottom, top) pair rather than the
+    /// COMPOUND (polar, interior) pair — jointly the (majority_lead,
+    /// atomic_majority_lead) pair carries the ARM-AGNOSTIC DIRECTED-
+    /// LEAD reading on BOTH levels of the (COMPOUND → ATOMIC)
+    /// refinement chain the (axial_skew, atomic_skew) UNDIRECTED
+    /// CARDINAL pair carries one COMBINATOR-KIND axis under.
+    ///
+    /// A STRICT REFINEMENT of BOTH the BOOLEAN atomic MAJORITY-
+    /// EXISTENCE verdict AND the UNDIRECTED atomic CARDINAL `usize`
+    /// projection on the same atomic tally pair: the SOME-bridge is
+    /// `atomic_majority_lead().is_some() ⇔ has_atomic_majority()`; the
+    /// NONE-bridge is `atomic_majority_lead().is_none() ⇔
+    /// is_atomically_balanced()`; the VALUE-bridge on the SOME arm is
+    /// `atomic_majority_lead().unwrap() == atomic_skew()`. Discriminates
+    /// postures the boolean has_atomic_majority conflates: two atomic-
+    /// majority-firing postures with the SAME `has_atomic_majority() ==
+    /// true` but DIFFERENT majority magnitudes give DIFFERENT `Some(k)`
+    /// values.
+    ///
+    /// A STRICT WEAKENING of the DIRECTED-LEAD pair on the arm-identity
+    /// axis: the DIRECTED pair discriminates atomic-bottom-dominant
+    /// from atomic-top-dominant at the SAME lead magnitude, THIS
+    /// projection discards arm identity keeping only the CARDINAL
+    /// magnitude paired with the atomic-majority-existence verdict.
+    ///
+    /// **SOME-bridge to atomic majority existence**: for every posture
+    /// `a`, `a.atomic_majority_lead().is_some() ⇔ a
+    /// .has_atomic_majority()`. Pinned via
+    /// `resource_limits_atomic_majority_lead_is_some_iff_has_atomic_majority`.
+    ///
+    /// **NONE-bridge to atomic balance**: for every posture `a`,
+    /// `a.atomic_majority_lead().is_none() ⇔ a.is_atomically_balanced()`.
+    /// Pinned via
+    /// `resource_limits_atomic_majority_lead_is_none_iff_is_atomically_balanced`.
+    ///
+    /// **OR-fold decomposition**: for every posture `a`,
+    /// `a.atomic_majority_lead() == a.bottom_lead().or(a.top_lead())`.
+    /// LOAD-BEARING substrate theorem tying the ARM-AGNOSTIC exit to
+    /// the paired DIRECTED-LEAD Option-pair via the CROSS-CELL mutual-
+    /// exclusion pin (at most one of the two arms fires `Some`, so `or`
+    /// picks the winning arm's magnitude or leaves `None` at the atomic
+    /// balance corner). Pinned via
+    /// `resource_limits_atomic_majority_lead_equals_bottom_lead_or_top_lead`.
+    ///
+    /// **VALUE-agreement bridge to atomic_skew**: for every posture `a`,
+    /// `a.atomic_majority_lead().unwrap_or(0) == a.atomic_skew()`.
+    /// LOAD-BEARING substrate theorem tying the two atomic CARDINAL-
+    /// DISTANCE projections through the `unwrap_or(0)` collapse of the
+    /// atomic balance corner. Pinned via
+    /// `resource_limits_atomic_majority_lead_unwrap_or_zero_equals_atomic_skew`.
+    ///
+    /// **Range bound**: when `Some(k)`, `1 <= k <= Self::FIELD_COUNT`
+    /// by construction — the lower bound `k >= 1` follows from the
+    /// SOME-bridge (atomic-majority-existence forces a strict
+    /// inequality, so `atomic_skew >= 1`), the upper bound from the
+    /// atomic-saturated-uniform arm case. Pinned via
+    /// `resource_limits_atomic_majority_lead_value_lies_in_one_through_field_count`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.atomic_majority_lead() ==
+    /// Some(6)` (atomic-bottom-uniform → bottom_lead saturates →
+    /// atomic_majority_lead saturates); `UNBOUNDED_RESOURCE_LIMITS
+    /// .atomic_majority_lead() == Some(6)` (atomic-top-uniform →
+    /// top_lead saturates → atomic_majority_lead saturates — the DUAL
+    /// atomic-uniform case collapses to the SAME saturated `Some(6)`
+    /// under the ARM-AGNOSTIC OR-fold); `DEFAULT_RESOURCE_LIMITS
+    /// .atomic_majority_lead() == None` (interior-uniform → both atomic
+    /// tallies zero → atomic balance corner);
+    /// `HAND_AUTHORED_MID_POSTURE.atomic_majority_lead() == None`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.atomic_majority_lead() == None`.
+    /// EXACTLY TWO of the five uniform fixtures fire the SATURATED
+    /// atomic lead at `Some(6)` — the LOAD-BEARING BROADER atomic-tie
+    /// corner rejecting the ARM-AGNOSTIC atomic lead on every interior-
+    /// uniform posture the compound `majority_lead` merges onto the
+    /// SAME saturated `Some(6)` cell.
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .atomic_majority_lead() == Some(3)` (3 + 0 bottom-strict split);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.atomic_majority_lead() ==
+    /// Some(3)` (same 3 + 0); `ENDPOINTS_ONLY_BOTTOM_POSTURE
+    /// .atomic_majority_lead() == Some(2)` (2 + 0 bottom-strict split).
+    /// The LOAD-BEARING NON-SATURATED CARDINAL witnesses on the ARM-
+    /// AGNOSTIC atomic arm — ALL THREE truly-mixed BOTTOM-CARRYING
+    /// fixtures fire `Some(k)` with `1 <= k < FIELD_COUNT`, pinning
+    /// THREE distinct non-saturated ARM-AGNOSTIC lead values where the
+    /// compound `majority_lead` pins only ONE (`Some(2)` on
+    /// ENDPOINTS_ONLY) because two of the three fixtures sit at the
+    /// compound tie.
+    ///
+    /// Encoded as the plain `const fn` `if self.atomic_skew() == 0 {
+    /// None } else { Some(self.atomic_skew()) }` on the just-lifted
+    /// UNDIRECTED atomic CARDINAL projection — one primitive delegation
+    /// each to [`Self::atomic_skew`], composed through the ZERO-bridge
+    /// to the atomic balance leg. The equivalent alternative encodings
+    /// `self.bottom_lead().or(self.top_lead())` (Option::or is
+    /// `const fn` since Rust 1.61) and `if self.has_atomic_majority() {
+    /// Some(self.atomic_skew()) } else { None }` are all structurally
+    /// equivalent AND pinned as substrate theorems in the paired
+    /// contracts above.
+    ///
+    /// `const fn` so a caller can pin the exact atomic ARM-AGNOSTIC
+    /// lead at compile time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.atomic_majority_lead(), Some(6)));`).
+    ///
+    /// Theory anchor: same as [`Self::atomic_skew`], on the DUAL
+    /// `Option<usize>` shape. The (atomic_skew, atomic_majority_lead)
+    /// pair jointly CLOSES the CARDINAL-DISTANCE column on the ATOMIC
+    /// (bottom, top) tally pair past the just-opened (bottom_lead,
+    /// top_lead) DIRECTED-LEAD pair — LOAD-BEARING because the DIRECTED
+    /// pair reads "bottom leads by k" and "top leads by k" through two
+    /// exits at most one of which fires; the ARM-AGNOSTIC pair reads
+    /// "the atomic majority arm (whichever it is) leads by k" through
+    /// one exit that fires universally at the two atomic-majority legs
+    /// and rejects the atomic balance leg. Naming the ARM-AGNOSTIC
+    /// atomic reading turns a per-call-site `bottom_lead().or(
+    /// top_lead())` disjunction into ONE typed exit.
+    ///
+    /// Frontier inspiration: same as [`Self::majority_lead`], through
+    /// the DUAL (atomic vs compound) CELL-KIND combinator on the two
+    /// atomic pole tallies of the DISJOINT-BUT-NOT-EXHAUSTIVE (bottom,
+    /// top) atomic sub-partition of the polar cell. Haskell's `Data
+    /// .List.NonEmpty` idiom of lifting `[a]` to `Maybe (NonEmpty a)`
+    /// to mark the empty case at the type — here the "empty" case is
+    /// the atomic balance corner, marked as `None`. APL's guarded
+    /// `|(+/⍵=0) - (+/⍵=⌈/⍵)|` under a `⊃` guard on the paired atomic
+    /// tally. Voting-theory's canonical "victory margin (if any)"
+    /// figure that reads `Nothing` on a tied atomic election and
+    /// `Just k` on a strict-plurality winner restricted to the two
+    /// atomic-pole arms. Translation through pleme-io primitives:
+    /// plain `const fn` conditional on the just-lifted
+    /// [`Self::atomic_skew`], no `unwrap_or`/`filter` chain, no new
+    /// dep, no typeclass indirection, no per-axis loop, no allocation.
+    #[must_use]
+    pub const fn atomic_majority_lead(self) -> Option<usize> {
+        let skew = self.atomic_skew();
+        if skew == 0 {
+            None
+        } else {
+            Some(skew)
+        }
+    }
+
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
     /// `self.first_bottom_axis_index()` returns `Some(i)` for the least
     /// `i` such that `self.field_values()[i] == 0`, or `None` when no
@@ -60885,5 +61190,353 @@ mod tests {
         const _: () = assert!(EMPTY_RESOURCE_LIMITS.top_lead().is_none());
         const _: () = assert!(matches!(UNBOUNDED_RESOURCE_LIMITS.top_lead(), Some(6)));
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_lead().is_none());
+    }
+
+    #[test]
+    fn resource_limits_atomic_skew_preset_pins_saturate_on_atomic_poles_reject_on_interior_uniform()
+    {
+        // Preset pins on the ATOMIC UNDIRECTED-CARDINAL projection —
+        // EXACTLY TWO of the five uniform presets fire the SATURATED
+        // atomic CARDINAL magnitude at `FIELD_COUNT`: EMPTY (atomic-
+        // bottom-uniform) and UNBOUNDED (atomic-top-uniform). The three
+        // interior-uniform presets sit at the atomic zero-tie corner
+        // and reject with `0`. The LOAD-BEARING BROADER atomic-tie
+        // corner rejecting the atomic CARDINAL magnitude on every
+        // interior-uniform posture the compound `axial_skew` merges
+        // onto the SAME saturated `6` cell.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.atomic_skew(), 6);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.atomic_skew(), 6);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.atomic_skew(), 0);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.atomic_skew(), 0);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.atomic_skew(), 0);
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_lead_preset_pins_saturate_on_atomic_poles_reject_on_interior_uniform(
+    ) {
+        // DUAL preset pins on the ARM-AGNOSTIC atomic DIRECTED-LEAD
+        // Option shape — EXACTLY TWO of the five uniform presets fire
+        // the SATURATED atomic ARM-AGNOSTIC lead at `Some(FIELD_COUNT)`:
+        // EMPTY and UNBOUNDED. The three interior-uniform presets sit
+        // at the atomic balance corner and reject with `None`. Mirror
+        // of [`atomic_skew`]'s preset pin on the DUAL `Option<usize>`
+        // shape (`0` ↦ `None`, `k > 0` ↦ `Some(k)`).
+        assert_eq!(EMPTY_RESOURCE_LIMITS.atomic_majority_lead(), Some(6));
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.atomic_majority_lead(), Some(6));
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.atomic_majority_lead(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.atomic_majority_lead(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.atomic_majority_lead(), None);
+    }
+
+    #[test]
+    fn resource_limits_atomic_skew_test_local_witnesses_fire_on_every_bottom_carrying_fixture() {
+        // Truly-mixed witnesses on the atomic UNDIRECTED CARDINAL
+        // projection — ALL THREE truly-mixed BOTTOM-CARRYING fixtures
+        // fire `k` with `1 <= k < FIELD_COUNT`, exercising the interior
+        // of the atomic CARDINAL range no uniform preset can reach. The
+        // LOAD-BEARING NON-SATURATED CARDINAL pin on the ARM-AGNOSTIC
+        // atomic arm — the compound `axial_skew` pins only ONE non-
+        // saturated truly-mixed value because two of the three fixtures
+        // sit at the compound tie, whereas THIS atomic projection pins
+        // THREE distinct non-saturated truly-mixed values because all
+        // three fixtures fire the same atomic-bottom arm at (3, 3, 2).
+        assert_eq!(SPARSE_BOTTOM_POSTURE.atomic_skew(), 3);
+        assert_eq!(CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.atomic_skew(), 3);
+        assert_eq!(ENDPOINTS_ONLY_BOTTOM_POSTURE.atomic_skew(), 2);
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_lead_test_local_witnesses_fire_on_every_bottom_carrying_fixture(
+    ) {
+        // DUAL truly-mixed witnesses on the ARM-AGNOSTIC atomic
+        // DIRECTED-LEAD Option shape — the paired atomic UNDIRECTED
+        // `k > 0` values lifted through `Some(_)`. Mirror of
+        // [`atomic_skew`]'s truly-mixed pin on the DUAL `Option<usize>`
+        // shape.
+        assert_eq!(SPARSE_BOTTOM_POSTURE.atomic_majority_lead(), Some(3));
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.atomic_majority_lead(),
+            Some(3),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.atomic_majority_lead(),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn resource_limits_atomic_skew_equals_bottom_count_abs_diff_top_count() {
+        // ATOMIC-DEFINITIONAL bridge — LOAD-BEARING structural pin.
+        // The atomic UNDIRECTED CARDINAL magnitude equals the canonical
+        // `usize::abs_diff` fold of the paired atomic tallies. Anchors
+        // the encoding at ONE typed theorem the substrate proves once
+        // for every downstream consumer.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_skew(),
+                a.count_bottom_axes().abs_diff(a.count_top_axes()),
+                "atomic_skew() != count_bottom_axes().abs_diff(count_top_axes()) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_skew_is_zero_iff_is_atomically_balanced() {
+        // ZERO-bridge — LOAD-BEARING structural pin. The atomic
+        // UNDIRECTED CARDINAL magnitude reads `0` iff the paired
+        // boolean atomic MAJORITY-EXISTENCE verdict rejects — the
+        // CARDINAL projection strictly REFINES the boolean projection
+        // on the SAME atomic tally pair, with the ZERO cell of the
+        // CARDINAL matching the FALSE cell of the boolean via the
+        // atomic STRICT-TOTAL-ORDER TRICHOTOMY.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_skew() == 0,
+                a.is_atomically_balanced(),
+                "atomic_skew() == 0 != is_atomically_balanced() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_skew_equals_sum_of_bottom_lead_and_top_lead() {
+        // SUM-fold decomposition — LOAD-BEARING structural pin. The
+        // atomic UNDIRECTED CARDINAL magnitude equals the sum of the
+        // paired DIRECTED-LEAD `Option<usize>` pair through `unwrap_or
+        // (0)` on each cell. The CROSS-CELL mutual-exclusion pin
+        // (at most one of the two arms fires `Some`) makes the sum
+        // pick the winning arm's magnitude or collapse to `0` at the
+        // atomic balance corner. Mirror of the compound
+        // `axial_skew_equals_sum_of_polar_lead_and_interior_lead` one
+        // CELL-KIND axis over on the ATOMIC pair.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_skew(),
+                a.bottom_lead().unwrap_or(0) + a.top_lead().unwrap_or(0),
+                "atomic_skew() != bottom_lead().unwrap_or(0) + top_lead().unwrap_or(0) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_skew_value_lies_in_zero_through_field_count() {
+        // Range bound contract — LOAD-BEARING structural pin. The
+        // atomic UNDIRECTED CARDINAL magnitude lies in `[0,
+        // FIELD_COUNT]`: the lower bound from the total non-negative
+        // `usize::abs_diff` fold; the upper bound from BOTH atomic
+        // tallies lying in `[0, FIELD_COUNT]` and the saturated
+        // atomic-uniform arm case hitting the ceiling.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let k = a.atomic_skew();
+            assert!(
+                k <= ResourceLimits::FIELD_COUNT,
+                "atomic_skew() = {k} exceeds FIELD_COUNT = {} on {a:?}",
+                ResourceLimits::FIELD_COUNT,
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_lead_is_some_iff_has_atomic_majority() {
+        // SOME-bridge — LOAD-BEARING structural pin. The ARM-AGNOSTIC
+        // atomic DIRECTED-LEAD fires `Some(_)` iff the paired boolean
+        // atomic MAJORITY-EXISTENCE verdict fires — the CARDINAL
+        // projection strictly REFINES the boolean projection on the
+        // SAME atomic arm-selection combinator, with the CARDINAL value
+        // carrying the magnitude the boolean fold structurally cannot
+        // access.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_majority_lead().is_some(),
+                a.has_atomic_majority(),
+                "atomic_majority_lead().is_some() != has_atomic_majority() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_lead_is_none_iff_is_atomically_balanced() {
+        // DUAL NONE-bridge — LOAD-BEARING structural pin. The ARM-
+        // AGNOSTIC atomic DIRECTED-LEAD fires `None` iff the paired
+        // boolean atomic BALANCE verdict fires. Substrate theorem tying
+        // the `Option::None` cell to the atomic-balance leg of the
+        // STRICT-TOTAL-ORDER trichotomy.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_majority_lead().is_none(),
+                a.is_atomically_balanced(),
+                "atomic_majority_lead().is_none() != is_atomically_balanced() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_lead_equals_bottom_lead_or_top_lead() {
+        // OR-fold decomposition — LOAD-BEARING structural pin. The
+        // ARM-AGNOSTIC atomic DIRECTED-LEAD equals the `Option::or`
+        // fold of the paired DIRECTED-LEAD `Option<usize>` pair. The
+        // CROSS-CELL mutual-exclusion pin makes `or` pick the winning
+        // arm's magnitude or leave `None` at the atomic balance corner.
+        // Mirror of the compound
+        // `majority_lead_equals_polar_lead_or_interior_lead` one
+        // CELL-KIND axis over on the ATOMIC pair.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_majority_lead(),
+                a.bottom_lead().or(a.top_lead()),
+                "atomic_majority_lead() != bottom_lead().or(top_lead()) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_lead_unwrap_or_zero_equals_atomic_skew() {
+        // VALUE-agreement bridge — LOAD-BEARING structural pin. The
+        // ARM-AGNOSTIC atomic DIRECTED-LEAD collapsed through
+        // `unwrap_or(0)` equals the paired atomic UNDIRECTED CARDINAL
+        // magnitude — the two CARDINAL projections agree on the SOME
+        // arm and the DIRECTED projection's NONE cell collapses to the
+        // UNDIRECTED projection's `0` cell. Mirror of the compound
+        // `majority_lead_unwrap_or_zero_equals_axial_skew` one
+        // CELL-KIND axis over on the ATOMIC pair.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_majority_lead().unwrap_or(0),
+                a.atomic_skew(),
+                "atomic_majority_lead().unwrap_or(0) != atomic_skew() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_lead_value_lies_in_one_through_field_count() {
+        // Range bound contract — LOAD-BEARING structural pin. When
+        // `Some(k)`, `1 <= k <= FIELD_COUNT`: the lower bound follows
+        // from the SOME-bridge (atomic-majority-existence forces
+        // `atomic_skew >= 1`), the upper bound from the atomic-
+        // saturated-uniform arm case.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if let Some(k) = a.atomic_majority_lead() {
+                assert!(
+                    (1..=ResourceLimits::FIELD_COUNT).contains(&k),
+                    "atomic_majority_lead() = Some({k}) out of [1, {}] on {a:?}",
+                    ResourceLimits::FIELD_COUNT,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_cardinal_distance_projections_evaluate_at_compile_time_via_const_fn()
+    {
+        // Const-fn pin on the atomic UNDIRECTED-CARDINAL closure —
+        // both atomic CARDINAL-DISTANCE projections evaluable in const
+        // context so a caller can pin the exact atomic ARM-AGNOSTIC
+        // magnitude at compile time as build-breaks. Mirror of the
+        // const-fn evaluability pins on the (bottom_lead, top_lead)
+        // pair one COMBINATOR-KIND axis under, and on the compound
+        // (axial_skew, majority_lead) pair one CELL-KIND axis over.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.atomic_skew() == 6);
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.atomic_skew() == 6);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.atomic_skew() == 0);
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.atomic_majority_lead(),
+            Some(6),
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.atomic_majority_lead(),
+            Some(6),
+        ));
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.atomic_majority_lead().is_none());
     }
 }

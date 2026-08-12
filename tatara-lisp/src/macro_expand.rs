@@ -15233,6 +15233,194 @@ impl ResourceLimits {
         }
     }
 
+    /// Whole-posture LEXICOGRAPHIC-COMPOSITION reading on the paired
+    /// (atomic, axial) SIGNUM-TRICHOTOMY exits —
+    /// `self.atomic_then_axial_ordering()` reads
+    /// [`Self::atomic_ordering`] first and falls through to
+    /// [`Self::axial_ordering`] ONLY when the atomic reading fires
+    /// [`Ordering::Equal`]. The PRIMARY-KIND DUAL of the just-lifted
+    /// [`Self::axial_then_atomic_ordering`] one PRIMARY-KEY axis over on
+    /// the SAME (axial, atomic) SIGNUM pair: where the axial-primary
+    /// composition reads the COMPOUND polar-vs-interior verdict first
+    /// and defers to the ATOMIC bottom-vs-top verdict on the axially-
+    /// balanced regime, this projection SWAPS the roles — reading the
+    /// ATOMIC bottom-vs-top verdict first and deferring to the
+    /// COMPOUND polar-vs-interior verdict on the atomically-balanced
+    /// regime. Together the two compositions close the ORDER-of-
+    /// composition axis on the (axial, atomic) SIGNUM pair, exhausting
+    /// the two ways `Ordering::then` can compose the pair into ONE
+    /// whole-posture verdict.
+    ///
+    /// The ATOMIC (bottom-vs-top) verdict is the PRIMARY key; the
+    /// AXIAL (polar-vs-interior) verdict is the TIEBREAKER. When
+    /// atomic fires [`Ordering::Greater`] or [`Ordering::Less`], this
+    /// projection returns that same verdict verbatim — the axial tally
+    /// is not consulted, matching [`Ordering::then`]'s short-circuit on
+    /// the first non-`Equal` argument. When atomic fires
+    /// [`Ordering::Equal`] (the atomically-balanced `(0, 0)` corner AND
+    /// every posture whose (bottom, top) tallies match on cardinality),
+    /// this projection defers to axial — the LOAD-BEARING DISCRIMINATING
+    /// GAIN the paired SIGNUM readings jointly deliver but which
+    /// neither the axial nor the atomic SIGNUM alone can carry through
+    /// ONE `Ordering` exit.
+    ///
+    /// **Discriminating gain on the atomically-balanced regime — LOAD-
+    /// BEARING structural pin**: two atomically-balanced
+    /// (`atomic_ordering() == Ordering::Equal`) postures with DIFFERENT
+    /// axial tallies give the SAME atomic verdict (Equal) but
+    /// DIFFERENT `atomic_then_axial_ordering` verdicts (via the axial
+    /// fall-through). The three interior-uniform preset postures
+    /// (DEFAULT + both hand-authored) all sit at the atomic `(0, 0)`
+    /// balance corner and all fire axial `Ordering::Less`, so the
+    /// composed reading returns axial `Less` — where atomic alone
+    /// merges the whole interior-uniform arm onto the SAME `Equal`
+    /// cell, the atomic-primary composition PROMOTES the axial verdict
+    /// on that arm and re-splits it against every other atomically-
+    /// balanced posture whose axial reading would fire differently.
+    ///
+    /// **DIVERGENCE from [`Self::axial_then_atomic_ordering`] — LOAD-
+    /// BEARING structural pin**: on every posture where the (axial,
+    /// atomic) SIGNUM pair DISAGREES on the strict-vs-tie question,
+    /// the two lexicographic compositions return DIFFERENT verdicts —
+    /// the PRIMARY-KEY axis names which reading dominates on the
+    /// disagreement. The two disagreement fixtures on the shipped
+    /// roster are UNBOUNDED (axial `Greater` at polar-uniform-top, but
+    /// atomic `Less` at 0-bottom-6-top — axial-primary returns
+    /// `Greater`, atomic-primary returns `Less`) and ENDPOINTS_ONLY_
+    /// BOTTOM (axial `Less` at 2-polar-4-interior, but atomic
+    /// `Greater` at 2-bottom-0-top — axial-primary returns `Less`,
+    /// atomic-primary returns `Greater`). Together the two fixtures
+    /// witness the (axial-primary, atomic-primary) pair as a proper
+    /// PRIMARY-KEY-KIND split rather than a same-function-under-two-
+    /// names alias — the LOAD-BEARING structural gain naming the
+    /// PRIMARY-KEY axis carries at the ONE-Ordering exit surface.
+    ///
+    /// **`Ordering::then`-DERIVATION identity — LOAD-BEARING
+    /// structural pin**: on every posture,
+    /// `atomic_then_axial_ordering() ==
+    /// atomic_ordering().then(axial_ordering())`. Composes structurally
+    /// through the two already-lifted SIGNUM readings via the std-
+    /// canonical lexicographic-combinator [`Ordering::then`]; the
+    /// substrate never re-runs the count projections nor the
+    /// trichotomy dispatch — this reading is a pure DERIVATION from
+    /// the already-lifted (atomic_ordering, axial_ordering) pair.
+    /// `Ordering::then` is not `const`-stable on tatara-lisp's
+    /// supported Rust versions, so the body inlines the two-arm match
+    /// on the atomic verdict — matching the encoding-shape convention
+    /// the axial-primary composition uses one PRIMARY-KEY axis over.
+    ///
+    /// **ATOMIC-STRICT-AGREEMENT bridge — LOAD-BEARING structural
+    /// pin**: on every posture where `atomic_ordering() !=
+    /// Ordering::Equal`, `atomic_then_axial_ordering() ==
+    /// atomic_ordering()`. The axial reading is NOT consulted on the
+    /// atomic-strict regime — pinned by
+    /// `resource_limits_atomic_then_axial_ordering_agrees_with_atomic_when_atomic_non_equal`.
+    ///
+    /// **ATOMIC-EQUAL-USE-AXIAL bridge — LOAD-BEARING structural pin
+    /// dual**: on every posture where `atomic_ordering() ==
+    /// Ordering::Equal`, `atomic_then_axial_ordering() ==
+    /// axial_ordering()`. The axial reading BECOMES the whole-posture
+    /// verdict on the atomically-balanced regime — pinned by
+    /// `resource_limits_atomic_then_axial_ordering_equals_axial_when_atomic_equal`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.atomic_then_axial_ordering()
+    /// == Ordering::Greater` (atomic Greater at 6-bottom-0-top → atomic
+    /// short-circuit → no axial tiebreaker); `UNBOUNDED_RESOURCE_LIMITS
+    /// .atomic_then_axial_ordering() == Ordering::Less` (atomic Less
+    /// at 0-bottom-6-top → atomic short-circuit → no axial tiebreaker
+    /// — DIVERGES from `axial_then_atomic_ordering` which returned
+    /// `Greater` on the SAME posture, witnessing the PRIMARY-KEY
+    /// split); `DEFAULT_RESOURCE_LIMITS.atomic_then_axial_ordering() ==
+    /// Ordering::Less` (atomic Equal at (0, 0) → axial tiebreaker fires
+    /// → axial Less at interior-uniform → composed Less);
+    /// `HAND_AUTHORED_MID_POSTURE.atomic_then_axial_ordering() ==
+    /// Ordering::Less` (same atomic-Equal-then-axial-Less pattern);
+    /// `HAND_AUTHORED_OTHER_POSTURE.atomic_then_axial_ordering() ==
+    /// Ordering::Less` (same).
+    ///
+    /// **Truly-mixed test-local witnesses — LOAD-BEARING
+    /// discriminating gain**:
+    /// - `SPARSE_BOTTOM_POSTURE.atomic_then_axial_ordering() ==
+    ///   Ordering::Greater` (atomic Greater at 3-bottom-0-top →
+    ///   atomic short-circuit → composed Greater — the axial Equal
+    ///   verdict at 3-polar-3-interior is DISCARDED).
+    /// - `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.atomic_then_axial_ordering()
+    ///   == Ordering::Greater` (same atomic Greater → composed
+    ///   Greater).
+    /// - `ENDPOINTS_ONLY_BOTTOM_POSTURE.atomic_then_axial_ordering() ==
+    ///   Ordering::Greater` (atomic Greater at 2-bottom-0-top →
+    ///   atomic short-circuit → composed Greater — DIVERGES from
+    ///   `axial_then_atomic_ordering` which returned `Less` on the
+    ///   SAME posture via axial Less at 2-polar-4-interior, the
+    ///   second PRIMARY-KEY-split witness).
+    ///
+    /// Together the eight fixtures reach TWO of the three
+    /// [`Ordering`] variants (Greater ← EMPTY + all three truly-mixed
+    /// bottom-carrying; Less ← UNBOUNDED + three interior-uniform;
+    /// NO Equal fixture in the eight-fixture set). The Equal leg is
+    /// inhabited by any posture where BOTH `atomic == Equal` AND
+    /// `axial == Equal` — the SAME joint TWO-CELL tie corner no
+    /// shipped fixture reaches on `axial_then_atomic_ordering`,
+    /// matching the joint-partition composition contract (this Equal
+    /// corner is the ONE cell both lexicographic compositions AGREE
+    /// on identically — the composed-Equal ↔ both-cells-Equal
+    /// biconditional is order-of-composition-invariant).
+    ///
+    /// `const fn` so a caller can pin the whole-posture SIGNUM
+    /// verdict at compile time as a build-break (`const _: () =
+    /// assert!(matches!(UNBOUNDED_RESOURCE_LIMITS
+    /// .atomic_then_axial_ordering(), Ordering::Less));`) — the LOAD-
+    /// BEARING PRIMARY-KEY split pinnable in a `matches!` guard at
+    /// compile time.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// atomic-primary lexicographic composition is a named typed
+    /// [`Ordering`] exit rather than an inline
+    /// `self.atomic_ordering().then(self.axial_ordering())`
+    /// per-consumer combinator, and the exit type is the std-canonical
+    /// [`Ordering`] sum whose match-exhaustiveness rustc verifies at
+    /// every downstream dispatch site. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; the (atomic_ordering,
+    /// axial_ordering) SIGNUM pair composed through the std-canonical
+    /// [`Ordering::then`] combinator with atomic as the primary key
+    /// closes the PRIMARY-KEY axis on the SAME (axial, atomic) SIGNUM
+    /// pair the axial-primary composition opened, exhausting the two
+    /// lexicographic-compositions of the pair as a first-class typed
+    /// exit for the ATOMIC-primary, AXIAL-tiebreaker whole-posture
+    /// reading neither cell's SIGNUM alone can carry through ONE
+    /// `Ordering`. THEORY.md §V.1 — knowable platform; the composed
+    /// SIGNUM verdict is a TYPE-level operation on the posture algebra
+    /// returning a `const`-evaluable [`Ordering`].
+    ///
+    /// Frontier inspiration: the classical order-theoretic
+    /// LEXICOGRAPHIC composition dual — swapping the primary and
+    /// secondary keys yields the DUAL preorder on the same pair of
+    /// preorders, and the pair (axial-primary, atomic-primary)
+    /// exhausts the two lex-orderings of the (axial, atomic) pair.
+    /// Haskell's `Data.Ord.comparing` applied in different key
+    /// orders (`comparing atomic <> comparing axial` vs `comparing
+    /// axial <> comparing atomic`) the direct term-level analog of
+    /// the same primary-key swap. Rust's `Ord` impl on tuples
+    /// (`(a, b) < (c, d)` reads `a`-first vs `(b, a) < (d, c)` reads
+    /// `b`-first) demonstrating the same primary-key-swap semantics
+    /// on the pair-encoding surface. Idris's `Ordering` monoid under
+    /// `<+>` closes under both compositions of any two-argument
+    /// application. Translation through pleme-io primitives: plain
+    /// `const fn` inline two-arm match on the primary
+    /// [`Self::atomic_ordering`] verdict (the const-stable analog of
+    /// [`Ordering::then`]) delegating to the secondary
+    /// [`Self::axial_ordering`] on the tie fall-through — no new
+    /// dep, no typeclass indirection, no per-axis loop, no
+    /// allocation.
+    #[must_use]
+    pub const fn atomic_then_axial_ordering(self) -> Ordering {
+        match self.atomic_ordering() {
+            Ordering::Equal => self.axial_ordering(),
+            Ordering::Greater => Ordering::Greater,
+            Ordering::Less => Ordering::Less,
+        }
+    }
+
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
     /// `self.first_bottom_axis_index()` returns `Some(i)` for the least
     /// `i` such that `self.field_values()[i] == 0`, or `None` when no
@@ -63276,6 +63464,262 @@ mod tests {
         const _: () = assert!(matches!(
             ENDPOINTS_ONLY_BOTTOM_POSTURE.axial_then_atomic_ordering(),
             Ordering::Less,
+        ));
+    }
+
+    #[test]
+    fn resource_limits_atomic_then_axial_ordering_preset_pins_atomic_short_circuits_on_polar_uniform_arms(
+    ) {
+        // ATOMIC-THEN-AXIAL LEXICOGRAPHIC SIGNUM preset pins — LOAD-
+        // BEARING structural pin. The polar-uniform preset arms
+        // (EMPTY, UNBOUNDED) both fire a strict atomic verdict on
+        // their (6, 0) / (0, 6) atomic tally — EMPTY at atomic
+        // `Greater` (bottom-uniform), UNBOUNDED at atomic `Less`
+        // (top-uniform) — so both preset arms SHORT-CIRCUIT at the
+        // atomic primary, NEVER consulting the axial tiebreaker.
+        // The three interior-uniform postures (DEFAULT + both hand-
+        // authored) all sit at the atomic `(0, 0)` balance corner
+        // and defer to the axial tiebreaker; the axial reading fires
+        // `Less` at 0-polar-6-interior on each, so the composed
+        // reading pins at axial `Less`.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.atomic_then_axial_ordering(),
+            Ordering::Greater,
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.atomic_then_axial_ordering(),
+            Ordering::Less,
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.atomic_then_axial_ordering(),
+            Ordering::Less,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.atomic_then_axial_ordering(),
+            Ordering::Less,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.atomic_then_axial_ordering(),
+            Ordering::Less,
+        );
+    }
+
+    #[test]
+    fn resource_limits_atomic_then_axial_ordering_truly_mixed_fires_atomic_short_circuit_on_bottom_carrying_fixtures(
+    ) {
+        // LOAD-BEARING atomic-primary short-circuit pin on truly-
+        // mixed fixtures. All three shipped truly-mixed fixtures
+        // carry a bottom-majority atomic tally (positive atomic
+        // count, zero top), so all three fire atomic `Greater` and
+        // the atomic-primary composition SHORT-CIRCUITS to
+        // `Ordering::Greater` on each — the axial verdicts (Equal
+        // on the two 3-3 fixtures, Less on ENDPOINTS_ONLY_BOTTOM
+        // at 2-polar-4-interior) are DISCARDED. This is the LOAD-
+        // BEARING contrast with `axial_then_atomic_ordering` on
+        // the ENDPOINTS_ONLY_BOTTOM posture: axial-primary returns
+        // `Less` (via axial short-circuit); atomic-primary returns
+        // `Greater` (via atomic short-circuit); the primary-key
+        // axis names which arm dominates on the disagreement.
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE.atomic_then_axial_ordering(),
+            Ordering::Greater,
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.atomic_then_axial_ordering(),
+            Ordering::Greater,
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.atomic_then_axial_ordering(),
+            Ordering::Greater,
+        );
+    }
+
+    #[test]
+    fn resource_limits_atomic_then_axial_ordering_agrees_with_atomic_when_atomic_non_equal() {
+        // ATOMIC-STRICT-AGREEMENT bridge — LOAD-BEARING structural
+        // pin. On every posture whose atomic SIGNUM reading fires
+        // a strict verdict (`Greater` or `Less`), the composed
+        // reading returns that same verdict — the axial tiebreaker
+        // is NOT consulted. Pins the atomic-primary composition as
+        // SHORT-CIRCUITING on the first non-`Equal` argument,
+        // matching the std-canonical [`Ordering::then`] semantics
+        // the const-fn body inlines. Mirror of the axial-primary
+        // strict-agreement bridge one PRIMARY-KEY axis over.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.atomic_ordering() != Ordering::Equal {
+                assert_eq!(
+                    a.atomic_then_axial_ordering(),
+                    a.atomic_ordering(),
+                    "atomic_then_axial_ordering() != atomic_ordering() on atomic-strict {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_then_axial_ordering_equals_axial_when_atomic_equal() {
+        // ATOMIC-EQUAL-USE-AXIAL bridge — LOAD-BEARING structural
+        // pin dual. On every posture whose atomic SIGNUM reading
+        // fires `Equal`, the composed reading defers to the axial
+        // SIGNUM verdict — the axial reading BECOMES the whole-
+        // posture verdict on the atomically-balanced regime.
+        // Complements the atomic-strict-agreement bridge above;
+        // together the two bridges pin the atomic-primary
+        // composition as the exact [`Ordering::then`] lexicographic
+        // combinator on the paired (atomic_ordering, axial_ordering)
+        // SIGNUM exits. Mirror of the axial-primary equal-use-atomic
+        // bridge one PRIMARY-KEY axis over.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.atomic_ordering() == Ordering::Equal {
+                assert_eq!(
+                    a.atomic_then_axial_ordering(),
+                    a.axial_ordering(),
+                    "atomic_then_axial_ordering() != axial_ordering() on atomic-balanced {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_then_axial_ordering_partitions_every_posture_into_exactly_one_leg() {
+        // LEXICOGRAPHIC TRICHOTOMY EXHAUSTIVENESS pin — LOAD-BEARING
+        // structural pin. Every posture returns EXACTLY ONE of the
+        // three [`Ordering`] variants, and the returned variant
+        // matches ONE of the composition legs: `Greater` iff atomic
+        // is Greater OR (atomic Equal AND axial Greater); `Less` iff
+        // atomic is Less OR (atomic Equal AND axial Less); `Equal`
+        // iff both atomic AND axial are Equal (this joint-Equal
+        // corner is the ONE cell both lexicographic compositions
+        // AGREE on identically — order-of-composition-invariant).
+        // Proved structurally by rustc's `match` exhaustiveness: any
+        // missing arm here is a compile error, so the pin is a
+        // TYPE-level theorem of the atomic-primary composed SIGNUM's
+        // exhaustiveness. Mirror of the axial-primary exhaustiveness
+        // pin one PRIMARY-KEY axis over.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let matches_partition_leg = match a.atomic_then_axial_ordering() {
+                Ordering::Greater => {
+                    a.atomic_ordering() == Ordering::Greater
+                        || (a.atomic_ordering() == Ordering::Equal
+                            && a.axial_ordering() == Ordering::Greater)
+                }
+                Ordering::Less => {
+                    a.atomic_ordering() == Ordering::Less
+                        || (a.atomic_ordering() == Ordering::Equal
+                            && a.axial_ordering() == Ordering::Less)
+                }
+                Ordering::Equal => {
+                    a.atomic_ordering() == Ordering::Equal && a.axial_ordering() == Ordering::Equal
+                }
+            };
+            assert!(
+                matches_partition_leg,
+                "atomic_then_axial_ordering() leg mismatches (atomic, axial) partition on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_then_axial_ordering_diverges_from_axial_then_atomic_on_primary_key_disagreement_fixtures(
+    ) {
+        // PRIMARY-KEY DIVERGENCE pin — LOAD-BEARING structural pin.
+        // On the two shipped fixtures where the (axial, atomic)
+        // SIGNUM pair DISAGREES on strict-vs-tie or on strict-arm
+        // identity, the (axial-primary, atomic-primary) composition
+        // pair returns DIFFERENT verdicts, witnessing the primary-
+        // key axis as a proper structural split rather than a
+        // same-function alias.
+        //
+        // UNBOUNDED: axial `Greater` (polar-uniform-top), atomic
+        // `Less` (0-bottom-6-top) — the primary-key wins:
+        // axial-primary short-circuits to axial `Greater`;
+        // atomic-primary short-circuits to atomic `Less`.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.axial_then_atomic_ordering(),
+            Ordering::Greater,
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.atomic_then_axial_ordering(),
+            Ordering::Less,
+        );
+        // ENDPOINTS_ONLY_BOTTOM: axial `Less` (2-polar-4-interior),
+        // atomic `Greater` (2-bottom-0-top) — same primary-key
+        // winner pattern with the arm identities swapped:
+        // axial-primary short-circuits to axial `Less`;
+        // atomic-primary short-circuits to atomic `Greater`.
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.axial_then_atomic_ordering(),
+            Ordering::Less,
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.atomic_then_axial_ordering(),
+            Ordering::Greater,
+        );
+    }
+
+    #[test]
+    fn resource_limits_atomic_then_axial_ordering_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the atomic-primary LEXICOGRAPHIC-
+        // COMPOSITION reading — the composed [`Ordering`] verdict
+        // is evaluable in const context so a caller can pin the
+        // exact whole-posture arm at compile time as a build-break,
+        // including the LOAD-BEARING PRIMARY-KEY split on
+        // UNBOUNDED where the atomic-primary composition returns
+        // `Less` while the axial-primary composition returns
+        // `Greater` on the SAME posture. Uses `matches!` because
+        // `Ordering` is not `PartialEq` in a `const`-comparable
+        // form on stable Rust — `matches!` is the const-context-
+        // legal shape, matching the const-fn pattern the paired
+        // SIGNUM readings one PROJECTION-KIND axis under.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.atomic_then_axial_ordering(),
+            Ordering::Greater,
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.atomic_then_axial_ordering(),
+            Ordering::Less,
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.atomic_then_axial_ordering(),
+            Ordering::Less,
+        ));
+        const _: () = assert!(matches!(
+            SPARSE_BOTTOM_POSTURE.atomic_then_axial_ordering(),
+            Ordering::Greater,
+        ));
+        const _: () = assert!(matches!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.atomic_then_axial_ordering(),
+            Ordering::Greater,
         ));
     }
 }

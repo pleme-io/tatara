@@ -13685,6 +13685,297 @@ impl ResourceLimits {
         self.count_top_axes() > self.count_bottom_axes()
     }
 
+    /// Whole-posture ATOMICALLY-BALANCED predicate —
+    /// `self.is_atomically_balanced()` holds iff the bottom-arm tally
+    /// EXACTLY EQUALS the top-arm tally on the ATOMIC (bottom, top)
+    /// axial partition of the polar cell —
+    /// `self.count_bottom_axes() == self.count_top_axes()`. The
+    /// direct EQUALITY-KIND peer of the just-shipped
+    /// ([`Self::bottom_is_majority`], [`Self::top_is_majority`])
+    /// STRICT-INEQUALITY pair one COMPARISON-KIND axis over — jointly
+    /// with the paired [`Self::has_atomic_majority`] the two
+    /// projections CLOSE the MAJORITY-KIND column on the ATOMIC
+    /// (bottom, top) pair, naming the TIE leg the paired atomic
+    /// strict-majority pair leaves as a discriminated readable-but-
+    /// unnamed verdict.
+    ///
+    /// The direct CELL-KIND peer of [`Self::is_axially_balanced`] one
+    /// CELL axis over on the ATOMIC (bottom, top) pair rather than the
+    /// COMPOUND (polar, interior) pair. The THIRD leg of the STRICT-
+    /// TOTAL-ORDER TRICHOTOMY (bottom-majority, top-majority, atomic-
+    /// tie) — where the paired (bottom_is_majority, top_is_majority)
+    /// pair covers the two STRICT-INEQUALITY directions, THIS
+    /// projection covers the EQUALITY leg the pair jointly rejects.
+    /// Fires exactly at the corner `count_bottom_axes() ==
+    /// count_top_axes()` — the balance point of the two-arm tally
+    /// where neither atomic strict-majority arm wins.
+    ///
+    /// Mutually exclusive with BOTH [`Self::bottom_is_majority`] AND
+    /// [`Self::top_is_majority`]: a `==` and a `>` on the same two
+    /// `usize`s cannot both hold. Jointly EXHAUSTIVE with the pair on
+    /// the total-order trichotomy: exactly one of
+    /// `bottom_is_majority`, `top_is_majority`, or
+    /// `is_atomically_balanced` holds on every posture — the atomic
+    /// tie leg already appears inline as `count_bottom == count_top`
+    /// inside
+    /// [`resource_limits_bottom_is_majority_top_is_majority_and_atomic_tie_partition_every_posture`],
+    /// promoted here to a first-class typed exit. The direct De
+    /// Morgan complement of [`Self::has_atomic_majority`] one
+    /// COMBINATOR-KIND axis over: the (is_atomically_balanced,
+    /// has_atomic_majority) pair PARTITIONS every posture into a two-
+    /// cell EXHAUSTIVE-AND-DISJOINT ATOMIC-MAJORITY-EXISTENCE
+    /// partition.
+    ///
+    /// The atomic balance corner is BROADER than the compound balance
+    /// corner: EVERY interior-uniform posture sits at the atomic tie
+    /// `(0, 0)` because both atomic pole counts are zero, whereas the
+    /// compound tie `count_polar == count_interior` requires a truly-
+    /// mixed posture with an even tally split. The (interior-uniform
+    /// ⇒ atomic-balance) bridge is a LOAD-BEARING refinement of the
+    /// paired [`Self::is_axially_balanced`]'s test-local-only witness
+    /// set — where the compound balance is reachable exclusively by
+    /// truly-mixed fixtures, the atomic balance fires on THREE of the
+    /// five uniform shipped presets (DEFAULT + both HAND_AUTHORED)
+    /// and rejects only on the two polar-uniform presets EMPTY and
+    /// UNBOUNDED.
+    ///
+    /// Encoded as the plain `const fn` `self.count_bottom_axes() ==
+    /// self.count_top_axes()` on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies — matching
+    /// [`Self::is_axially_balanced`]'s shape verbatim on the DUAL
+    /// (atomic vs compound) CELL-KIND combinator. The equivalent
+    /// alternative encodings `!self.has_atomic_majority()` and
+    /// `!self.bottom_is_majority() && !self.top_is_majority()` are
+    /// both structurally equivalent AND pinned as substrate theorems
+    /// in the paired contracts below.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.is_atomically_balanced()
+    /// == false` (every axis at bottom pole → bottom = 6, top = 0 →
+    /// no atomic tie); `UNBOUNDED_RESOURCE_LIMITS.is_atomically_balanced()
+    /// == false` (every axis at top pole → bottom = 0, top = 6 → no
+    /// atomic tie); `DEFAULT_RESOURCE_LIMITS.is_atomically_balanced()
+    /// == true` (every axis strictly interior → bottom = 0, top = 0 →
+    /// atomic tie at the zero corner); `HAND_AUTHORED_MID_POSTURE
+    /// .is_atomically_balanced() == true` (interior-uniform → same
+    /// zero-corner tie); `HAND_AUTHORED_OTHER_POSTURE
+    /// .is_atomically_balanced() == true`. THREE of the five uniform
+    /// fixtures FIRE the atomic balance verdict — the DUAL reading of
+    /// the paired [`Self::is_axially_balanced`] preset pins where the
+    /// compound balance REJECTS on all five, because the atomic
+    /// partition is not exhaustive on FIELD_COUNT and every interior-
+    /// uniform posture inhabits the atomic zero-tie corner.
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .is_atomically_balanced() == false` (3 bottom + 0 top → no
+    /// tie); `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.is_atomically_balanced()
+    /// == false` (same 3 + 0); `ENDPOINTS_ONLY_BOTTOM_POSTURE
+    /// .is_atomically_balanced() == false` (2 + 0). ALL THREE truly-
+    /// mixed BOTTOM-CARRYING fixtures REJECT the atomic balance
+    /// because no shipped truly-mixed fixture places any axis at the
+    /// top pole — the DUAL of the paired
+    /// [`Self::bottom_is_majority`] ALL-FIRE pin.
+    ///
+    /// **Equality-agreement contract**: for every posture `a`,
+    /// `a.is_atomically_balanced() == (a.count_bottom_axes() ==
+    /// a.count_top_axes())`. Pinned via
+    /// `resource_limits_is_atomically_balanced_equals_bottom_count_eq_top_count`.
+    ///
+    /// **De Morgan complement contract**: for every posture `a`,
+    /// `a.is_atomically_balanced() == !a.has_atomic_majority()`.
+    /// Pinned via
+    /// `resource_limits_is_atomically_balanced_is_de_morgan_complement_of_has_atomic_majority`.
+    ///
+    /// **Atomic-strict-majority-pair rejection contract**: for every
+    /// posture `a`, `a.is_atomically_balanced() ⇒
+    /// !a.bottom_is_majority() && !a.top_is_majority()`. Pinned via
+    /// `resource_limits_is_atomically_balanced_implies_neither_atomic_strict_majority_arm_fires`.
+    ///
+    /// **Interior-uniform ⇒ atomic-balance bridge**: for every
+    /// posture `a`, `a.is_axially_interior() ⇒
+    /// a.is_atomically_balanced()` — every axially-interior posture
+    /// has both atomic pole tallies at zero, forcing the equality.
+    /// Pinned via
+    /// `resource_limits_is_axially_interior_implies_is_atomically_balanced_on_every_shipped_posture`.
+    ///
+    /// `const fn` so a caller can pin the atomic-balance verdict at
+    /// compile time (`const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+    /// .is_atomically_balanced());`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// atomic-balance verdict is a named typed `bool` exit rather
+    /// than an inline `self.count_bottom_axes() == self
+    /// .count_top_axes()` per-consumer comparison. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the
+    /// (is_atomically_balanced, has_atomic_majority) pair CLOSES the
+    /// MAJORITY-KIND column on the ATOMIC (bottom, top) tally pair
+    /// one CELL-KIND axis over from the COMPOUND (is_axially_balanced,
+    /// has_majority_axis) pair with the LOAD-BEARING BROADER TIE
+    /// LEG — every interior-uniform posture inhabits the atomic
+    /// balance corner the compound balance corner structurally
+    /// cannot reach. THEORY.md §V.1 — knowable platform; the
+    /// MAJORITY-KIND verdict on the atomic partition is a TYPE-level
+    /// operation on the posture algebra returning a `const`-evaluable
+    /// `bool`.
+    ///
+    /// Frontier inspiration: same as [`Self::is_axially_balanced`],
+    /// through the DUAL (atomic vs compound) CELL-KIND combinator on
+    /// the two atomic pole tallies. APL's `(+/⍵=0) = (+/⍵=⌈/⍵)`
+    /// direct arithmetic-equality on the paired atomic pole tally.
+    /// Haskell's `length bottom == length top` on the DUAL atomic
+    /// arm. Voting-theory's canonical "perfect-tie" leg of the strict-
+    /// plurality trichotomy lifted to the two-endpoint sub-election on
+    /// the polar cell.
+    #[must_use]
+    pub const fn is_atomically_balanced(self) -> bool {
+        self.count_bottom_axes() == self.count_top_axes()
+    }
+
+    /// Whole-posture ATOMIC-STRICT-MAJORITY-EXISTENCE predicate —
+    /// `self.has_atomic_majority()` holds iff SOME strict-majority
+    /// arm fires on the ATOMIC (bottom, top) axial partition —
+    /// `self.count_bottom_axes() != self.count_top_axes()`,
+    /// equivalently `self.bottom_is_majority() ||
+    /// self.top_is_majority()`. The direct De Morgan complement of
+    /// [`Self::is_atomically_balanced`] one COMBINATOR-KIND axis
+    /// over, jointly the (is_atomically_balanced, has_atomic_majority)
+    /// pair PARTITIONS the whole-posture universe into a two-cell
+    /// EXHAUSTIVE-AND-DISJOINT ATOMIC-MAJORITY-EXISTENCE partition —
+    /// every posture fires exactly one.
+    ///
+    /// The direct COMBINATOR-KIND peer of the just-shipped
+    /// (bottom_is_majority, top_is_majority) STRICT-INEQUALITY pair
+    /// one COMBINATOR axis over — where the pair asserts the two
+    /// independent DIRECTED atomic strict-majority verdicts, THIS
+    /// projection folds them through boolean `||` into ONE named
+    /// typed exit at the union of the (T, F) and (F, T) cells (the
+    /// (T, T) cell is structurally unreachable — a single posture
+    /// cannot simultaneously satisfy both atomic strict-majority
+    /// arms since `<` and `>` on the same two `usize`s cannot both
+    /// hold, per the paired
+    /// [`Self::bottom_is_majority`]/[`Self::top_is_majority`] mutual-
+    /// exclusion pin). The direct CELL-KIND peer of
+    /// [`Self::has_majority_axis`] one CELL axis over on the ATOMIC
+    /// (bottom, top) pair rather than the COMPOUND (polar, interior)
+    /// pair.
+    ///
+    /// Strictly WEAKER than [`Self::is_axially_polar`]: `self
+    /// .is_axially_polar() ⇒ self.has_atomic_majority()` — any
+    /// axially-polar posture saturates one of the two atomic arms at
+    /// FIELD_COUNT so the other sits at 0, forcing a strict atomic
+    /// inequality. Strictly STRONGER than [`Self::has_polar_axis`]:
+    /// `self.has_atomic_majority() ⇒ self.has_polar_axis()` —
+    /// discovered via the atomic-decomposition bridge
+    /// `count_polar == count_bottom + count_top >= 1` at every atomic
+    /// strict-majority corner. Same (POLAR-ALL ⇒ ATOMIC-MAJORITY ⇒
+    /// POLAR-ANY) refinement chain as the atomic strict-majority pair
+    /// on the atomic partition.
+    ///
+    /// The atomic majority-existence arm is NARROWER than the
+    /// compound majority-existence arm: EVERY interior-uniform
+    /// posture REJECTS the atomic majority (both atomic counts at
+    /// zero → tie), whereas the compound majority-existence FIRES on
+    /// every interior-uniform posture (polar = 0 ≠ 6 = interior). The
+    /// (interior-uniform ⇒ ¬atomic-majority) bridge is the DUAL
+    /// reading of the paired
+    /// [`Self::is_atomically_balanced`]'s interior-uniform ⇒ balance
+    /// bridge.
+    ///
+    /// Encoded as the boolean `!=` of the two ARITHMETIC-QUANTIFIER
+    /// tallies — one primitive delegation to the shipped
+    /// [`Self::count_bottom_axes`] and [`Self::count_top_axes`]
+    /// each. The equivalent alternative encodings `self
+    /// .bottom_is_majority() || self.top_is_majority()` and
+    /// `!self.is_atomically_balanced()` are both structurally
+    /// equivalent AND pinned as substrate theorems in the paired
+    /// contracts below.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.has_atomic_majority()
+    /// == true` (bottom = 6, top = 0 → bottom_is_majority fires);
+    /// `UNBOUNDED_RESOURCE_LIMITS.has_atomic_majority() == true`
+    /// (bottom = 0, top = 6 → top_is_majority fires);
+    /// `DEFAULT_RESOURCE_LIMITS.has_atomic_majority() == false`
+    /// (every axis strictly interior → both atomic counts at 0);
+    /// `HAND_AUTHORED_MID_POSTURE.has_atomic_majority() == false`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.has_atomic_majority() == false`.
+    /// EXACTLY the two polar-uniform presets (EMPTY, UNBOUNDED) fire
+    /// the atomic majority arm — the DUAL reading of the paired
+    /// [`Self::is_atomically_balanced`] preset pins, and NARROWER
+    /// than the paired [`Self::has_majority_axis`] which fires on ALL
+    /// FIVE uniform fixtures.
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .has_atomic_majority() == true` (3 bottom + 0 top → bottom
+    /// strict-majority fires); `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE
+    /// .has_atomic_majority() == true` (same 3 + 0);
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE.has_atomic_majority() == true`
+    /// (2 + 0). ALL THREE truly-mixed BOTTOM-CARRYING fixtures FIRE
+    /// the atomic majority arm on the bottom pole — the DUAL of the
+    /// paired [`Self::is_atomically_balanced`] ALL-REJECT pin.
+    ///
+    /// **Inequality-agreement contract**: for every posture `a`,
+    /// `a.has_atomic_majority() == (a.count_bottom_axes() !=
+    /// a.count_top_axes())`. Pinned via
+    /// `resource_limits_has_atomic_majority_equals_bottom_count_ne_top_count`.
+    ///
+    /// **Atomic-strict-majority-pair decomposition contract**: for
+    /// every posture `a`, `a.has_atomic_majority() ==
+    /// (a.bottom_is_majority() || a.top_is_majority())`. Pinned via
+    /// `resource_limits_has_atomic_majority_decomposes_as_bottom_or_top_is_majority`.
+    ///
+    /// **De Morgan complement contract**: for every posture `a`,
+    /// `a.has_atomic_majority() == !a.is_atomically_balanced()`.
+    /// Pinned via
+    /// `resource_limits_has_atomic_majority_is_de_morgan_complement_of_is_atomically_balanced`.
+    ///
+    /// **ATOMIC-MAJORITY-EXISTENCE partition exhaustive-and-disjoint
+    /// contract**: for every posture `a`, EXACTLY ONE of
+    /// `a.is_atomically_balanced()` and `a.has_atomic_majority()`
+    /// holds — the two-cell partition covers every posture
+    /// (exhaustive) with no overlap (disjoint). Pinned via
+    /// `resource_limits_is_atomically_balanced_xor_has_atomic_majority_partitions_every_posture`.
+    ///
+    /// **is_axially_polar ⇒ has_atomic_majority contract**: on every
+    /// posture, `a.is_axially_polar() ⇒ a.has_atomic_majority()` —
+    /// the compound POLAR-ALL uniformity verdict implies the ATOMIC
+    /// STRICT-MAJORITY existence verdict on the atomic partition
+    /// (via the polar-uniform ⇒ one-atomic-arm-saturated bridge).
+    /// Pinned via
+    /// `resource_limits_is_axially_polar_implies_has_atomic_majority_on_every_shipped_posture`.
+    ///
+    /// `const fn` so a caller can pin the atomic-majority-existence
+    /// verdict at compile time (`const _: () = assert!(
+    /// EMPTY_RESOURCE_LIMITS.has_atomic_majority());`).
+    ///
+    /// Theory anchor: same as [`Self::is_atomically_balanced`], on
+    /// the COMPLEMENT half of the ATOMIC-MAJORITY-EXISTENCE
+    /// partition. The (is_atomically_balanced, has_atomic_majority)
+    /// pair jointly closes the MAJORITY-KIND column past the just-
+    /// shipped (bottom_is_majority, top_is_majority) STRICT-
+    /// INEQUALITY pair on the SAME atomic two-arm tally pair with
+    /// the LOAD-BEARING EQUALITY leg the pair jointly rejects, and
+    /// one CELL-KIND axis over from the COMPOUND
+    /// (is_axially_balanced, has_majority_axis) MAJORITY-KIND column
+    /// closure. Naming the two atomic legs (atomic-balance +
+    /// atomic-majority-existence) turns the paired three call-site
+    /// atomic comparisons (already present inline inside the
+    /// `atomic_tie_partition` test) into two typed exits.
+    ///
+    /// Frontier inspiration: same as [`Self::has_majority_axis`],
+    /// through the DUAL (atomic vs compound) CELL-KIND combinator on
+    /// the two atomic pole tallies — the STRICT-MAJORITY disjunction
+    /// `bottom > top || top > bottom` sits at Kmett's `lattices`
+    /// "some-strict-majority" existence notion, the paired inequality
+    /// `bottom != top` is APL's `(+/⍵=0) ≠ (+/⍵=⌈/⍵)` direct
+    /// arithmetic-inequality combinator, and the two-cell EXHAUSTIVE-
+    /// AND-DISJOINT ATOMIC-MAJORITY-EXISTENCE partition is the
+    /// classical STRICT-vs-TIE split from voting-theory tie-
+    /// detection lifted to the two-endpoint sub-election on the polar
+    /// cell.
+    #[must_use]
+    pub const fn has_atomic_majority(self) -> bool {
+        self.count_bottom_axes() != self.count_top_axes()
+    }
+
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
     /// `self.first_bottom_axis_index()` returns `Some(i)` for the least
     /// `i` such that `self.field_values()[i] == 0`, or `None` when no
@@ -59607,5 +59898,323 @@ mod tests {
         const _: () = assert!(!EMPTY_RESOURCE_LIMITS.top_is_majority());
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.top_is_majority());
         const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.top_is_majority());
+    }
+
+    #[test]
+    fn resource_limits_is_atomically_balanced_preset_pins_fire_on_interior_uniform_reject_on_polar_uniform(
+    ) {
+        // Preset pins on the atomic BALANCE arm — THREE of the five
+        // shipped uniform fixtures FIRE the atomic tie corner because
+        // every interior-uniform posture has both atomic pole counts
+        // at zero (0 == 0). The two polar-uniform presets EMPTY and
+        // UNBOUNDED reject because each saturates ONE atomic arm at
+        // FIELD_COUNT while the other sits at 0 (6 != 0 and 0 != 6).
+        // BROADER than the compound balance corner
+        // [`is_axially_balanced`] — where the compound balance
+        // rejects on ALL FIVE uniform fixtures, the atomic balance
+        // fires on the three interior-uniform ones.
+        assert!(!EMPTY_RESOURCE_LIMITS.is_atomically_balanced());
+        assert!(!UNBOUNDED_RESOURCE_LIMITS.is_atomically_balanced());
+        assert!(DEFAULT_RESOURCE_LIMITS.is_atomically_balanced());
+        assert!(HAND_AUTHORED_MID_POSTURE.is_atomically_balanced());
+        assert!(HAND_AUTHORED_OTHER_POSTURE.is_atomically_balanced());
+    }
+
+    #[test]
+    fn resource_limits_has_atomic_majority_preset_pins_fire_on_polar_uniform_reject_on_interior_uniform(
+    ) {
+        // DUAL preset pins on the ATOMIC-MAJORITY-EXISTENCE arm —
+        // EXACTLY the two polar-uniform presets EMPTY and UNBOUNDED
+        // fire the atomic strict-majority-existence verdict on the
+        // direct De Morgan complement of the atomic balance. The
+        // three interior-uniform presets reject because both atomic
+        // pole counts are zero (no strict inequality possible).
+        // NARROWER than the compound
+        // [`has_majority_axis`] which fires on ALL FIVE uniform
+        // fixtures.
+        assert!(EMPTY_RESOURCE_LIMITS.has_atomic_majority());
+        assert!(UNBOUNDED_RESOURCE_LIMITS.has_atomic_majority());
+        assert!(!DEFAULT_RESOURCE_LIMITS.has_atomic_majority());
+        assert!(!HAND_AUTHORED_MID_POSTURE.has_atomic_majority());
+        assert!(!HAND_AUTHORED_OTHER_POSTURE.has_atomic_majority());
+    }
+
+    #[test]
+    fn resource_limits_is_atomically_balanced_test_local_witnesses_reject_on_every_bottom_carrying_fixture(
+    ) {
+        // Truly-mixed witnesses on the balance leg — every shipped
+        // truly-mixed fixture carries at least one bottom axis and no
+        // top axis, so the atomic tally never balances at the truly-
+        // mixed corner on the shipped fixture set. All three of
+        // SPARSE (3, 0), CONTIGUOUS_INTERIOR (3, 0), and
+        // ENDPOINTS_ONLY (2, 0) reject the atomic-balance verdict.
+        // The DUAL truly-mixed pin of the paired
+        // [`has_atomic_majority`] fixture fire.
+        assert!(!SPARSE_BOTTOM_POSTURE.is_atomically_balanced());
+        assert!(!CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.is_atomically_balanced());
+        assert!(!ENDPOINTS_ONLY_BOTTOM_POSTURE.is_atomically_balanced());
+    }
+
+    #[test]
+    fn resource_limits_has_atomic_majority_test_local_witnesses_fire_on_every_bottom_carrying_fixture(
+    ) {
+        // Truly-mixed witnesses on the DUAL arm — every shipped
+        // truly-mixed fixture carries a strict atomic majority on the
+        // bottom pole (top count at zero). All three of
+        // SPARSE (3, 0), CONTIGUOUS_INTERIOR (3, 0), and
+        // ENDPOINTS_ONLY (2, 0) fire the atomic-majority-existence
+        // verdict. The DUAL truly-mixed pin of the paired
+        // [`is_atomically_balanced`] fixture reject.
+        assert!(SPARSE_BOTTOM_POSTURE.has_atomic_majority());
+        assert!(CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.has_atomic_majority());
+        assert!(ENDPOINTS_ONLY_BOTTOM_POSTURE.has_atomic_majority());
+    }
+
+    #[test]
+    fn resource_limits_is_atomically_balanced_equals_bottom_count_eq_top_count() {
+        // Equality-agreement contract on the ATOMIC pair — LOAD-
+        // BEARING structural pin. The atomic-balance verdict IS the
+        // `==` comparison on the two ARITHMETIC-QUANTIFIER tallies,
+        // per definition. Mirror of
+        // `resource_limits_is_axially_balanced_equals_polar_count_eq_interior_count`
+        // one CELL-KIND axis over on the ATOMIC (bottom, top) pair
+        // rather than the COMPOUND (polar, interior) pair.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.is_atomically_balanced(),
+                a.count_bottom_axes() == a.count_top_axes(),
+                "is_atomically_balanced != (count_bottom_axes == count_top_axes) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_has_atomic_majority_equals_bottom_count_ne_top_count() {
+        // Inequality-agreement contract on the DUAL arm — LOAD-
+        // BEARING structural pin. Mirror of the atomic-balance
+        // definitional pin on the DUAL comparison direction.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.has_atomic_majority(),
+                a.count_bottom_axes() != a.count_top_axes(),
+                "has_atomic_majority != (count_bottom_axes != count_top_axes) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_has_atomic_majority_decomposes_as_bottom_or_top_is_majority() {
+        // Atomic-strict-majority-pair decomposition contract — LOAD-
+        // BEARING structural pin. Pins the alternative encoding
+        // through the paired (bottom_is_majority, top_is_majority)
+        // STRICT-INEQUALITY pair, showing the ATOMIC-MAJORITY-
+        // EXISTENCE verdict is EXACTLY the two-arm SET-UNION of the
+        // DIRECTED atomic strict-majority verdicts through boolean
+        // `||`.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.has_atomic_majority(),
+                a.bottom_is_majority() || a.top_is_majority(),
+                "has_atomic_majority != (bottom_is_majority || top_is_majority) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_atomically_balanced_is_de_morgan_complement_of_has_atomic_majority() {
+        // De Morgan complement contract on the ATOMIC pair — LOAD-
+        // BEARING structural pin. Pins the two-cell partition as
+        // literally the negation relationship between the two arms,
+        // so a downstream consumer can rewrite either projection as
+        // the negation of the other as a substrate theorem.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.is_atomically_balanced(),
+                !a.has_atomic_majority(),
+                "is_atomically_balanced != !has_atomic_majority on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_atomically_balanced_implies_neither_atomic_strict_majority_arm_fires() {
+        // Trichotomy REJECTION arm on the atomic pair — the balance
+        // leg forces both DIRECTED strict-majority arms to reject via
+        // the mutually-exclusive `>` and `==` combinators on the
+        // same two `usize`s. Pins the balance-leg branch of the atomic
+        // trichotomy — where balance fires, neither directional atomic
+        // majority arm can fire.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.is_atomically_balanced() {
+                assert!(
+                    !a.bottom_is_majority(),
+                    "is_atomically_balanced && bottom_is_majority on {a:?}",
+                );
+                assert!(
+                    !a.top_is_majority(),
+                    "is_atomically_balanced && top_is_majority on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_atomically_balanced_xor_has_atomic_majority_partitions_every_posture() {
+        // Two-cell EXHAUSTIVE-AND-DISJOINT partition contract on the
+        // ATOMIC MAJORITY-EXISTENCE column — EXACTLY ONE of
+        // `is_atomically_balanced` and `has_atomic_majority` holds on
+        // every posture — via the De Morgan complement relationship.
+        // Mirror of the compound
+        // `resource_limits_is_axially_balanced_xor_has_majority_axis_partitions_every_posture`
+        // one CELL-KIND axis over on the ATOMIC pair.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let fires =
+                usize::from(a.is_atomically_balanced()) + usize::from(a.has_atomic_majority());
+            assert_eq!(
+                fires, 1,
+                "atomic majority-existence two-cell partition failed on {a:?} (fires = {fires})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_interior_implies_is_atomically_balanced_on_every_shipped_posture()
+    {
+        // Interior-uniform ⇒ atomic-balance bridge — LOAD-BEARING
+        // structural pin. Every axially-interior posture has both
+        // atomic pole counts at zero (bottom = 0 = top), forcing the
+        // atomic tie. Distinguishes the atomic balance corner as
+        // BROADER than the compound balance corner: the compound
+        // balance rejects every axially-uniform posture (compound
+        // partition is exhaustive on FIELD_COUNT), the atomic balance
+        // fires on every axially-interior posture (atomic partition
+        // is not exhaustive on FIELD_COUNT — interior axes contribute
+        // zero to both atomic pole tallies).
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.is_axially_interior() {
+                assert!(
+                    a.is_atomically_balanced(),
+                    "is_axially_interior without is_atomically_balanced on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_polar_implies_has_atomic_majority_on_every_shipped_posture() {
+        // Polar-uniform ⇒ atomic-majority bridge on the DUAL arm —
+        // LOAD-BEARING structural pin. Every axially-polar posture
+        // saturates ONE of the two atomic arms at FIELD_COUNT while
+        // the other sits at 0 (mutually-exclusive polar per-axis
+        // choice), forcing a strict atomic inequality on the
+        // saturated arm. DUAL of the interior-uniform ⇒ atomic-
+        // balance bridge on the paired complement partition.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.is_axially_polar() {
+                assert!(
+                    a.has_atomic_majority(),
+                    "is_axially_polar without has_atomic_majority on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_kind_extended_projections_evaluate_at_compile_time_via_const_fn(
+    ) {
+        // Const-fn pin on the extended ATOMIC MAJORITY-KIND column —
+        // both boolean projections closing the (bottom_is_majority,
+        // top_is_majority) STRICT-INEQUALITY pair through the
+        // EQUALITY leg + De Morgan complement are evaluable in const
+        // context so a caller can pin the atomic-balance verdict at
+        // compile time as build-breaks. Mirror of the const-fn
+        // evaluability pin one CELL-KIND axis over on the COMPOUND
+        // (is_axially_balanced, has_majority_axis) pair.
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.is_atomically_balanced());
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.is_atomically_balanced());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.is_atomically_balanced());
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.has_atomic_majority());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.has_atomic_majority());
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.has_atomic_majority());
     }
 }

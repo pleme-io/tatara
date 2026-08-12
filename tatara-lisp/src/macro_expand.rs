@@ -13976,6 +13976,292 @@ impl ResourceLimits {
         self.count_bottom_axes() != self.count_top_axes()
     }
 
+    /// Whole-posture BOTTOM-DIRECTED-LEAD projection —
+    /// `self.bottom_lead()` returns `Some(k)` for the CARDINAL magnitude
+    /// `k = self.count_bottom_axes() - self.count_top_axes()` iff the
+    /// bottom-arm tally STRICTLY EXCEEDS the top-arm tally on the ATOMIC
+    /// (bottom, top) axial partition of the polar cell, and `None` at
+    /// every other posture (top-dominant OR atomic-balanced). The direct
+    /// CARDINAL-DISTANCE `Option<usize>` lift of
+    /// [`Self::bottom_is_majority`] one PROJECTION-KIND axis over, and
+    /// the ATOMIC-CELL peer of [`Self::polar_lead`] one CELL-KIND axis
+    /// over on the ATOMIC (bottom, top) pair rather than the COMPOUND
+    /// (polar, interior) pair — jointly the (bottom_lead, top_lead)
+    /// ATOMIC pair carries the DIRECTED-LEAD `Option<usize>` shape of
+    /// the paired (bottom_is_majority, top_is_majority) boolean pair.
+    ///
+    /// A STRICT REFINEMENT of the STRICT-INEQUALITY MAJORITY verdict on
+    /// the same atomic arm: `bottom_lead().is_some() ⇔
+    /// bottom_is_majority()`; on the SOME arm, `bottom_lead() ==
+    /// Some(count_bottom_axes() - count_top_axes())` via the paired
+    /// atomic-majority-arm-tally identity. Discriminates postures the
+    /// boolean STRICT-INEQUALITY conflates: two bottom-dominant postures
+    /// with the SAME `bottom_is_majority() == true` but DIFFERENT
+    /// majority magnitudes (e.g. a `(6, 0)` split and a `(2, 0)` split)
+    /// give DIFFERENT lead verdicts (`Some(6)` vs `Some(2)`).
+    ///
+    /// **CROSS-CELL DISJOINTNESS**: on every posture, at MOST one of
+    /// `bottom_lead().is_some()` and `top_lead().is_some()` holds (the
+    /// two STRICT-INEQUALITY directions on the same atomic tally pair
+    /// cannot both fire, matching the paired boolean pair's mutual-
+    /// exclusion pin on the DUAL CARDINAL projection). The
+    /// DIRECTED-LEAD form of the atomic boolean cross-cell exclusivity
+    /// pair one PROJECTION-KIND axis over.
+    ///
+    /// The atomic-balance corner is BROADER than the compound-balance
+    /// corner: every interior-uniform posture inhabits the atomic
+    /// `(0, 0)` tie so BOTH atomic directed leads fire `None`, whereas
+    /// the compound tie requires a truly-mixed even split (per the
+    /// paired [`Self::is_atomically_balanced`] atomic-tie discussion).
+    /// So both atomic DIRECTED-LEAD arms reject on THREE of the five
+    /// uniform shipped presets (DEFAULT + both HAND_AUTHORED) rather
+    /// than the compound partition's ALL-uniform saturation.
+    ///
+    /// Encoded as the plain `const fn` guarded-subtraction on the two
+    /// already-lifted ARITHMETIC-QUANTIFIER tallies —
+    /// `self.count_bottom_axes() > self.count_top_axes()` is the strict
+    /// guard proving the subtraction cannot underflow on `usize`, and
+    /// the guarded branch returns `Some(count_bottom_axes() -
+    /// count_top_axes())`. Matches [`Self::polar_lead`]'s shape verbatim
+    /// on the DUAL (atomic vs compound) CELL-KIND combinator.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.bottom_lead() == Some(6)`
+    /// (bottom = 6, top = 0 → the SATURATED atomic BOTTOM-directed lead
+    /// corner); `UNBOUNDED_RESOURCE_LIMITS.bottom_lead() == None` (top
+    /// arm dominates); `DEFAULT_RESOURCE_LIMITS.bottom_lead() == None`
+    /// (atomic zero-tie corner); `HAND_AUTHORED_MID_POSTURE.bottom_lead()
+    /// == None`; `HAND_AUTHORED_OTHER_POSTURE.bottom_lead() == None`.
+    /// EXACTLY ONE of the five uniform presets fires the BOTTOM-directed
+    /// lead — EMPTY, the SATURATED atomic-BOTTOM-uniform preset. The
+    /// three interior-uniform presets sit at the atomic zero-tie corner
+    /// (both atomic counts at 0 — the LOAD-BEARING BROADER atomic tie
+    /// corner rejecting BOTH atomic DIRECTED leads) and UNBOUNDED sits
+    /// on the DUAL top-directed arm.
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .bottom_lead() == Some(3)` (3 bottom + 0 top → bottom strictly
+    /// dominates with a three-axis lead); `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE
+    /// .bottom_lead() == Some(3)` (same 3 + 0 tally);
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_lead() == Some(2)` (2 + 0 →
+    /// two-axis bottom lead). The LOAD-BEARING NON-SATURATED CARDINAL
+    /// pin on the atomic bottom arm — ALL THREE truly-mixed BOTTOM-
+    /// CARRYING fixtures fire `Some(k)` with `1 <= k < FIELD_COUNT`,
+    /// exercising the interior of the atomic CARDINAL range that no
+    /// uniform preset can reach (uniform presets fire `Some(FIELD_COUNT)`
+    /// on the SATURATED corner or `None` at every other corner).
+    ///
+    /// **Range bound**: when `Some(k)`, `1 <= k <= Self::FIELD_COUNT` by
+    /// construction — mirror of the paired [`Self::polar_lead`] range
+    /// pin on the DUAL (atomic vs compound) CELL-KIND combinator.
+    ///
+    /// **SOME-bridge to atomic strict majority**: for every posture `a`,
+    /// `a.bottom_lead().is_some() == a.bottom_is_majority()`. Pinned
+    /// via `resource_limits_bottom_lead_is_some_iff_bottom_is_majority`.
+    ///
+    /// **NONE-bridge to non-strict-atomic-majority**: for every posture
+    /// `a`, `a.bottom_lead().is_none() == !a.bottom_is_majority()` —
+    /// equivalently `a.top_is_majority() || a.is_atomically_balanced()`.
+    /// Pinned via
+    /// `resource_limits_bottom_lead_is_none_iff_top_or_atomically_balanced`.
+    ///
+    /// **CARDINAL-value bridge on the SOME arm**: for every posture `a`
+    /// with `a.bottom_is_majority()`, `a.bottom_lead().unwrap() ==
+    /// a.count_bottom_axes() - a.count_top_axes()`. Pinned via
+    /// `resource_limits_bottom_lead_value_equals_bottom_minus_top_when_bottom_majority`.
+    ///
+    /// **Range bound contract**: when `a.bottom_lead() == Some(k)`,
+    /// `1 <= k && k <= Self::FIELD_COUNT`. Pinned via
+    /// `resource_limits_bottom_lead_value_lies_in_one_through_field_count`.
+    ///
+    /// **Atomic-balance ⇒ both-None contract**: for every posture `a`,
+    /// `a.is_atomically_balanced() ⇒ a.bottom_lead().is_none() &&
+    /// a.top_lead().is_none()` — the atomic-balance leg jointly rejects
+    /// BOTH DIRECTED atomic lead verdicts, matching the paired
+    /// [`Self::polar_lead`]/[`Self::interior_lead`] balance behaviour on
+    /// the DUAL (atomic vs compound) CELL-KIND combinator. Pinned via
+    /// `resource_limits_atomic_balance_implies_both_atomic_leads_none`.
+    ///
+    /// **SOME-count partition contract**: for every posture `a`,
+    /// `usize::from(a.bottom_lead().is_some()) + usize::from(a
+    /// .top_lead().is_some()) + usize::from(a.is_atomically_balanced())
+    /// == 1` — exactly one of the three legs (bottom-lead-Some,
+    /// top-lead-Some, atomically-balanced) holds on every posture. The
+    /// CARDINAL-DISTANCE reading of the paired STRICT-TOTAL-ORDER
+    /// trichotomy closure on the DIRECTED-LEAD `Option<usize>` shape,
+    /// one CELL-KIND axis over from the compound
+    /// (polar_lead, interior_lead, is_axially_balanced) partition.
+    /// Pinned via
+    /// `resource_limits_bottom_lead_some_top_lead_some_and_atomic_balance_partition_every_posture`.
+    ///
+    /// `const fn` so a caller can pin the exact bottom lead at compile
+    /// time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.bottom_lead(), Some(6)));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// atomic BOTTOM-directed lead is a named typed `Option<usize>` exit
+    /// rather than an inline `if self.count_bottom_axes() > self
+    /// .count_top_axes() { Some(...) } else { None }` per-consumer
+    /// guarded subtraction. THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the (bottom_lead, top_lead) pair opens the
+    /// CARDINAL-DISTANCE column on the ATOMIC (bottom, top) tally pair
+    /// past the just-closed (bottom_is_majority, top_is_majority,
+    /// is_atomically_balanced, has_atomic_majority) MAJORITY-KIND
+    /// closure with the LOAD-BEARING CARDINAL magnitude the boolean
+    /// STRICT-INEQUALITY verdict structurally cannot access, and one
+    /// CELL-KIND axis over from the COMPOUND (polar_lead, interior_lead)
+    /// DIRECTED-LEAD pair. THEORY.md §V.1 — knowable platform; the
+    /// atomic DIRECTED-LEAD verdict is a TYPE-level operation on the
+    /// posture algebra returning a `const`-evaluable `Option<usize>`.
+    ///
+    /// Frontier inspiration: same as [`Self::polar_lead`], through the
+    /// DUAL (atomic vs compound) CELL-KIND combinator on the two atomic
+    /// pole tallies of the DISJOINT-BUT-NOT-EXHAUSTIVE (bottom, top)
+    /// atomic sub-partition of the polar cell. APL's guarded
+    /// `(+/⍵=0) - (+/⍵=⌈/⍵)` on the paired atomic-directed arm. Haskell's
+    /// `if length bottom > length top then Just (length bottom - length
+    /// top) else Nothing` on the atomic BOTTOM arm. Voting-theory's
+    /// canonical "winning-margin" figure on the WINNING candidate of a
+    /// two-candidate election where a third abstain arm exists — the
+    /// atomic bottom-directed lead names the bottom-candidate's winning-
+    /// margin size when the bottom arm wins and refuses the verdict
+    /// otherwise. Translation through pleme-io primitives: plain
+    /// `const fn` guarded subtraction on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies, no new dep, no typeclass
+    /// indirection, no per-axis loop, no allocation.
+    #[must_use]
+    pub const fn bottom_lead(self) -> Option<usize> {
+        let bottom = self.count_bottom_axes();
+        let top = self.count_top_axes();
+        if bottom > top {
+            Some(bottom - top)
+        } else {
+            None
+        }
+    }
+
+    /// Whole-posture TOP-DIRECTED-LEAD projection —
+    /// `self.top_lead()` returns `Some(k)` for the CARDINAL magnitude
+    /// `k = self.count_top_axes() - self.count_bottom_axes()` iff the
+    /// top-arm tally STRICTLY EXCEEDS the bottom-arm tally on the
+    /// ATOMIC (bottom, top) axial partition of the polar cell, and
+    /// `None` at every other posture (bottom-dominant OR atomic-
+    /// balanced). The DUAL CARDINAL-DISTANCE lift of
+    /// [`Self::top_is_majority`] one PROJECTION-KIND axis over and the
+    /// ATOMIC-CELL DUAL of [`Self::bottom_lead`] on the DUAL arm-
+    /// selection combinator — jointly the (bottom_lead, top_lead)
+    /// ATOMIC pair carries the SIGNED-KIND DIRECTED-LEAD projection
+    /// through the paired `Option<usize>` shape one CELL-KIND axis over
+    /// from the COMPOUND (polar_lead, interior_lead) pair.
+    ///
+    /// A STRICT REFINEMENT of the STRICT-INEQUALITY MAJORITY verdict on
+    /// the same atomic arm: `top_lead().is_some() ⇔ top_is_majority()`;
+    /// on the SOME arm, `top_lead() == Some(count_top_axes() -
+    /// count_bottom_axes())` via the paired atomic-majority-arm-tally
+    /// identity. Discriminates postures the boolean STRICT-INEQUALITY
+    /// conflates: two top-dominant postures with the SAME
+    /// `top_is_majority() == true` but DIFFERENT majority magnitudes
+    /// (e.g. a `(0, 6)` split and a `(0, 2)` split) give DIFFERENT lead
+    /// verdicts (`Some(6)` vs `Some(2)`).
+    ///
+    /// **CROSS-CELL DISJOINTNESS**: on every posture, at MOST one of
+    /// `bottom_lead().is_some()` and `top_lead().is_some()` holds (the
+    /// two STRICT-INEQUALITY directions on the same atomic tally pair
+    /// cannot both fire, matching the paired boolean pair's mutual-
+    /// exclusion pin on the DUAL CARDINAL projection).
+    ///
+    /// The atomic-balance corner is BROADER than the compound-balance
+    /// corner: every interior-uniform posture inhabits the atomic
+    /// `(0, 0)` tie so BOTH atomic directed leads fire `None`, whereas
+    /// the compound tie requires a truly-mixed even split. So both
+    /// atomic DIRECTED-LEAD arms reject on THREE of the five uniform
+    /// shipped presets rather than the compound partition's ALL-uniform
+    /// saturation.
+    ///
+    /// Encoded as the plain `const fn` guarded-subtraction on the DUAL
+    /// per-arm mask — matching [`Self::bottom_lead`]'s shape verbatim on
+    /// the DUAL arm-selection combinator. The strict `>` guard proves
+    /// the subtraction cannot underflow on `usize`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.top_lead() == None`
+    /// (bottom arm dominates); `UNBOUNDED_RESOURCE_LIMITS.top_lead()
+    /// == Some(6)` (top = 6, bottom = 0 → the SATURATED atomic
+    /// TOP-directed lead corner); `DEFAULT_RESOURCE_LIMITS.top_lead()
+    /// == None` (atomic zero-tie corner); `HAND_AUTHORED_MID_POSTURE
+    /// .top_lead() == None`; `HAND_AUTHORED_OTHER_POSTURE.top_lead()
+    /// == None`. EXACTLY ONE of the five uniform presets fires the
+    /// TOP-directed lead — UNBOUNDED, the SATURATED atomic-TOP-uniform
+    /// preset. The DUAL preset pins of the paired [`Self::bottom_lead`]
+    /// on the DUAL atomic arm.
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .top_lead() == None` (3 bottom + 0 top → bottom-only);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.top_lead() == None` (same
+    /// 3 + 0); `ENDPOINTS_ONLY_BOTTOM_POSTURE.top_lead() == None` (2 +
+    /// 0). ALL THREE truly-mixed BOTTOM-CARRYING fixtures REJECT the
+    /// TOP-directed arm because no shipped truly-mixed fixture places
+    /// any axis at the top pole — the DUAL of the paired
+    /// [`Self::bottom_lead`] ALL-FIRE pin.
+    ///
+    /// **Range bound**: when `Some(k)`, `1 <= k <= Self::FIELD_COUNT`
+    /// by construction — mirror of the paired [`Self::bottom_lead`]
+    /// range pin on the DUAL atomic arm.
+    ///
+    /// **SOME-bridge to atomic strict majority**: for every posture `a`,
+    /// `a.top_lead().is_some() == a.top_is_majority()`. Pinned via
+    /// `resource_limits_top_lead_is_some_iff_top_is_majority`.
+    ///
+    /// **NONE-bridge to non-strict-atomic-majority**: for every posture
+    /// `a`, `a.top_lead().is_none() == !a.top_is_majority()` —
+    /// equivalently `a.bottom_is_majority() || a.is_atomically_balanced()`.
+    /// Pinned via
+    /// `resource_limits_top_lead_is_none_iff_bottom_or_atomically_balanced`.
+    ///
+    /// **CARDINAL-value bridge on the SOME arm**: for every posture `a`
+    /// with `a.top_is_majority()`, `a.top_lead().unwrap() ==
+    /// a.count_top_axes() - a.count_bottom_axes()`. Pinned via
+    /// `resource_limits_top_lead_value_equals_top_minus_bottom_when_top_majority`.
+    ///
+    /// **Range bound contract**: when `a.top_lead() == Some(k)`,
+    /// `1 <= k && k <= Self::FIELD_COUNT`. Pinned via
+    /// `resource_limits_top_lead_value_lies_in_one_through_field_count`.
+    ///
+    /// `const fn` so a caller can pin the exact top lead at compile
+    /// time (`const _: () = assert!(matches!(
+    /// UNBOUNDED_RESOURCE_LIMITS.top_lead(), Some(6)));`).
+    ///
+    /// Theory anchor: same as [`Self::bottom_lead`], on the DUAL
+    /// arm-selection combinator. The (bottom_lead, top_lead) atomic
+    /// pair jointly opens the CARDINAL-DISTANCE column past the just-
+    /// closed atomic MAJORITY-KIND column on the SAME two-arm atomic
+    /// tally pair one CELL-KIND axis over from the COMPOUND
+    /// (polar_lead, interior_lead) DIRECTED-LEAD pair — LOAD-BEARING
+    /// because the atomic boolean STRICT-INEQUALITY MAJORITY verdict
+    /// names WHICH atomic arm wins but NOT BY HOW MUCH; the paired
+    /// `Option<usize>` DIRECTED-LEAD projection lifts the arithmetic
+    /// magnitude of the winning atomic arm's lead into ONE named typed
+    /// exit per direction, so a downstream consumer of "the winning
+    /// atomic arm's margin" reads `bottom_lead().unwrap_or(0) +
+    /// top_lead().unwrap_or(0)` as the ABSOLUTE atomic skew rather than
+    /// re-deriving the guarded subtraction at every call site.
+    ///
+    /// Frontier inspiration: same as [`Self::bottom_lead`], through the
+    /// DUAL max-arm-selection combinator on the two atomic pole tallies
+    /// of the DISJOINT-BUT-NOT-EXHAUSTIVE (bottom, top) atomic sub-
+    /// partition of the polar cell. APL's guarded
+    /// `(+/⍵=⌈/⍵) - (+/⍵=0)` on the DUAL atomic-directed arm. Haskell's
+    /// `if length top > length bottom then Just (length top - length
+    /// bottom) else Nothing` on the DUAL atomic arm.
+    #[must_use]
+    pub const fn top_lead(self) -> Option<usize> {
+        let bottom = self.count_bottom_axes();
+        let top = self.count_top_axes();
+        if top > bottom {
+            Some(top - bottom)
+        } else {
+            None
+        }
+    }
+
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
     /// `self.first_bottom_axis_index()` returns `Some(i)` for the least
     /// `i` such that `self.field_values()[i] == 0`, or `None` when no
@@ -60216,5 +60502,388 @@ mod tests {
         const _: () = assert!(EMPTY_RESOURCE_LIMITS.has_atomic_majority());
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.has_atomic_majority());
         const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.has_atomic_majority());
+    }
+
+    #[test]
+    fn resource_limits_bottom_lead_preset_pins_saturate_on_bottom_uniform_reject_on_others() {
+        // Preset pins on the ATOMIC BOTTOM-directed arm of the
+        // CARDINAL-DISTANCE column — EXACTLY ONE of the five uniform
+        // presets fires the SATURATED atomic CARDINAL lead at
+        // `Some(FIELD_COUNT)`: EMPTY, the atomic-BOTTOM-uniform preset.
+        // The three interior-uniform presets sit at the atomic zero-tie
+        // corner and reject; UNBOUNDED sits on the DUAL top-directed
+        // arm. The LOAD-BEARING BROADER atomic-tie preset rejection
+        // pattern where the compound polar_lead fires on TWO uniform
+        // presets (the two polar-uniform presets EMPTY and UNBOUNDED).
+        assert_eq!(EMPTY_RESOURCE_LIMITS.bottom_lead(), Some(6));
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.bottom_lead(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.bottom_lead(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.bottom_lead(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.bottom_lead(), None);
+    }
+
+    #[test]
+    fn resource_limits_top_lead_preset_pins_saturate_on_top_uniform_reject_on_others() {
+        // DUAL preset pins — EXACTLY ONE of the five uniform presets
+        // fires the SATURATED atomic CARDINAL lead at `Some(FIELD_COUNT)`
+        // on the top-directed arm: UNBOUNDED. Mirror of the paired
+        // [`bottom_lead`] preset pin on the DUAL arm-selection
+        // combinator.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.top_lead(), None);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.top_lead(), Some(6));
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.top_lead(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.top_lead(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.top_lead(), None);
+    }
+
+    #[test]
+    fn resource_limits_bottom_lead_test_local_witnesses_fire_on_every_bottom_carrying_fixture() {
+        // Truly-mixed witnesses on the atomic BOTTOM-directed arm — all
+        // three truly-mixed BOTTOM-CARRYING fixtures fire `Some(k)` with
+        // `1 <= k < FIELD_COUNT`, exercising the interior of the atomic
+        // CARDINAL range no uniform preset can reach (uniform presets
+        // fire `Some(FIELD_COUNT)` or `None`). SPARSE and
+        // CONTIGUOUS_INTERIOR each carry a 3-bottom-0-top split so the
+        // guarded subtraction fires `Some(3)`; ENDPOINTS_ONLY carries a
+        // 2-bottom-0-top split so it fires `Some(2)`. The LOAD-BEARING
+        // NON-SATURATED CARDINAL pin on the atomic bottom arm — the
+        // paired [`polar_lead`] can only pin one non-saturated
+        // truly-mixed value at Some(k) because two of the three
+        // truly-mixed fixtures sit at the compound tie, whereas THIS
+        // atomic projection pins THREE distinct non-saturated
+        // truly-mixed values because all three fixtures fire the same
+        // BOTTOM-directed arm at (Some(3), Some(3), Some(2)).
+        assert_eq!(SPARSE_BOTTOM_POSTURE.bottom_lead(), Some(3));
+        assert_eq!(CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.bottom_lead(), Some(3));
+        assert_eq!(ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_lead(), Some(2));
+    }
+
+    #[test]
+    fn resource_limits_top_lead_test_local_witnesses_reject_on_every_bottom_carrying_fixture() {
+        // Truly-mixed witnesses on the atomic TOP-directed arm — ALL
+        // THREE truly-mixed BOTTOM-CARRYING fixtures reject the
+        // TOP-directed arm because no shipped truly-mixed fixture
+        // places any axis at the top pole. DUAL of the paired
+        // [`bottom_lead`] ALL-FIRE pin on the DUAL atomic arm.
+        assert_eq!(SPARSE_BOTTOM_POSTURE.top_lead(), None);
+        assert_eq!(CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.top_lead(), None);
+        assert_eq!(ENDPOINTS_ONLY_BOTTOM_POSTURE.top_lead(), None);
+    }
+
+    #[test]
+    fn resource_limits_bottom_lead_is_some_iff_bottom_is_majority() {
+        // SOME-bridge — LOAD-BEARING structural pin. The atomic
+        // BOTTOM-directed lead fires `Some(_)` iff the paired boolean
+        // STRICT-INEQUALITY atomic MAJORITY verdict fires — the
+        // CARDINAL projection strictly REFINES the boolean projection
+        // on the SAME atomic arm-selection combinator, with the
+        // CARDINAL value carrying the magnitude the boolean fold
+        // structurally cannot access.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.bottom_lead().is_some(),
+                a.bottom_is_majority(),
+                "bottom_lead().is_some() != bottom_is_majority() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_lead_is_some_iff_top_is_majority() {
+        // DUAL SOME-bridge — mirror of the paired bottom-directed
+        // SOME-bridge on the DUAL atomic arm-selection combinator.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.top_lead().is_some(),
+                a.top_is_majority(),
+                "top_lead().is_some() != top_is_majority() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_lead_is_none_iff_top_or_atomically_balanced() {
+        // NONE-bridge — the atomic BOTTOM-directed lead fires `None` on
+        // EXACTLY the two other atomic-trichotomy legs (top-majority OR
+        // atomically-balanced). Substrate theorem tying the
+        // `Option::None` cell to the paired atomic boolean
+        // STRICT-TOTAL-ORDER trichotomy's DUAL arm and TIE leg.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.bottom_lead().is_none(),
+                a.top_is_majority() || a.is_atomically_balanced(),
+                "bottom_lead().is_none() != (top_is_majority || is_atomically_balanced) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_lead_is_none_iff_bottom_or_atomically_balanced() {
+        // DUAL NONE-bridge — mirror of the paired bottom-directed
+        // NONE-bridge on the DUAL atomic arm-selection combinator.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.top_lead().is_none(),
+                a.bottom_is_majority() || a.is_atomically_balanced(),
+                "top_lead().is_none() != (bottom_is_majority || is_atomically_balanced) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_lead_value_equals_bottom_minus_top_when_bottom_majority() {
+        // CARDINAL-value bridge on the SOME arm — LOAD-BEARING
+        // structural pin. On every atomic-bottom-dominant posture, the
+        // wrapped `usize` value EQUALS the DIRECTED difference of the
+        // two ARITHMETIC-QUANTIFIER tallies. Crystallizes the guarded
+        // subtraction as ONE typed theorem the substrate proves once
+        // for every downstream consumer of "how much does the atomic
+        // bottom arm lead by".
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if let Some(k) = a.bottom_lead() {
+                assert_eq!(
+                    k,
+                    a.count_bottom_axes() - a.count_top_axes(),
+                    "bottom_lead().unwrap() != count_bottom_axes - count_top_axes on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_lead_value_equals_top_minus_bottom_when_top_majority() {
+        // DUAL CARDINAL-value bridge — mirror of the paired bottom-
+        // directed CARDINAL-value pin on the DUAL atomic arm-selection
+        // combinator.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if let Some(k) = a.top_lead() {
+                assert_eq!(
+                    k,
+                    a.count_top_axes() - a.count_bottom_axes(),
+                    "top_lead().unwrap() != count_top_axes - count_bottom_axes on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_lead_and_top_lead_are_mutually_exclusive_on_some() {
+        // Cross-cell disjointness on the SOME cell — LOAD-BEARING
+        // structural pin. A `<` and a `>` on the same two `usize`s
+        // cannot both hold, so the atomic DIRECTED-LEAD `Option<usize>`
+        // pair fires `Some(_)` on at most one arm per posture —
+        // matching the paired [`bottom_is_majority`]/[`top_is_majority`]
+        // mutual-exclusion pin lifted through the CARDINAL projection.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert!(
+                !(a.bottom_lead().is_some() && a.top_lead().is_some()),
+                "bottom_lead().is_some() && top_lead().is_some() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_lead_value_lies_in_one_through_field_count() {
+        // Range bound contract — LOAD-BEARING structural pin. When
+        // `Some(k)`, `1 <= k <= FIELD_COUNT`: the lower bound follows
+        // from the strict `>` guard, the upper bound from the atomic
+        // pole tallies each lying in `[0, FIELD_COUNT]` (their strict
+        // difference cannot exceed FIELD_COUNT itself).
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if let Some(k) = a.bottom_lead() {
+                assert!(
+                    (1..=ResourceLimits::FIELD_COUNT).contains(&k),
+                    "bottom_lead() = Some({k}) out of [1, {}] on {a:?}",
+                    ResourceLimits::FIELD_COUNT,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_lead_value_lies_in_one_through_field_count() {
+        // DUAL range bound contract — mirror of the paired bottom-
+        // directed range-bound pin on the DUAL atomic arm-selection
+        // combinator.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if let Some(k) = a.top_lead() {
+                assert!(
+                    (1..=ResourceLimits::FIELD_COUNT).contains(&k),
+                    "top_lead() = Some({k}) out of [1, {}] on {a:?}",
+                    ResourceLimits::FIELD_COUNT,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_balance_implies_both_atomic_leads_none() {
+        // Atomic-balance ⇒ both-None — LOAD-BEARING structural pin. The
+        // atomic-balance leg jointly rejects BOTH DIRECTED atomic lead
+        // verdicts — neither strict-inequality guard can fire under
+        // equality. Mirror of the compound
+        // `resource_limits_balance_implies_both_leads_none` one
+        // CELL-KIND axis over on the ATOMIC pair.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.is_atomically_balanced() {
+                assert!(
+                    a.bottom_lead().is_none(),
+                    "bottom_lead() fires with is_atomically_balanced on {a:?}",
+                );
+                assert!(
+                    a.top_lead().is_none(),
+                    "top_lead() fires with is_atomically_balanced on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_lead_some_top_lead_some_and_atomic_balance_partition_every_posture() {
+        // Atomic SOME-count partition — LOAD-BEARING structural pin.
+        // EXACTLY ONE of the three legs (bottom-lead-Some,
+        // top-lead-Some, atomically-balanced) holds on every posture —
+        // the CARDINAL-DISTANCE reading of the paired STRICT-TOTAL-
+        // ORDER trichotomy closure on the atomic DIRECTED-LEAD
+        // `Option<usize>` shape one CELL-KIND axis over from the
+        // compound (polar_lead, interior_lead, is_axially_balanced)
+        // partition.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let fires = usize::from(a.bottom_lead().is_some())
+                + usize::from(a.top_lead().is_some())
+                + usize::from(a.is_atomically_balanced());
+            assert_eq!(
+                fires, 1,
+                "atomic DIRECTED-LEAD trichotomy did not partition {a:?} (fires = {fires})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_directed_lead_projections_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin on the atomic CARDINAL-DISTANCE column — both
+        // atomic DIRECTED-LEAD projections are evaluable in const
+        // context so a caller can pin the exact atomic directed
+        // lead-size at compile time as build-breaks. Mirror of the
+        // const-fn evaluability pins on the (bottom_is_majority,
+        // top_is_majority) pair one PROJECTION-KIND axis under, and on
+        // the compound (polar_lead, interior_lead) pair one CELL-KIND
+        // axis over.
+        const _: () = assert!(matches!(EMPTY_RESOURCE_LIMITS.bottom_lead(), Some(6)));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.bottom_lead().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.bottom_lead().is_none());
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.top_lead().is_none());
+        const _: () = assert!(matches!(UNBOUNDED_RESOURCE_LIMITS.top_lead(), Some(6)));
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_lead().is_none());
     }
 }

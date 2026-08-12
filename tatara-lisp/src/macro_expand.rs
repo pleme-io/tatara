@@ -13429,6 +13429,262 @@ impl ResourceLimits {
         }
     }
 
+    /// Whole-posture BOTTOM-STRICT-MAJORITY predicate —
+    /// `self.bottom_is_majority()` holds iff the bottom-arm tally
+    /// STRICTLY EXCEEDS the top-arm tally on the ATOMIC (bottom, top)
+    /// axial partition of the polar cell — `self.count_bottom_axes() >
+    /// self.count_top_axes()`. The direct CELL-KIND peer of
+    /// [`Self::polar_is_majority`] one CELL axis over on the ATOMIC
+    /// (bottom, top) pair rather than the COMPOUND (polar, interior)
+    /// pair — jointly the (polar_is_majority, bottom_is_majority) pair
+    /// carries the MAJORITY-KIND STRICT-INEQUALITY reading on BOTH
+    /// levels of the (COMPOUND → ATOMIC) refinement chain the
+    /// (has_polar_axis, has_bottom_axis) ANY-fold pair carries one
+    /// QUANTIFIER-STRENGTH axis under.
+    ///
+    /// A STRICT REFINEMENT of BOTH the (has_bottom_axis, count_bottom_axes)
+    /// ANY-fold and arithmetic-COUNT verdicts on the same atomic BOTTOM
+    /// cell: `bottom_is_majority() ⇒ has_bottom_axis()` (a strict
+    /// majority is at least one, since `count_bottom > count_top >= 0`
+    /// forces `count_bottom >= 1`); `bottom_is_majority() ⇒
+    /// count_bottom_axes() >= 1`. Strictly WEAKER than [`Self::is_bottom`]:
+    /// `is_bottom() ⇒ bottom_is_majority()` (STRICT-ALL bottom
+    /// saturates `count_bottom_axes` at `FIELD_COUNT` while `count_top`
+    /// sits at 0). Same (STRICT-ALL ⇒ STRICT-MAJORITY ⇒ ANY) refinement
+    /// chain [`Self::polar_is_majority`] carries on the COMPOUND polar
+    /// arm, transported one CELL axis over to the ATOMIC bottom arm.
+    ///
+    /// The KIND-of-majority projection the atomic ANY-fold and COUNT
+    /// pairs cannot access. Two postures with matching
+    /// `(has_bottom_axis, has_top_axis)` pairs can differ on
+    /// `bottom_is_majority` when their `(count_bottom, count_top)`
+    /// tallies split on `>`; two postures with matching
+    /// `(count_bottom + count_top)` compound polar count can differ on
+    /// `bottom_is_majority` when the split lands `(3, 0)` vs `(1, 2)`.
+    ///
+    /// Mutually exclusive with [`Self::top_is_majority`]: at most one
+    /// holds on any posture (a `<` and a `>` on the same two `usize`s
+    /// cannot both hold). Jointly NOT exhaustive: both fire `false` at
+    /// the atomic-balance corner `count_bottom_axes() ==
+    /// count_top_axes()` — the tie leg of the ATOMIC trichotomy the
+    /// pair leaves as a discriminated verdict readable as
+    /// `!self.bottom_is_majority() && !self.top_is_majority()`.
+    ///
+    /// CONTRAST with the COMPOUND (polar, interior) tally pair: the
+    /// polar-interior tally always sums to `FIELD_COUNT` (exhaustive
+    /// partition), so the balance corner requires a truly-mixed
+    /// posture. The atomic (bottom, top) tally sums to
+    /// `count_polar_axes()` which can be zero, so the balance corner
+    /// is inhabited by EVERY interior-uniform posture (both counts at
+    /// `0`) in addition to any truly-mixed posture with matching
+    /// atomic tallies. This is the LOAD-BEARING structural difference
+    /// the CELL axis names: the atomic trichotomy has a BROADER tie
+    /// leg because the atomic partition is NOT exhaustive over the
+    /// whole axis set.
+    ///
+    /// Encoded as the plain `const fn` `self.count_bottom_axes() >
+    /// self.count_top_axes()` on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies — matching
+    /// [`Self::polar_is_majority`]'s shape verbatim on the ATOMIC
+    /// (bottom, top) arm-selection combinator.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.bottom_is_majority() ==
+    /// true` (every axis at the bottom pole → bottom = 6 > 0 = top);
+    /// `UNBOUNDED_RESOURCE_LIMITS.bottom_is_majority() == false` (every
+    /// axis at the top pole → bottom = 0 < 6 = top);
+    /// `DEFAULT_RESOURCE_LIMITS.bottom_is_majority() == false` (every
+    /// axis strictly interior → bottom = 0 == 0 = top → ATOMIC TIE);
+    /// `HAND_AUTHORED_MID_POSTURE.bottom_is_majority() == false` (same
+    /// atomic-tie-at-zero corner); `HAND_AUTHORED_OTHER_POSTURE
+    /// .bottom_is_majority() == false` (same). The five uniform
+    /// fixtures partition into the bottom-uniform arm (EMPTY) firing
+    /// `true`, the top-uniform arm (UNBOUNDED) firing `false`, and the
+    /// interior-uniform arm (DEFAULT + both hand-authored) sitting at
+    /// the atomic-balance corner — a strictly BROADER tie-arm than
+    /// [`Self::polar_is_majority`]'s (which fires `true` on both
+    /// EMPTY and UNBOUNDED because both saturate the polar arm).
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .bottom_is_majority() == true` (3 bottom + 0 top → bottom-only);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.bottom_is_majority() == true`
+    /// (same 3 + 0); `ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_is_majority()
+    /// == true` (2 + 0). ALL THREE truly-mixed BOTTOM-CARRYING
+    /// fixtures fire `true` on the bottom arm because no shipped
+    /// truly-mixed fixture places any axis at the top pole. Pins the
+    /// LOAD-BEARING BOTTOM-DOMINANT arm of the ATOMIC trichotomy at
+    /// every non-uniform bottom-carrying posture, and pins the paired
+    /// (polar_is_majority, bottom_is_majority) verdicts as
+    /// INDEPENDENT: `SPARSE_BOTTOM_POSTURE` and
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE` fire `bottom_is_majority`
+    /// but REJECT `polar_is_majority` (both carry a 3-3 polar-interior
+    /// tie), witnessing that atomic-majority ≠ compound-majority
+    /// through DIFFERENT trichotomy legs on the same posture.
+    ///
+    /// **Comparison-agreement contract**: for every posture `a`,
+    /// `a.bottom_is_majority() == (a.count_bottom_axes() >
+    /// a.count_top_axes())`. Pinned via
+    /// `resource_limits_bottom_is_majority_equals_bottom_count_gt_top_count`.
+    ///
+    /// **is_bottom ⇒ bottom_is_majority contract**: on every posture,
+    /// `a.is_bottom() ⇒ a.bottom_is_majority()`. Pinned via
+    /// `resource_limits_is_bottom_implies_bottom_is_majority_on_every_shipped_posture`.
+    ///
+    /// **bottom_is_majority ⇒ has_bottom_axis contract**: on every
+    /// posture, `a.bottom_is_majority() ⇒ a.has_bottom_axis()`. Pinned
+    /// via
+    /// `resource_limits_bottom_is_majority_implies_has_bottom_axis_on_every_shipped_posture`.
+    ///
+    /// **Mutual exclusion with top_is_majority**: on every posture,
+    /// `!(a.bottom_is_majority() && a.top_is_majority())`. Pinned via
+    /// `resource_limits_bottom_is_majority_and_top_is_majority_are_mutually_exclusive`.
+    ///
+    /// **Trichotomy exhaustiveness**: on every posture, EXACTLY ONE of
+    /// `a.bottom_is_majority()`, `a.top_is_majority()`, or
+    /// `a.count_bottom_axes() == a.count_top_axes()` holds. Pinned via
+    /// `resource_limits_bottom_is_majority_top_is_majority_and_atomic_tie_partition_every_posture`.
+    ///
+    /// **CROSS-CELL bridge to has_polar_axis**: for every posture `a`,
+    /// `a.bottom_is_majority() || a.top_is_majority() ⇒
+    /// a.has_polar_axis()`. The atomic MAJORITY on either arm implies
+    /// polar existence at the compound cell via the ATOMIC-DECOMPOSITION
+    /// theorem `count_polar == count_bottom + count_top >= 1`. Pinned
+    /// via
+    /// `resource_limits_atomic_strict_majority_implies_has_polar_axis`.
+    ///
+    /// `const fn` so a caller can pin the atomic-bottom-majority
+    /// verdict at compile time (`const _: () = assert!(
+    /// EMPTY_RESOURCE_LIMITS.bottom_is_majority());`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// atomic-bottom-strict-majority verdict is a named typed exit
+    /// rather than an inline `self.count_bottom_axes() >
+    /// self.count_top_axes()` per-consumer comparison. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the
+    /// (bottom_is_majority, top_is_majority) pair opens the
+    /// MAJORITY-KIND column on the ATOMIC (bottom, top) tally pair one
+    /// CELL-KIND axis over from the just-shipped
+    /// (polar_is_majority, interior_is_majority) COMPOUND pair with the
+    /// LOAD-BEARING BROADER TIE LEG partitioning every interior-uniform
+    /// posture — and every truly-mixed atomic-tied posture — into the
+    /// equality leg the polar-interior pair narrows to only-truly-
+    /// mixed corners. THEORY.md §V.1 — knowable platform; the
+    /// atomic-MAJORITY-KIND verdict is a TYPE-level operation on the
+    /// posture algebra returning a `const`-evaluable `bool`.
+    ///
+    /// Frontier inspiration: classical order theory's canonical
+    /// "strict-majority" combinator on a DISJOINT-BUT-NOT-EXHAUSTIVE
+    /// two-arm sub-partition — the same shape [`Self::polar_is_majority`]
+    /// lifts on the EXHAUSTIVE pair, transported one CELL axis over to
+    /// the atomic sub-partition where the residual (neither-bottom-nor-
+    /// top) cell inhabits the tie corner rather than a third named arm.
+    /// APL's `(+/⍵=0) > (+/⍵=⌈/⍵)` — the direct arithmetic-comparison
+    /// combinator on the ATOMIC paired tally. Haskell's `length bottom >
+    /// length top` on the two atomic pole sub-vectors. Idris's
+    /// `count (== Z) v > count (== maxBound) v` returning `Bool` at the
+    /// type of the paired atomic-arm-tally comparison. Voting-theory's
+    /// canonical "strict-plurality" combinator on a two-candidate
+    /// election where a third abstain arm exists — the abstainers
+    /// inhabit the tie corner when both candidates score zero, which is
+    /// the same shape the interior-uniform corner takes on the atomic
+    /// trichotomy. Translation through pleme-io primitives: plain
+    /// `const fn` `self.count_bottom_axes() > self.count_top_axes()` on
+    /// the two already-lifted ARITHMETIC-QUANTIFIER tallies, no new
+    /// dep, no typeclass indirection, no per-axis loop, no allocation.
+    #[must_use]
+    pub const fn bottom_is_majority(self) -> bool {
+        self.count_bottom_axes() > self.count_top_axes()
+    }
+
+    /// Whole-posture TOP-STRICT-MAJORITY predicate —
+    /// `self.top_is_majority()` holds iff the top-arm tally STRICTLY
+    /// EXCEEDS the bottom-arm tally on the ATOMIC (bottom, top) axial
+    /// partition of the polar cell — `self.count_top_axes() >
+    /// self.count_bottom_axes()`. The direct MAJORITY-KIND DUAL of
+    /// [`Self::bottom_is_majority`] on the DUAL arm-selection
+    /// combinator, and the CELL-KIND peer of
+    /// [`Self::interior_is_majority`] one CELL axis over on the
+    /// ATOMIC (bottom, top) pair rather than the COMPOUND (polar,
+    /// interior) pair.
+    ///
+    /// Strictly WEAKER than [`Self::is_top`]: `self.is_top() ⇒
+    /// self.top_is_majority()`. Strictly STRONGER than
+    /// [`Self::has_top_axis`]: `self.top_is_majority() ⇒
+    /// self.has_top_axis()`. Same (STRICT-ALL ⇒ STRICT-MAJORITY ⇒
+    /// ANY) refinement chain as the bottom peer on the DUAL atomic
+    /// arm.
+    ///
+    /// Mutually exclusive with [`Self::bottom_is_majority`]: at most
+    /// one holds on any posture. Jointly NOT exhaustive: both fire
+    /// `false` at the atomic-balance corner `count_bottom_axes() ==
+    /// count_top_axes()` — the tie leg of the atomic trichotomy the
+    /// pair leaves as a discriminated verdict readable as
+    /// `!self.bottom_is_majority() && !self.top_is_majority()`. As on
+    /// the paired bottom arm, the ATOMIC balance corner is BROADER
+    /// than the COMPOUND balance corner: EVERY interior-uniform
+    /// posture sits at the atomic tie (both counts at zero), whereas
+    /// the polar-interior tie requires a truly-mixed posture.
+    ///
+    /// Encoded as the plain `const fn` `self.count_top_axes() >
+    /// self.count_bottom_axes()` on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies — matching
+    /// [`Self::bottom_is_majority`]'s shape verbatim on the DUAL
+    /// arm-selection combinator.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.top_is_majority() ==
+    /// false` (every axis at the bottom pole → top = 0 < 6 = bottom);
+    /// `UNBOUNDED_RESOURCE_LIMITS.top_is_majority() == true` (every
+    /// axis at the top pole → top = 6 > 0 = bottom);
+    /// `DEFAULT_RESOURCE_LIMITS.top_is_majority() == false` (every
+    /// axis strictly interior → both counts at 0);
+    /// `HAND_AUTHORED_MID_POSTURE.top_is_majority() == false`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.top_is_majority() == false`. The
+    /// DUAL preset pins of the paired [`Self::bottom_is_majority`]
+    /// on the DUAL atomic arm.
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .top_is_majority() == false` (3 bottom + 0 top → bottom-only);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.top_is_majority() == false`
+    /// (same 3 + 0); `ENDPOINTS_ONLY_BOTTOM_POSTURE.top_is_majority()
+    /// == false` (2 + 0). ALL THREE truly-mixed BOTTOM-CARRYING
+    /// fixtures REJECT the top arm because no shipped truly-mixed
+    /// fixture places any axis at the top pole — the DUAL of the
+    /// paired bottom-majority ALL-FIRE pin.
+    ///
+    /// **Comparison-agreement contract**: for every posture `a`,
+    /// `a.top_is_majority() == (a.count_top_axes() >
+    /// a.count_bottom_axes())`. Pinned via
+    /// `resource_limits_top_is_majority_equals_top_count_gt_bottom_count`.
+    ///
+    /// **is_top ⇒ top_is_majority contract**: on every posture,
+    /// `a.is_top() ⇒ a.top_is_majority()`. Pinned via
+    /// `resource_limits_is_top_implies_top_is_majority_on_every_shipped_posture`.
+    ///
+    /// **top_is_majority ⇒ has_top_axis contract**: on every posture,
+    /// `a.top_is_majority() ⇒ a.has_top_axis()`. Pinned via
+    /// `resource_limits_top_is_majority_implies_has_top_axis_on_every_shipped_posture`.
+    ///
+    /// `const fn` so a caller can pin the atomic-top-majority verdict
+    /// at compile time (`const _: () = assert!(
+    /// UNBOUNDED_RESOURCE_LIMITS.top_is_majority());`).
+    ///
+    /// Theory anchor: same as [`Self::bottom_is_majority`], on the
+    /// DUAL atomic-arm-selection combinator. The (bottom_is_majority,
+    /// top_is_majority) pair jointly carries the STRICT-TOTAL-ORDER
+    /// trichotomy on the atomic tally pair — LOAD-BEARING because the
+    /// (min, max) permutation on the atomic counts preserves neither
+    /// operand identity, so the KIND of the majority arm on the
+    /// atomic partition is a projection the atomic arithmetic-depth
+    /// column structurally cannot access.
+    ///
+    /// Frontier inspiration: same as [`Self::bottom_is_majority`],
+    /// through the DUAL max-arm-selection combinator on the two
+    /// atomic pole tallies. APL's `(+/⍵=⌈/⍵) > (+/⍵=0)`. Haskell's
+    /// `length top > length bottom` on the DUAL atomic arm.
+    #[must_use]
+    pub const fn top_is_majority(self) -> bool {
+        self.count_top_axes() > self.count_bottom_axes()
+    }
+
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
     /// `self.first_bottom_axis_index()` returns `Some(i)` for the least
     /// `i` such that `self.field_values()[i] == 0`, or `None` when no
@@ -59024,5 +59280,332 @@ mod tests {
         const _: () = assert!(EMPTY_RESOURCE_LIMITS.axial_signed_skew() == 6);
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.axial_signed_skew() == 6);
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.axial_signed_skew() == -6);
+    }
+
+    #[test]
+    fn resource_limits_bottom_is_majority_preset_pins_fire_on_bottom_uniform_reject_on_others() {
+        // Preset pins — EMPTY (bottom-uniform) fires because
+        // count_bottom = FIELD_COUNT > 0 = count_top. UNBOUNDED
+        // (top-uniform) rejects because count_bottom = 0 < FIELD_COUNT
+        // = count_top. The interior-uniform arm (DEFAULT +
+        // HAND_AUTHORED_MID + HAND_AUTHORED_OTHER) rejects because
+        // both atomic counts sit at 0 — the ATOMIC balance corner
+        // inhabited by every interior-uniform posture. The five
+        // uniform fixtures partition on the ATOMIC arm as (1 bottom-
+        // firing, 1 top-firing, 3 atomic-tied) — a strictly BROADER
+        // tie leg than the corresponding polar_is_majority pin
+        // partitions as (2 polar-firing, 3 interior-firing, 0 tied)
+        // on the COMPOUND arm.
+        assert!(EMPTY_RESOURCE_LIMITS.bottom_is_majority());
+        assert!(!UNBOUNDED_RESOURCE_LIMITS.bottom_is_majority());
+        assert!(!DEFAULT_RESOURCE_LIMITS.bottom_is_majority());
+        assert!(!HAND_AUTHORED_MID_POSTURE.bottom_is_majority());
+        assert!(!HAND_AUTHORED_OTHER_POSTURE.bottom_is_majority());
+    }
+
+    #[test]
+    fn resource_limits_top_is_majority_preset_pins_fire_on_top_uniform_reject_on_others() {
+        // Preset pins on the DUAL atomic arm — UNBOUNDED fires;
+        // EMPTY + interior-uniform arm rejects. The DUAL of the
+        // paired bottom_is_majority preset pin — the two together
+        // partition the five uniform fixtures into exactly the
+        // (bottom-uniform, top-uniform, atomic-tied) three-cell
+        // partition on the ATOMIC MAJORITY-KIND surface.
+        assert!(!EMPTY_RESOURCE_LIMITS.top_is_majority());
+        assert!(UNBOUNDED_RESOURCE_LIMITS.top_is_majority());
+        assert!(!DEFAULT_RESOURCE_LIMITS.top_is_majority());
+        assert!(!HAND_AUTHORED_MID_POSTURE.top_is_majority());
+        assert!(!HAND_AUTHORED_OTHER_POSTURE.top_is_majority());
+    }
+
+    #[test]
+    fn resource_limits_bottom_is_majority_test_local_witnesses_fire_on_every_bottom_carrying_fixture(
+    ) {
+        // Truly-mixed witnesses on the atomic bottom arm — ALL THREE
+        // truly-mixed fixtures place bottom axes but no top axes, so
+        // the strict `>` on `(bottom, top)` fires uniformly. This
+        // pins the LOAD-BEARING INDEPENDENCE from polar_is_majority:
+        // SPARSE_BOTTOM_POSTURE and CONTIGUOUS_INTERIOR_BOTTOM_POSTURE
+        // both fire bottom_is_majority but REJECT polar_is_majority
+        // (they carry a 3-3 polar-interior tie) — the atomic MAJORITY
+        // reading and the compound MAJORITY reading disagree on the
+        // same posture through DIFFERENT trichotomy legs.
+        assert!(SPARSE_BOTTOM_POSTURE.bottom_is_majority());
+        assert!(CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.bottom_is_majority());
+        assert!(ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_is_majority());
+    }
+
+    #[test]
+    fn resource_limits_top_is_majority_test_local_witnesses_reject_on_every_bottom_carrying_fixture(
+    ) {
+        // DUAL truly-mixed witnesses on the atomic top arm — ALL
+        // THREE truly-mixed fixtures reject the top arm because no
+        // shipped truly-mixed fixture places any axis at the top
+        // pole. The paired (bottom_is_majority, top_is_majority)
+        // verdicts on the truly-mixed subset partition as (3 bottom-
+        // firing, 0 top-firing, 0 tied) — the strictly BOTTOM-
+        // DOMINANT atomic arm.
+        assert!(!SPARSE_BOTTOM_POSTURE.top_is_majority());
+        assert!(!CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.top_is_majority());
+        assert!(!ENDPOINTS_ONLY_BOTTOM_POSTURE.top_is_majority());
+    }
+
+    #[test]
+    fn resource_limits_bottom_is_majority_equals_bottom_count_gt_top_count() {
+        // Comparison-agreement contract — LOAD-BEARING structural
+        // pin. The atomic-bottom-strict-majority verdict IS the `>`
+        // comparison on the two ATOMIC ARITHMETIC-QUANTIFIER tallies,
+        // per definition. Mirror of the polar_is_majority definitional
+        // pin on the ATOMIC arm one CELL axis over.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.bottom_is_majority(),
+                a.count_bottom_axes() > a.count_top_axes(),
+                "bottom_is_majority != (count_bottom_axes > count_top_axes) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_is_majority_equals_top_count_gt_bottom_count() {
+        // Comparison-agreement contract on the DUAL atomic arm —
+        // LOAD-BEARING structural pin. Mirror of bottom_is_majority
+        // on the DUAL comparison direction.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.top_is_majority(),
+                a.count_top_axes() > a.count_bottom_axes(),
+                "top_is_majority != (count_top_axes > count_bottom_axes) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_bottom_implies_bottom_is_majority_on_every_shipped_posture() {
+        // STRICT-ALL ⇒ STRICT-MAJORITY refinement contract on the
+        // atomic bottom arm — is_bottom saturates count_bottom at
+        // FIELD_COUNT while count_top sits at 0, so the strict
+        // majority trivially wins on FIELD_COUNT > 0. Pins the
+        // direction of the (STRICT-ALL, STRICT-MAJORITY) refinement
+        // on the ATOMIC bottom arm one CELL axis over from the
+        // paired is_axially_polar ⇒ polar_is_majority pin.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.is_bottom() {
+                assert!(
+                    a.bottom_is_majority(),
+                    "is_bottom without bottom_is_majority on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_top_implies_top_is_majority_on_every_shipped_posture() {
+        // Same refinement contract on the DUAL atomic arm — is_top
+        // saturates count_top at FIELD_COUNT while count_bottom sits
+        // at 0.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.is_top() {
+                assert!(
+                    a.top_is_majority(),
+                    "is_top without top_is_majority on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_is_majority_implies_has_bottom_axis_on_every_shipped_posture() {
+        // STRICT-MAJORITY ⇒ ANY-fold refinement contract on the
+        // atomic bottom arm — count_bottom > count_top >= 0 forces
+        // count_bottom >= 1. Pins the direction of the (ANY,
+        // MAJORITY) refinement column on the ATOMIC bottom arm.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.bottom_is_majority() {
+                assert!(
+                    a.has_bottom_axis(),
+                    "bottom_is_majority without has_bottom_axis on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_is_majority_implies_has_top_axis_on_every_shipped_posture() {
+        // Same refinement contract on the DUAL atomic arm.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.top_is_majority() {
+                assert!(
+                    a.has_top_axis(),
+                    "top_is_majority without has_top_axis on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_is_majority_and_top_is_majority_are_mutually_exclusive() {
+        // Mutual-exclusion contract — LOAD-BEARING structural pin. A
+        // `<` and a `>` on the same two `usize`s cannot both hold,
+        // so at most one atomic-strict-majority verdict fires on any
+        // posture. Crystallizes the mutual-exclusion arm of the
+        // ATOMIC total-order trichotomy as ONE typed theorem.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert!(
+                !(a.bottom_is_majority() && a.top_is_majority()),
+                "both bottom_is_majority and top_is_majority fire on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_is_majority_top_is_majority_and_atomic_tie_partition_every_posture() {
+        // Trichotomy-exhaustiveness contract on the ATOMIC pair —
+        // EXACTLY ONE of the three legs (bottom-majority, top-
+        // majority, atomic-tie) holds on every posture — the total-
+        // order trichotomy on the atomic two-arm tally pair covers
+        // the posture universe exactly once. Pinned by counting the
+        // true verdicts across the three legs and asserting exactly
+        // one fires. Contrast: the ATOMIC tie leg is BROADER than the
+        // COMPOUND tie leg because the atomic partition is not
+        // exhaustive — every interior-uniform posture inhabits the
+        // atomic tie at (0, 0).
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let tie = a.count_bottom_axes() == a.count_top_axes();
+            let fires = usize::from(a.bottom_is_majority())
+                + usize::from(a.top_is_majority())
+                + usize::from(tie);
+            assert_eq!(
+                fires, 1,
+                "atomic trichotomy legs did not partition {a:?} (fires = {fires})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_strict_majority_implies_has_polar_axis() {
+        // CROSS-CELL bridge to has_polar_axis — the atomic MAJORITY
+        // on either arm implies polar existence at the compound cell
+        // via the ATOMIC-DECOMPOSITION theorem count_polar ==
+        // count_bottom + count_top >= 1 (a strict majority on either
+        // atomic arm forces at least one polar axis). LOAD-BEARING
+        // bridge from the ATOMIC MAJORITY-KIND column into the
+        // COMPOUND ANY-fold column one CELL axis up.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.bottom_is_majority() || a.top_is_majority() {
+                assert!(
+                    a.has_polar_axis(),
+                    "atomic strict majority without has_polar_axis on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_majority_kind_projections_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin on the ATOMIC MAJORITY-KIND column — both
+        // boolean projections are evaluable in const context so a
+        // caller can pin the atomic pole KIND of the majority arm at
+        // compile time as build-breaks. Mirror of the const-fn
+        // evaluability pins on the COMPOUND (polar_is_majority,
+        // interior_is_majority) pair one CELL-KIND axis over and the
+        // (count_bottom_axes, count_top_axes) pair one COMPARISON-
+        // KIND axis under.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.bottom_is_majority());
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.bottom_is_majority());
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.bottom_is_majority());
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.top_is_majority());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.top_is_majority());
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.top_is_majority());
     }
 }

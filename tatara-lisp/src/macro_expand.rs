@@ -12669,6 +12669,325 @@ impl ResourceLimits {
         self.count_polar_axes() != self.count_interior_axes()
     }
 
+    /// Whole-posture POLAR-DIRECTED-LEAD projection —
+    /// `self.polar_lead()` returns `Some(k)` for the CARDINAL magnitude
+    /// `k = self.count_polar_axes() - self.count_interior_axes()` iff
+    /// the polar arm STRICTLY EXCEEDS the interior arm on the (polar,
+    /// interior) axial partition, and `None` at every other posture
+    /// (interior-dominant OR balanced). The direct CARDINAL-DISTANCE
+    /// lift of the just-shipped [`Self::polar_is_majority`] boolean
+    /// STRICT-INEQUALITY verdict one PROJECTION-KIND axis over —
+    /// where the boolean predicate carries THAT the polar arm wins,
+    /// THIS projection carries BY HOW MUCH.
+    ///
+    /// A STRICT REFINEMENT of BOTH the STRICT-INEQUALITY MAJORITY
+    /// verdict AND the MIN/MAX arithmetic-depth pair on the same
+    /// two-arm tally: the SOME-bridge is `polar_lead().is_some() ⇔
+    /// polar_is_majority()`; the CARDINAL-value bridge on the SOME arm
+    /// is `polar_lead() == Some(count_uniformity_axes() -
+    /// count_mixity_axes())` whenever polar dominates (via the
+    /// MAJORITY-KIND identity `polar_is_majority ⇒ (count_uniformity,
+    /// count_mixity) == (count_polar, count_interior)`). Discriminates
+    /// postures the boolean STRICT-INEQUALITY conflates: two polar-
+    /// dominant postures with the SAME `polar_is_majority() == true`
+    /// but DIFFERENT majority magnitudes (e.g. a 4-polar-2-interior
+    /// split and a 6-polar-0-interior split) give DIFFERENT lead
+    /// verdicts (`Some(2)` vs `Some(6)`). The boolean projection
+    /// carries "which arm wins" — arm identity only; the CARDINAL
+    /// projection carries "by how many axes" — the arithmetic magnitude
+    /// the boolean fold structurally cannot access.
+    ///
+    /// The CARDINAL-DISTANCE peer of [`Self::interior_lead`] on the
+    /// DUAL arm-selection combinator, jointly the (polar_lead,
+    /// interior_lead) pair carries the SIGNED-KIND DIRECTED-LEAD
+    /// projection through the paired `Option<usize>` shape — Some on
+    /// exactly the arm that dominates, None on the two other legs of
+    /// the STRICT-TOTAL-ORDER trichotomy (the DUAL arm's majority AND
+    /// the balance corner). Mutually exclusive on the SOME cell: at
+    /// most one of `polar_lead().is_some()` and
+    /// `interior_lead().is_some()` holds on any posture (a `<` and a
+    /// `>` on the same two `usize`s cannot both hold, matching the
+    /// paired [`Self::polar_is_majority`]/[`Self::interior_is_majority`]
+    /// mutual-exclusion pin). Jointly NOT exhaustive on the SOME cell:
+    /// both fire `None` at the perfect-balance corner — matching the
+    /// paired boolean pair's tie-leg behaviour on the DIRECTED-LEAD
+    /// projection.
+    ///
+    /// Encoded as the plain `const fn` guarded-subtraction `if
+    /// count_polar_axes() > count_interior_axes() { Some(count_polar -
+    /// count_interior) } else { None }` on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies — matching [`Self::interior_lead`]'s
+    /// shape verbatim on the DUAL arm-selection combinator. The strict
+    /// `>` guard proves the subtraction cannot underflow, keeping the
+    /// method total on `usize` without a `checked_sub` indirection.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.polar_lead() ==
+    /// Some(6)` (every axis at the bottom pole → polar = 6, interior
+    /// = 0 → lead = 6 = FIELD_COUNT — the SATURATED-lead corner);
+    /// `UNBOUNDED_RESOURCE_LIMITS.polar_lead() == Some(6)` (every axis
+    /// at the top pole → same tally, same saturated lead);
+    /// `DEFAULT_RESOURCE_LIMITS.polar_lead() == None` (every axis
+    /// strictly interior → polar = 0 < 6 = interior → polar loses);
+    /// `HAND_AUTHORED_MID_POSTURE.polar_lead() == None`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.polar_lead() == None`. The five
+    /// uniform fixtures partition cleanly into the polar-uniform arm
+    /// (EMPTY, UNBOUNDED) each firing `Some(FIELD_COUNT)` — the
+    /// arithmetically-saturated lead — and the interior-uniform arm
+    /// (DEFAULT, HAND_AUTHORED_*) each firing `None`.
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .polar_lead() == None` (3 polar + 3 interior → tie, both
+    /// direction verdicts fire `None`); `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE
+    /// .polar_lead() == None` (same 3 + 3 tie);
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_lead() == None` (2 polar +
+    /// 4 interior → interior strictly dominates). The three truly-
+    /// mixed fixtures collectively pin BOTH the tie leg (SPARSE,
+    /// CONTIGUOUS_INTERIOR) AND the interior-dominant leg
+    /// (ENDPOINTS_ONLY) of the trichotomy on THIS projection at
+    /// `None` — the LOAD-BEARING truly-mixed rejection pin.
+    ///
+    /// **Range bound**: when `Some(k)`, `1 <= k <= Self::FIELD_COUNT`
+    /// by construction — the lower bound `k >= 1` follows from the
+    /// strict `>` guard (`count_polar - count_interior >= 1` when
+    /// `count_polar > count_interior`), and the upper bound `k <=
+    /// FIELD_COUNT` follows from the EXHAUSTIVE-PARTITION identity
+    /// `count_polar + count_interior == FIELD_COUNT`.
+    ///
+    /// **SOME-bridge to strict majority**: for every posture `a`,
+    /// `a.polar_lead().is_some() == a.polar_is_majority()`. Pinned via
+    /// `resource_limits_polar_lead_is_some_iff_polar_is_majority`.
+    ///
+    /// **NONE-bridge to non-strict-majority**: for every posture `a`,
+    /// `a.polar_lead().is_none() == !a.polar_is_majority()` —
+    /// equivalently `a.interior_is_majority() || a.is_axially_balanced()`.
+    /// Pinned via `resource_limits_polar_lead_is_none_iff_interior_or_balanced`.
+    ///
+    /// **CARDINAL-value bridge on the SOME arm**: for every posture
+    /// `a` with `a.polar_is_majority()`, `a.polar_lead().unwrap() ==
+    /// a.count_polar_axes() - a.count_interior_axes()`. Pinned via
+    /// `resource_limits_polar_lead_value_equals_polar_minus_interior_when_polar_majority`.
+    ///
+    /// **MIN/MAX-agreement identity**: for every posture `a` with
+    /// `a.polar_is_majority()`, `a.polar_lead().unwrap() ==
+    /// a.count_uniformity_axes() - a.count_mixity_axes()` — via the
+    /// paired majority-arm-tally pin, the CARDINAL lead through the
+    /// DIRECTED (polar, interior) tally EQUALS the CARDINAL lead
+    /// through the ORDERED (max, min) tally on the SAME polar-dominant
+    /// arm. Pinned via
+    /// `resource_limits_polar_lead_value_equals_uniformity_minus_mixity_when_polar_majority`.
+    ///
+    /// **Mutual exclusion with interior_lead on the SOME cell**: on
+    /// every posture, `!(a.polar_lead().is_some() && a.interior_lead()
+    /// .is_some())`. Pinned via
+    /// `resource_limits_polar_lead_and_interior_lead_are_mutually_exclusive_on_some`.
+    ///
+    /// **Range bound contract**: when `a.polar_lead() == Some(k)`,
+    /// `1 <= k && k <= Self::FIELD_COUNT`. Pinned via
+    /// `resource_limits_polar_lead_value_lies_in_one_through_field_count`.
+    ///
+    /// `const fn` so a caller can pin the exact polar lead at compile
+    /// time (`const _: () = assert!(matches!(EMPTY_RESOURCE_LIMITS
+    /// .polar_lead(), Some(6)));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// polar-directed-lead projection is a named typed `Option<usize>`
+    /// exit rather than an inline `if self.count_polar_axes() > self
+    /// .count_interior_axes() { Some(self.count_polar_axes() - self
+    /// .count_interior_axes()) } else { None }` per-consumer guarded
+    /// subtraction. THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the (polar_lead, interior_lead) pair opens
+    /// the CARDINAL-DISTANCE column past the just-closed BOOLEAN
+    /// COMPARISON columns (STRICT-INEQUALITY MAJORITY,
+    /// EQUALITY-KIND BALANCED, De Morgan MAJORITY-EXISTENCE) on the
+    /// SAME two-arm tally pair with the LOAD-BEARING CARDINAL
+    /// magnitude the boolean STRICT-INEQUALITY verdict structurally
+    /// cannot access. THEORY.md §V.1 — knowable platform; the
+    /// CARDINAL-DISTANCE verdict is a TYPE-level operation on the
+    /// posture algebra returning a `const`-evaluable `Option<usize>`.
+    ///
+    /// Frontier inspiration: classical order theory's canonical
+    /// "signed-difference" combinator on the two-arm exhaustive-and-
+    /// disjoint partition lifted through the arm's own dominance
+    /// guard into an `Option<usize>` DIRECTED-LEAD projection. APL's
+    /// guarded `(+/mask) - (+/~mask)` conditionally emitted at the
+    /// dominant arm — the direct CARDINAL-DIFFERENCE combinator on
+    /// the paired axial tally. Haskell's `if length polar > length
+    /// interior then Just (length polar - length interior) else
+    /// Nothing` on the two arm sub-vectors returning `Maybe Int`.
+    /// Idris's `if (count p v) > (count (not . p) v) then Just ((count
+    /// p v) - (count (not . p) v)) else Nothing` returning `Maybe Nat`
+    /// at the type of the paired arm-tally directed difference.
+    /// Voting-theory's canonical "winning-margin" projection on a
+    /// two-candidate strict-plurality election — the exact positive-
+    /// margin figure that decides the plurality winner's dominance
+    /// depth. Translation through pleme-io primitives: plain `const
+    /// fn` guarded subtraction on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies, no `checked_sub` indirection, no
+    /// new dep, no typeclass indirection, no per-axis loop, no
+    /// allocation.
+    #[must_use]
+    pub const fn polar_lead(self) -> Option<usize> {
+        let polar = self.count_polar_axes();
+        let interior = self.count_interior_axes();
+        if polar > interior {
+            Some(polar - interior)
+        } else {
+            None
+        }
+    }
+
+    /// Whole-posture INTERIOR-DIRECTED-LEAD projection —
+    /// `self.interior_lead()` returns `Some(k)` for the CARDINAL
+    /// magnitude `k = self.count_interior_axes() -
+    /// self.count_polar_axes()` iff the interior arm STRICTLY EXCEEDS
+    /// the polar arm on the (polar, interior) axial partition, and
+    /// `None` at every other posture (polar-dominant OR balanced). The
+    /// DUAL CARDINAL-DISTANCE lift of [`Self::interior_is_majority`]
+    /// one PROJECTION-KIND axis over and the ATOMIC-CELL DUAL of
+    /// [`Self::polar_lead`] on the DUAL arm-selection combinator —
+    /// jointly the (polar_lead, interior_lead) pair carries the
+    /// SIGNED-KIND DIRECTED-LEAD projection through the paired
+    /// `Option<usize>` shape.
+    ///
+    /// A STRICT REFINEMENT of BOTH the STRICT-INEQUALITY MAJORITY
+    /// verdict AND the MIN/MAX arithmetic-depth pair on the same
+    /// two-arm tally: `interior_lead().is_some() ⇔
+    /// interior_is_majority()`; on the SOME arm, `interior_lead() ==
+    /// Some(count_uniformity_axes() - count_mixity_axes())` via the
+    /// paired majority-arm-tally identity. Discriminates postures the
+    /// boolean STRICT-INEQUALITY conflates: two interior-dominant
+    /// postures with the SAME `interior_is_majority() == true` but
+    /// DIFFERENT majority magnitudes (e.g. a 2-polar-4-interior split
+    /// and a 0-polar-6-interior split) give DIFFERENT lead verdicts
+    /// (`Some(2)` vs `Some(6)`).
+    ///
+    /// **CROSS-CELL DISJOINTNESS**: on every posture, at MOST one of
+    /// `polar_lead().is_some()` and `interior_lead().is_some()` holds
+    /// (the two STRICT-INEQUALITY directions on the same tally pair
+    /// cannot both fire, matching the paired boolean pair's mutual-
+    /// exclusion pin on the DUAL CARDINAL projection). The
+    /// DIRECTED-LEAD form of the boolean cross-cell exclusivity pair
+    /// one PROJECTION-KIND axis over.
+    ///
+    /// Encoded as the plain `const fn` guarded-subtraction on the DUAL
+    /// per-arm mask — matching [`Self::polar_lead`]'s shape verbatim on
+    /// the DUAL arm-selection combinator. The strict `>` guard proves
+    /// the subtraction cannot underflow on `usize`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.interior_lead() == None`
+    /// (every axis at bottom pole → polar = 6, interior = 0 → interior
+    /// loses); `UNBOUNDED_RESOURCE_LIMITS.interior_lead() == None`
+    /// (same asymmetry); `DEFAULT_RESOURCE_LIMITS.interior_lead() ==
+    /// Some(6)` (every axis strictly interior → interior = 6 = FIELD_COUNT
+    /// — the SATURATED-lead corner on the DUAL arm);
+    /// `HAND_AUTHORED_MID_POSTURE.interior_lead() == Some(6)`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.interior_lead() == Some(6)`. The
+    /// five uniform fixtures partition cleanly into the DUAL
+    /// (interior-uniform → `Some(FIELD_COUNT)`, polar-uniform → `None`)
+    /// arms of the paired [`Self::polar_lead`] preset pins.
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .interior_lead() == None` (3 + 3 tie);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.interior_lead() == None`
+    /// (same 3 + 3 tie); `ENDPOINTS_ONLY_BOTTOM_POSTURE.interior_lead()
+    /// == Some(2)` (2 polar + 4 interior → interior strictly dominates
+    /// with a two-axis lead). The LOAD-BEARING truly-mixed dominance
+    /// witness — where the paired [`Self::polar_lead`] rejects all
+    /// three truly-mixed fixtures (two ties + one interior-dominant),
+    /// THIS projection accepts exactly the interior-dominant one at
+    /// `Some(2)`, pinning BOTH the arm identity AND the CARDINAL
+    /// magnitude of the interior-lead on the sole non-tie non-uniform
+    /// witness. The two-axis lead figure (`Some(2)`) is itself the
+    /// LOAD-BEARING NON-SATURATED CARDINAL witness on the CARDINAL
+    /// column — every preset lead saturates at `Some(FIELD_COUNT)`
+    /// (uniform corners) or fires `None` (uniform-DUAL corners), so
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE` is the sole shipped fixture
+    /// pinning a `Some(k)` with `1 <= k < FIELD_COUNT` — the interior
+    /// of the CARDINAL range.
+    ///
+    /// **Range bound**: when `Some(k)`, `1 <= k <= Self::FIELD_COUNT`
+    /// by construction — mirror of the paired [`Self::polar_lead`]
+    /// range pin on the DUAL arm.
+    ///
+    /// **SOME-bridge to strict majority**: for every posture `a`,
+    /// `a.interior_lead().is_some() == a.interior_is_majority()`.
+    /// Pinned via
+    /// `resource_limits_interior_lead_is_some_iff_interior_is_majority`.
+    ///
+    /// **NONE-bridge to non-strict-majority**: for every posture `a`,
+    /// `a.interior_lead().is_none() == !a.interior_is_majority()` —
+    /// equivalently `a.polar_is_majority() || a.is_axially_balanced()`.
+    /// Pinned via
+    /// `resource_limits_interior_lead_is_none_iff_polar_or_balanced`.
+    ///
+    /// **CARDINAL-value bridge on the SOME arm**: for every posture
+    /// `a` with `a.interior_is_majority()`, `a.interior_lead().unwrap()
+    /// == a.count_interior_axes() - a.count_polar_axes()`. Pinned via
+    /// `resource_limits_interior_lead_value_equals_interior_minus_polar_when_interior_majority`.
+    ///
+    /// **MIN/MAX-agreement identity**: for every posture `a` with
+    /// `a.interior_is_majority()`, `a.interior_lead().unwrap() ==
+    /// a.count_uniformity_axes() - a.count_mixity_axes()` — DUAL of
+    /// the paired [`Self::polar_lead`] MIN/MAX-agreement identity on
+    /// the interior-dominant arm. Pinned via
+    /// `resource_limits_interior_lead_value_equals_uniformity_minus_mixity_when_interior_majority`.
+    ///
+    /// **Range bound contract**: when `a.interior_lead() == Some(k)`,
+    /// `1 <= k && k <= Self::FIELD_COUNT`. Pinned via
+    /// `resource_limits_interior_lead_value_lies_in_one_through_field_count`.
+    ///
+    /// **Balance ⇒ both-None contract**: for every posture `a`,
+    /// `a.is_axially_balanced() ⇒ a.polar_lead().is_none() && a
+    /// .interior_lead().is_none()` — the balance leg jointly rejects
+    /// BOTH DIRECTED lead verdicts, matching the paired boolean pair's
+    /// tie-leg behaviour on the CARDINAL projection. Pinned via
+    /// `resource_limits_balance_implies_both_leads_none`.
+    ///
+    /// **SOME-count partition contract**: for every posture `a`,
+    /// `usize::from(a.polar_lead().is_some()) + usize::from(a
+    /// .interior_lead().is_some()) + usize::from(a.is_axially_balanced())
+    /// == 1` — exactly one of the three legs (polar-lead-Some,
+    /// interior-lead-Some, balanced) holds on every posture. The
+    /// CARDINAL-DISTANCE reading of the paired STRICT-TOTAL-ORDER
+    /// trichotomy closure on the DIRECTED-LEAD `Option<usize>` shape.
+    /// Pinned via
+    /// `resource_limits_polar_lead_some_interior_lead_some_and_balance_partition_every_posture`.
+    ///
+    /// `const fn` so a caller can pin the exact interior lead at
+    /// compile time (`const _: () = assert!(matches!(
+    /// DEFAULT_RESOURCE_LIMITS.interior_lead(), Some(6)));`).
+    ///
+    /// Theory anchor: same as [`Self::polar_lead`], on the DUAL
+    /// arm-selection combinator. The (polar_lead, interior_lead) pair
+    /// jointly opens the CARDINAL-DISTANCE column past the just-closed
+    /// BOOLEAN COMPARISON columns on the SAME two-arm tally pair —
+    /// LOAD-BEARING because the boolean STRICT-INEQUALITY MAJORITY
+    /// verdict names WHICH arm wins but NOT BY HOW MUCH; the paired
+    /// `Option<usize>` DIRECTED-LEAD projection lifts the arithmetic
+    /// magnitude of the winning arm's lead into ONE named typed exit
+    /// per direction, so a downstream consumer of "the winning arm's
+    /// margin" reads `polar_lead().unwrap_or(0) +
+    /// interior_lead().unwrap_or(0)` as the ABSOLUTE skew rather than
+    /// re-deriving the guarded subtraction at every call site.
+    ///
+    /// Frontier inspiration: same as [`Self::polar_lead`], through the
+    /// DUAL max-arm-selection combinator on the two arm tallies of the
+    /// exhaustive-and-disjoint (polar, interior) axial partition. APL's
+    /// guarded `(+/~mask) - (+/mask)` on the DUAL of the paired
+    /// direction. Haskell's `if length interior > length polar then
+    /// Just (length interior - length polar) else Nothing` on the DUAL
+    /// arm.
+    #[must_use]
+    pub const fn interior_lead(self) -> Option<usize> {
+        let polar = self.count_polar_axes();
+        let interior = self.count_interior_axes();
+        if interior > polar {
+            Some(interior - polar)
+        } else {
+            None
+        }
+    }
+
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
     /// `self.first_bottom_axis_index()` returns `Some(i)` for the least
     /// `i` such that `self.field_values()[i] == 0`, or `None` when no
@@ -57251,5 +57570,431 @@ mod tests {
         const _: () = assert!(EMPTY_RESOURCE_LIMITS.has_majority_axis());
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.has_majority_axis());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.has_majority_axis());
+    }
+
+    #[test]
+    fn resource_limits_polar_lead_preset_pins_saturate_on_polar_uniform_reject_on_interior_uniform()
+    {
+        // Preset pins on the CARDINAL-DISTANCE column — the two polar-
+        // uniform presets (EMPTY, UNBOUNDED) each fire the SATURATED
+        // CARDINAL lead at `Some(FIELD_COUNT)`; the three interior-
+        // uniform presets (DEFAULT, HAND_AUTHORED_MID, HAND_AUTHORED_OTHER)
+        // each fire `None` on the polar-directed arm because the
+        // interior arm dominates them.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.polar_lead(), Some(6));
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.polar_lead(), Some(6));
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.polar_lead(), None);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.polar_lead(), None);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.polar_lead(), None);
+    }
+
+    #[test]
+    fn resource_limits_interior_lead_preset_pins_saturate_on_interior_uniform_reject_on_polar_uniform(
+    ) {
+        // DUAL preset pins — the three interior-uniform presets each
+        // fire the SATURATED CARDINAL lead at `Some(FIELD_COUNT)` on
+        // the interior-directed arm; the two polar-uniform presets each
+        // fire `None`. Mirror of the paired [`polar_lead`] preset pin
+        // on the DUAL arm-selection combinator.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.interior_lead(), None);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.interior_lead(), None);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.interior_lead(), Some(6));
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.interior_lead(), Some(6));
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.interior_lead(), Some(6));
+    }
+
+    #[test]
+    fn resource_limits_polar_lead_test_local_witnesses_reject_on_tie_and_interior_dominant() {
+        // Truly-mixed witnesses on the polar-directed arm — SPARSE and
+        // CONTIGUOUS_INTERIOR each carry a perfect 3-polar-3-interior
+        // tie so the guarded subtraction rejects; ENDPOINTS_ONLY carries
+        // a 2-polar-4-interior interior-dominant split so the polar-
+        // directed guard fails. All three truly-mixed fixtures fire
+        // `None` on THIS projection — the DUAL of the paired
+        // [`interior_lead`] truly-mixed pin.
+        assert_eq!(SPARSE_BOTTOM_POSTURE.polar_lead(), None);
+        assert_eq!(CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.polar_lead(), None);
+        assert_eq!(ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_lead(), None);
+    }
+
+    #[test]
+    fn resource_limits_interior_lead_test_local_witnesses_reject_on_tie_fire_on_interior_dominant()
+    {
+        // Truly-mixed witnesses on the interior-directed arm — SPARSE
+        // and CONTIGUOUS_INTERIOR reject at the 3-3 tie;
+        // ENDPOINTS_ONLY fires `Some(2)` at the 2-polar-4-interior
+        // interior-dominant balance, pinning BOTH the arm identity AND
+        // the CARDINAL two-axis lead magnitude on the sole non-tie
+        // non-uniform witness. The LOAD-BEARING NON-SATURATED CARDINAL
+        // pin — every uniform preset lead saturates at `Some(6)` or
+        // fires `None`, so ENDPOINTS_ONLY is the sole shipped fixture
+        // pinning a `Some(k)` with `1 <= k < FIELD_COUNT`.
+        assert_eq!(SPARSE_BOTTOM_POSTURE.interior_lead(), None);
+        assert_eq!(CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.interior_lead(), None);
+        assert_eq!(ENDPOINTS_ONLY_BOTTOM_POSTURE.interior_lead(), Some(2));
+    }
+
+    #[test]
+    fn resource_limits_polar_lead_is_some_iff_polar_is_majority() {
+        // SOME-bridge — LOAD-BEARING structural pin. The polar-directed
+        // lead fires `Some(_)` iff the paired boolean STRICT-INEQUALITY
+        // MAJORITY verdict fires — the CARDINAL projection strictly
+        // REFINES the boolean projection on the SAME arm-selection
+        // combinator, with the CARDINAL value carrying the magnitude
+        // the boolean fold structurally cannot access.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.polar_lead().is_some(),
+                a.polar_is_majority(),
+                "polar_lead().is_some() != polar_is_majority() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_lead_is_some_iff_interior_is_majority() {
+        // DUAL SOME-bridge — mirror of the paired polar-directed
+        // SOME-bridge on the DUAL arm-selection combinator.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.interior_lead().is_some(),
+                a.interior_is_majority(),
+                "interior_lead().is_some() != interior_is_majority() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_lead_is_none_iff_interior_or_balanced() {
+        // NONE-bridge — the polar-directed lead fires `None` on
+        // EXACTLY the two other trichotomy legs (interior-majority OR
+        // balanced). Substrate theorem tying the `Option::None` cell
+        // to the paired boolean STRICT-TOTAL-ORDER trichotomy's DUAL
+        // arm and TIE leg.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.polar_lead().is_none(),
+                a.interior_is_majority() || a.is_axially_balanced(),
+                "polar_lead().is_none() != (interior_is_majority || is_axially_balanced) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_lead_is_none_iff_polar_or_balanced() {
+        // DUAL NONE-bridge — mirror of the paired polar-directed
+        // NONE-bridge on the DUAL arm-selection combinator.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.interior_lead().is_none(),
+                a.polar_is_majority() || a.is_axially_balanced(),
+                "interior_lead().is_none() != (polar_is_majority || is_axially_balanced) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_lead_value_equals_polar_minus_interior_when_polar_majority() {
+        // CARDINAL-value bridge on the SOME arm — LOAD-BEARING
+        // structural pin. On every polar-dominant posture, the wrapped
+        // `usize` value EQUALS the DIRECTED difference of the two
+        // ARITHMETIC-QUANTIFIER tallies. Crystallizes the guarded
+        // subtraction as ONE typed theorem the substrate proves once
+        // for every downstream consumer of "how much does the polar
+        // arm lead by".
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if let Some(k) = a.polar_lead() {
+                assert_eq!(
+                    k,
+                    a.count_polar_axes() - a.count_interior_axes(),
+                    "polar_lead().unwrap() != count_polar_axes - count_interior_axes on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_lead_value_equals_interior_minus_polar_when_interior_majority() {
+        // DUAL CARDINAL-value bridge — mirror of the paired polar-
+        // directed CARDINAL-value pin on the DUAL arm-selection
+        // combinator.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if let Some(k) = a.interior_lead() {
+                assert_eq!(
+                    k,
+                    a.count_interior_axes() - a.count_polar_axes(),
+                    "interior_lead().unwrap() != count_interior_axes - count_polar_axes on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_lead_value_equals_uniformity_minus_mixity_when_polar_majority() {
+        // MIN/MAX-agreement identity — LOAD-BEARING structural pin.
+        // Via the paired majority-arm-tally pin `polar_is_majority ⇒
+        // (count_uniformity, count_mixity) == (count_polar, count_interior)`,
+        // the CARDINAL lead through the DIRECTED (polar, interior)
+        // tally EQUALS the CARDINAL lead through the ORDERED (max, min)
+        // tally on the polar-dominant arm. Substrate theorem tying the
+        // CARDINAL-DISTANCE column to the just-closed (MIN, MAX)
+        // arithmetic-depth column on the SAME two-arm tally.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if let Some(k) = a.polar_lead() {
+                assert_eq!(
+                    k,
+                    a.count_uniformity_axes() - a.count_mixity_axes(),
+                    "polar_lead().unwrap() != count_uniformity_axes - count_mixity_axes on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_lead_value_equals_uniformity_minus_mixity_when_interior_majority() {
+        // DUAL MIN/MAX-agreement identity — mirror of the paired
+        // polar-directed pin on the DUAL arm-selection combinator.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if let Some(k) = a.interior_lead() {
+                assert_eq!(
+                    k,
+                    a.count_uniformity_axes() - a.count_mixity_axes(),
+                    "interior_lead().unwrap() != count_uniformity_axes - count_mixity_axes on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_lead_and_interior_lead_are_mutually_exclusive_on_some() {
+        // Cross-cell disjointness on the SOME cell — LOAD-BEARING
+        // structural pin. A `<` and a `>` on the same two `usize`s
+        // cannot both hold, so the DIRECTED-LEAD `Option<usize>` pair
+        // fires `Some(_)` on at most one arm per posture — matching
+        // the paired [`polar_is_majority`]/[`interior_is_majority`]
+        // mutual-exclusion pin lifted through the CARDINAL projection.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert!(
+                !(a.polar_lead().is_some() && a.interior_lead().is_some()),
+                "polar_lead().is_some() && interior_lead().is_some() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_lead_value_lies_in_one_through_field_count() {
+        // Range bound contract — LOAD-BEARING structural pin. When
+        // `Some(k)`, `1 <= k <= FIELD_COUNT`: the lower bound follows
+        // from the strict `>` guard, the upper bound from the
+        // EXHAUSTIVE-PARTITION identity `count_polar + count_interior
+        // == FIELD_COUNT` (a strict difference of two non-negatives
+        // summing to FIELD_COUNT cannot exceed FIELD_COUNT itself).
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if let Some(k) = a.polar_lead() {
+                assert!(
+                    (1..=ResourceLimits::FIELD_COUNT).contains(&k),
+                    "polar_lead() = Some({k}) out of [1, {}] on {a:?}",
+                    ResourceLimits::FIELD_COUNT,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_lead_value_lies_in_one_through_field_count() {
+        // DUAL range bound contract — mirror of the paired polar-
+        // directed range-bound pin on the DUAL arm-selection combinator.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if let Some(k) = a.interior_lead() {
+                assert!(
+                    (1..=ResourceLimits::FIELD_COUNT).contains(&k),
+                    "interior_lead() = Some({k}) out of [1, {}] on {a:?}",
+                    ResourceLimits::FIELD_COUNT,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_balance_implies_both_leads_none() {
+        // Balance ⇒ both-None — LOAD-BEARING structural pin. The
+        // balance leg jointly rejects BOTH DIRECTED lead verdicts —
+        // neither strict-inequality guard can fire under equality.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.is_axially_balanced() {
+                assert!(
+                    a.polar_lead().is_none(),
+                    "polar_lead() fires with is_axially_balanced on {a:?}",
+                );
+                assert!(
+                    a.interior_lead().is_none(),
+                    "interior_lead() fires with is_axially_balanced on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_lead_some_interior_lead_some_and_balance_partition_every_posture() {
+        // SOME-count partition — LOAD-BEARING structural pin. EXACTLY
+        // ONE of the three legs (polar-lead-Some, interior-lead-Some,
+        // balanced) holds on every posture — the CARDINAL-DISTANCE
+        // reading of the paired STRICT-TOTAL-ORDER trichotomy closure
+        // on the DIRECTED-LEAD `Option<usize>` shape.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let fires = usize::from(a.polar_lead().is_some())
+                + usize::from(a.interior_lead().is_some())
+                + usize::from(a.is_axially_balanced());
+            assert_eq!(
+                fires, 1,
+                "DIRECTED-LEAD trichotomy did not partition {a:?} (fires = {fires})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_directed_lead_projections_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin on the open CARDINAL-DISTANCE column — both
+        // DIRECTED-LEAD projections are evaluable in const context so
+        // a caller can pin the exact directed lead-size at compile
+        // time as build-breaks. Mirror of the const-fn evaluability
+        // pins on the (polar_is_majority, interior_is_majority) pair
+        // one PROJECTION-KIND axis under.
+        const _: () = assert!(matches!(EMPTY_RESOURCE_LIMITS.polar_lead(), Some(6)));
+        const _: () = assert!(matches!(UNBOUNDED_RESOURCE_LIMITS.polar_lead(), Some(6)));
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_lead().is_none());
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.interior_lead().is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.interior_lead().is_none());
+        const _: () = assert!(matches!(DEFAULT_RESOURCE_LIMITS.interior_lead(), Some(6)));
     }
 }

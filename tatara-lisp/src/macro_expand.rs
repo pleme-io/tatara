@@ -12150,6 +12150,257 @@ impl ResourceLimits {
         }
     }
 
+    /// Whole-posture POLAR-STRICT-MAJORITY predicate —
+    /// `self.polar_is_majority()` holds iff the polar-arm tally
+    /// STRICTLY EXCEEDS the interior-arm tally on the (polar, interior)
+    /// axial partition — `self.count_polar_axes() >
+    /// self.count_interior_axes()`. The MAJORITY-KIND refinement of
+    /// [`Self::is_axially_polar`] one QUANTIFIER-STRENGTH axis over —
+    /// where `is_axially_polar` binds the STRICT-ALL verdict (every
+    /// axis at pole), THIS projection binds the STRICT-MAJORITY verdict
+    /// (more axes at pole than in the strict interior) at ONE typed
+    /// named `bool` primitive, opening the MAJORITY-KIND column
+    /// past the just-closed (MIN, MAX) arithmetic-depth column on the
+    /// same (count_polar_axes, count_interior_axes) two-arm tally pair.
+    ///
+    /// Strictly WEAKER than [`Self::is_axially_polar`]: `self.is_axially_polar()
+    /// ⇒ self.polar_is_majority()` (every-axis-polar trivially implies
+    /// polar-arm-strictly-exceeds-interior-arm — polar = FIELD_COUNT >
+    /// 0 = interior). Where `is_axially_polar` fires ONLY on the
+    /// STRICT-ALL corner, THIS projection ALSO fires on postures where
+    /// SOME axes sit in the strict interior but polar-arm tally still
+    /// strictly dominates — the truly-mixed postures on the polar-majority
+    /// side of the balance. Strictly STRONGER than [`Self::has_polar_axis`]:
+    /// `self.polar_is_majority() ⇒ self.has_polar_axis()`
+    /// (strict majority is at least one). Where `has_polar_axis` fires
+    /// on ANY polar-arm-non-empty posture, THIS projection ONLY fires
+    /// when the polar-arm tally strictly dominates — rejecting minority
+    /// postures the weaker ANY-fold admits.
+    ///
+    /// The MAJORITY-KIND peer of [`Self::interior_is_majority`] on the
+    /// whole-posture ARITHMETIC-COMPARISON surface — the two together
+    /// carry the TRICHOTOMOUS `(polar>interior, polar<interior,
+    /// polar==interior)` decision the plain (min, max) permutation
+    /// cannot express. Mutually exclusive: at most one of
+    /// `polar_is_majority()` and `interior_is_majority()` holds on any
+    /// posture (a total-order comparison of two `usize`s can fire at
+    /// most one strict-inequality direction). Jointly NOT exhaustive:
+    /// both fire `false` at the perfect-balance corner
+    /// `count_polar_axes() == count_interior_axes()` — the third leg
+    /// of the trichotomy the pair leaves as a discriminated verdict.
+    ///
+    /// Encoded as the plain `const fn` `self.count_polar_axes() >
+    /// self.count_interior_axes()` on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies — matching [`Self::interior_is_majority`]'s
+    /// shape verbatim on the DUAL arm-selection combinator.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.polar_is_majority() ==
+    /// true` (every axis at the bottom pole → polar = 6 > 0 = interior);
+    /// `UNBOUNDED_RESOURCE_LIMITS.polar_is_majority() == true` (every
+    /// axis at the top pole → same tally);
+    /// `DEFAULT_RESOURCE_LIMITS.polar_is_majority() == false` (every
+    /// axis strictly interior → polar = 0 < 6 = interior);
+    /// `HAND_AUTHORED_MID_POSTURE.polar_is_majority() == false` (every
+    /// axis interior); `HAND_AUTHORED_OTHER_POSTURE.polar_is_majority()
+    /// == false` (same). The five uniform fixtures partition cleanly
+    /// into the polar-uniform arm (EMPTY, UNBOUNDED) firing `true` and
+    /// the interior-uniform arm (DEFAULT, HAND_AUTHORED_*) firing
+    /// `false` — the ARITHMETIC-COMPARISON surface names the polarity
+    /// KIND of the majority arm the (min, max) permutation forgets.
+    ///
+    /// **Truly-mixed witnesses**: `SPARSE_BOTTOM_POSTURE.polar_is_majority()
+    /// == false` (3 polar + 3 interior → tie, both direction verdicts
+    /// fire `false`); `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.polar_is_majority()
+    /// == false` (same 3 + 3 tie);
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_is_majority() == false`
+    /// (2 polar + 4 interior → interior strictly dominates). Pins the
+    /// tie-arm and the interior-dominant arm of the trichotomy on the
+    /// three test-local truly-mixed fixtures.
+    ///
+    /// **Comparison-agreement contract**: for every posture `a`,
+    /// `a.polar_is_majority() == (a.count_polar_axes() >
+    /// a.count_interior_axes())`. Pinned via
+    /// `resource_limits_polar_is_majority_equals_polar_count_gt_interior_count`.
+    ///
+    /// **Uniformity-KIND bridge**: for every posture `a`,
+    /// `a.polar_is_majority() ⇔ (a.is_strictly_mixed() ||
+    /// a.is_axially_polar()) && a.count_polar_axes() >
+    /// a.count_interior_axes()` — the STRICT-MAJORITY verdict
+    /// refines the (STRICT-ALL polar, STRICT-MIXED with polar dominance)
+    /// disjunction into ONE arithmetic comparison the substrate proves
+    /// once for every downstream consumer of "does the polar arm win".
+    ///
+    /// **is_axially_polar ⇒ polar_is_majority contract**: on every
+    /// posture, `a.is_axially_polar() ⇒ a.polar_is_majority()` — the
+    /// STRICT-ALL corner trivially wins the strict-majority comparison.
+    /// The converse fails on any truly-mixed posture with polar
+    /// dominance, pinning the STRICTLY WEAKER direction. Pinned via
+    /// `resource_limits_is_axially_polar_implies_polar_is_majority_on_every_shipped_posture`.
+    ///
+    /// **polar_is_majority ⇒ has_polar_axis contract**: on every
+    /// posture, `a.polar_is_majority() ⇒ a.has_polar_axis()` — a strict
+    /// majority is at least one. The converse fails on minority
+    /// postures, pinning the STRICTLY STRONGER direction on the
+    /// (ANY, MAJORITY) refinement column. Pinned via
+    /// `resource_limits_polar_is_majority_implies_has_polar_axis_on_every_shipped_posture`.
+    ///
+    /// **Mutual exclusion with interior_is_majority**: on every posture,
+    /// `!(a.polar_is_majority() && a.interior_is_majority())` — the two
+    /// strict-inequality directions on the same tally pair are
+    /// mutually exclusive (a `<` and a `>` on the same two `usize`s
+    /// cannot both hold). Pinned via
+    /// `resource_limits_polar_is_majority_and_interior_is_majority_are_mutually_exclusive`.
+    ///
+    /// **Trichotomy exhaustiveness**: on every posture, EXACTLY ONE of
+    /// `a.polar_is_majority()`, `a.interior_is_majority()`, or
+    /// `a.count_polar_axes() == a.count_interior_axes()` holds — the
+    /// three legs of the total-order trichotomy on the two-arm tally
+    /// pair cover every posture exactly once. Pinned via
+    /// `resource_limits_polar_is_majority_interior_is_majority_and_tie_partition_every_posture`.
+    ///
+    /// **Majority-arm-tally identity**: for every posture `a`,
+    /// `a.polar_is_majority() ⇒ a.count_uniformity_axes() ==
+    /// a.count_polar_axes()` AND `a.polar_is_majority() ⇒
+    /// a.count_mixity_axes() == a.count_interior_axes()` — the
+    /// MAJORITY-KIND verdict pins WHICH arm the (min, max) permutation
+    /// selected at every truly-not-tied posture. Pinned via
+    /// `resource_limits_polar_is_majority_pins_majority_arm_to_polar_count`.
+    ///
+    /// `const fn` so a caller can pin the polar-majority verdict at
+    /// compile time (`const _: () = assert!(EMPTY_RESOURCE_LIMITS
+    /// .polar_is_majority());`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// polar-strict-majority verdict is a named typed exit rather than
+    /// an inline `self.count_polar_axes() > self.count_interior_axes()`
+    /// per-consumer comparison. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; the (polar_is_majority,
+    /// interior_is_majority) pair opens the MAJORITY-KIND column past
+    /// the just-closed (count_mixity_axes, count_uniformity_axes) MIN-
+    /// MAX arithmetic-depth column on the SAME two-arm tally pair with
+    /// the LOAD-BEARING STRICT-TOTAL-ORDER trichotomy that partitions
+    /// every posture into (polar-majority, interior-majority, tie).
+    /// THEORY.md §V.1 — knowable platform; the MAJORITY-KIND verdict
+    /// is a TYPE-level operation on the posture algebra returning a
+    /// `const`-evaluable `bool`.
+    ///
+    /// Frontier inspiration: classical order theory's canonical
+    /// "strict-majority" combinator on a two-arm exhaustive-and-disjoint
+    /// partition lifted to whole-posture arithmetic via `polar > interior`.
+    /// APL's `(+/mask) > (+/~mask)` — the direct arithmetic-comparison
+    /// combinator on the paired axial tally. Haskell's `length polar >
+    /// length interior` on the two arm sub-vectors. Idris's `(count p
+    /// v) > (count (not . p) v)` returning `Bool` at the type of the
+    /// paired arm-tally comparison. Voting-theory's canonical
+    /// "strict-plurality" combinator on a two-candidate election.
+    /// Translation through pleme-io primitives: plain `const fn`
+    /// `self.count_polar_axes() > self.count_interior_axes()` on the
+    /// two already-lifted ARITHMETIC-QUANTIFIER tallies, no new dep, no
+    /// typeclass indirection, no per-axis loop, no allocation.
+    #[must_use]
+    pub const fn polar_is_majority(self) -> bool {
+        self.count_polar_axes() > self.count_interior_axes()
+    }
+
+    /// Whole-posture INTERIOR-STRICT-MAJORITY predicate —
+    /// `self.interior_is_majority()` holds iff the interior-arm tally
+    /// STRICTLY EXCEEDS the polar-arm tally on the (polar, interior)
+    /// axial partition — `self.count_interior_axes() >
+    /// self.count_polar_axes()`. The direct MAJORITY-KIND DUAL of
+    /// [`Self::polar_is_majority`] on the DUAL arm-selection
+    /// combinator, jointly the (polar_is_majority, interior_is_majority)
+    /// pair carries the TRICHOTOMOUS `(polar>interior, polar<interior,
+    /// polar==interior)` decision the (min, max) permutation cannot
+    /// express.
+    ///
+    /// Strictly WEAKER than [`Self::is_axially_interior`]:
+    /// `self.is_axially_interior() ⇒ self.interior_is_majority()`.
+    /// Strictly STRONGER than [`Self::has_interior_axis`]:
+    /// `self.interior_is_majority() ⇒ self.has_interior_axis()`. Same
+    /// (STRICT-ALL ⇒ STRICT-MAJORITY ⇒ ANY) refinement chain as the
+    /// polar peer on the DUAL arm.
+    ///
+    /// Mutually exclusive with [`Self::polar_is_majority`]: at most one
+    /// holds on any posture. Jointly NOT exhaustive: both fire `false`
+    /// at the perfect-balance corner `count_polar_axes() ==
+    /// count_interior_axes()` — the tie leg of the trichotomy the pair
+    /// leaves as a discriminated verdict readable as `!self
+    /// .polar_is_majority() && !self.interior_is_majority()`.
+    ///
+    /// Encoded as the plain `const fn` `self.count_interior_axes() >
+    /// self.count_polar_axes()` on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies — matching [`Self::polar_is_majority`]'s
+    /// shape verbatim on the DUAL arm-selection combinator.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.interior_is_majority()
+    /// == false` (every axis at the bottom pole → interior = 0 < 6 =
+    /// polar); `UNBOUNDED_RESOURCE_LIMITS.interior_is_majority() ==
+    /// false` (every axis at the top pole → same tally);
+    /// `DEFAULT_RESOURCE_LIMITS.interior_is_majority() == true` (every
+    /// axis strictly interior → interior = 6 > 0 = polar);
+    /// `HAND_AUTHORED_MID_POSTURE.interior_is_majority() == true`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.interior_is_majority() == true`.
+    /// The five uniform fixtures partition cleanly into the DUAL
+    /// (interior-uniform → `true`, polar-uniform → `false`) arms of
+    /// the corresponding [`Self::polar_is_majority`] pins.
+    ///
+    /// **Truly-mixed witnesses**: `SPARSE_BOTTOM_POSTURE.interior_is_majority()
+    /// == false` (3 polar + 3 interior → tie);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.interior_is_majority() ==
+    /// false` (same 3 + 3 tie);
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE.interior_is_majority() == true`
+    /// (2 polar + 4 interior → interior strictly dominates). The
+    /// LOAD-BEARING truly-mixed dominance witness — where the paired
+    /// [`Self::polar_is_majority`] rejects all three (two ties + one
+    /// interior-dominant), THIS projection accepts exactly the
+    /// interior-dominant one, pinning the two-arm trichotomy at the
+    /// truly-mixed corner.
+    ///
+    /// **Comparison-agreement contract**: for every posture `a`,
+    /// `a.interior_is_majority() == (a.count_interior_axes() >
+    /// a.count_polar_axes())`. Pinned via
+    /// `resource_limits_interior_is_majority_equals_interior_count_gt_polar_count`.
+    ///
+    /// **is_axially_interior ⇒ interior_is_majority contract**: on
+    /// every posture, `a.is_axially_interior() ⇒
+    /// a.interior_is_majority()`. Pinned via
+    /// `resource_limits_is_axially_interior_implies_interior_is_majority_on_every_shipped_posture`.
+    ///
+    /// **interior_is_majority ⇒ has_interior_axis contract**: on every
+    /// posture, `a.interior_is_majority() ⇒ a.has_interior_axis()`.
+    /// Pinned via
+    /// `resource_limits_interior_is_majority_implies_has_interior_axis_on_every_shipped_posture`.
+    ///
+    /// **Majority-arm-tally identity**: for every posture `a`,
+    /// `a.interior_is_majority() ⇒ a.count_uniformity_axes() ==
+    /// a.count_interior_axes()` AND `a.interior_is_majority() ⇒
+    /// a.count_mixity_axes() == a.count_polar_axes()` — the DUAL
+    /// arm-selection reading of the paired [`Self::polar_is_majority`]
+    /// majority-arm-tally pin. Pinned via
+    /// `resource_limits_interior_is_majority_pins_majority_arm_to_interior_count`.
+    ///
+    /// `const fn` so a caller can pin the interior-majority verdict at
+    /// compile time (`const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+    /// .interior_is_majority());`).
+    ///
+    /// Theory anchor: same as [`Self::polar_is_majority`], on the DUAL
+    /// arm-selection combinator. The (polar_is_majority,
+    /// interior_is_majority) pair jointly carries the STRICT-TOTAL-ORDER
+    /// trichotomy on the two-arm tally pair — LOAD-BEARING because the
+    /// (min, max) permutation preserves neither operand identity, so
+    /// the KIND of the majority arm is a projection the arithmetic-depth
+    /// column structurally cannot access.
+    ///
+    /// Frontier inspiration: same as [`Self::polar_is_majority`], through
+    /// the DUAL max-arm-selection combinator on the two arm tallies of
+    /// the exhaustive-and-disjoint (polar, interior) axial partition.
+    /// APL's `(+/~mask) > (+/mask)` — the DUAL of the paired direction.
+    /// Haskell's `length interior > length polar` on the DUAL arm.
+    #[must_use]
+    pub const fn interior_is_majority(self) -> bool {
+        self.count_interior_axes() > self.count_polar_axes()
+    }
+
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
     /// `self.first_bottom_axis_index()` returns `Some(i)` for the least
     /// `i` such that `self.field_values()[i] == 0`, or `None` when no
@@ -56013,5 +56264,361 @@ mod tests {
         );
         const _: () =
             assert!(DEFAULT_RESOURCE_LIMITS.count_uniformity_axes() == ResourceLimits::FIELD_COUNT);
+    }
+
+    #[test]
+    fn resource_limits_polar_is_majority_preset_pins_fire_on_polar_uniform_reject_on_interior_uniform(
+    ) {
+        // Preset pins — the (EMPTY, UNBOUNDED) polar-uniform arm fires
+        // `true` because polar = FIELD_COUNT > 0 = interior on any
+        // polar-saturated posture. The (DEFAULT, HAND_AUTHORED_MID,
+        // HAND_AUTHORED_OTHER) interior-uniform arm rejects because
+        // polar = 0 < FIELD_COUNT = interior. Pins the KIND-of-majority
+        // discrimination the (min, max) permutation forgets — where
+        // `count_uniformity_axes()` fires uniformly `FIELD_COUNT` across
+        // all five uniform fixtures, `polar_is_majority` names the two
+        // polar-side ones apart from the three interior-side ones.
+        assert!(EMPTY_RESOURCE_LIMITS.polar_is_majority());
+        assert!(UNBOUNDED_RESOURCE_LIMITS.polar_is_majority());
+        assert!(!DEFAULT_RESOURCE_LIMITS.polar_is_majority());
+        assert!(!HAND_AUTHORED_MID_POSTURE.polar_is_majority());
+        assert!(!HAND_AUTHORED_OTHER_POSTURE.polar_is_majority());
+    }
+
+    #[test]
+    fn resource_limits_interior_is_majority_preset_pins_fire_on_interior_uniform_reject_on_polar_uniform(
+    ) {
+        // Preset pins on the DUAL arm — the (DEFAULT, HAND_AUTHORED_MID,
+        // HAND_AUTHORED_OTHER) interior-uniform arm fires `true`; the
+        // (EMPTY, UNBOUNDED) polar-uniform arm rejects. The DUAL of the
+        // paired `polar_is_majority` preset pin — the two together
+        // partition the five uniform fixtures into exactly the (polar,
+        // interior) axial-classification cells on the MAJORITY-KIND
+        // surface.
+        assert!(!EMPTY_RESOURCE_LIMITS.interior_is_majority());
+        assert!(!UNBOUNDED_RESOURCE_LIMITS.interior_is_majority());
+        assert!(DEFAULT_RESOURCE_LIMITS.interior_is_majority());
+        assert!(HAND_AUTHORED_MID_POSTURE.interior_is_majority());
+        assert!(HAND_AUTHORED_OTHER_POSTURE.interior_is_majority());
+    }
+
+    #[test]
+    fn resource_limits_polar_is_majority_test_local_witnesses_reject_on_tie_and_interior_dominant()
+    {
+        // Truly-mixed witnesses on the polar-majority arm — SPARSE and
+        // CONTIGUOUS_INTERIOR each carry a perfect 3-polar-3-interior
+        // tie so the strict `>` rejects; ENDPOINTS_ONLY carries a
+        // 2-polar-4-interior interior-dominant balance so the strict
+        // `>` also rejects. All three test-local truly-mixed fixtures
+        // sit on the polar-non-majority side of the trichotomy — pins
+        // both the tie leg and the interior-dominant leg as
+        // `polar_is_majority() == false`.
+        assert!(!SPARSE_BOTTOM_POSTURE.polar_is_majority());
+        assert!(!CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.polar_is_majority());
+        assert!(!ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_is_majority());
+    }
+
+    #[test]
+    fn resource_limits_interior_is_majority_test_local_witnesses_fire_only_on_interior_dominant() {
+        // Truly-mixed witnesses on the DUAL arm — SPARSE and
+        // CONTIGUOUS_INTERIOR reject at the 3-3 tie; ENDPOINTS_ONLY
+        // fires at the 2-4 interior-dominant balance. The LOAD-BEARING
+        // truly-mixed dominance witness: exactly one of the three
+        // test-local truly-mixed fixtures sits on the interior-dominant
+        // side of the trichotomy, and THIS projection names it apart
+        // from the two ties.
+        assert!(!SPARSE_BOTTOM_POSTURE.interior_is_majority());
+        assert!(!CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.interior_is_majority());
+        assert!(ENDPOINTS_ONLY_BOTTOM_POSTURE.interior_is_majority());
+    }
+
+    #[test]
+    fn resource_limits_polar_is_majority_equals_polar_count_gt_interior_count() {
+        // Comparison-agreement contract — LOAD-BEARING structural pin.
+        // The polar-strict-majority verdict IS the `>` comparison on
+        // the two ARITHMETIC-QUANTIFIER tallies, per definition.
+        // Crystallizes the strict-inequality combinator as ONE typed
+        // theorem the substrate proves once for every downstream
+        // consumer of "does the polar arm win".
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.polar_is_majority(),
+                a.count_polar_axes() > a.count_interior_axes(),
+                "polar_is_majority != (count_polar_axes > count_interior_axes) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_is_majority_equals_interior_count_gt_polar_count() {
+        // Comparison-agreement contract on the DUAL arm — LOAD-BEARING
+        // structural pin. Mirror of the polar-majority definitional
+        // pin on the DUAL comparison direction.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.interior_is_majority(),
+                a.count_interior_axes() > a.count_polar_axes(),
+                "interior_is_majority != (count_interior_axes > count_polar_axes) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_polar_implies_polar_is_majority_on_every_shipped_posture() {
+        // STRICT-ALL ⇒ STRICT-MAJORITY refinement contract — the
+        // universal-quantifier `is_axially_polar` verdict trivially
+        // implies the strict-majority verdict (every-axis-polar means
+        // polar = FIELD_COUNT > 0 = interior on FIELD_COUNT > 0). Pins
+        // the direction of the (STRICT-ALL, STRICT-MAJORITY) refinement
+        // on the polar arm; the converse fails on truly-mixed postures
+        // with polar dominance.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.is_axially_polar() {
+                assert!(
+                    a.polar_is_majority(),
+                    "is_axially_polar without polar_is_majority on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_interior_implies_interior_is_majority_on_every_shipped_posture() {
+        // Same refinement contract on the DUAL arm — STRICT-ALL
+        // interior verdict implies STRICT-MAJORITY interior verdict.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.is_axially_interior() {
+                assert!(
+                    a.interior_is_majority(),
+                    "is_axially_interior without interior_is_majority on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_is_majority_implies_has_polar_axis_on_every_shipped_posture() {
+        // STRICT-MAJORITY ⇒ ANY-fold refinement contract — a strict
+        // majority is at least one. Pins the direction of the (ANY,
+        // MAJORITY) refinement column on the polar arm; the converse
+        // fails on minority postures (ANY-fold fires as soon as one
+        // polar axis exists, MAJORITY requires strict dominance).
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.polar_is_majority() {
+                assert!(
+                    a.has_polar_axis(),
+                    "polar_is_majority without has_polar_axis on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_is_majority_implies_has_interior_axis_on_every_shipped_posture() {
+        // Same refinement contract on the DUAL arm — STRICT-MAJORITY
+        // interior verdict implies ANY-fold interior verdict.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.interior_is_majority() {
+                assert!(
+                    a.has_interior_axis(),
+                    "interior_is_majority without has_interior_axis on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_is_majority_and_interior_is_majority_are_mutually_exclusive() {
+        // Mutual-exclusion contract — LOAD-BEARING structural pin. A
+        // `<` and a `>` on the same two `usize`s cannot both hold, so
+        // at most one strict-majority verdict fires on any posture.
+        // Crystallizes the mutual-exclusion arm of the total-order
+        // trichotomy as ONE typed theorem the substrate proves once.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert!(
+                !(a.polar_is_majority() && a.interior_is_majority()),
+                "both polar_is_majority and interior_is_majority fire on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_is_majority_interior_is_majority_and_tie_partition_every_posture() {
+        // Trichotomy-exhaustiveness contract — LOAD-BEARING structural
+        // pin. EXACTLY ONE of the three legs (polar-majority, interior-
+        // majority, tie) holds on every posture — the total-order
+        // trichotomy on the two-arm tally pair covers the posture
+        // universe exactly once. Pinned by counting the true verdicts
+        // across the three legs and asserting exactly one fires.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let tie = a.count_polar_axes() == a.count_interior_axes();
+            let fires = usize::from(a.polar_is_majority())
+                + usize::from(a.interior_is_majority())
+                + usize::from(tie);
+            assert_eq!(
+                fires, 1,
+                "trichotomy legs did not partition {a:?} (fires = {fires})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_is_majority_pins_majority_arm_to_polar_count() {
+        // Majority-arm-tally identity on the polar arm — pins WHICH
+        // arm the (min, max) permutation selected whenever the polar
+        // arm strictly wins. Crystallizes the KIND-of-majority verdict
+        // as ONE typed bridge into the paired (count_mixity_axes,
+        // count_uniformity_axes) arithmetic-depth surface.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.polar_is_majority() {
+                assert_eq!(
+                    a.count_uniformity_axes(),
+                    a.count_polar_axes(),
+                    "count_uniformity_axes != count_polar_axes when polar_is_majority on {a:?}",
+                );
+                assert_eq!(
+                    a.count_mixity_axes(),
+                    a.count_interior_axes(),
+                    "count_mixity_axes != count_interior_axes when polar_is_majority on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_is_majority_pins_majority_arm_to_interior_count() {
+        // Same majority-arm-tally identity on the DUAL arm — mirror of
+        // the polar peer pin on the DUAL arm-selection combinator.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            if a.interior_is_majority() {
+                assert_eq!(
+                    a.count_uniformity_axes(),
+                    a.count_interior_axes(),
+                    "count_uniformity_axes != count_interior_axes when interior_is_majority on {a:?}",
+                );
+                assert_eq!(
+                    a.count_mixity_axes(),
+                    a.count_polar_axes(),
+                    "count_mixity_axes != count_polar_axes when interior_is_majority on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_majority_kind_projections_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin on the MAJORITY-KIND column — both boolean
+        // projections are evaluable in const context so a caller can
+        // pin the polarity KIND of the majority arm at compile time as
+        // build-breaks. Mirror of the const-fn evaluability pins on
+        // the (count_mixity_axes, count_uniformity_axes) pair one
+        // COMPARISON-KIND axis under and the (is_axially_polar,
+        // is_axially_interior) pair one QUANTIFIER-STRENGTH axis over.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.polar_is_majority());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.polar_is_majority());
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.polar_is_majority());
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.interior_is_majority());
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.interior_is_majority());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.interior_is_majority());
     }
 }

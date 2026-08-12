@@ -16148,6 +16148,182 @@ impl ResourceLimits {
         }
     }
 
+    /// Whole-posture SIGNED-KIND ARM-AGNOSTIC CENTRAL-TENDENCY MAX-
+    /// fold projection — `self.axial_signed_majority_count()` returns
+    /// the winning arm's tally on the COMPOUND (polar, interior) pair
+    /// signed by which arm wins: `+count_polar_axes()` when polar wins
+    /// (or ties), `-count_interior_axes()` when interior strictly
+    /// wins. The SIGNED-KIND peer of [`Self::axial_majority_count`]
+    /// one SIGNEDNESS axis over on the SAME COMPOUND (polar, interior)
+    /// tally pair, and the CENTRAL-TENDENCY MAX peer of
+    /// [`Self::axial_signed_skew`] one COMBINATOR-KIND axis over on
+    /// the same SIGNED-KIND CARDINAL column — jointly the
+    /// (axial_signed_skew, axial_signed_majority_count) pair carries
+    /// the SIGNED reading on BOTH the DISPERSION (ABS-DIFF) and
+    /// CENTRAL-TENDENCY (MAX) statistics of the paired axial tally.
+    ///
+    /// A STRICT REFINEMENT of [`Self::axial_majority_count`] on the
+    /// arm-identity axis: the UNSIGNED MAX-fold collapses BOTH strict-
+    /// majority arms onto the SAME positive magnitude (discarding arm
+    /// identity), THIS projection reads BOTH arm identity (via the
+    /// sign) AND magnitude (via the absolute value) as ONE `isize`.
+    /// The `>=` tie convention picks the `+` sign at the balance
+    /// corner (`count_polar == count_interior`), matching
+    /// [`Self::axial_majority_count`]'s tie convention verbatim so
+    /// `axial_signed_majority_count().unsigned_abs()` agrees with
+    /// [`Self::axial_majority_count`] on every posture.
+    ///
+    /// **ABSOLUTE-VALUE bridge to axial_majority_count**: for every
+    /// posture `a`, `a.axial_signed_majority_count().unsigned_abs()
+    /// == a.axial_majority_count()`. LOAD-BEARING substrate theorem
+    /// tying the SIGNED CENTRAL-TENDENCY reading to the UNSIGNED
+    /// CENTRAL-TENDENCY reading through the canonical
+    /// `isize::unsigned_abs` fold — the DIRECT proof that this
+    /// projection strictly REFINES `axial_majority_count` by splitting
+    /// each magnitude cell onto its (positive, negative) arm-identity
+    /// partition, with the balance corner grouped into the positive
+    /// arm by the `>=` tie convention. Pinned via
+    /// `resource_limits_axial_signed_majority_count_unsigned_abs_equals_axial_majority_count`.
+    ///
+    /// **POSITIVE-SIGN bridge to non-interior-majority**: for every
+    /// posture `a`, `a.axial_signed_majority_count() > 0 ⇔
+    /// !a.interior_is_majority()`. The SIGNED CENTRAL-TENDENCY
+    /// reading fires a strictly positive value iff the interior arm
+    /// does NOT strictly lead — equivalently iff `polar_is_majority()
+    /// || is_axially_balanced()`. Broader than
+    /// [`Self::axial_signed_skew`]`() > 0 ⇔ polar_is_majority()`
+    /// because THIS projection groups the balance leg into the
+    /// positive arm via the `>=` tie convention, where the SIGNED
+    /// SKEW's zero at balance breaks the strict-positive property.
+    /// Pinned via
+    /// `resource_limits_axial_signed_majority_count_positive_iff_not_interior_is_majority`.
+    ///
+    /// **NEGATIVE-SIGN bridge to interior-majority**: for every
+    /// posture `a`, `a.axial_signed_majority_count() < 0 ⇔
+    /// a.interior_is_majority()`. The SIGNED CENTRAL-TENDENCY
+    /// reading fires a strictly negative value iff the interior arm
+    /// strictly leads on the paired ARITHMETIC-QUANTIFIER tally.
+    /// Matches the SIGNED SKEW's negative-sign bridge verbatim one
+    /// COMBINATOR-KIND axis over. Pinned via
+    /// `resource_limits_axial_signed_majority_count_negative_iff_interior_is_majority`.
+    ///
+    /// **NEVER-ZERO structural pin**: on every posture `a`,
+    /// `a.axial_signed_majority_count() != 0`. The EXHAUSTIVE COMPOUND
+    /// partition `count_polar + count_interior == FIELD_COUNT > 0`
+    /// forces `count_polar >= count_interior ⇒ count_polar >=
+    /// FIELD_COUNT / 2 > 0` and `count_polar < count_interior ⇒
+    /// count_interior > FIELD_COUNT / 2 > 0`, so the SIGNED-KIND
+    /// output's magnitude is bounded below by `FIELD_COUNT / 2` on
+    /// every posture — the SIGNED-KIND reading CANNOT reach the ZERO
+    /// cell that [`Self::axial_signed_skew`] does at every balance
+    /// corner. Pinned via
+    /// `resource_limits_axial_signed_majority_count_is_never_zero`.
+    ///
+    /// **SATURATED MAGNITUDE lower bound — LOAD-BEARING tightening
+    /// pin**: on every posture `a`,
+    /// `a.axial_signed_majority_count().unsigned_abs() >=
+    /// ResourceLimits::FIELD_COUNT / 2`. Direct consequence of
+    /// [`Self::axial_majority_count`]'s lower bound `>= FIELD_COUNT /
+    /// 2` transported through the [`unsigned_abs`] bridge — the
+    /// SIGNED CENTRAL-TENDENCY reading lies in
+    /// `[-FIELD_COUNT, -FIELD_COUNT/2] ∪ [FIELD_COUNT/2, FIELD_COUNT]`
+    /// with the open middle strip `(-FIELD_COUNT/2, FIELD_COUNT/2)`
+    /// STRUCTURALLY UNREACHABLE. The (BROADER-RANGE signed_skew,
+    /// TIGHTER-RANGE signed_majority_count) pair partitions the
+    /// SIGNED axial reading into the ABS-DIFF DISPERSION statistic
+    /// (which spans `[-FIELD_COUNT, FIELD_COUNT]` continuously
+    /// including 0) and the MAX CENTRAL-TENDENCY statistic (which
+    /// avoids the open middle strip). Pinned via
+    /// `resource_limits_axial_signed_majority_count_magnitude_bounded_below_by_half_field_count`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS
+    /// .axial_signed_majority_count() == 6` (polar-uniform → `+6`);
+    /// `UNBOUNDED_RESOURCE_LIMITS.axial_signed_majority_count() == 6`
+    /// (also polar-uniform via the atomic-top pole → `+6`);
+    /// `DEFAULT_RESOURCE_LIMITS.axial_signed_majority_count() == -6`
+    /// (interior-uniform → `-6`);
+    /// `HAND_AUTHORED_MID_POSTURE.axial_signed_majority_count() ==
+    /// -6` (same interior-uniform);
+    /// `HAND_AUTHORED_OTHER_POSTURE.axial_signed_majority_count() ==
+    /// -6` (same). The two saturated-polar preset arms COLLAPSE onto
+    /// `+6` and the three interior-uniform preset arms COLLAPSE onto
+    /// `-6` — matching [`Self::axial_signed_skew`]'s SATURATED
+    /// preset partition verbatim on the DUAL statistic.
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .axial_signed_majority_count() == 3` (3-polar + 3-interior tie
+    /// → `+3` at balance via `>=` tie convention);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.axial_signed_majority_count()
+    /// == 3` (same 3-3 tie → `+3`);
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE.axial_signed_majority_count()
+    /// == -4` (2-polar + 4-interior interior-strict → `-4`). The two
+    /// balance-corner fixtures fire `+3` (NOT `0` as
+    /// [`Self::axial_signed_skew`] would), pinning the LOAD-BEARING
+    /// non-zero-at-balance property that distinguishes THIS
+    /// CENTRAL-TENDENCY reading from the DISPERSION reading one
+    /// COMBINATOR-KIND axis under.
+    ///
+    /// Encoded as the plain `const fn` sign-split delegation on the
+    /// two already-lifted ARITHMETIC-QUANTIFIER tallies — matching
+    /// [`Self::axial_signed_skew`]'s shape verbatim on the DUAL
+    /// (MAX vs ABS-DIFF) statistic, and matching
+    /// [`Self::axial_majority_count`]'s `>=` tie convention verbatim
+    /// on the DUAL (SIGNED vs UNSIGNED) column. No `Ord::max`, no
+    /// `isize::abs` indirection, no new dep, no typeclass indirection,
+    /// no per-axis loop, no allocation.
+    ///
+    /// `const fn` so a caller can pin the exact SIGNED CENTRAL-
+    /// TENDENCY value at compile time as a build-break (`const _:
+    /// () = assert!(EMPTY_RESOURCE_LIMITS
+    /// .axial_signed_majority_count() == 6);`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// SIGNED CENTRAL-TENDENCY projection is a named typed `isize`
+    /// exit rather than an inline sign-split MAX-fold per consumer.
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// the SIGNED-KIND peer OPENS the SIGNEDNESS axis on the ARM-
+    /// AGNOSTIC CENTRAL-TENDENCY MAX column with the LOAD-BEARING
+    /// ABSOLUTE-VALUE fold agreeing with [`Self::axial_majority_count`]
+    /// and the SIGN discriminating the polar-majority-or-balance /
+    /// interior-strict-majority arms the UNSIGNED reading structurally
+    /// cannot access. THEORY.md §V.1 — knowable platform; the SIGNED
+    /// CENTRAL-TENDENCY verdict is a TYPE-level operation on the
+    /// posture algebra returning a `const`-evaluable `isize`.
+    ///
+    /// Frontier inspiration: classical descriptive statistics'
+    /// SIGNED-MAX statistic on a paired two-arm tally with the sign
+    /// discriminating the winning arm — the DIRECT peer of the
+    /// SIGNED-DIFFERENCE statistic [`Self::axial_signed_skew`]
+    /// carries one COMBINATOR-KIND axis under. Voting-theory's
+    /// canonical "winning tally with directional sign" figure that
+    /// reads `+k` on a strict polar win with `k` polar votes and
+    /// `-k` on a strict interior win with `k` interior votes,
+    /// discriminating the winner by sign — the SIGNED MAX peer of
+    /// the SIGNED MARGIN. Haskell's `if p >= i then p else -i` on
+    /// the paired arm tally lifted from `Int` to `Integer`. APL's
+    /// `((+/mask) ≥ (+/~mask)) × (+/mask) - ((+/mask) < (+/~mask))
+    /// × (+/~mask)` SIGNED MAX-fold on the paired axial tally.
+    /// Idris's `max (count p v) (count (not . p) v)` signed by
+    /// `sign (count p v - count (not . p) v)`. Translation through
+    /// pleme-io primitives: plain `const fn` sign-split delegation
+    /// on the two already-lifted ARITHMETIC-QUANTIFIER tallies —
+    /// no new dep, no typeclass indirection, no per-axis loop, no
+    /// allocation.
+    #[must_use]
+    pub const fn axial_signed_majority_count(self) -> isize {
+        let p = self.count_polar_axes();
+        let i = self.count_interior_axes();
+        // Both `p` and `i` lie in `0..=FIELD_COUNT` (= 6), so the
+        // `as isize` cast never wraps on any target Rust supports
+        // (`isize::MAX` far exceeds FIELD_COUNT on every target).
+        #[allow(clippy::cast_possible_wrap)]
+        if p >= i {
+            p as isize
+        } else {
+            -(i as isize)
+        }
+    }
+
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
     /// `self.first_bottom_axis_index()` returns `Some(i)` for the least
     /// `i` such that `self.field_values()[i] == 0`, or `None` when no
@@ -65206,5 +65382,241 @@ mod tests {
         const _: () = assert!(EMPTY_RESOURCE_LIMITS.atomic_minority_count() == 0);
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.atomic_minority_count() == 0);
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.atomic_minority_count() == 0);
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_majority_count_preset_pins_split_saturated_corner_on_arm_identity(
+    ) {
+        // Preset pins on the SIGNED-KIND peer of the UNSIGNED
+        // CENTRAL-TENDENCY closure — the SIGNED read RESOLVES the
+        // arm-identity ambiguity that `axial_majority_count` merged.
+        // Where `axial_majority_count` fires the SAME `+6` on every
+        // uniform preset (BOTH polar-uniform and interior-uniform
+        // arms saturate to the same UNSIGNED magnitude), the SIGNED
+        // reading splits the SATURATED corner onto the TWO signed
+        // reads `+6` (polar-uniform: EMPTY / UNBOUNDED) and `-6`
+        // (interior-uniform: DEFAULT / HAND_AUTHORED_*). The LOAD-
+        // BEARING arm-labeling the UNSIGNED CENTRAL-TENDENCY
+        // structurally cannot access — matching the shape of
+        // `axial_signed_skew`'s preset partition verbatim one
+        // COMBINATOR-KIND axis under on the SIGNED-KIND CARDINAL
+        // column.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.axial_signed_majority_count(), 6);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.axial_signed_majority_count(), 6);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.axial_signed_majority_count(), -6);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.axial_signed_majority_count(), -6);
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.axial_signed_majority_count(),
+            -6
+        );
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_majority_count_test_local_witnesses_pin_positive_three_on_ties_and_neg_four_on_endpoints(
+    ) {
+        // Truly-mixed witnesses on the SIGNED-KIND CENTRAL-TENDENCY
+        // projection — the two 3+3 ties each fire `+3` at the balance
+        // corner via the `>=` tie convention (matching
+        // `axial_majority_count`'s tie convention verbatim on the
+        // DUAL SIGNED read), NOT `0` as `axial_signed_skew` would.
+        // ENDPOINTS_ONLY carries a 2 + 4 interior-strict split so
+        // the SIGNED reading fires `-4` (the interior arm's tally
+        // signed by its winning arm). LOAD-BEARING NON-ZERO-AT-
+        // BALANCE witnesses that distinguish THIS CENTRAL-TENDENCY
+        // reading from the DISPERSION reading one COMBINATOR-KIND
+        // axis under.
+        assert_eq!(SPARSE_BOTTOM_POSTURE.axial_signed_majority_count(), 3);
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.axial_signed_majority_count(),
+            3,
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.axial_signed_majority_count(),
+            -4,
+        );
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_majority_count_unsigned_abs_equals_axial_majority_count() {
+        // ABSOLUTE-VALUE bridge to axial_majority_count — LOAD-
+        // BEARING structural pin. On every posture, the SIGNED
+        // CENTRAL-TENDENCY reading agrees with the UNSIGNED CENTRAL-
+        // TENDENCY reading after collapsing the sign through
+        // `isize::unsigned_abs`. Ties the SIGNED SIGNED-KIND
+        // projection to the UNSIGNED CENTRAL-TENDENCY projection
+        // through the canonical `unsigned_abs` fold — the DIRECT
+        // proof that this projection strictly REFINES
+        // `axial_majority_count` by splitting each magnitude cell
+        // onto its (positive, negative) arm-identity partition, with
+        // the balance corner grouped into the positive arm by the
+        // `>=` tie convention.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_signed_majority_count().unsigned_abs(),
+                a.axial_majority_count(),
+                "axial_signed_majority_count().unsigned_abs() != axial_majority_count() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_majority_count_positive_iff_not_interior_is_majority() {
+        // POSITIVE-SIGN bridge to non-interior-majority — LOAD-
+        // BEARING structural pin. The SIGNED CENTRAL-TENDENCY reading
+        // fires a strictly positive value iff the interior arm does
+        // NOT strictly lead — equivalently iff the polar arm is
+        // majority OR the paired tally is axially balanced. Broader
+        // than `axial_signed_skew() > 0 ⇔ polar_is_majority()`
+        // because THIS projection groups the balance leg into the
+        // positive arm via the `>=` tie convention, where the
+        // SIGNED SKEW's zero at balance breaks the strict-positive
+        // property.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_signed_majority_count() > 0,
+                !a.interior_is_majority(),
+                "axial_signed_majority_count() > 0 != !interior_is_majority() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_majority_count_negative_iff_interior_is_majority() {
+        // NEGATIVE-SIGN bridge to interior-majority — LOAD-BEARING
+        // structural pin. The SIGNED CENTRAL-TENDENCY reading fires
+        // a strictly negative value iff the interior arm strictly
+        // leads on the paired ARITHMETIC-QUANTIFIER tally. Matches
+        // `axial_signed_skew`'s negative-sign bridge verbatim on the
+        // DUAL (MAX vs ABS-DIFF) statistic one COMBINATOR-KIND axis
+        // under.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_signed_majority_count() < 0,
+                a.interior_is_majority(),
+                "axial_signed_majority_count() < 0 != interior_is_majority() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_majority_count_is_never_zero() {
+        // NEVER-ZERO structural pin — LOAD-BEARING. The EXHAUSTIVE
+        // COMPOUND partition `count_polar + count_interior ==
+        // FIELD_COUNT > 0` forces `count_polar >= count_interior ⇒
+        // count_polar >= FIELD_COUNT / 2 > 0` and `count_polar <
+        // count_interior ⇒ count_interior > FIELD_COUNT / 2 > 0`, so
+        // the SIGNED-KIND output's magnitude is bounded below by
+        // `FIELD_COUNT / 2` on every posture. The SIGNED-KIND
+        // CENTRAL-TENDENCY reading STRUCTURALLY CANNOT reach the
+        // ZERO cell that `axial_signed_skew` fires at every balance
+        // corner — the LOAD-BEARING structural difference between the
+        // CENTRAL-TENDENCY (MAX) and DISPERSION (ABS-DIFF) statistics
+        // at the balance corner where the MAX is non-zero but the
+        // ABS-DIFF vanishes.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_ne!(
+                a.axial_signed_majority_count(),
+                0,
+                "axial_signed_majority_count() = 0 on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_majority_count_magnitude_bounded_below_by_half_field_count() {
+        // SATURATED MAGNITUDE lower bound — LOAD-BEARING tightening
+        // pin. Direct consequence of `axial_majority_count`'s lower
+        // bound `>= FIELD_COUNT / 2` transported through the
+        // `unsigned_abs` bridge — the SIGNED CENTRAL-TENDENCY reading
+        // lies in `[-FIELD_COUNT, -FIELD_COUNT/2] ∪ [FIELD_COUNT/2,
+        // FIELD_COUNT]` with the open middle strip
+        // `(-FIELD_COUNT/2, FIELD_COUNT/2)` STRUCTURALLY UNREACHABLE.
+        // The (BROADER-RANGE signed_skew, TIGHTER-RANGE
+        // signed_majority_count) pair partitions the SIGNED axial
+        // reading into the ABS-DIFF DISPERSION statistic (which spans
+        // `[-FIELD_COUNT, FIELD_COUNT]` continuously including 0) and
+        // the MAX CENTRAL-TENDENCY statistic (which avoids the open
+        // middle strip).
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let k = a.axial_signed_majority_count();
+            let half = ResourceLimits::FIELD_COUNT / 2;
+            assert!(
+                k.unsigned_abs() >= half,
+                "|axial_signed_majority_count()| = {} < FIELD_COUNT/2 = {half} on {a:?}",
+                k.unsigned_abs(),
+            );
+            let upper = ResourceLimits::FIELD_COUNT as isize;
+            let lower = -upper;
+            assert!(
+                (lower..=upper).contains(&k),
+                "axial_signed_majority_count() = {k} out of [{lower}, {upper}] on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_majority_count_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the SIGNED-KIND CENTRAL-TENDENCY closure —
+        // the SIGNED reading is evaluable in const context so a
+        // caller can pin the exact SIGNED SATURATED corner (polar-
+        // uniform `+6` vs interior-uniform `-6`) at compile time as
+        // build-breaks. Mirror of the const-fn evaluability pins on
+        // the (axial_majority_count, axial_minority_count) UNSIGNED
+        // CENTRAL-TENDENCY closure one SIGNEDNESS axis under, and on
+        // the (axial_skew, axial_signed_skew) SIGNEDNESS pair one
+        // COMBINATOR-KIND axis under.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.axial_signed_majority_count() == 6);
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.axial_signed_majority_count() == 6);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.axial_signed_majority_count() == -6);
     }
 }

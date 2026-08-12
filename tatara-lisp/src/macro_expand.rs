@@ -14567,6 +14567,228 @@ impl ResourceLimits {
         }
     }
 
+    /// Whole-posture ATOMIC-CELL SIGNED-KIND DIRECTED-CARDINAL projection
+    /// — `self.atomic_signed_skew()` returns `count_bottom_axes() -
+    /// count_top_axes()` read as an `isize` where the SIGN carries
+    /// which atomic arm dominates on the ATOMIC (bottom, top) axial
+    /// partition of the polar cell and the MAGNITUDE carries by how
+    /// much. `+k` iff bottom strictly leads by `k`, `-k` iff top
+    /// strictly leads by `k`, `0` at the atomic balance corner. The
+    /// SIGNED-KIND peer of [`Self::atomic_skew`] one SIGNEDNESS axis
+    /// over on the same CARDINAL-DISTANCE column that just closed via
+    /// the UNDIRECTED `usize` and ARM-AGNOSTIC `Option<usize>` reads on
+    /// the ATOMIC (bottom, top) tally pair.
+    ///
+    /// The direct CELL-KIND peer of [`Self::axial_signed_skew`] one
+    /// CELL-KIND axis over on the ATOMIC (bottom, top) pair rather
+    /// than the COMPOUND (polar, interior) pair — jointly the
+    /// (axial_signed_skew, atomic_signed_skew) pair carries the
+    /// SIGNED-KIND DIRECTED-CARDINAL reading on BOTH levels of the
+    /// (COMPOUND → ATOMIC) refinement chain the (axial_skew,
+    /// atomic_skew) UNDIRECTED CARDINAL pair carries one COMBINATOR-
+    /// KIND axis under and the (majority_lead, atomic_majority_lead)
+    /// ARM-AGNOSTIC DIRECTED-LEAD pair carries one COMBINATOR-KIND
+    /// axis under.
+    ///
+    /// A STRICT REFINEMENT of BOTH the UNDIRECTED `usize` and the
+    /// ARM-AGNOSTIC `Option<usize>` closure exits on the SAME atomic
+    /// pair: the ABSOLUTE-VALUE bridge is
+    /// `atomic_signed_skew().unsigned_abs() == atomic_skew()`; the
+    /// SIGN-TRICHOTOMY bridge partitions every posture into
+    /// `atomic_signed_skew() > 0 ⇔ bottom_is_majority()`,
+    /// `atomic_signed_skew() < 0 ⇔ top_is_majority()`,
+    /// `atomic_signed_skew() == 0 ⇔ is_atomically_balanced()`. Where
+    /// the UNDIRECTED atomic CARDINAL projection folds BOTH strict-
+    /// majority arms onto the SAME positive magnitude (discarding arm
+    /// identity) and the ARM-AGNOSTIC `Option<usize>` projection folds
+    /// them onto the SAME `Some(k)` cell (discarding arm identity,
+    /// distinguishing the atomic balance corner), THIS projection
+    /// reads BOTH arm identity (via the sign) AND magnitude (via the
+    /// absolute value) as ONE `isize` — the CARDINAL-DISTANCE reading
+    /// the paired atomic (bottom_lead, top_lead) DIRECTED
+    /// `Option<usize>` pair expresses as a DISJUNCTION of two arm-
+    /// selecting cells that this SIGNED integer expresses as ONE
+    /// arithmetic value.
+    ///
+    /// CONTRAST with the COMPOUND (polar, interior) SIGNED skew: the
+    /// polar-interior tally always sums to `FIELD_COUNT` (exhaustive
+    /// partition), so [`Self::axial_signed_skew`]'s balance corner
+    /// requires a truly-mixed posture and its interior-uniform arm
+    /// SATURATES to `-6`. The atomic (bottom, top) tally sums to
+    /// `count_polar_axes()` which can be zero, so THIS projection's
+    /// atomic balance corner is inhabited by EVERY interior-uniform
+    /// posture (both atomic counts at `0`, difference `0`) in addition
+    /// to any truly-mixed atomic-tied posture. This is the SAME
+    /// LOAD-BEARING BROADER TIE LEG the atomic-KIND MAJORITY
+    /// (bottom_is_majority, top_is_majority) and DIRECTED-LEAD
+    /// (bottom_lead, top_lead) and UNDIRECTED-CARDINAL (atomic_skew,
+    /// atomic_majority_lead) pairs already pin — the CELL axis names
+    /// the structural difference between the atomic and compound
+    /// trichotomies at the SIGNED CARDINAL exit.
+    ///
+    /// A STRICT REFINEMENT of the atomic DIRECTED-LEAD `Option<usize>`
+    /// pair (bottom_lead, top_lead) on the discriminator axis: the
+    /// DIRECTED pair carries the arm-identity + magnitude verdict as
+    /// TWO exits at most one of which fires `Some(_)`; THIS projection
+    /// carries the SAME verdict as ONE typed `isize` exit —
+    /// `.signum()` selects the atomic arm, `.unsigned_abs()` selects
+    /// the magnitude — rather than composing the two paired arms
+    /// through `bottom_lead().or(top_lead().map(...))` or a match on
+    /// the DIRECTED pair.
+    ///
+    /// **ABSOLUTE-VALUE bridge to atomic_skew**: for every posture `a`,
+    /// `a.atomic_signed_skew().unsigned_abs() == a.atomic_skew()`.
+    /// LOAD-BEARING substrate theorem tying the atomic SIGNED CARDINAL
+    /// reading to the atomic UNDIRECTED CARDINAL reading through the
+    /// canonical `isize::unsigned_abs` fold. Pinned via
+    /// `resource_limits_atomic_signed_skew_unsigned_abs_equals_atomic_skew`.
+    ///
+    /// **POSITIVE-SIGN bridge to bottom-majority**: for every posture
+    /// `a`, `a.atomic_signed_skew() > 0 ⇔ a.bottom_is_majority()`.
+    /// Pinned via
+    /// `resource_limits_atomic_signed_skew_positive_iff_bottom_is_majority`.
+    ///
+    /// **NEGATIVE-SIGN bridge to top-majority**: for every posture
+    /// `a`, `a.atomic_signed_skew() < 0 ⇔ a.top_is_majority()`. Pinned
+    /// via `resource_limits_atomic_signed_skew_negative_iff_top_is_majority`.
+    ///
+    /// **ZERO-SIGN bridge to atomic balance**: for every posture `a`,
+    /// `a.atomic_signed_skew() == 0 ⇔ a.is_atomically_balanced()`.
+    /// Pinned via
+    /// `resource_limits_atomic_signed_skew_zero_iff_is_atomically_balanced`.
+    ///
+    /// **SIGNUM-TRICHOTOMY bridge**: for every posture `a`,
+    /// `a.atomic_signed_skew().signum()` reads the three legs of the
+    /// atomic STRICT-TOTAL-ORDER trichotomy as `{+1, 0, -1}` — the
+    /// direct SIGN projection of the (bottom_is_majority,
+    /// is_atomically_balanced, top_is_majority) three-cell partition.
+    /// Pinned via
+    /// `resource_limits_atomic_signed_skew_signum_partitions_atomic_majority_trichotomy`.
+    ///
+    /// **VALUE-agreement bridge to (bottom_lead, top_lead)**: for
+    /// every posture `a`, `a.atomic_signed_skew() ==
+    /// a.bottom_lead().unwrap_or(0) as isize -
+    /// a.top_lead().unwrap_or(0) as isize`. LOAD-BEARING substrate
+    /// theorem tying the atomic SIGNED CARDINAL reading to the atomic
+    /// DIRECTED-LEAD pair through the DIFFERENCE of the two arms with
+    /// balance corners collapsed to `0`. Holds universally because at
+    /// most one atomic DIRECTED arm fires `Some(_)` (per the paired
+    /// [`Self::bottom_lead`]/[`Self::top_lead`] mutual-exclusion pin),
+    /// so the difference collapses to the winning arm's magnitude with
+    /// the winning arm's sign — or `0` at the atomic balance corner
+    /// where both fire `None`. Pinned via
+    /// `resource_limits_atomic_signed_skew_equals_bottom_lead_minus_top_lead`.
+    ///
+    /// **Range bound**: for every posture `a`,
+    /// `-(FIELD_COUNT as isize) <= a.atomic_signed_skew() <=
+    /// FIELD_COUNT as isize`. Lower bound follows from the SATURATED
+    /// top-arm case where `count_bottom == 0` and `count_top ==
+    /// FIELD_COUNT` (UNBOUNDED_RESOURCE_LIMITS); upper bound from the
+    /// DUAL SATURATED bottom-arm case (EMPTY_RESOURCE_LIMITS). Pinned
+    /// via
+    /// `resource_limits_atomic_signed_skew_value_lies_in_neg_field_count_through_field_count`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.atomic_signed_skew() ==
+    /// 6` (bottom-uniform: 6 bottom + 0 top → `+6`);
+    /// `UNBOUNDED_RESOURCE_LIMITS.atomic_signed_skew() == -6` (top-
+    /// uniform: 0 bottom + 6 top → `-6`);
+    /// `DEFAULT_RESOURCE_LIMITS.atomic_signed_skew() == 0` (interior-
+    /// uniform: both counts at 0 → atomic balance corner);
+    /// `HAND_AUTHORED_MID_POSTURE.atomic_signed_skew() == 0` (same);
+    /// `HAND_AUTHORED_OTHER_POSTURE.atomic_signed_skew() == 0` (same).
+    /// The five uniform fixtures split into THREE cells: the polar-
+    /// uniform corner (that [`Self::axial_signed_skew`] merged onto
+    /// the SAME `+6` cell via polar-arm saturation) splits at the
+    /// atomic surface into BOTTOM-uniform (`+6`) and TOP-uniform
+    /// (`-6`) — the LOAD-BEARING atomic-arm-identity split the compound
+    /// SIGNED reading could not access — while the interior-uniform
+    /// arm (that [`Self::axial_signed_skew`] fires at `-6` because the
+    /// compound interior arm SATURATES) collapses to the atomic
+    /// balance corner (`0`) here because the atomic (bottom, top)
+    /// tally is `(0, 0)` on every interior-uniform posture. The
+    /// (axial_signed_skew, atomic_signed_skew) pair thus discriminates
+    /// FIVE distinct signed cells `{+6, -6, +6, -6, -6}` (compound)
+    /// vs `{+6, -6, 0, 0, 0}` (atomic) on the same five uniform
+    /// fixtures — the SAME LOAD-BEARING CELL-KIND discriminating
+    /// contrast the paired UNDIRECTED and DIRECTED atomic vs compound
+    /// pairs already pin.
+    ///
+    /// **Truly-mixed test-local witnesses**:
+    /// `SPARSE_BOTTOM_POSTURE.atomic_signed_skew() == 3` (3 bottom +
+    /// 0 top → `+3`);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.atomic_signed_skew() == 3`
+    /// (same 3 + 0);
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE.atomic_signed_skew() == 2` (2 +
+    /// 0). ALL THREE truly-mixed BOTTOM-CARRYING fixtures fire
+    /// STRICTLY POSITIVE `isize` values on the bottom-dominant arm —
+    /// the LOAD-BEARING SIGNED-CARDINAL witnesses on the bottom arm
+    /// the UNDIRECTED [`Self::atomic_skew`] merged onto the SAME
+    /// positive magnitude, arm-labeled here as `+3, +3, +2` where a
+    /// hypothetical DUAL top-dominant split at the same magnitudes
+    /// would fire `-3, -3, -2`.
+    ///
+    /// Encoded as the plain `const fn` split on the SIGN of the paired
+    /// atomic-tally comparison, delegating to `usize::abs_diff` on
+    /// each arm and casting through `as isize` — safe by the same
+    /// range-bound proof as [`Self::axial_signed_skew`] (both atomic
+    /// counts are bounded by `FIELD_COUNT = 6`, so the difference fits
+    /// `isize` on every target Rust supports). No `checked_sub`
+    /// indirection, no `i64` bridge, no per-axis loop, no allocation.
+    ///
+    /// `const fn` so a caller can pin the atomic-arm-labeled SIGNED
+    /// SATURATED corner at compile time (`const _: () = assert!(
+    /// EMPTY_RESOURCE_LIMITS.atomic_signed_skew() == 6);`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// atomic SIGNED CARDINAL projection is a named typed `isize`
+    /// exit rather than an inline sign-split subtraction per consumer
+    /// on the atomic pair. THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the SIGNED-KIND peer CLOSES the SIGNEDNESS
+    /// axis on the atomic CARDINAL-DISTANCE column with the LOAD-
+    /// BEARING ABSOLUTE-VALUE fold agreeing with [`Self::atomic_skew`]
+    /// and the SIGN discriminating the bottom-majority / top-majority
+    /// arms the UNDIRECTED atomic reading structurally cannot access.
+    /// THEORY.md §V.1 — knowable platform; the atomic SIGNED CARDINAL
+    /// verdict is a TYPE-level operation on the posture algebra
+    /// returning a `const`-evaluable `isize`.
+    ///
+    /// Frontier inspiration: same as [`Self::axial_signed_skew`],
+    /// through the DUAL (atomic vs compound) CELL-KIND combinator on
+    /// the two atomic pole tallies of the DISJOINT-BUT-NOT-EXHAUSTIVE
+    /// (bottom, top) atomic sub-partition of the polar cell. Voting-
+    /// theory's canonical "signed margin" figure that reads `+k` on a
+    /// strict bottom win and `-k` on a strict top win, restricted to
+    /// the two atomic-pole arms with abstainers (interior axes)
+    /// inhabiting neither arm and contributing 0 to both tallies —
+    /// where the compound SIGNED margin partitions abstainers into an
+    /// interior-arm SATURATING to `-6`, the atomic SIGNED margin
+    /// partitions them into the balance corner at `0`. APL's
+    /// `(+/⍵=0) - (+/⍵=⌈/⍵)` SIGNED direct atomic-arm difference on
+    /// the paired atomic tally. Haskell's
+    /// `length bottom - length top` on the two atomic pole sub-vectors
+    /// lifted from `Int` to `Integer`. Idris's
+    /// `count (== Z) v - count (== maxBound) v` returning `Int` at the
+    /// type of the paired atomic-arm-tally signed difference.
+    /// Translation through pleme-io primitives: plain `const fn`
+    /// sign-split delegation on `usize::abs_diff` — mirror of
+    /// [`Self::axial_signed_skew`] on the atomic pair, no new dep, no
+    /// typeclass indirection, no per-axis loop, no allocation.
+    #[must_use]
+    pub const fn atomic_signed_skew(self) -> isize {
+        let b = self.count_bottom_axes();
+        let t = self.count_top_axes();
+        // Both `b` and `t` lie in `0..=FIELD_COUNT` (= 6), so the
+        // absolute difference fits `isize` on every target Rust
+        // supports. Matches the range-bound proof on
+        // [`Self::axial_signed_skew`].
+        #[allow(clippy::cast_possible_wrap)]
+        if b >= t {
+            b.abs_diff(t) as isize
+        } else {
+            -(b.abs_diff(t) as isize)
+        }
+    }
+
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
     /// `self.first_bottom_axis_index()` returns `Some(i)` for the least
     /// `i` such that `self.field_values()[i] == 0`, or `None` when no
@@ -61538,5 +61760,289 @@ mod tests {
             Some(6),
         ));
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.atomic_majority_lead().is_none());
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_skew_preset_pins_split_saturated_corner_on_atomic_arm_identity(
+    ) {
+        // Preset pins on the ATOMIC-CELL SIGNED-KIND peer of the atomic
+        // UNDIRECTED CARDINAL closure — the SIGNED atomic read RESOLVES
+        // the arm-identity ambiguity that `atomic_skew` merged. Where
+        // `atomic_skew` fires the SAME `+6` on both polar-uniform
+        // presets (EMPTY: bottom-uniform and UNBOUNDED: top-uniform)
+        // and `0` on every interior-uniform preset, the SIGNED atomic
+        // reading splits the saturated corner onto TWO signed reads
+        // `+6` (EMPTY: bottom-uniform) and `-6` (UNBOUNDED: top-
+        // uniform) — the LOAD-BEARING atomic-arm-labeling neither the
+        // UNSIGNED atomic CARDINAL nor the compound SIGNED CARDINAL
+        // structurally accesses on the SAME five uniform fixtures
+        // (compound: {+6, +6, -6, -6, -6}; atomic: {+6, -6, 0, 0, 0}).
+        assert_eq!(EMPTY_RESOURCE_LIMITS.atomic_signed_skew(), 6);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.atomic_signed_skew(), -6);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.atomic_signed_skew(), 0);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.atomic_signed_skew(), 0);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.atomic_signed_skew(), 0);
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_skew_test_local_witnesses_pin_positive_three_and_two_on_bottom_carrying(
+    ) {
+        // Truly-mixed witnesses on the atomic SIGNED-KIND projection —
+        // ALL THREE truly-mixed BOTTOM-CARRYING fixtures fire STRICTLY
+        // POSITIVE `isize` values on the bottom-dominant arm because no
+        // shipped truly-mixed fixture places any axis at the top pole.
+        // The LOAD-BEARING SIGNED-CARDINAL witnesses on the bottom arm
+        // — where atomic_skew fires the UNSIGNED `3, 3, 2` merged from
+        // BOTH atomic arms, THIS projection fires arm-labeled `+3, +3,
+        // +2` that would fire `-3, -3, -2` on a hypothetical DUAL top-
+        // dominant split at the same magnitudes.
+        assert_eq!(SPARSE_BOTTOM_POSTURE.atomic_signed_skew(), 3);
+        assert_eq!(CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.atomic_signed_skew(), 3);
+        assert_eq!(ENDPOINTS_ONLY_BOTTOM_POSTURE.atomic_signed_skew(), 2);
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_skew_unsigned_abs_equals_atomic_skew() {
+        // ABSOLUTE-VALUE bridge to atomic_skew — LOAD-BEARING structural
+        // pin. On every posture, the atomic SIGNED CARDINAL reading
+        // agrees with the atomic UNDIRECTED CARDINAL reading after
+        // collapsing the sign through `isize::unsigned_abs`. Ties the
+        // SIGNED-KIND atomic projection to the UNSIGNED atomic
+        // UNDIRECTED-CARDINAL projection through the canonical
+        // `unsigned_abs` fold — the DIRECT proof that this projection
+        // strictly REFINES `atomic_skew` by splitting each magnitude
+        // cell onto its (positive, negative) atomic-arm-identity
+        // partition. Mirror of
+        // `resource_limits_axial_signed_skew_unsigned_abs_equals_axial_skew`
+        // one CELL-KIND axis over.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_signed_skew().unsigned_abs(),
+                a.atomic_skew(),
+                "atomic_signed_skew().unsigned_abs() != atomic_skew() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_skew_positive_iff_bottom_is_majority() {
+        // POSITIVE-SIGN bridge to bottom-majority — LOAD-BEARING
+        // structural pin. The atomic SIGNED CARDINAL reading fires a
+        // strictly positive value iff the bottom arm strictly leads
+        // on the paired atomic ARITHMETIC-QUANTIFIER tally. Ties the
+        // `> 0` cell of the atomic SIGNED reading to the bottom leg
+        // of the paired atomic STRICT-TOTAL-ORDER trichotomy on the
+        // SAME two-arm tally.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_signed_skew() > 0,
+                a.bottom_is_majority(),
+                "atomic_signed_skew() > 0 != bottom_is_majority() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_skew_negative_iff_top_is_majority() {
+        // NEGATIVE-SIGN bridge to top-majority — LOAD-BEARING
+        // structural pin. The atomic SIGNED CARDINAL reading fires a
+        // strictly negative value iff the top arm strictly leads on
+        // the paired atomic ARITHMETIC-QUANTIFIER tally. Ties the
+        // `< 0` cell of the atomic SIGNED reading to the top leg of
+        // the paired atomic STRICT-TOTAL-ORDER trichotomy on the SAME
+        // two-arm tally.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_signed_skew() < 0,
+                a.top_is_majority(),
+                "atomic_signed_skew() < 0 != top_is_majority() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_skew_zero_iff_is_atomically_balanced() {
+        // ZERO-SIGN bridge to atomic balance — LOAD-BEARING structural
+        // pin. The atomic SIGNED CARDINAL reading fires the ZERO cell
+        // iff the paired atomic STRICT-TOTAL-ORDER trichotomy fires the
+        // balance leg. Ties the `== 0` cell of the atomic SIGNED
+        // reading to the shipped [`is_atomically_balanced`] typed exit
+        // — matching the paired [`atomic_skew`] ZERO-bridge on the
+        // UNSIGNED atomic reading, and mirroring the paired
+        // `resource_limits_axial_signed_skew_zero_iff_is_axially_balanced`
+        // one CELL-KIND axis over.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_signed_skew() == 0,
+                a.is_atomically_balanced(),
+                "atomic_signed_skew() == 0 != is_atomically_balanced() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_skew_signum_partitions_atomic_majority_trichotomy() {
+        // SIGNUM-TRICHOTOMY bridge — LOAD-BEARING structural pin. The
+        // atomic SIGNED CARDINAL reading's SIGNUM projection reads the
+        // three legs of the atomic STRICT-TOTAL-ORDER trichotomy on the
+        // paired atomic ARITHMETIC-QUANTIFIER tally as `{+1, 0, -1}` —
+        // the direct SIGN projection of the (bottom_is_majority,
+        // is_atomically_balanced, top_is_majority) three-cell partition.
+        // Substrate theorem tying the atomic SIGNED CARDINAL closure to
+        // the paired atomic boolean MAJORITY-KIND closure through the
+        // canonical `signum` fold.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let expected: isize = if a.bottom_is_majority() {
+                1
+            } else if a.top_is_majority() {
+                -1
+            } else {
+                0
+            };
+            assert_eq!(
+                a.atomic_signed_skew().signum(),
+                expected,
+                "atomic_signed_skew().signum() != atomic trichotomy leg on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_skew_equals_bottom_lead_minus_top_lead() {
+        // VALUE-agreement bridge to (bottom_lead, top_lead) — LOAD-
+        // BEARING structural pin. On every posture, the atomic SIGNED
+        // CARDINAL reading EQUALS the DIFFERENCE of the two atomic
+        // DIRECTED-LEAD magnitudes with `None` collapsed to `0`. Holds
+        // universally because at most one atomic DIRECTED arm fires
+        // `Some(_)` (per the paired [`bottom_lead`]/[`top_lead`]
+        // mutual-exclusion pin), so the difference collapses to the
+        // winning arm's magnitude with the winning arm's sign — or `0`
+        // at the atomic balance corner where both fire `None`. The
+        // direct SIGNED DIFFERENCE lift of the atomic DIRECTED-LEAD
+        // pair to the atomic SIGNED CARDINAL exit — mirror of
+        // `resource_limits_axial_signed_skew_equals_polar_lead_minus_interior_lead`
+        // one CELL-KIND axis over.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let b = a.bottom_lead().unwrap_or(0);
+            let t = a.top_lead().unwrap_or(0);
+            // Both `b` and `t` are usize bounded by FIELD_COUNT = 6,
+            // so the DIFFERENCE fits `isize` on every target.
+            let expected = if b >= t {
+                (b - t) as isize
+            } else {
+                -((t - b) as isize)
+            };
+            assert_eq!(
+                a.atomic_signed_skew(),
+                expected,
+                "atomic_signed_skew() != bottom_lead - top_lead on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_skew_value_lies_in_neg_field_count_through_field_count() {
+        // Range bound contract — LOAD-BEARING structural pin. The
+        // atomic SIGNED CARDINAL projection lies in `-(FIELD_COUNT as
+        // isize)..=(FIELD_COUNT as isize)`. Lower bound from the
+        // SATURATED top-arm case (`count_bottom == 0`, `count_top ==
+        // FIELD_COUNT`) which the shipped UNBOUNDED_RESOURCE_LIMITS
+        // preset witnesses; upper bound from the DUAL SATURATED
+        // bottom-arm case (`count_bottom == FIELD_COUNT`, `count_top
+        // == 0`) which the shipped EMPTY_RESOURCE_LIMITS preset
+        // witnesses.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let k = a.atomic_signed_skew();
+            let upper = ResourceLimits::FIELD_COUNT as isize;
+            let lower = -upper;
+            assert!(
+                (lower..=upper).contains(&k),
+                "atomic_signed_skew() = {k} out of [{lower}, {upper}] on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_skew_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the ATOMIC-CELL SIGNED-KIND CARDINAL-DISTANCE
+        // closure — the atomic SIGNED reading is evaluable in const
+        // context so a caller can pin the exact atomic-arm-labeled
+        // SIGNED SATURATED corner (bottom-uniform `+6` vs top-uniform
+        // `-6`) at compile time as build-breaks. Mirror of the
+        // const-fn evaluability pin on [`Self::axial_signed_skew`] one
+        // CELL-KIND axis over.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.atomic_signed_skew() == 6);
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.atomic_signed_skew() == -6);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.atomic_signed_skew() == 0);
     }
 }

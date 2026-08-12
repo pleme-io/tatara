@@ -805,22 +805,24 @@ const _: () = crate::ast::assert_str_array_slice_equals_str_array::<2, 2, 0>(
     &StructuralKind::LABELS,
     &["nil", "list"],
 );
-const _: () = crate::ast::assert_str_array_slice_equals_str_array::<8, 8, 0>(
+const _: () = crate::ast::assert_str_array_slice_equals_str_array::<9, 9, 0>(
     &NumericWidth::LABELS,
-    &["i32", "i64", "u32", "u64", "usize", "isize", "f32", "f64"],
+    &[
+        "i32", "i64", "u16", "u32", "u64", "usize", "isize", "f32", "f64",
+    ],
 );
 
 /// The closed set of Rust numeric widths a `#[derive(TataraDomain)]`
-/// field can lower a numeric kwarg into — the exact eight the derive's
-/// `classify` recognises (`Kind::Int("i32" | "i64" | "u32" | "u64" |
-/// "usize" | "isize")` ⊎ `Kind::Float("f32" | "f64")`), encoded as a
-/// TYPE so the width identity riding [`LispError::KwargOutOfRange.target`]
-/// is load-bearing data rather than a `&'static str` the proc macro
-/// interpolated into a message.
+/// field can lower a numeric kwarg into — the exact nine the derive's
+/// `classify` recognises (`Kind::Int("i32" | "i64" | "u16" | "u32" |
+/// "u64" | "usize" | "isize")` ⊎ `Kind::Float("f32" | "f64")`), encoded
+/// as a TYPE so the width identity riding
+/// [`LispError::KwargOutOfRange.target`] is load-bearing data rather
+/// than a `&'static str` the proc macro interpolated into a message.
 ///
 /// The set is closed by CONSTRUCTION on the derive's side: the derive's
 /// `Kind::Int` / `Kind::Float` payload is the only producer, and a
-/// hypothetical ninth width (`i8`, `u16`, `i128`) is not reachable
+/// hypothetical tenth width (`i8`, `i16`, `i128`) is not reachable
 /// until `classify` grows an arm for it — at which point the emitted
 /// `::tatara_lisp::error::NumericWidth::<Variant>` path fails to
 /// resolve, which is the compile error we want rather than a silently
@@ -845,6 +847,16 @@ pub enum NumericWidth {
     /// the derive's width payload maps totally onto this enum rather
     /// than through an `Option`.
     I64,
+    /// `"u16"` — unsigned 16-bit; the NARROWEST unsigned peer of
+    /// [`Self::U32`] one BIT-WIDTH axis over. Rejects the negative
+    /// literal always, and the `> 65535` literal as OUT-OF-RANGE — the
+    /// canonical `port 70000` case the [`LispError::KwargOutOfRange`]
+    /// docstring names, now first-class rather than the mystery
+    /// serde-shaped message the `Kind::Deserialize` fallthrough emitted
+    /// before the classify arm existed. Narrows through
+    /// `<u16 as TryFrom<i64>>::try_from`, matching every peer integer
+    /// width on the delegation to std's partial function.
+    U16,
     /// `"u32"` — unsigned 32-bit; rejects both the too-large and the
     /// NEGATIVE literal, the second of which a raw `as` cast turned
     /// into a huge positive number.
@@ -875,14 +887,15 @@ pub enum NumericWidth {
 }
 
 impl NumericWidth {
-    /// The closed set of eight reachable target widths — single source
+    /// The closed set of nine reachable target widths — single source
     /// of truth driving [`Self::label`] / [`fmt::Display`] and the
-    /// derive-generated `FromStr` decode sweep. Adding a ninth width
+    /// derive-generated `FromStr` decode sweep. Adding a tenth width
     /// lands at one `ALL` entry + one [`Self::label`] arm, arity-forced
-    /// by the `[Self; 8]` literal.
-    pub const ALL: [Self; 8] = [
+    /// by the `[Self; 9]` literal.
+    pub const ALL: [Self; 9] = [
         Self::I32,
         Self::I64,
+        Self::U16,
         Self::U32,
         Self::U64,
         Self::Usize,
@@ -891,13 +904,14 @@ impl NumericWidth {
         Self::F64,
     ];
 
-    /// The eight canonical labels in [`Self::ALL`] order — the Rust
+    /// The nine canonical labels in [`Self::ALL`] order — the Rust
     /// type names themselves, so the diagnostic quotes the source the
     /// author would have to edit. Pinned against a literal array by the
     /// `assert_str_array_slice_equals_str_array` const above.
-    pub const LABELS: [&'static str; 8] = [
+    pub const LABELS: [&'static str; 9] = [
         Self::I32.label(),
         Self::I64.label(),
+        Self::U16.label(),
         Self::U32.label(),
         Self::U64.label(),
         Self::Usize.label(),
@@ -912,6 +926,7 @@ impl NumericWidth {
         match self {
             Self::I32 => "i32",
             Self::I64 => "i64",
+            Self::U16 => "u16",
             Self::U32 => "u32",
             Self::U64 => "u64",
             Self::Usize => "usize",
@@ -1045,7 +1060,7 @@ pub enum LispError {
     /// WHY this is NOT a `TypeMismatch`. Both of that variant's
     /// descriptive slots are shape-valued — `expected:
     /// ExpectedKwargShape` and `got: SexpShape` — so an out-of-range
-    /// `:port 70000` on a `u16`-ish field would render the vacuous
+    /// `:port 70000` on a `u16` field would render the vacuous
     /// `expected int, got int`. The shapes AGREE; it is the WIDTH that
     /// disagrees, and `SexpShape` has no vocabulary for a width. The two
     /// rejection modes are genuinely distinct gates on the same value
@@ -1057,7 +1072,7 @@ pub enum LispError {
     /// rejection carries, so `KwargPath::Named(_)` / `Item { .. }` /
     /// `Slot(_)` bind structurally here exactly as they do on
     /// `TypeMismatch`. `target` is the typed closed-set
-    /// [`NumericWidth`] — the eight Rust numeric widths
+    /// [`NumericWidth`] — the nine Rust numeric widths
     /// `#[derive(TataraDomain)]` can lower a kwarg into — so the width
     /// identity is load-bearing data rather than a `&'static str` the
     /// derive interpolated. `value` is the typed [`NumericLiteral`]

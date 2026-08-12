@@ -1216,6 +1216,7 @@ fn classify(ty: &Type) -> Kind {
                 "bool" => return Kind::Bool,
                 "i64" => return Kind::Int("i64"),
                 "i32" => return Kind::Int("i32"),
+                "u16" => return Kind::Int("u16"),
                 "u32" => return Kind::Int("u32"),
                 "u64" => return Kind::Int("u64"),
                 "usize" => return Kind::Int("usize"),
@@ -1436,8 +1437,8 @@ mod classify_tests {
     // integration-test time.
     //
     // The projection admits three distinct arms — the primitive-name
-    // switch (`String`, `bool`, `i64` / `i32` / `u32` / `u64` / `usize`,
-    // `f64` / `f32`), the `Option<T>` recursor (delegates to
+    // switch (`String`, `bool`, `i64` / `i32` / `u16` / `u32` / `u64` /
+    // `usize` / `isize`, `f64` / `f32`), the `Option<T>` recursor (delegates to
     // `classify_option`), the `Vec<T>` recursor (delegates to
     // `classify_vec`) — and one fall-through arm to `Kind::Deserialize`
     // that catches every non-primitive type (nested structs, foreign
@@ -1491,7 +1492,7 @@ mod classify_tests {
 
     #[test]
     fn every_supported_integer_width_classifies_as_kind_int_with_the_matching_type_literal() {
-        // The six integer widths the derive supports each project to
+        // The seven integer widths the derive supports each project to
         // `Kind::Int(<literal>)` with the width name threaded through
         // the payload — the payload IS the turbofish the emitted
         // extractor narrows `extract_int`'s `i64` return into (it was
@@ -1507,8 +1508,17 @@ mod classify_tests {
         // `TryFrom<i64>` on the `NarrowNumeric<i64>` trait so their
         // (classify → extract → narrow) chains are byte-identical modulo
         // the width payload the derive threads through `Kind::Int(_)`.
+        //
+        // `u16` sits on the NARROWEST half of the unsigned column one
+        // BIT-WIDTH axis over from `u32`; it too narrows through
+        // `TryFrom<i64>` on the same `NarrowNumeric<i64>` trait so its
+        // (classify → extract → narrow) chain lands on the SAME shape
+        // modulo the width-payload the derive threads through
+        // `Kind::Int("u16")` — the canonical `port 70000` gate the
+        // `LispError::KwargOutOfRange` docstring names.
         assert!(matches!(classify(&parse_ty("i64")), Kind::Int("i64")));
         assert!(matches!(classify(&parse_ty("i32")), Kind::Int("i32")));
+        assert!(matches!(classify(&parse_ty("u16")), Kind::Int("u16")));
         assert!(matches!(classify(&parse_ty("u32")), Kind::Int("u32")));
         assert!(matches!(classify(&parse_ty("u64")), Kind::Int("u64")));
         assert!(matches!(classify(&parse_ty("usize")), Kind::Int("usize")));
@@ -1559,6 +1569,10 @@ mod classify_tests {
         assert!(matches!(
             classify(&parse_ty("Option<u32>")),
             Kind::OptionalInt("u32")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<u16>")),
+            Kind::OptionalInt("u16")
         ));
         assert!(matches!(
             classify(&parse_ty("Option<isize>")),

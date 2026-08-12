@@ -1454,7 +1454,7 @@ pub fn extract_optional_float(kw: &Kwargs<'_>, key: &str) -> Result<Option<f64>>
 /// A narrower numeric type reachable from the reader's wide `Wide`
 /// value — `i64` on the int axis, `f64` on the float axis.
 ///
-/// Implemented for exactly the eight widths `#[derive(TataraDomain)]`
+/// Implemented for exactly the nine widths `#[derive(TataraDomain)]`
 /// recognises, which is what makes [`NumericWidth`] a genuinely closed
 /// set: the enum's variants and this trait's impls are the same list,
 /// generated from the same macro invocation below.
@@ -1488,6 +1488,7 @@ macro_rules! impl_narrow_int {
 impl_narrow_int! {
     i32 => I32,
     i64 => I64,
+    u16 => U16,
     u32 => U32,
     u64 => U64,
     usize => Usize,
@@ -2375,6 +2376,7 @@ mod tests {
     fn every_supported_width_reports_its_own_typed_identity() {
         assert_eq!(<i32 as NarrowNumeric<i64>>::WIDTH, NumericWidth::I32);
         assert_eq!(<i64 as NarrowNumeric<i64>>::WIDTH, NumericWidth::I64);
+        assert_eq!(<u16 as NarrowNumeric<i64>>::WIDTH, NumericWidth::U16);
         assert_eq!(<u32 as NarrowNumeric<i64>>::WIDTH, NumericWidth::U32);
         assert_eq!(<u64 as NarrowNumeric<i64>>::WIDTH, NumericWidth::U64);
         assert_eq!(<usize as NarrowNumeric<i64>>::WIDTH, NumericWidth::Usize);
@@ -2447,6 +2449,104 @@ mod tests {
                 offset: 0,
                 capacity: None,
             }
+        );
+    }
+
+    /// A domain whose numeric fields exercise the NARROWEST-unsigned
+    /// column — `u16` is the canonical `port` case named in the
+    /// [`LispError::KwargOutOfRange`] docstring. Pin the full
+    /// (classify → extract → narrow → derive) chain: an in-range port
+    /// parses through `extract_int_narrowed::<u16>`, an out-of-range
+    /// `70000` rejects as `LispError::KwargOutOfRange { target:
+    /// NumericWidth::U16, .. }` (the case whose diagnostic the docstring
+    /// promises), a NEGATIVE literal `-1` rejects on the sign gate
+    /// (same rejection shape as `-1` on `U32`, on the peer BIT-WIDTH),
+    /// and the optional u16 arm carries the same three gates on its
+    /// own axis. Before this lift the (`port: u16`, `alt_port: Option<u16>`)
+    /// shape routed through the serde bridge, so the rejection surfaced
+    /// as a mystery `KwargDeserialize { message: "invalid value:
+    /// integer ...", .. }` — the exact substring-parse trap the typed
+    /// [`NumericWidth`] identity exists to eliminate.
+    #[derive(DeriveTataraDomain, Serialize, Debug, PartialEq)]
+    #[tatara(keyword = "defport")]
+    struct PortSpec {
+        port: u16,
+        alt_port: Option<u16>,
+    }
+
+    #[test]
+    fn narrowest_unsigned_u16_field_parses_in_range_literal_through_the_narrowing_gate() {
+        let forms = read(r"(defport :port 8080 :alt-port 65535)").expect("reads");
+        let spec = PortSpec::compile_from_sexp(&forms[0]).expect("in-range values must parse");
+        assert_eq!(
+            spec,
+            PortSpec {
+                port: 8080,
+                alt_port: Some(65535),
+            }
+        );
+
+        let absent = read(r"(defport :port 0)").expect("reads");
+        let spec_absent =
+            PortSpec::compile_from_sexp(&absent[0]).expect("absent optionals are legal");
+        assert_eq!(
+            spec_absent,
+            PortSpec {
+                port: 0,
+                alt_port: None,
+            }
+        );
+    }
+
+    /// The canonical `port 70000` case the [`LispError::KwargOutOfRange`]
+    /// docstring names. Pre-lift the derive routed `port: u16` through
+    /// the serde bridge, so an author's `70000` came back as a mystery
+    /// `KwargDeserialize { message: "invalid value: integer ...", .. }`.
+    /// Post-lift the rejection is typed as `NumericWidth::U16` and the
+    /// author's own literal rides through unchanged.
+    #[test]
+    fn u16_field_rejects_the_canonical_port_70000_case_with_the_typed_width_identity() {
+        let forms = read(r"(defport :port 70000)").expect("reads");
+        let err = PortSpec::compile_from_sexp(&forms[0])
+            .expect_err("70000 is out of range for u16 and must not parse");
+        let LispError::KwargOutOfRange {
+            form,
+            target,
+            value,
+        } = &err
+        else {
+            panic!("expected KwargOutOfRange, got {err:?}");
+        };
+        assert_eq!(form, &KwargPath::named("port"));
+        assert_eq!(*target, NumericWidth::U16);
+        assert_eq!(*value, NumericLiteral::Int(70_000));
+        assert_eq!(
+            err.to_string(),
+            "compile error in :port: 70000 is out of range for u16"
+        );
+    }
+
+    /// The NEGATIVE-into-unsigned gate on the narrowest-unsigned peer.
+    /// Same rejection shape as `-1` on `U32` in
+    /// `negative_int_into_an_unsigned_width_is_rejected_not_sign_flipped`
+    /// — pin here that `u16`'s sign-gate lands on
+    /// `NumericWidth::U16` rather than drifting through the serde
+    /// bridge (as it did before the classify arm existed).
+    #[test]
+    fn negative_int_into_u16_is_rejected_on_the_sign_gate_not_the_serde_bridge() {
+        let forms = read(r"(defport :port 0 :alt-port -1)").expect("reads");
+        let err = PortSpec::compile_from_sexp(&forms[0])
+            .expect_err("-1 is out of range for u16 and must not parse");
+        assert!(
+            matches!(
+                &err,
+                LispError::KwargOutOfRange {
+                    target: NumericWidth::U16,
+                    value: NumericLiteral::Int(-1),
+                    ..
+                }
+            ),
+            "expected an Option<u16> sign-gate rejection, got {err:?}"
         );
     }
 

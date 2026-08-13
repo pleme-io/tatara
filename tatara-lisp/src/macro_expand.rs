@@ -20458,6 +20458,212 @@ impl ResourceLimits {
             c => Some(c > 1 && c < Self::FIELD_COUNT),
         }
     }
+
+    /// Whole-posture NEARLY-SATURATED-OF-BOTTOM predicate —
+    /// `self.bottom_axis_is_nearly_saturated()` returns `Some(true)` iff
+    /// EXACTLY [`Self::FIELD_COUNT`] `- 1` axes of `self` sit at the
+    /// bottom pole (equivalently: [`Self::count_bottom_axes`] `==
+    /// Self::FIELD_COUNT - 1`, i.e. one axis shy of saturation),
+    /// `Some(false)` iff at least ONE axis is at the bottom pole but the
+    /// count is not exactly `FIELD_COUNT - 1` (either strictly below the
+    /// upper-endpoint neighbour or at the SATURATED endpoint itself), or
+    /// `None` iff no axis is at the bottom pole. The DUAL-ENDPOINT peer
+    /// of [`Self::bottom_axis_is_singleton`] one CARDINAL-DEPTH axis over
+    /// on the has-bottom-axis regime: SINGLETON pins the lower-endpoint
+    /// `count == 1` cell; NEARLY-SATURATED pins the upper-endpoint
+    /// neighbour `count == FIELD_COUNT - 1` cell — the two open a
+    /// FLANKING pair of atomic-count cells bracketing the STRICTLY-MULTI
+    /// column's `1 < count < FIELD_COUNT` open interval at its two
+    /// interior endpoints. Jointly the (bottom_axis_is_nearly_saturated,
+    /// top_axis_is_nearly_saturated) atomic pair OPENS the
+    /// NEARLY-SATURATED column past the just-closed STRICTLY-MULTI column
+    /// on the atomic (bottom, top) row.
+    ///
+    /// **COUNT-EQUALS-FIELD_COUNT-MINUS-ONE identity — LOAD-BEARING
+    /// structural pin**: on every posture,
+    /// `bottom_axis_is_nearly_saturated() == { let c =
+    /// self.count_bottom_axes(); if c == 0 { None } else { Some(c ==
+    /// Self::FIELD_COUNT - 1) } }`. Composes structurally through the
+    /// COUNT projection; the substrate never re-scans the per-axis mask.
+    /// Pinned via
+    /// `resource_limits_bottom_axis_is_nearly_saturated_equals_count_equals_field_count_minus_one`.
+    ///
+    /// **NEARLY-SATURATED-IMPLIES-STRICTLY-MULTI bridge — LOAD-BEARING
+    /// refinement pin**: on every posture,
+    /// `bottom_axis_is_nearly_saturated() == Some(true) ⇒
+    /// bottom_axis_is_strictly_multi() == Some(true)`. The
+    /// NEARLY-SATURATED cell lands at `count == FIELD_COUNT - 1 == 5`
+    /// which sits strictly between `1` and `FIELD_COUNT` (both endpoints
+    /// excluded because `FIELD_COUNT >= 3`) — the substrate crystallizes
+    /// the NEARLY-SATURATED cell as a strict REFINEMENT of the
+    /// STRICTLY-MULTI open interval at its upper-endpoint neighbour.
+    /// Pinned via
+    /// `resource_limits_bottom_axis_is_nearly_saturated_true_implies_is_strictly_multi_true`.
+    ///
+    /// **NEARLY-SATURATED-EXCLUDES-SATURATED — LOAD-BEARING mutual-
+    /// exclusion pin**: on every posture, NOT
+    /// (`bottom_axis_is_nearly_saturated() == Some(true) &&
+    /// bottom_axis_is_saturated() == Some(true)`). The two cells sit at
+    /// distinct cardinalities `FIELD_COUNT - 1` and `FIELD_COUNT` on the
+    /// same COUNT projection; they NEVER co-fire. The NEARLY-SATURATED
+    /// cell is EXACTLY the neighbour-below-SATURATED landing — the two
+    /// jointly name the two-cell "upper tail" of the has-bottom-axis
+    /// regime as first-class typed exits rather than an inline
+    /// `count == FIELD_COUNT - 1` per-consumer equality that shares its
+    /// arithmetic root with a paired `count == FIELD_COUNT` inline test
+    /// nearby. Pinned via
+    /// `resource_limits_bottom_axis_is_nearly_saturated_true_implies_is_saturated_false`.
+    ///
+    /// **NEARLY-SATURATED-EXCLUDES-SINGLETON mutual-exclusion pin**: on
+    /// every posture, NOT (`bottom_axis_is_nearly_saturated() ==
+    /// Some(true) && bottom_axis_is_singleton() == Some(true)`). The
+    /// FLANKING dual-endpoint peers are at distinct cardinalities `1`
+    /// and `FIELD_COUNT - 1`; on the shipped `FIELD_COUNT == 6` they
+    /// NEVER co-fire (they would only coincide at the degenerate
+    /// `FIELD_COUNT == 2` regime where the two endpoint neighbours
+    /// collapse, which the compile-time `FIELD_COUNT` constant already
+    /// forbids). Pinned via
+    /// `resource_limits_bottom_axis_is_nearly_saturated_true_implies_is_singleton_false`.
+    ///
+    /// **Preset pins — LOAD-BEARING SATURATION contrast**:
+    /// `EMPTY_RESOURCE_LIMITS.bottom_axis_is_nearly_saturated() ==
+    /// Some(false)` (saturated bottom pole packs SIX axes at 0, count ==
+    /// FIELD_COUNT — one MORE than FIELD_COUNT - 1, at the SATURATED
+    /// endpoint itself, NOT the neighbour-below);
+    /// `UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_nearly_saturated() ==
+    /// None` (no bottom axis); `DEFAULT_RESOURCE_LIMITS
+    /// .bottom_axis_is_nearly_saturated() == None`. No shipped preset
+    /// fires `Some(true)` (no shipped preset places exactly five bottom
+    /// axes) — the truth-firing pin uses a synthetic five-bottom-axis
+    /// posture built via [`Self::from_field_values`].
+    ///
+    /// **ANY-fold bridge**:
+    /// `a.bottom_axis_is_nearly_saturated().is_some() ⇔
+    /// a.has_bottom_axis()`. Pinned via
+    /// `resource_limits_bottom_axis_is_nearly_saturated_is_some_iff_has_bottom_axis`.
+    ///
+    /// **BOOLEAN COLLAPSE — LOAD-BEARING pin**: the (`Some(true)`,
+    /// `Some(false)`, `None`) trichotomy PARTITIONS every posture into
+    /// (nearly-saturated-bottom, present-but-not-nearly-saturated-bottom,
+    /// no-bottom) — the DUAL-ENDPOINT image of the SINGLETON column's
+    /// (singleton-bottom, non-singleton-bottom-but-present, no-bottom)
+    /// partition with the Some(true) cell relocated from `count == 1`
+    /// to `count == FIELD_COUNT - 1`, fixing the None cell and swapping
+    /// the two arms of the has-axis regime that carry the Some(_) cells.
+    ///
+    /// `const fn` so a caller can pin the bottom-axis NEARLY-SATURATED
+    /// verdict at compile time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.bottom_axis_is_nearly_saturated(),
+    /// Some(false)));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// NEARLY-SATURATED predicate is a named typed exit `Option<bool>`
+    /// rather than a per-consumer `self.count_bottom_axes() ==
+    /// Self::FIELD_COUNT - 1` inline equality test that discards the
+    /// has-axis-at-all distinction AND treats the neighbour-below-
+    /// SATURATED cell as an ad-hoc arithmetic derivation on the field
+    /// count rather than a named substrate theorem. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs (the NEARLY-SATURATED
+    /// cell is a structural derivation from the COUNT projection via
+    /// one usize equality against `Self::FIELD_COUNT - 1` and one
+    /// is-zero split, no new per-axis scan, no allocation). THEORY.md
+    /// §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: Racket's `(= (length l) (sub1 N))` typed
+    /// exit for the one-shy-of-full length regime distinct from `(=
+    /// (length l) N)` full and `(= (length l) 1)` singleton; APL's
+    /// `(≢⍵)=(∆-1)` neighbour-below-saturation length primitive;
+    /// Idris's `Vect (n - 1) a` refinement type on a fixed-capacity
+    /// vector; Lean's `List.length = n - 1` refinement at the upper-
+    /// endpoint neighbour. Translation through pleme-io primitives:
+    /// the plain `const fn` DERIVATION from the already-lifted
+    /// [`Self::count_bottom_axes`], one usize equality against
+    /// `Self::FIELD_COUNT - 1` under a two-arm match on the zero split,
+    /// no new per-axis scan, no allocation.
+    #[must_use]
+    pub const fn bottom_axis_is_nearly_saturated(self) -> Option<bool> {
+        match self.count_bottom_axes() {
+            0 => None,
+            c => Some(c == Self::FIELD_COUNT - 1),
+        }
+    }
+
+    /// Whole-posture NEARLY-SATURATED-OF-TOP predicate —
+    /// `self.top_axis_is_nearly_saturated()` returns `Some(true)` iff
+    /// EXACTLY [`Self::FIELD_COUNT`] `- 1` axes of `self` sit at the
+    /// top pole (equivalently: [`Self::count_top_axes`] `==
+    /// Self::FIELD_COUNT - 1`, one axis shy of saturation),
+    /// `Some(false)` iff at least ONE axis is at the top pole but the
+    /// count is not exactly `FIELD_COUNT - 1`, or `None` iff no axis is
+    /// at the top pole. The ATOMIC-CELL DUAL of
+    /// [`Self::bottom_axis_is_nearly_saturated`] one PROJECTION-KIND axis
+    /// over on the NEARLY-SATURATED column — jointly the
+    /// (bottom_axis_is_nearly_saturated, top_axis_is_nearly_saturated)
+    /// atomic pair OPENS the NEARLY-SATURATED column past the just-
+    /// closed STRICTLY-MULTI column on the atomic (bottom, top) row.
+    ///
+    /// **COUNT-EQUALS-FIELD_COUNT-MINUS-ONE identity dual**: on every
+    /// posture, `top_axis_is_nearly_saturated() == { let c =
+    /// self.count_top_axes(); if c == 0 { None } else { Some(c ==
+    /// Self::FIELD_COUNT - 1) } }`. Pinned via
+    /// `resource_limits_top_axis_is_nearly_saturated_equals_count_equals_field_count_minus_one`.
+    ///
+    /// **NEARLY-SATURATED-IMPLIES-STRICTLY-MULTI bridge dual**: on every
+    /// posture, `top_axis_is_nearly_saturated() == Some(true) ⇒
+    /// top_axis_is_strictly_multi() == Some(true)`. Pinned via
+    /// `resource_limits_top_axis_is_nearly_saturated_true_implies_is_strictly_multi_true`.
+    ///
+    /// **NEARLY-SATURATED-EXCLUDES-SATURATED mutual-exclusion pin dual**:
+    /// on every posture, NOT (`top_axis_is_nearly_saturated() ==
+    /// Some(true) && top_axis_is_saturated() == Some(true)`). Pinned via
+    /// `resource_limits_top_axis_is_nearly_saturated_true_implies_is_saturated_false`.
+    ///
+    /// **NEARLY-SATURATED-EXCLUDES-SINGLETON mutual-exclusion pin dual**:
+    /// on every posture, NOT (`top_axis_is_nearly_saturated() ==
+    /// Some(true) && top_axis_is_singleton() == Some(true)`). Pinned via
+    /// `resource_limits_top_axis_is_nearly_saturated_true_implies_is_singleton_false`.
+    ///
+    /// **Preset pins**: `UNBOUNDED_RESOURCE_LIMITS
+    /// .top_axis_is_nearly_saturated() == Some(false)` (saturated top
+    /// pole packs SIX axes at usize::MAX, count == FIELD_COUNT — one
+    /// MORE than FIELD_COUNT - 1, at the SATURATED endpoint itself);
+    /// `EMPTY_RESOURCE_LIMITS.top_axis_is_nearly_saturated() == None`
+    /// (no top axis); `DEFAULT_RESOURCE_LIMITS
+    /// .top_axis_is_nearly_saturated() == None`. No shipped preset
+    /// fires Some(true).
+    ///
+    /// **CROSS-CELL SATURATION contrast — LOAD-BEARING pin**: at the
+    /// SATURATED pole preset for EACH atomic cell, the SAME cell's
+    /// NEARLY-SATURATED verdict is `Some(false)` (the pole preset packs
+    /// FIELD_COUNT axes at that cell, ONE MORE than the NEARLY-SATURATED
+    /// cardinality) and the OTHER cell's verdict is `None`. Same
+    /// (Some(false), None) partition shape carried by the SATURATED /
+    /// SINGLETON / MULTI / STRICTLY-MULTI columns on their own saturated-
+    /// pole preset row — the NEARLY-SATURATED column carries this shape
+    /// through the neighbour-below cardinality landing rather than the
+    /// endpoint cardinality itself. Pinned via
+    /// `resource_limits_atomic_is_nearly_saturated_saturation_pole_partitions_into_below_endpoint_and_absent`.
+    ///
+    /// **ANY-fold bridge dual**:
+    /// `a.top_axis_is_nearly_saturated().is_some() ⇔
+    /// a.has_top_axis()`. Pinned via
+    /// `resource_limits_top_axis_is_nearly_saturated_is_some_iff_has_top_axis`.
+    ///
+    /// `const fn` so a caller can pin the top-axis NEARLY-SATURATED
+    /// verdict at compile time.
+    ///
+    /// Theory anchor: same as [`Self::bottom_axis_is_nearly_saturated`].
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::bottom_axis_is_nearly_saturated`], on the DUAL atomic
+    /// mask.
+    #[must_use]
+    pub const fn top_axis_is_nearly_saturated(self) -> Option<bool> {
+        match self.count_top_axes() {
+            0 => None,
+            c => Some(c == Self::FIELD_COUNT - 1),
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -67916,5 +68122,517 @@ mod tests {
                 "compound STRICTLY-MULTI preset-drift on {posture:?}",
             );
         }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_nearly_saturated_preset_pins_saturate_at_endpoint_and_absent()
+    {
+        // Preset pins — LOAD-BEARING SATURATION contrast against the
+        // SATURATED column and the STRICTLY-MULTI column at the upper-
+        // endpoint-neighbour cardinality. The SATURATED-bottom-pole
+        // preset EMPTY packs SIX axes at position 0 (count ==
+        // FIELD_COUNT), which is ONE MORE than the NEARLY-SATURATED
+        // cardinality `FIELD_COUNT - 1` — Some(false) at the SATURATED
+        // endpoint itself, not the neighbour-below. Distinct from the
+        // SATURATED column's Some(true) at the same preset row (the
+        // SATURATED cell fires at count == FIELD_COUNT) and from the
+        // STRICTLY-MULTI column's Some(false) at the same preset row
+        // (STRICTLY-MULTI fires Some(false) on the OTHER side of the
+        // open interval at the SATURATED endpoint; NEARLY-SATURATED
+        // fires Some(false) also, but for a different reason — count
+        // OVERSHOOTS the neighbour-below rather than lands on it).
+        // Both agree Some(false) at count == FIELD_COUNT, so the
+        // preset-drift discipline pins the same-cell Some(false)
+        // landing through the neighbour-below equality identity. The
+        // absent-bottom presets UNBOUNDED and DEFAULT and both hand-
+        // authored postures carry no bottom axis; the NEARLY-SATURATED
+        // verdict is None.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_nearly_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.bottom_axis_is_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.bottom_axis_is_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.bottom_axis_is_nearly_saturated(),
+            None,
+        );
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_nearly_saturated_preset_pins_saturate_at_endpoint_and_absent() {
+        // Preset pins dual — the SATURATED-top-pole preset UNBOUNDED
+        // packs SIX axes at usize::MAX (count == FIELD_COUNT), one MORE
+        // than the NEARLY-SATURATED cardinality — Some(false). The
+        // absent-top presets and hand-authored postures carry no top
+        // axis; the NEARLY-SATURATED verdict is None.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_nearly_saturated(),
+            Some(false),
+        );
+        assert_eq!(EMPTY_RESOURCE_LIMITS.top_axis_is_nearly_saturated(), None,);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.top_axis_is_nearly_saturated(), None,);
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.top_axis_is_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.top_axis_is_nearly_saturated(),
+            None,
+        );
+    }
+
+    #[test]
+    fn resource_limits_atomic_is_nearly_saturated_saturation_pole_partitions_into_below_endpoint_and_absent(
+    ) {
+        // CROSS-CELL SATURATION contrast on the NEARLY-SATURATED column
+        // — the two saturated pole presets each pin (Some(false), None)
+        // on their (same-cell, dual-cell) NEARLY-SATURATED pair. The
+        // saturated pole hits the SATURATED endpoint on its own cell
+        // (count == FIELD_COUNT, one MORE than the neighbour-below
+        // cardinality) and is UNIFORMLY ABSENT on the dual cell. Same
+        // (Some(false), None) partition shape as the (SATURATED,
+        // STRICTLY-MULTI, SINGLETON, MULTI) columns on their own
+        // saturated-pole preset row, translated through the COUNT-
+        // EQUALS-FIELD_COUNT-MINUS-ONE derivation.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_nearly_saturated(),
+            Some(false),
+        );
+        assert_eq!(EMPTY_RESOURCE_LIMITS.top_axis_is_nearly_saturated(), None,);
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_nearly_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_nearly_saturated(),
+            None,
+        );
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_nearly_saturated_equals_count_equals_field_count_minus_one() {
+        // COUNT-EQUALS-FIELD_COUNT-MINUS-ONE identity — the
+        // NEARLY-SATURATED predicate is structurally derived from
+        // count_bottom_axes on every posture: None iff count == 0,
+        // Some(count == FIELD_COUNT - 1) otherwise. Pinned across every
+        // shipped preset + hand-authored + test-local posture PLUS a
+        // synthetic five-bottom-axis posture built via
+        // from_field_values (no shipped preset places exactly five
+        // bottom axes, so the Some(true) arm needs an explicit witness
+        // fixture). A future rewrite of either projection that silently
+        // drifts from the neighbour-below-saturation contract fires this
+        // pin.
+        let five_bottom_posture = ResourceLimits::from_field_values([0, 0, 0, 0, 0, 41]);
+        assert_eq!(five_bottom_posture.count_bottom_axes(), 5);
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            five_bottom_posture,
+        ];
+        for a in postures {
+            let c = a.count_bottom_axes();
+            let expected = if c == 0 {
+                None
+            } else {
+                Some(c == ResourceLimits::FIELD_COUNT - 1)
+            };
+            assert_eq!(
+                a.bottom_axis_is_nearly_saturated(),
+                expected,
+                "is_nearly_saturated = count-equals-field-count-minus-one contract failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_nearly_saturated_equals_count_equals_field_count_minus_one() {
+        // COUNT-EQUALS-FIELD_COUNT-MINUS-ONE identity dual on the top
+        // cell. Synthetic five-top-axis fixture places five sentinels
+        // at usize::MAX and one at a strictly-interior value.
+        let five_top_posture = ResourceLimits::from_field_values([
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            41,
+        ]);
+        assert_eq!(five_top_posture.count_top_axes(), 5);
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            five_top_posture,
+        ];
+        for a in postures {
+            let c = a.count_top_axes();
+            let expected = if c == 0 {
+                None
+            } else {
+                Some(c == ResourceLimits::FIELD_COUNT - 1)
+            };
+            assert_eq!(
+                a.top_axis_is_nearly_saturated(),
+                expected,
+                "is_nearly_saturated = count-equals-field-count-minus-one contract failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_nearly_saturated_is_some_iff_has_bottom_axis() {
+        // ANY-fold bridge — the NEARLY-SATURATED verdict is defined iff
+        // the bottom-axis subset is non-empty. Identical shape to every
+        // already-lifted (SPAN, GAP, CONTIGUITY, SPARSE, SINGLETON,
+        // MULTI, SATURATED, STRICTLY-MULTI) atomic-cell is_some ⇔ has-
+        // axis bridge, extending the atomic-column octet to a nonet on
+        // the uniform ANY-fold bridge contract.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.bottom_axis_is_nearly_saturated().is_some(),
+                a.has_bottom_axis(),
+                "is_nearly_saturated.is_some() != has_bottom_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_nearly_saturated_is_some_iff_has_top_axis() {
+        // ANY-fold bridge dual on the top cell.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.top_axis_is_nearly_saturated().is_some(),
+                a.has_top_axis(),
+                "is_nearly_saturated.is_some() != has_top_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_nearly_saturated_true_implies_is_strictly_multi_true() {
+        // NEARLY-SATURATED-IMPLIES-STRICTLY-MULTI bridge — LOAD-BEARING
+        // refinement pin. The NEARLY-SATURATED cell lands at count ==
+        // FIELD_COUNT - 1 == 5, strictly between 1 and FIELD_COUNT ==
+        // 6, so it is a strict REFINEMENT of the STRICTLY-MULTI open
+        // interval at its upper-endpoint neighbour. Swept across every
+        // shipped + hand-authored + test-local + synthetic-count-5
+        // fixture; the antecedent fires only at the synthetic
+        // five-bottom fixture, so the implication is exercised non-
+        // vacuously.
+        let five_bottom_posture = ResourceLimits::from_field_values([0, 0, 0, 0, 0, 41]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            five_bottom_posture,
+        ] {
+            if a.bottom_axis_is_nearly_saturated() == Some(true) {
+                assert_eq!(
+                    a.bottom_axis_is_strictly_multi(),
+                    Some(true),
+                    "is_nearly_saturated Some(true) ⇒ is_strictly_multi Some(true) failed on {a:?}",
+                );
+            }
+        }
+        assert_eq!(
+            five_bottom_posture.bottom_axis_is_nearly_saturated(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_nearly_saturated_true_implies_is_strictly_multi_true() {
+        // NEARLY-SATURATED-IMPLIES-STRICTLY-MULTI bridge dual on the
+        // top cell. Synthetic five-top-axis fixture fires the
+        // antecedent non-vacuously.
+        let five_top_posture = ResourceLimits::from_field_values([
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            41,
+        ]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            five_top_posture,
+        ] {
+            if a.top_axis_is_nearly_saturated() == Some(true) {
+                assert_eq!(
+                    a.top_axis_is_strictly_multi(),
+                    Some(true),
+                    "is_nearly_saturated Some(true) ⇒ is_strictly_multi Some(true) failed on {a:?}",
+                );
+            }
+        }
+        assert_eq!(five_top_posture.top_axis_is_nearly_saturated(), Some(true),);
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_nearly_saturated_true_implies_is_saturated_false() {
+        // NEARLY-SATURATED-EXCLUDES-SATURATED — LOAD-BEARING mutual-
+        // exclusion pin. The two cells sit at distinct cardinalities
+        // FIELD_COUNT - 1 and FIELD_COUNT on the same COUNT projection;
+        // they NEVER co-fire. Swept across every fixture including the
+        // synthetic five-bottom-axis witness.
+        let five_bottom_posture = ResourceLimits::from_field_values([0, 0, 0, 0, 0, 41]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            five_bottom_posture,
+        ] {
+            assert!(
+                !(a.bottom_axis_is_nearly_saturated() == Some(true)
+                    && a.bottom_axis_is_saturated() == Some(true)),
+                "is_nearly_saturated Some(true) co-fires is_saturated Some(true) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_nearly_saturated_true_implies_is_saturated_false() {
+        // NEARLY-SATURATED-EXCLUDES-SATURATED dual on the top cell.
+        let five_top_posture = ResourceLimits::from_field_values([
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            41,
+        ]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            five_top_posture,
+        ] {
+            assert!(
+                !(a.top_axis_is_nearly_saturated() == Some(true)
+                    && a.top_axis_is_saturated() == Some(true)),
+                "is_nearly_saturated Some(true) co-fires is_saturated Some(true) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_nearly_saturated_true_implies_is_singleton_false() {
+        // NEARLY-SATURATED-EXCLUDES-SINGLETON mutual-exclusion pin. The
+        // FLANKING dual-endpoint peers sit at distinct cardinalities
+        // 1 and FIELD_COUNT - 1 == 5 on the shipped FIELD_COUNT == 6;
+        // they NEVER co-fire.
+        let five_bottom_posture = ResourceLimits::from_field_values([0, 0, 0, 0, 0, 41]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            five_bottom_posture,
+        ] {
+            assert!(
+                !(a.bottom_axis_is_nearly_saturated() == Some(true)
+                    && a.bottom_axis_is_singleton() == Some(true)),
+                "is_nearly_saturated Some(true) co-fires is_singleton Some(true) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_nearly_saturated_true_implies_is_singleton_false() {
+        // NEARLY-SATURATED-EXCLUDES-SINGLETON dual on the top cell.
+        let five_top_posture = ResourceLimits::from_field_values([
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            41,
+        ]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            five_top_posture,
+        ] {
+            assert!(
+                !(a.top_axis_is_nearly_saturated() == Some(true)
+                    && a.top_axis_is_singleton() == Some(true)),
+                "is_nearly_saturated Some(true) co-fires is_singleton Some(true) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_nearly_saturated_true_at_synthetic_count_five_posture() {
+        // Direct Some(true) firing pin — the synthetic five-bottom-axis
+        // fixture places five sentinels at position 0 and one interior
+        // sentinel at position 5, so count_bottom_axes == 5 ==
+        // FIELD_COUNT - 1 and bottom_axis_is_nearly_saturated fires
+        // Some(true). Swept across every position of the single
+        // interior sentinel to prove the Some(true) verdict is
+        // position-independent (only the COUNT matters, per the
+        // count-equals-field-count-minus-one identity).
+        for interior_position in 0..ResourceLimits::FIELD_COUNT {
+            let mut fields = [0_usize; ResourceLimits::FIELD_COUNT];
+            fields[interior_position] = 41;
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(
+                posture.count_bottom_axes(),
+                5,
+                "synthetic count-5 fixture at interior position {interior_position} miscounted",
+            );
+            assert_eq!(
+                posture.bottom_axis_is_nearly_saturated(),
+                Some(true),
+                "is_nearly_saturated should fire Some(true) at count-5 interior position {interior_position}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_nearly_saturated_true_at_synthetic_count_five_posture() {
+        // Direct Some(true) firing pin dual on the top cell.
+        for interior_position in 0..ResourceLimits::FIELD_COUNT {
+            let mut fields = [usize::MAX; ResourceLimits::FIELD_COUNT];
+            fields[interior_position] = 41;
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(
+                posture.count_top_axes(),
+                5,
+                "synthetic count-5 top fixture at interior position {interior_position} miscounted",
+            );
+            assert_eq!(
+                posture.top_axis_is_nearly_saturated(),
+                Some(true),
+                "is_nearly_saturated should fire Some(true) at count-5 top interior position {interior_position}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_is_nearly_saturated_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the NEARLY-SATURATED atomic pair — both
+        // projections are evaluable in const context so a caller can
+        // pin the exact SATURATED-endpoint corners at compile time as
+        // build-breaks. Mirror of the const-fn evaluability pins on the
+        // (SINGLETON, MULTI, SATURATED, STRICTLY-MULTI) atomic-column
+        // octet one COMBINATOR-KIND axis under. The Some(true) corner
+        // uses a runtime-only synthetic fixture rather than a shipped
+        // preset because no shipped preset places exactly five bottom
+        // or top axes; the const-fn pin therefore fixes the Some(false)
+        // saturated-endpoint corner and the None absent corner directly.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_nearly_saturated(),
+            Some(false)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .top_axis_is_nearly_saturated()
+            .is_none());
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_nearly_saturated(),
+            Some(false)
+        ));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .bottom_axis_is_nearly_saturated()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .bottom_axis_is_nearly_saturated()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .top_axis_is_nearly_saturated()
+            .is_none());
+        // Synthetic five-bottom-axis fixture evaluated in const context
+        // — pins the Some(true) corner at compile time by constructing
+        // the fixture via the const-fn from_field_values entry.
+        const FIVE_BOTTOM: ResourceLimits = ResourceLimits::from_field_values([0, 0, 0, 0, 0, 41]);
+        const _: () = assert!(matches!(
+            FIVE_BOTTOM.bottom_axis_is_nearly_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(FIVE_BOTTOM.top_axis_is_nearly_saturated().is_none());
+        const FIVE_TOP: ResourceLimits = ResourceLimits::from_field_values([
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            41,
+        ]);
+        const _: () = assert!(matches!(
+            FIVE_TOP.top_axis_is_nearly_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(FIVE_TOP.bottom_axis_is_nearly_saturated().is_none());
     }
 }

@@ -20264,6 +20264,37 @@ impl ResourceLimits {
     /// Pinned via
     /// `resource_limits_compound_is_strictly_multi_saturation_pole_partitions_into_upper_endpoint_and_absent`.
     ///
+    /// **COMPOUND-STRICTLY-MULTI QUINQUEPARTITE partition — LOAD-BEARING
+    /// structural pin**: on every posture, the
+    /// (polar_axis_is_strictly_multi, interior_axis_is_strictly_multi)
+    /// pair falls into EXACTLY ONE of five cells indexed by
+    /// `self.count_polar_axes()` — the seven feasible cardinalities
+    /// `0..=FIELD_COUNT` collapse onto the five-cell partition through
+    /// the middle-count `2..=FIELD_COUNT-2` merge:
+    ///
+    /// - `(None, Some(false))` iff `count_polar == 0` (every axis
+    ///   strictly interior, interior tally at the SATURATED endpoint),
+    /// - `(Some(false), Some(true))` iff `count_polar == 1` (polar
+    ///   SINGLETON, interior strictly multi at `FIELD_COUNT - 1`),
+    /// - `(Some(true), Some(true))` iff `2 <= count_polar <=
+    ///   FIELD_COUNT - 2` (BOTH cells strictly multi),
+    /// - `(Some(true), Some(false))` iff `count_polar == FIELD_COUNT -
+    ///   1` (polar strictly multi at `FIELD_COUNT - 1`, interior
+    ///   SINGLETON),
+    /// - `(Some(false), None)` iff `count_polar == FIELD_COUNT` (every
+    ///   axis polar, polar tally at the SATURATED endpoint).
+    ///
+    /// The remaining eleven `(Option<bool>, Option<bool>)` pair-values
+    /// NEVER fire — a strictly-tighter partition than the
+    /// COMPOUND-SATURATION TRIPARTITE partition one COMPARISON-KIND axis
+    /// under whose `(Some(false), Some(false))` middle cell absorbs
+    /// every `1 <= count_polar <= FIELD_COUNT - 1` posture undivided;
+    /// the STRICTLY-MULTI column splits that middle cell into a
+    /// `(Some(true), Some(true))` all-truly-mixed centre bracketed by
+    /// two `(Some(false), Some(true))` / `(Some(true), Some(false))`
+    /// singleton-endpoint cells. Pinned via
+    /// `resource_limits_compound_is_strictly_multi_quinquepartite_partition_by_exhaustive_polar_interior_split`.
+    ///
     /// **ANY-fold bridge**: `a.polar_axis_is_strictly_multi().is_some()
     /// ⇔ a.has_polar_axis()`. Pinned via
     /// `resource_limits_polar_axis_is_strictly_multi_is_some_iff_has_polar_axis`.
@@ -20348,6 +20379,17 @@ impl ResourceLimits {
     /// Some(true) && interior_axis_is_singleton() == Some(true)`). Pinned
     /// via
     /// `resource_limits_interior_axis_is_strictly_multi_true_implies_is_singleton_false`.
+    ///
+    /// **COMPOUND-STRICTLY-MULTI QUINQUEPARTITE partition — LOAD-BEARING
+    /// structural pin (dual view)**: same partition as on
+    /// [`Self::polar_axis_is_strictly_multi`], read through the
+    /// count_interior axis. `count_polar + count_interior == FIELD_COUNT`
+    /// on every posture (the EXHAUSTIVE-PARTITION identity one
+    /// QUANTIFIER-KIND axis under), so the compound STRICTLY-MULTI cell
+    /// index is equivalently `FIELD_COUNT - self.count_interior_axes()`;
+    /// the QUINQUEPARTITE cells cover the same five landings with polar
+    /// and interior slots swapped. Pinned via
+    /// `resource_limits_compound_is_strictly_multi_quinquepartite_partition_by_exhaustive_polar_interior_split`.
     ///
     /// **Preset pins**: `DEFAULT_RESOURCE_LIMITS
     /// .interior_axis_is_strictly_multi() == Some(false)` (every field
@@ -67578,5 +67620,131 @@ mod tests {
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS
             .polar_axis_is_strictly_multi()
             .is_none());
+    }
+
+    #[test]
+    fn resource_limits_compound_is_strictly_multi_quinquepartite_partition_by_exhaustive_polar_interior_split(
+    ) {
+        // COMPOUND-STRICTLY-MULTI QUINQUEPARTITE partition — LOAD-BEARING
+        // structural pin. On every posture, the compound
+        // (polar_axis_is_strictly_multi, interior_axis_is_strictly_multi)
+        // pair falls into EXACTLY ONE of five cells indexed by
+        // count_polar ∈ {0, 1, 2..=FIELD_COUNT-2, FIELD_COUNT-1,
+        // FIELD_COUNT} — the seven feasible cardinalities collapse onto
+        // the five-cell partition through the middle-count merge:
+        //
+        //   count_polar == 0                    → (None, Some(false))
+        //   count_polar == 1                    → (Some(false), Some(true))
+        //   2 <= count_polar <= FIELD_COUNT - 2 → (Some(true), Some(true))
+        //   count_polar == FIELD_COUNT - 1      → (Some(true), Some(false))
+        //   count_polar == FIELD_COUNT          → (Some(false), None)
+        //
+        // A strictly-tighter partition than the COMPOUND-SATURATION
+        // TRIPARTITE partition one COMPARISON-KIND axis under whose
+        // (Some(false), Some(false)) middle cell absorbs every
+        // count_polar ∈ 1..FIELD_COUNT posture undivided; the
+        // STRICTLY-MULTI column splits that middle cell into a
+        // (Some(true), Some(true)) all-truly-mixed centre bracketed by
+        // two (Some(false), Some(true)) / (Some(true), Some(false))
+        // singleton-endpoint cells.
+        //
+        // Exhaustive sweep over every possible count_polar value
+        // (0..=FIELD_COUNT) via a synthetic posture built by placing the
+        // first `n` axes at a polar sentinel (alternating bottom/top)
+        // and the remainder at strictly-interior sentinels — covers all
+        // seven feasible cardinalities so the partition is pinned by
+        // enumeration, not by preset sampling alone.
+        for c_polar in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            let mut idx = 0;
+            while idx < c_polar {
+                fields[idx] = if idx % 2 == 0 { 0 } else { usize::MAX };
+                idx += 1;
+            }
+            let posture = ResourceLimits {
+                max_expansion_depth: fields[0],
+                max_cache_entries: fields[1],
+                max_expansion_size: fields[2],
+                max_macro_body_size: fields[3],
+                max_registered_macros: fields[4],
+                max_macro_arity: fields[5],
+            };
+            assert_eq!(
+                posture.count_polar_axes(),
+                c_polar,
+                "synthetic posture at c_polar={c_polar} did not tally to c_polar polar axes",
+            );
+            assert_eq!(
+                posture.count_interior_axes(),
+                ResourceLimits::FIELD_COUNT - c_polar,
+                "synthetic posture at c_polar={c_polar} interior tally not FIELD_COUNT - c_polar",
+            );
+            let pair = (
+                posture.polar_axis_is_strictly_multi(),
+                posture.interior_axis_is_strictly_multi(),
+            );
+            let c_interior = ResourceLimits::FIELD_COUNT - c_polar;
+            let expected_polar = if c_polar == 0 {
+                None
+            } else {
+                Some(c_polar > 1 && c_polar < ResourceLimits::FIELD_COUNT)
+            };
+            let expected_interior = if c_interior == 0 {
+                None
+            } else {
+                Some(c_interior > 1 && c_interior < ResourceLimits::FIELD_COUNT)
+            };
+            assert_eq!(
+                pair,
+                (expected_polar, expected_interior),
+                "compound STRICTLY-MULTI pair mismatch at c_polar={c_polar} on {posture:?}",
+            );
+            let cell_name = match pair {
+                (None, Some(false)) => "cell_no_polar_interior_saturated",
+                (Some(false), Some(true)) => "cell_polar_singleton_interior_strictly_multi",
+                (Some(true), Some(true)) => "cell_both_strictly_multi",
+                (Some(true), Some(false)) => "cell_polar_strictly_multi_interior_singleton",
+                (Some(false), None) => "cell_polar_saturated_no_interior",
+                other => panic!(
+                    "compound STRICTLY-MULTI pair {other:?} landed outside the quinquepartite partition on {posture:?}",
+                ),
+            };
+            let expected_name = match c_polar {
+                0 => "cell_no_polar_interior_saturated",
+                1 => "cell_polar_singleton_interior_strictly_multi",
+                2..=4 => "cell_both_strictly_multi",
+                5 => "cell_polar_strictly_multi_interior_singleton",
+                6 => "cell_polar_saturated_no_interior",
+                _ => unreachable!("count_polar exceeds FIELD_COUNT == 6"),
+            };
+            assert_eq!(
+                cell_name, expected_name,
+                "cell-name mismatch at c_polar={c_polar} on {posture:?}",
+            );
+        }
+        // Preset-drift pin — every shipped preset + hand-authored + test-
+        // local BOTTOM posture falls into a specific quinquepartite cell.
+        // Any future preset-drift that accidentally moves a preset out of
+        // its cell fires here.
+        let preset_pairs = [
+            (EMPTY_RESOURCE_LIMITS, (Some(false), None)),
+            (UNBOUNDED_RESOURCE_LIMITS, (Some(false), None)),
+            (DEFAULT_RESOURCE_LIMITS, (None, Some(false))),
+            (HAND_AUTHORED_MID_POSTURE, (None, Some(false))),
+            (HAND_AUTHORED_OTHER_POSTURE, (None, Some(false))),
+            (SPARSE_BOTTOM_POSTURE, (Some(true), Some(true))),
+            (CONTIGUOUS_INTERIOR_BOTTOM_POSTURE, (Some(true), Some(true))),
+            (ENDPOINTS_ONLY_BOTTOM_POSTURE, (Some(true), Some(true))),
+        ];
+        for (posture, expected) in preset_pairs {
+            let pair = (
+                posture.polar_axis_is_strictly_multi(),
+                posture.interior_axis_is_strictly_multi(),
+            );
+            assert_eq!(
+                pair, expected,
+                "compound STRICTLY-MULTI preset-drift on {posture:?}",
+            );
+        }
     }
 }

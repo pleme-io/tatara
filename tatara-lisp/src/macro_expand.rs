@@ -24242,6 +24242,239 @@ impl ResourceLimits {
             c => Some(c * 2 >= Self::FIELD_COUNT),
         }
     }
+
+    /// Whole-posture PARTIALLY-SATURATED-OF-BOTTOM predicate —
+    /// `self.bottom_axis_is_partially_saturated()` returns `Some(true)`
+    /// iff AT LEAST ONE axis of `self` is at the bottom pole AND
+    /// [`Self::count_bottom_axes`] `< Self::FIELD_COUNT` (the OPEN
+    /// interior of the has-axis interval, EXCLUDING the RIGHT endpoint
+    /// SATURATED landing), `Some(false)` iff every axis is at the
+    /// bottom pole (the RIGHT endpoint SATURATION cardinality), or
+    /// `None` iff no axis is at the bottom pole. The ATOMIC-CELL half
+    /// of the (bottom, top) pair OPENING the PARTIALLY-SATURATED
+    /// column past the just-closed AT-LEAST-HALF-SATURATED column on
+    /// the atomic (bottom, top) row — one INCLUSION-KIND axis over
+    /// from `is_saturated`, the OPEN complement of `is_saturated` in
+    /// the has-axis regime.
+    ///
+    /// **COUNT-STRICTLY-BELOW-FIELD-COUNT identity — LOAD-BEARING
+    /// structural pin**: on every posture,
+    /// `bottom_axis_is_partially_saturated() == { let c =
+    /// self.count_bottom_axes(); if c == 0 { None } else { Some(c <
+    /// Self::FIELD_COUNT) } }`. Composes structurally through the
+    /// already-lifted COUNT projection; the substrate never re-scans
+    /// the per-axis mask. Pinned via
+    /// `resource_limits_bottom_axis_is_partially_saturated_equals_count_strictly_below_field_count`.
+    ///
+    /// **PARTIALLY-SATURATED ⇔ NOT SATURATED complementarity —
+    /// LOAD-BEARING BINARY-CLOSURE pin**: on every posture with a
+    /// bottom axis, `bottom_axis_is_partially_saturated() == Some(true)
+    /// ⇔ bottom_axis_is_saturated() == Some(false)`. The OPEN
+    /// complement of the RIGHT endpoint on the has-axis interval
+    /// binds the SATURATED cell as its EXCLUDED landing. Pinned via
+    /// `resource_limits_bottom_axis_is_partially_saturated_iff_saturated_false`.
+    ///
+    /// **PARTIALLY-SATURATED-EXCLUDES-SATURATED mutual-exclusion —
+    /// LOAD-BEARING separation pin**: on every posture, NOT
+    /// (`bottom_axis_is_partially_saturated() == Some(true) &&
+    /// bottom_axis_is_saturated() == Some(true)`). The OPEN interior
+    /// and the RIGHT endpoint are DISJOINT sub-cells of the has-axis
+    /// interval. Pinned via
+    /// `resource_limits_bottom_axis_is_partially_saturated_true_implies_is_saturated_false`.
+    ///
+    /// **PARTIALLY-SATURATED ⇔ (SINGLETON OR STRICTLY-MULTI)
+    /// disjoint-union identity — LOAD-BEARING PARTITION pin**: on
+    /// every posture with a bottom axis,
+    /// `bottom_axis_is_partially_saturated() == Some(true) ⇔
+    /// (bottom_axis_is_singleton() == Some(true) ||
+    /// bottom_axis_is_strictly_multi() == Some(true))`. The OPEN
+    /// interior of the has-axis interval decomposes into its SINGLETON
+    /// left endpoint (count == 1) plus the STRICTLY-MULTI open middle
+    /// (1 < count < FIELD_COUNT) as a disjoint union. Pinned via
+    /// `resource_limits_bottom_axis_is_partially_saturated_iff_singleton_or_strictly_multi`.
+    ///
+    /// **SINGLETON-IMPLIES-PARTIALLY-SATURATED bridge — LOAD-BEARING
+    /// LEFT-ENDPOINT INCLUSION pin**: on every posture at
+    /// `FIELD_COUNT >= 2`, `bottom_axis_is_singleton() == Some(true)
+    /// ⇒ bottom_axis_is_partially_saturated() == Some(true)`. The
+    /// SINGLETON cardinality (count == 1) is the LEFT endpoint of the
+    /// OPEN interior of the has-axis interval, strictly below the
+    /// SATURATED right endpoint at every `FIELD_COUNT >= 2`. Pinned
+    /// via
+    /// `resource_limits_bottom_axis_is_singleton_true_implies_is_partially_saturated_true`.
+    ///
+    /// **STRICTLY-MULTI-IMPLIES-PARTIALLY-SATURATED bridge —
+    /// LOAD-BEARING OPEN-MIDDLE INCLUSION pin**: on every posture,
+    /// `bottom_axis_is_strictly_multi() == Some(true) ⇒
+    /// bottom_axis_is_partially_saturated() == Some(true)`. The
+    /// STRICTLY-MULTI open middle sits strictly within the OPEN
+    /// interior of the has-axis interval by construction. Pinned via
+    /// `resource_limits_bottom_axis_is_strictly_multi_true_implies_is_partially_saturated_true`.
+    ///
+    /// **Preset pins — LOAD-BEARING SATURATION-POLE partition**:
+    /// `EMPTY_RESOURCE_LIMITS.bottom_axis_is_partially_saturated() ==
+    /// Some(false)` (the SATURATED-bottom-pole preset packs SIX
+    /// bottom axes, count == FIELD_COUNT == 6, so the OPEN interior
+    /// EXCLUDES this cardinality — the RIGHT endpoint SATURATION
+    /// landing); `UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_partially_saturated()
+    /// == None` (SATURATED-top-pole preset carries no bottom axis);
+    /// `DEFAULT_RESOURCE_LIMITS.bottom_axis_is_partially_saturated()
+    /// == None`; `HAND_AUTHORED_MID_POSTURE.bottom_axis_is_partially_saturated()
+    /// == None`; `HAND_AUTHORED_OTHER_POSTURE.bottom_axis_is_partially_saturated()
+    /// == None`; `SPARSE_BOTTOM_POSTURE.bottom_axis_is_partially_saturated()
+    /// == Some(true)` at count == 3 (STRICTLY between 1 and 6, the
+    /// OPEN middle); `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE
+    /// .bottom_axis_is_partially_saturated() == Some(true)` at count
+    /// == 3; `ENDPOINTS_ONLY_BOTTOM_POSTURE
+    /// .bottom_axis_is_partially_saturated() == Some(true)` at count
+    /// == 2. The shipped truth-firing preset row exercises the OPEN
+    /// interior at multiple cardinalities without depending on a
+    /// SINGLETON preset landing.
+    ///
+    /// **ANY-fold bridge**:
+    /// `a.bottom_axis_is_partially_saturated().is_some() ⇔
+    /// a.has_bottom_axis()`. Pinned via
+    /// `resource_limits_bottom_axis_is_partially_saturated_is_some_iff_has_bottom_axis`.
+    ///
+    /// `const fn` so a caller can pin the bottom-axis
+    /// PARTIALLY-SATURATED verdict at compile time.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// atomic bottom PARTIALLY-SATURATED predicate is a named typed
+    /// exit `Option<bool>` rather than a per-consumer `self
+    /// .count_bottom_axes() < Self::FIELD_COUNT` inline comparison
+    /// that discards the has-bottom-axis-at-all distinction and
+    /// silently classifies EMPTY-bottom postures as
+    /// "partially-saturated" (the classic zero-elides-as-false bug
+    /// the None-on-zero gate structurally forbids). THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the
+    /// PARTIALLY-SATURATED cell is a structural derivation from the
+    /// already-lifted COUNT projection via one usize comparison
+    /// against `Self::FIELD_COUNT` under a two-arm match on the zero
+    /// split, no new per-axis scan, no allocation. The COMPLEMENTARITY
+    /// pin with `is_saturated` composes structurally: both cells
+    /// share the same count derivation, and their disagreement is a
+    /// single-bit binary partition of the has-axis regime. THEORY.md
+    /// §V.1 — knowable platform; naming the OPEN complement of
+    /// SATURATED as a typed exit removes the ambiguity in "has
+    /// bottom axis but not all saturated" that
+    /// `has_bottom_axis() && !bottom_axis_is_saturated().unwrap_or(false)`
+    /// forces every consumer to inline as a compound predicate whose
+    /// Some/None correctness depends on getting the `unwrap_or`
+    /// default right.
+    ///
+    /// Frontier inspiration: Racket's `(and (not (empty? l)) (not
+    /// (andmap bottom? l)))` "has some but not all" fold on a boolean
+    /// mask; Idris's `Vect (S k) a` refinement pinning "at least one
+    /// element" alongside `(k : Nat) -> LT k (S FIELD_COUNT)` pinning
+    /// "strictly below the saturated cardinality" — the join of the
+    /// two witnesses is the OPEN interior; APL's `(0<+/mask)∧(+/mask<∆)`
+    /// two-clause open-interval predicate on a boolean mask. Lean's
+    /// `List.Nonempty ∧ List.length < N` refinement at the strict
+    /// upper endpoint. Translation through pleme-io primitives: the
+    /// plain `const fn` DERIVATION from the already-lifted
+    /// [`Self::count_bottom_axes`], one usize comparison against
+    /// `Self::FIELD_COUNT` under a two-arm match on the zero split
+    /// (the None-on-zero gate that makes the SATURATED complement
+    /// unambiguous at has-axis boundaries), no new per-axis scan, no
+    /// allocation.
+    #[must_use]
+    pub const fn bottom_axis_is_partially_saturated(self) -> Option<bool> {
+        match self.count_bottom_axes() {
+            0 => None,
+            c => Some(c < Self::FIELD_COUNT),
+        }
+    }
+
+    /// Whole-posture PARTIALLY-SATURATED-OF-TOP predicate —
+    /// `self.top_axis_is_partially_saturated()` returns `Some(true)`
+    /// iff AT LEAST ONE axis of `self` is at the top pole AND
+    /// [`Self::count_top_axes`] `< Self::FIELD_COUNT` (the OPEN
+    /// interior of the has-axis interval, EXCLUDING the RIGHT endpoint
+    /// SATURATED landing), `Some(false)` iff every axis is at the top
+    /// pole (the RIGHT endpoint SATURATION cardinality), or `None`
+    /// iff no axis is at the top pole. The ATOMIC-CELL DUAL of
+    /// [`Self::bottom_axis_is_partially_saturated`] one PROJECTION-
+    /// KIND axis over on the PARTIALLY-SATURATED column — jointly the
+    /// (bottom_axis_is_partially_saturated,
+    /// top_axis_is_partially_saturated) atomic pair OPENS the
+    /// PARTIALLY-SATURATED column past the just-closed AT-LEAST-HALF-
+    /// SATURATED column on the atomic (bottom, top) row.
+    ///
+    /// **COUNT-STRICTLY-BELOW-FIELD-COUNT identity dual**: on every
+    /// posture, `top_axis_is_partially_saturated() == { let c =
+    /// self.count_top_axes(); if c == 0 { None } else { Some(c <
+    /// Self::FIELD_COUNT) } }`. Pinned via
+    /// `resource_limits_top_axis_is_partially_saturated_equals_count_strictly_below_field_count`.
+    ///
+    /// **PARTIALLY-SATURATED ⇔ NOT SATURATED complementarity dual —
+    /// LOAD-BEARING BINARY-CLOSURE pin dual**: on every posture with
+    /// a top axis, `top_axis_is_partially_saturated() == Some(true) ⇔
+    /// top_axis_is_saturated() == Some(false)`. Pinned via
+    /// `resource_limits_top_axis_is_partially_saturated_iff_saturated_false`.
+    ///
+    /// **PARTIALLY-SATURATED-EXCLUDES-SATURATED mutual-exclusion
+    /// dual**: on every posture, NOT
+    /// (`top_axis_is_partially_saturated() == Some(true) &&
+    /// top_axis_is_saturated() == Some(true)`). Pinned via
+    /// `resource_limits_top_axis_is_partially_saturated_true_implies_is_saturated_false`.
+    ///
+    /// **PARTIALLY-SATURATED ⇔ (SINGLETON OR STRICTLY-MULTI)
+    /// disjoint-union identity dual**: on every posture with a top
+    /// axis, `top_axis_is_partially_saturated() == Some(true) ⇔
+    /// (top_axis_is_singleton() == Some(true) ||
+    /// top_axis_is_strictly_multi() == Some(true))`. Pinned via
+    /// `resource_limits_top_axis_is_partially_saturated_iff_singleton_or_strictly_multi`.
+    ///
+    /// **SINGLETON-IMPLIES-PARTIALLY-SATURATED bridge dual**: on
+    /// every posture at `FIELD_COUNT >= 2`,
+    /// `top_axis_is_singleton() == Some(true) ⇒
+    /// top_axis_is_partially_saturated() == Some(true)`. Pinned via
+    /// `resource_limits_top_axis_is_singleton_true_implies_is_partially_saturated_true`.
+    ///
+    /// **STRICTLY-MULTI-IMPLIES-PARTIALLY-SATURATED bridge dual**: on
+    /// every posture, `top_axis_is_strictly_multi() == Some(true) ⇒
+    /// top_axis_is_partially_saturated() == Some(true)`. Pinned via
+    /// `resource_limits_top_axis_is_strictly_multi_true_implies_is_partially_saturated_true`.
+    ///
+    /// **Preset pins dual**:
+    /// `UNBOUNDED_RESOURCE_LIMITS.top_axis_is_partially_saturated() ==
+    /// Some(false)` (the SATURATED-top-pole preset packs SIX top
+    /// axes, count == FIELD_COUNT == 6 — the RIGHT endpoint
+    /// SATURATION landing the OPEN interior EXCLUDES);
+    /// `EMPTY_RESOURCE_LIMITS.top_axis_is_partially_saturated() ==
+    /// None` (no top axis);
+    /// `DEFAULT_RESOURCE_LIMITS.top_axis_is_partially_saturated() ==
+    /// None`; `HAND_AUTHORED_MID_POSTURE.top_axis_is_partially_saturated()
+    /// == None`; `HAND_AUTHORED_OTHER_POSTURE.top_axis_is_partially_saturated()
+    /// == None`. No shipped preset places one, two, three, four, or
+    /// five top axes; the truth-firing arm is exercised via per-count
+    /// synthetic top-axis fixtures walking count ∈ {0, …,
+    /// FIELD_COUNT} matching the shape used across every other
+    /// atomic top-cell count-derived predicate.
+    ///
+    /// **ANY-fold bridge dual**:
+    /// `a.top_axis_is_partially_saturated().is_some() ⇔
+    /// a.has_top_axis()`. Pinned via
+    /// `resource_limits_top_axis_is_partially_saturated_is_some_iff_has_top_axis`.
+    ///
+    /// `const fn` so a caller can pin the top-axis
+    /// PARTIALLY-SATURATED verdict at compile time.
+    ///
+    /// Theory anchor: same as
+    /// [`Self::bottom_axis_is_partially_saturated`], on the DUAL
+    /// atomic top cell.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::bottom_axis_is_partially_saturated`], on the DUAL
+    /// atomic top mask.
+    #[must_use]
+    pub const fn top_axis_is_partially_saturated(self) -> Option<bool> {
+        match self.count_top_axes() {
+            0 => None,
+            c => Some(c < Self::FIELD_COUNT),
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -79687,6 +79920,502 @@ mod tests {
         const _: () = assert!(matches!(
             ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_axis_is_at_least_half_saturated(),
             Some(false)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_partially_saturated_preset_pins_saturate_at_open_interior_and_right_endpoint(
+    ) {
+        // Preset pins on the atomic bottom PARTIALLY-SATURATED cell —
+        // the SATURATED-bottom-pole preset EMPTY packs six axes,
+        // count == FIELD_COUNT == 6, so PARTIALLY-SATURATED is
+        // Some(false) — the RIGHT endpoint SATURATION landing the
+        // OPEN interior EXCLUDES. Absent-bottom presets carry no
+        // bottom axis, so None. The count-3 postures SPARSE_BOTTOM /
+        // CONTIGUOUS_INTERIOR_BOTTOM and the count-2 preset
+        // ENDPOINTS_ONLY_BOTTOM all pin Some(true) — the OPEN
+        // interior of the has-axis interval exercised at multiple
+        // cardinalities.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_partially_saturated(),
+            Some(false)
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_partially_saturated(),
+            None
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.bottom_axis_is_partially_saturated(),
+            None
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.bottom_axis_is_partially_saturated(),
+            None
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.bottom_axis_is_partially_saturated(),
+            None
+        );
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE.bottom_axis_is_partially_saturated(),
+            Some(true)
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.bottom_axis_is_partially_saturated(),
+            Some(true)
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_is_partially_saturated(),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_partially_saturated_preset_pins_saturate_at_right_endpoint_and_absent(
+    ) {
+        // Preset pins dual on the atomic top PARTIALLY-SATURATED
+        // cell — the SATURATED-top-pole preset UNBOUNDED packs six
+        // top axes, count == FIELD_COUNT == 6, so PARTIALLY-SATURATED
+        // is Some(false) — the RIGHT endpoint SATURATION landing.
+        // Absent-top presets carry no top axis; PARTIALLY-SATURATED
+        // is None. No shipped preset places one, two, three, four,
+        // or five top axes; the truth-firing arm is exercised via
+        // per-count synthetic top-axis fixtures in the identity pin
+        // below.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_partially_saturated(),
+            Some(false)
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.top_axis_is_partially_saturated(),
+            None
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.top_axis_is_partially_saturated(),
+            None
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.top_axis_is_partially_saturated(),
+            None
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.top_axis_is_partially_saturated(),
+            None
+        );
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_partially_saturated_equals_count_strictly_below_field_count()
+    {
+        // COUNT-STRICTLY-BELOW-FIELD-COUNT identity — the
+        // PARTIALLY-SATURATED predicate is structurally derived from
+        // count_bottom_axes on every posture: None iff count == 0,
+        // Some(count < FIELD_COUNT) otherwise. Pinned across every
+        // shipped preset + hand-authored + test-local posture PLUS
+        // synthetic four- and five-bottom-axis fixtures that reach
+        // the count-4 (4 < 6, Some(true)) and count-5 (5 < 6,
+        // Some(true)) truth arms no shipped preset hits on the
+        // TRUTH side, and the count-6 SATURATED arm the EMPTY
+        // preset pins on the FALSITY side.
+        let four_bottom = ResourceLimits::from_field_values([0, 0, 0, 0, 41, 43]);
+        let five_bottom = ResourceLimits::from_field_values([0, 0, 0, 0, 0, 41]);
+        assert_eq!(four_bottom.count_bottom_axes(), 4);
+        assert_eq!(five_bottom.count_bottom_axes(), 5);
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            four_bottom,
+            five_bottom,
+        ];
+        for a in postures {
+            let c = a.count_bottom_axes();
+            let expected = if c == 0 {
+                None
+            } else {
+                Some(c < ResourceLimits::FIELD_COUNT)
+            };
+            assert_eq!(
+                a.bottom_axis_is_partially_saturated(),
+                expected,
+                "is_partially_saturated = count-strictly-below-field-count identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_partially_saturated_equals_count_strictly_below_field_count() {
+        // COUNT-STRICTLY-BELOW-FIELD-COUNT identity dual on the top
+        // cell — pinned via per-count synthetic top-axis fixtures
+        // walking count ∈ {0, …, FIELD_COUNT} so the None arm at
+        // count == 0, the Some(true) arm at count ∈ {1, …, 5}
+        // (each strictly below FIELD_COUNT == 6), and the Some(false)
+        // arm at count == 6 (SATURATED right endpoint) are all
+        // exercised without depending on any shipped preset placing
+        // exactly one, two, three, four, or five top axes.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(posture.count_top_axes(), count);
+            let expected = if count == 0 {
+                None
+            } else {
+                Some(count < ResourceLimits::FIELD_COUNT)
+            };
+            assert_eq!(
+                posture.top_axis_is_partially_saturated(),
+                expected,
+                "is_partially_saturated = count-strictly-below-field-count identity failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_partially_saturated_is_some_iff_has_bottom_axis() {
+        // ANY-fold bridge — Some iff has_bottom_axis, symmetric to
+        // every other atomic bottom axis-count-derived predicate.
+        // The is_some / is_none split fires on presence rather than
+        // on the cardinality landing.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.bottom_axis_is_partially_saturated().is_some(),
+                a.has_bottom_axis(),
+                "is_partially_saturated.is_some ⇔ has_bottom_axis failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_partially_saturated_is_some_iff_has_top_axis() {
+        // ANY-fold bridge dual on the top cell — walked via per-count
+        // synthetic top-axis fixtures so both is_some / is_none arms
+        // fire without depending on a shipped preset placing any
+        // specific top-axis count between the two endpoints.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(
+                posture.top_axis_is_partially_saturated().is_some(),
+                posture.has_top_axis(),
+                "is_partially_saturated.is_some ⇔ has_top_axis failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_partially_saturated_iff_saturated_false() {
+        // PARTIALLY-SATURATED ⇔ NOT SATURATED complementarity —
+        // LOAD-BEARING BINARY-CLOSURE pin. On every posture with a
+        // bottom axis, the OPEN complement of the SATURATED right
+        // endpoint IS the PARTIALLY-SATURATED cell. The two cells
+        // together partition the has-bottom-axis regime with no
+        // co-fire and no missed landing — every non-None verdict
+        // pair disagrees on exactly the bit that flips between
+        // count < FIELD_COUNT and count == FIELD_COUNT.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            let partial = a.bottom_axis_is_partially_saturated();
+            let sat = a.bottom_axis_is_saturated();
+            assert!(partial.is_some());
+            assert!(sat.is_some());
+            assert_eq!(
+                partial == Some(true),
+                sat == Some(false),
+                "partially_saturated ⇔ NOT saturated failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_partially_saturated_iff_saturated_false() {
+        // PARTIALLY-SATURATED ⇔ NOT SATURATED complementarity dual
+        // on the top cell — walked via per-count synthetic top-axis
+        // fixtures so the partition fires across every has-axis
+        // cardinality without depending on a shipped preset row.
+        for count in 1..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let partial = posture.top_axis_is_partially_saturated();
+            let sat = posture.top_axis_is_saturated();
+            assert!(partial.is_some());
+            assert!(sat.is_some());
+            assert_eq!(
+                partial == Some(true),
+                sat == Some(false),
+                "partially_saturated ⇔ NOT saturated failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_partially_saturated_true_implies_is_saturated_false() {
+        // PARTIALLY-SATURATED-EXCLUDES-SATURATED mutual-exclusion —
+        // LOAD-BEARING separation pin. The OPEN interior and the
+        // RIGHT endpoint are DISJOINT sub-cells of the has-axis
+        // interval, so no posture can fire Some(true) on both.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            if a.bottom_axis_is_partially_saturated() == Some(true) {
+                assert_eq!(
+                    a.bottom_axis_is_saturated(),
+                    Some(false),
+                    "partially_saturated true ⇒ saturated false failed on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_partially_saturated_true_implies_is_saturated_false() {
+        // PARTIALLY-SATURATED-EXCLUDES-SATURATED mutual-exclusion
+        // dual on the top cell.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if posture.top_axis_is_partially_saturated() == Some(true) {
+                assert_eq!(
+                    posture.top_axis_is_saturated(),
+                    Some(false),
+                    "partially_saturated true ⇒ saturated false failed at count {count} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_partially_saturated_iff_singleton_or_strictly_multi() {
+        // PARTIALLY-SATURATED ⇔ (SINGLETON OR STRICTLY-MULTI)
+        // disjoint-union identity — LOAD-BEARING PARTITION pin. The
+        // OPEN interior of the has-axis interval decomposes into its
+        // SINGLETON left endpoint (count == 1) plus the
+        // STRICTLY-MULTI open middle (1 < count < FIELD_COUNT) as a
+        // disjoint union. Pinned across shipped presets + a
+        // count-1 synthetic bottom-axis fixture (SINGLETON left
+        // endpoint no shipped preset places on the bottom cell).
+        let one_bottom = ResourceLimits::from_field_values([0, 41, 43, 47, 53, 59]);
+        assert_eq!(one_bottom.count_bottom_axes(), 1);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            one_bottom,
+        ] {
+            if a.bottom_axis_is_partially_saturated().is_some() {
+                let partial = a.bottom_axis_is_partially_saturated() == Some(true);
+                let singleton = a.bottom_axis_is_singleton() == Some(true);
+                let strictly_multi = a.bottom_axis_is_strictly_multi() == Some(true);
+                assert_eq!(
+                    partial,
+                    singleton || strictly_multi,
+                    "partially_saturated ⇔ (singleton OR strictly_multi) failed on {a:?}",
+                );
+                assert!(
+                    !(singleton && strictly_multi),
+                    "singleton AND strictly_multi co-fire (partition breach) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_partially_saturated_iff_singleton_or_strictly_multi() {
+        // PARTIALLY-SATURATED ⇔ (SINGLETON OR STRICTLY-MULTI)
+        // disjoint-union identity dual on the top cell — walked via
+        // per-count synthetic top-axis fixtures so every OPEN-interior
+        // cardinality fires the SINGLETON or STRICTLY-MULTI arm as a
+        // disjoint union.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if posture.top_axis_is_partially_saturated().is_some() {
+                let partial = posture.top_axis_is_partially_saturated() == Some(true);
+                let singleton = posture.top_axis_is_singleton() == Some(true);
+                let strictly_multi = posture.top_axis_is_strictly_multi() == Some(true);
+                assert_eq!(
+                    partial,
+                    singleton || strictly_multi,
+                    "partially_saturated ⇔ (singleton OR strictly_multi) failed at count {count} on {posture:?}",
+                );
+                assert!(
+                    !(singleton && strictly_multi),
+                    "singleton AND strictly_multi co-fire (partition breach) at count {count} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_singleton_true_implies_is_partially_saturated_true() {
+        // SINGLETON-IMPLIES-PARTIALLY-SATURATED bridge — LOAD-BEARING
+        // LEFT-ENDPOINT INCLUSION pin. At FIELD_COUNT >= 2, the
+        // SINGLETON cardinality (count == 1) is strictly below the
+        // SATURATED right endpoint (count == FIELD_COUNT), so it
+        // lands inside the OPEN interior of the has-axis interval.
+        // Walked via per-count synthetic bottom-axis fixtures because
+        // no shipped preset places exactly one bottom axis.
+        const { assert!(ResourceLimits::FIELD_COUNT >= 2) };
+        let one_bottom = ResourceLimits::from_field_values([0, 41, 43, 47, 53, 59]);
+        assert_eq!(one_bottom.count_bottom_axes(), 1);
+        assert_eq!(one_bottom.bottom_axis_is_singleton(), Some(true));
+        assert_eq!(
+            one_bottom.bottom_axis_is_partially_saturated(),
+            Some(true),
+            "bottom singleton ⇒ partially_saturated failed on {one_bottom:?}",
+        );
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_singleton_true_implies_is_partially_saturated_true() {
+        // SINGLETON-IMPLIES-PARTIALLY-SATURATED bridge dual on the
+        // top cell — walked via per-count synthetic top-axis fixtures
+        // at count == 1 (the SINGLETON left endpoint).
+        const { assert!(ResourceLimits::FIELD_COUNT >= 2) };
+        let one_top = ResourceLimits::from_field_values([usize::MAX, 41, 43, 47, 53, 59]);
+        assert_eq!(one_top.count_top_axes(), 1);
+        assert_eq!(one_top.top_axis_is_singleton(), Some(true));
+        assert_eq!(
+            one_top.top_axis_is_partially_saturated(),
+            Some(true),
+            "top singleton ⇒ partially_saturated failed on {one_top:?}",
+        );
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_strictly_multi_true_implies_is_partially_saturated_true() {
+        // STRICTLY-MULTI-IMPLIES-PARTIALLY-SATURATED bridge —
+        // LOAD-BEARING OPEN-MIDDLE INCLUSION pin. STRICTLY-MULTI
+        // (1 < count < FIELD_COUNT) sits by construction strictly
+        // within the OPEN interior (0 < count < FIELD_COUNT). Every
+        // count-3 preset (SPARSE_BOTTOM / CONTIGUOUS_INTERIOR) and
+        // the count-2 ENDPOINTS_ONLY preset lands STRICTLY-MULTI on
+        // the bottom cell, so the truth-firing arm is exercised
+        // three times across shipped presets.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            if a.bottom_axis_is_strictly_multi() == Some(true) {
+                assert_eq!(
+                    a.bottom_axis_is_partially_saturated(),
+                    Some(true),
+                    "bottom strictly_multi ⇒ partially_saturated failed on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_strictly_multi_true_implies_is_partially_saturated_true() {
+        // STRICTLY-MULTI-IMPLIES-PARTIALLY-SATURATED bridge dual on
+        // the top cell — walked via per-count synthetic top-axis
+        // fixtures at count ∈ {2, 3, 4, 5} (each STRICTLY between 1
+        // and FIELD_COUNT == 6).
+        for count in 2..ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(posture.top_axis_is_strictly_multi(), Some(true));
+            assert_eq!(
+                posture.top_axis_is_partially_saturated(),
+                Some(true),
+                "top strictly_multi ⇒ partially_saturated failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_is_partially_saturated_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn evaluability pin — the atomic (bottom, top)
+        // PARTIALLY-SATURATED predicates evaluate at compile time on
+        // both saturated-pole presets (each firing Some(false) on
+        // its own cell) and on the shipped absent-cell presets (each
+        // firing None on the opposite cell) so a caller can pin the
+        // verdict as a compile-time constant.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_partially_saturated(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_partially_saturated(),
+            Some(false)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .top_axis_is_partially_saturated()
+            .is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .bottom_axis_is_partially_saturated()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .bottom_axis_is_partially_saturated()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .top_axis_is_partially_saturated()
+            .is_none());
+        const _: () = assert!(matches!(
+            SPARSE_BOTTOM_POSTURE.bottom_axis_is_partially_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.bottom_axis_is_partially_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_is_partially_saturated(),
+            Some(true)
         ));
     }
 }

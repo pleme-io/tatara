@@ -20664,6 +20664,241 @@ impl ResourceLimits {
             c => Some(c == Self::FIELD_COUNT - 1),
         }
     }
+
+    /// Whole-posture NEARLY-SATURATED-OF-POLAR predicate —
+    /// `self.polar_axis_is_nearly_saturated()` returns `Some(true)` iff
+    /// EXACTLY [`Self::FIELD_COUNT`] `- 1` axes of `self` sit at either
+    /// pole (equivalently: [`Self::count_polar_axes`] `==
+    /// Self::FIELD_COUNT - 1`, one axis shy of saturation),
+    /// `Some(false)` iff at least ONE axis is polar but the count is not
+    /// exactly `FIELD_COUNT - 1` (either strictly below the upper-
+    /// endpoint neighbour or at the SATURATED endpoint itself), or
+    /// `None` iff no axis is polar. The COMPOUND-CELL peer of
+    /// [`Self::bottom_axis_is_nearly_saturated`] one CELL-KIND axis over
+    /// on the NEARLY-SATURATED column — jointly the
+    /// (polar_axis_is_nearly_saturated, interior_axis_is_nearly_saturated)
+    /// COMPOUND pair CLOSES the NEARLY-SATURATED column on the (bottom,
+    /// top, polar, interior) 4-cell axis-family, one CELL-KIND axis over
+    /// from the just-shipped atomic (bottom_axis_is_nearly_saturated,
+    /// top_axis_is_nearly_saturated) pair.
+    ///
+    /// **COUNT-EQUALS-FIELD_COUNT-MINUS-ONE identity — LOAD-BEARING
+    /// structural pin**: on every posture, `polar_axis_is_nearly_saturated()
+    /// == { let c = self.count_polar_axes(); if c == 0 { None } else {
+    /// Some(c == Self::FIELD_COUNT - 1) } }`. Composes structurally
+    /// through the COMPOUND polar COUNT projection; the substrate never
+    /// re-scans the per-axis mask. Pinned via
+    /// `resource_limits_polar_axis_is_nearly_saturated_equals_count_equals_field_count_minus_one`.
+    ///
+    /// **DUAL-CELL SINGLETON exchange — LOAD-BEARING structural pin**:
+    /// on every posture, `polar_axis_is_nearly_saturated() == Some(true)
+    /// ⇔ interior_axis_is_singleton() == Some(true)`. The COMPOUND
+    /// EXHAUSTIVE-PARTITION identity `count_polar + count_interior ==
+    /// FIELD_COUNT` swaps the neighbour-below-SATURATED cell on the
+    /// polar tally with the SINGLETON cell on the interior tally —
+    /// `count_polar == FIELD_COUNT - 1 ⇔ count_interior == 1` — and
+    /// dually swaps the SINGLETON cell on polar (`count_polar == 1`)
+    /// with the neighbour-below-SATURATED cell on interior
+    /// (`count_interior == FIELD_COUNT - 1`). The atomic (bottom, top)
+    /// NEARLY-SATURATED pair structurally cannot express this dual-cell
+    /// exchange — the disjoint-atomic sum inequality `count_bottom +
+    /// count_top <= FIELD_COUNT` admits BOTH tallies at (5, 0), (0, 5),
+    /// AND (1, 5) / (5, 1) — while the strict COMPOUND partition
+    /// EQUALITY collapses them onto one bijection. Pinned via
+    /// `resource_limits_compound_is_nearly_saturated_dual_cell_singleton_exchange`.
+    ///
+    /// **NEARLY-SATURATED-IMPLIES-STRICTLY-MULTI bridge — LOAD-BEARING
+    /// refinement pin**: on every posture, `polar_axis_is_nearly_saturated()
+    /// == Some(true) ⇒ polar_axis_is_strictly_multi() == Some(true)`.
+    /// The NEARLY-SATURATED cell lands at `count == FIELD_COUNT - 1`,
+    /// strictly between 1 and `FIELD_COUNT` on the shipped `FIELD_COUNT
+    /// == 6`, so it is a strict REFINEMENT of the STRICTLY-MULTI open
+    /// interval at its upper-endpoint neighbour. Pinned via
+    /// `resource_limits_polar_axis_is_nearly_saturated_true_implies_is_strictly_multi_true`.
+    ///
+    /// **NEARLY-SATURATED-EXCLUDES-SATURATED — LOAD-BEARING mutual-
+    /// exclusion pin**: on every posture, NOT
+    /// (`polar_axis_is_nearly_saturated() == Some(true) &&
+    /// polar_axis_is_saturated() == Some(true)`). The two cells sit at
+    /// distinct cardinalities `FIELD_COUNT - 1` and `FIELD_COUNT` on the
+    /// same COMPOUND polar COUNT projection; they NEVER co-fire. Pinned
+    /// via
+    /// `resource_limits_polar_axis_is_nearly_saturated_true_implies_is_saturated_false`.
+    ///
+    /// **NEARLY-SATURATED-EXCLUDES-SINGLETON mutual-exclusion pin**: on
+    /// every posture, NOT (`polar_axis_is_nearly_saturated() ==
+    /// Some(true) && polar_axis_is_singleton() == Some(true)`). The
+    /// FLANKING dual-endpoint peers on the COMPOUND polar tally sit at
+    /// distinct cardinalities `1` and `FIELD_COUNT - 1`; on the shipped
+    /// `FIELD_COUNT == 6` they NEVER co-fire (they would only coincide
+    /// at the degenerate `FIELD_COUNT == 2` regime where the two
+    /// endpoint neighbours collapse, which the compile-time
+    /// `FIELD_COUNT` constant already forbids). Pinned via
+    /// `resource_limits_polar_axis_is_nearly_saturated_true_implies_is_singleton_false`.
+    ///
+    /// **Preset pins — LOAD-BEARING SATURATION contrast**:
+    /// `EMPTY_RESOURCE_LIMITS.polar_axis_is_nearly_saturated() ==
+    /// Some(false)` (saturated bottom pole packs SIX polar axes, count
+    /// == FIELD_COUNT — one MORE than FIELD_COUNT - 1, at the SATURATED
+    /// endpoint itself, NOT the neighbour-below);
+    /// `UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_nearly_saturated() ==
+    /// Some(false)` (saturated top pole packs SIX polar axes);
+    /// `DEFAULT_RESOURCE_LIMITS.polar_axis_is_nearly_saturated() ==
+    /// None` (no polar axis); `HAND_AUTHORED_MID_POSTURE
+    /// .polar_axis_is_nearly_saturated() == None`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_nearly_saturated() ==
+    /// None`. No shipped preset fires `Some(true)` (no shipped preset
+    /// places exactly five polar axes) — the truth-firing pin uses a
+    /// synthetic five-polar-axis posture built via
+    /// [`Self::from_field_values`] with FIVE endpoint sentinels and ONE
+    /// strictly-interior sentinel.
+    ///
+    /// **CROSS-CELL SATURATION contrast — LOAD-BEARING pin**: at each of
+    /// the two saturated pole presets, the (polar, interior)
+    /// NEARLY-SATURATED pair is (Some(false), None); at the interior-
+    /// saturation preset DEFAULT (and the two hand-authored postures)
+    /// the pair is (None, Some(false)). Same (Some(false), None) /
+    /// (None, Some(false)) partition shape carried by the COMPOUND
+    /// (SATURATED, STRICTLY-MULTI, SINGLETON, MULTI) columns on their
+    /// own saturated-pole preset row — the NEARLY-SATURATED column
+    /// carries this shape through the neighbour-below cardinality
+    /// landing rather than the endpoint cardinality itself. Pinned via
+    /// `resource_limits_compound_is_nearly_saturated_saturation_pole_partitions_into_below_endpoint_and_absent`.
+    ///
+    /// **ANY-fold bridge**: `a.polar_axis_is_nearly_saturated().is_some()
+    /// ⇔ a.has_polar_axis()`. Pinned via
+    /// `resource_limits_polar_axis_is_nearly_saturated_is_some_iff_has_polar_axis`.
+    ///
+    /// **BOOLEAN COLLAPSE — LOAD-BEARING pin**: the (`Some(true)`,
+    /// `Some(false)`, `None`) trichotomy PARTITIONS every posture into
+    /// (nearly-saturated-polar, present-but-not-nearly-saturated-polar,
+    /// no-polar) — the DUAL-ENDPOINT image of the COMPOUND polar
+    /// SINGLETON column's (singleton-polar, non-singleton-polar-but-
+    /// present, no-polar) partition with the Some(true) cell relocated
+    /// from `count == 1` to `count == FIELD_COUNT - 1`, fixing the None
+    /// cell and swapping the two arms of the has-axis regime that carry
+    /// the Some(_) cells.
+    ///
+    /// `const fn` so a caller can pin the polar-axis NEARLY-SATURATED
+    /// verdict at compile time (`const _: () = assert!(matches!(
+    /// EMPTY_RESOURCE_LIMITS.polar_axis_is_nearly_saturated(),
+    /// Some(false)));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// COMPOUND polar NEARLY-SATURATED predicate is a named typed exit
+    /// `Option<bool>` rather than a per-consumer `self.count_polar_axes()
+    /// == Self::FIELD_COUNT - 1` inline equality test that discards the
+    /// has-axis-at-all distinction AND a paired `self.count_polar_axes()
+    /// == Self::FIELD_COUNT` inline test that carries the endpoint
+    /// exclusion at the call site. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs (the COMPOUND NEARLY-SATURATED cell
+    /// is a structural derivation from the COMPOUND polar COUNT
+    /// projection via one usize equality against `Self::FIELD_COUNT - 1`
+    /// and one is-zero split, no new per-axis scan, no allocation).
+    /// THEORY.md §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::bottom_axis_is_nearly_saturated`], on the DUAL COMPOUND
+    /// polar mask. Racket's `(= (length l) (sub1 N))` neighbour-below
+    /// refinement lifted from the atomic (bottom, top) tally to the
+    /// COMPOUND (polar, interior) tally; APL's `(≢⍵)=(∆-1)` on the
+    /// polar projection; Lean's `List.length = n - 1` refinement.
+    /// Translation through pleme-io primitives: the plain `const fn`
+    /// DERIVATION from the already-lifted [`Self::count_polar_axes`],
+    /// one usize equality against `Self::FIELD_COUNT - 1` under a
+    /// two-arm match on the zero split, no new per-axis scan, no
+    /// allocation.
+    #[must_use]
+    pub const fn polar_axis_is_nearly_saturated(self) -> Option<bool> {
+        match self.count_polar_axes() {
+            0 => None,
+            c => Some(c == Self::FIELD_COUNT - 1),
+        }
+    }
+
+    /// Whole-posture NEARLY-SATURATED-OF-INTERIOR predicate —
+    /// `self.interior_axis_is_nearly_saturated()` returns `Some(true)`
+    /// iff EXACTLY [`Self::FIELD_COUNT`] `- 1` axes of `self` sit
+    /// strictly between the two poles (equivalently:
+    /// [`Self::count_interior_axes`] `== Self::FIELD_COUNT - 1`, one
+    /// axis shy of saturation), `Some(false)` iff at least ONE axis is
+    /// strictly interior but the count is not exactly `FIELD_COUNT - 1`,
+    /// or `None` iff no axis is interior. The COMPOUND-CELL DUAL of
+    /// [`Self::polar_axis_is_nearly_saturated`] one CELL-KIND axis over
+    /// via the (polar, interior) disjoint complement — jointly the
+    /// (polar_axis_is_nearly_saturated, interior_axis_is_nearly_saturated)
+    /// COMPOUND pair CLOSES the NEARLY-SATURATED column on the (bottom,
+    /// top, polar, interior) 4-cell axis-family.
+    ///
+    /// **COUNT-EQUALS-FIELD_COUNT-MINUS-ONE identity dual**: on every
+    /// posture, `interior_axis_is_nearly_saturated() == { let c =
+    /// self.count_interior_axes(); if c == 0 { None } else { Some(c ==
+    /// Self::FIELD_COUNT - 1) } }`. Pinned via
+    /// `resource_limits_interior_axis_is_nearly_saturated_equals_count_equals_field_count_minus_one`.
+    ///
+    /// **DUAL-CELL SINGLETON exchange dual**: on every posture,
+    /// `interior_axis_is_nearly_saturated() == Some(true) ⇔
+    /// polar_axis_is_singleton() == Some(true)`. Same COMPOUND
+    /// EXHAUSTIVE-PARTITION derivation as on the SELF compound cell,
+    /// read through the count_polar axis. Pinned via
+    /// `resource_limits_compound_is_nearly_saturated_dual_cell_singleton_exchange`.
+    ///
+    /// **NEARLY-SATURATED-IMPLIES-STRICTLY-MULTI bridge dual**: on every
+    /// posture, `interior_axis_is_nearly_saturated() == Some(true) ⇒
+    /// interior_axis_is_strictly_multi() == Some(true)`. Pinned via
+    /// `resource_limits_interior_axis_is_nearly_saturated_true_implies_is_strictly_multi_true`.
+    ///
+    /// **NEARLY-SATURATED-EXCLUDES-SATURATED mutual-exclusion pin
+    /// dual**: on every posture, NOT
+    /// (`interior_axis_is_nearly_saturated() == Some(true) &&
+    /// interior_axis_is_saturated() == Some(true)`). Pinned via
+    /// `resource_limits_interior_axis_is_nearly_saturated_true_implies_is_saturated_false`.
+    ///
+    /// **NEARLY-SATURATED-EXCLUDES-SINGLETON mutual-exclusion pin
+    /// dual**: on every posture, NOT
+    /// (`interior_axis_is_nearly_saturated() == Some(true) &&
+    /// interior_axis_is_singleton() == Some(true)`). Pinned via
+    /// `resource_limits_interior_axis_is_nearly_saturated_true_implies_is_singleton_false`.
+    ///
+    /// **Preset pins**: `DEFAULT_RESOURCE_LIMITS
+    /// .interior_axis_is_nearly_saturated() == Some(false)` (every
+    /// field strictly interior, count == FIELD_COUNT — the SATURATED
+    /// endpoint, one MORE than FIELD_COUNT - 1);
+    /// `EMPTY_RESOURCE_LIMITS.interior_axis_is_nearly_saturated() ==
+    /// None` (no interior); `UNBOUNDED_RESOURCE_LIMITS
+    /// .interior_axis_is_nearly_saturated() == None`;
+    /// `HAND_AUTHORED_MID_POSTURE.interior_axis_is_nearly_saturated()
+    /// == Some(false)`; `HAND_AUTHORED_OTHER_POSTURE
+    /// .interior_axis_is_nearly_saturated() == Some(false)`. No shipped
+    /// preset fires Some(true) (no shipped preset places exactly five
+    /// interior axes). Same COMPOUND-CELL SATURATION shape as the
+    /// interior (CONTIGUITY, SPARSE, GAP, SINGLETON, MULTI, SATURATED,
+    /// STRICTLY-MULTI) columns — the interior bracket flips from
+    /// `saturated-multi` Some(true) on the SATURATED / MULTI columns to
+    /// `saturated-endpoint-excluded` Some(false) on the STRICTLY-MULTI
+    /// and NEARLY-SATURATED columns at the same three interior-
+    /// saturated postures.
+    ///
+    /// **ANY-fold bridge dual**: `a.interior_axis_is_nearly_saturated()
+    /// .is_some() ⇔ a.has_interior_axis()`. Pinned via
+    /// `resource_limits_interior_axis_is_nearly_saturated_is_some_iff_has_interior_axis`.
+    ///
+    /// `const fn` so a caller can pin the interior-axis NEARLY-SATURATED
+    /// verdict at compile time.
+    ///
+    /// Theory anchor: same as [`Self::polar_axis_is_nearly_saturated`],
+    /// on the DUAL COMPOUND interior cell.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::polar_axis_is_nearly_saturated`], on the DUAL COMPOUND
+    /// interior mask.
+    #[must_use]
+    pub const fn interior_axis_is_nearly_saturated(self) -> Option<bool> {
+        match self.count_interior_axes() {
+            0 => None,
+            c => Some(c == Self::FIELD_COUNT - 1),
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -68634,5 +68869,524 @@ mod tests {
             Some(true)
         ));
         const _: () = assert!(FIVE_TOP.bottom_axis_is_nearly_saturated().is_none());
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_nearly_saturated_preset_pins_saturate_at_below_endpoint_and_absent(
+    ) {
+        // Preset pins on the COMPOUND polar NEARLY-SATURATED cell —
+        // LOAD-BEARING COMPOUND-CELL SATURATION contrast. BOTH saturated
+        // pole presets pack SIX polar axes (count == FIELD_COUNT), one
+        // MORE than FIELD_COUNT - 1, so the NEARLY-SATURATED verdict
+        // fires Some(false) at the SATURATED endpoint itself. The
+        // DEFAULT preset and both hand-authored postures carry no polar
+        // axis; the NEARLY-SATURATED verdict is None. Same
+        // (2-polar-saturated, 1-interior-saturated, 2-hand-authored-
+        // absent) preset partition shape carried by the COMPOUND
+        // (SPARSE, CONTIGUITY, GAP, SINGLETON, MULTI, SATURATED,
+        // STRICTLY-MULTI) columns one COMBINATOR-KIND axis under, with
+        // the polar SATURATED arm swapped from Some(true) to Some(false)
+        // exactly at the neighbour-below exclusion.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_nearly_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_nearly_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.polar_axis_is_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.polar_axis_is_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_nearly_saturated(),
+            None,
+        );
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_nearly_saturated_preset_pins_saturate_at_below_endpoint_and_absent(
+    ) {
+        // Preset pins dual on the COMPOUND interior NEARLY-SATURATED
+        // cell — the DEFAULT preset pins every axis strictly interior
+        // (count == FIELD_COUNT), one MORE than FIELD_COUNT - 1, so the
+        // NEARLY-SATURATED verdict fires Some(false) at the SATURATED
+        // endpoint itself. Both hand-authored postures pin every field
+        // strictly interior at the same endpoint. The two saturated
+        // pole presets carry no interior axis; the NEARLY-SATURATED
+        // verdict is None.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_nearly_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.interior_axis_is_nearly_saturated(),
+            None
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.interior_axis_is_nearly_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.interior_axis_is_nearly_saturated(),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn resource_limits_compound_is_nearly_saturated_saturation_pole_partitions_into_below_endpoint_and_absent(
+    ) {
+        // CROSS-CELL SATURATION contrast on the COMPOUND NEARLY-
+        // SATURATED column — each of the two saturated pole presets
+        // pins (Some(false), None) on the (polar, interior) NEARLY-
+        // SATURATED pair (the polar cell hits the SATURATED endpoint
+        // one MORE than the NEARLY-SATURATED cardinality and the
+        // interior cell is UNIFORMLY ABSENT); the interior-saturation
+        // preset DEFAULT pins (None, Some(false)) on the same pair.
+        // Same (Some(false), None) / (None, Some(false)) partition
+        // shape carried by the COMPOUND (SATURATED, STRICTLY-MULTI,
+        // SINGLETON, MULTI) columns on their own saturated-pole preset
+        // row — the NEARLY-SATURATED column carries this shape through
+        // the neighbour-below cardinality landing rather than the
+        // endpoint cardinality itself.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_nearly_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.interior_axis_is_nearly_saturated(),
+            None
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_nearly_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.polar_axis_is_nearly_saturated(),
+            None
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_nearly_saturated(),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_nearly_saturated_equals_count_equals_field_count_minus_one() {
+        // COUNT-EQUALS-FIELD_COUNT-MINUS-ONE identity on the COMPOUND
+        // polar cell — the NEARLY-SATURATED predicate is structurally
+        // derived from count_polar_axes on every posture: None iff
+        // count == 0, Some(count == FIELD_COUNT - 1) otherwise. Pinned
+        // across every shipped preset + hand-authored + test-local
+        // posture PLUS a synthetic five-polar-axis posture built via
+        // from_field_values (no shipped preset places exactly five
+        // polar axes, so the Some(true) arm needs an explicit witness
+        // fixture). A future rewrite of either projection that silently
+        // drifts from the neighbour-below-saturation contract fires
+        // this pin.
+        let five_polar_posture = ResourceLimits::from_field_values([0, 0, 0, 0, 0, 41]);
+        assert_eq!(five_polar_posture.count_polar_axes(), 5);
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            five_polar_posture,
+        ];
+        for a in postures {
+            let c = a.count_polar_axes();
+            let expected = if c == 0 {
+                None
+            } else {
+                Some(c == ResourceLimits::FIELD_COUNT - 1)
+            };
+            assert_eq!(
+                a.polar_axis_is_nearly_saturated(),
+                expected,
+                "polar_is_nearly_saturated = count-equals-field-count-minus-one contract failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_nearly_saturated_equals_count_equals_field_count_minus_one()
+    {
+        // COUNT-EQUALS-FIELD_COUNT-MINUS-ONE identity dual on the
+        // COMPOUND interior cell. Synthetic five-interior-axis fixture
+        // places five sentinels strictly between the two poles and one
+        // sentinel at the bottom pole.
+        let five_interior_posture = ResourceLimits::from_field_values([41, 41, 41, 41, 41, 0]);
+        assert_eq!(five_interior_posture.count_interior_axes(), 5);
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            five_interior_posture,
+        ];
+        for a in postures {
+            let c = a.count_interior_axes();
+            let expected = if c == 0 {
+                None
+            } else {
+                Some(c == ResourceLimits::FIELD_COUNT - 1)
+            };
+            assert_eq!(
+                a.interior_axis_is_nearly_saturated(),
+                expected,
+                "interior_is_nearly_saturated = count-equals-field-count-minus-one contract failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_compound_is_nearly_saturated_dual_cell_singleton_exchange() {
+        // DUAL-CELL SINGLETON exchange — LOAD-BEARING structural pin.
+        // The COMPOUND EXHAUSTIVE-PARTITION identity `count_polar +
+        // count_interior == FIELD_COUNT` swaps the neighbour-below-
+        // SATURATED cell on ONE compound tally with the SINGLETON cell
+        // on the DUAL compound tally: `count_polar == FIELD_COUNT - 1
+        // ⇔ count_interior == 1` and vice versa. The atomic (bottom,
+        // top) NEARLY-SATURATED pair structurally CANNOT express this
+        // exchange because the disjoint-atomic sum INEQUALITY admits
+        // (count_bottom, count_top) at (5, 0), (0, 5), AND (1, 5) /
+        // (5, 1) as distinct feasible cardinalities; the strict COMPOUND
+        // partition EQUALITY collapses them onto one bijection. Swept
+        // across every shipped + hand-authored + test-local fixture
+        // plus BOTH truth-firing synthetic fixtures.
+        let five_polar_posture = ResourceLimits::from_field_values([0, 0, 0, 0, 0, 41]);
+        let five_interior_posture = ResourceLimits::from_field_values([41, 41, 41, 41, 41, 0]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            five_polar_posture,
+            five_interior_posture,
+        ] {
+            assert_eq!(
+                a.polar_axis_is_nearly_saturated() == Some(true),
+                a.interior_axis_is_singleton() == Some(true),
+                "polar_is_nearly_saturated Some(true) ⇔ interior_is_singleton Some(true) failed on {a:?}",
+            );
+            assert_eq!(
+                a.interior_axis_is_nearly_saturated() == Some(true),
+                a.polar_axis_is_singleton() == Some(true),
+                "interior_is_nearly_saturated Some(true) ⇔ polar_is_singleton Some(true) failed on {a:?}",
+            );
+        }
+        assert_eq!(
+            five_polar_posture.polar_axis_is_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(five_polar_posture.interior_axis_is_singleton(), Some(true),);
+        assert_eq!(
+            five_interior_posture.interior_axis_is_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(five_interior_posture.polar_axis_is_singleton(), Some(true),);
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_nearly_saturated_is_some_iff_has_polar_axis() {
+        // ANY-fold bridge on the COMPOUND polar cell — the NEARLY-
+        // SATURATED verdict is defined iff the polar subset is non-
+        // empty. Identical shape to every already-lifted (SPAN, GAP,
+        // CONTIGUITY, SPARSE, SINGLETON, MULTI, SATURATED,
+        // STRICTLY-MULTI) compound-cell is_some ⇔ has-axis bridge,
+        // extending the COMPOUND polar-column octet to a nonet.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.polar_axis_is_nearly_saturated().is_some(),
+                a.has_polar_axis(),
+                "polar_is_nearly_saturated.is_some() != has_polar_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_nearly_saturated_is_some_iff_has_interior_axis() {
+        // ANY-fold bridge dual on the COMPOUND interior cell.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.interior_axis_is_nearly_saturated().is_some(),
+                a.has_interior_axis(),
+                "interior_is_nearly_saturated.is_some() != has_interior_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_nearly_saturated_true_implies_is_strictly_multi_true() {
+        // NEARLY-SATURATED-IMPLIES-STRICTLY-MULTI bridge on the
+        // COMPOUND polar cell — LOAD-BEARING refinement pin. The
+        // NEARLY-SATURATED cell lands at count == FIELD_COUNT - 1 == 5,
+        // strictly between 1 and FIELD_COUNT == 6, so it is a strict
+        // REFINEMENT of the STRICTLY-MULTI open interval at its upper-
+        // endpoint neighbour. Swept across every shipped + hand-
+        // authored + test-local + synthetic-count-5 fixture; the
+        // antecedent fires only at the synthetic five-polar fixture.
+        let five_polar_posture = ResourceLimits::from_field_values([0, 0, 0, 0, 0, 41]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            five_polar_posture,
+        ] {
+            if a.polar_axis_is_nearly_saturated() == Some(true) {
+                assert_eq!(
+                    a.polar_axis_is_strictly_multi(),
+                    Some(true),
+                    "polar_is_nearly_saturated Some(true) ⇒ polar_is_strictly_multi Some(true) failed on {a:?}",
+                );
+            }
+        }
+        assert_eq!(
+            five_polar_posture.polar_axis_is_nearly_saturated(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_nearly_saturated_true_implies_is_strictly_multi_true() {
+        // NEARLY-SATURATED-IMPLIES-STRICTLY-MULTI bridge dual on the
+        // COMPOUND interior cell.
+        let five_interior_posture = ResourceLimits::from_field_values([41, 41, 41, 41, 41, 0]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            five_interior_posture,
+        ] {
+            if a.interior_axis_is_nearly_saturated() == Some(true) {
+                assert_eq!(
+                    a.interior_axis_is_strictly_multi(),
+                    Some(true),
+                    "interior_is_nearly_saturated Some(true) ⇒ interior_is_strictly_multi Some(true) failed on {a:?}",
+                );
+            }
+        }
+        assert_eq!(
+            five_interior_posture.interior_axis_is_nearly_saturated(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_nearly_saturated_true_implies_is_saturated_false() {
+        // NEARLY-SATURATED-EXCLUDES-SATURATED — LOAD-BEARING mutual-
+        // exclusion pin on the COMPOUND polar cell. The two cells sit
+        // at distinct cardinalities FIELD_COUNT - 1 and FIELD_COUNT on
+        // the same COMPOUND polar COUNT projection; they NEVER co-fire.
+        let five_polar_posture = ResourceLimits::from_field_values([0, 0, 0, 0, 0, 41]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            five_polar_posture,
+        ] {
+            assert!(
+                !(a.polar_axis_is_nearly_saturated() == Some(true)
+                    && a.polar_axis_is_saturated() == Some(true)),
+                "polar_is_nearly_saturated Some(true) co-fires polar_is_saturated Some(true) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_nearly_saturated_true_implies_is_saturated_false() {
+        // NEARLY-SATURATED-EXCLUDES-SATURATED dual on the COMPOUND
+        // interior cell.
+        let five_interior_posture = ResourceLimits::from_field_values([41, 41, 41, 41, 41, 0]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            five_interior_posture,
+        ] {
+            assert!(
+                !(a.interior_axis_is_nearly_saturated() == Some(true)
+                    && a.interior_axis_is_saturated() == Some(true)),
+                "interior_is_nearly_saturated Some(true) co-fires interior_is_saturated Some(true) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_nearly_saturated_true_implies_is_singleton_false() {
+        // NEARLY-SATURATED-EXCLUDES-SINGLETON mutual-exclusion pin on
+        // the COMPOUND polar cell. The FLANKING dual-endpoint peers
+        // sit at distinct cardinalities 1 and FIELD_COUNT - 1 == 5 on
+        // the shipped FIELD_COUNT == 6; they NEVER co-fire.
+        let five_polar_posture = ResourceLimits::from_field_values([0, 0, 0, 0, 0, 41]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            five_polar_posture,
+        ] {
+            assert!(
+                !(a.polar_axis_is_nearly_saturated() == Some(true)
+                    && a.polar_axis_is_singleton() == Some(true)),
+                "polar_is_nearly_saturated Some(true) co-fires polar_is_singleton Some(true) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_nearly_saturated_true_implies_is_singleton_false() {
+        // NEARLY-SATURATED-EXCLUDES-SINGLETON dual on the COMPOUND
+        // interior cell.
+        let five_interior_posture = ResourceLimits::from_field_values([41, 41, 41, 41, 41, 0]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            five_interior_posture,
+        ] {
+            assert!(
+                !(a.interior_axis_is_nearly_saturated() == Some(true)
+                    && a.interior_axis_is_singleton() == Some(true)),
+                "interior_is_nearly_saturated Some(true) co-fires interior_is_singleton Some(true) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_compound_is_nearly_saturated_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the NEARLY-SATURATED COMPOUND pair — both
+        // projections are evaluable in const context so a caller can
+        // pin the exact SATURATED-endpoint corners at compile time as
+        // build-breaks. Mirror of the const-fn evaluability pins on the
+        // atomic NEARLY-SATURATED pair one CELL-KIND axis under. The
+        // Some(true) corner uses a runtime-only synthetic fixture
+        // rather than a shipped preset because no shipped preset places
+        // exactly five polar or interior axes; the const-fn pin
+        // therefore fixes the Some(false) saturated-endpoint corner
+        // and the None absent corner directly.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_nearly_saturated(),
+            Some(false)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .interior_axis_is_nearly_saturated()
+            .is_none());
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_nearly_saturated(),
+            Some(false)
+        ));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .interior_axis_is_nearly_saturated()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .polar_axis_is_nearly_saturated()
+            .is_none());
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_nearly_saturated(),
+            Some(false)
+        ));
+        // Synthetic five-polar-axis fixture evaluated in const context
+        // — pins the Some(true) corner on the polar compound cell.
+        // The dual interior cell sits at count == 1 (the SINGLETON
+        // landing forced by the DUAL-CELL SINGLETON exchange), so its
+        // NEARLY-SATURATED verdict is Some(false), NOT None.
+        const FIVE_POLAR: ResourceLimits = ResourceLimits::from_field_values([0, 0, 0, 0, 0, 41]);
+        const _: () = assert!(matches!(
+            FIVE_POLAR.polar_axis_is_nearly_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            FIVE_POLAR.interior_axis_is_nearly_saturated(),
+            Some(false)
+        ));
+        // Synthetic five-interior-axis fixture evaluated in const
+        // context — pins the Some(true) corner on the interior
+        // compound cell. The dual polar cell sits at count == 1 (the
+        // SINGLETON landing forced by the DUAL-CELL SINGLETON
+        // exchange), so its NEARLY-SATURATED verdict is Some(false),
+        // NOT None.
+        const FIVE_INTERIOR: ResourceLimits =
+            ResourceLimits::from_field_values([41, 41, 41, 41, 41, 0]);
+        const _: () = assert!(matches!(
+            FIVE_INTERIOR.interior_axis_is_nearly_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            FIVE_INTERIOR.polar_axis_is_nearly_saturated(),
+            Some(false)
+        ));
     }
 }

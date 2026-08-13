@@ -11,8 +11,11 @@ use std::time::Duration;
 
 use wasmer::{imports, Instance, Module, Store};
 
-use crate::engine::{WasmBoot, WasmEngine, WasmEngineError, WasmHandle, WasmModuleSource};
-use crate::{WasiPreview, WasmRuntime};
+use crate::engine::{
+    check_boot, check_imports_granted, read_module, WasmBoot, WasmEngine, WasmEngineError,
+    WasmHandle,
+};
+use crate::WasmRuntime;
 
 pub struct WasmerEngine;
 
@@ -28,14 +31,25 @@ impl WasmEngine for WasmerEngine {
     }
 
     fn run(&self, boot: &WasmBoot) -> Result<WasmHandle, WasmEngineError> {
-        if boot.preview == WasiPreview::P2 {
-            return Err(WasmEngineError::PreviewNotSupported(WasiPreview::P2));
-        }
+        check_boot(&self.facts(), boot)?;
         let bytes = read_module(&boot.module)?;
 
         let mut store = Store::default();
         let module = Module::new(&store, &bytes)
             .map_err(|e| WasmEngineError::Compile(e.to_string()))?;
+
+        // As wasmi: no WASI bridge here, so a granted import can only be a
+        // host one. The empty `imports!` below is now a *consequence* of the
+        // declaration rather than a hardcoded posture.
+        // wasmer's `ImportType` owns its strings, so these are cloned rather
+        // than borrowed — the shared validator takes any `AsRef<str>` pair.
+        check_imports_granted(
+            &boot.capabilities,
+            module
+                .imports()
+                .map(|i| (i.module().to_string(), i.name().to_string())),
+        )?;
+
         let import_object = imports! {};
         let instance = Instance::new(&mut store, &module, &import_object)
             .map_err(|e| WasmEngineError::Instantiate(e.to_string()))?;
@@ -62,12 +76,5 @@ impl WasmEngine for WasmerEngine {
     }
 }
 
-fn read_module(src: &WasmModuleSource) -> Result<Vec<u8>, WasmEngineError> {
-    match src {
-        WasmModuleSource::Bytes(b) => Ok(b.clone()),
-        WasmModuleSource::Wat(text) => wat::parse_str(text)
-            .map_err(|e| WasmEngineError::Compile(format!("WAT parse: {e}"))),
-        WasmModuleSource::Path(p) => std::fs::read(p)
-            .map_err(|e| WasmEngineError::Io(format!("{}: {e}", p.display()))),
-    }
-}
+// `read_module` was the second copy of the same function; it is
+// `engine::read_module` now.

@@ -4,7 +4,7 @@
 
 use tatara_hospedeiro::{GuestStatus, GuestSupervisor};
 use tatara_vm::WasmSpec;
-use tatara_wasm::{WasiPreview, WasmFeatures, WasmRuntime};
+use tatara_wasm::{WasiPreview, WasmCapabilities, WasmFeatures, WasmRuntime};
 use tatara_build_remote::BuildRef;
 
 /// Pure-compute WAT — no imports, _start returns nop.
@@ -18,6 +18,9 @@ fn supervisor_runs_wasm_guest_end_to_end() {
         wasi_preview: WasiPreview::P1,
         component: BuildRef::StorePath("/dev/null".into()), // not used by _bytes variant
         features: WasmFeatures::default(),
+        // Both guests here are pure-compute WAT with no imports, so the
+        // deny-all default is exactly right.
+        capabilities: WasmCapabilities::default(),
     };
 
     let mut sup = GuestSupervisor::new();
@@ -52,6 +55,9 @@ fn supervisor_records_failed_guest_on_non_zero_exit() {
         wasi_preview: WasiPreview::P1,
         component: BuildRef::StorePath("/dev/null".into()),
         features: WasmFeatures::default(),
+        // Both guests here are pure-compute WAT with no imports, so the
+        // deny-all default is exactly right.
+        capabilities: WasmCapabilities::default(),
     };
     let mut sup = GuestSupervisor::new();
     let err = sup.boot_wasm_bytes("trap-guest", &spec, bytes);
@@ -66,6 +72,9 @@ fn multiple_guests_coexist_in_the_supervisor() {
         wasi_preview: WasiPreview::P1,
         component: BuildRef::StorePath("/dev/null".into()),
         features: WasmFeatures::default(),
+        // Both guests here are pure-compute WAT with no imports, so the
+        // deny-all default is exactly right.
+        capabilities: WasmCapabilities::default(),
     };
     let mut sup = GuestSupervisor::new();
     for i in 0..5 {

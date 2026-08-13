@@ -7,7 +7,8 @@
 #![cfg(feature = "runtime-wasmtime")]
 
 use tatara_wasm::{
-    engine_for, WasiPreview, WasmBoot, WasmFeatures, WasmModuleSource, WasmRuntime,
+    engine_for, WasiPreview, WasmBoot, WasmCapabilities, WasmFeatures, WasmModuleSource,
+    WasmRuntime,
 };
 
 /// Minimal WASI p1 "hello world" in WebAssembly Text Format. Imports
@@ -50,6 +51,9 @@ fn hello_world_through_wasmtime() {
         runtime: WasmRuntime::Wasmtime,
         preview: WasiPreview::P1,
         features: WasmFeatures::default(),
+        // Declared, where it used to be hardcoded inside the impl. Same
+        // grant this guest always had — now stated at the call site.
+        capabilities: WasmCapabilities::stdio(),
         name: "hello".into(),
     };
 
@@ -60,6 +64,42 @@ fn hello_world_through_wasmtime() {
     assert_eq!(handle.stderr, "");
 }
 
+/// The M2 differential: **the same module**, admitted or refused purely by
+/// what the capability declaration carries. This is the property blue needs
+/// from the border — a frame that omits the capability cannot reach it.
+///
+/// RED RUN (2026-08-13): with `check_imports_granted` removed from
+/// `wasmtime_impl::run` and the WASI linker added unconditionally, the closed
+/// boot *succeeds* and this fails at
+/// `a guest with no WASI grant must not reach fd_write`.
+#[test]
+fn the_same_guest_is_refused_when_the_declaration_omits_wasi() {
+    let engine = engine_for(WasmRuntime::Wasmtime).expect("wasmtime feature compiled in");
+
+    let boot_with = |caps: WasmCapabilities| WasmBoot {
+        module: WasmModuleSource::Wat(HELLO_WAT.to_string()),
+        runtime: WasmRuntime::Wasmtime,
+        preview: WasiPreview::P1,
+        features: WasmFeatures::default(),
+        capabilities: caps,
+        name: "hello".into(),
+    };
+
+    // Granted: runs, and prints.
+    let granted = engine
+        .run(&boot_with(WasmCapabilities::stdio()))
+        .expect("the granted guest must run");
+    assert_eq!(granted.stdout, "Hello, tatara\n");
+
+    // Ungranted: refused by name, before it can run.
+    let err = engine
+        .run(&boot_with(WasmCapabilities::closed()))
+        .expect_err("a guest with no WASI grant must not reach fd_write");
+    let msg = format!("{err:?}");
+    assert!(msg.contains("CapabilityNotGranted"), "got {msg}");
+    assert!(msg.contains("fd_write"), "the error must name the import: {msg}");
+}
+
 #[test]
 fn p2_is_rejected_on_wasmtime_p1_path() {
     let engine = engine_for(WasmRuntime::Wasmtime).expect("wasmtime feature compiled in");
@@ -68,6 +108,7 @@ fn p2_is_rejected_on_wasmtime_p1_path() {
         runtime: WasmRuntime::Wasmtime,
         preview: WasiPreview::P2,
         features: WasmFeatures::default(),
+        capabilities: WasmCapabilities::stdio(),
         name: "hello".into(),
     };
     let err = engine.run(&boot).unwrap_err();

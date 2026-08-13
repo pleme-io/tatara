@@ -15,7 +15,7 @@
 use serde::{Deserialize, Serialize};
 use tatara_build_remote::{BuildRef, BuildTransportChain};
 use tatara_lisp_derive::TataraDomain as DeriveTataraDomain;
-use tatara_wasm::{WasiPreview, WasmFeatures, WasmRuntime};
+use tatara_wasm::{WasiPreview, WasmCapabilities, WasmFeatures, WasmRuntime};
 
 use crate::config::{NetworkSpec, ShareSpec, VmSpec};
 
@@ -84,6 +84,17 @@ pub struct WasmSpec {
     /// AOT/JIT/SIMD/wasi-http/wasi-nn toggles.
     #[serde(default)]
     pub features: WasmFeatures,
+
+    /// What the host grants this guest — stdio, env, argv, preopens, and the
+    /// non-WASI host imports the embedder supplies.
+    ///
+    /// **Defaults to deny-all**, which is a deliberate posture change. The
+    /// engines used to hardcode their own grant (wasmtime handed every guest
+    /// stdout+stderr; wasmi and wasmer handed out nothing), so the capability
+    /// surface was whichever impl you happened to land on. Declaring it here
+    /// makes it a property of the guest instead of the backend.
+    #[serde(default)]
+    pub capabilities: WasmCapabilities,
 }
 
 /// Shared resource caps — both kinds honor these.
@@ -160,6 +171,7 @@ mod tests {
                     url: "github:pleme-io/cors-proxy".into(),
                     attr: "wasi".into(),
                 },
+                capabilities: WasmCapabilities::default(),
                 features: WasmFeatures {
                     simd: true,
                     wasi_http: true,

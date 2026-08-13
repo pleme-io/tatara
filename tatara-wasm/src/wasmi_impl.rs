@@ -15,8 +15,11 @@ use std::time::Duration;
 
 use wasmi::{Engine, Linker, Module, Store};
 
-use crate::engine::{WasmBoot, WasmEngine, WasmEngineError, WasmHandle, WasmModuleSource};
-use crate::{WasiPreview, WasmRuntime};
+use crate::engine::{
+    check_boot, check_imports_granted, read_module, WasmBoot, WasmEngine, WasmEngineError,
+    WasmHandle,
+};
+use crate::WasmRuntime;
 
 pub struct WasmiEngine {
     engine: Engine,
@@ -36,12 +39,18 @@ impl WasmEngine for WasmiEngine {
     }
 
     fn run(&self, boot: &WasmBoot) -> Result<WasmHandle, WasmEngineError> {
-        if boot.preview == WasiPreview::P2 {
-            return Err(WasmEngineError::PreviewNotSupported(WasiPreview::P2));
-        }
+        check_boot(&self.facts(), boot)?;
         let bytes = read_module(&boot.module)?;
         let module = Module::new(&self.engine, &bytes[..])
             .map_err(|e| WasmEngineError::Compile(e.to_string()))?;
+
+        // wasmi wires no WASI (see `engine::facts_of`), so the only imports
+        // that could be granted here are host ones — and `check_boot` has
+        // already refused a WASI grant this engine cannot honour.
+        check_imports_granted(
+            &boot.capabilities,
+            module.imports().map(|i| (i.module(), i.name())),
+        )?;
 
         let mut store = Store::new(&self.engine, ());
         let linker: Linker<()> = Linker::new(&self.engine);
@@ -74,12 +83,5 @@ impl WasmEngine for WasmiEngine {
     }
 }
 
-fn read_module(src: &WasmModuleSource) -> Result<Vec<u8>, WasmEngineError> {
-    match src {
-        WasmModuleSource::Bytes(b) => Ok(b.clone()),
-        WasmModuleSource::Wat(text) => wat::parse_str(text)
-            .map_err(|e| WasmEngineError::Compile(format!("WAT parse: {e}"))),
-        WasmModuleSource::Path(p) => std::fs::read(p)
-            .map_err(|e| WasmEngineError::Io(format!("{}: {e}", p.display()))),
-    }
-}
+// `read_module` was a third copy of the same function; it is
+// `engine::read_module` now.

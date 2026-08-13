@@ -1,22 +1,29 @@
 //! wasmtime backend. Compiled in with `runtime-wasmtime`.
 //!
-//! Today: WASI Preview 1, inherit-stdio, sync-run. Component Model +
-//! WASI Preview 2 land when the rest of the stack asks for them (cheap
-//! — wasmtime already supports both; it's a matter of wiring the
-//! linker).
+//! Today: WASI Preview 1, sync-run. Component Model + WASI Preview 2 land
+//! when the rest of the stack asks for them (cheap — wasmtime already
+//! supports both; it's a matter of wiring the linker). What this engine
+//! accepts is declared in `engine::facts_of`, not repeated here.
+//!
+//! **Stdio is granted, never inherited.** This impl used to build its
+//! `WasiCtxBuilder` with stdout+stderr unconditionally; it now derives the
+//! whole context from `WasmBoot::capabilities`, and adds the WASI linker only
+//! when a grant is present.
 
 #![cfg(feature = "runtime-wasmtime")]
 
-use std::io::Read;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use wasmtime::{Config, Engine, Linker, Module, Store};
 use wasmtime_wasi::preview1::WasiP1Ctx;
-use wasmtime_wasi::{WasiCtxBuilder, pipe::MemoryOutputPipe};
+use wasmtime_wasi::{pipe::MemoryOutputPipe, DirPerms, FilePerms, WasiCtxBuilder};
 
-use crate::engine::{WasmBoot, WasmEngine, WasmEngineError, WasmHandle, WasmModuleSource};
-use crate::{WasiPreview, WasmRuntime};
+use crate::engine::{
+    check_boot, check_imports_granted, read_module, WasmBoot, WasmEngine, WasmEngineError,
+    WasmHandle,
+};
+use crate::WasmRuntime;
 
 pub struct WasmtimeEngine {
     engine: Engine,
@@ -37,10 +44,8 @@ impl WasmEngine for WasmtimeEngine {
     }
 
     fn run(&self, boot: &WasmBoot) -> Result<WasmHandle, WasmEngineError> {
-        // Preview 2 (component model) lands later — for now, p1 only.
-        if boot.preview == WasiPreview::P2 {
-            return Err(WasmEngineError::PreviewNotSupported(WasiPreview::P2));
-        }
+        // Preview + WASI-grant validation, from the one facts table.
+        check_boot(&self.facts(), boot)?;
 
         let bytes = read_module(&boot.module)?;
 
@@ -48,19 +53,63 @@ impl WasmEngine for WasmtimeEngine {
         let module = Module::new(&self.engine, &bytes)
             .map_err(|e| WasmEngineError::Compile(e.to_string()))?;
 
-        // WASI context with captured stdout + stderr so the handle
-        // reports what the guest printed.
+        // Refuse an ungranted import by name, before instantiation. The
+        // structural refusal happens anyway (an absent import cannot link);
+        // this makes it typed and early.
+        check_imports_granted(
+            &boot.capabilities,
+            module.imports().map(|i| (i.module(), i.name())),
+        )?;
+
+        // The WASI context is DERIVED from the declaration. Previously this
+        // hardcoded stdout+stderr, so every guest got them whether or not the
+        // caller meant to grant them.
+        let grant = boot.capabilities.wasi.as_ref();
         let stdout_pipe = MemoryOutputPipe::new(1 << 20);
         let stderr_pipe = MemoryOutputPipe::new(1 << 20);
-        let wasi = WasiCtxBuilder::new()
-            .stdout(stdout_pipe.clone())
-            .stderr(stderr_pipe.clone())
-            .build_p1();
+
+        let mut builder = WasiCtxBuilder::new();
+        if let Some(g) = grant {
+            if g.stdout {
+                builder.stdout(stdout_pipe.clone());
+            }
+            if g.stderr {
+                builder.stderr(stderr_pipe.clone());
+            }
+            for (k, v) in &g.env {
+                builder.env(k, v);
+            }
+            if !g.argv.is_empty() {
+                builder.args(&g.argv);
+            }
+            for p in &g.preopens {
+                let dir_perms = if p.writable {
+                    DirPerms::all()
+                } else {
+                    DirPerms::READ
+                };
+                let file_perms = if p.writable {
+                    FilePerms::all()
+                } else {
+                    FilePerms::READ
+                };
+                builder
+                    .preopened_dir(&p.host_path, &p.guest_path, dir_perms, file_perms)
+                    .map_err(|e| {
+                        WasmEngineError::Io(format!("preopen {}: {e}", p.host_path.display()))
+                    })?;
+            }
+        }
+        let wasi = builder.build_p1();
 
         let mut store: Store<WasiP1Ctx> = Store::new(&self.engine, wasi);
         let mut linker: Linker<WasiP1Ctx> = Linker::new(&self.engine);
-        wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |s| s)
-            .map_err(|e| WasmEngineError::Instantiate(e.to_string()))?;
+        // Only added when WASI was granted: with no grant there is no symbol
+        // for a `wasi_snapshot_preview1` import to resolve against.
+        if grant.is_some() {
+            wasmtime_wasi::preview1::add_to_linker_sync(&mut linker, |s| s)
+                .map_err(|e| WasmEngineError::Instantiate(e.to_string()))?;
+        }
 
         let instance = linker
             .instantiate(&mut store, &module)
@@ -102,20 +151,8 @@ impl WasmEngine for WasmtimeEngine {
     }
 }
 
-fn read_module(src: &WasmModuleSource) -> Result<Vec<u8>, WasmEngineError> {
-    match src {
-        WasmModuleSource::Bytes(b) => Ok(b.clone()),
-        WasmModuleSource::Wat(text) => wat::parse_str(text)
-            .map_err(|e| WasmEngineError::Compile(format!("WAT parse: {e}"))),
-        WasmModuleSource::Path(p) => {
-            let mut buf = Vec::new();
-            std::fs::File::open(p)
-                .and_then(|mut f| f.read_to_end(&mut buf))
-                .map_err(|e| WasmEngineError::Io(format!("{}: {e}", p.display())))?;
-            Ok(buf)
-        }
-    }
-}
+// `read_module` lived here, byte-identical to the copies in wasmi_impl and
+// wasmer_impl. It is `engine::read_module` now — one implementation.
 
 // Silence unused-import lint for Arc/Mutex that we'll use once
 // hospedeiro adds concurrent handle state.

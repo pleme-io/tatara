@@ -138,6 +138,9 @@ impl GuestSupervisor {
             runtime: wasm.runtime,
             preview: wasm.wasi_preview,
             features: wasm.features.clone(),
+            // Carried from the spec, never assumed here. Deny-all unless the
+            // guest declared otherwise.
+            capabilities: wasm.capabilities.clone(),
             name: spec.name.clone(),
         };
 
@@ -174,6 +177,9 @@ impl GuestSupervisor {
             runtime: wasm.runtime,
             preview: wasm.wasi_preview,
             features: wasm.features.clone(),
+            // Carried from the spec, never assumed here. Deny-all unless the
+            // guest declared otherwise.
+            capabilities: wasm.capabilities.clone(),
             name: name.clone(),
         };
         let handle = engine.run(&boot).map_err(SupervisorError::Engine)?;

@@ -25469,6 +25469,249 @@ impl ResourceLimits {
             c => Some(c >= Self::FIELD_COUNT - 1),
         }
     }
+
+    /// Whole-posture AT-LEAST-NEARLY-SATURATED-OF-POLAR predicate —
+    /// `self.polar_axis_is_at_least_nearly_saturated()` returns
+    /// `Some(true)` iff AT LEAST ONE axis of `self` sits at either
+    /// pole AND [`Self::count_polar_axes`] `>= Self::FIELD_COUNT - 1`
+    /// (the CLOSED right-endpoint bracket around SATURATED, INCLUDING
+    /// the one-shy landing NEARLY-SATURATED and the fully-packed
+    /// landing SATURATED), `Some(false)` iff at least ONE axis is
+    /// polar AND the count is strictly below NEARLY-SATURATED, or
+    /// `None` iff no axis is polar. The COMPOUND-CELL half of the
+    /// (polar, interior) pair OPENING the AT-LEAST-NEARLY-SATURATED
+    /// column past the just-closed atomic (bottom, top) row — one
+    /// CELL-KIND axis over from the atomic
+    /// [`Self::bottom_axis_is_at_least_nearly_saturated`] /
+    /// [`Self::top_axis_is_at_least_nearly_saturated`] atomic pair.
+    ///
+    /// **COUNT-GEQ-FIELD-COUNT-MINUS-ONE identity — LOAD-BEARING
+    /// structural pin**: on every posture,
+    /// `polar_axis_is_at_least_nearly_saturated() == { let c =
+    /// self.count_polar_axes(); if c == 0 { None } else { Some(c >=
+    /// Self::FIELD_COUNT - 1) } }`. Pinned via
+    /// `resource_limits_polar_axis_is_at_least_nearly_saturated_equals_count_geq_field_count_minus_one`.
+    ///
+    /// **AT-LEAST-NEARLY ⇔ (NEARLY-SATURATED OR SATURATED)
+    /// disjoint-union identity — LOAD-BEARING PARTITION pin**: on
+    /// every posture with a polar axis,
+    /// `polar_axis_is_at_least_nearly_saturated() == Some(true) ⇔
+    /// (polar_axis_is_nearly_saturated() == Some(true) ||
+    /// polar_axis_is_saturated() == Some(true))`. Pinned via
+    /// `resource_limits_polar_axis_is_at_least_nearly_saturated_iff_nearly_saturated_or_saturated`.
+    ///
+    /// **NEARLY-IMPLIES-AT-LEAST-NEARLY LEFT-endpoint inclusion
+    /// bridge**: on every posture, `polar_axis_is_nearly_saturated()
+    /// == Some(true) ⇒ polar_axis_is_at_least_nearly_saturated() ==
+    /// Some(true)`. Pinned via
+    /// `resource_limits_polar_axis_is_nearly_saturated_true_implies_is_at_least_nearly_saturated_true`.
+    ///
+    /// **SATURATED-IMPLIES-AT-LEAST-NEARLY RIGHT-endpoint inclusion
+    /// bridge**: on every posture, `polar_axis_is_saturated() ==
+    /// Some(true) ⇒ polar_axis_is_at_least_nearly_saturated() ==
+    /// Some(true)`. Pinned via
+    /// `resource_limits_polar_axis_is_saturated_true_implies_is_at_least_nearly_saturated_true`.
+    ///
+    /// **AT-LEAST-NEARLY-IMPLIES-AT-LEAST-HALF nested-interval bridge
+    /// at `Self::FIELD_COUNT >= 2`**: on every posture with
+    /// `Self::FIELD_COUNT >= 2`,
+    /// `polar_axis_is_at_least_nearly_saturated() == Some(true) ⇒
+    /// polar_axis_is_at_least_half_saturated() == Some(true)`. Pinned
+    /// via
+    /// `resource_limits_polar_axis_is_at_least_nearly_saturated_true_implies_is_at_least_half_saturated_true`.
+    ///
+    /// **AT-LEAST-NEARLY-EXCLUDES-SUB-HALF mutual-exclusion pin at
+    /// `Self::FIELD_COUNT >= 3`**: on every posture with
+    /// `Self::FIELD_COUNT >= 3`, NOT
+    /// (`polar_axis_is_at_least_nearly_saturated() == Some(true) &&
+    /// polar_axis_is_sub_half_saturated() == Some(true)`). Pinned via
+    /// `resource_limits_polar_axis_is_at_least_nearly_saturated_true_implies_is_sub_half_saturated_false`.
+    ///
+    /// **Preset pins**: BOTH saturated pole presets pack SIX polar
+    /// axes (`6 >= FIELD_COUNT - 1 == 5`) so
+    /// `polar_axis_is_at_least_nearly_saturated` returns `Some(true)`
+    /// on each; the absent-polar presets `DEFAULT_RESOURCE_LIMITS`,
+    /// `HAND_AUTHORED_MID_POSTURE`, and `HAND_AUTHORED_OTHER_POSTURE`
+    /// return `None`; `SPARSE_BOTTOM_POSTURE` and
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE` at polar count == 3
+    /// return `Some(false)` (strictly below NEARLY); and
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE` at polar count == 2 returns
+    /// `Some(false)`. No shipped preset places EXACTLY five polar
+    /// axes — the LEFT-endpoint NEARLY-SATURATED truth-firing arm is
+    /// exercised via a synthetic five-polar fixture below.
+    ///
+    /// **ANY-fold bridge**:
+    /// `a.polar_axis_is_at_least_nearly_saturated().is_some() ⇔
+    /// a.has_polar_axis()`. Pinned via
+    /// `resource_limits_polar_axis_is_at_least_nearly_saturated_is_some_iff_has_polar_axis`.
+    ///
+    /// **CROSS-CELL POLAR-INTERIOR CO-FIRE UNSATISFIABLE at
+    /// `Self::FIELD_COUNT >= 3`** — LOAD-BEARING structural pin
+    /// UNIQUE to the COMPOUND partition on the AT-LEAST-NEARLY cell.
+    /// Both AT-LEAST-NEARLY arms firing `Some(true)` would force
+    /// `count_polar >= FIELD_COUNT - 1 && count_interior >=
+    /// FIELD_COUNT - 1`, but the COMPOUND EXHAUSTIVE-PARTITION
+    /// identity `count_polar + count_interior == FIELD_COUNT` cannot
+    /// admit a sum of `2 * (FIELD_COUNT - 1) == 2 * FIELD_COUNT - 2`
+    /// at any `FIELD_COUNT >= 3` (since `2 * FIELD_COUNT - 2 >
+    /// FIELD_COUNT` iff `FIELD_COUNT > 2`). Fundamentally STRONGER
+    /// than the AT-LEAST-HALF DUAL-BALANCE-POINT CO-FIRE identity one
+    /// COUNT-STEP axis over — where the CO-FIRE is admissible at even
+    /// `FIELD_COUNT` and identifies the balance-point witness — the
+    /// AT-LEAST-NEARLY CO-FIRE cell is EMPTY at every `FIELD_COUNT
+    /// >= 3`. Pinned via
+    /// `resource_limits_compound_is_at_least_nearly_saturated_polar_interior_co_fire_is_unsatisfiable`.
+    ///
+    /// `const fn` so a caller can pin the polar-axis
+    /// AT-LEAST-NEARLY-SATURATED verdict at compile time.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// compound polar AT-LEAST-NEARLY-SATURATED predicate is a named
+    /// typed exit `Option<bool>` rather than a per-consumer
+    /// `polar_axis_is_nearly_saturated() == Some(true) ||
+    /// polar_axis_is_saturated() == Some(true)` inline two-clause
+    /// disjunction on the already-lifted count-equality cells that
+    /// silently classify the EMPTY-polar posture as NOT
+    /// SATURATION-ADJACENT rather than UNDEFINED (the classic
+    /// zero-elides-as-far-from-saturation bug the None-on-zero gate
+    /// structurally forbids). THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; the compound AT-LEAST-NEARLY
+    /// cell is a structural derivation from the already-lifted
+    /// [`Self::count_polar_axes`] via one usize comparison against
+    /// `Self::FIELD_COUNT - 1` under a two-arm match on the zero
+    /// split, no new per-axis scan, no allocation. The CROSS-CELL
+    /// CO-FIRE-UNSATISFIABLE pin composes structurally through the
+    /// already-lifted COMPOUND EXHAUSTIVE-PARTITION identity
+    /// `count_polar + count_interior == FIELD_COUNT`, no
+    /// re-derivation. THEORY.md §V.1 — knowable platform; naming the
+    /// CLOSED right-endpoint bracket on the compound polar row
+    /// alongside its OPEN sibling NEARLY-SATURATED and its RIGHT
+    /// endpoint SATURATED removes the ambiguity in "at or one shy of
+    /// saturation" as a per-consumer inline disjunction.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::bottom_axis_is_at_least_nearly_saturated`], on the
+    /// DUAL COMPOUND polar mask. Racket's `(>= (count polar? l) (-
+    /// (length l) 1))` closed-right-endpoint fold on the compound
+    /// mask; Idris's `LTE (S k) n` refinement type paired with
+    /// `k + 1 >= n - 1` bracketing to distinguish the CLOSED right
+    /// endpoint from the OPEN NEARLY endpoint on the compound
+    /// projection; Lean's `Nat.le_pred_iff_lt` closed-decrement
+    /// bridge; APL's `(⍴⍵)-1≤+/mask` last-two-cell primitive lifted
+    /// through pleme-io primitives on the compound polar mask.
+    /// Translation through pleme-io primitives: plain `const fn`
+    /// DERIVATION from the already-lifted
+    /// [`Self::count_polar_axes`], one usize comparison against
+    /// `Self::FIELD_COUNT - 1` under a two-arm match on the zero
+    /// split, no new per-axis scan, no allocation. The CROSS-CELL
+    /// POLAR-INTERIOR CO-FIRE UNSATISFIABLE identity composes
+    /// structurally through the already-lifted COMPOUND
+    /// EXHAUSTIVE-PARTITION identity `count_polar + count_interior
+    /// == FIELD_COUNT`, no re-derivation.
+    #[must_use]
+    pub const fn polar_axis_is_at_least_nearly_saturated(self) -> Option<bool> {
+        match self.count_polar_axes() {
+            0 => None,
+            c => Some(c >= Self::FIELD_COUNT - 1),
+        }
+    }
+
+    /// Whole-posture AT-LEAST-NEARLY-SATURATED-OF-INTERIOR predicate
+    /// — `self.interior_axis_is_at_least_nearly_saturated()` returns
+    /// `Some(true)` iff AT LEAST ONE axis sits strictly interior AND
+    /// [`Self::count_interior_axes`] `>= Self::FIELD_COUNT - 1` (the
+    /// CLOSED right-endpoint bracket around SATURATED, INCLUDING the
+    /// one-shy landing NEARLY-SATURATED and the fully-packed landing
+    /// SATURATED), `Some(false)` iff at least ONE axis is interior
+    /// AND the count is strictly below NEARLY-SATURATED, or `None`
+    /// iff no axis is interior. The COMPOUND-CELL DUAL of
+    /// [`Self::polar_axis_is_at_least_nearly_saturated`] one
+    /// CELL-KIND axis over via the (polar, interior) disjoint
+    /// complement — jointly the
+    /// (polar_axis_is_at_least_nearly_saturated,
+    /// interior_axis_is_at_least_nearly_saturated) COMPOUND pair
+    /// CLOSES the AT-LEAST-NEARLY-SATURATED column on the (bottom,
+    /// top, polar, interior) 4-cell axis-family.
+    ///
+    /// **COUNT-GEQ-FIELD-COUNT-MINUS-ONE identity dual**: on every
+    /// posture, `interior_axis_is_at_least_nearly_saturated() == {
+    /// let c = self.count_interior_axes(); if c == 0 { None } else {
+    /// Some(c >= Self::FIELD_COUNT - 1) } }`. Pinned via
+    /// `resource_limits_interior_axis_is_at_least_nearly_saturated_equals_count_geq_field_count_minus_one`.
+    ///
+    /// **AT-LEAST-NEARLY ⇔ (NEARLY-SATURATED OR SATURATED)
+    /// disjoint-union identity dual**: on every posture with an
+    /// interior axis,
+    /// `interior_axis_is_at_least_nearly_saturated() == Some(true) ⇔
+    /// (interior_axis_is_nearly_saturated() == Some(true) ||
+    /// interior_axis_is_saturated() == Some(true))`. Pinned via
+    /// `resource_limits_interior_axis_is_at_least_nearly_saturated_iff_nearly_saturated_or_saturated`.
+    ///
+    /// **NEARLY-IMPLIES-AT-LEAST-NEARLY bridge dual**: on every
+    /// posture, `interior_axis_is_nearly_saturated() == Some(true) ⇒
+    /// interior_axis_is_at_least_nearly_saturated() == Some(true)`.
+    /// Pinned via
+    /// `resource_limits_interior_axis_is_nearly_saturated_true_implies_is_at_least_nearly_saturated_true`.
+    ///
+    /// **SATURATED-IMPLIES-AT-LEAST-NEARLY bridge dual**: on every
+    /// posture, `interior_axis_is_saturated() == Some(true) ⇒
+    /// interior_axis_is_at_least_nearly_saturated() == Some(true)`.
+    /// Pinned via
+    /// `resource_limits_interior_axis_is_saturated_true_implies_is_at_least_nearly_saturated_true`.
+    ///
+    /// **AT-LEAST-NEARLY-IMPLIES-AT-LEAST-HALF bridge dual at
+    /// `Self::FIELD_COUNT >= 2`**: on every posture with
+    /// `Self::FIELD_COUNT >= 2`,
+    /// `interior_axis_is_at_least_nearly_saturated() == Some(true) ⇒
+    /// interior_axis_is_at_least_half_saturated() == Some(true)`.
+    /// Pinned via
+    /// `resource_limits_interior_axis_is_at_least_nearly_saturated_true_implies_is_at_least_half_saturated_true`.
+    ///
+    /// **AT-LEAST-NEARLY-EXCLUDES-SUB-HALF mutual-exclusion pin dual
+    /// at `Self::FIELD_COUNT >= 3`**: on every posture with
+    /// `Self::FIELD_COUNT >= 3`, NOT
+    /// (`interior_axis_is_at_least_nearly_saturated() == Some(true)
+    /// && interior_axis_is_sub_half_saturated() == Some(true)`).
+    /// Pinned via
+    /// `resource_limits_interior_axis_is_at_least_nearly_saturated_true_implies_is_sub_half_saturated_false`.
+    ///
+    /// **Preset pins dual**: `DEFAULT_RESOURCE_LIMITS`,
+    /// `HAND_AUTHORED_MID_POSTURE`, and `HAND_AUTHORED_OTHER_POSTURE`
+    /// each pack all six fields strictly interior (count == 6, 6 >=
+    /// FIELD_COUNT - 1 == 5) so
+    /// `interior_axis_is_at_least_nearly_saturated` returns
+    /// `Some(true)` on each; the saturated pole presets
+    /// `EMPTY_RESOURCE_LIMITS` and `UNBOUNDED_RESOURCE_LIMITS` carry
+    /// no interior axis so return `None`; `SPARSE_BOTTOM_POSTURE`
+    /// and `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE` at interior count ==
+    /// 3 return `Some(false)`; and `ENDPOINTS_ONLY_BOTTOM_POSTURE`
+    /// at interior count == 4 returns `Some(false)`. No shipped
+    /// preset places EXACTLY five interior axes — the LEFT-endpoint
+    /// NEARLY-SATURATED truth-firing arm is exercised via a
+    /// synthetic five-interior fixture below.
+    ///
+    /// **ANY-fold bridge dual**:
+    /// `a.interior_axis_is_at_least_nearly_saturated().is_some() ⇔
+    /// a.has_interior_axis()`. Pinned via
+    /// `resource_limits_interior_axis_is_at_least_nearly_saturated_is_some_iff_has_interior_axis`.
+    ///
+    /// `const fn` so a caller can pin the interior-axis
+    /// AT-LEAST-NEARLY-SATURATED verdict at compile time.
+    ///
+    /// Theory anchor: same as
+    /// [`Self::polar_axis_is_at_least_nearly_saturated`], on the
+    /// DUAL COMPOUND interior cell.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::polar_axis_is_at_least_nearly_saturated`], on the
+    /// DUAL COMPOUND interior mask.
+    #[must_use]
+    pub const fn interior_axis_is_at_least_nearly_saturated(self) -> Option<bool> {
+        match self.count_interior_axes() {
+            0 => None,
+            c => Some(c >= Self::FIELD_COUNT - 1),
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -83323,6 +83566,597 @@ mod tests {
         const _: () = assert!(matches!(
             ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_axis_is_barely_sub_half_saturated(),
             Some(true)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_least_nearly_saturated_preset_pins_saturate_at_count_geq_field_count_minus_one_and_absent(
+    ) {
+        // Preset pins on the COMPOUND polar AT-LEAST-NEARLY-SATURATED
+        // cell — BOTH SATURATED-pole presets pack SIX polar axes (6 >=
+        // FIELD_COUNT - 1 == 5), so AT-LEAST-NEARLY is Some(true) at each
+        // SATURATED endpoint (the RIGHT endpoint SATURATION landing).
+        // Absent-polar presets (DEFAULT + both hand-authored) carry no
+        // polar axis so None. SPARSE_BOTTOM / CONTIGUOUS_INTERIOR at
+        // polar count == 3 pin Some(false); ENDPOINTS_ONLY at polar
+        // count == 2 pins Some(false). No shipped preset places EXACTLY
+        // five polar axes (NEARLY-SATURATED landing) — the LEFT-endpoint
+        // truth-firing arm is covered by the COUNT-GEQ-FIELD-COUNT-MINUS-
+        // ONE identity test with a synthetic five-polar fixture.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_at_least_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_at_least_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.polar_axis_is_at_least_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.polar_axis_is_at_least_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_at_least_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE.polar_axis_is_at_least_nearly_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.polar_axis_is_at_least_nearly_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_axis_is_at_least_nearly_saturated(),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_least_nearly_saturated_preset_pins_saturate_at_count_geq_field_count_minus_one_and_absent(
+    ) {
+        // Preset pins dual on the COMPOUND interior AT-LEAST-NEARLY cell
+        // — DEFAULT and both hand-authored postures pack all six fields
+        // strictly interior (count == 6, 6 >= 5), so Some(true).
+        // Saturated pole presets carry no interior axis so None.
+        // SPARSE_BOTTOM / CONTIGUOUS_INTERIOR at interior count == 3 pin
+        // Some(false); ENDPOINTS_ONLY at interior count == 4 pins
+        // Some(false). No shipped preset places EXACTLY five interior
+        // axes — the LEFT-endpoint truth-firing arm is exercised via a
+        // synthetic five-interior fixture below.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_at_least_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.interior_axis_is_at_least_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.interior_axis_is_at_least_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.interior_axis_is_at_least_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_at_least_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE.interior_axis_is_at_least_nearly_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.interior_axis_is_at_least_nearly_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.interior_axis_is_at_least_nearly_saturated(),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_least_nearly_saturated_equals_count_geq_field_count_minus_one(
+    ) {
+        // COUNT-GEQ-FIELD-COUNT-MINUS-ONE identity on the COMPOUND polar
+        // cell — the AT-LEAST-NEARLY predicate is structurally derived
+        // from count_polar_axes on every posture: None iff count == 0,
+        // Some(count >= FIELD_COUNT - 1) otherwise. Pinned across every
+        // shipped preset + hand-authored + test-local posture PLUS a
+        // synthetic five-polar fixture (the NEARLY-SATURATED count
+        // landing that no shipped preset hits on the polar cell) so the
+        // LEFT-endpoint truth-firing arm is exercised without depending
+        // on any shipped preset.
+        let five_polar_posture =
+            ResourceLimits::from_field_values([0, 0, 0, usize::MAX, usize::MAX, 41]);
+        assert_eq!(five_polar_posture.count_polar_axes(), 5);
+        let four_polar_posture =
+            ResourceLimits::from_field_values([0, 0, usize::MAX, usize::MAX, 41, 43]);
+        assert_eq!(four_polar_posture.count_polar_axes(), 4);
+        let threshold = ResourceLimits::FIELD_COUNT - 1;
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            four_polar_posture,
+            five_polar_posture,
+        ];
+        for a in postures {
+            let c = a.count_polar_axes();
+            let expected = if c == 0 { None } else { Some(c >= threshold) };
+            assert_eq!(
+                a.polar_axis_is_at_least_nearly_saturated(),
+                expected,
+                "polar_is_at_least_nearly_saturated = count-geq-(field_count-1) identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_least_nearly_saturated_equals_count_geq_field_count_minus_one(
+    ) {
+        // COUNT-GEQ-FIELD-COUNT-MINUS-ONE identity dual on the COMPOUND
+        // interior cell — pinned via per-count synthetic interior-axis
+        // fixtures walking count ∈ {0, …, FIELD_COUNT} so the None arm
+        // at count == 0, the Some(false) arm at count ∈ {1, 2, 3, 4}
+        // (each strictly below FIELD_COUNT - 1 == 5), and the Some(true)
+        // arm at count ∈ {5, 6} (LEFT endpoint NEARLY-SATURATED and
+        // RIGHT endpoint SATURATED) are all exercised without depending
+        // on any shipped preset placing exactly five interior axes.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [0_usize; ResourceLimits::FIELD_COUNT];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 41;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(posture.count_interior_axes(), count);
+            let expected = if count == 0 {
+                None
+            } else {
+                Some(count >= ResourceLimits::FIELD_COUNT - 1)
+            };
+            assert_eq!(
+                posture.interior_axis_is_at_least_nearly_saturated(),
+                expected,
+                "interior_is_at_least_nearly_saturated = count-geq-(field_count-1) identity failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_least_nearly_saturated_is_some_iff_has_polar_axis() {
+        // ANY-fold bridge on the COMPOUND polar cell — the
+        // AT-LEAST-NEARLY verdict is defined iff the polar-axis subset
+        // is non-empty. Same shape as every already-lifted compound-cell
+        // is_some ⇔ has-axis bridge.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.polar_axis_is_at_least_nearly_saturated().is_some(),
+                a.has_polar_axis(),
+                "polar_at_least_nearly is_some ↔ has_polar_axis failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_least_nearly_saturated_is_some_iff_has_interior_axis() {
+        // ANY-fold bridge dual on the COMPOUND interior cell.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.interior_axis_is_at_least_nearly_saturated().is_some(),
+                a.has_interior_axis(),
+                "interior_at_least_nearly is_some ↔ has_interior_axis failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_least_nearly_saturated_iff_nearly_saturated_or_saturated() {
+        // AT-LEAST-NEARLY ⇔ (NEARLY-SATURATED OR SATURATED) disjoint-
+        // union identity on the COMPOUND polar cell — the two count-
+        // landings FIELD_COUNT - 1 and FIELD_COUNT are the ONLY landings
+        // the AT-LEAST-NEARLY interval names, and they are the DISJOINT
+        // UNION of the NEARLY-SATURATED and SATURATED count-equality
+        // cells. Pinned across every shipped preset + hand-authored
+        // posture PLUS a synthetic five-polar fixture (NEARLY endpoint)
+        // so BOTH disjuncts are exercised as truth-firing arms.
+        let five_polar_posture =
+            ResourceLimits::from_field_values([0, 0, 0, usize::MAX, usize::MAX, 41]);
+        assert_eq!(five_polar_posture.count_polar_axes(), 5);
+        let four_polar_posture =
+            ResourceLimits::from_field_values([0, 0, usize::MAX, usize::MAX, 41, 43]);
+        assert_eq!(four_polar_posture.count_polar_axes(), 4);
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            four_polar_posture,
+            five_polar_posture,
+        ];
+        for a in postures {
+            if a.has_polar_axis() {
+                let lhs = a.polar_axis_is_at_least_nearly_saturated() == Some(true);
+                let rhs = a.polar_axis_is_nearly_saturated() == Some(true)
+                    || a.polar_axis_is_saturated() == Some(true);
+                assert_eq!(
+                    lhs, rhs,
+                    "polar at_least_nearly ⇔ (nearly OR saturated) disjoint-union failed on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_least_nearly_saturated_iff_nearly_saturated_or_saturated(
+    ) {
+        // AT-LEAST-NEARLY ⇔ (NEARLY-SATURATED OR SATURATED) disjoint-
+        // union identity dual on the COMPOUND interior cell — walked via
+        // per-count synthetic interior-axis fixtures walking count ∈ {0,
+        // …, FIELD_COUNT} to exercise both disjuncts (NEARLY-endpoint
+        // truth-firing at count == FIELD_COUNT - 1 and SATURATED-endpoint
+        // truth-firing at count == FIELD_COUNT).
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [0_usize; ResourceLimits::FIELD_COUNT];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 41;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if posture.has_interior_axis() {
+                let lhs = posture.interior_axis_is_at_least_nearly_saturated() == Some(true);
+                let rhs = posture.interior_axis_is_nearly_saturated() == Some(true)
+                    || posture.interior_axis_is_saturated() == Some(true);
+                assert_eq!(
+                    lhs, rhs,
+                    "interior at_least_nearly ⇔ (nearly OR saturated) disjoint-union failed at count {count} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_nearly_saturated_true_implies_is_at_least_nearly_saturated_true(
+    ) {
+        // NEARLY-IMPLIES-AT-LEAST-NEARLY LOAD-BEARING LEFT-endpoint
+        // inclusion bridge on the COMPOUND polar cell — the
+        // NEARLY-SATURATED endpoint (count == FIELD_COUNT - 1) is the
+        // LEFT endpoint of the CLOSED right-endpoint bracket. No shipped
+        // preset places FIELD_COUNT - 1 polar axes; the pin uses a
+        // synthetic five-polar fixture.
+        let five_polar_posture =
+            ResourceLimits::from_field_values([0, 0, 0, usize::MAX, usize::MAX, 41]);
+        assert_eq!(five_polar_posture.count_polar_axes(), 5);
+        assert_eq!(
+            five_polar_posture.polar_axis_is_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            five_polar_posture.polar_axis_is_at_least_nearly_saturated(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_nearly_saturated_true_implies_is_at_least_nearly_saturated_true(
+    ) {
+        // NEARLY-IMPLIES-AT-LEAST-NEARLY bridge dual on the COMPOUND
+        // interior cell — synthetic five-interior fixture since no
+        // shipped preset lands FIELD_COUNT - 1 interior axes.
+        let five_interior_posture = ResourceLimits::from_field_values([41, 43, 47, 53, 59, 0]);
+        assert_eq!(five_interior_posture.count_interior_axes(), 5);
+        assert_eq!(
+            five_interior_posture.interior_axis_is_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            five_interior_posture.interior_axis_is_at_least_nearly_saturated(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_saturated_true_implies_is_at_least_nearly_saturated_true() {
+        // SATURATED-IMPLIES-AT-LEAST-NEARLY LOAD-BEARING RIGHT-endpoint
+        // inclusion bridge on the COMPOUND polar cell — the SATURATED
+        // endpoint (count == FIELD_COUNT) is the RIGHT endpoint of the
+        // CLOSED right-endpoint bracket at every FIELD_COUNT >= 1. Fires
+        // on BOTH saturated pole presets (EMPTY, UNBOUNDED) at polar
+        // count == FIELD_COUNT == 6.
+        const {
+            assert!(ResourceLimits::FIELD_COUNT >= 1);
+        };
+        assert_eq!(EMPTY_RESOURCE_LIMITS.polar_axis_is_saturated(), Some(true),);
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_at_least_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_at_least_nearly_saturated(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_saturated_true_implies_is_at_least_nearly_saturated_true() {
+        // SATURATED-IMPLIES-AT-LEAST-NEARLY bridge dual on the COMPOUND
+        // interior cell — fires on the interior-saturated presets
+        // DEFAULT, HAND_AUTHORED_MID, HAND_AUTHORED_OTHER at interior
+        // count == FIELD_COUNT == 6.
+        for a in [
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                a.interior_axis_is_saturated(),
+                Some(true),
+                "expected interior_axis_is_saturated Some(true) on {a:?}",
+            );
+            assert_eq!(
+                a.interior_axis_is_at_least_nearly_saturated(),
+                Some(true),
+                "interior saturated true ⇒ at_least_nearly true failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_least_nearly_saturated_true_implies_is_at_least_half_saturated_true(
+    ) {
+        // AT-LEAST-NEARLY-IMPLIES-AT-LEAST-HALF nested-interval bridge at
+        // FIELD_COUNT >= 2 on the COMPOUND polar cell — the CLOSED
+        // right-endpoint bracket sits STRICTLY INSIDE the CLOSED upper
+        // half at every FIELD_COUNT >= 2 (count >= FIELD_COUNT - 1
+        // forces 2 * count >= 2 * FIELD_COUNT - 2 >= FIELD_COUNT).
+        // Exercised on BOTH saturated pole presets at polar count == 6
+        // AND a synthetic five-polar fixture at count == 5.
+        const {
+            assert!(ResourceLimits::FIELD_COUNT >= 2);
+        };
+        for a in [EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS] {
+            assert_eq!(
+                a.polar_axis_is_at_least_nearly_saturated(),
+                Some(true),
+                "expected polar at_least_nearly Some(true) on {a:?}",
+            );
+            assert_eq!(
+                a.polar_axis_is_at_least_half_saturated(),
+                Some(true),
+                "polar at_least_nearly true ⇒ at_least_half true failed on {a:?}",
+            );
+        }
+        let five_polar_posture =
+            ResourceLimits::from_field_values([0, 0, 0, usize::MAX, usize::MAX, 41]);
+        assert_eq!(five_polar_posture.count_polar_axes(), 5);
+        assert_eq!(
+            five_polar_posture.polar_axis_is_at_least_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            five_polar_posture.polar_axis_is_at_least_half_saturated(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_least_nearly_saturated_true_implies_is_at_least_half_saturated_true(
+    ) {
+        // AT-LEAST-NEARLY-IMPLIES-AT-LEAST-HALF nested-interval bridge
+        // dual at FIELD_COUNT >= 2 on the COMPOUND interior cell —
+        // exercised on the interior-saturated presets DEFAULT,
+        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER at interior count == 6
+        // AND a synthetic five-interior fixture at count == 5.
+        const {
+            assert!(ResourceLimits::FIELD_COUNT >= 2);
+        };
+        for a in [
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                a.interior_axis_is_at_least_nearly_saturated(),
+                Some(true),
+                "expected interior at_least_nearly Some(true) on {a:?}",
+            );
+            assert_eq!(
+                a.interior_axis_is_at_least_half_saturated(),
+                Some(true),
+                "interior at_least_nearly true ⇒ at_least_half true failed on {a:?}",
+            );
+        }
+        let five_interior_posture = ResourceLimits::from_field_values([41, 43, 47, 53, 59, 0]);
+        assert_eq!(five_interior_posture.count_interior_axes(), 5);
+        assert_eq!(
+            five_interior_posture.interior_axis_is_at_least_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            five_interior_posture.interior_axis_is_at_least_half_saturated(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_least_nearly_saturated_true_implies_is_sub_half_saturated_false(
+    ) {
+        // AT-LEAST-NEARLY-EXCLUDES-SUB-HALF mutual-exclusion pin at
+        // FIELD_COUNT >= 3 on the COMPOUND polar cell — count >=
+        // FIELD_COUNT - 1 >= 2 forces 2 * count >= 2 * FIELD_COUNT - 2 >
+        // FIELD_COUNT strictly, so AT-LEAST-NEARLY and SUB-HALF sit on
+        // opposite sides of the balance point.
+        const {
+            assert!(ResourceLimits::FIELD_COUNT >= 3);
+        };
+        let five_polar_posture =
+            ResourceLimits::from_field_values([0, 0, 0, usize::MAX, usize::MAX, 41]);
+        assert_eq!(five_polar_posture.count_polar_axes(), 5);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            five_polar_posture,
+        ] {
+            assert!(
+                !(a.polar_axis_is_at_least_nearly_saturated() == Some(true)
+                    && a.polar_axis_is_sub_half_saturated() == Some(true)),
+                "polar at_least_nearly Some(true) co-fires sub_half Some(true) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_least_nearly_saturated_true_implies_is_sub_half_saturated_false(
+    ) {
+        // AT-LEAST-NEARLY-EXCLUDES-SUB-HALF mutual-exclusion pin dual at
+        // FIELD_COUNT >= 3 on the COMPOUND interior cell.
+        const {
+            assert!(ResourceLimits::FIELD_COUNT >= 3);
+        };
+        let five_interior_posture = ResourceLimits::from_field_values([41, 43, 47, 53, 59, 0]);
+        assert_eq!(five_interior_posture.count_interior_axes(), 5);
+        for a in [
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            five_interior_posture,
+        ] {
+            assert!(
+                !(a.interior_axis_is_at_least_nearly_saturated() == Some(true)
+                    && a.interior_axis_is_sub_half_saturated() == Some(true)),
+                "interior at_least_nearly Some(true) co-fires sub_half Some(true) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_compound_is_at_least_nearly_saturated_polar_interior_co_fire_is_unsatisfiable(
+    ) {
+        // CROSS-CELL POLAR-INTERIOR CO-FIRE UNSATISFIABLE at FIELD_COUNT
+        // >= 3 — LOAD-BEARING structural pin UNIQUE to the COMPOUND
+        // partition on the AT-LEAST-NEARLY cell. Both AT-LEAST-NEARLY
+        // arms firing Some(true) would force `count_polar >= FIELD_COUNT
+        // - 1 && count_interior >= FIELD_COUNT - 1`; combined with the
+        // COMPOUND EXHAUSTIVE-PARTITION identity `count_polar +
+        // count_interior == FIELD_COUNT`, the sum would need to reach
+        // `2 * (FIELD_COUNT - 1) == 2 * FIELD_COUNT - 2`, which STRICTLY
+        // exceeds FIELD_COUNT whenever FIELD_COUNT >= 3. Fundamentally
+        // STRONGER than the AT-LEAST-HALF DUAL-BALANCE-POINT CO-FIRE
+        // identity one COUNT-STEP axis over — where the CO-FIRE is
+        // admissible at even FIELD_COUNT and identifies the balance-
+        // point witness — the AT-LEAST-NEARLY CO-FIRE cell is EMPTY at
+        // every FIELD_COUNT >= 3. Exercised across every shipped +
+        // hand-authored + test-local posture plus synthetic four- and
+        // five-polar-axis fixtures on both cells and synthetic five-
+        // and two-interior-axis fixtures.
+        const {
+            assert!(ResourceLimits::FIELD_COUNT >= 3);
+        };
+        let four_polar_posture =
+            ResourceLimits::from_field_values([0, 0, usize::MAX, usize::MAX, 41, 43]);
+        let five_polar_posture =
+            ResourceLimits::from_field_values([0, 0, 0, usize::MAX, usize::MAX, 41]);
+        let five_interior_posture = ResourceLimits::from_field_values([41, 43, 47, 53, 59, 0]);
+        let two_interior_posture = ResourceLimits::from_field_values([41, 43, 0, 0, 0, 0]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            four_polar_posture,
+            five_polar_posture,
+            five_interior_posture,
+            two_interior_posture,
+        ] {
+            assert!(
+                !(matches!(a.polar_axis_is_at_least_nearly_saturated(), Some(true))
+                    && matches!(a.interior_axis_is_at_least_nearly_saturated(), Some(true))),
+                "polar_is_at_least_nearly_saturated && interior_is_at_least_nearly_saturated both fired on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_compound_is_at_least_nearly_saturated_evaluates_at_compile_time_via_const_fn(
+    ) {
+        // Const-fn pin on the COMPOUND cells — both AT-LEAST-NEARLY-
+        // SATURATED projections are evaluable in const context so a
+        // caller can pin the compound count-geq-(FIELD_COUNT-1)
+        // identities at compile time as build-breaks. Both saturated
+        // pole presets pack six polar axes so the polar truth-firing
+        // arm pins at compile time; DEFAULT packs six interior axes so
+        // the interior truth-firing arm pins at compile time. No
+        // synthetic fixture required on either cell.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_at_least_nearly_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_at_least_nearly_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_at_least_nearly_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .interior_axis_is_at_least_nearly_saturated()
+            .is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .interior_axis_is_at_least_nearly_saturated()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .polar_axis_is_at_least_nearly_saturated()
+            .is_none());
+        const _: () = assert!(matches!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_axis_is_at_least_nearly_saturated(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            SPARSE_BOTTOM_POSTURE.interior_axis_is_at_least_nearly_saturated(),
+            Some(false)
         ));
     }
 }

@@ -21841,6 +21841,233 @@ impl ResourceLimits {
             c => Some(c * 2 < Self::FIELD_COUNT),
         }
     }
+
+    /// Whole-posture SUPER-HALF-SATURATED-OF-BOTTOM predicate —
+    /// `self.bottom_axis_is_super_half_saturated()` returns `Some(true)`
+    /// iff AT LEAST ONE axis is at the bottom pole AND
+    /// [`Self::count_bottom_axes`] `* 2 > Self::FIELD_COUNT` (the strict
+    /// UPPER open half around the balance-point cardinality),
+    /// `Some(false)` iff at least ONE axis is at the bottom pole AND
+    /// the count is at most half (`count * 2 <= FIELD_COUNT`), or
+    /// `None` iff no axis is at the bottom pole. The COUNT-TIMES-TWO-
+    /// GREATER-THAN-FIELD-COUNT peer of
+    /// [`Self::bottom_axis_is_sub_half_saturated`] one COMPARISON-KIND
+    /// axis over on the boolean predicate surface — jointly the
+    /// (bottom_axis_is_super_half_saturated,
+    /// top_axis_is_super_half_saturated) atomic pair OPENS the SUPER-
+    /// HALF-SATURATED column past the just-closed SUB-HALF-SATURATED
+    /// column on the atomic (bottom, top) row via the STRICT-INEQUALITY
+    /// RIGHT-OPEN PROMOTION of the HALF-SATURATED equality cell,
+    /// jointly with the already-lifted SUB-HALF and HALF columns
+    /// completing the (SUB-HALF, HALF, SUPER-HALF) count-times-two
+    /// trichotomy against FIELD_COUNT on the atomic row.
+    ///
+    /// **COUNT-TIMES-TWO-GREATER-THAN-FIELD-COUNT identity**: on every
+    /// posture, `bottom_axis_is_super_half_saturated() == { let c =
+    /// self.count_bottom_axes(); if c == 0 { None } else { Some(c * 2
+    /// > Self::FIELD_COUNT) } }`. Pinned via
+    /// `resource_limits_bottom_axis_is_super_half_saturated_equals_count_times_two_gt_field_count`.
+    ///
+    /// **SUPER-HALF-EXCLUDES-SUB-HALF neighbour-separation pin —
+    /// LOAD-BEARING TRICHOTOMY OPPOSITE-END pin**: on every posture,
+    /// NOT (`bottom_axis_is_super_half_saturated() == Some(true) &&
+    /// bottom_axis_is_sub_half_saturated() == Some(true)`). The strict
+    /// INEQUALITY cells of the (SUB-HALF, HALF, SUPER-HALF) count-
+    /// times-two trichotomy sit on OPPOSITE sides of the balance-point
+    /// cardinality landing and never co-fire. Pinned via
+    /// `resource_limits_bottom_axis_is_super_half_saturated_true_implies_is_sub_half_saturated_false`.
+    ///
+    /// **SUPER-HALF-EXCLUDES-HALF neighbour-separation pin**: on every
+    /// posture, NOT (`bottom_axis_is_super_half_saturated() ==
+    /// Some(true) && bottom_axis_is_half_saturated() == Some(true)`).
+    /// Pinned via
+    /// `resource_limits_bottom_axis_is_super_half_saturated_true_implies_is_half_saturated_false`.
+    ///
+    /// **SATURATED-IMPLIES-SUPER-HALF-SATURATED bridge — LOAD-BEARING
+    /// structural pin**: on every posture with `Self::FIELD_COUNT >=
+    /// 1`, `bottom_axis_is_saturated() == Some(true) ⇒
+    /// bottom_axis_is_super_half_saturated() == Some(true)`. Since
+    /// SATURATED requires count == FIELD_COUNT, doubling gives 2 *
+    /// FIELD_COUNT > FIELD_COUNT on every positive cardinality — the
+    /// SATURATED regime is the MAXIMAL cell strictly inside SUPER-HALF.
+    /// Pinned via
+    /// `resource_limits_bottom_axis_is_saturated_true_implies_is_super_half_saturated_true`.
+    ///
+    /// **NEARLY-SATURATED-IMPLIES-SUPER-HALF-SATURATED bridge**: on
+    /// every posture with `Self::FIELD_COUNT >= 3`,
+    /// `bottom_axis_is_nearly_saturated() == Some(true) ⇒
+    /// bottom_axis_is_super_half_saturated() == Some(true)`. NEARLY-
+    /// SATURATED requires count == FIELD_COUNT - 1, doubling gives 2 *
+    /// FIELD_COUNT - 2 > FIELD_COUNT iff FIELD_COUNT > 2 — the NEARLY-
+    /// SATURATED regime lies strictly INSIDE SUPER-HALF on the count
+    /// half-line at every practical FIELD_COUNT. Pinned via
+    /// `resource_limits_bottom_axis_is_nearly_saturated_true_implies_is_super_half_saturated_true`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS
+    /// .bottom_axis_is_super_half_saturated() == Some(true)`
+    /// (saturated bottom pole packs SIX axes, count == FIELD_COUNT so
+    /// `count * 2 = 12 > 6` — strictly over half);
+    /// `UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_super_half_saturated()
+    /// == None` (no bottom axis); `DEFAULT_RESOURCE_LIMITS
+    /// .bottom_axis_is_super_half_saturated() == None`;
+    /// `HAND_AUTHORED_MID_POSTURE.bottom_axis_is_super_half_saturated()
+    /// == None`; `HAND_AUTHORED_OTHER_POSTURE
+    /// .bottom_axis_is_super_half_saturated() == None`. Both
+    /// `SPARSE_BOTTOM_POSTURE` and `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE`
+    /// (count == 3, doubling == 6, NOT strictly greater) pin
+    /// `Some(false)`; `ENDPOINTS_ONLY_BOTTOM_POSTURE` (count == 2,
+    /// doubling == 4) pins `Some(false)`. No shipped preset places
+    /// four or five bottom axes — the count-4 truth-firing pin uses a
+    /// synthetic four-bottom-axis posture built via
+    /// [`Self::from_field_values`], matching the shape the SUB-HALF
+    /// count-2 pins used one COMPARISON-KIND axis under.
+    ///
+    /// **ANY-fold bridge**: `a.bottom_axis_is_super_half_saturated()
+    /// .is_some() ⇔ a.has_bottom_axis()`. Pinned via
+    /// `resource_limits_bottom_axis_is_super_half_saturated_is_some_iff_has_bottom_axis`.
+    ///
+    /// **CROSS-CELL SATURATION contrast — LOAD-BEARING pin**: at the
+    /// SATURATED pole preset for EACH atomic cell, the SAME cell's
+    /// SUPER-HALF-SATURATED verdict is `Some(true)` (that pole packs
+    /// FIELD_COUNT axes, doubling above FIELD_COUNT) and the OTHER
+    /// cell's SUPER-HALF-SATURATED verdict is `None` (the DISJOINT-
+    /// UNION atomic-count identity forces the dual cell's count to 0
+    /// when the same cell saturates). The saturated pole is UNIFORMLY
+    /// SUPER-HALF on its own cell and UNIFORMLY ABSENT on the dual
+    /// cell — the DUAL partition-shape of the (SUB-HALF, HALF, MULTI,
+    /// SINGLETON, NEARLY-SATURATED) columns' (Some(false), None) row
+    /// on the SATURATED pole. Pinned via
+    /// `resource_limits_atomic_is_super_half_saturated_saturation_pole_partitions_into_super_half_and_absent`.
+    ///
+    /// **TRICHOTOMY-CLOSURE — LOAD-BEARING structural pin UNIQUE to
+    /// the SUPER-HALF cell**: on every posture, `a.has_bottom_axis()`
+    /// implies EXACTLY ONE of (`bottom_axis_is_sub_half_saturated()`,
+    /// `bottom_axis_is_half_saturated()`,
+    /// `bottom_axis_is_super_half_saturated()`) fires `Some(true)` (and
+    /// the other two fire `Some(false)`). The (SUB-HALF, HALF,
+    /// SUPER-HALF) three cells now TOTALLY PARTITION the has-axis
+    /// count half-line into the strict-under, exactly-at, and strict-
+    /// over regimes around the balance-point cardinality — a partition
+    /// invariant neither pair alone can express (SUB-HALF + HALF alone
+    /// leaves the strict-upper regime as an unnamed complement). Pinned
+    /// via
+    /// `resource_limits_atomic_trichotomy_sub_half_half_super_half_exactly_one_fires_when_has_bottom_axis`.
+    ///
+    /// `const fn` so a caller can pin the bottom-axis SUPER-HALF-
+    /// SATURATED verdict at compile time.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit;
+    /// SUPER-HALF-SATURATED is a named typed exit `Option<bool>` rather
+    /// than a per-consumer `self.count_bottom_axes() * 2 >
+    /// Self::FIELD_COUNT` inline strict-inequality test that discards
+    /// the has-axis-at-all distinction. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; the SUPER-HALF cell is a
+    /// structural derivation from the already-lifted COUNT projection
+    /// via one usize doubling and one strict-inequality comparison,
+    /// no new per-axis scan, no allocation. THEORY.md §V.1 — knowable
+    /// platform; the count half-line's (SUB-HALF, HALF, SUPER-HALF)
+    /// three cells now TOTALLY PARTITION the has-axis regime at named
+    /// typed methods with the CLOSURE invariant pinned as a first-class
+    /// structural fact rather than a per-consumer implicit assumption.
+    ///
+    /// Frontier inspiration: APL's `(+/mask) * 2 > (⌈/⍴)` per-position
+    /// strict-over-half comparison folded through `+/`; Haskell's
+    /// `length (filter p xs) * 2 > length xs` — the strict-upper-half
+    /// combinator on a boolean mask; Racket's `(> (* (count p lst) 2)
+    /// (length lst))` majority predicate; Idris's `count p v * 2 > n`
+    /// over `Vect n a`; voting-theory's canonical "strict-majority"
+    /// combinator distinguishing over-half from at-most-half regimes.
+    /// Translation through pleme-io primitives: plain `const fn`
+    /// DERIVATION from the already-lifted [`Self::count_bottom_axes`],
+    /// one usize doubling and one strict-inequality comparison against
+    /// `Self::FIELD_COUNT` under a two-arm match on the zero split, no
+    /// new per-axis scan, no allocation. The TRICHOTOMY-CLOSURE
+    /// invariant composes structurally through the already-lifted
+    /// SUB-HALF and HALF cells, no re-derivation.
+    #[must_use]
+    pub const fn bottom_axis_is_super_half_saturated(self) -> Option<bool> {
+        match self.count_bottom_axes() {
+            0 => None,
+            c => Some(c * 2 > Self::FIELD_COUNT),
+        }
+    }
+
+    /// Whole-posture SUPER-HALF-SATURATED-OF-TOP predicate —
+    /// `self.top_axis_is_super_half_saturated()` returns `Some(true)`
+    /// iff AT LEAST ONE axis is at the top pole AND
+    /// [`Self::count_top_axes`] `* 2 > Self::FIELD_COUNT` (the strict
+    /// UPPER open half around the balance-point cardinality),
+    /// `Some(false)` iff at least ONE axis is at the top pole AND the
+    /// count is at most half, or `None` iff no axis is at the top pole.
+    /// The ATOMIC-CELL DUAL of
+    /// [`Self::bottom_axis_is_super_half_saturated`] one PROJECTION-
+    /// KIND axis over on the SUPER-HALF-SATURATED column — jointly the
+    /// (bottom_axis_is_super_half_saturated,
+    /// top_axis_is_super_half_saturated) atomic pair OPENS the SUPER-
+    /// HALF-SATURATED column past the just-closed SUB-HALF-SATURATED
+    /// column on the atomic (bottom, top) row.
+    ///
+    /// **COUNT-TIMES-TWO-GREATER-THAN-FIELD-COUNT identity dual**: on
+    /// every posture, `top_axis_is_super_half_saturated() == { let c =
+    /// self.count_top_axes(); if c == 0 { None } else { Some(c * 2 >
+    /// Self::FIELD_COUNT) } }`. Pinned via
+    /// `resource_limits_top_axis_is_super_half_saturated_equals_count_times_two_gt_field_count`.
+    ///
+    /// **SUPER-HALF-EXCLUDES-SUB-HALF neighbour-separation pin dual —
+    /// LOAD-BEARING TRICHOTOMY OPPOSITE-END pin dual**: on every
+    /// posture, NOT (`top_axis_is_super_half_saturated() == Some(true)
+    /// && top_axis_is_sub_half_saturated() == Some(true)`). Pinned via
+    /// `resource_limits_top_axis_is_super_half_saturated_true_implies_is_sub_half_saturated_false`.
+    ///
+    /// **SUPER-HALF-EXCLUDES-HALF neighbour-separation pin dual**: on
+    /// every posture, NOT (`top_axis_is_super_half_saturated() ==
+    /// Some(true) && top_axis_is_half_saturated() == Some(true)`).
+    /// Pinned via
+    /// `resource_limits_top_axis_is_super_half_saturated_true_implies_is_half_saturated_false`.
+    ///
+    /// **SATURATED-IMPLIES-SUPER-HALF-SATURATED bridge dual**: on every
+    /// posture with `Self::FIELD_COUNT >= 1`, `top_axis_is_saturated()
+    /// == Some(true) ⇒ top_axis_is_super_half_saturated() ==
+    /// Some(true)`. Pinned via
+    /// `resource_limits_top_axis_is_saturated_true_implies_is_super_half_saturated_true`.
+    ///
+    /// **NEARLY-SATURATED-IMPLIES-SUPER-HALF-SATURATED bridge dual**:
+    /// on every posture with `Self::FIELD_COUNT >= 3`,
+    /// `top_axis_is_nearly_saturated() == Some(true) ⇒
+    /// top_axis_is_super_half_saturated() == Some(true)`. Pinned via
+    /// `resource_limits_top_axis_is_nearly_saturated_true_implies_is_super_half_saturated_true`.
+    ///
+    /// **Preset pins**: `UNBOUNDED_RESOURCE_LIMITS
+    /// .top_axis_is_super_half_saturated() == Some(true)` (saturated
+    /// top pole packs SIX axes); `EMPTY_RESOURCE_LIMITS
+    /// .top_axis_is_super_half_saturated() == None` (no top axis);
+    /// `DEFAULT_RESOURCE_LIMITS.top_axis_is_super_half_saturated() ==
+    /// None`; `HAND_AUTHORED_MID_POSTURE
+    /// .top_axis_is_super_half_saturated() == None`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.top_axis_is_super_half_saturated()
+    /// == None`. No shipped preset places one, two, four, or five top
+    /// axes — the count-4 truth-firing pin uses a synthetic four-top-
+    /// axis posture built via [`Self::from_field_values`].
+    ///
+    /// **ANY-fold bridge dual**: `a.top_axis_is_super_half_saturated()
+    /// .is_some() ⇔ a.has_top_axis()`. Pinned via
+    /// `resource_limits_top_axis_is_super_half_saturated_is_some_iff_has_top_axis`.
+    ///
+    /// `const fn` so a caller can pin the top-axis SUPER-HALF-SATURATED
+    /// verdict at compile time.
+    ///
+    /// Theory anchor: same as [`Self::bottom_axis_is_super_half_saturated`].
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::bottom_axis_is_super_half_saturated`], on the DUAL
+    /// atomic mask.
+    #[must_use]
+    pub const fn top_axis_is_super_half_saturated(self) -> Option<bool> {
+        match self.count_top_axes() {
+            0 => None,
+            c => Some(c * 2 > Self::FIELD_COUNT),
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -72374,5 +72601,545 @@ mod tests {
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS
             .polar_axis_is_sub_half_saturated()
             .is_none());
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_super_half_saturated_preset_pins_saturate_over_lower_half_and_absent(
+    ) {
+        // Preset pins on the atomic bottom SUPER-HALF-SATURATED cell —
+        // the SATURATED-bottom-pole preset EMPTY packs all six axes,
+        // count == 6, count * 2 == 12 > 6, so SUPER-HALF is Some(true).
+        // The absent-bottom presets UNBOUNDED and DEFAULT and both
+        // hand-authored postures carry no bottom axis; SUPER-HALF is
+        // None. SPARSE / CONTIGUOUS bottom postures at count == 3 pin
+        // Some(false) (doubling == 6, NOT strictly greater); the
+        // ENDPOINTS_ONLY_BOTTOM_POSTURE at count == 2 pins Some(false).
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_super_half_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_super_half_saturated(),
+            None,
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.bottom_axis_is_super_half_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.bottom_axis_is_super_half_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.bottom_axis_is_super_half_saturated(),
+            None,
+        );
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE.bottom_axis_is_super_half_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.bottom_axis_is_super_half_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_is_super_half_saturated(),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_super_half_saturated_preset_pins_saturate_over_lower_half_and_absent(
+    ) {
+        // Preset pins dual on the atomic top SUPER-HALF cell — the
+        // SATURATED-top-pole preset UNBOUNDED packs six top axes,
+        // Some(true). The absent-top presets and hand-authored postures
+        // carry no top axis; SUPER-HALF is None.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_super_half_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.top_axis_is_super_half_saturated(),
+            None,
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.top_axis_is_super_half_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.top_axis_is_super_half_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.top_axis_is_super_half_saturated(),
+            None,
+        );
+    }
+
+    #[test]
+    fn resource_limits_atomic_is_super_half_saturated_saturation_pole_partitions_into_super_half_and_absent(
+    ) {
+        // CROSS-CELL SATURATION contrast on the atomic SUPER-HALF-
+        // SATURATED column — each SATURATED pole preset pins
+        // (Some(true), None) on its (same-cell, dual-cell) SUPER-HALF
+        // pair. The saturated pole is UNIFORMLY SUPER-HALF on its own
+        // cell and UNIFORMLY ABSENT on the dual cell — the DUAL of the
+        // (Some(false), None) partition shape carried by the SUB-HALF /
+        // HALF / SINGLETON / MULTI / NEARLY-SATURATED columns on their
+        // saturated-pole preset row, sitting on the OPPOSITE end of the
+        // (SUB-HALF, HALF, SUPER-HALF) trichotomy from the SUB-HALF
+        // column's Some(false) at that same preset.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_super_half_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.top_axis_is_super_half_saturated(),
+            None,
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_super_half_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_super_half_saturated(),
+            None,
+        );
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_super_half_saturated_equals_count_times_two_gt_field_count() {
+        // COUNT-TIMES-TWO-GREATER-THAN-FIELD-COUNT identity — the
+        // SUPER-HALF predicate is structurally derived from
+        // count_bottom_axes on every posture: None iff count == 0,
+        // Some(count * 2 > FIELD_COUNT) otherwise. Pinned across every
+        // shipped preset + hand-authored + test-local posture PLUS
+        // synthetic four- and five-bottom-axis fixtures that reach the
+        // super-half count arm (count ∈ {4, 5}) no shipped preset places.
+        let four_bottom = ResourceLimits::from_field_values([0, 0, 0, 0, 41, 43]);
+        let five_bottom = ResourceLimits::from_field_values([0, 0, 0, 0, 0, 41]);
+        assert_eq!(four_bottom.count_bottom_axes(), 4);
+        assert_eq!(five_bottom.count_bottom_axes(), 5);
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            four_bottom,
+            five_bottom,
+        ];
+        for a in postures {
+            let c = a.count_bottom_axes();
+            let expected = if c == 0 {
+                None
+            } else {
+                Some(c * 2 > ResourceLimits::FIELD_COUNT)
+            };
+            assert_eq!(
+                a.bottom_axis_is_super_half_saturated(),
+                expected,
+                "is_super_half = count-times-two-gt-field-count identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_super_half_saturated_equals_count_times_two_gt_field_count() {
+        // COUNT-TIMES-TWO-GREATER-THAN-FIELD-COUNT identity dual on the
+        // top cell.
+        let four_top = ResourceLimits::from_field_values([
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            41,
+            43,
+        ]);
+        let five_top = ResourceLimits::from_field_values([
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            41,
+        ]);
+        assert_eq!(four_top.count_top_axes(), 4);
+        assert_eq!(five_top.count_top_axes(), 5);
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            four_top,
+            five_top,
+        ];
+        for a in postures {
+            let c = a.count_top_axes();
+            let expected = if c == 0 {
+                None
+            } else {
+                Some(c * 2 > ResourceLimits::FIELD_COUNT)
+            };
+            assert_eq!(
+                a.top_axis_is_super_half_saturated(),
+                expected,
+                "is_super_half = count-times-two-gt-field-count identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_super_half_saturated_is_some_iff_has_bottom_axis() {
+        // ANY-fold bridge — the SUPER-HALF verdict is defined iff the
+        // bottom-axis subset is non-empty. Same shape as every already-
+        // lifted atomic-cell is_some ⇔ has-axis bridge on the (SPAN,
+        // GAP, CONTIGUITY, SPARSE, SINGLETON, MULTI, SATURATED,
+        // STRICTLY-MULTI, NEARLY-SATURATED, HALF-SATURATED, SUB-HALF-
+        // SATURATED) columns, extending the atomic column undecet to a
+        // duodecet.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.bottom_axis_is_super_half_saturated().is_some(),
+                a.has_bottom_axis(),
+                "is_super_half.is_some() != has_bottom_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_super_half_saturated_is_some_iff_has_top_axis() {
+        // ANY-fold bridge dual on the top cell.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.top_axis_is_super_half_saturated().is_some(),
+                a.has_top_axis(),
+                "is_super_half.is_some() != has_top_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_super_half_saturated_true_implies_is_sub_half_saturated_false(
+    ) {
+        // SUPER-HALF-EXCLUDES-SUB-HALF neighbour-separation pin — LOAD-
+        // BEARING TRICHOTOMY OPPOSITE-END pin. The strict INEQUALITY
+        // cells of the (SUB-HALF, HALF, SUPER-HALF) count-times-two
+        // trichotomy sit on OPPOSITE sides of the balance-point
+        // cardinality landing and never co-fire.
+        let four_bottom = ResourceLimits::from_field_values([0, 0, 0, 0, 41, 43]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            four_bottom,
+        ] {
+            assert!(
+                !(a.bottom_axis_is_super_half_saturated() == Some(true)
+                    && a.bottom_axis_is_sub_half_saturated() == Some(true)),
+                "is_super_half Some(true) co-fires is_sub_half Some(true) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_super_half_saturated_true_implies_is_sub_half_saturated_false() {
+        // SUPER-HALF-EXCLUDES-SUB-HALF neighbour-separation pin dual on
+        // the top cell.
+        let four_top = ResourceLimits::from_field_values([
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            41,
+            43,
+        ]);
+        for a in [UNBOUNDED_RESOURCE_LIMITS, four_top] {
+            assert!(
+                !(a.top_axis_is_super_half_saturated() == Some(true)
+                    && a.top_axis_is_sub_half_saturated() == Some(true)),
+                "is_super_half Some(true) co-fires is_sub_half Some(true) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_super_half_saturated_true_implies_is_half_saturated_false() {
+        // SUPER-HALF-EXCLUDES-HALF neighbour-separation pin — SUPER-
+        // HALF (`count * 2 > FIELD_COUNT`) and HALF (`count * 2 ==
+        // FIELD_COUNT`) are DISJOINT cells of the count-times-two
+        // trichotomy against FIELD_COUNT — no `count` satisfies both.
+        let four_bottom = ResourceLimits::from_field_values([0, 0, 0, 0, 41, 43]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            four_bottom,
+        ] {
+            assert!(
+                !(a.bottom_axis_is_super_half_saturated() == Some(true)
+                    && a.bottom_axis_is_half_saturated() == Some(true)),
+                "is_super_half Some(true) co-fires is_half_saturated Some(true) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_super_half_saturated_true_implies_is_half_saturated_false() {
+        // SUPER-HALF-EXCLUDES-HALF neighbour-separation pin dual.
+        let four_top = ResourceLimits::from_field_values([
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            41,
+            43,
+        ]);
+        for a in [UNBOUNDED_RESOURCE_LIMITS, four_top] {
+            assert!(
+                !(a.top_axis_is_super_half_saturated() == Some(true)
+                    && a.top_axis_is_half_saturated() == Some(true)),
+                "is_super_half Some(true) co-fires is_half_saturated Some(true) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_saturated_true_implies_is_super_half_saturated_true() {
+        // SATURATED-IMPLIES-SUPER-HALF-SATURATED bridge — LOAD-BEARING
+        // structural pin. Since FIELD_COUNT >= 1, count == FIELD_COUNT
+        // gives count * 2 == 2 * FIELD_COUNT > FIELD_COUNT, so SATURATED
+        // strictly implies SUPER-HALF. The SATURATED regime lies
+        // strictly INSIDE the SUPER-HALF regime on the count half-line
+        // — SATURATED is the MAXIMAL cell strictly inside SUPER-HALF.
+        const { assert!(ResourceLimits::FIELD_COUNT >= 1) };
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            if a.bottom_axis_is_saturated() == Some(true) {
+                assert_eq!(
+                    a.bottom_axis_is_super_half_saturated(),
+                    Some(true),
+                    "is_saturated Some(true) but is_super_half != Some(true) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_saturated_true_implies_is_super_half_saturated_true() {
+        // SATURATED-IMPLIES-SUPER-HALF-SATURATED bridge dual on the top
+        // cell.
+        const { assert!(ResourceLimits::FIELD_COUNT >= 1) };
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            if a.top_axis_is_saturated() == Some(true) {
+                assert_eq!(
+                    a.top_axis_is_super_half_saturated(),
+                    Some(true),
+                    "is_saturated Some(true) but is_super_half != Some(true) on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_nearly_saturated_true_implies_is_super_half_saturated_true() {
+        // NEARLY-SATURATED-IMPLIES-SUPER-HALF-SATURATED bridge — at
+        // FIELD_COUNT >= 3, count == FIELD_COUNT - 1 gives count * 2 ==
+        // 2 * FIELD_COUNT - 2 > FIELD_COUNT iff FIELD_COUNT > 2, so
+        // NEARLY-SATURATED strictly implies SUPER-HALF. The NEARLY-
+        // SATURATED regime lies strictly INSIDE the SUPER-HALF regime
+        // on the count half-line — SUPER-HALF is the LEFT-strict
+        // shadow of NEARLY-SATURATED at this cardinality distance.
+        const { assert!(ResourceLimits::FIELD_COUNT >= 3) };
+        let five_bottom = ResourceLimits::from_field_values([0, 0, 0, 0, 0, 41]);
+        assert_eq!(five_bottom.count_bottom_axes(), 5);
+        assert_eq!(five_bottom.bottom_axis_is_nearly_saturated(), Some(true));
+        assert_eq!(
+            five_bottom.bottom_axis_is_super_half_saturated(),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_nearly_saturated_true_implies_is_super_half_saturated_true() {
+        // NEARLY-SATURATED-IMPLIES-SUPER-HALF-SATURATED bridge dual on
+        // the top cell.
+        const { assert!(ResourceLimits::FIELD_COUNT >= 3) };
+        let five_top = ResourceLimits::from_field_values([
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            41,
+        ]);
+        assert_eq!(five_top.count_top_axes(), 5);
+        assert_eq!(five_top.top_axis_is_nearly_saturated(), Some(true));
+        assert_eq!(five_top.top_axis_is_super_half_saturated(), Some(true));
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_super_half_saturated_true_at_synthetic_count_four_posture() {
+        // Truth-firing pin — a four-bottom-axis posture gives count == 4,
+        // count * 2 == 8 > 6, so SUPER-HALF is Some(true). Sits on the
+        // arm no shipped preset reaches (the shipped roster covers
+        // count_bottom ∈ {0, 2, 3, 6} on the bottom cell).
+        let four_bottom = ResourceLimits::from_field_values([0, 0, 0, 0, 41, 43]);
+        assert_eq!(four_bottom.count_bottom_axes(), 4);
+        assert_eq!(
+            four_bottom.bottom_axis_is_super_half_saturated(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_super_half_saturated_true_at_synthetic_count_four_posture() {
+        // Truth-firing pin dual — a four-top-axis posture gives count ==
+        // 4, count * 2 == 8 > 6, so SUPER-HALF is Some(true).
+        let four_top = ResourceLimits::from_field_values([
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            41,
+            43,
+        ]);
+        assert_eq!(four_top.count_top_axes(), 4);
+        assert_eq!(four_top.top_axis_is_super_half_saturated(), Some(true));
+    }
+
+    #[test]
+    fn resource_limits_atomic_trichotomy_sub_half_half_super_half_exactly_one_fires_when_has_bottom_axis(
+    ) {
+        // LOAD-BEARING TRICHOTOMY-CLOSURE pin unique to the SUPER-HALF
+        // cell — on every posture with a bottom axis, EXACTLY ONE of
+        // (SUB-HALF, HALF, SUPER-HALF) fires Some(true). The three
+        // cells now TOTALLY PARTITION the has-axis count half-line into
+        // the strict-under, exactly-at, and strict-over regimes around
+        // the balance-point cardinality. Exercised across every count
+        // ∈ {0, 1, 2, 3, 4, 5, 6} the atomic bottom cell can carry via
+        // one preset (count == 0 → None) plus synthetic per-count
+        // fixtures.
+        for count in 1..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(posture.count_bottom_axes(), count);
+            let sub = posture.bottom_axis_is_sub_half_saturated() == Some(true);
+            let half = posture.bottom_axis_is_half_saturated() == Some(true);
+            let sup = posture.bottom_axis_is_super_half_saturated() == Some(true);
+            let fires = usize::from(sub) + usize::from(half) + usize::from(sup);
+            assert_eq!(
+                fires, 1,
+                "trichotomy not partitioning at count {count} on posture {posture:?}: (sub, half, super) = ({sub}, {half}, {sup})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_trichotomy_sub_half_half_super_half_exactly_one_fires_when_has_top_axis(
+    ) {
+        // LOAD-BEARING TRICHOTOMY-CLOSURE pin dual on the top cell.
+        for count in 1..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(posture.count_top_axes(), count);
+            let sub = posture.top_axis_is_sub_half_saturated() == Some(true);
+            let half = posture.top_axis_is_half_saturated() == Some(true);
+            let sup = posture.top_axis_is_super_half_saturated() == Some(true);
+            let fires = usize::from(sub) + usize::from(half) + usize::from(sup);
+            assert_eq!(
+                fires, 1,
+                "trichotomy not partitioning at count {count} on posture {posture:?}: (sub, half, super) = ({sub}, {half}, {sup})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_is_super_half_saturated_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the atomic cells — both SUPER-HALF-SATURATED
+        // projections are evaluable in const context so a caller can
+        // pin the atomic count-times-two-gt-field-count identities at
+        // compile time as build-breaks. Mirror of the atomic SUB-HALF
+        // const-fn pins one COMPARISON-KIND axis over on the boolean
+        // surface.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_super_half_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_super_half_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .top_axis_is_super_half_saturated()
+            .is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .bottom_axis_is_super_half_saturated()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .bottom_axis_is_super_half_saturated()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .top_axis_is_super_half_saturated()
+            .is_none());
+        const _: () = assert!(matches!(
+            SPARSE_BOTTOM_POSTURE.bottom_axis_is_super_half_saturated(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_is_super_half_saturated(),
+            Some(false)
+        ));
     }
 }

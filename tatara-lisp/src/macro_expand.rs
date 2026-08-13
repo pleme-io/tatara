@@ -23471,6 +23471,270 @@ impl ResourceLimits {
             c => Some(c * 2 <= Self::FIELD_COUNT),
         }
     }
+
+    /// Whole-posture AT-MOST-HALF-SATURATED-OF-POLAR predicate —
+    /// `self.polar_axis_is_at_most_half_saturated()` returns `Some(true)`
+    /// iff AT LEAST ONE axis sits at either pole AND
+    /// [`Self::count_polar_axes`] `* 2 <= Self::FIELD_COUNT` (the CLOSED
+    /// LOWER half around the balance-point cardinality, INCLUDING the
+    /// balance-point itself at `count * 2 == FIELD_COUNT`), `Some(false)`
+    /// iff at least ONE axis is polar AND the count is strictly over half,
+    /// or `None` iff no axis is polar. The COMPOUND-CELL peer of
+    /// [`Self::bottom_axis_is_at_most_half_saturated`] one CELL-KIND axis
+    /// over on the (bottom, top, polar, interior) 4-cell axis-family —
+    /// jointly the (polar_axis_is_at_most_half_saturated,
+    /// interior_axis_is_at_most_half_saturated) COMPOUND pair CLOSES the
+    /// AT-MOST-HALF-SATURATED column on the 4-cell axis-family past the
+    /// just-shipped atomic (bottom, top) opening.
+    ///
+    /// **COUNT-TIMES-TWO-LEQ-FIELD-COUNT identity — LOAD-BEARING
+    /// structural pin**: on every posture,
+    /// `polar_axis_is_at_most_half_saturated() == { let c =
+    /// self.count_polar_axes(); if c == 0 { None } else { Some(c * 2
+    /// <= Self::FIELD_COUNT) } }`. Composes structurally through the
+    /// already-lifted COUNT projection; the substrate never re-scans
+    /// the per-axis mask. Pinned via
+    /// `resource_limits_polar_axis_is_at_most_half_saturated_equals_count_times_two_leq_field_count`.
+    ///
+    /// **AT-MOST-HALF ⇔ NOT SUPER-HALF complementarity — LOAD-BEARING
+    /// TRICHOTOMY-CLOSURE pin**: on every posture with a polar axis,
+    /// `polar_axis_is_at_most_half_saturated() == Some(true) ⇔
+    /// polar_axis_is_super_half_saturated() == Some(false)`. The two
+    /// cells PARTITION the has-polar-axis regime into disjoint halves
+    /// via the arithmetic identity `NOT (c * 2 > FIELD_COUNT) ⇔ c * 2 <=
+    /// FIELD_COUNT`. Pinned via
+    /// `resource_limits_polar_axis_is_at_most_half_saturated_iff_super_half_saturated_false`.
+    ///
+    /// **AT-MOST-HALF ⇔ (SUB-HALF OR HALF) disjoint-union identity —
+    /// LOAD-BEARING PARTITION pin**: on every posture with a polar axis,
+    /// `polar_axis_is_at_most_half_saturated() == Some(true) ⇔
+    /// (polar_axis_is_sub_half_saturated() == Some(true) ||
+    /// polar_axis_is_half_saturated() == Some(true))`. The two summands
+    /// are MUTUALLY EXCLUSIVE on the count half-line and the AT-MOST-HALF
+    /// interior is EXACTLY their disjoint union. Pinned via
+    /// `resource_limits_polar_axis_is_at_most_half_saturated_iff_sub_half_or_half`.
+    ///
+    /// **SUB-HALF-IMPLIES-AT-MOST-HALF bridge — LOAD-BEARING INCLUSION
+    /// pin**: on every posture, `polar_axis_is_sub_half_saturated() ==
+    /// Some(true) ⇒ polar_axis_is_at_most_half_saturated() == Some(true)`.
+    /// The OPEN lower half is a strict subset of the CLOSED lower half at
+    /// every FIELD_COUNT. Pinned via
+    /// `resource_limits_polar_axis_is_sub_half_saturated_true_implies_is_at_most_half_saturated_true`.
+    ///
+    /// **HALF-IMPLIES-AT-MOST-HALF bridge — LOAD-BEARING RIGHT-ENDPOINT
+    /// INCLUSION pin**: on every posture, `polar_axis_is_half_saturated()
+    /// == Some(true) ⇒ polar_axis_is_at_most_half_saturated() ==
+    /// Some(true)`. The balance-point is the RIGHT endpoint of the
+    /// CLOSED lower half (the exact cell the OPEN lower half SUB-HALF
+    /// excludes). Pinned via
+    /// `resource_limits_polar_axis_is_half_saturated_true_implies_is_at_most_half_saturated_true`.
+    ///
+    /// **AT-MOST-HALF-EXCLUDES-SATURATED mutual-exclusion pin at
+    /// `Self::FIELD_COUNT >= 2`**: on every posture with
+    /// `Self::FIELD_COUNT >= 2`, NOT
+    /// (`polar_axis_is_at_most_half_saturated() == Some(true) &&
+    /// polar_axis_is_saturated() == Some(true)`). Pinned via
+    /// `resource_limits_polar_axis_is_at_most_half_saturated_true_implies_is_saturated_false`.
+    ///
+    /// **AT-MOST-HALF-EXCLUDES-BARELY-SUPER-HALF-SATURATED mutual-
+    /// exclusion pin — LOAD-BEARING NEIGHBOUR-SEPARATION pin**: on
+    /// every posture, NOT (`polar_axis_is_at_most_half_saturated() ==
+    /// Some(true) && polar_axis_is_barely_super_half_saturated() ==
+    /// Some(true)`). BARELY-SUPER-HALF requires `count == FIELD_COUNT / 2 + 1`
+    /// and AT-MOST-HALF requires `count * 2 <= FIELD_COUNT`; `2 *
+    /// (FIELD_COUNT / 2 + 1) <= FIELD_COUNT` reduces to `2 <= FIELD_COUNT
+    /// mod 2` which fails at every FIELD_COUNT. Pinned via
+    /// `resource_limits_polar_axis_is_at_most_half_saturated_true_implies_is_barely_super_half_saturated_false`.
+    ///
+    /// **CROSS-CELL POLAR-INTERIOR DUAL-BALANCE-POINT CO-FIRE identity —
+    /// LOAD-BEARING structural pin UNIQUE to the COMPOUND partition on
+    /// the AT-MOST-HALF cell**: on every posture at every FIELD_COUNT,
+    /// (`polar_axis_is_at_most_half_saturated() == Some(true) &&
+    /// interior_axis_is_at_most_half_saturated() == Some(true)`) ⇔
+    /// (`polar_axis_is_half_saturated() == Some(true) &&
+    /// interior_axis_is_half_saturated() == Some(true)`). Fundamentally
+    /// STRONGER than a bare mutual-exclusion pin: the COMPOUND EXHAUSTIVE-
+    /// PARTITION identity `count_polar + count_interior == FIELD_COUNT`
+    /// forces `count_polar * 2 <= FIELD_COUNT && count_interior * 2 <=
+    /// FIELD_COUNT` to require BOTH counts at exactly `FIELD_COUNT / 2`
+    /// at EVEN FIELD_COUNT (the dual-balance-point) OR to be UNSATISFIABLE
+    /// at ODD FIELD_COUNT. The compound row cannot host a straight mutual-
+    /// exclusion pin like SUB-HALF/SUPER-HALF admit — the co-fire arm is
+    /// STRUCTURAL rather than absent, and the substrate names its exact
+    /// witness (the DUAL-BALANCE-POINT) as the load-bearing structural
+    /// truth. Pinned via
+    /// `resource_limits_compound_is_at_most_half_saturated_polar_interior_co_fire_iff_dual_balance_point`.
+    ///
+    /// **Preset pins — LOAD-BEARING SATURATION-POLE partition**:
+    /// `EMPTY_RESOURCE_LIMITS.polar_axis_is_at_most_half_saturated() ==
+    /// Some(false)` (BOTH SATURATED pole presets pack SIX polar axes,
+    /// `6 * 2 == 12 > 6`); `UNBOUNDED_RESOURCE_LIMITS
+    /// .polar_axis_is_at_most_half_saturated() == Some(false)`;
+    /// `DEFAULT_RESOURCE_LIMITS.polar_axis_is_at_most_half_saturated() ==
+    /// None` (every field strictly interior); `HAND_AUTHORED_MID_POSTURE
+    /// .polar_axis_is_at_most_half_saturated() == None`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_at_most_half_saturated()
+    /// == None`. `SPARSE_BOTTOM_POSTURE` and
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE` at polar count == 3 pin
+    /// `Some(true)` (balance-point itself, the RIGHT endpoint of the
+    /// CLOSED lower half at FIELD_COUNT == 6); `ENDPOINTS_ONLY_BOTTOM_POSTURE`
+    /// at polar count == 2 pins `Some(true)` (OPEN interior of the
+    /// CLOSED lower half), the shipped truth-firing preset row for the
+    /// COMPOUND polar AT-MOST-HALF cell EXERCISING BOTH the OPEN
+    /// interior AND the RIGHT endpoint balance-point landings without
+    /// any synthetic posture.
+    ///
+    /// **ANY-fold bridge**:
+    /// `a.polar_axis_is_at_most_half_saturated().is_some() ⇔
+    /// a.has_polar_axis()`. Pinned via
+    /// `resource_limits_polar_axis_is_at_most_half_saturated_is_some_iff_has_polar_axis`.
+    ///
+    /// `const fn` so a caller can pin the polar-axis AT-MOST-HALF-
+    /// SATURATED verdict at compile time.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// COMPOUND polar AT-MOST-HALF-SATURATED predicate is a named typed
+    /// exit `Option<bool>` rather than a per-consumer `self
+    /// .count_polar_axes() * 2 <= Self::FIELD_COUNT` inline comparison
+    /// that discards the has-axis-at-all distinction. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the AT-MOST-HALF cell
+    /// is a structural derivation from the already-lifted COUNT
+    /// projection via one usize comparison against `Self::FIELD_COUNT`
+    /// under a two-arm match on the zero split, no new per-axis scan, no
+    /// allocation. The CROSS-CELL DUAL-BALANCE-POINT CO-FIRE pin
+    /// composes structurally through the already-lifted COMPOUND
+    /// EXHAUSTIVE-PARTITION identity `count_polar + count_interior ==
+    /// FIELD_COUNT`, no re-derivation. THEORY.md §V.1 — knowable
+    /// platform; naming the CLOSED-LOWER-HALF cell on the compound row
+    /// alongside its OPEN-LOWER-HALF sibling (SUB-HALF) removes the
+    /// ambiguity in "≤ half" that the OPEN cell forces every consumer
+    /// to inline.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::bottom_axis_is_at_most_half_saturated`], on the DUAL
+    /// COMPOUND polar mask. Racket's `(<= (count polar? l) (quotient
+    /// (length l) 2))` closed-half fold; Idris's `LTE k (S n)`
+    /// refinement type naming the closed order relation distinct from
+    /// `LT k (S n)`; Lean's `Nat.le_div_two_iff_double_le` half-
+    /// comparison lemma library; APL's `(2×⍺)≤⍵` closed-double
+    /// comparison primitive. Translation through pleme-io primitives:
+    /// plain `const fn` DERIVATION from the already-lifted
+    /// [`Self::count_polar_axes`], one usize comparison against
+    /// `Self::FIELD_COUNT` under a two-arm match on the zero split, no
+    /// new per-axis scan, no allocation. The CROSS-CELL POLAR-INTERIOR
+    /// DUAL-BALANCE-POINT CO-FIRE identity composes structurally through
+    /// the already-lifted COMPOUND EXHAUSTIVE-PARTITION identity
+    /// `count_polar + count_interior == FIELD_COUNT`, no re-derivation.
+    #[must_use]
+    pub const fn polar_axis_is_at_most_half_saturated(self) -> Option<bool> {
+        match self.count_polar_axes() {
+            0 => None,
+            c => Some(c * 2 <= Self::FIELD_COUNT),
+        }
+    }
+
+    /// Whole-posture AT-MOST-HALF-SATURATED-OF-INTERIOR predicate —
+    /// `self.interior_axis_is_at_most_half_saturated()` returns `Some(true)`
+    /// iff AT LEAST ONE axis sits strictly interior AND
+    /// [`Self::count_interior_axes`] `* 2 <= Self::FIELD_COUNT` (the
+    /// CLOSED LOWER half around the balance-point cardinality, INCLUDING
+    /// the balance-point itself), `Some(false)` iff at least ONE axis is
+    /// interior AND the count is strictly over half, or `None` iff no
+    /// axis is interior. The COMPOUND-CELL DUAL of
+    /// [`Self::polar_axis_is_at_most_half_saturated`] one CELL-KIND axis
+    /// over via the (polar, interior) disjoint complement — jointly the
+    /// (polar_axis_is_at_most_half_saturated,
+    /// interior_axis_is_at_most_half_saturated) COMPOUND pair CLOSES the
+    /// AT-MOST-HALF-SATURATED column on the (bottom, top, polar,
+    /// interior) 4-cell axis-family.
+    ///
+    /// **COUNT-TIMES-TWO-LEQ-FIELD-COUNT identity dual**: on every
+    /// posture, `interior_axis_is_at_most_half_saturated() == { let c =
+    /// self.count_interior_axes(); if c == 0 { None } else { Some(c * 2
+    /// <= Self::FIELD_COUNT) } }`. Pinned via
+    /// `resource_limits_interior_axis_is_at_most_half_saturated_equals_count_times_two_leq_field_count`.
+    ///
+    /// **AT-MOST-HALF ⇔ NOT SUPER-HALF complementarity dual**: on every
+    /// posture with an interior axis,
+    /// `interior_axis_is_at_most_half_saturated() == Some(true) ⇔
+    /// interior_axis_is_super_half_saturated() == Some(false)`. Pinned
+    /// via
+    /// `resource_limits_interior_axis_is_at_most_half_saturated_iff_super_half_saturated_false`.
+    ///
+    /// **AT-MOST-HALF ⇔ (SUB-HALF OR HALF) disjoint-union identity
+    /// dual**: on every posture with an interior axis,
+    /// `interior_axis_is_at_most_half_saturated() == Some(true) ⇔
+    /// (interior_axis_is_sub_half_saturated() == Some(true) ||
+    /// interior_axis_is_half_saturated() == Some(true))`. Pinned via
+    /// `resource_limits_interior_axis_is_at_most_half_saturated_iff_sub_half_or_half`.
+    ///
+    /// **SUB-HALF-IMPLIES-AT-MOST-HALF bridge dual**: on every posture,
+    /// `interior_axis_is_sub_half_saturated() == Some(true) ⇒
+    /// interior_axis_is_at_most_half_saturated() == Some(true)`. Pinned
+    /// via
+    /// `resource_limits_interior_axis_is_sub_half_saturated_true_implies_is_at_most_half_saturated_true`.
+    ///
+    /// **HALF-IMPLIES-AT-MOST-HALF bridge dual**: on every posture,
+    /// `interior_axis_is_half_saturated() == Some(true) ⇒
+    /// interior_axis_is_at_most_half_saturated() == Some(true)`. Pinned
+    /// via
+    /// `resource_limits_interior_axis_is_half_saturated_true_implies_is_at_most_half_saturated_true`.
+    ///
+    /// **AT-MOST-HALF-EXCLUDES-SATURATED mutual-exclusion pin dual at
+    /// `Self::FIELD_COUNT >= 2`**: on every posture with
+    /// `Self::FIELD_COUNT >= 2`, NOT
+    /// (`interior_axis_is_at_most_half_saturated() == Some(true) &&
+    /// interior_axis_is_saturated() == Some(true)`). Pinned via
+    /// `resource_limits_interior_axis_is_at_most_half_saturated_true_implies_is_saturated_false`.
+    ///
+    /// **AT-MOST-HALF-EXCLUDES-BARELY-SUPER-HALF-SATURATED mutual-
+    /// exclusion pin dual**: on every posture, NOT
+    /// (`interior_axis_is_at_most_half_saturated() == Some(true) &&
+    /// interior_axis_is_barely_super_half_saturated() == Some(true)`).
+    /// Pinned via
+    /// `resource_limits_interior_axis_is_at_most_half_saturated_true_implies_is_barely_super_half_saturated_false`.
+    ///
+    /// **Preset pins dual — LOAD-BEARING SATURATION-POLE partition**:
+    /// `EMPTY_RESOURCE_LIMITS.interior_axis_is_at_most_half_saturated()
+    /// == None` (no interior axis); `UNBOUNDED_RESOURCE_LIMITS
+    /// .interior_axis_is_at_most_half_saturated() == None`;
+    /// `DEFAULT_RESOURCE_LIMITS.interior_axis_is_at_most_half_saturated()
+    /// == Some(false)` (every field strictly interior; count == 6, `6 *
+    /// 2 == 12 > 6`); `HAND_AUTHORED_MID_POSTURE
+    /// .interior_axis_is_at_most_half_saturated() == Some(false)`;
+    /// `HAND_AUTHORED_OTHER_POSTURE
+    /// .interior_axis_is_at_most_half_saturated() == Some(false)`.
+    /// `SPARSE_BOTTOM_POSTURE` and `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE`
+    /// at interior count == 3 pin `Some(true)` (balance-point itself,
+    /// the RIGHT endpoint of the CLOSED lower half); `ENDPOINTS_ONLY_BOTTOM_POSTURE`
+    /// at interior count == 4 pins `Some(false)`. No shipped preset
+    /// places EXACTLY one or two interior axes at the OPEN interior of
+    /// the CLOSED lower half — the truth-firing arm at count ∈ {1, 2}
+    /// is exercised via per-count synthetic interior-axis fixtures in
+    /// the count-times-two-leq-field-count identity pin.
+    ///
+    /// **ANY-fold bridge dual**:
+    /// `a.interior_axis_is_at_most_half_saturated().is_some() ⇔
+    /// a.has_interior_axis()`. Pinned via
+    /// `resource_limits_interior_axis_is_at_most_half_saturated_is_some_iff_has_interior_axis`.
+    ///
+    /// `const fn` so a caller can pin the interior-axis AT-MOST-HALF-
+    /// SATURATED verdict at compile time.
+    ///
+    /// Theory anchor: same as
+    /// [`Self::polar_axis_is_at_most_half_saturated`], on the DUAL
+    /// COMPOUND interior cell.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::bottom_axis_is_at_most_half_saturated`], on the DUAL
+    /// COMPOUND interior mask.
+    #[must_use]
+    pub const fn interior_axis_is_at_most_half_saturated(self) -> Option<bool> {
+        match self.count_interior_axes() {
+            0 => None,
+            c => Some(c * 2 <= Self::FIELD_COUNT),
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -77129,6 +77393,606 @@ mod tests {
             .is_none());
         const _: () = assert!(matches!(
             ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_is_at_most_half_saturated(),
+            Some(true)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_half_saturated_preset_pins_saturate_at_closed_lower_half_and_absent(
+    ) {
+        // Preset pins on the COMPOUND polar AT-MOST-HALF-SATURATED cell
+        // — BOTH SATURATED-pole presets pack SIX polar axes, count * 2
+        // == 12 > 6, so AT-MOST-HALF is Some(false) at each SATURATED
+        // endpoint. Absent-polar presets (DEFAULT + both hand-authored)
+        // carry no polar axis so None. SPARSE_BOTTOM / CONTIGUOUS_INTERIOR
+        // at polar count == 3 (3 * 2 == 6 <= 6, the CLOSED right endpoint
+        // at the balance-point) both pin Some(true); ENDPOINTS_ONLY at
+        // polar count == 2 (2 * 2 == 4 <= 6, OPEN interior of the CLOSED
+        // lower half) pins Some(true) — the shipped truth-firing preset
+        // row for the COMPOUND polar AT-MOST-HALF cell EXERCISES BOTH the
+        // OPEN interior AND the RIGHT endpoint balance-point landings.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_at_most_half_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_at_most_half_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.polar_axis_is_at_most_half_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.polar_axis_is_at_most_half_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_at_most_half_saturated(),
+            None,
+        );
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE.polar_axis_is_at_most_half_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.polar_axis_is_at_most_half_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_axis_is_at_most_half_saturated(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_half_saturated_preset_pins_saturate_at_closed_lower_half_and_absent(
+    ) {
+        // Preset pins dual on the COMPOUND interior AT-MOST-HALF-
+        // SATURATED cell — DEFAULT and both hand-authored postures pack
+        // all six fields strictly interior (count == 6, `6 * 2 == 12 >
+        // 6`), so Some(false). Saturated pole presets carry no interior
+        // axis so None. SPARSE_BOTTOM / CONTIGUOUS_INTERIOR at interior
+        // count == 3 pin Some(true) (balance-point itself, RIGHT endpoint
+        // of the CLOSED lower half at FIELD_COUNT == 6); ENDPOINTS_ONLY
+        // at interior count == 4 pins Some(false) (past half). No
+        // shipped preset places EXACTLY one or two interior axes — the
+        // OPEN interior of the CLOSED lower half at count ∈ {1, 2} is
+        // exercised via per-count synthetic fixtures below.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_at_most_half_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.interior_axis_is_at_most_half_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.interior_axis_is_at_most_half_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.interior_axis_is_at_most_half_saturated(),
+            None,
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_at_most_half_saturated(),
+            None,
+        );
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE.interior_axis_is_at_most_half_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.interior_axis_is_at_most_half_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.interior_axis_is_at_most_half_saturated(),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_half_saturated_equals_count_times_two_leq_field_count()
+    {
+        // COUNT-TIMES-TWO-LEQ-FIELD-COUNT identity on the COMPOUND polar
+        // cell — the AT-MOST-HALF-SATURATED predicate is structurally
+        // derived from count_polar_axes on every posture: None iff
+        // count == 0, Some(count * 2 <= FIELD_COUNT) otherwise. Pinned
+        // across every shipped preset + hand-authored + test-local
+        // posture PLUS synthetic four- and five-polar-axis fixtures that
+        // reach the count-4 (4 * 2 == 8 > 6, Some(false)) and count-5
+        // (5 * 2 == 10 > 6, Some(false)) falsity arms no shipped preset
+        // hits on the polar cell.
+        let four_polar_posture =
+            ResourceLimits::from_field_values([0, 0, usize::MAX, usize::MAX, 41, 43]);
+        let five_polar_posture =
+            ResourceLimits::from_field_values([0, 0, 0, usize::MAX, usize::MAX, 41]);
+        assert_eq!(four_polar_posture.count_polar_axes(), 4);
+        assert_eq!(five_polar_posture.count_polar_axes(), 5);
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            four_polar_posture,
+            five_polar_posture,
+        ];
+        for a in postures {
+            let c = a.count_polar_axes();
+            let expected = if c == 0 {
+                None
+            } else {
+                Some(c * 2 <= ResourceLimits::FIELD_COUNT)
+            };
+            assert_eq!(
+                a.polar_axis_is_at_most_half_saturated(),
+                expected,
+                "polar_is_at_most_half_saturated = count-times-two-leq-field-count identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_half_saturated_equals_count_times_two_leq_field_count(
+    ) {
+        // COUNT-TIMES-TWO-LEQ-FIELD-COUNT identity dual on the COMPOUND
+        // interior cell — pinned via per-count synthetic interior-axis
+        // fixtures walking count ∈ {0, …, FIELD_COUNT} so the None arm
+        // at count == 0, the Some(true) arm at count ∈ {1, 2, 3} (each
+        // satisfying c * 2 <= 6), and the Some(false) arm at count ∈
+        // {4, 5, 6} (each violating c * 2 <= 6) are all exercised
+        // without depending on any shipped preset placing exactly one or
+        // two interior axes.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [0_usize; ResourceLimits::FIELD_COUNT];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 41;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(posture.count_interior_axes(), count);
+            let expected = if count == 0 {
+                None
+            } else {
+                Some(count * 2 <= ResourceLimits::FIELD_COUNT)
+            };
+            assert_eq!(
+                posture.interior_axis_is_at_most_half_saturated(),
+                expected,
+                "interior_is_at_most_half_saturated = count-times-two-leq-field-count identity failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_half_saturated_is_some_iff_has_polar_axis() {
+        // ANY-fold bridge on the COMPOUND polar cell — the AT-MOST-HALF
+        // verdict is defined iff the polar-axis subset is non-empty.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.polar_axis_is_at_most_half_saturated().is_some(),
+                a.has_polar_axis(),
+                "polar_at_most_half is_some ↔ has_polar_axis failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_half_saturated_is_some_iff_has_interior_axis() {
+        // ANY-fold bridge dual on the COMPOUND interior cell.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.interior_axis_is_at_most_half_saturated().is_some(),
+                a.has_interior_axis(),
+                "interior_at_most_half is_some ↔ has_interior_axis failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_half_saturated_iff_super_half_saturated_false() {
+        // COMPLEMENTARITY LOAD-BEARING TRICHOTOMY-CLOSURE pin on the
+        // COMPOUND polar cell — on every posture WITH a polar axis, AT-
+        // MOST-HALF fires Some(true) iff SUPER-HALF fires Some(false).
+        // Pinned across every shipped + hand-authored + test-local
+        // polar-bearing posture PLUS synthetic four- and five-polar
+        // fixtures at the SUPER-HALF-fires arm.
+        let four_polar_posture =
+            ResourceLimits::from_field_values([0, 0, usize::MAX, usize::MAX, 41, 43]);
+        let five_polar_posture =
+            ResourceLimits::from_field_values([0, 0, 0, usize::MAX, usize::MAX, 41]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            four_polar_posture,
+            five_polar_posture,
+        ] {
+            if !a.has_polar_axis() {
+                continue;
+            }
+            let at_most = a.polar_axis_is_at_most_half_saturated();
+            let super_half = a.polar_axis_is_super_half_saturated();
+            assert_eq!(
+                at_most == Some(true),
+                super_half == Some(false),
+                "polar_at_most_half true ↔ super_half false complementarity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_half_saturated_iff_super_half_saturated_false() {
+        // COMPLEMENTARITY LOAD-BEARING TRICHOTOMY-CLOSURE pin dual on
+        // the COMPOUND interior cell — walked via per-count synthetic
+        // interior-axis fixtures. At every count ∈ {1, …, FIELD_COUNT},
+        // exactly one of AT-MOST-HALF and SUPER-HALF fires Some(true).
+        for count in 1..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [0_usize; ResourceLimits::FIELD_COUNT];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 41;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let at_most = posture.interior_axis_is_at_most_half_saturated();
+            let super_half = posture.interior_axis_is_super_half_saturated();
+            assert_eq!(
+                at_most == Some(true),
+                super_half == Some(false),
+                "interior_at_most_half true ↔ super_half false complementarity failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_half_saturated_iff_sub_half_or_half() {
+        // DISJOINT-UNION IDENTITY LOAD-BEARING PARTITION pin on the
+        // COMPOUND polar cell — on every posture with a polar axis, AT-
+        // MOST-HALF fires Some(true) iff EXACTLY ONE of (SUB-HALF, HALF)
+        // fires Some(true). The two summands are mutually exclusive by
+        // arithmetic and their disjoint union is EXACTLY the CLOSED
+        // lower half AT-MOST-HALF names.
+        let four_polar_posture =
+            ResourceLimits::from_field_values([0, 0, usize::MAX, usize::MAX, 41, 43]);
+        let five_polar_posture =
+            ResourceLimits::from_field_values([0, 0, 0, usize::MAX, usize::MAX, 41]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            four_polar_posture,
+            five_polar_posture,
+        ] {
+            if !a.has_polar_axis() {
+                continue;
+            }
+            let at_most = a.polar_axis_is_at_most_half_saturated();
+            let sub_half = a.polar_axis_is_sub_half_saturated();
+            let half = a.polar_axis_is_half_saturated();
+            assert_eq!(
+                at_most == Some(true),
+                sub_half == Some(true) || half == Some(true),
+                "polar_at_most_half ↔ (sub_half OR half) disjoint-union failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_half_saturated_iff_sub_half_or_half() {
+        // DISJOINT-UNION IDENTITY dual on the COMPOUND interior cell —
+        // walked via per-count synthetic interior-axis fixtures.
+        for count in 1..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [0_usize; ResourceLimits::FIELD_COUNT];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 41;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let at_most = posture.interior_axis_is_at_most_half_saturated();
+            let sub_half = posture.interior_axis_is_sub_half_saturated();
+            let half = posture.interior_axis_is_half_saturated();
+            assert_eq!(
+                at_most == Some(true),
+                sub_half == Some(true) || half == Some(true),
+                "interior_at_most_half ↔ (sub_half OR half) disjoint-union failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_sub_half_saturated_true_implies_is_at_most_half_saturated_true(
+    ) {
+        // SUB-HALF-IMPLIES-AT-MOST-HALF LOAD-BEARING INCLUSION bridge on
+        // the COMPOUND polar cell — the OPEN lower half is a strict
+        // subset of the CLOSED lower half. Fires on the count == 2
+        // ENDPOINTS_ONLY posture.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            if a.polar_axis_is_sub_half_saturated() == Some(true) {
+                assert_eq!(
+                    a.polar_axis_is_at_most_half_saturated(),
+                    Some(true),
+                    "polar sub_half true ⇒ at_most_half true failed on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_sub_half_saturated_true_implies_is_at_most_half_saturated_true(
+    ) {
+        // SUB-HALF-IMPLIES-AT-MOST-HALF LOAD-BEARING INCLUSION bridge
+        // dual on the COMPOUND interior cell — walked via per-count
+        // synthetic interior-axis fixtures.
+        for count in 1..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [0_usize; ResourceLimits::FIELD_COUNT];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 41;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if posture.interior_axis_is_sub_half_saturated() == Some(true) {
+                assert_eq!(
+                    posture.interior_axis_is_at_most_half_saturated(),
+                    Some(true),
+                    "interior sub_half true ⇒ at_most_half true failed at count {count} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_half_saturated_true_implies_is_at_most_half_saturated_true() {
+        // HALF-IMPLIES-AT-MOST-HALF LOAD-BEARING RIGHT-ENDPOINT
+        // INCLUSION bridge on the COMPOUND polar cell — the balance-
+        // point is the RIGHT endpoint of the CLOSED lower half. Fires
+        // on the count == 3 SPARSE / CONTIGUOUS_INTERIOR postures.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            if a.polar_axis_is_half_saturated() == Some(true) {
+                assert_eq!(
+                    a.polar_axis_is_at_most_half_saturated(),
+                    Some(true),
+                    "polar half true ⇒ at_most_half true failed on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_half_saturated_true_implies_is_at_most_half_saturated_true()
+    {
+        // HALF-IMPLIES-AT-MOST-HALF bridge dual on the COMPOUND interior
+        // cell — walked via per-count synthetic interior-axis fixtures.
+        // Fires at count == 3.
+        for count in 1..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [0_usize; ResourceLimits::FIELD_COUNT];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 41;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if posture.interior_axis_is_half_saturated() == Some(true) {
+                assert_eq!(
+                    posture.interior_axis_is_at_most_half_saturated(),
+                    Some(true),
+                    "interior half true ⇒ at_most_half true failed at count {count} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_half_saturated_true_implies_is_saturated_false() {
+        // AT-MOST-HALF-EXCLUDES-SATURATED on the COMPOUND polar cell at
+        // FIELD_COUNT >= 2.
+        const { assert!(ResourceLimits::FIELD_COUNT >= 2) };
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            if a.polar_axis_is_at_most_half_saturated() == Some(true) {
+                assert_eq!(
+                    a.polar_axis_is_saturated(),
+                    Some(false),
+                    "polar at_most_half true ⇒ saturated false failed on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_half_saturated_true_implies_is_saturated_false() {
+        // AT-MOST-HALF-EXCLUDES-SATURATED dual on the COMPOUND interior
+        // cell — walked via per-count synthetic interior-axis fixtures.
+        const { assert!(ResourceLimits::FIELD_COUNT >= 2) };
+        for count in 1..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [0_usize; ResourceLimits::FIELD_COUNT];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 41;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if posture.interior_axis_is_at_most_half_saturated() == Some(true) {
+                assert_eq!(
+                    posture.interior_axis_is_saturated(),
+                    Some(false),
+                    "interior at_most_half true ⇒ saturated false failed at count {count} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_half_saturated_true_implies_is_barely_super_half_saturated_false(
+    ) {
+        // AT-MOST-HALF-EXCLUDES-BARELY-SUPER-HALF LOAD-BEARING
+        // NEIGHBOUR-SEPARATION pin on the COMPOUND polar cell — BARELY-
+        // SUPER-HALF fires at count == FIELD_COUNT/2+1 (the neighbour-
+        // above the balance-point), which is strictly outside the CLOSED
+        // lower half at every FIELD_COUNT.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            if a.polar_axis_is_at_most_half_saturated() == Some(true) {
+                assert_ne!(
+                    a.polar_axis_is_barely_super_half_saturated(),
+                    Some(true),
+                    "polar at_most_half true ⇒ barely_super_half false failed on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_half_saturated_true_implies_is_barely_super_half_saturated_false(
+    ) {
+        // AT-MOST-HALF-EXCLUDES-BARELY-SUPER-HALF dual on the COMPOUND
+        // interior cell — walked via per-count synthetic interior-axis
+        // fixtures.
+        for count in 1..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [0_usize; ResourceLimits::FIELD_COUNT];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 41;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if posture.interior_axis_is_at_most_half_saturated() == Some(true) {
+                assert_ne!(
+                    posture.interior_axis_is_barely_super_half_saturated(),
+                    Some(true),
+                    "interior at_most_half true ⇒ barely_super_half false failed at count {count} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_compound_is_at_most_half_saturated_polar_interior_co_fire_iff_dual_balance_point(
+    ) {
+        // CROSS-CELL POLAR-INTERIOR DUAL-BALANCE-POINT CO-FIRE IDENTITY
+        // — LOAD-BEARING structural pin UNIQUE to the COMPOUND partition
+        // on the AT-MOST-HALF cell. Both AT-MOST-HALF arms firing
+        // Some(true) forces `count_polar * 2 <= FIELD_COUNT &&
+        // count_interior * 2 <= FIELD_COUNT`; combined with the COMPOUND
+        // EXHAUSTIVE-PARTITION identity `count_polar + count_interior ==
+        // FIELD_COUNT`, this pins BOTH counts at EXACTLY `FIELD_COUNT / 2`
+        // at even FIELD_COUNT (the dual-balance-point where both
+        // HALF-SATURATED cells fire Some(true)) OR is UNSATISFIABLE at
+        // odd FIELD_COUNT. Fundamentally STRONGER than the bare mutual-
+        // exclusion pin the COMPOUND BARELY-SUPER-HALF cell carries —
+        // this pin names the exact witness (DUAL-BALANCE-POINT via BOTH
+        // HALF-SATURATED cells) of the CO-FIRE arm the AT-MOST-HALF
+        // compound row structurally admits at even FIELD_COUNT rather
+        // than merely refusing it. Exercised across every shipped +
+        // hand-authored + test-local posture plus synthetic four- and
+        // five-polar-axis fixtures on both cells.
+        let four_polar_posture =
+            ResourceLimits::from_field_values([0, 0, usize::MAX, usize::MAX, 41, 43]);
+        let five_polar_posture =
+            ResourceLimits::from_field_values([0, 0, 0, usize::MAX, usize::MAX, 41]);
+        let five_interior_posture = ResourceLimits::from_field_values([41, 43, 47, 53, 59, 0]);
+        let two_interior_posture = ResourceLimits::from_field_values([41, 43, 0, 0, 0, 0]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            four_polar_posture,
+            five_polar_posture,
+            five_interior_posture,
+            two_interior_posture,
+        ] {
+            let co_fire = matches!(a.polar_axis_is_at_most_half_saturated(), Some(true))
+                && matches!(a.interior_axis_is_at_most_half_saturated(), Some(true));
+            let dual_balance = matches!(a.polar_axis_is_half_saturated(), Some(true))
+                && matches!(a.interior_axis_is_half_saturated(), Some(true));
+            assert_eq!(
+                co_fire, dual_balance,
+                "at_most_half co-fire ↔ dual-balance-point (both HALF) failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_compound_is_at_most_half_saturated_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the COMPOUND cells — both AT-MOST-HALF
+        // projections are evaluable in const context so a caller can
+        // pin the compound count-times-two-leq-FIELD_COUNT identities
+        // at compile time as build-breaks.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_at_most_half_saturated(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_at_most_half_saturated(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_at_most_half_saturated(),
+            Some(false)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .interior_axis_is_at_most_half_saturated()
+            .is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .interior_axis_is_at_most_half_saturated()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .polar_axis_is_at_most_half_saturated()
+            .is_none());
+        const _: () = assert!(matches!(
+            SPARSE_BOTTOM_POSTURE.polar_axis_is_at_most_half_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.interior_axis_is_at_most_half_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_axis_is_at_most_half_saturated(),
             Some(true)
         ));
     }

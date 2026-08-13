@@ -20038,6 +20038,24 @@ impl ResourceLimits {
     /// too. Pinned via
     /// `resource_limits_bottom_axis_is_strictly_multi_true_implies_is_singleton_false`.
     ///
+    /// **ATOMIC-STRICTLY-MULTI NONUPLE partition — LOAD-BEARING
+    /// exhaustive-partition pin**: on every posture, the atomic
+    /// (bottom_axis_is_strictly_multi, top_axis_is_strictly_multi) pair
+    /// falls into EXACTLY ONE of nine (Option<bool>, Option<bool>)
+    /// cells indexed by (count_bottom, count_top) under the disjoint-
+    /// atomic sum bound `count_bottom + count_top <= FIELD_COUNT`. All
+    /// nine cells of the Cartesian product are feasible — the atomic
+    /// sum INEQUALITY strictly refines both the COMPOUND-SATURATION
+    /// TRIPARTITE partition and the COMPOUND-STRICTLY-MULTI
+    /// QUINQUEPARTITE partition one CELL-KIND axis over, whose strict
+    /// sum-equality `count_polar + count_interior == FIELD_COUNT`
+    /// collapses cardinalities onto fewer cells; the atomic partition
+    /// opens two extra corners the compound partition structurally
+    /// cannot reach (the all-interior (None, None) cell and the
+    /// both-endpoints (Some(false), Some(false)) cell at (1, 1)).
+    /// Pinned via
+    /// `resource_limits_atomic_is_strictly_multi_nonuple_partition_by_exhaustive_bottom_top_split`.
+    ///
     /// **Preset pins — LOAD-BEARING SATURATION contrast**:
     /// `EMPTY_RESOURCE_LIMITS.bottom_axis_is_strictly_multi() ==
     /// Some(false)` (saturated bottom pole packs SIX axes at 0, count ==
@@ -20161,6 +20179,19 @@ impl ResourceLimits {
     /// upper-endpoint exclusion fires at the saturated cardinality.
     /// Pinned via
     /// `resource_limits_atomic_is_strictly_multi_saturation_pole_partitions_into_upper_endpoint_and_absent`.
+    ///
+    /// **ATOMIC-STRICTLY-MULTI NONUPLE partition dual — LOAD-BEARING
+    /// exhaustive-partition pin**: on every posture, the atomic
+    /// (bottom_axis_is_strictly_multi, top_axis_is_strictly_multi) pair
+    /// falls into EXACTLY ONE of nine (Option<bool>, Option<bool>)
+    /// cells indexed by (count_bottom, count_top) under the disjoint-
+    /// atomic sum bound `count_bottom + count_top <= FIELD_COUNT`. All
+    /// nine cells of the Cartesian product are feasible — a strictly
+    /// wider partition than the COMPOUND-STRICTLY-MULTI QUINQUEPARTITE
+    /// partition one CELL-KIND axis over, whose strict sum-equality
+    /// `count_polar + count_interior == FIELD_COUNT` collapses seven
+    /// feasible cardinalities onto only five cells. Pinned via
+    /// `resource_limits_atomic_is_strictly_multi_nonuple_partition_by_exhaustive_bottom_top_split`.
     ///
     /// **ANY-fold bridge dual**: `a.top_axis_is_strictly_multi().is_some()
     /// ⇔ a.has_top_axis()`. Pinned via
@@ -67028,6 +67059,145 @@ mod tests {
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS
             .top_axis_is_strictly_multi()
             .is_none());
+    }
+
+    #[test]
+    fn resource_limits_atomic_is_strictly_multi_nonuple_partition_by_exhaustive_bottom_top_split() {
+        // ATOMIC-STRICTLY-MULTI NONUPLE partition — LOAD-BEARING
+        // structural pin. On every posture, the atomic
+        // (bottom_axis_is_strictly_multi, top_axis_is_strictly_multi) pair
+        // falls into EXACTLY ONE of nine (Option<bool>, Option<bool>) cells
+        // indexed by (count_bottom, count_top) under the disjoint-atomic
+        // sum bound `count_bottom + count_top <= FIELD_COUNT`:
+        //
+        //   (count_b == 0, count_t == 0)                        → (None, None)
+        //   (count_b == 0, count_t ∈ {1, FIELD_COUNT})          → (None, Some(false))
+        //   (count_b == 0, 1 < count_t < FIELD_COUNT)           → (None, Some(true))
+        //   (count_b ∈ {1, FIELD_COUNT}, count_t == 0)          → (Some(false), None)
+        //   (count_b == 1, count_t == 1)                        → (Some(false), Some(false))
+        //   (count_b == 1, 1 < count_t < FIELD_COUNT)           → (Some(false), Some(true))
+        //   (1 < count_b < FIELD_COUNT, count_t == 0)           → (Some(true), None)
+        //   (1 < count_b < FIELD_COUNT, count_t == 1)           → (Some(true), Some(false))
+        //   (1 < count_b, 1 < count_t, sum <= FIELD_COUNT)      → (Some(true), Some(true))
+        //
+        // A strictly-wider partition than the COMPOUND polar-interior
+        // QUINQUEPARTITE partition one CELL-KIND axis over whose strict
+        // sum-equality `count_polar + count_interior == FIELD_COUNT`
+        // collapses seven feasible cardinalities onto only five cells —
+        // the ATOMIC sum INEQUALITY `count_b + count_t <= FIELD_COUNT`
+        // opens two extra corners the compound sum EQUALITY structurally
+        // cannot reach: the (None, None) all-interior cell (compound
+        // partition never fires it because the compound sum equality
+        // forbids polar_count == 0 without interior_count == FIELD_COUNT
+        // simultaneously vacating the polar cell, which is fine, but the
+        // (None, None) atomic cell requires BOTH atomic cells absent
+        // where the disjoint sum admits it via count_interior ==
+        // FIELD_COUNT) and the (Some(false), Some(false)) both-endpoints
+        // cell at (count_b, count_t) == (1, 1).
+        //
+        // Exhaustive sweep over every feasible (count_b, count_t) tuple
+        // via a synthetic-posture builder that places the first `c_b`
+        // axes at the bottom sentinel `0`, the next `c_t` axes at the top
+        // sentinel `usize::MAX`, and the remainder at strictly-interior
+        // sentinels — covers all 28 feasible tuples so the partition is
+        // pinned by enumeration, not by preset sampling alone.
+        let interior_sentinels: [usize; ResourceLimits::FIELD_COUNT] = [41, 43, 47, 53, 59, 61];
+        for c_bottom in 0..=ResourceLimits::FIELD_COUNT {
+            for c_top in 0..=(ResourceLimits::FIELD_COUNT - c_bottom) {
+                let mut fields = interior_sentinels;
+                let mut idx = 0;
+                while idx < c_bottom {
+                    fields[idx] = 0;
+                    idx += 1;
+                }
+                while idx < c_bottom + c_top {
+                    fields[idx] = usize::MAX;
+                    idx += 1;
+                }
+                let posture = ResourceLimits::from_field_values(fields);
+                assert_eq!(
+                    posture.count_bottom_axes(),
+                    c_bottom,
+                    "synthetic posture at (c_bottom={c_bottom}, c_top={c_top}) did not tally to c_bottom bottom axes",
+                );
+                assert_eq!(
+                    posture.count_top_axes(),
+                    c_top,
+                    "synthetic posture at (c_bottom={c_bottom}, c_top={c_top}) did not tally to c_top top axes",
+                );
+                let pair = (
+                    posture.bottom_axis_is_strictly_multi(),
+                    posture.top_axis_is_strictly_multi(),
+                );
+                let expected_bottom = if c_bottom == 0 {
+                    None
+                } else {
+                    Some(c_bottom > 1 && c_bottom < ResourceLimits::FIELD_COUNT)
+                };
+                let expected_top = if c_top == 0 {
+                    None
+                } else {
+                    Some(c_top > 1 && c_top < ResourceLimits::FIELD_COUNT)
+                };
+                assert_eq!(
+                    pair,
+                    (expected_bottom, expected_top),
+                    "atomic STRICTLY-MULTI pair mismatch at (c_bottom={c_bottom}, c_top={c_top}) on {posture:?}",
+                );
+                let cell_name = match pair {
+                    (None, None) => "cell_no_bottom_no_top",
+                    (None, Some(false)) => "cell_no_bottom_top_endpoint",
+                    (None, Some(true)) => "cell_no_bottom_top_strictly_multi",
+                    (Some(false), None) => "cell_bottom_endpoint_no_top",
+                    (Some(false), Some(false)) => "cell_both_endpoints",
+                    (Some(false), Some(true)) => "cell_bottom_endpoint_top_strictly_multi",
+                    (Some(true), None) => "cell_bottom_strictly_multi_no_top",
+                    (Some(true), Some(false)) => "cell_bottom_strictly_multi_top_endpoint",
+                    (Some(true), Some(true)) => "cell_both_strictly_multi",
+                };
+                let expected_name = match (c_bottom, c_top) {
+                    (0, 0) => "cell_no_bottom_no_top",
+                    (1, 1) => "cell_both_endpoints",
+                    (0, 1 | 6) => "cell_no_bottom_top_endpoint",
+                    (1 | 6, 0) => "cell_bottom_endpoint_no_top",
+                    (0, _) => "cell_no_bottom_top_strictly_multi",
+                    (_, 0) => "cell_bottom_strictly_multi_no_top",
+                    (1, _) => "cell_bottom_endpoint_top_strictly_multi",
+                    (_, 1) => "cell_bottom_strictly_multi_top_endpoint",
+                    _ => "cell_both_strictly_multi",
+                };
+                assert_eq!(
+                    cell_name, expected_name,
+                    "cell-name mismatch at (c_bottom={c_bottom}, c_top={c_top}) on {posture:?}",
+                );
+            }
+        }
+        // Preset-drift pin — every shipped preset + hand-authored posture
+        // falls into a specific nonuple cell. Any future preset-drift
+        // that accidentally moves a preset out of its cell fires here.
+        // EMPTY / UNBOUNDED pack all six axes at one pole so their
+        // STRICTLY-MULTI verdict is Some(false) at that pole (hitting the
+        // upper endpoint of the open interval, count == FIELD_COUNT) and
+        // None at the dual pole. DEFAULT and both HAND_AUTHORED postures
+        // carry every axis strictly interior — no bottom, no top — so
+        // both STRICTLY-MULTI verdicts are None.
+        let preset_pairs = [
+            (EMPTY_RESOURCE_LIMITS, (Some(false), None)),
+            (UNBOUNDED_RESOURCE_LIMITS, (None, Some(false))),
+            (DEFAULT_RESOURCE_LIMITS, (None, None)),
+            (HAND_AUTHORED_MID_POSTURE, (None, None)),
+            (HAND_AUTHORED_OTHER_POSTURE, (None, None)),
+        ];
+        for (posture, expected) in preset_pairs {
+            let pair = (
+                posture.bottom_axis_is_strictly_multi(),
+                posture.top_axis_is_strictly_multi(),
+            );
+            assert_eq!(
+                pair, expected,
+                "atomic STRICTLY-MULTI preset-drift on {posture:?}",
+            );
+        }
     }
 
     #[test]

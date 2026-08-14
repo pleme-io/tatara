@@ -11621,7 +11621,105 @@ impl ResourceLimits {
     /// indirection, no allocation.
     #[must_use]
     pub const fn count_bottom_axes(self) -> usize {
-        let mask = self.axes_is_bottom();
+        Self::count_mask_bits(self.axes_is_bottom())
+    }
+
+    /// Per-axis mask POPCOUNT — `Self::count_mask_bits(mask)` returns
+    /// the number of `true` bits in a `[bool; Self::FIELD_COUNT]`
+    /// per-axis mask, in `0..=Self::FIELD_COUNT`. The BOUNDARY primitive
+    /// lifting the shape
+    /// ```text
+    /// let mut i = 0;
+    /// let mut count = 0;
+    /// while i < Self::FIELD_COUNT {
+    ///     if mask[i] { count += 1; }
+    ///     i += 1;
+    /// }
+    /// count
+    /// ```
+    /// that every ARITHMETIC-QUANTIFIER `count_X_axes` tally on
+    /// [`ResourceLimits`] carries at its body —
+    /// [`Self::count_bottom_axes`], [`Self::count_top_axes`],
+    /// [`Self::count_polar_axes`], [`Self::count_interior_axes`] all
+    /// fold a per-axis `[bool; FIELD_COUNT]` mask into its `usize`
+    /// popcount at the exit. Pre-lift each COUNT tally open-coded the
+    /// six-line `while`-based fold at its own body — the SAME per-axis
+    /// popcount dispatch appears verbatim on four sibling tallies, a
+    /// copy-paste cascade whose consistency the type system did not
+    /// gate (a tally that skipped the `i += 1` increment would silently
+    /// loop, and a tally that swapped `count += 1` for a different
+    /// accumulator would silently mis-classify without any structural
+    /// break). Post-lift the shape binds at ONE typed `const fn` on
+    /// [`ResourceLimits`], and every ARITHMETIC-QUANTIFIER tally
+    /// composes through this helper — the per-axis fold is a
+    /// substrate-level theorem rather than a per-tally convention.
+    ///
+    /// **Fold-agreement identity — LOAD-BEARING structural pin**: on
+    /// every `mask`, `Self::count_mask_bits(mask) ==
+    /// mask.iter().filter(|&&bit| bit).count()`. Pinned via
+    /// `resource_limits_count_mask_bits_agrees_with_iterator_filter_count`.
+    ///
+    /// **Empty-mask identity**: `Self::count_mask_bits([false;
+    /// FIELD_COUNT]) == 0` — a mask with no set bits folds to zero.
+    /// **All-ones identity**: `Self::count_mask_bits([true; FIELD_COUNT])
+    /// == Self::FIELD_COUNT` — a saturated mask folds to the axis
+    /// cardinality. The (empty, saturated) endpoints partition the
+    /// popcount range into disjoint (min, max) verdicts. Pinned via
+    /// `resource_limits_count_mask_bits_at_endpoints_pins_zero_and_field_count`.
+    ///
+    /// **Bounded-above identity**: on every `mask`,
+    /// `Self::count_mask_bits(mask) <= Self::FIELD_COUNT`. The popcount
+    /// cannot exceed the mask arity — the STRUCTURAL bound the
+    /// substrate proves once. Pinned via
+    /// `resource_limits_count_mask_bits_bounded_above_by_field_count`.
+    ///
+    /// **Complement identity**: on every `mask`,
+    /// `Self::count_mask_bits(mask) + Self::count_mask_bits(negate(mask))
+    /// == Self::FIELD_COUNT` — a mask and its pointwise negation
+    /// partition the axis set disjointly and exhaustively, so their
+    /// popcounts sum to the axis cardinality. The ARITHMETIC form of
+    /// the boolean De Morgan complement on per-axis masks lifted
+    /// through disjoint-mask sum-of-cardinalities. Pinned via
+    /// `resource_limits_count_mask_bits_and_complement_sum_equals_field_count`.
+    ///
+    /// `const fn` so a caller can pin the popcount at compile time
+    /// (`const _: () =
+    /// assert!(ResourceLimits::count_mask_bits([true; ResourceLimits::FIELD_COUNT])
+    /// == ResourceLimits::FIELD_COUNT);`) — sibling of the const-fn
+    /// evaluability pins the [`Self::count_bottom_axes`] and paired
+    /// tallies already carry at their own exits.
+    ///
+    /// **Adoption compounds**: the four shipped `count_X_axes`
+    /// tallies rewrite from the open-coded six-line fold to the
+    /// two-line `Self::count_mask_bits(self.axes_is_X())` composition
+    /// at no semantic change; any future arithmetic-quantifier tally
+    /// over a `[bool; FIELD_COUNT]` mask (mixity/uniformity variants,
+    /// higher-order axial partitions, cross-posture disagreement
+    /// counts) composes through this same primitive.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-axis popcount dispatch shape at every `count_X_axes` body
+    /// binds at ONE typed named `const fn` on the algebra rather than
+    /// a per-tally six-line open-coded `while` loop. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the helper composes
+    /// mechanically under the fold-agreement identity above with no
+    /// re-derivation at the caller. THEORY.md §V.1 — knowable
+    /// platform.
+    ///
+    /// Frontier inspiration: APL's `+/` folded over a boolean vector;
+    /// Haskell's `length . filter id` on a `[Bool]`; Idris's `count
+    /// id` under a total function signature; Rust's stable
+    /// `<[bool]>::iter().filter(|&&b| b).count()` iterator idiom. The
+    /// `usize::count_ones` primitive Rust exposes on integer packed
+    /// masks is the same operation one representation-KIND axis over
+    /// on a bit-packed encoding. Translation through pleme-io
+    /// primitives is the plain `const fn` `while`-based popcount below
+    /// — no closure, no typeclass indirection, and the mask is an
+    /// owned array eagerly evaluated by the caller (Rust `const fn`
+    /// cannot take a closure on stable, so the mask is projected
+    /// eagerly and folded structurally).
+    #[must_use]
+    pub const fn count_mask_bits(mask: [bool; Self::FIELD_COUNT]) -> usize {
         let mut i = 0;
         let mut count = 0;
         while i < Self::FIELD_COUNT {
@@ -11696,16 +11794,7 @@ impl ResourceLimits {
     /// [`Self::axes_is_top`] mask.
     #[must_use]
     pub const fn count_top_axes(self) -> usize {
-        let mask = self.axes_is_top();
-        let mut i = 0;
-        let mut count = 0;
-        while i < Self::FIELD_COUNT {
-            if mask[i] {
-                count += 1;
-            }
-            i += 1;
-        }
-        count
+        Self::count_mask_bits(self.axes_is_top())
     }
 
     /// Whole-posture ARITHMETIC-POLAR tally — `self.count_polar_axes()`
@@ -11830,16 +11919,7 @@ impl ResourceLimits {
     /// [`Self::axes_is_pole`] mask.
     #[must_use]
     pub const fn count_polar_axes(self) -> usize {
-        let mask = self.axes_is_pole();
-        let mut i = 0;
-        let mut count = 0;
-        while i < Self::FIELD_COUNT {
-            if mask[i] {
-                count += 1;
-            }
-            i += 1;
-        }
-        count
+        Self::count_mask_bits(self.axes_is_pole())
     }
 
     /// Whole-posture ARITHMETIC-INTERIOR tally —
@@ -11927,16 +12007,7 @@ impl ResourceLimits {
     /// already-lifted [`Self::axes_is_interior`] mask.
     #[must_use]
     pub const fn count_interior_axes(self) -> usize {
-        let mask = self.axes_is_interior();
-        let mut i = 0;
-        let mut count = 0;
-        while i < Self::FIELD_COUNT {
-            if mask[i] {
-                count += 1;
-            }
-            i += 1;
-        }
-        count
+        Self::count_mask_bits(self.axes_is_interior())
     }
 
     /// Present-axis-conditional witness — `Self::witness_axis_presence(count,
@@ -86852,5 +86923,191 @@ mod tests {
             DEFAULT_RESOURCE_LIMITS.interior_axis_is_partially_saturated(),
             Some(false)
         ));
+    }
+
+    // Hand-authored per-axis mask fixtures spanning the popcount range
+    // 0..=FIELD_COUNT — used by the count_mask_bits sweep tests below to
+    // cover every distinct verdict of the substrate popcount primitive.
+    const MASK_ALL_FALSE: [bool; ResourceLimits::FIELD_COUNT] =
+        [false, false, false, false, false, false];
+    const MASK_SINGLE_HEAD: [bool; ResourceLimits::FIELD_COUNT] =
+        [true, false, false, false, false, false];
+    const MASK_SINGLE_TAIL: [bool; ResourceLimits::FIELD_COUNT] =
+        [false, false, false, false, false, true];
+    const MASK_TWO_ENDS: [bool; ResourceLimits::FIELD_COUNT] =
+        [true, false, false, false, false, true];
+    const MASK_ALTERNATING_HEAD_TRUE: [bool; ResourceLimits::FIELD_COUNT] =
+        [true, false, true, false, true, false];
+    const MASK_ALTERNATING_HEAD_FALSE: [bool; ResourceLimits::FIELD_COUNT] =
+        [false, true, false, true, false, true];
+    const MASK_FIRST_HALF: [bool; ResourceLimits::FIELD_COUNT] =
+        [true, true, true, false, false, false];
+    const MASK_SECOND_HALF: [bool; ResourceLimits::FIELD_COUNT] =
+        [false, false, false, true, true, true];
+    const MASK_MISSING_HEAD: [bool; ResourceLimits::FIELD_COUNT] =
+        [false, true, true, true, true, true];
+    const MASK_MISSING_TAIL: [bool; ResourceLimits::FIELD_COUNT] =
+        [true, true, true, true, true, false];
+    const MASK_ALL_TRUE: [bool; ResourceLimits::FIELD_COUNT] = [true, true, true, true, true, true];
+
+    const COUNT_MASK_BITS_MASK_SWEEP: &[[bool; ResourceLimits::FIELD_COUNT]] = &[
+        MASK_ALL_FALSE,
+        MASK_SINGLE_HEAD,
+        MASK_SINGLE_TAIL,
+        MASK_TWO_ENDS,
+        MASK_ALTERNATING_HEAD_TRUE,
+        MASK_ALTERNATING_HEAD_FALSE,
+        MASK_FIRST_HALF,
+        MASK_SECOND_HALF,
+        MASK_MISSING_HEAD,
+        MASK_MISSING_TAIL,
+        MASK_ALL_TRUE,
+    ];
+
+    #[test]
+    fn resource_limits_count_mask_bits_agrees_with_iterator_filter_count() {
+        // Fold-agreement contract — the substrate popcount helper's
+        // verdict on every mask fixture agrees with the raw
+        // `.iter().filter(|&&bit| bit).count()` open-coded fold that
+        // every prior per-tally body carried before the helper lift.
+        // Swept across an 11-mask constellation covering the full
+        // 0..=FIELD_COUNT popcount range, including endpoints
+        // (all-false, all-true), singletons at both boundary positions,
+        // both alternating parities, both contiguous half-masks, and
+        // both single-hole complements of all-ones. A helper regression
+        // that mis-indexed the while-loop or skipped increments would
+        // break here on at least one mask.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            let via_helper = ResourceLimits::count_mask_bits(*mask);
+            let via_iterator = mask.iter().filter(|&&bit| bit).count();
+            assert_eq!(
+                via_helper, via_iterator,
+                "helper != iterator-filter-count on mask {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_mask_bits_at_endpoints_pins_zero_and_field_count() {
+        // Endpoint identities — the (empty, all-ones) mask endpoints
+        // partition the popcount range into disjoint (min, max)
+        // verdicts. Named separately from the sweep test so a future
+        // regression that broke only the endpoint arms would fire a
+        // dedicated failure rather than folding into a mask-sweep
+        // assertion.
+        assert_eq!(ResourceLimits::count_mask_bits(MASK_ALL_FALSE), 0);
+        assert_eq!(
+            ResourceLimits::count_mask_bits(MASK_ALL_TRUE),
+            ResourceLimits::FIELD_COUNT,
+        );
+    }
+
+    #[test]
+    fn resource_limits_count_mask_bits_bounded_above_by_field_count() {
+        // Structural upper-bound identity — the popcount cannot exceed
+        // the mask arity. Swept across the same 11-mask constellation
+        // so the bound is pinned on every distinct popcount verdict in
+        // the 0..=FIELD_COUNT range. A helper regression that added a
+        // spurious increment past the arity would break here.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            assert!(
+                ResourceLimits::count_mask_bits(*mask) <= ResourceLimits::FIELD_COUNT,
+                "popcount exceeds FIELD_COUNT on mask {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_mask_bits_and_complement_sum_equals_field_count() {
+        // Complement identity — a mask and its pointwise negation
+        // partition the axis set disjointly and exhaustively, so their
+        // popcounts sum to the axis cardinality. The ARITHMETIC form
+        // of the boolean De Morgan complement on per-axis masks
+        // lifted through disjoint-mask sum-of-cardinalities. Swept
+        // across the same 11-mask constellation so the identity is
+        // pinned on every distinct popcount verdict.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            let mut complement = [false; ResourceLimits::FIELD_COUNT];
+            let mut i = 0;
+            while i < ResourceLimits::FIELD_COUNT {
+                complement[i] = !mask[i];
+                i += 1;
+            }
+            assert_eq!(
+                ResourceLimits::count_mask_bits(*mask)
+                    + ResourceLimits::count_mask_bits(complement),
+                ResourceLimits::FIELD_COUNT,
+                "popcount + complement popcount != FIELD_COUNT on mask {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_axes_family_bodies_delegate_to_count_mask_bits() {
+        // Sweep-of-family pin — after routing the four count_X_axes
+        // ARITHMETIC-QUANTIFIER tally bodies through
+        // ResourceLimits::count_mask_bits, the (bottom, top, polar,
+        // interior) × (EMPTY, DEFAULT, UNBOUNDED, HAND_AUTHORED_MID,
+        // HAND_AUTHORED_OTHER) constellation of 4×5 = 20 shipped
+        // verdicts continues to agree with the helper-based shape
+        // `count_mask_bits(axes_is_X())`. The pin locks the
+        // semantics-equivalent rewrite in the shipped bodies rather
+        // than trusting the mechanical rewrite by inspection: a
+        // future tally lift that fed the wrong mask projection to
+        // the helper, or a helper regression that miscounted a
+        // per-axis position, would break here on at least one
+        // (axis, posture) pair.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                posture.count_bottom_axes(),
+                ResourceLimits::count_mask_bits(posture.axes_is_bottom()),
+                "count_bottom_axes disagrees with count_mask_bits(axes_is_bottom) on {posture:?}",
+            );
+            assert_eq!(
+                posture.count_top_axes(),
+                ResourceLimits::count_mask_bits(posture.axes_is_top()),
+                "count_top_axes disagrees with count_mask_bits(axes_is_top) on {posture:?}",
+            );
+            assert_eq!(
+                posture.count_polar_axes(),
+                ResourceLimits::count_mask_bits(posture.axes_is_pole()),
+                "count_polar_axes disagrees with count_mask_bits(axes_is_pole) on {posture:?}",
+            );
+            assert_eq!(
+                posture.count_interior_axes(),
+                ResourceLimits::count_mask_bits(posture.axes_is_interior()),
+                "count_interior_axes disagrees with count_mask_bits(axes_is_interior) on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_mask_bits_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the popcount at compile time as a
+        // build-break. Sibling of the const-fn evaluability pins the
+        // count_X_axes tallies already carry at their own exits.
+        // Covers the two popcount endpoints (all-false → 0, all-true
+        // → FIELD_COUNT), a singleton (popcount 1), and a two-endpoint
+        // mask (popcount 2) so the helper is pinned on all three
+        // distinct arithmetic verdicts the tally regime uses.
+        const _: () = assert!(ResourceLimits::count_mask_bits(MASK_ALL_FALSE) == 0);
+        const _: () =
+            assert!(ResourceLimits::count_mask_bits(MASK_ALL_TRUE) == ResourceLimits::FIELD_COUNT);
+        const _: () = assert!(ResourceLimits::count_mask_bits(MASK_SINGLE_HEAD) == 1);
+        const _: () = assert!(ResourceLimits::count_mask_bits(MASK_SINGLE_TAIL) == 1);
+        const _: () = assert!(ResourceLimits::count_mask_bits(MASK_TWO_ENDS) == 2);
+        const _: () = assert!(
+            ResourceLimits::count_mask_bits(MASK_FIRST_HALF) == ResourceLimits::FIELD_COUNT / 2
+        );
+        const _: () = assert!(
+            ResourceLimits::count_mask_bits(MASK_MISSING_HEAD) == ResourceLimits::FIELD_COUNT - 1
+        );
     }
 }

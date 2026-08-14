@@ -25712,6 +25712,245 @@ impl ResourceLimits {
             c => Some(c >= Self::FIELD_COUNT - 1),
         }
     }
+
+    /// Whole-posture AT-MOST-BARELY-MULTI-OF-BOTTOM predicate —
+    /// `self.bottom_axis_is_at_most_barely_multi()` returns `Some(true)`
+    /// iff AT LEAST ONE axis of `self` is at the bottom pole AND
+    /// [`Self::count_bottom_axes`] `<= 2` (the CLOSED left-endpoint
+    /// bracket around SINGLETON, INCLUDING the fully-alone landing
+    /// SINGLETON and the one-past-alone landing BARELY-MULTI),
+    /// `Some(false)` iff at least ONE axis is at the bottom pole AND
+    /// the count is strictly above BARELY-MULTI, or `None` iff no
+    /// axis is at the bottom pole. The ATOMIC-CELL LOW-SIDE DUAL of
+    /// [`Self::bottom_axis_is_at_least_nearly_saturated`] one COUNT-
+    /// HALFLINE-ENDPOINT axis over — jointly the
+    /// (bottom_axis_is_at_most_barely_multi,
+    /// bottom_axis_is_at_least_nearly_saturated) endpoint pair
+    /// BRACKETS the count half-line at both ends with the two-count-
+    /// wide closed intervals [1, 2] and [FIELD_COUNT - 1, FIELD_COUNT]
+    /// on the atomic bottom row, symmetric under the `c ↔
+    /// FIELD_COUNT + 1 - c` count-mirror.
+    ///
+    /// **COUNT-LEQ-TWO identity — LOAD-BEARING structural pin**: on
+    /// every posture, `bottom_axis_is_at_most_barely_multi() == { let
+    /// c = self.count_bottom_axes(); if c == 0 { None } else { Some(c
+    /// <= 2) } }`. Pinned via
+    /// `resource_limits_bottom_axis_is_at_most_barely_multi_equals_count_leq_two`.
+    ///
+    /// **AT-MOST-BARELY-MULTI ⇔ (SINGLETON OR BARELY-MULTI) disjoint-
+    /// union identity — LOAD-BEARING PARTITION pin**: on every posture
+    /// with a bottom axis, `bottom_axis_is_at_most_barely_multi() ==
+    /// Some(true) ⇔ (bottom_axis_is_singleton() == Some(true) ||
+    /// bottom_axis_is_barely_multi() == Some(true))`. The two count-
+    /// landings `1` and `2` are the ONLY landings the AT-MOST-BARELY-
+    /// MULTI interval names, and they are the DISJOINT UNION of the
+    /// SINGLETON and BARELY-MULTI count-equality cells. Pinned via
+    /// `resource_limits_bottom_axis_is_at_most_barely_multi_iff_singleton_or_barely_multi`.
+    ///
+    /// **SINGLETON-IMPLIES-AT-MOST-BARELY-MULTI LEFT-endpoint
+    /// inclusion bridge**: on every posture, `bottom_axis_is_singleton()
+    /// == Some(true) ⇒ bottom_axis_is_at_most_barely_multi() ==
+    /// Some(true)`. The SINGLETON endpoint (count == 1) is the LEFT
+    /// endpoint of the CLOSED left-endpoint bracket at every
+    /// FIELD_COUNT >= 1. Pinned via
+    /// `resource_limits_bottom_axis_is_singleton_true_implies_is_at_most_barely_multi_true`.
+    ///
+    /// **BARELY-MULTI-IMPLIES-AT-MOST-BARELY-MULTI RIGHT-endpoint
+    /// inclusion bridge**: on every posture, `bottom_axis_is_barely_multi()
+    /// == Some(true) ⇒ bottom_axis_is_at_most_barely_multi() ==
+    /// Some(true)`. The BARELY-MULTI endpoint (count == 2) is the
+    /// RIGHT endpoint of the CLOSED left-endpoint bracket at every
+    /// FIELD_COUNT >= 2. Pinned via
+    /// `resource_limits_bottom_axis_is_barely_multi_true_implies_is_at_most_barely_multi_true`.
+    ///
+    /// **AT-MOST-BARELY-MULTI-IMPLIES-AT-MOST-HALF nested-interval
+    /// bridge at `Self::FIELD_COUNT >= 4`**: on every posture with
+    /// `Self::FIELD_COUNT >= 4`, `bottom_axis_is_at_most_barely_multi()
+    /// == Some(true) ⇒ bottom_axis_is_at_most_half_saturated() ==
+    /// Some(true)`. The CLOSED left-endpoint bracket sits STRICTLY
+    /// INSIDE the CLOSED lower half at every FIELD_COUNT >= 4 (since
+    /// count <= 2 forces 2 * count <= 4 <= FIELD_COUNT). Pinned via
+    /// `resource_limits_bottom_axis_is_at_most_barely_multi_true_implies_is_at_most_half_saturated_true`.
+    ///
+    /// **AT-MOST-BARELY-MULTI-EXCLUDES-SUPER-HALF mutual-exclusion
+    /// pin at `Self::FIELD_COUNT >= 4`**: on every posture with
+    /// `Self::FIELD_COUNT >= 4`, NOT
+    /// (`bottom_axis_is_at_most_barely_multi() == Some(true) &&
+    /// bottom_axis_is_super_half_saturated() == Some(true)`). At
+    /// FIELD_COUNT >= 4, count <= 2 forces 2 * count <= 4 <=
+    /// FIELD_COUNT, so the AT-MOST-BARELY-MULTI truth-firing arm and
+    /// the SUPER-HALF truth-firing arm sit on opposite sides of the
+    /// balance point. Pinned via
+    /// `resource_limits_bottom_axis_is_at_most_barely_multi_true_implies_is_super_half_saturated_false`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS
+    /// .bottom_axis_is_at_most_barely_multi() == Some(false)`
+    /// (saturated bottom pole packs SIX bottom axes, 6 > 2);
+    /// `UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_at_most_barely_multi()
+    /// == None` (no bottom axis); `DEFAULT_RESOURCE_LIMITS
+    /// .bottom_axis_is_at_most_barely_multi() == None`;
+    /// `HAND_AUTHORED_MID_POSTURE.bottom_axis_is_at_most_barely_multi()
+    /// == None`; `HAND_AUTHORED_OTHER_POSTURE
+    /// .bottom_axis_is_at_most_barely_multi() == None`;
+    /// `SPARSE_BOTTOM_POSTURE.bottom_axis_is_at_most_barely_multi() ==
+    /// Some(false)` (count == 3 > 2);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE
+    /// .bottom_axis_is_at_most_barely_multi() == Some(false)` (same);
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE
+    /// .bottom_axis_is_at_most_barely_multi() == Some(true)`
+    /// (count == 2 == RIGHT-endpoint truth-firing). No shipped preset
+    /// places EXACTLY one bottom axis — the LEFT-endpoint SINGLETON
+    /// truth-firing arm is exercised via a synthetic one-bottom-axis
+    /// fixture built through [`Self::from_field_values`], matching
+    /// the atomic-cell synthetic-fixture pattern the BARELY-MULTI and
+    /// NEARLY-SATURATED pins already carry.
+    ///
+    /// **ANY-fold bridge**:
+    /// `a.bottom_axis_is_at_most_barely_multi().is_some() ⇔
+    /// a.has_bottom_axis()`. Pinned via
+    /// `resource_limits_bottom_axis_is_at_most_barely_multi_is_some_iff_has_bottom_axis`.
+    ///
+    /// `const fn` so a caller can pin the bottom-axis AT-MOST-BARELY-
+    /// MULTI verdict at compile time (`const _: () =
+    /// assert!(matches!(ENDPOINTS_ONLY_BOTTOM_POSTURE
+    /// .bottom_axis_is_at_most_barely_multi(), Some(true)));`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// atomic bottom AT-MOST-BARELY-MULTI predicate is a named typed
+    /// exit `Option<bool>` rather than a per-consumer
+    /// `self.count_bottom_axes() <= 2` inline comparison that
+    /// discards the has-bottom-axis-at-all distinction and silently
+    /// classifies the empty-bottom posture as SPARSITY-ADJACENT (the
+    /// classic zero-elides-as-close-to-singleton bug the None-on-zero
+    /// gate structurally forbids). THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; the AT-MOST-BARELY-MULTI cell is
+    /// a structural derivation from the already-lifted atomic bottom
+    /// COUNT projection via one usize comparison against `2` under a
+    /// two-arm match on the zero split, no new per-axis scan, no
+    /// allocation. THEORY.md §V.1 — knowable platform; naming the
+    /// CLOSED left-endpoint bracket on the atomic bottom row
+    /// alongside its OPEN sibling BARELY-MULTI and its LEFT endpoint
+    /// SINGLETON removes the ambiguity in "at or one past alone" that
+    /// (SINGLETON, BARELY-MULTI) alone forces every consumer to
+    /// inline as a two-clause disjunction on the already-lifted
+    /// count-equality cells — the SYMMETRIC low-side peer of the
+    /// already-lifted AT-LEAST-NEARLY-SATURATED CLOSED right-endpoint
+    /// bracket on the count half-line.
+    ///
+    /// Frontier inspiration: Racket's `(<= (count bottom? l) 2)`
+    /// closed-left-endpoint fold — the count-half-line landing that
+    /// names "alone or one past alone"; Idris's `LTE k 2` refinement
+    /// type paired with `k >= 1` bracketing to distinguish the
+    /// CLOSED left endpoint from the OPEN BARELY-MULTI endpoint;
+    /// APL's `2≥+/mask` first-two-cell primitive; Lean's
+    /// `Nat.le_succ_iff` closed-increment bridge lifted through
+    /// pleme-io primitives on the atomic bottom mask. Translation
+    /// through pleme-io primitives: plain `const fn` DERIVATION from
+    /// the already-lifted [`Self::count_bottom_axes`], one usize
+    /// comparison against `2` under a two-arm match on the zero
+    /// split, no new per-axis scan, no allocation.
+    #[must_use]
+    pub const fn bottom_axis_is_at_most_barely_multi(self) -> Option<bool> {
+        match self.count_bottom_axes() {
+            0 => None,
+            c => Some(c <= 2),
+        }
+    }
+
+    /// Whole-posture AT-MOST-BARELY-MULTI-OF-TOP predicate —
+    /// `self.top_axis_is_at_most_barely_multi()` returns `Some(true)`
+    /// iff AT LEAST ONE axis is at the top pole AND
+    /// [`Self::count_top_axes`] `<= 2` (the CLOSED left-endpoint
+    /// bracket around SINGLETON, INCLUDING the fully-alone landing
+    /// SINGLETON and the one-past-alone landing BARELY-MULTI),
+    /// `Some(false)` iff at least ONE axis is at the top pole AND the
+    /// count is strictly above BARELY-MULTI, or `None` iff no axis is
+    /// at the top pole. The ATOMIC-CELL DUAL of
+    /// [`Self::bottom_axis_is_at_most_barely_multi`] one PROJECTION-
+    /// KIND axis over on the AT-MOST-BARELY-MULTI column — jointly
+    /// the (bottom_axis_is_at_most_barely_multi,
+    /// top_axis_is_at_most_barely_multi) atomic pair OPENS the AT-
+    /// MOST-BARELY-MULTI column past the just-closed AT-LEAST-NEARLY-
+    /// SATURATED column on the atomic (bottom, top) row, mirroring
+    /// the count half-line's CLOSED right-endpoint bracket over onto
+    /// the SYMMETRIC low-side CLOSED left-endpoint bracket.
+    ///
+    /// **COUNT-LEQ-TWO identity dual**: on every posture,
+    /// `top_axis_is_at_most_barely_multi() == { let c =
+    /// self.count_top_axes(); if c == 0 { None } else { Some(c <= 2)
+    /// } }`. Pinned via
+    /// `resource_limits_top_axis_is_at_most_barely_multi_equals_count_leq_two`.
+    ///
+    /// **AT-MOST-BARELY-MULTI ⇔ (SINGLETON OR BARELY-MULTI) disjoint-
+    /// union identity dual**: on every posture with a top axis,
+    /// `top_axis_is_at_most_barely_multi() == Some(true) ⇔
+    /// (top_axis_is_singleton() == Some(true) ||
+    /// top_axis_is_barely_multi() == Some(true))`. Pinned via
+    /// `resource_limits_top_axis_is_at_most_barely_multi_iff_singleton_or_barely_multi`.
+    ///
+    /// **SINGLETON-IMPLIES-AT-MOST-BARELY-MULTI bridge dual**: on
+    /// every posture, `top_axis_is_singleton() == Some(true) ⇒
+    /// top_axis_is_at_most_barely_multi() == Some(true)`. Pinned via
+    /// `resource_limits_top_axis_is_singleton_true_implies_is_at_most_barely_multi_true`.
+    ///
+    /// **BARELY-MULTI-IMPLIES-AT-MOST-BARELY-MULTI bridge dual**: on
+    /// every posture, `top_axis_is_barely_multi() == Some(true) ⇒
+    /// top_axis_is_at_most_barely_multi() == Some(true)`. Pinned via
+    /// `resource_limits_top_axis_is_barely_multi_true_implies_is_at_most_barely_multi_true`.
+    ///
+    /// **AT-MOST-BARELY-MULTI-IMPLIES-AT-MOST-HALF bridge dual at
+    /// `Self::FIELD_COUNT >= 4`**: on every posture with
+    /// `Self::FIELD_COUNT >= 4`,
+    /// `top_axis_is_at_most_barely_multi() == Some(true) ⇒
+    /// top_axis_is_at_most_half_saturated() == Some(true)`. Pinned
+    /// via
+    /// `resource_limits_top_axis_is_at_most_barely_multi_true_implies_is_at_most_half_saturated_true`.
+    ///
+    /// **AT-MOST-BARELY-MULTI-EXCLUDES-SUPER-HALF mutual-exclusion
+    /// pin dual at `Self::FIELD_COUNT >= 4`**: on every posture with
+    /// `Self::FIELD_COUNT >= 4`, NOT
+    /// (`top_axis_is_at_most_barely_multi() == Some(true) &&
+    /// top_axis_is_super_half_saturated() == Some(true)`). Pinned via
+    /// `resource_limits_top_axis_is_at_most_barely_multi_true_implies_is_super_half_saturated_false`.
+    ///
+    /// **Preset pins dual**: `UNBOUNDED_RESOURCE_LIMITS
+    /// .top_axis_is_at_most_barely_multi() == Some(false)`
+    /// (saturated top pole packs SIX top axes, 6 > 2);
+    /// `EMPTY_RESOURCE_LIMITS.top_axis_is_at_most_barely_multi() ==
+    /// None` (no top axis); `DEFAULT_RESOURCE_LIMITS
+    /// .top_axis_is_at_most_barely_multi() == None`;
+    /// `HAND_AUTHORED_MID_POSTURE.top_axis_is_at_most_barely_multi()
+    /// == None`; `HAND_AUTHORED_OTHER_POSTURE
+    /// .top_axis_is_at_most_barely_multi() == None`. No shipped
+    /// preset places one or two top axes — the truth-firing and
+    /// count-3-through-count-5 falsity arms all use per-count
+    /// synthetic top-axis fixtures walking count ∈ {0, …, FIELD_COUNT}
+    /// matching the shape the BARELY-MULTI and AT-LEAST-NEARLY-
+    /// SATURATED pins used on the top cell one COUNT-HALFLINE-
+    /// ENDPOINT axis away.
+    ///
+    /// **ANY-fold bridge dual**:
+    /// `a.top_axis_is_at_most_barely_multi().is_some() ⇔
+    /// a.has_top_axis()`. Pinned via
+    /// `resource_limits_top_axis_is_at_most_barely_multi_is_some_iff_has_top_axis`.
+    ///
+    /// `const fn` so a caller can pin the top-axis AT-MOST-BARELY-
+    /// MULTI verdict at compile time.
+    ///
+    /// Theory anchor: same as
+    /// [`Self::bottom_axis_is_at_most_barely_multi`], on the DUAL
+    /// atomic top cell.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::bottom_axis_is_at_most_barely_multi`], on the DUAL
+    /// atomic top mask.
+    #[must_use]
+    pub const fn top_axis_is_at_most_barely_multi(self) -> Option<bool> {
+        match self.count_top_axes() {
+            0 => None,
+            c => Some(c <= 2),
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -84157,6 +84396,440 @@ mod tests {
         const _: () = assert!(matches!(
             SPARSE_BOTTOM_POSTURE.interior_axis_is_at_least_nearly_saturated(),
             Some(false)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_at_most_barely_multi_preset_pins_saturate_at_count_leq_two_and_absent(
+    ) {
+        // Preset pins on the atomic bottom AT-MOST-BARELY-MULTI cell —
+        // the SATURATED-bottom-pole preset EMPTY packs six axes,
+        // count == 6 > 2, so AT-MOST-BARELY-MULTI is Some(false).
+        // Absent-bottom presets and hand-authored postures carry no
+        // bottom axis, so None. The count-3 postures SPARSE_BOTTOM /
+        // CONTIGUOUS_INTERIOR pin Some(false); the count-2 preset
+        // ENDPOINTS_ONLY_BOTTOM_POSTURE pins Some(true) — the shipped
+        // RIGHT-endpoint truth-firing row for the atomic bottom
+        // AT-MOST-BARELY-MULTI cell. No shipped preset places EXACTLY
+        // one bottom axis; the LEFT-endpoint SINGLETON truth-firing
+        // arm is covered by the COUNT-LEQ-TWO identity test with a
+        // synthetic one-bottom-axis fixture.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_at_most_barely_multi(),
+            Some(false)
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_at_most_barely_multi(),
+            None
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.bottom_axis_is_at_most_barely_multi(),
+            None
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.bottom_axis_is_at_most_barely_multi(),
+            None
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.bottom_axis_is_at_most_barely_multi(),
+            None
+        );
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE.bottom_axis_is_at_most_barely_multi(),
+            Some(false)
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.bottom_axis_is_at_most_barely_multi(),
+            Some(false)
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_is_at_most_barely_multi(),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_at_most_barely_multi_preset_pins_saturate_at_count_leq_two_and_absent(
+    ) {
+        // Preset pins dual on the atomic top AT-MOST-BARELY-MULTI cell —
+        // the SATURATED-top-pole preset UNBOUNDED packs six top axes,
+        // count == 6 > 2, so AT-MOST-BARELY-MULTI is Some(false).
+        // Absent-top presets and hand-authored postures carry no top
+        // axis; AT-MOST-BARELY-MULTI is None. No shipped preset places
+        // one or two top axes.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_at_most_barely_multi(),
+            Some(false)
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.top_axis_is_at_most_barely_multi(),
+            None
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.top_axis_is_at_most_barely_multi(),
+            None
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.top_axis_is_at_most_barely_multi(),
+            None
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.top_axis_is_at_most_barely_multi(),
+            None
+        );
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_at_most_barely_multi_equals_count_leq_two() {
+        // COUNT-LEQ-TWO identity — the AT-MOST-BARELY-MULTI predicate
+        // is structurally derived from count_bottom_axes on every
+        // posture: None iff count == 0, Some(count <= 2) otherwise.
+        // Pinned across every shipped preset + hand-authored + test-
+        // local posture PLUS a synthetic one-bottom fixture (the
+        // SINGLETON count landing that no shipped preset hits on the
+        // bottom cell) so the LEFT-endpoint truth-firing arm is
+        // exercised without depending on any shipped preset.
+        let one_bottom = ResourceLimits::from_field_values([0, 17, 19, 23, 29, 31]);
+        assert_eq!(one_bottom.count_bottom_axes(), 1);
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            one_bottom,
+        ];
+        for a in postures {
+            let c = a.count_bottom_axes();
+            let expected = if c == 0 { None } else { Some(c <= 2) };
+            assert_eq!(
+                a.bottom_axis_is_at_most_barely_multi(),
+                expected,
+                "is_at_most_barely_multi = count-leq-two identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_at_most_barely_multi_equals_count_leq_two() {
+        // COUNT-LEQ-TWO identity dual on the top cell — pinned via
+        // per-count synthetic top-axis fixtures walking count ∈ {0, …,
+        // FIELD_COUNT} so both the LEFT-endpoint truth-firing arm
+        // (count == 1), the RIGHT-endpoint truth-firing arm (count ==
+        // 2), and every falsity arm (count ∈ {3, 4, 5, 6}) are
+        // exercised without depending on any shipped preset placing
+        // between one and two top axes.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(posture.count_top_axes(), count);
+            let expected = if count == 0 { None } else { Some(count <= 2) };
+            assert_eq!(
+                posture.top_axis_is_at_most_barely_multi(),
+                expected,
+                "is_at_most_barely_multi = count-leq-two identity failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_at_most_barely_multi_is_some_iff_has_bottom_axis() {
+        // ANY-fold bridge — the AT-MOST-BARELY-MULTI verdict is
+        // defined iff the bottom-axis subset is non-empty. Same shape
+        // as every already-lifted atomic-cell is_some ⇔ has-axis
+        // bridge.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.bottom_axis_is_at_most_barely_multi().is_some(),
+                a.has_bottom_axis(),
+                "is_at_most_barely_multi.is_some() != has_bottom_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_at_most_barely_multi_is_some_iff_has_top_axis() {
+        // ANY-fold bridge dual on the top cell.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.top_axis_is_at_most_barely_multi().is_some(),
+                a.has_top_axis(),
+                "is_at_most_barely_multi.is_some() != has_top_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_at_most_barely_multi_iff_singleton_or_barely_multi() {
+        // AT-MOST-BARELY-MULTI ⇔ (SINGLETON OR BARELY-MULTI) disjoint-
+        // union identity — the two count-landings 1 and 2 are the
+        // ONLY landings the AT-MOST-BARELY-MULTI interval names, and
+        // they are the DISJOINT UNION of the SINGLETON and BARELY-
+        // MULTI count-equality cells. Pinned across every shipped
+        // preset + hand-authored posture PLUS a synthetic one-bottom
+        // fixture (SINGLETON endpoint) so BOTH disjuncts are
+        // exercised as truth-firing arms.
+        let one_bottom = ResourceLimits::from_field_values([0, 17, 19, 23, 29, 31]);
+        assert_eq!(one_bottom.count_bottom_axes(), 1);
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            one_bottom,
+        ];
+        for a in postures {
+            if a.has_bottom_axis() {
+                let lhs = a.bottom_axis_is_at_most_barely_multi() == Some(true);
+                let rhs = a.bottom_axis_is_singleton() == Some(true)
+                    || a.bottom_axis_is_barely_multi() == Some(true);
+                assert_eq!(
+                    lhs, rhs,
+                    "is_at_most_barely_multi ⇔ (is_singleton || is_barely_multi) failed on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_at_most_barely_multi_iff_singleton_or_barely_multi() {
+        // AT-MOST-BARELY-MULTI ⇔ (SINGLETON OR BARELY-MULTI)
+        // disjoint-union identity dual on the top cell — per-count
+        // synthetic top-axis fixtures walking count ∈ {0, …,
+        // FIELD_COUNT} exercise both disjuncts (SINGLETON-endpoint
+        // truth-firing at count == 1 and BARELY-MULTI-endpoint truth-
+        // firing at count == 2) since no shipped preset places one or
+        // two top axes.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if posture.has_top_axis() {
+                let lhs = posture.top_axis_is_at_most_barely_multi() == Some(true);
+                let rhs = posture.top_axis_is_singleton() == Some(true)
+                    || posture.top_axis_is_barely_multi() == Some(true);
+                assert_eq!(
+                    lhs, rhs,
+                    "is_at_most_barely_multi ⇔ (is_singleton || is_barely_multi) failed at count {count} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_singleton_true_implies_is_at_most_barely_multi_true() {
+        // SINGLETON-IMPLIES-AT-MOST-BARELY-MULTI bridge — the
+        // SINGLETON endpoint (count == 1) is the LEFT endpoint of the
+        // CLOSED left-endpoint bracket at every FIELD_COUNT >= 1. No
+        // shipped preset places EXACTLY one bottom axis; the pin uses
+        // a synthetic one-bottom-axis fixture.
+        let one_bottom = ResourceLimits::from_field_values([0, 17, 19, 23, 29, 31]);
+        assert_eq!(one_bottom.count_bottom_axes(), 1);
+        assert_eq!(one_bottom.bottom_axis_is_singleton(), Some(true));
+        assert_eq!(one_bottom.bottom_axis_is_at_most_barely_multi(), Some(true),);
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_singleton_true_implies_is_at_most_barely_multi_true() {
+        // SINGLETON-IMPLIES-AT-MOST-BARELY-MULTI bridge dual on the
+        // top cell — synthetic one-top-axis fixture since no shipped
+        // preset lands EXACTLY one top axis.
+        let one_top = ResourceLimits::from_field_values([usize::MAX, 43, 47, 53, 59, 61]);
+        assert_eq!(one_top.count_top_axes(), 1);
+        assert_eq!(one_top.top_axis_is_singleton(), Some(true));
+        assert_eq!(one_top.top_axis_is_at_most_barely_multi(), Some(true));
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_barely_multi_true_implies_is_at_most_barely_multi_true() {
+        // BARELY-MULTI-IMPLIES-AT-MOST-BARELY-MULTI bridge — the
+        // BARELY-MULTI endpoint (count == 2) is the RIGHT endpoint of
+        // the CLOSED left-endpoint bracket at every FIELD_COUNT >= 2.
+        // Exercised on the shipped ENDPOINTS_ONLY preset at bottom
+        // count == 2.
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_is_barely_multi(),
+            Some(true),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_is_at_most_barely_multi(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_barely_multi_true_implies_is_at_most_barely_multi_true() {
+        // BARELY-MULTI-IMPLIES-AT-MOST-BARELY-MULTI bridge dual on
+        // the top cell — synthetic two-top-axis fixture since no
+        // shipped preset lands EXACTLY two top axes.
+        let two_top = ResourceLimits::from_field_values([0, 0, 0, 0, usize::MAX, usize::MAX]);
+        assert_eq!(two_top.count_top_axes(), 2);
+        assert_eq!(two_top.top_axis_is_barely_multi(), Some(true));
+        assert_eq!(two_top.top_axis_is_at_most_barely_multi(), Some(true));
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_at_most_barely_multi_true_implies_is_at_most_half_saturated_true(
+    ) {
+        // AT-MOST-BARELY-MULTI-IMPLIES-AT-MOST-HALF bridge at
+        // FIELD_COUNT >= 4 — the CLOSED left-endpoint bracket sits
+        // STRICTLY INSIDE the CLOSED lower half at every FIELD_COUNT
+        // >= 4 (count <= 2 forces 2 * count <= 4 <= FIELD_COUNT).
+        // Exercised on the shipped ENDPOINTS_ONLY preset at bottom
+        // count == 2 AND a synthetic one-bottom fixture at count == 1.
+        const {
+            assert!(ResourceLimits::FIELD_COUNT >= 4);
+        };
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_is_at_most_barely_multi(),
+            Some(true),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_is_at_most_half_saturated(),
+            Some(true),
+        );
+        let one_bottom = ResourceLimits::from_field_values([0, 17, 19, 23, 29, 31]);
+        assert_eq!(one_bottom.count_bottom_axes(), 1);
+        assert_eq!(one_bottom.bottom_axis_is_at_most_barely_multi(), Some(true),);
+        assert_eq!(
+            one_bottom.bottom_axis_is_at_most_half_saturated(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_at_most_barely_multi_true_implies_is_at_most_half_saturated_true(
+    ) {
+        // AT-MOST-BARELY-MULTI-IMPLIES-AT-MOST-HALF bridge dual at
+        // FIELD_COUNT >= 4 on the top cell — synthetic one-top and
+        // two-top fixtures since no shipped preset lands one or two
+        // top axes.
+        const {
+            assert!(ResourceLimits::FIELD_COUNT >= 4);
+        };
+        let one_top = ResourceLimits::from_field_values([usize::MAX, 43, 47, 53, 59, 61]);
+        assert_eq!(one_top.count_top_axes(), 1);
+        assert_eq!(one_top.top_axis_is_at_most_barely_multi(), Some(true));
+        assert_eq!(one_top.top_axis_is_at_most_half_saturated(), Some(true));
+        let two_top = ResourceLimits::from_field_values([0, 0, 0, 0, usize::MAX, usize::MAX]);
+        assert_eq!(two_top.count_top_axes(), 2);
+        assert_eq!(two_top.top_axis_is_at_most_barely_multi(), Some(true));
+        assert_eq!(two_top.top_axis_is_at_most_half_saturated(), Some(true));
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_at_most_barely_multi_true_implies_is_super_half_saturated_false(
+    ) {
+        // AT-MOST-BARELY-MULTI-EXCLUDES-SUPER-HALF mutual-exclusion
+        // pin at FIELD_COUNT >= 4 — count <= 2 forces 2 * count <= 4
+        // <= FIELD_COUNT, so AT-MOST-BARELY-MULTI and SUPER-HALF sit
+        // on opposite sides of the balance point.
+        const {
+            assert!(ResourceLimits::FIELD_COUNT >= 4);
+        };
+        let one_bottom = ResourceLimits::from_field_values([0, 17, 19, 23, 29, 31]);
+        assert_eq!(one_bottom.count_bottom_axes(), 1);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            one_bottom,
+        ] {
+            assert!(
+                !(a.bottom_axis_is_at_most_barely_multi() == Some(true)
+                    && a.bottom_axis_is_super_half_saturated() == Some(true)),
+                "is_at_most_barely_multi Some(true) co-fires is_super_half_saturated Some(true) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_at_most_barely_multi_true_implies_is_super_half_saturated_false()
+    {
+        // AT-MOST-BARELY-MULTI-EXCLUDES-SUPER-HALF mutual-exclusion
+        // pin dual on the top cell at FIELD_COUNT >= 4.
+        const {
+            assert!(ResourceLimits::FIELD_COUNT >= 4);
+        };
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert!(
+                !(posture.top_axis_is_at_most_barely_multi() == Some(true)
+                    && posture.top_axis_is_super_half_saturated() == Some(true)),
+                "is_at_most_barely_multi Some(true) co-fires is_super_half_saturated Some(true) at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_is_at_most_barely_multi_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the atomic cells — both AT-MOST-BARELY-MULTI
+        // projections are evaluable in const context so a caller can
+        // pin the atomic count-leq-two identities at compile time as
+        // build-breaks. Mirror of the atomic AT-LEAST-NEARLY-SATURATED
+        // const-fn pins one COUNT-HALFLINE-ENDPOINT axis over on the
+        // count half-line — the symmetric low-side peer that names
+        // the CLOSED left-endpoint bracket alongside the already-
+        // lifted CLOSED right-endpoint bracket.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_at_most_barely_multi(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_at_most_barely_multi(),
+            Some(false)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .top_axis_is_at_most_barely_multi()
+            .is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .bottom_axis_is_at_most_barely_multi()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .bottom_axis_is_at_most_barely_multi()
+            .is_none());
+        const _: () = assert!(matches!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_is_at_most_barely_multi(),
+            Some(true)
         ));
     }
 }

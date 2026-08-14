@@ -11939,6 +11939,110 @@ impl ResourceLimits {
         count
     }
 
+    /// Present-axis-conditional witness — `Self::witness_axis_presence(count,
+    /// pred)` returns `Some(pred)` iff `count > 0`, or `None` iff `count == 0`.
+    /// The BOUNDARY primitive lifting the shape
+    /// `if count == 0 { None } else { Some(pred) }` (equivalently
+    /// `match count { 0 => None, _ => Some(pred) }`) that every AXIS-CELL
+    /// `Option<bool>` PREDICATE on [`ResourceLimits`] carries at its exit —
+    /// `bottom_axis_is_singleton`, `top_axis_is_saturated`,
+    /// `polar_axis_is_at_most_half_saturated`,
+    /// `interior_axis_is_at_least_nearly_saturated`, and their peers all
+    /// wrap a boolean count-comparison in `Some` iff the paired count is
+    /// non-zero. Pre-lift each predicate open-coded the four-line
+    /// `if c == 0 { None } else { Some(...) }` or the equivalent two-arm
+    /// `match c { 0 => None, c => Some(...) }` at its own exit — the SAME
+    /// two-cell empty-vs-present dispatch appears verbatim on 100+ sibling
+    /// predicates, a copy-paste cascade whose consistency the type system
+    /// did not gate (a predicate that forgot the `count == 0` arm would
+    /// silently mis-classify the empty-axis posture as `Some(false)` where
+    /// the canonical shape yields `None`, discarding the has-axis
+    /// distinction the compound `Option<bool>` exit was defined to
+    /// preserve). Post-lift the shape binds at ONE typed `const fn` on
+    /// [`ResourceLimits`], and every AXIS-CELL predicate lifted from this
+    /// point forward composes through this helper — the empty-arm
+    /// treatment is a substrate-level theorem rather than a per-consumer
+    /// convention.
+    ///
+    /// **Two-arm dispatch identity — LOAD-BEARING structural pin**: on
+    /// every `(count, pred)` pair,
+    /// `witness_axis_presence(count, pred) ==
+    /// if count == 0 { None } else { Some(pred) }`. Pinned via
+    /// `resource_limits_witness_axis_presence_agrees_with_if_count_zero_none_else_some`.
+    ///
+    /// **Empty-arm identity**: `witness_axis_presence(0, pred).is_none()`
+    /// holds for every `pred`; the `pred` argument is DISCARDED on the
+    /// empty arm — the empty-axis posture yields `None` REGARDLESS of the
+    /// predicate the caller passes. Pinned via
+    /// `resource_limits_witness_axis_presence_empty_arm_discards_pred`.
+    ///
+    /// **Present-arm identity**: for every `count > 0` and every `pred`,
+    /// `witness_axis_presence(count, pred) == Some(pred)` — the helper
+    /// PRESERVES the predicate verbatim on the present arm. Pinned via
+    /// `resource_limits_witness_axis_presence_present_arm_wraps_pred`.
+    ///
+    /// **`is_some` bridge**: `witness_axis_presence(count, pred).is_some() ⇔
+    /// count > 0`. The `is_some`-vs-`is_none` split RECONSTRUCTS the
+    /// count-non-zero-vs-zero boolean projection independent of the
+    /// predicate — the ANY-fold peer of the helper at the boolean surface
+    /// one PROJECTION-KIND axis over. Pinned via
+    /// `resource_limits_witness_axis_presence_is_some_iff_count_gt_zero`.
+    ///
+    /// **Cross-predicate MONOTONICITY-ON-PRESENT-ARM identity — LOAD-
+    /// BEARING structural pin**: for every `count > 0` and every
+    /// `(pred_a, pred_b)` pair with `pred_a <= pred_b` (Boolean order
+    /// `false < true`), `witness_axis_presence(count, pred_a) <=
+    /// witness_axis_presence(count, pred_b)` under
+    /// `Option<bool>`'s derived lexicographic ordering (`None < Some(false)
+    /// < Some(true)`). Pinned via
+    /// `resource_limits_witness_axis_presence_present_arm_monotone_in_pred`.
+    ///
+    /// `const fn` so a caller can pin the helper's verdict at compile time
+    /// (`const _: () =
+    /// assert!(ResourceLimits::witness_axis_presence(0, true).is_none());`)
+    /// — sibling of the const-fn evaluability pins the AXIS-CELL predicates
+    /// already carry at their own exits.
+    ///
+    /// **Adoption compounds**: future AXIS-CELL predicate lifts that
+    /// currently open-code the two-arm shape rewrite their body from
+    /// `let c = self.count_X_axes(); if c == 0 { None } else { Some(cond(c)) }`
+    /// to `Self::witness_axis_presence(self.count_X_axes(), cond(c))` at
+    /// no semantic change, and a mechanical sweep of the existing 100+
+    /// predicate bodies through the helper becomes a substrate-level
+    /// refactor rather than a per-method rewrite.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// present-vs-empty dispatch shape at every AXIS-CELL predicate exit
+    /// binds at ONE typed named `const fn` on the algebra rather than a
+    /// per-consumer four-line open-coded conditional. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the helper composes
+    /// mechanically under the two-arm identity above with no re-derivation
+    /// at the caller. THEORY.md §V.1 — knowable platform; the empty-arm
+    /// convention becomes a substrate-level theorem rather than a per-
+    /// predicate convention.
+    ///
+    /// Frontier inspiration: Haskell's `bool None (Just pred) (count /= 0)`
+    /// case-of on the two-arm empty split; Idris's `if count == 0 then
+    /// Nothing else Just pred` conditional under a total function
+    /// signature; Racket's `(and (positive? count) pred)` short-circuiting
+    /// present-arm wrapper; APL's `(0<count) × pred` present-arm
+    /// multiplicand. Translation through pleme-io primitives is the plain
+    /// `const fn` two-arm match below on the zero split — no closure, no
+    /// typeclass indirection, and the `pred` argument is a plain `bool`
+    /// eagerly evaluated by the caller (Rust `const fn` cannot take a
+    /// closure on stable, so the caller supplies the computed predicate
+    /// rather than a thunk; the empty-arm identity guarantees the eagerly-
+    /// computed value on the `count == 0` posture is DISCARDED, so the
+    /// convention of computing `pred` unconditionally is safe).
+    #[must_use]
+    pub const fn witness_axis_presence(count: usize, pred: bool) -> Option<bool> {
+        if count == 0 {
+            None
+        } else {
+            Some(pred)
+        }
+    }
+
     /// Whole-posture ARITHMETIC-MIXITY-DEPTH tally — `self.count_mixity_axes()`
     /// returns the size of the MINORITY arm of the (polar, interior)
     /// exhaustive-and-disjoint partition, in `0..=Self::FIELD_COUNT / 2`.
@@ -85554,6 +85658,140 @@ mod tests {
             .is_none());
         const _: () = assert!(matches!(
             ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_axis_is_at_most_barely_multi(),
+            Some(true)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_witness_axis_presence_empty_arm_discards_pred() {
+        // Empty-arm identity: on count == 0 the helper yields None
+        // REGARDLESS of the pred the caller passes. The pred is
+        // eagerly evaluated by the caller but structurally DISCARDED
+        // on the empty arm — the boundary primitive preserves the
+        // has-axis distinction the compound Option<bool> exit was
+        // defined to name.
+        assert!(ResourceLimits::witness_axis_presence(0, true).is_none());
+        assert!(ResourceLimits::witness_axis_presence(0, false).is_none());
+    }
+
+    #[test]
+    fn resource_limits_witness_axis_presence_present_arm_wraps_pred() {
+        // Present-arm identity: for every count > 0 and every pred,
+        // the helper wraps the pred verbatim as Some(pred). Swept
+        // over count in 1..=FIELD_COUNT and both truth values so the
+        // present-arm behaviour is pinned uniformly across the
+        // non-empty count regime.
+        for count in 1..=ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_axis_presence(count, true),
+                Some(true),
+                "present arm at count {count} with pred=true",
+            );
+            assert_eq!(
+                ResourceLimits::witness_axis_presence(count, false),
+                Some(false),
+                "present arm at count {count} with pred=false",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_axis_presence_agrees_with_if_count_zero_none_else_some() {
+        // Two-arm dispatch identity — the helper's verdict on every
+        // (count, pred) pair agrees with the open-coded shape
+        // `if count == 0 { None } else { Some(pred) }` that every
+        // AXIS-CELL Option<bool> predicate on ResourceLimits carries
+        // at its exit. Swept over count in 0..=FIELD_COUNT and both
+        // truth values so the two-arm dispatch is pinned exhaustively
+        // over the count regime the predicates use.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            for pred in [false, true] {
+                let via_helper = ResourceLimits::witness_axis_presence(count, pred);
+                let via_open_code = if count == 0 { None } else { Some(pred) };
+                assert_eq!(
+                    via_helper, via_open_code,
+                    "helper != open-coded shape at (count={count}, pred={pred})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_axis_presence_is_some_iff_count_gt_zero() {
+        // is_some bridge: the helper's is_some verdict reconstructs
+        // the count-non-zero-vs-zero boolean projection independently
+        // of the predicate — the ANY-fold peer at the boolean surface.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            for pred in [false, true] {
+                assert_eq!(
+                    ResourceLimits::witness_axis_presence(count, pred).is_some(),
+                    count > 0,
+                    "is_some != (count > 0) at (count={count}, pred={pred})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_axis_presence_present_arm_monotone_in_pred() {
+        // Present-arm monotonicity: for every count > 0, the helper
+        // is monotone in its pred argument under Option<bool>'s
+        // derived lexicographic ordering (None < Some(false) <
+        // Some(true)). Composes structurally with predicate refinement
+        // families — a caller passing a strengthened pred at the same
+        // count witnesses a weakly-stronger Option<bool> verdict.
+        for count in 1..=ResourceLimits::FIELD_COUNT {
+            let weak = ResourceLimits::witness_axis_presence(count, false);
+            let strong = ResourceLimits::witness_axis_presence(count, true);
+            assert!(
+                weak <= strong,
+                "present-arm monotonicity violated at count {count}: {weak:?} > {strong:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_axis_presence_agrees_with_singleton_predicate_shape() {
+        // Cross-check against the existing atomic SINGLETON predicate
+        // shape — for every posture on the (EMPTY, DEFAULT, UNBOUNDED)
+        // preset triple, the helper applied to the same count and the
+        // same c == 1 pred agrees with the shipped
+        // bottom_axis_is_singleton verdict. Pins that the helper is
+        // semantics-equivalent to the open-coded shape ONE existing
+        // AXIS-CELL predicate carries at its exit — an adoption-safety
+        // proof for the future mechanical sweep the helper enables.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+        ] {
+            let c = posture.count_bottom_axes();
+            assert_eq!(
+                ResourceLimits::witness_axis_presence(c, c == 1),
+                posture.bottom_axis_is_singleton(),
+                "helper (bottom, c==1) != bottom_axis_is_singleton on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_axis_presence_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the two-arm identity at compile time as a
+        // build-break. Sibling of the const-fn evaluability pins the
+        // AXIS-CELL predicates already carry at their own exits.
+        const _: () = assert!(ResourceLimits::witness_axis_presence(0, true).is_none());
+        const _: () = assert!(ResourceLimits::witness_axis_presence(0, false).is_none());
+        const _: () = assert!(matches!(
+            ResourceLimits::witness_axis_presence(1, true),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::witness_axis_presence(1, false),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::witness_axis_presence(ResourceLimits::FIELD_COUNT, true),
             Some(true)
         ));
     }

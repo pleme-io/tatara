@@ -25951,6 +25951,219 @@ impl ResourceLimits {
             c => Some(c <= 2),
         }
     }
+
+    /// Whole-posture AT-MOST-BARELY-MULTI-OF-POLAR predicate —
+    /// `self.polar_axis_is_at_most_barely_multi()` returns `Some(true)`
+    /// iff AT LEAST ONE axis of `self` sits at a pole AND
+    /// [`Self::count_polar_axes`] `<= 2` (the CLOSED left-endpoint
+    /// bracket around SINGLETON, INCLUDING the fully-alone landing
+    /// SINGLETON and the one-past-alone landing BARELY-MULTI),
+    /// `Some(false)` iff at least ONE axis is at a pole AND the count
+    /// is strictly above BARELY-MULTI, or `None` iff no axis is at a
+    /// pole. The COMPOUND-CELL half of the (polar, interior) pair
+    /// CLOSING the AT-MOST-BARELY-MULTI column past the just-opened
+    /// atomic (bottom, top) row — one CELL-KIND axis over from the
+    /// atomic [`Self::bottom_axis_is_at_most_barely_multi`] /
+    /// [`Self::top_axis_is_at_most_barely_multi`] atomic pair, and the
+    /// LOW-SIDE DUAL of [`Self::polar_axis_is_at_least_nearly_saturated`]
+    /// one COUNT-HALFLINE-ENDPOINT axis over — jointly the
+    /// (polar_axis_is_at_most_barely_multi,
+    /// polar_axis_is_at_least_nearly_saturated) endpoint pair BRACKETS
+    /// the count half-line at both ends with the two-count-wide closed
+    /// intervals [1, 2] and [FIELD_COUNT - 1, FIELD_COUNT] on the
+    /// compound polar row, symmetric under the `c ↔ FIELD_COUNT + 1 - c`
+    /// count-mirror.
+    ///
+    /// **COUNT-LEQ-TWO identity — LOAD-BEARING structural pin**: on
+    /// every posture, `polar_axis_is_at_most_barely_multi() == { let
+    /// c = self.count_polar_axes(); if c == 0 { None } else { Some(c
+    /// <= 2) } }`. Pinned via
+    /// `resource_limits_polar_axis_is_at_most_barely_multi_equals_count_leq_two`.
+    ///
+    /// **AT-MOST-BARELY-MULTI ⇔ (SINGLETON OR BARELY-MULTI) disjoint-
+    /// union identity — LOAD-BEARING PARTITION pin**: on every posture
+    /// with a polar axis, `polar_axis_is_at_most_barely_multi() ==
+    /// Some(true) ⇔ (polar_axis_is_singleton() == Some(true) ||
+    /// polar_axis_is_barely_multi() == Some(true))`. Pinned via
+    /// `resource_limits_polar_axis_is_at_most_barely_multi_iff_singleton_or_barely_multi`.
+    ///
+    /// **SINGLETON-IMPLIES-AT-MOST-BARELY-MULTI LEFT-endpoint
+    /// inclusion bridge**: on every posture,
+    /// `polar_axis_is_singleton() == Some(true) ⇒
+    /// polar_axis_is_at_most_barely_multi() == Some(true)`. Pinned via
+    /// `resource_limits_polar_axis_is_singleton_true_implies_is_at_most_barely_multi_true`.
+    ///
+    /// **BARELY-MULTI-IMPLIES-AT-MOST-BARELY-MULTI RIGHT-endpoint
+    /// inclusion bridge**: on every posture,
+    /// `polar_axis_is_barely_multi() == Some(true) ⇒
+    /// polar_axis_is_at_most_barely_multi() == Some(true)`. Pinned via
+    /// `resource_limits_polar_axis_is_barely_multi_true_implies_is_at_most_barely_multi_true`.
+    ///
+    /// **AT-MOST-BARELY-MULTI-IMPLIES-AT-MOST-HALF nested-interval
+    /// bridge at `Self::FIELD_COUNT >= 4`**: on every posture with
+    /// `Self::FIELD_COUNT >= 4`, `polar_axis_is_at_most_barely_multi()
+    /// == Some(true) ⇒ polar_axis_is_at_most_half_saturated() ==
+    /// Some(true)`. Pinned via
+    /// `resource_limits_polar_axis_is_at_most_barely_multi_true_implies_is_at_most_half_saturated_true`.
+    ///
+    /// **AT-MOST-BARELY-MULTI-EXCLUDES-SUPER-HALF mutual-exclusion pin
+    /// at `Self::FIELD_COUNT >= 4`**: on every posture with
+    /// `Self::FIELD_COUNT >= 4`, NOT
+    /// (`polar_axis_is_at_most_barely_multi() == Some(true) &&
+    /// polar_axis_is_super_half_saturated() == Some(true)`). Pinned via
+    /// `resource_limits_polar_axis_is_at_most_barely_multi_true_implies_is_super_half_saturated_false`.
+    ///
+    /// **Preset pins**: BOTH saturated pole presets pack SIX polar axes
+    /// (`6 > 2`) so `polar_axis_is_at_most_barely_multi` returns
+    /// `Some(false)` on each; the absent-polar presets
+    /// `DEFAULT_RESOURCE_LIMITS`, `HAND_AUTHORED_MID_POSTURE`, and
+    /// `HAND_AUTHORED_OTHER_POSTURE` return `None`;
+    /// `SPARSE_BOTTOM_POSTURE` and `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE`
+    /// at polar count == 3 return `Some(false)`; and
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE` at polar count == 2 returns
+    /// `Some(true)` — the shipped RIGHT-endpoint BARELY-MULTI truth-
+    /// firing row for the compound polar AT-MOST-BARELY-MULTI cell. No
+    /// shipped preset places EXACTLY one polar axis — the LEFT-endpoint
+    /// SINGLETON truth-firing arm is exercised via a synthetic one-
+    /// polar-axis fixture.
+    ///
+    /// **ANY-fold bridge**:
+    /// `a.polar_axis_is_at_most_barely_multi().is_some() ⇔
+    /// a.has_polar_axis()`. Pinned via
+    /// `resource_limits_polar_axis_is_at_most_barely_multi_is_some_iff_has_polar_axis`.
+    ///
+    /// **CROSS-CELL POLAR-INTERIOR CO-FIRE UNSATISFIABLE at
+    /// `Self::FIELD_COUNT >= 5`** — LOAD-BEARING structural pin UNIQUE
+    /// to the COMPOUND partition on the AT-MOST-BARELY-MULTI cell.
+    /// Both AT-MOST-BARELY-MULTI arms firing `Some(true)` would force
+    /// `count_polar <= 2 && count_interior <= 2`, but the COMPOUND
+    /// EXHAUSTIVE-PARTITION identity `count_polar + count_interior ==
+    /// FIELD_COUNT` cannot admit a sum of at most `4` at any
+    /// `FIELD_COUNT >= 5`. The LOW-SIDE MIRROR of the AT-LEAST-NEARLY
+    /// CROSS-CELL CO-FIRE UNSATISFIABLE pin one COUNT-HALFLINE-ENDPOINT
+    /// axis over — where AT-LEAST-NEARLY vanishes at `FIELD_COUNT >= 3`
+    /// under `2 * (FIELD_COUNT - 1) > FIELD_COUNT`, the low-side
+    /// endpoint vanishes at `FIELD_COUNT >= 5` under `2 + 2 <
+    /// FIELD_COUNT`. Pinned via
+    /// `resource_limits_compound_is_at_most_barely_multi_polar_interior_co_fire_is_unsatisfiable`.
+    ///
+    /// `const fn` so a caller can pin the polar-axis AT-MOST-BARELY-
+    /// MULTI verdict at compile time.
+    ///
+    /// Theory anchor: same as
+    /// [`Self::bottom_axis_is_at_most_barely_multi`], on the COMPOUND
+    /// polar cell derived structurally from the already-lifted
+    /// [`Self::count_polar_axes`]. The CROSS-CELL CO-FIRE-UNSATISFIABLE
+    /// pin composes structurally through the already-lifted COMPOUND
+    /// EXHAUSTIVE-PARTITION identity `count_polar + count_interior ==
+    /// FIELD_COUNT`, no re-derivation.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::bottom_axis_is_at_most_barely_multi`], on the compound
+    /// polar mask.
+    #[must_use]
+    pub const fn polar_axis_is_at_most_barely_multi(self) -> Option<bool> {
+        match self.count_polar_axes() {
+            0 => None,
+            c => Some(c <= 2),
+        }
+    }
+
+    /// Whole-posture AT-MOST-BARELY-MULTI-OF-INTERIOR predicate —
+    /// `self.interior_axis_is_at_most_barely_multi()` returns
+    /// `Some(true)` iff AT LEAST ONE axis sits strictly interior AND
+    /// [`Self::count_interior_axes`] `<= 2` (the CLOSED left-endpoint
+    /// bracket around SINGLETON, INCLUDING the fully-alone landing
+    /// SINGLETON and the one-past-alone landing BARELY-MULTI),
+    /// `Some(false)` iff at least ONE axis is interior AND the count
+    /// is strictly above BARELY-MULTI, or `None` iff no axis is
+    /// interior. The COMPOUND-CELL DUAL of
+    /// [`Self::polar_axis_is_at_most_barely_multi`] one CELL-KIND axis
+    /// over via the (polar, interior) disjoint complement — jointly
+    /// the (polar_axis_is_at_most_barely_multi,
+    /// interior_axis_is_at_most_barely_multi) COMPOUND pair CLOSES the
+    /// AT-MOST-BARELY-MULTI column on the (bottom, top, polar,
+    /// interior) 4-cell axis-family, matching the shape the AT-LEAST-
+    /// NEARLY-SATURATED column closed one COUNT-HALFLINE-ENDPOINT axis
+    /// over.
+    ///
+    /// **COUNT-LEQ-TWO identity dual**: on every posture,
+    /// `interior_axis_is_at_most_barely_multi() == { let c =
+    /// self.count_interior_axes(); if c == 0 { None } else { Some(c
+    /// <= 2) } }`. Pinned via
+    /// `resource_limits_interior_axis_is_at_most_barely_multi_equals_count_leq_two`.
+    ///
+    /// **AT-MOST-BARELY-MULTI ⇔ (SINGLETON OR BARELY-MULTI) disjoint-
+    /// union identity dual**: on every posture with an interior axis,
+    /// `interior_axis_is_at_most_barely_multi() == Some(true) ⇔
+    /// (interior_axis_is_singleton() == Some(true) ||
+    /// interior_axis_is_barely_multi() == Some(true))`. Pinned via
+    /// `resource_limits_interior_axis_is_at_most_barely_multi_iff_singleton_or_barely_multi`.
+    ///
+    /// **SINGLETON-IMPLIES-AT-MOST-BARELY-MULTI bridge dual**: on
+    /// every posture, `interior_axis_is_singleton() == Some(true) ⇒
+    /// interior_axis_is_at_most_barely_multi() == Some(true)`. Pinned
+    /// via
+    /// `resource_limits_interior_axis_is_singleton_true_implies_is_at_most_barely_multi_true`.
+    ///
+    /// **BARELY-MULTI-IMPLIES-AT-MOST-BARELY-MULTI bridge dual**: on
+    /// every posture, `interior_axis_is_barely_multi() == Some(true)
+    /// ⇒ interior_axis_is_at_most_barely_multi() == Some(true)`.
+    /// Pinned via
+    /// `resource_limits_interior_axis_is_barely_multi_true_implies_is_at_most_barely_multi_true`.
+    ///
+    /// **AT-MOST-BARELY-MULTI-IMPLIES-AT-MOST-HALF bridge dual at
+    /// `Self::FIELD_COUNT >= 4`**: on every posture with
+    /// `Self::FIELD_COUNT >= 4`,
+    /// `interior_axis_is_at_most_barely_multi() == Some(true) ⇒
+    /// interior_axis_is_at_most_half_saturated() == Some(true)`.
+    /// Pinned via
+    /// `resource_limits_interior_axis_is_at_most_barely_multi_true_implies_is_at_most_half_saturated_true`.
+    ///
+    /// **AT-MOST-BARELY-MULTI-EXCLUDES-SUPER-HALF mutual-exclusion pin
+    /// dual at `Self::FIELD_COUNT >= 4`**: on every posture with
+    /// `Self::FIELD_COUNT >= 4`, NOT
+    /// (`interior_axis_is_at_most_barely_multi() == Some(true) &&
+    /// interior_axis_is_super_half_saturated() == Some(true)`). Pinned
+    /// via
+    /// `resource_limits_interior_axis_is_at_most_barely_multi_true_implies_is_super_half_saturated_false`.
+    ///
+    /// **Preset pins dual**: `DEFAULT_RESOURCE_LIMITS`,
+    /// `HAND_AUTHORED_MID_POSTURE`, and `HAND_AUTHORED_OTHER_POSTURE`
+    /// each pack all six fields strictly interior (count == 6, 6 > 2)
+    /// so `interior_axis_is_at_most_barely_multi` returns `Some(false)`
+    /// on each; the saturated pole presets `EMPTY_RESOURCE_LIMITS` and
+    /// `UNBOUNDED_RESOURCE_LIMITS` carry no interior axis so return
+    /// `None`; `SPARSE_BOTTOM_POSTURE` and
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE` at interior count == 3
+    /// return `Some(false)`; and `ENDPOINTS_ONLY_BOTTOM_POSTURE` at
+    /// interior count == 4 returns `Some(false)`. No shipped preset
+    /// places one or two interior axes — the truth-firing arms both
+    /// use per-count synthetic interior-axis fixtures walking count ∈
+    /// {0, …, FIELD_COUNT}.
+    ///
+    /// **ANY-fold bridge dual**:
+    /// `a.interior_axis_is_at_most_barely_multi().is_some() ⇔
+    /// a.has_interior_axis()`. Pinned via
+    /// `resource_limits_interior_axis_is_at_most_barely_multi_is_some_iff_has_interior_axis`.
+    ///
+    /// `const fn` so a caller can pin the interior-axis AT-MOST-
+    /// BARELY-MULTI verdict at compile time.
+    ///
+    /// Theory anchor: same as
+    /// [`Self::polar_axis_is_at_most_barely_multi`], on the DUAL
+    /// COMPOUND interior cell.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::polar_axis_is_at_most_barely_multi`], on the DUAL
+    /// COMPOUND interior mask.
+    #[must_use]
+    pub const fn interior_axis_is_at_most_barely_multi(self) -> Option<bool> {
+        match self.count_interior_axes() {
+            0 => None,
+            c => Some(c <= 2),
+        }
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -84829,6 +85042,518 @@ mod tests {
             .is_none());
         const _: () = assert!(matches!(
             ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_is_at_most_barely_multi(),
+            Some(true)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_barely_multi_preset_pins_saturate_at_count_leq_two_and_absent(
+    ) {
+        // Preset pins on the COMPOUND polar AT-MOST-BARELY-MULTI cell —
+        // BOTH SATURATED-pole presets pack SIX polar axes (6 > 2), so
+        // AT-MOST-BARELY-MULTI is Some(false) at each SATURATED endpoint.
+        // Absent-polar presets (DEFAULT + both hand-authored) carry no
+        // polar axis so None. SPARSE_BOTTOM / CONTIGUOUS_INTERIOR at
+        // polar count == 3 pin Some(false); ENDPOINTS_ONLY at polar
+        // count == 2 pins Some(true) — the shipped RIGHT-endpoint
+        // BARELY-MULTI truth-firing row for the compound polar cell.
+        // No shipped preset places EXACTLY one polar axis; the LEFT-
+        // endpoint SINGLETON truth-firing arm is covered by the COUNT-
+        // LEQ-TWO identity test with a synthetic one-polar fixture.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_at_most_barely_multi(),
+            Some(false),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_at_most_barely_multi(),
+            Some(false),
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.polar_axis_is_at_most_barely_multi(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.polar_axis_is_at_most_barely_multi(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_at_most_barely_multi(),
+            None,
+        );
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE.polar_axis_is_at_most_barely_multi(),
+            Some(false),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.polar_axis_is_at_most_barely_multi(),
+            Some(false),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_axis_is_at_most_barely_multi(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_barely_multi_preset_pins_saturate_at_count_leq_two_and_absent(
+    ) {
+        // Preset pins dual on the COMPOUND interior AT-MOST-BARELY-MULTI
+        // cell — DEFAULT and both hand-authored postures pack all six
+        // fields strictly interior (count == 6 > 2), so Some(false).
+        // Saturated pole presets carry no interior axis so None.
+        // SPARSE_BOTTOM / CONTIGUOUS_INTERIOR at interior count == 3
+        // pin Some(false); ENDPOINTS_ONLY at interior count == 4 pins
+        // Some(false). No shipped preset places one or two interior
+        // axes — both truth-firing arms are exercised via per-count
+        // synthetic interior-axis fixtures below.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_at_most_barely_multi(),
+            Some(false),
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.interior_axis_is_at_most_barely_multi(),
+            Some(false),
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.interior_axis_is_at_most_barely_multi(),
+            Some(false),
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.interior_axis_is_at_most_barely_multi(),
+            None,
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_at_most_barely_multi(),
+            None,
+        );
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE.interior_axis_is_at_most_barely_multi(),
+            Some(false),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.interior_axis_is_at_most_barely_multi(),
+            Some(false),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.interior_axis_is_at_most_barely_multi(),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_barely_multi_equals_count_leq_two() {
+        // COUNT-LEQ-TWO identity on the COMPOUND polar cell — the
+        // AT-MOST-BARELY-MULTI predicate is structurally derived from
+        // count_polar_axes on every posture: None iff count == 0,
+        // Some(count <= 2) otherwise. Pinned across every shipped
+        // preset + hand-authored + test-local posture PLUS a synthetic
+        // one-polar fixture (the SINGLETON count landing that no
+        // shipped preset hits on the polar cell) so the LEFT-endpoint
+        // truth-firing arm is exercised without depending on any
+        // shipped preset.
+        let one_polar = ResourceLimits::from_field_values([0, 17, 19, 23, 29, 31]);
+        assert_eq!(one_polar.count_polar_axes(), 1);
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            one_polar,
+        ];
+        for a in postures {
+            let c = a.count_polar_axes();
+            let expected = if c == 0 { None } else { Some(c <= 2) };
+            assert_eq!(
+                a.polar_axis_is_at_most_barely_multi(),
+                expected,
+                "polar_is_at_most_barely_multi = count-leq-two identity failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_barely_multi_equals_count_leq_two() {
+        // COUNT-LEQ-TWO identity dual on the COMPOUND interior cell —
+        // pinned via per-count synthetic interior-axis fixtures walking
+        // count ∈ {0, …, FIELD_COUNT} so the None arm at count == 0,
+        // the Some(true) arm at count ∈ {1, 2} (LEFT endpoint SINGLETON
+        // and RIGHT endpoint BARELY-MULTI), and the Some(false) arm at
+        // count ∈ {3, 4, 5, 6} are all exercised without depending on
+        // any shipped preset placing between one and two interior axes.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [0_usize; ResourceLimits::FIELD_COUNT];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 41;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(posture.count_interior_axes(), count);
+            let expected = if count == 0 { None } else { Some(count <= 2) };
+            assert_eq!(
+                posture.interior_axis_is_at_most_barely_multi(),
+                expected,
+                "interior_is_at_most_barely_multi = count-leq-two identity failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_barely_multi_is_some_iff_has_polar_axis() {
+        // ANY-fold bridge on the COMPOUND polar cell — the AT-MOST-
+        // BARELY-MULTI verdict is defined iff the polar subset is
+        // non-empty. Same shape as every already-lifted compound-cell
+        // is_some ⇔ has-axis bridge.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.polar_axis_is_at_most_barely_multi().is_some(),
+                a.has_polar_axis(),
+                "polar_is_at_most_barely_multi.is_some() != has_polar_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_barely_multi_is_some_iff_has_interior_axis() {
+        // ANY-fold bridge dual on the COMPOUND interior cell.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.interior_axis_is_at_most_barely_multi().is_some(),
+                a.has_interior_axis(),
+                "interior_is_at_most_barely_multi.is_some() != has_interior_axis on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_barely_multi_iff_singleton_or_barely_multi() {
+        // AT-MOST-BARELY-MULTI ⇔ (SINGLETON OR BARELY-MULTI) disjoint-
+        // union identity on the COMPOUND polar cell — the two count-
+        // landings 1 and 2 are the ONLY landings the AT-MOST-BARELY-
+        // MULTI interval names, and they are the DISJOINT UNION of the
+        // SINGLETON and BARELY-MULTI count-equality cells. Pinned
+        // across every shipped preset + hand-authored posture PLUS a
+        // synthetic one-polar fixture (SINGLETON endpoint) so BOTH
+        // disjuncts are exercised as truth-firing arms.
+        let one_polar = ResourceLimits::from_field_values([0, 17, 19, 23, 29, 31]);
+        assert_eq!(one_polar.count_polar_axes(), 1);
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            one_polar,
+        ];
+        for a in postures {
+            if a.has_polar_axis() {
+                let lhs = a.polar_axis_is_at_most_barely_multi() == Some(true);
+                let rhs = a.polar_axis_is_singleton() == Some(true)
+                    || a.polar_axis_is_barely_multi() == Some(true);
+                assert_eq!(
+                    lhs, rhs,
+                    "polar_is_at_most_barely_multi ⇔ (is_singleton || is_barely_multi) failed on {a:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_barely_multi_iff_singleton_or_barely_multi() {
+        // AT-MOST-BARELY-MULTI ⇔ (SINGLETON OR BARELY-MULTI) disjoint-
+        // union identity dual on the COMPOUND interior cell — per-count
+        // synthetic interior-axis fixtures walking count ∈ {0, …,
+        // FIELD_COUNT} exercise both disjuncts (SINGLETON at count == 1
+        // and BARELY-MULTI at count == 2) since no shipped preset
+        // places one or two interior axes.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [0_usize; ResourceLimits::FIELD_COUNT];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 41;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if posture.has_interior_axis() {
+                let lhs = posture.interior_axis_is_at_most_barely_multi() == Some(true);
+                let rhs = posture.interior_axis_is_singleton() == Some(true)
+                    || posture.interior_axis_is_barely_multi() == Some(true);
+                assert_eq!(
+                    lhs, rhs,
+                    "interior_is_at_most_barely_multi ⇔ (is_singleton || is_barely_multi) failed at count {count} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_singleton_true_implies_is_at_most_barely_multi_true() {
+        // SINGLETON-IMPLIES-AT-MOST-BARELY-MULTI bridge on the COMPOUND
+        // polar cell — the SINGLETON endpoint (count == 1) is the LEFT
+        // endpoint of the CLOSED left-endpoint bracket at every
+        // FIELD_COUNT >= 1. No shipped preset places EXACTLY one polar
+        // axis; the pin uses a synthetic one-polar-axis fixture.
+        let one_polar = ResourceLimits::from_field_values([0, 17, 19, 23, 29, 31]);
+        assert_eq!(one_polar.count_polar_axes(), 1);
+        assert_eq!(one_polar.polar_axis_is_singleton(), Some(true));
+        assert_eq!(one_polar.polar_axis_is_at_most_barely_multi(), Some(true),);
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_singleton_true_implies_is_at_most_barely_multi_true() {
+        // SINGLETON-IMPLIES-AT-MOST-BARELY-MULTI bridge dual on the
+        // COMPOUND interior cell — synthetic one-interior-axis fixture
+        // since no shipped preset lands EXACTLY one interior axis.
+        let one_interior = ResourceLimits::from_field_values([41, 0, 0, 0, 0, 0]);
+        assert_eq!(one_interior.count_interior_axes(), 1);
+        assert_eq!(one_interior.interior_axis_is_singleton(), Some(true));
+        assert_eq!(
+            one_interior.interior_axis_is_at_most_barely_multi(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_barely_multi_true_implies_is_at_most_barely_multi_true() {
+        // BARELY-MULTI-IMPLIES-AT-MOST-BARELY-MULTI bridge on the
+        // COMPOUND polar cell — the BARELY-MULTI endpoint (count == 2)
+        // is the RIGHT endpoint of the CLOSED left-endpoint bracket at
+        // every FIELD_COUNT >= 2. Exercised on the shipped
+        // ENDPOINTS_ONLY preset at polar count == 2.
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_axis_is_barely_multi(),
+            Some(true),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_axis_is_at_most_barely_multi(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_barely_multi_true_implies_is_at_most_barely_multi_true() {
+        // BARELY-MULTI-IMPLIES-AT-MOST-BARELY-MULTI bridge dual on the
+        // COMPOUND interior cell — synthetic two-interior-axis fixture
+        // since no shipped preset lands EXACTLY two interior axes.
+        let two_interior = ResourceLimits::from_field_values([41, 43, 0, 0, 0, 0]);
+        assert_eq!(two_interior.count_interior_axes(), 2);
+        assert_eq!(two_interior.interior_axis_is_barely_multi(), Some(true));
+        assert_eq!(
+            two_interior.interior_axis_is_at_most_barely_multi(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_barely_multi_true_implies_is_at_most_half_saturated_true(
+    ) {
+        // AT-MOST-BARELY-MULTI-IMPLIES-AT-MOST-HALF bridge at
+        // FIELD_COUNT >= 4 on the COMPOUND polar cell — count <= 2
+        // forces 2 * count <= 4 <= FIELD_COUNT. Exercised on the
+        // shipped ENDPOINTS_ONLY preset at polar count == 2 AND a
+        // synthetic one-polar fixture at count == 1.
+        const {
+            assert!(ResourceLimits::FIELD_COUNT >= 4);
+        };
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_axis_is_at_most_barely_multi(),
+            Some(true),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_axis_is_at_most_half_saturated(),
+            Some(true),
+        );
+        let one_polar = ResourceLimits::from_field_values([0, 17, 19, 23, 29, 31]);
+        assert_eq!(one_polar.count_polar_axes(), 1);
+        assert_eq!(one_polar.polar_axis_is_at_most_barely_multi(), Some(true),);
+        assert_eq!(one_polar.polar_axis_is_at_most_half_saturated(), Some(true),);
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_barely_multi_true_implies_is_at_most_half_saturated_true(
+    ) {
+        // AT-MOST-BARELY-MULTI-IMPLIES-AT-MOST-HALF bridge dual at
+        // FIELD_COUNT >= 4 on the COMPOUND interior cell — synthetic
+        // one-interior and two-interior fixtures since no shipped
+        // preset lands one or two interior axes.
+        const {
+            assert!(ResourceLimits::FIELD_COUNT >= 4);
+        };
+        let one_interior = ResourceLimits::from_field_values([41, 0, 0, 0, 0, 0]);
+        assert_eq!(one_interior.count_interior_axes(), 1);
+        assert_eq!(
+            one_interior.interior_axis_is_at_most_barely_multi(),
+            Some(true),
+        );
+        assert_eq!(
+            one_interior.interior_axis_is_at_most_half_saturated(),
+            Some(true),
+        );
+        let two_interior = ResourceLimits::from_field_values([41, 43, 0, 0, 0, 0]);
+        assert_eq!(two_interior.count_interior_axes(), 2);
+        assert_eq!(
+            two_interior.interior_axis_is_at_most_barely_multi(),
+            Some(true),
+        );
+        assert_eq!(
+            two_interior.interior_axis_is_at_most_half_saturated(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_barely_multi_true_implies_is_super_half_saturated_false(
+    ) {
+        // AT-MOST-BARELY-MULTI-EXCLUDES-SUPER-HALF mutual-exclusion pin
+        // at FIELD_COUNT >= 4 on the COMPOUND polar cell — count <= 2
+        // forces 2 * count <= 4 <= FIELD_COUNT, so AT-MOST-BARELY-MULTI
+        // and SUPER-HALF sit on opposite sides of the balance point.
+        const {
+            assert!(ResourceLimits::FIELD_COUNT >= 4);
+        };
+        let one_polar = ResourceLimits::from_field_values([0, 17, 19, 23, 29, 31]);
+        assert_eq!(one_polar.count_polar_axes(), 1);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            one_polar,
+        ] {
+            assert!(
+                !(a.polar_axis_is_at_most_barely_multi() == Some(true)
+                    && a.polar_axis_is_super_half_saturated() == Some(true)),
+                "polar_is_at_most_barely_multi Some(true) co-fires polar_is_super_half_saturated Some(true) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_barely_multi_true_implies_is_super_half_saturated_false(
+    ) {
+        // AT-MOST-BARELY-MULTI-EXCLUDES-SUPER-HALF mutual-exclusion pin
+        // dual on the COMPOUND interior cell at FIELD_COUNT >= 4.
+        const {
+            assert!(ResourceLimits::FIELD_COUNT >= 4);
+        };
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [0_usize; ResourceLimits::FIELD_COUNT];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 41;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert!(
+                !(posture.interior_axis_is_at_most_barely_multi() == Some(true)
+                    && posture.interior_axis_is_super_half_saturated() == Some(true)),
+                "interior_is_at_most_barely_multi Some(true) co-fires interior_is_super_half_saturated Some(true) at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_compound_is_at_most_barely_multi_polar_interior_co_fire_is_unsatisfiable() {
+        // CROSS-CELL POLAR-INTERIOR CO-FIRE UNSATISFIABLE at
+        // FIELD_COUNT >= 5 — LOAD-BEARING structural pin UNIQUE to the
+        // COMPOUND partition on the AT-MOST-BARELY-MULTI cell. Both
+        // AT-MOST-BARELY-MULTI arms firing Some(true) would force
+        // count_polar <= 2 && count_interior <= 2, but count_polar +
+        // count_interior == FIELD_COUNT cannot admit a sum of at most 4
+        // at any FIELD_COUNT >= 5. The LOW-SIDE MIRROR of the AT-LEAST-
+        // NEARLY CROSS-CELL CO-FIRE UNSATISFIABLE pin one COUNT-
+        // HALFLINE-ENDPOINT axis over. Pinned across every shipped
+        // preset + hand-authored + test-local posture PLUS per-count
+        // synthetic fixtures walking count ∈ {0, …, FIELD_COUNT}.
+        const {
+            assert!(ResourceLimits::FIELD_COUNT >= 5);
+        };
+        let one_polar = ResourceLimits::from_field_values([0, 17, 19, 23, 29, 31]);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            one_polar,
+        ] {
+            assert!(
+                !(a.polar_axis_is_at_most_barely_multi() == Some(true)
+                    && a.interior_axis_is_at_most_barely_multi() == Some(true)),
+                "polar_is_at_most_barely_multi Some(true) co-fires interior_is_at_most_barely_multi Some(true) on {a:?}",
+            );
+        }
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [0_usize; ResourceLimits::FIELD_COUNT];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 41;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert!(
+                !(posture.polar_axis_is_at_most_barely_multi() == Some(true)
+                    && posture.interior_axis_is_at_most_barely_multi() == Some(true)),
+                "polar/interior AT-MOST-BARELY-MULTI CO-FIRE at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_compound_is_at_most_barely_multi_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the compound cells — both AT-MOST-BARELY-MULTI
+        // compound projections are evaluable in const context so a
+        // caller can pin the compound count-leq-two identities at
+        // compile time as build-breaks. Mirror of the compound AT-LEAST-
+        // NEARLY-SATURATED const-fn pins one COUNT-HALFLINE-ENDPOINT
+        // axis over on the count half-line.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_at_most_barely_multi(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_at_most_barely_multi(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_at_most_barely_multi(),
+            Some(false)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .interior_axis_is_at_most_barely_multi()
+            .is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .interior_axis_is_at_most_barely_multi()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .polar_axis_is_at_most_barely_multi()
+            .is_none());
+        const _: () = assert!(matches!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_axis_is_at_most_barely_multi(),
             Some(true)
         ));
     }

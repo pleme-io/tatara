@@ -22482,10 +22482,8 @@ impl ResourceLimits {
     /// zero split, no new per-axis scan, no allocation.
     #[must_use]
     pub const fn bottom_axis_is_barely_multi(self) -> Option<bool> {
-        match self.count_bottom_axes() {
-            0 => None,
-            c => Some(c == 2),
-        }
+        let c = self.count_bottom_axes();
+        Self::witness_axis_presence(c, c == 2)
     }
 
     /// Whole-posture BARELY-MULTI-OF-TOP predicate —
@@ -22557,10 +22555,8 @@ impl ResourceLimits {
     /// mask.
     #[must_use]
     pub const fn top_axis_is_barely_multi(self) -> Option<bool> {
-        match self.count_top_axes() {
-            0 => None,
-            c => Some(c == 2),
-        }
+        let c = self.count_top_axes();
+        Self::witness_axis_presence(c, c == 2)
     }
 
     /// Whole-posture BARELY-MULTI-OF-POLAR predicate —
@@ -22690,10 +22686,8 @@ impl ResourceLimits {
     /// count_interior == FIELD_COUNT`, no re-derivation.
     #[must_use]
     pub const fn polar_axis_is_barely_multi(self) -> Option<bool> {
-        match self.count_polar_axes() {
-            0 => None,
-            c => Some(c == 2),
-        }
+        let c = self.count_polar_axes();
+        Self::witness_axis_presence(c, c == 2)
     }
 
     /// Whole-posture BARELY-MULTI-OF-INTERIOR predicate —
@@ -22771,10 +22765,8 @@ impl ResourceLimits {
     /// interior mask.
     #[must_use]
     pub const fn interior_axis_is_barely_multi(self) -> Option<bool> {
-        match self.count_interior_axes() {
-            0 => None,
-            c => Some(c == 2),
-        }
+        let c = self.count_interior_axes();
+        Self::witness_axis_presence(c, c == 2)
     }
 
     /// Whole-posture BARELY-SUPER-HALF-SATURATED-OF-BOTTOM predicate —
@@ -86585,6 +86577,149 @@ mod tests {
         const _: () = assert!(matches!(
             DEFAULT_RESOURCE_LIMITS.interior_axis_is_super_half_saturated(),
             Some(true)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_barely_multi_family_bodies_delegate_to_witness_axis_presence() {
+        // Sweep-of-family pin — after routing the four BARELY-MULTI
+        // AXIS-CELL predicate bodies through
+        // ResourceLimits::witness_axis_presence, the (bottom, top,
+        // polar, interior) × (EMPTY, DEFAULT, UNBOUNDED,
+        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation of
+        // 4×5 = 20 shipped verdicts continues to agree with the
+        // helper-based shape `witness_axis_presence(count_X_axes(),
+        // count_X_axes() == 2)`. Locks the semantics-equivalent
+        // rewrite in the shipped bodies rather than trusting the
+        // mechanical rewrite by inspection; a future predicate lift
+        // that forgot the empty arm, or a helper regression that
+        // silently discarded the present-arm pred, would break here on
+        // at least one (axis, posture) pair. The BARELY-MULTI column
+        // is the eighth AXIS-CELL family swept to the helper
+        // (SINGLETON first, db01b3f; MULTI second, 82f5d01; SATURATED
+        // third, 47583ce; HALF-SATURATED fourth, 05421c0; NEARLY-
+        // SATURATED fifth, d2b57d7; SUB-HALF-SATURATED sixth,
+        // 3414837; SUPER-HALF-SATURATED seventh, 22206b8). BARELY-
+        // MULTI (`c == 2`) is the STRICT-SUCCESSOR-OF-SINGLETON
+        // refinement of MULTI — with the MULTI (`c >= 2`) sweep from
+        // 82f5d01 and the SINGLETON (`c == 1`) sweep from db01b3f
+        // already routed through the helper, this run closes the
+        // (SINGLETON, BARELY-MULTI, MULTI) count-locus trichotomy on
+        // the SAME `witness_axis_presence` composition rather than on
+        // three independently-open-coded empty-arm dispatches, pinning
+        // the (`c == 1`, `c == 2`, `c >= 2`) count-cardinality-cell
+        // partition on ONE typed empty-arm dispatch — BARELY-MULTI is
+        // the WITNESSING LOWER EDGE of the MULTI upward-closed cell
+        // (BARELY-MULTI implies MULTI on every FIELD_COUNT >= 2, and
+        // MULTI ∧ ¬BARELY-MULTI is the STRICTLY-ABOVE-BARELY-MULTI
+        // regime the not-yet-swept AT-MOST-BARELY-MULTI (a834a78) and
+        // AT-LEAST-NEARLY-SATURATED (52c9af1) families will refine
+        // against). Remaining sibling families (PARTIALLY-SATURATED,
+        // {AT-MOST,AT-LEAST}-HALF-SATURATED, {BARELY-SUB,BARELY-
+        // SUPER}-HALF-SATURATED, AT-LEAST-NEARLY-SATURATED, AT-MOST-
+        // BARELY-MULTI) pending their own family-scoped adoption pins
+        // under future runs.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            let cb = posture.count_bottom_axes();
+            assert_eq!(
+                posture.bottom_axis_is_barely_multi(),
+                ResourceLimits::witness_axis_presence(cb, cb == 2),
+                "bottom BARELY-MULTI delegation regressed on {posture:?}",
+            );
+            let ct = posture.count_top_axes();
+            assert_eq!(
+                posture.top_axis_is_barely_multi(),
+                ResourceLimits::witness_axis_presence(ct, ct == 2),
+                "top BARELY-MULTI delegation regressed on {posture:?}",
+            );
+            let cp = posture.count_polar_axes();
+            assert_eq!(
+                posture.polar_axis_is_barely_multi(),
+                ResourceLimits::witness_axis_presence(cp, cp == 2),
+                "polar BARELY-MULTI delegation regressed on {posture:?}",
+            );
+            let ci = posture.count_interior_axes();
+            assert_eq!(
+                posture.interior_axis_is_barely_multi(),
+                ResourceLimits::witness_axis_presence(ci, ci == 2),
+                "interior BARELY-MULTI delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_barely_multi_family_bodies_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin — every BARELY-MULTI predicate in the swept
+        // family remains const-fn evaluable after routing through
+        // ResourceLimits::witness_axis_presence. Pins that the helper
+        // preserves the const-fn evaluability contract each AXIS-CELL
+        // predicate carried before the sweep; a build-break here
+        // would fire if the helper (or its caller) lost const-fn
+        // eligibility. FIELD_COUNT is 6, so `c == 2` fires ONLY at
+        // `c == 2` — no canonical shipped preset places exactly two
+        // axes at any pole (every preset that hits an axis saturates
+        // all six axes uniformly on it, count == 6), so the present-
+        // arm verdicts are `Some(false)` across the board — matching
+        // the HALF-SATURATED (05421c0, `c == FIELD_COUNT / 2`), NEARLY-
+        // SATURATED (d2b57d7, `c == FIELD_COUNT - 1`), and SUB-HALF-
+        // SATURATED (3414837, `c * 2 < FIELD_COUNT`) families'
+        // Some(false) posture, and contrasting the MULTI family's
+        // (82f5d01) Some(true) upper corner (MULTI holds at count 6,
+        // BARELY-MULTI does not — BARELY-MULTI is MULTI ∧ ¬(c > 2)).
+        // The SINGLETON / BARELY-MULTI / MULTI three together now pin
+        // the (`c == 1`, `c == 2`, `c >= 2`) count-cardinality-cell
+        // trichotomy on the SAME helper.
+        // EMPTY: 6 fields at 0 → bottom count 6 (2 != 6 → Some(false)),
+        // top count 0 (None), polar count 6 (Some(false)), interior
+        // count 0 (None).
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_barely_multi(),
+            Some(false)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.top_axis_is_barely_multi().is_none());
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_barely_multi(),
+            Some(false)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .interior_axis_is_barely_multi()
+            .is_none());
+        // UNBOUNDED: 6 fields at usize::MAX → bottom count 0 (None),
+        // top count 6 (Some(false)), polar count 6 (Some(false)),
+        // interior count 0 (None).
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .bottom_axis_is_barely_multi()
+            .is_none());
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_barely_multi(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_barely_multi(),
+            Some(false)
+        ));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .interior_axis_is_barely_multi()
+            .is_none());
+        // DEFAULT: 6 fields strictly interior → bottom count 0 (None),
+        // top count 0 (None), polar count 0 (None), interior count 6
+        // (Some(false)).
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .bottom_axis_is_barely_multi()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_is_barely_multi().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .polar_axis_is_barely_multi()
+            .is_none());
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_barely_multi(),
+            Some(false)
         ));
     }
 }

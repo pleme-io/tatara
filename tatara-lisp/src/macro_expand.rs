@@ -21123,10 +21123,8 @@ impl ResourceLimits {
     /// zero split, no new per-axis scan, no allocation.
     #[must_use]
     pub const fn bottom_axis_is_half_saturated(self) -> Option<bool> {
-        match self.count_bottom_axes() {
-            0 => None,
-            c => Some(c == Self::FIELD_COUNT / 2),
-        }
+        let c = self.count_bottom_axes();
+        Self::witness_axis_presence(c, c == Self::FIELD_COUNT / 2)
     }
 
     /// Whole-posture HALF-SATURATED-OF-TOP predicate —
@@ -21198,10 +21196,8 @@ impl ResourceLimits {
     /// mask.
     #[must_use]
     pub const fn top_axis_is_half_saturated(self) -> Option<bool> {
-        match self.count_top_axes() {
-            0 => None,
-            c => Some(c == Self::FIELD_COUNT / 2),
-        }
+        let c = self.count_top_axes();
+        Self::witness_axis_presence(c, c == Self::FIELD_COUNT / 2)
     }
 
     /// Whole-posture HALF-SATURATED-OF-POLAR predicate —
@@ -21379,10 +21375,8 @@ impl ResourceLimits {
     /// split, no new per-axis scan, no allocation.
     #[must_use]
     pub const fn polar_axis_is_half_saturated(self) -> Option<bool> {
-        match self.count_polar_axes() {
-            0 => None,
-            c => Some(c == Self::FIELD_COUNT / 2),
-        }
+        let c = self.count_polar_axes();
+        Self::witness_axis_presence(c, c == Self::FIELD_COUNT / 2)
     }
 
     /// Whole-posture HALF-SATURATED-OF-INTERIOR predicate —
@@ -21475,10 +21469,8 @@ impl ResourceLimits {
     /// interior mask.
     #[must_use]
     pub const fn interior_axis_is_half_saturated(self) -> Option<bool> {
-        match self.count_interior_axes() {
-            0 => None,
-            c => Some(c == Self::FIELD_COUNT / 2),
-        }
+        let c = self.count_interior_axes();
+        Self::witness_axis_presence(c, c == Self::FIELD_COUNT / 2)
     }
 
     /// Whole-posture SUB-HALF-SATURATED-OF-BOTTOM predicate —
@@ -86088,6 +86080,128 @@ mod tests {
         const _: () = assert!(matches!(
             DEFAULT_RESOURCE_LIMITS.interior_axis_is_saturated(),
             Some(true)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_half_saturated_family_bodies_delegate_to_witness_axis_presence() {
+        // Sweep-of-family pin — after routing the four HALF-SATURATED
+        // AXIS-CELL predicate bodies through
+        // ResourceLimits::witness_axis_presence, the (bottom, top,
+        // polar, interior) × (EMPTY, DEFAULT, UNBOUNDED,
+        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation of
+        // 4×5 = 20 shipped verdicts continues to agree with the
+        // helper-based shape `witness_axis_presence(count_X_axes(),
+        // count_X_axes() == Self::FIELD_COUNT / 2)`. Locks the
+        // semantics-equivalent rewrite in the shipped bodies rather
+        // than trusting the mechanical rewrite by inspection; a future
+        // predicate lift that forgot the empty arm, or a helper
+        // regression that silently discarded the present-arm pred,
+        // would break here on at least one (axis, posture) pair. The
+        // HALF-SATURATED column is the fourth AXIS-CELL family swept
+        // to the helper (SINGLETON was first, in db01b3f; MULTI
+        // second, in 82f5d01; SATURATED third, in 47583ce). HALF-
+        // SATURATED is the COUNT-MIDPOINT sibling of SATURATED —
+        // `count == FIELD_COUNT / 2` is the tight center of the
+        // presence regime, exactly complementing SATURATED's tight
+        // upper edge (`count == FIELD_COUNT`) — so the two adoption
+        // pins together lock the (MIDPOINT, ENDPOINT) count-locus
+        // pair on the SAME witness helper. Remaining sibling families
+        // (NEARLY-SATURATED, PARTIALLY-SATURATED, BARELY-MULTI,
+        // {SUB,SUPER,AT-MOST,AT-LEAST}-HALF-SATURATED,
+        // {BARELY-SUB,BARELY-SUPER}-HALF-SATURATED,
+        // AT-LEAST-NEARLY-SATURATED, AT-MOST-BARELY-MULTI) pending
+        // their own family-scoped adoption pins under future runs.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            let cb = posture.count_bottom_axes();
+            assert_eq!(
+                posture.bottom_axis_is_half_saturated(),
+                ResourceLimits::witness_axis_presence(cb, cb == ResourceLimits::FIELD_COUNT / 2),
+                "bottom HALF-SATURATED delegation regressed on {posture:?}",
+            );
+            let ct = posture.count_top_axes();
+            assert_eq!(
+                posture.top_axis_is_half_saturated(),
+                ResourceLimits::witness_axis_presence(ct, ct == ResourceLimits::FIELD_COUNT / 2),
+                "top HALF-SATURATED delegation regressed on {posture:?}",
+            );
+            let cp = posture.count_polar_axes();
+            assert_eq!(
+                posture.polar_axis_is_half_saturated(),
+                ResourceLimits::witness_axis_presence(cp, cp == ResourceLimits::FIELD_COUNT / 2),
+                "polar HALF-SATURATED delegation regressed on {posture:?}",
+            );
+            let ci = posture.count_interior_axes();
+            assert_eq!(
+                posture.interior_axis_is_half_saturated(),
+                ResourceLimits::witness_axis_presence(ci, ci == ResourceLimits::FIELD_COUNT / 2),
+                "interior HALF-SATURATED delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_half_saturated_family_bodies_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin — every HALF-SATURATED predicate in the swept
+        // family remains const-fn evaluable after routing through
+        // ResourceLimits::witness_axis_presence. Pins that the helper
+        // preserves the const-fn evaluability contract each AXIS-CELL
+        // predicate carried before the sweep; a build-break here would
+        // fire if the helper (or its caller) lost const-fn eligibility.
+        // FIELD_COUNT is 6, so FIELD_COUNT / 2 is 3 — none of the three
+        // canonical presets sit at the midpoint on any axis, so every
+        // present-arm verdict is `Some(false)`, complementing the
+        // SATURATED family's `Some(true)` corners pinned above.
+        // EMPTY: 6 fields at 0 → bottom count 6 (!= 3), top count 0,
+        // polar count 6 (!= 3), interior count 0.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_half_saturated(),
+            Some(false)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.top_axis_is_half_saturated().is_none());
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_half_saturated(),
+            Some(false)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .interior_axis_is_half_saturated()
+            .is_none());
+        // UNBOUNDED: 6 fields at usize::MAX → bottom count 0, top
+        // count 6 (!= 3), polar count 6 (!= 3), interior count 0.
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .bottom_axis_is_half_saturated()
+            .is_none());
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_half_saturated(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_half_saturated(),
+            Some(false)
+        ));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .interior_axis_is_half_saturated()
+            .is_none());
+        // DEFAULT: 6 fields strictly interior → bottom count 0, top
+        // count 0, polar count 0, interior count 6 (!= 3).
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .bottom_axis_is_half_saturated()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .top_axis_is_half_saturated()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .polar_axis_is_half_saturated()
+            .is_none());
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_half_saturated(),
+            Some(false)
         ));
     }
 }

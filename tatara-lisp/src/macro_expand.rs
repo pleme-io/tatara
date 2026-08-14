@@ -85836,62 +85836,79 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn resource_limits_singleton_family_bodies_delegate_to_witness_axis_presence() {
-        // Sweep-of-family pin — after routing the four SINGLETON
-        // AXIS-CELL predicate bodies through
-        // ResourceLimits::witness_axis_presence, the (bottom, top,
-        // polar, interior) × (EMPTY, DEFAULT, UNBOUNDED,
-        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation of
-        // 4×5 = 20 shipped verdicts continues to agree with the
-        // helper-based shape `witness_axis_presence(count_X_axes(),
-        // count_X_axes() == 1)`. The pin locks the semantics-
-        // equivalent rewrite in the shipped bodies rather than
-        // trusting the mechanical rewrite by inspection: a future
-        // predicate lift that forgot the empty arm, or a helper
-        // regression that silently discarded the present-arm pred,
-        // would break here on at least one (axis, posture) pair. The
-        // SINGLETON column is the first AXIS-CELL family swept to the
-        // helper; sibling families (SATURATED, MULTI, HALF-SATURATED,
-        // NEARLY-SATURATED, PARTIALLY-SATURATED, BARELY-MULTI,
-        // {SUB,SUPER,AT-MOST,AT-LEAST}-HALF-SATURATED,
-        // {BARELY-SUB,BARELY-SUPER}-HALF-SATURATED,
-        // AT-LEAST-NEARLY-SATURATED, AT-MOST-BARELY-MULTI) are
-        // pending their own family-scoped adoption pins under future
-        // runs.
-        for posture in [
-            EMPTY_RESOURCE_LIMITS,
-            DEFAULT_RESOURCE_LIMITS,
-            UNBOUNDED_RESOURCE_LIMITS,
-            HAND_AUTHORED_MID_POSTURE,
-            HAND_AUTHORED_OTHER_POSTURE,
-        ] {
-            let cb = posture.count_bottom_axes();
-            assert_eq!(
-                posture.bottom_axis_is_singleton(),
-                ResourceLimits::witness_axis_presence(cb, cb == 1),
-                "bottom SINGLETON delegation regressed on {posture:?}",
-            );
-            let ct = posture.count_top_axes();
-            assert_eq!(
-                posture.top_axis_is_singleton(),
-                ResourceLimits::witness_axis_presence(ct, ct == 1),
-                "top SINGLETON delegation regressed on {posture:?}",
-            );
-            let cp = posture.count_polar_axes();
-            assert_eq!(
-                posture.polar_axis_is_singleton(),
-                ResourceLimits::witness_axis_presence(cp, cp == 1),
-                "polar SINGLETON delegation regressed on {posture:?}",
-            );
-            let ci = posture.count_interior_axes();
-            assert_eq!(
-                posture.interior_axis_is_singleton(),
-                ResourceLimits::witness_axis_presence(ci, ci == 1),
-                "interior SINGLETON delegation regressed on {posture:?}",
-            );
-        }
+    /// Sweep-of-family pin — asserts each of a family's four AXIS-CELL
+    /// predicates (`bottom_axis_is_$name`, `top_axis_is_$name`,
+    /// `polar_axis_is_$name`, `interior_axis_is_$name`) agrees with the
+    /// helper-based shape `ResourceLimits::witness_axis_presence(count,
+    /// pred(count))` on every (axis, posture) pair from the EMPTY /
+    /// DEFAULT / UNBOUNDED / HAND_AUTHORED_MID / HAND_AUTHORED_OTHER
+    /// constellation (4×5 = 20 verdicts). Adding a new family adoption
+    /// is one invocation, not one copy of a 30-line scan; the substrate
+    /// now has a first-class primitive for the family-delegation shape.
+    macro_rules! axis_family_delegation_pin {
+        (
+            $fn_name:ident,
+            $bottom_method:ident, $top_method:ident,
+            $polar_method:ident, $interior_method:ident,
+            $label:literal,
+            |$c:ident| $pred:expr $(,)?
+        ) => {
+            #[test]
+            fn $fn_name() {
+                let pred = |$c: usize| -> bool { $pred };
+                for posture in [
+                    EMPTY_RESOURCE_LIMITS,
+                    DEFAULT_RESOURCE_LIMITS,
+                    UNBOUNDED_RESOURCE_LIMITS,
+                    HAND_AUTHORED_MID_POSTURE,
+                    HAND_AUTHORED_OTHER_POSTURE,
+                ] {
+                    let cb = posture.count_bottom_axes();
+                    assert_eq!(
+                        posture.$bottom_method(),
+                        ResourceLimits::witness_axis_presence(cb, pred(cb)),
+                        "bottom {} delegation regressed on {:?}",
+                        $label,
+                        posture,
+                    );
+                    let ct = posture.count_top_axes();
+                    assert_eq!(
+                        posture.$top_method(),
+                        ResourceLimits::witness_axis_presence(ct, pred(ct)),
+                        "top {} delegation regressed on {:?}",
+                        $label,
+                        posture,
+                    );
+                    let cp = posture.count_polar_axes();
+                    assert_eq!(
+                        posture.$polar_method(),
+                        ResourceLimits::witness_axis_presence(cp, pred(cp)),
+                        "polar {} delegation regressed on {:?}",
+                        $label,
+                        posture,
+                    );
+                    let ci = posture.count_interior_axes();
+                    assert_eq!(
+                        posture.$interior_method(),
+                        ResourceLimits::witness_axis_presence(ci, pred(ci)),
+                        "interior {} delegation regressed on {:?}",
+                        $label,
+                        posture,
+                    );
+                }
+            }
+        };
     }
+
+    axis_family_delegation_pin!(
+        resource_limits_singleton_family_bodies_delegate_to_witness_axis_presence,
+        bottom_axis_is_singleton,
+        top_axis_is_singleton,
+        polar_axis_is_singleton,
+        interior_axis_is_singleton,
+        "SINGLETON",
+        |c| c == 1,
+    );
 
     #[test]
     fn resource_limits_singleton_family_bodies_evaluate_at_compile_time_via_const_fn() {
@@ -85941,65 +85958,15 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn resource_limits_multi_family_bodies_delegate_to_witness_axis_presence() {
-        // Sweep-of-family pin — after routing the four MULTI AXIS-CELL
-        // predicate bodies through ResourceLimits::witness_axis_presence,
-        // the (bottom, top, polar, interior) × (EMPTY, DEFAULT,
-        // UNBOUNDED, HAND_AUTHORED_MID, HAND_AUTHORED_OTHER)
-        // constellation of 4×5 = 20 shipped verdicts continues to agree
-        // with the helper-based shape `witness_axis_presence(
-        // count_X_axes(), count_X_axes() > 1)`. Locks the semantics-
-        // equivalent rewrite in the shipped bodies rather than trusting
-        // the mechanical rewrite by inspection; a future predicate lift
-        // that forgot the empty arm, or a helper regression that
-        // silently discarded the present-arm pred, would break here on
-        // at least one (axis, posture) pair. The MULTI column is the
-        // second AXIS-CELL family swept to the helper (SINGLETON was
-        // first, in db01b3f); the two form the DE-MORGAN-COMPLEMENT
-        // dual pair pinned by the sibling `..._multi() ==
-        // ..._singleton().map(|b| !b)` identity family, so the two
-        // adoption pins together lock BOTH sides of the complement
-        // pair on the witness helper. Remaining sibling families
-        // (SATURATED, HALF-SATURATED, NEARLY-SATURATED,
-        // PARTIALLY-SATURATED, BARELY-MULTI,
-        // {SUB,SUPER,AT-MOST,AT-LEAST}-HALF-SATURATED,
-        // {BARELY-SUB,BARELY-SUPER}-HALF-SATURATED,
-        // AT-LEAST-NEARLY-SATURATED, AT-MOST-BARELY-MULTI) pending
-        // their own family-scoped adoption pins under future runs.
-        for posture in [
-            EMPTY_RESOURCE_LIMITS,
-            DEFAULT_RESOURCE_LIMITS,
-            UNBOUNDED_RESOURCE_LIMITS,
-            HAND_AUTHORED_MID_POSTURE,
-            HAND_AUTHORED_OTHER_POSTURE,
-        ] {
-            let cb = posture.count_bottom_axes();
-            assert_eq!(
-                posture.bottom_axis_is_multi(),
-                ResourceLimits::witness_axis_presence(cb, cb > 1),
-                "bottom MULTI delegation regressed on {posture:?}",
-            );
-            let ct = posture.count_top_axes();
-            assert_eq!(
-                posture.top_axis_is_multi(),
-                ResourceLimits::witness_axis_presence(ct, ct > 1),
-                "top MULTI delegation regressed on {posture:?}",
-            );
-            let cp = posture.count_polar_axes();
-            assert_eq!(
-                posture.polar_axis_is_multi(),
-                ResourceLimits::witness_axis_presence(cp, cp > 1),
-                "polar MULTI delegation regressed on {posture:?}",
-            );
-            let ci = posture.count_interior_axes();
-            assert_eq!(
-                posture.interior_axis_is_multi(),
-                ResourceLimits::witness_axis_presence(ci, ci > 1),
-                "interior MULTI delegation regressed on {posture:?}",
-            );
-        }
-    }
+    axis_family_delegation_pin!(
+        resource_limits_multi_family_bodies_delegate_to_witness_axis_presence,
+        bottom_axis_is_multi,
+        top_axis_is_multi,
+        polar_axis_is_multi,
+        interior_axis_is_multi,
+        "MULTI",
+        |c| c > 1,
+    );
 
     #[test]
     fn resource_limits_multi_family_bodies_evaluate_at_compile_time_via_const_fn() {
@@ -86044,67 +86011,15 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn resource_limits_saturated_family_bodies_delegate_to_witness_axis_presence() {
-        // Sweep-of-family pin — after routing the four SATURATED
-        // AXIS-CELL predicate bodies through
-        // ResourceLimits::witness_axis_presence, the (bottom, top,
-        // polar, interior) × (EMPTY, DEFAULT, UNBOUNDED,
-        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation of
-        // 4×5 = 20 shipped verdicts continues to agree with the
-        // helper-based shape `witness_axis_presence(count_X_axes(),
-        // count_X_axes() == Self::FIELD_COUNT)`. Locks the semantics-
-        // equivalent rewrite in the shipped bodies rather than
-        // trusting the mechanical rewrite by inspection; a future
-        // predicate lift that forgot the empty arm, or a helper
-        // regression that silently discarded the present-arm pred,
-        // would break here on at least one (axis, posture) pair. The
-        // SATURATED column is the third AXIS-CELL family swept to the
-        // helper (SINGLETON was first, in db01b3f; MULTI second, in
-        // 82f5d01). SATURATED is the strict COUNT-endpoint refinement
-        // of MULTI — `count == FIELD_COUNT` is the tight upper edge
-        // of the `count > 1` MULTI regime — so the two adoption pins
-        // together lock the MULTI base + its SATURATED refinement on
-        // the SAME witness helper, closing the (MULTI, SATURATED)
-        // refinement pair. Remaining sibling families (HALF-SATURATED,
-        // NEARLY-SATURATED, PARTIALLY-SATURATED, BARELY-MULTI,
-        // {SUB,SUPER,AT-MOST,AT-LEAST}-HALF-SATURATED,
-        // {BARELY-SUB,BARELY-SUPER}-HALF-SATURATED,
-        // AT-LEAST-NEARLY-SATURATED, AT-MOST-BARELY-MULTI) pending
-        // their own family-scoped adoption pins under future runs.
-        for posture in [
-            EMPTY_RESOURCE_LIMITS,
-            DEFAULT_RESOURCE_LIMITS,
-            UNBOUNDED_RESOURCE_LIMITS,
-            HAND_AUTHORED_MID_POSTURE,
-            HAND_AUTHORED_OTHER_POSTURE,
-        ] {
-            let cb = posture.count_bottom_axes();
-            assert_eq!(
-                posture.bottom_axis_is_saturated(),
-                ResourceLimits::witness_axis_presence(cb, cb == ResourceLimits::FIELD_COUNT),
-                "bottom SATURATED delegation regressed on {posture:?}",
-            );
-            let ct = posture.count_top_axes();
-            assert_eq!(
-                posture.top_axis_is_saturated(),
-                ResourceLimits::witness_axis_presence(ct, ct == ResourceLimits::FIELD_COUNT),
-                "top SATURATED delegation regressed on {posture:?}",
-            );
-            let cp = posture.count_polar_axes();
-            assert_eq!(
-                posture.polar_axis_is_saturated(),
-                ResourceLimits::witness_axis_presence(cp, cp == ResourceLimits::FIELD_COUNT),
-                "polar SATURATED delegation regressed on {posture:?}",
-            );
-            let ci = posture.count_interior_axes();
-            assert_eq!(
-                posture.interior_axis_is_saturated(),
-                ResourceLimits::witness_axis_presence(ci, ci == ResourceLimits::FIELD_COUNT),
-                "interior SATURATED delegation regressed on {posture:?}",
-            );
-        }
-    }
+    axis_family_delegation_pin!(
+        resource_limits_saturated_family_bodies_delegate_to_witness_axis_presence,
+        bottom_axis_is_saturated,
+        top_axis_is_saturated,
+        polar_axis_is_saturated,
+        interior_axis_is_saturated,
+        "SATURATED",
+        |c| c == ResourceLimits::FIELD_COUNT,
+    );
 
     #[test]
     fn resource_limits_saturated_family_bodies_evaluate_at_compile_time_via_const_fn() {
@@ -86155,68 +86070,15 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn resource_limits_half_saturated_family_bodies_delegate_to_witness_axis_presence() {
-        // Sweep-of-family pin — after routing the four HALF-SATURATED
-        // AXIS-CELL predicate bodies through
-        // ResourceLimits::witness_axis_presence, the (bottom, top,
-        // polar, interior) × (EMPTY, DEFAULT, UNBOUNDED,
-        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation of
-        // 4×5 = 20 shipped verdicts continues to agree with the
-        // helper-based shape `witness_axis_presence(count_X_axes(),
-        // count_X_axes() == Self::FIELD_COUNT / 2)`. Locks the
-        // semantics-equivalent rewrite in the shipped bodies rather
-        // than trusting the mechanical rewrite by inspection; a future
-        // predicate lift that forgot the empty arm, or a helper
-        // regression that silently discarded the present-arm pred,
-        // would break here on at least one (axis, posture) pair. The
-        // HALF-SATURATED column is the fourth AXIS-CELL family swept
-        // to the helper (SINGLETON was first, in db01b3f; MULTI
-        // second, in 82f5d01; SATURATED third, in 47583ce). HALF-
-        // SATURATED is the COUNT-MIDPOINT sibling of SATURATED —
-        // `count == FIELD_COUNT / 2` is the tight center of the
-        // presence regime, exactly complementing SATURATED's tight
-        // upper edge (`count == FIELD_COUNT`) — so the two adoption
-        // pins together lock the (MIDPOINT, ENDPOINT) count-locus
-        // pair on the SAME witness helper. Remaining sibling families
-        // (NEARLY-SATURATED, PARTIALLY-SATURATED, BARELY-MULTI,
-        // {SUB,SUPER,AT-MOST,AT-LEAST}-HALF-SATURATED,
-        // {BARELY-SUB,BARELY-SUPER}-HALF-SATURATED,
-        // AT-LEAST-NEARLY-SATURATED, AT-MOST-BARELY-MULTI) pending
-        // their own family-scoped adoption pins under future runs.
-        for posture in [
-            EMPTY_RESOURCE_LIMITS,
-            DEFAULT_RESOURCE_LIMITS,
-            UNBOUNDED_RESOURCE_LIMITS,
-            HAND_AUTHORED_MID_POSTURE,
-            HAND_AUTHORED_OTHER_POSTURE,
-        ] {
-            let cb = posture.count_bottom_axes();
-            assert_eq!(
-                posture.bottom_axis_is_half_saturated(),
-                ResourceLimits::witness_axis_presence(cb, cb == ResourceLimits::FIELD_COUNT / 2),
-                "bottom HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let ct = posture.count_top_axes();
-            assert_eq!(
-                posture.top_axis_is_half_saturated(),
-                ResourceLimits::witness_axis_presence(ct, ct == ResourceLimits::FIELD_COUNT / 2),
-                "top HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let cp = posture.count_polar_axes();
-            assert_eq!(
-                posture.polar_axis_is_half_saturated(),
-                ResourceLimits::witness_axis_presence(cp, cp == ResourceLimits::FIELD_COUNT / 2),
-                "polar HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let ci = posture.count_interior_axes();
-            assert_eq!(
-                posture.interior_axis_is_half_saturated(),
-                ResourceLimits::witness_axis_presence(ci, ci == ResourceLimits::FIELD_COUNT / 2),
-                "interior HALF-SATURATED delegation regressed on {posture:?}",
-            );
-        }
-    }
+    axis_family_delegation_pin!(
+        resource_limits_half_saturated_family_bodies_delegate_to_witness_axis_presence,
+        bottom_axis_is_half_saturated,
+        top_axis_is_half_saturated,
+        polar_axis_is_half_saturated,
+        interior_axis_is_half_saturated,
+        "HALF-SATURATED",
+        |c| c == ResourceLimits::FIELD_COUNT / 2,
+    );
 
     #[test]
     fn resource_limits_half_saturated_family_bodies_evaluate_at_compile_time_via_const_fn() {
@@ -86277,70 +86139,15 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn resource_limits_nearly_saturated_family_bodies_delegate_to_witness_axis_presence() {
-        // Sweep-of-family pin — after routing the four NEARLY-SATURATED
-        // AXIS-CELL predicate bodies through
-        // ResourceLimits::witness_axis_presence, the (bottom, top,
-        // polar, interior) × (EMPTY, DEFAULT, UNBOUNDED,
-        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation of
-        // 4×5 = 20 shipped verdicts continues to agree with the
-        // helper-based shape `witness_axis_presence(count_X_axes(),
-        // count_X_axes() == Self::FIELD_COUNT - 1)`. Locks the
-        // semantics-equivalent rewrite in the shipped bodies rather
-        // than trusting the mechanical rewrite by inspection; a future
-        // predicate lift that forgot the empty arm, or a helper
-        // regression that silently discarded the present-arm pred,
-        // would break here on at least one (axis, posture) pair. The
-        // NEARLY-SATURATED column is the fifth AXIS-CELL family swept
-        // to the helper (SINGLETON first, db01b3f; MULTI second,
-        // 82f5d01; SATURATED third, 47583ce; HALF-SATURATED fourth,
-        // 05421c0). NEARLY-SATURATED is the ENDPOINT-MINUS-ONE
-        // sibling of SATURATED — `count == FIELD_COUNT - 1` is one
-        // axis shy of the tight upper edge SATURATED locks — so the
-        // three adoption pins on the count regime's upper corner
-        // (SATURATED at FIELD_COUNT, NEARLY-SATURATED at
-        // FIELD_COUNT - 1, HALF-SATURATED at FIELD_COUNT / 2) now
-        // all route through the SAME witness helper on the SAME
-        // (bottom, top, polar, interior) × preset constellation.
-        // Remaining sibling families (PARTIALLY-SATURATED,
-        // BARELY-MULTI, {SUB,SUPER,AT-MOST,AT-LEAST}-HALF-SATURATED,
-        // {BARELY-SUB,BARELY-SUPER}-HALF-SATURATED,
-        // AT-LEAST-NEARLY-SATURATED, AT-MOST-BARELY-MULTI) pending
-        // their own family-scoped adoption pins under future runs.
-        for posture in [
-            EMPTY_RESOURCE_LIMITS,
-            DEFAULT_RESOURCE_LIMITS,
-            UNBOUNDED_RESOURCE_LIMITS,
-            HAND_AUTHORED_MID_POSTURE,
-            HAND_AUTHORED_OTHER_POSTURE,
-        ] {
-            let cb = posture.count_bottom_axes();
-            assert_eq!(
-                posture.bottom_axis_is_nearly_saturated(),
-                ResourceLimits::witness_axis_presence(cb, cb == ResourceLimits::FIELD_COUNT - 1),
-                "bottom NEARLY-SATURATED delegation regressed on {posture:?}",
-            );
-            let ct = posture.count_top_axes();
-            assert_eq!(
-                posture.top_axis_is_nearly_saturated(),
-                ResourceLimits::witness_axis_presence(ct, ct == ResourceLimits::FIELD_COUNT - 1),
-                "top NEARLY-SATURATED delegation regressed on {posture:?}",
-            );
-            let cp = posture.count_polar_axes();
-            assert_eq!(
-                posture.polar_axis_is_nearly_saturated(),
-                ResourceLimits::witness_axis_presence(cp, cp == ResourceLimits::FIELD_COUNT - 1),
-                "polar NEARLY-SATURATED delegation regressed on {posture:?}",
-            );
-            let ci = posture.count_interior_axes();
-            assert_eq!(
-                posture.interior_axis_is_nearly_saturated(),
-                ResourceLimits::witness_axis_presence(ci, ci == ResourceLimits::FIELD_COUNT - 1),
-                "interior NEARLY-SATURATED delegation regressed on {posture:?}",
-            );
-        }
-    }
+    axis_family_delegation_pin!(
+        resource_limits_nearly_saturated_family_bodies_delegate_to_witness_axis_presence,
+        bottom_axis_is_nearly_saturated,
+        top_axis_is_nearly_saturated,
+        polar_axis_is_nearly_saturated,
+        interior_axis_is_nearly_saturated,
+        "NEARLY-SATURATED",
+        |c| c == ResourceLimits::FIELD_COUNT - 1,
+    );
 
     #[test]
     fn resource_limits_nearly_saturated_family_bodies_evaluate_at_compile_time_via_const_fn() {
@@ -86406,71 +86213,15 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn resource_limits_sub_half_saturated_family_bodies_delegate_to_witness_axis_presence() {
-        // Sweep-of-family pin — after routing the four SUB-HALF-
-        // SATURATED AXIS-CELL predicate bodies through
-        // ResourceLimits::witness_axis_presence, the (bottom, top,
-        // polar, interior) × (EMPTY, DEFAULT, UNBOUNDED,
-        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation of
-        // 4×5 = 20 shipped verdicts continues to agree with the
-        // helper-based shape `witness_axis_presence(count_X_axes(),
-        // count_X_axes() * 2 < Self::FIELD_COUNT)`. Locks the
-        // semantics-equivalent rewrite in the shipped bodies rather
-        // than trusting the mechanical rewrite by inspection; a future
-        // predicate lift that forgot the empty arm, or a helper
-        // regression that silently discarded the present-arm pred,
-        // would break here on at least one (axis, posture) pair. The
-        // SUB-HALF-SATURATED column is the sixth AXIS-CELL family
-        // swept to the helper (SINGLETON first, db01b3f; MULTI second,
-        // 82f5d01; SATURATED third, 47583ce; HALF-SATURATED fourth,
-        // 05421c0; NEARLY-SATURATED fifth, d2b57d7). SUB-HALF-
-        // SATURATED is the STRICT-LOWER-OPEN-HALF sibling of
-        // HALF-SATURATED — `c * 2 < FIELD_COUNT` opens the lower half
-        // strictly under the midpoint HALF-SATURATED locks
-        // (`c == FIELD_COUNT / 2`) — so the two adoption pins together
-        // close the (STRICT-LOWER-OPEN-HALF, MIDPOINT) count-locus
-        // pair on the SAME witness helper, pinning the two disjoint
-        // halves of the strict-under-versus-at-midpoint neighbour
-        // separation on ONE typed empty-arm dispatch. Remaining
-        // sibling families (PARTIALLY-SATURATED, BARELY-MULTI,
-        // SUPER-HALF-SATURATED, {AT-MOST,AT-LEAST}-HALF-SATURATED,
-        // {BARELY-SUB,BARELY-SUPER}-HALF-SATURATED,
-        // AT-LEAST-NEARLY-SATURATED, AT-MOST-BARELY-MULTI) pending
-        // their own family-scoped adoption pins under future runs.
-        for posture in [
-            EMPTY_RESOURCE_LIMITS,
-            DEFAULT_RESOURCE_LIMITS,
-            UNBOUNDED_RESOURCE_LIMITS,
-            HAND_AUTHORED_MID_POSTURE,
-            HAND_AUTHORED_OTHER_POSTURE,
-        ] {
-            let cb = posture.count_bottom_axes();
-            assert_eq!(
-                posture.bottom_axis_is_sub_half_saturated(),
-                ResourceLimits::witness_axis_presence(cb, cb * 2 < ResourceLimits::FIELD_COUNT),
-                "bottom SUB-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let ct = posture.count_top_axes();
-            assert_eq!(
-                posture.top_axis_is_sub_half_saturated(),
-                ResourceLimits::witness_axis_presence(ct, ct * 2 < ResourceLimits::FIELD_COUNT),
-                "top SUB-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let cp = posture.count_polar_axes();
-            assert_eq!(
-                posture.polar_axis_is_sub_half_saturated(),
-                ResourceLimits::witness_axis_presence(cp, cp * 2 < ResourceLimits::FIELD_COUNT),
-                "polar SUB-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let ci = posture.count_interior_axes();
-            assert_eq!(
-                posture.interior_axis_is_sub_half_saturated(),
-                ResourceLimits::witness_axis_presence(ci, ci * 2 < ResourceLimits::FIELD_COUNT),
-                "interior SUB-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-        }
-    }
+    axis_family_delegation_pin!(
+        resource_limits_sub_half_saturated_family_bodies_delegate_to_witness_axis_presence,
+        bottom_axis_is_sub_half_saturated,
+        top_axis_is_sub_half_saturated,
+        polar_axis_is_sub_half_saturated,
+        interior_axis_is_sub_half_saturated,
+        "SUB-HALF-SATURATED",
+        |c| c * 2 < ResourceLimits::FIELD_COUNT,
+    );
 
     #[test]
     fn resource_limits_sub_half_saturated_family_bodies_evaluate_at_compile_time_via_const_fn() {
@@ -86544,73 +86295,15 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn resource_limits_super_half_saturated_family_bodies_delegate_to_witness_axis_presence() {
-        // Sweep-of-family pin — after routing the four SUPER-HALF-
-        // SATURATED AXIS-CELL predicate bodies through
-        // ResourceLimits::witness_axis_presence, the (bottom, top,
-        // polar, interior) × (EMPTY, DEFAULT, UNBOUNDED,
-        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation of
-        // 4×5 = 20 shipped verdicts continues to agree with the
-        // helper-based shape `witness_axis_presence(count_X_axes(),
-        // count_X_axes() * 2 > Self::FIELD_COUNT)`. Locks the
-        // semantics-equivalent rewrite in the shipped bodies rather
-        // than trusting the mechanical rewrite by inspection; a future
-        // predicate lift that forgot the empty arm, or a helper
-        // regression that silently discarded the present-arm pred,
-        // would break here on at least one (axis, posture) pair. The
-        // SUPER-HALF-SATURATED column is the seventh AXIS-CELL family
-        // swept to the helper (SINGLETON first, db01b3f; MULTI second,
-        // 82f5d01; SATURATED third, 47583ce; HALF-SATURATED fourth,
-        // 05421c0; NEARLY-SATURATED fifth, d2b57d7; SUB-HALF-SATURATED
-        // sixth, 3414837). SUPER-HALF-SATURATED is the STRICT-UPPER-
-        // OPEN-HALF sibling of HALF-SATURATED and the TRICHOTOMY
-        // OPPOSITE-END of SUB-HALF-SATURATED — `c * 2 > FIELD_COUNT`
-        // opens the upper half strictly above the midpoint HALF-
-        // SATURATED locks (`c == FIELD_COUNT / 2`) and never co-fires
-        // Some(true) with SUB-HALF-SATURATED — so the three adoption
-        // pins together close the (STRICT-LOWER-OPEN-HALF, MIDPOINT,
-        // STRICT-UPPER-OPEN-HALF) count-times-two trichotomy on the
-        // SAME witness helper, pinning the three disjoint cells of the
-        // count-times-two-against-FIELD_COUNT partition on ONE typed
-        // empty-arm dispatch. Remaining sibling families (PARTIALLY-
-        // SATURATED, BARELY-MULTI, {AT-MOST,AT-LEAST}-HALF-SATURATED,
-        // {BARELY-SUB,BARELY-SUPER}-HALF-SATURATED,
-        // AT-LEAST-NEARLY-SATURATED, AT-MOST-BARELY-MULTI) pending
-        // their own family-scoped adoption pins under future runs.
-        for posture in [
-            EMPTY_RESOURCE_LIMITS,
-            DEFAULT_RESOURCE_LIMITS,
-            UNBOUNDED_RESOURCE_LIMITS,
-            HAND_AUTHORED_MID_POSTURE,
-            HAND_AUTHORED_OTHER_POSTURE,
-        ] {
-            let cb = posture.count_bottom_axes();
-            assert_eq!(
-                posture.bottom_axis_is_super_half_saturated(),
-                ResourceLimits::witness_axis_presence(cb, cb * 2 > ResourceLimits::FIELD_COUNT),
-                "bottom SUPER-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let ct = posture.count_top_axes();
-            assert_eq!(
-                posture.top_axis_is_super_half_saturated(),
-                ResourceLimits::witness_axis_presence(ct, ct * 2 > ResourceLimits::FIELD_COUNT),
-                "top SUPER-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let cp = posture.count_polar_axes();
-            assert_eq!(
-                posture.polar_axis_is_super_half_saturated(),
-                ResourceLimits::witness_axis_presence(cp, cp * 2 > ResourceLimits::FIELD_COUNT),
-                "polar SUPER-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let ci = posture.count_interior_axes();
-            assert_eq!(
-                posture.interior_axis_is_super_half_saturated(),
-                ResourceLimits::witness_axis_presence(ci, ci * 2 > ResourceLimits::FIELD_COUNT),
-                "interior SUPER-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-        }
-    }
+    axis_family_delegation_pin!(
+        resource_limits_super_half_saturated_family_bodies_delegate_to_witness_axis_presence,
+        bottom_axis_is_super_half_saturated,
+        top_axis_is_super_half_saturated,
+        polar_axis_is_super_half_saturated,
+        interior_axis_is_super_half_saturated,
+        "SUPER-HALF-SATURATED",
+        |c| c * 2 > ResourceLimits::FIELD_COUNT,
+    );
 
     #[test]
     fn resource_limits_super_half_saturated_family_bodies_evaluate_at_compile_time_via_const_fn() {
@@ -86684,78 +86377,15 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn resource_limits_barely_multi_family_bodies_delegate_to_witness_axis_presence() {
-        // Sweep-of-family pin — after routing the four BARELY-MULTI
-        // AXIS-CELL predicate bodies through
-        // ResourceLimits::witness_axis_presence, the (bottom, top,
-        // polar, interior) × (EMPTY, DEFAULT, UNBOUNDED,
-        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation of
-        // 4×5 = 20 shipped verdicts continues to agree with the
-        // helper-based shape `witness_axis_presence(count_X_axes(),
-        // count_X_axes() == 2)`. Locks the semantics-equivalent
-        // rewrite in the shipped bodies rather than trusting the
-        // mechanical rewrite by inspection; a future predicate lift
-        // that forgot the empty arm, or a helper regression that
-        // silently discarded the present-arm pred, would break here on
-        // at least one (axis, posture) pair. The BARELY-MULTI column
-        // is the eighth AXIS-CELL family swept to the helper
-        // (SINGLETON first, db01b3f; MULTI second, 82f5d01; SATURATED
-        // third, 47583ce; HALF-SATURATED fourth, 05421c0; NEARLY-
-        // SATURATED fifth, d2b57d7; SUB-HALF-SATURATED sixth,
-        // 3414837; SUPER-HALF-SATURATED seventh, 22206b8). BARELY-
-        // MULTI (`c == 2`) is the STRICT-SUCCESSOR-OF-SINGLETON
-        // refinement of MULTI — with the MULTI (`c >= 2`) sweep from
-        // 82f5d01 and the SINGLETON (`c == 1`) sweep from db01b3f
-        // already routed through the helper, this run closes the
-        // (SINGLETON, BARELY-MULTI, MULTI) count-locus trichotomy on
-        // the SAME `witness_axis_presence` composition rather than on
-        // three independently-open-coded empty-arm dispatches, pinning
-        // the (`c == 1`, `c == 2`, `c >= 2`) count-cardinality-cell
-        // partition on ONE typed empty-arm dispatch — BARELY-MULTI is
-        // the WITNESSING LOWER EDGE of the MULTI upward-closed cell
-        // (BARELY-MULTI implies MULTI on every FIELD_COUNT >= 2, and
-        // MULTI ∧ ¬BARELY-MULTI is the STRICTLY-ABOVE-BARELY-MULTI
-        // regime the not-yet-swept AT-MOST-BARELY-MULTI (a834a78) and
-        // AT-LEAST-NEARLY-SATURATED (52c9af1) families will refine
-        // against). Remaining sibling families (PARTIALLY-SATURATED,
-        // {AT-MOST,AT-LEAST}-HALF-SATURATED, {BARELY-SUB,BARELY-
-        // SUPER}-HALF-SATURATED, AT-LEAST-NEARLY-SATURATED, AT-MOST-
-        // BARELY-MULTI) pending their own family-scoped adoption pins
-        // under future runs.
-        for posture in [
-            EMPTY_RESOURCE_LIMITS,
-            DEFAULT_RESOURCE_LIMITS,
-            UNBOUNDED_RESOURCE_LIMITS,
-            HAND_AUTHORED_MID_POSTURE,
-            HAND_AUTHORED_OTHER_POSTURE,
-        ] {
-            let cb = posture.count_bottom_axes();
-            assert_eq!(
-                posture.bottom_axis_is_barely_multi(),
-                ResourceLimits::witness_axis_presence(cb, cb == 2),
-                "bottom BARELY-MULTI delegation regressed on {posture:?}",
-            );
-            let ct = posture.count_top_axes();
-            assert_eq!(
-                posture.top_axis_is_barely_multi(),
-                ResourceLimits::witness_axis_presence(ct, ct == 2),
-                "top BARELY-MULTI delegation regressed on {posture:?}",
-            );
-            let cp = posture.count_polar_axes();
-            assert_eq!(
-                posture.polar_axis_is_barely_multi(),
-                ResourceLimits::witness_axis_presence(cp, cp == 2),
-                "polar BARELY-MULTI delegation regressed on {posture:?}",
-            );
-            let ci = posture.count_interior_axes();
-            assert_eq!(
-                posture.interior_axis_is_barely_multi(),
-                ResourceLimits::witness_axis_presence(ci, ci == 2),
-                "interior BARELY-MULTI delegation regressed on {posture:?}",
-            );
-        }
-    }
+    axis_family_delegation_pin!(
+        resource_limits_barely_multi_family_bodies_delegate_to_witness_axis_presence,
+        bottom_axis_is_barely_multi,
+        top_axis_is_barely_multi,
+        polar_axis_is_barely_multi,
+        interior_axis_is_barely_multi,
+        "BARELY-MULTI",
+        |c| c == 2,
+    );
 
     #[test]
     fn resource_limits_barely_multi_family_bodies_evaluate_at_compile_time_via_const_fn() {
@@ -86827,74 +86457,15 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn resource_limits_partially_saturated_family_bodies_delegate_to_witness_axis_presence() {
-        // Sweep-of-family pin — after routing the four PARTIALLY-
-        // SATURATED AXIS-CELL predicate bodies through
-        // ResourceLimits::witness_axis_presence, the (bottom, top,
-        // polar, interior) × (EMPTY, DEFAULT, UNBOUNDED,
-        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation of
-        // 4×5 = 20 shipped verdicts continues to agree with the
-        // helper-based shape `witness_axis_presence(count_X_axes(),
-        // count_X_axes() < FIELD_COUNT)`. Locks the semantics-
-        // equivalent rewrite in the shipped bodies rather than
-        // trusting the mechanical rewrite by inspection; a future
-        // predicate lift that forgot the empty arm, or a helper
-        // regression that silently discarded the present-arm pred,
-        // would break here on at least one (axis, posture) pair. The
-        // PARTIALLY-SATURATED column is the ninth AXIS-CELL family
-        // swept to the helper (SINGLETON first, db01b3f; MULTI
-        // second, 82f5d01; SATURATED third, 47583ce; HALF-SATURATED
-        // fourth, 05421c0; NEARLY-SATURATED fifth, d2b57d7; SUB-HALF-
-        // SATURATED sixth, 3414837; SUPER-HALF-SATURATED seventh,
-        // 22206b8; BARELY-MULTI eighth, 32f09df). PARTIALLY-SATURATED
-        // (`c < FIELD_COUNT`) is the OPEN-INTERIOR REFINEMENT of the
-        // has-axis interval EXCLUDING the SATURATED right endpoint —
-        // with the SATURATED (`c == FIELD_COUNT`) sweep from 47583ce
-        // already routed through the helper, this run closes the
-        // (PARTIALLY-SATURATED, SATURATED) OPEN-CLOSED partition of
-        // the has-axis interval on the SAME `witness_axis_presence`
-        // composition rather than on two independently-open-coded
-        // empty-arm dispatches, pinning the (`0 < c < FIELD_COUNT`,
-        // `c == FIELD_COUNT`) has-axis dichotomy on ONE typed empty-
-        // arm dispatch. Remaining sibling families ({AT-MOST,AT-
-        // LEAST}-HALF-SATURATED, {BARELY-SUB,BARELY-SUPER}-HALF-
-        // SATURATED, AT-LEAST-NEARLY-SATURATED, AT-MOST-BARELY-MULTI)
-        // pending their own family-scoped adoption pins under future
-        // runs.
-        for posture in [
-            EMPTY_RESOURCE_LIMITS,
-            DEFAULT_RESOURCE_LIMITS,
-            UNBOUNDED_RESOURCE_LIMITS,
-            HAND_AUTHORED_MID_POSTURE,
-            HAND_AUTHORED_OTHER_POSTURE,
-        ] {
-            let cb = posture.count_bottom_axes();
-            assert_eq!(
-                posture.bottom_axis_is_partially_saturated(),
-                ResourceLimits::witness_axis_presence(cb, cb < ResourceLimits::FIELD_COUNT),
-                "bottom PARTIALLY-SATURATED delegation regressed on {posture:?}",
-            );
-            let ct = posture.count_top_axes();
-            assert_eq!(
-                posture.top_axis_is_partially_saturated(),
-                ResourceLimits::witness_axis_presence(ct, ct < ResourceLimits::FIELD_COUNT),
-                "top PARTIALLY-SATURATED delegation regressed on {posture:?}",
-            );
-            let cp = posture.count_polar_axes();
-            assert_eq!(
-                posture.polar_axis_is_partially_saturated(),
-                ResourceLimits::witness_axis_presence(cp, cp < ResourceLimits::FIELD_COUNT),
-                "polar PARTIALLY-SATURATED delegation regressed on {posture:?}",
-            );
-            let ci = posture.count_interior_axes();
-            assert_eq!(
-                posture.interior_axis_is_partially_saturated(),
-                ResourceLimits::witness_axis_presence(ci, ci < ResourceLimits::FIELD_COUNT),
-                "interior PARTIALLY-SATURATED delegation regressed on {posture:?}",
-            );
-        }
-    }
+    axis_family_delegation_pin!(
+        resource_limits_partially_saturated_family_bodies_delegate_to_witness_axis_presence,
+        bottom_axis_is_partially_saturated,
+        top_axis_is_partially_saturated,
+        polar_axis_is_partially_saturated,
+        interior_axis_is_partially_saturated,
+        "PARTIALLY-SATURATED",
+        |c| c < ResourceLimits::FIELD_COUNT,
+    );
 
     #[test]
     fn resource_limits_partially_saturated_family_bodies_evaluate_at_compile_time_via_const_fn() {
@@ -87270,86 +86841,15 @@ mod tests {
         const _: () = assert!(ResourceLimits::any_mask_bit_set(MASK_MISSING_HEAD));
     }
 
-    #[test]
-    fn resource_limits_strictly_multi_family_bodies_delegate_to_witness_axis_presence() {
-        // Sweep-of-family pin — after routing the four STRICTLY-MULTI
-        // AXIS-CELL predicate bodies through
-        // ResourceLimits::witness_axis_presence, the (bottom, top,
-        // polar, interior) × (EMPTY, DEFAULT, UNBOUNDED,
-        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation of
-        // 4×5 = 20 shipped verdicts continues to agree with the
-        // helper-based shape `witness_axis_presence(count_X_axes(),
-        // count_X_axes() > 1 && count_X_axes() < FIELD_COUNT)`. Locks
-        // the semantics-equivalent rewrite in the shipped bodies
-        // rather than trusting the mechanical rewrite by inspection;
-        // a future predicate lift that forgot the empty arm, or a
-        // helper regression that silently discarded the present-arm
-        // pred, would break here on at least one (axis, posture)
-        // pair. The STRICTLY-MULTI column is the tenth AXIS-CELL
-        // family swept to the helper (SINGLETON first, db01b3f; MULTI
-        // second, 82f5d01; SATURATED third, 47583ce; HALF-SATURATED
-        // fourth, 05421c0; NEARLY-SATURATED fifth, d2b57d7; SUB-HALF-
-        // SATURATED sixth, 3414837; SUPER-HALF-SATURATED seventh,
-        // 22206b8; BARELY-MULTI eighth, 32f09df; PARTIALLY-SATURATED
-        // ninth, df1f6c9). STRICTLY-MULTI (`c > 1 && c < FIELD_COUNT`)
-        // is the FIRST swept family whose truth-firing arm is a
-        // COMPOUND predicate — the CONJUNCTION of MULTI's `c >= 2`
-        // lower bound and PARTIALLY-SATURATED's `c < FIELD_COUNT`
-        // upper bound. Every prior swept family's truth arm carried a
-        // single comparison against `c`; this run confirms the
-        // helper's present-arm `bool` accepts a lazily-short-circuited
-        // `&&` composition just as freely as a single comparison,
-        // widening the demonstrated adoption surface of the helper on
-        // the compound-predicate variant. Remaining sibling families
-        // ({AT-MOST,AT-LEAST}-HALF-SATURATED, {BARELY-SUB,BARELY-
-        // SUPER}-HALF-SATURATED, AT-LEAST-NEARLY-SATURATED,
-        // AT-MOST-BARELY-MULTI) pending their own family-scoped
-        // adoption pins under future runs.
-        for posture in [
-            EMPTY_RESOURCE_LIMITS,
-            DEFAULT_RESOURCE_LIMITS,
-            UNBOUNDED_RESOURCE_LIMITS,
-            HAND_AUTHORED_MID_POSTURE,
-            HAND_AUTHORED_OTHER_POSTURE,
-        ] {
-            let cb = posture.count_bottom_axes();
-            assert_eq!(
-                posture.bottom_axis_is_strictly_multi(),
-                ResourceLimits::witness_axis_presence(
-                    cb,
-                    cb > 1 && cb < ResourceLimits::FIELD_COUNT,
-                ),
-                "bottom STRICTLY-MULTI delegation regressed on {posture:?}",
-            );
-            let ct = posture.count_top_axes();
-            assert_eq!(
-                posture.top_axis_is_strictly_multi(),
-                ResourceLimits::witness_axis_presence(
-                    ct,
-                    ct > 1 && ct < ResourceLimits::FIELD_COUNT,
-                ),
-                "top STRICTLY-MULTI delegation regressed on {posture:?}",
-            );
-            let cp = posture.count_polar_axes();
-            assert_eq!(
-                posture.polar_axis_is_strictly_multi(),
-                ResourceLimits::witness_axis_presence(
-                    cp,
-                    cp > 1 && cp < ResourceLimits::FIELD_COUNT,
-                ),
-                "polar STRICTLY-MULTI delegation regressed on {posture:?}",
-            );
-            let ci = posture.count_interior_axes();
-            assert_eq!(
-                posture.interior_axis_is_strictly_multi(),
-                ResourceLimits::witness_axis_presence(
-                    ci,
-                    ci > 1 && ci < ResourceLimits::FIELD_COUNT,
-                ),
-                "interior STRICTLY-MULTI delegation regressed on {posture:?}",
-            );
-        }
-    }
+    axis_family_delegation_pin!(
+        resource_limits_strictly_multi_family_bodies_delegate_to_witness_axis_presence,
+        bottom_axis_is_strictly_multi,
+        top_axis_is_strictly_multi,
+        polar_axis_is_strictly_multi,
+        interior_axis_is_strictly_multi,
+        "STRICTLY-MULTI",
+        |c| c > 1 && c < ResourceLimits::FIELD_COUNT,
+    );
 
     #[test]
     fn resource_limits_strictly_multi_family_bodies_evaluate_at_compile_time_via_const_fn() {
@@ -87428,82 +86928,15 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn resource_limits_barely_super_half_saturated_family_bodies_delegate_to_witness_axis_presence()
-    {
-        // Sweep-of-family pin — after routing the four BARELY-SUPER-
-        // HALF-SATURATED AXIS-CELL predicate bodies through
-        // ResourceLimits::witness_axis_presence, the (bottom, top,
-        // polar, interior) × (EMPTY, DEFAULT, UNBOUNDED,
-        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation of
-        // 4×5 = 20 shipped verdicts continues to agree with the
-        // helper-based shape `witness_axis_presence(count_X_axes(),
-        // count_X_axes() == FIELD_COUNT / 2 + 1)`. Locks the
-        // semantics-equivalent rewrite in the shipped bodies rather
-        // than trusting the mechanical rewrite by inspection; a future
-        // predicate lift that forgot the empty arm, or a helper
-        // regression that silently discarded the present-arm pred,
-        // would break here on at least one (axis, posture) pair.
-        // BARELY-SUPER-HALF-SATURATED is the ELEVENTH AXIS-CELL family
-        // swept to the helper (SINGLETON first, db01b3f; MULTI second,
-        // 82f5d01; SATURATED third, 47583ce; HALF-SATURATED fourth,
-        // 05421c0; NEARLY-SATURATED fifth, d2b57d7; SUB-HALF-SATURATED
-        // sixth, 3414837; SUPER-HALF-SATURATED seventh, 22206b8;
-        // BARELY-MULTI eighth, 32f09df; PARTIALLY-SATURATED ninth,
-        // df1f6c9; STRICTLY-MULTI tenth, c124b35). Its truth-firing
-        // arm is a single-comparison equality against the CONSTANT
-        // `FIELD_COUNT / 2 + 1 == 4` — the SINGLE integer landing
-        // where the axis count sits ONE-STEP-ABOVE the HALF-SATURATION
-        // pivot on FIELD_COUNT == 6. It is the OFFSET-BY-ONE sibling
-        // of BARELY-SUB-HALF-SATURATED (`c == (FIELD_COUNT - 1) / 2`)
-        // and the UPPER-ENDPOINT REFINEMENT of SUPER-HALF-SATURATED
-        // (`c * 2 > FIELD_COUNT`, already swept 22206b8) at the exact
-        // pivot-plus-one landing.
-        for posture in [
-            EMPTY_RESOURCE_LIMITS,
-            DEFAULT_RESOURCE_LIMITS,
-            UNBOUNDED_RESOURCE_LIMITS,
-            HAND_AUTHORED_MID_POSTURE,
-            HAND_AUTHORED_OTHER_POSTURE,
-        ] {
-            let cb = posture.count_bottom_axes();
-            assert_eq!(
-                posture.bottom_axis_is_barely_super_half_saturated(),
-                ResourceLimits::witness_axis_presence(
-                    cb,
-                    cb == ResourceLimits::FIELD_COUNT / 2 + 1,
-                ),
-                "bottom BARELY-SUPER-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let ct = posture.count_top_axes();
-            assert_eq!(
-                posture.top_axis_is_barely_super_half_saturated(),
-                ResourceLimits::witness_axis_presence(
-                    ct,
-                    ct == ResourceLimits::FIELD_COUNT / 2 + 1,
-                ),
-                "top BARELY-SUPER-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let cp = posture.count_polar_axes();
-            assert_eq!(
-                posture.polar_axis_is_barely_super_half_saturated(),
-                ResourceLimits::witness_axis_presence(
-                    cp,
-                    cp == ResourceLimits::FIELD_COUNT / 2 + 1,
-                ),
-                "polar BARELY-SUPER-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let ci = posture.count_interior_axes();
-            assert_eq!(
-                posture.interior_axis_is_barely_super_half_saturated(),
-                ResourceLimits::witness_axis_presence(
-                    ci,
-                    ci == ResourceLimits::FIELD_COUNT / 2 + 1,
-                ),
-                "interior BARELY-SUPER-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-        }
-    }
+    axis_family_delegation_pin!(
+        resource_limits_barely_super_half_saturated_family_bodies_delegate_to_witness_axis_presence,
+        bottom_axis_is_barely_super_half_saturated,
+        top_axis_is_barely_super_half_saturated,
+        polar_axis_is_barely_super_half_saturated,
+        interior_axis_is_barely_super_half_saturated,
+        "BARELY-SUPER-HALF-SATURATED",
+        |c| c == ResourceLimits::FIELD_COUNT / 2 + 1,
+    );
 
     #[test]
     fn resource_limits_barely_super_half_saturated_family_bodies_evaluate_at_compile_time_via_const_fn(
@@ -87572,85 +87005,15 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn resource_limits_barely_sub_half_saturated_family_bodies_delegate_to_witness_axis_presence() {
-        // Sweep-of-family pin — after routing the four BARELY-SUB-HALF-
-        // SATURATED AXIS-CELL predicate bodies through
-        // ResourceLimits::witness_axis_presence, the (bottom, top,
-        // polar, interior) × (EMPTY, DEFAULT, UNBOUNDED,
-        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation of
-        // 4×5 = 20 shipped verdicts continues to agree with the
-        // helper-based shape `witness_axis_presence(count_X_axes(),
-        // count_X_axes() == (FIELD_COUNT - 1) / 2)`. Locks the
-        // semantics-equivalent rewrite in the shipped bodies rather
-        // than trusting the mechanical rewrite by inspection; a future
-        // predicate lift that forgot the empty arm, or a helper
-        // regression that silently discarded the present-arm pred,
-        // would break here on at least one (axis, posture) pair.
-        // BARELY-SUB-HALF-SATURATED is the TWELFTH AXIS-CELL family
-        // swept to the helper (SINGLETON first, db01b3f; MULTI second,
-        // 82f5d01; SATURATED third, 47583ce; HALF-SATURATED fourth,
-        // 05421c0; NEARLY-SATURATED fifth, d2b57d7; SUB-HALF-SATURATED
-        // sixth, 3414837; SUPER-HALF-SATURATED seventh, 22206b8;
-        // BARELY-MULTI eighth, 32f09df; PARTIALLY-SATURATED ninth,
-        // df1f6c9; STRICTLY-MULTI tenth, c124b35; BARELY-SUPER-HALF-
-        // SATURATED eleventh, ef7551d). Its truth-firing arm is a
-        // single-comparison equality against the CONSTANT
-        // `(FIELD_COUNT - 1) / 2 == 2` — the SINGLE integer landing
-        // where the axis count sits ONE-STEP-BELOW the HALF-SATURATION
-        // pivot on FIELD_COUNT == 6. It is the OFFSET-BY-ONE sibling
-        // of BARELY-SUPER-HALF-SATURATED (`c == FIELD_COUNT / 2 + 1`)
-        // just swept one run prior (ef7551d) and the UPPER-ENDPOINT
-        // REFINEMENT of SUB-HALF-SATURATED (`c * 2 < FIELD_COUNT`,
-        // already swept 3414837) at the exact pivot-minus-one landing.
-        // Together with the ef7551d sweep this closes the PAIR of
-        // OFFSET-BY-ONE half-pivot-equality cells on the SAME
-        // witness_axis_presence composition.
-        for posture in [
-            EMPTY_RESOURCE_LIMITS,
-            DEFAULT_RESOURCE_LIMITS,
-            UNBOUNDED_RESOURCE_LIMITS,
-            HAND_AUTHORED_MID_POSTURE,
-            HAND_AUTHORED_OTHER_POSTURE,
-        ] {
-            let cb = posture.count_bottom_axes();
-            assert_eq!(
-                posture.bottom_axis_is_barely_sub_half_saturated(),
-                ResourceLimits::witness_axis_presence(
-                    cb,
-                    cb == (ResourceLimits::FIELD_COUNT - 1) / 2,
-                ),
-                "bottom BARELY-SUB-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let ct = posture.count_top_axes();
-            assert_eq!(
-                posture.top_axis_is_barely_sub_half_saturated(),
-                ResourceLimits::witness_axis_presence(
-                    ct,
-                    ct == (ResourceLimits::FIELD_COUNT - 1) / 2,
-                ),
-                "top BARELY-SUB-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let cp = posture.count_polar_axes();
-            assert_eq!(
-                posture.polar_axis_is_barely_sub_half_saturated(),
-                ResourceLimits::witness_axis_presence(
-                    cp,
-                    cp == (ResourceLimits::FIELD_COUNT - 1) / 2,
-                ),
-                "polar BARELY-SUB-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let ci = posture.count_interior_axes();
-            assert_eq!(
-                posture.interior_axis_is_barely_sub_half_saturated(),
-                ResourceLimits::witness_axis_presence(
-                    ci,
-                    ci == (ResourceLimits::FIELD_COUNT - 1) / 2,
-                ),
-                "interior BARELY-SUB-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-        }
-    }
+    axis_family_delegation_pin!(
+        resource_limits_barely_sub_half_saturated_family_bodies_delegate_to_witness_axis_presence,
+        bottom_axis_is_barely_sub_half_saturated,
+        top_axis_is_barely_sub_half_saturated,
+        polar_axis_is_barely_sub_half_saturated,
+        interior_axis_is_barely_sub_half_saturated,
+        "BARELY-SUB-HALF-SATURATED",
+        |c| c == (ResourceLimits::FIELD_COUNT - 1) / 2,
+    );
 
     #[test]
     fn resource_limits_barely_sub_half_saturated_family_bodies_evaluate_at_compile_time_via_const_fn(
@@ -87719,74 +87082,15 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn resource_limits_at_most_half_saturated_family_bodies_delegate_to_witness_axis_presence() {
-        // Sweep-of-family pin — after routing the four AT-MOST-HALF-
-        // SATURATED AXIS-CELL predicate bodies through
-        // ResourceLimits::witness_axis_presence, the (bottom, top,
-        // polar, interior) × (EMPTY, DEFAULT, UNBOUNDED,
-        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation of
-        // 4×5 = 20 shipped verdicts continues to agree with the
-        // helper-based shape `witness_axis_presence(count_X_axes(),
-        // count_X_axes() * 2 <= FIELD_COUNT)`. Locks the semantics-
-        // equivalent rewrite in the shipped bodies rather than
-        // trusting the mechanical rewrite by inspection; a future
-        // predicate lift that forgot the empty arm, or a helper
-        // regression that silently discarded the present-arm pred,
-        // would break here on at least one (axis, posture) pair.
-        // AT-MOST-HALF-SATURATED is the THIRTEENTH AXIS-CELL family
-        // swept to the helper (SINGLETON first, db01b3f; MULTI second,
-        // 82f5d01; SATURATED third, 47583ce; HALF-SATURATED fourth,
-        // 05421c0; NEARLY-SATURATED fifth, d2b57d7; SUB-HALF-SATURATED
-        // sixth, 3414837; SUPER-HALF-SATURATED seventh, 22206b8;
-        // BARELY-MULTI eighth, 32f09df; PARTIALLY-SATURATED ninth,
-        // df1f6c9; STRICTLY-MULTI tenth, c124b35; BARELY-SUPER-HALF-
-        // SATURATED eleventh, ef7551d; BARELY-SUB-HALF-SATURATED
-        // twelfth, eeac99b). Its truth-firing arm is the CLOSED LOWER
-        // half comparison `c * 2 <= FIELD_COUNT` — the FIRST doubled-
-        // count-vs-FIELD-COUNT family (as opposed to equality-against-
-        // a-derived-constant landings the prior five equality families
-        // used); this same doubled-comparison shape recurs as the
-        // strict `<` in already-swept SUB-HALF-SATURATED (3414837),
-        // the strict `>` in already-swept SUPER-HALF-SATURATED
-        // (22206b8), and the mirror `>=` in the not-yet-swept AT-
-        // LEAST-HALF-SATURATED family — the CLOSED half-line pair
-        // (AT-MOST-HALF, AT-LEAST-HALF) now begins to close on the
-        // same substrate identity, with the AT-LEAST-HALF sweep
-        // available to close the pair one run later.
-        for posture in [
-            EMPTY_RESOURCE_LIMITS,
-            DEFAULT_RESOURCE_LIMITS,
-            UNBOUNDED_RESOURCE_LIMITS,
-            HAND_AUTHORED_MID_POSTURE,
-            HAND_AUTHORED_OTHER_POSTURE,
-        ] {
-            let cb = posture.count_bottom_axes();
-            assert_eq!(
-                posture.bottom_axis_is_at_most_half_saturated(),
-                ResourceLimits::witness_axis_presence(cb, cb * 2 <= ResourceLimits::FIELD_COUNT,),
-                "bottom AT-MOST-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let ct = posture.count_top_axes();
-            assert_eq!(
-                posture.top_axis_is_at_most_half_saturated(),
-                ResourceLimits::witness_axis_presence(ct, ct * 2 <= ResourceLimits::FIELD_COUNT,),
-                "top AT-MOST-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let cp = posture.count_polar_axes();
-            assert_eq!(
-                posture.polar_axis_is_at_most_half_saturated(),
-                ResourceLimits::witness_axis_presence(cp, cp * 2 <= ResourceLimits::FIELD_COUNT,),
-                "polar AT-MOST-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let ci = posture.count_interior_axes();
-            assert_eq!(
-                posture.interior_axis_is_at_most_half_saturated(),
-                ResourceLimits::witness_axis_presence(ci, ci * 2 <= ResourceLimits::FIELD_COUNT,),
-                "interior AT-MOST-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-        }
-    }
+    axis_family_delegation_pin!(
+        resource_limits_at_most_half_saturated_family_bodies_delegate_to_witness_axis_presence,
+        bottom_axis_is_at_most_half_saturated,
+        top_axis_is_at_most_half_saturated,
+        polar_axis_is_at_most_half_saturated,
+        interior_axis_is_at_most_half_saturated,
+        "AT-MOST-HALF-SATURATED",
+        |c| c * 2 <= ResourceLimits::FIELD_COUNT,
+    );
 
     #[test]
     fn resource_limits_at_most_half_saturated_family_bodies_evaluate_at_compile_time_via_const_fn()
@@ -87854,64 +87158,15 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn resource_limits_at_least_half_saturated_family_bodies_delegate_to_witness_axis_presence() {
-        // Sweep-of-family pin — after routing the four AT-LEAST-HALF-
-        // SATURATED AXIS-CELL predicate bodies through
-        // ResourceLimits::witness_axis_presence, the (bottom, top,
-        // polar, interior) × (EMPTY, DEFAULT, UNBOUNDED,
-        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation of
-        // 4×5 = 20 shipped verdicts continues to agree with the
-        // helper-based shape `witness_axis_presence(count_X_axes(),
-        // count_X_axes() * 2 >= FIELD_COUNT)`. Locks the semantics-
-        // equivalent rewrite in the shipped bodies rather than
-        // trusting the mechanical rewrite by inspection; a future
-        // predicate lift that forgot the empty arm, or a helper
-        // regression that silently discarded the present-arm pred,
-        // would break here on at least one (axis, posture) pair.
-        // AT-LEAST-HALF-SATURATED is the FOURTEENTH AXIS-CELL family
-        // swept to the helper — the MIRROR DUAL of the AT-MOST-HALF-
-        // SATURATED sweep (324ac7a) on the same doubled-count-vs-
-        // FIELD-COUNT identity one COMPARATOR-KIND axis over (`>=`
-        // instead of `<=`). Jointly the (AT-MOST-HALF, AT-LEAST-HALF)
-        // CLOSED half-line pair now closes on the SAME substrate
-        // identity, matching the (SUB-HALF, SUPER-HALF) OPEN half-
-        // line pair already closed via the earlier (SUB-HALF-
-        // SATURATED sixth 3414837, SUPER-HALF-SATURATED seventh
-        // 22206b8) sweeps.
-        for posture in [
-            EMPTY_RESOURCE_LIMITS,
-            DEFAULT_RESOURCE_LIMITS,
-            UNBOUNDED_RESOURCE_LIMITS,
-            HAND_AUTHORED_MID_POSTURE,
-            HAND_AUTHORED_OTHER_POSTURE,
-        ] {
-            let cb = posture.count_bottom_axes();
-            assert_eq!(
-                posture.bottom_axis_is_at_least_half_saturated(),
-                ResourceLimits::witness_axis_presence(cb, cb * 2 >= ResourceLimits::FIELD_COUNT,),
-                "bottom AT-LEAST-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let ct = posture.count_top_axes();
-            assert_eq!(
-                posture.top_axis_is_at_least_half_saturated(),
-                ResourceLimits::witness_axis_presence(ct, ct * 2 >= ResourceLimits::FIELD_COUNT,),
-                "top AT-LEAST-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let cp = posture.count_polar_axes();
-            assert_eq!(
-                posture.polar_axis_is_at_least_half_saturated(),
-                ResourceLimits::witness_axis_presence(cp, cp * 2 >= ResourceLimits::FIELD_COUNT,),
-                "polar AT-LEAST-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-            let ci = posture.count_interior_axes();
-            assert_eq!(
-                posture.interior_axis_is_at_least_half_saturated(),
-                ResourceLimits::witness_axis_presence(ci, ci * 2 >= ResourceLimits::FIELD_COUNT,),
-                "interior AT-LEAST-HALF-SATURATED delegation regressed on {posture:?}",
-            );
-        }
-    }
+    axis_family_delegation_pin!(
+        resource_limits_at_least_half_saturated_family_bodies_delegate_to_witness_axis_presence,
+        bottom_axis_is_at_least_half_saturated,
+        top_axis_is_at_least_half_saturated,
+        polar_axis_is_at_least_half_saturated,
+        interior_axis_is_at_least_half_saturated,
+        "AT-LEAST-HALF-SATURATED",
+        |c| c * 2 >= ResourceLimits::FIELD_COUNT,
+    );
 
     #[test]
     fn resource_limits_at_least_half_saturated_family_bodies_evaluate_at_compile_time_via_const_fn()
@@ -87979,65 +87234,31 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn resource_limits_at_least_nearly_saturated_family_bodies_delegate_to_witness_axis_presence() {
-        // Sweep-of-family pin — after routing the four AT-LEAST-NEARLY-
-        // SATURATED AXIS-CELL predicate bodies through
-        // ResourceLimits::witness_axis_presence, the (bottom, top,
-        // polar, interior) × (EMPTY, DEFAULT, UNBOUNDED,
-        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation of
-        // 4×5 = 20 shipped verdicts continues to agree with the
-        // helper-based shape `witness_axis_presence(count_X_axes(),
-        // count_X_axes() >= FIELD_COUNT - 1)`. Locks the semantics-
-        // equivalent rewrite in the shipped bodies rather than
-        // trusting the mechanical rewrite by inspection; a future
-        // predicate lift that forgot the empty arm, or a helper
-        // regression that silently discarded the present-arm pred,
-        // would break here on at least one (axis, posture) pair.
-        // AT-LEAST-NEARLY-SATURATED is the FIFTEENTH AXIS-CELL family
-        // swept to the helper — the ONE-COUNT-SHORTER-INTERVAL SIBLING
-        // of the AT-LEAST-HALF-SATURATED sweep (4402ca0) on the same
-        // COUNT-GEQ-CONSTANT closed-upper-half comparison one
-        // ENDPOINT-CONSTANT axis over (`>= FIELD_COUNT - 1` instead of
-        // `* 2 >= FIELD_COUNT`). Where AT-LEAST-HALF partitions on the
-        // balance point FIELD_COUNT / 2, AT-LEAST-NEARLY partitions on
-        // the one-shy-of-SATURATED endpoint FIELD_COUNT - 1 — the
-        // CLOSED right-endpoint bracket around SATURATED, INCLUDING
-        // NEARLY-SATURATED at FIELD_COUNT - 1 and SATURATED at
-        // FIELD_COUNT.
-        for posture in [
-            EMPTY_RESOURCE_LIMITS,
-            DEFAULT_RESOURCE_LIMITS,
-            UNBOUNDED_RESOURCE_LIMITS,
-            HAND_AUTHORED_MID_POSTURE,
-            HAND_AUTHORED_OTHER_POSTURE,
-        ] {
-            let cb = posture.count_bottom_axes();
-            assert_eq!(
-                posture.bottom_axis_is_at_least_nearly_saturated(),
-                ResourceLimits::witness_axis_presence(cb, cb >= ResourceLimits::FIELD_COUNT - 1),
-                "bottom AT-LEAST-NEARLY-SATURATED delegation regressed on {posture:?}",
-            );
-            let ct = posture.count_top_axes();
-            assert_eq!(
-                posture.top_axis_is_at_least_nearly_saturated(),
-                ResourceLimits::witness_axis_presence(ct, ct >= ResourceLimits::FIELD_COUNT - 1),
-                "top AT-LEAST-NEARLY-SATURATED delegation regressed on {posture:?}",
-            );
-            let cp = posture.count_polar_axes();
-            assert_eq!(
-                posture.polar_axis_is_at_least_nearly_saturated(),
-                ResourceLimits::witness_axis_presence(cp, cp >= ResourceLimits::FIELD_COUNT - 1),
-                "polar AT-LEAST-NEARLY-SATURATED delegation regressed on {posture:?}",
-            );
-            let ci = posture.count_interior_axes();
-            assert_eq!(
-                posture.interior_axis_is_at_least_nearly_saturated(),
-                ResourceLimits::witness_axis_presence(ci, ci >= ResourceLimits::FIELD_COUNT - 1),
-                "interior AT-LEAST-NEARLY-SATURATED delegation regressed on {posture:?}",
-            );
-        }
-    }
+    axis_family_delegation_pin!(
+        resource_limits_at_least_nearly_saturated_family_bodies_delegate_to_witness_axis_presence,
+        bottom_axis_is_at_least_nearly_saturated,
+        top_axis_is_at_least_nearly_saturated,
+        polar_axis_is_at_least_nearly_saturated,
+        interior_axis_is_at_least_nearly_saturated,
+        "AT-LEAST-NEARLY-SATURATED",
+        |c| c >= ResourceLimits::FIELD_COUNT - 1,
+    );
+
+    // NEW — AT-MOST-BARELY-MULTI: shipped body still uses the open-coded
+    // 4-arm match (bodies at bottom/top/polar/interior_axis_is_at_most_barely_multi
+    // haven't been routed through the helper yet). The pin proves the
+    // shipped body is already semantics-equivalent to the helper shape,
+    // so a future body rewrite through witness_axis_presence is a pure
+    // mechanical lift under a locked contract.
+    axis_family_delegation_pin!(
+        resource_limits_at_most_barely_multi_family_bodies_delegate_to_witness_axis_presence,
+        bottom_axis_is_at_most_barely_multi,
+        top_axis_is_at_most_barely_multi,
+        polar_axis_is_at_most_barely_multi,
+        interior_axis_is_at_most_barely_multi,
+        "AT-MOST-BARELY-MULTI",
+        |c| c <= 2,
+    );
 
     #[test]
     fn resource_limits_at_least_nearly_saturated_family_bodies_evaluate_at_compile_time_via_const_fn(

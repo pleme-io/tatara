@@ -19446,10 +19446,8 @@ impl ResourceLimits {
     /// new per-axis scan, no allocation.
     #[must_use]
     pub const fn bottom_axis_is_multi(self) -> Option<bool> {
-        match self.count_bottom_axes() {
-            0 => None,
-            c => Some(c > 1),
-        }
+        let c = self.count_bottom_axes();
+        Self::witness_axis_presence(c, c > 1)
     }
 
     /// Whole-posture MULTI-OF-TOP predicate —
@@ -19507,10 +19505,8 @@ impl ResourceLimits {
     /// the DUAL atomic mask.
     #[must_use]
     pub const fn top_axis_is_multi(self) -> Option<bool> {
-        match self.count_top_axes() {
-            0 => None,
-            c => Some(c > 1),
-        }
+        let c = self.count_top_axes();
+        Self::witness_axis_presence(c, c > 1)
     }
 
     /// Whole-posture MULTI-OF-POLAR predicate —
@@ -19624,10 +19620,8 @@ impl ResourceLimits {
     /// predicate lifted from the atomic `(pair? l)` shape.
     #[must_use]
     pub const fn polar_axis_is_multi(self) -> Option<bool> {
-        match self.count_polar_axes() {
-            0 => None,
-            c => Some(c > 1),
-        }
+        let c = self.count_polar_axes();
+        Self::witness_axis_presence(c, c > 1)
     }
 
     /// Whole-posture MULTI-OF-INTERIOR predicate —
@@ -19689,10 +19683,8 @@ impl ResourceLimits {
     /// the DUAL COMPOUND interior mask.
     #[must_use]
     pub const fn interior_axis_is_multi(self) -> Option<bool> {
-        match self.count_interior_axes() {
-            0 => None,
-            c => Some(c > 1),
-        }
+        let c = self.count_interior_axes();
+        Self::witness_axis_presence(c, c > 1)
     }
 
     /// Whole-posture SATURATED-OF-BOTTOM predicate —
@@ -85890,6 +85882,109 @@ mod tests {
         const _: () = assert!(matches!(
             DEFAULT_RESOURCE_LIMITS.interior_axis_is_singleton(),
             Some(false)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_multi_family_bodies_delegate_to_witness_axis_presence() {
+        // Sweep-of-family pin — after routing the four MULTI AXIS-CELL
+        // predicate bodies through ResourceLimits::witness_axis_presence,
+        // the (bottom, top, polar, interior) × (EMPTY, DEFAULT,
+        // UNBOUNDED, HAND_AUTHORED_MID, HAND_AUTHORED_OTHER)
+        // constellation of 4×5 = 20 shipped verdicts continues to agree
+        // with the helper-based shape `witness_axis_presence(
+        // count_X_axes(), count_X_axes() > 1)`. Locks the semantics-
+        // equivalent rewrite in the shipped bodies rather than trusting
+        // the mechanical rewrite by inspection; a future predicate lift
+        // that forgot the empty arm, or a helper regression that
+        // silently discarded the present-arm pred, would break here on
+        // at least one (axis, posture) pair. The MULTI column is the
+        // second AXIS-CELL family swept to the helper (SINGLETON was
+        // first, in db01b3f); the two form the DE-MORGAN-COMPLEMENT
+        // dual pair pinned by the sibling `..._multi() ==
+        // ..._singleton().map(|b| !b)` identity family, so the two
+        // adoption pins together lock BOTH sides of the complement
+        // pair on the witness helper. Remaining sibling families
+        // (SATURATED, HALF-SATURATED, NEARLY-SATURATED,
+        // PARTIALLY-SATURATED, BARELY-MULTI,
+        // {SUB,SUPER,AT-MOST,AT-LEAST}-HALF-SATURATED,
+        // {BARELY-SUB,BARELY-SUPER}-HALF-SATURATED,
+        // AT-LEAST-NEARLY-SATURATED, AT-MOST-BARELY-MULTI) pending
+        // their own family-scoped adoption pins under future runs.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            let cb = posture.count_bottom_axes();
+            assert_eq!(
+                posture.bottom_axis_is_multi(),
+                ResourceLimits::witness_axis_presence(cb, cb > 1),
+                "bottom MULTI delegation regressed on {posture:?}",
+            );
+            let ct = posture.count_top_axes();
+            assert_eq!(
+                posture.top_axis_is_multi(),
+                ResourceLimits::witness_axis_presence(ct, ct > 1),
+                "top MULTI delegation regressed on {posture:?}",
+            );
+            let cp = posture.count_polar_axes();
+            assert_eq!(
+                posture.polar_axis_is_multi(),
+                ResourceLimits::witness_axis_presence(cp, cp > 1),
+                "polar MULTI delegation regressed on {posture:?}",
+            );
+            let ci = posture.count_interior_axes();
+            assert_eq!(
+                posture.interior_axis_is_multi(),
+                ResourceLimits::witness_axis_presence(ci, ci > 1),
+                "interior MULTI delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_multi_family_bodies_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin dual — every MULTI predicate in the swept family
+        // remains const-fn evaluable after routing through
+        // ResourceLimits::witness_axis_presence. Pins that the helper
+        // preserves the const-fn evaluability contract each AXIS-CELL
+        // predicate carried before the sweep; a build-break here would
+        // fire if the helper (or its caller) lost const-fn eligibility.
+        // EMPTY: 6 fields at 0 → bottom count 6, top count 0, polar
+        // count 6 (bottom ∪ top), interior count 0.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_multi(),
+            Some(true)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.top_axis_is_multi().is_none());
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_multi(),
+            Some(true)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.interior_axis_is_multi().is_none());
+        // UNBOUNDED: 6 fields at usize::MAX → bottom count 0, top count
+        // 6, polar count 6, interior count 0.
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_multi().is_none());
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_multi(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_multi(),
+            Some(true)
+        ));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_multi().is_none());
+        // DEFAULT: 6 fields strictly interior → bottom count 0, top
+        // count 0, polar count 0, interior count 6.
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.bottom_axis_is_multi().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_is_multi().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_multi().is_none());
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_multi(),
+            Some(true)
         ));
     }
 }

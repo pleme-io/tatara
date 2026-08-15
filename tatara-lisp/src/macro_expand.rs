@@ -3173,20 +3173,20 @@ impl ResourceLimits {
     /// `Data.Foldable.all` alongside the pairwise relation — the N-ary
     /// traversal of a collection through a boolean-conjunction seed is a
     /// first-class named method the typeclass carries. Translation
-    /// through pleme-io primitives is the plain `const fn` slice-walk
-    /// below, no typeclass indirection — the partial-order relation
-    /// already exists as a `const fn` on the algebra so the predicate
-    /// picks it up structurally.
+    /// through pleme-io primitives is the one-composition delegation
+    /// [`Self::all_mask_bits_set`] on the per-axis
+    /// [`Self::axes_is_lower_bound_of`] mask below — the whole-posture
+    /// N-ary lower-bound verdict is the six-axis conjunction of the
+    /// per-axis-mask N-ary lower-bound verdict via `leq(a, b) ==
+    /// all(axes_leq(a, b))` on the six-axis `&&` chain, and the ALL-fold
+    /// exit substrate composes the reduction at ONE named `const fn` on
+    /// the algebra rather than a bespoke `while i < postures.len() { if
+    /// !self.leq(postures[i]) { return false; } i += 1; }` short-
+    /// circuiting slice-walk at this callsite. No closure, no typeclass
+    /// indirection, no dependency on non-const iterator adapters.
     #[must_use]
     pub const fn is_lower_bound_of(self, postures: &[Self]) -> bool {
-        let mut i = 0;
-        while i < postures.len() {
-            if !self.leq(postures[i]) {
-                return false;
-            }
-            i += 1;
-        }
-        true
+        Self::all_mask_bits_set(self.axes_is_lower_bound_of(postures))
     }
 
     /// Boolean `leq`-conjunction across a slice of postures — every operand
@@ -3247,17 +3247,14 @@ impl ResourceLimits {
     /// theory anchor (THEORY.md §II.1 invariant 5, §V.1), and the
     /// `Foldable::all` frontier inspiration — this method carries the
     /// dual `postures[i].leq(self)` direction rather than
-    /// `self.leq(postures[i])`.
+    /// `self.leq(postures[i])`. Encoded as the one-composition delegation
+    /// [`Self::all_mask_bits_set`] on the per-axis
+    /// [`Self::axes_is_upper_bound_of`] mask — the DUAL threading of the
+    /// [`Self::is_lower_bound_of`] delegation one COMBINATOR-DIRECTION
+    /// axis over.
     #[must_use]
     pub const fn is_upper_bound_of(self, postures: &[Self]) -> bool {
-        let mut i = 0;
-        while i < postures.len() {
-            if !postures[i].leq(self) {
-                return false;
-            }
-            i += 1;
-        }
-        true
+        Self::all_mask_bits_set(self.axes_is_upper_bound_of(postures))
     }
 
     /// Per-axis boolean `leq`-conjunction across a slice of postures —
@@ -6066,25 +6063,32 @@ impl ResourceLimits {
     /// / `<[T]>::is_sorted_by` idioms carry the totally-ordered case;
     /// Haskell's `Data.List` idiom of `and . zipWith leq xs . tail xs`
     /// on a partial-order carrier; Coq's `Sorted` inductive on lists over
-    /// a `Relation`. Translation through pleme-io primitives: the singly-
-    /// indexed consecutive-pair walk directly, with [`Self::leq`] as the
-    /// pair-level primitive, no new dep, no supertrait bound, `const fn`
-    /// throughout. The (ascending, descending) sequence-level pair opens
-    /// the door to `is_strictly_ascending` / `is_strictly_descending` via
+    /// a `Relation`. Translation through pleme-io primitives is the
+    /// one-composition delegation [`Self::all_mask_bits_set`] on the
+    /// per-axis [`Self::axes_is_ascending`] mask below — the whole-
+    /// posture sequence-level ascending verdict is the six-axis
+    /// conjunction of the per-axis-mask sequence-level ascending verdict
+    /// via `leq(a, b) == all(axes_leq(a, b))` on the six-axis `&&` chain
+    /// composed through the per-consecutive-pair conjunction, and the
+    /// ALL-fold exit substrate composes the reduction at ONE named
+    /// `const fn` on the algebra rather than a bespoke `while i + 1 < n
+    /// { if !postures[i].leq(postures[i + 1]) { return false; } i += 1;
+    /// }` short-circuiting consecutive-pair walk at this callsite. The
+    /// (ascending, descending) sequence-level pair opens the door to
+    /// `is_strictly_ascending` / `is_strictly_descending` via
     /// [`Self::lt`] / [`Self::gt`] one STRICTNESS axis over, and to
     /// `is_monotone` (`is_ascending || is_descending`) one DIRECTION-
-    /// AGNOSTIC axis over, at future callsites.
+    /// AGNOSTIC axis over, at future callsites — the STRICT peers CANNOT
+    /// delegate through the same [`Self::all_mask_bits_set`] shape because
+    /// [`Self::lt`]'s "leq everywhere AND strict on at least one axis"
+    /// semantic diverges from the per-axis [`Self::axes_lt`]'s "strict
+    /// on every axis" semantic, load-bearing on the shipped
+    /// `Fold-does-NOT-recover-is_strict_lower_bound_of` /
+    /// `Fold-does-NOT-recover-is_strict_upper_bound_of` docstring
+    /// contracts on the per-axis strict-bound-of peers.
     #[must_use]
     pub const fn is_ascending(postures: &[Self]) -> bool {
-        let n = postures.len();
-        let mut i = 0;
-        while i + 1 < n {
-            if !postures[i].leq(postures[i + 1]) {
-                return false;
-            }
-            i += 1;
-        }
-        true
+        Self::all_mask_bits_set(Self::axes_is_ascending(postures))
     }
 
     /// Boolean `geq`-conjunction across every CONSECUTIVE pair of a slice
@@ -6191,20 +6195,15 @@ impl ResourceLimits {
     /// Frontier inspiration: `Iterator::is_sorted_by` with a reversed
     /// comparator on a totally-ordered carrier; Coq's `StronglySorted`
     /// on a `<=` relation applied with the argument order flipped.
-    /// Translation through pleme-io primitives: the singly-indexed
-    /// consecutive-pair walk directly, with [`Self::geq`] as the pair-
-    /// level primitive.
+    /// Translation through pleme-io primitives is the one-composition
+    /// delegation [`Self::all_mask_bits_set`] on the per-axis
+    /// [`Self::axes_is_descending`] mask below — the DIRECTION peer of
+    /// the [`Self::is_ascending`] delegation one PAIR-LEVEL-PRIMITIVE
+    /// axis over, with the pair-level primitive swapped from [`Self::leq`]
+    /// to [`Self::geq`] inside the per-axis-mask surface.
     #[must_use]
     pub const fn is_descending(postures: &[Self]) -> bool {
-        let n = postures.len();
-        let mut i = 0;
-        while i + 1 < n {
-            if !postures[i].geq(postures[i + 1]) {
-                return false;
-            }
-            i += 1;
-        }
-        true
+        Self::all_mask_bits_set(Self::axes_is_descending(postures))
     }
 
     /// Per-axis boolean `leq`-conjunction across every CONSECUTIVE pair
@@ -94084,6 +94083,250 @@ mod tests {
                         fold_via_helper(&slice),
                         "axes_is_strictly_descending disagrees with intersect_masks_pointwise \
                          fold on triple [{a:?}, {b:?}, {c:?}]",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_lower_bound_of_body_delegates_to_all_mask_bits_set_of_axes_is_lower_bound_of(
+    ) {
+        // Sweep-of-callsite pin — after routing the WHOLE-POSTURE N-ary
+        // lower-bound scalar body from the FIELD_COUNT-free
+        // `while i < postures.len() { if !self.leq(postures[i]) { return
+        // false; } i += 1; }` short-circuiting slice-walk through
+        // `Self::all_mask_bits_set(self.axes_is_lower_bound_of(postures))`,
+        // the swept body continues to agree with the ALL-fold reduction
+        // of the shipped per-axis N-ary lower-bound mask at every slice
+        // arity from 0..=3 drawn from the shared canonical posture roster.
+        // The delegation is proof-preserving by construction: `leq(a, b)
+        // == all(axes_leq(a, b))` on the six-axis `&&` chain, so
+        // `∀j. self.leq(postures[j])` iff `∀j. all_i. self.axes_leq(
+        // postures[j])[i]` iff (by ∀-commutativity) `all_i. ∀j.
+        // self.axes_leq(postures[j])[i]` iff
+        // `all_mask_bits_set(self.axes_is_lower_bound_of(postures))`.
+        // Sibling of the four sequence-level monotonicity sweep pins on
+        // the (SEQUENCE-LEVEL, WHOLE-SLICE-N-ARY) row of the WHOLE-POSTURE
+        // SCALAR surface; STRICT peers CANNOT delegate through the same
+        // shape because `lt`'s "leq everywhere AND strict on at least one
+        // axis" semantic diverges from the per-axis `axes_lt`'s "strict
+        // on every axis" semantic, load-bearing on the shipped
+        // Fold-does-NOT-recover-is_strict_*_bound_of docstring contracts.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        fn fold_via_helper(anchor: ResourceLimits, slice: &[ResourceLimits]) -> bool {
+            ResourceLimits::all_mask_bits_set(anchor.axes_is_lower_bound_of(slice))
+        }
+        for a in postures {
+            assert_eq!(
+                a.is_lower_bound_of(&[]),
+                fold_via_helper(a, &[]),
+                "is_lower_bound_of disagrees with all_mask_bits_set fold on empty slice \
+                 for anchor {a:?}",
+            );
+            for b in postures {
+                let slice = [b];
+                assert_eq!(
+                    a.is_lower_bound_of(&slice),
+                    fold_via_helper(a, &slice),
+                    "is_lower_bound_of disagrees with all_mask_bits_set fold on singleton \
+                     [{b:?}] for anchor {a:?}",
+                );
+                for c in postures {
+                    let slice = [b, c];
+                    assert_eq!(
+                        a.is_lower_bound_of(&slice),
+                        fold_via_helper(a, &slice),
+                        "is_lower_bound_of disagrees with all_mask_bits_set fold on pair \
+                         [{b:?}, {c:?}] for anchor {a:?}",
+                    );
+                    for d in postures {
+                        let slice = [b, c, d];
+                        assert_eq!(
+                            a.is_lower_bound_of(&slice),
+                            fold_via_helper(a, &slice),
+                            "is_lower_bound_of disagrees with all_mask_bits_set fold on \
+                             triple [{b:?}, {c:?}, {d:?}] for anchor {a:?}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_upper_bound_of_body_delegates_to_all_mask_bits_set_of_axes_is_upper_bound_of(
+    ) {
+        // Sweep-of-callsite pin — DUAL of
+        // `resource_limits_is_lower_bound_of_body_delegates_to_all_mask_bits_set_of_axes_is_lower_bound_of`
+        // one COMBINATOR-DIRECTION axis over. Routes the WHOLE-POSTURE
+        // N-ary upper-bound scalar body from the FIELD_COUNT-free short-
+        // circuiting slice-walk over `postures[i].leq(self)` through
+        // `Self::all_mask_bits_set(self.axes_is_upper_bound_of(postures))`.
+        // Same 5-posture roster, same 0..=3-arity constellation.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        fn fold_via_helper(anchor: ResourceLimits, slice: &[ResourceLimits]) -> bool {
+            ResourceLimits::all_mask_bits_set(anchor.axes_is_upper_bound_of(slice))
+        }
+        for a in postures {
+            assert_eq!(
+                a.is_upper_bound_of(&[]),
+                fold_via_helper(a, &[]),
+                "is_upper_bound_of disagrees with all_mask_bits_set fold on empty slice \
+                 for anchor {a:?}",
+            );
+            for b in postures {
+                let slice = [b];
+                assert_eq!(
+                    a.is_upper_bound_of(&slice),
+                    fold_via_helper(a, &slice),
+                    "is_upper_bound_of disagrees with all_mask_bits_set fold on singleton \
+                     [{b:?}] for anchor {a:?}",
+                );
+                for c in postures {
+                    let slice = [b, c];
+                    assert_eq!(
+                        a.is_upper_bound_of(&slice),
+                        fold_via_helper(a, &slice),
+                        "is_upper_bound_of disagrees with all_mask_bits_set fold on pair \
+                         [{b:?}, {c:?}] for anchor {a:?}",
+                    );
+                    for d in postures {
+                        let slice = [b, c, d];
+                        assert_eq!(
+                            a.is_upper_bound_of(&slice),
+                            fold_via_helper(a, &slice),
+                            "is_upper_bound_of disagrees with all_mask_bits_set fold on \
+                             triple [{b:?}, {c:?}, {d:?}] for anchor {a:?}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_ascending_body_delegates_to_all_mask_bits_set_of_axes_is_ascending() {
+        // Sweep-of-callsite pin — after routing the WHOLE-POSTURE
+        // SEQUENCE-LEVEL ascending scalar body from the FIELD_COUNT-free
+        // `while i + 1 < n { if !postures[i].leq(postures[i + 1]) {
+        // return false; } i += 1; }` short-circuiting consecutive-pair
+        // walk through
+        // `Self::all_mask_bits_set(Self::axes_is_ascending(postures))`,
+        // the swept body continues to agree with the ALL-fold reduction
+        // of the shipped per-axis sequence-level ascending mask at every
+        // slice arity from 0..=3 drawn from the shared canonical posture
+        // roster. Sibling of the N-ary bound-of sweep pins one
+        // CARDINALITY-KIND axis over on the (N-ARY-AGGREGATION,
+        // SEQUENCE-LEVEL) row of the WHOLE-POSTURE SCALAR surface.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        fn fold_via_helper(slice: &[ResourceLimits]) -> bool {
+            ResourceLimits::all_mask_bits_set(ResourceLimits::axes_is_ascending(slice))
+        }
+        assert_eq!(
+            ResourceLimits::is_ascending(&[]),
+            fold_via_helper(&[]),
+            "is_ascending disagrees with all_mask_bits_set fold on empty slice",
+        );
+        for a in postures {
+            let slice = [a];
+            assert_eq!(
+                ResourceLimits::is_ascending(&slice),
+                fold_via_helper(&slice),
+                "is_ascending disagrees with all_mask_bits_set fold on singleton [{a:?}]",
+            );
+            for b in postures {
+                let slice = [a, b];
+                assert_eq!(
+                    ResourceLimits::is_ascending(&slice),
+                    fold_via_helper(&slice),
+                    "is_ascending disagrees with all_mask_bits_set fold on pair \
+                     [{a:?}, {b:?}]",
+                );
+                for c in postures {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        ResourceLimits::is_ascending(&slice),
+                        fold_via_helper(&slice),
+                        "is_ascending disagrees with all_mask_bits_set fold on triple \
+                         [{a:?}, {b:?}, {c:?}]",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_descending_body_delegates_to_all_mask_bits_set_of_axes_is_descending() {
+        // Sweep-of-callsite pin — DIRECTION peer of
+        // `resource_limits_is_ascending_body_delegates_to_all_mask_bits_set_of_axes_is_ascending`
+        // one PAIR-LEVEL-PRIMITIVE axis over on the WHOLE-POSTURE
+        // SEQUENCE-LEVEL monotonicity surface. Routes the WHOLE-POSTURE
+        // SEQUENCE-LEVEL descending scalar body from the FIELD_COUNT-free
+        // short-circuiting consecutive-pair walk over
+        // `postures[i].geq(postures[i + 1])` through
+        // `Self::all_mask_bits_set(Self::axes_is_descending(postures))`.
+        // Same 5-posture roster, same 0..=3-arity constellation. With
+        // all four non-strict WHOLE-POSTURE SCALAR N-ary predicates now
+        // delegating to the substrate ALL-fold exit on their per-axis-
+        // mask peers, a future FIELD_COUNT bump propagates through the
+        // helper's one `while i < FIELD_COUNT` per-axis body rather than
+        // through four hand-authored short-circuiting slice-walks.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        fn fold_via_helper(slice: &[ResourceLimits]) -> bool {
+            ResourceLimits::all_mask_bits_set(ResourceLimits::axes_is_descending(slice))
+        }
+        assert_eq!(
+            ResourceLimits::is_descending(&[]),
+            fold_via_helper(&[]),
+            "is_descending disagrees with all_mask_bits_set fold on empty slice",
+        );
+        for a in postures {
+            let slice = [a];
+            assert_eq!(
+                ResourceLimits::is_descending(&slice),
+                fold_via_helper(&slice),
+                "is_descending disagrees with all_mask_bits_set fold on singleton [{a:?}]",
+            );
+            for b in postures {
+                let slice = [a, b];
+                assert_eq!(
+                    ResourceLimits::is_descending(&slice),
+                    fold_via_helper(&slice),
+                    "is_descending disagrees with all_mask_bits_set fold on pair \
+                     [{a:?}, {b:?}]",
+                );
+                for c in postures {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        ResourceLimits::is_descending(&slice),
+                        fold_via_helper(&slice),
+                        "is_descending disagrees with all_mask_bits_set fold on triple \
+                         [{a:?}, {b:?}, {c:?}]",
                     );
                 }
             }

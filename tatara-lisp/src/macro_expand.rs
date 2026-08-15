@@ -8354,15 +8354,10 @@ impl ResourceLimits {
     /// inner `const fn` bodies), no allocation, `const fn` throughout.
     #[must_use]
     pub const fn axes_is_monotone(postures: &[Self]) -> [bool; Self::FIELD_COUNT] {
-        let asc = Self::axes_is_ascending(postures);
-        let desc = Self::axes_is_descending(postures);
-        let mut result = [false; Self::FIELD_COUNT];
-        let mut i = 0;
-        while i < Self::FIELD_COUNT {
-            result[i] = asc[i] || desc[i];
-            i += 1;
-        }
-        result
+        Self::union_masks_pointwise(
+            Self::axes_is_ascending(postures),
+            Self::axes_is_descending(postures),
+        )
     }
 
     /// Per-axis boolean STRICTLY-MONOTONE projection across a slice of
@@ -8587,15 +8582,10 @@ impl ResourceLimits {
     /// bodies), no allocation, `const fn` throughout.
     #[must_use]
     pub const fn axes_is_strictly_monotone(postures: &[Self]) -> [bool; Self::FIELD_COUNT] {
-        let asc = Self::axes_is_strictly_ascending(postures);
-        let desc = Self::axes_is_strictly_descending(postures);
-        let mut result = [false; Self::FIELD_COUNT];
-        let mut i = 0;
-        while i < Self::FIELD_COUNT {
-            result[i] = asc[i] || desc[i];
-            i += 1;
-        }
-        result
+        Self::union_masks_pointwise(
+            Self::axes_is_strictly_ascending(postures),
+            Self::axes_is_strictly_descending(postures),
+        )
     }
 
     /// Per-axis boolean CONSTANT projection across a slice of postures —
@@ -10425,15 +10415,7 @@ impl ResourceLimits {
     /// primitives, no new dep, no typeclass indirection, no allocation.
     #[must_use]
     pub const fn axes_is_pole(self) -> [bool; Self::FIELD_COUNT] {
-        let bot = self.axes_is_bottom();
-        let top = self.axes_is_top();
-        let mut result = [false; Self::FIELD_COUNT];
-        let mut i = 0;
-        while i < Self::FIELD_COUNT {
-            result[i] = bot[i] || top[i];
-            i += 1;
-        }
-        result
+        Self::union_masks_pointwise(self.axes_is_bottom(), self.axes_is_top())
     }
 
     /// Per-axis pointwise INTERIOR-membership mask — the MIDDLE-CELL
@@ -12449,6 +12431,207 @@ impl ResourceLimits {
         let mut i = 0;
         while i < Self::FIELD_COUNT {
             out[i] = a[i] && b[i];
+            i += 1;
+        }
+        out
+    }
+
+    /// Per-axis pointwise UNION mask combinator on two `[bool;
+    /// Self::FIELD_COUNT]` per-axis masks — the MASK+MASK→MASK OR
+    /// combinator producing a `[bool; Self::FIELD_COUNT]` per-axis mask
+    /// whose `i`-th bit is the per-index disjunction `a[i] || b[i]` of
+    /// two shipped per-axis masks. The BOUNDARY primitive lifting the
+    /// shape
+    /// ```text
+    /// [
+    ///     a[0] || b[0],
+    ///     a[1] || b[1],
+    ///     a[2] || b[2],
+    ///     a[3] || b[3],
+    ///     a[4] || b[4],
+    ///     a[5] || b[5],
+    /// ]
+    /// ```
+    /// that every per-axis MASK→MASK UNION on [`ResourceLimits`] carries
+    /// at its body — [`Self::axes_is_pole`] takes exactly this shape at
+    /// the per-index disjunction of [`Self::axes_is_bottom`] and
+    /// [`Self::axes_is_top`] under the pole-cell partition
+    /// `axes_is_pole[i] == axes_is_bottom[i] || axes_is_top[i]`;
+    /// [`Self::axes_is_monotone`] takes the same shape at the per-index
+    /// disjunction of [`Self::axes_is_ascending`] and
+    /// [`Self::axes_is_descending`] on the direction surface;
+    /// [`Self::axes_is_strictly_monotone`] takes the same shape at the
+    /// per-index disjunction of [`Self::axes_is_strictly_ascending`]
+    /// and [`Self::axes_is_strictly_descending`] one STRICTNESS axis
+    /// over. Pre-lift the union body open-coded the six-primitive `[a[0]
+    /// || b[0], ..., a[5] || b[5]]` array literal at every exit, and the
+    /// shape sits ready one PROJECTION-KIND axis over from every future
+    /// pairwise-combined per-axis mask (whole-posture direction masks on
+    /// cross-cell pairs, cross-posture cover masks on joint-projection
+    /// pairs, higher-order axial partition union checks). Post-lift the
+    /// shape binds at ONE typed `const fn` on [`ResourceLimits`], and
+    /// every MASK→MASK UNION composes through this helper — the per-axis
+    /// pointwise `||` is a substrate-level theorem rather than a
+    /// per-consumer inline six-primitive cascade whose FIELD_COUNT=6-
+    /// coupling silently rots on a future arity bump.
+    ///
+    /// The SECOND MASK→MASK COMBINATOR primitive on the per-axis mask
+    /// substrate — the pointwise-OR DUAL of the shipped
+    /// [`Self::intersect_masks_pointwise`] pointwise-AND combinator, and
+    /// orthogonal to the five shipped MASK→SCALAR collapse primitives
+    /// ([`Self::count_mask_bits`] POPCOUNT `usize`,
+    /// [`Self::any_mask_bit_set`] ANY-fold `bool`,
+    /// [`Self::all_mask_bits_set`] ALL-fold `bool`,
+    /// [`Self::first_mask_bit_set_index`] FIRST-HIT `Option<usize>`,
+    /// [`Self::last_mask_bit_set_index`] LAST-HIT `Option<usize>`) which
+    /// all COLLAPSE a `[bool; FIELD_COUNT]` mask into a scalar. Where
+    /// `intersect` binds the STRUCTURAL INTERSECTION of two per-axis
+    /// witnesses, THIS combinator binds the STRUCTURAL UNION on the SAME
+    /// per-axis surface — the paired-mask-to-combined-mask peer of every
+    /// cover-cell partition the per-axis-mask sextuple projects onto
+    /// (pole = bottom ∪ top, monotone = ascending ∪ descending, and
+    /// every future disjoint-partition-of-cover MASK→MASK exit).
+    ///
+    /// **Iterator-agreement identity — LOAD-BEARING structural pin**: on
+    /// every `(a, b)` mask pair, the returned mask's `i`-th bit equals
+    /// `a.iter().zip(b.iter()).map(|(&x, &y)| x || y).collect::<[bool; N]>()[i]`
+    /// — the direct stable-Rust `zip`-then-`map`-then-`||` iterator idiom
+    /// the helper substitutes for at every consumer. Pinned via
+    /// `resource_limits_union_masks_pointwise_agrees_with_iterator_zip_or`.
+    ///
+    /// **OR-identity contract**: on every `mask`,
+    /// `Self::union_masks_pointwise(mask, [false; FIELD_COUNT])
+    /// == mask`. The empty-mask serves as the two-sided IDENTITY
+    /// element of the pointwise-OR monoid on `[bool; FIELD_COUNT]`
+    /// arrays — the ALGEBRAIC DUAL of the AND-identity role
+    /// `[true; FIELD_COUNT]` plays on the paired
+    /// [`Self::intersect_masks_pointwise`] combinator. Pinned via
+    /// `resource_limits_union_masks_pointwise_identity_with_all_false`.
+    ///
+    /// **OR-annihilator contract**: on every `mask`,
+    /// `Self::union_masks_pointwise(mask, [true; FIELD_COUNT])
+    /// == [true; FIELD_COUNT]`. The saturated-mask serves as the two-
+    /// sided ANNIHILATOR (top) element of the pointwise-OR monoid on
+    /// `[bool; FIELD_COUNT]` arrays — the ALGEBRAIC DUAL of the AND-
+    /// annihilator role `[false; FIELD_COUNT]` plays on the paired
+    /// [`Self::intersect_masks_pointwise`] combinator. Pinned via
+    /// `resource_limits_union_masks_pointwise_annihilator_with_all_true`.
+    ///
+    /// **Commutativity contract**: on every `(a, b)` mask pair,
+    /// `Self::union_masks_pointwise(a, b)
+    /// == Self::union_masks_pointwise(b, a)`. Per-axis `||` is
+    /// commutative on every field, so the mask combinator inherits
+    /// commutativity from the underlying Boolean operation. Pinned via
+    /// `resource_limits_union_masks_pointwise_is_commutative`.
+    ///
+    /// **Idempotence contract**: on every `mask`,
+    /// `Self::union_masks_pointwise(mask, mask) == mask`. Per-axis
+    /// `||` is idempotent (`x || x == x`), so the mask combinator
+    /// inherits idempotence from the underlying Boolean operation.
+    /// Pinned via `resource_limits_union_masks_pointwise_is_idempotent`.
+    ///
+    /// **POPCOUNT lower bound**: on every `(a, b)` mask pair,
+    /// `Self::count_mask_bits(Self::union_masks_pointwise(a, b))
+    /// >= max(Self::count_mask_bits(a), Self::count_mask_bits(b))`. The
+    /// union's popcount cannot be less than EITHER operand's popcount
+    /// (every set bit of an operand is set in the union, so each operand
+    /// is a per-axis submask of the union) — the DUAL of the paired
+    /// [`Self::intersect_masks_pointwise`] combinator's
+    /// `count(intersect) <= min(count(a), count(b))` upper bound one
+    /// MONOID-ORIENTATION axis over. Pinned via
+    /// `resource_limits_union_masks_pointwise_popcount_bounded_below_by_max`.
+    ///
+    /// **ANY-fold bridge**: on every `(a, b)` mask pair,
+    /// `Self::any_mask_bit_set(Self::union_masks_pointwise(a, b))
+    /// == Self::any_mask_bit_set(a) || Self::any_mask_bit_set(b)`. The
+    /// union any-fires iff SOME operand any-fires — the ANY-fold
+    /// distributes over the mask combinator exactly. The BICONDITIONAL
+    /// DUAL of the paired [`Self::intersect_masks_pointwise`]
+    /// combinator's ALL-fold biconditional one QUANTIFIER-KIND axis
+    /// over. Pinned via
+    /// `resource_limits_union_masks_pointwise_any_agrees_with_operand_any_disjunction`.
+    ///
+    /// **ALL-fold bridge**: on every `(a, b)` mask pair, if
+    /// EITHER operand saturates, then the union saturates —
+    /// `Self::all_mask_bits_set(a) || Self::all_mask_bits_set(b)`
+    /// IMPLIES `Self::all_mask_bits_set(Self::union_masks_pointwise(a, b))`.
+    /// The converse fails on operands whose per-axis truth-sets partition
+    /// disjointly (e.g. `MASK_ALTERNATING_HEAD_TRUE` unions
+    /// `MASK_ALTERNATING_HEAD_FALSE` to `MASK_ALL_TRUE` even though
+    /// neither operand is `MASK_ALL_TRUE`), so only the forward
+    /// implication holds — the DUAL of the paired
+    /// [`Self::intersect_masks_pointwise`] combinator's ANY-fold forward
+    /// implication one QUANTIFIER-KIND axis over. Pinned via
+    /// `resource_limits_union_masks_pointwise_all_implied_by_operand_all_disjunction`.
+    ///
+    /// `const fn` so a caller can pin a unioned mask at compile time
+    /// (`const _: [bool; ResourceLimits::FIELD_COUNT] =
+    /// ResourceLimits::union_masks_pointwise([false; ResourceLimits::FIELD_COUNT],
+    /// [false; ResourceLimits::FIELD_COUNT]);`) — sibling of the const-fn
+    /// evaluability pins the five paired SCALAR-COLLAPSE helpers and the
+    /// paired [`Self::intersect_masks_pointwise`] MASK→MASK combinator
+    /// already carry at their own exits.
+    ///
+    /// **Adoption compounds**: [`Self::axes_is_pole`] rewrites from the
+    /// open-coded `[bot[0] || top[0], ...]` per-axis fill to the one-line
+    /// `Self::union_masks_pointwise(self.axes_is_bottom(),
+    /// self.axes_is_top())` composition at no semantic change;
+    /// [`Self::axes_is_monotone`] and [`Self::axes_is_strictly_monotone`]
+    /// rewrite the same way through the shipped direction pair on the
+    /// SEQUENCE surface. Any future per-axis mask whose exit is the
+    /// pointwise disjunction of two shipped per-axis masks (cross-posture
+    /// disjunction masks on joint-cell pairs, higher-order axial
+    /// partition union checks, cover-cell closures on disjoint per-axis
+    /// partitions) composes through this same primitive. Sits at the OR
+    /// pole of the (AND, OR) MASK→MASK monoid pair — the two-primitive
+    /// COMBINATOR row on the per-axis mask algebra, opening the pattern
+    /// for the paired NOT (unary complement) and XOR (symmetric
+    /// difference) primitives at shapes this helper's forward `[a[i] ||
+    /// b[i]; N]` fixed-size array construction has already proven safe.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-axis pointwise-OR mask combinator at every MASK→MASK UNION
+    /// exit now binds at ONE typed named `const fn` on the algebra
+    /// rather than a per-consumer six-primitive hardcoded array literal
+    /// whose FIELD_COUNT=6-coupling silently rots on a future arity
+    /// bump. THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// the helper composes mechanically under the iterator-zip-or
+    /// agreement, OR-monoid identity/annihilator, commutativity,
+    /// idempotence, POPCOUNT lower bound, and ANY/ALL-fold bridge
+    /// identities above with no re-derivation at the caller. THEORY.md
+    /// §V.1 — knowable platform; the per-axis pointwise `||` combinator
+    /// becomes a TYPE-level operation on the per-axis mask algebra
+    /// rather than a per-consumer inline six-primitive cascade, with the
+    /// per-axis granularity baked in so the consumer cannot silently
+    /// drop an axis (the array's fixed arity forces every axis to
+    /// appear).
+    ///
+    /// Frontier inspiration: APL / J's rank-lifted `∨` (logical-or)
+    /// operator producing a per-position bit array between two conformable
+    /// boolean arrays; Haskell's `zipWith (||)` on two `[Bool]` producing
+    /// a `[Bool]`; Idris's `Data.Vect.zipWith (||)` on two `Vec n Bool`
+    /// producing a `Vec n Bool` under a total function signature; Rust's
+    /// stable `a.iter().zip(b.iter()).map(|(&x, &y)| x || y)` iterator
+    /// idiom. Classical bitset OR (`|`) on a bit-packed mask is the same
+    /// operation one representation-KIND axis over on a bit-packed
+    /// encoding — `union_masks_pointwise` is its per-axis-boolean-array
+    /// peer at the substrate, and the OR-pole of the (AND, OR) MASK→MASK
+    /// monoid pair. Translation through pleme-io primitives is the plain
+    /// `const fn` `while`-based per-axis fill below into a stack-
+    /// allocated `[bool; FIELD_COUNT]` array — no closure, no typeclass
+    /// indirection, no dependency on `<[bool]>::iter().zip(...)` (which
+    /// is not const-callable on stable Rust because `zip` returns an
+    /// iterator adapter that takes closures at every consumer), and the
+    /// two masks are owned arrays eagerly evaluated by the caller.
+    #[must_use]
+    pub const fn union_masks_pointwise(
+        a: [bool; Self::FIELD_COUNT],
+        b: [bool; Self::FIELD_COUNT],
+    ) -> [bool; Self::FIELD_COUNT] {
+        let mut out = [false; Self::FIELD_COUNT];
+        let mut i = 0;
+        while i < Self::FIELD_COUNT {
+            out[i] = a[i] || b[i];
             i += 1;
         }
         out
@@ -89373,6 +89556,362 @@ mod tests {
         const _: [bool; ResourceLimits::FIELD_COUNT] = ResourceLimits::intersect_masks_pointwise(
             UNBOUNDED_RESOURCE_LIMITS.axes_leq(UNBOUNDED_RESOURCE_LIMITS),
             UNBOUNDED_RESOURCE_LIMITS.axes_geq(UNBOUNDED_RESOURCE_LIMITS),
+        );
+    }
+
+    #[test]
+    fn resource_limits_union_masks_pointwise_agrees_with_iterator_zip_or() {
+        // Iterator-agreement contract — the substrate MASK→MASK
+        // pointwise-OR combinator's verdict on every (a, b) mask pair
+        // agrees with the raw `a.iter().zip(b.iter()).map(|(&x, &y)| x
+        // || y).collect::<Vec<bool>>()` open-coded fold that every prior
+        // per-axis pointwise-disjunction body (`axes_is_pole`,
+        // `axes_is_monotone`, `axes_is_strictly_monotone`) carried
+        // before the helper lift. Swept across the FULL 11×11 = 121-mask
+        // pair constellation drawn from the shared
+        // COUNT_MASK_BITS_MASK_SWEEP constellation so the combinator is
+        // pinned on every distinct per-index (false||false, false||true,
+        // true||false, true||true) corner across the popcount range. A
+        // helper regression that mis-indexed the while-loop, skipped
+        // increments, inverted a per-index arm, or dropped an axis from
+        // the output array would break here on at least one mask pair.
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                let via_helper = ResourceLimits::union_masks_pointwise(*a, *b);
+                let mut via_iterator = [false; ResourceLimits::FIELD_COUNT];
+                for (i, (&x, &y)) in a.iter().zip(b.iter()).enumerate() {
+                    via_iterator[i] = x || y;
+                }
+                assert_eq!(
+                    via_helper, via_iterator,
+                    "union_masks_pointwise != iterator-zip-or on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_union_masks_pointwise_identity_with_all_false() {
+        // OR-identity contract — the empty MASK_ALL_FALSE serves as the
+        // two-sided IDENTITY element of the pointwise-OR monoid on
+        // `[bool; FIELD_COUNT]` arrays — the ALGEBRAIC DUAL of the AND-
+        // identity role MASK_ALL_TRUE plays on the paired
+        // `intersect_masks_pointwise` combinator. For every mask
+        // fixture, `union(mask, MASK_ALL_FALSE) == mask` AND
+        // `union(MASK_ALL_FALSE, mask) == mask`. Both directions swept
+        // so the pin verifies the monoid identity on BOTH left- and
+        // right-argument positions, catching a regression that lost the
+        // per-axis truth-propagation on either input.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            assert_eq!(
+                ResourceLimits::union_masks_pointwise(*mask, MASK_ALL_FALSE),
+                *mask,
+                "union(mask, all-false) != mask on {mask:?}",
+            );
+            assert_eq!(
+                ResourceLimits::union_masks_pointwise(MASK_ALL_FALSE, *mask),
+                *mask,
+                "union(all-false, mask) != mask on {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_union_masks_pointwise_annihilator_with_all_true() {
+        // OR-annihilator contract — the saturated MASK_ALL_TRUE serves
+        // as the two-sided ANNIHILATOR (top) element of the pointwise-OR
+        // monoid on `[bool; FIELD_COUNT]` arrays — the ALGEBRAIC DUAL of
+        // the AND-annihilator role MASK_ALL_FALSE plays on the paired
+        // `intersect_masks_pointwise` combinator. For every mask
+        // fixture, `union(mask, MASK_ALL_TRUE) == MASK_ALL_TRUE` AND
+        // `union(MASK_ALL_TRUE, mask) == MASK_ALL_TRUE`. Both directions
+        // swept so the pin verifies the annihilator on BOTH left- and
+        // right-argument positions, catching a regression that lost the
+        // per-axis truth-annihilation on either input.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            assert_eq!(
+                ResourceLimits::union_masks_pointwise(*mask, MASK_ALL_TRUE),
+                MASK_ALL_TRUE,
+                "union(mask, all-true) != all-true on {mask:?}",
+            );
+            assert_eq!(
+                ResourceLimits::union_masks_pointwise(MASK_ALL_TRUE, *mask),
+                MASK_ALL_TRUE,
+                "union(all-true, mask) != all-true on {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_union_masks_pointwise_is_commutative() {
+        // Commutativity contract — per-axis `||` is commutative on
+        // every field, so the mask combinator inherits commutativity
+        // from the underlying Boolean operation: `union(a, b) ==
+        // union(b, a)` for every mask pair. Swept across the FULL
+        // 11×11 = 121-mask pair constellation so the identity is
+        // pinned on every distinct per-index corner. Catches a
+        // regression where a helper's per-index fill accidentally
+        // depended on argument position (e.g. `a[i] || b[i - 1]` or a
+        // swap in the accumulator).
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                assert_eq!(
+                    ResourceLimits::union_masks_pointwise(*a, *b),
+                    ResourceLimits::union_masks_pointwise(*b, *a),
+                    "union not commutative on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_union_masks_pointwise_is_idempotent() {
+        // Idempotence contract — per-axis `||` is idempotent (`x || x
+        // == x`), so the mask combinator inherits idempotence from the
+        // underlying Boolean operation: `union(mask, mask) == mask` for
+        // every mask fixture. Swept across the 11-mask constellation so
+        // the identity is pinned on every distinct popcount verdict.
+        // Together with the OR-identity and OR-annihilator pins the
+        // three tests close the (identity, annihilator, idempotence)
+        // OR-monoid algebraic-law triad at ONE substrate identity per
+        // law rather than a per-consumer inline proof — mirroring the
+        // paired triad the `intersect_masks_pointwise` combinator's
+        // three pins close on the AND-monoid one MONOID-ORIENTATION
+        // axis over.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            assert_eq!(
+                ResourceLimits::union_masks_pointwise(*mask, *mask),
+                *mask,
+                "union(mask, mask) != mask on {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_union_masks_pointwise_popcount_bounded_below_by_max() {
+        // POPCOUNT lower bound — the union's popcount cannot be LESS
+        // than EITHER operand's popcount (every set bit of an operand
+        // is set in the union, so each operand is a per-axis submask of
+        // the union). Bridges the mask combinator to the paired
+        // POPCOUNT-fold on the SAME per-axis mask surface via
+        // `count(union(a, b)) >= max(count(a), count(b))`. The DUAL of
+        // the paired `intersect_masks_pointwise` combinator's
+        // `count(intersect) <= min(count(a), count(b))` upper bound one
+        // MONOID-ORIENTATION axis over. Swept across the FULL 11×11 =
+        // 121-mask pair constellation so the bound is pinned on every
+        // distinct popcount verdict pair.
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                let unioned = ResourceLimits::union_masks_pointwise(*a, *b);
+                let ca = ResourceLimits::count_mask_bits(*a);
+                let cb = ResourceLimits::count_mask_bits(*b);
+                let cu = ResourceLimits::count_mask_bits(unioned);
+                let max_ab = if ca >= cb { ca } else { cb };
+                assert!(
+                    cu >= max_ab,
+                    "count(union) < max(count(a), count(b)) on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_union_masks_pointwise_any_agrees_with_operand_any_disjunction() {
+        // ANY-fold bridge (biconditional) — the union any-fires iff
+        // SOME operand any-fires; the ANY-fold distributes over the
+        // mask combinator exactly. The BICONDITIONAL DUAL of the paired
+        // `intersect_masks_pointwise` combinator's ALL-fold biconditional
+        // one QUANTIFIER-KIND axis over — on the EXISTENTIAL-QUANTIFIER
+        // edge the equivalence closes both directions because per-axis
+        // disjunction is `true` iff at least one per-axis operand slot
+        // is `true`. Swept across the FULL 11×11 = 121-mask pair
+        // constellation so the identity is pinned on every distinct
+        // per-index corner.
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                let unioned = ResourceLimits::union_masks_pointwise(*a, *b);
+                assert_eq!(
+                    ResourceLimits::any_mask_bit_set(unioned),
+                    ResourceLimits::any_mask_bit_set(*a) || ResourceLimits::any_mask_bit_set(*b),
+                    "any(union) != any(a) || any(b) on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_union_masks_pointwise_all_implied_by_operand_all_disjunction() {
+        // ALL-fold bridge (forward only) — a saturated operand witness
+        // saturates the union (every axis is `true` in some operand
+        // and the union's per-axis disjunction fires). The converse
+        // fails on operands whose per-axis truth-sets partition
+        // disjointly (e.g. MASK_ALTERNATING_HEAD_TRUE unions
+        // MASK_ALTERNATING_HEAD_FALSE to MASK_ALL_TRUE even though
+        // NEITHER operand saturates), so only the forward implication
+        // holds. The DUAL of the paired `intersect_masks_pointwise`
+        // combinator's ANY-fold forward implication one QUANTIFIER-KIND
+        // axis over. Swept across the FULL 11×11 = 121-mask pair
+        // constellation so the implication is pinned on every distinct
+        // per-index corner.
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                if ResourceLimits::all_mask_bits_set(*a) || ResourceLimits::all_mask_bits_set(*b) {
+                    let unioned = ResourceLimits::union_masks_pointwise(*a, *b);
+                    assert!(
+                        ResourceLimits::all_mask_bits_set(unioned),
+                        "operand all-fires but union does not on ({a:?}, {b:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_pole_body_delegates_to_union_masks_pointwise() {
+        // Sweep-of-callsite pin — after routing the whole-posture
+        // `axes_is_pole` body from the per-axis `while i < FIELD_COUNT
+        // { result[i] = bot[i] || top[i]; i += 1; }` open-coded per-axis
+        // fill through ResourceLimits::union_masks_pointwise, the whole
+        // STRICT_ORDER_ROSTER preset roster continues to agree with the
+        // helper-based shape
+        // `union_masks_pointwise(a.axes_is_bottom(), a.axes_is_top())`.
+        // The pin closes the FIELD_COUNT-decoupling refactor on the
+        // FIRST MASK→MASK UNION callsite for the per-axis-mask surface:
+        // a future FIELD_COUNT bump that would have silently under-
+        // covered the open-coded per-axis fill is now caught by the
+        // helper's `while i < FIELD_COUNT` per-axis body rather than an
+        // axis-count that no callsite guarded. Sibling of
+        // `resource_limits_axes_eq_body_delegates_to_intersect_masks_pointwise`
+        // one MONOID-ORIENTATION axis over — the (intersect, union)
+        // delegation pair closes the (AND, OR) MASK→MASK monoid at ONE
+        // substrate primitive delegation per exit.
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.axes_is_pole(),
+                ResourceLimits::union_masks_pointwise(a.axes_is_bottom(), a.axes_is_top()),
+                "axes_is_pole disagrees with union_masks_pointwise(axes_is_bottom, axes_is_top) \
+                 on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_monotone_body_delegates_to_union_masks_pointwise() {
+        // Sweep-of-callsite pin — after routing the whole-posture
+        // `axes_is_monotone` body from the per-axis `while i <
+        // FIELD_COUNT { result[i] = asc[i] || desc[i]; i += 1; }` open-
+        // coded per-axis fill through ResourceLimits::union_masks_pointwise,
+        // the whole 5^3 preset-triple constellation continues to agree
+        // with the helper-based shape
+        // `union_masks_pointwise(axes_is_ascending, axes_is_descending)`.
+        // The pin closes the FIELD_COUNT-decoupling refactor on the
+        // SECOND MASK→MASK UNION callsite — the DIRECTION-COVER cell
+        // (monotone = ascending ∪ descending) on the SEQUENCE-LEVEL
+        // per-axis mask surface, one PROJECTION-KIND axis over from the
+        // POLE-COVER cell (pole = bottom ∪ top) on the POSITION-LEVEL
+        // per-axis mask surface.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        ResourceLimits::axes_is_monotone(&slice),
+                        ResourceLimits::union_masks_pointwise(
+                            ResourceLimits::axes_is_ascending(&slice),
+                            ResourceLimits::axes_is_descending(&slice),
+                        ),
+                        "axes_is_monotone disagrees with \
+                         union_masks_pointwise(axes_is_ascending, axes_is_descending) on \
+                         ({a:?}, {b:?}, {c:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_monotone_body_delegates_to_union_masks_pointwise() {
+        // Sweep-of-callsite pin — after routing the whole-posture
+        // `axes_is_strictly_monotone` body from the per-axis `while i <
+        // FIELD_COUNT { result[i] = asc[i] || desc[i]; i += 1; }` open-
+        // coded per-axis fill through ResourceLimits::union_masks_pointwise,
+        // the whole 5^3 preset-triple constellation continues to agree
+        // with the helper-based shape
+        // `union_masks_pointwise(axes_is_strictly_ascending,
+        // axes_is_strictly_descending)`. The pin closes the FIELD_COUNT-
+        // decoupling refactor on the THIRD MASK→MASK UNION callsite —
+        // the STRICT-DIRECTION-COVER cell (strictly monotone =
+        // strictly ascending ∪ strictly descending) one STRICTNESS axis
+        // over from the loose direction-cover cell above.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        ResourceLimits::axes_is_strictly_monotone(&slice),
+                        ResourceLimits::union_masks_pointwise(
+                            ResourceLimits::axes_is_strictly_ascending(&slice),
+                            ResourceLimits::axes_is_strictly_descending(&slice),
+                        ),
+                        "axes_is_strictly_monotone disagrees with \
+                         union_masks_pointwise(axes_is_strictly_ascending, \
+                         axes_is_strictly_descending) on ({a:?}, {b:?}, {c:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_union_masks_pointwise_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin a unioned mask at compile time as a build-
+        // break. Sibling of the const-fn evaluability pins the five
+        // paired SCALAR-COLLAPSE helpers and the paired
+        // `intersect_masks_pointwise` MASK→MASK combinator already
+        // carry at their own exits. Covers the (identity, annihilator,
+        // idempotence) monoid corners on the shipped `pub const`
+        // fixtures plus the paired-preset composition through
+        // axes_is_bottom/axes_is_top that the axes_is_pole sweep
+        // delegates through, so the helper is pinned as const-fn on
+        // every corner the sweep depends on.
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::union_masks_pointwise(MASK_ALL_FALSE, MASK_ALL_FALSE);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::union_masks_pointwise(MASK_ALL_TRUE, MASK_ALL_FALSE);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::union_masks_pointwise(MASK_ALL_FALSE, MASK_ALL_TRUE);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::union_masks_pointwise(MASK_ALL_TRUE, MASK_ALL_TRUE);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::union_masks_pointwise(MASK_SINGLE_HEAD, MASK_SINGLE_HEAD);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::union_masks_pointwise(MASK_FIRST_HALF, MASK_SECOND_HALF);
+        const _: [bool; ResourceLimits::FIELD_COUNT] = ResourceLimits::union_masks_pointwise(
+            MASK_ALTERNATING_HEAD_TRUE,
+            MASK_ALTERNATING_HEAD_FALSE,
+        );
+        const _: [bool; ResourceLimits::FIELD_COUNT] = ResourceLimits::union_masks_pointwise(
+            EMPTY_RESOURCE_LIMITS.axes_is_bottom(),
+            EMPTY_RESOURCE_LIMITS.axes_is_top(),
+        );
+        const _: [bool; ResourceLimits::FIELD_COUNT] = ResourceLimits::union_masks_pointwise(
+            UNBOUNDED_RESOURCE_LIMITS.axes_is_bottom(),
+            UNBOUNDED_RESOURCE_LIMITS.axes_is_top(),
         );
     }
 

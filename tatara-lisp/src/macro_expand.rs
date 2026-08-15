@@ -13837,6 +13837,124 @@ impl ResourceLimits {
         }
     }
 
+    /// Zero-signalling `usize` → `Option<usize>` lift on whole-posture axis
+    /// counts — `Self::witness_positive_count(count)` returns `Some(count)`
+    /// when `count > 0` and `None` when `count == 0`. The BOUNDARY primitive
+    /// lifting the shape
+    /// `if count == 0 { None } else { Some(count) }`
+    /// (equivalently the stable-Rust `NonZeroUsize::new(count).map(
+    /// NonZeroUsize::get)` closure form Rust `const fn` cannot express on
+    /// stable, since `Option::map` takes a closure) that every WHOLE-POSTURE
+    /// ARM-AGNOSTIC DIRECTED-LEAD `Option<usize>` PROJECTION on
+    /// [`ResourceLimits`] carries at its exit — [`Self::majority_lead`] and
+    /// [`Self::atomic_majority_lead`] both wrap the just-lifted UNDIRECTED
+    /// CARDINAL projection ([`Self::axial_skew`] and [`Self::atomic_skew`]
+    /// respectively) in the same zero-signalling dispatch. Pre-lift each
+    /// ARM-AGNOSTIC LEAD projection open-coded the four-line
+    /// `let skew = self.X_skew(); if skew == 0 { None } else { Some(skew) }`
+    /// at its own exit — the SAME zero-signalling dispatch appeared verbatim
+    /// on TWO sibling projections, a copy-paste cascade whose consistency
+    /// the type system did not gate (a projection that swapped the branch
+    /// arms would silently invert the (balance, majority) partition,
+    /// classifying the balance corner as `Some(0)` and every majority regime
+    /// as `None` — the exact inverse of the intended semantics). Post-lift
+    /// the shape binds at ONE typed `const fn` on [`ResourceLimits`], and
+    /// every future ARM-AGNOSTIC LEAD projection over a `usize` distance
+    /// tally (higher-order axial partitions, cross-posture disagreement
+    /// counts, atomic-vs-compound skew composites) composes through this
+    /// helper — the zero-signalling dispatch is a substrate-level theorem
+    /// rather than a per-projection convention. The COMBINATOR-KIND peer of
+    /// [`Self::witness_axis_presence`] one INPUT-KIND axis over: presence-
+    /// conditional wrapping over `(count, pred)` at the paired helper
+    /// returning `Option<bool>`, here presence-conditional identity over
+    /// `count` returning `Option<usize>` — jointly the two helpers OPEN the
+    /// substrate's `usize → Option<T>` axis-count combinator surface on the
+    /// (Option<bool>, Option<usize>) mask, sharing the same
+    /// `count == 0 ⇒ None` presence dispatch across both output shapes.
+    ///
+    /// **Two-arm dispatch identity — LOAD-BEARING structural pin**: on
+    /// every `count`, `witness_positive_count(count) == if count == 0 {
+    /// None } else { Some(count) }`. Pinned via
+    /// `resource_limits_witness_positive_count_agrees_with_if_count_zero_none_else_some`.
+    ///
+    /// **Zero-arm identity**: `witness_positive_count(0) == None` — the
+    /// zero corner is signalled through the empty arm of the output
+    /// `Option<usize>`, distinguishing it structurally from every positive
+    /// count the present arm carries. Pinned via
+    /// `resource_limits_witness_positive_count_zero_arm_maps_to_none`.
+    ///
+    /// **Positive-arm identity**: for every `k > 0`,
+    /// `witness_positive_count(k) == Some(k)` — the positive present-arm
+    /// count passes through verbatim, so the helper preserves the exact
+    /// magnitude on the majority regime and only discriminates the balance
+    /// corner. Pinned via
+    /// `resource_limits_witness_positive_count_positive_arm_wraps_verbatim`.
+    ///
+    /// **`is_some` bridge**: `witness_positive_count(count).is_some() ==
+    /// (count > 0)`. The presence dispatch on the output tracks strict
+    /// positivity of the input — the ARM-AGNOSTIC LEAD projection's
+    /// `is_some` reading on the wrapping helper agrees with the paired
+    /// STRICT-INEQUALITY MAJORITY-EXISTENCE verdict on the source count.
+    /// Pinned via `resource_limits_witness_positive_count_is_some_iff_input_positive`.
+    ///
+    /// **Round-trip identity**: for every `count`,
+    /// `witness_positive_count(count).unwrap_or(0) == count` — the paired
+    /// `unwrap_or(0)` collapse of the zero-signalling helper recovers the
+    /// input count exactly (since the `None` arm fires only when `count
+    /// == 0`, the collapse to `0` matches the input arm-for-arm). The
+    /// LOAD-BEARING inverse identity carrying the ARM-AGNOSTIC LEAD
+    /// projection's `unwrap_or(0)` bridge to the paired UNDIRECTED
+    /// CARDINAL projection at ONE substrate theorem. Pinned via
+    /// `resource_limits_witness_positive_count_unwrap_or_zero_recovers_input`.
+    ///
+    /// `const fn` so a caller can pin the helper's verdict at compile time
+    /// (`const _: () = assert!(ResourceLimits::witness_positive_count(0)
+    /// .is_none());`) — sibling of the const-fn evaluability pins the
+    /// ARM-AGNOSTIC LEAD projections already carry at their own exits.
+    ///
+    /// **Adoption compounds**: the two shipped ARM-AGNOSTIC LEAD
+    /// projections rewrite from the open-coded four-line
+    /// `let skew = self.X_skew(); if skew == 0 { None } else { Some(skew) }`
+    /// shape to the one-line
+    /// `Self::witness_positive_count(self.X_skew())` composition at no
+    /// semantic change; any future ARM-AGNOSTIC LEAD projection over a
+    /// `usize` distance tally composes through this same primitive.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// zero-signalling dispatch shape at every ARM-AGNOSTIC LEAD projection
+    /// body binds at ONE typed named `const fn` on the algebra rather than
+    /// a per-projection four-line open-coded conditional. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the helper composes
+    /// mechanically under the two-arm identity above with no re-derivation
+    /// at the caller. THEORY.md §V.1 — knowable platform; the zero-arm
+    /// preservation becomes a substrate-level theorem rather than a
+    /// per-projection convention.
+    ///
+    /// Frontier inspiration: Rust's own `NonZeroUsize::new(count)`
+    /// zero-guarded newtype wrapper is the same operation one
+    /// REPRESENTATION-KIND axis over on the type-encoded non-zero
+    /// invariant (`NonZeroUsize::new(count).map(NonZeroUsize::get)` and
+    /// this helper agree pointwise on every `usize`, but the helper stays
+    /// in `Option<usize>` where the newtype recasts the present arm as
+    /// `NonZeroUsize`). Haskell's `guard (n > 0) >> Just n` on the `Maybe`
+    /// monad; Idris's `if n == 0 then Nothing else Just n` under a total
+    /// function signature; APL's `⊂⍣(0<n)⊢n` guarded box; Racket's `(and
+    /// (positive? n) n)` present-arm-preserving positivity guard.
+    /// Translation through pleme-io primitives is the plain `const fn`
+    /// conditional below on the `usize` split — no closure, no typeclass
+    /// indirection, no newtype indirection, no dependency on
+    /// `NonZeroUsize::new` (which returns `Option<NonZeroUsize>` rather
+    /// than `Option<usize>` on the present arm, adding a `NonZeroUsize
+    /// ::get` round-trip the caller would then compose through).
+    #[must_use]
+    pub const fn witness_positive_count(count: usize) -> Option<usize> {
+        if count == 0 {
+            None
+        } else {
+            Some(count)
+        }
+    }
+
     /// Presence-preserving CLOSED-INTERVAL WIDTH from a coupled ENDPOINT PAIR
     /// on whole-posture `Option<usize>` axis-endpoint tallies —
     /// `Self::derive_axis_endpoint_span(first, last)` returns
@@ -15548,11 +15666,16 @@ impl ResourceLimits {
     /// with `1 <= k < FIELD_COUNT`, matching the paired
     /// [`Self::interior_lead`] pin on the DIRECTED interior arm.
     ///
-    /// Encoded as the plain `const fn` `if self.axial_skew() == 0 {
-    /// None } else { Some(self.axial_skew()) }` on the just-lifted
-    /// UNDIRECTED CARDINAL projection — one primitive delegation each
-    /// to [`Self::axial_skew`], composed through the ZERO-bridge to the
-    /// balance leg. The equivalent alternative encodings
+    /// Encoded as the one-composition
+    /// `Self::witness_positive_count(self.axial_skew())` on the just-
+    /// lifted UNDIRECTED CARDINAL projection through the substrate zero-
+    /// signalling `usize → Option<usize>` combinator
+    /// [`Self::witness_positive_count`] — one primitive delegation to
+    /// [`Self::axial_skew`] threaded through the helper's ZERO-bridge to
+    /// the balance leg, at ONE named typed named `const fn` on the
+    /// algebra rather than a per-projection open-coded four-line
+    /// `if skew == 0 { None } else { Some(skew) }` conditional. The
+    /// equivalent alternative encodings
     /// `self.polar_lead().or(self.interior_lead())` (Option::or is
     /// `const fn` since Rust 1.61) and `if self.has_majority_axis() {
     /// Some(self.axial_skew()) } else { None }` are all structurally
@@ -15590,12 +15713,7 @@ impl ResourceLimits {
     /// indirection, no per-axis loop, no allocation.
     #[must_use]
     pub const fn majority_lead(self) -> Option<usize> {
-        let skew = self.axial_skew();
-        if skew == 0 {
-            None
-        } else {
-            Some(skew)
-        }
+        Self::witness_positive_count(self.axial_skew())
     }
 
     /// Whole-posture SIGNED-KIND DIRECTED-CARDINAL projection —
@@ -16964,16 +17082,21 @@ impl ResourceLimits {
     /// ENDPOINTS_ONLY) because two of the three fixtures sit at the
     /// compound tie.
     ///
-    /// Encoded as the plain `const fn` `if self.atomic_skew() == 0 {
-    /// None } else { Some(self.atomic_skew()) }` on the just-lifted
-    /// UNDIRECTED atomic CARDINAL projection — one primitive delegation
-    /// each to [`Self::atomic_skew`], composed through the ZERO-bridge
-    /// to the atomic balance leg. The equivalent alternative encodings
-    /// `self.bottom_lead().or(self.top_lead())` (Option::or is
-    /// `const fn` since Rust 1.61) and `if self.has_atomic_majority() {
-    /// Some(self.atomic_skew()) } else { None }` are all structurally
-    /// equivalent AND pinned as substrate theorems in the paired
-    /// contracts above.
+    /// Encoded as the one-composition
+    /// `Self::witness_positive_count(self.atomic_skew())` on the just-
+    /// lifted UNDIRECTED atomic CARDINAL projection through the substrate
+    /// zero-signalling `usize → Option<usize>` combinator
+    /// [`Self::witness_positive_count`] — one primitive delegation to
+    /// [`Self::atomic_skew`] threaded through the helper's ZERO-bridge to
+    /// the atomic balance leg, matching [`Self::majority_lead`]'s shape
+    /// verbatim on the DUAL (atomic, compound) cell — the SAME zero-
+    /// signalling dispatch binds BOTH ARM-AGNOSTIC LEAD projections at
+    /// ONE named typed `const fn` on the algebra. The equivalent
+    /// alternative encodings `self.bottom_lead().or(self.top_lead())`
+    /// (Option::or is `const fn` since Rust 1.61) and `if self
+    /// .has_atomic_majority() { Some(self.atomic_skew()) } else { None }`
+    /// are all structurally equivalent AND pinned as substrate theorems
+    /// in the paired contracts above.
     ///
     /// `const fn` so a caller can pin the exact atomic ARM-AGNOSTIC
     /// lead at compile time (`const _: () = assert!(matches!(
@@ -17009,12 +17132,7 @@ impl ResourceLimits {
     /// dep, no typeclass indirection, no per-axis loop, no allocation.
     #[must_use]
     pub const fn atomic_majority_lead(self) -> Option<usize> {
-        let skew = self.atomic_skew();
-        if skew == 0 {
-            None
-        } else {
-            Some(skew)
-        }
+        Self::witness_positive_count(self.atomic_skew())
     }
 
     /// Whole-posture ATOMIC-CELL SIGNED-KIND DIRECTED-CARDINAL projection
@@ -88307,6 +88425,191 @@ mod tests {
             DEFAULT_RESOURCE_LIMITS.interior_axis_is_contiguous(),
             Some(true)
         ));
+    }
+
+    #[test]
+    fn resource_limits_witness_positive_count_zero_arm_maps_to_none() {
+        // Zero-arm identity: on count == 0 the helper yields None. The
+        // balance corner is signalled through the empty arm of the output
+        // Option<usize>, distinguishing it structurally from every
+        // positive count the present arm carries.
+        assert_eq!(ResourceLimits::witness_positive_count(0), None);
+    }
+
+    #[test]
+    fn resource_limits_witness_positive_count_positive_arm_wraps_verbatim() {
+        // Positive-arm identity: for every k > 0, the helper wraps the
+        // input verbatim as Some(k). Swept over a representative
+        // constellation covering the (min-positive, FIELD_COUNT,
+        // usize::MAX) endpoints so the present-arm behaviour is pinned
+        // across the strict-positive regime.
+        assert_eq!(
+            ResourceLimits::witness_positive_count(1),
+            Some(1),
+            "positive arm at 1 (min-positive)",
+        );
+        assert_eq!(
+            ResourceLimits::witness_positive_count(ResourceLimits::FIELD_COUNT),
+            Some(ResourceLimits::FIELD_COUNT),
+            "positive arm at FIELD_COUNT",
+        );
+        assert_eq!(
+            ResourceLimits::witness_positive_count(usize::MAX),
+            Some(usize::MAX),
+            "positive arm at usize::MAX",
+        );
+    }
+
+    #[test]
+    fn resource_limits_witness_positive_count_agrees_with_if_count_zero_none_else_some() {
+        // Two-arm dispatch identity — the helper's verdict on every count
+        // agrees with the open-coded shape
+        // `if count == 0 { None } else { Some(count) }` that every ARM-
+        // AGNOSTIC LEAD projection on ResourceLimits carried at its exit
+        // pre-lift. Swept over 0, a min-positive sample, and the
+        // FIELD_COUNT / usize::MAX endpoints so the two-arm dispatch is
+        // pinned across both cells of the (zero, positive) partition of
+        // the usize input regime.
+        for count in [0_usize, 1, 2, ResourceLimits::FIELD_COUNT, usize::MAX] {
+            let via_helper = ResourceLimits::witness_positive_count(count);
+            let via_open_code = if count == 0 { None } else { Some(count) };
+            assert_eq!(
+                via_helper, via_open_code,
+                "helper != open-coded shape at count={count}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_positive_count_is_some_iff_input_positive() {
+        // is_some bridge: the helper's is_some verdict agrees with strict
+        // positivity of the input on every count. The presence dispatch
+        // on the output tracks strict positivity of the input — the ARM-
+        // AGNOSTIC LEAD projection's is_some reading on the wrapping
+        // helper agrees with the paired STRICT-INEQUALITY MAJORITY-
+        // EXISTENCE verdict on the source count.
+        for count in [0_usize, 1, 2, ResourceLimits::FIELD_COUNT, usize::MAX] {
+            assert_eq!(
+                ResourceLimits::witness_positive_count(count).is_some(),
+                count > 0,
+                "is_some bridge violated at count={count}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_positive_count_unwrap_or_zero_recovers_input() {
+        // Round-trip identity: for every count, unwrap_or(0) on the
+        // helper output recovers the input count exactly. The None arm
+        // fires only when count == 0, so the collapse to 0 matches the
+        // input arm-for-arm. The LOAD-BEARING inverse identity carrying
+        // the ARM-AGNOSTIC LEAD projection's unwrap_or(0) bridge to the
+        // paired UNDIRECTED CARDINAL projection at ONE substrate theorem
+        // — pins that
+        // `witness_positive_count(skew).unwrap_or(0) == skew` on every
+        // count, so a downstream consumer that composed the ARM-AGNOSTIC
+        // LEAD through unwrap_or(0) rewrites to the source skew verbatim.
+        for count in [0_usize, 1, 2, ResourceLimits::FIELD_COUNT, usize::MAX] {
+            assert_eq!(
+                ResourceLimits::witness_positive_count(count).unwrap_or(0),
+                count,
+                "round-trip violated at count={count}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_positive_count_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the two-arm identity at compile time as a
+        // build-break. Sibling of the const-fn evaluability pins the
+        // ARM-AGNOSTIC LEAD projections already carry at their own exits.
+        const _: () = assert!(ResourceLimits::witness_positive_count(0).is_none());
+        const _: () = assert!(matches!(ResourceLimits::witness_positive_count(1), Some(1)));
+        const _: () = assert!(matches!(
+            ResourceLimits::witness_positive_count(ResourceLimits::FIELD_COUNT),
+            Some(v) if v == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::witness_positive_count(usize::MAX),
+            Some(usize::MAX)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_arm_agnostic_lead_family_bodies_delegate_to_witness_positive_count() {
+        // Sweep-of-family pin — asserts each of the two ARM-AGNOSTIC
+        // LEAD projection bodies (majority_lead over the (polar,
+        // interior) axial partition, atomic_majority_lead over the
+        // ATOMIC (bottom, top) sub-partition of the polar cell) agrees
+        // with the helper-based shape
+        // `ResourceLimits::witness_positive_count(self.X_skew())` on
+        // every posture from the EMPTY / DEFAULT / UNBOUNDED /
+        // HAND_AUTHORED_MID / HAND_AUTHORED_OTHER preset constellation
+        // (2×5 = 10 verdicts). A future body regression that swapped the
+        // None arm — or a helper regression that silently inverted the
+        // zero-signalling dispatch — would break here on at least one
+        // pair. The five uniform fixtures ALL fire the SATURATED
+        // Some(6) magnitude on the axial (polar, interior) partition
+        // and either Some(6) or None on the ATOMIC (bottom, top) sub-
+        // partition depending on whether the polar arm packs a strict-
+        // majority atomic pole (EMPTY: bottom == 6, top == 0 → Some(6);
+        // UNBOUNDED: bottom == 0, top == 6 → Some(6); DEFAULT / HAND_*:
+        // atomic-empty → None).
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                posture.majority_lead(),
+                ResourceLimits::witness_positive_count(posture.axial_skew()),
+                "majority_lead delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.atomic_majority_lead(),
+                ResourceLimits::witness_positive_count(posture.atomic_skew()),
+                "atomic_majority_lead delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_arm_agnostic_lead_family_bodies_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the ARM-AGNOSTIC LEAD family bodies
+        // preserved const-fn evaluability under the sweep through
+        // witness_positive_count. Each of the two swept projections ×
+        // the three shipped `pub const` preset postures (EMPTY,
+        // UNBOUNDED, DEFAULT). EMPTY packs six bottom axes uniformly, so
+        // the axial arm fires Some(6) (polar strict-uniform → skew ==
+        // FIELD_COUNT) and the atomic arm fires Some(6) (bottom strict-
+        // uniform → atomic skew == FIELD_COUNT). UNBOUNDED is the corner
+        // mirror on the atomic top arm. DEFAULT is interior-uniform, so
+        // the axial arm fires Some(6) (interior strict-uniform) and the
+        // atomic arm fires None (no polar axis → no atomic-pole tally).
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.majority_lead(),
+            Some(v) if v == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.atomic_majority_lead(),
+            Some(v) if v == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.majority_lead(),
+            Some(v) if v == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.atomic_majority_lead(),
+            Some(v) if v == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.majority_lead(),
+            Some(v) if v == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.atomic_majority_lead().is_none());
     }
 
     #[test]

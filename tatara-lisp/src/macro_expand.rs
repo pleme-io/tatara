@@ -8803,23 +8803,22 @@ impl ResourceLimits {
     /// pointwise equality operator; Coq's per-component intersection of
     /// `Sorted le` and `Sorted ge` on a product record, which collapses
     /// through antisymmetry to per-component `AllEqual`. Translation
-    /// through pleme-io primitives: the doubly-composed per-axis
-    /// `&&`-fold directly, with the shipped per-axis-mask direction pair
-    /// [`Self::axes_is_ascending`] + [`Self::axes_is_descending`] as the
-    /// two primitives, no new dep, no supertrait bound (`Copy` on
-    /// [`ResourceLimits`] suffices to pass slices by value through the
-    /// inner `const fn` bodies), no allocation, `const fn` throughout.
+    /// through pleme-io primitives: the one-line composition below,
+    /// routed through the substrate MASK+MASK→MASK INTERSECTION
+    /// combinator [`Self::intersect_masks_pointwise`] on the pair of
+    /// already-lifted per-axis-mask direction masks
+    /// [`Self::axes_is_ascending`] + [`Self::axes_is_descending`] — the
+    /// FIELD_COUNT=6-coupling the pre-lift `let asc = ...; let desc =
+    /// ...; while i < FIELD_COUNT { result[i] = asc[i] && desc[i]; i +=
+    /// 1; }` open-coded per-axis AND-fill carried is now retired at the
+    /// callsite and propagates mechanically through the helper's `while
+    /// i < FIELD_COUNT` per-axis body on any future arity bump.
     #[must_use]
     pub const fn axes_is_constant(postures: &[Self]) -> [bool; Self::FIELD_COUNT] {
-        let asc = Self::axes_is_ascending(postures);
-        let desc = Self::axes_is_descending(postures);
-        let mut result = [false; Self::FIELD_COUNT];
-        let mut i = 0;
-        while i < Self::FIELD_COUNT {
-            result[i] = asc[i] && desc[i];
-            i += 1;
-        }
-        result
+        Self::intersect_masks_pointwise(
+            Self::axes_is_ascending(postures),
+            Self::axes_is_descending(postures),
+        )
     }
 
     /// Per-axis boolean NON-MONOTONE projection across a slice of postures
@@ -9580,24 +9579,23 @@ impl ResourceLimits {
     /// arity ≥ 2; Coq's per-component intersection of `Sorted lt` and
     /// `Sorted gt` on a product record, inhabited only at `nil` and
     /// singleton lists. Translation through pleme-io primitives: the
-    /// doubly-composed per-axis `&&`-fold directly, with the shipped
-    /// per-axis-mask strict direction pair
+    /// one-line composition below, routed through the substrate
+    /// MASK+MASK→MASK INTERSECTION combinator
+    /// [`Self::intersect_masks_pointwise`] on the pair of already-lifted
+    /// per-axis-mask strict direction masks
     /// [`Self::axes_is_strictly_ascending`] +
-    /// [`Self::axes_is_strictly_descending`] as the two primitives, no
-    /// new dep, no supertrait bound (`Copy` on [`ResourceLimits`]
-    /// suffices to pass slices by value through the inner `const fn`
-    /// bodies), no allocation, `const fn` throughout.
+    /// [`Self::axes_is_strictly_descending`] — the FIELD_COUNT=6-coupling
+    /// the pre-lift `let asc = ...; let desc = ...; while i <
+    /// FIELD_COUNT { result[i] = asc[i] && desc[i]; i += 1; }` open-coded
+    /// per-axis AND-fill carried is now retired at the callsite and
+    /// propagates mechanically through the helper's `while i <
+    /// FIELD_COUNT` per-axis body on any future arity bump.
     #[must_use]
     pub const fn axes_is_strictly_constant(postures: &[Self]) -> [bool; Self::FIELD_COUNT] {
-        let asc = Self::axes_is_strictly_ascending(postures);
-        let desc = Self::axes_is_strictly_descending(postures);
-        let mut result = [false; Self::FIELD_COUNT];
-        let mut i = 0;
-        while i < Self::FIELD_COUNT {
-            result[i] = asc[i] && desc[i];
-            i += 1;
-        }
-        result
+        Self::intersect_masks_pointwise(
+            Self::axes_is_strictly_ascending(postures),
+            Self::axes_is_strictly_descending(postures),
+        )
     }
 
     /// Bounded-lattice BOTTOM identity — `self.is_bottom()` holds iff
@@ -90781,6 +90779,189 @@ mod tests {
                     "axes_eq disagrees with intersect_masks_pointwise(axes_leq, axes_geq) on \
                      ({a:?}, {b:?})",
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_constant_body_delegates_to_intersect_masks_pointwise() {
+        // Sweep-of-callsite pin — after routing the whole-slice per-axis
+        // CONSTANT verdict `axes_is_constant` body from the FIELD_COUNT-
+        // hardcoded `let asc = ...; let desc = ...; let mut i = 0; while
+        // i < Self::FIELD_COUNT { result[i] = asc[i] && desc[i]; i += 1;
+        // }` open-coded per-axis AND-fill over the (axes_is_ascending,
+        // axes_is_descending) mask pair through
+        // ResourceLimits::intersect_masks_pointwise, the whole preset-
+        // triple constellation continues to agree with the helper-based
+        // shape `intersect_masks_pointwise(axes_is_ascending(postures),
+        // axes_is_descending(postures))`. The pin closes the FIELD_COUNT-
+        // decoupling refactor on a SEQUENCE-LEVEL bare AND-fold
+        // callsite for the per-axis-mask surface: a future FIELD_COUNT
+        // bump that would have silently under-covered the open-coded
+        // per-axis AND-fill loop is now caught by the helper's `while i
+        // < FIELD_COUNT` per-axis body rather than an axis-count that no
+        // callsite guarded. Sibling of
+        // `resource_limits_axes_eq_body_delegates_to_intersect_masks_pointwise`
+        // one PROJECTION-KIND axis over (pairwise-relation → sequence-
+        // level constant verdict): both callsites bind the direct
+        // MASK+MASK→MASK INTERSECTION composition at ONE substrate
+        // primitive delegation per exit. Swept across the 5×5 pairwise,
+        // 5^3 triple, and singleton/empty edge constellations drawn from
+        // the shared canonical posture roster used by every prior
+        // sequence-level sweep pin — every arity from 0 through 3
+        // exercises both the vacuous-truth arm and the per-axis
+        // agreement arm on the shipped presets.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        // Empty slice — vacuous-truth arm.
+        assert_eq!(
+            ResourceLimits::axes_is_constant(&[]),
+            ResourceLimits::intersect_masks_pointwise(
+                ResourceLimits::axes_is_ascending(&[]),
+                ResourceLimits::axes_is_descending(&[]),
+            ),
+            "axes_is_constant disagrees with intersect_masks_pointwise(axes_is_ascending, \
+             axes_is_descending) on the empty slice",
+        );
+        // Singleton — vacuous-truth arm on every shipped preset.
+        for a in postures {
+            let slice = [a];
+            assert_eq!(
+                ResourceLimits::axes_is_constant(&slice),
+                ResourceLimits::intersect_masks_pointwise(
+                    ResourceLimits::axes_is_ascending(&slice),
+                    ResourceLimits::axes_is_descending(&slice),
+                ),
+                "axes_is_constant disagrees with intersect_masks_pointwise(axes_is_ascending, \
+                 axes_is_descending) on the singleton slice [{a:?}]",
+            );
+        }
+        // Pairwise (5×5 = 25) — every pair exercises the per-axis
+        // agreement arm on the (leq, geq) direction pair.
+        for a in postures {
+            for b in postures {
+                let slice = [a, b];
+                assert_eq!(
+                    ResourceLimits::axes_is_constant(&slice),
+                    ResourceLimits::intersect_masks_pointwise(
+                        ResourceLimits::axes_is_ascending(&slice),
+                        ResourceLimits::axes_is_descending(&slice),
+                    ),
+                    "axes_is_constant disagrees with intersect_masks_pointwise(\
+                     axes_is_ascending, axes_is_descending) on the pair [{a:?}, {b:?}]",
+                );
+            }
+        }
+        // Arity-3 triple constellation (5^3 = 125) — every triple
+        // exercises the per-axis agreement arm over two consecutive
+        // pairs.
+        for a in postures {
+            for b in postures {
+                for c in postures {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        ResourceLimits::axes_is_constant(&slice),
+                        ResourceLimits::intersect_masks_pointwise(
+                            ResourceLimits::axes_is_ascending(&slice),
+                            ResourceLimits::axes_is_descending(&slice),
+                        ),
+                        "axes_is_constant disagrees with intersect_masks_pointwise(\
+                         axes_is_ascending, axes_is_descending) on the triple \
+                         [{a:?}, {b:?}, {c:?}]",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_constant_body_delegates_to_intersect_masks_pointwise() {
+        // Sweep-of-callsite pin — after routing the whole-slice per-axis
+        // STRICT-CONSTANT verdict `axes_is_strictly_constant` body from
+        // the FIELD_COUNT-hardcoded `let asc = ...; let desc = ...; let
+        // mut i = 0; while i < Self::FIELD_COUNT { result[i] = asc[i] &&
+        // desc[i]; i += 1; }` open-coded per-axis AND-fill over the
+        // (axes_is_strictly_ascending, axes_is_strictly_descending) mask
+        // pair through ResourceLimits::intersect_masks_pointwise, the
+        // whole preset-triple constellation continues to agree with the
+        // helper-based shape `intersect_masks_pointwise(
+        // axes_is_strictly_ascending(postures),
+        // axes_is_strictly_descending(postures))`. Companion of
+        // `resource_limits_axes_is_constant_body_delegates_to_intersect_masks_pointwise`
+        // one STRICTNESS axis over on the (constant, strict-constant)
+        // 2-cell face — both sequence-level per-axis-mask CONSTANT
+        // corners now bind through the MASK+MASK→MASK INTERSECTION
+        // combinator at ONE substrate primitive delegation per exit.
+        // Same 5×5 pairwise + 5^3 triple + singleton/empty
+        // constellations as the non-strict peer.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        // Empty slice — vacuous-truth arm.
+        assert_eq!(
+            ResourceLimits::axes_is_strictly_constant(&[]),
+            ResourceLimits::intersect_masks_pointwise(
+                ResourceLimits::axes_is_strictly_ascending(&[]),
+                ResourceLimits::axes_is_strictly_descending(&[]),
+            ),
+            "axes_is_strictly_constant disagrees with intersect_masks_pointwise(\
+             axes_is_strictly_ascending, axes_is_strictly_descending) on the empty slice",
+        );
+        // Singleton — vacuous-truth arm on every shipped preset.
+        for a in postures {
+            let slice = [a];
+            assert_eq!(
+                ResourceLimits::axes_is_strictly_constant(&slice),
+                ResourceLimits::intersect_masks_pointwise(
+                    ResourceLimits::axes_is_strictly_ascending(&slice),
+                    ResourceLimits::axes_is_strictly_descending(&slice),
+                ),
+                "axes_is_strictly_constant disagrees with intersect_masks_pointwise(\
+                 axes_is_strictly_ascending, axes_is_strictly_descending) on the singleton \
+                 slice [{a:?}]",
+            );
+        }
+        // Pairwise (5×5 = 25).
+        for a in postures {
+            for b in postures {
+                let slice = [a, b];
+                assert_eq!(
+                    ResourceLimits::axes_is_strictly_constant(&slice),
+                    ResourceLimits::intersect_masks_pointwise(
+                        ResourceLimits::axes_is_strictly_ascending(&slice),
+                        ResourceLimits::axes_is_strictly_descending(&slice),
+                    ),
+                    "axes_is_strictly_constant disagrees with intersect_masks_pointwise(\
+                     axes_is_strictly_ascending, axes_is_strictly_descending) on the pair \
+                     [{a:?}, {b:?}]",
+                );
+            }
+        }
+        // Arity-3 triple constellation (5^3 = 125).
+        for a in postures {
+            for b in postures {
+                for c in postures {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        ResourceLimits::axes_is_strictly_constant(&slice),
+                        ResourceLimits::intersect_masks_pointwise(
+                            ResourceLimits::axes_is_strictly_ascending(&slice),
+                            ResourceLimits::axes_is_strictly_descending(&slice),
+                        ),
+                        "axes_is_strictly_constant disagrees with intersect_masks_pointwise(\
+                         axes_is_strictly_ascending, axes_is_strictly_descending) on the \
+                         triple [{a:?}, {b:?}, {c:?}]",
+                    );
+                }
             }
         }
     }

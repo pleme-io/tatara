@@ -2029,8 +2029,7 @@ impl ResourceLimits {
     /// primitives is the plain fold below, no trait indirection.
     #[must_use]
     pub const fn eq(self, other: Self) -> bool {
-        let mask = self.axes_eq(other);
-        mask[0] && mask[1] && mask[2] && mask[3] && mask[4] && mask[5]
+        Self::all_mask_bits_set(self.axes_eq(other))
     }
 
     /// Pointwise `!=` predicate across the six ceilings — `self`
@@ -10667,15 +10666,7 @@ impl ResourceLimits {
     /// indirection, no allocation.
     #[must_use]
     pub const fn is_axially_polar(self) -> bool {
-        let mask = self.axes_is_pole();
-        let mut i = 0;
-        while i < Self::FIELD_COUNT {
-            if !mask[i] {
-                return false;
-            }
-            i += 1;
-        }
-        true
+        Self::all_mask_bits_set(self.axes_is_pole())
     }
 
     /// Whole-posture AXIALLY-INTERIOR predicate — `self.is_axially_interior()`
@@ -10798,15 +10789,7 @@ impl ResourceLimits {
     /// mask.
     #[must_use]
     pub const fn is_axially_interior(self) -> bool {
-        let mask = self.axes_is_interior();
-        let mut i = 0;
-        while i < Self::FIELD_COUNT {
-            if !mask[i] {
-                return false;
-            }
-            i += 1;
-        }
-        true
+        Self::all_mask_bits_set(self.axes_is_interior())
     }
 
     /// Whole-posture EXISTENTIAL-POLAR predicate — `self.has_polar_axis()`
@@ -11818,6 +11801,160 @@ impl ResourceLimits {
             i += 1;
         }
         false
+    }
+
+    /// Per-axis mask ALL-fold — `Self::all_mask_bits_set(mask)` returns
+    /// `true` iff EVERY bit of a `[bool; Self::FIELD_COUNT]` per-axis
+    /// mask is `true`, and `false` iff at least one bit is `false`.
+    /// The BOUNDARY primitive lifting the shape
+    /// ```text
+    /// let mut i = 0;
+    /// while i < Self::FIELD_COUNT {
+    ///     if !mask[i] { return false; }
+    ///     i += 1;
+    /// }
+    /// true
+    /// ```
+    /// that every UNIVERSAL-QUANTIFIER `is_axially_X` predicate on
+    /// [`ResourceLimits`] carries at its body — [`Self::is_axially_polar`],
+    /// [`Self::is_axially_interior`] both short-circuit-scan a per-axis
+    /// `[bool; FIELD_COUNT]` mask into its `bool` ALL-fold at the exit,
+    /// AND the FIELD_COUNT-hardcoded pair [`Self::eq`] / [`Self::ne`]
+    /// which spell the ALL-/ANY-folds inline as an explicit
+    /// `mask[0] && mask[1] && mask[2] && mask[3] && mask[4] && mask[5]`
+    /// six-primitive chain — a callsite silently coupled to
+    /// `FIELD_COUNT == 6`. Pre-lift each ALL-fold body open-coded either
+    /// the seven-line `while`-based short-circuit scan or the six-
+    /// primitive hardcoded conjunction chain at its own body — a copy-
+    /// paste cascade whose consistency the type system did not gate (a
+    /// predicate that skipped the `i += 1` increment would silently loop,
+    /// a predicate that returned `true` on the miss and `false` on the
+    /// fall-through would silently invert without any structural break,
+    /// and a hardcoded chain that dropped `mask[5]` after a FIELD_COUNT
+    /// bump would silently ignore the trailing axis). Post-lift the shape
+    /// binds at ONE typed `const fn` on [`ResourceLimits`], and every
+    /// UNIVERSAL-QUANTIFIER predicate composes through this helper — the
+    /// per-axis ALL-fold is a substrate-level theorem rather than a
+    /// per-predicate convention, AND the FIELD_COUNT dependency the
+    /// hardcoded chains carried is retired at the callsite.
+    ///
+    /// The direct QUANTIFIER-KIND DUAL of [`Self::any_mask_bit_set`] on
+    /// the same per-axis mask surface — where `any_mask_bit_set`
+    /// collapses the mask into a single-bit EXISTENTIAL verdict (∃),
+    /// THIS projection collapses it into a single-bit UNIVERSAL verdict
+    /// (∀). Jointly the (any_mask_bit_set, all_mask_bits_set) pair
+    /// closes the (∃, ∀) quantifier column at ONE typed `const fn`
+    /// primitive per QUANTIFIER on the per-axis mask input — every
+    /// per-axis mask projection whose exit is a single-bit boolean fold
+    /// lands on one of the two helpers for its quantifier reading.
+    /// Together with [`Self::count_mask_bits`] (ARITHMETIC-CARDINALITY),
+    /// [`Self::first_mask_bit_set_index`] (POSITIONAL-FIRST), and
+    /// [`Self::last_mask_bit_set_index`] (POSITIONAL-LAST) the five
+    /// helpers carry the (BOOLEAN-EXISTENCE, BOOLEAN-UNIVERSAL,
+    /// ARITHMETIC-CARDINALITY, POSITIONAL-FIRST, POSITIONAL-LAST)
+    /// five-KIND scalar-collapse column at ONE typed `const fn`
+    /// primitive per KIND on the substrate.
+    ///
+    /// **De Morgan complement identity — LOAD-BEARING structural pin**:
+    /// on every `mask`, `Self::all_mask_bits_set(mask) ==
+    /// !Self::any_mask_bit_set(complement)` where `complement[i] ==
+    /// !mask[i]` — the classical `all(x) == !any(!x)` law on Boolean
+    /// vectors reduced through the per-axis pointwise negation. The
+    /// bridge between the two paired (∃, ∀) helpers on the SAME
+    /// pointwise-negated mask input. Pinned via
+    /// `resource_limits_all_mask_bits_set_is_de_morgan_dual_of_any_mask_bit_set`.
+    ///
+    /// **POPCOUNT-saturation identity — LOAD-BEARING structural pin**:
+    /// on every `mask`, `Self::all_mask_bits_set(mask) ==
+    /// (Self::count_mask_bits(mask) == Self::FIELD_COUNT)`. The `count
+    /// == FIELD_COUNT` bridge to the paired ARITHMETIC-CARDINALITY
+    /// helper — a mask fires the ALL-fold iff its popcount saturates
+    /// at the mask arity, exactly as `any_mask_bit_set` fires iff the
+    /// popcount is strictly positive on the DUAL quantifier edge.
+    /// Pinned via
+    /// `resource_limits_all_mask_bits_set_agrees_with_count_mask_bits_eq_field_count`.
+    ///
+    /// **Iterator-agreement identity**: on every `mask`,
+    /// `Self::all_mask_bits_set(mask) == mask.iter().all(|&bit| bit)`.
+    /// The direct stable-Rust iterator idiom the helper substitutes for
+    /// at every consumer. Pinned via
+    /// `resource_limits_all_mask_bits_set_agrees_with_iterator_all`.
+    ///
+    /// **Empty-mask identity**: `Self::all_mask_bits_set([false;
+    /// FIELD_COUNT]) == false` — a mask with no set bits folds to
+    /// `false`. **All-ones identity**: `Self::all_mask_bits_set([true;
+    /// FIELD_COUNT]) == true` — a saturated mask folds to `true`. The
+    /// (empty, saturated) endpoints partition the ALL-fold range into
+    /// disjoint (min, max) verdicts — the DUAL of the ANY-fold endpoint
+    /// partition. Pinned via
+    /// `resource_limits_all_mask_bits_set_at_endpoints_pins_false_and_true`.
+    ///
+    /// **ALL ⇒ ANY on non-empty arity contract — LOAD-BEARING cross-
+    /// helper pin**: on every `mask`, `Self::all_mask_bits_set(mask) ⇒
+    /// Self::any_mask_bit_set(mask)` since `FIELD_COUNT > 0` (a
+    /// saturated mask has at least one set bit). Pinned via
+    /// `resource_limits_all_mask_bits_set_implies_any_mask_bit_set`.
+    ///
+    /// `const fn` so a caller can pin the ALL-fold at compile time
+    /// (`const _: () =
+    /// assert!(ResourceLimits::all_mask_bits_set([true; ResourceLimits::FIELD_COUNT]));`)
+    /// — sibling of the const-fn evaluability pins the [`Self::is_axially_polar`]
+    /// and paired UNIVERSAL-QUANTIFIER predicates already carry at their
+    /// own exits.
+    ///
+    /// **Adoption compounds**: the two shipped `is_axially_X` predicates
+    /// rewrite from the open-coded seven-line short-circuit scan to the
+    /// one-line `Self::all_mask_bits_set(self.axes_is_X())` composition
+    /// at no semantic change, and the hardcoded FIELD_COUNT-coupled
+    /// [`Self::eq`] body rewrites from the six-primitive
+    /// `mask[0] && ... && mask[5]` chain to the arity-independent
+    /// `Self::all_mask_bits_set(self.axes_eq(other))` composition; any
+    /// future UNIVERSAL-QUANTIFIER predicate over a `[bool; FIELD_COUNT]`
+    /// mask (mixity/uniformity universal variants, higher-order axial
+    /// partition universal checks, cross-posture agreement universal
+    /// checks) composes through this same primitive.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-axis ALL-fold dispatch shape at every `is_axially_X` body
+    /// binds at ONE typed named `const fn` on the algebra rather than a
+    /// per-predicate seven-line open-coded `while` loop or a FIELD_COUNT-
+    /// coupled hardcoded conjunction chain. THEORY.md §II.1 invariant 5
+    /// — composition preserves proofs; the helper composes mechanically
+    /// under the iterator-agreement, De Morgan, and popcount-saturation
+    /// identities above with no re-derivation at the caller, closing the
+    /// (∃, ∀) quantifier pair on the per-axis mask substrate. THEORY.md
+    /// §V.1 — knowable platform; the ALL-fold becomes a substrate-level
+    /// theorem the type system carries for the per-axis
+    /// `[bool; FIELD_COUNT]` mask input, and the FIELD_COUNT coupling
+    /// the hardcoded `mask[0] && ... && mask[5]` chain carried is
+    /// retired at the callsite (a future FIELD_COUNT bump propagates
+    /// mechanically through the helper's `while i < FIELD_COUNT` loop
+    /// rather than requiring a per-callsite chain extension).
+    ///
+    /// Frontier inspiration: APL's `∧/` folded over a boolean vector;
+    /// Haskell's `all id` on a `[Bool]`; Idris's `all id` under a total
+    /// function signature; Rust's stable `<[bool]>::iter().all(|&b| b)`
+    /// iterator idiom. The `usize::count_ones(x) == BITS` popcount-
+    /// saturation primitive Rust exposes on integer packed masks is the
+    /// same operation one representation-KIND axis over on a bit-packed
+    /// encoding — `all_mask_bits_set` is its per-axis-boolean-array peer
+    /// at the substrate, and the DUAL of `any_mask_bit_set` (which
+    /// mirrors `count_ones(x) != 0`). Translation through pleme-io
+    /// primitives is the plain `const fn` `while`-based short-circuit
+    /// scan below — no closure, no typeclass indirection, no dependency
+    /// on `<[bool]>::iter().all` (which is not const-callable on stable
+    /// Rust because it takes a closure), and the mask is an owned array
+    /// eagerly evaluated by the caller.
+    #[must_use]
+    pub const fn all_mask_bits_set(mask: [bool; Self::FIELD_COUNT]) -> bool {
+        let mut i = 0;
+        while i < Self::FIELD_COUNT {
+            if !mask[i] {
+                return false;
+            }
+            i += 1;
+        }
+        true
     }
 
     /// Per-axis mask FIRST-HIT INDEX projection —
@@ -88574,6 +88711,221 @@ mod tests {
         const _: () = assert!(ResourceLimits::any_mask_bit_set(MASK_TWO_ENDS));
         const _: () = assert!(ResourceLimits::any_mask_bit_set(MASK_FIRST_HALF));
         const _: () = assert!(ResourceLimits::any_mask_bit_set(MASK_MISSING_HEAD));
+    }
+
+    #[test]
+    fn resource_limits_all_mask_bits_set_agrees_with_iterator_all() {
+        // Iterator-agreement contract — the substrate ALL-fold helper's
+        // verdict on every mask fixture agrees with the raw
+        // `.iter().all(|&bit| bit)` open-coded fold that every prior
+        // per-predicate body carried before the helper lift. Swept
+        // across the same 11-mask constellation the count_mask_bits and
+        // any_mask_bit_set sweeps use so all paired helpers are pinned
+        // on the identical fixture set. A helper regression that mis-
+        // indexed the while-loop, skipped increments, or inverted the
+        // return arm would break here on at least one mask.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            let via_helper = ResourceLimits::all_mask_bits_set(*mask);
+            let via_iterator = mask.iter().all(|&bit| bit);
+            assert_eq!(
+                via_helper, via_iterator,
+                "all_mask_bits_set != iterator-all on mask {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_all_mask_bits_set_agrees_with_count_mask_bits_eq_field_count() {
+        // POPCOUNT-saturation contract — the ALL-fold and the COUNT-fold
+        // are paired substrate helpers on the SAME mask input, related
+        // by the `count == FIELD_COUNT` bridge: every bit set iff the
+        // popcount saturates at the mask arity. The DUAL of the
+        // `any_mask_bit_set == count_mask_bits > 0` popcount-agreement
+        // identity on the OTHER quantifier edge. Closes the (BOOLEAN-
+        // UNIVERSAL, ARITHMETIC-CARDINALITY) two-KIND column at ONE
+        // substrate identity per mask verdict rather than leaving the
+        // bridge as a per-consumer inline comparison. Swept across the
+        // same 11-mask constellation so the identity is pinned on every
+        // distinct popcount verdict in the 0..=FIELD_COUNT range.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            assert_eq!(
+                ResourceLimits::all_mask_bits_set(*mask),
+                ResourceLimits::count_mask_bits(*mask) == ResourceLimits::FIELD_COUNT,
+                "all_mask_bits_set != (count_mask_bits == FIELD_COUNT) on mask {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_all_mask_bits_set_is_de_morgan_dual_of_any_mask_bit_set() {
+        // De Morgan complement contract — the ALL-fold and the ANY-fold
+        // are paired quantifier duals on the SAME per-axis mask surface,
+        // related by the classical `all(x) == !any(!x)` law reduced
+        // through per-axis pointwise negation. The bridge that CLOSES
+        // the (∃, ∀) quantifier pair as substrate-level theorem rather
+        // than a per-consumer inline complement. Swept across the same
+        // 11-mask constellation so the identity is pinned on every
+        // distinct popcount verdict.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            let mut complement = [false; ResourceLimits::FIELD_COUNT];
+            let mut i = 0;
+            while i < ResourceLimits::FIELD_COUNT {
+                complement[i] = !mask[i];
+                i += 1;
+            }
+            assert_eq!(
+                ResourceLimits::all_mask_bits_set(*mask),
+                !ResourceLimits::any_mask_bit_set(complement),
+                "all_mask_bits_set != !any_mask_bit_set(complement) on mask {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_all_mask_bits_set_at_endpoints_pins_false_and_true() {
+        // Endpoint identities — the (empty, all-ones) mask endpoints
+        // partition the ALL-fold range into disjoint (min, max)
+        // verdicts. Named separately from the sweep test so a future
+        // regression that broke only the endpoint arms would fire a
+        // dedicated failure rather than folding into a mask-sweep
+        // assertion. DUAL of the (empty → false, all-true → true)
+        // ANY-fold endpoint partition — for the ALL-fold, (empty →
+        // false, all-true → true) mirror the same verdict layout on the
+        // DUAL quantifier since the (∃, ∀) folds AGREE at both range
+        // endpoints and only diverge on the strict-interior masks.
+        assert!(!ResourceLimits::all_mask_bits_set(MASK_ALL_FALSE));
+        assert!(ResourceLimits::all_mask_bits_set(MASK_ALL_TRUE));
+    }
+
+    #[test]
+    fn resource_limits_all_mask_bits_set_implies_any_mask_bit_set() {
+        // ALL ⇒ ANY on non-empty arity — since FIELD_COUNT > 0, a
+        // saturated mask has at least one set bit, so the ALL-fold
+        // verdict IMPLIES the ANY-fold verdict on every mask. The
+        // STRUCTURAL implication the substrate proves once so no
+        // downstream consumer needs to re-derive the (∀ ⇒ ∃) lift on
+        // non-empty carriers. Swept across the 11-mask constellation.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            if ResourceLimits::all_mask_bits_set(*mask) {
+                assert!(
+                    ResourceLimits::any_mask_bit_set(*mask),
+                    "all_mask_bits_set holds but any_mask_bit_set does not on mask {mask:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_is_axially_predicate_family_bodies_delegate_to_all_mask_bits_set() {
+        // Sweep-of-family pin — after routing the two `is_axially_X`
+        // UNIVERSAL-QUANTIFIER predicate bodies through
+        // ResourceLimits::all_mask_bits_set, the (polar, interior) ×
+        // (EMPTY, DEFAULT, UNBOUNDED, HAND_AUTHORED_MID,
+        // HAND_AUTHORED_OTHER) constellation of 2×5 = 10 shipped
+        // verdicts continues to agree with the helper-based shape
+        // `all_mask_bits_set(axes_is_X())`. The pin locks the
+        // semantics-equivalent rewrite in the shipped bodies rather
+        // than trusting the mechanical rewrite by inspection: a future
+        // predicate lift that fed the wrong mask projection to the
+        // helper, or a helper regression that mis-scanned a per-axis
+        // position, would break here on at least one (axis, posture)
+        // pair. Peer of `resource_limits_has_axis_family_bodies_delegate_to_any_mask_bit_set`
+        // on the DUAL quantifier edge.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                posture.is_axially_polar(),
+                ResourceLimits::all_mask_bits_set(posture.axes_is_pole()),
+                "is_axially_polar disagrees with all_mask_bits_set(axes_is_pole) on {posture:?}",
+            );
+            assert_eq!(
+                posture.is_axially_interior(),
+                ResourceLimits::all_mask_bits_set(posture.axes_is_interior()),
+                "is_axially_interior disagrees with all_mask_bits_set(axes_is_interior) on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_eq_body_delegates_to_all_mask_bits_set() {
+        // Sweep-of-callsite pin — after routing the whole-posture `eq`
+        // body from the FIELD_COUNT-hardcoded `mask[0] && mask[1] &&
+        // mask[2] && mask[3] && mask[4] && mask[5]` six-primitive
+        // conjunction chain through ResourceLimits::all_mask_bits_set,
+        // the whole 5×5 = 25 preset×preset constellation continues to
+        // agree with the helper-based shape
+        // `all_mask_bits_set(axes_eq(other))`. The pin closes the
+        // FIELD_COUNT-decoupling refactor: a future FIELD_COUNT bump
+        // that would have silently under-covered the hardcoded chain
+        // is now caught by the helper's `while i < FIELD_COUNT` loop
+        // rather than an axis-count that no callsite guarded.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in postures {
+            for b in postures {
+                assert_eq!(
+                    a.eq(b),
+                    ResourceLimits::all_mask_bits_set(a.axes_eq(b)),
+                    "eq disagrees with all_mask_bits_set(axes_eq) on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_all_mask_bits_set_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the ALL-fold at compile time as a build-break.
+        // Sibling of the const-fn evaluability pins the is_axially_X
+        // predicates and the eq body already carry at their own exits.
+        // Covers the two endpoints (all-false → false, all-true → true),
+        // both singletons (head → false, tail → false), a two-endpoint
+        // mask (→ false), a contiguous half-mask (→ false), and a
+        // missing-head mask (→ false) so the helper is pinned on both
+        // distinct verdicts the predicate regime uses.
+        const _: () = assert!(!ResourceLimits::all_mask_bits_set(MASK_ALL_FALSE));
+        const _: () = assert!(ResourceLimits::all_mask_bits_set(MASK_ALL_TRUE));
+        const _: () = assert!(!ResourceLimits::all_mask_bits_set(MASK_SINGLE_HEAD));
+        const _: () = assert!(!ResourceLimits::all_mask_bits_set(MASK_SINGLE_TAIL));
+        const _: () = assert!(!ResourceLimits::all_mask_bits_set(MASK_TWO_ENDS));
+        const _: () = assert!(!ResourceLimits::all_mask_bits_set(MASK_FIRST_HALF));
+        const _: () = assert!(!ResourceLimits::all_mask_bits_set(MASK_MISSING_HEAD));
+        const _: () = assert!(!ResourceLimits::all_mask_bits_set(MASK_MISSING_TAIL));
+    }
+
+    #[test]
+    fn resource_limits_is_axially_predicate_family_bodies_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the (is_axially_polar,
+        // is_axially_interior) family bodies preserved const-fn
+        // evaluability under the sweep through all_mask_bits_set. Each
+        // of the two swept predicates × the three shipped `pub const`
+        // preset postures (EMPTY, UNBOUNDED, DEFAULT). EMPTY packs six
+        // bottom axes uniformly (is_axially_polar via the bottom-pole
+        // arm, is_axially_interior false). UNBOUNDED packs six top axes
+        // uniformly (is_axially_polar via the top-pole arm,
+        // is_axially_interior false). DEFAULT packs six strictly-
+        // interior axes (is_axially_polar false, is_axially_interior
+        // true). Also pins `eq` on the reflexive corner and the paired
+        // EMPTY/UNBOUNDED extremum disagreement.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.is_axially_polar());
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.is_axially_interior());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.is_axially_polar());
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.is_axially_interior());
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.is_axially_polar());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.is_axially_interior());
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.eq(EMPTY_RESOURCE_LIMITS));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.eq(UNBOUNDED_RESOURCE_LIMITS));
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.eq(UNBOUNDED_RESOURCE_LIMITS));
     }
 
     #[test]

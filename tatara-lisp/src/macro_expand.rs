@@ -13955,6 +13955,170 @@ impl ResourceLimits {
         }
     }
 
+    /// SIGN-carrying MAGNITUDE-preserving DIFFERENCE from a coupled COUNT
+    /// PAIR on whole-posture `usize` axial-tally sub-cells —
+    /// `Self::signed_count_difference(lhs, rhs)` returns `lhs.abs_diff(rhs)
+    /// as isize` when `lhs >= rhs`, or `-(lhs.abs_diff(rhs) as isize)` when
+    /// `lhs < rhs`. The BOUNDARY primitive lifting the shape
+    /// `if lhs >= rhs { lhs.abs_diff(rhs) as isize } else { -(lhs.abs_diff(
+    /// rhs) as isize) }` that every WHOLE-POSTURE SIGNED-KIND DIRECTED-
+    /// CARDINAL projection on [`ResourceLimits`] carries at its exit —
+    /// [`Self::axial_signed_skew`] and [`Self::atomic_signed_skew`] both
+    /// wrap the sign-split absolute-difference of a paired (majority-arm
+    /// count, minority-arm count) tally in the same order-comparison-
+    /// gated cast to `isize`. Pre-lift each SIGNED-CARDINAL projection
+    /// open-coded the four-line
+    /// `if X >= Y { X.abs_diff(Y) as isize } else { -(X.abs_diff(Y) as
+    /// isize) }` at its own exit — a copy-paste cascade whose consistency
+    /// the type system did not gate (a projection that swapped the two
+    /// arms of the `if` would silently INVERT the sign convention,
+    /// classifying majority-lhs postures as negative and majority-rhs
+    /// postures as positive — the exact inverse of the intended arm-
+    /// labelling; a projection that dropped the outer negation on the
+    /// `else` arm would silently emit the UNSIGNED magnitude on both arms,
+    /// collapsing the SIGN into the UNDIRECTED `abs_diff` reading; a
+    /// projection that reordered `abs_diff`'s two arguments would still
+    /// type-check but rely on the commutativity of `usize::abs_diff` to
+    /// stay correct). Post-lift the shape binds at ONE typed `const fn`
+    /// on [`ResourceLimits`], and every future WHOLE-POSTURE SIGNED-KIND
+    /// DIRECTED-CARDINAL projection composes through this helper — the
+    /// sign-split absolute-difference pipeline over a coupled `(usize,
+    /// usize)` count pair is a substrate-level theorem rather than a
+    /// per-consumer four-line open-coded body. The SECOND TWO-INPUT
+    /// combinator on the whole-posture count algebra past
+    /// [`Self::derive_axis_endpoint_span`] one CELL-KIND axis over on the
+    /// paired `(Option<usize>, Option<usize>) → Option<usize>` shape —
+    /// where the endpoint-span combinator dispatches on the two-cell
+    /// (None-either, Some-both) join of two `Option<usize>` axis-endpoint
+    /// tallies, THIS combinator dispatches on the two-cell (lhs-strong,
+    /// rhs-strong-or-tied) order-split of two `usize` count tallies with
+    /// the tied cell folded onto the non-negative arm as `+0`.
+    ///
+    /// **Two-arm sign-dispatch identity — LOAD-BEARING structural pin**:
+    /// on every `(lhs, rhs)` for which the absolute difference fits
+    /// `isize`, `signed_count_difference(lhs, rhs) == if lhs >= rhs {
+    /// lhs.abs_diff(rhs) as isize } else { -(lhs.abs_diff(rhs) as isize)
+    /// }`. Pinned via
+    /// `resource_limits_signed_count_difference_agrees_with_open_coded_sign_split`.
+    ///
+    /// **Zero-tie identity**: for every `n <= isize::MAX as usize`,
+    /// `signed_count_difference(n, n) == 0`. The atomic-tie leg is
+    /// signalled through the non-negative-zero cell of the output
+    /// `isize`, folded onto the same `+0` value the `lhs >= rhs` arm
+    /// carries at every diagonal input. Pinned via
+    /// `resource_limits_signed_count_difference_diagonal_inputs_fold_to_zero`.
+    ///
+    /// **Positive-arm identity — MAJORITY-LHS**: for every `lhs > rhs`
+    /// with `lhs.abs_diff(rhs) <= isize::MAX as usize`,
+    /// `signed_count_difference(lhs, rhs) == lhs.abs_diff(rhs) as isize
+    /// > 0`. The lhs-strong arm fires the UNSIGNED absolute difference
+    /// verbatim as a strictly positive `isize`. Pinned via
+    /// `resource_limits_signed_count_difference_lhs_strong_arm_projects_positive_diff`.
+    ///
+    /// **Negative-arm identity — MAJORITY-RHS**: for every `lhs < rhs`
+    /// with `lhs.abs_diff(rhs) <= isize::MAX as usize`,
+    /// `signed_count_difference(lhs, rhs) == -(lhs.abs_diff(rhs) as isize)
+    /// < 0`. The rhs-strong arm fires the NEGATED absolute difference
+    /// as a strictly negative `isize`. Pinned via
+    /// `resource_limits_signed_count_difference_rhs_strong_arm_projects_negative_diff`.
+    ///
+    /// **`unsigned_abs` bridge — MAGNITUDE recovery**: for every `(lhs,
+    /// rhs)` in the caller-safe regime,
+    /// `signed_count_difference(lhs, rhs).unsigned_abs() ==
+    /// lhs.abs_diff(rhs)`. The SIGNED reading and the UNSIGNED reading
+    /// AGREE on the absolute value — the SIGN carries the arm identity
+    /// the UNSIGNED `abs_diff` fold discards. Pinned via
+    /// `resource_limits_signed_count_difference_unsigned_abs_recovers_abs_diff`.
+    ///
+    /// **`signum` bridge — ARM-TRICHOTOMY**: for every `(lhs, rhs)` in
+    /// the caller-safe regime, `signed_count_difference(lhs, rhs).signum()
+    /// == lhs.cmp(&rhs) as isize` (with `Ordering::{Greater, Equal, Less}
+    /// as isize` reading as `{+1, 0, -1}`). The three legs of the SIGNUM-
+    /// TRICHOTOMY partition every `(lhs, rhs)` input into EXACTLY ONE of
+    /// {lhs-strong, tied, rhs-strong}. Pinned via
+    /// `resource_limits_signed_count_difference_signum_partitions_order_trichotomy`.
+    ///
+    /// **Sign-flip anti-symmetry — SWAPPED-INPUTS bridge**: for every
+    /// `(lhs, rhs)` in the caller-safe regime,
+    /// `signed_count_difference(rhs, lhs) == -signed_count_difference(lhs,
+    /// rhs)`. Swapping the two inputs negates the signed output — the
+    /// SIGN convention is anti-symmetric under argument swap, matching
+    /// the classical integer-difference identity `-(b - a) == (a - b)`.
+    /// Pinned via
+    /// `resource_limits_signed_count_difference_swapped_inputs_negate_sign`.
+    ///
+    /// `const fn` so a caller can pin the exact SIGNED CARDINAL
+    /// difference at compile time (`const _: () = assert!(
+    /// ResourceLimits::signed_count_difference(6, 0) == 6);`) — sibling
+    /// of the const-fn evaluability pins the WHOLE-POSTURE SIGNED-KIND
+    /// projections already carry at their own exits.
+    ///
+    /// **Adoption compounds**: future WHOLE-POSTURE SIGNED-KIND
+    /// DIRECTED-CARDINAL projections that currently open-code the two-
+    /// arm sign-split shape rewrite their body from `let x =
+    /// self.count_X(); let y = self.count_Y(); if x >= y { x.abs_diff(y)
+    /// as isize } else { -(x.abs_diff(y) as isize) }` to
+    /// `Self::signed_count_difference(self.count_X(), self.count_Y())`
+    /// at no semantic change, and a mechanical sweep of a future
+    /// SIGNED-CARDINAL body through the helper becomes a substrate-level
+    /// refactor rather than a per-method rewrite.
+    ///
+    /// **Caller-side invariant**: `lhs.abs_diff(rhs) <= isize::MAX as
+    /// usize` is required for `lhs.abs_diff(rhs) as isize` to preserve
+    /// the numeric value rather than wrap. The helper does NOT enforce
+    /// this — it is a structural invariant of the (lhs, rhs) pair
+    /// carried at every shipped callsite by the workspace-wide
+    /// `FIELD_COUNT = 6` bound (every axial tally lies in
+    /// `0..=FIELD_COUNT`, so the absolute difference is bounded by
+    /// FIELD_COUNT and trivially fits `isize` on every target Rust
+    /// supports). Callers that pass a `(usize, usize)` pair whose
+    /// absolute difference exceeds `isize::MAX as usize` violate this
+    /// invariant and will silently wrap the cast in release / trip the
+    /// `cast_possible_wrap` clippy pin the helper's `#[allow]` locally
+    /// suppresses. Same posture as every shipped SIGNED-CARDINAL
+    /// projection body, whose behavior on such input is undefined by
+    /// the same convention.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// sign-split absolute-difference shape at every WHOLE-POSTURE
+    /// SIGNED-KIND DIRECTED-CARDINAL projection exit binds at ONE typed
+    /// named `const fn` on the algebra rather than a per-consumer four-
+    /// line open-coded body. THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the helper composes mechanically under the two-
+    /// arm sign-dispatch identity above with no re-derivation at the
+    /// caller, and both swept callsites preserve their const-fn
+    /// evaluability pins verbatim. THEORY.md §V.1 — knowable platform;
+    /// the sign-split absolute-difference dispatch becomes a substrate-
+    /// level theorem rather than a per-projection convention.
+    ///
+    /// Frontier inspiration: classical integer algebra's canonical
+    /// SIGNED integer difference `a - b` on `Z` lifted through
+    /// `usize::abs_diff` under a `lhs >= rhs` guard so the SIGNED read
+    /// stays in `isize` without crossing `checked_sub` on the
+    /// underflowing arm. APL's `⍺-⍵` SIGNED direct difference on a
+    /// paired scalar. Haskell's `fromIntegral a - fromIntegral b` on
+    /// two `Word` inputs lifted to `Int`, with the sign carried by the
+    /// classical subtraction and the wrap-safety pinned by an external
+    /// range bound. Idris's `cast a - cast b : Int` under a total
+    /// function signature on two `Nat` inputs with the range bound
+    /// discharged at the type. Rust's own `usize::cmp` returning
+    /// `Ordering` reading the SAME arm-identity dispatch this helper
+    /// carries at the paired `signum` bridge above. Translation through
+    /// pleme-io primitives is the plain `const fn` sign-split
+    /// delegation on `usize::abs_diff` below — no `checked_sub`
+    /// indirection, no `i64` bridge, no `TryFrom` fallible cast, no
+    /// dependency on `isize::from`-family conversions (none of them are
+    /// const-callable on stable Rust for `usize → isize`).
+    #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
+    pub const fn signed_count_difference(lhs: usize, rhs: usize) -> isize {
+        if lhs >= rhs {
+            lhs.abs_diff(rhs) as isize
+        } else {
+            -(lhs.abs_diff(rhs) as isize)
+        }
+    }
+
     /// Presence-preserving CLOSED-INTERVAL WIDTH from a coupled ENDPOINT PAIR
     /// on whole-posture `Option<usize>` axis-endpoint tallies —
     /// `Self::derive_axis_endpoint_span(first, last)` returns
@@ -15827,12 +15991,21 @@ impl ResourceLimits {
     /// arm-labeled `-2` that discriminates it from a hypothetical
     /// 4-polar + 2-interior split that would fire `+2`.
     ///
-    /// Encoded as the plain `const fn` split on the SIGN of the paired
-    /// tally comparison, delegating to `usize::abs_diff` on each arm
-    /// and casting through `as isize` — safe by the range-bound pin
-    /// (both counts are bounded by `FIELD_COUNT = 6`, so the
-    /// difference fits `isize` on every target). No `checked_sub`
-    /// indirection, no `i64` bridge, no per-axis loop, no allocation.
+    /// Encoded as the one-composition
+    /// `Self::signed_count_difference(self.count_polar_axes(),
+    /// self.count_interior_axes())` on the paired axial-tally sub-cells
+    /// through the substrate sign-split absolute-difference combinator
+    /// [`Self::signed_count_difference`] — one primitive delegation
+    /// threaded through the helper's ORDER-COMPARISON-gated cast to
+    /// `isize`, safe by the range-bound pin (both counts are bounded by
+    /// `FIELD_COUNT = 6`, so the difference fits `isize` on every
+    /// target Rust supports and the caller-side invariant on
+    /// [`Self::signed_count_difference`] is discharged by construction).
+    /// At ONE named typed `const fn` on the algebra rather than a per-
+    /// projection open-coded four-line
+    /// `if p >= i { p.abs_diff(i) as isize } else { -(p.abs_diff(i) as
+    /// isize) }` conditional. No `checked_sub` indirection, no `i64`
+    /// bridge, no per-axis loop, no allocation.
     ///
     /// `const fn` so a caller can pin the exact SIGNED CARDINAL skew
     /// at compile time (`const _: () = assert!(
@@ -15870,19 +16043,7 @@ impl ResourceLimits {
     /// indirection, no per-axis loop, no allocation.
     #[must_use]
     pub const fn axial_signed_skew(self) -> isize {
-        let p = self.count_polar_axes();
-        let i = self.count_interior_axes();
-        // Both `p` and `i` lie in `0..=FIELD_COUNT` (= 6), so the
-        // absolute difference fits `isize` on every target Rust
-        // supports (`isize::MAX >= 2^15 - 1 = 32_767` on 16-bit,
-        // 2^31 - 1 on 32-bit, 2^63 - 1 on 64-bit — all vastly
-        // exceed FIELD_COUNT). The `as isize` cast never wraps.
-        #[allow(clippy::cast_possible_wrap)]
-        if p >= i {
-            p.abs_diff(i) as isize
-        } else {
-            -(p.abs_diff(i) as isize)
-        }
+        Self::signed_count_difference(self.count_polar_axes(), self.count_interior_axes())
     }
 
     /// Whole-posture SIGNUM-TRICHOTOMY reading on the COMPOUND (polar,
@@ -17295,12 +17456,23 @@ impl ResourceLimits {
     /// hypothetical DUAL top-dominant split at the same magnitudes
     /// would fire `-3, -3, -2`.
     ///
-    /// Encoded as the plain `const fn` split on the SIGN of the paired
-    /// atomic-tally comparison, delegating to `usize::abs_diff` on
-    /// each arm and casting through `as isize` — safe by the same
-    /// range-bound proof as [`Self::axial_signed_skew`] (both atomic
-    /// counts are bounded by `FIELD_COUNT = 6`, so the difference fits
-    /// `isize` on every target Rust supports). No `checked_sub`
+    /// Encoded as the one-composition
+    /// `Self::signed_count_difference(self.count_bottom_axes(),
+    /// self.count_top_axes())` on the paired atomic-tally sub-cells
+    /// through the substrate sign-split absolute-difference combinator
+    /// [`Self::signed_count_difference`] — one primitive delegation
+    /// threaded through the helper's ORDER-COMPARISON-gated cast to
+    /// `isize`, safe by the same range-bound proof as
+    /// [`Self::axial_signed_skew`] (both atomic counts are bounded by
+    /// `FIELD_COUNT = 6`, so the difference fits `isize` on every
+    /// target Rust supports and the caller-side invariant on
+    /// [`Self::signed_count_difference`] is discharged by construction).
+    /// At ONE named typed `const fn` on the algebra rather than a per-
+    /// projection open-coded four-line
+    /// `if b >= t { b.abs_diff(t) as isize } else { -(b.abs_diff(t) as
+    /// isize) }` conditional — mirror of
+    /// [`Self::axial_signed_skew`]'s delegation through the SAME
+    /// helper on the paired axial sub-cells. No `checked_sub`
     /// indirection, no `i64` bridge, no per-axis loop, no allocation.
     ///
     /// `const fn` so a caller can pin the atomic-arm-labeled SIGNED
@@ -17343,18 +17515,7 @@ impl ResourceLimits {
     /// typeclass indirection, no per-axis loop, no allocation.
     #[must_use]
     pub const fn atomic_signed_skew(self) -> isize {
-        let b = self.count_bottom_axes();
-        let t = self.count_top_axes();
-        // Both `b` and `t` lie in `0..=FIELD_COUNT` (= 6), so the
-        // absolute difference fits `isize` on every target Rust
-        // supports. Matches the range-bound proof on
-        // [`Self::axial_signed_skew`].
-        #[allow(clippy::cast_possible_wrap)]
-        if b >= t {
-            b.abs_diff(t) as isize
-        } else {
-            -(b.abs_diff(t) as isize)
-        }
+        Self::signed_count_difference(self.count_bottom_axes(), self.count_top_axes())
     }
 
     /// Whole-posture SIGNUM-TRICHOTOMY reading on the ATOMIC (bottom,
@@ -88610,6 +88771,326 @@ mod tests {
             Some(v) if v == ResourceLimits::FIELD_COUNT
         ));
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.atomic_majority_lead().is_none());
+    }
+
+    #[test]
+    fn resource_limits_signed_count_difference_agrees_with_open_coded_sign_split() {
+        // Two-arm sign-dispatch identity — the helper's verdict on every
+        // (lhs, rhs) pair in the caller-safe regime agrees with the
+        // open-coded shape
+        // `if lhs >= rhs { lhs.abs_diff(rhs) as isize } else {
+        // -(lhs.abs_diff(rhs) as isize) }` that every WHOLE-POSTURE
+        // SIGNED-KIND DIRECTED-CARDINAL projection on ResourceLimits
+        // carried at its exit pre-lift. Swept over the (lhs < rhs, lhs
+        // == rhs, lhs > rhs) three-cell order-partition with
+        // representative values so all three cells of the ARM-
+        // TRICHOTOMY on the (usize, usize) joint-input regime are
+        // pinned, using axial-tally-bounded samples (0..=FIELD_COUNT)
+        // for which the caller-side invariant is discharged by
+        // construction.
+        #[allow(clippy::cast_possible_wrap)]
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            let via_helper = ResourceLimits::signed_count_difference(lhs, rhs);
+            let via_open_code = if lhs >= rhs {
+                lhs.abs_diff(rhs) as isize
+            } else {
+                -(lhs.abs_diff(rhs) as isize)
+            };
+            assert_eq!(
+                via_helper, via_open_code,
+                "helper != open-coded shape at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_count_difference_diagonal_inputs_fold_to_zero() {
+        // Zero-tie identity — for every n in the caller-safe regime, the
+        // helper folds the diagonal (n, n) input to +0. The atomic-tie
+        // leg is signalled through the non-negative-zero cell of the
+        // output isize, folded onto the same +0 value the lhs >= rhs
+        // arm carries at every diagonal input. Swept across the
+        // (0, min-positive, FIELD_COUNT, mid) constellation covering the
+        // representative axial-tally diagonal postures.
+        for n in [
+            0_usize,
+            1,
+            ResourceLimits::FIELD_COUNT / 2,
+            ResourceLimits::FIELD_COUNT,
+        ] {
+            assert_eq!(
+                ResourceLimits::signed_count_difference(n, n),
+                0,
+                "diagonal fold violated at n={n}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_count_difference_lhs_strong_arm_projects_positive_diff() {
+        // Positive-arm identity — for every lhs > rhs in the caller-safe
+        // regime, the helper fires the UNSIGNED absolute difference
+        // verbatim as a strictly positive isize. Swept across the
+        // (min-strict, mid-strict, max-strict) constellation on the
+        // axial-tally range.
+        #[allow(clippy::cast_possible_wrap)]
+        for (lhs, rhs, expected) in [
+            (1_usize, 0_usize, 1_isize),
+            (2, 1, 1),
+            (
+                ResourceLimits::FIELD_COUNT,
+                0,
+                ResourceLimits::FIELD_COUNT as isize,
+            ),
+            (
+                ResourceLimits::FIELD_COUNT,
+                1,
+                (ResourceLimits::FIELD_COUNT - 1) as isize,
+            ),
+            (
+                ResourceLimits::FIELD_COUNT,
+                ResourceLimits::FIELD_COUNT / 2,
+                (ResourceLimits::FIELD_COUNT - ResourceLimits::FIELD_COUNT / 2) as isize,
+            ),
+        ] {
+            let got = ResourceLimits::signed_count_difference(lhs, rhs);
+            assert_eq!(
+                got, expected,
+                "lhs-strong arm value violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+            assert!(
+                got > 0,
+                "lhs-strong arm sign violated at (lhs, rhs)=({lhs}, {rhs}), got={got}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_count_difference_rhs_strong_arm_projects_negative_diff() {
+        // Negative-arm identity — for every lhs < rhs in the caller-safe
+        // regime, the helper fires the NEGATED absolute difference as
+        // a strictly negative isize. Mirror of the lhs-strong arm pin
+        // above on the DUAL rhs-strong cell of the ARM-TRICHOTOMY.
+        #[allow(clippy::cast_possible_wrap)]
+        for (lhs, rhs, expected) in [
+            (0_usize, 1_usize, -1_isize),
+            (1, 2, -1),
+            (
+                0,
+                ResourceLimits::FIELD_COUNT,
+                -(ResourceLimits::FIELD_COUNT as isize),
+            ),
+            (
+                1,
+                ResourceLimits::FIELD_COUNT,
+                -((ResourceLimits::FIELD_COUNT - 1) as isize),
+            ),
+            (
+                ResourceLimits::FIELD_COUNT / 2,
+                ResourceLimits::FIELD_COUNT,
+                -((ResourceLimits::FIELD_COUNT - ResourceLimits::FIELD_COUNT / 2) as isize),
+            ),
+        ] {
+            let got = ResourceLimits::signed_count_difference(lhs, rhs);
+            assert_eq!(
+                got, expected,
+                "rhs-strong arm value violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+            assert!(
+                got < 0,
+                "rhs-strong arm sign violated at (lhs, rhs)=({lhs}, {rhs}), got={got}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_count_difference_unsigned_abs_recovers_abs_diff() {
+        // unsigned_abs bridge — the SIGNED reading and the UNSIGNED
+        // reading agree on the absolute value: for every (lhs, rhs)
+        // in the caller-safe regime, unsigned_abs on the helper output
+        // recovers usize::abs_diff on the two inputs. The SIGN carries
+        // the arm identity the UNSIGNED abs_diff fold discards — the
+        // LOAD-BEARING inverse identity carrying the SIGNED-CARDINAL
+        // projections' unsigned_abs bridge to the paired UNDIRECTED
+        // CARDINAL projections (axial_skew / atomic_skew) at ONE
+        // substrate theorem.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (3, 3),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::signed_count_difference(lhs, rhs).unsigned_abs(),
+                lhs.abs_diff(rhs),
+                "unsigned_abs bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_count_difference_signum_partitions_order_trichotomy() {
+        // signum bridge — the three legs of the SIGNUM-TRICHOTOMY
+        // partition every (lhs, rhs) input into EXACTLY ONE of {lhs-
+        // strong, tied, rhs-strong}, and the helper's signum agrees
+        // with usize::cmp read through Ordering as isize on every
+        // input in the caller-safe regime. LOAD-BEARING substrate
+        // theorem tying the SIGN projection to Rust's own total-order
+        // comparison on usize.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, 1),
+            (1, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            let via_helper = ResourceLimits::signed_count_difference(lhs, rhs).signum();
+            let via_cmp = lhs.cmp(&rhs) as isize;
+            assert_eq!(
+                via_helper, via_cmp,
+                "signum bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_count_difference_swapped_inputs_negate_sign() {
+        // Sign-flip anti-symmetry — swapping the two inputs negates
+        // the signed output on every (lhs, rhs) in the caller-safe
+        // regime. Matches the classical integer-difference identity
+        // -(b - a) == (a - b) on the lifted SIGNED reading.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (3, 3),
+            (0, 1),
+            (1, 0),
+            (1, 5),
+            (5, 1),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+        ] {
+            let forward = ResourceLimits::signed_count_difference(lhs, rhs);
+            let backward = ResourceLimits::signed_count_difference(rhs, lhs);
+            assert_eq!(
+                backward, -forward,
+                "sign-flip anti-symmetry violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_count_difference_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the two-arm identity at compile time as a
+        // build-break. Sibling of the const-fn evaluability pins the
+        // WHOLE-POSTURE SIGNED-KIND DIRECTED-CARDINAL projections
+        // already carry at their own exits.
+        const _: () = assert!(ResourceLimits::signed_count_difference(0, 0) == 0);
+        const _: () = assert!(
+            ResourceLimits::signed_count_difference(ResourceLimits::FIELD_COUNT, 0)
+                == ResourceLimits::FIELD_COUNT as isize
+        );
+        const _: () = assert!(
+            ResourceLimits::signed_count_difference(0, ResourceLimits::FIELD_COUNT)
+                == -(ResourceLimits::FIELD_COUNT as isize)
+        );
+        const _: () = assert!(
+            ResourceLimits::signed_count_difference(
+                ResourceLimits::FIELD_COUNT,
+                ResourceLimits::FIELD_COUNT,
+            ) == 0
+        );
+    }
+
+    #[test]
+    fn resource_limits_signed_cardinal_family_bodies_delegate_to_signed_count_difference() {
+        // Sweep-of-family pin — asserts each of the two WHOLE-POSTURE
+        // SIGNED-KIND DIRECTED-CARDINAL projection bodies
+        // (axial_signed_skew over the (polar, interior) axial partition,
+        // atomic_signed_skew over the ATOMIC (bottom, top) sub-partition
+        // of the polar cell) agrees with the helper-based shape
+        // `ResourceLimits::signed_count_difference(self.count_LHS(),
+        // self.count_RHS())` on every posture from the EMPTY / DEFAULT /
+        // UNBOUNDED / HAND_AUTHORED_MID / HAND_AUTHORED_OTHER preset
+        // constellation (2×5 = 10 verdicts). A future body regression
+        // that swapped the two count inputs — or a helper regression
+        // that inverted the sign convention — would break here on at
+        // least one pair. The five uniform fixtures split the SATURATED
+        // corner into +6 (polar-uniform → +6 axial; bottom-uniform → +6
+        // atomic on EMPTY) and -6 (interior-uniform → -6 axial on
+        // DEFAULT / HAND_*) reads that the UNDIRECTED axial_skew /
+        // atomic_skew folded onto the SAME +6 unsigned cell.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                posture.axial_signed_skew(),
+                ResourceLimits::signed_count_difference(
+                    posture.count_polar_axes(),
+                    posture.count_interior_axes(),
+                ),
+                "axial_signed_skew delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.atomic_signed_skew(),
+                ResourceLimits::signed_count_difference(
+                    posture.count_bottom_axes(),
+                    posture.count_top_axes(),
+                ),
+                "atomic_signed_skew delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_cardinal_family_bodies_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the WHOLE-POSTURE SIGNED-KIND DIRECTED-
+        // CARDINAL family bodies preserved const-fn evaluability under
+        // the sweep through signed_count_difference. Each of the two
+        // swept projections × the three shipped `pub const` preset
+        // postures (EMPTY, UNBOUNDED, DEFAULT). EMPTY packs six bottom
+        // axes uniformly, so the axial arm fires +6 (polar strict-
+        // uniform → polar arm dominates by FIELD_COUNT) and the atomic
+        // arm fires +6 (bottom strict-uniform → bottom arm dominates by
+        // FIELD_COUNT). UNBOUNDED is the corner mirror on the atomic top
+        // arm — axial +6 (polar strict-uniform via top axes) and atomic
+        // -6 (top strict-uniform → top arm dominates by FIELD_COUNT).
+        // DEFAULT is interior-uniform, so the axial arm fires -6
+        // (interior strict-uniform → interior arm dominates by
+        // FIELD_COUNT) and the atomic arm fires 0 (no polar axis → both
+        // atomic tallies are zero → diagonal (0, 0) input folds to +0).
+        #[allow(clippy::cast_possible_wrap)]
+        const FIELD_COUNT_AS_ISIZE: isize = ResourceLimits::FIELD_COUNT as isize;
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.axial_signed_skew() == FIELD_COUNT_AS_ISIZE);
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.atomic_signed_skew() == FIELD_COUNT_AS_ISIZE);
+        const _: () =
+            assert!(UNBOUNDED_RESOURCE_LIMITS.axial_signed_skew() == FIELD_COUNT_AS_ISIZE);
+        const _: () =
+            assert!(UNBOUNDED_RESOURCE_LIMITS.atomic_signed_skew() == -FIELD_COUNT_AS_ISIZE);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.axial_signed_skew() == -FIELD_COUNT_AS_ISIZE);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.atomic_signed_skew() == 0);
     }
 
     #[test]

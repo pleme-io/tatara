@@ -1747,21 +1747,20 @@ impl ResourceLimits {
     /// typed structs. Translation through pleme-io primitives: a
     /// `const fn` returning a `[bool; N]` fixed-size array on the
     /// typed [`ResourceLimits`] algebra encoded as the intersection of
-    /// two already-lifted direction-signed per-axis masks, rather than
-    /// a runtime vector operation or a third inline six-primitive
-    /// cascade.
+    /// two already-lifted direction-signed per-axis masks, routed through
+    /// the substrate MASK→MASK combinator
+    /// [`Self::intersect_masks_pointwise`] rather than a runtime vector
+    /// operation or a third inline six-primitive cascade. Post-lift the
+    /// body is the one-line
+    /// `Self::intersect_masks_pointwise(self.axes_leq(other),
+    /// self.axes_geq(other))` composition — the FIELD_COUNT=6-coupling
+    /// the pre-lift `[below[0] && above[0], ..., below[5] && above[5]]`
+    /// six-primitive array literal carried is now retired at the callsite
+    /// and propagates mechanically through the helper's
+    /// `while i < FIELD_COUNT` per-axis fill on any future arity bump.
     #[must_use]
     pub const fn axes_eq(self, other: Self) -> [bool; Self::FIELD_COUNT] {
-        let below = self.axes_leq(other);
-        let above = self.axes_geq(other);
-        [
-            below[0] && above[0],
-            below[1] && above[1],
-            below[2] && above[2],
-            below[3] && above[3],
-            below[4] && above[4],
-            below[5] && above[5],
-        ]
+        Self::intersect_masks_pointwise(self.axes_leq(other), self.axes_geq(other))
     }
 
     /// Per-axis pointwise `!=` mask across the six ceilings — the ATOMIC
@@ -12274,6 +12273,185 @@ impl ResourceLimits {
             }
         }
         None
+    }
+
+    /// Per-axis mask POINTWISE INTERSECTION —
+    /// `Self::intersect_masks_pointwise(a, b)` returns the
+    /// `[bool; Self::FIELD_COUNT]` per-axis mask whose `i`-th bit is the
+    /// per-index conjunction `a[i] && b[i]` of two shipped per-axis masks.
+    /// The BOUNDARY primitive lifting the shape
+    /// ```text
+    /// [
+    ///     a[0] && b[0],
+    ///     a[1] && b[1],
+    ///     a[2] && b[2],
+    ///     a[3] && b[3],
+    ///     a[4] && b[4],
+    ///     a[5] && b[5],
+    /// ]
+    /// ```
+    /// that every per-axis MASK→MASK INTERSECTION on
+    /// [`ResourceLimits`] carries at its body — [`Self::axes_eq`] takes
+    /// exactly this shape at the per-index conjunction of
+    /// [`Self::axes_leq`] and [`Self::axes_geq`] under the antisymmetry
+    /// identity `a[i] <= b[i] && a[i] >= b[i] ⇒ a[i] == b[i]`. Pre-lift
+    /// the intersection body open-coded the six-primitive `[a[0] && b[0],
+    /// ..., a[5] && b[5]]` array literal at its exit, and the shape sits
+    /// ready one PROJECTION-KIND axis over from every future pairwise-
+    /// combined per-axis mask (whole-posture strict-comparison masks on
+    /// direction-signed pairs, cross-posture agreement/disagreement masks
+    /// on joint-cell pairs, higher-order axial partition intersection
+    /// checks). Post-lift the shape binds at ONE typed `const fn` on
+    /// [`ResourceLimits`], and every MASK→MASK INTERSECTION composes
+    /// through this helper — the per-axis pointwise `&&` is a substrate-
+    /// level theorem rather than a per-consumer inline six-primitive
+    /// cascade whose FIELD_COUNT=6-coupling silently rots on a future
+    /// arity bump.
+    ///
+    /// The FIRST MASK→MASK COMBINATOR primitive on the per-axis mask
+    /// substrate — orthogonal to the five shipped MASK→SCALAR collapse
+    /// primitives ([`Self::count_mask_bits`] POPCOUNT `usize`,
+    /// [`Self::any_mask_bit_set`] ANY-fold `bool`,
+    /// [`Self::all_mask_bits_set`] ALL-fold `bool`,
+    /// [`Self::first_mask_bit_set_index`] FIRST-HIT `Option<usize>`,
+    /// [`Self::last_mask_bit_set_index`] LAST-HIT `Option<usize>`) which
+    /// all COLLAPSE a `[bool; FIELD_COUNT]` mask into a scalar, this
+    /// COMBINES two masks into a third mask on the SAME per-axis surface.
+    /// Opens a new PROJECTION-KIND locus (MASK→MASK, distinct from
+    /// MASK→SCALAR) whose reading is the STRUCTURAL INTERSECTION of two
+    /// per-axis witnesses — the paired-mask-to-combined-mask peer of
+    /// every per-axis relation the (`axes_leq`, `axes_geq`, `axes_eq`,
+    /// `axes_ne`, `axes_lt`, `axes_gt`) per-axis-mask sextuple carries at
+    /// the per-position vector level.
+    ///
+    /// **Iterator-agreement identity — LOAD-BEARING structural pin**: on
+    /// every `(a, b)` mask pair, the returned mask's `i`-th bit equals
+    /// `a.iter().zip(b.iter()).map(|(&x, &y)| x && y).collect::<[bool; N]>()[i]`
+    /// — the direct stable-Rust `zip`-then-`map`-then-`&&` iterator idiom
+    /// the helper substitutes for at every consumer. Pinned via
+    /// `resource_limits_intersect_masks_pointwise_agrees_with_iterator_zip_and`.
+    ///
+    /// **AND-identity contract**: on every `mask`,
+    /// `Self::intersect_masks_pointwise(mask, [true; FIELD_COUNT])
+    /// == mask`. The saturated-mask serves as the two-sided IDENTITY
+    /// element of the pointwise-AND monoid on `[bool; FIELD_COUNT]`
+    /// arrays. Pinned via
+    /// `resource_limits_intersect_masks_pointwise_identity_with_all_true`.
+    ///
+    /// **AND-annihilator contract**: on every `mask`,
+    /// `Self::intersect_masks_pointwise(mask, [false; FIELD_COUNT])
+    /// == [false; FIELD_COUNT]`. The empty-mask serves as the two-sided
+    /// ANNIHILATOR (zero) element of the pointwise-AND monoid on
+    /// `[bool; FIELD_COUNT]` arrays. Pinned via
+    /// `resource_limits_intersect_masks_pointwise_annihilator_with_all_false`.
+    ///
+    /// **Commutativity contract**: on every `(a, b)` mask pair,
+    /// `Self::intersect_masks_pointwise(a, b)
+    /// == Self::intersect_masks_pointwise(b, a)`. Per-axis `&&` is
+    /// commutative on every field, so the mask combinator inherits
+    /// commutativity from the underlying Boolean operation. Pinned via
+    /// `resource_limits_intersect_masks_pointwise_is_commutative`.
+    ///
+    /// **Idempotence contract**: on every `mask`,
+    /// `Self::intersect_masks_pointwise(mask, mask) == mask`. Per-axis
+    /// `&&` is idempotent (`x && x == x`), so the mask combinator inherits
+    /// idempotence from the underlying Boolean operation. Pinned via
+    /// `resource_limits_intersect_masks_pointwise_is_idempotent`.
+    ///
+    /// **POPCOUNT upper bound**: on every `(a, b)` mask pair,
+    /// `Self::count_mask_bits(Self::intersect_masks_pointwise(a, b))
+    /// <= min(Self::count_mask_bits(a), Self::count_mask_bits(b))`. The
+    /// intersection's popcount cannot exceed EITHER operand's popcount
+    /// (every set bit of the intersection is set in BOTH operands),
+    /// bridging the mask combinator to the paired POPCOUNT-fold on the
+    /// SAME per-axis mask surface. Pinned via
+    /// `resource_limits_intersect_masks_pointwise_popcount_bounded_above_by_min`.
+    ///
+    /// **ANY-fold bridge**: on every `(a, b)` mask pair,
+    /// `Self::any_mask_bit_set(Self::intersect_masks_pointwise(a, b))`
+    /// IMPLIES `Self::any_mask_bit_set(a) && Self::any_mask_bit_set(b)`
+    /// (a fired intersection witnesses at least one bit in each operand),
+    /// but the converse fails on masks that fire the ANY-fold at
+    /// DISJOINT positions. Pinned via
+    /// `resource_limits_intersect_masks_pointwise_any_implies_operand_any_conjunction`.
+    ///
+    /// **ALL-fold bridge**: on every `(a, b)` mask pair,
+    /// `Self::all_mask_bits_set(Self::intersect_masks_pointwise(a, b))
+    /// == Self::all_mask_bits_set(a) && Self::all_mask_bits_set(b)`. The
+    /// intersection saturates iff BOTH operands saturate — the ALL-fold
+    /// distributes over the mask combinator exactly. Pinned via
+    /// `resource_limits_intersect_masks_pointwise_all_agrees_with_operand_all_conjunction`.
+    ///
+    /// `const fn` so a caller can pin an intersected mask at compile
+    /// time (`const _: [bool; ResourceLimits::FIELD_COUNT] =
+    /// ResourceLimits::intersect_masks_pointwise([true; ResourceLimits::FIELD_COUNT],
+    /// [true; ResourceLimits::FIELD_COUNT]);`) — sibling of the const-fn
+    /// evaluability pins the five paired SCALAR-COLLAPSE helpers and the
+    /// per-axis mask primitives already carry at their own exits.
+    ///
+    /// **Adoption compounds**: [`Self::axes_eq`] rewrites from the open-
+    /// coded six-primitive `[below[0] && above[0], ...]` array literal to
+    /// the one-line `Self::intersect_masks_pointwise(self.axes_leq(other),
+    /// self.axes_geq(other))` composition at no semantic change; any
+    /// future per-axis mask whose exit is the pointwise conjunction of
+    /// two shipped per-axis masks (cross-posture agreement on any two
+    /// per-axis boolean projections, higher-order axial partition
+    /// intersection checks) composes through this same primitive. Sits
+    /// one PROJECTION-KIND axis over from the five MASK→SCALAR collapse
+    /// primitives, opening the MASK→MASK COMBINATOR column at ONE typed
+    /// `const fn` primitive whose future peers ([pointwise NOT for
+    /// `axes_ne`], [pointwise AND-NOT for `axes_lt`], [pointwise OR for
+    /// cross-posture disjunction masks], [pointwise XOR for cross-posture
+    /// difference masks]) sit one COMBINATOR-KIND axis over at shapes
+    /// this helper's forward `[a[i] && b[i]; N]` fixed-size array
+    /// construction has already proven safe.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-axis pointwise-AND mask combinator at every MASK→MASK
+    /// INTERSECTION exit now binds at ONE typed named `const fn` on the
+    /// algebra rather than a per-consumer six-primitive hardcoded array
+    /// literal whose FIELD_COUNT=6-coupling silently rots on a future
+    /// arity bump. THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the helper composes mechanically under the iterator-zip-
+    /// and-agreement, AND-monoid identity/annihilator, commutativity,
+    /// idempotence, POPCOUNT upper bound, and ANY/ALL-fold bridge
+    /// identities above with no re-derivation at the caller. THEORY.md
+    /// §V.1 — knowable platform; the per-axis pointwise `&&` combinator
+    /// becomes a TYPE-level operation on the per-axis mask algebra rather
+    /// than a per-consumer inline six-primitive cascade, with the per-
+    /// axis granularity baked in so the consumer cannot silently drop an
+    /// axis (the array's fixed arity forces every axis to appear).
+    ///
+    /// Frontier inspiration: APL / J's rank-lifted `∧` (logical-and)
+    /// operator producing a per-position bit array between two conformable
+    /// boolean arrays; Haskell's `zipWith (&&)` on two `[Bool]` producing
+    /// a `[Bool]`; Idris's `Data.Vect.zipWith (&&)` on two `Vec n Bool`
+    /// producing a `Vec n Bool` under a total function signature; Rust's
+    /// stable `a.iter().zip(b.iter()).map(|(&x, &y)| x && y)` iterator
+    /// idiom. Classical bitset AND (`&`) on a bit-packed mask is the same
+    /// operation one representation-KIND axis over on a bit-packed
+    /// encoding — `intersect_masks_pointwise` is its per-axis-boolean-
+    /// array peer at the substrate, and the FIRST MASK→MASK combinator
+    /// primitive past the five shipped MASK→SCALAR collapse primitives.
+    /// Translation through pleme-io primitives is the plain `const fn`
+    /// `while`-based per-axis fill below into a stack-allocated
+    /// `[bool; FIELD_COUNT]` array — no closure, no typeclass
+    /// indirection, no dependency on `<[bool]>::iter().zip(...)` (which
+    /// is not const-callable on stable Rust because `zip` returns an
+    /// iterator adapter that takes closures at every consumer), and the
+    /// two masks are owned arrays eagerly evaluated by the caller.
+    #[must_use]
+    pub const fn intersect_masks_pointwise(
+        a: [bool; Self::FIELD_COUNT],
+        b: [bool; Self::FIELD_COUNT],
+    ) -> [bool; Self::FIELD_COUNT] {
+        let mut out = [false; Self::FIELD_COUNT];
+        let mut i = 0;
+        while i < Self::FIELD_COUNT {
+            out[i] = a[i] && b[i];
+            i += 1;
+        }
+        out
     }
 
     /// Whole-posture ARITHMETIC-TOP tally — `self.count_top_axes()`
@@ -88928,6 +89106,274 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn resource_limits_intersect_masks_pointwise_agrees_with_iterator_zip_and() {
+        // Iterator-agreement contract — the substrate MASK→MASK
+        // pointwise-AND combinator's verdict on every (a, b) mask pair
+        // agrees with the raw `a.iter().zip(b.iter()).map(|(&x, &y)| x
+        // && y).collect::<Vec<bool>>()` open-coded fold that every prior
+        // per-axis pointwise-conjunction body (`axes_eq`) carried before
+        // the helper lift. Swept across the FULL 11×11 = 121-mask-pair
+        // constellation drawn from the shared COUNT_MASK_BITS_MASK_SWEEP
+        // constellation so the combinator is pinned on every distinct
+        // per-index (false&&false, false&&true, true&&false, true&&true)
+        // corner across the popcount range. A helper regression that
+        // mis-indexed the while-loop, skipped increments, inverted a
+        // per-index arm, or dropped an axis from the output array would
+        // break here on at least one mask pair.
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                let via_helper = ResourceLimits::intersect_masks_pointwise(*a, *b);
+                let mut via_iterator = [false; ResourceLimits::FIELD_COUNT];
+                for (i, (&x, &y)) in a.iter().zip(b.iter()).enumerate() {
+                    via_iterator[i] = x && y;
+                }
+                assert_eq!(
+                    via_helper, via_iterator,
+                    "intersect_masks_pointwise != iterator-zip-and on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_intersect_masks_pointwise_identity_with_all_true() {
+        // AND-identity contract — the saturated MASK_ALL_TRUE serves as
+        // the two-sided IDENTITY element of the pointwise-AND monoid on
+        // `[bool; FIELD_COUNT]` arrays. For every mask fixture,
+        // `intersect(mask, MASK_ALL_TRUE) == mask` AND
+        // `intersect(MASK_ALL_TRUE, mask) == mask`. Both directions swept
+        // so the pin verifies the monoid identity on BOTH left- and
+        // right-argument positions, catching a regression that lost the
+        // per-axis truth-propagation on either input.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            assert_eq!(
+                ResourceLimits::intersect_masks_pointwise(*mask, MASK_ALL_TRUE),
+                *mask,
+                "intersect(mask, all-true) != mask on {mask:?}",
+            );
+            assert_eq!(
+                ResourceLimits::intersect_masks_pointwise(MASK_ALL_TRUE, *mask),
+                *mask,
+                "intersect(all-true, mask) != mask on {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_intersect_masks_pointwise_annihilator_with_all_false() {
+        // AND-annihilator contract — the empty MASK_ALL_FALSE serves as
+        // the two-sided ANNIHILATOR (zero) element of the pointwise-AND
+        // monoid on `[bool; FIELD_COUNT]` arrays. For every mask fixture,
+        // `intersect(mask, MASK_ALL_FALSE) == MASK_ALL_FALSE` AND
+        // `intersect(MASK_ALL_FALSE, mask) == MASK_ALL_FALSE`. Both
+        // directions swept so the pin verifies the annihilator on BOTH
+        // left- and right-argument positions, catching a regression that
+        // lost the per-axis zero-propagation on either input.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            assert_eq!(
+                ResourceLimits::intersect_masks_pointwise(*mask, MASK_ALL_FALSE),
+                MASK_ALL_FALSE,
+                "intersect(mask, all-false) != all-false on {mask:?}",
+            );
+            assert_eq!(
+                ResourceLimits::intersect_masks_pointwise(MASK_ALL_FALSE, *mask),
+                MASK_ALL_FALSE,
+                "intersect(all-false, mask) != all-false on {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_intersect_masks_pointwise_is_commutative() {
+        // Commutativity contract — per-axis `&&` is commutative on every
+        // field, so the mask combinator inherits commutativity from the
+        // underlying Boolean operation: `intersect(a, b) == intersect(b,
+        // a)` for every mask pair. Swept across the FULL 11×11 = 121-mask
+        // pair constellation so the identity is pinned on every distinct
+        // per-index corner. Catches a regression where a helper's per-
+        // index fill accidentally depended on argument position (e.g.
+        // `a[i] && b[i - 1]` or a swap in the accumulator).
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                assert_eq!(
+                    ResourceLimits::intersect_masks_pointwise(*a, *b),
+                    ResourceLimits::intersect_masks_pointwise(*b, *a),
+                    "intersect not commutative on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_intersect_masks_pointwise_is_idempotent() {
+        // Idempotence contract — per-axis `&&` is idempotent (`x && x
+        // == x`), so the mask combinator inherits idempotence from the
+        // underlying Boolean operation: `intersect(mask, mask) == mask`
+        // for every mask fixture. Swept across the 11-mask constellation
+        // so the identity is pinned on every distinct popcount verdict.
+        // Together with the AND-identity and AND-annihilator pins the
+        // three tests close the (identity, annihilator, idempotence)
+        // AND-monoid algebraic-law triad at ONE substrate identity per
+        // law rather than a per-consumer inline proof.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            assert_eq!(
+                ResourceLimits::intersect_masks_pointwise(*mask, *mask),
+                *mask,
+                "intersect(mask, mask) != mask on {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_intersect_masks_pointwise_popcount_bounded_above_by_min() {
+        // POPCOUNT upper bound — the intersection's popcount cannot
+        // exceed EITHER operand's popcount (every set bit of the
+        // intersection is set in BOTH operands, so the intersection is a
+        // per-axis submask of each). Bridges the mask combinator to the
+        // paired POPCOUNT-fold on the SAME per-axis mask surface via
+        // `count(intersect(a, b)) <= min(count(a), count(b))`. Swept
+        // across the FULL 11×11 = 121-mask pair constellation so the
+        // bound is pinned on every distinct popcount verdict pair.
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                let intersected = ResourceLimits::intersect_masks_pointwise(*a, *b);
+                let ca = ResourceLimits::count_mask_bits(*a);
+                let cb = ResourceLimits::count_mask_bits(*b);
+                let ci = ResourceLimits::count_mask_bits(intersected);
+                let min_ab = if ca <= cb { ca } else { cb };
+                assert!(
+                    ci <= min_ab,
+                    "count(intersect) > min(count(a), count(b)) on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_intersect_masks_pointwise_any_implies_operand_any_conjunction() {
+        // ANY-fold bridge (forward only) — a fired intersection witnesses
+        // at least one bit in each operand (the co-fired position). The
+        // converse fails on masks that fire the ANY-fold at DISJOINT
+        // positions (e.g. MASK_ALTERNATING_HEAD_TRUE and
+        // MASK_ALTERNATING_HEAD_FALSE both any-fire but their
+        // intersection is all-false), so only the forward implication
+        // holds. Swept across the FULL 11×11 = 121-mask pair
+        // constellation so the implication is pinned on every distinct
+        // per-index corner.
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                let intersected = ResourceLimits::intersect_masks_pointwise(*a, *b);
+                if ResourceLimits::any_mask_bit_set(intersected) {
+                    assert!(
+                        ResourceLimits::any_mask_bit_set(*a)
+                            && ResourceLimits::any_mask_bit_set(*b),
+                        "intersect any-fires but operand conjunction does not on ({a:?}, {b:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_intersect_masks_pointwise_all_agrees_with_operand_all_conjunction() {
+        // ALL-fold bridge (biconditional) — the intersection saturates
+        // iff BOTH operands saturate; the ALL-fold distributes over the
+        // mask combinator exactly. The DUAL of the ANY-fold bridge's
+        // one-way forward implication: on the UNIVERSAL-QUANTIFIER edge
+        // the equivalence closes both directions because every per-axis
+        // conjunction is `true` iff every per-axis operand pair is
+        // `(true, true)`. Swept across the FULL 11×11 = 121-mask pair
+        // constellation so the identity is pinned on every distinct
+        // per-index corner.
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                let intersected = ResourceLimits::intersect_masks_pointwise(*a, *b);
+                assert_eq!(
+                    ResourceLimits::all_mask_bits_set(intersected),
+                    ResourceLimits::all_mask_bits_set(*a) && ResourceLimits::all_mask_bits_set(*b),
+                    "all(intersect) != all(a) && all(b) on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_eq_body_delegates_to_intersect_masks_pointwise() {
+        // Sweep-of-callsite pin — after routing the whole-posture
+        // `axes_eq` body from the FIELD_COUNT-hardcoded six-primitive
+        // `[below[0] && above[0], below[1] && above[1], ...,
+        // below[5] && above[5]]` array literal through
+        // ResourceLimits::intersect_masks_pointwise, the whole 5×5 = 25
+        // preset×preset constellation continues to agree with the helper-
+        // based shape
+        // `intersect_masks_pointwise(a.axes_leq(b), a.axes_geq(b))`. The
+        // pin closes the FIELD_COUNT-decoupling refactor on the FIRST
+        // MASK→MASK COMBINATOR callsite for the per-axis-mask surface: a
+        // future FIELD_COUNT bump that would have silently under-covered
+        // the hardcoded array literal is now caught by the helper's
+        // `while i < FIELD_COUNT` per-axis fill rather than an axis-count
+        // that no callsite guarded. Sibling of
+        // `resource_limits_eq_body_delegates_to_all_mask_bits_set` and
+        // `resource_limits_ne_body_delegates_to_any_mask_bit_set` one
+        // PROJECTION-KIND axis over (whole-posture SCALAR verdict) — the
+        // three pins together close the (WHOLE-POSTURE-EQ,
+        // WHOLE-POSTURE-NE, PER-AXIS-EQ) equality/inequality face at
+        // ONE substrate primitive delegation per exit.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in postures {
+            for b in postures {
+                assert_eq!(
+                    a.axes_eq(b),
+                    ResourceLimits::intersect_masks_pointwise(a.axes_leq(b), a.axes_geq(b)),
+                    "axes_eq disagrees with intersect_masks_pointwise(axes_leq, axes_geq) on \
+                     ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_intersect_masks_pointwise_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin an intersected mask at compile time as a
+        // build-break. Sibling of the const-fn evaluability pins the
+        // five paired SCALAR-COLLAPSE helpers already carry at their own
+        // exits. Covers the (identity, annihilator, idempotence) monoid
+        // corners on the shipped `pub const` fixtures plus the paired-
+        // preset composition through axes_leq/axes_geq that the axes_eq
+        // sweep delegates through, so the helper is pinned as const-fn
+        // on every corner the sweep depends on.
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::intersect_masks_pointwise(MASK_ALL_TRUE, MASK_ALL_TRUE);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::intersect_masks_pointwise(MASK_ALL_FALSE, MASK_ALL_TRUE);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::intersect_masks_pointwise(MASK_ALL_TRUE, MASK_ALL_FALSE);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::intersect_masks_pointwise(MASK_ALL_FALSE, MASK_ALL_FALSE);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::intersect_masks_pointwise(MASK_SINGLE_HEAD, MASK_SINGLE_HEAD);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::intersect_masks_pointwise(MASK_FIRST_HALF, MASK_SECOND_HALF);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::intersect_masks_pointwise(MASK_MISSING_HEAD, MASK_MISSING_TAIL);
+        const _: [bool; ResourceLimits::FIELD_COUNT] = ResourceLimits::intersect_masks_pointwise(
+            EMPTY_RESOURCE_LIMITS.axes_leq(EMPTY_RESOURCE_LIMITS),
+            EMPTY_RESOURCE_LIMITS.axes_geq(EMPTY_RESOURCE_LIMITS),
+        );
+        const _: [bool; ResourceLimits::FIELD_COUNT] = ResourceLimits::intersect_masks_pointwise(
+            UNBOUNDED_RESOURCE_LIMITS.axes_leq(UNBOUNDED_RESOURCE_LIMITS),
+            UNBOUNDED_RESOURCE_LIMITS.axes_geq(UNBOUNDED_RESOURCE_LIMITS),
+        );
     }
 
     #[test]

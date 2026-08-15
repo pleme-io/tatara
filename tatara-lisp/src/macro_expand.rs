@@ -12399,6 +12399,141 @@ impl ResourceLimits {
         }
     }
 
+    /// Presence-preserving CLOSED-INTERVAL WIDTH from a coupled ENDPOINT PAIR
+    /// on whole-posture `Option<usize>` axis-endpoint tallies —
+    /// `Self::derive_axis_endpoint_span(first, last)` returns
+    /// `Some(l - f + 1)` when both `first` and `last` are `Some(_)`, or
+    /// `None` when either is `None`. The BOUNDARY primitive lifting the
+    /// shape `match (first, last) { (Some(f), Some(l)) => Some(l - f + 1),
+    /// _ => None }` (equivalently the nightly-only `first.zip(last).map(|(f,
+    /// l)| l - f + 1)` closure form Rust `const fn` cannot express on
+    /// stable) that every AXIS-CELL `Option<usize>`-ENDPOINT-DERIVED
+    /// BRACKET-WIDTH PROJECTION on [`ResourceLimits`] carries at its exit
+    /// — `bottom_axis_index_span`, `top_axis_index_span`,
+    /// `polar_axis_index_span`, `interior_axis_index_span` all wrap the
+    /// closed-interval width `l - f + 1` of the paired
+    /// [`Self::first_bottom_axis_index`]-family + [`Self::last_bottom_axis_index`]-
+    /// family endpoint pair in the same joint-presence dispatch. Pre-lift
+    /// each BRACKET-WIDTH projection open-coded the four-line
+    /// `match (self.first_X_axis_index(), self.last_X_axis_index()) {
+    /// (Some(f), Some(l)) => Some(l - f + 1), _ => None }` at its own
+    /// exit — a copy-paste cascade whose consistency the type system did
+    /// not gate (a projection that swapped the wildcard arm for
+    /// `Some(0)` would silently reclassify the empty-axis posture as
+    /// `Some(0)` where the canonical shape yields `None`, or dropped the
+    /// `+ 1` and returned an off-by-one open-interval width on every
+    /// posture). Post-lift the shape binds at ONE typed `const fn` on
+    /// [`ResourceLimits`], and every future AXIS-CELL `Option<usize>`-
+    /// ENDPOINT-DERIVED bracket-width projection composes through this
+    /// helper — the joint-presence dispatch is a substrate-level theorem
+    /// rather than a per-consumer convention. A distinct COMBINATOR-KIND
+    /// past the three shipped SINGLE-INPUT `Option<T>` axis-cell
+    /// combinators ([`Self::witness_axis_presence`],
+    /// [`Self::negate_axis_witness`], [`Self::project_axis_count_zero`]):
+    /// this is the FIRST TWO-INPUT `Option<T>` combinator on the axis-cell
+    /// substrate — a JOINT-Some ZIP-then-arithmetic operation on a coupled
+    /// endpoint pair rather than a per-input transform on a single Option.
+    /// Where the three shipped combinators dispatch on ONE axis-cell
+    /// `Option<T>`'s (None, Some) split, THIS combinator dispatches on the
+    /// two-axis-cell (None-either, Some-both) join — the projection SURFACE
+    /// past the projection CELL that the three predicate-shape combinators
+    /// closed on.
+    ///
+    /// **Two-arm joint-dispatch identity — LOAD-BEARING structural pin**:
+    /// on every `(first, last)`, `derive_axis_endpoint_span(first, last)
+    /// == match (first, last) { (Some(f), Some(l)) => Some(l - f + 1), _
+    /// => None }`. Pinned via
+    /// `resource_limits_derive_axis_endpoint_span_agrees_with_open_coded_match`.
+    ///
+    /// **Empty-arm identity**: `derive_axis_endpoint_span(None, None) ==
+    /// None`, and mixed-presence `derive_axis_endpoint_span(Some(f),
+    /// None) == None` and `derive_axis_endpoint_span(None, Some(l)) ==
+    /// None`. The empty-axis posture is PRESERVED verbatim on every
+    /// empty-or-partial input, never reclassified as a bracket width.
+    /// Pinned via
+    /// `resource_limits_derive_axis_endpoint_span_empty_arm_preserves_none`.
+    ///
+    /// **Present-arm identity — closed-interval width**: for every
+    /// `(f, l)` with `f <= l`, `derive_axis_endpoint_span(Some(f),
+    /// Some(l)) == Some(l - f + 1)` — the helper projects the endpoint
+    /// pair to its closed-interval width verbatim (counting BOTH
+    /// endpoints AND every position strictly between them). Pinned via
+    /// `resource_limits_derive_axis_endpoint_span_present_arm_projects_bracket_width`.
+    ///
+    /// **`is_some` bridge — JOINT-Some presence**:
+    /// `derive_axis_endpoint_span(first, last).is_some() == (first.is_some() &&
+    /// last.is_some())`. The presence dispatch is the LOGICAL-AND of the
+    /// two-input presences — the BRACKET-WIDTH family's has-axis-at-cell
+    /// boolean projection agrees with the JOINT presence of the two
+    /// endpoint families posture-for-posture. Pinned via
+    /// `resource_limits_derive_axis_endpoint_span_is_some_bridge`.
+    ///
+    /// **Diagonal-endpoint identity — SINGLE-FIRE coincidence**: for
+    /// every `k`, `derive_axis_endpoint_span(Some(k), Some(k)) == Some(1)`.
+    /// A one-element bracket (first == last) has width exactly 1 — the
+    /// SINGLE-FIRE COINCIDENCE identity every BRACKET-WIDTH consumer
+    /// carries. Pinned via
+    /// `resource_limits_derive_axis_endpoint_span_diagonal_endpoints_span_one`.
+    ///
+    /// `const fn` so a caller can pin the helper's verdict at compile
+    /// time (`const _: () = assert!(matches!(
+    /// ResourceLimits::derive_axis_endpoint_span(Some(0), Some(0)),
+    /// Some(1)));`) — sibling of the const-fn evaluability pins the
+    /// AXIS-CELL projections already carry at their own exits.
+    ///
+    /// **Adoption compounds**: future AXIS-CELL `Option<usize>`-ENDPOINT-
+    /// DERIVED bracket-width projections that currently open-code the
+    /// two-arm joint-dispatch shape rewrite their body from `match
+    /// (self.first_X_axis_index(), self.last_X_axis_index()) { (Some(f),
+    /// Some(l)) => Some(l - f + 1), _ => None }` to
+    /// `Self::derive_axis_endpoint_span(self.first_X_axis_index(),
+    /// self.last_X_axis_index())` at no semantic change, and a mechanical
+    /// sweep of the four BRACKET-WIDTH bodies through the helper becomes
+    /// a substrate-level refactor rather than a per-method rewrite.
+    ///
+    /// **Caller-side invariant**: `f <= l` is required for `l - f` to
+    /// evaluate without underflow. The helper does NOT enforce this — it
+    /// is a structural invariant of the (first, last) pair on the SAME
+    /// axis subset (first is the min, last is the max, so first <= last
+    /// by construction). Callers that pass a NON-companion (first, last)
+    /// pair violate this invariant and will underflow in debug mode /
+    /// wrap in release. Same posture as every shipped BRACKET-WIDTH
+    /// projection body, whose behavior on such input is undefined by the
+    /// same convention.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// joint-presence bracket-width shape at every AXIS-CELL `Option<usize>`-
+    /// ENDPOINT-DERIVED projection exit binds at ONE typed named `const
+    /// fn` on the algebra rather than a per-consumer four-line open-coded
+    /// match. THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// the helper composes mechanically under the two-arm joint-dispatch
+    /// identity above with no re-derivation at the caller. THEORY.md
+    /// §V.1 — knowable platform; the joint-Some AND empty-arm dispatch
+    /// becomes a substrate-level theorem rather than a per-projection
+    /// convention.
+    ///
+    /// Frontier inspiration: Haskell's `liftA2 (\f l -> l - f + 1)` on
+    /// `(Maybe Int, Maybe Int)`; Idris's `Applicative.liftA2 (\f l => l -
+    /// f + 1)` on `(Maybe Nat, Maybe Nat)` under a total function
+    /// signature; Racket's `(and f l (+ (- l f) 1))` joint-presence
+    /// closed-interval width; APL's `1 + (⊃⊖⍵) - (⊃⍵)` bracket-width
+    /// fold on a `(first, last)` boxed pair. Translation through pleme-
+    /// io primitives is the plain `const fn` two-arm joint-dispatch match
+    /// below on the `(Option<usize>, Option<usize>)` split — no closure,
+    /// no typeclass indirection, no higher-kinded machinery, no
+    /// dependency on `Option::zip` + `Option::map` (neither is const-
+    /// callable on stable Rust because both take closures).
+    #[must_use]
+    pub const fn derive_axis_endpoint_span(
+        first: Option<usize>,
+        last: Option<usize>,
+    ) -> Option<usize> {
+        match (first, last) {
+            (Some(f), Some(l)) => Some(l - f + 1),
+            _ => None,
+        }
+    }
+
     /// Whole-posture ARITHMETIC-MIXITY-DEPTH tally — `self.count_mixity_axes()`
     /// returns the size of the MINORITY arm of the (polar, interior)
     /// exhaustive-and-disjoint partition, in `0..=Self::FIELD_COUNT / 2`.
@@ -18033,13 +18168,10 @@ impl ResourceLimits {
     /// increment.
     #[must_use]
     pub const fn bottom_axis_index_span(self) -> Option<usize> {
-        match (
+        Self::derive_axis_endpoint_span(
             self.first_bottom_axis_index(),
             self.last_bottom_axis_index(),
-        ) {
-            (Some(f), Some(l)) => Some(l - f + 1),
-            _ => None,
-        }
+        )
     }
 
     /// Whole-posture INDEX-SPAN-OF-TOP projection —
@@ -18132,10 +18264,7 @@ impl ResourceLimits {
     /// on the DUAL atomic mask.
     #[must_use]
     pub const fn top_axis_index_span(self) -> Option<usize> {
-        match (self.first_top_axis_index(), self.last_top_axis_index()) {
-            (Some(f), Some(l)) => Some(l - f + 1),
-            _ => None,
-        }
+        Self::derive_axis_endpoint_span(self.first_top_axis_index(), self.last_top_axis_index())
     }
 
     /// Whole-posture INDEX-SPAN-OF-POLAR projection —
@@ -18282,10 +18411,7 @@ impl ResourceLimits {
     /// one increment.
     #[must_use]
     pub const fn polar_axis_index_span(self) -> Option<usize> {
-        match (self.first_polar_axis_index(), self.last_polar_axis_index()) {
-            (Some(f), Some(l)) => Some(l - f + 1),
-            _ => None,
-        }
+        Self::derive_axis_endpoint_span(self.first_polar_axis_index(), self.last_polar_axis_index())
     }
 
     /// Whole-posture INDEX-SPAN-OF-INTERIOR projection —
@@ -18372,13 +18498,10 @@ impl ResourceLimits {
     /// on the De Morgan dual COMPOUND cell.
     #[must_use]
     pub const fn interior_axis_index_span(self) -> Option<usize> {
-        match (
+        Self::derive_axis_endpoint_span(
             self.first_interior_axis_index(),
             self.last_interior_axis_index(),
-        ) {
-            (Some(f), Some(l)) => Some(l - f + 1),
-            _ => None,
-        }
+        )
     }
 
     /// Whole-posture INDEX-GAP-COUNT-OF-BOTTOM projection —
@@ -86384,6 +86507,303 @@ mod tests {
         const _: () = assert!(matches!(
             DEFAULT_RESOURCE_LIMITS.interior_axis_is_contiguous(),
             Some(true)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_derive_axis_endpoint_span_agrees_with_open_coded_match() {
+        // Two-arm joint-dispatch identity — the helper's verdict on every
+        // (first, last) pair agrees with the open-coded shape
+        // `match (first, last) { (Some(f), Some(l)) => Some(l - f + 1), _ =>
+        // None }` that every AXIS-CELL Option<usize>-ENDPOINT-DERIVED
+        // BRACKET-WIDTH projection on ResourceLimits carries at its exit.
+        // Swept over the (None, Some) × (None, Some) 2×2 presence
+        // constellation with representative present-arm values so both
+        // cells of the (either-None, both-Some) partition of the
+        // (Option<usize>, Option<usize>) joint-input regime are pinned.
+        // The (Some(f), Some(l)) arm is sampled at three (f, l) pairs
+        // with f <= l covering the singleton-bracket (f == l), narrow
+        // interior (f < l small), and wide interior
+        // (f == 0, l == FIELD_COUNT - 1) postures.
+        for (first, last) in [
+            (None, None),
+            (Some(0_usize), None),
+            (None, Some(0_usize)),
+            (Some(3_usize), None),
+            (None, Some(5_usize)),
+            (Some(0_usize), Some(0_usize)),
+            (Some(2_usize), Some(4_usize)),
+            (Some(0_usize), Some(ResourceLimits::FIELD_COUNT - 1)),
+        ] {
+            let via_helper = ResourceLimits::derive_axis_endpoint_span(first, last);
+            let via_open_code = match (first, last) {
+                (Some(f), Some(l)) => Some(l - f + 1),
+                _ => None,
+            };
+            assert_eq!(
+                via_helper, via_open_code,
+                "helper != open-coded shape at (first, last)=({first:?}, {last:?})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_derive_axis_endpoint_span_empty_arm_preserves_none() {
+        // Empty-arm identity — the (None, None) input and both mixed-
+        // presence inputs (Some(_), None) + (None, Some(_)) all fire
+        // None. The empty-axis posture is PRESERVED verbatim on every
+        // NOT-jointly-Some input, never reclassified as a bracket width.
+        assert_eq!(
+            ResourceLimits::derive_axis_endpoint_span(None, None),
+            None,
+            "(None, None) arm violated",
+        );
+        for present in [0_usize, 1, 3, ResourceLimits::FIELD_COUNT - 1, usize::MAX] {
+            assert_eq!(
+                ResourceLimits::derive_axis_endpoint_span(Some(present), None),
+                None,
+                "(Some({present}), None) arm violated",
+            );
+            assert_eq!(
+                ResourceLimits::derive_axis_endpoint_span(None, Some(present)),
+                None,
+                "(None, Some({present})) arm violated",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_derive_axis_endpoint_span_present_arm_projects_bracket_width() {
+        // Present-arm identity — for every (f, l) with f <= l, the
+        // helper projects the endpoint pair to Some(l - f + 1), the
+        // closed-interval width counting BOTH endpoints AND every
+        // position strictly between them. Sampled across the
+        // singleton (f == l), narrow (l == f + 1), medium
+        // (l == f + FIELD_COUNT / 2), and full-span
+        // (f == 0, l == FIELD_COUNT - 1) postures.
+        for (f, l, expected) in [
+            (0_usize, 0_usize, 1_usize),
+            (5, 5, 1),
+            (0, 1, 2),
+            (2, 3, 2),
+            (
+                0,
+                ResourceLimits::FIELD_COUNT / 2,
+                ResourceLimits::FIELD_COUNT / 2 + 1,
+            ),
+            (
+                0,
+                ResourceLimits::FIELD_COUNT - 1,
+                ResourceLimits::FIELD_COUNT,
+            ),
+        ] {
+            assert_eq!(
+                ResourceLimits::derive_axis_endpoint_span(Some(f), Some(l)),
+                Some(expected),
+                "present arm projection violated at (f={f}, l={l})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_derive_axis_endpoint_span_is_some_bridge() {
+        // is_some bridge — JOINT-Some presence: the helper's is_some
+        // verdict agrees with the LOGICAL-AND of the two-input
+        // presences. The BRACKET-WIDTH family's has-axis-at-cell
+        // boolean projection agrees with the JOINT presence of the two
+        // endpoint families posture-for-posture.
+        for (first, last) in [
+            (None, None),
+            (Some(0_usize), None),
+            (None, Some(0_usize)),
+            (Some(0_usize), Some(0_usize)),
+            (Some(2_usize), Some(5_usize)),
+        ] {
+            assert_eq!(
+                ResourceLimits::derive_axis_endpoint_span(first, last).is_some(),
+                first.is_some() && last.is_some(),
+                "is_some bridge violated at (first, last)=({first:?}, {last:?})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_derive_axis_endpoint_span_diagonal_endpoints_span_one() {
+        // Diagonal-endpoint identity — SINGLE-FIRE coincidence: for
+        // every k, derive_axis_endpoint_span(Some(k), Some(k)) ==
+        // Some(1). A one-element bracket (first == last) has width
+        // exactly 1 — the SINGLE-FIRE COINCIDENCE identity every
+        // BRACKET-WIDTH consumer carries at the singleton posture.
+        for k in [
+            0_usize,
+            1,
+            2,
+            ResourceLimits::FIELD_COUNT / 2,
+            ResourceLimits::FIELD_COUNT - 1,
+        ] {
+            assert_eq!(
+                ResourceLimits::derive_axis_endpoint_span(Some(k), Some(k)),
+                Some(1),
+                "diagonal endpoint span violated at k={k}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_derive_axis_endpoint_span_agrees_with_bottom_axis_index_span_shape() {
+        // Cross-check against the shipped atomic BRACKET-WIDTH projection
+        // shape — for every posture on the (EMPTY, DEFAULT, UNBOUNDED,
+        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation, the
+        // helper applied to the same posture's (first_bottom_axis_index,
+        // last_bottom_axis_index) endpoint pair agrees with the shipped
+        // bottom_axis_index_span verdict. Pins that the helper is
+        // semantics-equivalent to the open-coded shape one existing
+        // AXIS-CELL Option<usize>-ENDPOINT-DERIVED BRACKET-WIDTH
+        // projection carried at its exit — the adoption-safety proof
+        // the sweep rides on.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                ResourceLimits::derive_axis_endpoint_span(
+                    posture.first_bottom_axis_index(),
+                    posture.last_bottom_axis_index(),
+                ),
+                posture.bottom_axis_index_span(),
+                "helper (bottom endpoints) != bottom_axis_index_span on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_derive_axis_endpoint_span_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the two-arm joint-dispatch identity at compile
+        // time as a build-break. Sibling of the const-fn evaluability
+        // pins the AXIS-CELL projections already carry at their own
+        // exits.
+        const _: () = assert!(ResourceLimits::derive_axis_endpoint_span(None, None).is_none());
+        const _: () = assert!(ResourceLimits::derive_axis_endpoint_span(Some(0), None).is_none());
+        const _: () = assert!(ResourceLimits::derive_axis_endpoint_span(None, Some(0)).is_none());
+        const _: () = assert!(matches!(
+            ResourceLimits::derive_axis_endpoint_span(Some(0), Some(0)),
+            Some(1)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::derive_axis_endpoint_span(Some(2), Some(4)),
+            Some(3)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::derive_axis_endpoint_span(
+                Some(0),
+                Some(ResourceLimits::FIELD_COUNT - 1),
+            ),
+            Some(ResourceLimits::FIELD_COUNT)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_index_span_family_bodies_delegate_to_derive_axis_endpoint_span() {
+        // Sweep-of-family pin — asserts each of the four BRACKET-WIDTH
+        // AXIS-CELL projection bodies (bottom_axis_index_span,
+        // top_axis_index_span, polar_axis_index_span,
+        // interior_axis_index_span) agrees with the helper-based shape
+        // `ResourceLimits::derive_axis_endpoint_span(
+        //     self.first_X_axis_index(), self.last_X_axis_index())`
+        // on every (axis, posture) pair from the EMPTY / DEFAULT /
+        // UNBOUNDED / HAND_AUTHORED_MID / HAND_AUTHORED_OTHER preset
+        // constellation (4×5 = 20 verdicts). A future body regression
+        // that swapped the wildcard arm — or a helper regression that
+        // silently dropped the `+ 1` and returned an off-by-one open-
+        // interval width — would break here on at least one pair.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                posture.bottom_axis_index_span(),
+                ResourceLimits::derive_axis_endpoint_span(
+                    posture.first_bottom_axis_index(),
+                    posture.last_bottom_axis_index(),
+                ),
+                "bottom index_span delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.top_axis_index_span(),
+                ResourceLimits::derive_axis_endpoint_span(
+                    posture.first_top_axis_index(),
+                    posture.last_top_axis_index(),
+                ),
+                "top index_span delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.polar_axis_index_span(),
+                ResourceLimits::derive_axis_endpoint_span(
+                    posture.first_polar_axis_index(),
+                    posture.last_polar_axis_index(),
+                ),
+                "polar index_span delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.interior_axis_index_span(),
+                ResourceLimits::derive_axis_endpoint_span(
+                    posture.first_interior_axis_index(),
+                    posture.last_interior_axis_index(),
+                ),
+                "interior index_span delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_index_span_family_bodies_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the BRACKET-WIDTH family bodies preserved
+        // const-fn evaluability under the sweep through
+        // derive_axis_endpoint_span. Each of the four swept projections ×
+        // the three shipped `pub const` preset postures (EMPTY,
+        // UNBOUNDED, DEFAULT). EMPTY packs six bottom axes uniformly, so
+        // the (bottom, polar) pair fires Some(FIELD_COUNT) (bracket
+        // covers the full field width) and the (top, interior) pair
+        // fires None (no such axis). UNBOUNDED is the corner mirror.
+        // DEFAULT packs six strictly-interior axes, so only the
+        // (interior, polar) pair fires Some(_).
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_index_span(),
+            Some(ResourceLimits::FIELD_COUNT)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.top_axis_index_span().is_none());
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_index_span(),
+            Some(ResourceLimits::FIELD_COUNT)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.interior_axis_index_span().is_none());
+
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_index_span().is_none());
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_index_span(),
+            Some(ResourceLimits::FIELD_COUNT)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_index_span(),
+            Some(ResourceLimits::FIELD_COUNT)
+        ));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .interior_axis_index_span()
+            .is_none());
+
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.bottom_axis_index_span().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_index_span().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_axis_index_span().is_none());
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_index_span(),
+            Some(ResourceLimits::FIELD_COUNT)
         ));
     }
 

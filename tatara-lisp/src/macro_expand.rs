@@ -2088,18 +2088,27 @@ impl ResourceLimits {
     /// (irreflexivity on every pole). Pinned by
     /// `resource_limits_ne_pole_pins`.
     ///
-    /// Encoded as the fold `axes_ne[0] || ... || axes_ne[5]` — one
-    /// primitive delegation to [`Self::axes_ne`], so the whole-posture
-    /// difference lives at exactly one implementation site (the
-    /// per-axis difference mask's De Morgan complement of `axes_eq`),
-    /// and a future re-derivation of `axes_eq` propagates to `ne`
-    /// mechanically through `axes_ne`. Mirrors [`Self::eq`]'s
-    /// six-fold `&&` conjunction over `axes_eq` one COMBINATOR-TRANSFORM
-    /// axis over — the `&&`-of-`==` recovery on the equality mask
-    /// becomes the `||`-of-`!=` recovery on the difference mask,
-    /// exactly the same substrate law the (axes_eq, axes_ne) pair
-    /// carries at the per-axis-mask surface one PROJECTION-KIND axis
-    /// down.
+    /// Encoded as [`Self::any_mask_bit_set`] over `self.axes_ne(other)`
+    /// — a one-line composition of two shipped substrate primitives
+    /// (the per-axis difference mask and the per-axis ANY-fold), so
+    /// the whole-posture difference lives at exactly one implementation
+    /// site and a future re-derivation of either the difference mask
+    /// or the ANY-fold propagates to `ne` mechanically without a
+    /// per-method fix-up. Mirrors [`Self::eq`]'s
+    /// `Self::all_mask_bits_set(self.axes_eq(other))` composition one
+    /// COMBINATOR-TRANSFORM axis over — the ALL-fold-of-`==` recovery
+    /// on the equality mask becomes the ANY-fold-of-`!=` recovery on
+    /// the difference mask, exactly the same substrate law the
+    /// (axes_eq, axes_ne) pair carries at the per-axis-mask surface
+    /// one PROJECTION-KIND axis down, now dispatched through the
+    /// (`any_mask_bit_set`, `all_mask_bits_set`) QUANTIFIER-KIND pair
+    /// at the boolean-fold surface. Retires the FIELD_COUNT-hardcoded
+    /// `mask[0] || mask[1] || mask[2] || mask[3] || mask[4] || mask[5]`
+    /// six-primitive disjunction chain the body previously carried —
+    /// a future FIELD_COUNT bump now propagates mechanically through
+    /// the helper's `while i < FIELD_COUNT` short-circuit forward scan
+    /// rather than requiring the callsite chain to be manually
+    /// extended.
     ///
     /// `const fn` so a caller can pin a preset-difference identity
     /// at compile time (`const _: () = assert!(EMPTY_RESOURCE_LIMITS
@@ -2124,8 +2133,7 @@ impl ResourceLimits {
     /// below, no trait indirection.
     #[must_use]
     pub const fn ne(self, other: Self) -> bool {
-        let mask = self.axes_ne(other);
-        mask[0] || mask[1] || mask[2] || mask[3] || mask[4] || mask[5]
+        Self::any_mask_bit_set(self.axes_ne(other))
     }
 
     /// Per-axis pointwise `<` mask across the six ceilings — the ATOMIC
@@ -88877,6 +88885,46 @@ mod tests {
                     a.eq(b),
                     ResourceLimits::all_mask_bits_set(a.axes_eq(b)),
                     "eq disagrees with all_mask_bits_set(axes_eq) on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_ne_body_delegates_to_any_mask_bit_set() {
+        // Sweep-of-callsite pin — the direct DUAL of
+        // `resource_limits_eq_body_delegates_to_all_mask_bits_set` on
+        // the DE MORGAN COMPLEMENT edge of the (eq, ne) whole-posture-
+        // verdict pair. After routing the whole-posture `ne` body from
+        // the FIELD_COUNT-hardcoded
+        // `mask[0] || mask[1] || mask[2] || mask[3] || mask[4] || mask[5]`
+        // six-primitive disjunction chain through
+        // ResourceLimits::any_mask_bit_set, the whole 5×5 = 25
+        // preset×preset constellation continues to agree with the
+        // helper-based shape `any_mask_bit_set(axes_ne(other))`. The
+        // pin closes the FIELD_COUNT-decoupling refactor on the ANY-fold
+        // (existential-QUANTIFIER-KIND) callsite for the whole-posture-
+        // verdict surface: a future FIELD_COUNT bump that would have
+        // silently under-covered the hardcoded disjunction chain is now
+        // caught by the helper's `while i < FIELD_COUNT` forward scan
+        // rather than an axis-count that no callsite guarded. Together
+        // with the paired eq delegation-pin sweep the two tests close
+        // the (ALL-fold, ANY-fold) QUANTIFIER-KIND column of the whole-
+        // posture equality/inequality pair at ONE substrate primitive
+        // per QUANTIFIER-KIND at every callsite in the (eq, ne) pair.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in postures {
+            for b in postures {
+                assert_eq!(
+                    a.ne(b),
+                    ResourceLimits::any_mask_bit_set(a.axes_ne(b)),
+                    "ne disagrees with any_mask_bit_set(axes_ne) on ({a:?}, {b:?})",
                 );
             }
         }

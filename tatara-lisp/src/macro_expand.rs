@@ -14119,6 +14119,124 @@ impl ResourceLimits {
         }
     }
 
+    /// ARM-AGNOSTIC MAGNITUDE-PRESERVING DIFFERENCE from a coupled COUNT
+    /// PAIR on whole-posture `usize` axial-tally sub-cells —
+    /// `Self::absolute_count_difference(lhs, rhs)` returns `lhs.abs_diff(
+    /// rhs)`, the ABSOLUTE-VALUE fold of the SIGNED integer difference
+    /// `lhs - rhs` back into the non-negative `usize` half-line. The
+    /// BOUNDARY primitive lifting the shape `lhs.abs_diff(rhs)` that
+    /// every WHOLE-POSTURE UNDIRECTED-KIND ARM-AGNOSTIC CARDINAL
+    /// projection on [`ResourceLimits`] carries at its exit —
+    /// [`Self::axial_skew`] and [`Self::atomic_skew`] both wrap the
+    /// commutative absolute-difference of a paired (arm-A count, arm-B
+    /// count) tally in the same `usize::abs_diff` reduction. Pre-lift
+    /// each UNDIRECTED-CARDINAL projection open-coded the one-line
+    /// `self.count_X_axes().abs_diff(self.count_Y_axes())` at its own
+    /// exit — a two-point copy-paste whose consistency the type system
+    /// did not gate at the pair identity (a projection that duplicated
+    /// the SAME count on both `abs_diff` arms would silently emit `0` on
+    /// every posture, collapsing the UNDIRECTED CARDINAL projection to
+    /// the constant balance corner regardless of the underlying axial
+    /// tally split). Post-lift the shape binds at ONE typed `const fn`
+    /// on [`ResourceLimits`], and every future WHOLE-POSTURE UNDIRECTED-
+    /// KIND ARM-AGNOSTIC CARDINAL projection composes through this
+    /// helper — the absolute-difference reduction over a coupled `(usize,
+    /// usize)` count pair is a substrate-level theorem rather than a
+    /// per-consumer one-line open-coded `.abs_diff(...)` chain.
+    ///
+    /// The DIRECT UNSIGNED sibling of [`Self::signed_count_difference`]
+    /// one SIGNEDNESS axis over on the SAME `(usize, usize) → *` two-
+    /// input surface: where the SIGNED sibling dispatches on the (lhs-
+    /// strong, rhs-strong-or-tied) order-split of the two count tallies
+    /// and carries the arm-identity through the output sign in `isize`,
+    /// THIS combinator DISCARDS arm identity and keeps ONLY the
+    /// MAGNITUDE through the always-non-negative `usize` output, folding
+    /// both (lhs-strong, rhs-strong) arms onto the SAME magnitude cell
+    /// symmetrically. Composition identity: `signed_count_difference(lhs,
+    /// rhs).unsigned_abs() == absolute_count_difference(lhs, rhs)` on
+    /// every `(lhs, rhs)` pair — the two combinators agree on magnitude
+    /// posture-for-posture and differ only in whether the arm-identity
+    /// sign is carried through the output.
+    ///
+    /// **Bare-body identity — LOAD-BEARING structural pin**: on every
+    /// `(lhs, rhs)`, `absolute_count_difference(lhs, rhs) ==
+    /// lhs.abs_diff(rhs)`. Pinned via
+    /// `resource_limits_absolute_count_difference_agrees_with_open_coded_abs_diff`.
+    ///
+    /// **Commutativity — SYMMETRY on the input pair**: on every
+    /// `(lhs, rhs)`, `absolute_count_difference(lhs, rhs) ==
+    /// absolute_count_difference(rhs, lhs)`. The ARM-AGNOSTIC combinator
+    /// folds both order-cells onto the SAME magnitude reading —
+    /// unlike the SIGNED sibling whose swapped-input identity is a SIGN
+    /// FLIP. Pinned via
+    /// `resource_limits_absolute_count_difference_is_commutative_in_its_input_pair`.
+    ///
+    /// **Diagonal identity — ZERO on the tie cell**: for every `n`,
+    /// `absolute_count_difference(n, n) == 0`. The tie corner of the
+    /// input pair folds to the balance corner of the output magnitude.
+    /// Pinned via
+    /// `resource_limits_absolute_count_difference_diagonal_inputs_fold_to_zero`.
+    ///
+    /// **Signum bridge — MAGNITUDE-of-SIGNED identity**: on every
+    /// `(lhs, rhs)`, `absolute_count_difference(lhs, rhs) ==
+    /// signed_count_difference(lhs, rhs).unsigned_abs()`. The UNSIGNED
+    /// combinator recovers the MAGNITUDE the SIGNED sibling folds
+    /// through its arm-identity sign. Pinned via
+    /// `resource_limits_absolute_count_difference_agrees_with_signed_unsigned_abs`.
+    ///
+    /// **Zero-tie bridge — IS-ZERO iff INPUTS-EQUAL**: on every
+    /// `(lhs, rhs)`, `absolute_count_difference(lhs, rhs) == 0` iff
+    /// `lhs == rhs`. The balance corner of the magnitude output
+    /// coincides exactly with the diagonal cell of the input pair.
+    /// Pinned via
+    /// `resource_limits_absolute_count_difference_is_zero_iff_inputs_equal`.
+    ///
+    /// `const fn` so a caller can pin the helper's verdict at compile
+    /// time (`const _: () = assert!(
+    /// ResourceLimits::absolute_count_difference(0, 0) == 0);`) —
+    /// sibling of the const-fn evaluability pins the UNDIRECTED CARDINAL
+    /// projections already carry at their own exits.
+    ///
+    /// **Adoption compounds**: future WHOLE-POSTURE UNDIRECTED-KIND ARM-
+    /// AGNOSTIC CARDINAL projections that currently open-code the
+    /// absolute-difference on a coupled (usize, usize) count pair
+    /// rewrite their body from `self.count_X_axes().abs_diff(self
+    /// .count_Y_axes())` to `Self::absolute_count_difference(self
+    /// .count_X_axes(), self.count_Y_axes())` at no semantic change, and
+    /// a mechanical sweep of the two UNDIRECTED-CARDINAL bodies through
+    /// the helper becomes a substrate-level refactor rather than a
+    /// per-method rewrite.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// absolute-difference reduction at every WHOLE-POSTURE UNDIRECTED-
+    /// KIND ARM-AGNOSTIC CARDINAL projection body binds at ONE typed
+    /// named `const fn` on the algebra rather than a per-projection
+    /// open-coded `.abs_diff(...)` chain. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; the helper composes mechanically
+    /// under the bare-body identity above with no re-derivation at the
+    /// caller, and both swept callsites preserve their const-fn
+    /// evaluability pins verbatim. THEORY.md §V.1 — knowable platform;
+    /// the commutative absolute-difference dispatch becomes a substrate-
+    /// level theorem rather than a per-projection convention.
+    ///
+    /// Frontier inspiration: classical integer algebra's canonical
+    /// "absolute-value" fold on the SIGNED integer difference of the
+    /// two arm tallies — the DIRECT lift of `|a - b|` from `Z` to
+    /// `usize` through the total `abs_diff` combinator. Rust's own
+    /// `isize::unsigned_abs` reads the SAME magnitude-of-SIGNED bridge
+    /// this helper carries at the signum-bridge pin. APL's `|⍺-⍵|`
+    /// UNSIGNED magnitude on a paired scalar; Haskell's `abs (a - b)`
+    /// after `Word → Int` lifts; Idris's `abs (cast a - cast b : Int)`
+    /// under a total signature on two `Nat` inputs; Racket's
+    /// `(abs (- a b))` on paired non-negatives. Translation through
+    /// pleme-io primitives is the plain `const fn` `usize::abs_diff`
+    /// delegation below — no `i64` bridge, no `checked_sub` indirection,
+    /// no `TryFrom` fallible cast, no new dep, no typeclass indirection.
+    #[must_use]
+    pub const fn absolute_count_difference(lhs: usize, rhs: usize) -> usize {
+        lhs.abs_diff(rhs)
+    }
+
     /// Presence-preserving CLOSED-INTERVAL WIDTH from a coupled ENDPOINT PAIR
     /// on whole-posture `Option<usize>` axis-endpoint tallies —
     /// `Self::derive_axis_endpoint_span(first, last)` returns
@@ -15694,17 +15812,22 @@ impl ResourceLimits {
     /// the zero leg AND a non-saturated positive leg of the UNDIRECTED
     /// CARDINAL range.
     ///
-    /// Encoded as the plain `const fn` `abs_diff` on the two already-
+    /// Encoded as a single-composition delegation through the substrate
+    /// primitive [`Self::absolute_count_difference`] on the two already-
     /// lifted ARITHMETIC-QUANTIFIER tallies — one primitive delegation
     /// each to [`Self::count_polar_axes`] and [`Self::count_interior_axes`],
-    /// composed through `usize::abs_diff` (a `const fn` since Rust 1.60).
-    /// No new dep, no per-axis loop, no allocation.
+    /// fed pairwise through the shipped `(usize, usize) → usize`
+    /// UNDIRECTED-KIND combinator on the whole-posture count algebra.
+    /// The absolute-difference reduction is named at ONE typed `const fn`
+    /// on the algebra rather than an open-coded `.abs_diff(...)` on the
+    /// per-projection body. No new dep, no per-axis loop, no allocation.
     ///
     /// `const fn` so a caller can pin the exact skew at compile time
     /// (`const _: () = assert!(EMPTY_RESOURCE_LIMITS.axial_skew() == 6);`).
     ///
     /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
     /// UNDIRECTED CARDINAL projection is a named typed `usize` exit
+    /// through the substrate primitive [`Self::absolute_count_difference`]
     /// rather than an inline `self.count_polar_axes()
     /// .abs_diff(self.count_interior_axes())` per-consumer combinator.
     /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
@@ -15736,7 +15859,7 @@ impl ResourceLimits {
     /// loop, no allocation.
     #[must_use]
     pub const fn axial_skew(self) -> usize {
-        self.count_polar_axes().abs_diff(self.count_interior_axes())
+        Self::absolute_count_difference(self.count_polar_axes(), self.count_interior_axes())
     }
 
     /// Whole-posture ARM-AGNOSTIC DIRECTED-LEAD projection —
@@ -17087,11 +17210,17 @@ impl ResourceLimits {
     /// pins only ONE of (`2`) because two of the three fixtures sit at
     /// the compound tie.
     ///
-    /// Encoded as the plain `const fn` `usize::abs_diff` on the two
-    /// already-lifted ARITHMETIC-QUANTIFIER tallies — one primitive
-    /// delegation, mirroring [`Self::axial_skew`]'s shape verbatim on
-    /// the DUAL atomic combinator. No `i64` bridge, no `checked_sub`
-    /// indirection, no per-axis loop, no allocation.
+    /// Encoded as a single-composition delegation through the substrate
+    /// primitive [`Self::absolute_count_difference`] on the two already-
+    /// lifted ARITHMETIC-QUANTIFIER tallies — one primitive delegation
+    /// each to [`Self::count_bottom_axes`] and [`Self::count_top_axes`],
+    /// fed pairwise through the shipped `(usize, usize) → usize`
+    /// UNDIRECTED-KIND combinator on the whole-posture count algebra,
+    /// mirroring [`Self::axial_skew`]'s shape verbatim on the DUAL
+    /// atomic combinator. The absolute-difference reduction is named at
+    /// ONE typed `const fn` on the algebra rather than an open-coded
+    /// `.abs_diff(...)` on the per-projection body. No `i64` bridge, no
+    /// `checked_sub` indirection, no per-axis loop, no allocation.
     ///
     /// `const fn` so a caller can pin the exact atomic UNDIRECTED
     /// CARDINAL skew at compile time (`const _: () = assert!(
@@ -17099,7 +17228,8 @@ impl ResourceLimits {
     ///
     /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
     /// atomic UNDIRECTED CARDINAL projection is a named typed `usize`
-    /// exit rather than an inline `count_bottom_axes().abs_diff(
+    /// exit through the substrate primitive [`Self::absolute_count_difference`]
+    /// rather than an inline `count_bottom_axes().abs_diff(
     /// count_top_axes())` per-consumer subtraction. THEORY.md §II.1
     /// invariant 5 — composition preserves proofs; the (axial_skew,
     /// atomic_skew) pair jointly carries the UNDIRECTED CARDINAL
@@ -17127,7 +17257,7 @@ impl ResourceLimits {
     /// typeclass indirection, no per-axis loop, no allocation.
     #[must_use]
     pub const fn atomic_skew(self) -> usize {
-        self.count_bottom_axes().abs_diff(self.count_top_axes())
+        Self::absolute_count_difference(self.count_bottom_axes(), self.count_top_axes())
     }
 
     /// Whole-posture ATOMIC ARM-AGNOSTIC DIRECTED-LEAD projection —
@@ -89091,6 +89221,286 @@ mod tests {
             assert!(UNBOUNDED_RESOURCE_LIMITS.atomic_signed_skew() == -FIELD_COUNT_AS_ISIZE);
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.axial_signed_skew() == -FIELD_COUNT_AS_ISIZE);
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.atomic_signed_skew() == 0);
+    }
+
+    #[test]
+    fn resource_limits_absolute_count_difference_agrees_with_open_coded_abs_diff() {
+        // Bare-body identity — the helper's verdict on every (lhs, rhs)
+        // pair agrees with the open-coded shape `lhs.abs_diff(rhs)` that
+        // every WHOLE-POSTURE UNDIRECTED-KIND ARM-AGNOSTIC CARDINAL
+        // projection on ResourceLimits carried at its exit pre-lift.
+        // Swept over the (lhs < rhs, lhs == rhs, lhs > rhs) three-cell
+        // order-partition with representative values so all three cells
+        // of the ARM-TRICHOTOMY on the (usize, usize) joint-input regime
+        // are pinned, using axial-tally-bounded samples (0..=FIELD_COUNT)
+        // for which the caller-side invariant is discharged by
+        // construction.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::absolute_count_difference(lhs, rhs),
+                lhs.abs_diff(rhs),
+                "helper != open-coded abs_diff at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_absolute_count_difference_is_commutative_in_its_input_pair() {
+        // Commutativity — the ARM-AGNOSTIC combinator folds both order-
+        // cells of the input pair onto the SAME magnitude reading.
+        // Unlike the SIGNED sibling whose swapped-input identity is a
+        // SIGN FLIP, THIS combinator's swapped-input identity is the
+        // FIXED-POINT one: `absolute_count_difference(lhs, rhs) ==
+        // absolute_count_difference(rhs, lhs)` on every (lhs, rhs). A
+        // future body regression that dropped the abs_diff commutativity
+        // (e.g. replaced with a directed `saturating_sub`) would break
+        // here on any lhs != rhs cell.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (3, 5),
+            (1, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::absolute_count_difference(lhs, rhs),
+                ResourceLimits::absolute_count_difference(rhs, lhs),
+                "commutativity violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_absolute_count_difference_diagonal_inputs_fold_to_zero() {
+        // Diagonal identity — for every n in the caller-safe regime, the
+        // helper folds the diagonal (n, n) input to 0. The tie corner of
+        // the input pair coincides with the balance corner of the
+        // magnitude output. Swept across the (0, min-positive,
+        // FIELD_COUNT, mid) constellation covering the representative
+        // axial-tally diagonal postures.
+        for n in [
+            0_usize,
+            1,
+            ResourceLimits::FIELD_COUNT / 2,
+            ResourceLimits::FIELD_COUNT,
+        ] {
+            assert_eq!(
+                ResourceLimits::absolute_count_difference(n, n),
+                0,
+                "diagonal fold violated at n={n}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_absolute_count_difference_lhs_strong_arm_projects_positive_magnitude() {
+        // Order-arm dispatch — on every (lhs, rhs) with lhs > rhs, the
+        // helper projects the positive magnitude `lhs - rhs`. The
+        // ARM-AGNOSTIC reading of the lhs-strong arm of the SIGNED
+        // sibling's dispatch: where the SIGNED sibling reads it as
+        // `+(lhs - rhs)`, THIS combinator reads it as the plain positive
+        // magnitude `lhs - rhs` in `usize`.
+        for (lhs, rhs) in [
+            (1_usize, 0_usize),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+        ] {
+            assert!(
+                lhs > rhs,
+                "test-local invariant violated: lhs must exceed rhs, got ({lhs}, {rhs})",
+            );
+            assert_eq!(
+                ResourceLimits::absolute_count_difference(lhs, rhs),
+                lhs - rhs,
+                "lhs-strong arm magnitude regressed at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_absolute_count_difference_rhs_strong_arm_projects_positive_magnitude() {
+        // Order-arm dispatch — on every (lhs, rhs) with rhs > lhs, the
+        // helper projects the positive magnitude `rhs - lhs`. The
+        // ARM-AGNOSTIC reading of the rhs-strong arm of the SIGNED
+        // sibling's dispatch: where the SIGNED sibling reads it as
+        // `-(rhs - lhs)`, THIS combinator reads it as the plain positive
+        // magnitude `rhs - lhs` in `usize`, folded onto the SAME
+        // non-negative cell the lhs-strong arm carries.
+        for (lhs, rhs) in [
+            (0_usize, 1_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (1, 5),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert!(
+                rhs > lhs,
+                "test-local invariant violated: rhs must exceed lhs, got ({lhs}, {rhs})",
+            );
+            assert_eq!(
+                ResourceLimits::absolute_count_difference(lhs, rhs),
+                rhs - lhs,
+                "rhs-strong arm magnitude regressed at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_absolute_count_difference_agrees_with_signed_unsigned_abs() {
+        // Signum bridge — the UNSIGNED combinator recovers the MAGNITUDE
+        // the SIGNED sibling folds through its arm-identity sign. On
+        // every (lhs, rhs) pair, `absolute_count_difference(lhs, rhs) ==
+        // signed_count_difference(lhs, rhs).unsigned_abs()`. The two
+        // combinators agree on magnitude posture-for-posture and differ
+        // only in whether the arm-identity sign is carried through the
+        // output.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::absolute_count_difference(lhs, rhs),
+                ResourceLimits::signed_count_difference(lhs, rhs).unsigned_abs(),
+                "signum bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_absolute_count_difference_is_zero_iff_inputs_equal() {
+        // Zero-tie bridge — the balance corner of the magnitude output
+        // coincides exactly with the diagonal cell of the input pair.
+        // `absolute_count_difference(lhs, rhs) == 0` iff `lhs == rhs`.
+        // Load-bearing at every consumer that folds the (equal, unequal)
+        // input partition onto the (balance, mismatch) output partition
+        // through the UNDIRECTED CARDINAL projection.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::absolute_count_difference(lhs, rhs) == 0,
+                lhs == rhs,
+                "is-zero-iff-equal bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_absolute_count_difference_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the helper's `pub const fn` signature
+        // preserves compile-time evaluability across the diagonal-tie,
+        // lhs-strong-arm, rhs-strong-arm, and FIELD_COUNT-corner cells
+        // of the (usize, usize) joint-input regime. Complements the
+        // primary bare-body identity pin
+        // `resource_limits_absolute_count_difference_agrees_with_open_coded_abs_diff`
+        // by extending the const-evaluability proof onto the compile-
+        // time surface.
+        const _: () = assert!(ResourceLimits::absolute_count_difference(0, 0) == 0);
+        const _: () = assert!(
+            ResourceLimits::absolute_count_difference(0, ResourceLimits::FIELD_COUNT)
+                == ResourceLimits::FIELD_COUNT
+        );
+        const _: () = assert!(
+            ResourceLimits::absolute_count_difference(ResourceLimits::FIELD_COUNT, 0)
+                == ResourceLimits::FIELD_COUNT
+        );
+        const _: () = assert!(
+            ResourceLimits::absolute_count_difference(
+                ResourceLimits::FIELD_COUNT,
+                ResourceLimits::FIELD_COUNT,
+            ) == 0
+        );
+        const _: () = assert!(ResourceLimits::absolute_count_difference(5, 1) == 4);
+        const _: () = assert!(ResourceLimits::absolute_count_difference(1, 5) == 4);
+    }
+
+    #[test]
+    fn resource_limits_undirected_cardinal_family_bodies_delegate_to_absolute_count_difference() {
+        // Sweep-of-family pin — asserts each of the two WHOLE-POSTURE
+        // UNDIRECTED-KIND ARM-AGNOSTIC CARDINAL projection bodies
+        // (axial_skew over the (polar, interior) axial partition,
+        // atomic_skew over the ATOMIC (bottom, top) sub-partition of
+        // the polar cell) agrees with the helper-based shape
+        // `ResourceLimits::absolute_count_difference(self.count_LHS(),
+        // self.count_RHS())` on every posture from the EMPTY / DEFAULT /
+        // UNBOUNDED / HAND_AUTHORED_MID / HAND_AUTHORED_OTHER preset
+        // constellation (2×5 = 10 verdicts). A future body regression
+        // that swapped one of the count inputs to a wrong count — or a
+        // helper regression that dropped the abs_diff commutativity —
+        // would break here on at least one posture.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                posture.axial_skew(),
+                ResourceLimits::absolute_count_difference(
+                    posture.count_polar_axes(),
+                    posture.count_interior_axes(),
+                ),
+                "axial_skew delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.atomic_skew(),
+                ResourceLimits::absolute_count_difference(
+                    posture.count_bottom_axes(),
+                    posture.count_top_axes(),
+                ),
+                "atomic_skew delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_undirected_cardinal_family_bodies_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the WHOLE-POSTURE UNDIRECTED-KIND ARM-
+        // AGNOSTIC CARDINAL family bodies preserved const-fn
+        // evaluability under the sweep through
+        // absolute_count_difference. Each of the two swept projections ×
+        // the three shipped `pub const` preset postures (EMPTY,
+        // UNBOUNDED, DEFAULT). EMPTY packs six bottom axes uniformly,
+        // so the axial arm fires 6 (polar strict-uniform → magnitude 6)
+        // and the atomic arm fires 6 (bottom strict-uniform →
+        // magnitude 6). UNBOUNDED packs six top axes uniformly — axial
+        // 6 and atomic 6 (top strict-uniform → magnitude 6, folded onto
+        // the SAME UNSIGNED cell as the bottom-strong arm). DEFAULT is
+        // interior-uniform, so the axial arm fires 6 (interior strict-
+        // uniform → magnitude 6) and the atomic arm fires 0 (no polar
+        // axis → both atomic tallies are zero → diagonal (0, 0) input
+        // folds to 0).
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.axial_skew() == ResourceLimits::FIELD_COUNT);
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.atomic_skew() == ResourceLimits::FIELD_COUNT);
+        const _: () =
+            assert!(UNBOUNDED_RESOURCE_LIMITS.axial_skew() == ResourceLimits::FIELD_COUNT);
+        const _: () =
+            assert!(UNBOUNDED_RESOURCE_LIMITS.atomic_skew() == ResourceLimits::FIELD_COUNT);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.axial_skew() == ResourceLimits::FIELD_COUNT);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.atomic_skew() == 0);
     }
 
     #[test]

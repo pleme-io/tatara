@@ -12296,6 +12296,109 @@ impl ResourceLimits {
         }
     }
 
+    /// Presence-preserving zero-check on whole-posture `Option<usize>` axis
+    /// counts — `Self::project_axis_count_zero(count)` returns `Some(k == 0)`
+    /// when `count` is `Some(k)`, or `None` when `count` is `None`. The
+    /// BOUNDARY primitive lifting the shape
+    /// `match count { Some(k) => Some(k == 0), None => None }`
+    /// (equivalently the nightly-only `count.map(|k| k == 0)` closure form
+    /// Rust `const fn` cannot express on stable) that every AXIS-CELL
+    /// `Option<usize>`-DERIVED CONTIGUITY PREDICATE on [`ResourceLimits`]
+    /// carries at its exit — `bottom_axis_is_contiguous`,
+    /// `top_axis_is_contiguous`, `polar_axis_is_contiguous`,
+    /// `interior_axis_is_contiguous` all wrap the zero-check of the paired
+    /// [`Self::bottom_axis_gap_count`]-family projection in the same
+    /// presence-preserving dispatch. Pre-lift each CONTIGUITY predicate
+    /// open-coded the four-line
+    /// `match self.X_axis_gap_count() { Some(k) => Some(k == 0), None =>
+    /// None }` at its own exit — a copy-paste cascade whose consistency the
+    /// type system did not gate (a predicate that swapped the `None` arm
+    /// for `Some(true)` would silently reclassify the empty-axis posture as
+    /// `Some(contiguous)` where the canonical shape yields `None`,
+    /// discarding the has-axis distinction the compound `Option<bool>` exit
+    /// was defined to preserve). Post-lift the shape binds at ONE typed
+    /// `const fn` on [`ResourceLimits`], and every future AXIS-CELL
+    /// `Option<usize>`-DERIVED zero-check predicate composes through this
+    /// helper — the empty-arm preservation is a substrate-level theorem
+    /// rather than a per-consumer convention. The COMBINATOR-KIND peer of
+    /// [`Self::witness_axis_presence`] + [`Self::negate_axis_witness`] on
+    /// the OTHER `Option<T>` input regime: presence-conditional wrapping
+    /// over `(count, pred)` at the first, presence-preserving negation over
+    /// `Option<bool>` at the second, and here presence-preserving
+    /// zero-projection over `Option<usize>` — jointly the three helpers
+    /// CLOSE the substrate's `Option<T>` axis-cell combinator surface on
+    /// the (Some-inject, Some-negate, Some-zero-project) mask.
+    ///
+    /// **Two-arm dispatch identity — LOAD-BEARING structural pin**: on
+    /// every `count`, `project_axis_count_zero(count) == match count {
+    /// Some(k) => Some(k == 0), None => None }`. Pinned via
+    /// `resource_limits_project_axis_count_zero_agrees_with_open_coded_match`.
+    ///
+    /// **Empty-arm identity**: `project_axis_count_zero(None) == None` —
+    /// the empty-axis posture is PRESERVED verbatim, never reclassified as
+    /// either present-arm truth value under the zero-projection. Pinned via
+    /// `resource_limits_project_axis_count_zero_empty_arm_preserves_none`.
+    ///
+    /// **Present-arm identity — zero split**: for every `k`,
+    /// `project_axis_count_zero(Some(k)) == Some(k == 0)` — the helper
+    /// projects the present-arm count to its zero-verdict verbatim. Pinned
+    /// via `resource_limits_project_axis_count_zero_present_arm_projects_zero`.
+    ///
+    /// **`is_some` bridge**: `project_axis_count_zero(count).is_some() ==
+    /// count.is_some()`. The presence dispatch is PRESERVED across the
+    /// projection — the CONTIGUOUS family's has-axis-at-pole boolean
+    /// projection agrees with the GAP family's `Option<usize>` presence
+    /// posture-for-posture. Pinned via
+    /// `resource_limits_project_axis_count_zero_is_some_bridge`.
+    ///
+    /// **Monotone-in-count identity dual**: on every `k`,
+    /// `project_axis_count_zero(Some(k)) == Some(true)` iff `k == 0`, and
+    /// `Some(false)` iff `k > 0`. The zero-projection PARTITIONS the
+    /// `usize` present-arm regime into (zero, positive) exhaustively-and-
+    /// disjointly. Pinned via
+    /// `resource_limits_project_axis_count_zero_present_arm_partitions_zero_positive`.
+    ///
+    /// `const fn` so a caller can pin the helper's verdict at compile time
+    /// (`const _: () = assert!(ResourceLimits::project_axis_count_zero(None)
+    /// .is_none());`) — sibling of the const-fn evaluability pins the
+    /// AXIS-CELL predicates already carry at their own exits.
+    ///
+    /// **Adoption compounds**: future AXIS-CELL `Option<usize>`-DERIVED
+    /// zero-check predicates that currently open-code the two-arm shape
+    /// rewrite their body from `match self.X_axis_count() { Some(k) =>
+    /// Some(k == 0), None => None }` to
+    /// `Self::project_axis_count_zero(self.X_axis_count())` at no
+    /// semantic change, and a mechanical sweep of the four CONTIGUOUS
+    /// bodies through the helper becomes a substrate-level refactor rather
+    /// than a per-method rewrite.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// presence-preserving zero-projection shape at every AXIS-CELL
+    /// CONTIGUITY predicate exit binds at ONE typed named `const fn` on
+    /// the algebra rather than a per-consumer four-line open-coded match.
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// helper composes mechanically under the two-arm identity above with
+    /// no re-derivation at the caller. THEORY.md §V.1 — knowable platform;
+    /// the empty-arm preservation becomes a substrate-level theorem rather
+    /// than a per-predicate convention.
+    ///
+    /// Frontier inspiration: Haskell's `fmap (== 0)` on `Maybe Int`;
+    /// Idris's `Functor.map (== 0)` on `Maybe Nat` under a total function
+    /// signature; Racket's `(and c (zero? k))` present-arm-preserving zero
+    /// projection; APL's `0=¨` per-element zero-test on a boxed scalar.
+    /// Translation through pleme-io primitives is the plain `const fn`
+    /// two-arm match below on the `Option<usize>` split — no closure, no
+    /// typeclass indirection, no higher-kinded machinery, and no dependency
+    /// on `Option::map` (which is not const-callable on stable Rust because
+    /// it takes a closure).
+    #[must_use]
+    pub const fn project_axis_count_zero(count: Option<usize>) -> Option<bool> {
+        match count {
+            Some(k) => Some(k == 0),
+            None => None,
+        }
+    }
+
     /// Whole-posture ARITHMETIC-MIXITY-DEPTH tally — `self.count_mixity_axes()`
     /// returns the size of the MINORITY arm of the (polar, interior)
     /// exhaustive-and-disjoint partition, in `0..=Self::FIELD_COUNT / 2`.
@@ -18774,10 +18877,7 @@ impl ResourceLimits {
     /// no allocation.
     #[must_use]
     pub const fn bottom_axis_is_contiguous(self) -> Option<bool> {
-        match self.bottom_axis_gap_count() {
-            Some(k) => Some(k == 0),
-            None => None,
-        }
+        Self::project_axis_count_zero(self.bottom_axis_gap_count())
     }
 
     /// Whole-posture CONTIGUITY-OF-TOP predicate —
@@ -18828,10 +18928,7 @@ impl ResourceLimits {
     /// on the DUAL atomic mask.
     #[must_use]
     pub const fn top_axis_is_contiguous(self) -> Option<bool> {
-        match self.top_axis_gap_count() {
-            Some(k) => Some(k == 0),
-            None => None,
-        }
+        Self::project_axis_count_zero(self.top_axis_gap_count())
     }
 
     /// Whole-posture CONTIGUITY-OF-POLAR predicate —
@@ -18929,10 +19026,7 @@ impl ResourceLimits {
     /// under `Option::map`, no new per-axis scan, no allocation.
     #[must_use]
     pub const fn polar_axis_is_contiguous(self) -> Option<bool> {
-        match self.polar_axis_gap_count() {
-            Some(k) => Some(k == 0),
-            None => None,
-        }
+        Self::project_axis_count_zero(self.polar_axis_gap_count())
     }
 
     /// Whole-posture CONTIGUITY-OF-INTERIOR predicate —
@@ -18989,10 +19083,7 @@ impl ResourceLimits {
     /// on the DUAL COMPOUND mask.
     #[must_use]
     pub const fn interior_axis_is_contiguous(self) -> Option<bool> {
-        match self.interior_axis_gap_count() {
-            Some(k) => Some(k == 0),
-            None => None,
-        }
+        Self::project_axis_count_zero(self.interior_axis_gap_count())
     }
 
     /// Whole-posture SPARSITY-OF-BOTTOM predicate —
@@ -86050,6 +86141,250 @@ mod tests {
             ResourceLimits::negate_axis_witness(None)
         )
         .is_none());
+    }
+
+    #[test]
+    fn resource_limits_project_axis_count_zero_empty_arm_preserves_none() {
+        // Empty-arm identity: on count == None the helper yields None. The
+        // empty-axis posture is PRESERVED verbatim, never reclassified as
+        // either present-arm truth value under the zero-projection — the
+        // has-axis-at-pole distinction the compound Option<bool> exit was
+        // defined to name is preserved by the presence-preserving lift.
+        assert_eq!(ResourceLimits::project_axis_count_zero(None), None);
+    }
+
+    #[test]
+    fn resource_limits_project_axis_count_zero_present_arm_projects_zero() {
+        // Present-arm identity: for every k, the helper wraps the
+        // zero-verdict as Some(k == 0). Swept over k == 0 and a positive
+        // sample so the present-arm behaviour is pinned across both cells
+        // of the (zero, positive) partition of the usize present-arm
+        // regime.
+        assert_eq!(
+            ResourceLimits::project_axis_count_zero(Some(0)),
+            Some(true),
+            "present arm at Some(0)",
+        );
+        assert_eq!(
+            ResourceLimits::project_axis_count_zero(Some(1)),
+            Some(false),
+            "present arm at Some(1)",
+        );
+        assert_eq!(
+            ResourceLimits::project_axis_count_zero(Some(ResourceLimits::FIELD_COUNT)),
+            Some(false),
+            "present arm at Some(FIELD_COUNT)",
+        );
+        assert_eq!(
+            ResourceLimits::project_axis_count_zero(Some(usize::MAX)),
+            Some(false),
+            "present arm at Some(usize::MAX)",
+        );
+    }
+
+    #[test]
+    fn resource_limits_project_axis_count_zero_agrees_with_open_coded_match() {
+        // Two-arm dispatch identity — the helper's verdict on every count
+        // agrees with the open-coded shape
+        // `match count { Some(k) => Some(k == 0), None => None }` that
+        // every AXIS-CELL Option<usize>-DERIVED CONTIGUITY predicate on
+        // ResourceLimits carries at its exit. Swept over None, Some(0),
+        // and a positive sample so the two-arm dispatch is pinned across
+        // both cells of the (zero, positive) partition of the usize
+        // present-arm regime. The `#[allow(clippy::manual_map)]` is
+        // load-bearing on the OPEN-CODED oracle: this test pins the
+        // helper's equivalence to the pre-lift open-coded shape, so
+        // rewriting the oracle to `count.map(|k| k == 0)` would erase the
+        // very shape the pin exists to verify against.
+        #[allow(clippy::manual_map)]
+        for count in [None, Some(0_usize), Some(1_usize), Some(usize::MAX)] {
+            let via_helper = ResourceLimits::project_axis_count_zero(count);
+            let via_open_code = match count {
+                Some(k) => Some(k == 0),
+                None => None,
+            };
+            assert_eq!(
+                via_helper, via_open_code,
+                "helper != open-coded shape at count={count:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_project_axis_count_zero_is_some_bridge() {
+        // is_some bridge: the helper's is_some verdict agrees with the
+        // input's is_some verdict on every count. The presence dispatch
+        // is PRESERVED across the zero-projection — the CONTIGUOUS
+        // family's has-axis-at-pole projection agrees with the GAP
+        // family's Option<usize> presence posture-for-posture.
+        for count in [None, Some(0_usize), Some(1_usize), Some(usize::MAX)] {
+            assert_eq!(
+                ResourceLimits::project_axis_count_zero(count).is_some(),
+                count.is_some(),
+                "is_some bridge violated at count={count:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_project_axis_count_zero_present_arm_partitions_zero_positive() {
+        // Present-arm partition identity: on every k, the helper fires
+        // Some(true) iff k == 0 and Some(false) iff k > 0. The zero-
+        // projection PARTITIONS the usize present-arm regime into (zero,
+        // positive) exhaustively-and-disjointly — the arithmetic
+        // trichotomy on N collapses to the boolean (zero, positive)
+        // dichotomy under the helper's map.
+        for k in [0_usize, 1, 2, ResourceLimits::FIELD_COUNT, usize::MAX] {
+            let via_helper = ResourceLimits::project_axis_count_zero(Some(k));
+            if k == 0 {
+                assert_eq!(via_helper, Some(true), "zero cell violated at k={k}");
+            } else {
+                assert_eq!(via_helper, Some(false), "positive cell violated at k={k}");
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_project_axis_count_zero_agrees_with_bottom_axis_is_contiguous_shape() {
+        // Cross-check against the shipped atomic CONTIGUOUS predicate
+        // shape — for every posture on the (EMPTY, DEFAULT, UNBOUNDED,
+        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation, the
+        // helper applied to the same posture's bottom_axis_gap_count
+        // agrees with the shipped bottom_axis_is_contiguous verdict.
+        // Pins that the helper is semantics-equivalent to the open-coded
+        // shape one existing AXIS-CELL Option<usize>-DERIVED CONTIGUITY
+        // predicate carried at its exit — the adoption-safety proof the
+        // sweep rides on.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                ResourceLimits::project_axis_count_zero(posture.bottom_axis_gap_count()),
+                posture.bottom_axis_is_contiguous(),
+                "helper (bottom gap) != bottom_axis_is_contiguous on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_project_axis_count_zero_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the two-arm identity at compile time as a
+        // build-break. Sibling of the const-fn evaluability pins the
+        // AXIS-CELL predicates already carry at their own exits.
+        const _: () = assert!(ResourceLimits::project_axis_count_zero(None).is_none());
+        const _: () = assert!(matches!(
+            ResourceLimits::project_axis_count_zero(Some(0)),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::project_axis_count_zero(Some(1)),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::project_axis_count_zero(Some(ResourceLimits::FIELD_COUNT)),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::project_axis_count_zero(Some(usize::MAX)),
+            Some(false)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_contiguous_family_bodies_delegate_to_project_axis_count_zero() {
+        // Sweep-of-family pin — asserts each of the four CONTIGUOUS
+        // AXIS-CELL predicate bodies (bottom_axis_is_contiguous,
+        // top_axis_is_contiguous, polar_axis_is_contiguous,
+        // interior_axis_is_contiguous) agrees with the helper-based shape
+        // `ResourceLimits::project_axis_count_zero(self.X_axis_gap_count())`
+        // on every (axis, posture) pair from the EMPTY / DEFAULT /
+        // UNBOUNDED / HAND_AUTHORED_MID / HAND_AUTHORED_OTHER preset
+        // constellation (4×5 = 20 verdicts). A future body regression
+        // that swapped the None arm — or a helper regression that
+        // silently dropped the zero comparison — would break here on at
+        // least one pair.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                posture.bottom_axis_is_contiguous(),
+                ResourceLimits::project_axis_count_zero(posture.bottom_axis_gap_count()),
+                "bottom contiguous delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.top_axis_is_contiguous(),
+                ResourceLimits::project_axis_count_zero(posture.top_axis_gap_count()),
+                "top contiguous delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.polar_axis_is_contiguous(),
+                ResourceLimits::project_axis_count_zero(posture.polar_axis_gap_count()),
+                "polar contiguous delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.interior_axis_is_contiguous(),
+                ResourceLimits::project_axis_count_zero(posture.interior_axis_gap_count()),
+                "interior contiguous delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_contiguous_family_bodies_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the CONTIGUOUS family bodies preserved
+        // const-fn evaluability under the sweep through
+        // project_axis_count_zero. Each of the four swept predicates ×
+        // the three shipped `pub const` preset postures (EMPTY,
+        // UNBOUNDED, DEFAULT). EMPTY packs six bottom axes uniformly, so
+        // the (bottom, polar) pair fires Some(true) (fully contiguous by
+        // saturation-of-bracket) and the (top, interior) pair fires
+        // None (no such axis). UNBOUNDED is the corner mirror.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_contiguous(),
+            Some(true)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.top_axis_is_contiguous().is_none());
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_contiguous(),
+            Some(true)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .interior_axis_is_contiguous()
+            .is_none());
+
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .bottom_axis_is_contiguous()
+            .is_none());
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_contiguous(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_contiguous(),
+            Some(true)
+        ));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .interior_axis_is_contiguous()
+            .is_none());
+
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .bottom_axis_is_contiguous()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_is_contiguous().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_contiguous().is_none());
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_contiguous(),
+            Some(true)
+        ));
     }
 
     #[test]

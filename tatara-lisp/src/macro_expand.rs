@@ -14237,6 +14237,176 @@ impl ResourceLimits {
         lhs.abs_diff(rhs)
     }
 
+    /// ARM-SELECTING STRICT-DOMINANCE COUNT LEAD from a coupled COUNT
+    /// PAIR on whole-posture `usize` axial-tally sub-cells —
+    /// `Self::witness_strict_count_lead(lhs, rhs)` returns
+    /// `Some(lhs - rhs)` when `lhs > rhs`, or `None` otherwise. The
+    /// BOUNDARY primitive lifting the shape
+    /// `if lhs > rhs { Some(lhs - rhs) } else { None }` that every
+    /// WHOLE-POSTURE ARM-SELECTING DIRECTED-LEAD projection on
+    /// [`ResourceLimits`] carries at its exit — [`Self::polar_lead`],
+    /// [`Self::interior_lead`], [`Self::bottom_lead`], and
+    /// [`Self::top_lead`] all wrap the guarded-subtraction of a paired
+    /// (arm-A count, arm-B count) tally in the same strict `>`-gated
+    /// `Some`/`None` dispatch. Pre-lift each ARM-SELECTING DIRECTED-
+    /// LEAD projection open-coded the four-line `let a =
+    /// self.count_A_axes(); let b = self.count_B_axes(); if a > b {
+    /// Some(a - b) } else { None }` at its own exit — a four-point
+    /// copy-paste whose consistency the type system did not gate (a
+    /// projection that swapped the arms of the strict-inequality guard
+    /// would silently emit `None` on every WINNING posture of the
+    /// intended arm AND silently emit the WRONG arm's magnitude on
+    /// postures where the OTHER arm dominates; a projection that
+    /// dropped the outer strict-inequality guard would panic on
+    /// `usize` underflow on every posture where the intended arm did
+    /// not dominate). Post-lift the shape binds
+    /// at ONE typed `const fn` on [`ResourceLimits`], and every future
+    /// WHOLE-POSTURE ARM-SELECTING DIRECTED-LEAD projection composes
+    /// through this helper — the guarded strict-dominance lead
+    /// reduction over a coupled `(usize, usize)` count pair is a
+    /// substrate-level theorem rather than a per-consumer four-line
+    /// open-coded conditional.
+    ///
+    /// The DIRECT ARM-SELECTING sibling of both
+    /// [`Self::signed_count_difference`] (SIGNED, always defined via
+    /// arm-labelling sign on `isize`) and
+    /// [`Self::absolute_count_difference`] (ARM-AGNOSTIC, always
+    /// defined via `usize` magnitude) on the SAME `(usize, usize) → *`
+    /// two-input surface: where the SIGNED sibling carries arm
+    /// identity through the output sign and the UNSIGNED sibling folds
+    /// both order-arms onto the SAME magnitude cell, THIS combinator
+    /// carries arm identity through the SOME cell SELECTIVELY (fires
+    /// SOME only on the lhs-strong arm, NONE on the tied AND rhs-
+    /// strong arms) — the strict-dominance-witnessing dispatch reading
+    /// the DIRECTED lead only when it exists. The two-input surface
+    /// now closes on ALL THREE output cells (SIGNED `isize`, UNSIGNED
+    /// `usize`, ARM-SELECTING `Option<usize>`) at named typed
+    /// `const fn`s on the algebra.
+    ///
+    /// **Bare-body identity — LOAD-BEARING structural pin**: on every
+    /// `(lhs, rhs)`, `witness_strict_count_lead(lhs, rhs) ==
+    /// if lhs > rhs { Some(lhs - rhs) } else { None }`. Pinned via
+    /// `resource_limits_witness_strict_count_lead_agrees_with_open_coded_guarded_subtraction`.
+    ///
+    /// **Diagonal identity — NONE on the tie cell**: for every `n`,
+    /// `witness_strict_count_lead(n, n) == None`. The tie corner of
+    /// the input pair collapses to the NONE arm of the output —
+    /// strict dominance requires strict inequality, so the tie leg
+    /// rejects. Pinned via
+    /// `resource_limits_witness_strict_count_lead_diagonal_inputs_fold_to_none`.
+    ///
+    /// **lhs-strong arm — SOME projects the positive magnitude**: on
+    /// every `(lhs, rhs)` with `lhs > rhs`,
+    /// `witness_strict_count_lead(lhs, rhs) == Some(lhs - rhs)`.
+    /// Pinned via
+    /// `resource_limits_witness_strict_count_lead_lhs_strong_arm_projects_some_positive_magnitude`.
+    ///
+    /// **rhs-strong arm — NONE rejects the reversed lead**: on every
+    /// `(lhs, rhs)` with `rhs > lhs`,
+    /// `witness_strict_count_lead(lhs, rhs) == None`. The rhs-strong
+    /// arm folds to the SAME NONE cell as the tie arm — the ARM-
+    /// SELECTING combinator DISCARDS the rhs-strong reading, unlike
+    /// the SIGNED sibling which flips it to a negative `isize`. Pinned
+    /// via
+    /// `resource_limits_witness_strict_count_lead_rhs_strong_arm_rejects_to_none`.
+    ///
+    /// **Anti-commutativity — SWAPPED-INPUT mutual exclusion on SOME**:
+    /// on every `(lhs, rhs)`, at MOST one of
+    /// `witness_strict_count_lead(lhs, rhs)` and
+    /// `witness_strict_count_lead(rhs, lhs)` fires SOME (the two
+    /// STRICT-INEQUALITY directions on the same input pair cannot both
+    /// hold — matching the paired DIRECTED-LEAD callers' mutual-
+    /// exclusion pin on the SOME cell). Pinned via
+    /// `resource_limits_witness_strict_count_lead_swapped_inputs_are_mutually_exclusive_on_some`.
+    ///
+    /// **Signum bridge — SOME-iff-STRICTLY-POSITIVE-SIGNED identity**:
+    /// on every `(lhs, rhs)`,
+    /// `witness_strict_count_lead(lhs, rhs).is_some() ==
+    /// (signed_count_difference(lhs, rhs) > 0)`. The ARM-SELECTING
+    /// combinator's SOME arm coincides exactly with the strictly-
+    /// positive cell of the SIGNED sibling's output. Pinned via
+    /// `resource_limits_witness_strict_count_lead_is_some_iff_signed_count_difference_strictly_positive`.
+    ///
+    /// **Magnitude bridge — VALUE-of-ABSOLUTE identity on SOME**: on
+    /// every `(lhs, rhs)` with `lhs > rhs`,
+    /// `witness_strict_count_lead(lhs, rhs).unwrap() ==
+    /// absolute_count_difference(lhs, rhs)`. On the SOME arm, the
+    /// ARM-SELECTING combinator's cardinal value agrees with the
+    /// UNSIGNED sibling's magnitude — the three
+    /// (signed, absolute, arm-selecting) siblings agree on magnitude
+    /// posture-for-posture on the lhs-strong arm and differ only in
+    /// how they express the rhs-strong and tied arms. Pinned via
+    /// `resource_limits_witness_strict_count_lead_some_arm_value_equals_absolute_count_difference`.
+    ///
+    /// **NONE-iff-NON-STRICT-DOMINANCE identity**: on every
+    /// `(lhs, rhs)`,
+    /// `witness_strict_count_lead(lhs, rhs).is_none() == lhs <= rhs`.
+    /// The NONE arm coincides exactly with the non-strict-dominance
+    /// cell of the order partition — folding BOTH the tie leg AND the
+    /// rhs-strong leg onto the SAME NONE cell. Pinned via
+    /// `resource_limits_witness_strict_count_lead_is_none_iff_lhs_not_strictly_greater`.
+    ///
+    /// `const fn` so a caller can pin the helper's verdict at compile
+    /// time (`const _: () = assert!(matches!(
+    /// ResourceLimits::witness_strict_count_lead(1, 0), Some(1)));`) —
+    /// sibling of the const-fn evaluability pins the ARM-SELECTING
+    /// DIRECTED-LEAD projections already carry at their own exits.
+    ///
+    /// **Adoption compounds**: future WHOLE-POSTURE ARM-SELECTING
+    /// DIRECTED-LEAD projections that currently open-code the guarded-
+    /// subtraction on a coupled (usize, usize) count pair rewrite
+    /// their body from `let a = self.count_A_axes(); let b =
+    /// self.count_B_axes(); if a > b { Some(a - b) } else { None }` to
+    /// `Self::witness_strict_count_lead(self.count_A_axes(),
+    /// self.count_B_axes())` at no semantic change, and a mechanical
+    /// sweep of the four ARM-SELECTING DIRECTED-LEAD bodies through
+    /// the helper becomes a substrate-level refactor rather than a
+    /// per-method rewrite.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// guarded strict-dominance subtraction shape at every WHOLE-
+    /// POSTURE ARM-SELECTING DIRECTED-LEAD projection body binds at
+    /// ONE typed named `const fn` on the algebra rather than a per-
+    /// projection four-line open-coded conditional. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the helper composes
+    /// mechanically under the bare-body identity above with no re-
+    /// derivation at the caller, and all four swept callsites preserve
+    /// their const-fn evaluability pins verbatim. THEORY.md §V.1 —
+    /// knowable platform; the strict-dominance directed-lead dispatch
+    /// becomes a substrate-level theorem rather than a per-projection
+    /// convention.
+    ///
+    /// Frontier inspiration: classical order theory's canonical
+    /// "guarded signed difference" combinator on a two-arm exhaustive-
+    /// and-disjoint partition, expressed as `Option<usize>` via
+    /// strict-dominance guard rather than as `isize` via sign carrier.
+    /// Rust's own `usize::checked_sub` reads the SAME guarded-
+    /// subtraction shape on the NON-STRICT `lhs >= rhs` guard
+    /// (returning `Some(0)` on the tie cell where THIS combinator
+    /// returns `None`) — one QUANTIFIER-STRENGTH axis over on the
+    /// strictness dimension. Haskell's `if a > b then Just (a - b)
+    /// else Nothing` on paired `Word` inputs; Idris's `if a > b then
+    /// Just (a - b) else Nothing` under a total signature on two `Nat`
+    /// inputs; APL's guarded `⍺ - ⍵` conditionally emitted at the
+    /// dominant arm; Racket's `(and (> a b) (- a b))` positive-
+    /// directed-lead form. Voting-theory's canonical "winning-margin
+    /// on the WINNING candidate" projection on a two-candidate
+    /// strict-plurality election — the arm-selecting winning-margin
+    /// figure that carries BOTH arm identity AND lead magnitude
+    /// through ONE `Option<usize>` exit. Translation through pleme-io
+    /// primitives: plain `const fn` guarded subtraction below, no
+    /// `checked_sub` indirection, no `i64` bridge, no `TryFrom`
+    /// fallible cast, no closure, no new dep, no typeclass
+    /// indirection.
+    #[must_use]
+    pub const fn witness_strict_count_lead(lhs: usize, rhs: usize) -> Option<usize> {
+        if lhs > rhs {
+            Some(lhs - rhs)
+        } else {
+            None
+        }
+    }
+
     /// Presence-preserving CLOSED-INTERVAL WIDTH from a coupled ENDPOINT PAIR
     /// on whole-posture `Option<usize>` axis-endpoint tallies —
     /// `Self::derive_axis_endpoint_span(first, last)` returns
@@ -15451,13 +15621,18 @@ impl ResourceLimits {
     /// paired boolean pair's tie-leg behaviour on the DIRECTED-LEAD
     /// projection.
     ///
-    /// Encoded as the plain `const fn` guarded-subtraction `if
-    /// count_polar_axes() > count_interior_axes() { Some(count_polar -
-    /// count_interior) } else { None }` on the two already-lifted
-    /// ARITHMETIC-QUANTIFIER tallies — matching [`Self::interior_lead`]'s
-    /// shape verbatim on the DUAL arm-selection combinator. The strict
-    /// `>` guard proves the subtraction cannot underflow, keeping the
-    /// method total on `usize` without a `checked_sub` indirection.
+    /// Encoded as a single-composition delegation through the substrate
+    /// primitive [`Self::witness_strict_count_lead`] on the two already-
+    /// lifted ARITHMETIC-QUANTIFIER tallies —
+    /// `Self::witness_strict_count_lead(self.count_polar_axes(),
+    /// self.count_interior_axes())`, matching
+    /// [`Self::interior_lead`]'s shape verbatim on the DUAL arm-
+    /// selection combinator. The guarded strict-dominance subtraction
+    /// is named at ONE typed `const fn` on the algebra rather than an
+    /// open-coded four-line `if a > b { Some(a - b) } else { None }`
+    /// on the per-projection body. The strict `>` guard proves the
+    /// subtraction cannot underflow, keeping the method total on
+    /// `usize` without a `checked_sub` indirection.
     ///
     /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.polar_lead() ==
     /// Some(6)` (every axis at the bottom pole → polar = 6, interior
@@ -15565,13 +15740,7 @@ impl ResourceLimits {
     /// allocation.
     #[must_use]
     pub const fn polar_lead(self) -> Option<usize> {
-        let polar = self.count_polar_axes();
-        let interior = self.count_interior_axes();
-        if polar > interior {
-            Some(polar - interior)
-        } else {
-            None
-        }
+        Self::witness_strict_count_lead(self.count_polar_axes(), self.count_interior_axes())
     }
 
     /// Whole-posture INTERIOR-DIRECTED-LEAD projection —
@@ -15607,10 +15776,16 @@ impl ResourceLimits {
     /// DIRECTED-LEAD form of the boolean cross-cell exclusivity pair
     /// one PROJECTION-KIND axis over.
     ///
-    /// Encoded as the plain `const fn` guarded-subtraction on the DUAL
-    /// per-arm mask — matching [`Self::polar_lead`]'s shape verbatim on
-    /// the DUAL arm-selection combinator. The strict `>` guard proves
-    /// the subtraction cannot underflow on `usize`.
+    /// Encoded as a single-composition delegation through the substrate
+    /// primitive [`Self::witness_strict_count_lead`] on the DUAL per-arm
+    /// order —
+    /// `Self::witness_strict_count_lead(self.count_interior_axes(),
+    /// self.count_polar_axes())`, matching [`Self::polar_lead`]'s
+    /// shape verbatim on the DUAL arm-selection combinator. The
+    /// guarded strict-dominance subtraction is named at ONE typed
+    /// `const fn` on the algebra rather than an open-coded four-line
+    /// conditional on the per-projection body. The strict `>` guard
+    /// proves the subtraction cannot underflow on `usize`.
     ///
     /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.interior_lead() == None`
     /// (every axis at bottom pole → polar = 6, interior = 0 → interior
@@ -15717,13 +15892,7 @@ impl ResourceLimits {
     /// arm.
     #[must_use]
     pub const fn interior_lead(self) -> Option<usize> {
-        let polar = self.count_polar_axes();
-        let interior = self.count_interior_axes();
-        if interior > polar {
-            Some(interior - polar)
-        } else {
-            None
-        }
+        Self::witness_strict_count_lead(self.count_interior_axes(), self.count_polar_axes())
     }
 
     /// Whole-posture UNDIRECTED-CARDINAL-DISTANCE projection —
@@ -16869,13 +17038,18 @@ impl ResourceLimits {
     /// uniform shipped presets (DEFAULT + both HAND_AUTHORED) rather
     /// than the compound partition's ALL-uniform saturation.
     ///
-    /// Encoded as the plain `const fn` guarded-subtraction on the two
-    /// already-lifted ARITHMETIC-QUANTIFIER tallies —
-    /// `self.count_bottom_axes() > self.count_top_axes()` is the strict
-    /// guard proving the subtraction cannot underflow on `usize`, and
-    /// the guarded branch returns `Some(count_bottom_axes() -
-    /// count_top_axes())`. Matches [`Self::polar_lead`]'s shape verbatim
-    /// on the DUAL (atomic vs compound) CELL-KIND combinator.
+    /// Encoded as a single-composition delegation through the substrate
+    /// primitive [`Self::witness_strict_count_lead`] on the two already-
+    /// lifted ARITHMETIC-QUANTIFIER tallies of the ATOMIC (bottom, top)
+    /// sub-partition —
+    /// `Self::witness_strict_count_lead(self.count_bottom_axes(),
+    /// self.count_top_axes())`. The guarded strict-dominance
+    /// subtraction is named at ONE typed `const fn` on the algebra
+    /// rather than an open-coded four-line `if a > b { Some(a - b) }
+    /// else { None }` on the per-projection body. Matches
+    /// [`Self::polar_lead`]'s shape verbatim on the DUAL (atomic vs
+    /// compound) CELL-KIND combinator. The strict `>` guard proves the
+    /// subtraction cannot underflow on `usize`.
     ///
     /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.bottom_lead() == Some(6)`
     /// (bottom = 6, top = 0 → the SATURATED atomic BOTTOM-directed lead
@@ -16982,13 +17156,7 @@ impl ResourceLimits {
     /// indirection, no per-axis loop, no allocation.
     #[must_use]
     pub const fn bottom_lead(self) -> Option<usize> {
-        let bottom = self.count_bottom_axes();
-        let top = self.count_top_axes();
-        if bottom > top {
-            Some(bottom - top)
-        } else {
-            None
-        }
+        Self::witness_strict_count_lead(self.count_bottom_axes(), self.count_top_axes())
     }
 
     /// Whole-posture TOP-DIRECTED-LEAD projection —
@@ -17029,10 +17197,16 @@ impl ResourceLimits {
     /// shipped presets rather than the compound partition's ALL-uniform
     /// saturation.
     ///
-    /// Encoded as the plain `const fn` guarded-subtraction on the DUAL
-    /// per-arm mask — matching [`Self::bottom_lead`]'s shape verbatim on
-    /// the DUAL arm-selection combinator. The strict `>` guard proves
-    /// the subtraction cannot underflow on `usize`.
+    /// Encoded as a single-composition delegation through the substrate
+    /// primitive [`Self::witness_strict_count_lead`] on the DUAL per-arm
+    /// order of the ATOMIC (bottom, top) sub-partition —
+    /// `Self::witness_strict_count_lead(self.count_top_axes(),
+    /// self.count_bottom_axes())`, matching [`Self::bottom_lead`]'s
+    /// shape verbatim on the DUAL arm-selection combinator. The
+    /// guarded strict-dominance subtraction is named at ONE typed
+    /// `const fn` on the algebra rather than an open-coded four-line
+    /// conditional on the per-projection body. The strict `>` guard
+    /// proves the subtraction cannot underflow on `usize`.
     ///
     /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.top_lead() == None`
     /// (bottom arm dominates); `UNBOUNDED_RESOURCE_LIMITS.top_lead()
@@ -17105,13 +17279,7 @@ impl ResourceLimits {
     /// bottom) else Nothing` on the DUAL atomic arm.
     #[must_use]
     pub const fn top_lead(self) -> Option<usize> {
-        let bottom = self.count_bottom_axes();
-        let top = self.count_top_axes();
-        if top > bottom {
-            Some(top - bottom)
-        } else {
-            None
-        }
+        Self::witness_strict_count_lead(self.count_top_axes(), self.count_bottom_axes())
     }
 
     /// Whole-posture ATOMIC UNDIRECTED-CARDINAL skew projection —
@@ -89501,6 +89669,368 @@ mod tests {
             assert!(UNBOUNDED_RESOURCE_LIMITS.atomic_skew() == ResourceLimits::FIELD_COUNT);
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.axial_skew() == ResourceLimits::FIELD_COUNT);
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.atomic_skew() == 0);
+    }
+
+    #[test]
+    fn resource_limits_witness_strict_count_lead_agrees_with_open_coded_guarded_subtraction() {
+        // Bare-body identity — the helper's verdict on every (lhs, rhs)
+        // pair agrees with the open-coded shape
+        // `if lhs > rhs { Some(lhs - rhs) } else { None }` that every
+        // WHOLE-POSTURE ARM-SELECTING DIRECTED-LEAD projection on
+        // ResourceLimits carried at its exit pre-lift. Swept over the
+        // (lhs < rhs, lhs == rhs, lhs > rhs) three-cell order-partition
+        // with representative values so all three cells of the ARM-
+        // TRICHOTOMY on the (usize, usize) joint-input regime are
+        // pinned, using axial-tally-bounded samples (0..=FIELD_COUNT)
+        // for which the caller-side invariant is discharged by
+        // construction.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            let via_helper = ResourceLimits::witness_strict_count_lead(lhs, rhs);
+            let via_open_code = if lhs > rhs { Some(lhs - rhs) } else { None };
+            assert_eq!(
+                via_helper, via_open_code,
+                "helper != open-coded guarded subtraction at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_strict_count_lead_diagonal_inputs_fold_to_none() {
+        // Diagonal identity — for every n in the caller-safe regime, the
+        // helper folds the diagonal (n, n) input to None. The tie corner
+        // of the input pair collapses to the empty arm of the output
+        // Option<usize> — strict dominance requires strict inequality,
+        // so the tie leg rejects. Swept across the (0, min-positive,
+        // FIELD_COUNT, mid) constellation covering the representative
+        // axial-tally diagonal postures.
+        for n in [
+            0_usize,
+            1,
+            ResourceLimits::FIELD_COUNT / 2,
+            ResourceLimits::FIELD_COUNT,
+        ] {
+            assert_eq!(
+                ResourceLimits::witness_strict_count_lead(n, n),
+                None,
+                "diagonal fold to None violated at n={n}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_strict_count_lead_lhs_strong_arm_projects_some_positive_magnitude() {
+        // Order-arm dispatch — on every (lhs, rhs) with lhs > rhs, the
+        // helper projects the positive magnitude Some(lhs - rhs). The
+        // ARM-SELECTING reading of the lhs-strong arm of the SIGNED
+        // sibling's dispatch: where the SIGNED sibling reads it as
+        // `+(lhs - rhs)` in isize and the UNSIGNED sibling reads it as
+        // the plain magnitude `lhs - rhs` in usize, THIS combinator
+        // reads it as Some(lhs - rhs) — carrying the arm identity
+        // through the SOME cell selectively rather than through the
+        // output sign or the magnitude cell.
+        for (lhs, rhs) in [
+            (1_usize, 0_usize),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+        ] {
+            assert!(
+                lhs > rhs,
+                "test-local invariant violated: lhs must exceed rhs, got ({lhs}, {rhs})",
+            );
+            assert_eq!(
+                ResourceLimits::witness_strict_count_lead(lhs, rhs),
+                Some(lhs - rhs),
+                "lhs-strong arm SOME magnitude regressed at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_strict_count_lead_rhs_strong_arm_rejects_to_none() {
+        // Order-arm dispatch — on every (lhs, rhs) with rhs > lhs, the
+        // helper rejects the reversed arm's magnitude and folds to
+        // None. The rhs-strong arm collapses to the SAME NONE cell as
+        // the tie arm — the ARM-SELECTING combinator DISCARDS the rhs-
+        // strong reading, unlike the SIGNED sibling which carries it
+        // through a negative isize AND unlike the UNSIGNED sibling
+        // which folds it onto the SAME positive magnitude cell as the
+        // lhs-strong arm.
+        for (lhs, rhs) in [
+            (0_usize, 1_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (1, 5),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert!(
+                rhs > lhs,
+                "test-local invariant violated: rhs must exceed lhs, got ({lhs}, {rhs})",
+            );
+            assert_eq!(
+                ResourceLimits::witness_strict_count_lead(lhs, rhs),
+                None,
+                "rhs-strong arm rejection to None regressed at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_strict_count_lead_swapped_inputs_are_mutually_exclusive_on_some() {
+        // Anti-commutativity — on every (lhs, rhs), at most one of
+        // witness_strict_count_lead(lhs, rhs) and
+        // witness_strict_count_lead(rhs, lhs) fires SOME. The two
+        // STRICT-INEQUALITY directions on the same input pair cannot
+        // both hold, matching the paired DIRECTED-LEAD callers' mutual-
+        // exclusion pin on the SOME cell. Swept over representative
+        // (lhs != rhs, lhs == rhs) samples covering both strict-
+        // dominance-fires-on-some-arm and tie-neither-fires cells.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+        ] {
+            let forward = ResourceLimits::witness_strict_count_lead(lhs, rhs).is_some();
+            let reversed = ResourceLimits::witness_strict_count_lead(rhs, lhs).is_some();
+            assert!(
+                !(forward && reversed),
+                "mutual exclusion on SOME violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_strict_count_lead_is_some_iff_signed_count_difference_strictly_positive(
+    ) {
+        // Signum bridge — the ARM-SELECTING combinator's SOME arm
+        // coincides exactly with the strictly-positive cell of the
+        // SIGNED sibling's output. On every (lhs, rhs),
+        // witness_strict_count_lead(lhs, rhs).is_some() ==
+        // (signed_count_difference(lhs, rhs) > 0). The two combinators
+        // agree on the arm-identity dispatch posture-for-posture,
+        // routing the lhs-strong arm through Some and the rhs-strong-
+        // or-tied arms through None.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+        ] {
+            assert_eq!(
+                ResourceLimits::witness_strict_count_lead(lhs, rhs).is_some(),
+                ResourceLimits::signed_count_difference(lhs, rhs) > 0,
+                "signum bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_strict_count_lead_some_arm_value_equals_absolute_count_difference() {
+        // Magnitude bridge — on the SOME arm, the ARM-SELECTING
+        // combinator's cardinal value agrees with the UNSIGNED
+        // sibling's magnitude. On every (lhs, rhs) with lhs > rhs,
+        // witness_strict_count_lead(lhs, rhs).unwrap() ==
+        // absolute_count_difference(lhs, rhs). The three (signed,
+        // absolute, arm-selecting) siblings agree on magnitude
+        // posture-for-posture on the lhs-strong arm and differ only in
+        // how they express the rhs-strong and tied arms.
+        for (lhs, rhs) in [
+            (1_usize, 0_usize),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+        ] {
+            assert!(
+                lhs > rhs,
+                "test-local invariant violated: lhs must exceed rhs, got ({lhs}, {rhs})",
+            );
+            assert_eq!(
+                ResourceLimits::witness_strict_count_lead(lhs, rhs).unwrap(),
+                ResourceLimits::absolute_count_difference(lhs, rhs),
+                "magnitude bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_strict_count_lead_is_none_iff_lhs_not_strictly_greater() {
+        // Non-strict-dominance bridge — the NONE arm coincides exactly
+        // with the non-strict-dominance cell of the order partition.
+        // On every (lhs, rhs), witness_strict_count_lead(lhs,
+        // rhs).is_none() == (lhs <= rhs). The NONE arm folds BOTH the
+        // tie leg AND the rhs-strong leg onto the SAME empty cell.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::witness_strict_count_lead(lhs, rhs).is_none(),
+                lhs <= rhs,
+                "non-strict-dominance bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_strict_count_lead_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the helper's `pub const fn` signature
+        // preserves compile-time evaluability across the diagonal-tie,
+        // lhs-strong-arm, rhs-strong-arm, and FIELD_COUNT-corner cells
+        // of the (usize, usize) joint-input regime. Complements the
+        // primary bare-body identity pin
+        // `resource_limits_witness_strict_count_lead_agrees_with_open_coded_guarded_subtraction`
+        // by extending the const-evaluability proof onto the compile-
+        // time surface.
+        const _: () = assert!(ResourceLimits::witness_strict_count_lead(0, 0).is_none());
+        const _: () = assert!(matches!(
+            ResourceLimits::witness_strict_count_lead(1, 0),
+            Some(1)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::witness_strict_count_lead(ResourceLimits::FIELD_COUNT, 0),
+            Some(v) if v == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () =
+            assert!(
+                ResourceLimits::witness_strict_count_lead(0, ResourceLimits::FIELD_COUNT).is_none()
+            );
+        const _: () = assert!(matches!(
+            ResourceLimits::witness_strict_count_lead(5, 1),
+            Some(4)
+        ));
+        const _: () = assert!(ResourceLimits::witness_strict_count_lead(1, 5).is_none());
+        const _: () = assert!(ResourceLimits::witness_strict_count_lead(
+            ResourceLimits::FIELD_COUNT,
+            ResourceLimits::FIELD_COUNT
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn resource_limits_arm_selecting_directed_lead_family_bodies_delegate_to_witness_strict_count_lead(
+    ) {
+        // Sweep-of-family pin — asserts each of the four WHOLE-POSTURE
+        // ARM-SELECTING DIRECTED-LEAD projection bodies (polar_lead +
+        // interior_lead over the (polar, interior) axial partition,
+        // bottom_lead + top_lead over the ATOMIC (bottom, top) sub-
+        // partition of the polar cell) agrees with the helper-based
+        // shape `ResourceLimits::witness_strict_count_lead(
+        // self.count_LHS(), self.count_RHS())` on every posture from
+        // the EMPTY / DEFAULT / UNBOUNDED / HAND_AUTHORED_MID /
+        // HAND_AUTHORED_OTHER preset constellation (4×5 = 20
+        // verdicts). A future body regression that swapped one of the
+        // count inputs, or reversed the arm-selection order, would
+        // break here on at least one posture.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                posture.polar_lead(),
+                ResourceLimits::witness_strict_count_lead(
+                    posture.count_polar_axes(),
+                    posture.count_interior_axes(),
+                ),
+                "polar_lead delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.interior_lead(),
+                ResourceLimits::witness_strict_count_lead(
+                    posture.count_interior_axes(),
+                    posture.count_polar_axes(),
+                ),
+                "interior_lead delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.bottom_lead(),
+                ResourceLimits::witness_strict_count_lead(
+                    posture.count_bottom_axes(),
+                    posture.count_top_axes(),
+                ),
+                "bottom_lead delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.top_lead(),
+                ResourceLimits::witness_strict_count_lead(
+                    posture.count_top_axes(),
+                    posture.count_bottom_axes(),
+                ),
+                "top_lead delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_arm_selecting_directed_lead_family_bodies_evaluate_at_compile_time_via_const_fn(
+    ) {
+        // Const-fn pin — proves the WHOLE-POSTURE ARM-SELECTING
+        // DIRECTED-LEAD family bodies preserved const-fn evaluability
+        // under the sweep through witness_strict_count_lead. Each of
+        // the four swept projections × the three shipped `pub const`
+        // preset postures (EMPTY, UNBOUNDED, DEFAULT). EMPTY packs six
+        // bottom axes uniformly, so polar_lead fires Some(6) (polar
+        // strict-uniform) and interior_lead fires None (interior arm
+        // is empty); bottom_lead fires Some(6) (bottom strict-uniform)
+        // and top_lead fires None (top arm is empty). UNBOUNDED is the
+        // corner mirror on the atomic top arm — polar_lead == Some(6),
+        // interior_lead == None; bottom_lead == None, top_lead ==
+        // Some(6). DEFAULT is interior-uniform, so polar_lead fires
+        // None (polar arm is empty) and interior_lead fires Some(6)
+        // (interior strict-uniform); bottom_lead and top_lead BOTH
+        // fire None (no polar axis → both atomic tallies are zero →
+        // tie at (0, 0) fires None on both directed arms).
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_lead(),
+            Some(v) if v == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.interior_lead().is_none());
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_lead(),
+            Some(v) if v == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.top_lead().is_none());
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_lead(),
+            Some(v) if v == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.interior_lead().is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.bottom_lead().is_none());
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_lead(),
+            Some(v) if v == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_lead().is_none());
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_lead(),
+            Some(v) if v == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.bottom_lead().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_lead().is_none());
     }
 
     #[test]

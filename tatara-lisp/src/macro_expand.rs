@@ -12811,6 +12811,238 @@ impl ResourceLimits {
         out
     }
 
+    /// Per-axis pointwise SYMMETRIC-DIFFERENCE mask combinator on two
+    /// `[bool; Self::FIELD_COUNT]` per-axis masks — the MASK+MASK→MASK
+    /// XOR combinator producing a `[bool; Self::FIELD_COUNT]` per-axis
+    /// mask whose `i`-th bit is the per-index exclusive-disjunction
+    /// `a[i] ^ b[i]` of two shipped per-axis masks. The FOURTH MASK→MASK
+    /// COMBINATOR primitive on the per-axis mask substrate — and the
+    /// SECOND BINARY combinator (the DIFFERENTIAL combinator, distinct
+    /// from the shipped MONOTONE-CONJUNCTIVE
+    /// [`Self::intersect_masks_pointwise`] AND-monoid and
+    /// MONOTONE-DISJUNCTIVE [`Self::union_masks_pointwise`] OR-monoid),
+    /// completing the (AND, OR, NOT, XOR) primitive combinator quadruple
+    /// that spans the two-argument Boolean-connective algebra past the
+    /// three MONOTONE combinators shipped as
+    /// (`intersect`, `union`, `complement`). Every Boolean formula
+    /// over per-axis masks already composed from the shipped
+    /// (AND, OR, NOT) triple; XOR is the LOAD-BEARING NON-MONOTONE
+    /// binary connective those three synthesize but cannot open at a
+    /// single per-axis fill without a THREE-primitive nested
+    /// composition — post-lift the "which axes differ between two
+    /// masks" question binds at ONE substrate `const fn`.
+    ///
+    /// Where [`Self::intersect_masks_pointwise`] returns the per-axis
+    /// SHARED-TRUTH witnesses (`true` iff BOTH masks fire on the axis)
+    /// and [`Self::union_masks_pointwise`] returns the per-axis
+    /// EITHER-TRUTH witnesses (`true` iff SOME mask fires on the axis),
+    /// this returns the per-axis EXCLUSIVE-TRUTH witnesses (`true` iff
+    /// EXACTLY ONE mask fires on the axis) — the per-axis-mask peer of
+    /// classical set symmetric-difference `A △ B = (A ∪ B) ∖ (A ∩ B)`
+    /// one representation-KIND axis over from a bit-packed encoding
+    /// onto the per-axis boolean-array encoding this substrate carries.
+    /// The DIFFERENCE PROJECTION every "which axes changed between two
+    /// convergence snapshots" / "which axes carry the inequality between
+    /// two postures" consumer composes through — where the equality
+    /// projection [`Self::axes_eq`] returns the per-axis AGREEMENT
+    /// witnesses, the paired inequality projection at the per-axis-mask
+    /// level opens through this substrate combinator applied to any
+    /// two shipped per-axis masks whose pointwise disagreement is the
+    /// diagnostic in question.
+    ///
+    /// **Iterator-agreement identity — LOAD-BEARING structural pin**: on
+    /// every `(a, b)` mask pair, the returned mask's `i`-th bit equals
+    /// `a.iter().zip(b.iter()).map(|(&x, &y)| x ^ y).collect::<[bool; N]>()[i]`
+    /// — the direct stable-Rust `zip`-then-`map`-then-`^` iterator idiom
+    /// the helper substitutes for at every consumer. Pinned via
+    /// `resource_limits_symmetric_difference_masks_pointwise_agrees_with_iterator_zip_xor`.
+    ///
+    /// **XOR-identity contract**: on every `mask`,
+    /// `Self::symmetric_difference_masks_pointwise(mask, [false; FIELD_COUNT])
+    /// == mask`. The empty-mask serves as the two-sided IDENTITY element
+    /// of the pointwise-XOR ABELIAN-GROUP structure on
+    /// `[bool; FIELD_COUNT]` arrays — the group-identity role the AND-
+    /// identity `[true; FIELD_COUNT]` plays on
+    /// [`Self::intersect_masks_pointwise`] and the OR-identity
+    /// `[false; FIELD_COUNT]` plays on
+    /// [`Self::union_masks_pointwise`] one MONOID-ORIENTATION axis over.
+    /// Pinned via
+    /// `resource_limits_symmetric_difference_masks_pointwise_identity_with_all_false`.
+    ///
+    /// **XOR-complement-via-all-true contract**: on every `mask`,
+    /// `Self::symmetric_difference_masks_pointwise(mask, [true; FIELD_COUNT])
+    /// == Self::complement_mask_pointwise(mask)`. Xor-with-all-true is
+    /// the per-axis-mask peer of the classical bit-vector `mask ^
+    /// !0_usize == !mask` identity one representation-KIND axis over —
+    /// the WITHIN-COMBINATOR-QUADRUPLE bridge from the shipped BINARY
+    /// XOR to the shipped UNARY NOT that the three MONOTONE combinators
+    /// cannot open at a single per-axis fill. Pinned via
+    /// `resource_limits_symmetric_difference_masks_pointwise_all_true_agrees_with_complement`.
+    ///
+    /// **Self-annihilation contract — UNIQUE to XOR**: on every `mask`,
+    /// `Self::symmetric_difference_masks_pointwise(mask, mask) ==
+    /// [false; FIELD_COUNT]`. Per-axis `x ^ x == false` is the DEFINING
+    /// property of the pointwise-XOR ABELIAN-GROUP structure — every
+    /// element is its own inverse, so the two-argument combinator
+    /// applied to the same mask on both operands returns the group's
+    /// identity element. Distinguishes XOR from BOTH shipped MONOTONE
+    /// BINARY combinators: `intersect(mask, mask) == mask` (AND is
+    /// idempotent) and `union(mask, mask) == mask` (OR is idempotent),
+    /// while XOR is SELF-ANNIHILATING (`xor(mask, mask) == all-false`).
+    /// Pinned via
+    /// `resource_limits_symmetric_difference_masks_pointwise_is_self_annihilating`.
+    ///
+    /// **Commutativity contract**: on every `(a, b)` mask pair,
+    /// `Self::symmetric_difference_masks_pointwise(a, b)
+    /// == Self::symmetric_difference_masks_pointwise(b, a)`. Per-axis
+    /// `^` is commutative on every field, so the mask combinator
+    /// inherits commutativity from the underlying Boolean operation.
+    /// Sibling of the commutativity pin the two paired MONOTONE BINARY
+    /// combinators (`intersect`, `union`) already carry. Pinned via
+    /// `resource_limits_symmetric_difference_masks_pointwise_is_commutative`.
+    ///
+    /// **Associativity contract**: on every `(a, b, c)` mask triple,
+    /// `Self::symmetric_difference_masks_pointwise(
+    /// Self::symmetric_difference_masks_pointwise(a, b), c)
+    /// == Self::symmetric_difference_masks_pointwise(a,
+    /// Self::symmetric_difference_masks_pointwise(b, c))`. Per-axis
+    /// `^` is associative on every field, so the mask combinator
+    /// inherits associativity — the ASSOCIATIVITY property that jointly
+    /// with commutativity and identity puts the XOR combinator into
+    /// ABELIAN-GROUP position on `[bool; FIELD_COUNT]`, past the
+    /// commutative-MONOID position the two MONOTONE BINARY combinators
+    /// occupy. Pinned via
+    /// `resource_limits_symmetric_difference_masks_pointwise_is_associative`.
+    ///
+    /// **POPCOUNT inclusion-exclusion contract**: on every `(a, b)`
+    /// mask pair, the POPCOUNT of the XOR mask plus twice the POPCOUNT
+    /// of the intersect mask equals the sum of the two operand POPCOUNTs
+    /// (`count(xor(a, b)) + 2 * count(intersect(a, b)) == count(a) +
+    /// count(b)`). Bridges the mask
+    /// combinator to the paired POPCOUNT-fold on the SAME per-axis
+    /// mask surface via the classical inclusion-exclusion identity
+    /// `|A △ B| = |A| + |B| - 2|A ∩ B|` — the ARITHMETIC form the
+    /// two MONOTONE BINARY combinators only bound one-sidedly
+    /// (`intersect ≤ min`, `union ≥ max`); the XOR combinator's
+    /// popcount is EXACTLY calculable from the operand popcounts and
+    /// the intersect popcount. Pinned via
+    /// `resource_limits_symmetric_difference_masks_pointwise_popcount_via_inclusion_exclusion`.
+    ///
+    /// **De Morgan synthesis bridge (union-of-differences form)**: on
+    /// every `(a, b)` mask pair,
+    /// `Self::symmetric_difference_masks_pointwise(a, b) ==
+    /// Self::union_masks_pointwise(
+    /// Self::intersect_masks_pointwise(a,
+    /// Self::complement_mask_pointwise(b)),
+    /// Self::intersect_masks_pointwise(
+    /// Self::complement_mask_pointwise(a), b))`. The SET-DIFFERENCE
+    /// synthesis form `A △ B = (A ∖ B) ∪ (B ∖ A)` — the LOAD-BEARING
+    /// bridge showing the XOR combinator is DEFINABLE from the shipped
+    /// (AND, OR, NOT) Boolean-completeness triple at a THREE-primitive
+    /// composition (the exact composition depth the substrate saves by
+    /// opening XOR at ONE substrate primitive). Pinned via
+    /// `resource_limits_symmetric_difference_masks_pointwise_synthesis_via_union_of_differences`.
+    ///
+    /// **De Morgan synthesis bridge (union-minus-intersection form)**:
+    /// on every `(a, b)` mask pair,
+    /// `Self::symmetric_difference_masks_pointwise(a, b) ==
+    /// Self::intersect_masks_pointwise(
+    /// Self::union_masks_pointwise(a, b),
+    /// Self::complement_mask_pointwise(
+    /// Self::intersect_masks_pointwise(a, b)))`. The DUAL synthesis
+    /// form `A △ B = (A ∪ B) ∖ (A ∩ B)` — the classical set-symmetric-
+    /// difference definition, again showing definability from the
+    /// shipped (AND, OR, NOT) triple at a THREE-primitive composition
+    /// on the DUAL De Morgan orientation. Pinned via
+    /// `resource_limits_symmetric_difference_masks_pointwise_synthesis_via_union_minus_intersection`.
+    ///
+    /// **ANY-fold bridge**: on every `(a, b)` mask pair,
+    /// `Self::any_mask_bit_set(
+    /// Self::symmetric_difference_masks_pointwise(a, b))
+    /// == !Self::eq_mask(a, b)`, i.e. the XOR any-fires iff the two
+    /// masks DISAGREE on at least one axis. Expressed against the
+    /// primitive `[bool; N]` equality (Rust's derived `==` on
+    /// fixed-size arrays), the ANY-fold of the XOR mask is the
+    /// DISAGREEMENT-DETECTOR on the paired mask pair — the "are these
+    /// two masks distinct?" verdict at ONE mask-combinator
+    /// composition. Pinned via
+    /// `resource_limits_symmetric_difference_masks_pointwise_any_agrees_with_operand_disagreement`.
+    ///
+    /// **`axes_ne` algebraic bridge**: for every posture pair
+    /// `(a, b)`, `a.axes_ne(b) == Self::symmetric_difference_masks_pointwise(
+    /// a.axes_leq(b), a.axes_geq(b))`. The DIRECTION-SIGNED-MASK
+    /// synthesis of the per-axis inequality mask — because a per-axis
+    /// value comparison is `<`, `==`, or `>` on the field's total
+    /// order, and `leq` fires on `<`+`==` while `geq` fires on `==`+`>`,
+    /// their XOR fires exactly on `<`+`>` = the per-axis disagreement
+    /// witnesses. Pins the algebraic connection between the two shipped
+    /// direction-signed masks and the shipped inequality mask through
+    /// the XOR combinator at ONE substrate composition, past the
+    /// [`Self::axes_ne`] body's own encoding as `complement(axes_eq)` =
+    /// `complement(intersect(leq, geq))`. Pinned via
+    /// `resource_limits_axes_ne_agrees_with_symmetric_difference_of_axes_leq_and_axes_geq`.
+    ///
+    /// `const fn` so a caller can pin an XOR-combined mask at compile
+    /// time (`const _: [bool; ResourceLimits::FIELD_COUNT] =
+    /// ResourceLimits::symmetric_difference_masks_pointwise(
+    /// [false; ResourceLimits::FIELD_COUNT],
+    /// [false; ResourceLimits::FIELD_COUNT]);`) — sibling of the
+    /// const-fn evaluability pins the three shipped MASK→MASK
+    /// combinators and the five paired MASK→SCALAR collapse helpers
+    /// already carry at their own exits.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-axis pointwise-XOR mask combinator at every future
+    /// MASK→MASK DIFFERENCE exit binds at ONE typed named `const fn`
+    /// on the algebra rather than a per-consumer three-primitive
+    /// nested composition through the shipped (AND, OR, NOT) triple.
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs;
+    /// the helper composes mechanically under the iterator-zip-xor
+    /// agreement, XOR-group identity/self-annihilation/commutativity/
+    /// associativity, POPCOUNT inclusion-exclusion, both De Morgan
+    /// synthesis bridges, and the `axes_ne` algebraic bridge with no
+    /// re-derivation at the caller. THEORY.md §V.1 — knowable
+    /// platform; the per-axis pointwise `^` combinator becomes a
+    /// TYPE-level operation on the per-axis mask algebra rather than
+    /// a per-consumer nested composition, with the per-axis
+    /// granularity baked in so the consumer cannot silently drop an
+    /// axis (the array's fixed arity forces every axis to appear).
+    ///
+    /// Frontier inspiration: APL / J's rank-lifted `≠` (not-equal) /
+    /// `~=` operator producing a per-position bit array between two
+    /// conformable boolean arrays; Haskell's `zipWith (/=)` on two
+    /// `[Bool]` producing a `[Bool]`; Idris's `Data.Vect.zipWith (/=)`
+    /// on two `Vec n Bool` producing a `Vec n Bool` under a total
+    /// function signature; Rust's stable `a.iter().zip(b.iter()).
+    /// map(|(&x, &y)| x ^ y)` iterator idiom. Classical bitset XOR
+    /// (`^` / `⊕`) on a bit-packed mask is the same operation one
+    /// representation-KIND axis over on a bit-packed encoding —
+    /// `symmetric_difference_masks_pointwise` is its per-axis-boolean-
+    /// array peer at the substrate, and the ABELIAN-GROUP BINARY
+    /// combinator closing the (AND-monoid, OR-monoid, XOR-group,
+    /// NOT-involution) two-argument-connective quadruple on the per-
+    /// axis mask algebra. Translation through pleme-io primitives is
+    /// the plain `const fn` `while`-based per-axis fill below into a
+    /// stack-allocated `[bool; FIELD_COUNT]` array — no closure, no
+    /// typeclass indirection, no dependency on
+    /// `<[bool]>::iter().zip(...)` (which is not const-callable on
+    /// stable Rust because `zip` returns an iterator adapter that
+    /// takes closures at every consumer), and the two masks are owned
+    /// arrays eagerly evaluated by the caller.
+    #[must_use]
+    pub const fn symmetric_difference_masks_pointwise(
+        a: [bool; Self::FIELD_COUNT],
+        b: [bool; Self::FIELD_COUNT],
+    ) -> [bool; Self::FIELD_COUNT] {
+        let mut out = [false; Self::FIELD_COUNT];
+        let mut i = 0;
+        while i < Self::FIELD_COUNT {
+            out[i] = a[i] ^ b[i];
+            i += 1;
+        }
+        out
+    }
+
     /// Whole-posture ARITHMETIC-TOP tally — `self.count_top_axes()`
     /// returns the number of axes of `self` sitting at the top pole
     /// (`self.field_values()[i] == usize::MAX`), in
@@ -90473,6 +90705,353 @@ mod tests {
         );
         const _: [bool; ResourceLimits::FIELD_COUNT] =
             ResourceLimits::complement_mask_pointwise(UNBOUNDED_RESOURCE_LIMITS.axes_is_pole());
+    }
+
+    #[test]
+    fn resource_limits_symmetric_difference_masks_pointwise_agrees_with_iterator_zip_xor() {
+        // Iterator-agreement contract — the substrate MASK→MASK
+        // pointwise-XOR combinator's verdict on every (a, b) mask pair
+        // agrees with the raw `a.iter().zip(b.iter()).map(|(&x, &y)| x
+        // ^ y).collect::<Vec<bool>>()` open-coded fold. Swept across the
+        // FULL 11×11 = 121-mask pair constellation drawn from the shared
+        // COUNT_MASK_BITS_MASK_SWEEP constellation so the combinator is
+        // pinned on every distinct per-index (false^false, false^true,
+        // true^false, true^true) corner across the popcount range. A
+        // helper regression that mis-indexed the while-loop, skipped
+        // increments, inverted a per-index arm (e.g. `&&` for `^`), or
+        // dropped an axis from the output array would break here on at
+        // least one mask pair.
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                let via_helper = ResourceLimits::symmetric_difference_masks_pointwise(*a, *b);
+                let mut via_iterator = [false; ResourceLimits::FIELD_COUNT];
+                for (i, (&x, &y)) in a.iter().zip(b.iter()).enumerate() {
+                    via_iterator[i] = x ^ y;
+                }
+                assert_eq!(
+                    via_helper, via_iterator,
+                    "symmetric_difference_masks_pointwise != iterator-zip-xor on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_symmetric_difference_masks_pointwise_identity_with_all_false() {
+        // XOR-identity contract — the empty MASK_ALL_FALSE serves as the
+        // two-sided IDENTITY element of the pointwise-XOR ABELIAN-GROUP
+        // structure on `[bool; FIELD_COUNT]` arrays — the group-identity
+        // role the AND-identity MASK_ALL_TRUE plays on the paired
+        // `intersect_masks_pointwise` combinator and the OR-identity
+        // MASK_ALL_FALSE plays on the paired `union_masks_pointwise`
+        // combinator one MONOID-ORIENTATION axis over. For every mask
+        // fixture, `xor(mask, MASK_ALL_FALSE) == mask` AND
+        // `xor(MASK_ALL_FALSE, mask) == mask`. Both directions swept so
+        // the pin verifies the group identity on BOTH left- and right-
+        // argument positions.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            assert_eq!(
+                ResourceLimits::symmetric_difference_masks_pointwise(*mask, MASK_ALL_FALSE),
+                *mask,
+                "xor(mask, all-false) != mask on {mask:?}",
+            );
+            assert_eq!(
+                ResourceLimits::symmetric_difference_masks_pointwise(MASK_ALL_FALSE, *mask),
+                *mask,
+                "xor(all-false, mask) != mask on {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_symmetric_difference_masks_pointwise_all_true_agrees_with_complement() {
+        // XOR-complement-via-all-true contract — xor-with-all-true is the
+        // per-axis-mask peer of the classical bit-vector `mask ^ !0_usize
+        // == !mask` identity one representation-KIND axis over. For every
+        // mask fixture, `xor(mask, MASK_ALL_TRUE) == complement(mask)`
+        // AND `xor(MASK_ALL_TRUE, mask) == complement(mask)`. Both
+        // directions swept so the pin verifies the bridge on BOTH left-
+        // and right-argument positions. The WITHIN-COMBINATOR-QUADRUPLE
+        // bridge from the shipped BINARY XOR to the shipped UNARY NOT.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            let complemented = ResourceLimits::complement_mask_pointwise(*mask);
+            assert_eq!(
+                ResourceLimits::symmetric_difference_masks_pointwise(*mask, MASK_ALL_TRUE),
+                complemented,
+                "xor(mask, all-true) != complement(mask) on {mask:?}",
+            );
+            assert_eq!(
+                ResourceLimits::symmetric_difference_masks_pointwise(MASK_ALL_TRUE, *mask),
+                complemented,
+                "xor(all-true, mask) != complement(mask) on {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_symmetric_difference_masks_pointwise_is_self_annihilating() {
+        // Self-annihilation contract — UNIQUE to XOR. Per-axis `x ^ x ==
+        // false` is the DEFINING property of the pointwise-XOR ABELIAN-
+        // GROUP structure — every element is its own inverse, so the
+        // two-argument combinator applied to the same mask on both
+        // operands returns the group's identity element. Distinguishes
+        // XOR from BOTH shipped MONOTONE BINARY combinators:
+        // `intersect(mask, mask) == mask` and `union(mask, mask) == mask`
+        // (both idempotent), while XOR is SELF-ANNIHILATING. Swept
+        // across the 11-mask constellation so the identity is pinned on
+        // every distinct popcount verdict.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            assert_eq!(
+                ResourceLimits::symmetric_difference_masks_pointwise(*mask, *mask),
+                MASK_ALL_FALSE,
+                "xor(mask, mask) != all-false on {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_symmetric_difference_masks_pointwise_is_commutative() {
+        // Commutativity contract — per-axis `^` is commutative on every
+        // field, so the mask combinator inherits commutativity from the
+        // underlying Boolean operation: `xor(a, b) == xor(b, a)` for
+        // every mask pair. Swept across the FULL 11×11 = 121-mask pair
+        // constellation. Sibling of the commutativity pin the two paired
+        // MONOTONE BINARY combinators already carry.
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                assert_eq!(
+                    ResourceLimits::symmetric_difference_masks_pointwise(*a, *b),
+                    ResourceLimits::symmetric_difference_masks_pointwise(*b, *a),
+                    "xor not commutative on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_symmetric_difference_masks_pointwise_is_associative() {
+        // Associativity contract — per-axis `^` is associative on every
+        // field, so the mask combinator inherits associativity:
+        // `xor(xor(a, b), c) == xor(a, xor(b, c))` for every mask
+        // triple. Jointly with commutativity and identity puts the XOR
+        // combinator into ABELIAN-GROUP position on `[bool; FIELD_COUNT]`,
+        // past the commutative-MONOID position the two MONOTONE BINARY
+        // combinators occupy. Swept across the 11×11×11 = 1331-mask
+        // triple constellation.
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                for c in COUNT_MASK_BITS_MASK_SWEEP {
+                    let left_assoc = ResourceLimits::symmetric_difference_masks_pointwise(
+                        ResourceLimits::symmetric_difference_masks_pointwise(*a, *b),
+                        *c,
+                    );
+                    let right_assoc = ResourceLimits::symmetric_difference_masks_pointwise(
+                        *a,
+                        ResourceLimits::symmetric_difference_masks_pointwise(*b, *c),
+                    );
+                    assert_eq!(
+                        left_assoc, right_assoc,
+                        "xor not associative on ({a:?}, {b:?}, {c:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_symmetric_difference_masks_pointwise_popcount_via_inclusion_exclusion() {
+        // POPCOUNT inclusion-exclusion contract — bridges the mask
+        // combinator to the paired POPCOUNT-fold on the SAME per-axis
+        // mask surface via the classical identity `|A △ B| = |A| + |B|
+        // - 2|A ∩ B|`. Where the two MONOTONE BINARY combinators only
+        // bounded popcount one-sidedly (`intersect ≤ min`, `union ≥
+        // max`), the XOR combinator's popcount is EXACTLY calculable
+        // from the operand popcounts and the intersect popcount. Swept
+        // across the FULL 11×11 = 121-mask pair constellation.
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                let xored = ResourceLimits::symmetric_difference_masks_pointwise(*a, *b);
+                let intersected = ResourceLimits::intersect_masks_pointwise(*a, *b);
+                let ca = ResourceLimits::count_mask_bits(*a);
+                let cb = ResourceLimits::count_mask_bits(*b);
+                let ci = ResourceLimits::count_mask_bits(intersected);
+                let cx = ResourceLimits::count_mask_bits(xored);
+                assert_eq!(
+                    cx + 2 * ci,
+                    ca + cb,
+                    "count(xor) + 2*count(intersect) != count(a) + count(b) on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_symmetric_difference_masks_pointwise_synthesis_via_union_of_differences() {
+        // De Morgan synthesis bridge (union-of-differences form) —
+        // `xor(a, b) == union(intersect(a, complement(b)),
+        // intersect(complement(a), b))`. The SET-DIFFERENCE synthesis
+        // form `A △ B = (A ∖ B) ∪ (B ∖ A)` showing the XOR combinator
+        // is DEFINABLE from the shipped (AND, OR, NOT) Boolean-
+        // completeness triple at a THREE-primitive composition — the
+        // exact composition depth the substrate saves by opening XOR at
+        // ONE substrate primitive. Swept across the FULL 11×11 = 121-
+        // mask pair constellation.
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                let lhs = ResourceLimits::symmetric_difference_masks_pointwise(*a, *b);
+                let rhs = ResourceLimits::union_masks_pointwise(
+                    ResourceLimits::intersect_masks_pointwise(
+                        *a,
+                        ResourceLimits::complement_mask_pointwise(*b),
+                    ),
+                    ResourceLimits::intersect_masks_pointwise(
+                        ResourceLimits::complement_mask_pointwise(*a),
+                        *b,
+                    ),
+                );
+                assert_eq!(
+                    lhs, rhs,
+                    "xor(a, b) != union(intersect(a, !b), intersect(!a, b)) on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_symmetric_difference_masks_pointwise_synthesis_via_union_minus_intersection()
+    {
+        // De Morgan synthesis bridge (union-minus-intersection form) —
+        // `xor(a, b) == intersect(union(a, b), complement(intersect(a,
+        // b)))`. The DUAL synthesis form `A △ B = (A ∪ B) ∖ (A ∩ B)` —
+        // the classical set-symmetric-difference definition on the DUAL
+        // De Morgan orientation from the union-of-differences form
+        // above. Together the two pins close the DEFINABILITY of XOR
+        // from (AND, OR, NOT) on BOTH classical synthesis forms. Swept
+        // across the FULL 11×11 = 121-mask pair constellation.
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                let lhs = ResourceLimits::symmetric_difference_masks_pointwise(*a, *b);
+                let rhs = ResourceLimits::intersect_masks_pointwise(
+                    ResourceLimits::union_masks_pointwise(*a, *b),
+                    ResourceLimits::complement_mask_pointwise(
+                        ResourceLimits::intersect_masks_pointwise(*a, *b),
+                    ),
+                );
+                assert_eq!(
+                    lhs, rhs,
+                    "xor(a, b) != intersect(union(a, b), !intersect(a, b)) on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_symmetric_difference_masks_pointwise_any_agrees_with_operand_disagreement() {
+        // ANY-fold bridge — the XOR any-fires iff the two masks DISAGREE
+        // on at least one axis: `any(xor(a, b)) == (a != b)`. Expressed
+        // against Rust's derived `==` on fixed-size arrays, the ANY-fold
+        // of the XOR mask IS the DISAGREEMENT-DETECTOR on the paired
+        // mask pair — the "are these two masks distinct?" verdict at
+        // ONE mask-combinator composition. Swept across the FULL 11×11
+        // = 121-mask pair constellation.
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                let xored = ResourceLimits::symmetric_difference_masks_pointwise(*a, *b);
+                assert_eq!(
+                    ResourceLimits::any_mask_bit_set(xored),
+                    a != b,
+                    "any(xor(a, b)) != (a != b) on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_ne_agrees_with_symmetric_difference_of_axes_leq_and_axes_geq() {
+        // `axes_ne` algebraic bridge — pins the ALGEBRAIC connection
+        // between the two shipped direction-signed masks and the shipped
+        // inequality mask through the XOR combinator: `a.axes_ne(b) ==
+        // symmetric_difference(a.axes_leq(b), a.axes_geq(b))` for every
+        // posture pair. Because a per-axis value comparison is `<`,
+        // `==`, or `>` on the field's total order, and `leq` fires on
+        // `<`+`==` while `geq` fires on `==`+`>`, their XOR fires
+        // exactly on `<`+`>` = the per-axis disagreement witnesses.
+        // Establishes the DIRECTION-SIGNED-MASK synthesis of `axes_ne`
+        // at ONE substrate composition without rewriting the
+        // [`Self::axes_ne`] body — the body's own encoding as
+        // `complement(axes_eq)` = `complement(intersect(leq, geq))` and
+        // this XOR synthesis are DUAL forms tied to each other by
+        // `!(a && b) == a ^ b` when `a || b` (which holds under total
+        // order because at least one of `leq`/`geq` fires per axis).
+        // Swept across the 5×5 = 25 preset×preset constellation drawn
+        // from the shared canonical posture roster used by the paired
+        // `axes_eq`/`axes_ne` sweep pins.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in postures {
+            for b in postures {
+                assert_eq!(
+                    a.axes_ne(b),
+                    ResourceLimits::symmetric_difference_masks_pointwise(
+                        a.axes_leq(b),
+                        a.axes_geq(b),
+                    ),
+                    "axes_ne disagrees with symmetric_difference_masks_pointwise(axes_leq, \
+                     axes_geq) on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_symmetric_difference_masks_pointwise_evaluates_at_compile_time_via_const_fn()
+    {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin an XOR-combined mask at compile time as a
+        // build-break. Sibling of the const-fn evaluability pins the
+        // three shipped MASK→MASK combinators (`intersect`, `union`,
+        // `complement`) and the five paired MASK→SCALAR collapse
+        // helpers already carry at their own exits. Covers the
+        // (identity, self-annihilation, complement-via-all-true)
+        // group corners on the shipped `pub const` fixtures plus the
+        // paired-preset composition through axes_leq/axes_geq that the
+        // `axes_ne` bridge pin delegates through, so the helper is
+        // pinned as const-fn on every corner the sweep depends on.
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::symmetric_difference_masks_pointwise(MASK_ALL_FALSE, MASK_ALL_FALSE);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::symmetric_difference_masks_pointwise(MASK_ALL_TRUE, MASK_ALL_TRUE);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::symmetric_difference_masks_pointwise(MASK_ALL_TRUE, MASK_ALL_FALSE);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::symmetric_difference_masks_pointwise(MASK_ALL_FALSE, MASK_ALL_TRUE);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::symmetric_difference_masks_pointwise(
+                MASK_SINGLE_HEAD,
+                MASK_SINGLE_HEAD,
+            );
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::symmetric_difference_masks_pointwise(MASK_FIRST_HALF, MASK_SECOND_HALF);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::symmetric_difference_masks_pointwise(
+                MASK_ALTERNATING_HEAD_TRUE,
+                MASK_ALTERNATING_HEAD_FALSE,
+            );
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::symmetric_difference_masks_pointwise(
+                EMPTY_RESOURCE_LIMITS.axes_leq(UNBOUNDED_RESOURCE_LIMITS),
+                EMPTY_RESOURCE_LIMITS.axes_geq(UNBOUNDED_RESOURCE_LIMITS),
+            );
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::symmetric_difference_masks_pointwise(
+                UNBOUNDED_RESOURCE_LIMITS.axes_leq(EMPTY_RESOURCE_LIMITS),
+                UNBOUNDED_RESOURCE_LIMITS.axes_geq(EMPTY_RESOURCE_LIMITS),
+            );
     }
 
     #[test]

@@ -1791,16 +1791,24 @@ impl ResourceLimits {
     /// pattern lifted onto the per-axis-mask surface for the equality
     /// relation.
     ///
-    /// Encoded as the per-index negation of `self.axes_eq(other)` — one
-    /// primitive delegation to [`Self::axes_eq`], so the equality-relation
-    /// encoding lives at exactly one implementation site (`axes_eq`'s
-    /// intersection of `axes_leq` and `axes_geq`), and a future
-    /// re-derivation of `axes_eq` propagates to `axes_ne` mechanically
-    /// rather than requiring a per-method fix-up. Mirrors [`Self::axes_geq`]'s
-    /// `other.axes_leq(self)` delegation one COMBINATOR-TRANSFORM axis
-    /// over — where `axes_geq` is the argument-flip of `axes_leq`, this
-    /// is the De Morgan complement of `axes_eq`; both encodings avoid a
-    /// second inline six-primitive cascade.
+    /// Encoded as the per-index negation of `self.axes_eq(other)` routed
+    /// through the substrate MASK→MASK UNARY combinator
+    /// [`Self::complement_mask_pointwise`] — one primitive delegation to
+    /// [`Self::axes_eq`] and one primitive delegation to the substrate
+    /// complement helper, so the equality-relation encoding lives at
+    /// exactly one implementation site (`axes_eq`'s intersection of
+    /// `axes_leq` and `axes_geq`), and a future re-derivation of
+    /// `axes_eq` propagates to `axes_ne` mechanically rather than
+    /// requiring a per-method fix-up. Post-lift the body is the one-line
+    /// `Self::complement_mask_pointwise(self.axes_eq(other))` composition
+    /// — the FIELD_COUNT=6-coupling the pre-lift `[!equal[0], !equal[1],
+    /// ..., !equal[5]]` six-primitive array literal carried is now retired
+    /// at the callsite and propagates mechanically through the helper's
+    /// `while i < FIELD_COUNT` per-axis fill on any future arity bump.
+    /// Mirrors [`Self::axes_geq`]'s `other.axes_leq(self)` delegation one
+    /// COMBINATOR-TRANSFORM axis over — where `axes_geq` is the argument-
+    /// flip of `axes_leq`, this is the De Morgan complement of `axes_eq`;
+    /// both encodings avoid a second inline six-primitive cascade.
     ///
     /// **Disjunction-recovers-`!=` contract**: for every posture pair
     /// `(a, b)`, folding `a.axes_ne(b)` through `||` over the six
@@ -1921,10 +1929,7 @@ impl ResourceLimits {
     /// operation or a fourth inline six-primitive cascade.
     #[must_use]
     pub const fn axes_ne(self, other: Self) -> [bool; Self::FIELD_COUNT] {
-        let equal = self.axes_eq(other);
-        [
-            !equal[0], !equal[1], !equal[2], !equal[3], !equal[4], !equal[5],
-        ]
+        Self::complement_mask_pointwise(self.axes_eq(other))
     }
 
     /// Pointwise `==` predicate across the six ceilings — `self` equals
@@ -9074,15 +9079,7 @@ impl ResourceLimits {
     /// inner `const fn` bodies), no allocation, `const fn` throughout.
     #[must_use]
     pub const fn axes_is_non_monotone(postures: &[Self]) -> [bool; Self::FIELD_COUNT] {
-        let asc = Self::axes_is_ascending(postures);
-        let desc = Self::axes_is_descending(postures);
-        let mut result = [false; Self::FIELD_COUNT];
-        let mut i = 0;
-        while i < Self::FIELD_COUNT {
-            result[i] = !asc[i] && !desc[i];
-            i += 1;
-        }
-        result
+        Self::complement_mask_pointwise(Self::axes_is_monotone(postures))
     }
 
     /// Per-axis boolean STRICTLY-NON-MONOTONE projection across a slice
@@ -9384,15 +9381,7 @@ impl ResourceLimits {
     /// bodies), no allocation, `const fn` throughout.
     #[must_use]
     pub const fn axes_is_strictly_non_monotone(postures: &[Self]) -> [bool; Self::FIELD_COUNT] {
-        let asc = Self::axes_is_strictly_ascending(postures);
-        let desc = Self::axes_is_strictly_descending(postures);
-        let mut result = [false; Self::FIELD_COUNT];
-        let mut i = 0;
-        while i < Self::FIELD_COUNT {
-            result[i] = !asc[i] && !desc[i];
-            i += 1;
-        }
-        result
+        Self::complement_mask_pointwise(Self::axes_is_strictly_monotone(postures))
     }
 
     /// Per-axis boolean STRICTLY-CONSTANT projection across a slice of
@@ -10518,15 +10507,7 @@ impl ResourceLimits {
     /// lifted per-axis-mask pole-identity primitives.
     #[must_use]
     pub const fn axes_is_interior(self) -> [bool; Self::FIELD_COUNT] {
-        let bot = self.axes_is_bottom();
-        let top = self.axes_is_top();
-        let mut result = [false; Self::FIELD_COUNT];
-        let mut i = 0;
-        while i < Self::FIELD_COUNT {
-            result[i] = !bot[i] && !top[i];
-            i += 1;
-        }
-        result
+        Self::complement_mask_pointwise(self.axes_is_pole())
     }
 
     /// Whole-posture AXIALLY-POLAR predicate — `self.is_axially_polar()`
@@ -12632,6 +12613,199 @@ impl ResourceLimits {
         let mut i = 0;
         while i < Self::FIELD_COUNT {
             out[i] = a[i] || b[i];
+            i += 1;
+        }
+        out
+    }
+
+    /// Per-axis mask POINTWISE COMPLEMENT —
+    /// `Self::complement_mask_pointwise(mask)` returns the
+    /// `[bool; Self::FIELD_COUNT]` per-axis mask whose `i`-th bit is the
+    /// per-index negation `!mask[i]` of a shipped per-axis mask. The
+    /// BOUNDARY primitive lifting the shape
+    /// ```text
+    /// [
+    ///     !mask[0],
+    ///     !mask[1],
+    ///     !mask[2],
+    ///     !mask[3],
+    ///     !mask[4],
+    ///     !mask[5],
+    /// ]
+    /// ```
+    /// that every per-axis MASK→MASK COMPLEMENT on
+    /// [`ResourceLimits`] carries at its body — [`Self::axes_ne`] takes
+    /// exactly this shape at the per-index negation of [`Self::axes_eq`],
+    /// and the De Morgan expansion `!(a[i] || b[i]) == !a[i] && !b[i]`
+    /// that every UNION-COMPLEMENT body ([`Self::axes_is_interior`],
+    /// [`Self::axes_is_non_monotone`], [`Self::axes_is_strictly_non_monotone`])
+    /// carries at its exit collapses to `Self::complement_mask_pointwise`
+    /// composed with the paired [`Self::union_masks_pointwise`] via De
+    /// Morgan's law. Pre-lift the complement body open-coded the
+    /// six-primitive `[!mask[0], !mask[1], ..., !mask[5]]` array literal
+    /// (`axes_ne`) or the De Morgan `!x[i] && !y[i]` per-axis fill (the
+    /// three UNION-COMPLEMENT peers) at its exit, and the shape sits
+    /// ready one PROJECTION-KIND axis over from every future unary-negated
+    /// per-axis mask (higher-order axial partition complements, De Morgan
+    /// duals of any shipped union-mask). Post-lift the shape binds at ONE
+    /// typed `const fn` on [`ResourceLimits`], and every MASK→MASK
+    /// COMPLEMENT composes through this helper — the per-axis pointwise
+    /// `!` is a substrate-level theorem rather than a per-consumer inline
+    /// six-primitive cascade whose FIELD_COUNT=6-coupling silently rots
+    /// on a future arity bump.
+    ///
+    /// The THIRD MASK→MASK COMBINATOR primitive on the per-axis mask
+    /// substrate, opening the UNARY combinator arity past the two shipped
+    /// BINARY combinators ([`Self::intersect_masks_pointwise`] AND-monoid,
+    /// [`Self::union_masks_pointwise`] OR-monoid). Where the two binary
+    /// combinators COMBINE two masks into a third mask on the SAME
+    /// per-axis surface, this UNARY combinator INVERTS one mask into its
+    /// per-axis complement — the Boolean-completeness gap-closer past the
+    /// (AND, OR) monoid pair via the shipped `¬` operator. Jointly the
+    /// (`intersect_masks_pointwise`, `union_masks_pointwise`,
+    /// `complement_mask_pointwise`) triple carries the (AND, OR, NOT)
+    /// Boolean-completeness triad on the per-axis mask algebra at ONE
+    /// substrate `const fn` per Boolean primitive — every Boolean formula
+    /// over per-axis masks composes from this shipped triple by
+    /// definition of Boolean completeness.
+    ///
+    /// **Iterator-agreement identity — LOAD-BEARING structural pin**: on
+    /// every `mask`, the returned mask's `i`-th bit equals
+    /// `mask.iter().map(|&x| !x).collect::<[bool; N]>()[i]` — the direct
+    /// stable-Rust `iter`-then-`map`-then-`!` iterator idiom the helper
+    /// substitutes for at every consumer. Pinned via
+    /// `resource_limits_complement_mask_pointwise_agrees_with_iterator_map_not`.
+    ///
+    /// **Involutivity contract**: on every `mask`,
+    /// `Self::complement_mask_pointwise(Self::complement_mask_pointwise(mask))
+    /// == mask`. Per-axis `!` is involutive (`!!x == x`), so the mask
+    /// combinator inherits involutivity from the underlying Boolean
+    /// operation — the UNARY analogue of the BINARY combinators'
+    /// idempotence contract one COMBINATOR-ARITY axis over. Pinned via
+    /// `resource_limits_complement_mask_pointwise_is_involutive`.
+    ///
+    /// **Endpoint-swap contract**: `Self::complement_mask_pointwise([true;
+    /// FIELD_COUNT]) == [false; FIELD_COUNT]` AND
+    /// `Self::complement_mask_pointwise([false; FIELD_COUNT]) == [true;
+    /// FIELD_COUNT]`. The complement swaps the two saturated endpoints of
+    /// the pointwise-Boolean lattice — the ALGEBRAIC role that on the two
+    /// paired BINARY combinators splits into (identity, annihilator) but
+    /// on the UNARY combinator merges into a single endpoint-swap
+    /// contract, since one argument leaves no room for a distinguished
+    /// identity/annihilator pair. Pinned via
+    /// `resource_limits_complement_mask_pointwise_swaps_saturated_endpoints`.
+    ///
+    /// **POPCOUNT complement identity**: on every `mask`,
+    /// `Self::count_mask_bits(Self::complement_mask_pointwise(mask)) +
+    /// Self::count_mask_bits(mask) == Self::FIELD_COUNT`. The complement's
+    /// popcount is the arity minus the original popcount — bridging the
+    /// mask combinator to the paired POPCOUNT-fold on the SAME per-axis
+    /// mask surface. The UNARY analogue of the paired BINARY combinators'
+    /// POPCOUNT bounds one COMBINATOR-ARITY axis over. Pinned via
+    /// `resource_limits_complement_mask_pointwise_popcount_sums_to_field_count`.
+    ///
+    /// **De Morgan over intersect**: on every `(a, b)` mask pair,
+    /// `Self::complement_mask_pointwise(Self::intersect_masks_pointwise(a,
+    /// b)) == Self::union_masks_pointwise(Self::complement_mask_pointwise(a),
+    /// Self::complement_mask_pointwise(b))`. The complement of an AND is
+    /// the OR of complements — the canonical De Morgan identity closing
+    /// the (AND, OR, NOT) Boolean-completeness triad at the substrate
+    /// level. Pinned via
+    /// `resource_limits_complement_mask_pointwise_de_morgan_over_intersect`.
+    ///
+    /// **De Morgan over union**: on every `(a, b)` mask pair,
+    /// `Self::complement_mask_pointwise(Self::union_masks_pointwise(a,
+    /// b)) == Self::intersect_masks_pointwise(Self::complement_mask_pointwise(a),
+    /// Self::complement_mask_pointwise(b))`. The complement of an OR is
+    /// the AND of complements — the DUAL De Morgan identity on the paired
+    /// MONOID-ORIENTATION axis. Pinned via
+    /// `resource_limits_complement_mask_pointwise_de_morgan_over_union`.
+    ///
+    /// **ANY-fold bridge**: on every `mask`,
+    /// `Self::any_mask_bit_set(Self::complement_mask_pointwise(mask)) ==
+    /// !Self::all_mask_bits_set(mask)`. The complement any-fires iff the
+    /// original does NOT all-fire — the De Morgan bridge between the
+    /// (∃, ∀) QUANTIFIER-KIND pair on the paired MASK→SCALAR collapse
+    /// surface. Pinned via
+    /// `resource_limits_complement_mask_pointwise_any_is_de_morgan_dual_of_all`.
+    ///
+    /// **ALL-fold bridge**: on every `mask`,
+    /// `Self::all_mask_bits_set(Self::complement_mask_pointwise(mask)) ==
+    /// !Self::any_mask_bit_set(mask)`. The complement all-fires iff the
+    /// original does NOT any-fire — the DUAL De Morgan bridge on the
+    /// paired QUANTIFIER-KIND axis. Pinned via
+    /// `resource_limits_complement_mask_pointwise_all_is_de_morgan_dual_of_any`.
+    ///
+    /// `const fn` so a caller can pin a complemented mask at compile time
+    /// (`const _: [bool; ResourceLimits::FIELD_COUNT] =
+    /// ResourceLimits::complement_mask_pointwise([true;
+    /// ResourceLimits::FIELD_COUNT]);`) — sibling of the const-fn
+    /// evaluability pins the paired BINARY combinators and the five
+    /// MASK→SCALAR collapse helpers already carry at their own exits.
+    ///
+    /// **Adoption compounds**: [`Self::axes_ne`] rewrites from the open-
+    /// coded six-primitive `[!equal[0], !equal[1], ..., !equal[5]]` array
+    /// literal to the one-line
+    /// `Self::complement_mask_pointwise(self.axes_eq(other))` composition
+    /// at no semantic change; [`Self::axes_is_interior`] rewrites from the
+    /// De Morgan `!bot[i] && !top[i]` per-axis fill to the one-line
+    /// `Self::complement_mask_pointwise(self.axes_is_pole())` composition
+    /// (invoking the De Morgan identity `!(a || b) == !a && !b` and the
+    /// shipped `axes_is_pole = union(bot, top)` composition transitively);
+    /// [`Self::axes_is_non_monotone`] and
+    /// [`Self::axes_is_strictly_non_monotone`] rewrite the same way one
+    /// SEQUENCE-LEVEL axis over via [`Self::axes_is_monotone`] and
+    /// [`Self::axes_is_strictly_monotone`]. Any future per-axis mask
+    /// whose exit is the pointwise negation of a shipped per-axis mask
+    /// composes through this same primitive. Together with the paired
+    /// BINARY combinators the (`intersect_masks_pointwise`,
+    /// `union_masks_pointwise`, `complement_mask_pointwise`) triple closes
+    /// the (AND, OR, NOT) Boolean-completeness triad on the per-axis mask
+    /// substrate.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-axis pointwise-NOT mask combinator at every MASK→MASK
+    /// COMPLEMENT exit now binds at ONE typed named `const fn` on the
+    /// algebra rather than a per-consumer six-primitive hardcoded array
+    /// literal (or De Morgan-expanded per-axis fill) whose FIELD_COUNT=6-
+    /// coupling silently rots on a future arity bump. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the helper composes
+    /// mechanically under the iterator-map-not agreement, involutivity,
+    /// endpoint-swap, POPCOUNT complement, De Morgan over intersect / De
+    /// Morgan over union, and paired ANY/ALL-fold De Morgan bridge
+    /// identities above with no re-derivation at the caller. THEORY.md
+    /// §V.1 — knowable platform; the per-axis pointwise `!` combinator
+    /// becomes a TYPE-level operation on the per-axis mask algebra rather
+    /// than a per-consumer inline six-primitive cascade, with the per-
+    /// axis granularity baked in so the consumer cannot silently drop an
+    /// axis (the array's fixed arity forces every axis to appear).
+    ///
+    /// Frontier inspiration: APL / J's rank-lifted `~` (logical-not)
+    /// operator producing a per-position bit array from one conformable
+    /// boolean array; Haskell's `map not` on a `[Bool]` producing a
+    /// `[Bool]`; Idris's `Data.Vect.map not` on a `Vec n Bool` producing
+    /// a `Vec n Bool` under a total function signature; Rust's stable
+    /// `mask.iter().map(|&x| !x)` iterator idiom. Classical bitset NOT
+    /// (`!` / `~`) on a bit-packed mask is the same operation one
+    /// representation-KIND axis over on a bit-packed encoding —
+    /// `complement_mask_pointwise` is its per-axis-boolean-array peer at
+    /// the substrate, and the UNARY-ARITY primitive closing the (AND, OR,
+    /// NOT) Boolean-completeness triad on the per-axis mask combinator
+    /// row. Translation through pleme-io primitives is the plain `const
+    /// fn` `while`-based per-axis fill below into a stack-allocated
+    /// `[bool; FIELD_COUNT]` array — no closure, no typeclass
+    /// indirection, no dependency on `<[bool]>::iter().map(...)` (which
+    /// is not const-callable on stable Rust because `map` returns an
+    /// iterator adapter that takes closures), and the mask is an owned
+    /// array eagerly evaluated by the caller.
+    #[must_use]
+    pub const fn complement_mask_pointwise(
+        mask: [bool; Self::FIELD_COUNT],
+    ) -> [bool; Self::FIELD_COUNT] {
+        let mut out = [false; Self::FIELD_COUNT];
+        let mut i = 0;
+        while i < Self::FIELD_COUNT {
+            out[i] = !mask[i];
             i += 1;
         }
         out
@@ -89913,6 +90087,392 @@ mod tests {
             UNBOUNDED_RESOURCE_LIMITS.axes_is_bottom(),
             UNBOUNDED_RESOURCE_LIMITS.axes_is_top(),
         );
+    }
+
+    #[test]
+    fn resource_limits_complement_mask_pointwise_agrees_with_iterator_map_not() {
+        // Iterator-agreement contract — the substrate MASK→MASK
+        // pointwise-NOT combinator's verdict on every mask fixture agrees
+        // with the raw `mask.iter().map(|&x| !x).collect::<Vec<bool>>()`
+        // open-coded fold that every prior per-axis pointwise-negation
+        // body (`axes_ne` at the direct-complement callsite; and the
+        // De Morgan-collapsed peers `axes_is_interior`,
+        // `axes_is_non_monotone`, `axes_is_strictly_non_monotone` via
+        // `!(a || b) == !a && !b`) carried before the helper lift. Swept
+        // across the 11-mask constellation drawn from the shared
+        // COUNT_MASK_BITS_MASK_SWEEP constellation so the combinator is
+        // pinned on every distinct per-index (false→true, true→false)
+        // corner across the popcount range. A helper regression that
+        // mis-indexed the while-loop, skipped increments, dropped the
+        // negation, or dropped an axis from the output array would break
+        // here on at least one mask.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            let via_helper = ResourceLimits::complement_mask_pointwise(*mask);
+            let mut via_iterator = [false; ResourceLimits::FIELD_COUNT];
+            for (i, &bit) in mask.iter().enumerate() {
+                via_iterator[i] = !bit;
+            }
+            assert_eq!(
+                via_helper, via_iterator,
+                "complement_mask_pointwise != iterator-map-not on {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_complement_mask_pointwise_is_involutive() {
+        // Involutivity contract — per-axis `!` is involutive (`!!x == x`),
+        // so the mask combinator inherits involutivity from the underlying
+        // Boolean operation: `complement(complement(mask)) == mask` for
+        // every mask fixture. The UNARY analogue of the BINARY combinators'
+        // idempotence contract one COMBINATOR-ARITY axis over — where the
+        // paired `intersect`/`union` combinators are idempotent under
+        // self-repetition, the UNARY complement is involutive under
+        // self-composition. Swept across the 11-mask constellation so the
+        // identity is pinned on every distinct popcount verdict. Catches a
+        // regression where the helper's per-index fill lost the negation
+        // (identity-map returned) or double-negated (still-negated on the
+        // outer call).
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            let complemented = ResourceLimits::complement_mask_pointwise(*mask);
+            let double = ResourceLimits::complement_mask_pointwise(complemented);
+            assert_eq!(
+                double, *mask,
+                "complement(complement(mask)) != mask on {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_complement_mask_pointwise_swaps_saturated_endpoints() {
+        // Endpoint-swap contract — the complement swaps the two saturated
+        // endpoints of the pointwise-Boolean lattice:
+        // `complement(MASK_ALL_TRUE) == MASK_ALL_FALSE` AND
+        // `complement(MASK_ALL_FALSE) == MASK_ALL_TRUE`. The ALGEBRAIC role
+        // that on the two paired BINARY combinators splits into (identity,
+        // annihilator) pairs but on the UNARY combinator merges into a
+        // single endpoint-swap contract, since one argument leaves no room
+        // for a distinguished identity/annihilator pair. Catches a
+        // regression where the helper's per-index fill lost the negation
+        // on either endpoint.
+        assert_eq!(
+            ResourceLimits::complement_mask_pointwise(MASK_ALL_TRUE),
+            MASK_ALL_FALSE,
+            "complement(all-true) != all-false",
+        );
+        assert_eq!(
+            ResourceLimits::complement_mask_pointwise(MASK_ALL_FALSE),
+            MASK_ALL_TRUE,
+            "complement(all-false) != all-true",
+        );
+    }
+
+    #[test]
+    fn resource_limits_complement_mask_pointwise_popcount_sums_to_field_count() {
+        // POPCOUNT complement identity — the complement's popcount is the
+        // arity minus the original popcount: `count(complement(mask)) +
+        // count(mask) == FIELD_COUNT` for every mask fixture. Bridges the
+        // mask combinator to the paired POPCOUNT-fold on the SAME per-axis
+        // mask surface. The UNARY analogue of the paired BINARY
+        // combinators' POPCOUNT bounds one COMBINATOR-ARITY axis over —
+        // where the paired combinators bound the popcount above (intersect
+        // ≤ min) or below (union ≥ max) the operand popcounts, the UNARY
+        // complement EXACTLY complements the popcount against the arity
+        // ceiling. Swept across the 11-mask constellation so the identity
+        // is pinned on every distinct popcount verdict.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            let complemented = ResourceLimits::complement_mask_pointwise(*mask);
+            let cm = ResourceLimits::count_mask_bits(*mask);
+            let cc = ResourceLimits::count_mask_bits(complemented);
+            assert_eq!(
+                cm + cc,
+                ResourceLimits::FIELD_COUNT,
+                "count(mask) + count(complement) != FIELD_COUNT on {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_complement_mask_pointwise_de_morgan_over_intersect() {
+        // De Morgan over intersect — the complement of an AND is the OR
+        // of complements: `complement(intersect(a, b)) ==
+        // union(complement(a), complement(b))` for every mask pair. The
+        // canonical De Morgan identity closing the (AND, OR, NOT)
+        // Boolean-completeness triad at the substrate level. Swept across
+        // the FULL 11×11 = 121-mask pair constellation so the identity is
+        // pinned on every distinct per-index corner. A helper regression
+        // that lost the negation, mis-composed the union, or mis-composed
+        // the intersect would break here on at least one mask pair.
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                let lhs = ResourceLimits::complement_mask_pointwise(
+                    ResourceLimits::intersect_masks_pointwise(*a, *b),
+                );
+                let rhs = ResourceLimits::union_masks_pointwise(
+                    ResourceLimits::complement_mask_pointwise(*a),
+                    ResourceLimits::complement_mask_pointwise(*b),
+                );
+                assert_eq!(
+                    lhs, rhs,
+                    "complement(intersect(a, b)) != union(complement(a), complement(b)) on \
+                     ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_complement_mask_pointwise_de_morgan_over_union() {
+        // De Morgan over union — the complement of an OR is the AND of
+        // complements: `complement(union(a, b)) ==
+        // intersect(complement(a), complement(b))` for every mask pair.
+        // The DUAL De Morgan identity on the paired MONOID-ORIENTATION
+        // axis, closing the (AND, OR, NOT) Boolean-completeness triad on
+        // BOTH De Morgan orientations at the substrate level. This is the
+        // exact identity the three swept UNION-COMPLEMENT callsites
+        // (axes_is_interior via axes_is_pole, axes_is_non_monotone via
+        // axes_is_monotone, axes_is_strictly_non_monotone via
+        // axes_is_strictly_monotone) delegate through — the per-axis
+        // `!bot[i] && !top[i]` open-coded De Morgan fill they carried
+        // pre-sweep IS the RHS of this identity, and the post-sweep
+        // `complement(union(bot, top))` shape IS the LHS. Swept across
+        // the FULL 11×11 = 121-mask pair constellation.
+        for a in COUNT_MASK_BITS_MASK_SWEEP {
+            for b in COUNT_MASK_BITS_MASK_SWEEP {
+                let lhs = ResourceLimits::complement_mask_pointwise(
+                    ResourceLimits::union_masks_pointwise(*a, *b),
+                );
+                let rhs = ResourceLimits::intersect_masks_pointwise(
+                    ResourceLimits::complement_mask_pointwise(*a),
+                    ResourceLimits::complement_mask_pointwise(*b),
+                );
+                assert_eq!(
+                    lhs, rhs,
+                    "complement(union(a, b)) != intersect(complement(a), complement(b)) on \
+                     ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_complement_mask_pointwise_any_is_de_morgan_dual_of_all() {
+        // ANY-fold bridge — the complement any-fires iff the original does
+        // NOT all-fire: `any(complement(mask)) == !all(mask)` for every
+        // mask fixture. The De Morgan bridge between the (∃, ∀)
+        // QUANTIFIER-KIND pair on the paired MASK→SCALAR collapse surface,
+        // via `∃x. !P(x) ⇔ !(∀x. P(x))`. Swept across the 11-mask
+        // constellation so the identity is pinned on every distinct
+        // popcount verdict.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            let complemented = ResourceLimits::complement_mask_pointwise(*mask);
+            assert_eq!(
+                ResourceLimits::any_mask_bit_set(complemented),
+                !ResourceLimits::all_mask_bits_set(*mask),
+                "any(complement) != !all(mask) on {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_complement_mask_pointwise_all_is_de_morgan_dual_of_any() {
+        // ALL-fold bridge — the complement all-fires iff the original does
+        // NOT any-fire: `all(complement(mask)) == !any(mask)` for every
+        // mask fixture. The DUAL De Morgan bridge on the paired
+        // QUANTIFIER-KIND axis, via `∀x. !P(x) ⇔ !(∃x. P(x))`. Together
+        // with the paired ANY-fold bridge the two tests close the (∃, ∀)
+        // De Morgan bridge pair at ONE substrate identity per QUANTIFIER
+        // edge. Swept across the 11-mask constellation.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            let complemented = ResourceLimits::complement_mask_pointwise(*mask);
+            assert_eq!(
+                ResourceLimits::all_mask_bits_set(complemented),
+                !ResourceLimits::any_mask_bit_set(*mask),
+                "all(complement) != !any(mask) on {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_ne_body_delegates_to_complement_mask_pointwise() {
+        // Sweep-of-callsite pin — after routing the whole-posture
+        // `axes_ne` body from the FIELD_COUNT-hardcoded six-primitive
+        // `[!equal[0], !equal[1], !equal[2], !equal[3], !equal[4],
+        // !equal[5]]` array literal over `self.axes_eq(other)` through
+        // ResourceLimits::complement_mask_pointwise, the whole 5×5 = 25
+        // preset×preset constellation continues to agree with the helper-
+        // based shape `complement_mask_pointwise(a.axes_eq(b))`. The pin
+        // closes the FIELD_COUNT-decoupling refactor on the FIRST MASK→MASK
+        // COMPLEMENT (direct-complement) callsite for the per-axis-mask
+        // surface: a future FIELD_COUNT bump that would have silently
+        // under-covered the hardcoded array literal is now caught by the
+        // helper's `while i < FIELD_COUNT` per-axis fill rather than an
+        // axis-count that no callsite guarded. Sibling of
+        // `resource_limits_axes_eq_body_delegates_to_intersect_masks_pointwise`
+        // and `resource_limits_axes_is_pole_body_delegates_to_union_masks_pointwise`
+        // one COMBINATOR-KIND axis over — the (intersect, union, complement)
+        // delegation triple closes the (AND, OR, NOT) MASK→MASK
+        // Boolean-completeness triad at ONE substrate primitive delegation
+        // per exit.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in postures {
+            for b in postures {
+                assert_eq!(
+                    a.axes_ne(b),
+                    ResourceLimits::complement_mask_pointwise(a.axes_eq(b)),
+                    "axes_ne disagrees with complement_mask_pointwise(axes_eq) on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_interior_body_delegates_to_complement_mask_pointwise() {
+        // Sweep-of-callsite pin — after routing the whole-posture
+        // `axes_is_interior` body from the per-axis `while i < FIELD_COUNT
+        // { result[i] = !bot[i] && !top[i]; i += 1; }` open-coded De Morgan
+        // per-axis fill through
+        // `ResourceLimits::complement_mask_pointwise(self.axes_is_pole())`,
+        // the whole STRICT_ORDER_ROSTER preset roster continues to agree
+        // with the helper-based shape
+        // `complement_mask_pointwise(a.axes_is_pole())`. The rewrite
+        // invokes the De Morgan identity `!(a || b) == !a && !b` and the
+        // shipped `axes_is_pole == union(bot, top)` composition
+        // transitively: the pre-sweep body computed `!bot[i] && !top[i]`
+        // which by De Morgan equals `!(bot[i] || top[i])` which by the
+        // shipped `axes_is_pole` body equals `!axes_is_pole()[i]`. The
+        // pin closes the FIELD_COUNT-decoupling refactor on the SECOND
+        // MASK→MASK COMPLEMENT (De Morgan collapse) callsite — the
+        // INTERIOR cell on the POSITION-LEVEL pole-identity surface.
+        for &a in STRICT_ORDER_ROSTER {
+            assert_eq!(
+                a.axes_is_interior(),
+                ResourceLimits::complement_mask_pointwise(a.axes_is_pole()),
+                "axes_is_interior disagrees with complement_mask_pointwise(axes_is_pole) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_non_monotone_body_delegates_to_complement_mask_pointwise() {
+        // Sweep-of-callsite pin — after routing the whole-posture
+        // `axes_is_non_monotone` body from the per-axis `while i <
+        // FIELD_COUNT { result[i] = !asc[i] && !desc[i]; i += 1; }` open-
+        // coded De Morgan per-axis fill through
+        // `ResourceLimits::complement_mask_pointwise(Self::axes_is_monotone(postures))`,
+        // the whole 5^3 preset-triple constellation continues to agree
+        // with the helper-based shape
+        // `complement_mask_pointwise(axes_is_monotone(slice))`. The
+        // rewrite invokes the De Morgan identity `!(a || b) == !a && !b`
+        // and the shipped `axes_is_monotone == union(asc, desc)`
+        // composition transitively. The pin closes the FIELD_COUNT-
+        // decoupling refactor on the THIRD MASK→MASK COMPLEMENT (De Morgan
+        // collapse) callsite — the NON-MONOTONE cell on the SEQUENCE-
+        // LEVEL direction-cover surface, one PROJECTION-KIND axis over
+        // from the INTERIOR cell on the POSITION-LEVEL pole-identity
+        // surface.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        ResourceLimits::axes_is_non_monotone(&slice),
+                        ResourceLimits::complement_mask_pointwise(
+                            ResourceLimits::axes_is_monotone(&slice),
+                        ),
+                        "axes_is_non_monotone disagrees with \
+                         complement_mask_pointwise(axes_is_monotone) on ({a:?}, {b:?}, {c:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_non_monotone_body_delegates_to_complement_mask_pointwise() {
+        // Sweep-of-callsite pin — after routing the whole-posture
+        // `axes_is_strictly_non_monotone` body from the per-axis `while i
+        // < FIELD_COUNT { result[i] = !asc[i] && !desc[i]; i += 1; }` open-
+        // coded De Morgan per-axis fill through
+        // `complement_mask_pointwise(Self::axes_is_strictly_monotone(postures))`,
+        // the whole 5^3 preset-triple constellation continues to agree
+        // with the helper-based shape
+        // `complement_mask_pointwise(axes_is_strictly_monotone(slice))`.
+        // The FOURTH and final MASK→MASK COMPLEMENT (De Morgan collapse)
+        // callsite — the STRICT-NON-MONOTONE cell one STRICTNESS axis over
+        // from the loose non-monotone cell above.
+        let presets: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in presets {
+            for b in presets {
+                for c in presets {
+                    let slice = [a, b, c];
+                    assert_eq!(
+                        ResourceLimits::axes_is_strictly_non_monotone(&slice),
+                        ResourceLimits::complement_mask_pointwise(
+                            ResourceLimits::axes_is_strictly_monotone(&slice),
+                        ),
+                        "axes_is_strictly_non_monotone disagrees with \
+                         complement_mask_pointwise(axes_is_strictly_monotone) on \
+                         ({a:?}, {b:?}, {c:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_complement_mask_pointwise_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a caller
+        // can pin a complemented mask at compile time as a build-break.
+        // Sibling of the const-fn evaluability pins the paired BINARY
+        // combinators (`intersect_masks_pointwise`, `union_masks_pointwise`)
+        // and the five MASK→SCALAR collapse helpers already carry at their
+        // own exits. Covers the (endpoint-swap, involutivity) monoid
+        // corners on the shipped `pub const` fixtures plus the paired-
+        // preset compositions through axes_eq/axes_is_pole that the four
+        // swept callsites delegate through, so the helper is pinned as
+        // const-fn on every corner the sweeps depend on.
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::complement_mask_pointwise(MASK_ALL_TRUE);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::complement_mask_pointwise(MASK_ALL_FALSE);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::complement_mask_pointwise(MASK_SINGLE_HEAD);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::complement_mask_pointwise(MASK_SINGLE_TAIL);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::complement_mask_pointwise(MASK_TWO_ENDS);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::complement_mask_pointwise(MASK_FIRST_HALF);
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::complement_mask_pointwise(MASK_ALTERNATING_HEAD_TRUE);
+        const _: [bool; ResourceLimits::FIELD_COUNT] = ResourceLimits::complement_mask_pointwise(
+            ResourceLimits::complement_mask_pointwise(MASK_FIRST_HALF),
+        );
+        const _: [bool; ResourceLimits::FIELD_COUNT] = ResourceLimits::complement_mask_pointwise(
+            EMPTY_RESOURCE_LIMITS.axes_eq(EMPTY_RESOURCE_LIMITS),
+        );
+        const _: [bool; ResourceLimits::FIELD_COUNT] =
+            ResourceLimits::complement_mask_pointwise(UNBOUNDED_RESOURCE_LIMITS.axes_is_pole());
     }
 
     #[test]

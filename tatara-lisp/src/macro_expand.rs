@@ -2853,23 +2853,20 @@ impl ResourceLimits {
     /// per-position vector level. APL / J's rank-lifted `∧.≤` two-argument
     /// bracket operator producing a per-position bit array between three
     /// conformable arrays — the SAME lifted-bracket shape lifted onto
-    /// typed structs. Translation through pleme-io primitives: a
-    /// `const fn` returning a `[bool; N]` fixed-size array on the typed
-    /// [`ResourceLimits`] algebra encoded as the per-index intersection of
-    /// two already-lifted `axes_leq` calls, rather than a runtime vector
-    /// operation or a second inline six-primitive cascade.
+    /// typed structs. Translation through pleme-io primitives is the
+    /// one-line composition below, routed through the substrate
+    /// MASK+MASK→MASK INTERSECTION combinator
+    /// [`Self::intersect_masks_pointwise`] on the pair of already-lifted
+    /// `axes_leq` masks (`lower ≤ self` on the below arm; `self ≤ upper`
+    /// on the above arm) — the FIELD_COUNT=6-coupling the pre-lift
+    /// `[above_lower[0] && below_upper[0], ..., above_lower[5] &&
+    /// below_upper[5]]` six-primitive array literal carried is now
+    /// retired at the callsite and propagates mechanically through the
+    /// helper's `while i < FIELD_COUNT` per-axis fill on any future
+    /// arity bump.
     #[must_use]
     pub const fn axes_within(self, lower: Self, upper: Self) -> [bool; Self::FIELD_COUNT] {
-        let above_lower = lower.axes_leq(self);
-        let below_upper = self.axes_leq(upper);
-        [
-            above_lower[0] && below_upper[0],
-            above_lower[1] && below_upper[1],
-            above_lower[2] && below_upper[2],
-            above_lower[3] && below_upper[3],
-            above_lower[4] && below_upper[4],
-            above_lower[5] && below_upper[5],
-        ]
+        Self::intersect_masks_pointwise(lower.axes_leq(self), self.axes_leq(upper))
     }
 
     /// Per-axis pointwise [`Ordering`] verdict across the six ceilings —
@@ -4339,26 +4336,27 @@ impl ResourceLimits {
     /// the N-ary joint bracket. APL / J's rank-lifted joint-bounds
     /// membership operator producing a per-position bit array between a
     /// candidate and two conformable arrays of bounds. Translation
-    /// through pleme-io primitives: a `const fn` returning `[bool; N]`
-    /// on the typed [`ResourceLimits`] algebra encoded as the per-index
-    /// intersection of two already-lifted per-axis N-ary bound-membership
-    /// masks.
+    /// through pleme-io primitives is the one-line composition below,
+    /// routed through the substrate MASK+MASK→MASK INTERSECTION
+    /// combinator [`Self::intersect_masks_pointwise`] on the pair of
+    /// already-lifted per-axis N-ary bound-membership masks
+    /// [`Self::axes_is_upper_bound_of`] and
+    /// [`Self::axes_is_lower_bound_of`] — the FIELD_COUNT=6-coupling
+    /// the pre-lift `[above_lowers[0] && below_uppers[0], ...,
+    /// above_lowers[5] && below_uppers[5]]` six-primitive array literal
+    /// carried is now retired at the callsite and propagates
+    /// mechanically through the helper's `while i < FIELD_COUNT`
+    /// per-axis fill on any future arity bump.
     #[must_use]
     pub const fn axes_is_within_of(
         self,
         lowers: &[Self],
         uppers: &[Self],
     ) -> [bool; Self::FIELD_COUNT] {
-        let above_lowers = self.axes_is_upper_bound_of(lowers);
-        let below_uppers = self.axes_is_lower_bound_of(uppers);
-        [
-            above_lowers[0] && below_uppers[0],
-            above_lowers[1] && below_uppers[1],
-            above_lowers[2] && below_uppers[2],
-            above_lowers[3] && below_uppers[3],
-            above_lowers[4] && below_uppers[4],
-            above_lowers[5] && below_uppers[5],
-        ]
+        Self::intersect_masks_pointwise(
+            self.axes_is_upper_bound_of(lowers),
+            self.axes_is_lower_bound_of(uppers),
+        )
     }
 
     /// Boolean STRICT bracket-membership across a slice of lower operands
@@ -4686,27 +4684,28 @@ impl ResourceLimits {
     /// over, lifted onto a per-position vector via a pointwise strict
     /// comparator — Idris's `zipWith3` composed with a `foldMap` over
     /// two `Vec` of `Vec n Nat` producing a `Vec n Bool` under a
-    /// strict `<` comparator. Translation through pleme-io primitives:
-    /// a `const fn` returning `[bool; N]` on the typed
-    /// [`ResourceLimits`] algebra encoded as the per-index intersection
-    /// of two already-lifted per-axis N-ary strict-bound-membership
-    /// masks.
+    /// strict `<` comparator. Translation through pleme-io primitives
+    /// is the one-line composition below, routed through the substrate
+    /// MASK+MASK→MASK INTERSECTION combinator
+    /// [`Self::intersect_masks_pointwise`] on the pair of already-lifted
+    /// per-axis N-ary strict-bound-membership masks
+    /// [`Self::axes_is_strict_upper_bound_of`] and
+    /// [`Self::axes_is_strict_lower_bound_of`] — the FIELD_COUNT=6-
+    /// coupling the pre-lift `[above_lowers[0] && below_uppers[0], ...,
+    /// above_lowers[5] && below_uppers[5]]` six-primitive array literal
+    /// carried is now retired at the callsite and propagates
+    /// mechanically through the helper's `while i < FIELD_COUNT`
+    /// per-axis fill on any future arity bump.
     #[must_use]
     pub const fn axes_is_strictly_within_of(
         self,
         lowers: &[Self],
         uppers: &[Self],
     ) -> [bool; Self::FIELD_COUNT] {
-        let above_lowers = self.axes_is_strict_upper_bound_of(lowers);
-        let below_uppers = self.axes_is_strict_lower_bound_of(uppers);
-        [
-            above_lowers[0] && below_uppers[0],
-            above_lowers[1] && below_uppers[1],
-            above_lowers[2] && below_uppers[2],
-            above_lowers[3] && below_uppers[3],
-            above_lowers[4] && below_uppers[4],
-            above_lowers[5] && below_uppers[5],
-        ]
+        Self::intersect_masks_pointwise(
+            self.axes_is_strict_upper_bound_of(lowers),
+            self.axes_is_strict_lower_bound_of(uppers),
+        )
     }
 
     /// Strict pointwise partial-order relation across the six ceilings —
@@ -46650,6 +46649,51 @@ mod tests {
     }
 
     #[test]
+    fn resource_limits_axes_within_body_delegates_to_intersect_masks_pointwise() {
+        // Sweep-of-callsite pin — after routing the three-input bracket-
+        // membership `axes_within` body from the FIELD_COUNT-hardcoded
+        // `[above_lower[0] && below_upper[0], ..., above_lower[5] &&
+        // below_upper[5]]` six-primitive array literal over the
+        // (lower.axes_leq(self), self.axes_leq(upper)) mask pair through
+        // ResourceLimits::intersect_masks_pointwise, the whole 5^3
+        // preset-triple constellation continues to agree with the
+        // helper-based shape
+        // `intersect_masks_pointwise(lower.axes_leq(self), self.axes_leq(upper))`.
+        // The pin closes the FIELD_COUNT-decoupling refactor on the
+        // FIRST MASK→MASK INTERSECTION bracket-membership callsite for
+        // the per-axis-mask surface: a future FIELD_COUNT bump that
+        // would have silently under-covered the open-coded per-axis
+        // array literal is now caught by the helper's `while i <
+        // FIELD_COUNT` per-axis body rather than an axis-count that no
+        // callsite guarded. Sibling of
+        // `resource_limits_axes_eq_body_delegates_to_intersect_masks_pointwise`
+        // one ARITY axis over (pairwise-relation → three-input bracket).
+        let roster: [ResourceLimits; 5] = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in roster {
+            for lower in roster {
+                for upper in roster {
+                    assert_eq!(
+                        a.axes_within(lower, upper),
+                        ResourceLimits::intersect_masks_pointwise(
+                            lower.axes_leq(a),
+                            a.axes_leq(upper),
+                        ),
+                        "axes_within disagrees with \
+                         intersect_masks_pointwise(lower.axes_leq(self), self.axes_leq(upper)) \
+                         on ({a:?}, {lower:?}, {upper:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn resource_limits_axes_within_of_lattice_extrema_is_all_true() {
         // Extrema-bracket-identity pin — every posture sits within the
         // widest possible bracket `[EMPTY_RESOURCE_LIMITS,
@@ -49040,6 +49084,52 @@ mod tests {
     }
 
     #[test]
+    fn resource_limits_axes_is_within_of_body_delegates_to_intersect_masks_pointwise() {
+        // Sweep-of-callsite pin — after routing the N-ary joint-bracket-
+        // membership `axes_is_within_of` body from the FIELD_COUNT-
+        // hardcoded `[above_lowers[0] && below_uppers[0], ...,
+        // above_lowers[5] && below_uppers[5]]` six-primitive array
+        // literal over the (self.axes_is_upper_bound_of(lowers),
+        // self.axes_is_lower_bound_of(uppers)) mask pair through
+        // ResourceLimits::intersect_masks_pointwise, the whole 4 ×
+        // 3 × 3 posture-triple × lower-slice × upper-slice
+        // constellation continues to agree with the helper-based shape
+        // `intersect_masks_pointwise(self.axes_is_upper_bound_of(lowers),
+        // self.axes_is_lower_bound_of(uppers))`. The pin closes the
+        // FIELD_COUNT-decoupling refactor on the SECOND MASK→MASK
+        // INTERSECTION bracket-membership callsite — the N-ary joint-
+        // bracket peer of the pair-level `axes_within` one ARITY axis
+        // over on the same MASK→MASK INTERSECTION combinator locus.
+        let roster = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        let slices: [&[ResourceLimits]; 3] = [
+            &[],
+            &[EMPTY_RESOURCE_LIMITS, HAND_AUTHORED_MID_POSTURE],
+            &[DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS],
+        ];
+        for a in roster {
+            for l in slices {
+                for u in slices {
+                    assert_eq!(
+                        a.axes_is_within_of(l, u),
+                        ResourceLimits::intersect_masks_pointwise(
+                            a.axes_is_upper_bound_of(l),
+                            a.axes_is_lower_bound_of(u),
+                        ),
+                        "axes_is_within_of disagrees with \
+                         intersect_masks_pointwise(axes_is_upper_bound_of, axes_is_lower_bound_of) \
+                         on ({a:?}, {l:?}, {u:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn resource_limits_axes_is_within_of_both_empty_slices_is_all_true() {
         // Both empty conjunctions vacuous on every axis.
         for a in [
@@ -49481,6 +49571,53 @@ mod tests {
                             "intersection-encoding mismatch at axis {i} on {a:?} / {l:?} / {u:?}",
                         );
                     }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strictly_within_of_body_delegates_to_intersect_masks_pointwise() {
+        // Sweep-of-callsite pin — after routing the N-ary strict-joint-
+        // bracket-membership `axes_is_strictly_within_of` body from the
+        // FIELD_COUNT-hardcoded `[above_lowers[0] && below_uppers[0],
+        // ..., above_lowers[5] && below_uppers[5]]` six-primitive array
+        // literal over the (self.axes_is_strict_upper_bound_of(lowers),
+        // self.axes_is_strict_lower_bound_of(uppers)) mask pair through
+        // ResourceLimits::intersect_masks_pointwise, the whole 4 ×
+        // 3 × 3 posture-triple × lower-slice × upper-slice
+        // constellation continues to agree with the helper-based shape
+        // `intersect_masks_pointwise(self.axes_is_strict_upper_bound_of(
+        // lowers), self.axes_is_strict_lower_bound_of(uppers))`. The
+        // pin closes the FIELD_COUNT-decoupling refactor on the THIRD
+        // MASK→MASK INTERSECTION bracket-membership callsite — the
+        // STRICT-face N-ary joint-bracket peer of the loose N-ary
+        // joint-bracket callsite one STRICTNESS axis over on the same
+        // MASK→MASK INTERSECTION combinator locus.
+        let roster = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        let slices: [&[ResourceLimits]; 3] = [
+            &[],
+            &[EMPTY_RESOURCE_LIMITS, HAND_AUTHORED_MID_POSTURE],
+            &[DEFAULT_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS],
+        ];
+        for a in roster {
+            for l in slices {
+                for u in slices {
+                    assert_eq!(
+                        a.axes_is_strictly_within_of(l, u),
+                        ResourceLimits::intersect_masks_pointwise(
+                            a.axes_is_strict_upper_bound_of(l),
+                            a.axes_is_strict_lower_bound_of(u),
+                        ),
+                        "axes_is_strictly_within_of disagrees with \
+                         intersect_masks_pointwise(axes_is_strict_upper_bound_of, \
+                         axes_is_strict_lower_bound_of) on ({a:?}, {l:?}, {u:?})",
+                    );
                 }
             }
         }

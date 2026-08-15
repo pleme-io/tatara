@@ -14016,6 +14016,175 @@ impl ResourceLimits {
         }
     }
 
+    /// Per-axis mask CLOSED-BRACKET-WIDTH reduction —
+    /// `Self::mask_endpoint_span(mask)` returns `Some(l - f + 1)` for the
+    /// WIDTH of the closed index interval `[f, l]` spanned by the FIRST and
+    /// LAST set bits of a `[bool; Self::FIELD_COUNT]` per-axis mask, or
+    /// `None` iff every bit of the mask is `false`. The BOUNDARY primitive
+    /// composing the shape
+    /// `Self::derive_axis_endpoint_span(
+    ///     Self::first_mask_bit_set_index(mask),
+    ///     Self::last_mask_bit_set_index(mask),
+    /// )`
+    /// that every AXIS-CELL BRACKET-WIDTH projection on [`ResourceLimits`]
+    /// carries at its body — [`Self::bottom_axis_index_span`],
+    /// [`Self::top_axis_index_span`], [`Self::polar_axis_index_span`],
+    /// [`Self::interior_axis_index_span`] each wrap the (first, last)
+    /// endpoint pair of their paired per-axis mask through
+    /// [`Self::derive_axis_endpoint_span`] at their own exits, and every
+    /// one of the four bodies scans the SAME per-axis mask TWICE (once for
+    /// the first-hit, once for the last-hit) with the endpoint pair
+    /// re-composed at every callsite through two intermediate wrapper
+    /// projections ([`Self::first_bottom_axis_index`] +
+    /// [`Self::last_bottom_axis_index`] and their three CELL-KIND peers).
+    /// Pre-lift each BRACKET-WIDTH projection routed through the two
+    /// intermediate wrapper endpoint methods and re-composed the two
+    /// endpoints through [`Self::derive_axis_endpoint_span`] at every one
+    /// of the four callsites — a copy-paste cascade whose consistency the
+    /// type system did not gate at the mask-input layer (a projection that
+    /// swapped the (first, last) argument order at the
+    /// `derive_axis_endpoint_span` call would silently swap the bracket
+    /// endpoints and UNDERFLOW on any non-singleton mask, and a projection
+    /// that routed through a NON-companion (first_X, last_Y) endpoint pair
+    /// from two DIFFERENT cell masks would silently synthesize a
+    /// cross-cell bracket the (first, last) endpoint pair on a single
+    /// mask never carries by construction). Post-lift the shape binds at
+    /// ONE typed `const fn` on [`ResourceLimits`], and every AXIS-CELL
+    /// BRACKET-WIDTH projection composes through this helper — the
+    /// (first-hit, last-hit, close-bracket) pipeline over ONE per-axis
+    /// mask input is a substrate-level theorem rather than a per-consumer
+    /// three-primitive re-composition.
+    ///
+    /// The SIXTH REDUCTION on the per-axis mask substrate, closing the
+    /// (BOOLEAN-EXISTENCE, BOOLEAN-UNIVERSALITY, ARITHMETIC-CARDINALITY,
+    /// POSITIONAL-FIRST, POSITIONAL-LAST) five-KIND quantifier column
+    /// carried by [`Self::any_mask_bit_set`], [`Self::all_mask_bits_set`],
+    /// [`Self::count_mask_bits`], [`Self::first_mask_bit_set_index`],
+    /// [`Self::last_mask_bit_set_index`] with the POSITIONAL-EXTENT
+    /// reduction that BOTH POSITIONAL endpoints jointly derive but
+    /// neither carries alone. Where the paired POSITIONAL endpoints each
+    /// project ONE side of the bracket, THIS reduction closes the
+    /// bracket at ONE typed `const fn` on the SAME mask input, giving
+    /// downstream BRACKET-WIDTH consumers the closed-interval width
+    /// directly rather than through a per-consumer re-composition of the
+    /// two POSITIONAL endpoints via
+    /// [`Self::derive_axis_endpoint_span`].
+    ///
+    /// **Composition identity — LOAD-BEARING structural pin**: on every
+    /// `mask`, `Self::mask_endpoint_span(mask) ==
+    /// Self::derive_axis_endpoint_span(Self::first_mask_bit_set_index(mask),
+    /// Self::last_mask_bit_set_index(mask))`. Pinned via
+    /// `resource_limits_mask_endpoint_span_agrees_with_derive_axis_endpoint_span_of_first_and_last`.
+    ///
+    /// **Empty-mask identity**: `Self::mask_endpoint_span([false;
+    /// FIELD_COUNT]) == None` — a mask with no set bits has no bracket
+    /// and the empty-axis posture is PRESERVED verbatim. Pinned via
+    /// `resource_limits_mask_endpoint_span_empty_mask_pins_none`.
+    ///
+    /// **All-ones identity**: `Self::mask_endpoint_span([true;
+    /// FIELD_COUNT]) == Some(FIELD_COUNT)` — a saturated mask fires the
+    /// bracket at its full field width. The (empty, saturated) endpoints
+    /// partition the reduction range into disjoint (None,
+    /// Some(FIELD_COUNT)) endpoint verdicts. Pinned via
+    /// `resource_limits_mask_endpoint_span_all_ones_pins_some_field_count`.
+    ///
+    /// **ANY-fold bridge — LOAD-BEARING structural pin**: on every
+    /// `mask`, `Self::mask_endpoint_span(mask).is_some() ==
+    /// Self::any_mask_bit_set(mask)`. The BRACKET-WIDTH reduction's
+    /// `is_some` verdict agrees with the ANY-fold verdict on the SAME
+    /// mask — a bracket exists iff any bit is set — inherited from the
+    /// two POSITIONAL endpoints' ANY-fold bridges through the
+    /// joint-Some presence dispatch of
+    /// [`Self::derive_axis_endpoint_span`]. Pinned via
+    /// `resource_limits_mask_endpoint_span_is_some_iff_any_mask_bit_set`.
+    ///
+    /// **Singleton-bit identity — SINGLE-FIRE COINCIDENCE**: on every
+    /// mask with exactly one set bit at position `i`,
+    /// `Self::mask_endpoint_span(mask) == Some(1)` — a one-element
+    /// bracket has width exactly 1 (first == last == i). Pinned via
+    /// `resource_limits_mask_endpoint_span_singleton_bit_pins_span_one`.
+    ///
+    /// **POPCOUNT lower-bound — LOAD-BEARING DENSITY-DISCRIMINATOR**: on
+    /// every `mask`, when `Self::mask_endpoint_span(mask) == Some(w)`,
+    /// `w >= Self::count_mask_bits(mask)` — the bracket must contain at
+    /// least every set bit (the count bounds the width below), with
+    /// EQUALITY exactly when the set bits are CONTIGUOUS in the mask
+    /// range. This is the mask-level PRE-IMAGE of the AXIS-CELL
+    /// `span ≥ count` inequality every BRACKET-WIDTH projection carries
+    /// at its `Some(w) => w >= count_X_axes` pin — proven ONCE on the
+    /// mask substrate so all four AXIS-CELL projections inherit it
+    /// through their mask-endpoint-span composition. Pinned via
+    /// `resource_limits_mask_endpoint_span_dominates_count_mask_bits_when_some`.
+    ///
+    /// **Range bound**: when `Some(w)`, `1 <= w <= Self::FIELD_COUNT` by
+    /// construction — the first endpoint sits at some `f < FIELD_COUNT`,
+    /// the last endpoint at some `l < FIELD_COUNT` with `l >= f`, so the
+    /// closed-interval width `l - f + 1` is at least `1` and at most
+    /// `FIELD_COUNT`.
+    ///
+    /// `const fn` so a caller can pin the exact bracket width at compile
+    /// time (`const _: () = assert!(matches!(
+    /// ResourceLimits::mask_endpoint_span([true;
+    /// ResourceLimits::FIELD_COUNT]), Some(ResourceLimits::FIELD_COUNT)));`)
+    /// — sibling of the const-fn evaluability pins the FIRST-HIT +
+    /// LAST-HIT + BRACKET-WIDTH DERIVE helpers already carry at their own
+    /// exits.
+    ///
+    /// **Adoption compounds**: the four shipped `X_axis_index_span`
+    /// projections rewrite from the two-endpoint re-composition
+    /// `Self::derive_axis_endpoint_span(self.first_X_axis_index(),
+    /// self.last_X_axis_index())` to the one-line
+    /// `Self::mask_endpoint_span(self.axes_is_X())` composition at no
+    /// semantic change — the composition identity above closes the
+    /// adoption-safety proof — collapsing the per-projection three-
+    /// primitive re-composition (two intermediate wrapper projections
+    /// combined with one endpoint-pair joint-Some closer) into ONE
+    /// mask-level primitive at each callsite, and evaluating the paired
+    /// `axes_is_X` mask ONCE per projection rather than TWICE (once for
+    /// the FIRST-HIT wrapper, once for the LAST-HIT wrapper). Any
+    /// future BRACKET-WIDTH projection over a `[bool; FIELD_COUNT]`
+    /// mask (mixity/uniformity bracket-widths, higher-order axial
+    /// partition bracket-widths, cross-posture disagreement bracket-
+    /// widths) composes through this same primitive.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the mask-
+    /// input BRACKET-WIDTH shape at every AXIS-CELL projection body
+    /// binds at ONE typed named `const fn` on the algebra rather than a
+    /// per-projection three-primitive re-composition of the paired
+    /// POSITIONAL endpoints through
+    /// [`Self::derive_axis_endpoint_span`]. THEORY.md §II.1 invariant 5
+    /// — composition preserves proofs; the helper composes mechanically
+    /// under the composition identity above with no re-derivation at the
+    /// caller, and the mask-level POPCOUNT lower-bound inherits to every
+    /// AXIS-CELL projection through its adoption. THEORY.md §V.1 —
+    /// knowable platform; the mask-endpoint-span reduction becomes a
+    /// substrate-level theorem rather than a per-projection convention.
+    ///
+    /// Frontier inspiration: APL's `1 + (⌈/⍸⍵) - (⌊/⍸⍵)` — the closed-
+    /// interval width of the boolean-vector index set as a first-class
+    /// reduction over a boolean vector; Haskell's `case (findIndex id v,
+    /// findIndexEnd id v) of { (Just f, Just l) => Just (l - f + 1); _
+    /// => Nothing }`; Idris's `case (findIndex id v, findLastIndex id v)
+    /// of ...` under a total function signature; classical bitset `msb
+    /// minus lsb plus 1` on a bit-packed mask — the same operation one
+    /// representation-KIND axis over on a bit-packed encoding.
+    /// Translation through pleme-io primitives is the plain `const fn`
+    /// composition below of the three already-lifted helpers
+    /// [`Self::first_mask_bit_set_index`],
+    /// [`Self::last_mask_bit_set_index`], and
+    /// [`Self::derive_axis_endpoint_span`] — no closure, no typeclass
+    /// indirection, no dependency on `Option::zip` chained through
+    /// `Option::map` (neither is const-callable on stable Rust because
+    /// they take closures), and the mask is an owned array eagerly
+    /// evaluated by the caller.
+    #[must_use]
+    pub const fn mask_endpoint_span(mask: [bool; Self::FIELD_COUNT]) -> Option<usize> {
+        Self::derive_axis_endpoint_span(
+            Self::first_mask_bit_set_index(mask),
+            Self::last_mask_bit_set_index(mask),
+        )
+    }
+
     /// Presence-preserving CLOSED-BRACKET SPARSITY DERIVATION from a coupled
     /// (SPAN, COUNT) pair on whole-posture `(Option<usize>, usize)` axis-
     /// bracket tallies — `Self::derive_axis_span_gap(span, count)` returns
@@ -19722,10 +19891,7 @@ impl ResourceLimits {
     /// increment.
     #[must_use]
     pub const fn bottom_axis_index_span(self) -> Option<usize> {
-        Self::derive_axis_endpoint_span(
-            self.first_bottom_axis_index(),
-            self.last_bottom_axis_index(),
-        )
+        Self::mask_endpoint_span(self.axes_is_bottom())
     }
 
     /// Whole-posture INDEX-SPAN-OF-TOP projection —
@@ -19818,7 +19984,7 @@ impl ResourceLimits {
     /// on the DUAL atomic mask.
     #[must_use]
     pub const fn top_axis_index_span(self) -> Option<usize> {
-        Self::derive_axis_endpoint_span(self.first_top_axis_index(), self.last_top_axis_index())
+        Self::mask_endpoint_span(self.axes_is_top())
     }
 
     /// Whole-posture INDEX-SPAN-OF-POLAR projection —
@@ -19965,7 +20131,7 @@ impl ResourceLimits {
     /// one increment.
     #[must_use]
     pub const fn polar_axis_index_span(self) -> Option<usize> {
-        Self::derive_axis_endpoint_span(self.first_polar_axis_index(), self.last_polar_axis_index())
+        Self::mask_endpoint_span(self.axes_is_pole())
     }
 
     /// Whole-posture INDEX-SPAN-OF-INTERIOR projection —
@@ -20052,10 +20218,7 @@ impl ResourceLimits {
     /// on the De Morgan dual COMPOUND cell.
     #[must_use]
     pub const fn interior_axis_index_span(self) -> Option<usize> {
-        Self::derive_axis_endpoint_span(
-            self.first_interior_axis_index(),
-            self.last_interior_axis_index(),
-        )
+        Self::mask_endpoint_span(self.axes_is_interior())
     }
 
     /// Whole-posture INDEX-GAP-COUNT-OF-BOTTOM projection —
@@ -88347,6 +88510,302 @@ mod tests {
             DEFAULT_RESOURCE_LIMITS.interior_axis_index_span(),
             Some(ResourceLimits::FIELD_COUNT)
         ));
+    }
+
+    #[test]
+    fn resource_limits_mask_endpoint_span_agrees_with_derive_axis_endpoint_span_of_first_and_last()
+    {
+        // Composition identity — the mask-level BRACKET-WIDTH reduction
+        // agrees with the paired POSITIONAL endpoints re-composed through
+        // derive_axis_endpoint_span on every mask. Swept across a
+        // representative constellation: the two saturated endpoints
+        // ([false; N] and [true; N]), the two per-axis singletons at the
+        // range endpoints (bit 0 set, bit N-1 set), an interior
+        // singleton, a contiguous run, a sparse (non-contiguous) pair,
+        // and the four canonical axes_is_X masks over the shipped preset
+        // postures. Adoption-safety proof for the sweep: the four
+        // X_axis_index_span bodies now delegate to mask_endpoint_span
+        // via this identity.
+        let n = ResourceLimits::FIELD_COUNT;
+        let mut singleton_first = [false; ResourceLimits::FIELD_COUNT];
+        singleton_first[0] = true;
+        let mut singleton_last = [false; ResourceLimits::FIELD_COUNT];
+        singleton_last[n - 1] = true;
+        let mut singleton_interior = [false; ResourceLimits::FIELD_COUNT];
+        singleton_interior[n / 2] = true;
+        let mut contiguous_run = [false; ResourceLimits::FIELD_COUNT];
+        contiguous_run[1] = true;
+        contiguous_run[2] = true;
+        contiguous_run[3] = true;
+        let mut sparse_pair = [false; ResourceLimits::FIELD_COUNT];
+        sparse_pair[0] = true;
+        sparse_pair[n - 1] = true;
+        let synthetic_masks = [
+            [false; ResourceLimits::FIELD_COUNT],
+            [true; ResourceLimits::FIELD_COUNT],
+            singleton_first,
+            singleton_last,
+            singleton_interior,
+            contiguous_run,
+            sparse_pair,
+        ];
+        for mask in synthetic_masks {
+            let via_helper = ResourceLimits::mask_endpoint_span(mask);
+            let via_open_code = ResourceLimits::derive_axis_endpoint_span(
+                ResourceLimits::first_mask_bit_set_index(mask),
+                ResourceLimits::last_mask_bit_set_index(mask),
+            );
+            assert_eq!(
+                via_helper, via_open_code,
+                "mask_endpoint_span disagrees with (first, last) composition at mask={mask:?}",
+            );
+        }
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            for mask in [
+                posture.axes_is_bottom(),
+                posture.axes_is_top(),
+                posture.axes_is_pole(),
+                posture.axes_is_interior(),
+            ] {
+                let via_helper = ResourceLimits::mask_endpoint_span(mask);
+                let via_open_code = ResourceLimits::derive_axis_endpoint_span(
+                    ResourceLimits::first_mask_bit_set_index(mask),
+                    ResourceLimits::last_mask_bit_set_index(mask),
+                );
+                assert_eq!(
+                    via_helper, via_open_code,
+                    "mask_endpoint_span disagrees with (first, last) composition on {posture:?} mask={mask:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_mask_endpoint_span_empty_mask_pins_none() {
+        // Empty-mask identity — the all-false mask has no bracket, and
+        // the reduction PRESERVES that empty-axis posture as None rather
+        // than reclassifying it as any Some(_) width.
+        assert_eq!(
+            ResourceLimits::mask_endpoint_span([false; ResourceLimits::FIELD_COUNT]),
+            None,
+            "empty mask must fire None",
+        );
+    }
+
+    #[test]
+    fn resource_limits_mask_endpoint_span_all_ones_pins_some_field_count() {
+        // All-ones identity — the saturated mask fires the bracket at its
+        // full field width. Together with the empty-mask identity, the
+        // two endpoints partition the reduction range into
+        // (None, Some(FIELD_COUNT)) disjoint verdicts.
+        assert_eq!(
+            ResourceLimits::mask_endpoint_span([true; ResourceLimits::FIELD_COUNT]),
+            Some(ResourceLimits::FIELD_COUNT),
+            "all-ones mask must fire Some(FIELD_COUNT)",
+        );
+    }
+
+    #[test]
+    fn resource_limits_mask_endpoint_span_is_some_iff_any_mask_bit_set() {
+        // ANY-fold bridge — the bracket exists iff any bit is set. The
+        // presence dispatch is inherited from the two POSITIONAL
+        // endpoints' ANY-fold bridges through the joint-Some presence
+        // dispatch of derive_axis_endpoint_span. Swept across the same
+        // synthetic mask constellation as the composition-identity pin
+        // AND across the four axes_is_X masks on the shipped preset
+        // roster so the bridge is proven on both hand-synthesized inputs
+        // and posture-derived inputs.
+        let n = ResourceLimits::FIELD_COUNT;
+        let mut singleton_first = [false; ResourceLimits::FIELD_COUNT];
+        singleton_first[0] = true;
+        let mut singleton_last = [false; ResourceLimits::FIELD_COUNT];
+        singleton_last[n - 1] = true;
+        let mut singleton_interior = [false; ResourceLimits::FIELD_COUNT];
+        singleton_interior[n / 2] = true;
+        let mut contiguous_run = [false; ResourceLimits::FIELD_COUNT];
+        contiguous_run[1] = true;
+        contiguous_run[2] = true;
+        contiguous_run[3] = true;
+        for mask in [
+            [false; ResourceLimits::FIELD_COUNT],
+            [true; ResourceLimits::FIELD_COUNT],
+            singleton_first,
+            singleton_last,
+            singleton_interior,
+            contiguous_run,
+        ] {
+            assert_eq!(
+                ResourceLimits::mask_endpoint_span(mask).is_some(),
+                ResourceLimits::any_mask_bit_set(mask),
+                "mask_endpoint_span is_some bridge to any_mask_bit_set regressed at mask={mask:?}",
+            );
+        }
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            for mask in [
+                posture.axes_is_bottom(),
+                posture.axes_is_top(),
+                posture.axes_is_pole(),
+                posture.axes_is_interior(),
+            ] {
+                assert_eq!(
+                    ResourceLimits::mask_endpoint_span(mask).is_some(),
+                    ResourceLimits::any_mask_bit_set(mask),
+                    "is_some bridge regressed on {posture:?} mask={mask:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_mask_endpoint_span_singleton_bit_pins_span_one() {
+        // Singleton-bit identity — every mask with exactly one set bit at
+        // position i fires Some(1), regardless of i. A one-element
+        // bracket has width exactly 1 (first == last == i) — the SINGLE-
+        // FIRE coincidence identity every BRACKET-WIDTH consumer carries
+        // at the singleton posture. Sampled at every valid mask position
+        // so the identity is proven positionally-exhaustively, not just
+        // at the range endpoints.
+        let mut i = 0;
+        while i < ResourceLimits::FIELD_COUNT {
+            let mut mask = [false; ResourceLimits::FIELD_COUNT];
+            mask[i] = true;
+            assert_eq!(
+                ResourceLimits::mask_endpoint_span(mask),
+                Some(1),
+                "singleton-bit span at position {i} must be Some(1)",
+            );
+            i += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_mask_endpoint_span_dominates_count_mask_bits_when_some() {
+        // POPCOUNT lower-bound — when Some(w), w >= count_mask_bits(mask)
+        // (the bracket must contain at least every set bit), with EQUALITY
+        // exactly when the set bits are CONTIGUOUS in the mask range. The
+        // mask-level PRE-IMAGE of the AXIS-CELL span >= count inequality
+        // every BRACKET-WIDTH projection carries at its own exit — proven
+        // ONCE on the mask substrate so all four AXIS-CELL projections
+        // inherit it through the mask_endpoint_span composition. Sampled
+        // across a constellation covering the empty mask (None arm), the
+        // saturated mask (span == count == N, equality), a contiguous run
+        // (span == count, equality), and a sparse pair (span > count,
+        // strict inequality).
+        let n = ResourceLimits::FIELD_COUNT;
+        let mut contiguous_run = [false; ResourceLimits::FIELD_COUNT];
+        contiguous_run[1] = true;
+        contiguous_run[2] = true;
+        contiguous_run[3] = true;
+        let mut sparse_pair = [false; ResourceLimits::FIELD_COUNT];
+        sparse_pair[0] = true;
+        sparse_pair[n - 1] = true;
+        let cases = [
+            ([false; ResourceLimits::FIELD_COUNT], None::<usize>, 0_usize),
+            (
+                [true; ResourceLimits::FIELD_COUNT],
+                Some(ResourceLimits::FIELD_COUNT),
+                ResourceLimits::FIELD_COUNT,
+            ),
+            (contiguous_run, Some(3), 3),
+            (sparse_pair, Some(ResourceLimits::FIELD_COUNT), 2),
+        ];
+        for (mask, expected_span, expected_count) in cases {
+            let span = ResourceLimits::mask_endpoint_span(mask);
+            let count = ResourceLimits::count_mask_bits(mask);
+            assert_eq!(
+                span, expected_span,
+                "mask_endpoint_span regressed at mask={mask:?}",
+            );
+            assert_eq!(
+                count, expected_count,
+                "count_mask_bits regressed at mask={mask:?}",
+            );
+            if let Some(w) = span {
+                assert!(
+                    w >= count,
+                    "span {w} < count {count} violates POPCOUNT lower-bound at mask={mask:?}",
+                );
+            } else {
+                assert_eq!(
+                    count, 0,
+                    "None span at non-empty mask={mask:?} (count {count})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_mask_endpoint_span_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the mask-level BRACKET-WIDTH reduction at
+        // compile time as a build-break. Sibling of the const-fn
+        // evaluability pins the (any_mask_bit_set, all_mask_bits_set,
+        // count_mask_bits, first_mask_bit_set_index,
+        // last_mask_bit_set_index, derive_axis_endpoint_span) helpers
+        // already carry at their own exits.
+        const _: () = assert!(ResourceLimits::mask_endpoint_span(
+            [false; ResourceLimits::FIELD_COUNT]
+        )
+        .is_none());
+        const _: () = assert!(matches!(
+            ResourceLimits::mask_endpoint_span([true; ResourceLimits::FIELD_COUNT]),
+            Some(ResourceLimits::FIELD_COUNT)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_index_span_family_bodies_delegate_to_mask_endpoint_span_of_axes_is_family() {
+        // Sweep-of-family pin — asserts each of the four BRACKET-WIDTH
+        // AXIS-CELL projection bodies (bottom_axis_index_span,
+        // top_axis_index_span, polar_axis_index_span,
+        // interior_axis_index_span) agrees with the mask-level shape
+        // `ResourceLimits::mask_endpoint_span(self.axes_is_X())` on every
+        // (axis, posture) pair from the EMPTY / DEFAULT / UNBOUNDED /
+        // HAND_AUTHORED_MID / HAND_AUTHORED_OTHER preset constellation
+        // (4×5 = 20 verdicts). A future body regression that routed
+        // through a NON-companion axes_is_Y mask — or a helper regression
+        // that silently swapped the (first, last) argument order — would
+        // break here on at least one pair.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                posture.bottom_axis_index_span(),
+                ResourceLimits::mask_endpoint_span(posture.axes_is_bottom()),
+                "bottom index_span mask-endpoint delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.top_axis_index_span(),
+                ResourceLimits::mask_endpoint_span(posture.axes_is_top()),
+                "top index_span mask-endpoint delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.polar_axis_index_span(),
+                ResourceLimits::mask_endpoint_span(posture.axes_is_pole()),
+                "polar index_span mask-endpoint delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.interior_axis_index_span(),
+                ResourceLimits::mask_endpoint_span(posture.axes_is_interior()),
+                "interior index_span mask-endpoint delegation regressed on {posture:?}",
+            );
+        }
     }
 
     #[test]

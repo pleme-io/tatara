@@ -11820,6 +11820,150 @@ impl ResourceLimits {
         false
     }
 
+    /// Per-axis mask FIRST-HIT INDEX projection —
+    /// `Self::first_mask_bit_set_index(mask)` returns `Some(i)` for the
+    /// LEAST `i` such that `mask[i] == true`, or `None` iff every bit
+    /// of the `[bool; Self::FIELD_COUNT]` per-axis mask is `false`.
+    /// The BOUNDARY primitive lifting the shape
+    /// ```text
+    /// let mut i = 0;
+    /// while i < Self::FIELD_COUNT {
+    ///     if mask[i] { return Some(i); }
+    ///     i += 1;
+    /// }
+    /// None
+    /// ```
+    /// that every INDEX-OF-FIRST projection on [`ResourceLimits`] carries
+    /// at its body — [`Self::first_bottom_axis_index`],
+    /// [`Self::first_top_axis_index`], [`Self::first_polar_axis_index`],
+    /// [`Self::first_interior_axis_index`] all short-circuit-scan a
+    /// per-axis `[bool; FIELD_COUNT]` mask into its `Option<usize>`
+    /// first-hit at the exit. Pre-lift each first-hit projection open-
+    /// coded the nine-line `while`-based short-circuit scan at its own
+    /// body — the SAME per-axis first-hit dispatch appears verbatim on
+    /// four sibling projections, a copy-paste cascade whose consistency
+    /// the type system did not gate (a projection that skipped the `i
+    /// += 1` increment would silently loop, a projection that swapped
+    /// `Some(i)` for `Some(i + 1)` would silently off-by-one every
+    /// downstream INDEX-SPAN and GAP-COUNT derivation, and a projection
+    /// that returned `Some(i)` on the miss and `None` on the hit would
+    /// silently invert without any structural break). Post-lift the
+    /// shape binds at ONE typed `const fn` on [`ResourceLimits`], and
+    /// every INDEX-OF-FIRST projection composes through this helper —
+    /// the per-axis first-hit scan is a substrate-level theorem rather
+    /// than a per-projection convention.
+    ///
+    /// The direct INDEX-KIND peer of [`Self::any_mask_bit_set`] on the
+    /// same per-axis mask surface — where `any_mask_bit_set` collapses
+    /// the mask into a single-bit existential verdict (ANY-fold), THIS
+    /// projection collapses it into the LEFT-endpoint POSITION of the
+    /// first hit (INDEX-OF-FIRST-BIT). Jointly the (any_mask_bit_set,
+    /// count_mask_bits, first_mask_bit_set_index) triple carries the
+    /// (BOOLEAN-EXISTENCE, ARITHMETIC-CARDINALITY, POSITIONAL-FIRST)
+    /// three-KIND quantifier column at ONE typed `const fn` primitive
+    /// per KIND on the substrate — every per-axis mask projection whose
+    /// exit is one of those three readings lands on the paired helper.
+    ///
+    /// **ANY-fold bridge — LOAD-BEARING structural pin**: on every
+    /// `mask`, `Self::first_mask_bit_set_index(mask).is_some() ==
+    /// Self::any_mask_bit_set(mask)`. The `is_some` bridge between the
+    /// two paired helpers on the SAME mask input — the FIRST-HIT
+    /// projection witnesses the existential the ANY-fold verdicts.
+    /// Pinned via
+    /// `resource_limits_first_mask_bit_set_index_is_some_iff_any_mask_bit_set`.
+    ///
+    /// **COUNT bridge — LOAD-BEARING structural pin**: on every `mask`,
+    /// `Self::first_mask_bit_set_index(mask).is_none() ==
+    /// (Self::count_mask_bits(mask) == 0)`. The `count == 0` bridge to
+    /// the paired ARITHMETIC-CARDINALITY helper — a mask with popcount
+    /// zero has no first-hit and vice versa. Pinned via
+    /// `resource_limits_first_mask_bit_set_index_is_none_iff_count_mask_bits_is_zero`.
+    ///
+    /// **Iterator-agreement identity**: on every `mask`,
+    /// `Self::first_mask_bit_set_index(mask) ==
+    /// mask.iter().position(|&bit| bit)`. The direct stable-Rust
+    /// iterator idiom the helper substitutes for at every consumer.
+    /// Pinned via
+    /// `resource_limits_first_mask_bit_set_index_agrees_with_iterator_position`.
+    ///
+    /// **Empty-mask identity**: `Self::first_mask_bit_set_index([false;
+    /// FIELD_COUNT]) == None` — a mask with no set bits has no first-
+    /// hit. **All-ones identity**: `Self::first_mask_bit_set_index([true;
+    /// FIELD_COUNT]) == Some(0)` — a saturated mask fires the first-hit
+    /// at index 0. The (empty, saturated) endpoints partition the
+    /// projection range into disjoint (None, Some(0)) endpoint verdicts.
+    /// Pinned via
+    /// `resource_limits_first_mask_bit_set_index_at_endpoints_pins_none_and_some_zero`.
+    ///
+    /// **Range bound**: when `Some(i)`, `i < Self::FIELD_COUNT` by
+    /// construction of the forward scan — the returned index is a
+    /// valid position in the mask array. Pinned via
+    /// `resource_limits_first_mask_bit_set_index_when_some_is_lt_field_count`.
+    ///
+    /// **POPCOUNT-vs-FIRST-INDEX upper bound — LOAD-BEARING structural
+    /// pin**: on every `mask`, when `Self::first_mask_bit_set_index(mask)
+    /// == Some(i)`, `i <= Self::FIELD_COUNT - Self::count_mask_bits(mask)`
+    /// (the first hit sits at a position that leaves ROOM for the
+    /// remaining `count - 1` hits at strictly greater indices within
+    /// the `FIELD_COUNT`-wide array). Equivalently: the first-hit index
+    /// is bounded above by the number of MISSING bits after the last
+    /// hit's rightmost feasible position — a positional constraint
+    /// neither the ANY-fold nor the COUNT-fold on the same mask can
+    /// carry on its own. Pinned via
+    /// `resource_limits_first_mask_bit_set_index_bounded_above_by_field_count_minus_count`.
+    ///
+    /// `const fn` so a caller can pin the first-hit index at compile
+    /// time (`const _: () =
+    /// assert!(matches!(ResourceLimits::first_mask_bit_set_index([true;
+    /// ResourceLimits::FIELD_COUNT]), Some(0)));`) — sibling of the
+    /// const-fn evaluability pins the [`Self::first_bottom_axis_index`]
+    /// and paired INDEX-OF-FIRST projections already carry at their own
+    /// exits.
+    ///
+    /// **Adoption compounds**: the four shipped `first_X_axis_index`
+    /// projections rewrite from the open-coded nine-line short-circuit
+    /// scan to the one-line
+    /// `Self::first_mask_bit_set_index(self.axes_is_X())` composition at
+    /// no semantic change; any future INDEX-OF-FIRST projection over a
+    /// `[bool; FIELD_COUNT]` mask (mixity/uniformity first-hit variants,
+    /// higher-order axial partition first-hits, cross-posture
+    /// disagreement first-hits) composes through this same primitive.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// per-axis first-hit dispatch shape at every `first_X_axis_index`
+    /// body binds at ONE typed named `const fn` on the algebra rather
+    /// than a per-projection nine-line open-coded `while` loop.
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// helper composes mechanically under the iterator-agreement,
+    /// any-fold-bridge, and count-bridge identities above with no
+    /// re-derivation at the caller. THEORY.md §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: APL's `⍸/⍨` first-hit index on a boolean
+    /// vector; Haskell's `Data.List.findIndex id` on a `[Bool]`;
+    /// Idris's `findIndex id v` under a total function signature; Rust's
+    /// stable `<[bool]>::iter().position(|&b| b)` iterator idiom.
+    /// Classical bitset `ffs` (find-first-set) on a bit-packed mask is
+    /// the same operation one representation-KIND axis over —
+    /// `first_mask_bit_set_index` is its per-axis-boolean-array peer at
+    /// the substrate, and `any_mask_bit_set` is the projection of THIS
+    /// helper's verdict through `Option::is_some`. Translation through
+    /// pleme-io primitives is the plain `const fn` `while`-based
+    /// short-circuit scan below — no closure, no typeclass indirection,
+    /// no dependency on `<[bool]>::iter().position` (which is not
+    /// const-callable on stable Rust because it takes a closure), and
+    /// the mask is an owned array eagerly evaluated by the caller.
+    #[must_use]
+    pub const fn first_mask_bit_set_index(mask: [bool; Self::FIELD_COUNT]) -> Option<usize> {
+        let mut i = 0;
+        while i < Self::FIELD_COUNT {
+            if mask[i] {
+                return Some(i);
+            }
+            i += 1;
+        }
+        None
+    }
+
     /// Whole-posture ARITHMETIC-TOP tally — `self.count_top_axes()`
     /// returns the number of axes of `self` sitting at the top pole
     /// (`self.field_values()[i] == usize::MAX`), in
@@ -17340,15 +17484,7 @@ impl ResourceLimits {
     /// typeclass indirection, no allocation.
     #[must_use]
     pub const fn first_bottom_axis_index(self) -> Option<usize> {
-        let mask = self.axes_is_bottom();
-        let mut i = 0;
-        while i < Self::FIELD_COUNT {
-            if mask[i] {
-                return Some(i);
-            }
-            i += 1;
-        }
-        None
+        Self::first_mask_bit_set_index(self.axes_is_bottom())
     }
 
     /// Whole-posture INDEX-OF-FIRST-TOP projection —
@@ -17424,15 +17560,7 @@ impl ResourceLimits {
     /// lifted [`Self::axes_is_top`] mask.
     #[must_use]
     pub const fn first_top_axis_index(self) -> Option<usize> {
-        let mask = self.axes_is_top();
-        let mut i = 0;
-        while i < Self::FIELD_COUNT {
-            if mask[i] {
-                return Some(i);
-            }
-            i += 1;
-        }
-        None
+        Self::first_mask_bit_set_index(self.axes_is_top())
     }
 
     /// Whole-posture INDEX-OF-FIRST-POLAR projection —
@@ -17540,15 +17668,7 @@ impl ResourceLimits {
     /// indirection, no allocation.
     #[must_use]
     pub const fn first_polar_axis_index(self) -> Option<usize> {
-        let mask = self.axes_is_pole();
-        let mut i = 0;
-        while i < Self::FIELD_COUNT {
-            if mask[i] {
-                return Some(i);
-            }
-            i += 1;
-        }
-        None
+        Self::first_mask_bit_set_index(self.axes_is_pole())
     }
 
     /// Whole-posture INDEX-OF-FIRST-INTERIOR projection —
@@ -17664,15 +17784,7 @@ impl ResourceLimits {
     /// lifted [`Self::axes_is_interior`] mask.
     #[must_use]
     pub const fn first_interior_axis_index(self) -> Option<usize> {
-        let mask = self.axes_is_interior();
-        let mut i = 0;
-        while i < Self::FIELD_COUNT {
-            if mask[i] {
-                return Some(i);
-            }
-            i += 1;
-        }
-        None
+        Self::first_mask_bit_set_index(self.axes_is_interior())
     }
 
     /// Whole-posture INDEX-OF-LAST-BOTTOM projection —
@@ -88327,6 +88439,267 @@ mod tests {
         const _: () = assert!(ResourceLimits::any_mask_bit_set(MASK_TWO_ENDS));
         const _: () = assert!(ResourceLimits::any_mask_bit_set(MASK_FIRST_HALF));
         const _: () = assert!(ResourceLimits::any_mask_bit_set(MASK_MISSING_HEAD));
+    }
+
+    #[test]
+    fn resource_limits_first_mask_bit_set_index_agrees_with_iterator_position() {
+        // Iterator-agreement contract — the substrate FIRST-HIT helper's
+        // verdict on every mask fixture agrees with the raw
+        // `.iter().position(|&bit| bit)` open-coded fold that every prior
+        // per-projection body carried before the helper lift. Swept
+        // across the same 11-mask constellation the count_mask_bits and
+        // any_mask_bit_set sweeps use so all three paired helpers are
+        // pinned on the identical fixture set. A helper regression that
+        // mis-indexed the while-loop, skipped increments, returned an
+        // off-by-one `Some(i + 1)`, or inverted the hit/miss arms would
+        // break here on at least one mask.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            let via_helper = ResourceLimits::first_mask_bit_set_index(*mask);
+            let via_iterator = mask.iter().position(|&bit| bit);
+            assert_eq!(
+                via_helper, via_iterator,
+                "first_mask_bit_set_index != iterator-position on mask {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_mask_bit_set_index_is_some_iff_any_mask_bit_set() {
+        // ANY-fold bridge — the FIRST-HIT projection and the ANY-fold
+        // are paired substrate helpers on the SAME mask input, related
+        // by the `is_some` bridge: a first-hit exists iff any bit is
+        // set. This cross-helper pin closes the (BOOLEAN-EXISTENCE,
+        // POSITIONAL-FIRST) two-KIND column at ONE substrate identity
+        // per mask verdict rather than leaving the bridge as a per-
+        // consumer inline comparison — the ANY-fold is exactly the
+        // FIRST-HIT projection lifted through `Option::is_some`. Swept
+        // across the same 11-mask constellation so the identity is
+        // pinned on every distinct existential verdict.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            assert_eq!(
+                ResourceLimits::first_mask_bit_set_index(*mask).is_some(),
+                ResourceLimits::any_mask_bit_set(*mask),
+                "first_mask_bit_set_index.is_some() != any_mask_bit_set on mask {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_mask_bit_set_index_is_none_iff_count_mask_bits_is_zero() {
+        // COUNT bridge — the FIRST-HIT projection and the ARITHMETIC-
+        // CARDINALITY helper are related by the `count == 0` bridge:
+        // no first-hit exists iff the popcount is exactly zero. Closes
+        // the (ARITHMETIC-CARDINALITY, POSITIONAL-FIRST) two-KIND
+        // column at ONE substrate identity per mask verdict, mirroring
+        // the popcount-agreement identity between any_mask_bit_set and
+        // count_mask_bits on the DUAL kind axis. Swept across the same
+        // 11-mask constellation so the identity is pinned on every
+        // distinct popcount verdict in the 0..=FIELD_COUNT range.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            assert_eq!(
+                ResourceLimits::first_mask_bit_set_index(*mask).is_none(),
+                ResourceLimits::count_mask_bits(*mask) == 0,
+                "first_mask_bit_set_index.is_none() != (count_mask_bits == 0) on mask {mask:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_mask_bit_set_index_at_endpoints_pins_none_and_some_zero() {
+        // Endpoint identities — the (empty, all-ones) mask endpoints
+        // partition the FIRST-HIT projection range into disjoint
+        // (None, Some(0)) verdicts. Named separately from the sweep
+        // test so a future regression that broke only the endpoint
+        // arms would fire a dedicated failure rather than folding into
+        // a mask-sweep assertion.
+        assert_eq!(
+            ResourceLimits::first_mask_bit_set_index(MASK_ALL_FALSE),
+            None,
+        );
+        assert_eq!(
+            ResourceLimits::first_mask_bit_set_index(MASK_ALL_TRUE),
+            Some(0),
+        );
+    }
+
+    #[test]
+    fn resource_limits_first_mask_bit_set_index_when_some_is_lt_field_count() {
+        // Range-bound pin — when the FIRST-HIT projection fires
+        // `Some(i)`, `i` is a valid position in the mask array
+        // (i < FIELD_COUNT). The STRUCTURAL upper bound the substrate
+        // proves once so no downstream consumer needs to bounds-check
+        // the returned index before indexing back into the mask. A
+        // helper regression that returned `Some(FIELD_COUNT)` on a miss
+        // instead of `None` — or overshot on the final iteration —
+        // would break here. Swept across the 11-mask constellation.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            if let Some(i) = ResourceLimits::first_mask_bit_set_index(*mask) {
+                assert!(
+                    i < ResourceLimits::FIELD_COUNT,
+                    "first_mask_bit_set_index returned out-of-range Some({i}) on mask {mask:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_mask_bit_set_index_bounded_above_by_field_count_minus_count() {
+        // POPCOUNT-vs-FIRST-INDEX upper bound — when
+        // first_mask_bit_set_index(mask) == Some(i), `i` sits at a
+        // position that leaves ROOM for the remaining `count - 1` hits
+        // at strictly greater indices within the FIELD_COUNT-wide
+        // array: `i <= FIELD_COUNT - count_mask_bits(mask)`. This
+        // positional constraint neither the ANY-fold nor the COUNT-
+        // fold on the same mask can carry on its own — it binds the
+        // FIRST-INDEX projection to the ARITHMETIC-CARDINALITY
+        // projection through the LEFT-endpoint feasibility bound. On
+        // the all-ones endpoint, count == FIELD_COUNT so the bound
+        // collapses to i <= 0 which pins first == Some(0) tightly.
+        // Swept across the 11-mask constellation so the bound is
+        // pinned on every distinct (first, count) pair.
+        for mask in COUNT_MASK_BITS_MASK_SWEEP {
+            if let Some(i) = ResourceLimits::first_mask_bit_set_index(*mask) {
+                let count = ResourceLimits::count_mask_bits(*mask);
+                assert!(
+                    i + count <= ResourceLimits::FIELD_COUNT,
+                    "first_mask_bit_set_index Some({i}) + count {count} > FIELD_COUNT on mask {mask:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_axis_index_family_bodies_delegate_to_first_mask_bit_set_index() {
+        // Sweep-of-family pin — after routing the four first_X_axis_index
+        // INDEX-OF-FIRST projection bodies through
+        // ResourceLimits::first_mask_bit_set_index, the (bottom, top,
+        // polar, interior) × (EMPTY, DEFAULT, UNBOUNDED,
+        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation of
+        // 4×5 = 20 shipped verdicts continues to agree with the
+        // helper-based shape `first_mask_bit_set_index(axes_is_X())`.
+        // The pin locks the semantics-equivalent rewrite in the shipped
+        // bodies rather than trusting the mechanical rewrite by
+        // inspection: a future projection lift that fed the wrong mask
+        // projection to the helper, or a helper regression that mis-
+        // scanned a per-axis position, would break here on at least one
+        // (axis, posture) pair.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                posture.first_bottom_axis_index(),
+                ResourceLimits::first_mask_bit_set_index(posture.axes_is_bottom()),
+                "first_bottom_axis_index disagrees with first_mask_bit_set_index(axes_is_bottom) on {posture:?}",
+            );
+            assert_eq!(
+                posture.first_top_axis_index(),
+                ResourceLimits::first_mask_bit_set_index(posture.axes_is_top()),
+                "first_top_axis_index disagrees with first_mask_bit_set_index(axes_is_top) on {posture:?}",
+            );
+            assert_eq!(
+                posture.first_polar_axis_index(),
+                ResourceLimits::first_mask_bit_set_index(posture.axes_is_pole()),
+                "first_polar_axis_index disagrees with first_mask_bit_set_index(axes_is_pole) on {posture:?}",
+            );
+            assert_eq!(
+                posture.first_interior_axis_index(),
+                ResourceLimits::first_mask_bit_set_index(posture.axes_is_interior()),
+                "first_interior_axis_index disagrees with first_mask_bit_set_index(axes_is_interior) on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_first_mask_bit_set_index_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the first-hit index at compile time as a
+        // build-break. Sibling of the const-fn evaluability pins the
+        // first_X_axis_index projections already carry at their own
+        // exits. Covers the two endpoints (all-false → None, all-true
+        // → Some(0)), both singletons (head → Some(0), tail →
+        // Some(FIELD_COUNT - 1)), a two-endpoint mask (→ Some(0)), a
+        // contiguous first-half mask (→ Some(0)), and a missing-head
+        // mask (→ Some(1)) so the helper is pinned on the full range
+        // of first-hit positions the projection regime uses.
+        const _: () = assert!(ResourceLimits::first_mask_bit_set_index(MASK_ALL_FALSE).is_none());
+        const _: () = assert!(matches!(
+            ResourceLimits::first_mask_bit_set_index(MASK_ALL_TRUE),
+            Some(0)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::first_mask_bit_set_index(MASK_SINGLE_HEAD),
+            Some(0)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::first_mask_bit_set_index(MASK_SINGLE_TAIL),
+            Some(i) if i + 1 == ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::first_mask_bit_set_index(MASK_TWO_ENDS),
+            Some(0)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::first_mask_bit_set_index(MASK_FIRST_HALF),
+            Some(0)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::first_mask_bit_set_index(MASK_MISSING_HEAD),
+            Some(1)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_first_axis_index_family_bodies_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the INDEX-OF-FIRST family bodies
+        // preserved const-fn evaluability under the sweep through
+        // first_mask_bit_set_index. Each of the four swept projections
+        // × the three shipped `pub const` preset postures (EMPTY,
+        // UNBOUNDED, DEFAULT). EMPTY packs six bottom axes uniformly,
+        // so the (bottom, polar) pair fires Some(0) (first-hit at
+        // index 0) and the (top, interior) pair fires None (no such
+        // axis). UNBOUNDED is the corner mirror at the top pole.
+        // DEFAULT packs six strictly-interior axes, so only the
+        // `interior` projection fires Some(0) and the (bottom, top,
+        // polar) triple all fire None (polar mask is exactly
+        // is_interior-inverted, and DEFAULT has none of its axes at
+        // either pole so the polar mask is uniformly false).
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.first_bottom_axis_index(),
+            Some(0)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.first_top_axis_index().is_none());
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.first_polar_axis_index(),
+            Some(0)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.first_interior_axis_index().is_none());
+
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .first_bottom_axis_index()
+            .is_none());
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.first_top_axis_index(),
+            Some(0)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.first_polar_axis_index(),
+            Some(0)
+        ));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .first_interior_axis_index()
+            .is_none());
+
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.first_bottom_axis_index().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.first_top_axis_index().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.first_polar_axis_index().is_none());
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.first_interior_axis_index(),
+            Some(0)
+        ));
     }
 
     axis_family_delegation_pin!(

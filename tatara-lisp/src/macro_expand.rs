@@ -12534,6 +12534,142 @@ impl ResourceLimits {
         }
     }
 
+    /// Presence-preserving CLOSED-BRACKET SPARSITY DERIVATION from a coupled
+    /// (SPAN, COUNT) pair on whole-posture `(Option<usize>, usize)` axis-
+    /// bracket tallies — `Self::derive_axis_span_gap(span, count)` returns
+    /// `Some(w - count)` when `span` is `Some(w)`, or `None` when `span` is
+    /// `None`. The BOUNDARY primitive lifting the shape
+    /// `match span { Some(w) => Some(w - count), None => None }`
+    /// (equivalently the nightly-only `span.map(|w| w - count)` closure form
+    /// Rust `const fn` cannot express on stable) that every AXIS-CELL
+    /// `(Option<usize>-SPAN, usize-COUNT)`-DERIVED BRACKET-GAP PROJECTION on
+    /// [`ResourceLimits`] carries at its exit — `bottom_axis_gap_count`,
+    /// `top_axis_gap_count`, `polar_axis_gap_count`,
+    /// `interior_axis_gap_count` all wrap the SPARSITY count `w - count` of
+    /// the paired [`Self::bottom_axis_index_span`]-family +
+    /// [`Self::count_bottom_axes`]-family (span, count) tally pair in the
+    /// same presence-preserving dispatch. Pre-lift each BRACKET-GAP
+    /// projection open-coded the four-line
+    /// `match self.X_axis_index_span() { Some(w) => Some(w -
+    /// self.count_X_axes()), None => None }` at its own exit — a copy-paste
+    /// cascade whose consistency the type system did not gate (a projection
+    /// that swapped the `None` arm for `Some(0)` would silently reclassify
+    /// the empty-axis posture as `Some(contiguous)` where the canonical
+    /// shape yields `None`, discarding the has-axis distinction the compound
+    /// `Option<usize>` exit was defined to preserve, or dropped the
+    /// subtraction and returned the SPAN verbatim on every posture).
+    /// Post-lift the shape binds at ONE typed `const fn` on
+    /// [`ResourceLimits`], and every future AXIS-CELL
+    /// `(Option<usize>-SPAN, usize-COUNT)`-DERIVED bracket-gap projection
+    /// composes through this helper — the presence-preserving subtraction
+    /// is a substrate-level theorem rather than a per-consumer convention.
+    /// A distinct COMBINATOR-KIND past the three shipped SINGLE-INPUT
+    /// `Option<T>` axis-cell combinators ([`Self::witness_axis_presence`],
+    /// [`Self::negate_axis_witness`], [`Self::project_axis_count_zero`]) AND
+    /// past the JOINT-Some TWO-INPUT `(Option<T>, Option<T>)` combinator
+    /// ([`Self::derive_axis_endpoint_span`]): this is the FIRST MIXED-INPUT
+    /// `(Option<T>, T)` combinator on the axis-cell substrate — a
+    /// PRESENCE-PRESERVING SUBTRACT-CONSTANT operation on a coupled
+    /// (Option-carrier, plain-tally) pair rather than a per-input transform
+    /// on a single Option or a joint-Some zip on a homogeneous Option pair.
+    /// Where the three SINGLE-INPUT combinators dispatch on ONE axis-cell
+    /// `Option<T>`'s (None, Some) split, and the JOINT-Some combinator
+    /// dispatches on the two-axis-cell (None-either, Some-both) join, THIS
+    /// combinator dispatches on the (None, Some) split of the FIRST input
+    /// alone — the SECOND input is unconditionally consumed on the Some arm,
+    /// unconditionally discarded on the None arm — opening the third
+    /// combinator-KIND locus on the axis-cell substrate past the
+    /// SINGLE-INPUT + JOINT-Some kinds already shipped.
+    ///
+    /// **Two-arm dispatch identity — LOAD-BEARING structural pin**: on every
+    /// `(span, count)`, `derive_axis_span_gap(span, count) == match span {
+    /// Some(w) => Some(w - count), None => None }`. Pinned via
+    /// `resource_limits_derive_axis_span_gap_agrees_with_open_coded_match`.
+    ///
+    /// **Empty-arm identity**: for every `count`,
+    /// `derive_axis_span_gap(None, count) == None`. The empty-axis posture is
+    /// PRESERVED verbatim regardless of the second input, never reclassified
+    /// as a `Some(count)` under a silent zero-projection. Pinned via
+    /// `resource_limits_derive_axis_span_gap_empty_arm_preserves_none`.
+    ///
+    /// **Present-arm identity — SPARSITY subtraction**: for every `(w, count)`
+    /// with `w >= count`, `derive_axis_span_gap(Some(w), count) ==
+    /// Some(w - count)` — the helper projects the (span, count) pair to its
+    /// SPARSITY count verbatim (the count of positions inside the closed
+    /// bracket of width `w` that are NOT themselves member axes). Pinned via
+    /// `resource_limits_derive_axis_span_gap_present_arm_projects_sparsity`.
+    ///
+    /// **`is_some` bridge — SPAN-only presence**:
+    /// `derive_axis_span_gap(span, count).is_some() == span.is_some()`. The
+    /// presence dispatch tracks the FIRST input alone — the SECOND input's
+    /// value does NOT gate presence, unlike the JOINT-Some
+    /// [`Self::derive_axis_endpoint_span`] whose is_some verdict is the
+    /// LOGICAL-AND of both input presences. Pinned via
+    /// `resource_limits_derive_axis_span_gap_is_some_bridge`.
+    ///
+    /// **Diagonal (SPAN == COUNT) identity — CONTIGUOUS-pole coincidence**:
+    /// for every `w`, `derive_axis_span_gap(Some(w), w) == Some(0)`. When
+    /// span and count coincide (every bracket position IS a member axis),
+    /// the SPARSITY count saturates at zero — the CONTIGUOUS pole. Pinned
+    /// via `resource_limits_derive_axis_span_gap_diagonal_span_count_saturates_at_zero`.
+    ///
+    /// `const fn` so a caller can pin the helper's verdict at compile time
+    /// (`const _: () = assert!(matches!(
+    /// ResourceLimits::derive_axis_span_gap(Some(3), 3), Some(0)));`) —
+    /// sibling of the const-fn evaluability pins the AXIS-CELL projections
+    /// already carry at their own exits.
+    ///
+    /// **Adoption compounds**: future AXIS-CELL
+    /// `(Option<usize>-SPAN, usize-COUNT)`-DERIVED bracket-gap projections
+    /// that currently open-code the two-arm dispatch shape rewrite their
+    /// body from `match self.X_axis_index_span() { Some(w) => Some(w -
+    /// self.count_X_axes()), None => None }` to
+    /// `Self::derive_axis_span_gap(self.X_axis_index_span(),
+    /// self.count_X_axes())` at no semantic change, and a mechanical sweep
+    /// of the four BRACKET-GAP bodies through the helper becomes a
+    /// substrate-level refactor rather than a per-method rewrite.
+    ///
+    /// **Caller-side invariant**: `count <= w` is required for `w - count`
+    /// to evaluate without underflow. The helper does NOT enforce this — it
+    /// is a structural invariant of the (span, count) pair on the SAME axis
+    /// subset (the closed bracket `[first, last]` of width `w` contains
+    /// EVERY member axis of the subset, so `count <= w` by construction).
+    /// Callers that pass a NON-companion (span, count) pair violate this
+    /// invariant and will underflow in debug mode / wrap in release. Same
+    /// posture as every shipped BRACKET-GAP projection body, whose behavior
+    /// on such input is undefined by the same convention.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// presence-preserving subtract-constant shape at every AXIS-CELL
+    /// `(Option<usize>-SPAN, usize-COUNT)`-DERIVED bracket-gap projection
+    /// exit binds at ONE typed named `const fn` on the algebra rather than a
+    /// per-consumer four-line open-coded match. THEORY.md §II.1 invariant 5
+    /// — composition preserves proofs; the helper composes mechanically
+    /// under the two-arm dispatch identity above with no re-derivation at
+    /// the caller. THEORY.md §V.1 — knowable platform; the mixed-input
+    /// (Option-carrier, plain-tally) presence-preserving subtract-constant
+    /// becomes a substrate-level theorem rather than a per-projection
+    /// convention.
+    ///
+    /// Frontier inspiration: Haskell's `fmap (\w -> w - c) span` on
+    /// `Maybe Int` with a captured constant `c`; Idris's
+    /// `Functor.map (\w => w - c)` on `Maybe Nat` under a total function
+    /// signature; Racket's `(and w (- w c))` present-arm-preserving
+    /// subtract-constant; APL's `⊃⍵ - c` per-element subtract-constant on a
+    /// boxed scalar. Translation through pleme-io primitives is the plain
+    /// `const fn` two-arm dispatch match below on the `Option<usize>` split
+    /// with the `usize` `count` closed over as a plain function argument —
+    /// no closure, no typeclass indirection, no higher-kinded machinery, no
+    /// dependency on `Option::map` (which is not const-callable on stable
+    /// Rust because it takes a closure).
+    #[must_use]
+    pub const fn derive_axis_span_gap(span: Option<usize>, count: usize) -> Option<usize> {
+        match span {
+            Some(w) => Some(w - count),
+            None => None,
+        }
+    }
+
     /// Whole-posture ARITHMETIC-MIXITY-DEPTH tally — `self.count_mixity_axes()`
     /// returns the size of the MINORITY arm of the (polar, interior)
     /// exhaustive-and-disjoint partition, in `0..=Self::FIELD_COUNT / 2`.
@@ -18626,10 +18762,7 @@ impl ResourceLimits {
     /// per-axis scan, no allocation.
     #[must_use]
     pub const fn bottom_axis_gap_count(self) -> Option<usize> {
-        match self.bottom_axis_index_span() {
-            Some(w) => Some(w - self.count_bottom_axes()),
-            None => None,
-        }
+        Self::derive_axis_span_gap(self.bottom_axis_index_span(), self.count_bottom_axes())
     }
 
     /// Whole-posture INDEX-GAP-COUNT-OF-TOP projection —
@@ -18702,10 +18835,7 @@ impl ResourceLimits {
     /// the DUAL atomic mask.
     #[must_use]
     pub const fn top_axis_gap_count(self) -> Option<usize> {
-        match self.top_axis_index_span() {
-            Some(w) => Some(w - self.count_top_axes()),
-            None => None,
-        }
+        Self::derive_axis_span_gap(self.top_axis_index_span(), self.count_top_axes())
     }
 
     /// Whole-posture INDEX-GAP-COUNT-OF-POLAR projection —
@@ -18829,10 +18959,7 @@ impl ResourceLimits {
     /// no allocation.
     #[must_use]
     pub const fn polar_axis_gap_count(self) -> Option<usize> {
-        match self.polar_axis_index_span() {
-            Some(w) => Some(w - self.count_polar_axes()),
-            None => None,
-        }
+        Self::derive_axis_span_gap(self.polar_axis_index_span(), self.count_polar_axes())
     }
 
     /// Whole-posture INDEX-GAP-COUNT-OF-INTERIOR projection —
@@ -18923,10 +19050,7 @@ impl ResourceLimits {
     /// the DUAL COMPOUND mask.
     #[must_use]
     pub const fn interior_axis_gap_count(self) -> Option<usize> {
-        match self.interior_axis_index_span() {
-            Some(w) => Some(w - self.count_interior_axes()),
-            None => None,
-        }
+        Self::derive_axis_span_gap(self.interior_axis_index_span(), self.count_interior_axes())
     }
 
     /// Whole-posture CONTIGUITY-OF-BOTTOM predicate —
@@ -86804,6 +86928,312 @@ mod tests {
         const _: () = assert!(matches!(
             DEFAULT_RESOURCE_LIMITS.interior_axis_index_span(),
             Some(ResourceLimits::FIELD_COUNT)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_derive_axis_span_gap_agrees_with_open_coded_match() {
+        // Two-arm dispatch identity — the helper's verdict on every
+        // (span, count) pair agrees with the open-coded shape
+        // `match span { Some(w) => Some(w - count), None => None }` that
+        // every AXIS-CELL (Option<usize>-SPAN, usize-COUNT)-DERIVED
+        // BRACKET-GAP projection on ResourceLimits carries at its exit.
+        // Swept over the (None, Some) presence split of the first input
+        // paired with representative usize values of the second input so
+        // both cells of the (None, Some) partition of the (Option<usize>,
+        // usize) mixed-input regime are pinned. The Some arm is sampled
+        // at four (w, count) pairs with count <= w covering the
+        // singleton-bracket (w == count == 1), narrow interior
+        // (w > count small), CONTIGUOUS-pole (w == count), and wide
+        // interior (w == FIELD_COUNT, count == 1) postures.
+        for (span, count) in [
+            (None, 0_usize),
+            (None, 1),
+            (None, ResourceLimits::FIELD_COUNT),
+            (Some(1_usize), 1),
+            (Some(3_usize), 1),
+            (Some(3_usize), 3),
+            (Some(ResourceLimits::FIELD_COUNT), 1),
+            (
+                Some(ResourceLimits::FIELD_COUNT),
+                ResourceLimits::FIELD_COUNT,
+            ),
+        ] {
+            let via_helper = ResourceLimits::derive_axis_span_gap(span, count);
+            // Oracle pinned in the pre-lift open-coded shape so the
+            // point-of-the-pin (the two-arm dispatch the helper lifts)
+            // stays visible in the test source. `Option::map` is the
+            // stable-Rust closure form the helper cannot use in
+            // `const fn` context; the oracle intentionally mirrors the
+            // pre-lift shape rather than the closure form.
+            #[allow(clippy::manual_map)]
+            let via_open_code = match span {
+                Some(w) => Some(w - count),
+                None => None,
+            };
+            assert_eq!(
+                via_helper, via_open_code,
+                "helper != open-coded shape at (span, count)=({span:?}, {count})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_derive_axis_span_gap_empty_arm_preserves_none() {
+        // Empty-arm identity — for every second-input count, the None
+        // first-input fires None. The empty-axis posture is PRESERVED
+        // verbatim regardless of the second input, never reclassified as
+        // a Some(count) under a silent zero-projection or as Some(0)
+        // under a silent contiguous-pole reclassification.
+        for count in [0_usize, 1, 3, ResourceLimits::FIELD_COUNT, usize::MAX] {
+            assert_eq!(
+                ResourceLimits::derive_axis_span_gap(None, count),
+                None,
+                "(None, {count}) arm violated",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_derive_axis_span_gap_present_arm_projects_sparsity() {
+        // Present-arm identity — for every (w, count) with count <= w,
+        // the helper projects the (span, count) pair to Some(w - count),
+        // the SPARSITY count (positions inside the closed bracket of
+        // width w that are NOT themselves member axes). Sampled across
+        // the singleton (w == count == 1), narrow (w > count small),
+        // medium (w == FIELD_COUNT, count == FIELD_COUNT / 2),
+        // CONTIGUOUS-pole (w == count), and wide (w == FIELD_COUNT,
+        // count == 1) postures.
+        for (w, count, expected) in [
+            (1_usize, 1_usize, 0_usize),
+            (2, 1, 1),
+            (3, 2, 1),
+            (
+                ResourceLimits::FIELD_COUNT,
+                ResourceLimits::FIELD_COUNT / 2,
+                ResourceLimits::FIELD_COUNT - ResourceLimits::FIELD_COUNT / 2,
+            ),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT, 0),
+            (
+                ResourceLimits::FIELD_COUNT,
+                1,
+                ResourceLimits::FIELD_COUNT - 1,
+            ),
+        ] {
+            assert_eq!(
+                ResourceLimits::derive_axis_span_gap(Some(w), count),
+                Some(expected),
+                "present arm projection violated at (w={w}, count={count})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_derive_axis_span_gap_is_some_bridge() {
+        // is_some bridge — SPAN-only presence: the helper's is_some
+        // verdict agrees with the FIRST-input presence alone; the
+        // SECOND-input value does NOT gate presence. Distinguishes this
+        // MIXED-INPUT combinator from the JOINT-Some
+        // derive_axis_endpoint_span whose is_some verdict is the
+        // LOGICAL-AND of both input presences.
+        for (span, count) in [
+            (None, 0_usize),
+            (None, 1),
+            (None, 5),
+            (Some(1_usize), 0),
+            (Some(3_usize), 3),
+            (Some(ResourceLimits::FIELD_COUNT), 1),
+        ] {
+            assert_eq!(
+                ResourceLimits::derive_axis_span_gap(span, count).is_some(),
+                span.is_some(),
+                "is_some bridge violated at (span, count)=({span:?}, {count})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_derive_axis_span_gap_diagonal_span_count_saturates_at_zero() {
+        // Diagonal (SPAN == COUNT) identity — CONTIGUOUS-pole
+        // coincidence: for every w, derive_axis_span_gap(Some(w), w) ==
+        // Some(0). When span and count coincide (every position in the
+        // closed bracket IS a member axis), the SPARSITY count saturates
+        // at zero — the CONTIGUOUS pole every BRACKET-GAP consumer
+        // carries at the (w, count) == (k, k) diagonal.
+        for w in [
+            1_usize,
+            2,
+            3,
+            ResourceLimits::FIELD_COUNT / 2,
+            ResourceLimits::FIELD_COUNT,
+        ] {
+            assert_eq!(
+                ResourceLimits::derive_axis_span_gap(Some(w), w),
+                Some(0),
+                "diagonal span/count saturation violated at w={w}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_derive_axis_span_gap_agrees_with_bottom_axis_gap_count_shape() {
+        // Cross-check against the shipped atomic BRACKET-GAP projection
+        // shape — for every posture on the (EMPTY, DEFAULT, UNBOUNDED,
+        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation, the
+        // helper applied to the same posture's (bottom_axis_index_span,
+        // count_bottom_axes) (span, count) pair agrees with the shipped
+        // bottom_axis_gap_count verdict. Pins that the helper is
+        // semantics-equivalent to the open-coded shape one existing
+        // AXIS-CELL (Option<usize>-SPAN, usize-COUNT)-DERIVED BRACKET-
+        // GAP projection carried at its exit — the adoption-safety
+        // proof the sweep rides on.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                ResourceLimits::derive_axis_span_gap(
+                    posture.bottom_axis_index_span(),
+                    posture.count_bottom_axes(),
+                ),
+                posture.bottom_axis_gap_count(),
+                "helper (bottom span/count) != bottom_axis_gap_count on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_derive_axis_span_gap_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the two-arm dispatch identity at compile time
+        // as a build-break. Sibling of the const-fn evaluability pins
+        // the AXIS-CELL projections already carry at their own exits.
+        const _: () = assert!(ResourceLimits::derive_axis_span_gap(None, 0).is_none());
+        const _: () = assert!(ResourceLimits::derive_axis_span_gap(None, 5).is_none());
+        const _: () = assert!(ResourceLimits::derive_axis_span_gap(None, usize::MAX).is_none());
+        const _: () = assert!(matches!(
+            ResourceLimits::derive_axis_span_gap(Some(1), 1),
+            Some(0)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::derive_axis_span_gap(Some(3), 1),
+            Some(2)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::derive_axis_span_gap(
+                Some(ResourceLimits::FIELD_COUNT),
+                ResourceLimits::FIELD_COUNT,
+            ),
+            Some(0)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::derive_axis_span_gap(Some(ResourceLimits::FIELD_COUNT), 1),
+            Some(fc_minus_one) if fc_minus_one == ResourceLimits::FIELD_COUNT - 1
+        ));
+    }
+
+    #[test]
+    fn resource_limits_gap_count_family_bodies_delegate_to_derive_axis_span_gap() {
+        // Sweep-of-family pin — asserts each of the four BRACKET-GAP
+        // AXIS-CELL projection bodies (bottom_axis_gap_count,
+        // top_axis_gap_count, polar_axis_gap_count,
+        // interior_axis_gap_count) agrees with the helper-based shape
+        // `ResourceLimits::derive_axis_span_gap(
+        //     self.X_axis_index_span(), self.count_X_axes())`
+        // on every (axis, posture) pair from the EMPTY / DEFAULT /
+        // UNBOUNDED / HAND_AUTHORED_MID / HAND_AUTHORED_OTHER preset
+        // constellation (4×5 = 20 verdicts). A future body regression
+        // that swapped the None arm — or a helper regression that
+        // silently dropped the subtraction and returned the SPAN
+        // verbatim — would break here on at least one pair.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                posture.bottom_axis_gap_count(),
+                ResourceLimits::derive_axis_span_gap(
+                    posture.bottom_axis_index_span(),
+                    posture.count_bottom_axes(),
+                ),
+                "bottom gap_count delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.top_axis_gap_count(),
+                ResourceLimits::derive_axis_span_gap(
+                    posture.top_axis_index_span(),
+                    posture.count_top_axes(),
+                ),
+                "top gap_count delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.polar_axis_gap_count(),
+                ResourceLimits::derive_axis_span_gap(
+                    posture.polar_axis_index_span(),
+                    posture.count_polar_axes(),
+                ),
+                "polar gap_count delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.interior_axis_gap_count(),
+                ResourceLimits::derive_axis_span_gap(
+                    posture.interior_axis_index_span(),
+                    posture.count_interior_axes(),
+                ),
+                "interior gap_count delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_gap_count_family_bodies_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the BRACKET-GAP family bodies preserved
+        // const-fn evaluability under the sweep through
+        // derive_axis_span_gap. Each of the four swept projections × the
+        // three shipped `pub const` preset postures (EMPTY, UNBOUNDED,
+        // DEFAULT). EMPTY packs six bottom axes uniformly, so the
+        // (bottom, polar) pair fires Some(0) (bracket saturates at the
+        // CONTIGUOUS pole) and the (top, interior) pair fires None (no
+        // such axis). UNBOUNDED is the corner mirror. DEFAULT packs six
+        // strictly-interior axes, so only the (interior) fires Some(0)
+        // — the polar cell has ZERO polar axes here, so its gap is None
+        // (span is None, count is 0).
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_gap_count(),
+            Some(0)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.top_axis_gap_count().is_none());
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_gap_count(),
+            Some(0)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.interior_axis_gap_count().is_none());
+
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_gap_count().is_none());
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_gap_count(),
+            Some(0)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_gap_count(),
+            Some(0)
+        ));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .interior_axis_gap_count()
+            .is_none());
+
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.bottom_axis_gap_count().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_gap_count().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_axis_gap_count().is_none());
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_gap_count(),
+            Some(0)
         ));
     }
 

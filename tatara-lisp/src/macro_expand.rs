@@ -3433,12 +3433,7 @@ impl ResourceLimits {
         let mut result = [true; Self::FIELD_COUNT];
         let mut j = 0;
         while j < postures.len() {
-            let mask = self.axes_leq(postures[j]);
-            let mut i = 0;
-            while i < Self::FIELD_COUNT {
-                result[i] = result[i] && mask[i];
-                i += 1;
-            }
+            result = Self::intersect_masks_pointwise(result, self.axes_leq(postures[j]));
             j += 1;
         }
         result
@@ -3632,12 +3627,7 @@ impl ResourceLimits {
         let mut result = [true; Self::FIELD_COUNT];
         let mut j = 0;
         while j < postures.len() {
-            let mask = self.axes_geq(postures[j]);
-            let mut i = 0;
-            while i < Self::FIELD_COUNT {
-                result[i] = result[i] && mask[i];
-                i += 1;
-            }
+            result = Self::intersect_masks_pointwise(result, self.axes_geq(postures[j]));
             j += 1;
         }
         result
@@ -3822,12 +3812,7 @@ impl ResourceLimits {
         let mut result = [true; Self::FIELD_COUNT];
         let mut j = 0;
         while j < postures.len() {
-            let mask = self.axes_lt(postures[j]);
-            let mut i = 0;
-            while i < Self::FIELD_COUNT {
-                result[i] = result[i] && mask[i];
-                i += 1;
-            }
+            result = Self::intersect_masks_pointwise(result, self.axes_lt(postures[j]));
             j += 1;
         }
         result
@@ -3908,12 +3893,7 @@ impl ResourceLimits {
         let mut result = [true; Self::FIELD_COUNT];
         let mut j = 0;
         while j < postures.len() {
-            let mask = self.axes_gt(postures[j]);
-            let mut i = 0;
-            while i < Self::FIELD_COUNT {
-                result[i] = result[i] && mask[i];
-                i += 1;
-            }
+            result = Self::intersect_masks_pointwise(result, self.axes_gt(postures[j]));
             j += 1;
         }
         result
@@ -93587,5 +93567,280 @@ mod tests {
             DEFAULT_RESOURCE_LIMITS.interior_axis_is_at_most_barely_multi(),
             Some(false)
         ));
+    }
+
+    #[test]
+    fn resource_limits_axes_is_lower_bound_of_body_delegates_to_intersect_masks_pointwise() {
+        // Sweep-of-callsite pin — after routing the N-ary per-axis
+        // lower-bound body from the FIELD_COUNT-hardcoded per-index
+        // `while i < Self::FIELD_COUNT { result[i] = result[i] &&
+        // mask[i]; i += 1; }` accumulator-AND-fold inner loop over the
+        // per-posture `self.axes_leq(postures[j])` mask through
+        // `ResourceLimits::intersect_masks_pointwise(result,
+        // self.axes_leq(postures[j]))`, the swept body continues to
+        // agree with the fold `[true; FIELD_COUNT]` seeded and reduced
+        // through the substrate INTERSECTION combinator at every
+        // posture and every arity 0..=3 drawn from the shared canonical
+        // posture roster. The pin catches a future FIELD_COUNT bump
+        // that would silently under-cover the per-axis accumulator arm
+        // at the helper's `while i < FIELD_COUNT` per-axis body rather
+        // than at an axis-count no callsite guarded. Sibling of
+        // `resource_limits_axes_is_constant_body_delegates_to_intersect_masks_pointwise`
+        // one PROJECTION-KIND axis over (SEQUENCE-LEVEL constant
+        // pair-of-masks intersection → N-ARY-AGGREGATION accumulator-
+        // AND-fold across a variable-length slice of per-posture
+        // masks): both bind the MASK+MASK→MASK INTERSECTION combinator
+        // at ONE substrate primitive delegation per exit.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        fn fold_via_helper(
+            anchor: ResourceLimits,
+            slice: &[ResourceLimits],
+        ) -> [bool; ResourceLimits::FIELD_COUNT] {
+            let mut acc = [true; ResourceLimits::FIELD_COUNT];
+            for p in slice {
+                acc = ResourceLimits::intersect_masks_pointwise(acc, anchor.axes_leq(*p));
+            }
+            acc
+        }
+        for a in postures {
+            assert_eq!(
+                a.axes_is_lower_bound_of(&[]),
+                fold_via_helper(a, &[]),
+                "axes_is_lower_bound_of disagrees with intersect_masks_pointwise fold \
+                 on empty slice for anchor {a:?}",
+            );
+            for b in postures {
+                let slice = [b];
+                assert_eq!(
+                    a.axes_is_lower_bound_of(&slice),
+                    fold_via_helper(a, &slice),
+                    "axes_is_lower_bound_of disagrees with intersect_masks_pointwise fold \
+                     on singleton [{b:?}] for anchor {a:?}",
+                );
+                for c in postures {
+                    let slice = [b, c];
+                    assert_eq!(
+                        a.axes_is_lower_bound_of(&slice),
+                        fold_via_helper(a, &slice),
+                        "axes_is_lower_bound_of disagrees with intersect_masks_pointwise fold \
+                         on pair [{b:?}, {c:?}] for anchor {a:?}",
+                    );
+                    for d in postures {
+                        let slice = [b, c, d];
+                        assert_eq!(
+                            a.axes_is_lower_bound_of(&slice),
+                            fold_via_helper(a, &slice),
+                            "axes_is_lower_bound_of disagrees with intersect_masks_pointwise fold \
+                             on triple [{b:?}, {c:?}, {d:?}] for anchor {a:?}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_upper_bound_of_body_delegates_to_intersect_masks_pointwise() {
+        // Sweep-of-callsite pin — DIRECTION peer of
+        // `resource_limits_axes_is_lower_bound_of_body_delegates_to_intersect_masks_pointwise`
+        // one COMBINATOR-DIRECTION axis over on the (LOWER, UPPER) row
+        // of the N-ary bound-of surface. Routes the N-ary per-axis
+        // upper-bound body from the FIELD_COUNT-hardcoded per-index
+        // accumulator-AND-fold inner loop over the per-posture
+        // `self.axes_geq(postures[j])` mask through
+        // `ResourceLimits::intersect_masks_pointwise(result,
+        // self.axes_geq(postures[j]))`. Same 5-posture roster, same
+        // 0..=3-arity constellation.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        fn fold_via_helper(
+            anchor: ResourceLimits,
+            slice: &[ResourceLimits],
+        ) -> [bool; ResourceLimits::FIELD_COUNT] {
+            let mut acc = [true; ResourceLimits::FIELD_COUNT];
+            for p in slice {
+                acc = ResourceLimits::intersect_masks_pointwise(acc, anchor.axes_geq(*p));
+            }
+            acc
+        }
+        for a in postures {
+            assert_eq!(
+                a.axes_is_upper_bound_of(&[]),
+                fold_via_helper(a, &[]),
+                "axes_is_upper_bound_of disagrees with intersect_masks_pointwise fold \
+                 on empty slice for anchor {a:?}",
+            );
+            for b in postures {
+                let slice = [b];
+                assert_eq!(
+                    a.axes_is_upper_bound_of(&slice),
+                    fold_via_helper(a, &slice),
+                    "axes_is_upper_bound_of disagrees with intersect_masks_pointwise fold \
+                     on singleton [{b:?}] for anchor {a:?}",
+                );
+                for c in postures {
+                    let slice = [b, c];
+                    assert_eq!(
+                        a.axes_is_upper_bound_of(&slice),
+                        fold_via_helper(a, &slice),
+                        "axes_is_upper_bound_of disagrees with intersect_masks_pointwise fold \
+                         on pair [{b:?}, {c:?}] for anchor {a:?}",
+                    );
+                    for d in postures {
+                        let slice = [b, c, d];
+                        assert_eq!(
+                            a.axes_is_upper_bound_of(&slice),
+                            fold_via_helper(a, &slice),
+                            "axes_is_upper_bound_of disagrees with intersect_masks_pointwise fold \
+                             on triple [{b:?}, {c:?}, {d:?}] for anchor {a:?}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strict_lower_bound_of_body_delegates_to_intersect_masks_pointwise() {
+        // Sweep-of-callsite pin — STRICT peer of
+        // `resource_limits_axes_is_lower_bound_of_body_delegates_to_intersect_masks_pointwise`
+        // one STRICTNESS axis over on the (LOOSE, STRICT) row of the
+        // N-ary lower-bound surface. Routes the strict per-axis
+        // accumulator-AND-fold over `self.axes_lt(postures[j])`
+        // through `ResourceLimits::intersect_masks_pointwise(result,
+        // self.axes_lt(postures[j]))`. Same 5-posture roster, same
+        // 0..=3-arity constellation.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        fn fold_via_helper(
+            anchor: ResourceLimits,
+            slice: &[ResourceLimits],
+        ) -> [bool; ResourceLimits::FIELD_COUNT] {
+            let mut acc = [true; ResourceLimits::FIELD_COUNT];
+            for p in slice {
+                acc = ResourceLimits::intersect_masks_pointwise(acc, anchor.axes_lt(*p));
+            }
+            acc
+        }
+        for a in postures {
+            assert_eq!(
+                a.axes_is_strict_lower_bound_of(&[]),
+                fold_via_helper(a, &[]),
+                "axes_is_strict_lower_bound_of disagrees with intersect_masks_pointwise fold \
+                 on empty slice for anchor {a:?}",
+            );
+            for b in postures {
+                let slice = [b];
+                assert_eq!(
+                    a.axes_is_strict_lower_bound_of(&slice),
+                    fold_via_helper(a, &slice),
+                    "axes_is_strict_lower_bound_of disagrees with intersect_masks_pointwise fold \
+                     on singleton [{b:?}] for anchor {a:?}",
+                );
+                for c in postures {
+                    let slice = [b, c];
+                    assert_eq!(
+                        a.axes_is_strict_lower_bound_of(&slice),
+                        fold_via_helper(a, &slice),
+                        "axes_is_strict_lower_bound_of disagrees with intersect_masks_pointwise fold \
+                         on pair [{b:?}, {c:?}] for anchor {a:?}",
+                    );
+                    for d in postures {
+                        let slice = [b, c, d];
+                        assert_eq!(
+                            a.axes_is_strict_lower_bound_of(&slice),
+                            fold_via_helper(a, &slice),
+                            "axes_is_strict_lower_bound_of disagrees with intersect_masks_pointwise fold \
+                             on triple [{b:?}, {c:?}, {d:?}] for anchor {a:?}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axes_is_strict_upper_bound_of_body_delegates_to_intersect_masks_pointwise() {
+        // Sweep-of-callsite pin — closes the 2×2
+        // (DIRECTION × STRICTNESS) grid on the N-ary bound-of surface
+        // together with the three companion sweeps on this run. Routes
+        // the strict-face upper-bound per-axis accumulator-AND-fold
+        // over `self.axes_gt(postures[j])` through
+        // `ResourceLimits::intersect_masks_pointwise(result,
+        // self.axes_gt(postures[j]))`. Same 5-posture roster, same
+        // 0..=3-arity constellation. With all four N-ary bound-of
+        // methods now delegating to the substrate INTERSECTION
+        // combinator, a future FIELD_COUNT bump propagates through the
+        // helper's one `while i < FIELD_COUNT` per-axis fill rather
+        // than through four hand-authored per-axis AND-fill inner
+        // loops.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        fn fold_via_helper(
+            anchor: ResourceLimits,
+            slice: &[ResourceLimits],
+        ) -> [bool; ResourceLimits::FIELD_COUNT] {
+            let mut acc = [true; ResourceLimits::FIELD_COUNT];
+            for p in slice {
+                acc = ResourceLimits::intersect_masks_pointwise(acc, anchor.axes_gt(*p));
+            }
+            acc
+        }
+        for a in postures {
+            assert_eq!(
+                a.axes_is_strict_upper_bound_of(&[]),
+                fold_via_helper(a, &[]),
+                "axes_is_strict_upper_bound_of disagrees with intersect_masks_pointwise fold \
+                 on empty slice for anchor {a:?}",
+            );
+            for b in postures {
+                let slice = [b];
+                assert_eq!(
+                    a.axes_is_strict_upper_bound_of(&slice),
+                    fold_via_helper(a, &slice),
+                    "axes_is_strict_upper_bound_of disagrees with intersect_masks_pointwise fold \
+                     on singleton [{b:?}] for anchor {a:?}",
+                );
+                for c in postures {
+                    let slice = [b, c];
+                    assert_eq!(
+                        a.axes_is_strict_upper_bound_of(&slice),
+                        fold_via_helper(a, &slice),
+                        "axes_is_strict_upper_bound_of disagrees with intersect_masks_pointwise fold \
+                         on pair [{b:?}, {c:?}] for anchor {a:?}",
+                    );
+                    for d in postures {
+                        let slice = [b, c, d];
+                        assert_eq!(
+                            a.axes_is_strict_upper_bound_of(&slice),
+                            fold_via_helper(a, &slice),
+                            "axes_is_strict_upper_bound_of disagrees with intersect_masks_pointwise fold \
+                             on triple [{b:?}, {c:?}, {d:?}] for anchor {a:?}",
+                        );
+                    }
+                }
+            }
+        }
     }
 }

@@ -12203,6 +12203,99 @@ impl ResourceLimits {
         }
     }
 
+    /// Presence-preserving negation on whole-posture `Option<bool>` witnesses —
+    /// `Self::negate_axis_witness(w)` returns `Some(!b)` when `w` is `Some(b)`,
+    /// or `None` when `w` is `None`. The BOUNDARY primitive lifting the shape
+    /// `match w { Some(b) => Some(!b), None => None }` (equivalently the
+    /// nightly-only `w.map(|b| !b)` closure form Rust `const fn` cannot
+    /// express on stable) that every AXIS-CELL `Option<bool>` DE MORGAN
+    /// COMPLEMENT PREDICATE on [`ResourceLimits`] carries at its exit —
+    /// `bottom_axis_is_sparse`, `top_axis_is_sparse`, `polar_axis_is_sparse`,
+    /// `interior_axis_is_sparse` all wrap the negation of the paired
+    /// [`Self::bottom_axis_is_contiguous`]-family witness in the same
+    /// presence-preserving dispatch. Pre-lift each SPARSE predicate open-
+    /// coded the four-line `match self.X_axis_is_contiguous() { Some(b) =>
+    /// Some(!b), None => None }` at its own exit — a copy-paste cascade
+    /// whose consistency the type system did not gate (a predicate that
+    /// swapped the `None` arm for `Some(true)` would silently reclassify the
+    /// empty-axis posture as `Some(sparse)` where the canonical shape yields
+    /// `None`, discarding the has-axis distinction the compound `Option<bool>`
+    /// exit was defined to preserve). Post-lift the shape binds at ONE typed
+    /// `const fn` on [`ResourceLimits`], and every future AXIS-CELL DE
+    /// MORGAN complement predicate composes through this helper — the empty-
+    /// arm preservation is a substrate-level theorem rather than a per-
+    /// consumer convention. The COMBINATOR-KIND peer of
+    /// [`Self::witness_axis_presence`] one BOUNDARY-INPUT axis over: presence-
+    /// conditional wrapping over `(count, pred)` there, presence-preserving
+    /// negation over `Option<bool>` here — jointly the two helpers OPEN the
+    /// substrate's `Option<bool>` axis-cell combinator surface.
+    ///
+    /// **Two-arm dispatch identity — LOAD-BEARING structural pin**: on every
+    /// `w`, `negate_axis_witness(w) == match w { Some(b) => Some(!b), None =>
+    /// None }`. Pinned via
+    /// `resource_limits_negate_axis_witness_agrees_with_open_coded_match`.
+    ///
+    /// **Empty-arm identity**: `negate_axis_witness(None) == None` — the
+    /// empty-axis posture is PRESERVED verbatim, never confused with either
+    /// truth value on the present arm. Pinned via
+    /// `resource_limits_negate_axis_witness_empty_arm_preserves_none`.
+    ///
+    /// **Present-arm identity**: for every `b`,
+    /// `negate_axis_witness(Some(b)) == Some(!b)` — the helper NEGATES the
+    /// present-arm boolean verbatim. Pinned via
+    /// `resource_limits_negate_axis_witness_present_arm_negates`.
+    ///
+    /// **Involution identity — LOAD-BEARING structural pin**: on every `w`,
+    /// `negate_axis_witness(negate_axis_witness(w)) == w`. The
+    /// DE MORGAN complement is its own inverse — the boolean surface's
+    /// GROUP-THEORETIC period-2 fact PRESERVED verbatim through the
+    /// presence-preserving lift. Pinned via
+    /// `resource_limits_negate_axis_witness_is_involution`.
+    ///
+    /// **`is_some` bridge**: `negate_axis_witness(w).is_some() == w.is_some()`.
+    /// The presence dispatch is PRESERVED across the negation — the SPARSE
+    /// family's has-axis-at-pole boolean projection agrees with the
+    /// CONTIGUOUS family's projection posture-for-posture. Pinned via
+    /// `resource_limits_negate_axis_witness_is_some_bridge`.
+    ///
+    /// `const fn` so a caller can pin the helper's verdict at compile time
+    /// (`const _: () = assert!(ResourceLimits::negate_axis_witness(None)
+    /// .is_none());`) — sibling of the const-fn evaluability pins the
+    /// AXIS-CELL predicates already carry at their own exits.
+    ///
+    /// **Adoption compounds**: future AXIS-CELL DE MORGAN complement
+    /// predicates that currently open-code the two-arm shape rewrite their
+    /// body from `match self.X_axis_is_Y() { Some(b) => Some(!b), None =>
+    /// None }` to `Self::negate_axis_witness(self.X_axis_is_Y())` at no
+    /// semantic change, and a mechanical sweep of the four SPARSE bodies
+    /// through the helper becomes a substrate-level refactor rather than a
+    /// per-method rewrite.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// presence-preserving negation shape at every AXIS-CELL DE MORGAN
+    /// complement predicate exit binds at ONE typed named `const fn` on the
+    /// algebra rather than a per-consumer four-line open-coded match.
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// helper composes mechanically under the two-arm identity above with no
+    /// re-derivation at the caller. THEORY.md §V.1 — knowable platform; the
+    /// empty-arm preservation becomes a substrate-level theorem rather than
+    /// a per-predicate convention.
+    ///
+    /// Frontier inspiration: Haskell's `fmap not` on `Maybe Bool`; Idris's
+    /// `Functor.map not` on `Maybe Bool` under a total function signature;
+    /// Racket's `(and c (not b))` present-arm-preserving negation; APL's
+    /// `~¨` per-element not on a boxed scalar. Translation through pleme-io
+    /// primitives is the plain `const fn` two-arm match below on the
+    /// `Option<bool>` split — no closure, no typeclass indirection, no
+    /// higher-kinded machinery.
+    #[must_use]
+    pub const fn negate_axis_witness(w: Option<bool>) -> Option<bool> {
+        match w {
+            Some(b) => Some(!b),
+            None => None,
+        }
+    }
+
     /// Whole-posture ARITHMETIC-MIXITY-DEPTH tally — `self.count_mixity_axes()`
     /// returns the size of the MINORITY arm of the (polar, interior)
     /// exhaustive-and-disjoint partition, in `0..=Self::FIELD_COUNT / 2`.
@@ -18985,10 +19078,7 @@ impl ResourceLimits {
     /// no gap re-derivation, no allocation.
     #[must_use]
     pub const fn bottom_axis_is_sparse(self) -> Option<bool> {
-        match self.bottom_axis_is_contiguous() {
-            Some(b) => Some(!b),
-            None => None,
-        }
+        Self::negate_axis_witness(self.bottom_axis_is_contiguous())
     }
 
     /// Whole-posture SPARSITY-OF-TOP predicate —
@@ -19046,10 +19136,7 @@ impl ResourceLimits {
     /// on the DUAL atomic mask.
     #[must_use]
     pub const fn top_axis_is_sparse(self) -> Option<bool> {
-        match self.top_axis_is_contiguous() {
-            Some(b) => Some(!b),
-            None => None,
-        }
+        Self::negate_axis_witness(self.top_axis_is_contiguous())
     }
 
     /// Whole-posture SPARSITY-OF-POLAR predicate —
@@ -19162,10 +19249,7 @@ impl ResourceLimits {
     /// allocation.
     #[must_use]
     pub const fn polar_axis_is_sparse(self) -> Option<bool> {
-        match self.polar_axis_is_contiguous() {
-            Some(b) => Some(!b),
-            None => None,
-        }
+        Self::negate_axis_witness(self.polar_axis_is_contiguous())
     }
 
     /// Whole-posture SPARSITY-OF-INTERIOR predicate —
@@ -19228,10 +19312,7 @@ impl ResourceLimits {
     /// the DUAL COMPOUND mask.
     #[must_use]
     pub const fn interior_axis_is_sparse(self) -> Option<bool> {
-        match self.interior_axis_is_contiguous() {
-            Some(b) => Some(!b),
-            None => None,
-        }
+        Self::negate_axis_witness(self.interior_axis_is_contiguous())
     }
 
     /// Whole-posture SINGLETON-OF-BOTTOM predicate —
@@ -85825,6 +85906,236 @@ mod tests {
         const _: () = assert!(matches!(
             ResourceLimits::witness_axis_presence(ResourceLimits::FIELD_COUNT, true),
             Some(true)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_negate_axis_witness_empty_arm_preserves_none() {
+        // Empty-arm identity: on w == None the helper yields None. The
+        // empty-axis posture is PRESERVED verbatim, never reclassified
+        // as either present-arm truth value under the DE MORGAN
+        // complement — the has-axis-at-pole distinction the compound
+        // Option<bool> exit was defined to name is preserved by the
+        // presence-preserving lift.
+        assert_eq!(ResourceLimits::negate_axis_witness(None), None);
+    }
+
+    #[test]
+    fn resource_limits_negate_axis_witness_present_arm_negates() {
+        // Present-arm identity: for every b, the helper wraps the
+        // negation of b as Some(!b). Swept over both truth values so
+        // the present-arm behaviour is pinned uniformly across the
+        // Option<bool> present-arm regime.
+        assert_eq!(
+            ResourceLimits::negate_axis_witness(Some(true)),
+            Some(false),
+            "present arm at Some(true)",
+        );
+        assert_eq!(
+            ResourceLimits::negate_axis_witness(Some(false)),
+            Some(true),
+            "present arm at Some(false)",
+        );
+    }
+
+    #[test]
+    #[allow(clippy::manual_map)]
+    fn resource_limits_negate_axis_witness_agrees_with_open_coded_match() {
+        // Two-arm dispatch identity — the helper's verdict on every w
+        // agrees with the open-coded shape
+        // `match w { Some(b) => Some(!b), None => None }` that every
+        // AXIS-CELL DE MORGAN complement predicate on ResourceLimits
+        // carries at its exit. Swept over None and both Some(bool)
+        // values so the two-arm dispatch is pinned exhaustively over
+        // the Option<bool> input regime. The `#[allow(clippy::manual_map)]`
+        // is load-bearing on the OPEN-CODED oracle: this test pins the
+        // helper's equivalence to the pre-lift open-coded shape, so
+        // rewriting the oracle to `w.map(|b| !b)` would erase the very
+        // shape the pin exists to verify against.
+        for w in [None, Some(false), Some(true)] {
+            let via_helper = ResourceLimits::negate_axis_witness(w);
+            let via_open_code = match w {
+                Some(b) => Some(!b),
+                None => None,
+            };
+            assert_eq!(
+                via_helper, via_open_code,
+                "helper != open-coded shape at w={w:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_negate_axis_witness_is_involution() {
+        // Involution identity: applying the helper twice returns the
+        // original Option<bool>. The DE MORGAN complement is its own
+        // inverse — the boolean surface's period-2 fact PRESERVED
+        // verbatim through the presence-preserving lift. Swept over
+        // every Option<bool> value so the involution is pinned
+        // exhaustively over the input regime.
+        for w in [None, Some(false), Some(true)] {
+            let round_trip =
+                ResourceLimits::negate_axis_witness(ResourceLimits::negate_axis_witness(w));
+            assert_eq!(round_trip, w, "involution violated at w={w:?}");
+        }
+    }
+
+    #[test]
+    fn resource_limits_negate_axis_witness_is_some_bridge() {
+        // is_some bridge: the helper's is_some verdict agrees with the
+        // input's is_some verdict on every posture. The presence
+        // dispatch is PRESERVED across the negation — the SPARSE
+        // family's has-axis-at-pole projection agrees with the
+        // CONTIGUOUS family's projection input-for-input.
+        for w in [None, Some(false), Some(true)] {
+            assert_eq!(
+                ResourceLimits::negate_axis_witness(w).is_some(),
+                w.is_some(),
+                "is_some bridge violated at w={w:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_negate_axis_witness_agrees_with_bottom_axis_is_sparse_shape() {
+        // Cross-check against the shipped atomic SPARSE predicate
+        // shape — for every posture on the (EMPTY, DEFAULT, UNBOUNDED,
+        // HAND_AUTHORED_MID, HAND_AUTHORED_OTHER) constellation, the
+        // helper applied to the same posture's CONTIGUOUS witness
+        // agrees with the shipped bottom_axis_is_sparse verdict. Pins
+        // that the helper is semantics-equivalent to the open-coded
+        // shape one existing AXIS-CELL DE MORGAN complement predicate
+        // carries at its exit — the adoption-safety proof the sweep
+        // rides on.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                ResourceLimits::negate_axis_witness(posture.bottom_axis_is_contiguous()),
+                posture.bottom_axis_is_sparse(),
+                "helper (bottom contiguous) != bottom_axis_is_sparse on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_negate_axis_witness_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the two-arm identity at compile time as a
+        // build-break. Sibling of the const-fn evaluability pins the
+        // AXIS-CELL predicates already carry at their own exits.
+        const _: () = assert!(ResourceLimits::negate_axis_witness(None).is_none());
+        const _: () = assert!(matches!(
+            ResourceLimits::negate_axis_witness(Some(true)),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::negate_axis_witness(Some(false)),
+            Some(true)
+        ));
+        // Involution at compile time on every input.
+        const _: () = assert!(matches!(
+            ResourceLimits::negate_axis_witness(ResourceLimits::negate_axis_witness(Some(true))),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::negate_axis_witness(ResourceLimits::negate_axis_witness(Some(false))),
+            Some(false)
+        ));
+        const _: () = assert!(ResourceLimits::negate_axis_witness(
+            ResourceLimits::negate_axis_witness(None)
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn resource_limits_sparse_family_bodies_delegate_to_negate_axis_witness() {
+        // Sweep-of-family pin — asserts each of the four SPARSE
+        // AXIS-CELL predicate bodies (bottom_axis_is_sparse,
+        // top_axis_is_sparse, polar_axis_is_sparse,
+        // interior_axis_is_sparse) agrees with the helper-based shape
+        // `ResourceLimits::negate_axis_witness(self.X_axis_is_contiguous())`
+        // on every (axis, posture) pair from the EMPTY / DEFAULT /
+        // UNBOUNDED / HAND_AUTHORED_MID / HAND_AUTHORED_OTHER preset
+        // constellation (4×5 = 20 verdicts). A future body regression
+        // that swapped the None arm — or a helper regression that
+        // silently dropped the negation — would break here on at least
+        // one pair.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                posture.bottom_axis_is_sparse(),
+                ResourceLimits::negate_axis_witness(posture.bottom_axis_is_contiguous()),
+                "bottom sparse delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.top_axis_is_sparse(),
+                ResourceLimits::negate_axis_witness(posture.top_axis_is_contiguous()),
+                "top sparse delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.polar_axis_is_sparse(),
+                ResourceLimits::negate_axis_witness(posture.polar_axis_is_contiguous()),
+                "polar sparse delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.interior_axis_is_sparse(),
+                ResourceLimits::negate_axis_witness(posture.interior_axis_is_contiguous()),
+                "interior sparse delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_sparse_family_bodies_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the SPARSE family bodies preserved
+        // const-fn evaluability under the sweep through
+        // negate_axis_witness. Each of the four swept predicates × the
+        // three shipped `pub const` preset postures (EMPTY, UNBOUNDED,
+        // DEFAULT). EMPTY packs six bottom axes uniformly, so the
+        // (bottom, polar) pair fires Some(false) (fully contiguous by
+        // singleton-of-bracket ⇒ NOT sparse) and the (top, interior)
+        // pair fires None (no such axis). UNBOUNDED is the corner
+        // mirror.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_sparse(),
+            Some(false)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.top_axis_is_sparse().is_none());
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_sparse(),
+            Some(false)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.interior_axis_is_sparse().is_none());
+
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_sparse().is_none());
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_sparse(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_sparse(),
+            Some(false)
+        ));
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .interior_axis_is_sparse()
+            .is_none());
+
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.bottom_axis_is_sparse().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_axis_is_sparse().is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.polar_axis_is_sparse().is_none());
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_sparse(),
+            Some(false)
         ));
     }
 

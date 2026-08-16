@@ -487,31 +487,6 @@ pub const EMPTY_RESOURCE_LIMITS: ResourceLimits = ResourceLimits {
     max_macro_arity: 0,
 };
 
-/// Pointwise `min` / `max` primitives the [`ResourceLimits`] lattice binds
-/// its meet ([`ResourceLimits::strictest`]) and join
-/// ([`ResourceLimits::most_permissive`]) operations to. Named at module
-/// scope as `const fn` so both operations are themselves `const fn` on
-/// stable — composing two postures at compile time (a caller stitching a
-/// new `pub const` preset from two shipped presets) needs no runtime
-/// evaluation. Ternary form rather than [`usize::min`] / [`usize::max`]
-/// so the two `const fn` remain valid on any tatara MSRV whose stability
-/// on the primitive const-fn methods has not been established.
-const fn min_usize(a: usize, b: usize) -> usize {
-    if a <= b {
-        a
-    } else {
-        b
-    }
-}
-
-const fn max_usize(a: usize, b: usize) -> usize {
-    if a >= b {
-        a
-    } else {
-        b
-    }
-}
-
 impl ResourceLimits {
     /// The cardinality of the [`ResourceLimits`] ceiling family — pinned
     /// at ONE typed `pub const` on the algebra so every field-arity-
@@ -1133,15 +1108,27 @@ impl ResourceLimits {
     #[must_use]
     pub const fn strictest(self, other: Self) -> Self {
         Self {
-            max_expansion_depth: min_usize(self.max_expansion_depth, other.max_expansion_depth),
-            max_cache_entries: min_usize(self.max_cache_entries, other.max_cache_entries),
-            max_expansion_size: min_usize(self.max_expansion_size, other.max_expansion_size),
-            max_macro_body_size: min_usize(self.max_macro_body_size, other.max_macro_body_size),
-            max_registered_macros: min_usize(
+            max_expansion_depth: Self::min_of_count_pair(
+                self.max_expansion_depth,
+                other.max_expansion_depth,
+            ),
+            max_cache_entries: Self::min_of_count_pair(
+                self.max_cache_entries,
+                other.max_cache_entries,
+            ),
+            max_expansion_size: Self::min_of_count_pair(
+                self.max_expansion_size,
+                other.max_expansion_size,
+            ),
+            max_macro_body_size: Self::min_of_count_pair(
+                self.max_macro_body_size,
+                other.max_macro_body_size,
+            ),
+            max_registered_macros: Self::min_of_count_pair(
                 self.max_registered_macros,
                 other.max_registered_macros,
             ),
-            max_macro_arity: min_usize(self.max_macro_arity, other.max_macro_arity),
+            max_macro_arity: Self::min_of_count_pair(self.max_macro_arity, other.max_macro_arity),
         }
     }
 
@@ -1193,15 +1180,27 @@ impl ResourceLimits {
     #[must_use]
     pub const fn most_permissive(self, other: Self) -> Self {
         Self {
-            max_expansion_depth: max_usize(self.max_expansion_depth, other.max_expansion_depth),
-            max_cache_entries: max_usize(self.max_cache_entries, other.max_cache_entries),
-            max_expansion_size: max_usize(self.max_expansion_size, other.max_expansion_size),
-            max_macro_body_size: max_usize(self.max_macro_body_size, other.max_macro_body_size),
-            max_registered_macros: max_usize(
+            max_expansion_depth: Self::max_of_count_pair(
+                self.max_expansion_depth,
+                other.max_expansion_depth,
+            ),
+            max_cache_entries: Self::max_of_count_pair(
+                self.max_cache_entries,
+                other.max_cache_entries,
+            ),
+            max_expansion_size: Self::max_of_count_pair(
+                self.max_expansion_size,
+                other.max_expansion_size,
+            ),
+            max_macro_body_size: Self::max_of_count_pair(
+                self.max_macro_body_size,
+                other.max_macro_body_size,
+            ),
+            max_registered_macros: Self::max_of_count_pair(
                 self.max_registered_macros,
                 other.max_registered_macros,
             ),
-            max_macro_arity: max_usize(self.max_macro_arity, other.max_macro_arity),
+            max_macro_arity: Self::max_of_count_pair(self.max_macro_arity, other.max_macro_arity),
         }
     }
 
@@ -15446,6 +15445,29 @@ impl ResourceLimits {
     /// two swept `_majority_count` pins rather than silently
     /// re-classifying every downstream posture-reading MAX.
     ///
+    /// **RESOURCE-LATTICE JOIN callsite — LOAD-BEARING generality pin**:
+    /// [`Self::most_permissive`] (the pointwise-`max` JOIN operation on
+    /// the six-field `ResourceLimits` lattice) folds each of its six
+    /// per-field ceilings through this SAME `Self::max_of_count_pair`
+    /// primitive on a `(usize, usize)` pair of independent-field
+    /// tallies (NOT a paired arm-count tally on a single posture). The
+    /// underlying primitive is arm-agnostic MAX on any `(usize, usize)`
+    /// input — the `_of_count_pair` naming is historical for the
+    /// FIRST callsite family (WHOLE-POSTURE ARM-AGNOSTIC MAX-fold
+    /// projections on paired arm-count tallies) that motivated the
+    /// lift, but the primitive itself closes the ONE MAX-of-two-`usize`
+    /// exit across BOTH the WHOLE-POSTURE arm-count column AND the
+    /// RESOURCE-LATTICE per-field lattice column. Pre-lift the
+    /// RESOURCE-LATTICE JOIN operation open-coded the same MAX split
+    /// through a module-scope `max_usize` free function whose body was
+    /// byte-for-byte identical to this helper's; post-sweep both
+    /// callsite families route through ONE typed named primitive on
+    /// [`ResourceLimits`], and rustc gates a regression at either
+    /// against the SAME pin — a `>=` inversion at the helper fires
+    /// against both the WHOLE-POSTURE `_majority_count` pins AND the
+    /// RESOURCE-LATTICE `most_permissive` lattice-law pins. Pinned via
+    /// `resource_limits_max_of_count_pair_agrees_with_resource_lattice_join_field_folds`.
+    ///
     /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
     /// ARM-AGNOSTIC MAX-fold shape at every WHOLE-POSTURE MAX-fold
     /// projection body binds at ONE typed named `const fn` on the
@@ -15633,6 +15655,29 @@ impl ResourceLimits {
     /// regression at the helper (`<=` → `>=`) fires immediately at the
     /// two swept `_minority_count` pins rather than silently
     /// re-classifying every downstream posture-reading MIN.
+    ///
+    /// **RESOURCE-LATTICE MEET callsite — LOAD-BEARING generality pin**:
+    /// [`Self::strictest`] (the pointwise-`min` MEET operation on the
+    /// six-field `ResourceLimits` lattice) folds each of its six per-
+    /// field ceilings through this SAME `Self::min_of_count_pair`
+    /// primitive on a `(usize, usize)` pair of independent-field
+    /// tallies (NOT a paired arm-count tally on a single posture). The
+    /// underlying primitive is arm-agnostic MIN on any `(usize, usize)`
+    /// input — the `_of_count_pair` naming is historical for the
+    /// FIRST callsite family (WHOLE-POSTURE ARM-AGNOSTIC MIN-fold
+    /// projections on paired arm-count tallies) that motivated the
+    /// lift, but the primitive itself closes the ONE MIN-of-two-`usize`
+    /// exit across BOTH the WHOLE-POSTURE arm-count column AND the
+    /// RESOURCE-LATTICE per-field lattice column. Pre-lift the
+    /// RESOURCE-LATTICE MEET operation open-coded the same MIN split
+    /// through a module-scope `min_usize` free function whose body was
+    /// byte-for-byte identical to this helper's; post-sweep both
+    /// callsite families route through ONE typed named primitive on
+    /// [`ResourceLimits`], and rustc gates a regression at either
+    /// against the SAME pin — a `<=` inversion at the helper fires
+    /// against both the WHOLE-POSTURE `_minority_count` pins AND the
+    /// RESOURCE-LATTICE `strictest` lattice-law pins. Pinned via
+    /// `resource_limits_min_of_count_pair_agrees_with_resource_lattice_meet_field_folds`.
     ///
     /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
     /// ARM-AGNOSTIC MIN-fold shape at every WHOLE-POSTURE MIN-fold
@@ -45069,6 +45114,70 @@ mod tests {
     }
 
     #[test]
+    fn resource_limits_min_of_count_pair_agrees_with_resource_lattice_meet_field_folds() {
+        // GENERALITY pin — the substrate MIN-of-two-`usize` primitive
+        // `ResourceLimits::min_of_count_pair` was opened for the
+        // WHOLE-POSTURE ARM-AGNOSTIC MIN-fold `_minority_count`
+        // projection family, but its body is identical to the
+        // pointwise-`min` fold each of the six per-field ceilings of
+        // `Self::strictest` (the RESOURCE-LATTICE MEET) is now folded
+        // through. This pin fires the six-field agreement identity on
+        // every axis, so a body regression at the helper (`<=` → `>=`,
+        // arm-binding swap) that no `_minority_count` pin caught
+        // because it happened to preserve the tie corner still fires
+        // here whenever `HAND_AUTHORED_MID_POSTURE` and
+        // `HAND_AUTHORED_OTHER_POSTURE` disagree on some axis (they
+        // disagree on ALL six by construction: three on each side).
+        // Peer to the `_minority_count` sweep pins but on the
+        // RESOURCE-LATTICE column rather than the WHOLE-POSTURE
+        // arm-count column — closing the substrate primitive on BOTH
+        // callsite families with ONE typed named exit.
+        let m = HAND_AUTHORED_MID_POSTURE.strictest(HAND_AUTHORED_OTHER_POSTURE);
+        assert_eq!(
+            m.max_expansion_depth,
+            ResourceLimits::min_of_count_pair(
+                HAND_AUTHORED_MID_POSTURE.max_expansion_depth,
+                HAND_AUTHORED_OTHER_POSTURE.max_expansion_depth,
+            ),
+        );
+        assert_eq!(
+            m.max_cache_entries,
+            ResourceLimits::min_of_count_pair(
+                HAND_AUTHORED_MID_POSTURE.max_cache_entries,
+                HAND_AUTHORED_OTHER_POSTURE.max_cache_entries,
+            ),
+        );
+        assert_eq!(
+            m.max_expansion_size,
+            ResourceLimits::min_of_count_pair(
+                HAND_AUTHORED_MID_POSTURE.max_expansion_size,
+                HAND_AUTHORED_OTHER_POSTURE.max_expansion_size,
+            ),
+        );
+        assert_eq!(
+            m.max_macro_body_size,
+            ResourceLimits::min_of_count_pair(
+                HAND_AUTHORED_MID_POSTURE.max_macro_body_size,
+                HAND_AUTHORED_OTHER_POSTURE.max_macro_body_size,
+            ),
+        );
+        assert_eq!(
+            m.max_registered_macros,
+            ResourceLimits::min_of_count_pair(
+                HAND_AUTHORED_MID_POSTURE.max_registered_macros,
+                HAND_AUTHORED_OTHER_POSTURE.max_registered_macros,
+            ),
+        );
+        assert_eq!(
+            m.max_macro_arity,
+            ResourceLimits::min_of_count_pair(
+                HAND_AUTHORED_MID_POSTURE.max_macro_arity,
+                HAND_AUTHORED_OTHER_POSTURE.max_macro_arity,
+            ),
+        );
+    }
+
+    #[test]
     fn resource_limits_most_permissive_takes_pointwise_max_on_every_axis() {
         // Field-level pin — the join operation projects the pointwise
         // `max` across the six-field surface. Pinned as six
@@ -45081,6 +45190,67 @@ mod tests {
         assert_eq!(j.max_macro_body_size, 31);
         assert_eq!(j.max_registered_macros, 19);
         assert_eq!(j.max_macro_arity, 41);
+    }
+
+    #[test]
+    fn resource_limits_max_of_count_pair_agrees_with_resource_lattice_join_field_folds() {
+        // GENERALITY pin — dual of the MEET-side pin above on the
+        // RESOURCE-LATTICE JOIN column: the substrate MAX-of-two-
+        // `usize` primitive `ResourceLimits::max_of_count_pair` was
+        // opened for the WHOLE-POSTURE ARM-AGNOSTIC MAX-fold
+        // `_majority_count` projection family, but its body is
+        // identical to the pointwise-`max` fold each of the six per-
+        // field ceilings of `Self::most_permissive` is now folded
+        // through. Fires the six-field agreement identity on every
+        // axis; a body regression at the helper (`>=` → `<=`, arm-
+        // binding swap) that no `_majority_count` pin caught still
+        // fires here whenever `HAND_AUTHORED_MID_POSTURE` and
+        // `HAND_AUTHORED_OTHER_POSTURE` disagree on some axis (they
+        // disagree on ALL six by construction). Closes the substrate
+        // primitive on BOTH callsite families with ONE typed named exit.
+        let j = HAND_AUTHORED_MID_POSTURE.most_permissive(HAND_AUTHORED_OTHER_POSTURE);
+        assert_eq!(
+            j.max_expansion_depth,
+            ResourceLimits::max_of_count_pair(
+                HAND_AUTHORED_MID_POSTURE.max_expansion_depth,
+                HAND_AUTHORED_OTHER_POSTURE.max_expansion_depth,
+            ),
+        );
+        assert_eq!(
+            j.max_cache_entries,
+            ResourceLimits::max_of_count_pair(
+                HAND_AUTHORED_MID_POSTURE.max_cache_entries,
+                HAND_AUTHORED_OTHER_POSTURE.max_cache_entries,
+            ),
+        );
+        assert_eq!(
+            j.max_expansion_size,
+            ResourceLimits::max_of_count_pair(
+                HAND_AUTHORED_MID_POSTURE.max_expansion_size,
+                HAND_AUTHORED_OTHER_POSTURE.max_expansion_size,
+            ),
+        );
+        assert_eq!(
+            j.max_macro_body_size,
+            ResourceLimits::max_of_count_pair(
+                HAND_AUTHORED_MID_POSTURE.max_macro_body_size,
+                HAND_AUTHORED_OTHER_POSTURE.max_macro_body_size,
+            ),
+        );
+        assert_eq!(
+            j.max_registered_macros,
+            ResourceLimits::max_of_count_pair(
+                HAND_AUTHORED_MID_POSTURE.max_registered_macros,
+                HAND_AUTHORED_OTHER_POSTURE.max_registered_macros,
+            ),
+        );
+        assert_eq!(
+            j.max_macro_arity,
+            ResourceLimits::max_of_count_pair(
+                HAND_AUTHORED_MID_POSTURE.max_macro_arity,
+                HAND_AUTHORED_OTHER_POSTURE.max_macro_arity,
+            ),
+        );
     }
 
     #[test]
@@ -45291,7 +45461,7 @@ mod tests {
             DEFAULT_RESOURCE_LIMITS.strictest(HAND_AUTHORED_MID_POSTURE);
         assert_eq!(
             DEFAULT_TIGHTENED_BY_MID.max_expansion_depth,
-            min_usize(
+            ResourceLimits::min_of_count_pair(
                 DEFAULT_RESOURCE_LIMITS.max_expansion_depth,
                 HAND_AUTHORED_MID_POSTURE.max_expansion_depth,
             ),

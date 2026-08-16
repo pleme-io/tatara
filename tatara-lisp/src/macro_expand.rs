@@ -15118,6 +15118,200 @@ impl ResourceLimits {
         }
     }
 
+    /// LEXICOGRAPHIC COMPOSITION on a coupled `Ordering` PAIR —
+    /// `Self::then_ordering(primary, secondary)` returns `primary`
+    /// verbatim when `primary != Ordering::Equal`, and defers to
+    /// `secondary` when `primary == Ordering::Equal`. The BOUNDARY
+    /// primitive lifting the three-arm inline shape
+    /// `match primary { Ordering::Equal => secondary,
+    ///  Ordering::Greater => Ordering::Greater,
+    ///  Ordering::Less => Ordering::Less }`
+    /// that every WHOLE-POSTURE LEXICOGRAPHIC-COMPOSITION projection on
+    /// [`ResourceLimits`] carries at its exit —
+    /// [`Self::axial_then_atomic_ordering`] and
+    /// [`Self::atomic_then_axial_ordering`] both wrap the plain
+    /// short-circuit-on-non-Equal dispatch of a paired
+    /// (primary-`Ordering`, secondary-`Ordering`) verdict pair in the
+    /// same three-arm match. Pre-lift each LEXICOGRAPHIC-COMPOSITION
+    /// projection open-coded the four-line match on its OWN pair — a
+    /// two-point copy-paste whose consistency the type system did not
+    /// gate (a projection that dropped the `Greater` arm would silently
+    /// re-defer to `secondary` on the primary-Greater regime, or one
+    /// that swapped the `Greater` and `Less` mapping cells would
+    /// negate the short-circuit direction). Post-lift the shape binds
+    /// at ONE typed `const fn` on [`ResourceLimits`], and every future
+    /// WHOLE-POSTURE LEXICOGRAPHIC-COMPOSITION projection composes
+    /// through this helper — the SHORT-CIRCUIT-ON-FIRST-NON-EQUAL
+    /// dispatch over a coupled `(Ordering, Ordering)` verdict pair is
+    /// a substrate-level theorem rather than a per-consumer four-line
+    /// open-coded match.
+    ///
+    /// The `Ordering`-INPUT peer of [`Self::count_pair_ordering`] one
+    /// COMBINATOR-KIND axis over on the SAME `Ordering`-VALUED output
+    /// cell — where [`Self::count_pair_ordering`] carries the
+    /// TRICHOTOMY-CONSTRUCTION shape `(usize, usize) → Ordering` on a
+    /// coupled COUNT PAIR (input paired arithmetic tallies, output the
+    /// std-canonical trichotomy sum), THIS combinator carries the
+    /// LEXICOGRAPHIC-COMPOSITION shape `(Ordering, Ordering) →
+    /// Ordering` on a coupled VERDICT PAIR (input paired trichotomy
+    /// verdicts, output the composed trichotomy verdict). Jointly the
+    /// pair CLOSES the `Ordering`-VALUED substrate primitives on the
+    /// two directions of the `Ordering` type: FROM `(usize, usize)`
+    /// (construction from tallies) and OVER `(Ordering, Ordering)`
+    /// (composition of already-constructed verdicts) — the two ways
+    /// the substrate produces an `Ordering` at all. The const-context-
+    /// legal analog of the std-canonical [`Ordering::then`]
+    /// short-circuiting monoid operation on `Ordering`
+    /// ([`Ordering::then`] itself has variable const-stability across
+    /// tatara-lisp's supported Rust versions, so the body inlines the
+    /// three-arm match in const-context-legal shape — matching the
+    /// encoding-shape convention [`Self::count_pair_ordering`] uses
+    /// one INPUT-KIND axis over on the SAME `Ordering`-VALUED output).
+    ///
+    /// **Bare-body identity — LOAD-BEARING structural pin**: on every
+    /// `(primary, secondary)`, `then_ordering(primary, secondary)`
+    /// matches the open-coded three-arm match
+    /// `match primary { Ordering::Equal => secondary,
+    ///  Ordering::Greater => Ordering::Greater,
+    ///  Ordering::Less => Ordering::Less }`. Pinned via
+    /// `resource_limits_then_ordering_agrees_with_open_coded_three_arm_match`.
+    ///
+    /// **Primary-Equal defer-to-secondary identity — LOAD-BEARING
+    /// tiebreaker pin**: for every `secondary`,
+    /// `then_ordering(Ordering::Equal, secondary) == secondary`. The
+    /// primary tie corner PROMOTES the secondary verdict to the whole
+    /// verdict — the LOAD-BEARING DISCRIMINATING GAIN the paired
+    /// verdicts jointly deliver but which the primary alone cannot
+    /// carry. Pinned via
+    /// `resource_limits_then_ordering_primary_equal_defers_to_secondary`.
+    ///
+    /// **Primary-Greater short-circuit identity — LOAD-BEARING
+    /// primary-dominance pin**: for every `secondary`,
+    /// `then_ordering(Ordering::Greater, secondary) ==
+    /// Ordering::Greater`. The primary GREATER verdict WINS the whole
+    /// verdict regardless of secondary; the tiebreaker is NOT
+    /// consulted. Pinned via
+    /// `resource_limits_then_ordering_primary_greater_short_circuits`.
+    ///
+    /// **Primary-Less short-circuit identity — LOAD-BEARING primary-
+    /// dominance pin dual**: for every `secondary`,
+    /// `then_ordering(Ordering::Less, secondary) == Ordering::Less`.
+    /// The primary LESS verdict WINS the whole verdict regardless of
+    /// secondary; the tiebreaker is NOT consulted. Pinned via
+    /// `resource_limits_then_ordering_primary_less_short_circuits`.
+    ///
+    /// **Right identity — LOAD-BEARING MONOID pin**: for every
+    /// `primary`, `then_ordering(primary, Ordering::Equal) ==
+    /// primary`. `Ordering::Equal` is the RIGHT identity of the
+    /// LEXICOGRAPHIC-COMPOSITION combinator — the tiebreaker that
+    /// never breaks ties always preserves the primary verdict. Pinned
+    /// via
+    /// `resource_limits_then_ordering_secondary_equal_preserves_primary`.
+    ///
+    /// **Left identity — LOAD-BEARING MONOID pin dual**: for every
+    /// `secondary`, `then_ordering(Ordering::Equal, secondary) ==
+    /// secondary` (the primary-Equal defer pin re-read as a left-
+    /// identity fact). Together with the RIGHT identity pin above the
+    /// pair witnesses `(Ordering, then_ordering, Ordering::Equal)` as
+    /// a MONOID — the SHORT-CIRCUIT-ON-FIRST-NON-EQUAL closure with
+    /// `Ordering::Equal` as its two-sided identity. Pinned via
+    /// `resource_limits_then_ordering_primary_equal_defers_to_secondary`
+    /// (above).
+    ///
+    /// **Idempotence on the diagonal — LOAD-BEARING structural pin**:
+    /// for every `x`, `then_ordering(x, x) == x`. The diagonal input
+    /// pair collapses to the primary verdict on every leg
+    /// (`x == Ordering::Equal` gives `secondary == x`; `x !=
+    /// Ordering::Equal` short-circuits to `x`). Pinned via
+    /// `resource_limits_then_ordering_diagonal_inputs_fold_to_primary`.
+    ///
+    /// **Associativity — LOAD-BEARING MONOID composition pin**: on
+    /// every `(a, b, c)`, `then_ordering(then_ordering(a, b), c) ==
+    /// then_ordering(a, then_ordering(b, c))`. The combinator is
+    /// ASSOCIATIVE — three lexicographic keys can compose in either
+    /// grouping and give the same whole verdict, matching the std-
+    /// canonical [`Ordering::then`] monoid law. Pinned via
+    /// `resource_limits_then_ordering_is_associative`.
+    ///
+    /// **NON-commutativity witness — LOAD-BEARING PRIMARY-KEY split
+    /// pin**: there exist `(primary, secondary)` pairs for which
+    /// `then_ordering(primary, secondary) != then_ordering(secondary,
+    /// primary)`. The combinator is NOT commutative — swapping the
+    /// input verdicts corresponds to swapping which key is the
+    /// PRIMARY, and on every pair where the two verdicts DISAGREE on
+    /// the strict-vs-tie question the two lexicographic compositions
+    /// return DIFFERENT verdicts. Pinned via
+    /// `resource_limits_then_ordering_is_non_commutative_witness`.
+    ///
+    /// **`Ordering::reverse`-DISTRIBUTIVITY identity — LOAD-BEARING
+    /// DUAL pin**: on every `(primary, secondary)`,
+    /// `then_ordering(primary, secondary).reverse() ==
+    /// then_ordering(primary.reverse(), secondary.reverse())`. The
+    /// LEXICOGRAPHIC-COMPOSITION combinator DISTRIBUTES over the
+    /// std-canonical [`Ordering::reverse`] involution — reversing the
+    /// composed verdict equals composing the two reversed verdicts.
+    /// Pinned via
+    /// `resource_limits_then_ordering_distributes_over_reverse`.
+    ///
+    /// `const fn` so a caller can pin the LEXICOGRAPHIC verdict at
+    /// compile time (`const _: () = assert!(matches!(
+    /// ResourceLimits::then_ordering(Ordering::Equal, Ordering::Less),
+    /// Ordering::Less));`) — sibling of the const-fn evaluability
+    /// pins the `Ordering`-KIND projections already carry at their own
+    /// exits.
+    ///
+    /// **Adoption compounds**: future WHOLE-POSTURE LEXICOGRAPHIC-
+    /// COMPOSITION projections that currently open-code the three-arm
+    /// short-circuit match on a coupled `(Ordering, Ordering)` verdict
+    /// pair rewrite their body from
+    /// `match self.primary_ordering() {
+    ///   Ordering::Equal => self.secondary_ordering(),
+    ///   Ordering::Greater => Ordering::Greater,
+    ///   Ordering::Less => Ordering::Less,
+    ///  }`
+    /// to `Self::then_ordering(self.primary_ordering(),
+    /// self.secondary_ordering())` at no semantic change. rustc's
+    /// exhaustive-match checking gates every downstream `match`
+    /// against the single lifted `Ordering` — a body regression that
+    /// dropped the `Greater` arm cannot compile at the helper.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// LEXICOGRAPHIC-COMPOSITION shape at every WHOLE-POSTURE
+    /// composed-verdict projection body binds at ONE typed named
+    /// `const fn` on the algebra rather than a per-projection open-
+    /// coded three-arm match. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; the helper composes mechanically
+    /// under the bare-body identity above with no re-derivation at
+    /// the caller, and both swept callsites preserve their const-fn
+    /// evaluability pins verbatim. THEORY.md §V.1 — knowable
+    /// platform; the SHORT-CIRCUIT-ON-FIRST-NON-EQUAL dispatch
+    /// becomes a substrate-level theorem rather than a per-projection
+    /// convention.
+    ///
+    /// Frontier inspiration: Haskell's `Data.Monoid.<>` on `Ordering`
+    /// (`compare a b <> compare c d`) — the exact `then` combinator
+    /// this projection composes, exposing `Ordering` as a MONOID
+    /// under short-circuit composition with `EQ` as the identity.
+    /// Rust std's [`Ordering::then`] / [`Ordering::then_with`] — the
+    /// direct lift of the same combinator into the language. C++20's
+    /// operator `<=>` on tuples deferring to lexicographic
+    /// composition of the members. Idris's `Ordering` inductive with
+    /// `<+>`-style monoid operation over the ternary sum. Classical
+    /// order-theoretic LEXICOGRAPHIC composition of two preorders on
+    /// the same carrier: read the first, defer to the second only on
+    /// the first's equality class. Translation through pleme-io
+    /// primitives is the plain `const fn` three-arm match below — no
+    /// `Ordering::then` const-stability workaround at every caller,
+    /// no closure, no new dep, no typeclass indirection.
+    #[must_use]
+    pub const fn then_ordering(primary: Ordering, secondary: Ordering) -> Ordering {
+        match primary {
+            Ordering::Equal => secondary,
+            Ordering::Greater => Ordering::Greater,
+            Ordering::Less => Ordering::Less,
+        }
+    }
+
     /// Presence-preserving CLOSED-INTERVAL WIDTH from a coupled ENDPOINT PAIR
     /// on whole-posture `Option<usize>` axis-endpoint tallies —
     /// `Self::derive_axis_endpoint_span(first, last)` returns
@@ -18880,11 +19074,7 @@ impl ResourceLimits {
     /// allocation.
     #[must_use]
     pub const fn axial_then_atomic_ordering(self) -> Ordering {
-        match self.axial_ordering() {
-            Ordering::Equal => self.atomic_ordering(),
-            Ordering::Greater => Ordering::Greater,
-            Ordering::Less => Ordering::Less,
-        }
+        Self::then_ordering(self.axial_ordering(), self.atomic_ordering())
     }
 
     /// Whole-posture LEXICOGRAPHIC-COMPOSITION reading on the paired
@@ -19068,11 +19258,7 @@ impl ResourceLimits {
     /// allocation.
     #[must_use]
     pub const fn atomic_then_axial_ordering(self) -> Ordering {
-        match self.atomic_ordering() {
-            Ordering::Equal => self.axial_ordering(),
-            Ordering::Greater => Ordering::Greater,
-            Ordering::Less => Ordering::Less,
-        }
+        Self::then_ordering(self.atomic_ordering(), self.axial_ordering())
     }
 
     /// Whole-posture ARM-AGNOSTIC MAX-fold projection —
@@ -74560,6 +74746,342 @@ mod tests {
         const _: () = assert!(matches!(
             ENDPOINTS_ONLY_BOTTOM_POSTURE.atomic_then_axial_ordering(),
             Ordering::Greater,
+        ));
+    }
+
+    #[test]
+    fn resource_limits_then_ordering_agrees_with_open_coded_three_arm_match() {
+        // Bare-body identity — the helper's verdict on every
+        // (primary, secondary) `Ordering` pair agrees with the
+        // open-coded three-arm short-circuit match
+        // `match primary { Ordering::Equal => secondary,
+        //  Ordering::Greater => Ordering::Greater,
+        //  Ordering::Less => Ordering::Less }`
+        // that every WHOLE-POSTURE LEXICOGRAPHIC-COMPOSITION
+        // projection carried at its exit pre-lift. Swept over the
+        // 3×3 = 9 cells of the (Ordering, Ordering) input regime so
+        // every arm of the primary trichotomy × every arm of the
+        // secondary trichotomy is pinned — the exhaustive
+        // constellation the substrate cannot regress on any single
+        // cell without the helper firing a mismatch.
+        for primary in [Ordering::Less, Ordering::Equal, Ordering::Greater] {
+            for secondary in [Ordering::Less, Ordering::Equal, Ordering::Greater] {
+                let via_helper = ResourceLimits::then_ordering(primary, secondary);
+                let via_open_code = match primary {
+                    Ordering::Equal => secondary,
+                    Ordering::Greater => Ordering::Greater,
+                    Ordering::Less => Ordering::Less,
+                };
+                assert_eq!(
+                    via_helper, via_open_code,
+                    "helper != open-coded three-arm match at (primary, secondary)=({primary:?}, {secondary:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_then_ordering_primary_equal_defers_to_secondary() {
+        // Primary-Equal defer-to-secondary — the tiebreaker takes
+        // over. On the primary-Equal regime the helper's verdict
+        // equals the secondary verbatim on every leg of the secondary
+        // trichotomy, matching the LOAD-BEARING promotion of the
+        // secondary reading to the whole verdict that the
+        // LEXICOGRAPHIC-COMPOSITION combinator carries at its exit.
+        // Sibling of the `Ordering::Equal` left-identity fact one
+        // MONOID-LAW axis under.
+        for secondary in [Ordering::Less, Ordering::Equal, Ordering::Greater] {
+            assert_eq!(
+                ResourceLimits::then_ordering(Ordering::Equal, secondary),
+                secondary,
+                "primary-Equal defer-to-secondary regressed at secondary={secondary:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_then_ordering_primary_greater_short_circuits() {
+        // Primary-Greater short-circuit — the tiebreaker is NOT
+        // consulted. On the primary-Greater regime the helper's
+        // verdict is `Ordering::Greater` on every leg of the
+        // secondary trichotomy, matching the LOAD-BEARING short-
+        // circuit-on-first-non-Equal shape the LEXICOGRAPHIC-
+        // COMPOSITION combinator carries at its exit. A body
+        // regression that dropped the `Greater` arm would silently
+        // defer to secondary on the primary-Greater regime — this
+        // pin fires immediately in that failure mode.
+        for secondary in [Ordering::Less, Ordering::Equal, Ordering::Greater] {
+            assert_eq!(
+                ResourceLimits::then_ordering(Ordering::Greater, secondary),
+                Ordering::Greater,
+                "primary-Greater short-circuit regressed at secondary={secondary:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_then_ordering_primary_less_short_circuits() {
+        // Primary-Less short-circuit — the tiebreaker is NOT
+        // consulted. Dual of the primary-Greater short-circuit pin
+        // one arm axis over on the primary trichotomy — together the
+        // pair (primary-Greater short-circuit, primary-Less short-
+        // circuit, primary-Equal defer) closes the primary
+        // trichotomy at three exhaustive-and-disjoint cells.
+        for secondary in [Ordering::Less, Ordering::Equal, Ordering::Greater] {
+            assert_eq!(
+                ResourceLimits::then_ordering(Ordering::Less, secondary),
+                Ordering::Less,
+                "primary-Less short-circuit regressed at secondary={secondary:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_then_ordering_secondary_equal_preserves_primary() {
+        // Right-identity — `Ordering::Equal` is the right identity of
+        // the LEXICOGRAPHIC-COMPOSITION combinator. For every
+        // primary, `then_ordering(primary, Ordering::Equal) ==
+        // primary` — a tiebreaker that never breaks ties preserves
+        // the primary verdict verbatim. Together with the primary-
+        // Equal defer pin (left-identity), the pair witnesses
+        // `(Ordering, then_ordering, Ordering::Equal)` as a MONOID.
+        for primary in [Ordering::Less, Ordering::Equal, Ordering::Greater] {
+            assert_eq!(
+                ResourceLimits::then_ordering(primary, Ordering::Equal),
+                primary,
+                "right-identity Ordering::Equal preservation regressed at primary={primary:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_then_ordering_diagonal_inputs_fold_to_primary() {
+        // Idempotence on the diagonal — the diagonal (x, x) input
+        // pair collapses to the primary verdict on every arm of the
+        // trichotomy. On `x == Ordering::Equal` the defer-to-
+        // secondary path returns `secondary == x`; on `x !=
+        // Ordering::Equal` the short-circuit returns `x`. Sibling of
+        // `count_pair_ordering(n, n) == Ordering::Equal` diagonal pin
+        // one INPUT-KIND axis over — where the count-input diagonal
+        // folds to the tie leg, the ordering-input diagonal folds to
+        // the primary itself (the tie leg is only one of three cells
+        // that survive the fold).
+        for x in [Ordering::Less, Ordering::Equal, Ordering::Greater] {
+            assert_eq!(
+                ResourceLimits::then_ordering(x, x),
+                x,
+                "diagonal fold to primary regressed at x={x:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_then_ordering_is_associative() {
+        // Associativity — three lexicographic keys compose in either
+        // grouping and give the same whole verdict. Pinned as the
+        // MONOID composition law on the LEXICOGRAPHIC-COMPOSITION
+        // combinator: for every (a, b, c) ∈ Ordering³,
+        // `then_ordering(then_ordering(a, b), c) ==
+        // then_ordering(a, then_ordering(b, c))`. Swept over the
+        // 3³ = 27 cells of the (Ordering, Ordering, Ordering) input
+        // regime so every leg of the triple trichotomy is pinned
+        // exhaustively.
+        for a in [Ordering::Less, Ordering::Equal, Ordering::Greater] {
+            for b in [Ordering::Less, Ordering::Equal, Ordering::Greater] {
+                for c in [Ordering::Less, Ordering::Equal, Ordering::Greater] {
+                    let left_grouped =
+                        ResourceLimits::then_ordering(ResourceLimits::then_ordering(a, b), c);
+                    let right_grouped =
+                        ResourceLimits::then_ordering(a, ResourceLimits::then_ordering(b, c));
+                    assert_eq!(
+                        left_grouped, right_grouped,
+                        "associativity regressed at (a, b, c)=({a:?}, {b:?}, {c:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_then_ordering_is_non_commutative_witness() {
+        // NON-commutativity witness — the combinator is NOT
+        // commutative, witnessed by explicit (primary, secondary)
+        // pairs whose swapped-input verdicts differ. The LOAD-BEARING
+        // PRIMARY-KEY split pin: swapping the input verdicts
+        // corresponds to swapping which key is the PRIMARY, and on
+        // every pair where the two verdicts DISAGREE on the strict-
+        // vs-tie question (one is `Ordering::Equal`, the other is
+        // strict) the two lexicographic compositions return
+        // DIFFERENT verdicts. Fires on both witness pairs together —
+        // documenting that the (axial_then_atomic, atomic_then_axial)
+        // pair one PRIMARY-KEY axis over is a proper split rather
+        // than a same-function-under-two-names alias.
+        //
+        // (Equal, Greater) → primary-Equal defers → Greater;
+        // (Greater, Equal) → primary-Greater short-circuits → Greater
+        // — coincidence on this SPECIFIC witness pair.
+        // (Equal, Less)    → primary-Equal defers → Less;
+        // (Less, Equal)    → primary-Less short-circuits → Less
+        // — coincidence on this SPECIFIC witness pair.
+        // The disagreement fires on strict/strict pairs:
+        // (Greater, Less)  → primary-Greater short-circuits → Greater;
+        // (Less, Greater)  → primary-Less short-circuits → Less
+        // — DIFFERENT verdicts, the witness of non-commutativity.
+        assert_eq!(
+            ResourceLimits::then_ordering(Ordering::Greater, Ordering::Less),
+            Ordering::Greater,
+            "forward primary-Greater short-circuit regressed on the non-commutativity witness pair",
+        );
+        assert_eq!(
+            ResourceLimits::then_ordering(Ordering::Less, Ordering::Greater),
+            Ordering::Less,
+            "swapped primary-Less short-circuit regressed on the non-commutativity witness pair",
+        );
+        assert_ne!(
+            ResourceLimits::then_ordering(Ordering::Greater, Ordering::Less),
+            ResourceLimits::then_ordering(Ordering::Less, Ordering::Greater),
+            "non-commutativity witness pair fires the SAME verdict — combinator collapsed to a commutative alias",
+        );
+    }
+
+    #[test]
+    fn resource_limits_then_ordering_distributes_over_reverse() {
+        // `Ordering::reverse`-DISTRIBUTIVITY — reversing the composed
+        // verdict equals composing the two reversed verdicts. Pinned
+        // on the 3×3 = 9 exhaustive constellation of the
+        // (Ordering, Ordering) input regime. `Ordering::reverse` is
+        // the involution mirroring the (Greater, Less) split at the
+        // type level; the LEXICOGRAPHIC-COMPOSITION combinator
+        // preserves this involution under distributivity, matching
+        // the std-canonical [`Ordering::then`] DUAL identity.
+        for primary in [Ordering::Less, Ordering::Equal, Ordering::Greater] {
+            for secondary in [Ordering::Less, Ordering::Equal, Ordering::Greater] {
+                assert_eq!(
+                    ResourceLimits::then_ordering(primary, secondary).reverse(),
+                    ResourceLimits::then_ordering(primary.reverse(), secondary.reverse()),
+                    "reverse-distributivity regressed at (primary, secondary)=({primary:?}, {secondary:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_then_ordering_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the helper's `pub const fn` signature
+        // preserves compile-time evaluability across the primary-
+        // Equal defer, primary-Greater short-circuit, primary-Less
+        // short-circuit, and both-Equal joint-tie cells of the
+        // (Ordering, Ordering) joint-input regime. Complements the
+        // primary bare-body identity pin
+        // `resource_limits_then_ordering_agrees_with_open_coded_three_arm_match`
+        // by extending the const-evaluability proof onto the compile-
+        // time surface. Uses `matches!` because `Ordering` is not
+        // `PartialEq` in a `const`-comparable form on stable Rust.
+        const _: () = assert!(matches!(
+            ResourceLimits::then_ordering(Ordering::Equal, Ordering::Less),
+            Ordering::Less
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::then_ordering(Ordering::Equal, Ordering::Greater),
+            Ordering::Greater
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::then_ordering(Ordering::Equal, Ordering::Equal),
+            Ordering::Equal
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::then_ordering(Ordering::Greater, Ordering::Less),
+            Ordering::Greater
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::then_ordering(Ordering::Less, Ordering::Greater),
+            Ordering::Less
+        ));
+    }
+
+    #[test]
+    fn resource_limits_lexicographic_composition_family_bodies_delegate_to_then_ordering() {
+        // Sweep-of-family pin — asserts each of the two WHOLE-POSTURE
+        // LEXICOGRAPHIC-COMPOSITION projection bodies
+        // (axial_then_atomic_ordering — axial-primary, atomic-
+        // tiebreaker; atomic_then_axial_ordering — atomic-primary,
+        // axial-tiebreaker) agrees with the helper-based shape
+        // `ResourceLimits::then_ordering(self.primary_ordering(),
+        // self.secondary_ordering())` on every posture from the
+        // EMPTY / DEFAULT / UNBOUNDED / HAND_AUTHORED_MID /
+        // HAND_AUTHORED_OTHER preset constellation (2×5 = 10 composed
+        // verdicts). A future body regression that swapped the
+        // `Greater` and `Less` mapping cells would silently negate
+        // the short-circuit direction on every strict-primary
+        // posture; one that dropped the `Greater` arm would silently
+        // re-defer to secondary on the primary-Greater regime. Both
+        // fixtures on the shipped preset constellation exercise the
+        // primary-strict short-circuit AND the primary-Equal defer
+        // paths (uniform presets fire the strict short-circuit;
+        // interior-uniform presets fire the atomic-Equal defer path
+        // on the atomic-primary composition), so the sweep pin gates
+        // both LOAD-BEARING regimes of the helper composition on
+        // every preset.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                posture.axial_then_atomic_ordering(),
+                ResourceLimits::then_ordering(posture.axial_ordering(), posture.atomic_ordering(),),
+                "axial_then_atomic_ordering delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.atomic_then_axial_ordering(),
+                ResourceLimits::then_ordering(posture.atomic_ordering(), posture.axial_ordering(),),
+                "atomic_then_axial_ordering delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_lexicographic_composition_family_bodies_evaluate_at_compile_time_via_const_fn(
+    ) {
+        // Const-fn pin — proves the two swept LEXICOGRAPHIC-
+        // COMPOSITION family bodies preserved const-fn evaluability
+        // under the sweep through then_ordering. Each of the two
+        // swept projections × the three shipped `pub const` preset
+        // postures (EMPTY, UNBOUNDED, DEFAULT). EMPTY is bottom-
+        // polar-uniform (axial Greater → axial-primary short-
+        // circuits to Greater; atomic Greater → atomic-primary
+        // short-circuits to Greater). UNBOUNDED is top-polar-
+        // uniform (axial Greater → axial-primary short-circuits to
+        // Greater; atomic Less → atomic-primary short-circuits to
+        // Less — LOAD-BEARING PRIMARY-KEY split witness at compile
+        // time). DEFAULT is interior-uniform (axial Less → axial-
+        // primary short-circuits to Less; atomic Equal → atomic-
+        // primary defers → axial Less → composed Less).
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.axial_then_atomic_ordering(),
+            Ordering::Greater
+        ));
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.atomic_then_axial_ordering(),
+            Ordering::Greater
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.axial_then_atomic_ordering(),
+            Ordering::Greater
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.atomic_then_axial_ordering(),
+            Ordering::Less
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.axial_then_atomic_ordering(),
+            Ordering::Less
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.atomic_then_axial_ordering(),
+            Ordering::Less
         ));
     }
 

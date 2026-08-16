@@ -15312,6 +15312,177 @@ impl ResourceLimits {
         }
     }
 
+    /// ARM-AGNOSTIC CENTRAL-TENDENCY MAX-fold on a coupled COUNT PAIR —
+    /// `Self::max_of_count_pair(lhs, rhs)` returns `lhs` when
+    /// `lhs >= rhs` and `rhs` otherwise. The BOUNDARY primitive lifting
+    /// the shape `if lhs >= rhs { lhs } else { rhs }` (equivalently
+    /// [`Ord::max`] on the paired `usize` tally, which is NOT
+    /// `const`-stable on tatara-lisp's supported Rust versions) that
+    /// every WHOLE-POSTURE ARM-AGNOSTIC MAX-fold projection on
+    /// [`ResourceLimits`] carries at its exit —
+    /// [`Self::axial_majority_count`] and [`Self::atomic_majority_count`]
+    /// both wrap the plain MAX-of-two-arms fold of a paired
+    /// ARITHMETIC-QUANTIFIER tally in the same three-line inline split.
+    /// Pre-lift each MAX-fold projection open-coded the four-line
+    /// `let a = self.count_A(); let b = self.count_B(); if a >= b { a }
+    /// else { b }` on its OWN pair — a two-point copy-paste whose
+    /// consistency the type system did not gate (a projection that
+    /// swapped the `>=` for `<=` would silently return the MINORITY
+    /// tally where the canonical shape yields the MAJORITY, or one that
+    /// swapped the arm bindings on the `else` branch would collapse
+    /// the fold onto the LHS on every input). Post-lift the shape
+    /// binds at ONE typed `const fn` on [`ResourceLimits`], and every
+    /// future WHOLE-POSTURE ARM-AGNOSTIC MAX-fold projection composes
+    /// through this helper — the MAX-OF-TWO-ARMS fold over a coupled
+    /// `(usize, usize)` COUNT PAIR is a substrate-level theorem rather
+    /// than a per-consumer four-line open-coded split.
+    ///
+    /// The `usize`-VALUED CENTRAL-TENDENCY peer of
+    /// [`Self::count_pair_ordering`] one COMBINATOR-KIND axis over on
+    /// the SAME `(usize, usize)` COUNT PAIR input — where
+    /// [`Self::count_pair_ordering`] carries the TRICHOTOMY-CONSTRUCTION
+    /// shape `(usize, usize) → Ordering` (input paired arithmetic
+    /// tallies, output the std-canonical trichotomy sum verdict),
+    /// THIS combinator carries the CENTRAL-TENDENCY MAX-fold shape
+    /// `(usize, usize) → usize` (input the SAME paired arithmetic
+    /// tallies, output the winning arm's tally). Jointly the
+    /// (count_pair_ordering, max_of_count_pair) pair reads the SAME
+    /// paired count input through the two ORTHOGONAL statistical exits
+    /// the substrate names on a coupled count tally: the SIGNUM verdict
+    /// (which arm wins) and the CENTRAL-TENDENCY magnitude (WHAT the
+    /// winning arm's tally is). The `usize`-VALUED CENTRAL-TENDENCY
+    /// peer of [`Self::absolute_count_difference`] one COMBINATOR-KIND
+    /// axis over on the SAME `(usize, usize)` COUNT PAIR — where
+    /// [`Self::absolute_count_difference`] reads the paired tallies
+    /// through the UNDIRECTED ABSOLUTE-DIFFERENCE fold `|lhs - rhs|`
+    /// (a DISPERSION statistic centered on `0`), THIS combinator reads
+    /// the SAME paired tallies through the UNDIRECTED MAX-fold
+    /// `max(lhs, rhs)` (a CENTRAL-TENDENCY statistic centered on the
+    /// winning arm's tally) — matching the classical descriptive-
+    /// statistics (CENTRAL-TENDENCY, DISPERSION) duality restricted to
+    /// a two-arm sample.
+    ///
+    /// **Bare-body identity — LOAD-BEARING structural pin**: on every
+    /// `(lhs, rhs)`, `max_of_count_pair(lhs, rhs)` matches the open-
+    /// coded MAX split `if lhs >= rhs { lhs } else { rhs }`. Pinned via
+    /// `resource_limits_max_of_count_pair_agrees_with_open_coded_max_split`.
+    ///
+    /// **`Ord::max`-defining identity — LOAD-BEARING substrate theorem**:
+    /// on every `(lhs, rhs)`, `max_of_count_pair(lhs, rhs) ==
+    /// lhs.max(rhs)`. Ties the substrate MAX-fold exit to the std-
+    /// canonical [`Ord::max`] combinator on the paired `usize` tally.
+    /// Pinned via
+    /// `resource_limits_max_of_count_pair_equals_ord_max`.
+    ///
+    /// **Idempotence on the diagonal — LOAD-BEARING structural pin**:
+    /// for every `n`, `max_of_count_pair(n, n) == n`. The diagonal
+    /// input pair collapses to the shared tally on every leg (the
+    /// `>=` tie convention picks the LHS, which equals the RHS). Pinned
+    /// via `resource_limits_max_of_count_pair_diagonal_inputs_fold_to_operand`.
+    ///
+    /// **Commutativity — LOAD-BEARING structural pin**: on every
+    /// `(lhs, rhs)`, `max_of_count_pair(lhs, rhs) ==
+    /// max_of_count_pair(rhs, lhs)`. The MAX-fold is symmetric on its
+    /// two arguments — the winning arm's tally does not depend on the
+    /// order the arms were presented. Contrasts with
+    /// [`Self::then_ordering`] one COMBINATOR-KIND axis over which is
+    /// NON-commutative (the primary-key axis is a proper split), and
+    /// with [`Self::signed_count_difference`] which anti-commutes under
+    /// swap (sign flips) — the CENTRAL-TENDENCY MAX-fold is the
+    /// SYMMETRIC leg of the (MAX, MIN, ABS-DIFF, SIGNED-DIFF, ORDERING,
+    /// THEN) combinator family on paired `usize` tallies. Pinned via
+    /// `resource_limits_max_of_count_pair_is_commutative`.
+    ///
+    /// **DEFINITIONAL upper-bound pair — LOAD-BEARING refinement pin**:
+    /// on every `(lhs, rhs)`, `max_of_count_pair(lhs, rhs) >= lhs` AND
+    /// `max_of_count_pair(lhs, rhs) >= rhs`. The MAX dominates both
+    /// operands by definition. Pinned via
+    /// `resource_limits_max_of_count_pair_dominates_both_operands`.
+    ///
+    /// **MEMBERSHIP-in-input identity — LOAD-BEARING structural pin**:
+    /// on every `(lhs, rhs)`, `max_of_count_pair(lhs, rhs) == lhs`
+    /// OR `max_of_count_pair(lhs, rhs) == rhs`. The MAX-fold's exit
+    /// is always ONE of its two inputs — the combinator never
+    /// synthesizes a fresh value. Pinned via
+    /// `resource_limits_max_of_count_pair_equals_one_of_its_operands`.
+    ///
+    /// **Bridge to `count_pair_ordering` — LOAD-BEARING structural pin**:
+    /// on every `(lhs, rhs)`, `max_of_count_pair(lhs, rhs) == lhs
+    /// ⇔ count_pair_ordering(lhs, rhs) != Ordering::Less`. Ties the
+    /// MAX-selection to the SIGNUM verdict on the SAME paired input —
+    /// the LHS wins the MAX iff the LHS trichotomy verdict is NOT
+    /// strictly-less. Pinned via
+    /// `resource_limits_max_of_count_pair_selects_lhs_iff_count_pair_ordering_not_less`.
+    ///
+    /// **SUM+ABS-DIFF halving bridge to `absolute_count_difference` —
+    /// LOAD-BEARING closure pin**: on every `(lhs, rhs)`,
+    /// `2 * max_of_count_pair(lhs, rhs) == lhs + rhs +
+    /// absolute_count_difference(lhs, rhs)`. The classical arithmetic
+    /// identity `max(a, b) = (a + b + |a - b|) / 2` on non-negative
+    /// `usize` — ties the paired (CENTRAL-TENDENCY MAX, DISPERSION
+    /// ABS-DIFF) exits into ONE bidirectional statistic-derivation
+    /// theorem readable from either direction: given `max`, `|a - b|`
+    /// is `2 * max - (a + b)`; given `|a - b|`, `max` is
+    /// `(a + b + |a - b|) / 2`. Pinned via
+    /// `resource_limits_max_of_count_pair_twice_equals_sum_plus_absolute_difference`.
+    ///
+    /// `const fn` so a caller can pin the MAX verdict at compile time
+    /// (`const _: () = assert!(ResourceLimits::max_of_count_pair(3, 5)
+    /// == 5);`) — sibling of the const-fn evaluability pins the
+    /// [`Self::then_ordering`] and [`Self::count_pair_ordering`]
+    /// combinators already carry at their own exits.
+    ///
+    /// **Adoption compounds**: future WHOLE-POSTURE ARM-AGNOSTIC MAX-
+    /// fold projections that currently open-code the four-line MAX
+    /// split on a coupled `(usize, usize)` COUNT PAIR rewrite their
+    /// body from
+    /// `let a = self.count_A(); let b = self.count_B();
+    ///  if a >= b { a } else { b }`
+    /// to `Self::max_of_count_pair(self.count_A(), self.count_B())` at
+    /// no semantic change — the two-line delegation replaces the four-
+    /// line split. rustc's type system gates every downstream `usize`
+    /// consumer against the single lifted MAX combinator; a body
+    /// regression at the helper (`>=` → `<=`) fires immediately at the
+    /// two swept `_majority_count` pins rather than silently
+    /// re-classifying every downstream posture-reading MAX.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// ARM-AGNOSTIC MAX-fold shape at every WHOLE-POSTURE MAX-fold
+    /// projection body binds at ONE typed named `const fn` on the
+    /// algebra rather than a per-projection open-coded four-line split.
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// helper composes mechanically under the bare-body identity above
+    /// with no re-derivation at the caller, and both swept callsites
+    /// preserve their const-fn evaluability pins verbatim. THEORY.md
+    /// §V.1 — knowable platform; the MAX-OF-TWO-ARMS fold becomes a
+    /// substrate-level theorem rather than a per-projection convention.
+    ///
+    /// Frontier inspiration: Haskell's `max` on `Ord a => a -> a -> a`
+    /// — the direct MAX-of-two-operands combinator, restricted here to
+    /// `usize` and inlined as the const-legal `if >=` split for
+    /// const-context legality. APL's `⌈` scalar-MAX dyadic on paired
+    /// numeric scalars — the SAME two-argument MAX on the type system's
+    /// numeric type. Rust std's [`Ord::max`] and [`std::cmp::max`] —
+    /// the direct lift of the same combinator; `Ord::max` on `usize` is
+    /// NOT `const`-stable on tatara-lisp's supported Rust versions, so
+    /// the body inlines the `if >=` split here. Idris's `max` on `Ord
+    /// a` on `Nat`. Classical descriptive statistics' MAX order
+    /// statistic on a two-point sample — the (MAX, MIN) pair CLOSES
+    /// the CENTRAL-TENDENCY column on a two-point sample, and this
+    /// combinator opens the MAX leg with its DUAL MIN leg reserved for
+    /// a future compounding sweep. Translation through pleme-io
+    /// primitives is the plain `const fn` inline MAX split below — no
+    /// `Ord::max` const-stability workaround at every caller, no
+    /// closure, no new dep, no typeclass indirection.
+    #[must_use]
+    pub const fn max_of_count_pair(lhs: usize, rhs: usize) -> usize {
+        if lhs >= rhs {
+            lhs
+        } else {
+            rhs
+        }
+    }
+
     /// Presence-preserving CLOSED-INTERVAL WIDTH from a coupled ENDPOINT PAIR
     /// on whole-posture `Option<usize>` axis-endpoint tallies —
     /// `Self::derive_axis_endpoint_span(first, last)` returns
@@ -19436,13 +19607,7 @@ impl ResourceLimits {
     /// indirection, no per-axis loop, no allocation.
     #[must_use]
     pub const fn axial_majority_count(self) -> usize {
-        let p = self.count_polar_axes();
-        let i = self.count_interior_axes();
-        if p >= i {
-            p
-        } else {
-            i
-        }
+        Self::max_of_count_pair(self.count_polar_axes(), self.count_interior_axes())
     }
 
     /// Whole-posture ARM-AGNOSTIC MIN-fold projection —
@@ -19802,13 +19967,7 @@ impl ResourceLimits {
     /// indirection, no per-axis loop, no allocation.
     #[must_use]
     pub const fn atomic_majority_count(self) -> usize {
-        let b = self.count_bottom_axes();
-        let t = self.count_top_axes();
-        if b >= t {
-            b
-        } else {
-            t
-        }
+        Self::max_of_count_pair(self.count_bottom_axes(), self.count_top_axes())
     }
 
     /// Whole-posture ATOMIC ARM-AGNOSTIC MIN-fold projection —
@@ -75083,6 +75242,246 @@ mod tests {
             DEFAULT_RESOURCE_LIMITS.atomic_then_axial_ordering(),
             Ordering::Less
         ));
+    }
+
+    #[test]
+    fn resource_limits_max_of_count_pair_agrees_with_open_coded_max_split() {
+        // Bare-body identity — the helper's verdict on every
+        // (lhs, rhs) `usize` pair agrees with the open-coded MAX split
+        // `if lhs >= rhs { lhs } else { rhs }` that every WHOLE-POSTURE
+        // ARM-AGNOSTIC MAX-fold projection carried at its exit pre-
+        // lift. Swept over a fixed 5×5 = 25-cell constellation of the
+        // (usize, usize) input regime whose components exhaust the
+        // relative-order trichotomy at multiple magnitude bands —
+        // covers `(0, 0)` (double-zero tie), `(0, 6)` and `(6, 0)`
+        // (SATURATED opposite corners), `(3, 3)` (INTERIOR tie at the
+        // halfway line), `(2, 4)` and `(4, 2)` (INTERIOR strict split),
+        // and every mixed cell. The exhaustive constellation the
+        // substrate cannot regress on any single cell without the
+        // helper firing a mismatch.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let via_helper = ResourceLimits::max_of_count_pair(lhs, rhs);
+                let via_open_code = if lhs >= rhs { lhs } else { rhs };
+                assert_eq!(
+                    via_helper, via_open_code,
+                    "helper != open-coded MAX split at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_max_of_count_pair_equals_ord_max() {
+        // `Ord::max`-defining identity — LOAD-BEARING substrate theorem
+        // tying the ARM-AGNOSTIC MAX exit to the std-canonical
+        // [`Ord::max`] combinator on the paired `usize` tally. The
+        // `const fn` body inlines the MAX as an `if lhs >= rhs { lhs }
+        // else { rhs }` split because [`Ord::max`] on `usize` is not
+        // `const`-stable on tatara-lisp's supported Rust versions —
+        // this test pins the equivalence against the (non-const)
+        // `Ord::max` reference.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                assert_eq!(
+                    ResourceLimits::max_of_count_pair(lhs, rhs),
+                    lhs.max(rhs),
+                    "max_of_count_pair(lhs, rhs) != lhs.max(rhs) at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_max_of_count_pair_diagonal_inputs_fold_to_operand() {
+        // Idempotence on the diagonal — the diagonal (n, n) input pair
+        // collapses to the shared tally on every leg of the input
+        // regime. Sibling of `then_ordering(x, x) == x` diagonal pin
+        // one OUTPUT-KIND axis over — where the ordering-input
+        // diagonal folds to the primary itself, the count-input MAX
+        // diagonal folds to the shared operand (the `>=` tie
+        // convention picks the LHS, which equals the RHS).
+        for n in [0usize, 1, 3, 6, 100] {
+            assert_eq!(
+                ResourceLimits::max_of_count_pair(n, n),
+                n,
+                "diagonal fold to operand regressed at n={n}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_max_of_count_pair_is_commutative() {
+        // Commutativity — the MAX-fold is symmetric on its two
+        // arguments. For every (lhs, rhs), `max_of_count_pair(lhs,
+        // rhs) == max_of_count_pair(rhs, lhs)`. LOAD-BEARING
+        // structural pin — a body regression that swapped the branch
+        // bindings (returning `rhs` on the `>=` leg) would collapse
+        // the combinator onto the RHS on every input and fire on the
+        // (LHS > RHS) cell of this pin immediately. Contrasts with
+        // `then_ordering` one COMBINATOR-KIND axis over which is
+        // NON-commutative — witnesses the SYMMETRIC leg of the
+        // combinator family on paired `usize` tallies.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                assert_eq!(
+                    ResourceLimits::max_of_count_pair(lhs, rhs),
+                    ResourceLimits::max_of_count_pair(rhs, lhs),
+                    "commutativity regressed at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_max_of_count_pair_dominates_both_operands() {
+        // DEFINITIONAL upper-bound pair — LOAD-BEARING refinement
+        // pin. On every `(lhs, rhs)`, `max_of_count_pair(lhs, rhs) >=
+        // lhs` AND `max_of_count_pair(lhs, rhs) >= rhs`. The MAX
+        // dominates both operands by definition — the substrate names
+        // this pair to make downstream consumers' upper-bound
+        // reasoning discharge into ONE inequality against the
+        // ARM-AGNOSTIC exit rather than TWO against the ARM-SPECIFIC
+        // pair.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let m = ResourceLimits::max_of_count_pair(lhs, rhs);
+                assert!(
+                    m >= lhs,
+                    "max_of_count_pair(lhs, rhs) < lhs at (lhs, rhs)=({lhs}, {rhs})",
+                );
+                assert!(
+                    m >= rhs,
+                    "max_of_count_pair(lhs, rhs) < rhs at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_max_of_count_pair_equals_one_of_its_operands() {
+        // MEMBERSHIP-in-input identity — the MAX-fold's exit is
+        // always ONE of its two inputs. The combinator never
+        // synthesizes a fresh value — a body regression that returned
+        // a computed value (`(lhs + rhs) / 2`, `lhs + 1`, etc.) would
+        // fire immediately on any non-diagonal cell.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let m = ResourceLimits::max_of_count_pair(lhs, rhs);
+                assert!(
+                    m == lhs || m == rhs,
+                    "max_of_count_pair(lhs, rhs) = {m} is neither lhs={lhs} nor rhs={rhs}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_max_of_count_pair_selects_lhs_iff_count_pair_ordering_not_less() {
+        // Bridge to `count_pair_ordering` — LOAD-BEARING structural
+        // pin tying the MAX-selection to the SIGNUM verdict on the
+        // SAME paired input. The LHS wins the MAX iff the LHS
+        // trichotomy verdict is NOT strictly-less (i.e. `>= rhs`),
+        // matching the `>=` tie convention verbatim. Cross-pins the
+        // two combinators one COMBINATOR-KIND axis apart on the SAME
+        // paired count input.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let selects_lhs = ResourceLimits::max_of_count_pair(lhs, rhs) == lhs;
+                let ordering_not_less =
+                    ResourceLimits::count_pair_ordering(lhs, rhs) != Ordering::Less;
+                assert_eq!(
+                    selects_lhs, ordering_not_less,
+                    "MAX-selects-LHS ⇔ count_pair_ordering != Less regressed at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_max_of_count_pair_twice_equals_sum_plus_absolute_difference() {
+        // SUM+ABS-DIFF halving bridge — the classical arithmetic
+        // identity `max(a, b) = (a + b + |a - b|) / 2` on non-negative
+        // `usize`. Ties the paired (CENTRAL-TENDENCY MAX, DISPERSION
+        // ABS-DIFF) exits into ONE bidirectional statistic-derivation
+        // theorem — `max_of_count_pair` and `absolute_count_difference`
+        // compute each other through `lhs + rhs` via the paired
+        // arithmetic identity.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                assert_eq!(
+                    2 * ResourceLimits::max_of_count_pair(lhs, rhs),
+                    lhs + rhs + ResourceLimits::absolute_count_difference(lhs, rhs),
+                    "2 * max != sum + |diff| at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_max_of_count_pair_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the helper's `pub const fn` signature
+        // preserves compile-time evaluability across the LHS-wins,
+        // RHS-wins, diagonal-tie, and double-zero cells of the
+        // (usize, usize) joint-input regime. Complements the primary
+        // bare-body identity pin
+        // `resource_limits_max_of_count_pair_agrees_with_open_coded_max_split`
+        // by extending the const-evaluability proof onto the compile-
+        // time surface.
+        const _: () = assert!(ResourceLimits::max_of_count_pair(3, 5) == 5);
+        const _: () = assert!(ResourceLimits::max_of_count_pair(5, 3) == 5);
+        const _: () = assert!(ResourceLimits::max_of_count_pair(4, 4) == 4);
+        const _: () = assert!(ResourceLimits::max_of_count_pair(0, 0) == 0);
+        const _: () = assert!(ResourceLimits::max_of_count_pair(0, 6) == 6);
+        const _: () = assert!(ResourceLimits::max_of_count_pair(6, 0) == 6);
+    }
+
+    #[test]
+    fn resource_limits_arm_agnostic_max_fold_family_bodies_delegate_to_max_of_count_pair() {
+        // Sweep-of-family pin — asserts each of the two WHOLE-POSTURE
+        // ARM-AGNOSTIC MAX-fold projection bodies
+        // (axial_majority_count — MAX of (count_polar_axes,
+        // count_interior_axes); atomic_majority_count — MAX of
+        // (count_bottom_axes, count_top_axes)) agrees with the
+        // helper-based shape `ResourceLimits::max_of_count_pair(
+        // self.count_A(), self.count_B())` on every posture from the
+        // EMPTY / DEFAULT / UNBOUNDED / HAND_AUTHORED_MID /
+        // HAND_AUTHORED_OTHER / SPARSE_BOTTOM /
+        // CONTIGUOUS_INTERIOR_BOTTOM / ENDPOINTS_ONLY_BOTTOM
+        // constellation (2×8 = 16 composed MAX verdicts). A future
+        // body regression that swapped the `>=` for `<=` at the helper
+        // would silently return the MINORITY tally on every strict-
+        // majority posture; the sweep pin gates the LOAD-BEARING
+        // regime on every posture where the pair splits (all three
+        // truly-mixed fixtures on the atomic pair, plus interior-
+        // uniform vs polar-uniform on the axial pair).
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                posture.axial_majority_count(),
+                ResourceLimits::max_of_count_pair(
+                    posture.count_polar_axes(),
+                    posture.count_interior_axes(),
+                ),
+                "axial_majority_count delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.atomic_majority_count(),
+                ResourceLimits::max_of_count_pair(
+                    posture.count_bottom_axes(),
+                    posture.count_top_axes(),
+                ),
+                "atomic_majority_count delegation regressed on {posture:?}",
+            );
+        }
     }
 
     #[test]

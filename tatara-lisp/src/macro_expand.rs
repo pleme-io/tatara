@@ -14918,6 +14918,206 @@ impl ResourceLimits {
         lhs != rhs
     }
 
+    /// TRICHOTOMY SIGNUM from a coupled COUNT PAIR on whole-posture
+    /// `usize` axial-tally sub-cells —
+    /// `Self::count_pair_ordering(lhs, rhs)` returns
+    /// [`Ordering::Greater`] iff `lhs > rhs`, [`Ordering::Less`] iff
+    /// `lhs < rhs`, [`Ordering::Equal`] iff `lhs == rhs`. The BOUNDARY
+    /// primitive lifting the three-leg trichotomy shape `if lhs > rhs
+    /// { Greater } else if lhs < rhs { Less } else { Equal }` that
+    /// every WHOLE-POSTURE `Ordering`-KIND TRICHOTOMY projection on
+    /// [`ResourceLimits`] carries at its exit —
+    /// [`Self::axial_ordering`] and [`Self::atomic_ordering`] both
+    /// wrap the plain trichotomy of a paired (arm-A count, arm-B
+    /// count) tally in the same three-leg if-else-if cascade. Pre-
+    /// lift each `Ordering` projection open-coded the four-line
+    /// trichotomy on its OWN pair — a two-point copy-paste whose
+    /// consistency the type system did not gate (a projection that
+    /// swapped the `Greater` and `Less` arms would silently negate
+    /// every non-tie posture's verdict; one that dropped the `Less`
+    /// branch would silently reclassify rhs-strong postures as tied).
+    /// Post-lift the shape binds at ONE typed `const fn` on
+    /// [`ResourceLimits`], and every future WHOLE-POSTURE
+    /// `Ordering`-KIND projection composes through this helper — the
+    /// TRICHOTOMY-SIGNUM dispatch over a coupled `(usize, usize)`
+    /// count pair is a substrate-level theorem rather than a per-
+    /// consumer four-line open-coded if-else-if cascade.
+    ///
+    /// The `Ordering`-VALUED sibling of
+    /// [`Self::strict_count_lead_holds`] (BOOLEAN `>` — strict-
+    /// dominance verdict), [`Self::count_arities_agree`] (BOOLEAN
+    /// `==` — equal-arity verdict), [`Self::count_arities_differ`]
+    /// (BOOLEAN `!=` — unequal-arity verdict),
+    /// [`Self::witness_strict_count_lead`] (ARM-SELECTING
+    /// `Option<usize>` — arm identity + lead magnitude),
+    /// [`Self::signed_count_difference`] (ARM-LABELLED `isize` — arm
+    /// identity through output sign), and
+    /// [`Self::absolute_count_difference`] (ARM-AGNOSTIC `usize` —
+    /// arm identity discarded, magnitude preserved) on the SAME
+    /// `(usize, usize) → *` two-input surface. Where the four
+    /// BOOLEAN combinators each carry a SINGLE cell of the
+    /// trichotomy (or a two-cell union) as a bare `bool`, and the
+    /// ARM-SELECTING / SIGNED / UNSIGNED combinators fold in the
+    /// magnitude reading, THIS combinator carries the FULL TRICHOTOMY
+    /// as one match-exhaustive `Ordering` sum — the ternary discriminant
+    /// [`Ord::cmp`] returns, promoted to a named `const fn` on the
+    /// algebra ([`Ord::cmp`] itself is not `const`-stable on tatara-
+    /// lisp's supported Rust versions, so the body inlines the three-
+    /// leg if-else-if cascade in const-context-legal shape). The two-
+    /// input surface now closes on ALL FIVE output cells (BOOLEAN
+    /// `bool`, ARM-SELECTING `Option<usize>`, SIGNED `isize`,
+    /// UNSIGNED `usize`, TRICHOTOMY `Ordering`) at named typed `const
+    /// fn`s on the algebra.
+    ///
+    /// **Bare-body identity — LOAD-BEARING structural pin**: on every
+    /// `(lhs, rhs)`, `count_pair_ordering(lhs, rhs)` matches the
+    /// open-coded three-leg cascade
+    /// `if lhs > rhs { Ordering::Greater }
+    ///  else if lhs < rhs { Ordering::Less }
+    ///  else { Ordering::Equal }`. Pinned via
+    /// `resource_limits_count_pair_ordering_agrees_with_open_coded_trichotomy`.
+    ///
+    /// **Diagonal identity — EQUAL on the tie cell**: for every `n`,
+    /// `count_pair_ordering(n, n) == Ordering::Equal`. The tie corner
+    /// of the input pair collapses to the balance leg of the
+    /// trichotomy. Pinned via
+    /// `resource_limits_count_pair_ordering_diagonal_inputs_fold_to_equal`.
+    ///
+    /// **lhs-strong arm — GREATER on strict-dominance**: on every
+    /// `(lhs, rhs)` with `lhs > rhs`, `count_pair_ordering(lhs, rhs)
+    /// == Ordering::Greater`. Pinned via
+    /// `resource_limits_count_pair_ordering_lhs_strong_arm_returns_greater`.
+    ///
+    /// **rhs-strong arm — LESS on reversed dominance**: on every
+    /// `(lhs, rhs)` with `rhs > lhs`, `count_pair_ordering(lhs, rhs)
+    /// == Ordering::Less`. Pinned via
+    /// `resource_limits_count_pair_ordering_rhs_strong_arm_returns_less`.
+    ///
+    /// **Anti-symmetry — SWAPPED-INPUT REVERSAL identity**: on every
+    /// `(lhs, rhs)`, `count_pair_ordering(rhs, lhs) ==
+    /// count_pair_ordering(lhs, rhs).reverse()`. The `Ordering` sum
+    /// carries the arm-identity dispatch through its Greater/Less
+    /// split, and swapping inputs mirrors that split at the type
+    /// level via the std-canonical [`Ordering::reverse`] involution —
+    /// the ARM-SELECTING refinement the BOOLEAN
+    /// [`Self::strict_count_lead_holds`] mutual-exclusion pin
+    /// projects onto its TRUE cell alone. Pinned via
+    /// `resource_limits_count_pair_ordering_swapped_inputs_are_reversed`.
+    ///
+    /// **Boolean-projection bridges — TRICHOTOMY LEG PARTITION**: on
+    /// every `(lhs, rhs)`:
+    /// - `count_pair_ordering(lhs, rhs).is_gt() ==
+    ///   strict_count_lead_holds(lhs, rhs)` — the GREATER leg
+    ///   coincides with the BOOLEAN strict-dominance verdict.
+    /// - `count_pair_ordering(lhs, rhs).is_lt() ==
+    ///   strict_count_lead_holds(rhs, lhs)` — the LESS leg coincides
+    ///   with the BOOLEAN strict-dominance verdict on the SWAPPED
+    ///   input pair.
+    /// - `count_pair_ordering(lhs, rhs).is_eq() ==
+    ///   count_arities_agree(lhs, rhs)` — the EQUAL leg coincides
+    ///   with the BOOLEAN equal-arity verdict.
+    /// - `count_pair_ordering(lhs, rhs).is_ne() ==
+    ///   count_arities_differ(lhs, rhs)` — the non-EQUAL cell (the
+    ///   union of GREATER and LESS) coincides with the BOOLEAN
+    ///   unequal-arity verdict.
+    ///
+    /// The four projections jointly recover every BOOLEAN sibling
+    /// from the single `Ordering` reading — the `Ordering` combinator
+    /// is the JOINT NORMAL FORM of the (>, ==, !=) BOOLEAN algebra on
+    /// the two-input surface. Pinned via
+    /// `resource_limits_count_pair_ordering_is_greater_iff_strict_count_lead_holds`,
+    /// `resource_limits_count_pair_ordering_is_less_iff_reversed_strict_count_lead_holds`,
+    /// `resource_limits_count_pair_ordering_is_equal_iff_count_arities_agree`,
+    /// and `resource_limits_count_pair_ordering_is_not_equal_iff_count_arities_differ`.
+    ///
+    /// **Signum bridge — SIGNED-CARDINAL `Ord::cmp(&0)` identity**:
+    /// on every `(lhs, rhs)`, `count_pair_ordering(lhs, rhs) ==
+    /// signed_count_difference(lhs, rhs).cmp(&0)`. The `Ordering`
+    /// combinator's TRICHOTOMY exit coincides with the SIGNED
+    /// sibling's SIGNUM projection — where the SIGNED sibling carries
+    /// the (arm, magnitude) pair through one `isize`, THIS combinator
+    /// carries the arm-identity fact alone through the std-canonical
+    /// [`Ordering`] sum, and the `cmp(&0)` projection on the SIGNED
+    /// reading discards magnitude to recover exactly this TRICHOTOMY.
+    /// Pinned via
+    /// `resource_limits_count_pair_ordering_agrees_with_signed_count_difference_cmp_zero`.
+    ///
+    /// **Witness-arm bridge — ARM-SELECTING `Option<usize>`
+    /// alignment**: on every `(lhs, rhs)`,
+    /// `count_pair_ordering(lhs, rhs) == Ordering::Greater ⇔
+    /// witness_strict_count_lead(lhs, rhs).is_some()` and
+    /// `count_pair_ordering(lhs, rhs) == Ordering::Less ⇔
+    /// witness_strict_count_lead(rhs, lhs).is_some()`. The
+    /// `Ordering` combinator's GREATER and LESS legs coincide with
+    /// the two DIRECTED witness-SOME cells, closing the pair of the
+    /// witness pins one PROJECTION-KIND axis over. Pinned via
+    /// `resource_limits_count_pair_ordering_arm_legs_iff_directed_witness_strict_count_lead_are_some`.
+    ///
+    /// `const fn` so a caller can pin the TRICHOTOMY verdict at
+    /// compile time (`const _: () = assert!(matches!(
+    /// ResourceLimits::count_pair_ordering(1, 0),
+    /// Ordering::Greater));`) — sibling of the const-fn evaluability
+    /// pins the [`Ordering`]-KIND projections already carry at their
+    /// own exits.
+    ///
+    /// **Adoption compounds**: future WHOLE-POSTURE `Ordering`-KIND
+    /// projections that currently open-code the three-leg trichotomy
+    /// cascade on a coupled (usize, usize) count pair rewrite their
+    /// body from
+    /// `if self.count_A() > self.count_B() { Greater }
+    ///  else if self.count_A() < self.count_B() { Less }
+    ///  else { Equal }`
+    /// to `Self::count_pair_ordering(self.count_A(), self.count_B())`
+    /// at no semantic change, and a mechanical sweep of the two
+    /// TRICHOTOMY bodies through the helper becomes a substrate-level
+    /// refactor rather than a per-method rewrite. rustc's exhaustive-
+    /// match checking gates every downstream `match` against the
+    /// single lifted `Ordering` — a body regression that dropped the
+    /// balance leg cannot compile at any consumer.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// TRICHOTOMY-SIGNUM shape at every WHOLE-POSTURE `Ordering`-KIND
+    /// projection body binds at ONE typed named `const fn` on the
+    /// algebra rather than a per-projection open-coded three-leg
+    /// cascade. THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the helper composes mechanically under the bare-body
+    /// identity above with no re-derivation at the caller, and both
+    /// swept callsites preserve their const-fn evaluability pins
+    /// verbatim. THEORY.md §V.1 — knowable platform; the TRICHOTOMY-
+    /// SIGNUM dispatch becomes a substrate-level theorem rather than
+    /// a per-projection convention.
+    ///
+    /// Frontier inspiration: Haskell's `compare :: a -> a -> Ordering`
+    /// returning the ternary sum type directly instead of a pair of
+    /// booleans (`LT`/`EQ`/`GT`); Idris's `Ordering` inductive with
+    /// three nullary constructors serving the same trichotomy
+    /// discriminant; Rust's own `Ord::cmp` (not `const`-stable
+    /// through tatara-lisp's supported versions, motivating the
+    /// const-context-legal inline expansion below); C++20's `<=>`
+    /// three-way comparison operator exposing the TRICHOTOMY as ONE
+    /// named exit rather than the three legs of an if-else chain; APL's
+    /// `⍺ ⌊ ⍵` and `⍺ ⌈ ⍵` under a paired-tally interpretation
+    /// recovering the SIGNUM projection via `signum(⍺ - ⍵)`. Voting-
+    /// theory's canonical STRICT-PLURALITY TRICHOTOMY on a two-
+    /// candidate election — Greater ← candidate-A-wins, Less ←
+    /// candidate-B-wins, Equal ← perfect tie — folded onto ONE
+    /// std-canonical sum type. Translation through pleme-io
+    /// primitives is the plain `const fn` three-leg if-else-if
+    /// cascade below — no `Ord::cmp` const-instability workaround at
+    /// every caller, no `PartialOrd`-trait indirection, no
+    /// `checked_sub` indirection, no closure, no new dep, no
+    /// typeclass indirection.
+    #[must_use]
+    pub const fn count_pair_ordering(lhs: usize, rhs: usize) -> Ordering {
+        if lhs > rhs {
+            Ordering::Greater
+        } else if lhs < rhs {
+            Ordering::Less
+        } else {
+            Ordering::Equal
+        }
+    }
+
     /// Presence-preserving CLOSED-INTERVAL WIDTH from a coupled ENDPOINT PAIR
     /// on whole-posture `Option<usize>` axis-endpoint tallies —
     /// `Self::derive_axis_endpoint_span(first, last)` returns
@@ -16973,15 +17173,7 @@ impl ResourceLimits {
     /// indirection, no per-axis loop, no allocation.
     #[must_use]
     pub const fn axial_ordering(self) -> Ordering {
-        let p = self.count_polar_axes();
-        let i = self.count_interior_axes();
-        if p > i {
-            Ordering::Greater
-        } else if p < i {
-            Ordering::Less
-        } else {
-            Ordering::Equal
-        }
+        Self::count_pair_ordering(self.count_polar_axes(), self.count_interior_axes())
     }
 
     /// Whole-posture BOTTOM-STRICT-MAJORITY predicate —
@@ -18527,15 +18719,7 @@ impl ResourceLimits {
     /// [`Self::axial_ordering`] uses one CELL-KIND axis over.
     #[must_use]
     pub const fn atomic_ordering(self) -> Ordering {
-        let b = self.count_bottom_axes();
-        let t = self.count_top_axes();
-        if b > t {
-            Ordering::Greater
-        } else if b < t {
-            Ordering::Less
-        } else {
-            Ordering::Equal
-        }
+        Self::count_pair_ordering(self.count_bottom_axes(), self.count_top_axes())
     }
 
     /// Whole-posture LEXICOGRAPHIC-COMPOSITION reading on the paired
@@ -91609,6 +91793,439 @@ mod tests {
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.has_atomic_majority());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.has_majority_axis());
         const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.has_atomic_majority());
+    }
+
+    #[test]
+    fn resource_limits_count_pair_ordering_agrees_with_open_coded_trichotomy() {
+        // Bare-body identity — the helper's verdict on every (lhs, rhs)
+        // pair agrees with the open-coded three-leg trichotomy cascade
+        // `if lhs > rhs { Greater } else if lhs < rhs { Less }
+        //  else { Equal }` that every WHOLE-POSTURE `Ordering`-KIND
+        // projection on ResourceLimits carried at its exit pre-lift.
+        // Swept over the (lhs < rhs, lhs == rhs, lhs > rhs) three-cell
+        // trichotomy with representative values so every leg of the
+        // ARM-TRICHOTOMY on the (usize, usize) joint-input regime is
+        // pinned, using axial-tally-bounded samples (0..=FIELD_COUNT)
+        // for which the caller-side invariant is discharged by
+        // construction.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            let via_helper = ResourceLimits::count_pair_ordering(lhs, rhs);
+            let via_open_code = if lhs > rhs {
+                Ordering::Greater
+            } else if lhs < rhs {
+                Ordering::Less
+            } else {
+                Ordering::Equal
+            };
+            assert_eq!(
+                via_helper, via_open_code,
+                "helper != open-coded trichotomy at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_pair_ordering_diagonal_inputs_fold_to_equal() {
+        // Diagonal identity — for every n in the caller-safe regime,
+        // the helper folds the diagonal (n, n) input to Ordering::Equal.
+        // The tie corner of the input pair collapses to the balance leg
+        // of the trichotomy — matching the BOOLEAN
+        // count_arities_agree(n, n) == true and count_arities_differ(n,
+        // n) == false diagonal pins one PROJECTION axis over.
+        for n in [
+            0_usize,
+            1,
+            ResourceLimits::FIELD_COUNT / 2,
+            ResourceLimits::FIELD_COUNT,
+        ] {
+            assert_eq!(
+                ResourceLimits::count_pair_ordering(n, n),
+                Ordering::Equal,
+                "diagonal fold to Ordering::Equal violated at n={n}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_pair_ordering_lhs_strong_arm_returns_greater() {
+        // Order-arm dispatch — on every (lhs, rhs) with lhs > rhs, the
+        // helper returns Ordering::Greater. The TRICHOTOMY reading of
+        // the lhs-strong arm of the BOOLEAN
+        // strict_count_lead_holds(lhs, rhs) TRUE cell — where the
+        // BOOLEAN sibling reads it as bare true, THIS combinator lifts
+        // the arm-identity fact into the std-canonical Greater
+        // discriminant.
+        for (lhs, rhs) in [
+            (1_usize, 0_usize),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+        ] {
+            assert!(
+                lhs > rhs,
+                "test-local invariant violated: lhs must exceed rhs, got ({lhs}, {rhs})",
+            );
+            assert_eq!(
+                ResourceLimits::count_pair_ordering(lhs, rhs),
+                Ordering::Greater,
+                "lhs-strong arm GREATER verdict regressed at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_pair_ordering_rhs_strong_arm_returns_less() {
+        // Order-arm dispatch — on every (lhs, rhs) with rhs > lhs, the
+        // helper returns Ordering::Less. The TRICHOTOMY reading of the
+        // rhs-strong arm of the BOOLEAN reversed
+        // strict_count_lead_holds(rhs, lhs) TRUE cell — where the
+        // BOOLEAN sibling's forward-input rejection folds onto its
+        // FALSE cell (indistinguishably with the tie leg), THIS
+        // combinator carries the arm-identity split through the
+        // canonical Less discriminant.
+        for (lhs, rhs) in [
+            (0_usize, 1_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (1, 5),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert!(
+                rhs > lhs,
+                "test-local invariant violated: rhs must exceed lhs, got ({lhs}, {rhs})",
+            );
+            assert_eq!(
+                ResourceLimits::count_pair_ordering(lhs, rhs),
+                Ordering::Less,
+                "rhs-strong arm LESS verdict regressed at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_pair_ordering_swapped_inputs_are_reversed() {
+        // Anti-symmetry — on every (lhs, rhs),
+        // count_pair_ordering(rhs, lhs) ==
+        // count_pair_ordering(lhs, rhs).reverse(). The `Ordering` sum
+        // carries the arm-identity dispatch through its Greater/Less
+        // split, and swapping inputs mirrors that split at the type
+        // level via [`Ordering::reverse`] — the ARM-SELECTING
+        // refinement the BOOLEAN strict_count_lead_holds
+        // mutual-exclusion pin projects onto its TRUE cell alone.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::count_pair_ordering(rhs, lhs),
+                ResourceLimits::count_pair_ordering(lhs, rhs).reverse(),
+                "anti-symmetry (swapped == .reverse()) violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_pair_ordering_is_greater_iff_strict_count_lead_holds() {
+        // Boolean projection — the GREATER leg of the TRICHOTOMY
+        // coincides with the BOOLEAN strict-dominance verdict on the
+        // SAME input pair. `count_pair_ordering(lhs, rhs).is_gt() ==
+        // strict_count_lead_holds(lhs, rhs)`.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::count_pair_ordering(lhs, rhs).is_gt(),
+                ResourceLimits::strict_count_lead_holds(lhs, rhs),
+                "GREATER-leg ⇔ strict_count_lead_holds bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_pair_ordering_is_less_iff_reversed_strict_count_lead_holds() {
+        // Boolean projection — the LESS leg of the TRICHOTOMY coincides
+        // with the BOOLEAN strict-dominance verdict on the SWAPPED
+        // input pair. `count_pair_ordering(lhs, rhs).is_lt() ==
+        // strict_count_lead_holds(rhs, lhs)`. Closes the pair of the
+        // GREATER-leg pin one input-swap-KIND axis over — the two arm-
+        // dominance directions of the BOOLEAN combinator recover from
+        // the single TRICHOTOMY reading via .is_gt() / .is_lt().
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::count_pair_ordering(lhs, rhs).is_lt(),
+                ResourceLimits::strict_count_lead_holds(rhs, lhs),
+                "LESS-leg ⇔ reversed strict_count_lead_holds bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_pair_ordering_is_equal_iff_count_arities_agree() {
+        // Boolean projection — the EQUAL leg of the TRICHOTOMY
+        // coincides with the BOOLEAN equal-arity verdict.
+        // `count_pair_ordering(lhs, rhs).is_eq() ==
+        // count_arities_agree(lhs, rhs)`.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::count_pair_ordering(lhs, rhs).is_eq(),
+                ResourceLimits::count_arities_agree(lhs, rhs),
+                "EQUAL-leg ⇔ count_arities_agree bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_pair_ordering_is_not_equal_iff_count_arities_differ() {
+        // Boolean projection — the non-EQUAL cell (the union of
+        // GREATER and LESS) of the TRICHOTOMY coincides with the
+        // BOOLEAN unequal-arity verdict.
+        // `count_pair_ordering(lhs, rhs).is_ne() ==
+        // count_arities_differ(lhs, rhs)`. Together with the EQUAL-leg
+        // pin, the pair recovers the (equal, unequal) two-cell
+        // partition of the input universe from the single TRICHOTOMY
+        // reading.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::count_pair_ordering(lhs, rhs).is_ne(),
+                ResourceLimits::count_arities_differ(lhs, rhs),
+                "non-EQUAL cell ⇔ count_arities_differ bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_pair_ordering_agrees_with_signed_count_difference_cmp_zero() {
+        // Signum bridge — the TRICHOTOMY exit coincides with the SIGNED
+        // sibling's SIGNUM projection.
+        // `count_pair_ordering(lhs, rhs) ==
+        // signed_count_difference(lhs, rhs).cmp(&0)`. Where the SIGNED
+        // sibling carries the (arm, magnitude) pair through one isize,
+        // THIS combinator carries the arm-identity fact alone through
+        // the std-canonical Ordering sum, and the .cmp(&0) projection
+        // on the SIGNED reading discards magnitude to recover exactly
+        // this TRICHOTOMY.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::count_pair_ordering(lhs, rhs),
+                ResourceLimits::signed_count_difference(lhs, rhs).cmp(&0),
+                "signum bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_pair_ordering_arm_legs_iff_directed_witness_strict_count_lead_are_some(
+    ) {
+        // Witness-arm bridge — the GREATER and LESS legs of the
+        // TRICHOTOMY coincide with the two DIRECTED witness-SOME cells
+        // of the ARM-SELECTING sibling. On every (lhs, rhs),
+        // count_pair_ordering(lhs, rhs) == Ordering::Greater ⇔
+        // witness_strict_count_lead(lhs, rhs).is_some(), and
+        // count_pair_ordering(lhs, rhs) == Ordering::Less ⇔
+        // witness_strict_count_lead(rhs, lhs).is_some(). Closes the
+        // pair of the witness pins one PROJECTION-KIND axis over.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            let ord = ResourceLimits::count_pair_ordering(lhs, rhs);
+            assert_eq!(
+                ord == Ordering::Greater,
+                ResourceLimits::witness_strict_count_lead(lhs, rhs).is_some(),
+                "GREATER-leg ⇔ forward-directed witness-SOME violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+            assert_eq!(
+                ord == Ordering::Less,
+                ResourceLimits::witness_strict_count_lead(rhs, lhs).is_some(),
+                "LESS-leg ⇔ reversed-directed witness-SOME violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_pair_ordering_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the helper's `pub const fn` signature
+        // preserves compile-time evaluability across the diagonal-tie
+        // (Equal), lhs-strong-arm (Greater), rhs-strong-arm (Less), and
+        // FIELD_COUNT-corner cells of the (usize, usize) joint-input
+        // regime. Complements the primary bare-body identity pin
+        // `resource_limits_count_pair_ordering_agrees_with_open_coded_trichotomy`
+        // by extending the const-evaluability proof onto the compile-
+        // time surface.
+        const _: () = assert!(matches!(
+            ResourceLimits::count_pair_ordering(0, 0),
+            Ordering::Equal
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::count_pair_ordering(1, 0),
+            Ordering::Greater
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::count_pair_ordering(0, 1),
+            Ordering::Less
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::count_pair_ordering(ResourceLimits::FIELD_COUNT, 0),
+            Ordering::Greater
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::count_pair_ordering(0, ResourceLimits::FIELD_COUNT),
+            Ordering::Less
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::count_pair_ordering(
+                ResourceLimits::FIELD_COUNT,
+                ResourceLimits::FIELD_COUNT
+            ),
+            Ordering::Equal
+        ));
+    }
+
+    #[test]
+    fn resource_limits_ordering_kind_family_bodies_delegate_to_count_pair_ordering() {
+        // Sweep-of-family pin — asserts each of the two WHOLE-POSTURE
+        // `Ordering`-KIND projection bodies (axial_ordering over the
+        // COMPOUND (polar, interior) axial partition, atomic_ordering
+        // over the ATOMIC (bottom, top) sub-partition of the polar
+        // cell) agrees with the helper-based shape
+        // `ResourceLimits::count_pair_ordering(self.count_A(),
+        // self.count_B())` on every posture from the EMPTY / DEFAULT /
+        // UNBOUNDED / HAND_AUTHORED_MID / HAND_AUTHORED_OTHER preset
+        // constellation (2×5 = 10 verdicts). A future body regression
+        // that swapped the Greater and Less arms would silently negate
+        // every non-tie posture's verdict; one that dropped the LESS
+        // branch would silently reclassify rhs-strong postures as
+        // Equal.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                posture.axial_ordering(),
+                ResourceLimits::count_pair_ordering(
+                    posture.count_polar_axes(),
+                    posture.count_interior_axes(),
+                ),
+                "axial_ordering delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.atomic_ordering(),
+                ResourceLimits::count_pair_ordering(
+                    posture.count_bottom_axes(),
+                    posture.count_top_axes(),
+                ),
+                "atomic_ordering delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_ordering_kind_family_bodies_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the two swept `Ordering`-KIND family
+        // bodies preserved const-fn evaluability under the sweep
+        // through count_pair_ordering. Each of the two swept
+        // projections × the three shipped `pub const` preset postures
+        // (EMPTY, UNBOUNDED, DEFAULT). EMPTY is bottom-uniform (polar =
+        // FIELD_COUNT, interior = 0 → axial_ordering Greater; bottom =
+        // FIELD_COUNT, top = 0 → atomic_ordering Greater). UNBOUNDED is
+        // top-uniform (polar = FIELD_COUNT, interior = 0 →
+        // axial_ordering Greater — the LOAD-BEARING COMPOUND
+        // saturation collapse; bottom = 0, top = FIELD_COUNT →
+        // atomic_ordering Less — the LOAD-BEARING atomic-arm-identity
+        // split). DEFAULT is interior-uniform (polar = 0, interior =
+        // FIELD_COUNT → axial_ordering Less; bottom = 0, top = 0 →
+        // atomic_ordering Equal — the LOAD-BEARING BROADER atomic-tie
+        // corner absorbing every interior-uniform posture).
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.axial_ordering(),
+            Ordering::Greater
+        ));
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.atomic_ordering(),
+            Ordering::Greater
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.axial_ordering(),
+            Ordering::Greater
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.atomic_ordering(),
+            Ordering::Less
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.axial_ordering(),
+            Ordering::Less
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.atomic_ordering(),
+            Ordering::Equal
+        ));
     }
 
     #[test]

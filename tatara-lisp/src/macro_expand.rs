@@ -14730,6 +14730,194 @@ impl ResourceLimits {
         lhs == rhs
     }
 
+    /// ARM-AGNOSTIC UNEQUAL-ARITY VERDICT from a coupled COUNT PAIR on
+    /// whole-posture `usize` axial-tally sub-cells —
+    /// `Self::count_arities_differ(lhs, rhs)` returns `true` iff `lhs !=
+    /// rhs`, `false` otherwise. The BOUNDARY primitive lifting the shape
+    /// `lhs != rhs` that every WHOLE-POSTURE MAJORITY-EXISTENCE predicate
+    /// on [`ResourceLimits`] carries at its exit —
+    /// [`Self::has_majority_axis`] and [`Self::has_atomic_majority`] both
+    /// wrap the `!=`-inequality of a paired (arm-A count, arm-B count)
+    /// tally in the same one-line comparison. Pre-lift each MAJORITY-
+    /// EXISTENCE predicate open-coded the one-line
+    /// `self.count_A_axes() != self.count_B_axes()` at its own exit — a
+    /// two-point copy-paste whose consistency the type system did not
+    /// gate (a predicate that duplicated the SAME count on both `!=` arms
+    /// would silently emit `false` on EVERY posture, collapsing the
+    /// MAJORITY-EXISTENCE verdict to the constant contradiction
+    /// regardless of the underlying axial tally split; a predicate that
+    /// flipped `!=` to `==` would silently negate its verdict on every
+    /// posture and ACCEPT exactly where the intended MAJORITY-EXISTENCE
+    /// verdict REJECTS). Post-lift the shape binds at ONE typed `const
+    /// fn` on [`ResourceLimits`], and every future WHOLE-POSTURE
+    /// MAJORITY-EXISTENCE predicate composes through this helper — the
+    /// unequal-arity verdict over a coupled `(usize, usize)` count pair
+    /// is a substrate-level theorem rather than a per-consumer one-line
+    /// open-coded `!=` comparison.
+    ///
+    /// The DIRECT INEQUALITY-KIND sibling of
+    /// [`Self::count_arities_agree`] (EQUALITY-KIND `==` — BOOLEAN
+    /// equal-arity verdict) on the SAME `(usize, usize) → bool` two-
+    /// input surface: where the EQUALITY-KIND sibling carries the
+    /// EQUAL-ARITY VERDICT through the bare `bool` (fires TRUE on the
+    /// tie leg, FALSE on both strict-dominance directions — lhs-strong
+    /// AND rhs-strong), THIS combinator carries the UNEQUAL-ARITY
+    /// VERDICT through the bare `bool` (fires TRUE on both strict-
+    /// dominance directions — lhs-strong AND rhs-strong, FALSE on the
+    /// tie leg). The two BOOLEAN combinators jointly close the
+    /// (EQUALITY, INEQUALITY) partition on the two-input surface's
+    /// `bool` output cell: they are DE MORGAN COMPLEMENTS
+    /// (`count_arities_differ(lhs, rhs) == !count_arities_agree(lhs,
+    /// rhs)` on every input pair), and their (TRUE, FALSE) cells swap
+    /// place-for-place. Like the EQUALITY-KIND sibling and unlike the
+    /// ORDER-KIND [`Self::strict_count_lead_holds`], THIS combinator is
+    /// COMMUTATIVE — the `!=` relation on `usize` is symmetric, so
+    /// `count_arities_differ(lhs, rhs) == count_arities_differ(rhs,
+    /// lhs)` on every input pair.
+    ///
+    /// Also the DIRECT UNION-of-DIRECTED-DOMINANCE lift of
+    /// [`Self::strict_count_lead_holds`] one BOOLEAN-COMBINATOR-KIND
+    /// axis over: for every `(lhs, rhs)`, `count_arities_differ(lhs,
+    /// rhs) == (strict_count_lead_holds(lhs, rhs) ||
+    /// strict_count_lead_holds(rhs, lhs))`. Where the ORDER-KIND
+    /// sibling carries the SINGLE-DIRECTION strict-dominance verdict,
+    /// THIS combinator folds BOTH directed strict-dominance verdicts
+    /// onto ONE `bool` at the union — the MAJORITY-EXISTENCE verdict
+    /// is the ANY-DIRECTION strict-dominance verdict.
+    ///
+    /// **Bare-body identity — LOAD-BEARING structural pin**: on every
+    /// `(lhs, rhs)`, `count_arities_differ(lhs, rhs) == (lhs != rhs)`.
+    /// Pinned via
+    /// `resource_limits_count_arities_differ_agrees_with_open_coded_ne`.
+    ///
+    /// **Diagonal identity — FALSE on the tie cell**: for every `n`,
+    /// `count_arities_differ(n, n) == false`. The tie corner of the
+    /// input pair collapses to the REJECTED arm of the BOOLEAN verdict —
+    /// UNEQUAL-ARITY requires the two operands to differ, so the
+    /// diagonal leg rejects. Dual of the EQUALITY-KIND sibling's
+    /// diagonal-to-TRUE pin. Pinned via
+    /// `resource_limits_count_arities_differ_diagonal_inputs_fold_to_false`.
+    ///
+    /// **Strict-dominance arms — TRUE on both directions**: on every
+    /// `(lhs, rhs)` with `lhs > rhs` OR `rhs > lhs`,
+    /// `count_arities_differ(lhs, rhs) == true`. The BOOLEAN
+    /// combinator DISCARDS the arm-identity distinction between the two
+    /// strict-dominance legs and folds both onto the SAME TRUE cell —
+    /// dual of the EQUALITY-KIND sibling which folds both strict-
+    /// dominance legs onto its FALSE cell. Pinned via
+    /// `resource_limits_count_arities_differ_strict_dominance_arms_accept_to_true`.
+    ///
+    /// **Commutativity — SYMMETRY on the input pair**: on every `(lhs,
+    /// rhs)`, `count_arities_differ(lhs, rhs) == count_arities_differ(
+    /// rhs, lhs)`. The UNEQUAL-ARITY combinator folds both order-cells
+    /// onto the SAME verdict — matching the EQUALITY-KIND sibling's
+    /// commutativity and the paired [`Self::absolute_count_difference`]
+    /// commutativity on the UNSIGNED magnitude output cell. Pinned via
+    /// `resource_limits_count_arities_differ_is_commutative_in_its_input_pair`.
+    ///
+    /// **De Morgan complement to count_arities_agree — TRUE-iff-NOT-
+    /// EQUAL identity**: on every `(lhs, rhs)`,
+    /// `count_arities_differ(lhs, rhs) == !count_arities_agree(lhs,
+    /// rhs)`. The BOOLEAN combinator's TRUE arm coincides exactly with
+    /// the complement of the EQUALITY-KIND sibling's TRUE arm — the
+    /// pair is the (equal, unequal) EXHAUSTIVE-AND-DISJOINT partition
+    /// of the input universe. Pinned via
+    /// `resource_limits_count_arities_differ_is_de_morgan_complement_of_count_arities_agree`.
+    ///
+    /// **Strict-dominance-union bridge — TRUE-iff-SOME-DIRECTED-STRICT-
+    /// LEAD-HOLDS identity**: on every `(lhs, rhs)`,
+    /// `count_arities_differ(lhs, rhs) == (strict_count_lead_holds(
+    /// lhs, rhs) || strict_count_lead_holds(rhs, lhs))`. The BOOLEAN
+    /// combinator's TRUE arm coincides exactly with the union of the
+    /// two ORDER-KIND sibling's TRUE arms across swapped inputs — the
+    /// MAJORITY-EXISTENCE verdict is the ANY-DIRECTION strict-
+    /// dominance verdict. Pinned via
+    /// `resource_limits_count_arities_differ_iff_some_directed_strict_count_lead_holds`.
+    ///
+    /// **Nonzero-magnitude bridge — TRUE-iff-ABSOLUTE-DIFFERENCE-
+    /// NONZERO identity**: on every `(lhs, rhs)`,
+    /// `count_arities_differ(lhs, rhs) == (absolute_count_difference(
+    /// lhs, rhs) != 0)`. The BOOLEAN combinator's TRUE arm coincides
+    /// exactly with the nonzero cell of the UNSIGNED sibling's output —
+    /// the unequal-arity verdict is the presence-only projection of
+    /// the strict-inequality corners the UNSIGNED magnitude carries as
+    /// a `usize` reading. Pinned via
+    /// `resource_limits_count_arities_differ_iff_absolute_count_difference_is_nonzero`.
+    ///
+    /// **Nonzero-signum bridge — TRUE-iff-SIGNED-DIFFERENCE-NONZERO
+    /// identity**: on every `(lhs, rhs)`, `count_arities_differ(lhs,
+    /// rhs) == (signed_count_difference(lhs, rhs) != 0)`. The BOOLEAN
+    /// combinator's TRUE arm coincides exactly with the nonzero cell
+    /// of the SIGNED sibling's output — matches the UNSIGNED bridge on
+    /// the ARM-AGNOSTIC nonzero cell across both sign representations,
+    /// dual of the [`Self::count_arities_agree`] zero-signum bridge on
+    /// the same paired sibling. Pinned via
+    /// `resource_limits_count_arities_differ_iff_signed_count_difference_is_nonzero`.
+    ///
+    /// **Witness-presence bridge — TRUE-iff-SOME-DIRECTED-WITNESS-IS-
+    /// SOME identity**: on every `(lhs, rhs)`, `count_arities_differ(
+    /// lhs, rhs) == (witness_strict_count_lead(lhs, rhs).is_some() ||
+    /// witness_strict_count_lead(rhs, lhs).is_some())`. The BOOLEAN
+    /// combinator's TRUE arm coincides exactly with the union-SOME
+    /// cell of the ARM-SELECTING sibling across swapped inputs — the
+    /// strict-dominance-in-some-direction leg is the ONLY posture
+    /// where AT LEAST ONE DIRECTED strict-dominance witness fires,
+    /// dual of the [`Self::count_arities_agree`] both-NONE witness
+    /// bridge. Pinned via
+    /// `resource_limits_count_arities_differ_iff_some_directed_witness_strict_count_lead_is_some`.
+    ///
+    /// `const fn` so a caller can pin the helper's verdict at compile
+    /// time (`const _: () = assert!(
+    /// ResourceLimits::count_arities_differ(1, 0));`) — sibling of the
+    /// const-fn evaluability pins the MAJORITY-EXISTENCE predicates
+    /// already carry at their own exits.
+    ///
+    /// **Adoption compounds**: future WHOLE-POSTURE MAJORITY-EXISTENCE
+    /// predicates that currently open-code the `!=`-comparison on a
+    /// coupled (usize, usize) count pair rewrite their body from
+    /// `self.count_A_axes() != self.count_B_axes()` to
+    /// `Self::count_arities_differ(self.count_A_axes(),
+    /// self.count_B_axes())` at no semantic change, and a mechanical
+    /// sweep of the two MAJORITY-EXISTENCE bodies through the helper
+    /// becomes a substrate-level refactor rather than a per-method
+    /// rewrite.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// unequal-arity verdict shape at every WHOLE-POSTURE MAJORITY-
+    /// EXISTENCE predicate body binds at ONE typed named `const fn` on
+    /// the algebra rather than a per-predicate one-line open-coded
+    /// `!=` comparison. THEORY.md §II.1 invariant 5 — composition
+    /// preserves proofs; the helper composes mechanically under the
+    /// bare-body identity above with no re-derivation at the caller,
+    /// and both swept callsites preserve their const-fn evaluability
+    /// pins verbatim. THEORY.md §V.1 — knowable platform; the
+    /// unequal-arity-verdict dispatch becomes a substrate-level theorem
+    /// rather than a per-predicate convention.
+    ///
+    /// Frontier inspiration: classical equational logic's canonical
+    /// "inequality predicate" on a two-input total-eq relation,
+    /// expressed as `bool` via the plain `!=` combinator rather than
+    /// as the paired (order, magnitude) cells. Rust's own `usize::ne`
+    /// reads the SAME inequality dispatch shape (the trait-method
+    /// projection of the `!=` operator on the total-eq-lifted
+    /// `PartialEq` impl) — one ABSTRACTION axis over via trait
+    /// dispatch. Haskell's `a /= b` on paired `Word` inputs; Idris's
+    /// `a /= b` under a total signature on two `Nat` inputs; APL's
+    /// `⍺ ≠ ⍵` on the paired arm tallies; Racket's `(not (= a b))` on
+    /// paired non-negatives. Voting-theory's canonical "strict-
+    /// plurality holds in SOME direction" projection on a two-
+    /// candidate election — the presence-only verdict for the strict-
+    /// dominance-in-some-direction union of the strict-plurality
+    /// trichotomy, dual of the tie leg. Translation through pleme-io
+    /// primitives is the plain `const fn` `!=`-comparison below — no
+    /// `checked_sub` indirection, no `Ordering`-dispatch, no
+    /// `PartialEq`-trait indirection, no closure, no new dep, no
+    /// typeclass indirection.
+    #[must_use]
+    pub const fn count_arities_differ(lhs: usize, rhs: usize) -> bool {
+        lhs != rhs
+    }
+
     /// Presence-preserving CLOSED-INTERVAL WIDTH from a coupled ENDPOINT PAIR
     /// on whole-posture `Option<usize>` axis-endpoint tallies —
     /// `Self::derive_axis_endpoint_span(first, last)` returns
@@ -15826,15 +16014,23 @@ impl ResourceLimits {
     /// least one interior axis) alongside has_majority_axis on the
     /// strictly-larger arm.
     ///
-    /// Encoded as the boolean `!=` of the two ARITHMETIC-QUANTIFIER
-    /// tallies — one primitive delegation to the shipped
-    /// [`Self::count_polar_axes`] and [`Self::count_interior_axes`] each.
-    /// The equivalent alternative encodings `self.polar_is_majority()
-    /// || self.interior_is_majority()`, `!self.is_axially_balanced()`,
-    /// and (via the EXHAUSTIVE-PARTITION identity) `2 *
-    /// self.count_polar_axes() != Self::FIELD_COUNT` are all
-    /// structurally equivalent AND pinned as substrate theorems in the
-    /// paired contracts below.
+    /// Encoded as a single-composition delegation through the substrate
+    /// primitive [`Self::count_arities_differ`] on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies —
+    /// `Self::count_arities_differ(self.count_polar_axes(),
+    /// self.count_interior_axes())`, matching
+    /// [`Self::is_axially_balanced`]'s single-composition delegation
+    /// verbatim on the INEQUALITY-KIND combinator (where the EQUALITY-
+    /// KIND sibling routes through [`Self::count_arities_agree`], THIS
+    /// predicate routes through the INEQUALITY-KIND peer on the SAME
+    /// two-input surface — the De Morgan complement pair jointly closing
+    /// the two-cell EXHAUSTIVE-AND-DISJOINT MAJORITY-EXISTENCE
+    /// partition). The equivalent alternative encodings
+    /// `self.polar_is_majority() || self.interior_is_majority()`,
+    /// `!self.is_axially_balanced()`, and (via the EXHAUSTIVE-PARTITION
+    /// identity) `2 * self.count_polar_axes() != Self::FIELD_COUNT` are
+    /// all structurally equivalent AND pinned as substrate theorems in
+    /// the paired contracts below.
     ///
     /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.has_majority_axis() ==
     /// true` (polar = 6, interior = 0 → polar_is_majority fires);
@@ -15912,7 +16108,7 @@ impl ResourceLimits {
     /// classical STRICT-vs-TIE split from voting-theory tie-detection.
     #[must_use]
     pub const fn has_majority_axis(self) -> bool {
-        self.count_polar_axes() != self.count_interior_axes()
+        Self::count_arities_differ(self.count_polar_axes(), self.count_interior_axes())
     }
 
     /// Whole-posture POLAR-DIRECTED-LEAD projection —
@@ -17252,10 +17448,18 @@ impl ResourceLimits {
     /// [`Self::is_atomically_balanced`]'s interior-uniform ⇒ balance
     /// bridge.
     ///
-    /// Encoded as the boolean `!=` of the two ARITHMETIC-QUANTIFIER
-    /// tallies — one primitive delegation to the shipped
-    /// [`Self::count_bottom_axes`] and [`Self::count_top_axes`]
-    /// each. The equivalent alternative encodings `self
+    /// Encoded as a single-composition delegation through the substrate
+    /// primitive [`Self::count_arities_differ`] on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies —
+    /// `Self::count_arities_differ(self.count_bottom_axes(),
+    /// self.count_top_axes())`, matching
+    /// [`Self::is_atomically_balanced`]'s single-composition delegation
+    /// verbatim on the INEQUALITY-KIND combinator (where the EQUALITY-
+    /// KIND sibling routes through [`Self::count_arities_agree`], THIS
+    /// predicate routes through the INEQUALITY-KIND peer on the SAME
+    /// two-input surface — the De Morgan complement pair jointly closing
+    /// the two-cell EXHAUSTIVE-AND-DISJOINT ATOMIC-MAJORITY-EXISTENCE
+    /// partition). The equivalent alternative encodings `self
     /// .bottom_is_majority() || self.top_is_majority()` and
     /// `!self.is_atomically_balanced()` are both structurally
     /// equivalent AND pinned as substrate theorems in the paired
@@ -17345,7 +17549,7 @@ impl ResourceLimits {
     /// cell.
     #[must_use]
     pub const fn has_atomic_majority(self) -> bool {
-        self.count_bottom_axes() != self.count_top_axes()
+        Self::count_arities_differ(self.count_bottom_axes(), self.count_top_axes())
     }
 
     /// Whole-posture BOTTOM-DIRECTED-LEAD projection —
@@ -91062,6 +91266,349 @@ mod tests {
         const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.is_atomically_balanced());
         const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.is_axially_balanced());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.is_atomically_balanced());
+    }
+
+    #[test]
+    fn resource_limits_count_arities_differ_agrees_with_open_coded_ne() {
+        // Bare-body identity — the helper's verdict on every (lhs, rhs)
+        // pair agrees with the open-coded shape `lhs != rhs` that every
+        // WHOLE-POSTURE MAJORITY-EXISTENCE predicate on ResourceLimits
+        // carried at its exit pre-lift. Swept over the (lhs < rhs, lhs
+        // == rhs, lhs > rhs) three-cell order-partition with
+        // representative values so all three cells of the ARM-TRICHOTOMY
+        // on the (usize, usize) joint-input regime are pinned, using
+        // axial-tally-bounded samples (0..=FIELD_COUNT) for which the
+        // caller-side invariant is discharged by construction.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::count_arities_differ(lhs, rhs),
+                lhs != rhs,
+                "helper != open-coded != at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_arities_differ_diagonal_inputs_fold_to_false() {
+        // Diagonal identity — for every n in the caller-safe regime, the
+        // helper folds the diagonal (n, n) input to false. The tie corner
+        // of the input pair collapses to the REJECTED arm of the BOOLEAN
+        // verdict — UNEQUAL-ARITY requires the two operands to differ,
+        // so the diagonal leg rejects. Swept across the (0, min-
+        // positive, FIELD_COUNT, mid) constellation covering the
+        // representative axial-tally diagonal postures — dual of the
+        // EQUALITY-KIND sibling's diagonal-to-TRUE pin.
+        for n in [
+            0_usize,
+            1,
+            ResourceLimits::FIELD_COUNT / 2,
+            ResourceLimits::FIELD_COUNT,
+        ] {
+            assert!(
+                !ResourceLimits::count_arities_differ(n, n),
+                "diagonal fold to false violated at n={n}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_arities_differ_strict_dominance_arms_accept_to_true() {
+        // Strict-dominance-arm dispatch — on every (lhs, rhs) with
+        // lhs != rhs (either direction), the helper accepts to true.
+        // The BOOLEAN combinator DISCARDS the arm-identity distinction
+        // between the two strict-dominance legs and folds both onto the
+        // SAME TRUE cell — dual of the EQUALITY-KIND sibling which folds
+        // both strict-dominance legs onto its FALSE cell. Swept over
+        // representative (lhs > rhs) and (rhs > lhs) samples covering
+        // both directions of the strict-inequality partition.
+        for (lhs, rhs) in [
+            (1_usize, 0_usize),
+            (0, 1),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (0, ResourceLimits::FIELD_COUNT),
+            (5, 1),
+            (1, 5),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_ne!(
+                lhs, rhs,
+                "test-local invariant violated: lhs must differ from rhs, got ({lhs}, {rhs})",
+            );
+            assert!(
+                ResourceLimits::count_arities_differ(lhs, rhs),
+                "strict-dominance-arm acceptance to true regressed at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_arities_differ_is_commutative_in_its_input_pair() {
+        // Commutativity — on every (lhs, rhs), count_arities_differ(
+        // lhs, rhs) == count_arities_differ(rhs, lhs). The UNEQUAL-
+        // ARITY combinator folds both order-cells onto the SAME verdict
+        // — matching the EQUALITY-KIND sibling's commutativity and the
+        // paired absolute_count_difference commutativity on the UNSIGNED
+        // magnitude output cell one output-cell axis over.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::count_arities_differ(lhs, rhs),
+                ResourceLimits::count_arities_differ(rhs, lhs),
+                "commutativity violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_arities_differ_is_de_morgan_complement_of_count_arities_agree() {
+        // De Morgan complement — on every (lhs, rhs),
+        // count_arities_differ(lhs, rhs) == !count_arities_agree(lhs,
+        // rhs). The BOOLEAN combinator's TRUE arm coincides exactly
+        // with the complement of the EQUALITY-KIND sibling's TRUE arm —
+        // the pair is the (equal, unequal) EXHAUSTIVE-AND-DISJOINT
+        // partition of the input universe.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::count_arities_differ(lhs, rhs),
+                !ResourceLimits::count_arities_agree(lhs, rhs),
+                "De Morgan complement violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_arities_differ_iff_some_directed_strict_count_lead_holds() {
+        // Strict-dominance-union bridge — on every (lhs, rhs),
+        // count_arities_differ(lhs, rhs) == (strict_count_lead_holds(
+        // lhs, rhs) || strict_count_lead_holds(rhs, lhs)). The BOOLEAN
+        // combinator's TRUE arm coincides exactly with the union of the
+        // two ORDER-KIND sibling's TRUE arms across swapped inputs —
+        // the MAJORITY-EXISTENCE verdict is the ANY-DIRECTION strict-
+        // dominance verdict.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::count_arities_differ(lhs, rhs),
+                ResourceLimits::strict_count_lead_holds(lhs, rhs)
+                    || ResourceLimits::strict_count_lead_holds(rhs, lhs),
+                "strict-dominance-union bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_arities_differ_iff_absolute_count_difference_is_nonzero() {
+        // Nonzero-magnitude bridge — the BOOLEAN combinator's TRUE arm
+        // coincides exactly with the nonzero cell of the UNSIGNED
+        // sibling's output. On every (lhs, rhs), count_arities_differ(
+        // lhs, rhs) == (absolute_count_difference(lhs, rhs) != 0). The
+        // unequal-arity verdict is the presence-only projection of the
+        // strict-inequality corners the UNSIGNED magnitude carries as a
+        // `usize` reading — dual of the EQUALITY-KIND sibling's zero-
+        // magnitude bridge on the same paired UNSIGNED sibling.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::count_arities_differ(lhs, rhs),
+                ResourceLimits::absolute_count_difference(lhs, rhs) != 0,
+                "nonzero-magnitude bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_arities_differ_iff_signed_count_difference_is_nonzero() {
+        // Nonzero-signum bridge — the BOOLEAN combinator's TRUE arm
+        // coincides exactly with the nonzero cell of the SIGNED
+        // sibling's output. On every (lhs, rhs), count_arities_differ(
+        // lhs, rhs) == (signed_count_difference(lhs, rhs) != 0). Matches
+        // the UNSIGNED bridge on the ARM-AGNOSTIC nonzero cell across
+        // both sign representations — dual of the EQUALITY-KIND
+        // sibling's zero-signum bridge on the same paired SIGNED
+        // sibling.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::count_arities_differ(lhs, rhs),
+                ResourceLimits::signed_count_difference(lhs, rhs) != 0,
+                "nonzero-signum bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_arities_differ_iff_some_directed_witness_strict_count_lead_is_some() {
+        // Witness-presence bridge — the BOOLEAN combinator's TRUE arm
+        // coincides exactly with the union-SOME cell of the ARM-
+        // SELECTING sibling across swapped inputs. On every (lhs, rhs),
+        // count_arities_differ(lhs, rhs) ==
+        // (witness_strict_count_lead(lhs, rhs).is_some() ||
+        //  witness_strict_count_lead(rhs, lhs).is_some()).
+        // The strict-dominance-in-some-direction leg is the ONLY posture
+        // where AT LEAST ONE DIRECTED strict-dominance witness fires —
+        // dual of the EQUALITY-KIND sibling's both-NONE witness bridge.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::count_arities_differ(lhs, rhs),
+                ResourceLimits::witness_strict_count_lead(lhs, rhs).is_some()
+                    || ResourceLimits::witness_strict_count_lead(rhs, lhs).is_some(),
+                "witness-presence bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_arities_differ_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the helper's `pub const fn` signature
+        // preserves compile-time evaluability across the diagonal-tie,
+        // lhs-strong-arm, rhs-strong-arm, and FIELD_COUNT-corner cells
+        // of the (usize, usize) joint-input regime. Complements the
+        // primary bare-body identity pin
+        // `resource_limits_count_arities_differ_agrees_with_open_coded_ne`
+        // by extending the const-evaluability proof onto the compile-
+        // time surface.
+        const _: () = assert!(!ResourceLimits::count_arities_differ(0, 0));
+        const _: () = assert!(ResourceLimits::count_arities_differ(1, 0));
+        const _: () = assert!(ResourceLimits::count_arities_differ(
+            ResourceLimits::FIELD_COUNT,
+            0
+        ));
+        const _: () = assert!(ResourceLimits::count_arities_differ(
+            0,
+            ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(ResourceLimits::count_arities_differ(5, 1));
+        const _: () = assert!(ResourceLimits::count_arities_differ(1, 5));
+        const _: () = assert!(!ResourceLimits::count_arities_differ(
+            ResourceLimits::FIELD_COUNT,
+            ResourceLimits::FIELD_COUNT
+        ));
+    }
+
+    #[test]
+    fn resource_limits_majority_existence_family_bodies_delegate_to_count_arities_differ() {
+        // Sweep-of-family pin — asserts each of the two WHOLE-POSTURE
+        // MAJORITY-EXISTENCE predicate bodies (has_majority_axis over
+        // the (polar, interior) axial partition, has_atomic_majority
+        // over the ATOMIC (bottom, top) sub-partition of the polar
+        // cell) agrees with the helper-based shape
+        // `ResourceLimits::count_arities_differ(self.count_A(),
+        // self.count_B())` on every posture from the EMPTY / DEFAULT /
+        // UNBOUNDED / HAND_AUTHORED_MID / HAND_AUTHORED_OTHER preset
+        // constellation (2×5 = 10 verdicts). A future body regression
+        // that swapped one of the count inputs for the SAME count on
+        // both arms would collapse to constant false here on at least
+        // one posture; a regression that flipped `!=` to `==` would
+        // negate the verdict on every posture.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                posture.has_majority_axis(),
+                ResourceLimits::count_arities_differ(
+                    posture.count_polar_axes(),
+                    posture.count_interior_axes(),
+                ),
+                "has_majority_axis delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.has_atomic_majority(),
+                ResourceLimits::count_arities_differ(
+                    posture.count_bottom_axes(),
+                    posture.count_top_axes(),
+                ),
+                "has_atomic_majority delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_majority_existence_family_bodies_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the WHOLE-POSTURE MAJORITY-EXISTENCE
+        // family bodies preserved const-fn evaluability under the sweep
+        // through count_arities_differ. Each of the two swept predicates
+        // × the three shipped `pub const` preset postures (EMPTY,
+        // UNBOUNDED, DEFAULT). EMPTY packs six bottom axes uniformly —
+        // polar = FIELD_COUNT, interior = 0 → has_majority_axis fires
+        // true; bottom = FIELD_COUNT, top = 0 → has_atomic_majority
+        // fires true. UNBOUNDED mirrors on the top pole — same compound
+        // asymmetry (polar = FIELD_COUNT, interior = 0) → true; bottom
+        // = 0, top = FIELD_COUNT → has_atomic_majority fires true.
+        // DEFAULT is interior-uniform — polar = 0, interior =
+        // FIELD_COUNT → has_majority_axis fires true; bottom = 0, top =
+        // 0 → has_atomic_majority fires FALSE (the zero-tie corner) —
+        // pinning that DEFAULT is the sole preset where the atomic
+        // majority-existence arm rejects on an interior-uniform posture.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.has_majority_axis());
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.has_atomic_majority());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.has_majority_axis());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.has_atomic_majority());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.has_majority_axis());
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.has_atomic_majority());
     }
 
     #[test]

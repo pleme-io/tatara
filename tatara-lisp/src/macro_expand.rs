@@ -1286,31 +1286,43 @@ impl ResourceLimits {
     /// to `self` — a correct but roundabout composition of the partial-
     /// order primitive against its lattice-companion. Post-lift the
     /// relation binds at ONE typed method on the posture algebra; a
-    /// caller writes `tighter.leq(looser)` and rustc's exhaustiveness
-    /// on the six-field conjunction below guarantees every ceiling is
-    /// threaded through the `<=` primitive.
+    /// caller writes `tighter.leq(looser)` and the two-primitive
+    /// delegation below (`all_mask_bits_set` composed with
+    /// [`Self::axes_leq`]) threads every ceiling through the `<=`
+    /// primitive at ONE per-axis-mask constructor site rather than
+    /// through six inline `<=` conjunctions at THIS callsite.
+    ///
+    /// Encoded as `Self::all_mask_bits_set(self.axes_leq(other))` — one
+    /// mask-constructor delegation to [`Self::axes_leq`] (the six per-
+    /// axis `<=` witnesses) composed with the substrate ALL-fold
+    /// [`Self::all_mask_bits_set`] on `[bool; Self::FIELD_COUNT]`. The
+    /// same shape [`Self::eq`] carries at its body one PROJECTION-KIND
+    /// axis over (which pairs `axes_eq` with `all_mask_bits_set` on the
+    /// EQUALITY column); this callsite pairs `axes_leq` with the SAME
+    /// ALL-fold on the PARTIAL-ORDER column. A future re-derivation of
+    /// [`Self::axes_leq`] (e.g. to a different pointwise `<=` primitive)
+    /// propagates here mechanically without requiring a per-method
+    /// fix-up, matching [`Self::geq`]'s `other.leq(self)` argument-flip
+    /// delegation one DIRECTION axis over.
     ///
     /// Theory anchor: THEORY.md §II.1 invariant 5 — composition
     /// preserves proofs; the partial-order relation on two preset-
     /// carried resource proofs is itself a typed named entry composing
-    /// their tightness ordering. THEORY.md §V.1 — knowable platform;
+    /// their tightness ordering, and the two-primitive delegation
+    /// composes both `axes_leq`'s per-axis proof and `all_mask_bits_set`'s
+    /// ALL-fold proof mechanically. THEORY.md §V.1 — knowable platform;
     /// the pointwise `<=` combinator becomes a TYPE-level operation on
-    /// the posture algebra rather than an inline six-primitive
-    /// conjunction at every consumer that compares two presets.
-    /// `tatara-lattice`'s [`Lattice::leq`] method on `Classification`
-    /// closes the SAME shape one layer down — an entity's
-    /// classification is a lattice with a `leq` partial order; a
-    /// resource posture is a lattice with a `leq` partial order; both
-    /// algebras carry the (meet, join, leq) primitive triple as their
-    /// fundamental relation-and-combinator surface.
+    /// the posture algebra threaded through ONE substrate ALL-fold
+    /// primitive at the whole-posture-verdict callsite rather than a
+    /// per-callsite six-inline conjunction. `tatara-lattice`'s
+    /// [`Lattice::leq`] method on `Classification` closes the SAME shape
+    /// one layer down — an entity's classification is a lattice with a
+    /// `leq` partial order; a resource posture is a lattice with a `leq`
+    /// partial order; both algebras carry the (meet, join, leq) primitive
+    /// triple as their fundamental relation-and-combinator surface.
     #[must_use]
     pub const fn leq(self, other: Self) -> bool {
-        self.max_expansion_depth <= other.max_expansion_depth
-            && self.max_cache_entries <= other.max_cache_entries
-            && self.max_expansion_size <= other.max_expansion_size
-            && self.max_macro_body_size <= other.max_macro_body_size
-            && self.max_registered_macros <= other.max_registered_macros
-            && self.max_macro_arity <= other.max_macro_arity
+        Self::all_mask_bits_set(self.axes_leq(other))
     }
 
     /// Per-axis pointwise `<=` mask across the six ceilings — the ATOMIC
@@ -96581,6 +96593,50 @@ mod tests {
                     a.ne(b),
                     ResourceLimits::any_mask_bit_set(a.axes_ne(b)),
                     "ne disagrees with any_mask_bit_set(axes_ne) on ({a:?}, {b:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_leq_body_delegates_to_all_mask_bits_set() {
+        // Sweep-of-callsite pin — the direct PROJECTION-KIND peer of
+        // `resource_limits_eq_body_delegates_to_all_mask_bits_set` one
+        // PARTIAL-ORDER axis over on the (equality, partial-order)
+        // pair of whole-posture-verdict pairwise relations. After
+        // routing the whole-posture `leq` body from the six-inline
+        // `field_i <= field_i && ...` conjunction chain through
+        // `ResourceLimits::all_mask_bits_set(self.axes_leq(other))`,
+        // the whole 5×5 = 25 preset×preset constellation continues to
+        // agree with the helper-based shape
+        // `all_mask_bits_set(axes_leq(other))`. The pin closes the
+        // FIELD_COUNT-decoupling refactor on the ALL-fold column of
+        // the (leq, eq) pair on the whole-posture-verdict surface:
+        // both bodies now bind at ONE substrate ALL-fold primitive
+        // composed with their per-axis-mask constructor
+        // (`axes_leq` / `axes_eq` respectively), so a future
+        // FIELD_COUNT bump that would have silently under-covered
+        // this callsite's hardcoded conjunction chain is now caught
+        // by the helper's `while i < FIELD_COUNT` forward scan
+        // rather than an axis-count that no callsite guarded.
+        // Together with the paired `eq` delegation-pin sweep the two
+        // tests close the ALL-fold (universal-QUANTIFIER-KIND) column
+        // of the (equality, partial-order) whole-posture-verdict pair
+        // at ONE substrate primitive per RELATION-KIND at every
+        // callsite in the (eq, leq) pair.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ];
+        for a in postures {
+            for b in postures {
+                assert_eq!(
+                    a.leq(b),
+                    ResourceLimits::all_mask_bits_set(a.axes_leq(b)),
+                    "leq disagrees with all_mask_bits_set(axes_leq) on ({a:?}, {b:?})",
                 );
             }
         }

@@ -15670,6 +15670,213 @@ impl ResourceLimits {
         }
     }
 
+    /// ARM-SELECTING SIGNED-KIND CENTRAL-TENDENCY MAX-fold on a coupled
+    /// COUNT PAIR — `Self::signed_max_of_count_pair(lhs, rhs)` returns
+    /// `+lhs` (as `isize`) when `lhs >= rhs` and `-rhs` (as `isize`)
+    /// otherwise. The BOUNDARY primitive lifting the sign-split shape
+    /// `if lhs >= rhs { lhs as isize } else { -(rhs as isize) }` that
+    /// every WHOLE-POSTURE SIGNED-KIND ARM-AGNOSTIC CENTRAL-TENDENCY
+    /// MAX-fold projection on [`ResourceLimits`] carries at its exit —
+    /// [`Self::axial_signed_majority_count`] and
+    /// [`Self::atomic_signed_majority_count`] both wrap the sign-split
+    /// MAX-fold of a paired `(usize, usize)` ARITHMETIC-QUANTIFIER tally
+    /// in the same three-line inline dispatch. Pre-lift each SIGNED-KIND
+    /// MAX-fold projection open-coded the five-line
+    /// `let a = self.count_A(); let b = self.count_B();
+    ///  #[allow(clippy::cast_possible_wrap)]
+    ///  if a >= b { a as isize } else { -(b as isize) }`
+    /// on its OWN pair — a two-point copy-paste whose consistency the
+    /// type system did not gate (a projection that swapped the `>=` for
+    /// `<=` would silently invert the WIN convention on every strict-
+    /// majority posture, and one that swapped the arm bindings on the
+    /// `else` branch would negate the LHS instead of the RHS on every
+    /// input). Post-lift the shape binds at ONE typed `const fn` on
+    /// [`ResourceLimits`], and every future WHOLE-POSTURE SIGNED-KIND
+    /// MAX-fold projection composes through this helper — the SIGNED-
+    /// MAX-of-TWO-ARMS fold over a coupled `(usize, usize)` COUNT PAIR
+    /// is a substrate-level theorem rather than a per-consumer five-line
+    /// open-coded sign-split.
+    ///
+    /// The `isize`-VALUED CENTRAL-TENDENCY DUAL of
+    /// [`Self::signed_count_difference`] one COMBINATOR-KIND axis over
+    /// on the SAME `(usize, usize) → isize` two-input surface — where
+    /// [`Self::signed_count_difference`] reads the paired tallies
+    /// through the SIGNED-DIFFERENCE DISPERSION fold `sign(a-b) *
+    /// |a-b|` (the SIGNED margin with the WINNER's identity carried
+    /// through the OUTPUT sign and the MARGIN carried through the
+    /// output magnitude), THIS combinator reads the SAME paired tallies
+    /// through the SIGNED-MAX CENTRAL-TENDENCY fold (the WINNER's
+    /// identity carried through the OUTPUT sign and the WINNER's OWN
+    /// TALLY carried through the output magnitude). Jointly the
+    /// (signed_max_of_count_pair, signed_count_difference) pair CLOSES
+    /// the SIGNED-KIND `isize`-VALUED (CENTRAL-TENDENCY, DISPERSION)
+    /// column on the paired `usize` count tally — where the ARM-AGNOSTIC
+    /// pair (max_of_count_pair, absolute_count_difference) reads the
+    /// same (CENTRAL-TENDENCY, DISPERSION) column into `usize` and
+    /// discards arm identity, THIS SIGNED pair reads the same column
+    /// into `isize` and PRESERVES arm identity through the output sign.
+    /// The `isize`-VALUED SIGNED-KIND peer of [`Self::max_of_count_pair`]
+    /// one SIGNEDNESS axis over on the SAME `(usize, usize)` COUNT PAIR
+    /// — where [`Self::max_of_count_pair`] reads the paired tallies
+    /// through the UNSIGNED MAX-fold `max(lhs, rhs)` (the winning arm's
+    /// tally, discarding arm identity), THIS combinator reads the SAME
+    /// paired tallies through the SIGNED-MAX-fold `sign(lhs-rhs) *
+    /// max(lhs, rhs)` with the `>=` tie convention routing the balance
+    /// corner into the positive arm.
+    ///
+    /// **Bare-body identity — LOAD-BEARING structural pin**: on every
+    /// `(lhs, rhs)`, `signed_max_of_count_pair(lhs, rhs)` matches the
+    /// open-coded SIGNED-MAX split
+    /// `if lhs >= rhs { lhs as isize } else { -(rhs as isize) }`.
+    /// Pinned via
+    /// `resource_limits_signed_max_of_count_pair_agrees_with_open_coded_signed_max_split`.
+    ///
+    /// **ABSOLUTE-VALUE bridge to `max_of_count_pair` — LOAD-BEARING
+    /// substrate theorem**: on every `(lhs, rhs)`,
+    /// `signed_max_of_count_pair(lhs, rhs).unsigned_abs() ==
+    /// max_of_count_pair(lhs, rhs)`. Ties the SIGNED-MAX exit to the
+    /// UNSIGNED-MAX exit through the canonical [`isize::unsigned_abs`]
+    /// fold — the DIRECT proof that this projection strictly REFINES
+    /// [`Self::max_of_count_pair`] by splitting each magnitude cell
+    /// onto its (positive, negative) arm-identity partition, with the
+    /// balance corner grouped into the positive arm by the `>=` tie
+    /// convention. Pinned via
+    /// `resource_limits_signed_max_of_count_pair_unsigned_abs_equals_max_of_count_pair`.
+    ///
+    /// **Diagonal identity — POSITIVE on the tie cell**: for every `n`,
+    /// `signed_max_of_count_pair(n, n) == n as isize`. The diagonal
+    /// input pair collapses to the shared tally under the `>=` tie
+    /// convention, always routed onto the positive arm. Pinned via
+    /// `resource_limits_signed_max_of_count_pair_diagonal_inputs_fold_to_positive_operand`.
+    ///
+    /// **Sign-flip on input swap — SIGNED SYMMETRY pin**: for every
+    /// `(lhs, rhs)` with `lhs != rhs`, `signed_max_of_count_pair(lhs,
+    /// rhs) == -signed_max_of_count_pair(rhs, lhs)`. Unlike the ARM-
+    /// AGNOSTIC MAX / MIN combinators (which are strictly commutative),
+    /// the SIGNED-MAX flips its sign on input swap because the WINNER
+    /// arm identity is carried through the OUTPUT sign — swapping the
+    /// input pair swaps the sign of the SIGN itself. The diagonal cell
+    /// `lhs == rhs` where both `signed_max_of_count_pair(n, n)` and its
+    /// swap read `+n` is the EXCEPTION carved out by the `>=` tie
+    /// convention. Pinned via
+    /// `resource_limits_signed_max_of_count_pair_flips_sign_on_input_swap_off_diagonal`.
+    ///
+    /// **NON-NEGATIVE-AT-LHS-DOMINATES pin — LOAD-BEARING WIN-CONVENTION
+    /// pin**: for every `(lhs, rhs)`, `signed_max_of_count_pair(lhs,
+    /// rhs) >= 0 ⇔ lhs >= rhs`. The SIGNED output is NON-NEGATIVE iff
+    /// the LHS wins (or ties) — matching the `>=` tie convention
+    /// verbatim. DUAL of the STRICT-negative bridge below. Pinned via
+    /// `resource_limits_signed_max_of_count_pair_non_negative_iff_lhs_dominates_rhs`.
+    ///
+    /// **NEGATIVE-AT-RHS-STRICT-DOMINATES pin — LOAD-BEARING**: for
+    /// every `(lhs, rhs)`, `signed_max_of_count_pair(lhs, rhs) < 0 ⇔
+    /// lhs < rhs`. DUAL of the NON-NEGATIVE bridge — the SIGNED output
+    /// is STRICTLY negative iff the RHS strictly wins. Pinned via
+    /// `resource_limits_signed_max_of_count_pair_negative_iff_rhs_strictly_dominates_lhs`.
+    ///
+    /// **ZERO iff DOUBLE-ZERO pin — LOAD-BEARING KERNEL pin**: on every
+    /// `(lhs, rhs)`, `signed_max_of_count_pair(lhs, rhs) == 0 ⇔ (lhs ==
+    /// 0 && rhs == 0)`. The SIGNED-MAX output vanishes exactly on the
+    /// double-zero corner of the input regime — the `>=` tie convention
+    /// routes the balance corner `(0, 0)` onto the `+0` cell (not
+    /// `-0`), and every other cell fires a non-zero magnitude on the
+    /// winning arm. Cross-pins the SIGNED-MAX combinator's KERNEL against
+    /// the diagonal-and-empty cell of the input pair. Pinned via
+    /// `resource_limits_signed_max_of_count_pair_zero_iff_double_zero_input`.
+    ///
+    /// **Bridge to `count_pair_ordering` — LOAD-BEARING structural pin**:
+    /// on every `(lhs, rhs)`, `signed_max_of_count_pair(lhs, rhs) >= 0
+    /// ⇔ count_pair_ordering(lhs, rhs) != Ordering::Less`. The SIGNED
+    /// output's NON-NEGATIVE half aligns with the trichotomy verdict's
+    /// {Greater, Equal} legs — pins the SIGNED-MAX sign discriminator
+    /// against the SIGNUM trichotomy discriminator one COMBINATOR-KIND
+    /// axis apart on the SAME paired count input. Cross-pins matching
+    /// the min-selects-LHS-iff-ordering-not-Greater bridge on the DUAL
+    /// (MIN, MAX) SIGNEDNESS axis. Pinned via
+    /// `resource_limits_signed_max_of_count_pair_non_negative_iff_count_pair_ordering_not_less`.
+    ///
+    /// **SIGNUM bridge to `signed_count_difference` — LOAD-BEARING
+    /// closure pin**: on every `(lhs, rhs)`, the SIGN of
+    /// `signed_max_of_count_pair(lhs, rhs)` agrees with the SIGN of
+    /// `signed_count_difference(lhs, rhs)` EXCEPT at the ties cells
+    /// where `lhs == rhs`: at every tie the SIGNED-MAX fires `+lhs`
+    /// (`>=` tie convention) while the SIGNED-DIFF fires `0`. Off-tie,
+    /// the two combinators' `isize::signum()` agree posture-for-posture.
+    /// Pinned via
+    /// `resource_limits_signed_max_of_count_pair_signum_agrees_with_signed_count_difference_off_diagonal`.
+    ///
+    /// `const fn` so a caller can pin the SIGNED-MAX verdict at compile
+    /// time (`const _: () = assert!(
+    /// ResourceLimits::signed_max_of_count_pair(3, 5) == -5);`) —
+    /// sibling of the const-fn evaluability pins the
+    /// [`Self::max_of_count_pair`], [`Self::min_of_count_pair`],
+    /// [`Self::signed_count_difference`], [`Self::then_ordering`], and
+    /// [`Self::count_pair_ordering`] combinators already carry at their
+    /// own exits.
+    ///
+    /// **Adoption compounds**: future WHOLE-POSTURE SIGNED-KIND MAX-
+    /// fold projections that currently open-code the five-line sign-
+    /// split on a coupled `(usize, usize)` COUNT PAIR rewrite their body
+    /// from
+    /// `let a = self.count_A(); let b = self.count_B();
+    ///  #[allow(clippy::cast_possible_wrap)]
+    ///  if a >= b { a as isize } else { -(b as isize) }`
+    /// to `Self::signed_max_of_count_pair(self.count_A(), self.count_B())`
+    /// at no semantic change — the two-line delegation replaces the
+    /// five-line sign-split. rustc's type system gates every downstream
+    /// `isize` consumer against the single lifted SIGNED-MAX
+    /// combinator; a body regression at the helper (`>=` → `<=`, or a
+    /// sign flip on either branch) fires immediately at the two swept
+    /// `_signed_majority_count` pins rather than silently re-classifying
+    /// every downstream posture-reading SIGNED-MAX. The paired
+    /// (signed_max, signed_diff) SIGNED-KIND `isize`-VALUED
+    /// (CENTRAL-TENDENCY, DISPERSION) column on the paired `usize`
+    /// count tally is now closed as two substrate combinators —
+    /// downstream SIGNED-KIND consumers on either statistic route
+    /// through ONE typed named `const fn` rather than a per-consumer
+    /// sign-split.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// SIGNED-KIND MAX-fold shape at every WHOLE-POSTURE SIGNED-MAX
+    /// projection body binds at ONE typed named `const fn` on the
+    /// algebra rather than a per-projection open-coded five-line sign-
+    /// split. THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the helper composes mechanically under the bare-body
+    /// identity above with no re-derivation at the caller, and both
+    /// swept callsites preserve their const-fn evaluability pins
+    /// verbatim. The (signed_max, signed_diff) SIGNED-KIND pair mirrors
+    /// the (max, abs-diff) ARM-AGNOSTIC pair one SIGNEDNESS axis over,
+    /// closing the (CENTRAL-TENDENCY, DISPERSION) column on BOTH
+    /// SIGNEDNESS legs. THEORY.md §V.1 — knowable platform; the
+    /// SIGNED-MAX-OF-TWO-ARMS fold becomes a substrate-level theorem
+    /// rather than a per-projection convention.
+    ///
+    /// Frontier inspiration: Haskell's `if a >= b then fromIntegral a
+    /// else negate (fromIntegral b)` on the paired `(Word, Word) →
+    /// Int` sign-split — the DIRECT SIGNED-MAX combinator on a paired
+    /// non-negative tally. APL's `((⍺≥⍵)×⍺)-((⍺<⍵)×⍵)` scalar sign-
+    /// split on paired numeric scalars — the SAME two-argument SIGNED-
+    /// MAX on the type system's numeric type. Voting-theory's canonical
+    /// "winning tally with directional sign" figure that reads `+k` on
+    /// a strict lhs win with `k` lhs votes and `-k` on a strict rhs win
+    /// with `k` rhs votes — the SAME SIGNED-MAX projection on paired
+    /// arm tallies. Classical descriptive statistics' SIGNED-MAX order
+    /// statistic on a two-point sample — closing the (MAX, ABS-DIFF)
+    /// UNSIGNED column into the (SIGNED-MAX, SIGNED-DIFF) SIGNED
+    /// column via the `sign(a - b) * ·` transport. Translation through
+    /// pleme-io primitives is the plain `const fn` inline sign-split
+    /// below — no closure, no `Ord::max` const-stability workaround, no
+    /// `isize::signum` indirection, no new dep, no typeclass indirection.
+    #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
+    pub const fn signed_max_of_count_pair(lhs: usize, rhs: usize) -> isize {
+        if lhs >= rhs {
+            lhs as isize
+        } else {
+            -(rhs as isize)
+        }
+    }
+
     /// Presence-preserving CLOSED-INTERVAL WIDTH from a coupled ENDPOINT PAIR
     /// on whole-posture `Option<usize>` axis-endpoint tallies —
     /// `Self::derive_axis_endpoint_span(first, last)` returns
@@ -20490,17 +20697,7 @@ impl ResourceLimits {
     /// allocation.
     #[must_use]
     pub const fn axial_signed_majority_count(self) -> isize {
-        let p = self.count_polar_axes();
-        let i = self.count_interior_axes();
-        // Both `p` and `i` lie in `0..=FIELD_COUNT` (= 6), so the
-        // `as isize` cast never wraps on any target Rust supports
-        // (`isize::MAX` far exceeds FIELD_COUNT on every target).
-        #[allow(clippy::cast_possible_wrap)]
-        if p >= i {
-            p as isize
-        } else {
-            -(i as isize)
-        }
+        Self::signed_max_of_count_pair(self.count_polar_axes(), self.count_interior_axes())
     }
 
     /// Whole-posture SIGNED-KIND ATOMIC ARM-AGNOSTIC CENTRAL-TENDENCY
@@ -20690,17 +20887,7 @@ impl ResourceLimits {
     /// indirection, no per-axis loop, no allocation.
     #[must_use]
     pub const fn atomic_signed_majority_count(self) -> isize {
-        let b = self.count_bottom_axes();
-        let t = self.count_top_axes();
-        // Both `b` and `t` lie in `0..=FIELD_COUNT` (= 6), so the
-        // `as isize` cast never wraps on any target Rust supports
-        // (`isize::MAX` far exceeds FIELD_COUNT on every target).
-        #[allow(clippy::cast_possible_wrap)]
-        if b >= t {
-            b as isize
-        } else {
-            -(t as isize)
-        }
+        Self::signed_max_of_count_pair(self.count_bottom_axes(), self.count_top_axes())
     }
 
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
@@ -75945,6 +76132,310 @@ mod tests {
                     posture.count_top_axes(),
                 ),
                 "atomic_minority_count delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_max_of_count_pair_agrees_with_open_coded_signed_max_split() {
+        // Bare-body identity — the helper's verdict on every (lhs, rhs)
+        // `usize` pair agrees with the open-coded SIGNED-MAX split
+        // `if lhs >= rhs { lhs as isize } else { -(rhs as isize) }`
+        // that every WHOLE-POSTURE SIGNED-KIND MAX-fold projection
+        // carried at its exit pre-lift. Swept over a fixed 5×5 = 25-cell
+        // constellation of the (usize, usize) input regime whose
+        // components exhaust the relative-order trichotomy at multiple
+        // magnitude bands — covers `(0, 0)` (double-zero tie routed to
+        // `+0` by the `>=` tie convention), `(0, 6)` and `(6, 0)`
+        // (SATURATED opposite corners routed to `-6` and `+6`), `(3, 3)`
+        // (INTERIOR tie at the halfway line routed to `+3`), `(2, 4)`
+        // and `(4, 2)` (INTERIOR strict split routed to `-4` and `+4`),
+        // and every mixed cell.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let via_helper = ResourceLimits::signed_max_of_count_pair(lhs, rhs);
+                #[allow(clippy::cast_possible_wrap)]
+                let via_open_code = if lhs >= rhs {
+                    lhs as isize
+                } else {
+                    -(rhs as isize)
+                };
+                assert_eq!(
+                    via_helper, via_open_code,
+                    "helper != open-coded SIGNED-MAX split at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_max_of_count_pair_unsigned_abs_equals_max_of_count_pair() {
+        // ABSOLUTE-VALUE bridge to `max_of_count_pair` — LOAD-BEARING
+        // substrate theorem. On every `(lhs, rhs)`, the SIGNED-MAX
+        // exit agrees with the UNSIGNED-MAX exit after collapsing the
+        // sign through `isize::unsigned_abs`. The DIRECT proof that
+        // this projection strictly REFINES the ARM-AGNOSTIC
+        // `max_of_count_pair` by splitting each magnitude cell onto its
+        // (positive, negative) arm-identity partition, with the balance
+        // corner grouped into the positive arm by the `>=` tie
+        // convention. DUAL of the `absolute_count_difference ==
+        // signed_count_difference.unsigned_abs()` SIGNUM bridge on the
+        // (SIGNED, ARM-AGNOSTIC) SIGNEDNESS axis at the DISPERSION
+        // statistic, promoted one COMBINATOR-KIND axis over onto the
+        // CENTRAL-TENDENCY statistic.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                assert_eq!(
+                    ResourceLimits::signed_max_of_count_pair(lhs, rhs).unsigned_abs(),
+                    ResourceLimits::max_of_count_pair(lhs, rhs),
+                    "signed_max.unsigned_abs() != max at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_max_of_count_pair_diagonal_inputs_fold_to_positive_operand() {
+        // Diagonal identity — POSITIVE on the tie cell. For every `n`,
+        // `signed_max_of_count_pair(n, n) == n as isize`. The diagonal
+        // input pair collapses to the shared tally under the `>=` tie
+        // convention, always routed onto the positive arm. LOAD-BEARING
+        // WIN-CONVENTION pin — a body regression that swapped the `>=`
+        // for `>` would return `-n` on every diagonal-non-zero cell and
+        // fire immediately here. DUAL of `signed_count_difference`'s
+        // diagonal-to-ZERO pin one COMBINATOR-KIND axis under on the
+        // DISPERSION statistic, where the SIGNED-DIFF collapses the
+        // diagonal to `0` and THIS SIGNED-MAX carries it as `+n`.
+        for n in [0usize, 1, 3, 6, 100] {
+            #[allow(clippy::cast_possible_wrap)]
+            let expected = n as isize;
+            assert_eq!(
+                ResourceLimits::signed_max_of_count_pair(n, n),
+                expected,
+                "diagonal fold to +operand regressed at n={n}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_max_of_count_pair_flips_sign_on_input_swap_off_diagonal() {
+        // Sign-flip on input swap — SIGNED SYMMETRY pin. For every
+        // `(lhs, rhs)` with `lhs != rhs`, `signed_max_of_count_pair(lhs,
+        // rhs) == -signed_max_of_count_pair(rhs, lhs)`. Unlike the ARM-
+        // AGNOSTIC MAX / MIN combinators (which are strictly
+        // commutative), the SIGNED-MAX flips its sign on input swap
+        // because the WINNER arm identity is carried through the
+        // OUTPUT sign — swapping the input pair swaps the sign of the
+        // SIGN itself. The diagonal cell `lhs == rhs` (where both the
+        // helper and its swap read `+n` via the `>=` tie convention)
+        // is the EXCEPTION carved out by the tie convention.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                if lhs == rhs {
+                    continue;
+                }
+                assert_eq!(
+                    ResourceLimits::signed_max_of_count_pair(lhs, rhs),
+                    -ResourceLimits::signed_max_of_count_pair(rhs, lhs),
+                    "sign-flip on input swap regressed at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_max_of_count_pair_non_negative_iff_lhs_dominates_rhs() {
+        // NON-NEGATIVE-AT-LHS-DOMINATES pin — LOAD-BEARING WIN-CONVENTION
+        // pin. For every `(lhs, rhs)`, `signed_max_of_count_pair(lhs,
+        // rhs) >= 0 ⇔ lhs >= rhs`. The SIGNED output is NON-NEGATIVE
+        // iff the LHS wins (or ties) — matching the `>=` tie convention
+        // verbatim. A body regression that swapped the `>=` for `>`
+        // would drop the balance-corner cells out of the NON-NEGATIVE
+        // half and fire here on every diagonal cell.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let non_negative = ResourceLimits::signed_max_of_count_pair(lhs, rhs) >= 0;
+                let lhs_dominates = lhs >= rhs;
+                assert_eq!(
+                    non_negative, lhs_dominates,
+                    "NON-NEGATIVE ⇔ lhs >= rhs regressed at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_max_of_count_pair_negative_iff_rhs_strictly_dominates_lhs() {
+        // NEGATIVE-AT-RHS-STRICT-DOMINATES pin — LOAD-BEARING DUAL of
+        // the NON-NEGATIVE bridge. For every `(lhs, rhs)`,
+        // `signed_max_of_count_pair(lhs, rhs) < 0 ⇔ lhs < rhs`. The
+        // SIGNED output is STRICTLY negative iff the RHS strictly wins.
+        // A body regression that flipped the sign on the `else` branch
+        // (returning `+rhs` instead of `-rhs`) would fire here on every
+        // RHS-strict-wins cell.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let strictly_negative = ResourceLimits::signed_max_of_count_pair(lhs, rhs) < 0;
+                let rhs_strictly_wins = lhs < rhs;
+                assert_eq!(
+                    strictly_negative, rhs_strictly_wins,
+                    "STRICTLY-NEGATIVE ⇔ lhs < rhs regressed at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_max_of_count_pair_zero_iff_double_zero_input() {
+        // ZERO iff DOUBLE-ZERO pin — LOAD-BEARING KERNEL pin. On every
+        // `(lhs, rhs)`, `signed_max_of_count_pair(lhs, rhs) == 0 ⇔ (lhs
+        // == 0 && rhs == 0)`. The SIGNED-MAX output vanishes exactly on
+        // the double-zero corner of the input regime — the `>=` tie
+        // convention routes the balance corner `(0, 0)` onto the `+0`
+        // cell (not `-0`), and every other cell fires a non-zero
+        // magnitude on the winning arm. Cross-pins the SIGNED-MAX
+        // combinator's KERNEL against the diagonal-and-empty cell of
+        // the input pair. Where `signed_count_difference` has the
+        // WHOLE diagonal `lhs == rhs` as its kernel (every tie vanishes),
+        // THIS SIGNED-MAX's kernel COLLAPSES to just the double-zero
+        // origin — the LOAD-BEARING structural difference between the
+        // DISPERSION and CENTRAL-TENDENCY statistics at the tie regime.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let is_zero = ResourceLimits::signed_max_of_count_pair(lhs, rhs) == 0;
+                let is_double_zero = lhs == 0 && rhs == 0;
+                assert_eq!(
+                    is_zero, is_double_zero,
+                    "ZERO ⇔ double-zero regressed at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_max_of_count_pair_non_negative_iff_count_pair_ordering_not_less() {
+        // Bridge to `count_pair_ordering` — LOAD-BEARING structural pin
+        // tying the SIGNED-MAX sign discriminator to the SIGNUM
+        // trichotomy verdict on the SAME paired input. The SIGNED
+        // output's NON-NEGATIVE half aligns with the trichotomy
+        // verdict's {Greater, Equal} legs — the `>=` tie convention on
+        // the SIGN discriminator routes the balance corner onto the
+        // POSITIVE half, matching the Ordering-KIND TRICHOTOMY
+        // combinator's balance-at-Equal-and-not-Less convention.
+        // Cross-pins the two combinators one COMBINATOR-KIND axis
+        // apart on the SAME paired count input, mirroring the DUAL
+        // `min_of_count_pair`-selects-LHS-iff-ordering-not-Greater
+        // bridge on the SIGNEDNESS axis.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let non_negative = ResourceLimits::signed_max_of_count_pair(lhs, rhs) >= 0;
+                let ordering_not_less =
+                    ResourceLimits::count_pair_ordering(lhs, rhs) != Ordering::Less;
+                assert_eq!(
+                    non_negative, ordering_not_less,
+                    "SIGNED-MAX >= 0 ⇔ count_pair_ordering != Less regressed at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_max_of_count_pair_signum_agrees_with_signed_count_difference_off_diagonal(
+    ) {
+        // SIGNUM bridge to `signed_count_difference` — LOAD-BEARING
+        // closure pin. On every off-diagonal `(lhs, rhs)`
+        // (`lhs != rhs`), the SIGN of `signed_max_of_count_pair(lhs,
+        // rhs)` agrees with the SIGN of `signed_count_difference(lhs,
+        // rhs)` posture-for-posture: both combinators route the
+        // WINNER's arm identity through the OUTPUT sign under the SAME
+        // `if lhs >= rhs { + } else { - }` dispatch. At the tie cells
+        // `lhs == rhs` the two combinators diverge: the SIGNED-MAX
+        // fires `+lhs` (`>=` tie convention picks positive) while the
+        // SIGNED-DIFF fires `0` (the DISPERSION vanishes at balance).
+        // The off-diagonal SIGNUM agreement is the DIRECT proof that
+        // both SIGNED-KIND `isize` combinators share the SAME WIN-
+        // CONVENTION on the input trichotomy, and jointly they close
+        // the SIGNED-KIND (CENTRAL-TENDENCY, DISPERSION) column with
+        // DIFFERENT tie-regime routing.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                if lhs == rhs {
+                    continue;
+                }
+                assert_eq!(
+                    ResourceLimits::signed_max_of_count_pair(lhs, rhs).signum(),
+                    ResourceLimits::signed_count_difference(lhs, rhs).signum(),
+                    "SIGNUM disagreement off-diagonal at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_max_of_count_pair_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the helper's `pub const fn` signature
+        // preserves compile-time evaluability across the LHS-wins,
+        // RHS-strict-wins, diagonal-tie, and double-zero cells of the
+        // (usize, usize) joint-input regime. Complements the primary
+        // bare-body identity pin
+        // `resource_limits_signed_max_of_count_pair_agrees_with_open_coded_signed_max_split`
+        // by extending the const-evaluability proof onto the compile-
+        // time surface. Sibling of the const-fn evaluability pins the
+        // (max_of_count_pair, min_of_count_pair, signed_count_difference,
+        // absolute_count_difference) combinators carry at their own
+        // exits.
+        const _: () = assert!(ResourceLimits::signed_max_of_count_pair(5, 3) == 5);
+        const _: () = assert!(ResourceLimits::signed_max_of_count_pair(3, 5) == -5);
+        const _: () = assert!(ResourceLimits::signed_max_of_count_pair(4, 4) == 4);
+        const _: () = assert!(ResourceLimits::signed_max_of_count_pair(0, 0) == 0);
+        const _: () = assert!(ResourceLimits::signed_max_of_count_pair(0, 6) == -6);
+        const _: () = assert!(ResourceLimits::signed_max_of_count_pair(6, 0) == 6);
+    }
+
+    #[test]
+    fn resource_limits_signed_max_fold_family_bodies_delegate_to_signed_max_of_count_pair() {
+        // Sweep-of-family pin — asserts each of the two WHOLE-POSTURE
+        // SIGNED-KIND MAX-fold projection bodies
+        // (axial_signed_majority_count — SIGNED-MAX of
+        // (count_polar_axes, count_interior_axes);
+        // atomic_signed_majority_count — SIGNED-MAX of
+        // (count_bottom_axes, count_top_axes)) agrees with the helper-
+        // based shape `ResourceLimits::signed_max_of_count_pair(
+        // self.count_A(), self.count_B())` on every posture from the
+        // EMPTY / DEFAULT / UNBOUNDED / HAND_AUTHORED_MID /
+        // HAND_AUTHORED_OTHER / SPARSE_BOTTOM /
+        // CONTIGUOUS_INTERIOR_BOTTOM / ENDPOINTS_ONLY_BOTTOM
+        // constellation (2×8 = 16 composed SIGNED-MAX verdicts). A
+        // future body regression that swapped the `>=` for `<=` at the
+        // helper would silently invert the WIN convention on every
+        // strict-majority posture; the sweep pin gates the LOAD-BEARING
+        // regime on every posture where the pair splits. Mirror of the
+        // MAX-fold and MIN-fold sweep pins one SIGNEDNESS axis over.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                posture.axial_signed_majority_count(),
+                ResourceLimits::signed_max_of_count_pair(
+                    posture.count_polar_axes(),
+                    posture.count_interior_axes(),
+                ),
+                "axial_signed_majority_count delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.atomic_signed_majority_count(),
+                ResourceLimits::signed_max_of_count_pair(
+                    posture.count_bottom_axes(),
+                    posture.count_top_axes(),
+                ),
+                "atomic_signed_majority_count delegation regressed on {posture:?}",
             );
         }
     }

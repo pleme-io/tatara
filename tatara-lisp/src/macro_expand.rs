@@ -14045,6 +14045,191 @@ impl ResourceLimits {
         Self::witness_axis_presence(count, count == Self::FIELD_COUNT)
     }
 
+    /// STRICTLY-MULTI-KIND count witness — `Self::witness_count_strictly_multi(count)`
+    /// returns `Some(true)` iff `1 < count < Self::FIELD_COUNT`, `Some(false)` iff
+    /// `count == 1` OR `count == Self::FIELD_COUNT`, or `None` iff `count == 0`.
+    /// The BOUNDARY primitive lifting the shape `let c = self.count_X_axes();
+    /// Self::witness_axis_presence(c, c > 1 && c < Self::FIELD_COUNT)` that
+    /// every AXIS-CELL STRICTLY-MULTI PREDICATE on [`ResourceLimits`] carries
+    /// at its exit — [`Self::bottom_axis_is_strictly_multi`],
+    /// [`Self::top_axis_is_strictly_multi`],
+    /// [`Self::polar_axis_is_strictly_multi`],
+    /// [`Self::interior_axis_is_strictly_multi`] all wrap the `c > 1 && c <
+    /// Self::FIELD_COUNT` STRICT-OPEN-INTERVAL conjunction of their paired
+    /// [`Self::count_bottom_axes`]-family count in the SAME two-line
+    /// presence-conditional cascade. Pre-lift each STRICTLY-MULTI predicate
+    /// open-coded the two-line `let c = self.count_X_axes();
+    /// Self::witness_axis_presence(c, c > 1 && c < Self::FIELD_COUNT)` at
+    /// its own exit — a four-point copy-paste whose consistency the type
+    /// system did not gate (a predicate that swapped `c > 1` for `c >= 1`
+    /// would silently accept the SINGLETON endpoint the STRICTLY-MULTI
+    /// regime excludes; a predicate that swapped `c < Self::FIELD_COUNT`
+    /// for `c <= Self::FIELD_COUNT` would silently accept the SATURATED
+    /// endpoint the STRICTLY-MULTI regime also excludes; a predicate that
+    /// swapped `Self::FIELD_COUNT` for a bare literal `6` would silently
+    /// miscompile at any future arity bump — exactly the drift
+    /// [`Self::FIELD_COUNT`] was named to prevent). Post-lift the shape
+    /// binds at ONE typed `const fn` on [`ResourceLimits`], and every
+    /// AXIS-CELL STRICTLY-MULTI predicate composes through this helper —
+    /// the STRICT-OPEN-INTERVAL cardinality dispatch is a substrate-level
+    /// theorem rather than a per-consumer two-line `let`-bound closure.
+    ///
+    /// The STRICTLY-MULTI-KIND specialization of
+    /// [`Self::witness_axis_presence`] on the STRICT-OPEN-INTERVAL predicate
+    /// `c > 1 && c < Self::FIELD_COUNT` — where
+    /// [`Self::witness_axis_presence`] takes an arbitrary boolean predicate
+    /// over the count, [`Self::witness_count_singleton`] pins the predicate
+    /// to the LOWER-ENDPOINT-EQUALITY `c == 1`,
+    /// [`Self::witness_count_multi`] pins it to the STRICT-ABOVE-LOWER
+    /// `c > 1`, and [`Self::witness_count_saturated`] pins it to the
+    /// UPPER-ENDPOINT-EQUALITY `c == Self::FIELD_COUNT`, THIS combinator
+    /// PINS the predicate to the STRICT-OPEN-INTERIOR of the (SINGLETON @
+    /// LOWER, STRICTLY_MULTI @ STRICT-OPEN-INTERIOR, SATURATED @ UPPER)
+    /// present-arm cardinality partition — a partition the atomic
+    /// (`_axis_is_singleton`, `_axis_is_strictly_multi`,
+    /// `_axis_is_saturated`) predicate triples exhaustively cover with
+    /// mutual exclusion on the `count > 0` arm. Named at the substrate so a
+    /// caller reads `witness_count_strictly_multi(count)` at the callsite
+    /// rather than `witness_axis_presence(count, count > 1 && count ==
+    /// Self::FIELD_COUNT)` with the count-name repeated at both bounds
+    /// — the STRICT-OPEN-INTERIOR pinning is visible without threading
+    /// the conjunction through the helper's second argument, and the
+    /// arity constant is bound INSIDE the helper rather than at every
+    /// callsite (a call to [`Self::witness_count_strictly_multi`] at any
+    /// of the four `_axis_is_strictly_multi` bodies never re-names
+    /// [`Self::FIELD_COUNT`] — the UPPER bound is INTERNAL to the
+    /// partition primitive).
+    ///
+    /// **Two-arm dispatch identity — LOAD-BEARING structural pin**: on
+    /// every `count`, `witness_count_strictly_multi(count) ==
+    /// Self::witness_axis_presence(count, count > 1 && count <
+    /// Self::FIELD_COUNT)`. The delegation through the shipped
+    /// presence-conditional helper is DIRECT — no new per-count scan, no
+    /// allocation. Pinned via
+    /// `resource_limits_witness_count_strictly_multi_agrees_with_witness_axis_presence_at_strict_open_interval`.
+    ///
+    /// **Empty-arm identity**: `witness_count_strictly_multi(0) == None` —
+    /// the empty-axis count yields `None`, PRESERVING the has-axis
+    /// distinction through the STRICTLY-MULTI dispatch. Pinned via
+    /// `resource_limits_witness_count_strictly_multi_empty_arm_is_none`.
+    ///
+    /// **LOWER-endpoint rejection**: `witness_count_strictly_multi(1) ==
+    /// Some(false)` — the LOWER endpoint (`count == 1`, the SINGLETON
+    /// cell) REJECTS the STRICTLY-MULTI verdict; the STRICT-OPEN-INTERVAL
+    /// EXCLUDES the SINGLETON endpoint. Pinned via
+    /// `resource_limits_witness_count_strictly_multi_at_one_is_some_false`.
+    ///
+    /// **UPPER-endpoint rejection**: `witness_count_strictly_multi(
+    /// Self::FIELD_COUNT) == Some(false)` — the UPPER endpoint (`count ==
+    /// FIELD_COUNT`, the SATURATED cell) REJECTS the STRICTLY-MULTI
+    /// verdict; the STRICT-OPEN-INTERVAL EXCLUDES the SATURATED
+    /// endpoint. Pinned via
+    /// `resource_limits_witness_count_strictly_multi_at_field_count_is_some_false`.
+    ///
+    /// **Open-interior acceptance**: for every `count` in
+    /// `2..Self::FIELD_COUNT`, `witness_count_strictly_multi(count) ==
+    /// Some(true)` — every strictly-between-endpoints count accepts the
+    /// STRICTLY-MULTI verdict. Swept across `2..Self::FIELD_COUNT` to
+    /// pin the acceptance at every strict-open-interior cell. Pinned via
+    /// `resource_limits_witness_count_strictly_multi_accepts_on_strict_open_interior`.
+    ///
+    /// **STRICTLY-MULTI-IMPLIES-MULTI bridge — LOAD-BEARING refinement
+    /// pin**: for every `count`, `witness_count_strictly_multi(count) ==
+    /// Some(true) ⇒ witness_count_multi(count) == Some(true)`. The
+    /// STRICTLY-MULTI regime is a strict subset of the MULTI regime
+    /// (STRICT-OPEN-INTERVAL `1 < c < FIELD_COUNT` ⊂ STRICT-ABOVE-LOWER
+    /// `1 < c`) — the same refinement pin the four shipped
+    /// `_axis_is_strictly_multi` bodies carry against their paired
+    /// `_axis_is_multi` bodies lifted to the substrate primitive one
+    /// PREDICATE-KIND axis under. Pinned via
+    /// `resource_limits_witness_count_strictly_multi_implies_witness_count_multi`.
+    ///
+    /// **STRICTLY-MULTI-EXCLUDES-SATURATED mutual-exclusion pin — LOAD-
+    /// BEARING partition pin**: for every `count`, NOT
+    /// (`witness_count_strictly_multi(count) == Some(true) &&
+    /// witness_count_saturated(count) == Some(true)`). The two cells sit
+    /// on opposite sides of the UPPER endpoint (`c < FIELD_COUNT` vs
+    /// `c == FIELD_COUNT`) — the STRICT-OPEN-INTERVAL partition primitive
+    /// is DISJOINT from the UPPER-ENDPOINT partition primitive by
+    /// construction, exactly the pin the four shipped
+    /// `_axis_is_strictly_multi` bodies carry against their paired
+    /// `_axis_is_saturated` bodies. Pinned via
+    /// `resource_limits_witness_count_strictly_multi_excludes_witness_count_saturated`.
+    ///
+    /// **`is_some` bridge**: `witness_count_strictly_multi(count).is_some()
+    /// ⇔ count > 0` — the presence dispatch matches the paired
+    /// [`Self::witness_axis_presence`]'s bridge and the
+    /// [`Self::witness_count_singleton`] /
+    /// [`Self::witness_count_multi`] / [`Self::witness_count_saturated`]
+    /// siblings one PREDICATE-KIND axis over (all FIVE PRESERVE the
+    /// `count > 0` boundary). Pinned via
+    /// `resource_limits_witness_count_strictly_multi_is_some_iff_count_gt_zero`.
+    ///
+    /// `const fn` so a caller can pin the STRICTLY-MULTI verdict at compile
+    /// time (`const _: () = assert!(matches!(
+    /// ResourceLimits::witness_count_strictly_multi(2), Some(true)));`) —
+    /// sibling of the const-fn evaluability pins the four
+    /// `_axis_is_strictly_multi` predicates already carry at their own
+    /// exits, and of the const-fn pins on
+    /// [`Self::witness_count_singleton`] +
+    /// [`Self::witness_count_multi`] + [`Self::witness_count_saturated`]
+    /// one PREDICATE-KIND axis over.
+    ///
+    /// **Adoption compounds**: the four shipped `_axis_is_strictly_multi`
+    /// predicates rewrite from the open-coded two-line `let c =
+    /// self.count_X_axes(); Self::witness_axis_presence(c, c > 1 && c <
+    /// Self::FIELD_COUNT)` to the one-line
+    /// `Self::witness_count_strictly_multi(self.count_X_axes())`
+    /// composition at no semantic change; any future AXIS-CELL
+    /// STRICTLY-MULTI predicate (higher-order axial partitions with a
+    /// STRICT-OPEN-INTERIOR cell, cross-posture multiplicity checks that
+    /// exclude both endpoints) composes through this same primitive. Body
+    /// regressions at the shared helper (a `>` weakening to `>=` on the
+    /// LOWER bound, a `<` weakening to `<=` on the UPPER bound, a
+    /// `Some(true)` swap on either endpoint) fire immediately at the
+    /// helper's own pins rather than silently re-classifying every
+    /// downstream `_axis_is_strictly_multi` reading. The STRICT-OPEN-
+    /// INTERIOR is now CLOSED at the substrate: the (SINGLETON @ LOWER,
+    /// STRICTLY_MULTI @ STRICT-OPEN-INTERIOR, SATURATED @ UPPER)
+    /// present-arm cardinality partition shares ONE factored predicate
+    /// combinator ([`Self::witness_axis_presence`]) rather than three
+    /// parallel two-arm matches at every callsite, and the arity
+    /// constant [`Self::FIELD_COUNT`] threads through ONE point on the
+    /// algebra rather than four.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// STRICTLY-MULTI-KIND count witness at every
+    /// `_axis_is_strictly_multi` body binds at ONE typed named `const fn`
+    /// on the algebra rather than a per-consumer two-line `let`-bound
+    /// composition through the paired [`Self::witness_axis_presence`]
+    /// helper. THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the helper composes structurally through the shipped
+    /// [`Self::witness_axis_presence`] under the two-arm dispatch
+    /// identity above with no re-derivation at the caller. THEORY.md
+    /// §V.1 — knowable platform; the STRICT-OPEN-INTERIOR cardinality
+    /// dispatch becomes a substrate-level theorem rather than a
+    /// per-predicate convention.
+    ///
+    /// Frontier inspiration: Haskell's `bool None (Just (1 < c && c < n))
+    /// (c /= 0)` case-of on the two-arm empty split with a
+    /// strict-open-interval predicate pinned; Idris's `if count == 0
+    /// then Nothing else Just (1 < count && count < n)` conditional
+    /// under a total function signature; Racket's `(and (positive?
+    /// count) (< 1 count n))` chained-comparison MULTI-STRICT wrapper;
+    /// APL's `(0<c) × ((1<c) ∧ c<n)` present-arm multiplicand at the
+    /// STRICT-OPEN-INTERVAL. Kmett's `lattices` package's "open
+    /// interior" projection lifted through a presence-preserving
+    /// wrapper; Lean's `Fin n \ {0, 1, n-1}` refinement type restricted
+    /// to the strict interior. Translation through pleme-io primitives
+    /// is the plain `const fn` delegation through the shipped
+    /// [`Self::witness_axis_presence`] at the STRICT-OPEN-INTERVAL
+    /// conjunction — no new dep, no typeclass indirection, no
+    /// allocation, no closure.
+    #[must_use]
+    pub const fn witness_count_strictly_multi(count: usize) -> Option<bool> {
+        Self::witness_axis_presence(count, count > 1 && count < Self::FIELD_COUNT)
+    }
+
     /// Presence-preserving negation on whole-posture `Option<bool>` witnesses —
     /// `Self::negate_axis_witness(w)` returns `Some(!b)` when `w` is `Some(b)`,
     /// or `None` when `w` is `None`. The BOUNDARY primitive lifting the shape
@@ -24774,8 +24959,7 @@ impl ResourceLimits {
     /// new per-axis scan, no allocation.
     #[must_use]
     pub const fn bottom_axis_is_strictly_multi(self) -> Option<bool> {
-        let c = self.count_bottom_axes();
-        Self::witness_axis_presence(c, c > 1 && c < Self::FIELD_COUNT)
+        Self::witness_count_strictly_multi(self.count_bottom_axes())
     }
 
     /// Whole-posture STRICTLY-MULTI-OF-TOP predicate —
@@ -24866,8 +25050,7 @@ impl ResourceLimits {
     /// [`Self::bottom_axis_is_strictly_multi`], on the DUAL atomic mask.
     #[must_use]
     pub const fn top_axis_is_strictly_multi(self) -> Option<bool> {
-        let c = self.count_top_axes();
-        Self::witness_axis_presence(c, c > 1 && c < Self::FIELD_COUNT)
+        Self::witness_count_strictly_multi(self.count_top_axes())
     }
 
     /// Whole-posture STRICTLY-MULTI-OF-POLAR predicate —
@@ -25019,8 +25202,7 @@ impl ResourceLimits {
     /// endpoint of the polar tally.
     #[must_use]
     pub const fn polar_axis_is_strictly_multi(self) -> Option<bool> {
-        let c = self.count_polar_axes();
-        Self::witness_axis_presence(c, c > 1 && c < Self::FIELD_COUNT)
+        Self::witness_count_strictly_multi(self.count_polar_axes())
     }
 
     /// Whole-posture STRICTLY-MULTI-OF-INTERIOR predicate —
@@ -25109,8 +25291,7 @@ impl ResourceLimits {
     /// interior mask.
     #[must_use]
     pub const fn interior_axis_is_strictly_multi(self) -> Option<bool> {
-        let c = self.count_interior_axes();
-        Self::witness_axis_presence(c, c > 1 && c < Self::FIELD_COUNT)
+        Self::witness_count_strictly_multi(self.count_interior_axes())
     }
 
     /// Whole-posture NEARLY-SATURATED-OF-BOTTOM predicate —
@@ -92280,6 +92461,237 @@ mod tests {
                 a.interior_axis_is_saturated(),
                 ResourceLimits::witness_count_saturated(a.count_interior_axes()),
                 "interior_axis_is_saturated != witness_count_saturated(count_interior_axes) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strictly_multi_agrees_with_witness_axis_presence_at_strict_open_interval(
+    ) {
+        // Two-arm dispatch identity — witness_count_strictly_multi(count)
+        // is structurally the shipped presence-conditional helper
+        // applied to the STRICT-OPEN-INTERVAL predicate `count > 1 &&
+        // count < FIELD_COUNT` on every count in `0..=FIELD_COUNT`.
+        // Pinning the delegation at every representable count catches a
+        // future rewrite that silently drifts from the presence-
+        // conditional composition (a `>` weakening to `>=` on the
+        // LOWER bound, a `<` weakening to `<=` on the UPPER bound, a
+        // swap of Self::FIELD_COUNT for a bare literal `6` that would
+        // silently miscompile at any future arity bump).
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_strictly_multi(count),
+                ResourceLimits::witness_axis_presence(
+                    count,
+                    count > 1 && count < ResourceLimits::FIELD_COUNT,
+                ),
+                "witness_count_strictly_multi({count}) != witness_axis_presence(count, count > 1 && count < FIELD_COUNT)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strictly_multi_empty_arm_is_none() {
+        // Empty-arm identity — the empty-axis count yields `None`,
+        // PRESERVING the has-axis distinction through the STRICTLY-MULTI
+        // dispatch. Discards the STRICT-OPEN-INTERVAL predicate on the
+        // count == 0 posture, exactly as the paired
+        // witness_axis_presence helper does one PREDICATE-KIND axis
+        // under and the SINGLETON / MULTI / SATURATED siblings do at
+        // their own empty arms.
+        assert_eq!(ResourceLimits::witness_count_strictly_multi(0), None);
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strictly_multi_at_one_is_some_false() {
+        // LOWER-endpoint rejection — the LOWER endpoint (count == 1,
+        // the SINGLETON cell) REJECTS the STRICTLY-MULTI verdict with
+        // `Some(false)`. The STRICT-OPEN-INTERVAL EXCLUDES the
+        // SINGLETON endpoint by construction — a `>` weakening to
+        // `>=` on the LOWER bound would flip this to Some(true) and
+        // silently reclassify every SINGLETON-KIND posture as
+        // STRICTLY-MULTI.
+        assert_eq!(
+            ResourceLimits::witness_count_strictly_multi(1),
+            Some(false),
+            "witness_count_strictly_multi(1) != Some(false) at LOWER endpoint",
+        );
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strictly_multi_at_field_count_is_some_false() {
+        // UPPER-endpoint rejection — the UPPER endpoint (count ==
+        // FIELD_COUNT, the SATURATED cell) REJECTS the STRICTLY-MULTI
+        // verdict with `Some(false)`. The STRICT-OPEN-INTERVAL
+        // EXCLUDES the SATURATED endpoint by construction — a `<`
+        // weakening to `<=` on the UPPER bound would flip this to
+        // Some(true) and silently reclassify every SATURATED-KIND
+        // posture as STRICTLY-MULTI.
+        assert_eq!(
+            ResourceLimits::witness_count_strictly_multi(ResourceLimits::FIELD_COUNT),
+            Some(false),
+            "witness_count_strictly_multi(FIELD_COUNT) != Some(false) at UPPER endpoint",
+        );
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strictly_multi_accepts_on_strict_open_interior() {
+        // Open-interior acceptance — every count strictly between the
+        // LOWER and UPPER endpoints (2..FIELD_COUNT) accepts the
+        // STRICTLY-MULTI verdict with `Some(true)`. Sweeps the full
+        // strict-open-interior cardinality range to pin the acceptance
+        // at every non-endpoint present cell — the exact partition
+        // cell the STRICTLY-MULTI regime names.
+        let mut count = 2;
+        while count < ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_strictly_multi(count),
+                Some(true),
+                "witness_count_strictly_multi({count}) != Some(true) at strict-open-interior count",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strictly_multi_implies_witness_count_multi() {
+        // STRICTLY-MULTI-IMPLIES-MULTI refinement pin — the
+        // STRICTLY-MULTI regime is a strict subset of the MULTI regime
+        // (STRICT-OPEN-INTERVAL `1 < c < FIELD_COUNT` ⊂ STRICT-ABOVE-
+        // LOWER `1 < c`). Swept across `0..=FIELD_COUNT` to pin the
+        // implication at every representable count — the same
+        // refinement pin the four shipped `_axis_is_strictly_multi`
+        // bodies carry against their paired `_axis_is_multi` bodies,
+        // lifted to the substrate primitive one PREDICATE-KIND axis
+        // under.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            if let Some(true) = ResourceLimits::witness_count_strictly_multi(count) {
+                assert_eq!(
+                    ResourceLimits::witness_count_multi(count),
+                    Some(true),
+                    "witness_count_strictly_multi({count}) == Some(true) but witness_count_multi({count}) != Some(true)",
+                );
+            }
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strictly_multi_excludes_witness_count_saturated() {
+        // STRICTLY-MULTI-EXCLUDES-SATURATED mutual-exclusion pin — the
+        // two cells sit on opposite sides of the UPPER endpoint (`c <
+        // FIELD_COUNT` vs `c == FIELD_COUNT`); the STRICT-OPEN-
+        // INTERVAL partition primitive is DISJOINT from the UPPER-
+        // ENDPOINT partition primitive by construction. Swept across
+        // `0..=FIELD_COUNT` to pin the disjointness at every
+        // representable count — the same partition pin the four
+        // shipped `_axis_is_strictly_multi` bodies carry against their
+        // paired `_axis_is_saturated` bodies, lifted to the substrate
+        // primitive one PREDICATE-KIND axis under.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert!(
+                !(matches!(
+                    ResourceLimits::witness_count_strictly_multi(count),
+                    Some(true)
+                ) && matches!(
+                    ResourceLimits::witness_count_saturated(count),
+                    Some(true)
+                )),
+                "witness_count_strictly_multi({count}) == Some(true) AND witness_count_saturated({count}) == Some(true) — STRICT-OPEN-INTERIOR and UPPER-ENDPOINT partitions not disjoint",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strictly_multi_is_some_iff_count_gt_zero() {
+        // `is_some` bridge — the presence dispatch matches the paired
+        // witness_axis_presence's bridge and the witness_count_singleton
+        // / witness_count_multi / witness_count_saturated siblings one
+        // PREDICATE-KIND axis over: all FIVE PRESERVE the `count > 0`
+        // boundary. Swept over `0..=FIELD_COUNT` to pin the presence
+        // identity at every representable count.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_strictly_multi(count).is_some(),
+                count > 0,
+                "witness_count_strictly_multi({count}).is_some() != (count > 0)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strictly_multi_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the STRICTLY-MULTI verdict at compile time as
+        // a build-break. Sibling of the const-fn evaluability pins the
+        // four _axis_is_strictly_multi predicates already carry at
+        // their own exits, and of the const-fn pins on
+        // witness_count_singleton + witness_count_multi +
+        // witness_count_saturated one PREDICATE-KIND axis over.
+        const _: () = assert!(ResourceLimits::witness_count_strictly_multi(0).is_none());
+        const _: () = assert!(matches!(
+            ResourceLimits::witness_count_strictly_multi(1),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::witness_count_strictly_multi(2),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::witness_count_strictly_multi(ResourceLimits::FIELD_COUNT),
+            Some(false)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_axis_is_strictly_multi_bodies_delegate_to_witness_count_strictly_multi() {
+        // Body-delegation pin — the four shipped _axis_is_strictly_multi
+        // predicates delegate through witness_count_strictly_multi
+        // applied to their paired count_X_axes tally, at every posture
+        // in the canonical roster. Catches a future rewrite of any of
+        // the four predicate bodies that silently drifts from the
+        // substrate combinator (an axis-name mismatch on the count
+        // call, an inversion of the delegation direction, a swap to a
+        // sibling count helper). Mirrors the sibling delegation-pin
+        // shape the singleton + multi + saturated cohorts already
+        // carry one PREDICATE-KIND axis over.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.bottom_axis_is_strictly_multi(),
+                ResourceLimits::witness_count_strictly_multi(a.count_bottom_axes()),
+                "bottom_axis_is_strictly_multi != witness_count_strictly_multi(count_bottom_axes) on {a:?}",
+            );
+            assert_eq!(
+                a.top_axis_is_strictly_multi(),
+                ResourceLimits::witness_count_strictly_multi(a.count_top_axes()),
+                "top_axis_is_strictly_multi != witness_count_strictly_multi(count_top_axes) on {a:?}",
+            );
+            assert_eq!(
+                a.polar_axis_is_strictly_multi(),
+                ResourceLimits::witness_count_strictly_multi(a.count_polar_axes()),
+                "polar_axis_is_strictly_multi != witness_count_strictly_multi(count_polar_axes) on {a:?}",
+            );
+            assert_eq!(
+                a.interior_axis_is_strictly_multi(),
+                ResourceLimits::witness_count_strictly_multi(a.count_interior_axes()),
+                "interior_axis_is_strictly_multi != witness_count_strictly_multi(count_interior_axes) on {a:?}",
             );
         }
     }

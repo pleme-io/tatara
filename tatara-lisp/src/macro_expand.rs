@@ -16367,10 +16367,15 @@ impl ResourceLimits {
     /// MIXITY surface cannot access at the whole-posture single-bit
     /// verdict cell.
     ///
-    /// Encoded as `min(self.count_polar_axes(), self.count_interior_axes())`
-    /// — the arithmetic form of "size of the minority arm" via plain
-    /// `const fn` `if a < b { a } else { b }` on the two already-lifted
-    /// ARITHMETIC-QUANTIFIER tallies. No new mask fold, no per-axis loop.
+    /// Encoded as `Self::min_of_count_pair(self.count_polar_axes(),
+    /// self.count_interior_axes())` — a single-composition delegation
+    /// through the substrate MIN combinator on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies. Body regressions at the shared
+    /// [`Self::min_of_count_pair`] helper (a `<=` → `>=` inversion, an
+    /// arm-binding swap on either branch) fire immediately at the
+    /// helper's own pins rather than silently re-classifying every
+    /// downstream MINORITY-arm reading. No new mask fold, no per-axis
+    /// loop, no `Ord::min` const-stability workaround at the callsite.
     ///
     /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.count_mixity_axes() == 0`
     /// (every axis at bottom pole, minority arm empty);
@@ -16421,13 +16426,7 @@ impl ResourceLimits {
     /// [`Self::count_interior_axes`] tallies.
     #[must_use]
     pub const fn count_mixity_axes(self) -> usize {
-        let cp = self.count_polar_axes();
-        let ci = self.count_interior_axes();
-        if cp < ci {
-            cp
-        } else {
-            ci
-        }
+        Self::min_of_count_pair(self.count_polar_axes(), self.count_interior_axes())
     }
 
     /// Whole-posture ARITHMETIC-UNIFORMITY-DEPTH tally —
@@ -16476,11 +16475,18 @@ impl ResourceLimits {
     /// `count_uniformity_axes() == 3` (evenly split), but the arithmetic
     /// tally names them apart at `5` vs `3`.
     ///
-    /// Encoded as `max(self.count_polar_axes(), self.count_interior_axes())`
-    /// — the arithmetic form of "size of the majority arm" via plain
-    /// `const fn` `if a < b { b } else { a }` on the two already-lifted
+    /// Encoded as `Self::max_of_count_pair(self.count_polar_axes(),
+    /// self.count_interior_axes())` — a single-composition delegation
+    /// through the substrate MAX combinator on the two already-lifted
     /// ARITHMETIC-QUANTIFIER tallies, matching [`Self::count_mixity_axes`]'s
-    /// shape verbatim on the DUAL arm-selection combinator.
+    /// shape verbatim on the DUAL arm-selection combinator (which
+    /// delegates through [`Self::min_of_count_pair`] on the SAME two
+    /// arm tallies). Body regressions at the shared
+    /// [`Self::max_of_count_pair`] helper (a `>=` → `<=` inversion, an
+    /// arm-binding swap on either branch) fire immediately at the
+    /// helper's own pins rather than silently re-classifying every
+    /// downstream MAJORITY-arm reading. No new mask fold, no per-axis
+    /// loop, no `Ord::max` const-stability workaround at the callsite.
     ///
     /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.count_uniformity_axes() ==
     /// Self::FIELD_COUNT` (every axis at bottom, majority = polar = 6);
@@ -16519,13 +16525,7 @@ impl ResourceLimits {
     /// tally pair. Haskell's `max (length polar) (length interior)`.
     #[must_use]
     pub const fn count_uniformity_axes(self) -> usize {
-        let cp = self.count_polar_axes();
-        let ci = self.count_interior_axes();
-        if cp < ci {
-            ci
-        } else {
-            cp
-        }
+        Self::max_of_count_pair(self.count_polar_axes(), self.count_interior_axes())
     }
 
     /// Whole-posture POLAR-STRICT-MAJORITY predicate —
@@ -70836,6 +70836,117 @@ mod tests {
         );
         const _: () =
             assert!(DEFAULT_RESOURCE_LIMITS.count_uniformity_axes() == ResourceLimits::FIELD_COUNT);
+    }
+
+    #[test]
+    fn resource_limits_count_mixity_axes_agrees_with_min_of_count_pair_delegation() {
+        // LOAD-BEARING DELEGATION pin — the MIXITY-DEPTH projection body
+        // IS the substrate combinator `Self::min_of_count_pair` composed
+        // with the paired (count_polar_axes, count_interior_axes)
+        // ARITHMETIC-QUANTIFIER tally. A body regression at the
+        // projection (a per-projection re-derivation that reintroduces
+        // the four-line `let cp = …; let ci = …; if cp < ci { cp } else
+        // { ci }` open-coded split OR swaps `<` for `>` OR swaps arm
+        // bindings on either branch) fires here rather than silently
+        // re-classifying every downstream MINORITY-arm reading through
+        // a shape that no longer routes through the substrate helper.
+        // Body regressions at the SHARED helper (a `<=` → `>=` inversion
+        // on `Self::min_of_count_pair`) fire at the helper's own pins
+        // first; this test pins the composition identity between the
+        // two.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.count_mixity_axes(),
+                ResourceLimits::min_of_count_pair(
+                    a.count_polar_axes(),
+                    a.count_interior_axes(),
+                ),
+                "count_mixity_axes != min_of_count_pair(count_polar_axes, count_interior_axes) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_uniformity_axes_agrees_with_max_of_count_pair_delegation() {
+        // LOAD-BEARING DELEGATION pin — the DUAL of the MIXITY-DEPTH
+        // delegation pin on the SAME (count_polar_axes,
+        // count_interior_axes) paired tally through the DUAL substrate
+        // combinator `Self::max_of_count_pair`. The (mixity, uniformity)
+        // delegation pair CLOSES the ARM-AGNOSTIC (MIN, MAX)
+        // CENTRAL-TENDENCY column on the paired axial-partition tally
+        // against the substrate combinator pair
+        // (min_of_count_pair, max_of_count_pair) already open on
+        // [`ResourceLimits`] — every downstream (minority, majority) arm
+        // reading composes through ONE typed named `const fn` rather
+        // than a per-projection open-coded MIN/MAX split.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.count_uniformity_axes(),
+                ResourceLimits::max_of_count_pair(
+                    a.count_polar_axes(),
+                    a.count_interior_axes(),
+                ),
+                "count_uniformity_axes != max_of_count_pair(count_polar_axes, count_interior_axes) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_mixity_depth_pair_sum_matches_paired_arm_tally_sum() {
+        // PAIRED-SUM identity — bridges the (mixity, uniformity)
+        // delegation pair against the SUM+ABS-DIFF halving identity
+        // `min + max == lhs + rhs` that both [`ResourceLimits::
+        // min_of_count_pair`] and [`ResourceLimits::max_of_count_pair`]
+        // carry at their own exits. Post-sweep the two projections
+        // compose through the substrate (min, max) combinators, so
+        // their pairwise sum equals the paired arm tally sum on every
+        // posture — which further collapses to `Self::FIELD_COUNT` via
+        // the disjoint-and-exhaustive `count_polar_axes +
+        // count_interior_axes == FIELD_COUNT` cross-cell partition. This
+        // pin bridges the delegation identity through the substrate
+        // combinator's own arithmetic theorem to the whole-posture
+        // FIELD_COUNT invariant — a THREE-hop cross-check the swept
+        // (min, max) column now supports.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let cp = a.count_polar_axes();
+            let ci = a.count_interior_axes();
+            assert_eq!(
+                a.count_mixity_axes() + a.count_uniformity_axes(),
+                cp + ci,
+                "count_mixity_axes + count_uniformity_axes != count_polar_axes + count_interior_axes on {a:?}",
+            );
+            assert_eq!(cp + ci, ResourceLimits::FIELD_COUNT);
+        }
     }
 
     #[test]

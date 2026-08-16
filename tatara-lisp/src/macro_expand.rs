@@ -13652,6 +13652,126 @@ impl ResourceLimits {
         }
     }
 
+    /// SINGLETON-KIND count witness — `Self::witness_count_singleton(count)`
+    /// returns `Some(true)` iff `count == 1`, `Some(false)` iff `count > 1`,
+    /// or `None` iff `count == 0`. The BOUNDARY primitive lifting the shape
+    /// `let c = self.count_X_axes(); Self::witness_axis_presence(c, c == 1)`
+    /// (equivalently `if c == 0 { None } else { Some(c == 1) }`) that every
+    /// AXIS-CELL SINGLETON PREDICATE on [`ResourceLimits`] carries at its
+    /// exit — [`Self::bottom_axis_is_singleton`],
+    /// [`Self::top_axis_is_singleton`], [`Self::polar_axis_is_singleton`],
+    /// [`Self::interior_axis_is_singleton`] all wrap the `count == 1`
+    /// endpoint-equality of their paired [`Self::count_bottom_axes`]-family
+    /// count in the SAME two-line presence-conditional cascade. Pre-lift
+    /// each SINGLETON predicate open-coded the two-line `let c =
+    /// self.count_X_axes(); Self::witness_axis_presence(c, c == 1)` at its
+    /// own exit — a four-point copy-paste whose consistency the type system
+    /// did not gate (a predicate that swapped `c == 1` for `c == 0` would
+    /// silently return `Some(false)` on every present posture where the
+    /// canonical shape yields `Some(true)` at exactly one axis, discarding
+    /// the SINGLE-FIRE distinction the SINGLETON verdict was defined to
+    /// name; a predicate that swapped `c == 1` for `c >= 1` would silently
+    /// collapse the SINGLETON regime into the MULTI-OR-SINGLETON regime).
+    /// Post-lift the shape binds at ONE typed `const fn` on
+    /// [`ResourceLimits`], and every AXIS-CELL SINGLETON predicate composes
+    /// through this helper — the LOWER-ENDPOINT cardinality dispatch is a
+    /// substrate-level theorem rather than a per-consumer two-line
+    /// `let`-bound closure.
+    ///
+    /// The SINGLETON-KIND specialization of [`Self::witness_axis_presence`]
+    /// on the LOWER-ENDPOINT-EQUALITY predicate `c == 1` — where
+    /// `witness_axis_presence` takes an arbitrary boolean predicate over
+    /// the count, THIS combinator PINS the predicate to the SINGLE-FIRE
+    /// endpoint on the (SINGLETON, MULTI, SATURATED) cardinality
+    /// trichotomy the (`_axis_is_singleton`, `_axis_is_multi`,
+    /// `_axis_is_saturated`) predicate triples close. Named at the
+    /// substrate so a caller reads `witness_count_singleton(count)` at the
+    /// callsite rather than `witness_axis_presence(count, count == 1)`
+    /// with the count-name repeated — the LOWER-ENDPOINT pinning is
+    /// visible without threading the `count == 1` clause through the
+    /// helper's second argument.
+    ///
+    /// **Two-arm dispatch identity — LOAD-BEARING structural pin**: on
+    /// every `count`, `witness_count_singleton(count) ==
+    /// Self::witness_axis_presence(count, count == 1)`. The delegation
+    /// through the shipped presence-conditional helper is DIRECT — no new
+    /// per-count scan, no allocation. Pinned via
+    /// `resource_limits_witness_count_singleton_agrees_with_witness_axis_presence_at_lower_endpoint`.
+    ///
+    /// **Empty-arm identity**: `witness_count_singleton(0) == None` — the
+    /// empty-axis count yields `None`, PRESERVING the has-axis distinction
+    /// through the SINGLETON dispatch. Pinned via
+    /// `resource_limits_witness_count_singleton_empty_arm_is_none`.
+    ///
+    /// **Single-fire endpoint identity**: `witness_count_singleton(1) ==
+    /// Some(true)` — the LOWER-ENDPOINT count fires the SINGLE-FIRE
+    /// verdict. Pinned via
+    /// `resource_limits_witness_count_singleton_at_one_is_some_true`.
+    ///
+    /// **Multi-count rejection**: for every `count > 1`,
+    /// `witness_count_singleton(count) == Some(false)` — every
+    /// above-endpoint count rejects the SINGLE-FIRE verdict. Swept across
+    /// `2..=Self::FIELD_COUNT` to pin the rejection at every non-endpoint
+    /// present cell. Pinned via
+    /// `resource_limits_witness_count_singleton_above_endpoint_rejects`.
+    ///
+    /// **`is_some` bridge**: `witness_count_singleton(count).is_some() ⇔
+    /// count > 0` — the presence dispatch matches the paired
+    /// [`Self::witness_axis_presence`]'s bridge one PREDICATE-KIND axis
+    /// under (both PRESERVE the `count > 0` boundary). Pinned via
+    /// `resource_limits_witness_count_singleton_is_some_iff_count_gt_zero`.
+    ///
+    /// `const fn` so a caller can pin the SINGLETON verdict at compile
+    /// time (`const _: () =
+    /// assert!(matches!(ResourceLimits::witness_count_singleton(1),
+    /// Some(true)));`) — sibling of the const-fn evaluability pins the
+    /// four `_axis_is_singleton` predicates already carry at their own
+    /// exits.
+    ///
+    /// **Adoption compounds**: the four shipped `_axis_is_singleton`
+    /// predicates rewrite from the open-coded two-line `let c =
+    /// self.count_X_axes(); Self::witness_axis_presence(c, c == 1)` to
+    /// the one-line
+    /// `Self::witness_count_singleton(self.count_X_axes())` composition
+    /// at no semantic change; any future AXIS-CELL SINGLETON predicate
+    /// (higher-order axial partitions with a SINGLE-FIRE endpoint cell,
+    /// cross-posture disagreement singleton checks) composes through this
+    /// same primitive. Body regressions at the shared helper (a `count ==
+    /// 1` inversion to `count != 1`, a `Some(false)` swap on the empty
+    /// arm) fire immediately at the helper's own pins rather than
+    /// silently re-classifying every downstream `_axis_is_singleton`
+    /// reading.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// SINGLETON-KIND count witness at every `_axis_is_singleton` body
+    /// binds at ONE typed named `const fn` on the algebra rather than a
+    /// per-consumer two-line `let`-bound composition through the paired
+    /// [`Self::witness_axis_presence`] helper. THEORY.md §II.1 invariant
+    /// 5 — composition preserves proofs; the helper composes structurally
+    /// through the shipped [`Self::witness_axis_presence`] under the
+    /// two-arm dispatch identity above with no re-derivation at the
+    /// caller. THEORY.md §V.1 — knowable platform; the LOWER-ENDPOINT
+    /// cardinality dispatch becomes a substrate-level theorem rather
+    /// than a per-predicate convention.
+    ///
+    /// Frontier inspiration: Haskell's `bool None (Just (count == 1))
+    /// (count /= 0)` case-of on the two-arm empty split with the
+    /// endpoint-equality predicate pinned; Idris's `if count == 0 then
+    /// Nothing else Just (count == 1)` conditional under a total
+    /// function signature; Racket's `(and (positive? count) (= count
+    /// 1))` short-circuiting SINGLE-FIRE wrapper; APL's `(0<count) ×
+    /// count=1` present-arm multiplicand at the LOWER-ENDPOINT. Kmett's
+    /// `lattices` package's "cardinality-one" projection lifted through
+    /// a presence-preserving wrapper. Translation through pleme-io
+    /// primitives is the plain `const fn` delegation through the shipped
+    /// [`Self::witness_axis_presence`] at the LOWER-ENDPOINT-EQUALITY
+    /// predicate — no new dep, no typeclass indirection, no allocation,
+    /// no closure.
+    #[must_use]
+    pub const fn witness_count_singleton(count: usize) -> Option<bool> {
+        Self::witness_axis_presence(count, count == 1)
+    }
+
     /// Presence-preserving negation on whole-posture `Option<bool>` witnesses —
     /// `Self::negate_axis_witness(w)` returns `Some(!b)` when `w` is `Some(b)`,
     /// or `None` when `w` is `None`. The BOUNDARY primitive lifting the shape
@@ -23352,8 +23472,7 @@ impl ResourceLimits {
     /// allocation.
     #[must_use]
     pub const fn bottom_axis_is_singleton(self) -> Option<bool> {
-        let c = self.count_bottom_axes();
-        Self::witness_axis_presence(c, c == 1)
+        Self::witness_count_singleton(self.count_bottom_axes())
     }
 
     /// Whole-posture SINGLETON-OF-TOP predicate —
@@ -23406,8 +23525,7 @@ impl ResourceLimits {
     /// on the DUAL atomic mask.
     #[must_use]
     pub const fn top_axis_is_singleton(self) -> Option<bool> {
-        let c = self.count_top_axes();
-        Self::witness_axis_presence(c, c == 1)
+        Self::witness_count_singleton(self.count_top_axes())
     }
 
     /// Whole-posture SINGLETON-OF-POLAR predicate —
@@ -23501,8 +23619,7 @@ impl ResourceLimits {
     /// on the DUAL COMPOUND mask.
     #[must_use]
     pub const fn polar_axis_is_singleton(self) -> Option<bool> {
-        let c = self.count_polar_axes();
-        Self::witness_axis_presence(c, c == 1)
+        Self::witness_count_singleton(self.count_polar_axes())
     }
 
     /// Whole-posture SINGLETON-OF-INTERIOR predicate —
@@ -23556,8 +23673,7 @@ impl ResourceLimits {
     /// on the DUAL COMPOUND mask.
     #[must_use]
     pub const fn interior_axis_is_singleton(self) -> Option<bool> {
-        let c = self.count_interior_axes();
-        Self::witness_axis_presence(c, c == 1)
+        Self::witness_count_singleton(self.count_interior_axes())
     }
 
     /// Whole-posture MULTI-OF-BOTTOM predicate —
@@ -91406,6 +91522,150 @@ mod tests {
             ResourceLimits::witness_axis_presence(ResourceLimits::FIELD_COUNT, true),
             Some(true)
         ));
+    }
+
+    #[test]
+    fn resource_limits_witness_count_singleton_agrees_with_witness_axis_presence_at_lower_endpoint()
+    {
+        // Two-arm dispatch identity — witness_count_singleton(count) is
+        // structurally the shipped presence-conditional helper applied to
+        // the LOWER-ENDPOINT-EQUALITY predicate `count == 1` on every
+        // count in `0..=FIELD_COUNT`. Pinning the delegation at every
+        // representable count catches a future rewrite that silently
+        // drifts from the presence-conditional composition.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_singleton(count),
+                ResourceLimits::witness_axis_presence(count, count == 1),
+                "witness_count_singleton({count}) != witness_axis_presence(count, count == 1)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_singleton_empty_arm_is_none() {
+        // Empty-arm identity — the empty-axis count yields `None`,
+        // PRESERVING the has-axis distinction through the SINGLETON
+        // dispatch. Discards the LOWER-ENDPOINT-EQUALITY predicate on the
+        // count == 0 posture, exactly as the paired witness_axis_presence
+        // helper does one PREDICATE-KIND axis under.
+        assert_eq!(ResourceLimits::witness_count_singleton(0), None);
+    }
+
+    #[test]
+    fn resource_limits_witness_count_singleton_at_one_is_some_true() {
+        // Single-fire endpoint identity — the LOWER-ENDPOINT count fires
+        // the SINGLE-FIRE verdict. Pins the affirmative arm at the
+        // canonical `count == 1` cardinality the SINGLETON regime names.
+        assert_eq!(ResourceLimits::witness_count_singleton(1), Some(true));
+    }
+
+    #[test]
+    fn resource_limits_witness_count_singleton_above_endpoint_rejects() {
+        // Multi-count rejection — every count strictly above the LOWER
+        // endpoint (2..=FIELD_COUNT) rejects the SINGLE-FIRE verdict with
+        // `Some(false)`. Sweeps the full above-endpoint cardinality range
+        // to pin the rejection at every non-endpoint present cell —
+        // catching a future rewrite that swaps `c == 1` for `c >= 1`
+        // (which would silently collapse the SINGLETON regime into the
+        // MULTI-OR-SINGLETON regime) or for `c > 0` (same collapse).
+        let mut count = 2;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_singleton(count),
+                Some(false),
+                "witness_count_singleton({count}) != Some(false) at above-endpoint count",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_singleton_is_some_iff_count_gt_zero() {
+        // `is_some` bridge — the presence dispatch matches the paired
+        // witness_axis_presence's bridge one PREDICATE-KIND axis under:
+        // both PRESERVE the `count > 0` boundary. Swept over
+        // `0..=FIELD_COUNT` to pin the presence identity at every
+        // representable count.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_singleton(count).is_some(),
+                count > 0,
+                "witness_count_singleton({count}).is_some() != (count > 0)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_singleton_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the SINGLETON verdict at compile time as a
+        // build-break. Sibling of the const-fn evaluability pins the
+        // four _axis_is_singleton predicates already carry at their own
+        // exits.
+        const _: () = assert!(ResourceLimits::witness_count_singleton(0).is_none());
+        const _: () = assert!(matches!(
+            ResourceLimits::witness_count_singleton(1),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::witness_count_singleton(2),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::witness_count_singleton(ResourceLimits::FIELD_COUNT),
+            Some(false)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_axis_is_singleton_bodies_delegate_to_witness_count_singleton() {
+        // Body-delegation pin — the four shipped _axis_is_singleton
+        // predicates delegate through witness_count_singleton applied to
+        // their paired count_X_axes tally, at every posture in the
+        // canonical roster. Catches a future rewrite of any of the four
+        // predicate bodies that silently drifts from the substrate
+        // combinator (an axis-name mismatch on the count call, an
+        // inversion of the delegation direction, a swap to a sibling
+        // count helper). Mirrors the sibling delegation-pin shape the
+        // whole-posture pairwise-verdict cohort (leq, eq, ne, ...)
+        // already carries at its own bodies.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.bottom_axis_is_singleton(),
+                ResourceLimits::witness_count_singleton(a.count_bottom_axes()),
+                "bottom_axis_is_singleton != witness_count_singleton(count_bottom_axes) on {a:?}",
+            );
+            assert_eq!(
+                a.top_axis_is_singleton(),
+                ResourceLimits::witness_count_singleton(a.count_top_axes()),
+                "top_axis_is_singleton != witness_count_singleton(count_top_axes) on {a:?}",
+            );
+            assert_eq!(
+                a.polar_axis_is_singleton(),
+                ResourceLimits::witness_count_singleton(a.count_polar_axes()),
+                "polar_axis_is_singleton != witness_count_singleton(count_polar_axes) on {a:?}",
+            );
+            assert_eq!(
+                a.interior_axis_is_singleton(),
+                ResourceLimits::witness_count_singleton(a.count_interior_axes()),
+                "interior_axis_is_singleton != witness_count_singleton(count_interior_axes) on {a:?}",
+            );
+        }
     }
 
     #[test]

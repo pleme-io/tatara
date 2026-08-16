@@ -13900,6 +13900,151 @@ impl ResourceLimits {
         Self::witness_axis_presence(count, count > 1)
     }
 
+    /// SATURATED-KIND count witness — `Self::witness_count_saturated(count)`
+    /// returns `Some(true)` iff `count == Self::FIELD_COUNT`, `Some(false)` iff
+    /// `0 < count < Self::FIELD_COUNT`, or `None` iff `count == 0`. The
+    /// BOUNDARY primitive lifting the shape `let c = self.count_X_axes();
+    /// Self::witness_axis_presence(c, c == Self::FIELD_COUNT)` (equivalently
+    /// `if c == 0 { None } else { Some(c == Self::FIELD_COUNT) }`) that every
+    /// AXIS-CELL SATURATED PREDICATE on [`ResourceLimits`] carries at its exit
+    /// — [`Self::bottom_axis_is_saturated`], [`Self::top_axis_is_saturated`],
+    /// [`Self::polar_axis_is_saturated`], [`Self::interior_axis_is_saturated`]
+    /// all wrap the `c == Self::FIELD_COUNT` UPPER-ENDPOINT equality of their
+    /// paired [`Self::count_bottom_axes`]-family count in the SAME two-line
+    /// presence-conditional cascade. Pre-lift each SATURATED predicate open-
+    /// coded the two-line `let c = self.count_X_axes();
+    /// Self::witness_axis_presence(c, c == Self::FIELD_COUNT)` at its own exit
+    /// — a four-point copy-paste whose consistency the type system did not
+    /// gate (a predicate that swapped `c == Self::FIELD_COUNT` for `c >
+    /// Self::FIELD_COUNT` would silently return `Some(false)` on every present
+    /// posture where the canonical shape yields `Some(true)` at the UPPER
+    /// endpoint; a predicate that swapped `Self::FIELD_COUNT` for a bare
+    /// literal `6` would silently miscompile at any future arity bump —
+    /// exactly the drift [`Self::FIELD_COUNT`] was named to prevent). Post-
+    /// lift the shape binds at ONE typed `const fn` on [`ResourceLimits`], and
+    /// every AXIS-CELL SATURATED predicate composes through this helper — the
+    /// UPPER-ENDPOINT cardinality dispatch is a substrate-level theorem rather
+    /// than a per-consumer two-line `let`-bound closure.
+    ///
+    /// The SATURATED-KIND specialization of [`Self::witness_axis_presence`] on
+    /// the UPPER-ENDPOINT-EQUALITY predicate `c == Self::FIELD_COUNT` — where
+    /// [`Self::witness_axis_presence`] takes an arbitrary boolean predicate
+    /// over the count, [`Self::witness_count_singleton`] pins the predicate to
+    /// the LOWER-ENDPOINT-EQUALITY `c == 1`, and [`Self::witness_count_multi`]
+    /// pins the predicate to the STRICT-ABOVE-LOWER-ENDPOINT `c > 1`, THIS
+    /// combinator PINS the predicate to the UPPER-ENDPOINT-EQUALITY on the
+    /// (SINGLETON @ LOWER, MULTI @ STRICT-ABOVE-LOWER, SATURATED @ UPPER)
+    /// cardinality trichotomy the (`_axis_is_singleton`, `_axis_is_multi`,
+    /// `_axis_is_saturated`) predicate triples close. Named at the substrate
+    /// so a caller reads `witness_count_saturated(count)` at the callsite
+    /// rather than `witness_axis_presence(count, count == Self::FIELD_COUNT)`
+    /// with the count-name repeated — the UPPER-ENDPOINT pinning is visible
+    /// without threading the `count == Self::FIELD_COUNT` clause through the
+    /// helper's second argument, and the arity constant is bound INSIDE the
+    /// helper rather than at every callsite (a call to
+    /// [`Self::witness_count_saturated`] at any of the four
+    /// `_axis_is_saturated` bodies never re-names [`Self::FIELD_COUNT`] — the
+    /// UPPER-ENDPOINT is INTERNAL to the trichotomy primitive).
+    ///
+    /// **Two-arm dispatch identity — LOAD-BEARING structural pin**: on every
+    /// `count`, `witness_count_saturated(count) ==
+    /// Self::witness_axis_presence(count, count == Self::FIELD_COUNT)`. The
+    /// delegation through the shipped presence-conditional helper is DIRECT —
+    /// no new per-count scan, no allocation. Pinned via
+    /// `resource_limits_witness_count_saturated_agrees_with_witness_axis_presence_at_upper_endpoint`.
+    ///
+    /// **Empty-arm identity**: `witness_count_saturated(0) == None` — the
+    /// empty-axis count yields `None`, PRESERVING the has-axis distinction
+    /// through the SATURATED dispatch. Pinned via
+    /// `resource_limits_witness_count_saturated_empty_arm_is_none`.
+    ///
+    /// **UPPER-endpoint acceptance**: `witness_count_saturated(Self::FIELD_COUNT)
+    /// == Some(true)` — the UPPER-ENDPOINT count fires the SATURATED verdict.
+    /// Pinned via
+    /// `resource_limits_witness_count_saturated_at_field_count_is_some_true`.
+    ///
+    /// **Below-endpoint rejection**: for every `count` in `1..Self::FIELD_COUNT`,
+    /// `witness_count_saturated(count) == Some(false)` — every present-but-
+    /// non-full count rejects the SATURATED verdict. Swept across
+    /// `1..Self::FIELD_COUNT` to pin the rejection at every present non-UPPER
+    /// cell. Pinned via
+    /// `resource_limits_witness_count_saturated_below_endpoint_rejects`.
+    ///
+    /// **SATURATED-IMPLIES-MULTI bridge — LOAD-BEARING refinement pin**: for
+    /// every `count`, `witness_count_saturated(count) == Some(true) ⇒
+    /// witness_count_multi(count) == Some(true)`. The SATURATED regime is
+    /// strictly stronger than the MULTI regime (`count == Self::FIELD_COUNT ⇒
+    /// count > 1` because `Self::FIELD_COUNT == 6 > 1`) — the same refinement
+    /// pin the four shipped `_axis_is_saturated` bodies carry against their
+    /// paired `_axis_is_multi` bodies (`polar_axis_is_saturated() == Some(true)
+    /// ⇒ polar_axis_is_multi() == Some(true)`, etc.) lifted to the substrate
+    /// primitive one PREDICATE-KIND axis under. Pinned via
+    /// `resource_limits_witness_count_saturated_implies_witness_count_multi`.
+    ///
+    /// **`is_some` bridge**: `witness_count_saturated(count).is_some() ⇔
+    /// count > 0` — the presence dispatch matches the paired
+    /// [`Self::witness_axis_presence`]'s bridge and the
+    /// [`Self::witness_count_singleton`] / [`Self::witness_count_multi`]
+    /// siblings one PREDICATE-KIND axis over (all FOUR PRESERVE the `count > 0`
+    /// boundary). Pinned via
+    /// `resource_limits_witness_count_saturated_is_some_iff_count_gt_zero`.
+    ///
+    /// `const fn` so a caller can pin the SATURATED verdict at compile time
+    /// (`const _: () = assert!(matches!(
+    /// ResourceLimits::witness_count_saturated(ResourceLimits::FIELD_COUNT),
+    /// Some(true)));`) — sibling of the const-fn evaluability pins the four
+    /// `_axis_is_saturated` predicates already carry at their own exits, and
+    /// of the const-fn pins on [`Self::witness_count_singleton`] +
+    /// [`Self::witness_count_multi`] one PREDICATE-KIND axis over.
+    ///
+    /// **Adoption compounds**: the four shipped `_axis_is_saturated` predicates
+    /// rewrite from the open-coded two-line `let c = self.count_X_axes();
+    /// Self::witness_axis_presence(c, c == Self::FIELD_COUNT)` to the one-line
+    /// `Self::witness_count_saturated(self.count_X_axes())` composition at no
+    /// semantic change; any future AXIS-CELL SATURATED predicate (higher-order
+    /// axial partitions with an UPPER-ENDPOINT cell, cross-posture agreement
+    /// full-count checks) composes through this same primitive. Body
+    /// regressions at the shared helper (a `count == Self::FIELD_COUNT`
+    /// weakening to `count >= Self::FIELD_COUNT` — same set on `usize` at
+    /// `Self::FIELD_COUNT` but future-brittle if the arity ever changes; a
+    /// `Some(true)` swap on the empty arm) fire immediately at the helper's
+    /// own pins rather than silently re-classifying every downstream
+    /// `_axis_is_saturated` reading. The trichotomy is now CLOSED at the
+    /// substrate: (SINGLETON, MULTI, SATURATED) count witnesses share ONE
+    /// factored predicate combinator ([`Self::witness_axis_presence`]) rather
+    /// than three parallel two-arm matches at every callsite.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// SATURATED-KIND count witness at every `_axis_is_saturated` body binds
+    /// at ONE typed named `const fn` on the algebra rather than a per-consumer
+    /// two-line `let`-bound composition through the paired
+    /// [`Self::witness_axis_presence`] helper. THEORY.md §II.1 invariant 5 —
+    /// composition preserves proofs; the helper composes structurally through
+    /// the shipped [`Self::witness_axis_presence`] under the two-arm dispatch
+    /// identity above with no re-derivation at the caller. THEORY.md §V.1 —
+    /// knowable platform; the UPPER-ENDPOINT cardinality dispatch becomes a
+    /// substrate-level theorem rather than a per-predicate convention, and the
+    /// arity constant [`Self::FIELD_COUNT`] is threaded through ONE point on
+    /// the algebra rather than four.
+    ///
+    /// Frontier inspiration: Haskell's `bool None (Just (count == n))
+    /// (count /= 0)` case-of on the two-arm empty split with the
+    /// upper-endpoint-equality predicate pinned; Idris's `if count == 0 then
+    /// Nothing else Just (count == n)` conditional under a total function
+    /// signature; Racket's `(and (positive? count) (= count n))` short-
+    /// circuiting FULL-COUNT wrapper; APL's `(0<count) × count=≢v` present-arm
+    /// multiplicand at the UPPER-ENDPOINT. Kmett's `lattices` package's
+    /// "top-of-lattice" projection lifted through a presence-preserving
+    /// wrapper; Lean's `Vector.all (const True)` under a length refinement.
+    /// Translation through pleme-io primitives is the plain `const fn`
+    /// delegation through the shipped [`Self::witness_axis_presence`] at the
+    /// UPPER-ENDPOINT-EQUALITY predicate — no new dep, no typeclass
+    /// indirection, no allocation, no closure.
+    #[must_use]
+    pub const fn witness_count_saturated(count: usize) -> Option<bool> {
+        Self::witness_axis_presence(count, count == Self::FIELD_COUNT)
+    }
+
     /// Presence-preserving negation on whole-posture `Option<bool>` witnesses —
     /// `Self::negate_axis_witness(w)` returns `Some(!b)` when `w` is `Some(b)`,
     /// or `None` when `w` is `None`. The BOUNDARY primitive lifting the shape
@@ -24233,8 +24378,7 @@ impl ResourceLimits {
     /// split, no new per-axis scan, no allocation.
     #[must_use]
     pub const fn bottom_axis_is_saturated(self) -> Option<bool> {
-        let c = self.count_bottom_axes();
-        Self::witness_axis_presence(c, c == Self::FIELD_COUNT)
+        Self::witness_count_saturated(self.count_bottom_axes())
     }
 
     /// Whole-posture SATURATED-OF-TOP predicate —
@@ -24300,8 +24444,7 @@ impl ResourceLimits {
     /// on the DUAL atomic mask.
     #[must_use]
     pub const fn top_axis_is_saturated(self) -> Option<bool> {
-        let c = self.count_top_axes();
-        Self::witness_axis_presence(c, c == Self::FIELD_COUNT)
+        Self::witness_count_saturated(self.count_top_axes())
     }
 
     /// Whole-posture SATURATED-OF-POLAR predicate —
@@ -24421,8 +24564,7 @@ impl ResourceLimits {
     /// a first-class typed observer.
     #[must_use]
     pub const fn polar_axis_is_saturated(self) -> Option<bool> {
-        let c = self.count_polar_axes();
-        Self::witness_axis_presence(c, c == Self::FIELD_COUNT)
+        Self::witness_count_saturated(self.count_polar_axes())
     }
 
     /// Whole-posture SATURATED-OF-INTERIOR predicate —
@@ -24491,8 +24633,7 @@ impl ResourceLimits {
     /// the DUAL COMPOUND interior mask.
     #[must_use]
     pub const fn interior_axis_is_saturated(self) -> Option<bool> {
-        let c = self.count_interior_axes();
-        Self::witness_axis_presence(c, c == Self::FIELD_COUNT)
+        Self::witness_count_saturated(self.count_interior_axes())
     }
 
     /// Whole-posture STRICTLY-MULTI-OF-BOTTOM predicate —
@@ -91960,6 +92101,185 @@ mod tests {
                 a.interior_axis_is_multi(),
                 ResourceLimits::witness_count_multi(a.count_interior_axes()),
                 "interior_axis_is_multi != witness_count_multi(count_interior_axes) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_agrees_with_witness_axis_presence_at_upper_endpoint()
+    {
+        // Two-arm dispatch identity — witness_count_saturated(count) is
+        // structurally the shipped presence-conditional helper applied to
+        // the UPPER-ENDPOINT-EQUALITY predicate `count == FIELD_COUNT` on
+        // every count in `0..=FIELD_COUNT`. Pinning the delegation at
+        // every representable count catches a future rewrite that
+        // silently drifts from the presence-conditional composition (a
+        // `==` -> `>=` weakening on the pinned endpoint, a swap of
+        // Self::FIELD_COUNT for a bare literal `6` that would silently
+        // miscompile at any future arity bump).
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_saturated(count),
+                ResourceLimits::witness_axis_presence(count, count == ResourceLimits::FIELD_COUNT),
+                "witness_count_saturated({count}) != witness_axis_presence(count, count == FIELD_COUNT)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_empty_arm_is_none() {
+        // Empty-arm identity — the empty-axis count yields `None`,
+        // PRESERVING the has-axis distinction through the SATURATED
+        // dispatch. Discards the UPPER-ENDPOINT-EQUALITY predicate on
+        // the count == 0 posture, exactly as the paired
+        // witness_axis_presence helper does one PREDICATE-KIND axis
+        // under and the SINGLETON / MULTI siblings do at their own
+        // empty arms.
+        assert_eq!(ResourceLimits::witness_count_saturated(0), None);
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_at_field_count_is_some_true() {
+        // UPPER-endpoint acceptance — the UPPER-ENDPOINT count fires
+        // the SATURATED verdict with `Some(true)`. Pins the positive
+        // arm at the canonical `count == FIELD_COUNT` cardinality the
+        // SATURATED regime names — the exact count the SATURATED-
+        // IMPLIES-MULTI refinement pin fires from.
+        assert_eq!(
+            ResourceLimits::witness_count_saturated(ResourceLimits::FIELD_COUNT),
+            Some(true),
+            "witness_count_saturated(FIELD_COUNT) != Some(true) at UPPER-ENDPOINT count",
+        );
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_below_endpoint_rejects() {
+        // Below-endpoint rejection — every count strictly below the
+        // UPPER endpoint but present (1..FIELD_COUNT) rejects the
+        // SATURATED verdict with `Some(false)`. Sweeps the full
+        // below-endpoint present cardinality range to pin the
+        // rejection at every present non-UPPER cell — catching a
+        // future rewrite that weakens `c == FIELD_COUNT` to `c >=
+        // FIELD_COUNT - 1` (which would silently accept the sub-full
+        // postures) or that swaps `FIELD_COUNT` for a bare literal
+        // that drifts under a future arity bump.
+        let mut count = 1;
+        while count < ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_saturated(count),
+                Some(false),
+                "witness_count_saturated({count}) != Some(false) at below-endpoint count",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_implies_witness_count_multi() {
+        // SATURATED-IMPLIES-MULTI refinement pin — the SATURATED regime
+        // is strictly stronger than the MULTI regime (`count ==
+        // FIELD_COUNT ⇒ count > 1` because FIELD_COUNT == 6 > 1).
+        // Swept across `0..=FIELD_COUNT` to pin the implication at
+        // every representable count — the same refinement pin the
+        // four shipped `_axis_is_saturated` bodies carry against
+        // their paired `_axis_is_multi` bodies, lifted to the
+        // substrate primitive one PREDICATE-KIND axis under.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            if let Some(true) = ResourceLimits::witness_count_saturated(count) {
+                assert_eq!(
+                    ResourceLimits::witness_count_multi(count),
+                    Some(true),
+                    "witness_count_saturated({count}) == Some(true) but witness_count_multi({count}) != Some(true)",
+                );
+            }
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_is_some_iff_count_gt_zero() {
+        // `is_some` bridge — the presence dispatch matches the paired
+        // witness_axis_presence's bridge and the witness_count_singleton
+        // / witness_count_multi siblings one PREDICATE-KIND axis over:
+        // all FOUR PRESERVE the `count > 0` boundary. Swept over
+        // `0..=FIELD_COUNT` to pin the presence identity at every
+        // representable count.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_saturated(count).is_some(),
+                count > 0,
+                "witness_count_saturated({count}).is_some() != (count > 0)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the SATURATED verdict at compile time as a
+        // build-break. Sibling of the const-fn evaluability pins the
+        // four _axis_is_saturated predicates already carry at their
+        // own exits, and of the const-fn pins on
+        // witness_count_singleton + witness_count_multi one
+        // PREDICATE-KIND axis over.
+        const _: () = assert!(ResourceLimits::witness_count_saturated(0).is_none());
+        const _: () = assert!(matches!(
+            ResourceLimits::witness_count_saturated(1),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::witness_count_saturated(ResourceLimits::FIELD_COUNT),
+            Some(true)
+        ));
+    }
+
+    #[test]
+    fn resource_limits_axis_is_saturated_bodies_delegate_to_witness_count_saturated() {
+        // Body-delegation pin — the four shipped _axis_is_saturated
+        // predicates delegate through witness_count_saturated applied
+        // to their paired count_X_axes tally, at every posture in the
+        // canonical roster. Catches a future rewrite of any of the
+        // four predicate bodies that silently drifts from the
+        // substrate combinator (an axis-name mismatch on the count
+        // call, an inversion of the delegation direction, a swap to a
+        // sibling count helper). Mirrors the sibling delegation-pin
+        // shape the singleton + multi cohorts already carry one
+        // PREDICATE-KIND axis over.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.bottom_axis_is_saturated(),
+                ResourceLimits::witness_count_saturated(a.count_bottom_axes()),
+                "bottom_axis_is_saturated != witness_count_saturated(count_bottom_axes) on {a:?}",
+            );
+            assert_eq!(
+                a.top_axis_is_saturated(),
+                ResourceLimits::witness_count_saturated(a.count_top_axes()),
+                "top_axis_is_saturated != witness_count_saturated(count_top_axes) on {a:?}",
+            );
+            assert_eq!(
+                a.polar_axis_is_saturated(),
+                ResourceLimits::witness_count_saturated(a.count_polar_axes()),
+                "polar_axis_is_saturated != witness_count_saturated(count_polar_axes) on {a:?}",
+            );
+            assert_eq!(
+                a.interior_axis_is_saturated(),
+                ResourceLimits::witness_count_saturated(a.count_interior_axes()),
+                "interior_axis_is_saturated != witness_count_saturated(count_interior_axes) on {a:?}",
             );
         }
     }

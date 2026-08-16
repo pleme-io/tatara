@@ -14566,6 +14566,170 @@ impl ResourceLimits {
         lhs > rhs
     }
 
+    /// ARM-AGNOSTIC EQUAL-ARITY VERDICT from a coupled COUNT PAIR on
+    /// whole-posture `usize` axial-tally sub-cells —
+    /// `Self::count_arities_agree(lhs, rhs)` returns `true` iff `lhs ==
+    /// rhs`, `false` otherwise. The BOUNDARY primitive lifting the shape
+    /// `lhs == rhs` that every WHOLE-POSTURE BALANCE predicate on
+    /// [`ResourceLimits`] carries at its exit —
+    /// [`Self::is_axially_balanced`] and [`Self::is_atomically_balanced`]
+    /// both wrap the `==`-equality of a paired (arm-A count, arm-B count)
+    /// tally in the same one-line comparison. Pre-lift each BALANCE
+    /// predicate open-coded the one-line `self.count_A_axes() ==
+    /// self.count_B_axes()` at its own exit — a two-point copy-paste
+    /// whose consistency the type system did not gate (a predicate that
+    /// duplicated the SAME count on both `==` arms would silently emit
+    /// `true` on EVERY posture, collapsing the BALANCE verdict to the
+    /// constant tautology regardless of the underlying axial tally split;
+    /// a predicate that flipped `==` to `!=` would silently negate its
+    /// verdict on every posture and REJECT exactly where the intended
+    /// BALANCE verdict FIRES). Post-lift the shape binds at ONE typed
+    /// `const fn` on [`ResourceLimits`], and every future WHOLE-POSTURE
+    /// BALANCE predicate composes through this helper — the equal-arity
+    /// verdict over a coupled `(usize, usize)` count pair is a substrate-
+    /// level theorem rather than a per-consumer one-line open-coded `==`
+    /// comparison.
+    ///
+    /// The DIRECT EQUALITY-KIND sibling of
+    /// [`Self::strict_count_lead_holds`] (ORDER-KIND `>` — BOOLEAN
+    /// strict-dominance verdict) on the SAME `(usize, usize) → bool` two-
+    /// input surface: where the ORDER-KIND sibling carries the STRICT-
+    /// DOMINANCE VERDICT through the bare `bool` (fires TRUE on the lhs-
+    /// strong arm, FALSE on the two non-lhs-strong legs — rhs-strong AND
+    /// tie), THIS combinator carries the EQUAL-ARITY VERDICT through the
+    /// bare `bool` (fires TRUE on the tie leg, FALSE on both strict-
+    /// dominance directions — lhs-strong AND rhs-strong). The two
+    /// BOOLEAN combinators jointly close the ORDER-vs-EQUALITY partition
+    /// on the two-input surface's `bool` output cell: the TRICHOTOMY
+    /// (lhs > rhs, lhs == rhs, lhs < rhs) reads through the paired
+    /// verdicts as (`strict_count_lead_holds(lhs, rhs) &&
+    /// !count_arities_agree(lhs, rhs)`,
+    /// `count_arities_agree(lhs, rhs)`,
+    /// `!strict_count_lead_holds(lhs, rhs) && !count_arities_agree(lhs,
+    /// rhs)`) — three cells disjoint, exhaustive, and mechanically
+    /// derivable at the helper composition. Unlike the ORDER-KIND
+    /// sibling, THIS combinator is COMMUTATIVE — the `==` relation on
+    /// `usize` is symmetric, so `count_arities_agree(lhs, rhs) ==
+    /// count_arities_agree(rhs, lhs)` on every input pair.
+    ///
+    /// **Bare-body identity — LOAD-BEARING structural pin**: on every
+    /// `(lhs, rhs)`, `count_arities_agree(lhs, rhs) == (lhs == rhs)`.
+    /// Pinned via
+    /// `resource_limits_count_arities_agree_agrees_with_open_coded_eq`.
+    ///
+    /// **Diagonal identity — TRUE on the tie cell**: for every `n`,
+    /// `count_arities_agree(n, n) == true`. The tie corner of the input
+    /// pair collapses to the ACCEPTED arm of the BOOLEAN verdict —
+    /// EQUAL-ARITY holds iff the two operands coincide, so the diagonal
+    /// leg fires. Pinned via
+    /// `resource_limits_count_arities_agree_diagonal_inputs_fold_to_true`.
+    ///
+    /// **Strict-dominance arms — FALSE on both directions**: on every
+    /// `(lhs, rhs)` with `lhs > rhs` OR `rhs > lhs`, `count_arities_agree(
+    /// lhs, rhs) == false`. The BOOLEAN combinator DISCARDS the arm-
+    /// identity distinction between the two strict-dominance legs and
+    /// folds both onto the SAME FALSE cell — dual of the ORDER-KIND
+    /// sibling which folds both non-lhs-strong legs (rhs-strong AND tie)
+    /// onto its FALSE cell. Pinned via
+    /// `resource_limits_count_arities_agree_strict_dominance_arms_reject_to_false`.
+    ///
+    /// **Commutativity — SYMMETRY on the input pair**: on every `(lhs,
+    /// rhs)`, `count_arities_agree(lhs, rhs) == count_arities_agree(rhs,
+    /// lhs)`. The EQUAL-ARITY combinator folds both order-cells onto the
+    /// SAME verdict — unlike the ORDER-KIND sibling whose swapped-input
+    /// identity is MUTUAL EXCLUSION on TRUE (matching the paired
+    /// [`Self::absolute_count_difference`] commutativity on the UNSIGNED
+    /// magnitude output cell). Pinned via
+    /// `resource_limits_count_arities_agree_is_commutative_in_its_input_pair`.
+    ///
+    /// **De Morgan complement to strict-dominance-disjunction — FALSE-
+    /// iff-SOME-STRICT-DOMINANCE identity**: on every `(lhs, rhs)`,
+    /// `!count_arities_agree(lhs, rhs) == (strict_count_lead_holds(lhs,
+    /// rhs) || strict_count_lead_holds(rhs, lhs))`. The FALSE arm
+    /// coincides exactly with the union of the two ORDER-KIND sibling's
+    /// TRUE arms across swapped inputs — the two-cell (equal, strict-
+    /// dominance-in-some-direction) EXHAUSTIVE-AND-DISJOINT partition
+    /// of the input universe. Pinned via
+    /// `resource_limits_count_arities_agree_negation_iff_some_strict_dominance_arm_fires`.
+    ///
+    /// **Zero-magnitude bridge — TRUE-iff-ABSOLUTE-DIFFERENCE-ZERO
+    /// identity**: on every `(lhs, rhs)`, `count_arities_agree(lhs, rhs)
+    /// == (absolute_count_difference(lhs, rhs) == 0)`. The BOOLEAN
+    /// combinator's TRUE arm coincides exactly with the zero cell of the
+    /// UNSIGNED sibling's output — the equal-arity verdict is the
+    /// presence-only projection of the balance corner the UNSIGNED
+    /// magnitude carries as a `usize` reading. Pinned via
+    /// `resource_limits_count_arities_agree_iff_absolute_count_difference_is_zero`.
+    ///
+    /// **Zero-signum bridge — TRUE-iff-SIGNED-DIFFERENCE-ZERO identity**:
+    /// on every `(lhs, rhs)`, `count_arities_agree(lhs, rhs) ==
+    /// (signed_count_difference(lhs, rhs) == 0)`. The BOOLEAN
+    /// combinator's TRUE arm coincides exactly with the zero cell of the
+    /// SIGNED sibling's output — the equal-arity verdict is the
+    /// presence-only projection of the balance corner the SIGNED
+    /// magnitude carries as an `isize` reading, matching the UNSIGNED
+    /// bridge on the ARM-AGNOSTIC zero cell across both sign
+    /// representations. Pinned via
+    /// `resource_limits_count_arities_agree_iff_signed_count_difference_is_zero`.
+    ///
+    /// **Witness-absence bridge — TRUE-iff-BOTH-DIRECTED-WITNESSES-NONE
+    /// identity**: on every `(lhs, rhs)`, `count_arities_agree(lhs, rhs)
+    /// == (witness_strict_count_lead(lhs, rhs).is_none() &&
+    /// witness_strict_count_lead(rhs, lhs).is_none())`. The BOOLEAN
+    /// combinator's TRUE arm coincides exactly with the joint-NONE cell
+    /// of the ARM-SELECTING sibling across swapped inputs — the tie leg
+    /// is the ONLY posture where BOTH DIRECTED strict-dominance witnesses
+    /// reject. Pinned via
+    /// `resource_limits_count_arities_agree_iff_both_directed_witness_strict_count_leads_are_none`.
+    ///
+    /// `const fn` so a caller can pin the helper's verdict at compile
+    /// time (`const _: () = assert!(
+    /// ResourceLimits::count_arities_agree(0, 0));`) — sibling of the
+    /// const-fn evaluability pins the BALANCE predicates already carry at
+    /// their own exits.
+    ///
+    /// **Adoption compounds**: future WHOLE-POSTURE BALANCE predicates
+    /// that currently open-code the `==`-comparison on a coupled (usize,
+    /// usize) count pair rewrite their body from `self.count_A_axes() ==
+    /// self.count_B_axes()` to `Self::count_arities_agree(self
+    /// .count_A_axes(), self.count_B_axes())` at no semantic change, and
+    /// a mechanical sweep of the two BALANCE bodies through the helper
+    /// becomes a substrate-level refactor rather than a per-method
+    /// rewrite.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// equal-arity verdict shape at every WHOLE-POSTURE BALANCE
+    /// predicate body binds at ONE typed named `const fn` on the algebra
+    /// rather than a per-predicate one-line open-coded `==` comparison.
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// helper composes mechanically under the bare-body identity above
+    /// with no re-derivation at the caller, and both swept callsites
+    /// preserve their const-fn evaluability pins verbatim. THEORY.md
+    /// §V.1 — knowable platform; the equal-arity-verdict dispatch
+    /// becomes a substrate-level theorem rather than a per-predicate
+    /// convention.
+    ///
+    /// Frontier inspiration: classical equational logic's canonical
+    /// "equality predicate" on a two-input total-eq relation, expressed
+    /// as `bool` via the plain `==` combinator rather than as the paired
+    /// (order, magnitude) cells. Rust's own `usize::eq` reads the SAME
+    /// equality-inequality dispatch shape (the trait-method projection
+    /// of the `==` operator on the total-eq-lifted `PartialEq` impl).
+    /// Haskell's `a == b` on paired `Word` inputs; Idris's `a == b`
+    /// under a total signature on two `Nat` inputs; APL's `⍺ = ⍵` on the
+    /// paired arm tallies; Racket's `(= a b)` on paired non-negatives.
+    /// Voting-theory's canonical "perfect-tie holds" projection on a
+    /// two-candidate election — the presence-only verdict for the
+    /// balance leg of the strict-plurality trichotomy. Translation
+    /// through pleme-io primitives is the plain `const fn` `==`-
+    /// comparison below — no `checked_sub` indirection, no `Ordering`-
+    /// dispatch, no `PartialEq`-trait indirection, no closure, no new
+    /// dep, no typeclass indirection.
+    #[must_use]
+    pub const fn count_arities_agree(lhs: usize, rhs: usize) -> bool {
+        lhs == rhs
+    }
+
     /// Presence-preserving CLOSED-INTERVAL WIDTH from a coupled ENDPOINT PAIR
     /// on whole-posture `Option<usize>` axis-endpoint tallies —
     /// `Self::derive_axis_endpoint_span(first, last)` returns
@@ -15509,11 +15673,16 @@ impl ResourceLimits {
     /// posture into a two-cell EXHAUSTIVE-AND-DISJOINT MAJORITY-
     /// EXISTENCE partition.
     ///
-    /// Encoded as the plain `const fn` `self.count_polar_axes() ==
-    /// self.count_interior_axes()` on the two already-lifted
-    /// ARITHMETIC-QUANTIFIER tallies — matching
-    /// [`Self::polar_is_majority`]'s shape verbatim on the EQUALITY-KIND
-    /// combinator. The equivalent alternative encodings `!self
+    /// Encoded as a single-composition delegation through the substrate
+    /// primitive [`Self::count_arities_agree`] on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies —
+    /// `Self::count_arities_agree(self.count_polar_axes(),
+    /// self.count_interior_axes())`, matching
+    /// [`Self::polar_is_majority`]'s single-composition delegation
+    /// verbatim on the EQUALITY-KIND combinator (where the ORDER-KIND
+    /// sibling routes through [`Self::strict_count_lead_holds`], THIS
+    /// predicate routes through the EQUALITY-KIND peer on the SAME two-
+    /// input surface). The equivalent alternative encodings `!self
     /// .has_majority_axis()`, `!self.polar_is_majority() && !self
     /// .interior_is_majority()`, and (via the EXHAUSTIVE-PARTITION
     /// identity `count_polar + count_interior == FIELD_COUNT`) `2 *
@@ -15607,13 +15776,13 @@ impl ResourceLimits {
     /// the type of the paired arm-tally equality. Voting-theory's
     /// canonical "perfect-tie" leg of the strict-plurality trichotomy
     /// on a two-candidate election. Translation through pleme-io
-    /// primitives: plain `const fn` `self.count_polar_axes() ==
-    /// self.count_interior_axes()` on the two already-lifted
+    /// primitives: single-composition delegation through the substrate
+    /// primitive [`Self::count_arities_agree`] on the two already-lifted
     /// ARITHMETIC-QUANTIFIER tallies, no new dep, no typeclass
     /// indirection, no per-axis loop, no allocation.
     #[must_use]
     pub const fn is_axially_balanced(self) -> bool {
-        self.count_polar_axes() == self.count_interior_axes()
+        Self::count_arities_agree(self.count_polar_axes(), self.count_interior_axes())
     }
 
     /// Whole-posture STRICT-MAJORITY-EXISTENCE predicate —
@@ -16939,12 +17108,15 @@ impl ResourceLimits {
     /// and rejects only on the two polar-uniform presets EMPTY and
     /// UNBOUNDED.
     ///
-    /// Encoded as the plain `const fn` `self.count_bottom_axes() ==
-    /// self.count_top_axes()` on the two already-lifted
-    /// ARITHMETIC-QUANTIFIER tallies — matching
-    /// [`Self::is_axially_balanced`]'s shape verbatim on the DUAL
-    /// (atomic vs compound) CELL-KIND combinator. The equivalent
-    /// alternative encodings `!self.has_atomic_majority()` and
+    /// Encoded as a single-composition delegation through the substrate
+    /// primitive [`Self::count_arities_agree`] on the two already-lifted
+    /// ARITHMETIC-QUANTIFIER tallies —
+    /// `Self::count_arities_agree(self.count_bottom_axes(),
+    /// self.count_top_axes())`, matching
+    /// [`Self::is_axially_balanced`]'s single-composition delegation
+    /// verbatim on the DUAL (atomic vs compound) CELL-KIND combinator.
+    /// The equivalent alternative encodings
+    /// `!self.has_atomic_majority()` and
     /// `!self.bottom_is_majority() && !self.top_is_majority()` are
     /// both structurally equivalent AND pinned as substrate theorems
     /// in the paired contracts below.
@@ -17027,7 +17199,7 @@ impl ResourceLimits {
     /// the polar cell.
     #[must_use]
     pub const fn is_atomically_balanced(self) -> bool {
-        self.count_bottom_axes() == self.count_top_axes()
+        Self::count_arities_agree(self.count_bottom_axes(), self.count_top_axes())
     }
 
     /// Whole-posture ATOMIC-STRICT-MAJORITY-EXISTENCE predicate —
@@ -90573,6 +90745,323 @@ mod tests {
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.interior_is_majority());
         const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.bottom_is_majority());
         const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.top_is_majority());
+    }
+
+    #[test]
+    fn resource_limits_count_arities_agree_agrees_with_open_coded_eq() {
+        // Bare-body identity — the helper's verdict on every (lhs, rhs)
+        // pair agrees with the open-coded shape `lhs == rhs` that every
+        // WHOLE-POSTURE BALANCE predicate on ResourceLimits carried at
+        // its exit pre-lift. Swept over the (lhs < rhs, lhs == rhs,
+        // lhs > rhs) three-cell order-partition with representative
+        // values so all three cells of the ARM-TRICHOTOMY on the
+        // (usize, usize) joint-input regime are pinned, using axial-
+        // tally-bounded samples (0..=FIELD_COUNT) for which the caller-
+        // side invariant is discharged by construction.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::count_arities_agree(lhs, rhs),
+                lhs == rhs,
+                "helper != open-coded == at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_arities_agree_diagonal_inputs_fold_to_true() {
+        // Diagonal identity — for every n in the caller-safe regime, the
+        // helper folds the diagonal (n, n) input to true. The tie corner
+        // of the input pair collapses to the ACCEPTED arm of the BOOLEAN
+        // verdict — EQUAL-ARITY holds iff the two operands coincide, so
+        // the diagonal leg fires. Swept across the (0, min-positive,
+        // FIELD_COUNT, mid) constellation covering the representative
+        // axial-tally diagonal postures — dual of the ORDER-KIND
+        // sibling's diagonal-to-FALSE pin.
+        for n in [
+            0_usize,
+            1,
+            ResourceLimits::FIELD_COUNT / 2,
+            ResourceLimits::FIELD_COUNT,
+        ] {
+            assert!(
+                ResourceLimits::count_arities_agree(n, n),
+                "diagonal fold to true violated at n={n}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_arities_agree_strict_dominance_arms_reject_to_false() {
+        // Strict-dominance-arm dispatch — on every (lhs, rhs) with
+        // lhs != rhs (either direction), the helper rejects to false.
+        // The BOOLEAN combinator DISCARDS the arm-identity distinction
+        // between the two strict-dominance legs and folds both onto the
+        // SAME FALSE cell — dual of the ORDER-KIND sibling which folds
+        // both non-lhs-strong legs (rhs-strong AND tie) onto its FALSE
+        // cell. Swept over representative (lhs > rhs) and (rhs > lhs)
+        // samples covering both directions of the strict-inequality
+        // partition.
+        for (lhs, rhs) in [
+            (1_usize, 0_usize),
+            (0, 1),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (0, ResourceLimits::FIELD_COUNT),
+            (5, 1),
+            (1, 5),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_ne!(
+                lhs, rhs,
+                "test-local invariant violated: lhs must differ from rhs, got ({lhs}, {rhs})",
+            );
+            assert!(
+                !ResourceLimits::count_arities_agree(lhs, rhs),
+                "strict-dominance-arm rejection to false regressed at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_arities_agree_is_commutative_in_its_input_pair() {
+        // Commutativity — on every (lhs, rhs), count_arities_agree(lhs,
+        // rhs) == count_arities_agree(rhs, lhs). The EQUAL-ARITY
+        // combinator folds both order-cells onto the SAME verdict —
+        // unlike the ORDER-KIND sibling whose swapped-input identity is
+        // MUTUAL EXCLUSION on TRUE. Matches the paired
+        // absolute_count_difference commutativity on the UNSIGNED
+        // magnitude output cell one output-cell axis over.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::count_arities_agree(lhs, rhs),
+                ResourceLimits::count_arities_agree(rhs, lhs),
+                "commutativity violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_arities_agree_negation_iff_some_strict_dominance_arm_fires() {
+        // De Morgan complement to strict-dominance disjunction — on every
+        // (lhs, rhs), !count_arities_agree(lhs, rhs) ==
+        // (strict_count_lead_holds(lhs, rhs) ||
+        //  strict_count_lead_holds(rhs, lhs)). The FALSE arm coincides
+        // exactly with the union of the two ORDER-KIND sibling's TRUE
+        // arms across swapped inputs — the two-cell (equal, strict-
+        // dominance-in-some-direction) EXHAUSTIVE-AND-DISJOINT partition
+        // of the input universe.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                !ResourceLimits::count_arities_agree(lhs, rhs),
+                ResourceLimits::strict_count_lead_holds(lhs, rhs)
+                    || ResourceLimits::strict_count_lead_holds(rhs, lhs),
+                "De Morgan complement violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_arities_agree_iff_absolute_count_difference_is_zero() {
+        // Zero-magnitude bridge — the BOOLEAN combinator's TRUE arm
+        // coincides exactly with the zero cell of the UNSIGNED sibling's
+        // output. On every (lhs, rhs), count_arities_agree(lhs, rhs) ==
+        // (absolute_count_difference(lhs, rhs) == 0). The equal-arity
+        // verdict is the presence-only projection of the balance corner
+        // the UNSIGNED magnitude carries as a `usize` reading.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::count_arities_agree(lhs, rhs),
+                ResourceLimits::absolute_count_difference(lhs, rhs) == 0,
+                "zero-magnitude bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_arities_agree_iff_signed_count_difference_is_zero() {
+        // Zero-signum bridge — the BOOLEAN combinator's TRUE arm
+        // coincides exactly with the zero cell of the SIGNED sibling's
+        // output. On every (lhs, rhs), count_arities_agree(lhs, rhs) ==
+        // (signed_count_difference(lhs, rhs) == 0). Matches the UNSIGNED
+        // bridge on the ARM-AGNOSTIC zero cell across both sign
+        // representations — the equal-arity leg is the sole cell where
+        // BOTH sign-carrying magnitude siblings collapse to zero.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::count_arities_agree(lhs, rhs),
+                ResourceLimits::signed_count_difference(lhs, rhs) == 0,
+                "zero-signum bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_arities_agree_iff_both_directed_witness_strict_count_leads_are_none() {
+        // Witness-absence bridge — the BOOLEAN combinator's TRUE arm
+        // coincides exactly with the joint-NONE cell of the ARM-SELECTING
+        // sibling across swapped inputs. On every (lhs, rhs),
+        // count_arities_agree(lhs, rhs) ==
+        // (witness_strict_count_lead(lhs, rhs).is_none() &&
+        //  witness_strict_count_lead(rhs, lhs).is_none()).
+        // The tie leg is the ONLY posture where BOTH DIRECTED strict-
+        // dominance witnesses reject.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::count_arities_agree(lhs, rhs),
+                ResourceLimits::witness_strict_count_lead(lhs, rhs).is_none()
+                    && ResourceLimits::witness_strict_count_lead(rhs, lhs).is_none(),
+                "witness-absence bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_count_arities_agree_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the helper's `pub const fn` signature
+        // preserves compile-time evaluability across the diagonal-tie,
+        // lhs-strong-arm, rhs-strong-arm, and FIELD_COUNT-corner cells
+        // of the (usize, usize) joint-input regime. Complements the
+        // primary bare-body identity pin
+        // `resource_limits_count_arities_agree_agrees_with_open_coded_eq`
+        // by extending the const-evaluability proof onto the compile-
+        // time surface.
+        const _: () = assert!(ResourceLimits::count_arities_agree(0, 0));
+        const _: () = assert!(!ResourceLimits::count_arities_agree(1, 0));
+        const _: () = assert!(!ResourceLimits::count_arities_agree(
+            ResourceLimits::FIELD_COUNT,
+            0
+        ));
+        const _: () = assert!(!ResourceLimits::count_arities_agree(
+            0,
+            ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(!ResourceLimits::count_arities_agree(5, 1));
+        const _: () = assert!(!ResourceLimits::count_arities_agree(1, 5));
+        const _: () = assert!(ResourceLimits::count_arities_agree(
+            ResourceLimits::FIELD_COUNT,
+            ResourceLimits::FIELD_COUNT
+        ));
+    }
+
+    #[test]
+    fn resource_limits_balance_family_bodies_delegate_to_count_arities_agree() {
+        // Sweep-of-family pin — asserts each of the two WHOLE-POSTURE
+        // BALANCE predicate bodies (is_axially_balanced over the (polar,
+        // interior) axial partition, is_atomically_balanced over the
+        // ATOMIC (bottom, top) sub-partition of the polar cell) agrees
+        // with the helper-based shape
+        // `ResourceLimits::count_arities_agree(self.count_A(),
+        // self.count_B())` on every posture from the EMPTY / DEFAULT /
+        // UNBOUNDED / HAND_AUTHORED_MID / HAND_AUTHORED_OTHER preset
+        // constellation (2×5 = 10 verdicts). A future body regression
+        // that swapped one of the count inputs for the SAME count on
+        // both arms would collapse to constant true here on at least
+        // one posture; a regression that flipped `==` to `!=` would
+        // negate the verdict on every posture.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                posture.is_axially_balanced(),
+                ResourceLimits::count_arities_agree(
+                    posture.count_polar_axes(),
+                    posture.count_interior_axes(),
+                ),
+                "is_axially_balanced delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.is_atomically_balanced(),
+                ResourceLimits::count_arities_agree(
+                    posture.count_bottom_axes(),
+                    posture.count_top_axes(),
+                ),
+                "is_atomically_balanced delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_balance_family_bodies_evaluate_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the WHOLE-POSTURE BALANCE family bodies
+        // preserved const-fn evaluability under the sweep through
+        // count_arities_agree. Each of the two swept predicates × the
+        // three shipped `pub const` preset postures (EMPTY, UNBOUNDED,
+        // DEFAULT). EMPTY packs six bottom axes uniformly — polar =
+        // FIELD_COUNT, interior = 0 → is_axially_balanced fires false;
+        // bottom = FIELD_COUNT, top = 0 → is_atomically_balanced fires
+        // false. UNBOUNDED mirrors on the top pole — same compound
+        // asymmetry (polar = FIELD_COUNT, interior = 0) → false;
+        // bottom = 0, top = FIELD_COUNT → is_atomically_balanced fires
+        // false. DEFAULT is interior-uniform — polar = 0, interior =
+        // FIELD_COUNT → is_axially_balanced fires false; bottom = 0,
+        // top = 0 → is_atomically_balanced fires TRUE (the zero-tie
+        // corner) — pinning that DEFAULT is the sole preset where the
+        // atomic balance corner is inhabited by an interior-uniform
+        // posture.
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.is_axially_balanced());
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.is_atomically_balanced());
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.is_axially_balanced());
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.is_atomically_balanced());
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.is_axially_balanced());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.is_atomically_balanced());
     }
 
     #[test]

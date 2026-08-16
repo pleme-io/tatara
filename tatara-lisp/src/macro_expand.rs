@@ -15483,6 +15483,193 @@ impl ResourceLimits {
         }
     }
 
+    /// ARM-AGNOSTIC CENTRAL-TENDENCY MIN-fold on a coupled COUNT PAIR —
+    /// `Self::min_of_count_pair(lhs, rhs)` returns `lhs` when
+    /// `lhs <= rhs` and `rhs` otherwise. The BOUNDARY primitive lifting
+    /// the shape `if lhs <= rhs { lhs } else { rhs }` (equivalently
+    /// [`Ord::min`] on the paired `usize` tally, which is NOT
+    /// `const`-stable on tatara-lisp's supported Rust versions) that
+    /// every WHOLE-POSTURE ARM-AGNOSTIC MIN-fold projection on
+    /// [`ResourceLimits`] carries at its exit —
+    /// [`Self::axial_minority_count`] and [`Self::atomic_minority_count`]
+    /// both wrap the plain MIN-of-two-arms fold of a paired
+    /// ARITHMETIC-QUANTIFIER tally in the same three-line inline split.
+    /// Pre-lift each MIN-fold projection open-coded the four-line
+    /// `let a = self.count_A(); let b = self.count_B(); if a <= b { a }
+    /// else { b }` on its OWN pair — a two-point copy-paste whose
+    /// consistency the type system did not gate (a projection that
+    /// swapped the `<=` for `>=` would silently return the MAJORITY
+    /// tally where the canonical shape yields the MINORITY, or one that
+    /// swapped the arm bindings on the `else` branch would collapse
+    /// the fold onto the LHS on every input). Post-lift the shape
+    /// binds at ONE typed `const fn` on [`ResourceLimits`], and every
+    /// future WHOLE-POSTURE ARM-AGNOSTIC MIN-fold projection composes
+    /// through this helper — the MIN-OF-TWO-ARMS fold over a coupled
+    /// `(usize, usize)` COUNT PAIR is a substrate-level theorem rather
+    /// than a per-consumer four-line open-coded split.
+    ///
+    /// The `usize`-VALUED CENTRAL-TENDENCY DUAL of
+    /// [`Self::max_of_count_pair`] one COMBINATOR-KIND axis over on the
+    /// SAME `(usize, usize)` COUNT PAIR — where
+    /// [`Self::max_of_count_pair`] reads the paired tallies through the
+    /// UNDIRECTED MAX-fold `max(lhs, rhs)` (the winning arm's tally),
+    /// THIS combinator reads the SAME paired tallies through the
+    /// UNDIRECTED MIN-fold `min(lhs, rhs)` (the losing arm's tally).
+    /// Jointly the (max_of_count_pair, min_of_count_pair) pair CLOSES
+    /// the ARM-AGNOSTIC CENTRAL-TENDENCY column on the paired `usize`
+    /// count tally: the TWO order statistics on a two-point sample the
+    /// substrate names as first-class combinators, exhausting the
+    /// ARM-AGNOSTIC (max, min) closure on a coupled count pair. The
+    /// `usize`-VALUED CENTRAL-TENDENCY peer of
+    /// [`Self::absolute_count_difference`] one COMBINATOR-KIND axis
+    /// over on the SAME `(usize, usize)` COUNT PAIR — where
+    /// [`Self::absolute_count_difference`] reads the paired tallies
+    /// through the UNDIRECTED ABSOLUTE-DIFFERENCE DISPERSION fold
+    /// `|lhs - rhs|`, THIS combinator reads the SAME paired tallies
+    /// through the UNDIRECTED MIN-fold CENTRAL-TENDENCY `min(lhs, rhs)`,
+    /// matching the classical descriptive-statistics (CENTRAL-TENDENCY,
+    /// DISPERSION) duality restricted to a two-arm sample on the DUAL
+    /// (MIN, ABS-DIFF) leg. The const-context-legal analog of the
+    /// std-canonical [`Ord::min`] on `usize` (which is NOT const-stable
+    /// on tatara-lisp's supported Rust versions), inlined as the three-
+    /// line `if lhs <= rhs { lhs } else { rhs }` matching the encoding-
+    /// shape convention [`Self::max_of_count_pair`] uses on the DUAL
+    /// comparison operator.
+    ///
+    /// **Bare-body identity — LOAD-BEARING structural pin**: on every
+    /// `(lhs, rhs)`, `min_of_count_pair(lhs, rhs)` matches the open-
+    /// coded MIN split `if lhs <= rhs { lhs } else { rhs }`. Pinned via
+    /// `resource_limits_min_of_count_pair_agrees_with_open_coded_min_split`.
+    ///
+    /// **`Ord::min`-defining identity — LOAD-BEARING substrate theorem**:
+    /// on every `(lhs, rhs)`, `min_of_count_pair(lhs, rhs) ==
+    /// lhs.min(rhs)`. Ties the ARM-AGNOSTIC MIN exit to the std-
+    /// canonical [`Ord::min`] combinator on the paired `usize` tally.
+    /// Pinned via `resource_limits_min_of_count_pair_equals_ord_min`.
+    ///
+    /// **Idempotence on the diagonal**: for every `n`,
+    /// `min_of_count_pair(n, n) == n`. The diagonal input pair
+    /// collapses to the shared tally on every leg of the input regime.
+    /// Pinned via
+    /// `resource_limits_min_of_count_pair_diagonal_inputs_fold_to_operand`.
+    ///
+    /// **Commutativity**: for every `(lhs, rhs)`,
+    /// `min_of_count_pair(lhs, rhs) == min_of_count_pair(rhs, lhs)`.
+    /// The MIN-fold is symmetric on its two arguments. Pinned via
+    /// `resource_limits_min_of_count_pair_is_commutative`.
+    ///
+    /// **DEFINITIONAL lower-bound pair — LOAD-BEARING refinement pin**:
+    /// on every `(lhs, rhs)`, `min_of_count_pair(lhs, rhs) <= lhs` AND
+    /// `min_of_count_pair(lhs, rhs) <= rhs`. The MIN is dominated by
+    /// both operands by definition — DUAL of [`Self::max_of_count_pair`]'s
+    /// upper-bound pair. Pinned via
+    /// `resource_limits_min_of_count_pair_dominated_by_both_operands`.
+    ///
+    /// **MEMBERSHIP-in-input identity**: on every `(lhs, rhs)`,
+    /// `min_of_count_pair(lhs, rhs) == lhs` OR
+    /// `min_of_count_pair(lhs, rhs) == rhs`. The MIN-fold's exit is
+    /// always ONE of its two inputs. Pinned via
+    /// `resource_limits_min_of_count_pair_equals_one_of_its_operands`.
+    ///
+    /// **Bridge to `count_pair_ordering` — LOAD-BEARING structural pin**:
+    /// on every `(lhs, rhs)`, `min_of_count_pair(lhs, rhs) == lhs` iff
+    /// `count_pair_ordering(lhs, rhs) != Greater`. The LHS wins the MIN
+    /// iff the LHS trichotomy verdict is NOT strictly-greater, matching
+    /// the `<=` tie convention verbatim — the DUAL of the LHS-wins-MAX
+    /// bridge to `!= Less`. Cross-pins the two combinators one
+    /// COMBINATOR-KIND axis apart on the SAME paired count input.
+    /// Pinned via
+    /// `resource_limits_min_of_count_pair_selects_lhs_iff_count_pair_ordering_not_greater`.
+    ///
+    /// **PAIRED SUM identity to max_of_count_pair — LOAD-BEARING
+    /// closure pin**: on every `(lhs, rhs)`, `min_of_count_pair(lhs,
+    /// rhs) + max_of_count_pair(lhs, rhs) == lhs + rhs`. The (max, min)
+    /// pair transports the (lhs, rhs) pair through an order-preserving
+    /// permutation — the SAME two values re-ordered by magnitude with
+    /// their SUM preserved. Pinned via
+    /// `resource_limits_min_plus_max_of_count_pair_equals_sum_of_operands`.
+    ///
+    /// **PAIRED DIFFERENCE identity to (max, abs-diff) — LOAD-BEARING
+    /// bridge pin**: on every `(lhs, rhs)`, `max_of_count_pair(lhs,
+    /// rhs) - min_of_count_pair(lhs, rhs) ==
+    /// absolute_count_difference(lhs, rhs)`. The paired (max, min)
+    /// difference IS the ABSOLUTE-DIFFERENCE `|lhs - rhs|` — the
+    /// substrate theorem tying the DISPERSION statistic to the (max,
+    /// min) CENTRAL-TENDENCY pair via `max(a, b) - min(a, b) == |a - b|`.
+    /// Pinned via
+    /// `resource_limits_max_minus_min_of_count_pair_equals_absolute_difference`.
+    ///
+    /// **SUM-DIFF halving bridge — LOAD-BEARING DUAL statistic-
+    /// derivation pin**: on every `(lhs, rhs)`, `2 *
+    /// min_of_count_pair(lhs, rhs) == lhs + rhs -
+    /// absolute_count_difference(lhs, rhs)`. The classical arithmetic
+    /// identity `min(a, b) = (a + b - |a - b|) / 2` on non-negative
+    /// `usize` — the DUAL of the SUM+ABS-DIFF halving identity `2 *
+    /// max = sum + |diff|` that [`Self::max_of_count_pair`] carries.
+    /// Jointly the two halving identities read the paired (max, min,
+    /// ABS-DIFF) triple as three arithmetic combinators tied by two
+    /// bidirectional-derivable theorems: given any two of (max, min,
+    /// ABS-DIFF, sum) the remaining two are computable at zero
+    /// re-derivation cost. Pinned via
+    /// `resource_limits_min_of_count_pair_twice_equals_sum_minus_absolute_difference`.
+    ///
+    /// `const fn` so a caller can pin the MIN verdict at compile time
+    /// (`const _: () = assert!(ResourceLimits::min_of_count_pair(3, 5)
+    /// == 3);`) — sibling of the const-fn evaluability pins the
+    /// [`Self::max_of_count_pair`], [`Self::then_ordering`], and
+    /// [`Self::count_pair_ordering`] combinators already carry at their
+    /// own exits.
+    ///
+    /// **Adoption compounds**: future WHOLE-POSTURE ARM-AGNOSTIC MIN-
+    /// fold projections that currently open-code the four-line MIN
+    /// split on a coupled `(usize, usize)` COUNT PAIR rewrite their
+    /// body from
+    /// `let a = self.count_A(); let b = self.count_B();
+    ///  if a <= b { a } else { b }`
+    /// to `Self::min_of_count_pair(self.count_A(), self.count_B())` at
+    /// no semantic change — the two-line delegation replaces the four-
+    /// line split. rustc's type system gates every downstream `usize`
+    /// consumer against the single lifted MIN combinator; a body
+    /// regression at the helper (`<=` → `>=`) fires immediately at the
+    /// two swept `_minority_count` pins rather than silently
+    /// re-classifying every downstream posture-reading MIN.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// ARM-AGNOSTIC MIN-fold shape at every WHOLE-POSTURE MIN-fold
+    /// projection body binds at ONE typed named `const fn` on the
+    /// algebra rather than a per-projection open-coded four-line split.
+    /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    /// helper composes mechanically under the bare-body identity above
+    /// with no re-derivation at the caller, and both swept callsites
+    /// preserve their const-fn evaluability pins verbatim. THEORY.md
+    /// §V.1 — knowable platform; the MIN-OF-TWO-ARMS fold becomes a
+    /// substrate-level theorem rather than a per-projection convention.
+    ///
+    /// Frontier inspiration: Haskell's `min` on `Ord a => a -> a -> a`
+    /// — the direct MIN-of-two-operands combinator, restricted here to
+    /// `usize` and inlined as the const-legal `if <=` split for
+    /// const-context legality. APL's `⌊` scalar-MIN dyadic on paired
+    /// numeric scalars — the SAME two-argument MIN on the type system's
+    /// numeric type. Rust std's [`Ord::min`] and [`std::cmp::min`] —
+    /// the direct lift of the same combinator; `Ord::min` on `usize` is
+    /// NOT `const`-stable on tatara-lisp's supported Rust versions, so
+    /// the body inlines the `if <=` split here. Idris's `min` on `Ord
+    /// a` on `Nat`. Classical descriptive statistics' MIN order
+    /// statistic on a two-point sample — closing the (MAX, MIN)
+    /// CENTRAL-TENDENCY column on a two-point sample opened by the DUAL
+    /// [`Self::max_of_count_pair`]. Translation through pleme-io
+    /// primitives is the plain `const fn` inline MIN split below — no
+    /// `Ord::min` const-stability workaround at every caller, no
+    /// closure, no new dep, no typeclass indirection.
+    #[must_use]
+    pub const fn min_of_count_pair(lhs: usize, rhs: usize) -> usize {
+        if lhs <= rhs {
+            lhs
+        } else {
+            rhs
+        }
+    }
+
     /// Presence-preserving CLOSED-INTERVAL WIDTH from a coupled ENDPOINT PAIR
     /// on whole-posture `Option<usize>` axis-endpoint tallies —
     /// `Self::derive_axis_endpoint_span(first, last)` returns
@@ -19722,12 +19909,14 @@ impl ResourceLimits {
     /// min) pair as JOINTLY-EQUAL at the balance corner and JOINTLY-
     /// STRICTLY-SPLIT at strict-majority postures.
     ///
-    /// Encoded as the plain `const fn` `if p <= i { p } else { i }`
-    /// inline MIN split on the two already-lifted ARITHMETIC-
-    /// QUANTIFIER tallies — matching [`Self::axial_majority_count`]'s
-    /// shape verbatim on the DUAL comparison operator. No `Ord::min`
-    /// (not const-stable), no `usize::abs_diff` indirection, no new
-    /// dep, no typeclass indirection, no per-axis loop, no
+    /// Encoded as a single-composition delegation through the substrate
+    /// primitive [`Self::min_of_count_pair`] on the paired
+    /// `(count_polar_axes(), count_interior_axes())` COMPOUND arm tally
+    /// — matching [`Self::axial_majority_count`]'s delegation shape
+    /// verbatim through the DUAL [`Self::max_of_count_pair`] combinator.
+    /// No open-coded four-line `if p <= i` split at the body, no
+    /// `Ord::min` (not const-stable), no `usize::abs_diff` indirection,
+    /// no new dep, no typeclass indirection, no per-axis loop, no
     /// allocation.
     ///
     /// `const fn` so a caller can pin the exact ARM-AGNOSTIC MIN
@@ -19758,20 +19947,15 @@ impl ResourceLimits {
     /// the paired axial tally. Idris's `min (count p v) (count (not
     /// . p) v)` returning `Nat`. Rust's own `[a, b].iter().min()`
     /// and [`Ord::min`] — the direct MIN-fold on the paired arm
-    /// tally, inlined as the const-legal `if p <= i` split here.
-    /// Translation through pleme-io primitives: plain `const fn`
-    /// inline MIN split on the two already-lifted ARITHMETIC-
-    /// QUANTIFIER tallies — no new dep, no typeclass indirection, no
-    /// per-axis loop, no allocation.
+    /// tally, delegated to the substrate primitive
+    /// [`Self::min_of_count_pair`]. Translation through pleme-io
+    /// primitives: single-composition delegation through the substrate
+    /// combinator on the two already-lifted ARITHMETIC-QUANTIFIER
+    /// tallies — no new dep, no typeclass indirection, no per-axis
+    /// loop, no allocation.
     #[must_use]
     pub const fn axial_minority_count(self) -> usize {
-        let p = self.count_polar_axes();
-        let i = self.count_interior_axes();
-        if p <= i {
-            p
-        } else {
-            i
-        }
+        Self::min_of_count_pair(self.count_polar_axes(), self.count_interior_axes())
     }
 
     /// Whole-posture ATOMIC ARM-AGNOSTIC MAX-fold projection —
@@ -20091,13 +20275,15 @@ impl ResourceLimits {
     /// through the (bottom, top) partition which is imbalanced onto
     /// the bottom arm.
     ///
-    /// Encoded as the plain `const fn` `if b <= t { b } else { t }`
-    /// inline MIN split on the two already-lifted ATOMIC ARITHMETIC-
-    /// QUANTIFIER tallies — matching [`Self::atomic_majority_count`]'s
-    /// shape verbatim on the DUAL comparison operator, matching
-    /// [`Self::axial_minority_count`]'s shape verbatim on the DUAL
-    /// ATOMIC cell. No `Ord::min` (not const-stable), no
-    /// `usize::abs_diff` indirection, no new dep, no typeclass
+    /// Encoded as a single-composition delegation through the substrate
+    /// primitive [`Self::min_of_count_pair`] on the paired
+    /// `(count_bottom_axes(), count_top_axes())` ATOMIC arm tally —
+    /// matching [`Self::atomic_majority_count`]'s delegation shape
+    /// verbatim through the DUAL [`Self::max_of_count_pair`] combinator,
+    /// matching [`Self::axial_minority_count`]'s delegation shape
+    /// verbatim on the DUAL ATOMIC cell. No open-coded four-line
+    /// `if b <= t` split at the body, no `Ord::min` (not const-stable),
+    /// no `usize::abs_diff` indirection, no new dep, no typeclass
     /// indirection, no per-axis loop, no allocation.
     ///
     /// `const fn` so a caller can pin the exact ARM-AGNOSTIC atomic
@@ -20130,21 +20316,15 @@ impl ResourceLimits {
     /// ⍵=0)(+/⍵=⌈/⍵)` MIN-fold on the paired atomic tally. Idris's
     /// `min (count (== 0) v) (count (== maxBound) v)` returning
     /// `Nat`. Rust's own `[a, b].iter().min()` and [`Ord::min`] —
-    /// the direct MIN-fold on the paired atomic arm tally, inlined
-    /// as the const-legal `if b <= t` split here. Translation
-    /// through pleme-io primitives: plain `const fn` inline MIN
-    /// split on the two already-lifted ATOMIC ARITHMETIC-QUANTIFIER
-    /// tallies — no new dep, no typeclass indirection, no per-axis
-    /// loop, no allocation.
+    /// the direct MIN-fold on the paired atomic arm tally, delegated
+    /// to the substrate primitive [`Self::min_of_count_pair`].
+    /// Translation through pleme-io primitives: single-composition
+    /// delegation through the substrate combinator on the two already-
+    /// lifted ATOMIC ARITHMETIC-QUANTIFIER tallies — no new dep, no
+    /// typeclass indirection, no per-axis loop, no allocation.
     #[must_use]
     pub const fn atomic_minority_count(self) -> usize {
-        let b = self.count_bottom_axes();
-        let t = self.count_top_axes();
-        if b <= t {
-            b
-        } else {
-            t
-        }
+        Self::min_of_count_pair(self.count_bottom_axes(), self.count_top_axes())
     }
 
     /// Whole-posture SIGNED-KIND ARM-AGNOSTIC CENTRAL-TENDENCY MAX-
@@ -75480,6 +75660,291 @@ mod tests {
                     posture.count_top_axes(),
                 ),
                 "atomic_majority_count delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_min_of_count_pair_agrees_with_open_coded_min_split() {
+        // Bare-body identity — the helper's verdict on every
+        // (lhs, rhs) `usize` pair agrees with the open-coded MIN split
+        // `if lhs <= rhs { lhs } else { rhs }` that every WHOLE-POSTURE
+        // ARM-AGNOSTIC MIN-fold projection carried at its exit pre-
+        // lift. Swept over a fixed 5×5 = 25-cell constellation of the
+        // (usize, usize) input regime whose components exhaust the
+        // relative-order trichotomy at multiple magnitude bands —
+        // covers `(0, 0)` (double-zero tie), `(0, 6)` and `(6, 0)`
+        // (SATURATED opposite corners), `(3, 3)` (INTERIOR tie at the
+        // halfway line), `(2, 4)` and `(4, 2)` (INTERIOR strict split),
+        // and every mixed cell. The exhaustive constellation the
+        // substrate cannot regress on any single cell without the
+        // helper firing a mismatch.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let via_helper = ResourceLimits::min_of_count_pair(lhs, rhs);
+                let via_open_code = if lhs <= rhs { lhs } else { rhs };
+                assert_eq!(
+                    via_helper, via_open_code,
+                    "helper != open-coded MIN split at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_min_of_count_pair_equals_ord_min() {
+        // `Ord::min`-defining identity — LOAD-BEARING substrate theorem
+        // tying the ARM-AGNOSTIC MIN exit to the std-canonical
+        // [`Ord::min`] combinator on the paired `usize` tally. The
+        // `const fn` body inlines the MIN as an `if lhs <= rhs { lhs }
+        // else { rhs }` split because [`Ord::min`] on `usize` is not
+        // `const`-stable on tatara-lisp's supported Rust versions —
+        // this test pins the equivalence against the (non-const)
+        // `Ord::min` reference. DUAL of the max-of-count-pair pin
+        // against `Ord::max`.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                assert_eq!(
+                    ResourceLimits::min_of_count_pair(lhs, rhs),
+                    lhs.min(rhs),
+                    "min_of_count_pair(lhs, rhs) != lhs.min(rhs) at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_min_of_count_pair_diagonal_inputs_fold_to_operand() {
+        // Idempotence on the diagonal — the diagonal (n, n) input pair
+        // collapses to the shared tally on every leg of the input
+        // regime. DUAL of `max_of_count_pair`'s diagonal pin one
+        // COMBINATOR-KIND axis over — both order statistics on a two-
+        // point sample coincide at the diagonal input, where the
+        // paired count carries a single tally on both arms and the
+        // MIN and MAX cannot distinguish the arms.
+        for n in [0usize, 1, 3, 6, 100] {
+            assert_eq!(
+                ResourceLimits::min_of_count_pair(n, n),
+                n,
+                "diagonal fold to operand regressed at n={n}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_min_of_count_pair_is_commutative() {
+        // Commutativity — the MIN-fold is symmetric on its two
+        // arguments. For every (lhs, rhs), `min_of_count_pair(lhs,
+        // rhs) == min_of_count_pair(rhs, lhs)`. LOAD-BEARING
+        // structural pin — a body regression that swapped the branch
+        // bindings (returning `rhs` on the `<=` leg) would collapse
+        // the combinator onto the RHS on every input and fire on the
+        // (LHS < RHS) cell of this pin immediately. Matches the
+        // SYMMETRIC leg the DUAL `max_of_count_pair` combinator carries
+        // one COMBINATOR-KIND axis over.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                assert_eq!(
+                    ResourceLimits::min_of_count_pair(lhs, rhs),
+                    ResourceLimits::min_of_count_pair(rhs, lhs),
+                    "commutativity regressed at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_min_of_count_pair_dominated_by_both_operands() {
+        // DEFINITIONAL lower-bound pair — LOAD-BEARING refinement
+        // pin. On every `(lhs, rhs)`, `min_of_count_pair(lhs, rhs) <=
+        // lhs` AND `min_of_count_pair(lhs, rhs) <= rhs`. The MIN is
+        // dominated by both operands by definition — DUAL of
+        // `max_of_count_pair`'s upper-bound pair, making downstream
+        // consumers' lower-bound reasoning discharge into ONE
+        // inequality against the ARM-AGNOSTIC exit rather than TWO
+        // against the ARM-SPECIFIC pair.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let m = ResourceLimits::min_of_count_pair(lhs, rhs);
+                assert!(
+                    m <= lhs,
+                    "min_of_count_pair(lhs, rhs) > lhs at (lhs, rhs)=({lhs}, {rhs})",
+                );
+                assert!(
+                    m <= rhs,
+                    "min_of_count_pair(lhs, rhs) > rhs at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_min_of_count_pair_equals_one_of_its_operands() {
+        // MEMBERSHIP-in-input identity — the MIN-fold's exit is
+        // always ONE of its two inputs. The combinator never
+        // synthesizes a fresh value — a body regression that returned
+        // a computed value (`(lhs + rhs) / 2`, `lhs.saturating_sub(1)`,
+        // etc.) would fire immediately on any non-diagonal cell.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let m = ResourceLimits::min_of_count_pair(lhs, rhs);
+                assert!(
+                    m == lhs || m == rhs,
+                    "min_of_count_pair(lhs, rhs) = {m} is neither lhs={lhs} nor rhs={rhs}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_min_of_count_pair_selects_lhs_iff_count_pair_ordering_not_greater() {
+        // Bridge to `count_pair_ordering` — LOAD-BEARING structural
+        // pin tying the MIN-selection to the SIGNUM verdict on the
+        // SAME paired input. The LHS wins the MIN iff the LHS
+        // trichotomy verdict is NOT strictly-greater (i.e. `<= rhs`),
+        // matching the `<=` tie convention verbatim — DUAL of the
+        // LHS-wins-MAX bridge to `!= Less`. Cross-pins the two
+        // combinators one COMBINATOR-KIND axis apart on the SAME
+        // paired count input.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let selects_lhs = ResourceLimits::min_of_count_pair(lhs, rhs) == lhs;
+                let ordering_not_greater =
+                    ResourceLimits::count_pair_ordering(lhs, rhs) != Ordering::Greater;
+                assert_eq!(
+                    selects_lhs, ordering_not_greater,
+                    "MIN-selects-LHS ⇔ count_pair_ordering != Greater regressed at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_min_plus_max_of_count_pair_equals_sum_of_operands() {
+        // PAIRED SUM identity to `max_of_count_pair` — LOAD-BEARING
+        // closure pin. The (max, min) pair transports the (lhs, rhs)
+        // pair through an order-preserving permutation — the SAME
+        // two values re-ordered by magnitude with their SUM preserved.
+        // `min + max == lhs + rhs` on every input pair. The substrate
+        // theorem tying the (max, min) CENTRAL-TENDENCY pair into ONE
+        // arithmetic-partition of the input sum.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                assert_eq!(
+                    ResourceLimits::min_of_count_pair(lhs, rhs)
+                        + ResourceLimits::max_of_count_pair(lhs, rhs),
+                    lhs + rhs,
+                    "min + max != lhs + rhs at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_max_minus_min_of_count_pair_equals_absolute_difference() {
+        // PAIRED DIFFERENCE identity — LOAD-BEARING bridge pin.
+        // `max_of_count_pair - min_of_count_pair == absolute_count_difference`
+        // on every input pair. The paired (max, min) difference IS
+        // the ABSOLUTE-DIFFERENCE `|lhs - rhs|` — the substrate
+        // theorem tying the DISPERSION statistic to the (max, min)
+        // CENTRAL-TENDENCY pair via `max(a, b) - min(a, b) == |a - b|`.
+        // Complements the (max + min = sum) identity: given any two
+        // of (max, min, sum, |diff|) the remaining two are computable.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                assert_eq!(
+                    ResourceLimits::max_of_count_pair(lhs, rhs)
+                        - ResourceLimits::min_of_count_pair(lhs, rhs),
+                    ResourceLimits::absolute_count_difference(lhs, rhs),
+                    "max - min != |diff| at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_min_of_count_pair_twice_equals_sum_minus_absolute_difference() {
+        // SUM-DIFF halving bridge — the classical arithmetic identity
+        // `min(a, b) = (a + b - |a - b|) / 2` on non-negative `usize`.
+        // DUAL of the SUM+ABS-DIFF halving identity `2 * max = sum +
+        // |diff|` that `max_of_count_pair` carries — jointly the two
+        // halving identities read the paired (max, min, ABS-DIFF)
+        // triple as three arithmetic combinators tied by two
+        // bidirectional-derivable theorems: given any two of (max,
+        // min, ABS-DIFF, sum) the remaining two are computable at
+        // zero re-derivation cost.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                assert_eq!(
+                    2 * ResourceLimits::min_of_count_pair(lhs, rhs),
+                    lhs + rhs - ResourceLimits::absolute_count_difference(lhs, rhs),
+                    "2 * min != sum - |diff| at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_min_of_count_pair_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the helper's `pub const fn` signature
+        // preserves compile-time evaluability across the LHS-wins,
+        // RHS-wins, diagonal-tie, and double-zero cells of the
+        // (usize, usize) joint-input regime. Complements the primary
+        // bare-body identity pin
+        // `resource_limits_min_of_count_pair_agrees_with_open_coded_min_split`
+        // by extending the const-evaluability proof onto the compile-
+        // time surface. DUAL of the `max_of_count_pair` const-fn pin.
+        const _: () = assert!(ResourceLimits::min_of_count_pair(3, 5) == 3);
+        const _: () = assert!(ResourceLimits::min_of_count_pair(5, 3) == 3);
+        const _: () = assert!(ResourceLimits::min_of_count_pair(4, 4) == 4);
+        const _: () = assert!(ResourceLimits::min_of_count_pair(0, 0) == 0);
+        const _: () = assert!(ResourceLimits::min_of_count_pair(0, 6) == 0);
+        const _: () = assert!(ResourceLimits::min_of_count_pair(6, 0) == 0);
+    }
+
+    #[test]
+    fn resource_limits_arm_agnostic_min_fold_family_bodies_delegate_to_min_of_count_pair() {
+        // Sweep-of-family pin — asserts each of the two WHOLE-POSTURE
+        // ARM-AGNOSTIC MIN-fold projection bodies
+        // (axial_minority_count — MIN of (count_polar_axes,
+        // count_interior_axes); atomic_minority_count — MIN of
+        // (count_bottom_axes, count_top_axes)) agrees with the
+        // helper-based shape `ResourceLimits::min_of_count_pair(
+        // self.count_A(), self.count_B())` on every posture from the
+        // EMPTY / DEFAULT / UNBOUNDED / HAND_AUTHORED_MID /
+        // HAND_AUTHORED_OTHER / SPARSE_BOTTOM /
+        // CONTIGUOUS_INTERIOR_BOTTOM / ENDPOINTS_ONLY_BOTTOM
+        // constellation (2×8 = 16 composed MIN verdicts). A future
+        // body regression that swapped the `<=` for `>=` at the helper
+        // would silently return the MAJORITY tally on every strict-
+        // majority posture; the sweep pin gates the LOAD-BEARING
+        // regime on every posture where the pair splits. DUAL of the
+        // MAX-fold sweep pin one COMBINATOR-KIND axis over.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                posture.axial_minority_count(),
+                ResourceLimits::min_of_count_pair(
+                    posture.count_polar_axes(),
+                    posture.count_interior_axes(),
+                ),
+                "axial_minority_count delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.atomic_minority_count(),
+                ResourceLimits::min_of_count_pair(
+                    posture.count_bottom_axes(),
+                    posture.count_top_axes(),
+                ),
+                "atomic_minority_count delegation regressed on {posture:?}",
             );
         }
     }

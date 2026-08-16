@@ -14407,6 +14407,165 @@ impl ResourceLimits {
         }
     }
 
+    /// ARM-SELECTING STRICT-DOMINANCE COUNT LEAD PRESENCE from a coupled
+    /// COUNT PAIR on whole-posture `usize` axial-tally sub-cells —
+    /// `Self::strict_count_lead_holds(lhs, rhs)` returns `true` iff `lhs >
+    /// rhs`, `false` otherwise. The BOUNDARY primitive lifting the shape
+    /// `lhs > rhs` that every WHOLE-POSTURE ARM-SELECTING STRICT-MAJORITY
+    /// predicate on [`ResourceLimits`] carries at its exit —
+    /// [`Self::polar_is_majority`], [`Self::interior_is_majority`],
+    /// [`Self::bottom_is_majority`], and [`Self::top_is_majority`] all
+    /// wrap the strict `>`-inequality of a paired (arm-A count, arm-B
+    /// count) tally in the same one-line comparison. Pre-lift each
+    /// STRICT-MAJORITY predicate open-coded the one-line
+    /// `self.count_A_axes() > self.count_B_axes()` at its own exit — a
+    /// four-point copy-paste whose consistency the type system did not
+    /// gate (a predicate that swapped the arms of the strict-inequality
+    /// would silently negate its verdict on every winning posture of the
+    /// intended arm AND silently accept postures where the OTHER arm
+    /// dominates; a predicate that flipped `>` to `>=` would silently
+    /// accept the tie leg the STRICT-MAJORITY dispatch rejects). Post-
+    /// lift the shape binds at ONE typed `const fn` on
+    /// [`ResourceLimits`], and every future WHOLE-POSTURE ARM-SELECTING
+    /// STRICT-MAJORITY predicate composes through this helper — the
+    /// strict-dominance-witnessing dispatch over a coupled `(usize,
+    /// usize)` count pair is a substrate-level theorem rather than a
+    /// per-consumer one-line open-coded comparison.
+    ///
+    /// The DIRECT BOOLEAN sibling of [`Self::witness_strict_count_lead`]
+    /// (ARM-SELECTING `Option<usize>` — arm identity + lead magnitude),
+    /// [`Self::signed_count_difference`] (ARM-LABELLED `isize` — arm
+    /// identity carried through output sign), and
+    /// [`Self::absolute_count_difference`] (ARM-AGNOSTIC `usize` — arm
+    /// identity discarded, magnitude preserved) on the SAME `(usize,
+    /// usize) → *` two-input surface: where the ARM-SELECTING
+    /// `Option<usize>` sibling carries arm identity AND lead magnitude
+    /// jointly through one output cell, the SIGNED sibling carries arm
+    /// identity through the output sign, and the UNSIGNED sibling
+    /// discards arm identity, THIS combinator carries ONLY the
+    /// STRICT-DOMINANCE VERDICT through the bare `bool` — discarding
+    /// both lead magnitude AND arm identity beyond the two-cell
+    /// (lhs-strong, non-lhs-strong) partition. The two-input surface
+    /// now closes on ALL FOUR output cells (BOOLEAN `bool`, ARM-
+    /// SELECTING `Option<usize>`, SIGNED `isize`, UNSIGNED `usize`) at
+    /// named typed `const fn`s on the algebra — the four cells of the
+    /// `(sign, magnitude)` product-space projection column on a paired
+    /// count tally.
+    ///
+    /// **Bare-body identity — LOAD-BEARING structural pin**: on every
+    /// `(lhs, rhs)`, `strict_count_lead_holds(lhs, rhs) == (lhs > rhs)`.
+    /// Pinned via
+    /// `resource_limits_strict_count_lead_holds_agrees_with_open_coded_gt`.
+    ///
+    /// **Diagonal identity — FALSE on the tie cell**: for every `n`,
+    /// `strict_count_lead_holds(n, n) == false`. The tie corner of the
+    /// input pair collapses to the REJECTED arm of the BOOLEAN verdict —
+    /// strict dominance requires strict inequality, so the tie leg
+    /// rejects. Pinned via
+    /// `resource_limits_strict_count_lead_holds_diagonal_inputs_fold_to_false`.
+    ///
+    /// **lhs-strong arm — TRUE on strict-dominance**: on every `(lhs,
+    /// rhs)` with `lhs > rhs`, `strict_count_lead_holds(lhs, rhs) ==
+    /// true`. Pinned via
+    /// `resource_limits_strict_count_lead_holds_lhs_strong_arm_fires_true`.
+    ///
+    /// **rhs-strong arm — FALSE on reversed dominance**: on every
+    /// `(lhs, rhs)` with `rhs > lhs`, `strict_count_lead_holds(lhs, rhs)
+    /// == false`. The rhs-strong arm folds to the SAME FALSE cell as the
+    /// tie arm — the BOOLEAN combinator DISCARDS the arm-identity
+    /// distinction between the two non-lhs-strong legs. Pinned via
+    /// `resource_limits_strict_count_lead_holds_rhs_strong_arm_rejects_to_false`.
+    ///
+    /// **Anti-commutativity — SWAPPED-INPUT mutual exclusion on TRUE**:
+    /// on every `(lhs, rhs)`, at MOST one of `strict_count_lead_holds(
+    /// lhs, rhs)` and `strict_count_lead_holds(rhs, lhs)` fires TRUE
+    /// (the two STRICT-INEQUALITY directions on the same input pair
+    /// cannot both hold — matching the paired STRICT-MAJORITY callers'
+    /// mutual-exclusion pin on the TRUE cell). Pinned via
+    /// `resource_limits_strict_count_lead_holds_swapped_inputs_are_mutually_exclusive_on_true`.
+    ///
+    /// **Option-bridge to witness_strict_count_lead — SOME-agreement
+    /// identity**: on every `(lhs, rhs)`, `strict_count_lead_holds(lhs,
+    /// rhs) == witness_strict_count_lead(lhs, rhs).is_some()`. The
+    /// BOOLEAN combinator's TRUE arm coincides exactly with the SOME
+    /// arm of the ARM-SELECTING sibling's output — the pair is the
+    /// (presence, presence-and-magnitude) unpacking of the same
+    /// strict-dominance dispatch. Pinned via
+    /// `resource_limits_strict_count_lead_holds_iff_witness_strict_count_lead_is_some`.
+    ///
+    /// **Signum bridge — TRUE-iff-STRICTLY-POSITIVE-SIGNED identity**:
+    /// on every `(lhs, rhs)`, `strict_count_lead_holds(lhs, rhs) ==
+    /// (signed_count_difference(lhs, rhs) > 0)`. The BOOLEAN
+    /// combinator's TRUE arm coincides exactly with the strictly-
+    /// positive cell of the SIGNED sibling's output. Pinned via
+    /// `resource_limits_strict_count_lead_holds_iff_signed_count_difference_strictly_positive`.
+    ///
+    /// **Magnitude-and-order bridge — TRUE-iff-NONZERO-ABS-AND-LHS-
+    /// GREATER identity**: on every `(lhs, rhs)`,
+    /// `strict_count_lead_holds(lhs, rhs) ==
+    /// (absolute_count_difference(lhs, rhs) != 0 && lhs >= rhs)`. The
+    /// BOOLEAN combinator refines the UNSIGNED sibling's nonzero cell
+    /// by the arm-identity dispatch the UNSIGNED sibling discards —
+    /// two `usize` inputs `(a, b)` and `(b, a)` fire the same UNSIGNED
+    /// magnitude but at MOST one fires TRUE here. Pinned via
+    /// `resource_limits_strict_count_lead_holds_refines_absolute_count_difference_nonzero_by_lhs_strong_arm`.
+    ///
+    /// **FALSE-iff-NON-STRICT-DOMINANCE identity**: on every `(lhs,
+    /// rhs)`, `!strict_count_lead_holds(lhs, rhs) == (lhs <= rhs)`. The
+    /// FALSE arm coincides exactly with the non-strict-dominance cell
+    /// of the order partition — folding BOTH the tie leg AND the rhs-
+    /// strong leg onto the SAME FALSE cell. Pinned via
+    /// `resource_limits_strict_count_lead_holds_negation_iff_lhs_not_strictly_greater`.
+    ///
+    /// `const fn` so a caller can pin the helper's verdict at compile
+    /// time (`const _: () = assert!(
+    /// ResourceLimits::strict_count_lead_holds(1, 0));`) — sibling of
+    /// the const-fn evaluability pins the STRICT-MAJORITY predicates
+    /// already carry at their own exits.
+    ///
+    /// **Adoption compounds**: future WHOLE-POSTURE ARM-SELECTING
+    /// STRICT-MAJORITY predicates that currently open-code the strict
+    /// `>`-comparison on a coupled (usize, usize) count pair rewrite
+    /// their body from `self.count_A_axes() > self.count_B_axes()` to
+    /// `Self::strict_count_lead_holds(self.count_A_axes(),
+    /// self.count_B_axes())` at no semantic change, and a mechanical
+    /// sweep of the four STRICT-MAJORITY bodies through the helper
+    /// becomes a substrate-level refactor rather than a per-method
+    /// rewrite.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// strict-dominance-verdict shape at every WHOLE-POSTURE ARM-
+    /// SELECTING STRICT-MAJORITY predicate body binds at ONE typed
+    /// named `const fn` on the algebra rather than a per-predicate
+    /// one-line open-coded `>` comparison. THEORY.md §II.1 invariant 5
+    /// — composition preserves proofs; the helper composes mechanically
+    /// under the bare-body identity above with no re-derivation at the
+    /// caller, and all four swept callsites preserve their const-fn
+    /// evaluability pins verbatim. THEORY.md §V.1 — knowable platform;
+    /// the strict-dominance-verdict dispatch becomes a substrate-level
+    /// theorem rather than a per-predicate convention.
+    ///
+    /// Frontier inspiration: classical order theory's canonical
+    /// "strict-dominance predicate" on a two-arm total order, expressed
+    /// as `bool` via the plain `>` combinator rather than as the paired
+    /// arm-identity + magnitude cells. Rust's own `usize::gt` reads the
+    /// SAME strict-inequality dispatch shape (the trait-method
+    /// projection of the `>` operator on the total-order-lifted `Ord`
+    /// impl). Haskell's `a > b` on paired `Word` inputs; Idris's `a >
+    /// b` under a total signature on two `Nat` inputs; APL's `⍺ > ⍵`
+    /// on the paired arm tallies; Racket's `(> a b)` on paired non-
+    /// negatives. Voting-theory's canonical "strict-plurality holds"
+    /// projection on a two-candidate election — the presence-only
+    /// verdict that the paired `winning-margin` combinator refines with
+    /// the magnitude reading. Translation through pleme-io primitives
+    /// is the plain `const fn` `>`-comparison below — no `checked_sub`
+    /// indirection, no `Ordering`-dispatch, no `PartialOrd`-trait
+    /// indirection, no closure, no new dep, no typeclass indirection.
+    #[must_use]
+    pub const fn strict_count_lead_holds(lhs: usize, rhs: usize) -> bool {
+        lhs > rhs
+    }
+
     /// Presence-preserving CLOSED-INTERVAL WIDTH from a coupled ENDPOINT PAIR
     /// on whole-posture `Option<usize>` axis-endpoint tallies —
     /// `Self::derive_axis_endpoint_span(first, last)` returns
@@ -15097,10 +15256,15 @@ impl ResourceLimits {
     /// `count_polar_axes() == count_interior_axes()` — the third leg
     /// of the trichotomy the pair leaves as a discriminated verdict.
     ///
-    /// Encoded as the plain `const fn` `self.count_polar_axes() >
-    /// self.count_interior_axes()` on the two already-lifted
-    /// ARITHMETIC-QUANTIFIER tallies — matching [`Self::interior_is_majority`]'s
-    /// shape verbatim on the DUAL arm-selection combinator.
+    /// Encoded as a single-composition delegation through the substrate
+    /// primitive [`Self::strict_count_lead_holds`] on the two already-
+    /// lifted ARITHMETIC-QUANTIFIER tallies —
+    /// `Self::strict_count_lead_holds(self.count_polar_axes(),
+    /// self.count_interior_axes())`, matching
+    /// [`Self::interior_is_majority`]'s shape verbatim on the DUAL arm-
+    /// selection combinator. The strict-dominance-verdict comparison is
+    /// named at ONE typed `const fn` on the algebra rather than an
+    /// open-coded `>`-comparison on the per-predicate body.
     ///
     /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.polar_is_majority() ==
     /// true` (every axis at the bottom pole → polar = 6 > 0 = interior);
@@ -15207,7 +15371,7 @@ impl ResourceLimits {
     /// typeclass indirection, no per-axis loop, no allocation.
     #[must_use]
     pub const fn polar_is_majority(self) -> bool {
-        self.count_polar_axes() > self.count_interior_axes()
+        Self::strict_count_lead_holds(self.count_polar_axes(), self.count_interior_axes())
     }
 
     /// Whole-posture INTERIOR-STRICT-MAJORITY predicate —
@@ -15235,10 +15399,15 @@ impl ResourceLimits {
     /// leaves as a discriminated verdict readable as `!self
     /// .polar_is_majority() && !self.interior_is_majority()`.
     ///
-    /// Encoded as the plain `const fn` `self.count_interior_axes() >
-    /// self.count_polar_axes()` on the two already-lifted
-    /// ARITHMETIC-QUANTIFIER tallies — matching [`Self::polar_is_majority`]'s
-    /// shape verbatim on the DUAL arm-selection combinator.
+    /// Encoded as a single-composition delegation through the substrate
+    /// primitive [`Self::strict_count_lead_holds`] on the DUAL per-arm
+    /// order —
+    /// `Self::strict_count_lead_holds(self.count_interior_axes(),
+    /// self.count_polar_axes())`, matching [`Self::polar_is_majority`]'s
+    /// shape verbatim on the DUAL arm-selection combinator. The strict-
+    /// dominance-verdict comparison is named at ONE typed `const fn` on
+    /// the algebra rather than an open-coded `>`-comparison on the per-
+    /// predicate body.
     ///
     /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.interior_is_majority()
     /// == false` (every axis at the bottom pole → interior = 0 < 6 =
@@ -15306,7 +15475,7 @@ impl ResourceLimits {
     /// Haskell's `length interior > length polar` on the DUAL arm.
     #[must_use]
     pub const fn interior_is_majority(self) -> bool {
-        self.count_interior_axes() > self.count_polar_axes()
+        Self::strict_count_lead_holds(self.count_interior_axes(), self.count_polar_axes())
     }
 
     /// Whole-posture AXIALLY-BALANCED predicate — `self.is_axially_balanced()`
@@ -16503,11 +16672,16 @@ impl ResourceLimits {
     /// leg because the atomic partition is NOT exhaustive over the
     /// whole axis set.
     ///
-    /// Encoded as the plain `const fn` `self.count_bottom_axes() >
-    /// self.count_top_axes()` on the two already-lifted
-    /// ARITHMETIC-QUANTIFIER tallies — matching
+    /// Encoded as a single-composition delegation through the substrate
+    /// primitive [`Self::strict_count_lead_holds`] one CELL axis over
+    /// on the ATOMIC arm pair —
+    /// `Self::strict_count_lead_holds(self.count_bottom_axes(),
+    /// self.count_top_axes())`, matching
     /// [`Self::polar_is_majority`]'s shape verbatim on the ATOMIC
-    /// (bottom, top) arm-selection combinator.
+    /// (bottom, top) arm-selection combinator. The strict-dominance-
+    /// verdict comparison is named at ONE typed `const fn` on the
+    /// algebra rather than an open-coded `>`-comparison on the per-
+    /// predicate body.
     ///
     /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.bottom_is_majority() ==
     /// true` (every axis at the bottom pole → bottom = 6 > 0 = top);
@@ -16613,7 +16787,7 @@ impl ResourceLimits {
     /// dep, no typeclass indirection, no per-axis loop, no allocation.
     #[must_use]
     pub const fn bottom_is_majority(self) -> bool {
-        self.count_bottom_axes() > self.count_top_axes()
+        Self::strict_count_lead_holds(self.count_bottom_axes(), self.count_top_axes())
     }
 
     /// Whole-posture TOP-STRICT-MAJORITY predicate —
@@ -16645,11 +16819,16 @@ impl ResourceLimits {
     /// posture sits at the atomic tie (both counts at zero), whereas
     /// the polar-interior tie requires a truly-mixed posture.
     ///
-    /// Encoded as the plain `const fn` `self.count_top_axes() >
-    /// self.count_bottom_axes()` on the two already-lifted
-    /// ARITHMETIC-QUANTIFIER tallies — matching
+    /// Encoded as a single-composition delegation through the substrate
+    /// primitive [`Self::strict_count_lead_holds`] on the DUAL per-arm
+    /// order of the ATOMIC (bottom, top) pair —
+    /// `Self::strict_count_lead_holds(self.count_top_axes(),
+    /// self.count_bottom_axes())`, matching
     /// [`Self::bottom_is_majority`]'s shape verbatim on the DUAL
-    /// arm-selection combinator.
+    /// arm-selection combinator. The strict-dominance-verdict
+    /// comparison is named at ONE typed `const fn` on the algebra
+    /// rather than an open-coded `>`-comparison on the per-predicate
+    /// body.
     ///
     /// **Preset pins**: `EMPTY_RESOURCE_LIMITS.top_is_majority() ==
     /// false` (every axis at the bottom pole → top = 0 < 6 = bottom);
@@ -16703,7 +16882,7 @@ impl ResourceLimits {
     /// `length top > length bottom` on the DUAL atomic arm.
     #[must_use]
     pub const fn top_is_majority(self) -> bool {
-        self.count_top_axes() > self.count_bottom_axes()
+        Self::strict_count_lead_holds(self.count_top_axes(), self.count_bottom_axes())
     }
 
     /// Whole-posture ATOMICALLY-BALANCED predicate —
@@ -90031,6 +90210,369 @@ mod tests {
         ));
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.bottom_lead().is_none());
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.top_lead().is_none());
+    }
+
+    #[test]
+    fn resource_limits_strict_count_lead_holds_agrees_with_open_coded_gt() {
+        // Bare-body identity — the helper's verdict on every (lhs, rhs)
+        // pair agrees with the open-coded shape `lhs > rhs` that every
+        // WHOLE-POSTURE ARM-SELECTING STRICT-MAJORITY predicate on
+        // ResourceLimits carried at its exit pre-lift. Swept over the
+        // (lhs < rhs, lhs == rhs, lhs > rhs) three-cell order-partition
+        // with representative values so all three cells of the ARM-
+        // TRICHOTOMY on the (usize, usize) joint-input regime are
+        // pinned, using axial-tally-bounded samples (0..=FIELD_COUNT)
+        // for which the caller-side invariant is discharged by
+        // construction.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                ResourceLimits::strict_count_lead_holds(lhs, rhs),
+                lhs > rhs,
+                "helper != open-coded > at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_strict_count_lead_holds_diagonal_inputs_fold_to_false() {
+        // Diagonal identity — for every n in the caller-safe regime, the
+        // helper folds the diagonal (n, n) input to false. The tie
+        // corner of the input pair collapses to the REJECTED arm of the
+        // BOOLEAN verdict — strict dominance requires strict inequality,
+        // so the tie leg rejects. Swept across the (0, min-positive,
+        // FIELD_COUNT, mid) constellation covering the representative
+        // axial-tally diagonal postures.
+        for n in [
+            0_usize,
+            1,
+            ResourceLimits::FIELD_COUNT / 2,
+            ResourceLimits::FIELD_COUNT,
+        ] {
+            assert!(
+                !ResourceLimits::strict_count_lead_holds(n, n),
+                "diagonal fold to false violated at n={n}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_strict_count_lead_holds_lhs_strong_arm_fires_true() {
+        // Order-arm dispatch — on every (lhs, rhs) with lhs > rhs, the
+        // helper fires true. The BOOLEAN reading of the lhs-strong arm
+        // of the ARM-SELECTING sibling's dispatch: where the ARM-
+        // SELECTING sibling reads it as Some(lhs - rhs) and the SIGNED
+        // sibling reads it as `+(lhs - rhs)` in isize, THIS combinator
+        // reads it as bare true — carrying only the arm-presence verdict
+        // through the BOOLEAN cell rather than the paired arm-identity
+        // + magnitude cells.
+        for (lhs, rhs) in [
+            (1_usize, 0_usize),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+        ] {
+            assert!(
+                lhs > rhs,
+                "test-local invariant violated: lhs must exceed rhs, got ({lhs}, {rhs})",
+            );
+            assert!(
+                ResourceLimits::strict_count_lead_holds(lhs, rhs),
+                "lhs-strong arm TRUE verdict regressed at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_strict_count_lead_holds_rhs_strong_arm_rejects_to_false() {
+        // Order-arm dispatch — on every (lhs, rhs) with rhs > lhs, the
+        // helper rejects the reversed arm's verdict and folds to false.
+        // The rhs-strong arm collapses to the SAME FALSE cell as the
+        // tie arm — the BOOLEAN combinator DISCARDS the arm-identity
+        // distinction between the two non-lhs-strong legs, unlike the
+        // SIGNED sibling which carries it through a negative isize AND
+        // unlike the UNSIGNED sibling which folds it onto the SAME
+        // positive magnitude cell as the lhs-strong arm.
+        for (lhs, rhs) in [
+            (0_usize, 1_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (1, 5),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert!(
+                rhs > lhs,
+                "test-local invariant violated: rhs must exceed lhs, got ({lhs}, {rhs})",
+            );
+            assert!(
+                !ResourceLimits::strict_count_lead_holds(lhs, rhs),
+                "rhs-strong arm rejection to false regressed at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_strict_count_lead_holds_swapped_inputs_are_mutually_exclusive_on_true() {
+        // Anti-commutativity — on every (lhs, rhs), at most one of
+        // strict_count_lead_holds(lhs, rhs) and
+        // strict_count_lead_holds(rhs, lhs) fires TRUE. The two
+        // STRICT-INEQUALITY directions on the same input pair cannot
+        // both hold, matching the paired STRICT-MAJORITY callers'
+        // mutual-exclusion pin on the TRUE cell. Swept over
+        // representative (lhs != rhs, lhs == rhs) samples covering both
+        // strict-dominance-fires-on-some-arm and tie-neither-fires
+        // cells.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+        ] {
+            let forward = ResourceLimits::strict_count_lead_holds(lhs, rhs);
+            let reversed = ResourceLimits::strict_count_lead_holds(rhs, lhs);
+            assert!(
+                !(forward && reversed),
+                "mutual exclusion on TRUE violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_strict_count_lead_holds_iff_witness_strict_count_lead_is_some() {
+        // Option-bridge — the BOOLEAN combinator's TRUE arm coincides
+        // exactly with the SOME arm of the ARM-SELECTING sibling's
+        // output. On every (lhs, rhs), strict_count_lead_holds(lhs,
+        // rhs) == witness_strict_count_lead(lhs, rhs).is_some(). The
+        // pair is the (presence, presence-and-magnitude) unpacking of
+        // the same strict-dominance dispatch: THIS combinator projects
+        // ONLY the arm-presence bit; the ARM-SELECTING sibling
+        // additionally carries the lead magnitude on the SOME cell.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+        ] {
+            assert_eq!(
+                ResourceLimits::strict_count_lead_holds(lhs, rhs),
+                ResourceLimits::witness_strict_count_lead(lhs, rhs).is_some(),
+                "option-bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_strict_count_lead_holds_iff_signed_count_difference_strictly_positive() {
+        // Signum bridge — the BOOLEAN combinator's TRUE arm coincides
+        // exactly with the strictly-positive cell of the SIGNED
+        // sibling's output. On every (lhs, rhs), strict_count_lead_holds(
+        // lhs, rhs) == (signed_count_difference(lhs, rhs) > 0). The two
+        // combinators agree on the arm-identity dispatch posture-for-
+        // posture, routing the lhs-strong arm through TRUE and the
+        // rhs-strong-or-tied arms through FALSE.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+        ] {
+            assert_eq!(
+                ResourceLimits::strict_count_lead_holds(lhs, rhs),
+                ResourceLimits::signed_count_difference(lhs, rhs) > 0,
+                "signum bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_strict_count_lead_holds_refines_absolute_count_difference_nonzero_by_lhs_strong_arm(
+    ) {
+        // Magnitude-and-order bridge — the BOOLEAN combinator refines
+        // the UNSIGNED sibling's nonzero cell by the arm-identity
+        // dispatch the UNSIGNED sibling discards. On every (lhs, rhs),
+        // strict_count_lead_holds(lhs, rhs) ==
+        // (absolute_count_difference(lhs, rhs) != 0 && lhs >= rhs).
+        // Two `usize` inputs (a, b) and (b, a) fire the same UNSIGNED
+        // magnitude but at MOST one fires TRUE here — the ARM-SELECTING
+        // refinement the UNSIGNED sibling forgets.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT / 2, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT / 2),
+        ] {
+            assert_eq!(
+                ResourceLimits::strict_count_lead_holds(lhs, rhs),
+                ResourceLimits::absolute_count_difference(lhs, rhs) != 0 && lhs >= rhs,
+                "magnitude-and-order bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_strict_count_lead_holds_negation_iff_lhs_not_strictly_greater() {
+        // Non-strict-dominance bridge — the FALSE arm coincides exactly
+        // with the non-strict-dominance cell of the order partition.
+        // On every (lhs, rhs), !strict_count_lead_holds(lhs, rhs) ==
+        // (lhs <= rhs). The FALSE arm folds BOTH the tie leg AND the
+        // rhs-strong leg onto the SAME rejected cell.
+        for (lhs, rhs) in [
+            (0_usize, 0_usize),
+            (0, ResourceLimits::FIELD_COUNT),
+            (ResourceLimits::FIELD_COUNT, 0),
+            (3, 3),
+            (1, 5),
+            (5, 1),
+            (ResourceLimits::FIELD_COUNT, ResourceLimits::FIELD_COUNT),
+        ] {
+            assert_eq!(
+                !ResourceLimits::strict_count_lead_holds(lhs, rhs),
+                lhs <= rhs,
+                "non-strict-dominance bridge violated at (lhs, rhs)=({lhs}, {rhs})",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_strict_count_lead_holds_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the helper's `pub const fn` signature
+        // preserves compile-time evaluability across the diagonal-tie,
+        // lhs-strong-arm, rhs-strong-arm, and FIELD_COUNT-corner cells
+        // of the (usize, usize) joint-input regime. Complements the
+        // primary bare-body identity pin
+        // `resource_limits_strict_count_lead_holds_agrees_with_open_coded_gt`
+        // by extending the const-evaluability proof onto the compile-
+        // time surface.
+        const _: () = assert!(!ResourceLimits::strict_count_lead_holds(0, 0));
+        const _: () = assert!(ResourceLimits::strict_count_lead_holds(1, 0));
+        const _: () = assert!(ResourceLimits::strict_count_lead_holds(
+            ResourceLimits::FIELD_COUNT,
+            0
+        ));
+        const _: () = assert!(!ResourceLimits::strict_count_lead_holds(
+            0,
+            ResourceLimits::FIELD_COUNT
+        ));
+        const _: () = assert!(ResourceLimits::strict_count_lead_holds(5, 1));
+        const _: () = assert!(!ResourceLimits::strict_count_lead_holds(1, 5));
+        const _: () = assert!(!ResourceLimits::strict_count_lead_holds(
+            ResourceLimits::FIELD_COUNT,
+            ResourceLimits::FIELD_COUNT
+        ));
+    }
+
+    #[test]
+    fn resource_limits_arm_selecting_strict_majority_family_bodies_delegate_to_strict_count_lead_holds(
+    ) {
+        // Sweep-of-family pin — asserts each of the four WHOLE-POSTURE
+        // ARM-SELECTING STRICT-MAJORITY predicate bodies
+        // (polar_is_majority + interior_is_majority over the (polar,
+        // interior) axial partition, bottom_is_majority +
+        // top_is_majority over the ATOMIC (bottom, top) sub-partition
+        // of the polar cell) agrees with the helper-based shape
+        // `ResourceLimits::strict_count_lead_holds(self.count_LHS(),
+        // self.count_RHS())` on every posture from the EMPTY / DEFAULT
+        // / UNBOUNDED / HAND_AUTHORED_MID / HAND_AUTHORED_OTHER preset
+        // constellation (4×5 = 20 verdicts). A future body regression
+        // that swapped one of the count inputs, or flipped the strict
+        // `>` guard to `>=`, would break here on at least one posture.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(
+                posture.polar_is_majority(),
+                ResourceLimits::strict_count_lead_holds(
+                    posture.count_polar_axes(),
+                    posture.count_interior_axes(),
+                ),
+                "polar_is_majority delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.interior_is_majority(),
+                ResourceLimits::strict_count_lead_holds(
+                    posture.count_interior_axes(),
+                    posture.count_polar_axes(),
+                ),
+                "interior_is_majority delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.bottom_is_majority(),
+                ResourceLimits::strict_count_lead_holds(
+                    posture.count_bottom_axes(),
+                    posture.count_top_axes(),
+                ),
+                "bottom_is_majority delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.top_is_majority(),
+                ResourceLimits::strict_count_lead_holds(
+                    posture.count_top_axes(),
+                    posture.count_bottom_axes(),
+                ),
+                "top_is_majority delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_arm_selecting_strict_majority_family_bodies_evaluate_at_compile_time_via_const_fn(
+    ) {
+        // Const-fn pin — proves the WHOLE-POSTURE ARM-SELECTING
+        // STRICT-MAJORITY family bodies preserved const-fn evaluability
+        // under the sweep through strict_count_lead_holds. Each of the
+        // four swept predicates × the three shipped `pub const` preset
+        // postures (EMPTY, UNBOUNDED, DEFAULT). EMPTY packs six bottom
+        // axes uniformly, so polar_is_majority fires true (polar =
+        // FIELD_COUNT > 0 = interior) and interior_is_majority fires
+        // false; bottom_is_majority fires true (bottom = FIELD_COUNT >
+        // 0 = top) and top_is_majority fires false. UNBOUNDED is the
+        // corner mirror on the atomic top arm — polar_is_majority ==
+        // true (still polar-uniform), interior_is_majority == false;
+        // bottom_is_majority == false, top_is_majority == true.
+        // DEFAULT is interior-uniform, so polar_is_majority fires false
+        // and interior_is_majority fires true; bottom_is_majority and
+        // top_is_majority BOTH fire false (no polar axis → both atomic
+        // tallies are zero → tie at (0, 0) folds to false on both
+        // directed arms).
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.polar_is_majority());
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.interior_is_majority());
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.bottom_is_majority());
+        const _: () = assert!(!EMPTY_RESOURCE_LIMITS.top_is_majority());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.polar_is_majority());
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.interior_is_majority());
+        const _: () = assert!(!UNBOUNDED_RESOURCE_LIMITS.bottom_is_majority());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.top_is_majority());
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.polar_is_majority());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.interior_is_majority());
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.bottom_is_majority());
+        const _: () = assert!(!DEFAULT_RESOURCE_LIMITS.top_is_majority());
     }
 
     #[test]

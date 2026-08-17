@@ -9,9 +9,9 @@ use serde::{Deserialize, Serialize};
 /// apiVersion: tatara.pleme.io/v1alpha1
 /// kind: NixBuild
 /// metadata:
-///   name: akeyless-auth
+///   name: example-backend-api
 /// spec:
-///   flakeRef: "github:pleme-io/blackmatter-akeyless#akeyless-backend-auth"
+///   flakeRef: "github:pleme-io/blackmatter-example#example-backend-api"
 ///   system: x86_64-linux
 ///   atticCache: main
 /// ```

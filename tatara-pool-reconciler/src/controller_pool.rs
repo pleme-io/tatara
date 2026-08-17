@@ -551,9 +551,9 @@ mod tests {
     fn belongs_to_pool_via_annotation() {
         let mut p = Process::new("x", empty_spec());
         let mut anns = std::collections::BTreeMap::new();
-        anns.insert(ANNOTATION_POOL.into(), "akeyless".into());
+        anns.insert(ANNOTATION_POOL.into(), "demo-pool".into());
         p.metadata.annotations = Some(anns);
-        assert!(process_belongs_to_pool(&p, "akeyless"));
+        assert!(process_belongs_to_pool(&p, "demo-pool"));
         assert!(!process_belongs_to_pool(&p, "other"));
     }
 }

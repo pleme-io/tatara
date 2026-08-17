@@ -16,7 +16,7 @@
 //!   :compliance (baseline fedramp-moderate
 //!                :at-boundary (nist SC-7)
 //!                :post        (cis-k8s-v1.8))
-//!   :depends-on (akeyless-injection))
+//!   :depends-on (secret-injection))
 //! ```
 
 // Allow the derive macro's `::tatara_lisp::...` paths to resolve when

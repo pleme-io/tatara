@@ -130,7 +130,7 @@ mod tests {
             "action": "opened",
             "number": 123,
             "repository": {
-                "full_name": "pleme-io/akeyless-deployment",
+                "full_name": "pleme-io/demo-app",
                 "default_branch": "main"
             },
             "pull_request": {
@@ -138,17 +138,17 @@ mod tests {
                 "base": { "ref": "main", "sha": "def456" },
                 "draft": false,
                 "merged": false,
-                "labels": [ { "name": "needs-akeyless" } ],
+                "labels": [ { "name": "needs-ephemeral" } ],
                 "user": { "login": "drzln" }
             }
         }"#;
         let evt: PullRequestEvent = serde_json::from_str(json).unwrap();
         assert_eq!(evt.action, PrAction::Opened);
         assert_eq!(evt.number, 123);
-        assert_eq!(evt.repository.full_name, "pleme-io/akeyless-deployment");
+        assert_eq!(evt.repository.full_name, "pleme-io/demo-app");
         assert_eq!(evt.pull_request.head.ref_name, "fix-something");
         assert_eq!(evt.pull_request.labels.len(), 1);
-        assert_eq!(evt.pull_request.labels[0].name, "needs-akeyless");
+        assert_eq!(evt.pull_request.labels[0].name, "needs-ephemeral");
         assert_eq!(evt.pull_request.user.login, "drzln");
     }
 

@@ -5,7 +5,7 @@
 //! - **closed-loop auth probes** — `kind = "closed-loop-auth"`. Stamps
 //!   that a system's bundled identity issuer authenticated its bundled
 //!   client. The substrate primitive every closed-loop-testable product
-//!   composes (Akeyless gator↔gateway, future: identity providers,
+//!   composes (an issuer↔client pair, future: identity providers,
 //!   message brokers, databases that can issue creds to themselves).
 //! - **schema/migration runs** — `kind = "db-migration"`. shinka emits
 //!   one per applied migration; pillars carry the diff hash.
@@ -20,7 +20,7 @@
 //! Process consumer share one parse.
 //!
 //! Wire format (snake_case to match the existing ConfigMap payload
-//! shape the akeyless-closed-loop-probe chart writes):
+//! shape the closed-loop-probe chart writes):
 //!
 //! ```yaml
 //! version: tatara-receipt/v1
@@ -30,7 +30,7 @@
 //! artifact_hash: <hex>
 //! control_hash:  <hex>
 //! generated_at:  2026-05-19T22:00:00Z
-//! process_ref:   "akeyless-test/ephemeral-akeyless"   # optional
+//! process_ref:   "demo-test/ephemeral-demo"   # optional
 //! evidence:      { ... }                              # optional, free-form
 //! ```
 
@@ -130,7 +130,7 @@ pub enum ReceiptKind {
     /// Closed-loop auth probe — stamps that a system's bundled identity
     /// issuer authenticated its bundled client. Emitted by
     /// `tatara-closed-loop-probe`; the substrate primitive every
-    /// closed-loop-testable product composes (Akeyless gator↔gateway,
+    /// closed-loop-testable product composes (an issuer↔client pair,
     /// future: identity providers, message brokers, databases that can
     /// issue creds to themselves).
     ClosedLoopAuth,
@@ -633,10 +633,10 @@ generated_at:  2026-05-19T12:00:00Z
     #[test]
     fn process_ref_optional_and_round_trips() {
         let mut r = ReceiptEnvelope::build("test-suite", "i", "a", "c", None);
-        r.process_ref = Some("akeyless-test/ephemeral".into());
+        r.process_ref = Some("demo-test/ephemeral".into());
         let s = serde_json::to_string(&r).unwrap();
         let back = ReceiptEnvelope::parse_json(&s).expect("round-trip");
-        assert_eq!(back.process_ref.as_deref(), Some("akeyless-test/ephemeral"));
+        assert_eq!(back.process_ref.as_deref(), Some("demo-test/ephemeral"));
     }
 
     #[test]

@@ -29,18 +29,18 @@ use crate::pool::AllocationRef;
 /// apiVersion: tatara.pleme.io/v1alpha1
 /// kind: EphemeralAllocation
 /// metadata:
-///   name: pr-123-akeyless
+///   name: pr-123-demo-app
 ///   namespace: ephemeral-pools
 /// spec:
 ///   poolRef:
-///     name: akeyless-attest-pool
+///     name: attest-pool
 ///     namespace: ephemeral-pools
 ///   requestor:
 ///     kind: github-pr
-///     repo: "pleme-io/akeyless-deployment"
+///     repo: "pleme-io/demo-app"
 ///     branch: "fix-something"
 ///     prNumber: 123
-///     prLabels: ["needs-akeyless"]
+///     prLabels: ["needs-ephemeral"]
 ///   ttl: "1h"
 /// ```
 #[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
@@ -96,7 +96,7 @@ pub struct Requestor {
     /// shape to [`crate::receipt::ReceiptEnvelope::known_kind`].
     pub kind: String,
 
-    /// Optional repo identifier (e.g., `"pleme-io/akeyless-deployment"`).
+    /// Optional repo identifier (e.g., `"pleme-io/demo-app"`).
     /// Matched against `PoolSelector.repos`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repo: Option<String>,
@@ -527,11 +527,11 @@ mod tests {
     fn requestor_minimum_shape_round_trips() {
         let r = Requestor {
             kind: "github-pr".into(),
-            repo: Some("pleme-io/akeyless-deployment".into()),
+            repo: Some("pleme-io/demo-app".into()),
             branch: Some("fix-something".into()),
             pr_number: Some(123),
             sha: Some("abc123def".into()),
-            pr_labels: vec!["needs-akeyless".into()],
+            pr_labels: vec!["needs-ephemeral".into()],
             actor: Some("drzln".into()),
         };
         let yaml = serde_yaml::to_string(&r).unwrap();

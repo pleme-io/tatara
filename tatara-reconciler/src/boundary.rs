@@ -12,8 +12,8 @@
 //! - `ClosedLoopAuth`:         JobAttested + BLAKE3 receipt shape verified
 //!                             (the canonical postcondition for any system
 //!                             that can produce credentials for its own
-//!                             client under test — e.g. Akeyless SaaS
-//!                             issuing secrets to its bundled Gateway)
+//!                             client under test — e.g. a secrets
+//!                             backend issuing creds to its bundled client)
 //!
 //! `check_depends_on` reuses the `ProcessPhase` evaluator and returns unmet
 //! dependencies structured for UX messaging.

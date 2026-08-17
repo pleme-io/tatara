@@ -58,8 +58,8 @@ mod tests {
 
     #[test]
     fn member_name_composes_pool_and_slug() {
-        let n = member_process_name("akeyless-pool", "uid-x", 5);
-        assert!(n.starts_with("akeyless-pool-"));
-        assert_eq!(n.len(), "akeyless-pool-".len() + 8);
+        let n = member_process_name("demo-pool", "uid-x", 5);
+        assert!(n.starts_with("demo-pool-"));
+        assert_eq!(n.len(), "demo-pool-".len() + 8);
     }
 }

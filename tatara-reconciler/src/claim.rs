@@ -86,7 +86,7 @@ impl<'a> Candidate<'a> {
 
 /// Decide the next state of a single stable-name claim entry.
 ///
-/// `key` is the `(cluster, app)` composite (e.g. `"pleme-dev/gator"`)
+/// `key` is the `(cluster, app)` composite (e.g. `"pleme-dev/api"`)
 /// — passed for logging clarity; the decision function only uses it
 /// implicitly via the filtered `candidates` slice.
 ///
@@ -217,7 +217,7 @@ mod tests {
 
     #[test]
     fn no_candidates_vacates() {
-        let d = decide_claim_for("pleme-dev/gator", None, &[], Utc::now());
+        let d = decide_claim_for("pleme-dev/api", None, &[], Utc::now());
         assert_eq!(d, ClaimDecision::Vacate);
     }
 

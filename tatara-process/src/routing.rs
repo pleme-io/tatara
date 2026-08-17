@@ -23,9 +23,9 @@
 //!
 //! Lisp authoring:
 //! ```lisp
-//! :routing (:hostnames ((:app "gator" :instance "akeyless-prod")
+//! :routing (:hostnames ((:app "api" :instance "demo-prod")
 //!                       (:app "gateway"))
-//!           :backend   (:service "akeyless-saas-akeyless-gateway"
+//!           :backend   (:service "demo-app-gateway"
 //!                       :port    8000)
 //!           :stable-name-claim #t
 //!           :priority           100)
@@ -82,14 +82,14 @@ pub struct RoutingSpec {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RoutingHostname {
-    /// Application slot — `api`, `gator`, `gateway`, `web`, etc.
+    /// Application slot — `api`, `gateway`, `web`, etc.
     /// Must be a valid DNS label (RFC 1123): lowercase alpha-num
     /// + hyphen, 1–63 chars, no leading/trailing hyphen. The
     /// reconciler validates this at the boundary.
     pub app: String,
 
-    /// Named instance segment. When `Some("akeyless-prod")` the FQDN
-    /// reads `${app}.akeyless-prod.${cluster}.…`. When `None` the
+    /// Named instance segment. When `Some("demo-prod")` the FQDN
+    /// reads `${app}.demo-prod.${cluster}.…`. When `None` the
     /// reconciler substitutes `blake3(canonical_spec)[:8]` —
     /// deterministic per-spec, changes when the spec changes.
     ///
@@ -154,22 +154,22 @@ impl RoutingHostname {
 mod tests {
     use super::*;
 
-    fn akeyless_routing() -> RoutingSpec {
+    fn demo_routing() -> RoutingSpec {
         RoutingSpec {
             hostnames: vec![
                 RoutingHostname {
-                    app: "gator".into(),
-                    instance: Some("akeyless-prod".into()),
+                    app: "api".into(),
+                    instance: Some("demo-prod".into()),
                     cluster: None,
                 },
                 RoutingHostname {
                     app: "gateway".into(),
-                    instance: Some("akeyless-prod".into()),
+                    instance: Some("demo-prod".into()),
                     cluster: None,
                 },
             ],
             backend: RoutingBackend {
-                service: "akeyless-saas-akeyless-gateway".into(),
+                service: "demo-app-gateway".into(),
                 port: 8000,
                 tls_issuer: None,
                 ingress_annotations: BTreeMap::new(),
@@ -199,7 +199,7 @@ mod tests {
 
     #[test]
     fn fqdn_count_doubles_when_claim_held() {
-        let r = akeyless_routing();
+        let r = demo_routing();
         assert_eq!(r.emitted_fqdn_count(false), 2);
         assert_eq!(r.emitted_fqdn_count(true), 4);
     }
@@ -230,14 +230,14 @@ mod tests {
 
     #[test]
     fn serde_round_trip_via_yaml() {
-        let r = akeyless_routing();
+        let r = demo_routing();
         let yaml = serde_yaml::to_string(&r).unwrap();
         // camelCase wire form — what FluxCD / kubectl users see.
         assert!(yaml.contains("hostnames:"));
-        assert!(yaml.contains("app: gator"));
-        assert!(yaml.contains("instance: akeyless-prod"));
+        assert!(yaml.contains("app: api"));
+        assert!(yaml.contains("instance: demo-prod"));
         assert!(yaml.contains("backend:"));
-        assert!(yaml.contains("service: akeyless-saas-akeyless-gateway"));
+        assert!(yaml.contains("service: demo-app-gateway"));
         assert!(yaml.contains("port: 8000"));
         assert!(yaml.contains("stableNameClaim: true"));
         assert!(yaml.contains("priority: 100"));
@@ -281,10 +281,10 @@ mod tests {
         // tatara_process::register_all (R3 adds this to the
         // registry); for now compile via tatara_lisp directly.
         let src = r#"
-            (defrouting akeyless-edges
-              :hostnames ((:app "gator"   :instance "akeyless-prod")
-                          (:app "gateway" :instance "akeyless-prod"))
-              :backend   (:service "akeyless-saas-akeyless-gateway"
+            (defrouting demo-edges
+              :hostnames ((:app "api"   :instance "demo-prod")
+                          (:app "gateway" :instance "demo-prod"))
+              :backend   (:service "demo-app-gateway"
                           :port 8000)
               :stable-name-claim #t
               :priority 100)
@@ -293,14 +293,14 @@ mod tests {
             tatara_lisp::compile_named::<RoutingSpec>(src).expect("compile");
         assert_eq!(defs.len(), 1);
         let d = &defs[0];
-        assert_eq!(d.name, "akeyless-edges");
+        assert_eq!(d.name, "demo-edges");
         assert_eq!(d.spec.hostnames.len(), 2);
-        assert_eq!(d.spec.hostnames[0].app, "gator");
+        assert_eq!(d.spec.hostnames[0].app, "api");
         assert_eq!(
             d.spec.hostnames[0].instance.as_deref(),
-            Some("akeyless-prod")
+            Some("demo-prod")
         );
-        assert_eq!(d.spec.backend.service, "akeyless-saas-akeyless-gateway");
+        assert_eq!(d.spec.backend.service, "demo-app-gateway");
         assert_eq!(d.spec.backend.port, 8000);
         assert!(d.spec.stable_name_claim);
         assert_eq!(d.spec.priority, 100);

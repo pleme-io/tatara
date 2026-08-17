@@ -123,7 +123,7 @@ mod tests {
             action,
             number: 42,
             repository: Repository {
-                full_name: "pleme-io/akeyless-deployment".into(),
+                full_name: "pleme-io/demo-app".into(),
                 default_branch: Some("main".into()),
             },
             pull_request: PullRequest {
@@ -139,7 +139,7 @@ mod tests {
                 merged: Some(false),
                 labels: vec![
                     Label {
-                        name: "needs-akeyless".into(),
+                        name: "needs-ephemeral".into(),
                     },
                     Label {
                         name: "integration".into(),
@@ -158,17 +158,17 @@ mod tests {
         let alloc = build_allocation(&evt, "ephemeral-pools", None, false).unwrap();
         assert_eq!(
             alloc.metadata.name.as_deref(),
-            Some("pr-42-pleme-io-akeyless-deployment")
+            Some("pr-42-pleme-io-demo-app")
         );
         assert_eq!(alloc.metadata.namespace.as_deref(), Some("ephemeral-pools"));
         assert_eq!(alloc.spec.requestor.kind, "github-pr");
         assert_eq!(
             alloc.spec.requestor.repo.as_deref(),
-            Some("pleme-io/akeyless-deployment")
+            Some("pleme-io/demo-app")
         );
         assert_eq!(alloc.spec.requestor.pr_number, Some(42));
         assert_eq!(alloc.spec.requestor.sha.as_deref(), Some("abc123def"));
-        assert_eq!(alloc.spec.requestor.pr_labels, vec!["needs-akeyless", "integration"]);
+        assert_eq!(alloc.spec.requestor.pr_labels, vec!["needs-ephemeral", "integration"]);
         assert_eq!(alloc.spec.requestor.actor.as_deref(), Some("drzln"));
         // Selector-routed (no pool pinned).
         assert!(alloc.spec.pool_ref.is_none());
@@ -177,9 +177,9 @@ mod tests {
     #[test]
     fn pool_ref_pins_to_named_pool() {
         let evt = sample_event(PrAction::Opened, false);
-        let alloc = build_allocation(&evt, "pools", Some("akeyless-pool"), false).unwrap();
+        let alloc = build_allocation(&evt, "pools", Some("demo-pool"), false).unwrap();
         let pr = alloc.spec.pool_ref.unwrap();
-        assert_eq!(pr.name, "akeyless-pool");
+        assert_eq!(pr.name, "demo-pool");
         assert_eq!(pr.namespace, "pools");
     }
 
@@ -206,8 +206,8 @@ mod tests {
 
     #[test]
     fn allocation_name_is_deterministic() {
-        let a = allocation_name("pleme-io/akeyless-deployment", 42);
-        let b = allocation_name("pleme-io/akeyless-deployment", 42);
+        let a = allocation_name("pleme-io/demo-app", 42);
+        let b = allocation_name("pleme-io/demo-app", 42);
         assert_eq!(a, b);
     }
 
@@ -234,6 +234,6 @@ mod tests {
         let note = alloc.spec.note.unwrap();
         assert!(note.contains("PR #42"));
         assert!(note.contains("reopened"));
-        assert!(note.contains("pleme-io/akeyless-deployment"));
+        assert!(note.contains("pleme-io/demo-app"));
     }
 }

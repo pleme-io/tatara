@@ -385,14 +385,14 @@ mod tests {
     #[test]
     fn run_id_falls_back_to_ns_slash_name() {
         let s = http_spec("x");
-        assert_eq!(resolve_run_id(&s, "akeyless-test", "r1"), "akeyless-test/r1");
+        assert_eq!(resolve_run_id(&s, "demo-test", "r1"), "demo-test/r1");
     }
 
     #[test]
     fn run_id_uses_override_when_set() {
         let mut s = http_spec("x");
-        s.experiment_id_override = Some("akeyless-run-2026-05-20".into());
-        assert_eq!(resolve_run_id(&s, "ns", "n"), "akeyless-run-2026-05-20");
+        s.experiment_id_override = Some("demo-run-2026-05-20".into());
+        assert_eq!(resolve_run_id(&s, "ns", "n"), "demo-run-2026-05-20");
     }
 
     #[test]
@@ -543,7 +543,7 @@ mod tests {
             &ExportOutcome::Shipped,
             None,
             "ns/n",
-            Some("akeyless-test/r1"),
+            Some("demo-test/r1"),
         )
         .expect("receipt");
         assert_eq!(r.version, RECEIPT_VERSION);
@@ -554,7 +554,7 @@ mod tests {
         assert_eq!(r.control_hash.len(), 64);
         assert_eq!(r.composed_root.len(), 64);
         // Process ref + evidence stamped through.
-        assert_eq!(r.process_ref.as_deref(), Some("akeyless-test/r1"));
+        assert_eq!(r.process_ref.as_deref(), Some("demo-test/r1"));
         assert_eq!(r.evidence["run_id"], "ns/n");
         assert_eq!(r.evidence["outcome"], "Shipped");
         // verify_root() agrees the composed_root was built correctly

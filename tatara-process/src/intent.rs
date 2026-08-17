@@ -7,7 +7,7 @@
 //!   - `lisp`:       tatara-lisp reader + macroexpander → resources
 //!   - `container`:  emit Deployment/StatefulSet/etc directly (no Helm)
 //!   - `aplicacao`:  emit a FluxCD `HelmRelease` for a pleme-io typed
-//!                   Aplicacao chart (e.g. `lareira-akeyless-deployment`).
+//!                   Aplicacao chart (e.g. `lareira-demo-app`).
 //!                   This is the canonical handoff from caixa-shaped
 //!                   declarations to in-cluster reconciliation.
 //!   - `guest`:      tatara-hospedeiro supervises a Linux VM or WASM
@@ -288,9 +288,9 @@ fn default_version() -> String {
 /// Example (Lisp):
 /// ```lisp
 /// :intent (:aplicacao
-///           (:chart-ref "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment"
+///           (:chart-ref "oci://ghcr.io/pleme-io/charts/lareira-demo-app"
 ///            :version "0.5.5"
-///            :profile "gateway-with-internal-saas"
+///            :profile "all-in-one"
 ///            :values-overlay (:cluster (:name "ephemeral-test-01")
 ///                             :persistence false
 ///                             :compliance (:overlays []))))
@@ -298,12 +298,12 @@ fn default_version() -> String {
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AplicacaoIntent {
-    /// Helm chart reference. OCI (`oci://…`) or repo-relative (`pleme-io/lareira-akeyless-deployment`).
+    /// Helm chart reference. OCI (`oci://…`) or repo-relative (`pleme-io/lareira-demo-app`).
     pub chart_ref: String,
     /// Chart version (Helm semver constraint; `">=0.5.5"` allowed).
     pub version: String,
     /// Architecture profile from the chart's `values/*.yaml` family
-    /// (e.g. `gateway-with-internal-saas`, `saas-internal`).
+    /// (e.g. `all-in-one`, `saas-internal`).
     /// Leave empty to use chart defaults.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub profile: String,
@@ -594,9 +594,9 @@ mod tests {
     fn aplicacao_intent_selects_its_variant() {
         let i = Intent {
             aplicacao: Some(AplicacaoIntent {
-                chart_ref: "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment".into(),
+                chart_ref: "oci://ghcr.io/pleme-io/charts/lareira-demo-app".into(),
                 version: "0.5.5".into(),
-                profile: "gateway-with-internal-saas".into(),
+                profile: "all-in-one".into(),
                 values_overlay: serde_json::json!({ "cluster": { "name": "test-01" } }),
                 release_name: None,
                 target_namespace: None,
@@ -606,7 +606,7 @@ mod tests {
         };
         match i.variant().unwrap() {
             IntentVariant::Aplicacao(a) => {
-                assert_eq!(a.profile, "gateway-with-internal-saas");
+                assert_eq!(a.profile, "all-in-one");
                 assert_eq!(a.version, "0.5.5");
                 assert_eq!(a.install_timeout.as_deref(), Some("25m"));
             }

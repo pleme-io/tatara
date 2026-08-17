@@ -82,13 +82,13 @@ pub enum ConditionKind {
     /// `params`:
     /// ```json
     /// {
-    ///   "issuer":   { "service": "akeyless-saas-akeyless-gator",
+    ///   "issuer":   { "service": "demo-app-issuer",
     ///                 "port": 8080,
     ///                 "secretPath": "/v2/get-secret-value" },
-    ///   "consumer": { "service": "akeyless-saas-akeyless-gateway",
+    ///   "consumer": { "service": "demo-app-gateway",
     ///                 "port": 8000,
     ///                 "authPath": "/api/v3/auth" },
-    ///   "jwkSource":{ "service": "akeyless-saas-akeyless-gator",
+    ///   "jwkSource":{ "service": "demo-app-issuer",
     ///                 "port": 8080,
     ///                 "path": "/.well-known/jwks.json" },
     ///   "probeImage": "ghcr.io/pleme-io/closed-loop-probe:0.1.0",
@@ -195,11 +195,11 @@ mod tests {
     fn serde_process_phase_condition() {
         let c = Condition {
             kind: ConditionKind::ProcessPhase,
-            params: json!({ "processRef": "akeyless-injection", "phase": "Attested" }),
+            params: json!({ "processRef": "secret-injection", "phase": "Attested" }),
         };
         let yaml = serde_yaml::to_string(&c).unwrap();
         assert!(yaml.contains("kind: ProcessPhase"));
-        assert!(yaml.contains("processRef: akeyless-injection"));
+        assert!(yaml.contains("processRef: secret-injection"));
     }
 
     #[test]
@@ -207,8 +207,8 @@ mod tests {
         let c = Condition {
             kind: ConditionKind::ClosedLoopAuth,
             params: json!({
-                "issuer":   { "service": "akeyless-saas-akeyless-gator", "port": 8080 },
-                "consumer": { "service": "akeyless-saas-akeyless-gateway", "port": 8000 },
+                "issuer":   { "service": "demo-app-issuer", "port": 8080 },
+                "consumer": { "service": "demo-app-gateway", "port": 8000 },
                 "probeImage": "ghcr.io/pleme-io/closed-loop-probe:0.1.0",
             }),
         };
@@ -223,7 +223,7 @@ mod tests {
     fn serde_job_attested_condition() {
         let c = Condition {
             kind: ConditionKind::JobAttested,
-            params: json!({ "name": "seed-job", "namespace": "akeyless-test" }),
+            params: json!({ "name": "seed-job", "namespace": "demo-test" }),
         };
         let yaml = serde_yaml::to_string(&c).unwrap();
         assert!(yaml.contains("kind: JobAttested"));

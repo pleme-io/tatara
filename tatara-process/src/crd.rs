@@ -45,7 +45,7 @@ use crate::status::{BoundaryStatus, ComplianceStatus, FluxResourceRef, ProcessCo
 ///         controlId: SC-7
 ///         phase: AtBoundary
 ///   dependsOn:
-///     - name: akeyless-injection
+///     - name: secret-injection
 /// ```
 #[derive(CustomResource, DeriveTataraDomain, Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[kube(

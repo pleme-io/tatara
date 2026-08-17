@@ -123,7 +123,7 @@ pub async fn run(cfg: ProbeConfig) -> Result<ProbeOutput> {
 fn extract_token(body: &str) -> Result<String> {
     let v: Value = serde_json::from_str(body)
         .with_context(|| format!("parse issuer auth response: {body}"))?;
-    // Akeyless returns `{ "token": "<jwt>" }` on success; tolerate
+    // The reference issuer returns `{ "token": "<jwt>" }` on success; tolerate
     // common variants without locking to a single shape.
     for field in ["token", "access_token", "auth_token", "jwt"] {
         if let Some(t) = v.get(field).and_then(|v| v.as_str()) {

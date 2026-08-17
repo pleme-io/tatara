@@ -10,21 +10,21 @@
 //!
 //! Lisp authoring:
 //! ```lisp
-//! (defephemeral akeyless-closed-loop-attest
-//!   :aplicacao  (:chart-ref "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment"
+//! (defephemeral closed-loop-attest
+//!   :aplicacao  (:chart-ref "oci://ghcr.io/pleme-io/charts/lareira-demo-app"
 //!                :version "0.5.5"
-//!                :profile "gateway-with-internal-saas"
+//!                :profile "all-in-one"
 //!                :values-overlay (:cluster (:name "ephemeral-test-01")
 //!                                 :persistence false))
 //!   :ttl        "1h"
 //!   :teardown   OnAttested
 //!   :postconditions
 //!     ((:kind HelmReleaseReleased
-//!       :params (:name "akeyless-saas-consolidated"
-//!                :namespace "akeyless-test"))
+//!       :params (:name "demo-app-consolidated"
+//!                :namespace "demo-test"))
 //!      (:kind ClosedLoopAuth
-//!       :params (:issuer (:service "akeyless-saas-akeyless-gator" :port 8080)
-//!                :consumer (:service "akeyless-saas-akeyless-gateway" :port 8000)
+//!       :params (:issuer (:service "demo-app-issuer" :port 8080)
+//!                :consumer (:service "demo-app-gateway" :port 8000)
 //!                :probeImage "ghcr.io/pleme-io/closed-loop-probe:0.1.0"))))
 //! ```
 
@@ -189,18 +189,18 @@ mod tests {
     use crate::intent::IntentVariant;
     use crate::lifetime::LifetimeVariant;
 
-    fn akeyless_overlay() -> AplicacaoIntent {
+    fn demo_overlay() -> AplicacaoIntent {
         AplicacaoIntent {
-            chart_ref: "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment".into(),
+            chart_ref: "oci://ghcr.io/pleme-io/charts/lareira-demo-app".into(),
             version: "0.5.5".into(),
-            profile: "gateway-with-internal-saas".into(),
+            profile: "all-in-one".into(),
             values_overlay: serde_json::json!({
-                "cluster": { "name": "ephemeral-test-01", "namespace": "akeyless-test" },
+                "cluster": { "name": "ephemeral-test-01", "namespace": "demo-test" },
                 "data": { "mysql": { "persistence": { "enabled": false } } },
                 "compliance": { "overlays": [] }
             }),
-            release_name: Some("akeyless-saas-consolidated".into()),
-            target_namespace: Some("akeyless-test".into()),
+            release_name: Some("demo-app-consolidated".into()),
+            target_namespace: Some("demo-test".into()),
             install_timeout: Some("25m".into()),
         }
     }
@@ -208,7 +208,7 @@ mod tests {
     #[test]
     fn defaults_resolve_for_ephemeral_spec() {
         let e = EphemeralSpec {
-            aplicacao: akeyless_overlay(),
+            aplicacao: demo_overlay(),
             ttl: default_ttl(),
             teardown: TeardownPolicy::default(),
             max_concurrent: default_max_concurrent(),
@@ -224,7 +224,7 @@ mod tests {
         // Intent must resolve to Aplicacao.
         match ps.intent.variant().unwrap() {
             IntentVariant::Aplicacao(a) => {
-                assert_eq!(a.profile, "gateway-with-internal-saas");
+                assert_eq!(a.profile, "all-in-one");
                 assert_eq!(a.install_timeout.as_deref(), Some("25m"));
             }
             other => panic!("expected Aplicacao, got {other:?}"),
@@ -245,42 +245,42 @@ mod tests {
     #[test]
     fn ephemeral_lisp_round_trip() {
         let src = r#"
-            (defephemeral akeyless-closed-loop-attest
-              :aplicacao (:chart-ref "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment"
+            (defephemeral closed-loop-attest
+              :aplicacao (:chart-ref "oci://ghcr.io/pleme-io/charts/lareira-demo-app"
                           :version "0.5.5"
-                          :profile "gateway-with-internal-saas"
+                          :profile "all-in-one"
                           :values-overlay (:cluster (:name "ephemeral-test-01")
                                            :data (:mysql (:persistence (:enabled #f)))
                                            :compliance (:overlays []))
-                          :release-name "akeyless-saas-consolidated"
-                          :target-namespace "akeyless-test"
+                          :release-name "demo-app-consolidated"
+                          :target-namespace "demo-test"
                           :install-timeout "25m")
               :ttl "1h"
               :teardown OnAttested
               :max-concurrent 1
               :postconditions
                 ((:kind HelmReleaseReleased
-                  :params (:name "akeyless-saas-consolidated"
-                           :namespace "akeyless-test"))
+                  :params (:name "demo-app-consolidated"
+                           :namespace "demo-test"))
                  (:kind ClosedLoopAuth
-                  :params (:issuer (:service "akeyless-saas-akeyless-gator" :port 8080)
-                           :consumer (:service "akeyless-saas-akeyless-gateway" :port 8000)
+                  :params (:issuer (:service "demo-app-issuer" :port 8080)
+                           :consumer (:service "demo-app-gateway" :port 8000)
                            :probeImage "ghcr.io/pleme-io/closed-loop-probe:0.1.0"))))
         "#;
         let defs = compile_ephemeral_source(src).expect("compile");
         assert_eq!(defs.len(), 1);
         let d = &defs[0];
-        assert_eq!(d.name, "akeyless-closed-loop-attest");
+        assert_eq!(d.name, "closed-loop-attest");
 
         // Aplicacao body landed correctly.
         assert_eq!(
             d.spec.aplicacao.chart_ref,
-            "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment"
+            "oci://ghcr.io/pleme-io/charts/lareira-demo-app"
         );
-        assert_eq!(d.spec.aplicacao.profile, "gateway-with-internal-saas");
+        assert_eq!(d.spec.aplicacao.profile, "all-in-one");
         assert_eq!(
             d.spec.aplicacao.target_namespace.as_deref(),
-            Some("akeyless-test")
+            Some("demo-test")
         );
         // values-overlay JSON is preserved.
         assert_eq!(
@@ -338,7 +338,7 @@ mod tests {
     fn exports_lisp_round_trip() {
         use crate::export::{ArtifactVariant, ChannelVariant, ExportTrigger, ReportFormat};
         let src = r#"
-            (defephemeral akeyless-closed-loop-attest
+            (defephemeral closed-loop-attest
               :aplicacao (:chart-ref "oci://x"
                           :version "1.0.0"
                           :profile "minimal"
@@ -425,7 +425,7 @@ mod tests {
         // resulting ProcessSpec is later mutated, the From bridge sets
         // every non-Aplicacao slot to None explicitly.
         let e = EphemeralSpec {
-            aplicacao: akeyless_overlay(),
+            aplicacao: demo_overlay(),
             ttl: "10m".into(),
             teardown: TeardownPolicy::Never,
             max_concurrent: 0,

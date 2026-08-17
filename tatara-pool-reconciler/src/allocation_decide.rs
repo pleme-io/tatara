@@ -349,10 +349,10 @@ mod tests {
     #[test]
     fn no_matching_pool_when_selector_excludes() {
         let p = pool(
-            "akeyless",
+            "demo-pool",
             "pools",
             PoolSelector {
-                repos: vec!["pleme-io/akeyless-*".into()],
+                repos: vec!["pleme-io/demo-*".into()],
                 ..Default::default()
             },
         );
@@ -364,9 +364,9 @@ mod tests {
 
     #[test]
     fn bind_when_free_member_available() {
-        let p = pool("akeyless", "pools", PoolSelector::default());
+        let p = pool("demo-pool", "pools", PoolSelector::default());
         let a = alloc("manual", "any/repo", "main");
-        let members = vec![member("akeyless-abcd1234", MemberState::Free)];
+        let members = vec![member("demo-abcd1234", MemberState::Free)];
         let pools = vec![p];
         let d = decide_allocation_reconcile(&a, &pools, |_| &members, Utc::now());
         match d {
@@ -374,8 +374,8 @@ mod tests {
                 pool,
                 member_process_name,
             } => {
-                assert_eq!(pool.name, "akeyless");
-                assert_eq!(member_process_name, "akeyless-abcd1234");
+                assert_eq!(pool.name, "demo-pool");
+                assert_eq!(member_process_name, "demo-abcd1234");
             }
             other => panic!("expected Bind, got {other:?}"),
         }
@@ -383,14 +383,14 @@ mod tests {
 
     #[test]
     fn wait_when_pool_full() {
-        let p = pool("akeyless", "pools", PoolSelector::default());
+        let p = pool("demo-pool", "pools", PoolSelector::default());
         let a = alloc("manual", "any/repo", "main");
         let members = vec![member("only-one", MemberState::Allocated)];
         let pools = vec![p];
         let d = decide_allocation_reconcile(&a, &pools, |_| &members, Utc::now());
         match d {
             AllocationDecision::Wait { pool } => {
-                assert_eq!(pool.name, "akeyless");
+                assert_eq!(pool.name, "demo-pool");
             }
             other => panic!("expected Wait, got {other:?}"),
         }
@@ -420,18 +420,18 @@ mod tests {
 
     #[test]
     fn bound_with_expiry_in_past_triggers_release() {
-        let p = pool("akeyless", "pools", PoolSelector::default());
+        let p = pool("demo-pool", "pools", PoolSelector::default());
         let mut a = alloc("manual", "any/repo", "main");
         let one_hour_ago = Utc::now() - chrono::Duration::hours(1);
         a.status = Some(AllocationStatus {
             phase: AllocationPhase::Bound,
             phase_since: Some(one_hour_ago),
             bound_pool: Some(AllocationRef {
-                name: "akeyless".into(),
+                name: "demo-pool".into(),
                 namespace: "pools".into(),
             }),
             assigned_process: Some(AllocationRef {
-                name: "akeyless-abcd".into(),
+                name: "demo-abcd".into(),
                 namespace: "pools".into(),
             }),
             allocated_at: Some(one_hour_ago),
@@ -445,8 +445,8 @@ mod tests {
                 member_process_name,
                 pool,
             } => {
-                assert_eq!(member_process_name, "akeyless-abcd");
-                assert_eq!(pool.name, "akeyless");
+                assert_eq!(member_process_name, "demo-abcd");
+                assert_eq!(pool.name, "demo-pool");
             }
             other => panic!("expected Release, got {other:?}"),
         }
@@ -473,14 +473,14 @@ mod tests {
     /// NOT bind regardless.
     #[test]
     fn failed_allocation_is_noop_without_deletion() {
-        let p = pool("akeyless", "pools", PoolSelector::default());
+        let p = pool("demo-pool", "pools", PoolSelector::default());
         let mut a = alloc("manual", "any/repo", "main");
         a.status = Some(AllocationStatus {
             phase: AllocationPhase::Failed,
             message: Some("max_size reached; operator must intervene".into()),
             ..Default::default()
         });
-        let members = vec![member("akeyless-fresh", MemberState::Free)];
+        let members = vec![member("demo-fresh", MemberState::Free)];
         let d = decide_allocation_reconcile(&a, &[p], |_| &members, Utc::now());
         assert_eq!(
             d,
@@ -496,21 +496,21 @@ mod tests {
     /// covers this arm.
     #[test]
     fn releasing_allocation_does_not_rebind_without_deletion() {
-        let p = pool("akeyless", "pools", PoolSelector::default());
+        let p = pool("demo-pool", "pools", PoolSelector::default());
         let mut a = alloc("manual", "any/repo", "main");
         a.status = Some(AllocationStatus {
             phase: AllocationPhase::Releasing,
             bound_pool: Some(AllocationRef {
-                name: "akeyless".into(),
+                name: "demo-pool".into(),
                 namespace: "pools".into(),
             }),
             assigned_process: Some(AllocationRef {
-                name: "akeyless-old".into(),
+                name: "demo-old".into(),
                 namespace: "pools".into(),
             }),
             ..Default::default()
         });
-        let members = vec![member("akeyless-fresh", MemberState::Free)];
+        let members = vec![member("demo-fresh", MemberState::Free)];
         let d = decide_allocation_reconcile(&a, &[p], |_| &members, Utc::now());
         // Releasing is neither terminal nor routing-eligible AND not
         // Bound, so it falls through to the priority-4 fallback —
@@ -525,7 +525,7 @@ mod tests {
 
     #[test]
     fn deletion_timestamp_releases_assigned_process() {
-        let p = pool("akeyless", "pools", PoolSelector::default());
+        let p = pool("demo-pool", "pools", PoolSelector::default());
         let mut a = alloc("manual", "any/repo", "main");
         a.metadata.deletion_timestamp = Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(
             Utc::now(),
@@ -533,11 +533,11 @@ mod tests {
         a.status = Some(AllocationStatus {
             phase: AllocationPhase::Bound,
             bound_pool: Some(AllocationRef {
-                name: "akeyless".into(),
+                name: "demo-pool".into(),
                 namespace: "pools".into(),
             }),
             assigned_process: Some(AllocationRef {
-                name: "akeyless-xyz".into(),
+                name: "demo-xyz".into(),
                 namespace: "pools".into(),
             }),
             ..Default::default()
@@ -548,7 +548,7 @@ mod tests {
                 member_process_name,
                 ..
             } => {
-                assert_eq!(member_process_name, "akeyless-xyz");
+                assert_eq!(member_process_name, "demo-xyz");
             }
             other => panic!("expected Release on deletion, got {other:?}"),
         }
@@ -559,7 +559,7 @@ mod tests {
 
     fn pool_ref() -> AllocationRef {
         AllocationRef {
-            name: "akeyless".into(),
+            name: "demo-pool".into(),
             namespace: "pools".into(),
         }
     }
@@ -583,12 +583,12 @@ mod tests {
     #[test]
     fn decide_from_ctx_binds_to_free_member() {
         use shigoto_types::decision::Decision;
-        let ctx = pending_ctx(Some(pool_ref()), Some("akeyless-abcd".into()));
+        let ctx = pending_ctx(Some(pool_ref()), Some("demo-abcd".into()));
         assert_eq!(
             AllocationConvergence::decide(&ctx),
             AllocationDecision::Bind {
                 pool: pool_ref(),
-                member_process_name: "akeyless-abcd".into(),
+                member_process_name: "demo-abcd".into(),
             }
         );
     }
@@ -619,7 +619,7 @@ mod tests {
             phase: AllocationPhase::Bound,
             being_deleted: false,
             expires_at: Some(Utc::now()),
-            assigned_process: Some("akeyless-xyz".into()),
+            assigned_process: Some("demo-xyz".into()),
             bound_pool: Some(pool_ref()),
             now: Utc::now(),
             matched_pool: None,

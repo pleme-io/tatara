@@ -89,7 +89,7 @@ pub struct ProcessTableStatus {
     pub last_reconciled: Option<DateTime<Utc>>,
 
     /// **R6** — Stable-name claim registry. Key:
-    /// `${cluster}/${app}` (e.g., `pleme-dev/gator`). Value: the
+    /// `${cluster}/${app}` (e.g., `pleme-dev/api`). Value: the
     /// Process currently holding the unprefixed-form DNS for that
     /// (cluster, app) tuple. At most one Process per key; transfer
     /// is atomic on the holder's Failed/Zombie/Reaped transition.

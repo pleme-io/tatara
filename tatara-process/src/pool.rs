@@ -36,7 +36,7 @@ use crate::ephemeral::EphemeralSpec;
 /// apiVersion: tatara.pleme.io/v1alpha1
 /// kind: EphemeralPool
 /// metadata:
-///   name: akeyless-attest-pool
+///   name: attest-pool
 ///   namespace: ephemeral-pools
 /// spec:
 ///   desiredSize: 3
@@ -44,14 +44,14 @@ use crate::ephemeral::EphemeralSpec;
 ///   maxSize: 5
 ///   returnPolicy: Reset
 ///   selector:
-///     repos: ["pleme-io/akeyless-*"]
+///     repos: ["pleme-io/demo-*"]
 ///     branches: ["main", "release-*"]
-///     prLabels: ["needs-akeyless"]
+///     prLabels: ["needs-ephemeral"]
 ///   template:
 ///     aplicacao:
-///       chartRef: "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment"
+///       chartRef: "oci://ghcr.io/pleme-io/charts/lareira-demo-app"
 ///       version: "0.5.5"
-///       profile: "gateway-with-internal-saas"
+///       profile: "all-in-one"
 ///       …
 ///     ttl: "2h"
 ///     teardown: OnAttested
@@ -689,8 +689,8 @@ pub enum ReturnPolicy {
     Replace,
     /// Keep the Process running; run a typed `:reset` Job that wipes
     /// state (DB drop, secrets rotate). Fast (~5-10s) but depends on
-    /// the reset Job being correct for the workload. Akeyless-style
-    /// systems are natural fits because the SaaS API is authoritative.
+    /// the reset Job being correct for the workload. API-authoritative
+    /// systems are natural fits because the control API owns all state.
     Reset,
     /// Keep the Process indefinitely after release (debugging aid;
     /// operator must `feira pool reap NAME` to clean up). Useful for
@@ -886,7 +886,7 @@ mod tests {
 
     #[test]
     fn glob_trailing_star_matches_prefix() {
-        assert!(glob_match("pleme-io/*", "pleme-io/akeyless-deployment"));
+        assert!(glob_match("pleme-io/*", "pleme-io/demo-app"));
         assert!(!glob_match("pleme-io/*", "drzln/dotfiles"));
         assert!(glob_match("release-*", "release-2026-05"));
         assert!(!glob_match("release-*", "main"));
@@ -908,11 +908,11 @@ mod tests {
     #[test]
     fn repo_glob_filters_match_key() {
         let s = PoolSelector {
-            repos: vec!["pleme-io/akeyless-*".into()],
+            repos: vec!["pleme-io/demo-*".into()],
             ..Default::default()
         };
         assert!(s.matches(&MatchKey {
-            repo: "pleme-io/akeyless-deployment",
+            repo: "pleme-io/demo-app",
             branch: "x",
             pr_labels: &[],
             kind: "y",
@@ -928,7 +928,7 @@ mod tests {
     #[test]
     fn pr_labels_require_all() {
         let s = PoolSelector {
-            pr_labels: vec!["needs-akeyless".into(), "integration".into()],
+            pr_labels: vec!["needs-ephemeral".into(), "integration".into()],
             ..Default::default()
         };
         // Both labels present → match.
@@ -936,7 +936,7 @@ mod tests {
             repo: "x",
             branch: "y",
             pr_labels: &[
-                "needs-akeyless".into(),
+                "needs-ephemeral".into(),
                 "integration".into(),
                 "extra".into()
             ],
@@ -946,7 +946,7 @@ mod tests {
         assert!(!s.matches(&MatchKey {
             repo: "x",
             branch: "y",
-            pr_labels: &["needs-akeyless".into()],
+            pr_labels: &["needs-ephemeral".into()],
             kind: "z",
         }));
     }
@@ -957,7 +957,7 @@ mod tests {
         let specific = PoolSelector {
             repos: vec!["pleme-io/*".into()],
             branches: vec!["main".into()],
-            pr_labels: vec!["needs-akeyless".into()],
+            pr_labels: vec!["needs-ephemeral".into()],
             kinds: vec!["github-pr".into()],
         };
         assert!(specific.specificity() > general.specificity());

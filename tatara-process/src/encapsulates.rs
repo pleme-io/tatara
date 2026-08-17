@@ -29,9 +29,9 @@
 //! Lisp authoring:
 //! ```lisp
 //! :encapsulates (:kind (:existing-helm-release
-//!                       :namespace    "akeyless"
-//!                       :name         "akeyless-saas"
-//!                       :release-name "akeyless-saas-consolidated")
+//!                       :namespace    "demo-ns"
+//!                       :name         "demo-app"
+//!                       :release-name "demo-app-consolidated")
 //!                :mode Adopt)
 //! ```
 
@@ -421,13 +421,13 @@ impl EncapsulationMode {
 mod tests {
     use super::*;
 
-    fn akeyless_adopt() -> EncapsulatesSpec {
+    fn demo_adopt() -> EncapsulatesSpec {
         EncapsulatesSpec {
             kind: EncapsulationKind {
                 existing_helm_release: Some(ExistingHelmRelease {
-                    namespace: "akeyless".into(),
-                    name: "akeyless-saas".into(),
-                    release_name: "akeyless-saas-consolidated".into(),
+                    namespace: "demo-ns".into(),
+                    name: "demo-app".into(),
+                    release_name: "demo-app-consolidated".into(),
                 }),
                 ..EncapsulationKind::default()
             },
@@ -446,11 +446,11 @@ mod tests {
 
     #[test]
     fn kind_existing_hr_resolves() {
-        let s = akeyless_adopt();
+        let s = demo_adopt();
         match s.kind.variant().unwrap() {
             EncapsulationKindVariant::ExistingHelmRelease(h) => {
-                assert_eq!(h.namespace, "akeyless");
-                assert_eq!(h.release_name, "akeyless-saas-consolidated");
+                assert_eq!(h.namespace, "demo-ns");
+                assert_eq!(h.release_name, "demo-app-consolidated");
             }
             other => panic!("expected ExistingHelmRelease, got {other:?}"),
         }
@@ -618,10 +618,10 @@ mod tests {
 
     #[test]
     fn serde_round_trip_via_yaml() {
-        let s = akeyless_adopt();
+        let s = demo_adopt();
         let yaml = serde_yaml::to_string(&s).unwrap();
         assert!(yaml.contains("existingHelmRelease:"));
-        assert!(yaml.contains("releaseName: akeyless-saas-consolidated"));
+        assert!(yaml.contains("releaseName: demo-app-consolidated"));
         assert!(yaml.contains("mode: Adopt"));
         let back: EncapsulatesSpec = serde_yaml::from_str(&yaml).unwrap();
         assert!(back.kind.existing_helm_release.is_some());
@@ -631,7 +631,7 @@ mod tests {
     #[test]
     fn bare_workload_selector_round_trips() {
         let mut sel = BTreeMap::new();
-        sel.insert("app".into(), "akeyless-gator".into());
+        sel.insert("app".into(), "demo-app".into());
         sel.insert("tier".into(), "prod".into());
         let s = EncapsulatesSpec {
             kind: EncapsulationKind {
@@ -645,7 +645,7 @@ mod tests {
         };
         let yaml = serde_yaml::to_string(&s).unwrap();
         assert!(yaml.contains("bareWorkload:"));
-        assert!(yaml.contains("app: akeyless-gator"));
+        assert!(yaml.contains("app: demo-app"));
         assert!(yaml.contains("mode: Observe"));
         let back: EncapsulatesSpec = serde_yaml::from_str(&yaml).unwrap();
         match back.kind.variant().unwrap() {
@@ -653,7 +653,7 @@ mod tests {
                 assert_eq!(b.selector.len(), 2);
                 assert_eq!(
                     b.selector.get("app").map(String::as_str),
-                    Some("akeyless-gator")
+                    Some("demo-app")
                 );
             }
             other => panic!("expected BareWorkload, got {other:?}"),
@@ -663,21 +663,21 @@ mod tests {
     #[test]
     fn lisp_round_trip_existing_hr() {
         let src = r#"
-            (defencapsulates akeyless-adopt
+            (defencapsulates demo-adopt
               :kind (:existing-helm-release
-                     (:namespace    "akeyless"
-                      :name         "akeyless-saas"
-                      :release-name "akeyless-saas-consolidated"))
+                     (:namespace    "demo-ns"
+                      :name         "demo-app"
+                      :release-name "demo-app-consolidated"))
               :mode Adopt)
         "#;
         let defs: Vec<tatara_lisp::NamedDefinition<EncapsulatesSpec>> =
             tatara_lisp::compile_named::<EncapsulatesSpec>(src).expect("compile");
         let d = &defs[0];
-        assert_eq!(d.name, "akeyless-adopt");
+        assert_eq!(d.name, "demo-adopt");
         assert_eq!(d.spec.mode, EncapsulationMode::Adopt);
         let h = d.spec.kind.existing_helm_release.as_ref().unwrap();
-        assert_eq!(h.namespace, "akeyless");
-        assert_eq!(h.release_name, "akeyless-saas-consolidated");
+        assert_eq!(h.namespace, "demo-ns");
+        assert_eq!(h.release_name, "demo-app-consolidated");
     }
 
     #[test]

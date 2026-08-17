@@ -288,10 +288,10 @@ mod tests {
         is_stable: bool,
     ) -> EdgeContext<'a> {
         EdgeContext {
-            process_name: "akeyless-prod",
-            process_namespace: "akeyless",
+            process_name: "demo-prod",
+            process_namespace: "demo-ns",
             process_uid: "uid-abc",
-            process_ref: "akeyless/akeyless-prod",
+            process_ref: "demo-ns/demo-prod",
             hostname,
             ephemeral_id,
             backend,
@@ -300,17 +300,17 @@ mod tests {
         }
     }
 
-    fn gator_hostname() -> RoutingHostname {
+    fn api_hostname() -> RoutingHostname {
         RoutingHostname {
-            app: "gator".into(),
-            instance: Some("akeyless-prod".into()),
+            app: "api".into(),
+            instance: Some("demo-prod".into()),
             cluster: None,
         }
     }
 
-    fn gator_backend() -> RoutingBackend {
+    fn api_backend() -> RoutingBackend {
         RoutingBackend {
-            service: "akeyless-saas-akeyless-gateway".into(),
+            service: "demo-app-gateway".into(),
             port: 8000,
             tls_issuer: None,
             ingress_annotations: BTreeMap::new(),
@@ -319,27 +319,27 @@ mod tests {
 
     #[test]
     fn ingress_per_instance() {
-        let h = gator_hostname();
-        let b = gator_backend();
+        let h = api_hostname();
+        let b = api_backend();
         let c = ctx(
             &h,
             &b,
-            "gator.akeyless-prod.pleme-dev.use1.quero.lol",
-            "akeyless-prod",
+            "api.demo-prod.pleme-dev.use1.quero.lol",
+            "demo-prod",
             false,
         );
         let r = IngressEdge.render(&c).unwrap().unwrap();
         assert_eq!(r["apiVersion"], "networking.k8s.io/v1");
         assert_eq!(r["kind"], "Ingress");
-        assert_eq!(r["metadata"]["name"], "akeyless-prod-gator-akeyless-prod");
-        assert_eq!(r["metadata"]["namespace"], "akeyless");
+        assert_eq!(r["metadata"]["name"], "demo-prod-api-demo-prod");
+        assert_eq!(r["metadata"]["namespace"], "demo-ns");
         assert_eq!(
             r["spec"]["rules"][0]["host"],
-            "gator.akeyless-prod.pleme-dev.use1.quero.lol"
+            "api.demo-prod.pleme-dev.use1.quero.lol"
         );
         assert_eq!(
             r["spec"]["rules"][0]["http"]["paths"][0]["backend"]["service"]["name"],
-            "akeyless-saas-akeyless-gateway"
+            "demo-app-gateway"
         );
         assert_eq!(
             r["spec"]["rules"][0]["http"]["paths"][0]["backend"]["service"]["port"]["number"],
@@ -349,7 +349,7 @@ mod tests {
         assert_eq!(r["metadata"]["ownerReferences"][0]["kind"], "Process");
         assert_eq!(
             r["metadata"]["ownerReferences"][0]["name"],
-            "akeyless-prod"
+            "demo-prod"
         );
         // TLS issuer defaulted.
         assert_eq!(
@@ -365,18 +365,18 @@ mod tests {
 
     #[test]
     fn ingress_stable_form_uses_stable_name() {
-        let h = gator_hostname();
-        let b = gator_backend();
+        let h = api_hostname();
+        let b = api_backend();
         let c = ctx(
             &h,
             &b,
-            "gator.pleme-dev.use1.quero.lol",
-            "akeyless-prod",
+            "api.pleme-dev.use1.quero.lol",
+            "demo-prod",
             true,
         );
         let r = IngressEdge.render(&c).unwrap().unwrap();
-        assert_eq!(r["metadata"]["name"], "akeyless-prod-gator-stable");
-        assert_eq!(r["spec"]["rules"][0]["host"], "gator.pleme-dev.use1.quero.lol");
+        assert_eq!(r["metadata"]["name"], "demo-prod-api-stable");
+        assert_eq!(r["spec"]["rules"][0]["host"], "api.pleme-dev.use1.quero.lol");
         assert_eq!(
             r["metadata"]["annotations"]["tatara.pleme.io/routing-form"],
             "stable"
@@ -385,7 +385,7 @@ mod tests {
 
     #[test]
     fn ingress_carries_custom_annotations() {
-        let h = gator_hostname();
+        let h = api_hostname();
         let mut anns = BTreeMap::new();
         anns.insert(
             "nginx.ingress.kubernetes.io/rate-limit".into(),
@@ -397,7 +397,7 @@ mod tests {
             tls_issuer: Some("custom-issuer".into()),
             ingress_annotations: anns,
         };
-        let c = ctx(&h, &b, "host.example.com", "akeyless-prod", false);
+        let c = ctx(&h, &b, "host.example.com", "demo-prod", false);
         let r = IngressEdge.render(&c).unwrap().unwrap();
         assert_eq!(
             r["metadata"]["annotations"]["nginx.ingress.kubernetes.io/rate-limit"],
@@ -411,13 +411,13 @@ mod tests {
 
     #[test]
     fn dns_endpoint_emits_when_lb_target_set() {
-        let h = gator_hostname();
-        let b = gator_backend();
+        let h = api_hostname();
+        let b = api_backend();
         let c = ctx(
             &h,
             &b,
-            "gator.akeyless-prod.pleme-dev.use1.quero.lol",
-            "akeyless-prod",
+            "api.demo-prod.pleme-dev.use1.quero.lol",
+            "demo-prod",
             false,
         );
         let edge = DnsEndpointEdge {
@@ -429,11 +429,11 @@ mod tests {
         assert_eq!(r["kind"], "DNSEndpoint");
         assert_eq!(
             r["metadata"]["name"],
-            "akeyless-prod-gator-akeyless-prod-dns"
+            "demo-prod-api-demo-prod-dns"
         );
         assert_eq!(
             r["spec"]["endpoints"][0]["dnsName"],
-            "gator.akeyless-prod.pleme-dev.use1.quero.lol"
+            "api.demo-prod.pleme-dev.use1.quero.lol"
         );
         assert_eq!(r["spec"]["endpoints"][0]["recordType"], "CNAME");
         assert_eq!(
@@ -445,9 +445,9 @@ mod tests {
 
     #[test]
     fn dns_endpoint_skips_when_no_lb_target() {
-        let h = gator_hostname();
-        let b = gator_backend();
-        let c = ctx(&h, &b, "host", "akeyless-prod", false);
+        let h = api_hostname();
+        let b = api_backend();
+        let c = ctx(&h, &b, "host", "demo-prod", false);
         let edge = DnsEndpointEdge {
             ingress_lb_target: None,
             ..DnsEndpointEdge::default()
@@ -457,9 +457,9 @@ mod tests {
 
     #[test]
     fn owner_refs_skipped_when_uid_empty() {
-        let h = gator_hostname();
-        let b = gator_backend();
-        let mut c = ctx(&h, &b, "host", "akeyless-prod", false);
+        let h = api_hostname();
+        let b = api_backend();
+        let mut c = ctx(&h, &b, "host", "demo-prod", false);
         c.process_uid = "";
         let r = IngressEdge.render(&c).unwrap().unwrap();
         let owners = r["metadata"]["ownerReferences"].as_array().unwrap();

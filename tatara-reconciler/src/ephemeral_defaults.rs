@@ -43,7 +43,7 @@ pub struct EphemeralDefaults {
     pub max_concurrent_per_cluster: u32,
 
     /// Default OCI registry for Aplicacao chart refs. When operators
-    /// author short refs (`"akeyless-deployment:0.5.5"`), the reconciler
+    /// author short refs (`"demo-app:0.5.5"`), the reconciler
     /// expands to `oci://<registry>/<ref>`. Default:
     /// `"ghcr.io/pleme-io/charts"`.
     #[serde(default = "default_registry")]
@@ -60,7 +60,7 @@ pub struct EphemeralDefaults {
     /// Default chart reference used when `(defephemeral :aplicacao …
     /// :chart-ref …)` is omitted. Useful for fleet-wide single-product
     /// deployments (e.g., a homelab cluster that only ever runs
-    /// `lareira-akeyless-deployment`). Default: empty (no fallback).
+    /// `lareira-demo-app`). Default: empty (no fallback).
     #[serde(default)]
     pub default_chart_ref: String,
 
@@ -163,7 +163,7 @@ mod tests {
             registry: "ghcr.io/example/charts".into(),
             root_ca_name: "homelab-root".into(),
             default_chart_ref:
-                "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment".into(),
+                "oci://ghcr.io/pleme-io/charts/lareira-demo-app".into(),
             emit_oci_repository: false,
         };
         let yaml = serde_yaml::to_string(&d).unwrap();

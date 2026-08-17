@@ -163,13 +163,13 @@ mod tests {
 
     #[test]
     fn repo_matches_exact() {
-        assert!(repo_matches("pleme-io/akeyless", "pleme-io/akeyless"));
-        assert!(!repo_matches("pleme-io/akeyless", "pleme-io/other"));
+        assert!(repo_matches("pleme-io/demo-app", "pleme-io/demo-app"));
+        assert!(!repo_matches("pleme-io/demo-app", "pleme-io/other"));
     }
 
     #[test]
     fn repo_matches_org_wildcard() {
-        assert!(repo_matches("pleme-io/*", "pleme-io/akeyless"));
+        assert!(repo_matches("pleme-io/*", "pleme-io/demo-app"));
         assert!(repo_matches("pleme-io/*", "pleme-io/tatara"));
         assert!(!repo_matches("pleme-io/*", "drzln/dotfiles"));
     }
@@ -185,7 +185,7 @@ mod tests {
     #[test]
     fn allowlist_with_one_pattern_filters() {
         let allow = vec!["pleme-io/*".to_string()];
-        assert!(repo_allowed("pleme-io/akeyless", &allow));
+        assert!(repo_allowed("pleme-io/demo-app", &allow));
         assert!(!repo_allowed("drzln/dotfiles", &allow));
     }
 }

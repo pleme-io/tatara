@@ -29,27 +29,27 @@ use tatara_reconciler::render;
 // Boolean literals in tatara-lisp use Scheme `#t` / `#f` (not
 // `true` / `false`, which the reader treats as symbols → strings).
 const SAMPLE_FORM: &str = r#"
-    (defephemeral akeyless-closed-loop-attest
-      :aplicacao (:chart-ref "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment"
+    (defephemeral closed-loop-attest
+      :aplicacao (:chart-ref "oci://ghcr.io/pleme-io/charts/lareira-demo-app"
                   :version "0.5.5"
-                  :profile "gateway-with-internal-saas"
+                  :profile "all-in-one"
                   :values-overlay (:cluster (:name "ephemeral-test-01")
                                    :data (:mysql (:persistence (:enabled #f)))
                                    :compliance (:overlays [])
                                    :closedLoopProbe (:enabled #t))
-                  :release-name "akeyless-saas-consolidated"
-                  :target-namespace "akeyless-test"
+                  :release-name "demo-app-consolidated"
+                  :target-namespace "demo-test"
                   :install-timeout "25m")
       :ttl "1h"
       :teardown OnAttested
       :max-concurrent 1
       :postconditions
         ((:kind HelmReleaseReleased
-          :params (:name "akeyless-saas-consolidated"
-                   :namespace "akeyless-test"))
+          :params (:name "demo-app-consolidated"
+                   :namespace "demo-test"))
          (:kind ClosedLoopAuth
-          :params (:issuer (:service "akeyless-saas-akeyless-gator" :port 8080)
-                   :consumer (:service "akeyless-saas-akeyless-gateway" :port 8000)
+          :params (:issuer (:service "demo-app-issuer" :port 8080)
+                   :consumer (:service "demo-app-gateway" :port 8000)
                    :probeImage "ghcr.io/pleme-io/closed-loop-probe:0.1.0"))))
 "#;
 
@@ -59,7 +59,7 @@ fn ephemeral_lisp_form_round_trips_through_full_pipeline() {
     let defs = compile_ephemeral_source(SAMPLE_FORM).expect("compile");
     assert_eq!(defs.len(), 1);
     let ephemeral = defs.into_iter().next().unwrap();
-    assert_eq!(ephemeral.name, "akeyless-closed-loop-attest");
+    assert_eq!(ephemeral.name, "closed-loop-attest");
     assert_eq!(ephemeral.spec.teardown, TeardownPolicy::OnAttested);
     assert_eq!(ephemeral.spec.ttl, "1h");
     assert_eq!(ephemeral.spec.postconditions.len(), 2);
@@ -77,7 +77,7 @@ fn ephemeral_lisp_form_round_trips_through_full_pipeline() {
     ));
     // 4 — wrap in a Process CR with metadata.
     let mut proc = Process::new(&ephemeral.name, spec.clone());
-    proc.metadata.namespace = Some("akeyless-test".into());
+    proc.metadata.namespace = Some("demo-test".into());
     // Suppress: silence the unused mut warning while keeping the
     // `spec` binding mutable so future tests can extend below.
     let _ = &mut spec;
@@ -102,7 +102,7 @@ fn ephemeral_lisp_form_round_trips_through_full_pipeline() {
 
     assert_eq!(
         oci["spec"]["url"],
-        "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment"
+        "oci://ghcr.io/pleme-io/charts/lareira-demo-app"
     );
     assert_eq!(oci["spec"]["ref"]["tag"], "0.5.5");
 
@@ -113,7 +113,7 @@ fn ephemeral_lisp_form_round_trips_through_full_pipeline() {
     // Profile injected into values.
     assert_eq!(
         hr["spec"]["values"]["profile"],
-        "gateway-with-internal-saas"
+        "all-in-one"
     );
     // values_overlay carried through untouched (deeply).
     assert_eq!(
@@ -133,7 +133,7 @@ fn ephemeral_lisp_form_round_trips_through_full_pipeline() {
         let anns = &r["metadata"]["annotations"];
         assert_eq!(
             anns[tatara_process::annotations::PROCESS],
-            "akeyless-test/akeyless-closed-loop-attest"
+            "demo-test/closed-loop-attest"
         );
     }
 
@@ -161,7 +161,7 @@ fn closed_loop_receipt_round_trips_and_lowers_to_attestation() {
     // path the reconciler uses.
     let probe_receipt = ReceiptEnvelope::build(
         ReceiptKind::ClosedLoopAuth,
-        "intent-hash-from-gator-jwk",
+        "intent-hash-from-issuer-jwk",
         "artifact-hash-of-secret-blob",
         "control-hash-of-signature-verify",
         None,
@@ -220,7 +220,7 @@ fn renderer_omits_helmrepository_chartref_when_oci_used() {
     let defs = compile_ephemeral_source(SAMPLE_FORM).expect("compile");
     let spec: ProcessSpec = defs.into_iter().next().unwrap().spec.into();
     let mut proc = Process::new("t", spec);
-    proc.metadata.namespace = Some("akeyless-test".into());
+    proc.metadata.namespace = Some("demo-test".into());
 
     let out = render::render(&proc, &proc.spec.intent).expect("render");
     let hr = out

@@ -18,7 +18,7 @@
 //! Where `${ephemeral_id}` is:
 //!
 //! * `RoutingHostname.instance` when set — a named slot like
-//!   `akeyless-prod` or `pr-1234`.
+//!   `demo-prod` or `pr-1234`.
 //! * `EPHEMERAL_ID_HASH_LEN` (= 8) hex chars of
 //!   `BLAKE3(canonical_spec_json)` when unset — a content-hash slot
 //!   that changes only when the Process's spec changes.
@@ -60,8 +60,8 @@ pub enum HostnameError {
 ///
 /// ```
 /// use tatara_process::hostname::fmt_fqdn;
-/// let fqdn = fmt_fqdn("gator", "akeyless-prod", "pleme-dev", "use1", "quero.lol").unwrap();
-/// assert_eq!(fqdn, "gator.akeyless-prod.pleme-dev.use1.quero.lol");
+/// let fqdn = fmt_fqdn("api", "demo-prod", "pleme-dev", "use1", "quero.lol").unwrap();
+/// assert_eq!(fqdn, "api.demo-prod.pleme-dev.use1.quero.lol");
 /// ```
 pub fn fmt_fqdn(
     app: &str,
@@ -87,8 +87,8 @@ pub fn fmt_fqdn(
 ///
 /// ```
 /// use tatara_process::hostname::fmt_fqdn_stable;
-/// let fqdn = fmt_fqdn_stable("gator", "pleme-dev", "use1", "quero.lol").unwrap();
-/// assert_eq!(fqdn, "gator.pleme-dev.use1.quero.lol");
+/// let fqdn = fmt_fqdn_stable("api", "pleme-dev", "use1", "quero.lol").unwrap();
+/// assert_eq!(fqdn, "api.pleme-dev.use1.quero.lol");
 /// ```
 pub fn fmt_fqdn_stable(
     app: &str,
@@ -203,14 +203,14 @@ mod tests {
 
     #[test]
     fn fmt_fqdn_per_instance() {
-        let f = fmt_fqdn("gator", "akeyless-prod", "pleme-dev", "use1", "quero.lol").unwrap();
-        assert_eq!(f, "gator.akeyless-prod.pleme-dev.use1.quero.lol");
+        let f = fmt_fqdn("api", "demo-prod", "pleme-dev", "use1", "quero.lol").unwrap();
+        assert_eq!(f, "api.demo-prod.pleme-dev.use1.quero.lol");
     }
 
     #[test]
     fn fmt_fqdn_stable_form() {
-        let f = fmt_fqdn_stable("gator", "pleme-dev", "use1", "quero.lol").unwrap();
-        assert_eq!(f, "gator.pleme-dev.use1.quero.lol");
+        let f = fmt_fqdn_stable("api", "pleme-dev", "use1", "quero.lol").unwrap();
+        assert_eq!(f, "api.pleme-dev.use1.quero.lol");
     }
 
     #[test]
@@ -317,17 +317,17 @@ mod tests {
     #[test]
     fn resolve_named_slot_wins() {
         let h = RoutingHostname {
-            app: "gator".into(),
-            instance: Some("akeyless-prod".into()),
+            app: "api".into(),
+            instance: Some("demo-prod".into()),
             cluster: None,
         };
-        assert_eq!(resolve_ephemeral_id(&h, "fallback"), "akeyless-prod");
+        assert_eq!(resolve_ephemeral_id(&h, "fallback"), "demo-prod");
     }
 
     #[test]
     fn resolve_empty_named_falls_back() {
         let h = RoutingHostname {
-            app: "gator".into(),
+            app: "api".into(),
             instance: Some(String::new()),
             cluster: None,
         };
@@ -337,7 +337,7 @@ mod tests {
     #[test]
     fn resolve_unset_named_falls_back() {
         let h = RoutingHostname {
-            app: "gator".into(),
+            app: "api".into(),
             instance: None,
             cluster: None,
         };
@@ -352,8 +352,8 @@ mod tests {
         let hash = ephemeral_id_from_spec(&spec).unwrap();
 
         let h_named = RoutingHostname {
-            app: "gator".into(),
-            instance: Some("akeyless-prod".into()),
+            app: "api".into(),
+            instance: Some("demo-prod".into()),
             cluster: None,
         };
         let h_anon = RoutingHostname {
@@ -370,7 +370,7 @@ mod tests {
         let fqdn_anon =
             fmt_fqdn(&h_anon.app, id_anon, "pleme-dev", "use1", "quero.lol").unwrap();
 
-        assert_eq!(fqdn_named, "gator.akeyless-prod.pleme-dev.use1.quero.lol");
+        assert_eq!(fqdn_named, "api.demo-prod.pleme-dev.use1.quero.lol");
         assert!(fqdn_anon.starts_with("gateway."));
         assert!(fqdn_anon.ends_with(".pleme-dev.use1.quero.lol"));
         // 5 named segments (app + eph_id + cluster + location + domain),

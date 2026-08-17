@@ -215,7 +215,7 @@ mod compile_tests {
                                :bindings ((:framework "nist-800-53"
                                            :control-id "SC-7"
                                            :phase AtBoundary)))
-              :depends-on     ((:name "akeyless" :must-reach Attested))
+              :depends-on     ((:name "secret-injection" :must-reach Attested))
               :signals        (:sigterm-grace-seconds 480
                                :sighup-strategy Reconverge))
         "#;
@@ -313,21 +313,21 @@ mod compile_tests {
         use crate::intent::IntentVariant;
         use crate::lifetime::{LifetimeVariant, TeardownPolicy};
         let src = r#"
-            (defpoint akeyless-closed-loop-attest
+            (defpoint closed-loop-attest
               :classification (:point-type Gate :substrate Compute)
               :intent (:aplicacao
-                        (:chart-ref "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment"
+                        (:chart-ref "oci://ghcr.io/pleme-io/charts/lareira-demo-app"
                          :version "0.5.5"
-                         :profile "gateway-with-internal-saas"
+                         :profile "all-in-one"
                          :values-overlay (:cluster (:name "ephemeral-test-01"))
-                         :target-namespace "akeyless-test"))
+                         :target-namespace "demo-test"))
               :boundary (:postconditions
                           ((:kind HelmReleaseReleased
-                            :params (:name "akeyless-saas-consolidated"
-                                     :namespace "akeyless-test"))
+                            :params (:name "demo-app-consolidated"
+                                     :namespace "demo-test"))
                            (:kind ClosedLoopAuth
-                            :params (:issuer (:service "akeyless-saas-akeyless-gator" :port 8080)
-                                     :consumer (:service "akeyless-saas-akeyless-gateway" :port 8000)
+                            :params (:issuer (:service "demo-app-issuer" :port 8080)
+                                     :consumer (:service "demo-app-gateway" :port 8000)
                                      :probeImage "ghcr.io/pleme-io/closed-loop-probe:0.1.0"))))
               :lifetime (:ephemeral (:ttl "1h"
                                      :teardown-policy OnAttested
@@ -340,9 +340,9 @@ mod compile_tests {
         // Aplicacao intent landed.
         match d.spec.intent.variant().unwrap() {
             IntentVariant::Aplicacao(a) => {
-                assert_eq!(a.profile, "gateway-with-internal-saas");
+                assert_eq!(a.profile, "all-in-one");
                 assert_eq!(a.version, "0.5.5");
-                assert_eq!(a.target_namespace.as_deref(), Some("akeyless-test"));
+                assert_eq!(a.target_namespace.as_deref(), Some("demo-test"));
                 assert_eq!(a.values_overlay["cluster"]["name"], "ephemeral-test-01");
             }
             other => panic!("expected Aplicacao, got {other:?}"),

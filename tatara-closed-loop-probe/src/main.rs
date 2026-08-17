@@ -2,7 +2,7 @@
 //! authenticates its own bundled consumer, then emits a tatara-receipt/v1
 //! envelope to a ConfigMap.
 //!
-//! Consumed by the akeyless-closed-loop-probe-pleme Helm chart and any
+//! Consumed by the closed-loop-probe Helm chart and any
 //! future closed-loop-testable consumer (databases, identity providers,
 //! message brokers — anything where the under-test instance can issue
 //! credentials its own under-test client must accept).
@@ -227,7 +227,7 @@ mod tests {
         let args = Args::try_parse_from([
             "closed-loop-probe",
             "--issuer-service",
-            "gator",
+            "issuer",
             "--consumer-service",
             "gateway",
             "--receipt-config-map",

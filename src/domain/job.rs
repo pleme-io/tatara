@@ -118,7 +118,7 @@ pub enum TaskConfig {
     /// Used for building derivations (packages, Docker images) rather than running them.
     /// Optionally pushes the result to an Attic binary cache.
     NixBuild {
-        /// Flake reference (e.g., "github:pleme-io/blackmatter-akeyless#akeyless-backend-auth")
+        /// Flake reference (e.g., "github:pleme-io/blackmatter-example#example-backend-api")
         flake_ref: String,
         /// Target system (e.g., "x86_64-linux"). If set, passed as --system.
         #[serde(default)]

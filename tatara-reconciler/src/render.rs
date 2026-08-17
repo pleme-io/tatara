@@ -159,9 +159,9 @@ fn render_flux(name: &str, ns: &str, f: &FluxIntent) -> (Vec<Value>, Vec<u8>) {
 /// namespace so K8s-native ownerReferences cascade cleanup on Process
 /// termination — load-bearing for the ephemeral teardown path.
 ///
-/// The closed-loop discovery property (gateway → bundled SaaS over K8s
+/// The closed-loop discovery property (client → bundled issuer over K8s
 /// DNS) requires no extra wiring here: the chart's `profile:
-/// gateway-with-internal-saas` already auto-derives the gator URL from
+/// all-in-one` already auto-derives the issuer URL from
 /// the release name + namespace, and we emit both into the same
 /// namespace as the Process.
 fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, Vec<u8>) {
@@ -673,18 +673,18 @@ mod aplicacao_tests {
     use super::*;
     use tatara_process::intent::AplicacaoIntent;
 
-    fn akeyless_intent() -> AplicacaoIntent {
+    fn demo_intent() -> AplicacaoIntent {
         AplicacaoIntent {
-            chart_ref: "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment".into(),
+            chart_ref: "oci://ghcr.io/pleme-io/charts/lareira-demo-app".into(),
             version: "0.5.5".into(),
-            profile: "gateway-with-internal-saas".into(),
+            profile: "all-in-one".into(),
             values_overlay: serde_json::json!({
                 "cluster": { "name": "ephemeral-test-01" },
                 "data": { "mysql": { "persistence": { "enabled": false } } },
                 "compliance": { "overlays": [] }
             }),
-            release_name: Some("akeyless-saas-consolidated".into()),
-            target_namespace: Some("akeyless-test".into()),
+            release_name: Some("demo-app-consolidated".into()),
+            target_namespace: Some("demo-test".into()),
             install_timeout: Some("25m".into()),
         }
     }
@@ -692,16 +692,16 @@ mod aplicacao_tests {
     #[test]
     fn oci_emits_ocirepository_plus_helmrelease() {
         let (resources, intent_bytes) =
-            render_aplicacao("ephemeral-akeyless", "akeyless-test", &akeyless_intent());
+            render_aplicacao("ephemeral-demo", "demo-test", &demo_intent());
         assert_eq!(resources.len(), 2);
         assert_eq!(resources[0]["kind"], "OCIRepository");
         assert_eq!(resources[1]["kind"], "HelmRelease");
         // OCIRepository in Process's namespace + name → same as Process.
-        assert_eq!(resources[0]["metadata"]["name"], "ephemeral-akeyless");
-        assert_eq!(resources[0]["metadata"]["namespace"], "akeyless-test");
+        assert_eq!(resources[0]["metadata"]["name"], "ephemeral-demo");
+        assert_eq!(resources[0]["metadata"]["namespace"], "demo-test");
         assert_eq!(
             resources[0]["spec"]["url"],
-            "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment"
+            "oci://ghcr.io/pleme-io/charts/lareira-demo-app"
         );
         assert_eq!(resources[0]["spec"]["ref"]["tag"], "0.5.5");
         // HelmRelease references the OCIRepository via chartRef.
@@ -711,21 +711,21 @@ mod aplicacao_tests {
         );
         assert_eq!(
             resources[1]["spec"]["chartRef"]["name"],
-            "ephemeral-akeyless"
+            "ephemeral-demo"
         );
         // releaseName + targetNamespace honored.
         assert_eq!(
             resources[1]["spec"]["releaseName"],
-            "akeyless-saas-consolidated"
+            "demo-app-consolidated"
         );
         assert_eq!(
             resources[1]["spec"]["targetNamespace"],
-            "akeyless-test"
+            "demo-test"
         );
         // profile injected into values (typed switch for the chart).
         assert_eq!(
             resources[1]["spec"]["values"]["profile"],
-            "gateway-with-internal-saas"
+            "all-in-one"
         );
         // Values overlay carried through untouched.
         assert_eq!(
@@ -740,7 +740,7 @@ mod aplicacao_tests {
 
     #[test]
     fn target_namespace_defaults_to_process_namespace() {
-        let mut a = akeyless_intent();
+        let mut a = demo_intent();
         a.target_namespace = None;
         a.release_name = None;
         let (resources, _) = render_aplicacao("test-proc", "my-ns", &a);
@@ -751,7 +751,7 @@ mod aplicacao_tests {
 
     #[test]
     fn install_timeout_defaults_to_25m() {
-        let mut a = akeyless_intent();
+        let mut a = demo_intent();
         a.install_timeout = None;
         let (resources, _) = render_aplicacao("p", "ns", &a);
         let hr = resources.iter().find(|r| r["kind"] == "HelmRelease").unwrap();
@@ -762,7 +762,7 @@ mod aplicacao_tests {
     #[test]
     fn helmrepository_chartref_for_non_oci() {
         let a = AplicacaoIntent {
-            chart_ref: "pleme-io/lareira-akeyless-deployment".into(),
+            chart_ref: "pleme-io/lareira-demo-app".into(),
             version: "0.5.5".into(),
             profile: String::new(),
             values_overlay: serde_json::Value::Null,
@@ -776,7 +776,7 @@ mod aplicacao_tests {
         assert_eq!(resources[0]["kind"], "HelmRelease");
         assert_eq!(
             resources[0]["spec"]["chart"]["spec"]["chart"],
-            "lareira-akeyless-deployment"
+            "lareira-demo-app"
         );
         assert_eq!(
             resources[0]["spec"]["chart"]["spec"]["sourceRef"]["name"],
@@ -789,14 +789,14 @@ mod aplicacao_tests {
 
     #[test]
     fn process_annotations_carry_owner_path() {
-        let a = akeyless_intent();
-        let (resources, _) = render_aplicacao("ephemeral-akeyless", "akeyless-test", &a);
+        let a = demo_intent();
+        let (resources, _) = render_aplicacao("ephemeral-demo", "demo-test", &a);
         for r in &resources {
             let anns = &r["metadata"]["annotations"];
             assert_eq!(anns[tatara_process::annotations::MANAGED_BY], "tatara-reconciler");
             assert_eq!(
                 anns[tatara_process::annotations::PROCESS],
-                "akeyless-test/ephemeral-akeyless"
+                "demo-test/ephemeral-demo"
             );
         }
     }
@@ -809,7 +809,7 @@ mod aplicacao_tests {
         use tatara_process::prelude::{Process, ProcessSpec};
 
         let intent = tatara_process::intent::Intent {
-            aplicacao: Some(akeyless_intent()),
+            aplicacao: Some(demo_intent()),
             ..tatara_process::intent::Intent::default()
         };
         let spec = ProcessSpec {
@@ -831,8 +831,8 @@ mod aplicacao_tests {
             encapsulates: None,
             suspended: false,
         };
-        let mut proc = Process::new("ephemeral-akeyless", spec);
-        proc.meta_mut().namespace = Some("akeyless-test".into());
+        let mut proc = Process::new("ephemeral-demo", spec);
+        proc.meta_mut().namespace = Some("demo-test".into());
         let out = render(&proc, &intent).expect("render");
         assert_eq!(out.resources.len(), 2);
         assert!(!out.intent_bytes.is_empty());
@@ -948,7 +948,7 @@ mod export_job_tests {
             suspended: false,
         };
         let mut p = Process::new("r1", spec);
-        p.metadata.namespace = Some("akeyless-test".into());
+        p.metadata.namespace = Some("demo-test".into());
         p.metadata.uid = Some("uid-abc".into());
         p.status = Some(status);
         p
@@ -1005,11 +1005,11 @@ mod export_job_tests {
         )
         .unwrap();
         let labels = &jobs[0]["metadata"]["labels"];
-        assert_eq!(labels[tatara_process::annotations::PROCESS], "akeyless-test/r1");
+        assert_eq!(labels[tatara_process::annotations::PROCESS], "demo-test/r1");
         assert_eq!(labels[tatara_process::annotations::ROLE], "export");
         assert_eq!(labels[tatara_process::annotations::EXPORT_INDEX], "0");
         assert_eq!(jobs[0]["metadata"]["name"], "r1-export-0");
-        assert_eq!(jobs[0]["metadata"]["namespace"], "akeyless-test");
+        assert_eq!(jobs[0]["metadata"]["namespace"], "demo-test");
     }
 
     #[test]
@@ -1041,7 +1041,7 @@ mod export_job_tests {
 
         // Downward-API stamps for the worker.
         let i_ns = args.iter().position(|a| *a == "--process-namespace").unwrap();
-        assert_eq!(args[i_ns + 1], "akeyless-test");
+        assert_eq!(args[i_ns + 1], "demo-test");
         let i_n = args.iter().position(|a| *a == "--process-name").unwrap();
         assert_eq!(args[i_n + 1], "r1");
         let i_rcm = args.iter().position(|a| *a == "--receipt-configmap").unwrap();
@@ -1097,7 +1097,7 @@ mod export_job_tests {
     #[test]
     fn export_job_name_is_deterministic() {
         assert_eq!(export_job_name("r1", 0), "r1-export-0");
-        assert_eq!(export_job_name("akeyless-attest", 5), "akeyless-attest-export-5");
+        assert_eq!(export_job_name("attest", 5), "attest-export-5");
     }
 
     #[test]
@@ -1116,7 +1116,7 @@ mod routing_tests {
     use tatara_process::crd::ProcessSpec;
     use tatara_process::routing::{RoutingBackend, RoutingHostname, RoutingSpec};
 
-    fn akeyless_process(routing: Option<RoutingSpec>) -> Process {
+    fn demo_process(routing: Option<RoutingSpec>) -> Process {
         let spec = ProcessSpec {
             identity: Default::default(),
             classification: Classification {
@@ -1136,8 +1136,8 @@ mod routing_tests {
             encapsulates: None,
             suspended: false,
         };
-        let mut p = Process::new("akeyless-prod", spec);
-        p.metadata.namespace = Some("akeyless".into());
+        let mut p = Process::new("demo-prod", spec);
+        p.metadata.namespace = Some("demo-ns".into());
         p.metadata.uid = Some("uid-1".into());
         p
     }
@@ -1146,18 +1146,18 @@ mod routing_tests {
         RoutingSpec {
             hostnames: vec![
                 RoutingHostname {
-                    app: "gator".into(),
-                    instance: Some("akeyless-prod".into()),
+                    app: "api".into(),
+                    instance: Some("demo-prod".into()),
                     cluster: None,
                 },
                 RoutingHostname {
                     app: "gateway".into(),
-                    instance: Some("akeyless-prod".into()),
+                    instance: Some("demo-prod".into()),
                     cluster: None,
                 },
             ],
             backend: RoutingBackend {
-                service: "akeyless-saas-akeyless-gateway".into(),
+                service: "demo-app-gateway".into(),
                 port: 8000,
                 tls_issuer: None,
                 ingress_annotations: BTreeMap::new(),
@@ -1170,7 +1170,7 @@ mod routing_tests {
     #[test]
     fn emits_ingress_plus_dns_per_hostname() {
         let r = two_hostname_routing(false);
-        let p = akeyless_process(Some(r.clone()));
+        let p = demo_process(Some(r.clone()));
         let out = render_routing(
             &p,
             &r,
@@ -1191,7 +1191,7 @@ mod routing_tests {
     #[test]
     fn stable_claim_doubles_emission() {
         let r = two_hostname_routing(true);
-        let p = akeyless_process(Some(r.clone()));
+        let p = demo_process(Some(r.clone()));
         // Without holding the claim → 4 resources (per-instance only).
         let without = render_routing(
             &p,
@@ -1230,7 +1230,7 @@ mod routing_tests {
     #[test]
     fn omits_dns_when_lb_target_absent() {
         let r = two_hostname_routing(false);
-        let p = akeyless_process(Some(r.clone()));
+        let p = demo_process(Some(r.clone()));
         let out = render_routing(&p, &r, false, "pleme-dev", "use1", "quero.lol", None).unwrap();
         // 2 hostnames × 1 edge (Ingress only — DNSEndpoint skipped) = 2.
         assert_eq!(out.len(), 2);
@@ -1252,7 +1252,7 @@ mod routing_tests {
             stable_name_claim: false,
             priority: 0,
         };
-        let p = akeyless_process(Some(r.clone()));
+        let p = demo_process(Some(r.clone()));
         let out = render_routing(&p, &r, false, "pleme-dev", "use1", "quero.lol", None).unwrap();
         assert!(out.is_empty());
     }
@@ -1274,7 +1274,7 @@ mod routing_tests {
             stable_name_claim: false,
             priority: 0,
         };
-        let p = akeyless_process(Some(r.clone()));
+        let p = demo_process(Some(r.clone()));
         let out = render_routing(&p, &r, false, "pleme-dev", "use1", "quero.lol", None).unwrap();
         let host = out[0]["spec"]["rules"][0]["host"].as_str().unwrap();
         // Shape: smoke.<8-hex>.pleme-dev.use1.quero.lol

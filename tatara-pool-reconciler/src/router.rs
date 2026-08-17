@@ -113,9 +113,9 @@ mod tests {
     #[test]
     fn unmatched_selector_skipped() {
         let p = pool(
-            "akeyless",
+            "demo-pool",
             PoolSelector {
-                repos: vec!["pleme-io/akeyless-*".into()],
+                repos: vec!["pleme-io/demo-*".into()],
                 ..Default::default()
             },
         );
@@ -134,16 +134,16 @@ mod tests {
         let specific = pool(
             "specific",
             PoolSelector {
-                repos: vec!["pleme-io/akeyless-*".into()],
+                repos: vec!["pleme-io/demo-*".into()],
                 branches: vec!["main".into()],
-                pr_labels: vec!["needs-akeyless".into()],
+                pr_labels: vec!["needs-ephemeral".into()],
                 ..Default::default()
             },
         );
         let key = MatchKey {
-            repo: "pleme-io/akeyless-deployment",
+            repo: "pleme-io/demo-app",
             branch: "main",
-            pr_labels: &["needs-akeyless".into()],
+            pr_labels: &["needs-ephemeral".into()],
             kind: "github-pr",
         };
         let pools = vec![general, specific];
@@ -156,19 +156,19 @@ mod tests {
         let a = pool(
             "a-pool",
             PoolSelector {
-                repos: vec!["pleme-io/akeyless-*".into()],
+                repos: vec!["pleme-io/demo-*".into()],
                 ..Default::default()
             },
         );
         let z = pool(
             "z-pool",
             PoolSelector {
-                repos: vec!["pleme-io/akeyless-*".into()],
+                repos: vec!["pleme-io/demo-*".into()],
                 ..Default::default()
             },
         );
         let key = MatchKey {
-            repo: "pleme-io/akeyless-deployment",
+            repo: "pleme-io/demo-app",
             branch: "x",
             pr_labels: &[],
             kind: "manual",

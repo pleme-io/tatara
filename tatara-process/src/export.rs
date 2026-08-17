@@ -27,7 +27,7 @@
 //!
 //! Lisp authoring:
 //! ```lisp
-//! (defephemeral akeyless-closed-loop-attest
+//! (defephemeral closed-loop-attest
 //!   :aplicacao  (…)
 //!   :ttl        "1h"
 //!   :teardown   OnAttested
@@ -38,7 +38,7 @@
 //!                               :stream  "EPHEMERAL_RECEIPTS")
 //!       :when    OnAttested)
 //!      ;; Test report — best-effort via Vector HTTP ingest
-//!      (:source  (:test-report :configmap "akeyless-test-results"
+//!      (:source  (:test-report :configmap "demo-test-results"
 //!                              :key       "junit.xml"
 //!                              :format    Junit)
 //!       :channel (:http-event :signal-type "test-report")
@@ -101,7 +101,7 @@ pub struct ArtifactSource {
     pub receipts: Option<ReceiptsSource>,
 
     /// A test report stored in a ConfigMap by an in-cluster test
-    /// runner (Job, gator, closed-loop probe). Worker reads the
+    /// runner (Job, test harness, closed-loop probe). Worker reads the
     /// ConfigMap, packages it per `format`, and forwards.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub test_report: Option<TestReportSource>,
@@ -319,7 +319,7 @@ pub struct RunMarkerSource {
 #[serde(rename_all = "PascalCase")]
 #[closed_set(via = "as_str", generate_unknown)]
 pub enum ReportFormat {
-    /// xUnit / JUnit XML — the closed-loop probe + gator emit this.
+    /// xUnit / JUnit XML — the closed-loop probe + test harnesses emit this.
     Junit,
     /// TAP v13 — Bash/Bats test suites.
     TapV13,
@@ -1392,7 +1392,7 @@ mod tests {
         let spec = ExportSpec {
             source: ArtifactSource {
                 test_report: Some(TestReportSource {
-                    configmap: "akeyless-test-results".into(),
+                    configmap: "demo-test-results".into(),
                     key: "junit.xml".into(),
                     format: ReportFormat::Junit,
                     namespace: None,
@@ -1407,20 +1407,20 @@ mod tests {
                 ..VectorChannel::default()
             },
             when: ExportTrigger::Always,
-            experiment_id_override: Some("akeyless-run-2026-05-20".into()),
+            experiment_id_override: Some("demo-run-2026-05-20".into()),
         };
 
         let yaml = serde_yaml::to_string(&spec).unwrap();
         // camelCase wire format — what FluxCD / kubectl users see.
         assert!(yaml.contains("source:"));
         assert!(yaml.contains("testReport:"));
-        assert!(yaml.contains("configmap: akeyless-test-results"));
+        assert!(yaml.contains("configmap: demo-test-results"));
         assert!(yaml.contains("format: Junit"));
         assert!(yaml.contains("channel:"));
         assert!(yaml.contains("httpEvent:"));
         assert!(yaml.contains("signalType: test-report"));
         assert!(yaml.contains("when: Always"));
-        assert!(yaml.contains("experimentIdOverride: akeyless-run-2026-05-20"));
+        assert!(yaml.contains("experimentIdOverride: demo-run-2026-05-20"));
 
         let back: ExportSpec = serde_yaml::from_str(&yaml).unwrap();
         assert!(back.source.test_report.is_some());
@@ -1431,7 +1431,7 @@ mod tests {
     #[test]
     fn run_marker_labels_round_trip() {
         let mut labels = BTreeMap::new();
-        labels.insert("run-id".into(), "akeyless-run-2026-05-20".into());
+        labels.insert("run-id".into(), "demo-run-2026-05-20".into());
         labels.insert("phase".into(), "end".into());
         let spec = ExportSpec {
             source: ArtifactSource {
@@ -1450,7 +1450,7 @@ mod tests {
         };
         let yaml = serde_yaml::to_string(&spec).unwrap();
         assert!(yaml.contains("runMarker:"));
-        assert!(yaml.contains("run-id: akeyless-run-2026-05-20"));
+        assert!(yaml.contains("run-id: demo-run-2026-05-20"));
         let back: ExportSpec = serde_yaml::from_str(&yaml).unwrap();
         let rm = back.source.run_marker.unwrap();
         assert_eq!(rm.labels["phase"], "end");

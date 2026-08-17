@@ -253,7 +253,7 @@ fn parse_github_repo(repo: &str) -> (String, String) {
     )
 }
 
-/// Turn "packages.x86_64-linux.akeyless-backend-auth" → "akeyless-backend-auth"
+/// Turn "packages.x86_64-linux.example-backend-api" → "example-backend-api"
 fn slugify_attr(attr: &str) -> String {
     attr.rsplit('.').next().unwrap_or(attr).to_string()
 }
@@ -329,16 +329,16 @@ mod tests {
 
     #[test]
     fn test_parse_github_repo() {
-        let (owner, repo) = parse_github_repo("github:pleme-io/blackmatter-akeyless");
+        let (owner, repo) = parse_github_repo("github:pleme-io/blackmatter-example");
         assert_eq!(owner, "pleme-io");
-        assert_eq!(repo, "blackmatter-akeyless");
+        assert_eq!(repo, "blackmatter-example");
     }
 
     #[test]
     fn test_slugify_attr() {
         assert_eq!(
-            slugify_attr("packages.x86_64-linux.akeyless-backend-auth"),
-            "akeyless-backend-auth"
+            slugify_attr("packages.x86_64-linux.example-backend-api"),
+            "example-backend-api"
         );
         assert_eq!(slugify_attr("default"), "default");
     }

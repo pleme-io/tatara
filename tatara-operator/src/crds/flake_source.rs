@@ -15,15 +15,15 @@ use serde::{Deserialize, Serialize};
 /// apiVersion: tatara.pleme.io/v1alpha1
 /// kind: FlakeSource
 /// metadata:
-///   name: blackmatter-akeyless
+///   name: blackmatter-example
 /// spec:
-///   repo: github:pleme-io/blackmatter-akeyless
+///   repo: github:pleme-io/blackmatter-example
 ///   branch: main
 ///   pollInterval: 5m
 ///   outputs:
-///     - attr: packages.x86_64-linux.akeyless-backend-auth
+///     - attr: packages.x86_64-linux.example-backend-api
 ///       system: x86_64-linux
-///     - attr: packages.x86_64-linux.akeyless-backend-kfm
+///     - attr: packages.x86_64-linux.example-backend-worker
 ///       system: x86_64-linux
 ///   atticCache: main
 /// ```
@@ -41,7 +41,7 @@ use serde::{Deserialize, Serialize};
     printcolumn = r#"{"name":"Age","type":"date","jsonPath":".metadata.creationTimestamp"}"#
 )]
 pub struct FlakeSourceSpec {
-    /// Git repository reference (e.g., "github:pleme-io/blackmatter-akeyless")
+    /// Git repository reference (e.g., "github:pleme-io/blackmatter-example")
     pub repo: String,
 
     /// Branch to watch (default: main)
@@ -79,7 +79,7 @@ pub struct FlakeSourceSpec {
 /// A specific flake output to build.
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
 pub struct FlakeOutput {
-    /// Flake attribute path (e.g., "packages.x86_64-linux.akeyless-backend-auth")
+    /// Flake attribute path (e.g., "packages.x86_64-linux.example-backend-api")
     pub attr: String,
 
     /// Target system (e.g., "x86_64-linux")

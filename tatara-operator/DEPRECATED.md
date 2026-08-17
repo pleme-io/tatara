@@ -17,9 +17,9 @@ is still used on the backend; only the CRD facade changes.
 apiVersion: tatara.pleme.io/v1alpha1
 kind: NixBuild
 metadata:
-  name: akeyless-auth
+  name: example-backend-api
 spec:
-  flakeRef: "github:pleme-io/blackmatter-akeyless#akeyless-backend-auth"
+  flakeRef: "github:pleme-io/blackmatter-example#example-backend-api"
   system: x86_64-linux
   atticCache: main
 ```
@@ -29,7 +29,7 @@ spec:
 apiVersion: tatara.pleme.io/v1alpha1
 kind: Process
 metadata:
-  name: akeyless-auth
+  name: example-backend-api
   namespace: builds
 spec:
   classification:
@@ -39,7 +39,7 @@ spec:
       kind: Bounded
   intent:
     nix:
-      flakeRef: "github:pleme-io/blackmatter-akeyless#akeyless-backend-auth"
+      flakeRef: "github:pleme-io/blackmatter-example#example-backend-api"
       system: x86_64-linux
       atticCache: main
       delegateToNixBuild: true    # hand off to bare-metal builder via NATS

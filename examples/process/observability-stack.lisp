@@ -36,6 +36,6 @@
                       (:framework "cis-k8s-v1.8"
                        :control-id "5.1.1"
                        :phase PostConvergence)))
-  :depends-on     ((:name "akeyless-injection" :must-reach Attested))
+  :depends-on     ((:name "secret-injection" :must-reach Attested))
   :signals        (:sigterm-grace-seconds 480
                    :sighup-strategy       Reconverge))

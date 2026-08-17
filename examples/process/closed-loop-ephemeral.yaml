@@ -1,7 +1,7 @@
 ---
-# Closed-loop attested Akeyless SaaS + Gateway as a single tatara Process.
+# Closed-loop attested issuer + gateway as a single tatara Process.
 # This YAML is the exact ProcessSpec that the companion
-# `akeyless-ephemeral.lisp` lowers to via `From<EphemeralSpec>`.
+# `closed-loop-ephemeral.lisp` lowers to via `From<EphemeralSpec>`.
 #
 # Three things to notice:
 #   1. `intent.aplicacao` — FluxCD HelmRelease emission for a typed
@@ -12,14 +12,14 @@
 #      lifetime_clock auto-SIGTERMs on Attested → Exiting → Zombie →
 #      Reaped.
 #   3. `boundary.postconditions[ClosedLoopAuth]` — promotes "the
-#      gateway↔SaaS loop holds" from an assertion into a theorem
+#      gateway↔issuer loop holds" from an assertion into a theorem
 #      provable per run via a BLAKE3 receipt the
-#      akeyless-closed-loop-probe Job emits.
+#      closed-loop-probe Job emits.
 apiVersion: tatara.pleme.io/v1alpha1
 kind: Process
 metadata:
-  name: akeyless-closed-loop-attest
-  namespace: akeyless-test
+  name: closed-loop-attest
+  namespace: demo-test
   labels:
     tatara.pleme.io/point-type: Gate
     tatara.pleme.io/substrate: Compute
@@ -33,11 +33,11 @@ spec:
     dataClassification: Internal
   intent:
     aplicacao:
-      chartRef: "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment"
+      chartRef: "oci://ghcr.io/pleme-io/charts/lareira-demo-app"
       version: "0.5.5"
-      profile: "gateway-with-internal-saas"
-      releaseName: "akeyless-saas-consolidated"
-      targetNamespace: "akeyless-test"
+      profile: "all-in-one"
+      releaseName: "demo-app-consolidated"
+      targetNamespace: "demo-test"
       installTimeout: "25m"
       valuesOverlay:
         cluster:
@@ -52,10 +52,10 @@ spec:
         closedLoopProbe:
           enabled: true
           issuer:
-            service: akeyless-saas-akeyless-gator
+            service: demo-app-issuer
             port: 8080
           consumer:
-            service: akeyless-saas-akeyless-gateway
+            service: demo-app-gateway
             port: 8000
   lifetime:
     ephemeral:
@@ -66,16 +66,16 @@ spec:
     postconditions:
       - kind: HelmReleaseReleased
         params:
-          name: akeyless-saas-consolidated
-          namespace: akeyless-test
+          name: demo-app-consolidated
+          namespace: demo-test
       - kind: ClosedLoopAuth
         params:
           issuer:
-            service: akeyless-saas-akeyless-gator
+            service: demo-app-issuer
             port: 8080
             jwksPath: /.well-known/jwks.json
           consumer:
-            service: akeyless-saas-akeyless-gateway
+            service: demo-app-gateway
             port: 8000
             authPath: /v2/whoami
           probeImage: "ghcr.io/pleme-io/closed-loop-probe:0.1.0"

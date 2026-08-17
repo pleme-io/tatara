@@ -63,7 +63,7 @@ spec:
     bindings:
       - { framework: nist-800-53, controlId: SC-7, phase: AtBoundary }
   dependsOn:
-    - { name: akeyless-injection, mustReach: Attested }
+    - { name: secret-injection, mustReach: Attested }
 ```
 
 ## Printer columns (`kubectl get proc`)

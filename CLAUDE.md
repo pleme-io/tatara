@@ -82,7 +82,7 @@ manifesto + anti-patterns for the pattern.
 
 | Crate | Purpose |
 |-------|---------|
-| `tatara-closed-loop-probe` | Closed-loop auth probe binary — verifies a system's bundled identity issuer authenticates its own bundled consumer, then emits a typed `tatara-receipt/v1` envelope to a ConfigMap. Pure Rust (reqwest + blake3 + kube-rs), NO SHELL. Consumed by `akeyless-closed-loop-probe-pleme` Helm chart; substrate primitive that any future closed-loop-testable consumer (databases, identity providers, message brokers) can shape their probe binary around. |
+| `tatara-closed-loop-probe` | Closed-loop auth probe binary — verifies a system's bundled identity issuer authenticates its own bundled consumer, then emits a typed `tatara-receipt/v1` envelope to a ConfigMap. Pure Rust (reqwest + blake3 + kube-rs), NO SHELL. Consumed by the `closed-loop-probe` Helm chart; substrate primitive that any future closed-loop-testable consumer (databases, identity providers, message brokers) can shape their probe binary around. |
 
 ### Deprecated
 
@@ -150,8 +150,7 @@ End-to-end loop, all on `main`, all tested:
   → ProcessSpec via typed From        (tatara-process)
   → reconciler render::render_aplicacao emits:
        OCIRepository + FluxCD HelmRelease
-  → chart deploys SaaS + Gateway + closed-loop-probe Job
-       (helmworks-akeyless / akeyless-closed-loop-probe-pleme)
+  → chart deploys the issuer + its client + a closed-loop-probe Job
   → tatara-closed-loop-probe binary runs the 5-step probe:
        1. POST creds → issuer → JWT
        2. blake3(JWT)                                   → artifact_hash
@@ -166,7 +165,7 @@ End-to-end loop, all on `main`, all tested:
   → Exiting → Zombie → Reaped → ownerRefs cascade-delete
 ```
 
-Reusable substrate primitives produced (NOT Akeyless-specific):
+Reusable substrate primitives produced (NOT product-specific):
 
 | Primitive | Crate | Who else uses it |
 |-----------|-------|------------------|
@@ -181,7 +180,7 @@ Reusable substrate primitives produced (NOT Akeyless-specific):
 | `lisp-compiles :domain` | tatara-check | any new typed-domain coherence check |
 | `render::render_aplicacao` | tatara-reconciler | the canonical Aplicacao→Flux emitter |
 | `tatara-closed-loop-probe` binary | this workspace | any closed-loop probe; takes typed flags |
-| `akeyless-closed-loop-probe-pleme` chart | helmworks-akeyless | Job + RBAC for the probe |
+| `closed-loop-probe` chart | the fleet chart repo | Job + RBAC for the probe |
 
 ### Ephemeral story — deferred milestones + migration plans
 

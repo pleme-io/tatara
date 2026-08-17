@@ -75,7 +75,7 @@ in
     defaultChartRef = lib.mkOption {
       type = lib.types.str;
       default = "";
-      example = "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment";
+      example = "oci://ghcr.io/pleme-io/charts/lareira-demo-app";
       description = ''
         Default chart reference used when `(defephemeral …)` omits
         `:chart-ref`. Empty = no fallback (operator must specify).

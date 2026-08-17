@@ -24,7 +24,7 @@
       boundary = {
         preconditions = [{
           kind = "ProcessPhase";
-          params = { processRef = "akeyless-injection"; phase = "Attested"; };
+          params = { processRef = "secret-injection"; phase = "Attested"; };
         }];
         postconditions = [
           { kind = "KustomizationHealthy"; params = { name = "observability-stack"; namespace = "flux-system"; }; }
@@ -41,7 +41,7 @@
         ];
       };
       dependsOn = [{
-        name = "akeyless-injection";
+        name = "secret-injection";
         mustReach = "Attested";
       }];
       signals = {

@@ -50,12 +50,12 @@
 ;; typed From). The YAML parses as a Process — same wire format the
 ;; reconciler reads from kubectl.
 (lisp-compiles
-  "examples/process/akeyless-ephemeral.lisp"
+  "examples/process/closed-loop-ephemeral.lisp"
   :domain ephemeral
   :min-definitions 1
   :requires (aplicacao ttl teardown postconditions closed-loop-auth))
 
-(yaml-parses-as Process "examples/process/akeyless-ephemeral.yaml")
+(yaml-parses-as Process "examples/process/closed-loop-ephemeral.yaml")
 
 ;; ─── Tier 1 registry demo ─────────────────────────────────────────
 ;; These keywords aren't built-in — they're `#[derive(TataraDomain)]`

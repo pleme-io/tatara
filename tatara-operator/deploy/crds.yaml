@@ -31,7 +31,7 @@ spec:
             description: |-
               NixBuild CRD — declarative Nix build request.
 
-              ```yaml apiVersion: tatara.pleme.io/v1alpha1 kind: NixBuild metadata: name: akeyless-auth spec: flakeRef: "github:pleme-io/blackmatter-akeyless#akeyless-backend-auth" system: x86_64-linux atticCache: main ```
+              ```yaml apiVersion: tatara.pleme.io/v1alpha1 kind: NixBuild metadata: name: example-backend-api spec: flakeRef: "github:pleme-io/blackmatter-example#example-backend-api" system: x86_64-linux atticCache: main ```
             properties:
               attic_cache:
                 description: Attic cache name to push results to
@@ -248,7 +248,7 @@ spec:
 
               Clients never trigger builds — the cache is always warm.
 
-              ```yaml apiVersion: tatara.pleme.io/v1alpha1 kind: FlakeSource metadata: name: blackmatter-akeyless spec: repo: github:pleme-io/blackmatter-akeyless branch: main pollInterval: 5m outputs: - attr: packages.x86_64-linux.akeyless-backend-auth system: x86_64-linux - attr: packages.x86_64-linux.akeyless-backend-kfm system: x86_64-linux atticCache: main ```
+              ```yaml apiVersion: tatara.pleme.io/v1alpha1 kind: FlakeSource metadata: name: blackmatter-example spec: repo: github:pleme-io/blackmatter-example branch: main pollInterval: 5m outputs: - attr: packages.x86_64-linux.example-backend-api system: x86_64-linux - attr: packages.x86_64-linux.example-backend-worker system: x86_64-linux atticCache: main ```
             properties:
               attic_cache:
                 default: main
@@ -274,7 +274,7 @@ spec:
                   description: A specific flake output to build.
                   properties:
                     attr:
-                      description: Flake attribute path (e.g., "packages.x86_64-linux.akeyless-backend-auth")
+                      description: Flake attribute path (e.g., "packages.x86_64-linux.example-backend-api")
                       type: string
                     extra_args:
                       default: []
@@ -295,7 +295,7 @@ spec:
                 description: 'How often to poll for changes as fallback (default: 5m). Primary trigger is GitHub webhooks — polling is backup only.'
                 type: string
               repo:
-                description: Git repository reference (e.g., "github:pleme-io/blackmatter-akeyless")
+                description: Git repository reference (e.g., "github:pleme-io/blackmatter-example")
                 type: string
               webhook_secret_ref:
                 description: GitHub webhook secret for validating push events. When set, the operator exposes a webhook endpoint at /webhooks/github/{namespace}/{name} that GitHub calls on push. This eliminates polling — builds fire within seconds of a commit.

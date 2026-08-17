@@ -38,7 +38,7 @@ spec:
             description: |-
               `EphemeralAllocation` CRD spec — a typed request for a pool member.
 
-              ```yaml apiVersion: tatara.pleme.io/v1alpha1 kind: EphemeralAllocation metadata: name: pr-123-akeyless namespace: ephemeral-pools spec: poolRef: name: akeyless-attest-pool namespace: ephemeral-pools requestor: kind: github-pr repo: "pleme-io/akeyless-deployment" branch: "fix-something" prNumber: 123 prLabels: ["needs-akeyless"] ttl: "1h" ```
+              ```yaml apiVersion: tatara.pleme.io/v1alpha1 kind: EphemeralAllocation metadata: name: pr-123-demo-app namespace: ephemeral-pools spec: poolRef: name: attest-pool namespace: ephemeral-pools requestor: kind: github-pr repo: "pleme-io/demo-app" branch: "fix-something" prNumber: 123 prLabels: ["needs-ephemeral"] ttl: "1h" ```
             properties:
               note:
                 description: Operator-supplied notes — surfaced in `feira allocation list` for audit / debugging context.
@@ -83,7 +83,7 @@ spec:
                     nullable: true
                     type: integer
                   repo:
-                    description: Optional repo identifier (e.g., `"pleme-io/akeyless-deployment"`). Matched against `PoolSelector.repos`.
+                    description: Optional repo identifier (e.g., `"pleme-io/demo-app"`). Matched against `PoolSelector.repos`.
                     nullable: true
                     type: string
                   sha:

@@ -38,7 +38,7 @@ spec:
             description: |-
               `EphemeralPool` CRD spec — typed pool of warm Processes.
 
-              ```yaml apiVersion: tatara.pleme.io/v1alpha1 kind: EphemeralPool metadata: name: akeyless-attest-pool namespace: ephemeral-pools spec: desiredSize: 3 minSize: 1 maxSize: 5 returnPolicy: Reset selector: repos: ["pleme-io/akeyless-*"] branches: ["main", "release-*"] prLabels: ["needs-akeyless"] template: aplicacao: chartRef: "oci://ghcr.io/pleme-io/charts/lareira-akeyless-deployment" version: "0.5.5" profile: "gateway-with-internal-saas" … ttl: "2h" teardown: OnAttested postconditions: [ … ] ```
+              ```yaml apiVersion: tatara.pleme.io/v1alpha1 kind: EphemeralPool metadata: name: attest-pool namespace: ephemeral-pools spec: desiredSize: 3 minSize: 1 maxSize: 5 returnPolicy: Reset selector: repos: ["pleme-io/demo-*"] branches: ["main", "release-*"] prLabels: ["needs-ephemeral"] template: aplicacao: chartRef: "oci://ghcr.io/pleme-io/charts/lareira-demo-app" version: "0.5.5" profile: "all-in-one" … ttl: "2h" teardown: OnAttested postconditions: [ … ] ```
             properties:
               desiredSize:
                 description: Target number of warm Processes the pool maintains in `Free` state (sum of Free + Spawning targets `desired_size`).
@@ -113,14 +113,14 @@ spec:
                     description: The Aplicacao chart + profile + overlay to install.
                     properties:
                       chartRef:
-                        description: Helm chart reference. OCI (`oci://…`) or repo-relative (`pleme-io/lareira-akeyless-deployment`).
+                        description: Helm chart reference. OCI (`oci://…`) or repo-relative (`pleme-io/lareira-demo-app`).
                         type: string
                       installTimeout:
                         description: Install timeout (`humantime` duration). Empty = chart-controller default.
                         nullable: true
                         type: string
                       profile:
-                        description: Architecture profile from the chart's `values/*.yaml` family (e.g. `gateway-with-internal-saas`, `saas-internal`). Leave empty to use chart defaults.
+                        description: Architecture profile from the chart's `values/*.yaml` family (e.g. `all-in-one`, `saas-internal`). Leave empty to use chart defaults.
                         type: string
                       releaseName:
                         description: HelmRelease name override. Defaults to the Process's PID-derived name.

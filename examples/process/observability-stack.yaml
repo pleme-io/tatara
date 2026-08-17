@@ -28,7 +28,7 @@ spec:
     preconditions:
       - kind: ProcessPhase
         params:
-          processRef: akeyless-injection
+          processRef: secret-injection
           phase: Attested
     postconditions:
       - kind: KustomizationHealthy
@@ -54,7 +54,7 @@ spec:
         controlId: "5.1.1"
         phase: PostConvergence
   dependsOn:
-    - name: akeyless-injection
+    - name: secret-injection
       mustReach: Attested
   signals:
     sigtermGraceSeconds: 480

@@ -1582,17 +1582,54 @@ pub trait WideNumeric: Copy {
     /// This wide value's typed lift into [`NumericLiteral`] — the
     /// per-axis variant the operator-facing rejection quotes.
     fn as_literal(self) -> NumericLiteral;
+
+    /// The wide-axis kwarg extractor — the SAME `extract_atom`-based
+    /// projection [`extract_int`] / [`extract_float`] name, dispatched
+    /// on the wide type itself rather than through a per-axis
+    /// `extract_XXX_narrowed` function's hand-written call. Post-lift
+    /// the four `extract_*_narrowed` extractors bind to
+    /// [`extract_narrowed`] / [`extract_optional_narrowed`] and the
+    /// axis identity rides ONE trait dispatch: `<i64 as WideNumeric>::
+    /// extract_kwarg` IS [`extract_int`]; `<f64 as WideNumeric>::
+    /// extract_kwarg` IS [`extract_float`]. A regression that silently
+    /// swapped the axis's wide extractor (an int-axis narrowed
+    /// extractor accidentally reading `extract_float`, widening the
+    /// rejection's `ExpectedKwargShape` from `Int` to `Number` and
+    /// letting integer-typed fields silently accept floats) cannot
+    /// survive the trait dispatch — the impl's return type pins the
+    /// axis at rustc time.
+    fn extract_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Self>;
+
+    /// The `Option` sibling of [`WideNumeric::extract_kwarg`] — same
+    /// per-axis dispatch shape, absent kwarg returns `Ok(None)`.
+    fn extract_optional_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Option<Self>>;
 }
 
 impl WideNumeric for i64 {
     fn as_literal(self) -> NumericLiteral {
         NumericLiteral::Int(self)
     }
+
+    fn extract_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Self> {
+        extract_int(kw, key)
+    }
+
+    fn extract_optional_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Option<Self>> {
+        extract_optional_int(kw, key)
+    }
 }
 
 impl WideNumeric for f64 {
     fn as_literal(self) -> NumericLiteral {
         NumericLiteral::Float(self)
+    }
+
+    fn extract_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Self> {
+        extract_float(kw, key)
+    }
+
+    fn extract_optional_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Option<Self>> {
+        extract_optional_float(kw, key)
     }
 }
 
@@ -1630,47 +1667,74 @@ where
     T::narrow(wide).ok_or_else(|| range_err(key, T::WIDTH, wide.as_literal()))
 }
 
-/// Required integer kwarg projected into the field's own width —
-/// [`extract_int`] followed by the typed [`NarrowNumeric`] projection
-/// via [`narrow_or_range_err`], with [`LispError::KwargOutOfRange`] on
-/// a value the width cannot hold. The narrowing replacement for
-/// `extract_int(&kw, key)? as T`.
-pub fn extract_int_narrowed<T: NarrowNumeric<i64>>(kw: &Kwargs<'_>, key: &str) -> Result<T> {
-    narrow_or_range_err(key, extract_int(kw, key)?)
+/// The GENERIC narrowing kwarg extractor — the axis identity rides
+/// the `W: WideNumeric` type parameter, so `extract_narrowed::<i64, T>`
+/// dispatches through [`WideNumeric::extract_kwarg`] to [`extract_int`]
+/// and `extract_narrowed::<f64, T>` dispatches to [`extract_float`],
+/// both threaded through the SAME [`narrow_or_range_err`] rejection
+/// primitive. Pre-lift the FOUR public `extract_*_narrowed` extractors
+/// each spelled `extract_int` / `extract_optional_int` / `extract_
+/// float` / `extract_optional_float` inline; post-lift the four are
+/// one-line delegates to this pair and the axis identity is a trait
+/// dispatch rather than a hand-written call. A future third wide axis
+/// lands as ONE `impl WideNumeric for <NewWide>` (adding
+/// `as_literal`, `extract_kwarg`, and `extract_optional_kwarg` for
+/// that axis) plus ONE `impl NarrowNumeric<NewWide> for <NewNarrow>`
+/// per new narrow width; the two generic primitives bind mechanically
+/// with no new public wrapper.
+pub fn extract_narrowed<W, T>(kw: &Kwargs<'_>, key: &str) -> Result<T>
+where
+    W: WideNumeric,
+    T: NarrowNumeric<W>,
+{
+    narrow_or_range_err(key, W::extract_kwarg(kw, key)?)
 }
 
-/// `Option` sibling of [`extract_int_narrowed`]. An ABSENT kwarg stays
+/// `Option` sibling of [`extract_narrowed`]. An ABSENT kwarg stays
 /// `None`; a PRESENT but out-of-range one is a rejection, never a
 /// `None` — silently dropping a value the author wrote would be the
 /// same corruption in a different costume.
+pub fn extract_optional_narrowed<W, T>(kw: &Kwargs<'_>, key: &str) -> Result<Option<T>>
+where
+    W: WideNumeric,
+    T: NarrowNumeric<W>,
+{
+    let Some(wide) = W::extract_optional_kwarg(kw, key)? else {
+        return Ok(None);
+    };
+    narrow_or_range_err(key, wide).map(Some)
+}
+
+/// Required integer kwarg projected into the field's own width —
+/// one-line delegate to [`extract_narrowed`] at the `W = i64` axis.
+/// The narrowing replacement for `extract_int(&kw, key)? as T`.
+pub fn extract_int_narrowed<T: NarrowNumeric<i64>>(kw: &Kwargs<'_>, key: &str) -> Result<T> {
+    extract_narrowed::<i64, T>(kw, key)
+}
+
+/// `Option` sibling of [`extract_int_narrowed`] — one-line delegate
+/// to [`extract_optional_narrowed`] at the `W = i64` axis.
 pub fn extract_optional_int_narrowed<T: NarrowNumeric<i64>>(
     kw: &Kwargs<'_>,
     key: &str,
 ) -> Result<Option<T>> {
-    let Some(wide) = extract_optional_int(kw, key)? else {
-        return Ok(None);
-    };
-    narrow_or_range_err(key, wide).map(Some)
+    extract_optional_narrowed::<i64, T>(kw, key)
 }
 
-/// Float-axis sibling of [`extract_int_narrowed`] — [`extract_float`]
-/// followed by the typed [`NarrowNumeric`] projection via
-/// [`narrow_or_range_err`]. The narrowing replacement for
-/// `extract_float(&kw, key)? as T`.
+/// Float-axis sibling of [`extract_int_narrowed`] — one-line delegate
+/// to [`extract_narrowed`] at the `W = f64` axis. The narrowing
+/// replacement for `extract_float(&kw, key)? as T`.
 pub fn extract_float_narrowed<T: NarrowNumeric<f64>>(kw: &Kwargs<'_>, key: &str) -> Result<T> {
-    narrow_or_range_err(key, extract_float(kw, key)?)
+    extract_narrowed::<f64, T>(kw, key)
 }
 
-/// `Option` sibling of [`extract_float_narrowed`]; same absent-vs-
-/// out-of-range split as [`extract_optional_int_narrowed`].
+/// `Option` sibling of [`extract_float_narrowed`] — one-line delegate
+/// to [`extract_optional_narrowed`] at the `W = f64` axis.
 pub fn extract_optional_float_narrowed<T: NarrowNumeric<f64>>(
     kw: &Kwargs<'_>,
     key: &str,
 ) -> Result<Option<T>> {
-    let Some(wide) = extract_optional_float(kw, key)? else {
-        return Ok(None);
-    };
-    narrow_or_range_err(key, wide).map(Some)
+    extract_optional_narrowed::<f64, T>(kw, key)
 }
 
 pub fn extract_bool(kw: &Kwargs<'_>, key: &str) -> Result<bool> {
@@ -2586,6 +2650,275 @@ mod tests {
         let ok_float: f32 =
             narrow_or_range_err::<f64, f32>("scale", 1.0).expect("in-range float narrows through");
         assert!((ok_float - 1.0_f32).abs() < f32::EPSILON);
+    }
+
+    /// `WideNumeric::extract_kwarg` / `WideNumeric::extract_optional_
+    /// kwarg` are the wide-axis kwarg extractor pinned as trait
+    /// methods dispatched on the wide type itself, so the axis
+    /// identity rides ONE trait dispatch rather than a hand-written
+    /// `extract_int` / `extract_float` call at each of the four
+    /// `extract_*_narrowed` extractors. Pin both axes on the wide
+    /// extractor's THREE promises: (1) the total path echoes the
+    /// axis's `extract_atom`-based projection unchanged (an in-range
+    /// integer literal reads back as the same `i64` on `<i64 as
+    /// WideNumeric>::extract_kwarg` and as the same `f64` on
+    /// `<f64 as WideNumeric>::extract_kwarg`), (2) the axis-typed
+    /// [`ExpectedKwargShape`] rides the rejection unchanged on a
+    /// type-mismatch (`ExpectedKwargShape::Int` on `<i64 as
+    /// WideNumeric>` — a regression that silently rerouted through
+    /// `extract_float` would widen the rejection to
+    /// `ExpectedKwargShape::Number` and let float literals through
+    /// on integer-typed fields), and (3) the `Option` sibling
+    /// short-circuits an absent kwarg to `Ok(None)` rather than
+    /// treating it as an error. Pre-lift the axis identity was
+    /// per-site hand-written across the four narrowed extractors;
+    /// post-lift a regression that silently swapped an int-axis
+    /// extractor for a float-axis extractor inside one narrowed
+    /// extractor's body is unconstructible — the trait's per-axis
+    /// impls forbid the cross-axis combination at rustc time.
+    #[test]
+    fn wide_numeric_extract_kwarg_pins_the_per_axis_wide_extractor_at_the_trait_dispatch() {
+        // (1) TOTAL path — the wide extractor round-trips the
+        //     author's literal at every axis unchanged.
+        let int_args = kwargs_of("(_ :port 8080)");
+        let int_kw = parse_kwargs(&int_args).unwrap();
+        assert_eq!(
+            <i64 as WideNumeric>::extract_kwarg(&int_kw, "port").unwrap(),
+            8080_i64,
+        );
+        assert_eq!(
+            <i64 as WideNumeric>::extract_optional_kwarg(&int_kw, "port").unwrap(),
+            Some(8080_i64),
+        );
+
+        let float_args = kwargs_of("(_ :scale 1.5)");
+        let float_kw = parse_kwargs(&float_args).unwrap();
+        let read_float = <f64 as WideNumeric>::extract_kwarg(&float_kw, "scale").unwrap();
+        assert!((read_float - 1.5_f64).abs() < f64::EPSILON);
+        let read_optional_float =
+            <f64 as WideNumeric>::extract_optional_kwarg(&float_kw, "scale").unwrap();
+        assert!(
+            matches!(read_optional_float, Some(x) if (x - 1.5_f64).abs() < f64::EPSILON),
+            "optional float axis round-trips the wide value unchanged",
+        );
+
+        // (2) TYPE-MISMATCH path — the axis-typed
+        //     `ExpectedKwargShape` rides the rejection identity.
+        //     A regression that silently rerouted `<i64 as
+        //     WideNumeric>::extract_kwarg` through `extract_float`
+        //     would surface here as `ExpectedKwargShape::Number`.
+        let bool_args = kwargs_of("(_ :n #f)");
+        let bool_kw = parse_kwargs(&bool_args).unwrap();
+        let int_type_mismatch = <i64 as WideNumeric>::extract_kwarg(&bool_kw, "n").unwrap_err();
+        assert!(
+            matches!(
+                &int_type_mismatch,
+                LispError::TypeMismatch { expected, .. }
+                    if *expected == ExpectedKwargShape::Int,
+            ),
+            "int axis's ExpectedKwargShape is Int, got {int_type_mismatch:?}",
+        );
+
+        let float_type_mismatch = <f64 as WideNumeric>::extract_kwarg(&bool_kw, "n").unwrap_err();
+        assert!(
+            matches!(
+                &float_type_mismatch,
+                LispError::TypeMismatch { expected, .. }
+                    if *expected == ExpectedKwargShape::Number,
+            ),
+            "float axis's ExpectedKwargShape is Number, got {float_type_mismatch:?}",
+        );
+
+        // (3) ABSENT path on the optional wide extractor — an absent
+        //     kwarg short-circuits to `Ok(None)`, not an error.
+        let absent_args = kwargs_of("(_ :other 1)");
+        let absent_kw = parse_kwargs(&absent_args).unwrap();
+        assert_eq!(
+            <i64 as WideNumeric>::extract_optional_kwarg(&absent_kw, "missing").unwrap(),
+            None,
+        );
+        assert_eq!(
+            <f64 as WideNumeric>::extract_optional_kwarg(&absent_kw, "missing").unwrap(),
+            None,
+        );
+    }
+
+    /// `extract_narrowed<W, T>` / `extract_optional_narrowed<W, T>`
+    /// are the two GENERIC narrowing primitives every
+    /// `extract_*_narrowed` extractor now delegates to as a one-line
+    /// wrapper. Pre-lift the four extractors each spelled the
+    /// wide-axis extractor call inline (`extract_int` /
+    /// `extract_optional_int` / `extract_float` /
+    /// `extract_optional_float`); post-lift the axis identity rides
+    /// the `W: WideNumeric` type parameter and the four extractors
+    /// resolve to `extract_narrowed::<i64, _>` /
+    /// `extract_optional_narrowed::<i64, _>` / their `<f64, _>`
+    /// peers. Pin the two-axis closed-set coverage at the generic
+    /// primitive: the canonical `port 70000 → u16` case reaches
+    /// `extract_narrowed::<i64, u16>` with the typed
+    /// `NumericWidth::U16` / `NumericLiteral::Int(70_000)` pair
+    /// carried on `LispError::KwargOutOfRange`, and the peer
+    /// `scale 1.0e300 → f32` case reaches `extract_narrowed::<f64,
+    /// f32>` with the peer identities on the peer axis; the
+    /// in-range totals round-trip unchanged at both axes and the
+    /// optional peer short-circuits an absent kwarg to `Ok(None)`.
+    /// A regression that swapped the two primitives inside one of
+    /// the four `extract_*_narrowed` delegates would fail at rustc
+    /// time — `extract_narrowed::<i64, T: NarrowNumeric<i64>>` and
+    /// `extract_narrowed::<f64, T: NarrowNumeric<f64>>` are two
+    /// disjoint typed slots.
+    #[test]
+    fn extract_narrowed_generic_primitives_close_the_two_axes_at_the_type_parameter() {
+        // TOTAL, int axis.
+        let int_ok_args = kwargs_of("(_ :port 8080)");
+        let int_ok_kw = parse_kwargs(&int_ok_args).unwrap();
+        assert_eq!(
+            extract_narrowed::<i64, u16>(&int_ok_kw, "port").unwrap(),
+            8080
+        );
+        assert_eq!(
+            extract_optional_narrowed::<i64, u16>(&int_ok_kw, "port").unwrap(),
+            Some(8080),
+        );
+
+        // TOTAL, float axis.
+        let float_ok_args = kwargs_of("(_ :scale 1.0)");
+        let float_ok_kw = parse_kwargs(&float_ok_args).unwrap();
+        let ok_f32 = extract_narrowed::<f64, f32>(&float_ok_kw, "scale").unwrap();
+        assert!((ok_f32 - 1.0_f32).abs() < f32::EPSILON);
+        let ok_optional_f32 = extract_optional_narrowed::<f64, f32>(&float_ok_kw, "scale").unwrap();
+        assert!(
+            matches!(ok_optional_f32, Some(x) if (x - 1.0_f32).abs() < f32::EPSILON),
+            "optional float axis round-trips the wide value unchanged",
+        );
+
+        // RANGE-ERR, int axis — the canonical `port 70000 → u16` case.
+        let int_bad_args = kwargs_of("(_ :port 70000)");
+        let int_bad_kw = parse_kwargs(&int_bad_args).unwrap();
+        let int_err =
+            extract_narrowed::<i64, u16>(&int_bad_kw, "port").expect_err("70000 overflows u16");
+        let LispError::KwargOutOfRange { target, value, .. } = &int_err else {
+            panic!("expected KwargOutOfRange, got {int_err:?}");
+        };
+        assert_eq!(*target, NumericWidth::U16);
+        assert_eq!(*value, NumericLiteral::Int(70_000));
+
+        // RANGE-ERR, float axis — the peer `scale 1.0e300 → f32` case.
+        let float_bad_args = kwargs_of("(_ :scale 1.0e300)");
+        let float_bad_kw = parse_kwargs(&float_bad_args).unwrap();
+        let float_err = extract_narrowed::<f64, f32>(&float_bad_kw, "scale")
+            .expect_err("1.0e300 overflows f32");
+        let LispError::KwargOutOfRange { target, value, .. } = &float_err else {
+            panic!("expected KwargOutOfRange, got {float_err:?}");
+        };
+        assert_eq!(*target, NumericWidth::F32);
+        assert!(
+            matches!(value, NumericLiteral::Float(x) if (*x - 1.0e300).abs() < f64::EPSILON),
+            "the diagnostic must echo the author's own literal, got {value:?}",
+        );
+
+        // ABSENT, both axes — the optional peer short-circuits.
+        let absent_args = kwargs_of("(_ :other 1)");
+        let absent_kw = parse_kwargs(&absent_args).unwrap();
+        assert_eq!(
+            extract_optional_narrowed::<i64, u16>(&absent_kw, "missing").unwrap(),
+            None,
+        );
+        assert_eq!(
+            extract_optional_narrowed::<f64, f32>(&absent_kw, "missing").unwrap(),
+            None,
+        );
+    }
+
+    /// The four public `extract_*_narrowed` extractors are now
+    /// one-line delegates to [`extract_narrowed`] /
+    /// [`extract_optional_narrowed`]. Pin the delegation identity
+    /// at the operator-visible level: for every input a
+    /// caller-shaped `extract_int_narrowed::<T>` / peer accepts or
+    /// rejects, the corresponding generic call
+    /// `extract_narrowed::<i64, T>` / peer must produce the same
+    /// verdict, and vice versa. Sweep the four extractor / generic
+    /// pairs over both a total input and a rejecting input to lock
+    /// the delegation shape — a regression that silently swapped a
+    /// delegate's axis parameter (`extract_int_narrowed` accidentally
+    /// binding to `extract_narrowed::<f64, T>`) would fail to compile
+    /// AT the delegate site (the `NarrowNumeric<i64>` bound wouldn't
+    /// resolve against `<f64, T: NarrowNumeric<f64>>`) AND, if that
+    /// somehow compiled, would surface here as a diverging verdict.
+    #[test]
+    fn extract_star_narrowed_delegates_agree_with_the_generic_primitives_at_both_verdicts() {
+        // Total, int axis.
+        let int_ok_args = kwargs_of("(_ :port 8080)");
+        let int_ok_kw = parse_kwargs(&int_ok_args).unwrap();
+        assert_eq!(
+            extract_int_narrowed::<u16>(&int_ok_kw, "port").unwrap(),
+            extract_narrowed::<i64, u16>(&int_ok_kw, "port").unwrap(),
+        );
+        assert_eq!(
+            extract_optional_int_narrowed::<u16>(&int_ok_kw, "port").unwrap(),
+            extract_optional_narrowed::<i64, u16>(&int_ok_kw, "port").unwrap(),
+        );
+
+        // Total, float axis.
+        let float_ok_args = kwargs_of("(_ :scale 1.0)");
+        let float_ok_kw = parse_kwargs(&float_ok_args).unwrap();
+        let (a, b) = (
+            extract_float_narrowed::<f32>(&float_ok_kw, "scale").unwrap(),
+            extract_narrowed::<f64, f32>(&float_ok_kw, "scale").unwrap(),
+        );
+        assert!((a - b).abs() < f32::EPSILON);
+
+        // Rejecting, int axis — same `KwargOutOfRange { target, value }`
+        // pair through either surface.
+        let int_bad_args = kwargs_of("(_ :port 70000)");
+        let int_bad_kw = parse_kwargs(&int_bad_args).unwrap();
+        let via_wrapper = extract_int_narrowed::<u16>(&int_bad_kw, "port").unwrap_err();
+        let via_generic = extract_narrowed::<i64, u16>(&int_bad_kw, "port").unwrap_err();
+        match (&via_wrapper, &via_generic) {
+            (
+                LispError::KwargOutOfRange {
+                    target: t1,
+                    value: v1,
+                    ..
+                },
+                LispError::KwargOutOfRange {
+                    target: t2,
+                    value: v2,
+                    ..
+                },
+            ) => {
+                assert_eq!(t1, t2);
+                assert_eq!(v1, v2);
+                assert_eq!(*t1, NumericWidth::U16);
+                assert_eq!(*v1, NumericLiteral::Int(70_000));
+            }
+            _ => panic!("both must be KwargOutOfRange, got {via_wrapper:?} vs {via_generic:?}"),
+        }
+
+        // Rejecting, float axis — peer identity on the peer axis.
+        let float_bad_args = kwargs_of("(_ :scale 1.0e300)");
+        let float_bad_kw = parse_kwargs(&float_bad_args).unwrap();
+        let via_wrapper = extract_float_narrowed::<f32>(&float_bad_kw, "scale").unwrap_err();
+        let via_generic = extract_narrowed::<f64, f32>(&float_bad_kw, "scale").unwrap_err();
+        match (&via_wrapper, &via_generic) {
+            (
+                LispError::KwargOutOfRange {
+                    target: t1,
+                    value: v1,
+                    ..
+                },
+                LispError::KwargOutOfRange {
+                    target: t2,
+                    value: v2,
+                    ..
+                },
+            ) => {
+                assert_eq!(t1, t2);
+                assert_eq!(v1, v2);
+                assert_eq!(*t1, NumericWidth::F32);
+            }
+            _ => panic!("both must be KwargOutOfRange, got {via_wrapper:?} vs {via_generic:?}"),
+        }
     }
 
     /// A domain whose numeric fields are the pointer-width pair —

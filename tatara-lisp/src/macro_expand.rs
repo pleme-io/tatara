@@ -15096,6 +15096,179 @@ impl ResourceLimits {
         Self::witness_axis_presence(count, count * 2 > Self::FIELD_COUNT)
     }
 
+    /// BARELY-MULTI-KIND count witness —
+    /// `Self::witness_count_barely_multi(count)` returns `Some(true)` iff
+    /// `count == 2`, `Some(false)` iff `count == 1` OR `count > 2`, or
+    /// `None` iff `count == 0`. The BOUNDARY primitive lifting the shape
+    /// `let c = self.count_X_axes(); Self::witness_axis_presence(c, c == 2)`
+    /// that every AXIS-CELL BARELY-MULTI PREDICATE on [`ResourceLimits`]
+    /// carries at its exit — [`Self::bottom_axis_is_barely_multi`],
+    /// [`Self::top_axis_is_barely_multi`],
+    /// [`Self::polar_axis_is_barely_multi`],
+    /// [`Self::interior_axis_is_barely_multi`] all wrap the `c == 2`
+    /// endpoint-equality of their paired [`Self::count_bottom_axes`]-family
+    /// count in the SAME two-line presence-conditional cascade. Pre-lift
+    /// each BARELY-MULTI predicate open-coded the two-line `let c =
+    /// self.count_X_axes(); Self::witness_axis_presence(c, c == 2)` at its
+    /// own exit — a four-point copy-paste whose consistency the type
+    /// system did not gate (a predicate that swapped `c == 2` for `c == 1`
+    /// would silently collapse BARELY-MULTI into the SINGLETON regime; a
+    /// predicate that swapped `c == 2` for `c >= 2` would silently
+    /// collapse BARELY-MULTI into the MULTI regime; a predicate that
+    /// swapped `c == 2` for `c > 2` would silently discard the exact-two
+    /// cell BARELY-MULTI was defined to name). Post-lift the shape binds
+    /// at ONE typed `const fn` on [`ResourceLimits`], and every AXIS-CELL
+    /// BARELY-MULTI predicate composes through this helper — the
+    /// CARDINALITY-EQUALS-TWO dispatch is a substrate-level theorem
+    /// rather than a per-consumer two-line `let`-bound closure.
+    ///
+    /// The BARELY-MULTI-KIND specialization of
+    /// [`Self::witness_axis_presence`] on the CARDINALITY-EQUALS-TWO
+    /// predicate `c == 2` — where [`Self::witness_axis_presence`] takes
+    /// an arbitrary boolean predicate over the count,
+    /// [`Self::witness_count_singleton`] pins the predicate to the
+    /// LOWER-ENDPOINT-EQUALITY `c == 1`, [`Self::witness_count_saturated`]
+    /// pins it to the UPPER-ENDPOINT-EQUALITY `c == Self::FIELD_COUNT`,
+    /// and the shipped MULTI / STRICTLY-MULTI / HALF-SATURATED cohorts
+    /// pin it to their respective inequality regimes, THIS combinator
+    /// PINS the predicate to the ATOMIC CELL just above the SINGLETON
+    /// endpoint on the (SINGLETON @ c==1, BARELY-MULTI @ c==2,
+    /// NEARLY-SATURATED @ c==FIELD_COUNT-1, SATURATED @ c==FIELD_COUNT)
+    /// COUNT-EQUALS-K cell partition — the DUAL of
+    /// [`Self::witness_count_singleton`] one CARDINALITY-STEP over on the
+    /// LOWER end of the has-axis regime, and the CARDINALITY-STEP DUAL of
+    /// a would-be `witness_count_nearly_saturated` on the UPPER end.
+    /// Named at the substrate so a caller reads
+    /// `witness_count_barely_multi(count)` at the callsite rather than
+    /// `witness_axis_presence(count, count == 2)` with the count-name
+    /// repeated at both operands — the CARDINALITY-EQUALS-TWO pinning is
+    /// visible without threading the `c == 2` clause through the helper's
+    /// second argument.
+    ///
+    /// **Two-arm dispatch identity — LOAD-BEARING structural pin**: on
+    /// every `count`, `witness_count_barely_multi(count) ==
+    /// Self::witness_axis_presence(count, count == 2)`. The delegation
+    /// through the shipped presence-conditional helper is DIRECT — no new
+    /// per-count scan, no allocation. Pinned via
+    /// `resource_limits_witness_count_barely_multi_agrees_with_witness_axis_presence_at_cardinality_two`.
+    ///
+    /// **Empty-arm identity**: `witness_count_barely_multi(0) == None` —
+    /// the empty-axis count yields `None`, PRESERVING the has-axis
+    /// distinction through the BARELY-MULTI dispatch. Pinned via
+    /// `resource_limits_witness_count_barely_multi_empty_arm_is_none`.
+    ///
+    /// **SINGLETON-endpoint rejection**: `witness_count_barely_multi(1) ==
+    /// Some(false)` — the LOWER-ENDPOINT count (the SINGLETON cell) is
+    /// REJECTED by the CARDINALITY-EQUALS-TWO dispatch; the ATOMIC CELL
+    /// PARTITION `(SINGLETON, BARELY-MULTI)` is DISJOINT by construction.
+    /// Pinned via
+    /// `resource_limits_witness_count_barely_multi_at_singleton_is_some_false`.
+    ///
+    /// **Cardinality-two endpoint acceptance**: on any FIELD_COUNT >= 2,
+    /// `witness_count_barely_multi(2) == Some(true)` — the ATOMIC
+    /// EXACT-TWO cell FIRES the BARELY-MULTI verdict. Pinned via
+    /// `resource_limits_witness_count_barely_multi_at_two_is_some_true`.
+    ///
+    /// **Above-cardinality-two rejection**: for every `count in
+    /// 3..=Self::FIELD_COUNT`, `witness_count_barely_multi(count) ==
+    /// Some(false)` — every strictly-above-two count REJECTS the
+    /// BARELY-MULTI verdict. Swept across `3..=Self::FIELD_COUNT` to pin
+    /// the rejection at every above-endpoint cell (INCLUDING both the
+    /// NEARLY-SATURATED cell at c==FIELD_COUNT-1 and the SATURATED
+    /// endpoint at c==FIELD_COUNT). Pinned via
+    /// `resource_limits_witness_count_barely_multi_above_endpoint_rejects`.
+    ///
+    /// **BARELY-MULTI-EXCLUDES-SINGLETON mutual-exclusion pin — LOAD-
+    /// BEARING partition pin**: for every `count`, NOT
+    /// (`witness_count_barely_multi(count) == Some(true) &&
+    /// witness_count_singleton(count) == Some(true)`). The two cells sit
+    /// on adjacent points of the COUNT-EQUALS-K cell partition (`c == 2`
+    /// vs `c == 1`) — the CARDINALITY-EQUALS-TWO primitive is DISJOINT
+    /// from the CARDINALITY-EQUALS-ONE primitive by construction. Pinned
+    /// via
+    /// `resource_limits_witness_count_barely_multi_excludes_witness_count_singleton`.
+    ///
+    /// **BARELY-MULTI-IMPLIES-MULTI bridge — LOAD-BEARING refinement
+    /// pin**: for every `count`, `witness_count_barely_multi(count) ==
+    /// Some(true) ⇒ witness_count_multi(count) == Some(true)`. The
+    /// BARELY-MULTI regime is a strict subset of the MULTI regime
+    /// (CARDINALITY-EQUALS-TWO `c == 2` ⊂ STRICT-ABOVE-LOWER `c > 1`) —
+    /// the same refinement pin the four shipped `_axis_is_barely_multi`
+    /// bodies carry against their paired `_axis_is_multi` bodies lifted
+    /// to the substrate primitive one PREDICATE-KIND axis under. Pinned
+    /// via
+    /// `resource_limits_witness_count_barely_multi_implies_witness_count_multi`.
+    ///
+    /// **`is_some` bridge**: `witness_count_barely_multi(count).is_some()
+    /// ⇔ count > 0` — the presence dispatch matches the paired
+    /// [`Self::witness_axis_presence`]'s bridge and the SINGLETON /
+    /// MULTI / SATURATED / STRICTLY-MULTI / AT-MOST-HALF / AT-LEAST-HALF
+    /// / SUB-HALF / SUPER-HALF siblings one PREDICATE-KIND axis over
+    /// (all NINE PRESERVE the `count > 0` boundary). Pinned via
+    /// `resource_limits_witness_count_barely_multi_is_some_iff_count_gt_zero`.
+    ///
+    /// `const fn` so a caller can pin the BARELY-MULTI verdict at
+    /// compile time (`const _: () =
+    /// assert!(matches!(ResourceLimits::witness_count_barely_multi(2),
+    /// Some(true)));`) — sibling of the const-fn evaluability pins the
+    /// four `_axis_is_barely_multi` predicates already carry at their
+    /// own exits, and of the const-fn pins on the shipped COUNT-EQUALS-K
+    /// endpoint siblings [`Self::witness_count_singleton`] +
+    /// [`Self::witness_count_saturated`] one CARDINALITY-STEP axis over.
+    ///
+    /// **Adoption compounds**: the four shipped `_axis_is_barely_multi`
+    /// predicates rewrite from the open-coded two-line `let c =
+    /// self.count_X_axes(); Self::witness_axis_presence(c, c == 2)` to
+    /// the one-line
+    /// `Self::witness_count_barely_multi(self.count_X_axes())` composition
+    /// at no semantic change; any future AXIS-CELL BARELY-MULTI predicate
+    /// (higher-order axial partitions with an EXACTLY-TWO cell,
+    /// pairwise-quorum checks that isolate the ATOMIC EXACT-TWO
+    /// cardinality) composes through this same primitive. Body regressions
+    /// at the shared helper (a `c == 2` inversion to `c != 2`, a `c == 2`
+    /// weakening to `c >= 2` collapsing BARELY-MULTI into MULTI, a
+    /// `Some(false)` swap on the empty arm) fire immediately at the
+    /// helper's own pins rather than silently re-classifying every
+    /// downstream `_axis_is_barely_multi` reading. The COUNT-EQUALS-K
+    /// cell partition OPENS at the substrate: the (SINGLETON @ c==1,
+    /// BARELY-MULTI @ c==2) LOWER-END adjacent pair now shares ONE
+    /// factored predicate combinator ([`Self::witness_axis_presence`])
+    /// rather than two parallel two-arm matches at every callsite, and
+    /// the CARDINALITY-EQUALS-TWO literal threads through ONE point on
+    /// the algebra rather than four.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// BARELY-MULTI-KIND count witness at every `_axis_is_barely_multi`
+    /// body binds at ONE typed named `const fn` on the algebra rather
+    /// than a per-consumer two-line `let`-bound composition through the
+    /// paired [`Self::witness_axis_presence`] helper. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the helper composes
+    /// structurally through the shipped [`Self::witness_axis_presence`]
+    /// under the two-arm dispatch identity above with no re-derivation
+    /// at the caller. THEORY.md §V.1 — knowable platform; the
+    /// CARDINALITY-EQUALS-TWO cell dispatch becomes a substrate-level
+    /// theorem rather than a per-predicate convention, and OPENS the
+    /// COUNT-EQUALS-K cell partition (as the LOWER-END peer of the
+    /// shipped HALF-LINE partitions) at the substrate.
+    ///
+    /// Frontier inspiration: Racket's `(= (count p lst) 2)` singleton-
+    /// plus-one dispatch on a boolean mask; Idris's `Vect (S (S Z)) a`
+    /// refinement type naming exactly-two-element vectors distinct from
+    /// `Vect Z a`, `Vect (S Z) a`, and `Vect (S (S (S k))) a`;
+    /// Haskell's `(a, b)` product type as the canonical shape at
+    /// EXACTLY-TWO-ELEMENTS; APL's `2=≢v` present-arm two-length
+    /// primitive; Kmett's `lattices` package's "cardinality-two"
+    /// projection lifted through a presence-preserving wrapper; Lean's
+    /// `Fin.mk 2` refinement to the second cell above the empty prefix.
+    /// Translation through pleme-io primitives: plain `const fn`
+    /// delegation through the shipped [`Self::witness_axis_presence`]
+    /// at the CARDINALITY-EQUALS-TWO predicate — no new dep, no
+    /// typeclass indirection, no allocation, no closure.
+    #[must_use]
+    pub const fn witness_count_barely_multi(count: usize) -> Option<bool> {
+        Self::witness_axis_presence(count, count == 2)
+    }
+
     /// Presence-preserving negation on whole-posture `Option<bool>` witnesses —
     /// `Self::negate_axis_witness(w)` returns `Some(!b)` when `w` is `Some(b)`,
     /// or `None` when `w` is `None`. The BOUNDARY primitive lifting the shape
@@ -28095,8 +28268,7 @@ impl ResourceLimits {
     /// zero split, no new per-axis scan, no allocation.
     #[must_use]
     pub const fn bottom_axis_is_barely_multi(self) -> Option<bool> {
-        let c = self.count_bottom_axes();
-        Self::witness_axis_presence(c, c == 2)
+        Self::witness_count_barely_multi(self.count_bottom_axes())
     }
 
     /// Whole-posture BARELY-MULTI-OF-TOP predicate —
@@ -28168,8 +28340,7 @@ impl ResourceLimits {
     /// mask.
     #[must_use]
     pub const fn top_axis_is_barely_multi(self) -> Option<bool> {
-        let c = self.count_top_axes();
-        Self::witness_axis_presence(c, c == 2)
+        Self::witness_count_barely_multi(self.count_top_axes())
     }
 
     /// Whole-posture BARELY-MULTI-OF-POLAR predicate —
@@ -28299,8 +28470,7 @@ impl ResourceLimits {
     /// count_interior == FIELD_COUNT`, no re-derivation.
     #[must_use]
     pub const fn polar_axis_is_barely_multi(self) -> Option<bool> {
-        let c = self.count_polar_axes();
-        Self::witness_axis_presence(c, c == 2)
+        Self::witness_count_barely_multi(self.count_polar_axes())
     }
 
     /// Whole-posture BARELY-MULTI-OF-INTERIOR predicate —
@@ -28378,8 +28548,7 @@ impl ResourceLimits {
     /// interior mask.
     #[must_use]
     pub const fn interior_axis_is_barely_multi(self) -> Option<bool> {
-        let c = self.count_interior_axes();
-        Self::witness_axis_presence(c, c == 2)
+        Self::witness_count_barely_multi(self.count_interior_axes())
     }
 
     /// Whole-posture BARELY-SUPER-HALF-SATURATED-OF-BOTTOM predicate —
@@ -94570,6 +94739,234 @@ mod tests {
                 a.interior_axis_is_super_half_saturated(),
                 ResourceLimits::witness_count_super_half_saturated(a.count_interior_axes()),
                 "interior_axis_is_super_half_saturated != witness_count_super_half_saturated(count_interior_axes) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_multi_agrees_with_witness_axis_presence_at_cardinality_two(
+    ) {
+        // Two-arm dispatch identity — witness_count_barely_multi(count)
+        // is structurally the shipped presence-conditional helper
+        // applied to the CARDINALITY-EQUALS-TWO predicate `count == 2`
+        // on every count in `0..=FIELD_COUNT`. Pinning the delegation
+        // at every representable count catches a future rewrite that
+        // silently drifts from the presence-conditional composition (a
+        // `c == 2` weakening to `c >= 2` collapsing BARELY-MULTI into
+        // MULTI, a `c == 2` inversion to `c != 2`, a `c == 2` swap to
+        // `c == 1` collapsing BARELY-MULTI into SINGLETON).
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_barely_multi(count),
+                ResourceLimits::witness_axis_presence(count, count == 2),
+                "witness_count_barely_multi({count}) != witness_axis_presence(count, count == 2)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_multi_empty_arm_is_none() {
+        // Empty-arm identity — the empty-axis count yields `None`,
+        // PRESERVING the has-axis distinction through the BARELY-MULTI
+        // dispatch. Discards the CARDINALITY-EQUALS-TWO predicate on
+        // the count == 0 posture, exactly as the paired
+        // witness_axis_presence helper does one PREDICATE-KIND axis
+        // under and the SINGLETON / MULTI / SATURATED / STRICTLY-MULTI
+        // / AT-MOST-HALF / AT-LEAST-HALF / SUB-HALF / SUPER-HALF
+        // siblings do at their own empty arms.
+        assert_eq!(ResourceLimits::witness_count_barely_multi(0), None);
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_multi_at_singleton_is_some_false() {
+        // SINGLETON-endpoint rejection — the LOWER-ENDPOINT count
+        // (`count == 1`, the SINGLETON cell) REJECTS the BARELY-MULTI
+        // verdict; the ATOMIC CELL PARTITION (SINGLETON, BARELY-MULTI)
+        // is DISJOINT by construction. A `c == 2` weakening to `c >= 1`
+        // (collapsing BARELY-MULTI into MULTI-OR-SINGLETON) or a swap
+        // to `c == 1` (collapsing BARELY-MULTI into SINGLETON) would
+        // flip this to Some(true).
+        assert_eq!(
+            ResourceLimits::witness_count_barely_multi(1),
+            Some(false),
+            "witness_count_barely_multi(1) != Some(false) at SINGLETON endpoint",
+        );
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_multi_at_two_is_some_true() {
+        // Cardinality-two endpoint acceptance — on any FIELD_COUNT >=
+        // 2 the ATOMIC EXACT-TWO cell FIRES the BARELY-MULTI verdict
+        // with `Some(true)`. The single acceptance cell of the
+        // CARDINALITY-EQUALS-TWO dispatch — every other present-arm
+        // count either sits below (SINGLETON at c==1) or above
+        // (STRICTLY-MULTI at c in 3..FIELD_COUNT) this cell.
+        if ResourceLimits::FIELD_COUNT >= 2 {
+            assert_eq!(
+                ResourceLimits::witness_count_barely_multi(2),
+                Some(true),
+                "witness_count_barely_multi(2) != Some(true) at CARDINALITY-EQUALS-TWO cell",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_multi_above_endpoint_rejects() {
+        // Above-cardinality-two rejection — every count strictly above
+        // 2 REJECTS the BARELY-MULTI verdict with `Some(false)`.
+        // Sweeps `3..=FIELD_COUNT` to pin the rejection at every
+        // above-endpoint cell (INCLUDING both the NEARLY-SATURATED
+        // cell at c==FIELD_COUNT-1 and the SATURATED endpoint at
+        // c==FIELD_COUNT).
+        let mut count = 3;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_barely_multi(count),
+                Some(false),
+                "witness_count_barely_multi({count}) != Some(false) at above-endpoint count",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_multi_excludes_witness_count_singleton() {
+        // BARELY-MULTI ⊥ SINGLETON mutual-exclusion pin — the two
+        // combinators sit on adjacent points of the COUNT-EQUALS-K
+        // cell partition (`c == 2` vs `c == 1`), so their present-arm
+        // acceptance sets are DISJOINT by construction. Swept across
+        // `0..=FIELD_COUNT` to pin the exclusion at every
+        // representable count.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            let barely = ResourceLimits::witness_count_barely_multi(count);
+            let single = ResourceLimits::witness_count_singleton(count);
+            assert!(
+                !(matches!(barely, Some(true)) && matches!(single, Some(true))),
+                "witness_count_barely_multi({count}) == Some(true) AND witness_count_singleton({count}) == Some(true)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_multi_implies_witness_count_multi() {
+        // BARELY-MULTI ⇒ MULTI refinement pin — the
+        // CARDINALITY-EQUALS-TWO regime is a strict subset of the
+        // STRICT-ABOVE-LOWER regime via the arithmetic identity `c ==
+        // 2 ⇒ c > 1`. Swept across `0..=FIELD_COUNT` to pin the
+        // subset relation at every representable count — the same
+        // refinement pin the four shipped `_axis_is_barely_multi`
+        // bodies carry against their paired `_axis_is_multi` bodies
+        // lifted one PREDICATE-KIND axis under.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            let barely = ResourceLimits::witness_count_barely_multi(count);
+            let multi = ResourceLimits::witness_count_multi(count);
+            if matches!(barely, Some(true)) {
+                assert_eq!(
+                    multi,
+                    Some(true),
+                    "witness_count_barely_multi({count}) == Some(true) but witness_count_multi({count}) != Some(true)",
+                );
+            }
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_multi_is_some_iff_count_gt_zero() {
+        // `is_some` bridge — the presence dispatch matches the paired
+        // witness_axis_presence's bridge and the witness_count_singleton
+        // / witness_count_multi / witness_count_saturated /
+        // witness_count_strictly_multi / witness_count_at_most_half_saturated
+        // / witness_count_at_least_half_saturated /
+        // witness_count_sub_half_saturated /
+        // witness_count_super_half_saturated siblings one
+        // PREDICATE-KIND axis over: all NINE PRESERVE the `count > 0`
+        // boundary. Swept over `0..=FIELD_COUNT` to pin the presence
+        // identity at every representable count.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_barely_multi(count).is_some(),
+                count > 0,
+                "witness_count_barely_multi({count}).is_some() != (count > 0)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_multi_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the BARELY-MULTI verdict at compile time as a
+        // build-break. Sibling of the const-fn evaluability pins the
+        // four _axis_is_barely_multi predicates already carry at their
+        // own exits, and of the const-fn pins on witness_count_singleton
+        // + witness_count_multi + witness_count_saturated +
+        // witness_count_strictly_multi +
+        // witness_count_at_most_half_saturated +
+        // witness_count_at_least_half_saturated +
+        // witness_count_sub_half_saturated +
+        // witness_count_super_half_saturated one PREDICATE-KIND axis
+        // over.
+        const _: () = assert!(ResourceLimits::witness_count_barely_multi(0).is_none());
+        const _: () = {
+            if ResourceLimits::FIELD_COUNT >= 2 {
+                assert!(matches!(
+                    ResourceLimits::witness_count_barely_multi(2),
+                    Some(true)
+                ));
+            }
+        };
+    }
+
+    #[test]
+    fn resource_limits_axis_is_barely_multi_bodies_delegate_to_witness_count_barely_multi() {
+        // Body-delegation pin — the four shipped _axis_is_barely_multi
+        // predicates delegate through witness_count_barely_multi
+        // applied to their paired count_X_axes tally, at every posture
+        // in the canonical roster. Catches a future rewrite of any of
+        // the four predicate bodies that silently drifts from the
+        // substrate combinator (an axis-name mismatch on the count
+        // call, an inversion of the delegation direction, a swap to a
+        // sibling count helper). Mirrors the sibling delegation-pin
+        // shape the singleton + multi + saturated + strictly-multi +
+        // at-most-half + at-least-half + sub-half + super-half cohorts
+        // already carry one PREDICATE-KIND axis over.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.bottom_axis_is_barely_multi(),
+                ResourceLimits::witness_count_barely_multi(a.count_bottom_axes()),
+                "bottom_axis_is_barely_multi != witness_count_barely_multi(count_bottom_axes) on {a:?}",
+            );
+            assert_eq!(
+                a.top_axis_is_barely_multi(),
+                ResourceLimits::witness_count_barely_multi(a.count_top_axes()),
+                "top_axis_is_barely_multi != witness_count_barely_multi(count_top_axes) on {a:?}",
+            );
+            assert_eq!(
+                a.polar_axis_is_barely_multi(),
+                ResourceLimits::witness_count_barely_multi(a.count_polar_axes()),
+                "polar_axis_is_barely_multi != witness_count_barely_multi(count_polar_axes) on {a:?}",
+            );
+            assert_eq!(
+                a.interior_axis_is_barely_multi(),
+                ResourceLimits::witness_count_barely_multi(a.count_interior_axes()),
+                "interior_axis_is_barely_multi != witness_count_barely_multi(count_interior_axes) on {a:?}",
             );
         }
     }

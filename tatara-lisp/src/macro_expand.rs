@@ -17428,6 +17428,153 @@ impl ResourceLimits {
         Self::witness_axis_presence(count, count <= 2 || count >= Self::FIELD_COUNT - 1)
     }
 
+    /// STRICT-INTERIOR-MIDDLE-KIND count witness —
+    /// `Self::witness_count_strict_interior_middle(count)` returns `Some(true)`
+    /// iff `count >= 3` AND `count <= Self::FIELD_COUNT - 2` (the STRICT-
+    /// INTERIOR-MIDDLE cell strictly inside BOTH closed boundary brackets
+    /// — the LEFT closed bracket `c <= 2` and the RIGHT closed bracket
+    /// `c >= Self::FIELD_COUNT - 1` — equivalently the pointwise DE MORGAN
+    /// COMPLEMENT on the has-axis interval of
+    /// [`Self::witness_count_at_most_barely_multi_or_at_least_nearly_saturated`]'s
+    /// FOUR-CELL BOUNDARY-ZONE acceptance), `Some(false)` iff `count > 0`
+    /// AND (`count <= 2` OR `count >= Self::FIELD_COUNT - 1`) (the FOUR-
+    /// CELL BOUNDARY-ZONE cells rejected here), or `None` iff `count == 0`.
+    /// The BOUNDARY primitive lifting the shape
+    /// `Self::witness_axis_presence(count, count >= 3 && count <=
+    /// Self::FIELD_COUNT - 2)` — the STRICT-CONJUNCTIVE-INTERIOR predicate
+    /// that names the "count sits STRICTLY INSIDE both closed boundary
+    /// brackets" cell as a first-class typed exit rather than the pointwise
+    /// `negate_axis_witness(witness_count_at_most_barely_multi_or_at_least_nearly_saturated(c))`
+    /// composition or the inline
+    /// `if c == 0 { None } else { Some(c >= 3 && c <= FIELD_COUNT - 2) }`
+    /// each downstream consumer would otherwise spell out.
+    ///
+    /// The STRICT-INTERIOR-MIDDLE-KIND specialization of
+    /// [`Self::witness_axis_presence`] on the STRICT-CONJUNCTIVE-INTERIOR
+    /// predicate `c >= 3 && c <= Self::FIELD_COUNT - 2` — the POINTWISE
+    /// COMPLEMENT of [`Self::witness_count_at_most_barely_multi_or_at_least_nearly_saturated`]
+    /// on the has-axis interval and simultaneously the STRICT INTERIOR of
+    /// the shipped [`Self::witness_count_strictly_multi`] with both
+    /// ADJACENT-TO-ENDPOINT cells (BARELY-MULTI, NEARLY-SATURATED)
+    /// additionally excluded. Named at the substrate so a caller reads
+    /// `witness_count_strict_interior_middle(count)` at the callsite
+    /// rather than the two-line
+    /// `negate_axis_witness(witness_count_at_most_barely_multi_or_at_least_nearly_saturated(c))`
+    /// DE MORGAN composition that would inline the same shape at every
+    /// consumer.
+    ///
+    /// **Two-arm dispatch identity — LOAD-BEARING structural pin**: on
+    /// every `count`, `witness_count_strict_interior_middle(count) ==
+    /// Self::witness_axis_presence(count, count >= 3 && count ==
+    /// Self::FIELD_COUNT - 2)` — sic-safe form: the identity is pinned
+    /// against the exact predicate `count >= 3 && count <=
+    /// Self::FIELD_COUNT - 2`. Pinned via
+    /// `resource_limits_witness_count_strict_interior_middle_agrees_with_witness_axis_presence_at_strict_conjunctive_interior`.
+    ///
+    /// **DE-MORGAN-COMPLEMENT identity — LOAD-BEARING structural pin**:
+    /// on every `count`, `witness_count_strict_interior_middle(count) ==
+    /// Self::negate_axis_witness(Self::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(count))`.
+    /// The STRICT-INTERIOR-MIDDLE-KIND count witness is the pointwise DE
+    /// MORGAN complement of the FOUR-CELL BOUNDARY-ZONE count witness on
+    /// the `Some(_)` cells, and the `None`-preserving lift composes
+    /// structurally through [`Self::negate_axis_witness`] rather than a
+    /// re-derived two-arm match. Pinned via
+    /// `resource_limits_witness_count_strict_interior_middle_equals_negate_at_most_barely_multi_or_at_least_nearly_saturated`.
+    ///
+    /// **Empty-arm identity**: `witness_count_strict_interior_middle(0)
+    /// == None` — the empty-axis count yields `None`, PRESERVING the
+    /// has-axis distinction. Pinned via
+    /// `resource_limits_witness_count_strict_interior_middle_empty_arm_is_none`.
+    ///
+    /// **Endpoint rejections**: at every `FIELD_COUNT >= 1`,
+    /// `witness_count_strict_interior_middle(1) == Some(false)` (SINGLETON
+    /// LEFT endpoint) and `witness_count_strict_interior_middle(
+    /// Self::FIELD_COUNT) == Some(false)` (SATURATED RIGHT endpoint). At
+    /// every `FIELD_COUNT >= 2`, `witness_count_strict_interior_middle(2)
+    /// == Some(false)` (BARELY-MULTI LEFT-ADJACENT) and
+    /// `witness_count_strict_interior_middle(Self::FIELD_COUNT - 1) ==
+    /// Some(false)` (NEARLY-SATURATED RIGHT-ADJACENT). Pinned via
+    /// `resource_limits_witness_count_strict_interior_middle_at_one_is_some_false_at_field_count_ge_one`,
+    /// `_at_field_count_is_some_false_at_field_count_ge_one`,
+    /// `_at_two_is_some_false_at_field_count_ge_two`, and
+    /// `_at_field_count_minus_one_is_some_false_at_field_count_ge_two`.
+    ///
+    /// **STRICT-INTERIOR acceptance at `Self::FIELD_COUNT >= 5`**:
+    /// `witness_count_strict_interior_middle(3) == Some(true)` — the
+    /// LEFT-most STRICT-INTERIOR-MIDDLE count ACCEPTS. Pinned via
+    /// `resource_limits_witness_count_strict_interior_middle_at_three_is_some_true_at_field_count_ge_five`.
+    ///
+    /// **STRICT-INTERIOR-MIDDLE ⇔ NOT BOUNDARY-ZONE partition identity**:
+    /// on every posture and every count `c > 0`,
+    /// `witness_count_strict_interior_middle(c)` and
+    /// `witness_count_at_most_barely_multi_or_at_least_nearly_saturated(c)`
+    /// carry OPPOSITE truth values — the STRICT-INTERIOR-MIDDLE cell and
+    /// the FOUR-CELL BOUNDARY-ZONE cell together PARTITION the has-axis
+    /// interval. Pinned via
+    /// `resource_limits_witness_count_strict_interior_middle_iff_not_at_most_barely_multi_or_at_least_nearly_saturated`.
+    ///
+    /// **STRICT-INTERIOR-MIDDLE ⇒ STRICTLY-MULTI refinement**: on every
+    /// count, `matches!(witness_count_strict_interior_middle(c),
+    /// Some(true))` implies `matches!(witness_count_strictly_multi(c),
+    /// Some(true))` — the STRICT-INTERIOR-MIDDLE cell is contained in
+    /// the STRICTLY-MULTI open interior (a strictly stronger predicate).
+    /// Pinned via
+    /// `resource_limits_witness_count_strict_interior_middle_true_implies_strictly_multi_true`.
+    ///
+    /// **`is_some` bridge**: `witness_count_strict_interior_middle(count)
+    /// .is_some() ⇔ count > 0`. Pinned via
+    /// `resource_limits_witness_count_strict_interior_middle_is_some_iff_count_gt_zero`.
+    ///
+    /// `const fn` so a caller can pin the STRICT-INTERIOR-MIDDLE verdict
+    /// at compile time.
+    ///
+    /// **Adoption compounds**: future WHOLE-POSTURE axial predicates that
+    /// currently open-code
+    /// `Self::negate_axis_witness(self.X_axis_is_at_most_barely_multi_or_at_least_nearly_saturated())`
+    /// at their exit rewrite to
+    /// `Self::witness_count_strict_interior_middle(self.count_X_axes())`
+    /// at no semantic change. Body regressions at the shared helper (a
+    /// `&&` collapse to `||` silently WIDENING the acceptance set to the
+    /// SATURATED-MULTI cardinality half-space, a `>= 3` swap to `> 3`
+    /// silently EXCLUDING the LEFT-most STRICT-INTERIOR-MIDDLE cell, a
+    /// `<= Self::FIELD_COUNT - 2` swap to `< Self::FIELD_COUNT - 2`
+    /// silently EXCLUDING the RIGHT-most STRICT-INTERIOR-MIDDLE cell)
+    /// fire immediately at the helper's own pins rather than silently
+    /// re-classifying every downstream axial reader.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// STRICT-INTERIOR-MIDDLE-KIND count witness at every axial predicate
+    /// body binds at ONE typed named `const fn` on the algebra rather
+    /// than a per-consumer DE MORGAN composition through the paired
+    /// [`Self::negate_axis_witness`] and
+    /// [`Self::witness_count_at_most_barely_multi_or_at_least_nearly_saturated`]
+    /// helpers. THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the helper composes structurally through the shipped
+    /// [`Self::witness_axis_presence`] under the two-arm dispatch
+    /// identity above with no re-derivation at the caller. THEORY.md
+    /// §V.1 — knowable platform; the STRICT-INTERIOR-MIDDLE-KIND
+    /// cardinality dispatch becomes a substrate-level theorem rather
+    /// than a per-predicate convention.
+    ///
+    /// Frontier inspiration: Racket's `(and (>= count 3) (<= count (- FIELD-COUNT 2)))`
+    /// short-circuiting STRICT-INTERIOR-MIDDLE lifted from the count arm
+    /// onto four axial-cell projections; Idris's `Fin n` refinement to
+    /// the closed-STRICT-INTERIOR predicate `n >= 2 && n <= FIELD_COUNT -
+    /// 3` (0-indexed) mirrored across the (atomic bottom, atomic top,
+    /// compound polar, compound interior) count arms; APL's `(0<c) ×
+    /// ((c≥3) ∧ (c≤FIELD-COUNT-2))` present-arm STRICT-INTERIOR primitive
+    /// projected onto the atomic and compound count columns; Haskell's
+    /// `fmap not . boundary_zone_of` composition on `Maybe Bool` under the
+    /// `Functor` law. Translated through pleme-io primitives: plain
+    /// `const fn` delegation through the shipped
+    /// [`Self::witness_axis_presence`] at the STRICT-CONJUNCTIVE-INTERIOR
+    /// predicate — no new dep, no typeclass indirection, no allocation,
+    /// no closure.
+    #[must_use]
+    pub const fn witness_count_strict_interior_middle(count: usize) -> Option<bool> {
+        Self::witness_axis_presence(count, count >= 3 && count <= Self::FIELD_COUNT - 2)
+    }
+
     /// Presence-preserving negation on whole-posture `Option<bool>` witnesses —
     /// `Self::negate_axis_witness(w)` returns `Some(!b)` when `w` is `Some(b)`,
     /// or `None` when `w` is `None`. The BOUNDARY primitive lifting the shape
@@ -35392,6 +35539,198 @@ impl ResourceLimits {
         Self::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
             self.count_interior_axes(),
         )
+    }
+
+    /// Whole-posture STRICT-INTERIOR-MIDDLE-OF-BOTTOM predicate — the
+    /// pointwise DE MORGAN COMPLEMENT of
+    /// [`Self::bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated`]
+    /// on the has-axis interval. Returns `Some(true)` iff at least three
+    /// AND at most `Self::FIELD_COUNT - 2` axes are at the bottom pole
+    /// (the STRICT-INTERIOR-MIDDLE cell strictly inside both closed
+    /// boundary brackets), `Some(false)` iff a FOUR-CELL BOUNDARY-ZONE
+    /// bottom count (`c == 1 || c == 2 || c == Self::FIELD_COUNT - 1 ||
+    /// c == Self::FIELD_COUNT`), `None` iff no bottom axis.
+    ///
+    /// **STRICT-INTERIOR-MIDDLE identity**: on every posture,
+    /// `bottom_axis_is_strict_interior_middle() == { let c =
+    /// self.count_bottom_axes(); if c == 0 { None } else { Some(c >= 3
+    /// && c <= Self::FIELD_COUNT - 2) } }`. Composes structurally
+    /// through the shipped [`Self::witness_count_strict_interior_middle`]
+    /// at the atomic bottom count.
+    ///
+    /// **Preset pins**: EMPTY packs six bottom axes (`c == FIELD_COUNT
+    /// == 6` — FOUR-CELL BOUNDARY-ZONE fires `Some(false)`); absent-
+    /// bottom presets pin None; count-3 SPARSE and CONTIGUOUS_INTERIOR
+    /// postures fire `Some(true)` (LEFT-most STRICT-INTERIOR-MIDDLE);
+    /// count-2 ENDPOINTS_ONLY_BOTTOM fires `Some(false)` (LEFT-ADJACENT
+    /// BOUNDARY-ZONE).
+    ///
+    /// **ANY-fold bridge**:
+    /// `bottom_axis_is_strict_interior_middle().is_some() ==
+    /// self.has_bottom_axis()`.
+    ///
+    /// **Complement partition on the has-axis interval**: on every
+    /// posture with `has_bottom_axis()`, `bottom_axis_is_strict_
+    /// interior_middle()` and `bottom_axis_is_at_most_barely_multi_or_
+    /// at_least_nearly_saturated()` carry OPPOSITE truth values.
+    ///
+    /// **STRICT-INTERIOR-MIDDLE ⇒ STRICTLY-MULTI refinement**: on every
+    /// posture, `matches!(bottom_axis_is_strict_interior_middle(),
+    /// Some(true))` implies `matches!(bottom_axis_is_strictly_multi(),
+    /// Some(true))`.
+    ///
+    /// `const fn` so a caller can pin the bottom-axis STRICT-INTERIOR-
+    /// MIDDLE verdict at compile time.
+    ///
+    /// Theory anchor: same as
+    /// [`Self::witness_count_strict_interior_middle`], on the atomic
+    /// bottom cell.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::witness_count_strict_interior_middle`], on the atomic
+    /// bottom count.
+    #[must_use]
+    pub const fn bottom_axis_is_strict_interior_middle(self) -> Option<bool> {
+        Self::witness_count_strict_interior_middle(self.count_bottom_axes())
+    }
+
+    /// Whole-posture STRICT-INTERIOR-MIDDLE-OF-TOP predicate — the
+    /// ATOMIC-CELL DUAL of [`Self::bottom_axis_is_strict_interior_middle`]
+    /// one PROJECTION-KIND axis over. Returns `Some(true)` iff at least
+    /// three AND at most `Self::FIELD_COUNT - 2` axes are at the top
+    /// pole, `Some(false)` iff a FOUR-CELL BOUNDARY-ZONE top count,
+    /// `None` iff no top axis.
+    ///
+    /// **STRICT-INTERIOR-MIDDLE identity dual**: on every posture,
+    /// `top_axis_is_strict_interior_middle() == { let c =
+    /// self.count_top_axes(); if c == 0 { None } else { Some(c >= 3
+    /// && c <= Self::FIELD_COUNT - 2) } }`.
+    ///
+    /// **Preset pins**: UNBOUNDED packs six top axes (BOUNDARY-ZONE
+    /// fires `Some(false)`); absent-top presets pin None. No shipped
+    /// preset places 3..=4 top axes; the STRICT-INTERIOR-MIDDLE
+    /// acceptance arm is exercised via per-count synthetic top-axis
+    /// fixtures in the identity pin.
+    ///
+    /// **ANY-fold bridge dual**:
+    /// `top_axis_is_strict_interior_middle().is_some() ==
+    /// self.has_top_axis()`.
+    ///
+    /// **Complement partition on the has-axis interval dual**: opposite
+    /// truth value to
+    /// `top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated`
+    /// on every has-top posture.
+    ///
+    /// **STRICT-INTERIOR-MIDDLE ⇒ STRICTLY-MULTI refinement dual**:
+    /// pinned per-count.
+    ///
+    /// `const fn` so a caller can pin the top-axis STRICT-INTERIOR-
+    /// MIDDLE verdict at compile time.
+    ///
+    /// Theory anchor: same as
+    /// [`Self::bottom_axis_is_strict_interior_middle`], on the DUAL
+    /// atomic top cell.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::bottom_axis_is_strict_interior_middle`], on the DUAL
+    /// atomic top mask.
+    #[must_use]
+    pub const fn top_axis_is_strict_interior_middle(self) -> Option<bool> {
+        Self::witness_count_strict_interior_middle(self.count_top_axes())
+    }
+
+    /// Whole-posture STRICT-INTERIOR-MIDDLE-OF-POLAR predicate — the
+    /// COMPOUND-CELL projection of
+    /// [`Self::witness_count_strict_interior_middle`] onto the polar-
+    /// axis-count arm. Returns `Some(true)` iff at least three AND at
+    /// most `Self::FIELD_COUNT - 2` axes sit at a pole (STRICT-
+    /// INTERIOR-MIDDLE polar count), `Some(false)` iff a FOUR-CELL
+    /// BOUNDARY-ZONE polar count, `None` iff no polar axis.
+    ///
+    /// **STRICT-INTERIOR-MIDDLE identity**: on every posture,
+    /// `polar_axis_is_strict_interior_middle() == { let c =
+    /// self.count_polar_axes(); if c == 0 { None } else { Some(c >= 3
+    /// && c <= Self::FIELD_COUNT - 2) } }`.
+    ///
+    /// **Preset pins**: ENDPOINTS_ONLY_BOTTOM_POSTURE packs polar
+    /// count == 2 — BOUNDARY-ZONE fires `Some(false)`; both SATURATED-
+    /// pole presets pin `Some(false)` (polar count == FIELD_COUNT ==
+    /// 6, BOUNDARY-ZONE); DEFAULT / hand-authored postures carry no
+    /// polar axis (None); count-3 SPARSE fires `Some(true)`.
+    ///
+    /// **ANY-fold bridge**:
+    /// `polar_axis_is_strict_interior_middle().is_some() ==
+    /// self.has_polar_axis()`.
+    ///
+    /// **Complement partition on the has-axis interval**: opposite
+    /// truth value to
+    /// `polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated`
+    /// on every has-polar posture.
+    ///
+    /// **STRICT-INTERIOR-MIDDLE ⇒ STRICTLY-MULTI refinement**: pinned
+    /// per-count.
+    ///
+    /// `const fn` so a caller can pin the polar-axis STRICT-INTERIOR-
+    /// MIDDLE verdict at compile time.
+    ///
+    /// Theory anchor: same as
+    /// [`Self::bottom_axis_is_strict_interior_middle`], on the COMPOUND
+    /// polar cell.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::bottom_axis_is_strict_interior_middle`], on the COMPOUND
+    /// polar mask.
+    #[must_use]
+    pub const fn polar_axis_is_strict_interior_middle(self) -> Option<bool> {
+        Self::witness_count_strict_interior_middle(self.count_polar_axes())
+    }
+
+    /// Whole-posture STRICT-INTERIOR-MIDDLE-OF-INTERIOR predicate — the
+    /// COMPOUND-CELL DUAL of
+    /// [`Self::polar_axis_is_strict_interior_middle`] one PROJECTION-
+    /// KIND axis over. Returns `Some(true)` iff at least three AND at
+    /// most `Self::FIELD_COUNT - 2` axes sit strictly between the two
+    /// poles, `Some(false)` iff a FOUR-CELL BOUNDARY-ZONE interior
+    /// count, `None` iff no interior axis.
+    ///
+    /// **STRICT-INTERIOR-MIDDLE identity dual**: on every posture,
+    /// `interior_axis_is_strict_interior_middle() == { let c =
+    /// self.count_interior_axes(); if c == 0 { None } else { Some(c
+    /// >= 3 && c <= Self::FIELD_COUNT - 2) } }`.
+    ///
+    /// **Preset pins**: DEFAULT / HAND_AUTHORED_MID / HAND_AUTHORED_OTHER
+    /// pin `Some(false)` (interior count == FIELD_COUNT == 6, BOUNDARY-
+    /// ZONE); SATURATED-pole presets pin `None` (interior count == 0);
+    /// count-3 SPARSE / CONTIGUOUS_INTERIOR_BOTTOM postures pin
+    /// `Some(true)` (STRICT-INTERIOR-MIDDLE with 3 interior axes);
+    /// count-4 ENDPOINTS_ONLY_BOTTOM_POSTURE pins `Some(true)` (STRICT-
+    /// INTERIOR-MIDDLE with 4 interior axes).
+    ///
+    /// **ANY-fold bridge dual**:
+    /// `interior_axis_is_strict_interior_middle().is_some() ==
+    /// self.has_interior_axis()`.
+    ///
+    /// **Complement partition on the has-axis interval dual**: opposite
+    /// truth value to
+    /// `interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated`
+    /// on every has-interior posture.
+    ///
+    /// **STRICT-INTERIOR-MIDDLE ⇒ STRICTLY-MULTI refinement dual**:
+    /// pinned per-count.
+    ///
+    /// `const fn` so a caller can pin the interior-axis STRICT-INTERIOR-
+    /// MIDDLE verdict at compile time.
+    ///
+    /// Theory anchor: same as
+    /// [`Self::polar_axis_is_strict_interior_middle`], on the DUAL
+    /// COMPOUND interior cell.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::polar_axis_is_strict_interior_middle`], on the DUAL
+    /// COMPOUND interior mask.
+    #[must_use]
+    pub const fn interior_axis_is_strict_interior_middle(self) -> Option<bool> {
+        Self::witness_count_strict_interior_middle(self.count_interior_axes())
     }
 }
 
@@ -113180,6 +113519,627 @@ mod tests {
             .is_none());
         const _: () = assert!(EMPTY_RESOURCE_LIMITS
             .interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated()
+            .is_none());
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strict_interior_middle_agrees_with_witness_axis_presence_at_strict_conjunctive_interior(
+    ) {
+        // Two-arm dispatch identity — the STRICT-INTERIOR-MIDDLE witness
+        // is structurally the shipped presence-conditional helper
+        // applied to the STRICT-CONJUNCTIVE-INTERIOR predicate `c >= 3
+        // && c <= FIELD_COUNT - 2` on every count in `0..=FIELD_COUNT`.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_strict_interior_middle(count),
+                ResourceLimits::witness_axis_presence(
+                    count,
+                    (3..=ResourceLimits::FIELD_COUNT - 2).contains(&count),
+                ),
+                "witness_count_strict_interior_middle({count}) != witness_axis_presence(count, count >= 3 && count <= FIELD_COUNT - 2)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strict_interior_middle_equals_negate_at_most_barely_multi_or_at_least_nearly_saturated(
+    ) {
+        // DE MORGAN complement identity — the STRICT-INTERIOR-MIDDLE
+        // witness is the pointwise DE MORGAN complement of the FOUR-
+        // CELL BOUNDARY-ZONE witness on the `Some(_)` cells, and the
+        // `None`-preserving lift composes structurally through
+        // `Self::negate_axis_witness`. Body regressions that decouple
+        // the two witnesses at any count (a `&&` collapse in either
+        // predicate) fire here first.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_strict_interior_middle(count),
+                ResourceLimits::negate_axis_witness(
+                    ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+                        count,
+                    ),
+                ),
+                "witness_count_strict_interior_middle({count}) != negate_axis_witness(witness_count_at_most_barely_multi_or_at_least_nearly_saturated({count}))",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strict_interior_middle_empty_arm_is_none() {
+        assert_eq!(
+            ResourceLimits::witness_count_strict_interior_middle(0),
+            None,
+        );
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strict_interior_middle_at_one_is_some_false_at_field_count_ge_one(
+    ) {
+        if ResourceLimits::FIELD_COUNT >= 1 {
+            assert_eq!(
+                ResourceLimits::witness_count_strict_interior_middle(1),
+                Some(false),
+                "SINGLETON LEFT ENDPOINT must reject STRICT-INTERIOR-MIDDLE",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strict_interior_middle_at_field_count_is_some_false_at_field_count_ge_one(
+    ) {
+        if ResourceLimits::FIELD_COUNT >= 1 {
+            assert_eq!(
+                ResourceLimits::witness_count_strict_interior_middle(ResourceLimits::FIELD_COUNT,),
+                Some(false),
+                "SATURATED RIGHT ENDPOINT must reject STRICT-INTERIOR-MIDDLE",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strict_interior_middle_at_two_is_some_false_at_field_count_ge_two(
+    ) {
+        if ResourceLimits::FIELD_COUNT >= 2 {
+            assert_eq!(
+                ResourceLimits::witness_count_strict_interior_middle(2),
+                Some(false),
+                "BARELY-MULTI LEFT-ADJACENT ENDPOINT must reject STRICT-INTERIOR-MIDDLE",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strict_interior_middle_at_field_count_minus_one_is_some_false_at_field_count_ge_two(
+    ) {
+        if ResourceLimits::FIELD_COUNT >= 2 {
+            assert_eq!(
+                ResourceLimits::witness_count_strict_interior_middle(
+                    ResourceLimits::FIELD_COUNT - 1,
+                ),
+                Some(false),
+                "NEARLY-SATURATED RIGHT-ADJACENT ENDPOINT must reject STRICT-INTERIOR-MIDDLE",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strict_interior_middle_at_three_is_some_true_at_field_count_ge_five(
+    ) {
+        if ResourceLimits::FIELD_COUNT >= 5 {
+            assert_eq!(
+                ResourceLimits::witness_count_strict_interior_middle(3),
+                Some(true),
+                "LEFT-most STRICT-INTERIOR-MIDDLE count must accept",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strict_interior_middle_iff_not_at_most_barely_multi_or_at_least_nearly_saturated(
+    ) {
+        // PARTITION identity on the has-axis interval — STRICT-
+        // INTERIOR-MIDDLE and FOUR-CELL BOUNDARY-ZONE carry opposite
+        // truth values on every present count. Structural pin against
+        // any body drift that would either share cells (both `true` at
+        // some count) or leak cells (both `false` at some has-axis
+        // count).
+        let mut count = 1;
+        while count <= ResourceLimits::FIELD_COUNT {
+            let middle = ResourceLimits::witness_count_strict_interior_middle(count);
+            let boundary =
+                ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+                    count,
+                );
+            assert_eq!(
+                matches!(middle, Some(true)),
+                matches!(boundary, Some(false)),
+                "middle(true) ⇔ boundary(false) failed at count {count}",
+            );
+            assert_eq!(
+                matches!(middle, Some(false)),
+                matches!(boundary, Some(true)),
+                "middle(false) ⇔ boundary(true) failed at count {count}",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strict_interior_middle_true_implies_strictly_multi_true() {
+        // REFINEMENT bridge — every STRICT-INTERIOR-MIDDLE count is also
+        // STRICTLY-MULTI (the STRICT-INTERIOR-MIDDLE cell is contained
+        // in the STRICTLY-MULTI open interior). Structural pin against
+        // any body drift that would let a SINGLETON / SATURATED cell
+        // leak into the STRICT-INTERIOR-MIDDLE acceptance set.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            if matches!(
+                ResourceLimits::witness_count_strict_interior_middle(count),
+                Some(true)
+            ) {
+                assert_eq!(
+                    ResourceLimits::witness_count_strictly_multi(count),
+                    Some(true),
+                    "strict_interior_middle(true) at {count} did not imply strictly_multi(true)",
+                );
+            }
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strict_interior_middle_is_some_iff_count_gt_zero() {
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_strict_interior_middle(count).is_some(),
+                count > 0,
+                "is_some ⇔ count > 0 bridge failed at {count}",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_strict_interior_middle_evaluates_at_compile_time_via_const_fn()
+    {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the STRICT-INTERIOR-MIDDLE verdict at compile
+        // time as a build-break.
+        const _: () = assert!(ResourceLimits::witness_count_strict_interior_middle(0).is_none());
+        const _: () = {
+            if ResourceLimits::FIELD_COUNT >= 1 {
+                assert!(matches!(
+                    ResourceLimits::witness_count_strict_interior_middle(1),
+                    Some(false)
+                ));
+                assert!(matches!(
+                    ResourceLimits::witness_count_strict_interior_middle(
+                        ResourceLimits::FIELD_COUNT,
+                    ),
+                    Some(false)
+                ));
+            }
+        };
+        const _: () = {
+            if ResourceLimits::FIELD_COUNT >= 5 {
+                assert!(matches!(
+                    ResourceLimits::witness_count_strict_interior_middle(3),
+                    Some(true)
+                ));
+            }
+        };
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_strict_interior_middle_preset_pins() {
+        // EMPTY packs six bottom axes (BOUNDARY-ZONE fires Some(false));
+        // absent-bottom presets pin None; count-2 ENDPOINTS_ONLY fires
+        // Some(false); count-3 SPARSE / CONTIGUOUS_INTERIOR fire
+        // Some(true) (LEFT-most STRICT-INTERIOR-MIDDLE).
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_strict_interior_middle(),
+            Some(false),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_strict_interior_middle(),
+            None,
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.bottom_axis_is_strict_interior_middle(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.bottom_axis_is_strict_interior_middle(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.bottom_axis_is_strict_interior_middle(),
+            None,
+        );
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE.bottom_axis_is_strict_interior_middle(),
+            Some(true),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.bottom_axis_is_strict_interior_middle(),
+            Some(true),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_is_strict_interior_middle(),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_strict_interior_middle_equals_count_ge_three_and_le_field_count_minus_two(
+    ) {
+        // STRICT-INTERIOR-MIDDLE identity walked across per-count
+        // synthetic bottom-axis fixtures — bottom axes at the first
+        // `count` positions.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let expected = if count == 0 {
+                None
+            } else {
+                Some((3..=ResourceLimits::FIELD_COUNT - 2).contains(&count))
+            };
+            assert_eq!(
+                posture.bottom_axis_is_strict_interior_middle(),
+                expected,
+                "bottom strict_interior_middle mismatch at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_strict_interior_middle_equals_count_ge_three_and_le_field_count_minus_two(
+    ) {
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let expected = if count == 0 {
+                None
+            } else {
+                Some((3..=ResourceLimits::FIELD_COUNT - 2).contains(&count))
+            };
+            assert_eq!(
+                posture.top_axis_is_strict_interior_middle(),
+                expected,
+                "top strict_interior_middle mismatch at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_strict_interior_middle_equals_count_ge_three_and_le_field_count_minus_two(
+    ) {
+        for bottom in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(bottom) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let polar_count = posture.count_polar_axes();
+            let expected = if polar_count == 0 {
+                None
+            } else {
+                Some((3..=ResourceLimits::FIELD_COUNT - 2).contains(&polar_count))
+            };
+            assert_eq!(
+                posture.polar_axis_is_strict_interior_middle(),
+                expected,
+                "polar strict_interior_middle mismatch at bottom {bottom} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_strict_interior_middle_equals_count_ge_three_and_le_field_count_minus_two(
+    ) {
+        for polar in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(polar) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let interior_count = posture.count_interior_axes();
+            let expected = if interior_count == 0 {
+                None
+            } else {
+                Some((3..=ResourceLimits::FIELD_COUNT - 2).contains(&interior_count))
+            };
+            assert_eq!(
+                posture.interior_axis_is_strict_interior_middle(),
+                expected,
+                "interior strict_interior_middle mismatch at polar {polar} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_strict_interior_middle_is_some_iff_has_bottom_axis() {
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                posture.bottom_axis_is_strict_interior_middle().is_some(),
+                posture.has_bottom_axis(),
+                "bottom is_some ⇔ has_bottom_axis failed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_strict_interior_middle_is_some_iff_has_top_axis() {
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(
+                posture.top_axis_is_strict_interior_middle().is_some(),
+                posture.has_top_axis(),
+                "top is_some ⇔ has_top_axis failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_strict_interior_middle_is_some_iff_has_polar_axis() {
+        for bottom in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(bottom) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(
+                posture.polar_axis_is_strict_interior_middle().is_some(),
+                posture.has_polar_axis(),
+                "polar is_some ⇔ has_polar_axis failed at bottom {bottom} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_strict_interior_middle_is_some_iff_has_interior_axis() {
+        for polar in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(polar) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(
+                posture.interior_axis_is_strict_interior_middle().is_some(),
+                posture.has_interior_axis(),
+                "interior is_some ⇔ has_interior_axis failed at polar {polar} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_strict_interior_middle_iff_not_at_most_barely_multi_or_at_least_nearly_saturated(
+    ) {
+        // PARTITION identity on the has-bottom interval — the two
+        // predicates carry opposite truth values on every posture with
+        // has_bottom_axis().
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if !posture.has_bottom_axis() {
+                continue;
+            }
+            let middle = posture.bottom_axis_is_strict_interior_middle();
+            let boundary =
+                posture.bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated();
+            assert_eq!(
+                matches!(middle, Some(true)),
+                matches!(boundary, Some(false)),
+                "bottom middle(true) ⇔ boundary(false) failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_strict_interior_middle_iff_not_at_most_barely_multi_or_at_least_nearly_saturated(
+    ) {
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if !posture.has_top_axis() {
+                continue;
+            }
+            let middle = posture.top_axis_is_strict_interior_middle();
+            let boundary = posture.top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated();
+            assert_eq!(
+                matches!(middle, Some(true)),
+                matches!(boundary, Some(false)),
+                "top middle(true) ⇔ boundary(false) failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_strict_interior_middle_iff_not_at_most_barely_multi_or_at_least_nearly_saturated(
+    ) {
+        for bottom in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(bottom) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if !posture.has_polar_axis() {
+                continue;
+            }
+            let middle = posture.polar_axis_is_strict_interior_middle();
+            let boundary =
+                posture.polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated();
+            assert_eq!(
+                matches!(middle, Some(true)),
+                matches!(boundary, Some(false)),
+                "polar middle(true) ⇔ boundary(false) failed at bottom {bottom} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_strict_interior_middle_iff_not_at_most_barely_multi_or_at_least_nearly_saturated(
+    ) {
+        for polar in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(polar) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if !posture.has_interior_axis() {
+                continue;
+            }
+            let middle = posture.interior_axis_is_strict_interior_middle();
+            let boundary =
+                posture.interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated();
+            assert_eq!(
+                matches!(middle, Some(true)),
+                matches!(boundary, Some(false)),
+                "interior middle(true) ⇔ boundary(false) failed at polar {polar} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_strict_interior_middle_true_implies_strictly_multi_true() {
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if matches!(posture.bottom_axis_is_strict_interior_middle(), Some(true)) {
+                assert_eq!(
+                    posture.bottom_axis_is_strictly_multi(),
+                    Some(true),
+                    "bottom strict_interior_middle(true) ⇒ strictly_multi(true) failed at count {count} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_strict_interior_middle_true_implies_strictly_multi_true() {
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if matches!(posture.top_axis_is_strict_interior_middle(), Some(true)) {
+                assert_eq!(
+                    posture.top_axis_is_strictly_multi(),
+                    Some(true),
+                    "top strict_interior_middle(true) ⇒ strictly_multi(true) failed at count {count} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_strict_interior_middle_true_implies_strictly_multi_true() {
+        for bottom in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(bottom) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if matches!(posture.polar_axis_is_strict_interior_middle(), Some(true)) {
+                assert_eq!(
+                    posture.polar_axis_is_strictly_multi(),
+                    Some(true),
+                    "polar strict_interior_middle(true) ⇒ strictly_multi(true) failed at bottom {bottom} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_strict_interior_middle_true_implies_strictly_multi_true() {
+        for polar in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(polar) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if matches!(
+                posture.interior_axis_is_strict_interior_middle(),
+                Some(true)
+            ) {
+                assert_eq!(
+                    posture.interior_axis_is_strictly_multi(),
+                    Some(true),
+                    "interior strict_interior_middle(true) ⇒ strictly_multi(true) failed at polar {polar} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axis_is_strict_interior_middle_evaluates_at_compile_time_via_const_fn() {
+        // const-fn compile-time evaluability across all four cells at
+        // their pole-of-fire preset.
+        const _: () = assert!(matches!(
+            SPARSE_BOTTOM_POSTURE.bottom_axis_is_strict_interior_middle(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_strict_interior_middle(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_strict_interior_middle(),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            SPARSE_BOTTOM_POSTURE.polar_axis_is_strict_interior_middle(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            SPARSE_BOTTOM_POSTURE.interior_axis_is_strict_interior_middle(),
+            Some(true)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .top_axis_is_strict_interior_middle()
+            .is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .bottom_axis_is_strict_interior_middle()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .polar_axis_is_strict_interior_middle()
+            .is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .interior_axis_is_strict_interior_middle()
             .is_none());
     }
 }

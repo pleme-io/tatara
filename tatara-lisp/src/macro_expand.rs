@@ -16340,6 +16340,239 @@ impl ResourceLimits {
         Self::witness_axis_presence(count, count == (Self::FIELD_COUNT - 1) / 2)
     }
 
+    /// AT-MOST-BARELY-MULTI-KIND count witness —
+    /// `Self::witness_count_at_most_barely_multi(count)` returns
+    /// `Some(true)` iff `count > 0 && count <= 2` (the CLOSED left-
+    /// endpoint bracket around SINGLETON, INCLUDING the fully-alone
+    /// SINGLETON cell at `c == 1` and the one-past-alone landing
+    /// BARELY-MULTI cell at `c == 2`), `Some(false)` iff `count > 2`,
+    /// or `None` iff `count == 0`. The BOUNDARY primitive lifting the
+    /// shape
+    /// `let c = self.count_X_axes(); Self::witness_axis_presence(c, c <= 2)`
+    /// that every AXIS-CELL AT-MOST-BARELY-MULTI PREDICATE on
+    /// [`ResourceLimits`] carries at its exit —
+    /// [`Self::bottom_axis_is_at_most_barely_multi`],
+    /// [`Self::top_axis_is_at_most_barely_multi`],
+    /// [`Self::polar_axis_is_at_most_barely_multi`],
+    /// [`Self::interior_axis_is_at_most_barely_multi`] all wrap the
+    /// `c <= 2` CLOSED-LEFT-BRACKET-AROUND-BARELY-MULTI comparison of
+    /// their paired [`Self::count_bottom_axes`]-family count in the
+    /// SAME two-line presence-conditional cascade. Pre-lift each
+    /// AT-MOST-BARELY-MULTI predicate open-coded the two-line
+    /// `let c = self.count_X_axes(); Self::witness_axis_presence(c, c <= 2)`
+    /// at its own exit — a four-point copy-paste whose consistency
+    /// the type system did not gate (a predicate that swapped the
+    /// `c <= 2` CLOSED bracket for the STRICT `c < 2` bracket would
+    /// silently EXCLUDE the BARELY-MULTI RIGHT-ENDPOINT cell,
+    /// collapsing AT-MOST-BARELY-MULTI into pure SINGLETON; a
+    /// predicate that swapped it for `c == 2` would silently EXCLUDE
+    /// the SINGLETON LEFT-ENDPOINT cell, collapsing it into pure
+    /// BARELY-MULTI; a predicate that swapped the literal `2` for
+    /// `1` would silently mis-scale the right endpoint one
+    /// CARDINALITY-STEP low, and a swap for `3` would silently expand
+    /// past the BARELY-MULTI landing into the STRICTLY-MULTI regime).
+    /// Post-lift the shape binds at ONE typed `const fn` on
+    /// [`ResourceLimits`], and every AXIS-CELL AT-MOST-BARELY-MULTI
+    /// predicate composes through this helper — the CLOSED-LEFT-
+    /// BRACKET-AROUND-BARELY-MULTI cardinality dispatch is a
+    /// substrate-level theorem rather than a per-consumer two-line
+    /// `let`-bound closure.
+    ///
+    /// The AT-MOST-BARELY-MULTI-KIND specialization of
+    /// [`Self::witness_axis_presence`] on the CLOSED-LEFT-BRACKET-
+    /// AROUND-BARELY-MULTI predicate `c <= 2` — where
+    /// [`Self::witness_axis_presence`] takes an arbitrary boolean
+    /// predicate over the count, [`Self::witness_count_singleton`]
+    /// pins the predicate to the LOWER-ENDPOINT-EQUALITY `c == 1`,
+    /// [`Self::witness_count_barely_multi`] pins it to the ATOMIC
+    /// EXACT-TWO cell `c == 2` one CARDINALITY-STEP above the
+    /// SINGLETON endpoint, [`Self::witness_count_multi`] pins it to
+    /// the STRICT-ABOVE-LOWER `c > 1` half-line,
+    /// [`Self::witness_count_at_least_nearly_saturated`] pins it to
+    /// the CLOSED right-endpoint bracket `c >= Self::FIELD_COUNT - 1`
+    /// around SATURATED, and
+    /// [`Self::witness_count_at_most_half_saturated`] pins it to the
+    /// CLOSED LOWER HALF `c * 2 <= Self::FIELD_COUNT` around the
+    /// balance-point, THIS combinator PINS the predicate to the
+    /// CLOSED LEFT-ENDPOINT bracket `c <= 2` around the union of
+    /// SINGLETON and BARELY-MULTI at the LOWER end of the cardinality
+    /// half-line. The DUAL of
+    /// [`Self::witness_count_at_least_nearly_saturated`] one HALF-
+    /// LINE-KIND axis over — where AT-LEAST-NEARLY-SATURATED pins the
+    /// CLOSED RIGHT-endpoint bracket `c >= Self::FIELD_COUNT - 1`
+    /// around SATURATED (the union of NEARLY-SATURATED at `c ==
+    /// Self::FIELD_COUNT - 1` and SATURATED at `c == Self::FIELD_COUNT`),
+    /// AT-MOST-BARELY-MULTI pins the CLOSED LEFT-endpoint bracket
+    /// `c <= 2` around SINGLETON (the union of SINGLETON at `c == 1`
+    /// and BARELY-MULTI at `c == 2`). Named at the substrate so a
+    /// caller reads `witness_count_at_most_barely_multi(count)` at
+    /// the callsite rather than
+    /// `witness_axis_presence(count, count <= 2)` with the count-name
+    /// repeated at both operands and the BARELY-MULTI landing
+    /// cardinality threaded through the helper's second argument.
+    ///
+    /// **Two-arm dispatch identity — LOAD-BEARING structural pin**:
+    /// on every `count`,
+    /// `witness_count_at_most_barely_multi(count) ==
+    /// Self::witness_axis_presence(count, count <= 2)`. The
+    /// delegation through the shipped presence-conditional helper is
+    /// DIRECT — no new per-count scan, no allocation. Pinned via
+    /// `resource_limits_witness_count_at_most_barely_multi_agrees_with_witness_axis_presence_at_closed_left_bracket_around_barely_multi`.
+    ///
+    /// **Empty-arm identity**:
+    /// `witness_count_at_most_barely_multi(0) == None` — the empty-
+    /// axis count yields `None`, PRESERVING the has-axis distinction
+    /// through the AT-MOST-BARELY-MULTI dispatch. Pinned via
+    /// `resource_limits_witness_count_at_most_barely_multi_empty_arm_is_none`.
+    ///
+    /// **SINGLETON-endpoint acceptance**:
+    /// `witness_count_at_most_barely_multi(1) == Some(true)` on any
+    /// FIELD_COUNT >= 1 — the LOWER LEFT-ENDPOINT of the CLOSED
+    /// bracket (the SINGLETON cell) ACCEPTS the AT-MOST-BARELY-MULTI
+    /// verdict. Pinned via
+    /// `resource_limits_witness_count_at_most_barely_multi_at_one_is_some_true`.
+    ///
+    /// **BARELY-MULTI-endpoint acceptance**:
+    /// `witness_count_at_most_barely_multi(2) == Some(true)` on any
+    /// FIELD_COUNT >= 2 — the RIGHT-ENDPOINT of the CLOSED bracket
+    /// (the BARELY-MULTI cell) ACCEPTS the AT-MOST-BARELY-MULTI
+    /// verdict, INCLUDING the right endpoint the STRICT `c < 2`
+    /// bracket EXCLUDES. Pinned via
+    /// `resource_limits_witness_count_at_most_barely_multi_at_two_is_some_true`.
+    ///
+    /// **Above-endpoint rejection**: for every `count` in
+    /// `3..=Self::FIELD_COUNT`,
+    /// `witness_count_at_most_barely_multi(count) == Some(false)` —
+    /// every count strictly past the BARELY-MULTI landing REJECTS
+    /// the verdict. Swept across `3..=FIELD_COUNT` (INCLUDING the
+    /// balance-point cell at `c == FIELD_COUNT / 2` and the
+    /// SATURATED cell at `c == FIELD_COUNT`) to pin the rejection at
+    /// every above-endpoint cell. Pinned via
+    /// `resource_limits_witness_count_at_most_barely_multi_above_endpoint_rejects`.
+    ///
+    /// **AT-MOST-BARELY-MULTI ⇔ (SINGLETON OR BARELY-MULTI) disjoint-
+    /// union pin — LOAD-BEARING partition pin**: for every `count`,
+    /// `witness_count_at_most_barely_multi(count) == Some(true) ⇔
+    /// (witness_count_singleton(count) == Some(true) ||
+    /// witness_count_barely_multi(count) == Some(true))`. The CLOSED
+    /// LEFT-endpoint bracket around BARELY-MULTI is the DISJOINT
+    /// UNION of the SINGLETON atomic cell (`c == 1`) and the BARELY-
+    /// MULTI atomic cell (`c == 2`) — the same disjoint-union
+    /// identity the four shipped `_axis_is_at_most_barely_multi`
+    /// bodies carry against their paired `_axis_is_singleton` /
+    /// `_axis_is_barely_multi` bodies. The DUAL of the shipped
+    /// AT-LEAST-NEARLY-SATURATED ⇔ (NEARLY-SATURATED OR SATURATED)
+    /// disjoint-union pin one HALF-LINE-KIND axis over on the
+    /// RIGHT-endpoint side. Pinned via
+    /// `resource_limits_witness_count_at_most_barely_multi_iff_singleton_or_barely_multi`.
+    ///
+    /// **SINGLETON-IMPLIES-AT-MOST-BARELY-MULTI refinement — LOAD-
+    /// BEARING nested-interval pin**: for every `count`,
+    /// `witness_count_singleton(count) == Some(true) ⇒
+    /// witness_count_at_most_barely_multi(count) == Some(true)`. The
+    /// SINGLETON atomic cell sits at the LEFT ENDPOINT of the CLOSED
+    /// bracket via the arithmetic identity `c == 1 ⇒ c <= 2` — the
+    /// same refinement pin the four shipped
+    /// `_axis_is_at_most_barely_multi` bodies carry against their
+    /// paired `_axis_is_singleton` bodies lifted to the substrate
+    /// one PREDICATE-KIND axis under, and the LEFT-endpoint DUAL of
+    /// the shipped SATURATED-IMPLIES-AT-LEAST-NEARLY-SATURATED
+    /// refinement pin. Pinned via
+    /// `resource_limits_witness_count_singleton_implies_witness_count_at_most_barely_multi`.
+    ///
+    /// **BARELY-MULTI-IMPLIES-AT-MOST-BARELY-MULTI refinement — LOAD-
+    /// BEARING nested-interval pin**: for every `count`,
+    /// `witness_count_barely_multi(count) == Some(true) ⇒
+    /// witness_count_at_most_barely_multi(count) == Some(true)`. The
+    /// BARELY-MULTI atomic cell sits at the RIGHT ENDPOINT of the
+    /// CLOSED bracket via the arithmetic identity `c == 2 ⇒ c <= 2`
+    /// — the RIGHT-endpoint refinement pin the CLOSED bracket
+    /// INCLUDES that the STRICT `c < 2` bracket EXCLUDES. Pinned via
+    /// `resource_limits_witness_count_barely_multi_implies_witness_count_at_most_barely_multi`.
+    ///
+    /// **`is_some` bridge**:
+    /// `witness_count_at_most_barely_multi(count).is_some() ⇔
+    /// count > 0` — the presence dispatch matches the paired
+    /// [`Self::witness_axis_presence`]'s bridge and every shipped
+    /// witness_count_* sibling one PREDICATE-KIND axis over (all
+    /// FIFTEEN PRESERVE the `count > 0` boundary). Pinned via
+    /// `resource_limits_witness_count_at_most_barely_multi_is_some_iff_count_gt_zero`.
+    ///
+    /// `const fn` so a caller can pin the AT-MOST-BARELY-MULTI
+    /// verdict at compile time (`const _: () = assert!(matches!(
+    /// ResourceLimits::witness_count_at_most_barely_multi(1),
+    /// Some(true)));`) — sibling of the const-fn evaluability pins
+    /// the four `_axis_is_at_most_barely_multi` predicates already
+    /// carry at their own exits, and of the const-fn pins on the
+    /// shipped HALF-LINE siblings
+    /// [`Self::witness_count_at_most_half_saturated`],
+    /// [`Self::witness_count_at_least_half_saturated`], and
+    /// [`Self::witness_count_at_least_nearly_saturated`] one
+    /// HALF-LINE-KIND axis over.
+    ///
+    /// **Adoption compounds**: the four shipped
+    /// `_axis_is_at_most_barely_multi` predicates rewrite from the
+    /// open-coded two-line `let c = self.count_X_axes();
+    /// Self::witness_axis_presence(c, c <= 2)` to the one-line
+    /// `Self::witness_count_at_most_barely_multi(self.count_X_axes())`
+    /// composition at no semantic change; any future AXIS-CELL
+    /// AT-MOST-BARELY-MULTI predicate (higher-order axial partitions
+    /// with a CLOSED-LEFT-ENDPOINT bracket around SINGLETON,
+    /// pairwise-quorum checks isolating the MINIMAL-and-one-past
+    /// cardinality cohort) composes through this same primitive.
+    /// Body regressions at the shared helper (a `c <= 2` collapse to
+    /// `c < 2` that would silently exclude the RIGHT-ENDPOINT
+    /// BARELY-MULTI cell, a `c == 2` swap that would silently exclude
+    /// the LEFT-ENDPOINT SINGLETON cell, a `2` swap to `1` that would
+    /// silently mis-scale the right endpoint one CARDINALITY-STEP
+    /// low, a `2` swap to `3` that would silently expand past the
+    /// BARELY-MULTI landing into STRICTLY-MULTI) fire immediately at
+    /// the helper's own pins rather than silently re-classifying every
+    /// downstream `_axis_is_at_most_barely_multi` reading. The
+    /// substrate now names the CLOSED LEFT-ENDPOINT bracket around
+    /// SINGLETON as a first-class typed combinator on
+    /// [`ResourceLimits`] — the DUAL of the shipped
+    /// [`Self::witness_count_at_least_nearly_saturated`]
+    /// RIGHT-ENDPOINT bracket around SATURATED, closing the
+    /// (AT-MOST-BARELY-MULTI, AT-LEAST-NEARLY-SATURATED) CLOSED
+    /// TWO-CELL ENDPOINT-BRACKET pair at the substrate.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// AT-MOST-BARELY-MULTI-KIND count witness at every
+    /// `_axis_is_at_most_barely_multi` body binds at ONE typed named
+    /// `const fn` on the algebra rather than a per-consumer two-line
+    /// `let`-bound composition through the paired
+    /// [`Self::witness_axis_presence`] helper. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the helper
+    /// composes structurally through the shipped
+    /// [`Self::witness_axis_presence`] under the two-arm dispatch
+    /// identity above with no re-derivation at the caller. THEORY.md
+    /// §V.1 — knowable platform; the CLOSED-LEFT-ENDPOINT-BRACKET-
+    /// AROUND-BARELY-MULTI cardinality dispatch becomes a substrate-
+    /// level theorem, EXTENDING the CLOSED-BRACKET half-line family
+    /// with the LEFT-ENDPOINT slot as the LEFT-endpoint DUAL of the
+    /// shipped RIGHT-ENDPOINT bracket, closing the (AT-MOST-BARELY-
+    /// MULTI, AT-LEAST-NEARLY-SATURATED) CLOSED TWO-CELL ENDPOINT-
+    /// BRACKET pair at the substrate.
+    ///
+    /// Frontier inspiration: Racket's `(and (positive? count) (<=
+    /// count 2))` short-circuiting CLOSED-LEFT-ENDPOINT bracket on a
+    /// count; Idris's `Vect n a` with `n <= 2` refinement to the
+    /// singleton-or-pair cardinality regime; APL's `(0<c) × c ≤ 2`
+    /// present-arm CLOSED-LEFT-ENDPOINT primitive; Kmett's
+    /// `lattices` package's "atomic-or-atom-successor" projection
+    /// lifted through a presence-preserving wrapper; Lean's `Fin n`
+    /// with `n <= 2` refinement to the two-cell head of a finite
+    /// index. Translation through pleme-io primitives: plain
+    /// `const fn` delegation through the shipped
+    /// [`Self::witness_axis_presence`] at the CLOSED-LEFT-ENDPOINT
+    /// `c <= 2` predicate — no new dep, no typeclass indirection, no
+    /// allocation, no closure.
+    #[must_use]
+    pub const fn witness_count_at_most_barely_multi(count: usize) -> Option<bool> {
+        Self::witness_axis_presence(count, count <= 2)
+    }
+
     /// Presence-preserving negation on whole-posture `Option<bool>` witnesses —
     /// `Self::negate_axis_witness(w)` returns `Some(!b)` when `w` is `Some(b)`,
     /// or `None` when `w` is `None`. The BOUNDARY primitive lifting the shape
@@ -32668,8 +32901,7 @@ impl ResourceLimits {
     /// split, no new per-axis scan, no allocation.
     #[must_use]
     pub const fn bottom_axis_is_at_most_barely_multi(self) -> Option<bool> {
-        let c = self.count_bottom_axes();
-        Self::witness_axis_presence(c, c <= 2)
+        Self::witness_count_at_most_barely_multi(self.count_bottom_axes())
     }
 
     /// Whole-posture AT-MOST-BARELY-MULTI-OF-TOP predicate —
@@ -32761,8 +32993,7 @@ impl ResourceLimits {
     /// atomic top mask.
     #[must_use]
     pub const fn top_axis_is_at_most_barely_multi(self) -> Option<bool> {
-        let c = self.count_top_axes();
-        Self::witness_axis_presence(c, c <= 2)
+        Self::witness_count_at_most_barely_multi(self.count_top_axes())
     }
 
     /// Whole-posture AT-MOST-BARELY-MULTI-OF-POLAR predicate —
@@ -32876,8 +33107,7 @@ impl ResourceLimits {
     /// polar mask.
     #[must_use]
     pub const fn polar_axis_is_at_most_barely_multi(self) -> Option<bool> {
-        let c = self.count_polar_axes();
-        Self::witness_axis_presence(c, c <= 2)
+        Self::witness_count_at_most_barely_multi(self.count_polar_axes())
     }
 
     /// Whole-posture AT-MOST-BARELY-MULTI-OF-INTERIOR predicate —
@@ -32970,8 +33200,7 @@ impl ResourceLimits {
     /// COMPOUND interior mask.
     #[must_use]
     pub const fn interior_axis_is_at_most_barely_multi(self) -> Option<bool> {
-        let c = self.count_interior_axes();
-        Self::witness_axis_presence(c, c <= 2)
+        Self::witness_count_at_most_barely_multi(self.count_interior_axes())
     }
 }
 
@@ -97287,6 +97516,273 @@ mod tests {
                 a.interior_axis_is_barely_sub_half_saturated(),
                 ResourceLimits::witness_count_barely_sub_half_saturated(a.count_interior_axes()),
                 "interior_axis_is_barely_sub_half_saturated != witness_count_barely_sub_half_saturated(count_interior_axes) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_agrees_with_witness_axis_presence_at_closed_left_bracket_around_barely_multi(
+    ) {
+        // Two-arm dispatch identity — witness_count_at_most_barely_multi(count)
+        // is structurally the shipped presence-conditional helper applied to
+        // the CLOSED-LEFT-BRACKET-AROUND-BARELY-MULTI predicate on every count
+        // in `0..=FIELD_COUNT`. Pinning the delegation at every representable
+        // count catches a future rewrite that silently drifts from the
+        // presence-conditional composition (a `c <= 2` collapse to `c < 2`
+        // that would silently exclude the RIGHT-ENDPOINT BARELY-MULTI cell,
+        // a `c == 2` swap that would silently exclude the LEFT-ENDPOINT
+        // SINGLETON cell, a `2` swap to `1` or `3` that would silently
+        // mis-scale the right endpoint one CARDINALITY-STEP off).
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_at_most_barely_multi(count),
+                ResourceLimits::witness_axis_presence(count, count <= 2),
+                "witness_count_at_most_barely_multi({count}) != witness_axis_presence(count, count <= 2)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_empty_arm_is_none() {
+        // Empty-arm identity — the empty-axis count yields `None`,
+        // PRESERVING the has-axis distinction through the AT-MOST-
+        // BARELY-MULTI dispatch. Discards the CLOSED-LEFT-BRACKET-
+        // AROUND-BARELY-MULTI predicate on the count == 0 posture,
+        // exactly as the paired witness_axis_presence helper does one
+        // PREDICATE-KIND axis under and the shipped witness_count_*
+        // siblings do at their own empty arms.
+        assert_eq!(ResourceLimits::witness_count_at_most_barely_multi(0), None,);
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_at_one_is_some_true() {
+        // SINGLETON-endpoint acceptance — on any FIELD_COUNT >= 1 the
+        // LOWER LEFT-ENDPOINT of the CLOSED bracket (the SINGLETON
+        // cell at `c == 1`) ACCEPTS the AT-MOST-BARELY-MULTI verdict
+        // with `Some(true)`. The LEFT endpoint of the CLOSED bracket
+        // is INCLUDED by construction of the `c <= 2` half-line.
+        if ResourceLimits::FIELD_COUNT >= 1 {
+            assert_eq!(
+                ResourceLimits::witness_count_at_most_barely_multi(1),
+                Some(true),
+                "witness_count_at_most_barely_multi(1) != Some(true) at SINGLETON LEFT-ENDPOINT",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_at_two_is_some_true() {
+        // BARELY-MULTI-endpoint acceptance — on any FIELD_COUNT >= 2
+        // the RIGHT-ENDPOINT of the CLOSED bracket (the BARELY-MULTI
+        // cell at `c == 2`) ACCEPTS the AT-MOST-BARELY-MULTI verdict
+        // with `Some(true)`. The RIGHT endpoint of the CLOSED bracket
+        // is INCLUDED by construction of the `c <= 2` half-line —
+        // exactly the cell the STRICT `c < 2` bracket would EXCLUDE.
+        if ResourceLimits::FIELD_COUNT >= 2 {
+            assert_eq!(
+                ResourceLimits::witness_count_at_most_barely_multi(2),
+                Some(true),
+                "witness_count_at_most_barely_multi(2) != Some(true) at BARELY-MULTI RIGHT-ENDPOINT",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_above_endpoint_rejects() {
+        // Above-endpoint rejection — every present-arm count strictly
+        // past the BARELY-MULTI landing (`c > 2`) REJECTS the AT-MOST-
+        // BARELY-MULTI verdict with `Some(false)`. Swept across
+        // `3..=FIELD_COUNT` (INCLUDING the balance-point cell at `c
+        // == FIELD_COUNT / 2` and the SATURATED cell at `c ==
+        // FIELD_COUNT`) to pin the rejection at every above-endpoint
+        // cell.
+        let mut count = 3;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_at_most_barely_multi(count),
+                Some(false),
+                "witness_count_at_most_barely_multi({count}) != Some(false) at above-endpoint present-arm count",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_iff_singleton_or_barely_multi() {
+        // AT-MOST-BARELY-MULTI ⇔ (SINGLETON OR BARELY-MULTI) disjoint-
+        // union pin — the CLOSED LEFT-endpoint bracket around
+        // BARELY-MULTI is the DISJOINT UNION of the SINGLETON atomic
+        // cell (`c == 1`) and the BARELY-MULTI atomic cell (`c ==
+        // 2`). Swept across `0..=FIELD_COUNT` to pin the biconditional
+        // at every representable count. The DUAL of the shipped
+        // AT-LEAST-NEARLY-SATURATED ⇔ (NEARLY-SATURATED OR SATURATED)
+        // disjoint-union pin one HALF-LINE-KIND axis over on the
+        // RIGHT-endpoint side.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            let at_most = ResourceLimits::witness_count_at_most_barely_multi(count);
+            let singleton = ResourceLimits::witness_count_singleton(count);
+            let barely_multi = ResourceLimits::witness_count_barely_multi(count);
+            assert_eq!(
+                matches!(at_most, Some(true)),
+                matches!(singleton, Some(true)) || matches!(barely_multi, Some(true)),
+                "witness_count_at_most_barely_multi({count}) == Some(true) not equivalent to (witness_count_singleton({count}) == Some(true) OR witness_count_barely_multi({count}) == Some(true))",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_singleton_implies_witness_count_at_most_barely_multi() {
+        // SINGLETON ⇒ AT-MOST-BARELY-MULTI refinement pin — the
+        // SINGLETON atomic cell (`c == 1`) sits at the LEFT ENDPOINT
+        // of the CLOSED bracket via the arithmetic identity `c == 1
+        // ⇒ c <= 2`. Swept across `0..=FIELD_COUNT` to pin the
+        // refinement at every representable count — the same
+        // refinement pin the four shipped `_axis_is_at_most_barely_multi`
+        // bodies carry against their paired `_axis_is_singleton`
+        // bodies lifted one PREDICATE-KIND axis under, and the
+        // LEFT-endpoint DUAL of the shipped SATURATED-IMPLIES-AT-
+        // LEAST-NEARLY-SATURATED refinement pin.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            let singleton = ResourceLimits::witness_count_singleton(count);
+            let at_most = ResourceLimits::witness_count_at_most_barely_multi(count);
+            if matches!(singleton, Some(true)) {
+                assert_eq!(
+                    at_most,
+                    Some(true),
+                    "witness_count_singleton({count}) == Some(true) but witness_count_at_most_barely_multi({count}) != Some(true)",
+                );
+            }
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_multi_implies_witness_count_at_most_barely_multi() {
+        // BARELY-MULTI ⇒ AT-MOST-BARELY-MULTI refinement pin — the
+        // BARELY-MULTI atomic cell (`c == 2`) sits at the RIGHT
+        // ENDPOINT of the CLOSED bracket via the arithmetic identity
+        // `c == 2 ⇒ c <= 2`. Swept across `0..=FIELD_COUNT` to pin
+        // the refinement at every representable count — the RIGHT-
+        // endpoint refinement pin the CLOSED bracket INCLUDES that
+        // the STRICT `c < 2` bracket EXCLUDES.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            let barely_multi = ResourceLimits::witness_count_barely_multi(count);
+            let at_most = ResourceLimits::witness_count_at_most_barely_multi(count);
+            if matches!(barely_multi, Some(true)) {
+                assert_eq!(
+                    at_most,
+                    Some(true),
+                    "witness_count_barely_multi({count}) == Some(true) but witness_count_at_most_barely_multi({count}) != Some(true)",
+                );
+            }
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_is_some_iff_count_gt_zero() {
+        // `is_some` bridge — the presence dispatch matches the paired
+        // witness_axis_presence's bridge and every shipped
+        // witness_count_* sibling one PREDICATE-KIND axis over: all
+        // FIFTEEN PRESERVE the `count > 0` boundary. Swept over
+        // `0..=FIELD_COUNT` to pin the presence identity at every
+        // representable count.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_at_most_barely_multi(count).is_some(),
+                count > 0,
+                "witness_count_at_most_barely_multi({count}).is_some() != (count > 0)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the AT-MOST-BARELY-MULTI verdict at compile
+        // time as a build-break. Sibling of the const-fn evaluability
+        // pins the four _axis_is_at_most_barely_multi predicates
+        // already carry at their own exits, and of the const-fn pins
+        // on the shipped HALF-LINE siblings
+        // witness_count_at_most_half_saturated,
+        // witness_count_at_least_half_saturated, and
+        // witness_count_at_least_nearly_saturated one HALF-LINE-KIND
+        // axis over.
+        const _: () = assert!(ResourceLimits::witness_count_at_most_barely_multi(0).is_none());
+        const _: () = {
+            if ResourceLimits::FIELD_COUNT >= 1 {
+                assert!(matches!(
+                    ResourceLimits::witness_count_at_most_barely_multi(1),
+                    Some(true)
+                ));
+            }
+        };
+        const _: () = {
+            if ResourceLimits::FIELD_COUNT >= 2 {
+                assert!(matches!(
+                    ResourceLimits::witness_count_at_most_barely_multi(2),
+                    Some(true)
+                ));
+            }
+        };
+    }
+
+    #[test]
+    fn resource_limits_axis_is_at_most_barely_multi_bodies_delegate_to_witness_count_at_most_barely_multi(
+    ) {
+        // Body-delegation pin — the four shipped
+        // _axis_is_at_most_barely_multi predicates delegate through
+        // witness_count_at_most_barely_multi applied to their paired
+        // count_X_axes tally, at every posture in the canonical
+        // roster. Catches a future rewrite of any of the four
+        // predicate bodies that silently drifts from the substrate
+        // combinator (an axis-name mismatch on the count call, an
+        // inversion of the delegation direction, a swap to a sibling
+        // count helper). Mirrors the sibling delegation-pin shape the
+        // singleton + multi + saturated + strictly-multi +
+        // at-most-half + at-least-half + sub-half + super-half +
+        // barely-multi + nearly-saturated + half-saturated +
+        // at-least-nearly-saturated + barely-super-half-saturated +
+        // barely-sub-half-saturated cohorts already carry one
+        // PREDICATE-KIND axis over.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.bottom_axis_is_at_most_barely_multi(),
+                ResourceLimits::witness_count_at_most_barely_multi(a.count_bottom_axes()),
+                "bottom_axis_is_at_most_barely_multi != witness_count_at_most_barely_multi(count_bottom_axes) on {a:?}",
+            );
+            assert_eq!(
+                a.top_axis_is_at_most_barely_multi(),
+                ResourceLimits::witness_count_at_most_barely_multi(a.count_top_axes()),
+                "top_axis_is_at_most_barely_multi != witness_count_at_most_barely_multi(count_top_axes) on {a:?}",
+            );
+            assert_eq!(
+                a.polar_axis_is_at_most_barely_multi(),
+                ResourceLimits::witness_count_at_most_barely_multi(a.count_polar_axes()),
+                "polar_axis_is_at_most_barely_multi != witness_count_at_most_barely_multi(count_polar_axes) on {a:?}",
+            );
+            assert_eq!(
+                a.interior_axis_is_at_most_barely_multi(),
+                ResourceLimits::witness_count_at_most_barely_multi(a.count_interior_axes()),
+                "interior_axis_is_at_most_barely_multi != witness_count_at_most_barely_multi(count_interior_axes) on {a:?}",
             );
         }
     }

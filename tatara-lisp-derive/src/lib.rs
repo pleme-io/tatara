@@ -1214,8 +1214,11 @@ fn classify(ty: &Type) -> Kind {
             match last.ident.to_string().as_str() {
                 "String" => return Kind::String,
                 "bool" => return Kind::Bool,
-                "i64" => return Kind::Int("i64"),
+                "i8" => return Kind::Int("i8"),
+                "i16" => return Kind::Int("i16"),
                 "i32" => return Kind::Int("i32"),
+                "i64" => return Kind::Int("i64"),
+                "u8" => return Kind::Int("u8"),
                 "u16" => return Kind::Int("u16"),
                 "u32" => return Kind::Int("u32"),
                 "u64" => return Kind::Int("u64"),
@@ -1516,8 +1519,11 @@ mod classify_tests {
         // modulo the width-payload the derive threads through
         // `Kind::Int("u16")` — the canonical `port 70000` gate the
         // `LispError::KwargOutOfRange` docstring names.
-        assert!(matches!(classify(&parse_ty("i64")), Kind::Int("i64")));
+        assert!(matches!(classify(&parse_ty("i8")), Kind::Int("i8")));
+        assert!(matches!(classify(&parse_ty("i16")), Kind::Int("i16")));
         assert!(matches!(classify(&parse_ty("i32")), Kind::Int("i32")));
+        assert!(matches!(classify(&parse_ty("i64")), Kind::Int("i64")));
+        assert!(matches!(classify(&parse_ty("u8")), Kind::Int("u8")));
         assert!(matches!(classify(&parse_ty("u16")), Kind::Int("u16")));
         assert!(matches!(classify(&parse_ty("u32")), Kind::Int("u32")));
         assert!(matches!(classify(&parse_ty("u64")), Kind::Int("u64")));
@@ -1563,8 +1569,20 @@ mod classify_tests {
             Kind::OptionalBool
         ));
         assert!(matches!(
+            classify(&parse_ty("Option<i8>")),
+            Kind::OptionalInt("i8")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<i16>")),
+            Kind::OptionalInt("i16")
+        ));
+        assert!(matches!(
             classify(&parse_ty("Option<i64>")),
             Kind::OptionalInt("i64")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<u8>")),
+            Kind::OptionalInt("u8")
         ));
         assert!(matches!(
             classify(&parse_ty("Option<u32>")),

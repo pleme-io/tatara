@@ -805,24 +805,25 @@ const _: () = crate::ast::assert_str_array_slice_equals_str_array::<2, 2, 0>(
     &StructuralKind::LABELS,
     &["nil", "list"],
 );
-const _: () = crate::ast::assert_str_array_slice_equals_str_array::<9, 9, 0>(
+const _: () = crate::ast::assert_str_array_slice_equals_str_array::<12, 12, 0>(
     &NumericWidth::LABELS,
     &[
-        "i32", "i64", "u16", "u32", "u64", "usize", "isize", "f32", "f64",
+        "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "usize", "isize", "f32", "f64",
     ],
 );
 
 /// The closed set of Rust numeric widths a `#[derive(TataraDomain)]`
-/// field can lower a numeric kwarg into — the exact nine the derive's
-/// `classify` recognises (`Kind::Int("i32" | "i64" | "u16" | "u32" |
-/// "u64" | "usize" | "isize")` ⊎ `Kind::Float("f32" | "f64")`), encoded
-/// as a TYPE so the width identity riding
-/// [`LispError::KwargOutOfRange.target`] is load-bearing data rather
-/// than a `&'static str` the proc macro interpolated into a message.
+/// field can lower a numeric kwarg into — the exact twelve the derive's
+/// `classify` recognises (`Kind::Int("i8" | "i16" | "i32" | "i64" |
+/// "u8" | "u16" | "u32" | "u64" | "usize" | "isize")` ⊎
+/// `Kind::Float("f32" | "f64")`), encoded as a TYPE so the width
+/// identity riding [`LispError::KwargOutOfRange.target`] is
+/// load-bearing data rather than a `&'static str` the proc macro
+/// interpolated into a message.
 ///
 /// The set is closed by CONSTRUCTION on the derive's side: the derive's
 /// `Kind::Int` / `Kind::Float` payload is the only producer, and a
-/// hypothetical tenth width (`i8`, `i16`, `i128`) is not reachable
+/// hypothetical thirteenth width (`i128`, `u128`) is not reachable
 /// until `classify` grows an arm for it — at which point the emitted
 /// `::tatara_lisp::error::NumericWidth::<Variant>` path fails to
 /// resolve, which is the compile error we want rather than a silently
@@ -840,6 +841,16 @@ const _: () = crate::ast::assert_str_array_slice_equals_str_array::<9, 9, 0>(
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, tatara_lisp_derive::ClosedSet)]
 #[closed_set(via = "label", display, generate_unknown = "numeric width")]
 pub enum NumericWidth {
+    /// `"i8"` — signed 8-bit; the NARROWEST signed peer of [`Self::I16`]
+    /// one BIT-WIDTH axis over. Rejects both the too-large literal
+    /// (`> 127` or `< -128`) as OUT-OF-RANGE, narrowing through
+    /// `<i8 as TryFrom<i64>>::try_from`, matching every peer integer
+    /// width on the delegation to std's partial function.
+    I8,
+    /// `"i16"` — signed 16-bit; one BIT-WIDTH axis over from
+    /// [`Self::I32`] on the signed column, with the same
+    /// `<i16 as TryFrom<i64>>::try_from` narrowing gate.
+    I16,
     /// `"i32"` — signed 32-bit; the `extract_int` → `i32` narrowing.
     I32,
     /// `"i64"` — signed 64-bit; the IDENTITY narrowing on the int axis
@@ -847,6 +858,12 @@ pub enum NumericWidth {
     /// the derive's width payload maps totally onto this enum rather
     /// than through an `Option`.
     I64,
+    /// `"u8"` — unsigned 8-bit; the NARROWEST unsigned peer of
+    /// [`Self::U16`] one BIT-WIDTH axis over. Rejects the negative
+    /// literal always, and the `> 255` literal as OUT-OF-RANGE.
+    /// Narrows through `<u8 as TryFrom<i64>>::try_from`, matching every
+    /// peer integer width on the delegation to std's partial function.
+    U8,
     /// `"u16"` — unsigned 16-bit; the NARROWEST unsigned peer of
     /// [`Self::U32`] one BIT-WIDTH axis over. Rejects the negative
     /// literal always, and the `> 65535` literal as OUT-OF-RANGE — the
@@ -887,14 +904,17 @@ pub enum NumericWidth {
 }
 
 impl NumericWidth {
-    /// The closed set of nine reachable target widths — single source
+    /// The closed set of twelve reachable target widths — single source
     /// of truth driving [`Self::label`] / [`fmt::Display`] and the
-    /// derive-generated `FromStr` decode sweep. Adding a tenth width
-    /// lands at one `ALL` entry + one [`Self::label`] arm, arity-forced
-    /// by the `[Self; 9]` literal.
-    pub const ALL: [Self; 9] = [
+    /// derive-generated `FromStr` decode sweep. Adding a thirteenth
+    /// width lands at one `ALL` entry + one [`Self::label`] arm,
+    /// arity-forced by the `[Self; 12]` literal.
+    pub const ALL: [Self; 12] = [
+        Self::I8,
+        Self::I16,
         Self::I32,
         Self::I64,
+        Self::U8,
         Self::U16,
         Self::U32,
         Self::U64,
@@ -904,13 +924,16 @@ impl NumericWidth {
         Self::F64,
     ];
 
-    /// The nine canonical labels in [`Self::ALL`] order — the Rust
+    /// The twelve canonical labels in [`Self::ALL`] order — the Rust
     /// type names themselves, so the diagnostic quotes the source the
     /// author would have to edit. Pinned against a literal array by the
     /// `assert_str_array_slice_equals_str_array` const above.
-    pub const LABELS: [&'static str; 9] = [
+    pub const LABELS: [&'static str; 12] = [
+        Self::I8.label(),
+        Self::I16.label(),
         Self::I32.label(),
         Self::I64.label(),
+        Self::U8.label(),
         Self::U16.label(),
         Self::U32.label(),
         Self::U64.label(),
@@ -924,8 +947,11 @@ impl NumericWidth {
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
+            Self::I8 => "i8",
+            Self::I16 => "i16",
             Self::I32 => "i32",
             Self::I64 => "i64",
+            Self::U8 => "u8",
             Self::U16 => "u16",
             Self::U32 => "u32",
             Self::U64 => "u64",

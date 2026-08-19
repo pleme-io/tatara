@@ -1486,8 +1486,11 @@ macro_rules! impl_narrow_int {
 }
 
 impl_narrow_int! {
+    i8 => I8,
+    i16 => I16,
     i32 => I32,
     i64 => I64,
+    u8 => U8,
     u16 => U16,
     u32 => U32,
     u64 => U64,
@@ -2374,8 +2377,11 @@ mod tests {
     /// rather than merely untested.
     #[test]
     fn every_supported_width_reports_its_own_typed_identity() {
+        assert_eq!(<i8 as NarrowNumeric<i64>>::WIDTH, NumericWidth::I8);
+        assert_eq!(<i16 as NarrowNumeric<i64>>::WIDTH, NumericWidth::I16);
         assert_eq!(<i32 as NarrowNumeric<i64>>::WIDTH, NumericWidth::I32);
         assert_eq!(<i64 as NarrowNumeric<i64>>::WIDTH, NumericWidth::I64);
+        assert_eq!(<u8 as NarrowNumeric<i64>>::WIDTH, NumericWidth::U8);
         assert_eq!(<u16 as NarrowNumeric<i64>>::WIDTH, NumericWidth::U16);
         assert_eq!(<u32 as NarrowNumeric<i64>>::WIDTH, NumericWidth::U32);
         assert_eq!(<u64 as NarrowNumeric<i64>>::WIDTH, NumericWidth::U64);
@@ -2547,6 +2553,114 @@ mod tests {
                 }
             ),
             "expected an Option<u16> sign-gate rejection, got {err:?}"
+        );
+    }
+
+    /// The narrowest-integer trio (`i8` / `i16` / `u8`) is the newest
+    /// classify cohort. Pre-lift a `u8` field routed through the serde
+    /// bridge — the operator's `:count 300` came back as a mystery
+    /// `KwargDeserialize { message: "invalid value: integer ..." }`.
+    /// Post-lift the rejection is typed as `NumericWidth::U8`, the
+    /// author's own literal rides through unchanged, and the derive
+    /// names the width exactly once (as a type on the emitted turbofish).
+    #[derive(DeriveTataraDomain, Serialize, Debug, PartialEq)]
+    #[tatara(keyword = "defbyte")]
+    struct ByteSpec {
+        count: u8,
+        delta: i8,
+        offset: i16,
+        maybe_count: Option<u8>,
+    }
+
+    #[test]
+    fn narrowest_integer_trio_parses_in_range_literal_through_the_narrowing_gate() {
+        let forms = read(r"(defbyte :count 200 :delta -42 :offset -30000 :maybe-count 255)")
+            .expect("reads");
+        let spec = ByteSpec::compile_from_sexp(&forms[0]).expect("in-range values must parse");
+        assert_eq!(
+            spec,
+            ByteSpec {
+                count: 200,
+                delta: -42,
+                offset: -30_000,
+                maybe_count: Some(255),
+            }
+        );
+    }
+
+    #[test]
+    fn u8_field_rejects_the_canonical_count_300_case_with_the_typed_width_identity() {
+        let forms = read(r"(defbyte :count 300 :delta 0 :offset 0)").expect("reads");
+        let err = ByteSpec::compile_from_sexp(&forms[0])
+            .expect_err("300 is out of range for u8 and must not parse");
+        let LispError::KwargOutOfRange {
+            form,
+            target,
+            value,
+        } = &err
+        else {
+            panic!("expected KwargOutOfRange, got {err:?}");
+        };
+        assert_eq!(form, &KwargPath::named("count"));
+        assert_eq!(*target, NumericWidth::U8);
+        assert_eq!(*value, NumericLiteral::Int(300));
+        assert_eq!(
+            err.to_string(),
+            "compile error in :count: 300 is out of range for u8"
+        );
+    }
+
+    #[test]
+    fn negative_int_into_u8_is_rejected_on_the_sign_gate_not_the_serde_bridge() {
+        let forms = read(r"(defbyte :count 0 :delta 0 :offset 0 :maybe-count -1)").expect("reads");
+        let err = ByteSpec::compile_from_sexp(&forms[0])
+            .expect_err("-1 is out of range for u8 and must not parse");
+        assert!(
+            matches!(
+                &err,
+                LispError::KwargOutOfRange {
+                    target: NumericWidth::U8,
+                    value: NumericLiteral::Int(-1),
+                    ..
+                }
+            ),
+            "expected an Option<u8> sign-gate rejection, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn i8_field_rejects_the_out_of_range_128_case_with_the_typed_width_identity() {
+        let forms = read(r"(defbyte :count 0 :delta 128 :offset 0)").expect("reads");
+        let err = ByteSpec::compile_from_sexp(&forms[0])
+            .expect_err("128 is out of range for i8 (max 127) and must not parse");
+        assert!(
+            matches!(
+                &err,
+                LispError::KwargOutOfRange {
+                    target: NumericWidth::I8,
+                    value: NumericLiteral::Int(128),
+                    ..
+                }
+            ),
+            "expected an i8 range-gate rejection, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn i16_field_rejects_the_out_of_range_case_with_the_typed_width_identity() {
+        let forms = read(r"(defbyte :count 0 :delta 0 :offset 40000)").expect("reads");
+        let err = ByteSpec::compile_from_sexp(&forms[0])
+            .expect_err("40000 is out of range for i16 (max 32767) and must not parse");
+        assert!(
+            matches!(
+                &err,
+                LispError::KwargOutOfRange {
+                    target: NumericWidth::I16,
+                    value: NumericLiteral::Int(40_000),
+                    ..
+                }
+            ),
+            "expected an i16 range-gate rejection, got {err:?}"
         );
     }
 

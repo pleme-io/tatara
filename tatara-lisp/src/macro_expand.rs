@@ -34115,6 +34115,385 @@ impl ResourceLimits {
     pub const fn interior_axis_is_at_most_barely_multi(self) -> Option<bool> {
         Self::witness_count_at_most_barely_multi(self.count_interior_axes())
     }
+
+    /// Whole-posture SATURATED-OR-SINGLETON-OF-BOTTOM predicate —
+    /// `self.bottom_axis_is_saturated_or_singleton()` returns
+    /// `Some(true)` iff EXACTLY ONE axis of `self` is at the bottom
+    /// pole OR EVERY axis of `self` is at the bottom pole
+    /// (equivalently: [`Self::count_bottom_axes`] `== 1 ||
+    /// Self::count_bottom_axes() == Self::FIELD_COUNT`, the two-
+    /// atomic-endpoint DISJOINT UNION of the count half-line),
+    /// `Some(false)` iff a strictly-between number of axes are at
+    /// the bottom pole (`1 < count < FIELD_COUNT`, the STRICTLY-
+    /// MULTI open middle), or `None` iff no axis is at the bottom
+    /// pole. The ATOMIC-CELL half of the (bottom, top) pair OPENING
+    /// the SATURATED-OR-SINGLETON column on the atomic (bottom,
+    /// top) row — the POINTWISE COMPLEMENT of the shipped
+    /// `bottom_axis_is_strictly_multi` STRICT-INTERIOR bracket on
+    /// the has-axis interval, and the DISJOINT-UNION join of the
+    /// shipped `bottom_axis_is_singleton` and
+    /// `bottom_axis_is_saturated` atomic-endpoint verdicts one
+    /// PARTITION-EXTENT axis over.
+    ///
+    /// **COUNT-EQUALS-ONE-OR-FIELD_COUNT identity — LOAD-BEARING
+    /// structural pin**: on every posture,
+    /// `bottom_axis_is_saturated_or_singleton() == { let c =
+    /// self.count_bottom_axes(); if c == 0 { None } else { Some(c
+    /// == 1 || c == Self::FIELD_COUNT) } }`. Composes structurally
+    /// through the already-lifted atomic bottom COUNT projection;
+    /// the substrate never re-scans the per-axis mask. Pinned via
+    /// `resource_limits_bottom_axis_is_saturated_or_singleton_equals_count_eq_one_or_field_count`.
+    ///
+    /// **SATURATED-OR-SINGLETON ⇔ NOT STRICTLY-MULTI complementarity
+    /// — LOAD-BEARING BINARY-CLOSURE pin**: on every posture with a
+    /// bottom axis, `bottom_axis_is_saturated_or_singleton() ==
+    /// Some(true) ⇔ bottom_axis_is_strictly_multi() == Some(false)`.
+    /// The two-atomic-endpoint DISJOINT UNION IS the POINTWISE
+    /// COMPLEMENT of the STRICT-INTERIOR bracket on the has-axis
+    /// interval. Pinned via
+    /// `resource_limits_bottom_axis_is_saturated_or_singleton_iff_strictly_multi_false`.
+    ///
+    /// **SATURATED-OR-SINGLETON ⇔ (SINGLETON OR SATURATED)
+    /// disjoint-union identity — LOAD-BEARING PARTITION pin**: on
+    /// every posture, `bottom_axis_is_saturated_or_singleton() ==
+    /// Some(true) ⇔ (bottom_axis_is_singleton() == Some(true) ||
+    /// bottom_axis_is_saturated() == Some(true))`. The two atomic
+    /// count-half-line ENDPOINTS jointly ACCEPT the verdict on their
+    /// landing counts; the interior STRICTLY-MULTI half-line REJECTS
+    /// between them. Pinned via
+    /// `resource_limits_bottom_axis_is_saturated_or_singleton_iff_singleton_or_saturated`.
+    ///
+    /// **SINGLETON-IMPLIES-SATURATED-OR-SINGLETON bridge — LOAD-
+    /// BEARING LEFT-ENDPOINT INCLUSION pin**: on every posture,
+    /// `bottom_axis_is_singleton() == Some(true) ⇒
+    /// bottom_axis_is_saturated_or_singleton() == Some(true)`.
+    /// SINGLETON is the LEFT endpoint of the two-endpoint DISJOINT
+    /// UNION. Pinned via
+    /// `resource_limits_bottom_axis_is_singleton_true_implies_is_saturated_or_singleton_true`.
+    ///
+    /// **SATURATED-IMPLIES-SATURATED-OR-SINGLETON bridge — LOAD-
+    /// BEARING RIGHT-ENDPOINT INCLUSION pin**: on every posture,
+    /// `bottom_axis_is_saturated() == Some(true) ⇒
+    /// bottom_axis_is_saturated_or_singleton() == Some(true)`.
+    /// SATURATED is the RIGHT endpoint of the two-endpoint DISJOINT
+    /// UNION. Pinned via
+    /// `resource_limits_bottom_axis_is_saturated_true_implies_is_saturated_or_singleton_true`.
+    ///
+    /// **Preset pins**:
+    /// `EMPTY_RESOURCE_LIMITS.bottom_axis_is_saturated_or_singleton()
+    /// == Some(true)` (SATURATED-bottom-pole packs six bottom axes,
+    /// count == FIELD_COUNT — the RIGHT endpoint SATURATION landing
+    /// fires);
+    /// `UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_saturated_or_singleton()
+    /// == None` (no bottom axis);
+    /// `DEFAULT_RESOURCE_LIMITS.bottom_axis_is_saturated_or_singleton()
+    /// == None`;
+    /// `HAND_AUTHORED_MID_POSTURE.bottom_axis_is_saturated_or_singleton()
+    /// == None`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.bottom_axis_is_saturated_or_singleton()
+    /// == None`;
+    /// `SPARSE_BOTTOM_POSTURE.bottom_axis_is_saturated_or_singleton()
+    /// == Some(false)` at count == 3 (STRICTLY-MULTI open middle);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE
+    /// .bottom_axis_is_saturated_or_singleton() == Some(false)` at
+    /// count == 3;
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_is_saturated_or_singleton()
+    /// == Some(false)` at count == 2 (BARELY-MULTI). The LEFT-
+    /// endpoint SINGLETON acceptance is exercised via per-count
+    /// synthetic bottom-axis fixtures since no shipped preset places
+    /// exactly one bottom axis.
+    ///
+    /// **ANY-fold bridge**:
+    /// `a.bottom_axis_is_saturated_or_singleton().is_some() ⇔
+    /// a.has_bottom_axis()`. Pinned via
+    /// `resource_limits_bottom_axis_is_saturated_or_singleton_is_some_iff_has_bottom_axis`.
+    ///
+    /// `const fn` so a caller can pin the bottom-axis
+    /// SATURATED-OR-SINGLETON verdict at compile time.
+    ///
+    /// Theory anchor: same as
+    /// [`Self::witness_count_saturated_or_singleton`], on the
+    /// atomic bottom cell. The DISJOINT UNION of the two atomic
+    /// count-half-line ENDPOINT cells names the SINGLE-FIRE-POLE
+    /// atomic bottom regime as one typed exit rather than a two-
+    /// operand `||` of the paired atomic-endpoint witnesses spelled
+    /// out at every callsite.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::witness_count_saturated_or_singleton`], on the
+    /// atomic bottom count.
+    #[must_use]
+    pub const fn bottom_axis_is_saturated_or_singleton(self) -> Option<bool> {
+        Self::witness_count_saturated_or_singleton(self.count_bottom_axes())
+    }
+
+    /// Whole-posture SATURATED-OR-SINGLETON-OF-TOP predicate —
+    /// `self.top_axis_is_saturated_or_singleton()` returns
+    /// `Some(true)` iff EXACTLY ONE axis of `self` is at the top
+    /// pole OR EVERY axis of `self` is at the top pole
+    /// (equivalently: [`Self::count_top_axes`] `== 1 ||
+    /// Self::count_top_axes() == Self::FIELD_COUNT`, the two-
+    /// atomic-endpoint DISJOINT UNION of the count half-line),
+    /// `Some(false)` iff a strictly-between number of axes are at
+    /// the top pole, or `None` iff no axis is at the top pole. The
+    /// ATOMIC-CELL DUAL of [`Self::bottom_axis_is_saturated_or_singleton`]
+    /// one PROJECTION-KIND axis over — jointly the
+    /// (bottom_axis_is_saturated_or_singleton,
+    /// top_axis_is_saturated_or_singleton) atomic pair OPENS the
+    /// SATURATED-OR-SINGLETON column on the atomic (bottom, top)
+    /// row.
+    ///
+    /// **COUNT-EQUALS-ONE-OR-FIELD_COUNT identity dual**: on every
+    /// posture, `top_axis_is_saturated_or_singleton() == { let c =
+    /// self.count_top_axes(); if c == 0 { None } else { Some(c ==
+    /// 1 || c == Self::FIELD_COUNT) } }`. Pinned via
+    /// `resource_limits_top_axis_is_saturated_or_singleton_equals_count_eq_one_or_field_count`.
+    ///
+    /// **SATURATED-OR-SINGLETON ⇔ NOT STRICTLY-MULTI complementarity
+    /// dual**: on every posture with a top axis,
+    /// `top_axis_is_saturated_or_singleton() == Some(true) ⇔
+    /// top_axis_is_strictly_multi() == Some(false)`. Pinned via
+    /// `resource_limits_top_axis_is_saturated_or_singleton_iff_strictly_multi_false`.
+    ///
+    /// **SATURATED-OR-SINGLETON ⇔ (SINGLETON OR SATURATED)
+    /// disjoint-union identity dual**: on every posture,
+    /// `top_axis_is_saturated_or_singleton() == Some(true) ⇔
+    /// (top_axis_is_singleton() == Some(true) ||
+    /// top_axis_is_saturated() == Some(true))`. Pinned via
+    /// `resource_limits_top_axis_is_saturated_or_singleton_iff_singleton_or_saturated`.
+    ///
+    /// **SINGLETON-IMPLIES-SATURATED-OR-SINGLETON bridge dual**: on
+    /// every posture, `top_axis_is_singleton() == Some(true) ⇒
+    /// top_axis_is_saturated_or_singleton() == Some(true)`. Pinned
+    /// via
+    /// `resource_limits_top_axis_is_singleton_true_implies_is_saturated_or_singleton_true`.
+    ///
+    /// **SATURATED-IMPLIES-SATURATED-OR-SINGLETON bridge dual**: on
+    /// every posture, `top_axis_is_saturated() == Some(true) ⇒
+    /// top_axis_is_saturated_or_singleton() == Some(true)`. Pinned
+    /// via
+    /// `resource_limits_top_axis_is_saturated_true_implies_is_saturated_or_singleton_true`.
+    ///
+    /// **Preset pins dual**:
+    /// `UNBOUNDED_RESOURCE_LIMITS.top_axis_is_saturated_or_singleton()
+    /// == Some(true)` (SATURATED-top-pole packs six top axes, count
+    /// == FIELD_COUNT — the RIGHT endpoint SATURATION landing
+    /// fires);
+    /// `EMPTY_RESOURCE_LIMITS.top_axis_is_saturated_or_singleton()
+    /// == None` (no top axis);
+    /// `DEFAULT_RESOURCE_LIMITS.top_axis_is_saturated_or_singleton()
+    /// == None`;
+    /// `HAND_AUTHORED_MID_POSTURE.top_axis_is_saturated_or_singleton()
+    /// == None`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.top_axis_is_saturated_or_singleton()
+    /// == None`. No shipped preset places one, two, three, four, or
+    /// five top axes; the truth-firing SINGLETON arm and the
+    /// falsehood-firing STRICTLY-MULTI arm are exercised via per-
+    /// count synthetic top-axis fixtures walking count ∈ {0, …,
+    /// FIELD_COUNT}.
+    ///
+    /// **ANY-fold bridge dual**:
+    /// `a.top_axis_is_saturated_or_singleton().is_some() ⇔
+    /// a.has_top_axis()`. Pinned via
+    /// `resource_limits_top_axis_is_saturated_or_singleton_is_some_iff_has_top_axis`.
+    ///
+    /// `const fn` so a caller can pin the top-axis
+    /// SATURATED-OR-SINGLETON verdict at compile time.
+    ///
+    /// Theory anchor: same as
+    /// [`Self::bottom_axis_is_saturated_or_singleton`], on the DUAL
+    /// atomic top cell.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::bottom_axis_is_saturated_or_singleton`], on the DUAL
+    /// atomic top mask.
+    #[must_use]
+    pub const fn top_axis_is_saturated_or_singleton(self) -> Option<bool> {
+        Self::witness_count_saturated_or_singleton(self.count_top_axes())
+    }
+
+    /// Whole-posture SATURATED-OR-SINGLETON-OF-POLAR predicate —
+    /// `self.polar_axis_is_saturated_or_singleton()` returns
+    /// `Some(true)` iff EXACTLY ONE axis of `self` sits at a pole
+    /// OR EVERY axis of `self` sits at a pole (equivalently:
+    /// [`Self::count_polar_axes`] `== 1 || Self::count_polar_axes()
+    /// == Self::FIELD_COUNT`, the two-compound-endpoint DISJOINT
+    /// UNION of the count half-line), `Some(false)` iff a strictly-
+    /// between number of axes sit at a pole, or `None` iff no axis
+    /// sits at a pole. The COMPOUND-CELL peer of
+    /// [`Self::bottom_axis_is_saturated_or_singleton`] one CELL-
+    /// KIND axis over via the (polar, interior) EXHAUSTIVE
+    /// PARTITION — jointly the (polar_axis_is_saturated_or_singleton,
+    /// interior_axis_is_saturated_or_singleton) COMPOUND pair
+    /// CLOSES the SATURATED-OR-SINGLETON column on the (bottom,
+    /// top, polar, interior) 4-cell axis-family.
+    ///
+    /// **COUNT-EQUALS-ONE-OR-FIELD_COUNT identity — LOAD-BEARING
+    /// structural pin**: on every posture,
+    /// `polar_axis_is_saturated_or_singleton() == { let c =
+    /// self.count_polar_axes(); if c == 0 { None } else { Some(c
+    /// == 1 || c == Self::FIELD_COUNT) } }`. Composes structurally
+    /// through the COMPOUND polar COUNT projection; the substrate
+    /// never re-scans the per-axis mask. Pinned via
+    /// `resource_limits_polar_axis_is_saturated_or_singleton_equals_count_eq_one_or_field_count`.
+    ///
+    /// **SATURATED-OR-SINGLETON ⇔ NOT STRICTLY-MULTI complementarity
+    /// — LOAD-BEARING BINARY-CLOSURE pin**: on every posture with a
+    /// polar axis, `polar_axis_is_saturated_or_singleton() ==
+    /// Some(true) ⇔ polar_axis_is_strictly_multi() == Some(false)`.
+    /// Pinned via
+    /// `resource_limits_polar_axis_is_saturated_or_singleton_iff_strictly_multi_false`.
+    ///
+    /// **SATURATED-OR-SINGLETON ⇔ (SINGLETON OR SATURATED)
+    /// disjoint-union identity — LOAD-BEARING PARTITION pin**: on
+    /// every posture, `polar_axis_is_saturated_or_singleton() ==
+    /// Some(true) ⇔ (polar_axis_is_singleton() == Some(true) ||
+    /// polar_axis_is_saturated() == Some(true))`. Pinned via
+    /// `resource_limits_polar_axis_is_saturated_or_singleton_iff_singleton_or_saturated`.
+    ///
+    /// **SINGLETON-IMPLIES-SATURATED-OR-SINGLETON bridge dual**: on
+    /// every posture, `polar_axis_is_singleton() == Some(true) ⇒
+    /// polar_axis_is_saturated_or_singleton() == Some(true)`.
+    /// Pinned via
+    /// `resource_limits_polar_axis_is_singleton_true_implies_is_saturated_or_singleton_true`.
+    ///
+    /// **SATURATED-IMPLIES-SATURATED-OR-SINGLETON bridge dual**: on
+    /// every posture, `polar_axis_is_saturated() == Some(true) ⇒
+    /// polar_axis_is_saturated_or_singleton() == Some(true)`.
+    /// Pinned via
+    /// `resource_limits_polar_axis_is_saturated_true_implies_is_saturated_or_singleton_true`.
+    ///
+    /// **Preset pins**:
+    /// `EMPTY_RESOURCE_LIMITS.polar_axis_is_saturated_or_singleton()
+    /// == Some(true)` (SATURATED-bottom-pole packs six polar axes);
+    /// `UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_saturated_or_singleton()
+    /// == Some(true)` (SATURATED-top-pole packs six polar axes);
+    /// `DEFAULT_RESOURCE_LIMITS.polar_axis_is_saturated_or_singleton()
+    /// == None` (all-interior posture carries no polar axis);
+    /// `HAND_AUTHORED_MID_POSTURE.polar_axis_is_saturated_or_singleton()
+    /// == None`;
+    /// `HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_saturated_or_singleton()
+    /// == None`;
+    /// `SPARSE_BOTTOM_POSTURE.polar_axis_is_saturated_or_singleton()
+    /// == Some(false)` at polar count == 3 (STRICTLY-MULTI middle);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE
+    /// .polar_axis_is_saturated_or_singleton() == Some(false)` at
+    /// polar count == 3;
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_axis_is_saturated_or_singleton()
+    /// == Some(false)` at polar count == 2. The LEFT-endpoint
+    /// SINGLETON acceptance is exercised via per-count synthetic
+    /// polar-axis fixtures walking count ∈ {0, …, FIELD_COUNT}.
+    ///
+    /// **ANY-fold bridge**:
+    /// `a.polar_axis_is_saturated_or_singleton().is_some() ⇔
+    /// a.has_polar_axis()`. Pinned via
+    /// `resource_limits_polar_axis_is_saturated_or_singleton_is_some_iff_has_polar_axis`.
+    ///
+    /// `const fn` so a caller can pin the polar-axis
+    /// SATURATED-OR-SINGLETON verdict at compile time.
+    ///
+    /// Theory anchor: same as
+    /// [`Self::bottom_axis_is_saturated_or_singleton`], on the DUAL
+    /// COMPOUND polar cell.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::bottom_axis_is_saturated_or_singleton`], on the DUAL
+    /// COMPOUND polar mask.
+    #[must_use]
+    pub const fn polar_axis_is_saturated_or_singleton(self) -> Option<bool> {
+        Self::witness_count_saturated_or_singleton(self.count_polar_axes())
+    }
+
+    /// Whole-posture SATURATED-OR-SINGLETON-OF-INTERIOR predicate —
+    /// `self.interior_axis_is_saturated_or_singleton()` returns
+    /// `Some(true)` iff EXACTLY ONE axis of `self` sits strictly
+    /// interior OR EVERY axis of `self` sits strictly interior
+    /// (equivalently: [`Self::count_interior_axes`] `== 1 ||
+    /// Self::count_interior_axes() == Self::FIELD_COUNT`, the two-
+    /// compound-endpoint DISJOINT UNION of the count half-line),
+    /// `Some(false)` iff a strictly-between number of axes sit
+    /// interior, or `None` iff no axis sits interior. The
+    /// COMPOUND-CELL DUAL of [`Self::polar_axis_is_saturated_or_singleton`]
+    /// one CELL-KIND axis over via the (polar, interior) EXHAUSTIVE
+    /// PARTITION — jointly the (polar_axis_is_saturated_or_singleton,
+    /// interior_axis_is_saturated_or_singleton) COMPOUND pair
+    /// CLOSES the SATURATED-OR-SINGLETON column on the (bottom,
+    /// top, polar, interior) 4-cell axis-family.
+    ///
+    /// **COUNT-EQUALS-ONE-OR-FIELD_COUNT identity dual**: on every
+    /// posture, `interior_axis_is_saturated_or_singleton() == { let
+    /// c = self.count_interior_axes(); if c == 0 { None } else {
+    /// Some(c == 1 || c == Self::FIELD_COUNT) } }`. Pinned via
+    /// `resource_limits_interior_axis_is_saturated_or_singleton_equals_count_eq_one_or_field_count`.
+    ///
+    /// **SATURATED-OR-SINGLETON ⇔ NOT STRICTLY-MULTI complementarity
+    /// dual**: on every posture with an interior axis,
+    /// `interior_axis_is_saturated_or_singleton() == Some(true) ⇔
+    /// interior_axis_is_strictly_multi() == Some(false)`. Pinned
+    /// via
+    /// `resource_limits_interior_axis_is_saturated_or_singleton_iff_strictly_multi_false`.
+    ///
+    /// **SATURATED-OR-SINGLETON ⇔ (SINGLETON OR SATURATED)
+    /// disjoint-union identity dual**: on every posture,
+    /// `interior_axis_is_saturated_or_singleton() == Some(true) ⇔
+    /// (interior_axis_is_singleton() == Some(true) ||
+    /// interior_axis_is_saturated() == Some(true))`. Pinned via
+    /// `resource_limits_interior_axis_is_saturated_or_singleton_iff_singleton_or_saturated`.
+    ///
+    /// **SINGLETON-IMPLIES-SATURATED-OR-SINGLETON bridge dual**: on
+    /// every posture, `interior_axis_is_singleton() == Some(true)
+    /// ⇒ interior_axis_is_saturated_or_singleton() == Some(true)`.
+    /// Pinned via
+    /// `resource_limits_interior_axis_is_singleton_true_implies_is_saturated_or_singleton_true`.
+    ///
+    /// **SATURATED-IMPLIES-SATURATED-OR-SINGLETON bridge dual**: on
+    /// every posture, `interior_axis_is_saturated() == Some(true)
+    /// ⇒ interior_axis_is_saturated_or_singleton() == Some(true)`.
+    /// Pinned via
+    /// `resource_limits_interior_axis_is_saturated_true_implies_is_saturated_or_singleton_true`.
+    ///
+    /// **Preset pins dual**:
+    /// `DEFAULT_RESOURCE_LIMITS.interior_axis_is_saturated_or_singleton()
+    /// == Some(true)` (all-interior posture packs six interior
+    /// axes);
+    /// `HAND_AUTHORED_MID_POSTURE.interior_axis_is_saturated_or_singleton()
+    /// == Some(true)` (all interior);
+    /// `HAND_AUTHORED_OTHER_POSTURE.interior_axis_is_saturated_or_singleton()
+    /// == Some(true)` (all interior);
+    /// `EMPTY_RESOURCE_LIMITS.interior_axis_is_saturated_or_singleton()
+    /// == None` (no interior axis);
+    /// `UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_saturated_or_singleton()
+    /// == None` (no interior axis);
+    /// `SPARSE_BOTTOM_POSTURE.interior_axis_is_saturated_or_singleton()
+    /// == Some(false)` at interior count == 3 (STRICTLY-MULTI
+    /// middle);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE
+    /// .interior_axis_is_saturated_or_singleton() == Some(false)`
+    /// at interior count == 3;
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE.interior_axis_is_saturated_or_singleton()
+    /// == Some(false)` at interior count == 2. The LEFT-endpoint
+    /// SINGLETON acceptance is exercised via per-count synthetic
+    /// interior-axis fixtures walking count ∈ {0, …, FIELD_COUNT}.
+    ///
+    /// **ANY-fold bridge dual**:
+    /// `a.interior_axis_is_saturated_or_singleton().is_some() ⇔
+    /// a.has_interior_axis()`. Pinned via
+    /// `resource_limits_interior_axis_is_saturated_or_singleton_is_some_iff_has_interior_axis`.
+    ///
+    /// `const fn` so a caller can pin the interior-axis
+    /// SATURATED-OR-SINGLETON verdict at compile time.
+    ///
+    /// Theory anchor: same as
+    /// [`Self::polar_axis_is_saturated_or_singleton`], on the DUAL
+    /// COMPOUND interior cell.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::polar_axis_is_saturated_or_singleton`], on the DUAL
+    /// COMPOUND interior mask.
+    #[must_use]
+    pub const fn interior_axis_is_saturated_or_singleton(self) -> Option<bool> {
+        Self::witness_count_saturated_or_singleton(self.count_interior_axes())
+    }
 }
 
 /// Cache key: (macro name, SipHash-2-4 of args). We hash `Sexp` directly via
@@ -109041,5 +109420,728 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_saturated_or_singleton_preset_pins_saturate_at_right_endpoint_and_strictly_multi_middle_and_absent(
+    ) {
+        // Preset pins on the atomic bottom SATURATED-OR-SINGLETON
+        // cell — the SATURATED-bottom-pole preset EMPTY packs six
+        // bottom axes (count == FIELD_COUNT == 6, RIGHT endpoint
+        // fires Some(true)); absent-bottom presets pin None; the
+        // count-3 postures SPARSE_BOTTOM / CONTIGUOUS_INTERIOR_BOTTOM
+        // and the count-2 ENDPOINTS_ONLY_BOTTOM all pin Some(false)
+        // — the STRICTLY-MULTI middle the two-endpoint DISJOINT
+        // UNION excludes.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_saturated_or_singleton(),
+            Some(true)
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.bottom_axis_is_saturated_or_singleton(),
+            None
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.bottom_axis_is_saturated_or_singleton(),
+            None
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.bottom_axis_is_saturated_or_singleton(),
+            None
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.bottom_axis_is_saturated_or_singleton(),
+            None
+        );
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE.bottom_axis_is_saturated_or_singleton(),
+            Some(false)
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.bottom_axis_is_saturated_or_singleton(),
+            Some(false)
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.bottom_axis_is_saturated_or_singleton(),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_saturated_or_singleton_preset_pins_saturate_at_right_endpoint_and_absent(
+    ) {
+        // Preset pins dual on the atomic top cell — the SATURATED-
+        // top-pole preset UNBOUNDED packs six top axes (count ==
+        // FIELD_COUNT == 6, RIGHT endpoint fires Some(true));
+        // absent-top presets pin None. No shipped preset places one,
+        // two, three, four, or five top axes; the SINGLETON left-
+        // endpoint and STRICTLY-MULTI middle arms are exercised via
+        // per-count synthetic top-axis fixtures in the identity pin
+        // below.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_saturated_or_singleton(),
+            Some(true)
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.top_axis_is_saturated_or_singleton(),
+            None
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.top_axis_is_saturated_or_singleton(),
+            None
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.top_axis_is_saturated_or_singleton(),
+            None
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.top_axis_is_saturated_or_singleton(),
+            None
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_saturated_or_singleton_preset_pins_saturate_at_right_endpoint_and_strictly_multi_middle_and_absent(
+    ) {
+        // Preset pins on the COMPOUND polar cell — both SATURATED-
+        // pole presets pack six polar axes (count == FIELD_COUNT ==
+        // 6, RIGHT endpoint fires Some(true)); DEFAULT and both
+        // hand-authored postures carry no polar axis (None); the
+        // count-3 postures SPARSE_BOTTOM / CONTIGUOUS_INTERIOR_BOTTOM
+        // and the count-2 ENDPOINTS_ONLY_BOTTOM all pin Some(false)
+        // on the polar cell — the STRICTLY-MULTI middle.
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_saturated_or_singleton(),
+            Some(true)
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.polar_axis_is_saturated_or_singleton(),
+            Some(true)
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.polar_axis_is_saturated_or_singleton(),
+            None
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.polar_axis_is_saturated_or_singleton(),
+            None
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.polar_axis_is_saturated_or_singleton(),
+            None
+        );
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE.polar_axis_is_saturated_or_singleton(),
+            Some(false)
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.polar_axis_is_saturated_or_singleton(),
+            Some(false)
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_axis_is_saturated_or_singleton(),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_saturated_or_singleton_preset_pins_saturate_at_right_endpoint_and_strictly_multi_middle_and_absent(
+    ) {
+        // Preset pins dual on the COMPOUND interior cell —
+        // DEFAULT and both hand-authored postures pack six interior
+        // axes (count == FIELD_COUNT == 6, RIGHT endpoint fires
+        // Some(true)); both SATURATED-pole presets carry no interior
+        // axis (None); the count-3 postures SPARSE_BOTTOM /
+        // CONTIGUOUS_INTERIOR_BOTTOM pin Some(false), and the count-4
+        // ENDPOINTS_ONLY_BOTTOM pins Some(false) on the interior
+        // cell (interior = FIELD_COUNT - polar = 6 - 2 = 4) — the
+        // STRICTLY-MULTI middle at two distinct cardinalities.
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_saturated_or_singleton(),
+            Some(true)
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE.interior_axis_is_saturated_or_singleton(),
+            Some(true)
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.interior_axis_is_saturated_or_singleton(),
+            Some(true)
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.interior_axis_is_saturated_or_singleton(),
+            None
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.interior_axis_is_saturated_or_singleton(),
+            None
+        );
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE.interior_axis_is_saturated_or_singleton(),
+            Some(false)
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.interior_axis_is_saturated_or_singleton(),
+            Some(false)
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.interior_axis_is_saturated_or_singleton(),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_saturated_or_singleton_equals_count_eq_one_or_field_count() {
+        // COUNT-EQUALS-ONE-OR-FIELD_COUNT identity — LOAD-BEARING
+        // structural pin. Walks every shipped bottom-cell fixture
+        // plus a count-1 synthetic bottom-axis fixture (SINGLETON
+        // left endpoint no shipped preset places) and per-count
+        // fixtures across the full 0..=FIELD_COUNT range so both the
+        // None arm (count == 0), the Some(true) arm (count == 1 or
+        // count == FIELD_COUNT), and the Some(false) STRICTLY-MULTI
+        // middle arm (2..FIELD_COUNT) are exercised.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(posture.count_bottom_axes(), count);
+            let expected = if count == 0 {
+                None
+            } else {
+                Some(count == 1 || count == ResourceLimits::FIELD_COUNT)
+            };
+            assert_eq!(
+                posture.bottom_axis_is_saturated_or_singleton(),
+                expected,
+                "is_saturated_or_singleton = (count == 1 || count == FIELD_COUNT) identity failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_saturated_or_singleton_equals_count_eq_one_or_field_count() {
+        // COUNT-EQUALS-ONE-OR-FIELD_COUNT identity dual on the top
+        // cell — walked via per-count synthetic top-axis fixtures.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(posture.count_top_axes(), count);
+            let expected = if count == 0 {
+                None
+            } else {
+                Some(count == 1 || count == ResourceLimits::FIELD_COUNT)
+            };
+            assert_eq!(
+                posture.top_axis_is_saturated_or_singleton(),
+                expected,
+                "is_saturated_or_singleton = (count == 1 || count == FIELD_COUNT) identity failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_saturated_or_singleton_equals_count_eq_one_or_field_count() {
+        // COUNT-EQUALS-ONE-OR-FIELD_COUNT identity on the COMPOUND
+        // polar cell — walked via per-count synthetic polar-axis
+        // fixtures alternating bottom/top pole placements so the
+        // polar count sweeps 0..=FIELD_COUNT with a mix of pole
+        // kinds (the polar count is DISJOINT-UNION of bottom + top,
+        // so any mix reaches the same polar cardinality).
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for (i, slot) in fields.iter_mut().enumerate().take(count) {
+                *slot = if i % 2 == 0 { 0 } else { usize::MAX };
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(posture.count_polar_axes(), count);
+            let expected = if count == 0 {
+                None
+            } else {
+                Some(count == 1 || count == ResourceLimits::FIELD_COUNT)
+            };
+            assert_eq!(
+                posture.polar_axis_is_saturated_or_singleton(),
+                expected,
+                "is_saturated_or_singleton = (count == 1 || count == FIELD_COUNT) identity failed at polar count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_saturated_or_singleton_equals_count_eq_one_or_field_count()
+    {
+        // COUNT-EQUALS-ONE-OR-FIELD_COUNT identity dual on the
+        // COMPOUND interior cell — walked via per-count synthetic
+        // interior-axis fixtures. Interior count == FIELD_COUNT -
+        // polar_count, so parameterize by number of polar axes and
+        // read interior at (FIELD_COUNT - polar).
+        for polar in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(polar) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let interior = ResourceLimits::FIELD_COUNT - polar;
+            assert_eq!(posture.count_interior_axes(), interior);
+            let expected = if interior == 0 {
+                None
+            } else {
+                Some(interior == 1 || interior == ResourceLimits::FIELD_COUNT)
+            };
+            assert_eq!(
+                posture.interior_axis_is_saturated_or_singleton(),
+                expected,
+                "is_saturated_or_singleton = (count == 1 || count == FIELD_COUNT) identity failed at interior count {interior} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_saturated_or_singleton_is_some_iff_has_bottom_axis() {
+        // ANY-fold bridge — is_some ⇔ has_bottom_axis, symmetric to
+        // every other atomic bottom axis-count-derived predicate.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.bottom_axis_is_saturated_or_singleton().is_some(),
+                a.has_bottom_axis(),
+                "is_saturated_or_singleton.is_some ⇔ has_bottom_axis failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_saturated_or_singleton_is_some_iff_has_top_axis() {
+        // ANY-fold bridge dual on the top cell — walked via per-
+        // count synthetic top-axis fixtures so both is_some /
+        // is_none arms fire without depending on a shipped preset
+        // placing any specific top-axis count.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(
+                posture.top_axis_is_saturated_or_singleton().is_some(),
+                posture.has_top_axis(),
+                "is_saturated_or_singleton.is_some ⇔ has_top_axis failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_saturated_or_singleton_is_some_iff_has_polar_axis() {
+        // ANY-fold bridge on the COMPOUND polar cell.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.polar_axis_is_saturated_or_singleton().is_some(),
+                a.has_polar_axis(),
+                "is_saturated_or_singleton.is_some ⇔ has_polar_axis failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_saturated_or_singleton_is_some_iff_has_interior_axis() {
+        // ANY-fold bridge dual on the COMPOUND interior cell.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.interior_axis_is_saturated_or_singleton().is_some(),
+                a.has_interior_axis(),
+                "is_saturated_or_singleton.is_some ⇔ has_interior_axis failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_saturated_or_singleton_iff_strictly_multi_false() {
+        // SATURATED-OR-SINGLETON ⇔ NOT STRICTLY-MULTI
+        // complementarity — LOAD-BEARING BINARY-CLOSURE pin. On
+        // every posture with a bottom axis, the two-atomic-endpoint
+        // DISJOINT UNION is the POINTWISE COMPLEMENT of the STRICT-
+        // INTERIOR bracket on the has-axis interval.
+        let one_bottom = ResourceLimits::from_field_values([0, 41, 43, 47, 53, 59]);
+        assert_eq!(one_bottom.count_bottom_axes(), 1);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            one_bottom,
+        ] {
+            let sos = a.bottom_axis_is_saturated_or_singleton();
+            let sm = a.bottom_axis_is_strictly_multi();
+            assert!(sos.is_some());
+            assert!(sm.is_some());
+            assert_eq!(
+                sos == Some(true),
+                sm == Some(false),
+                "saturated_or_singleton ⇔ NOT strictly_multi failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_saturated_or_singleton_iff_strictly_multi_false() {
+        // SATURATED-OR-SINGLETON ⇔ NOT STRICTLY-MULTI dual on the
+        // top cell — walked via per-count synthetic top-axis
+        // fixtures.
+        for count in 1..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let sos = posture.top_axis_is_saturated_or_singleton();
+            let sm = posture.top_axis_is_strictly_multi();
+            assert!(sos.is_some());
+            assert!(sm.is_some());
+            assert_eq!(
+                sos == Some(true),
+                sm == Some(false),
+                "saturated_or_singleton ⇔ NOT strictly_multi failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_saturated_or_singleton_iff_strictly_multi_false() {
+        // SATURATED-OR-SINGLETON ⇔ NOT STRICTLY-MULTI on the
+        // COMPOUND polar cell.
+        for count in 1..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for (i, slot) in fields.iter_mut().enumerate().take(count) {
+                *slot = if i % 2 == 0 { 0 } else { usize::MAX };
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let sos = posture.polar_axis_is_saturated_or_singleton();
+            let sm = posture.polar_axis_is_strictly_multi();
+            assert!(sos.is_some());
+            assert!(sm.is_some());
+            assert_eq!(
+                sos == Some(true),
+                sm == Some(false),
+                "saturated_or_singleton ⇔ NOT strictly_multi failed at polar count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_saturated_or_singleton_iff_strictly_multi_false() {
+        // SATURATED-OR-SINGLETON ⇔ NOT STRICTLY-MULTI dual on the
+        // COMPOUND interior cell.
+        for polar in 0..ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(polar) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let sos = posture.interior_axis_is_saturated_or_singleton();
+            let sm = posture.interior_axis_is_strictly_multi();
+            assert!(sos.is_some());
+            assert!(sm.is_some());
+            let interior = ResourceLimits::FIELD_COUNT - polar;
+            assert_eq!(
+                sos == Some(true),
+                sm == Some(false),
+                "saturated_or_singleton ⇔ NOT strictly_multi failed at interior count {interior} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_saturated_or_singleton_iff_singleton_or_saturated() {
+        // SATURATED-OR-SINGLETON ⇔ (SINGLETON OR SATURATED)
+        // disjoint-union identity — LOAD-BEARING PARTITION pin. On
+        // every posture, the two atomic count-half-line ENDPOINTS
+        // jointly ACCEPT the verdict on their landing counts; the
+        // interior STRICTLY-MULTI half-line REJECTS between them.
+        let one_bottom = ResourceLimits::from_field_values([0, 41, 43, 47, 53, 59]);
+        assert_eq!(one_bottom.count_bottom_axes(), 1);
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+            one_bottom,
+        ] {
+            let sos = a.bottom_axis_is_saturated_or_singleton() == Some(true);
+            let singleton = a.bottom_axis_is_singleton() == Some(true);
+            let saturated = a.bottom_axis_is_saturated() == Some(true);
+            assert_eq!(
+                sos,
+                singleton || saturated,
+                "saturated_or_singleton ⇔ (singleton OR saturated) failed on {a:?}",
+            );
+            assert!(
+                !(singleton && saturated),
+                "singleton AND saturated co-fire (partition breach) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_saturated_or_singleton_iff_singleton_or_saturated() {
+        // SATURATED-OR-SINGLETON ⇔ (SINGLETON OR SATURATED)
+        // disjoint-union identity dual on the top cell.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let sos = posture.top_axis_is_saturated_or_singleton() == Some(true);
+            let singleton = posture.top_axis_is_singleton() == Some(true);
+            let saturated = posture.top_axis_is_saturated() == Some(true);
+            assert_eq!(
+                sos,
+                singleton || saturated,
+                "saturated_or_singleton ⇔ (singleton OR saturated) failed at count {count} on {posture:?}",
+            );
+            assert!(
+                !(singleton && saturated),
+                "singleton AND saturated co-fire (partition breach) at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_saturated_or_singleton_iff_singleton_or_saturated() {
+        // SATURATED-OR-SINGLETON ⇔ (SINGLETON OR SATURATED) on the
+        // COMPOUND polar cell.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for (i, slot) in fields.iter_mut().enumerate().take(count) {
+                *slot = if i % 2 == 0 { 0 } else { usize::MAX };
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let sos = posture.polar_axis_is_saturated_or_singleton() == Some(true);
+            let singleton = posture.polar_axis_is_singleton() == Some(true);
+            let saturated = posture.polar_axis_is_saturated() == Some(true);
+            assert_eq!(
+                sos,
+                singleton || saturated,
+                "saturated_or_singleton ⇔ (singleton OR saturated) failed at polar count {count} on {posture:?}",
+            );
+            assert!(
+                !(singleton && saturated),
+                "singleton AND saturated co-fire (partition breach) at polar count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_saturated_or_singleton_iff_singleton_or_saturated() {
+        // SATURATED-OR-SINGLETON ⇔ (SINGLETON OR SATURATED) dual on
+        // the COMPOUND interior cell.
+        for polar in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(polar) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let sos = posture.interior_axis_is_saturated_or_singleton() == Some(true);
+            let singleton = posture.interior_axis_is_singleton() == Some(true);
+            let saturated = posture.interior_axis_is_saturated() == Some(true);
+            assert_eq!(
+                sos,
+                singleton || saturated,
+                "saturated_or_singleton ⇔ (singleton OR saturated) failed at polar count {polar} on {posture:?}",
+            );
+            assert!(
+                !(singleton && saturated),
+                "singleton AND saturated co-fire (partition breach) at polar count {polar} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_singleton_true_implies_is_saturated_or_singleton_true() {
+        // SINGLETON-IMPLIES-SATURATED-OR-SINGLETON bridge — LOAD-
+        // BEARING LEFT-ENDPOINT INCLUSION pin. Walked via a per-
+        // count synthetic bottom-axis fixture at count == 1 (the
+        // SINGLETON left endpoint no shipped preset places).
+        let one_bottom = ResourceLimits::from_field_values([0, 41, 43, 47, 53, 59]);
+        assert_eq!(one_bottom.count_bottom_axes(), 1);
+        assert_eq!(one_bottom.bottom_axis_is_singleton(), Some(true));
+        assert_eq!(
+            one_bottom.bottom_axis_is_saturated_or_singleton(),
+            Some(true),
+            "bottom singleton ⇒ saturated_or_singleton failed on {one_bottom:?}",
+        );
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_singleton_true_implies_is_saturated_or_singleton_true() {
+        // SINGLETON-IMPLIES-SATURATED-OR-SINGLETON bridge dual on
+        // the top cell.
+        let one_top = ResourceLimits::from_field_values([usize::MAX, 41, 43, 47, 53, 59]);
+        assert_eq!(one_top.count_top_axes(), 1);
+        assert_eq!(one_top.top_axis_is_singleton(), Some(true));
+        assert_eq!(
+            one_top.top_axis_is_saturated_or_singleton(),
+            Some(true),
+            "top singleton ⇒ saturated_or_singleton failed on {one_top:?}",
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_singleton_true_implies_is_saturated_or_singleton_true() {
+        // SINGLETON-IMPLIES-SATURATED-OR-SINGLETON bridge on the
+        // COMPOUND polar cell.
+        let one_polar = ResourceLimits::from_field_values([0, 41, 43, 47, 53, 59]);
+        assert_eq!(one_polar.count_polar_axes(), 1);
+        assert_eq!(one_polar.polar_axis_is_singleton(), Some(true));
+        assert_eq!(
+            one_polar.polar_axis_is_saturated_or_singleton(),
+            Some(true),
+            "polar singleton ⇒ saturated_or_singleton failed on {one_polar:?}",
+        );
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_singleton_true_implies_is_saturated_or_singleton_true() {
+        // SINGLETON-IMPLIES-SATURATED-OR-SINGLETON bridge dual on
+        // the COMPOUND interior cell.
+        let one_interior = ResourceLimits::from_field_values([0, 0, 0, 0, 0, 41]);
+        assert_eq!(one_interior.count_interior_axes(), 1);
+        assert_eq!(one_interior.interior_axis_is_singleton(), Some(true));
+        assert_eq!(
+            one_interior.interior_axis_is_saturated_or_singleton(),
+            Some(true),
+            "interior singleton ⇒ saturated_or_singleton failed on {one_interior:?}",
+        );
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_saturated_true_implies_is_saturated_or_singleton_true() {
+        // SATURATED-IMPLIES-SATURATED-OR-SINGLETON bridge — LOAD-
+        // BEARING RIGHT-ENDPOINT INCLUSION pin. EMPTY packs six
+        // bottom axes.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.bottom_axis_is_saturated(), Some(true));
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_saturated_or_singleton(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_saturated_true_implies_is_saturated_or_singleton_true() {
+        // SATURATED-IMPLIES-SATURATED-OR-SINGLETON bridge dual on
+        // the top cell. UNBOUNDED packs six top axes.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_saturated(),
+            Some(true)
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_saturated_or_singleton(),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_saturated_true_implies_is_saturated_or_singleton_true() {
+        // SATURATED-IMPLIES-SATURATED-OR-SINGLETON bridge on the
+        // COMPOUND polar cell — both SATURATED-pole presets pack
+        // six polar axes.
+        for a in [EMPTY_RESOURCE_LIMITS, UNBOUNDED_RESOURCE_LIMITS] {
+            assert_eq!(a.polar_axis_is_saturated(), Some(true));
+            assert_eq!(
+                a.polar_axis_is_saturated_or_singleton(),
+                Some(true),
+                "polar saturated ⇒ saturated_or_singleton failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_saturated_true_implies_is_saturated_or_singleton_true() {
+        // SATURATED-IMPLIES-SATURATED-OR-SINGLETON bridge dual on
+        // the COMPOUND interior cell — DEFAULT and both hand-
+        // authored postures pack six interior axes.
+        for a in [
+            DEFAULT_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+        ] {
+            assert_eq!(a.interior_axis_is_saturated(), Some(true));
+            assert_eq!(
+                a.interior_axis_is_saturated_or_singleton(),
+                Some(true),
+                "interior saturated ⇒ saturated_or_singleton failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axis_is_saturated_or_singleton_evaluates_at_compile_time_via_const_fn() {
+        // const-fn compile-time evaluability across all four cells
+        // at their pole-of-fire preset — a body regression to a
+        // non-const combinator would fail compile here rather than
+        // silently at each downstream const context.
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.bottom_axis_is_saturated_or_singleton(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS.top_axis_is_saturated_or_singleton(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_saturated_or_singleton(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS.interior_axis_is_saturated_or_singleton(),
+            Some(true)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .top_axis_is_saturated_or_singleton()
+            .is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .bottom_axis_is_saturated_or_singleton()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .polar_axis_is_saturated_or_singleton()
+            .is_none());
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .interior_axis_is_saturated_or_singleton()
+            .is_none());
     }
 }

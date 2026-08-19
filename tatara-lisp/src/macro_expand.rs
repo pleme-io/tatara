@@ -17202,6 +17202,232 @@ impl ResourceLimits {
         Self::witness_axis_presence(count, count == 2 || count == Self::FIELD_COUNT - 1)
     }
 
+    /// AT-MOST-BARELY-MULTI-OR-AT-LEAST-NEARLY-SATURATED-KIND count witness —
+    /// `Self::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(count)`
+    /// returns `Some(true)` iff `count <= 2` OR `count >= Self::FIELD_COUNT - 1`
+    /// (the CLOSED-LEFT-BRACKET-AROUND-SINGLETON-UP-TO-BARELY-MULTI joined
+    /// with the CLOSED-RIGHT-BRACKET-AROUND-SATURATED-DOWN-FROM-NEARLY-
+    /// SATURATED — the FOUR-CELL BOUNDARY-ZONE UNION where the present-arm
+    /// cardinality sits within one CARDINALITY-STEP of either endpoint of
+    /// the count half-line: at SINGLETON `c == 1`, BARELY-MULTI `c == 2`,
+    /// NEARLY-SATURATED `c == Self::FIELD_COUNT - 1`, or SATURATED
+    /// `c == Self::FIELD_COUNT`), `Some(false)` iff `count > 0` AND
+    /// `count > 2` AND `count < Self::FIELD_COUNT - 1` (the STRICT-INTERIOR-
+    /// MIDDLE cells of the STRICTLY-MULTI open interval), or `None` iff
+    /// `count == 0`. The BOUNDARY primitive lifting the shape
+    /// `Self::witness_axis_presence(count, count <= 2 || count >=
+    /// Self::FIELD_COUNT - 1)` — the FOUR-CELL BOUNDARY-ZONE disjunction
+    /// that names the "count sits AT or ADJACENT-TO one of the two atomic
+    /// count-endpoints" cell as a first-class typed exit rather than the
+    /// two-operand `||` composition of
+    /// [`Self::witness_count_at_most_barely_multi`]'s CLOSED-LEFT-BRACKET
+    /// and [`Self::witness_count_at_least_nearly_saturated`]'s CLOSED-
+    /// RIGHT-BRACKET every downstream consumer would otherwise spell out,
+    /// or the four-operand disjunction over
+    /// [`Self::witness_count_saturated_or_singleton`] and
+    /// [`Self::witness_count_barely_multi_or_nearly_saturated`] two atomic
+    /// atoms deep.
+    ///
+    /// The AT-MOST-BARELY-MULTI-OR-AT-LEAST-NEARLY-SATURATED-KIND
+    /// specialization of [`Self::witness_axis_presence`] on the BOUNDARY-
+    /// ZONE-DISJUNCTION predicate `c <= 2 || c >= Self::FIELD_COUNT - 1` —
+    /// the LATTICE JOIN of the two shipped closed brackets
+    /// [`Self::witness_count_at_most_barely_multi`] (`c <= 2`) and
+    /// [`Self::witness_count_at_least_nearly_saturated`] (`c >=
+    /// Self::FIELD_COUNT - 1`), equivalently the LATTICE JOIN of the two
+    /// shipped two-atomic-endpoint disjunctions
+    /// [`Self::witness_count_saturated_or_singleton`] (`c == 1 || c ==
+    /// Self::FIELD_COUNT`) and
+    /// [`Self::witness_count_barely_multi_or_nearly_saturated`] (`c == 2
+    /// || c == Self::FIELD_COUNT - 1`). Named at the substrate so a caller
+    /// reads
+    /// `witness_count_at_most_barely_multi_or_at_least_nearly_saturated(count)`
+    /// at the callsite rather than the two-line
+    /// `witness_count_at_most_barely_multi(c) == Some(true) ||
+    /// witness_count_at_least_nearly_saturated(c) == Some(true)` closed-
+    /// bracket disjunction that would inline the same shape at every
+    /// consumer.
+    ///
+    /// **Two-arm dispatch identity — LOAD-BEARING structural pin**: on
+    /// every `count`,
+    /// `witness_count_at_most_barely_multi_or_at_least_nearly_saturated(count)
+    /// == Self::witness_axis_presence(count, count <= 2 || count >=
+    /// Self::FIELD_COUNT - 1)`. The delegation through the shipped
+    /// presence-conditional helper is DIRECT. Pinned via
+    /// `resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_agrees_with_witness_axis_presence_at_boundary_zone_disjunction`.
+    ///
+    /// **Empty-arm identity**:
+    /// `witness_count_at_most_barely_multi_or_at_least_nearly_saturated(0) ==
+    /// None` — the empty-axis count yields `None`, PRESERVING the has-
+    /// axis distinction through the BOUNDARY-ZONE dispatch. Pinned via
+    /// `resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_empty_arm_is_none`.
+    ///
+    /// **SINGLETON-endpoint acceptance at `Self::FIELD_COUNT >= 1`**:
+    /// `witness_count_at_most_barely_multi_or_at_least_nearly_saturated(1)
+    /// == Some(true)` on any `FIELD_COUNT >= 1` — the atomic LEFT
+    /// ENDPOINT cell (SINGLETON) is ACCEPTED by the CLOSED-LEFT-BRACKET
+    /// half of the disjunction (`1 <= 2`). Pinned via
+    /// `resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_at_one_is_some_true_at_field_count_ge_one`.
+    ///
+    /// **BARELY-MULTI-endpoint acceptance at `Self::FIELD_COUNT >= 2`**:
+    /// `witness_count_at_most_barely_multi_or_at_least_nearly_saturated(2)
+    /// == Some(true)` on any `FIELD_COUNT >= 2` — the LEFT ADJACENT
+    /// ENDPOINT cell (BARELY-MULTI) is ACCEPTED by the CLOSED-LEFT-
+    /// BRACKET half of the disjunction (`2 <= 2`). Pinned via
+    /// `resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_at_two_is_some_true_at_field_count_ge_two`.
+    ///
+    /// **NEARLY-SATURATED-endpoint acceptance at
+    /// `Self::FIELD_COUNT >= 2`**: on any `FIELD_COUNT >= 2`, feeding
+    /// `Self::FIELD_COUNT - 1` returns `Some(true)` — the RIGHT ADJACENT
+    /// ENDPOINT cell (NEARLY-SATURATED) is ACCEPTED by the CLOSED-RIGHT-
+    /// BRACKET half of the disjunction because
+    /// `Self::FIELD_COUNT - 1 >= Self::FIELD_COUNT - 1`. Pinned via
+    /// `resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_at_field_count_minus_one_is_some_true_at_field_count_ge_two`.
+    ///
+    /// **SATURATED-endpoint acceptance at `Self::FIELD_COUNT >= 1`**:
+    /// `witness_count_at_most_barely_multi_or_at_least_nearly_saturated(Self::FIELD_COUNT)
+    /// == Some(true)` on any `FIELD_COUNT >= 1` — the atomic RIGHT
+    /// ENDPOINT cell (SATURATED) is ACCEPTED by the CLOSED-RIGHT-BRACKET
+    /// half of the disjunction (`Self::FIELD_COUNT >=
+    /// Self::FIELD_COUNT - 1`). Pinned via
+    /// `resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_at_field_count_is_some_true_at_field_count_ge_one`.
+    ///
+    /// **STRICT-INTERIOR-MIDDLE rejection at `Self::FIELD_COUNT >= 5`**:
+    /// `witness_count_at_most_barely_multi_or_at_least_nearly_saturated(3)
+    /// == Some(false)` on any `FIELD_COUNT >= 5` — the STRICT-INTERIOR-
+    /// MIDDLE cell landing at `c == 3` is REJECTED because `3 > 2` AND
+    /// `3 < Self::FIELD_COUNT - 1` at every `FIELD_COUNT >= 5`. Pin
+    /// separates the FOUR-CELL BOUNDARY-ZONE from the STRICT-INTERIOR-
+    /// MIDDLE at the first strictly-interior count. Pinned via
+    /// `resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_at_three_is_some_false_at_field_count_ge_five`.
+    ///
+    /// **AT-MOST-BMNS ⇔ (AT-MOST-BARELY-MULTI OR AT-LEAST-NEARLY-
+    /// SATURATED) disjoint-union pin — LOAD-BEARING partition pin**: for
+    /// every `count`,
+    /// `witness_count_at_most_barely_multi_or_at_least_nearly_saturated(count)
+    /// == Some(true) ⇔ (witness_count_at_most_barely_multi(count) ==
+    /// Some(true) || witness_count_at_least_nearly_saturated(count) ==
+    /// Some(true))`. The two shipped closed brackets jointly ACCEPT the
+    /// BOUNDARY-ZONE verdict on their respective landing intervals.
+    /// Pinned via
+    /// `resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_iff_at_most_barely_multi_or_at_least_nearly_saturated`.
+    ///
+    /// **AT-MOST-BMNS ⇔ (SATURATED-OR-SINGLETON OR BARELY-MULTI-OR-
+    /// NEARLY-SATURATED) FOUR-CELL disjoint-union pin — LOAD-BEARING
+    /// atomic-partition pin**: for every `count`,
+    /// `witness_count_at_most_barely_multi_or_at_least_nearly_saturated(count)
+    /// == Some(true) ⇔ (witness_count_saturated_or_singleton(count) ==
+    /// Some(true) || witness_count_barely_multi_or_nearly_saturated(count)
+    /// == Some(true))`. The BOUNDARY-ZONE is the LATTICE JOIN of the two
+    /// shipped two-atomic-endpoint disjunctions — atomic ENDPOINTS
+    /// (SATURATED, SINGLETON) plus atomic ADJACENT-TO-ENDPOINT cells
+    /// (BARELY-MULTI, NEARLY-SATURATED) = the four cells nearest to
+    /// either count endpoint. Pinned via
+    /// `resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_iff_saturated_or_singleton_or_barely_multi_or_nearly_saturated`.
+    ///
+    /// **AT-MOST-BARELY-MULTI-IMPLIES-AT-MOST-BMNS bridge — LOAD-BEARING
+    /// LEFT-CLOSED-BRACKET INCLUSION pin**: for every `count`,
+    /// `witness_count_at_most_barely_multi(count) == Some(true) ⇒
+    /// witness_count_at_most_barely_multi_or_at_least_nearly_saturated(count)
+    /// == Some(true)`. The CLOSED-LEFT-BRACKET sits at the LEFT half of
+    /// the disjunction via the tautology `c <= 2 ⇒ c <= 2 || c >=
+    /// Self::FIELD_COUNT - 1`. Pinned via
+    /// `resource_limits_witness_count_at_most_barely_multi_implies_witness_count_at_most_barely_multi_or_at_least_nearly_saturated`.
+    ///
+    /// **AT-LEAST-NEARLY-SATURATED-IMPLIES-AT-MOST-BMNS bridge — LOAD-
+    /// BEARING RIGHT-CLOSED-BRACKET INCLUSION pin**: for every `count`,
+    /// `witness_count_at_least_nearly_saturated(count) == Some(true) ⇒
+    /// witness_count_at_most_barely_multi_or_at_least_nearly_saturated(count)
+    /// == Some(true)`. The CLOSED-RIGHT-BRACKET sits at the RIGHT half
+    /// of the disjunction via the tautology `c >= Self::FIELD_COUNT - 1
+    /// ⇒ c <= 2 || c >= Self::FIELD_COUNT - 1`. Pinned via
+    /// `resource_limits_witness_count_at_least_nearly_saturated_implies_witness_count_at_most_barely_multi_or_at_least_nearly_saturated`.
+    ///
+    /// **SATURATED-OR-SINGLETON-IMPLIES-AT-MOST-BMNS bridge — LOAD-
+    /// BEARING ATOMIC-ENDPOINT-UNION INCLUSION pin**: for every `count`,
+    /// `witness_count_saturated_or_singleton(count) == Some(true) ⇒
+    /// witness_count_at_most_barely_multi_or_at_least_nearly_saturated(count)
+    /// == Some(true)`. Each of the two atomic ENDPOINT cells lives INSIDE
+    /// its respective closed bracket. Pinned via
+    /// `resource_limits_witness_count_saturated_or_singleton_implies_witness_count_at_most_barely_multi_or_at_least_nearly_saturated`.
+    ///
+    /// **BARELY-MULTI-OR-NEARLY-SATURATED-IMPLIES-AT-MOST-BMNS bridge —
+    /// LOAD-BEARING ATOMIC-ADJACENT-ENDPOINT-UNION INCLUSION pin**: for
+    /// every `count`,
+    /// `witness_count_barely_multi_or_nearly_saturated(count) == Some(true)
+    /// ⇒
+    /// witness_count_at_most_barely_multi_or_at_least_nearly_saturated(count)
+    /// == Some(true)`. Each of the two atomic ADJACENT-TO-ENDPOINT cells
+    /// lives INSIDE its respective closed bracket. Pinned via
+    /// `resource_limits_witness_count_barely_multi_or_nearly_saturated_implies_witness_count_at_most_barely_multi_or_at_least_nearly_saturated`.
+    ///
+    /// **`is_some` bridge**:
+    /// `witness_count_at_most_barely_multi_or_at_least_nearly_saturated(count).is_some()
+    /// ⇔ count > 0`. Pinned via
+    /// `resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_is_some_iff_count_gt_zero`.
+    ///
+    /// `const fn` so a caller can pin the BOUNDARY-ZONE verdict at
+    /// compile time.
+    ///
+    /// **Adoption compounds**: any future AXIS-CELL BOUNDARY-ZONE
+    /// predicate (higher-order axial partitions that isolate the four-
+    /// cell boundary zone, pairwise-quorum checks that flag the "sits at
+    /// or adjacent to a count-endpoint" regime, gauge-mesh checks that
+    /// name the FOUR-CELL BOUNDARY-ZONE cell) composes through this ONE
+    /// combinator rather than re-derived at every callsite. Body
+    /// regressions at the shared helper (a `||` collapse to `&&` that
+    /// would silently EMPTY the acceptance set on any `FIELD_COUNT >= 5`,
+    /// a `<= 2` swap to `< 2` that would silently EXCLUDE the BARELY-
+    /// MULTI cell one CARDINALITY-STEP inward from the LEFT half, a `>=
+    /// Self::FIELD_COUNT - 1` swap to `> Self::FIELD_COUNT - 1` that
+    /// would silently EXCLUDE the NEARLY-SATURATED cell one CARDINALITY-
+    /// STEP inward from the RIGHT half, a `Self::FIELD_COUNT - 1` swap to
+    /// bare `Self::FIELD_COUNT` that would silently reclassify the RIGHT
+    /// half's boundary one CARDINALITY-STEP outward) fire immediately at
+    /// the helper's own pins rather than silently re-classifying every
+    /// downstream consumer. The substrate now names the LATTICE JOIN of
+    /// the two shipped closed brackets (equivalently the LATTICE JOIN of
+    /// the two shipped two-atomic-endpoint disjunctions) as a first-class
+    /// typed combinator on [`ResourceLimits`] — the FOUR-CELL BOUNDARY-
+    /// ZONE peer of [`Self::witness_count_saturated_or_singleton`] plus
+    /// [`Self::witness_count_barely_multi_or_nearly_saturated`],
+    /// EXTENDING the substrate's cell family with the FOUR-ATOMIC-CELL-
+    /// UNION slot.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// AT-MOST-BMNS-KIND count witness binds at ONE typed named `const
+    /// fn` on the algebra rather than a per-consumer two-operand `||`
+    /// composition of the paired closed-bracket witnesses or a four-
+    /// operand disjunction two atomic atoms deep. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the helper composes
+    /// structurally through the shipped [`Self::witness_axis_presence`]
+    /// under the two-arm dispatch identity above with no re-derivation at
+    /// the caller. THEORY.md §V.1 — knowable platform; the LATTICE JOIN
+    /// of the two shipped closed brackets becomes a substrate-level
+    /// theorem, EXTENDING the algebra with the FOUR-CELL BOUNDARY-ZONE
+    /// slot as the LATTICE JOIN of [`Self::witness_count_at_most_barely_multi`]
+    /// and [`Self::witness_count_at_least_nearly_saturated`].
+    ///
+    /// Frontier inspiration: Racket's `(and (positive? count) (or (<=
+    /// count 2) (>= count (- FIELD-COUNT 1))))` short-circuiting
+    /// BOUNDARY-ZONE-DISJUNCTION on a count; Idris's `Fin n` type refined
+    /// to the closed-bracket-union predicate `n < 2 || n >=
+    /// FIELD_COUNT - 2` (0-indexed); APL's
+    /// `(0<c) × ((c≤2) ∨ (c≥FIELD-COUNT-1))` present-arm boundary-zone
+    /// primitive; Clojure's
+    /// `(and (pos? c) (or (<= c 2) (>= c (dec FIELD-COUNT))))` closed-
+    /// bracket set-membership dispatch. Translation through pleme-io
+    /// primitives: plain `const fn` delegation through the shipped
+    /// [`Self::witness_axis_presence`] at the BOUNDARY-ZONE-DISJUNCTION
+    /// `c <= 2 || c >= Self::FIELD_COUNT - 1` predicate — no new dep, no
+    /// typeclass indirection, no allocation, no closure.
+    #[must_use]
+    pub const fn witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+        count: usize,
+    ) -> Option<bool> {
+        Self::witness_axis_presence(count, count <= 2 || count >= Self::FIELD_COUNT - 1)
+    }
+
     /// Presence-preserving negation on whole-posture `Option<bool>` witnesses —
     /// `Self::negate_axis_witness(w)` returns `Some(!b)` when `w` is `Some(b)`,
     /// or `None` when `w` is `None`. The BOUNDARY primitive lifting the shape
@@ -34930,6 +35156,242 @@ impl ResourceLimits {
     #[must_use]
     pub const fn interior_axis_is_barely_multi_or_nearly_saturated(self) -> Option<bool> {
         Self::witness_count_barely_multi_or_nearly_saturated(self.count_interior_axes())
+    }
+
+    /// Whole-posture AT-MOST-BARELY-MULTI-OR-AT-LEAST-NEARLY-SATURATED-
+    /// OF-BOTTOM predicate — the four-cell BOUNDARY-ZONE JOIN pin on the
+    /// atomic bottom count. Returns `Some(true)` iff exactly one, exactly
+    /// two, exactly `Self::FIELD_COUNT - 1`, or exactly `Self::FIELD_COUNT`
+    /// axes are at the bottom pole (the four cells nearest the count
+    /// endpoints — the atomic ENDPOINTS SINGLETON `c == 1` and SATURATED
+    /// `c == Self::FIELD_COUNT` plus the atomic ADJACENT-TO-ENDPOINTS
+    /// BARELY-MULTI `c == 2` and NEARLY-SATURATED
+    /// `c == Self::FIELD_COUNT - 1`), `Some(false)` iff another STRICT-
+    /// INTERIOR-MIDDLE cardinality with at least three bottom axes,
+    /// `None` iff no bottom axis.
+    ///
+    /// **BOUNDARY-ZONE identity**: on every posture,
+    /// `bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated()
+    /// == { let c = self.count_bottom_axes(); if c == 0 { None } else {
+    /// Some(c <= 2 || c >= Self::FIELD_COUNT - 1) } }`. Pinned via
+    /// `resource_limits_bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_equals_count_le_two_or_ge_field_count_minus_one`.
+    ///
+    /// **AT-MOST-BMNS ⇔ (AT-MOST-BARELY-MULTI OR AT-LEAST-NEARLY-
+    /// SATURATED) disjoint-union identity**: Pinned via
+    /// `resource_limits_bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_iff_at_most_barely_multi_or_at_least_nearly_saturated`.
+    ///
+    /// **AT-MOST-BMNS ⇔ (SATURATED-OR-SINGLETON OR BARELY-MULTI-OR-
+    /// NEARLY-SATURATED) four-cell disjoint-union identity**: Pinned via
+    /// `resource_limits_bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_iff_saturated_or_singleton_or_barely_multi_or_nearly_saturated`.
+    ///
+    /// **AT-MOST-BARELY-MULTI-IMPLIES-AT-MOST-BMNS bridge / AT-LEAST-
+    /// NEARLY-SATURATED-IMPLIES-AT-MOST-BMNS bridge**: Pinned via
+    /// `resource_limits_bottom_axis_is_at_most_barely_multi_true_implies_is_at_most_barely_multi_or_at_least_nearly_saturated_true`
+    /// and
+    /// `resource_limits_bottom_axis_is_at_least_nearly_saturated_true_implies_is_at_most_barely_multi_or_at_least_nearly_saturated_true`.
+    ///
+    /// **Preset pins**: ENDPOINTS_ONLY_BOTTOM_POSTURE (bottom count == 2
+    /// — CLOSED-LEFT-BRACKET fires Some(true)); EMPTY_RESOURCE_LIMITS
+    /// (bottom count == FIELD_COUNT == 6 — CLOSED-RIGHT-BRACKET fires
+    /// Some(true)); absent-bottom presets pin None; count-3 postures
+    /// pin Some(false) (STRICT-INTERIOR-MIDDLE).
+    ///
+    /// **ANY-fold bridge**: Pinned via
+    /// `resource_limits_bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_is_some_iff_has_bottom_axis`.
+    ///
+    /// `const fn` so a caller can pin the bottom-axis BOUNDARY-ZONE
+    /// verdict at compile time.
+    ///
+    /// Theory anchor: same as
+    /// [`Self::witness_count_at_most_barely_multi_or_at_least_nearly_saturated`],
+    /// on the atomic bottom cell.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::witness_count_at_most_barely_multi_or_at_least_nearly_saturated`],
+    /// on the atomic bottom count.
+    #[must_use]
+    pub const fn bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(
+        self,
+    ) -> Option<bool> {
+        Self::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+            self.count_bottom_axes(),
+        )
+    }
+
+    /// Whole-posture AT-MOST-BARELY-MULTI-OR-AT-LEAST-NEARLY-SATURATED-
+    /// OF-TOP predicate — the ATOMIC-CELL DUAL of
+    /// [`Self::bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated`]
+    /// one PROJECTION-KIND axis over. Returns `Some(true)` iff exactly
+    /// one, exactly two, exactly `Self::FIELD_COUNT - 1`, or exactly
+    /// `Self::FIELD_COUNT` axes are at the top pole, `Some(false)` iff
+    /// another STRICT-INTERIOR-MIDDLE cardinality with at least three top
+    /// axes, `None` iff no top axis.
+    ///
+    /// **BOUNDARY-ZONE identity dual**: on every posture,
+    /// `top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated()
+    /// == { let c = self.count_top_axes(); if c == 0 { None } else {
+    /// Some(c <= 2 || c >= Self::FIELD_COUNT - 1) } }`. Pinned via
+    /// `resource_limits_top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_equals_count_le_two_or_ge_field_count_minus_one`.
+    ///
+    /// **AT-MOST-BMNS ⇔ (AT-MOST-BARELY-MULTI OR AT-LEAST-NEARLY-
+    /// SATURATED) disjoint-union identity dual**: Pinned via
+    /// `resource_limits_top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_iff_at_most_barely_multi_or_at_least_nearly_saturated`.
+    ///
+    /// **AT-MOST-BMNS ⇔ (SATURATED-OR-SINGLETON OR BARELY-MULTI-OR-
+    /// NEARLY-SATURATED) four-cell disjoint-union identity dual**: Pinned
+    /// via
+    /// `resource_limits_top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_iff_saturated_or_singleton_or_barely_multi_or_nearly_saturated`.
+    ///
+    /// **AT-MOST-BARELY-MULTI-IMPLIES-AT-MOST-BMNS bridge / AT-LEAST-
+    /// NEARLY-SATURATED-IMPLIES-AT-MOST-BMNS bridge dual**: Pinned via
+    /// `resource_limits_top_axis_is_at_most_barely_multi_true_implies_is_at_most_barely_multi_or_at_least_nearly_saturated_true`
+    /// and
+    /// `resource_limits_top_axis_is_at_least_nearly_saturated_true_implies_is_at_most_barely_multi_or_at_least_nearly_saturated_true`.
+    ///
+    /// **Preset pins**: `UNBOUNDED_RESOURCE_LIMITS.top_axis_is_at_most_
+    /// barely_multi_or_at_least_nearly_saturated() == Some(true)` (top
+    /// count == FIELD_COUNT == 6 — CLOSED-RIGHT-BRACKET fires); absent-
+    /// top presets pin None. No shipped preset places 1..=5 top axes;
+    /// the CLOSED-LEFT-BRACKET arms and the STRICT-INTERIOR-MIDDLE
+    /// rejection are exercised via per-count synthetic top-axis fixtures
+    /// in the identity pin below.
+    ///
+    /// **ANY-fold bridge dual**: Pinned via
+    /// `resource_limits_top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_is_some_iff_has_top_axis`.
+    ///
+    /// `const fn` so a caller can pin the top-axis BOUNDARY-ZONE verdict
+    /// at compile time.
+    ///
+    /// Theory anchor: same as
+    /// [`Self::bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated`],
+    /// on the DUAL atomic top cell.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated`],
+    /// on the DUAL atomic top mask.
+    #[must_use]
+    pub const fn top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(
+        self,
+    ) -> Option<bool> {
+        Self::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(self.count_top_axes())
+    }
+
+    /// Whole-posture AT-MOST-BARELY-MULTI-OR-AT-LEAST-NEARLY-SATURATED-
+    /// OF-POLAR predicate — the COMPOUND-CELL projection of
+    /// [`Self::witness_count_at_most_barely_multi_or_at_least_nearly_saturated`]
+    /// onto the polar-axis-count arm. Returns `Some(true)` iff exactly
+    /// one, exactly two, exactly `Self::FIELD_COUNT - 1`, or exactly
+    /// `Self::FIELD_COUNT` axes sit at a pole, `Some(false)` iff another
+    /// STRICT-INTERIOR-MIDDLE cardinality with at least three polar axes,
+    /// `None` iff no polar axis.
+    ///
+    /// **BOUNDARY-ZONE identity**: on every posture,
+    /// `polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated()
+    /// == { let c = self.count_polar_axes(); if c == 0 { None } else {
+    /// Some(c <= 2 || c >= Self::FIELD_COUNT - 1) } }`. Pinned via
+    /// `resource_limits_polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_equals_count_le_two_or_ge_field_count_minus_one`.
+    ///
+    /// **AT-MOST-BMNS ⇔ (AT-MOST-BARELY-MULTI OR AT-LEAST-NEARLY-
+    /// SATURATED) disjoint-union identity**: Pinned via
+    /// `resource_limits_polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_iff_at_most_barely_multi_or_at_least_nearly_saturated`.
+    ///
+    /// **AT-MOST-BMNS ⇔ (SATURATED-OR-SINGLETON OR BARELY-MULTI-OR-
+    /// NEARLY-SATURATED) four-cell disjoint-union identity**: Pinned via
+    /// `resource_limits_polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_iff_saturated_or_singleton_or_barely_multi_or_nearly_saturated`.
+    ///
+    /// **AT-MOST-BARELY-MULTI-IMPLIES-AT-MOST-BMNS bridge / AT-LEAST-
+    /// NEARLY-SATURATED-IMPLIES-AT-MOST-BMNS bridge**: Pinned via
+    /// `resource_limits_polar_axis_is_at_most_barely_multi_true_implies_is_at_most_barely_multi_or_at_least_nearly_saturated_true`
+    /// and
+    /// `resource_limits_polar_axis_is_at_least_nearly_saturated_true_implies_is_at_most_barely_multi_or_at_least_nearly_saturated_true`.
+    ///
+    /// **Preset pins**: `ENDPOINTS_ONLY_BOTTOM_POSTURE.polar_axis_is_at_
+    /// most_barely_multi_or_at_least_nearly_saturated() == Some(true)`
+    /// (polar count == 2 — CLOSED-LEFT-BRACKET fires); both SATURATED-
+    /// pole presets pin Some(true) (polar count == FIELD_COUNT == 6 —
+    /// CLOSED-RIGHT-BRACKET fires); DEFAULT and hand-authored postures
+    /// carry no polar axis (None); count-3 postures pin Some(false).
+    ///
+    /// **ANY-fold bridge**: Pinned via
+    /// `resource_limits_polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_is_some_iff_has_polar_axis`.
+    ///
+    /// `const fn` so a caller can pin the polar-axis BOUNDARY-ZONE
+    /// verdict at compile time.
+    ///
+    /// Theory anchor: same as
+    /// [`Self::bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated`],
+    /// on the COMPOUND polar cell.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated`],
+    /// on the COMPOUND polar mask.
+    #[must_use]
+    pub const fn polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(
+        self,
+    ) -> Option<bool> {
+        Self::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+            self.count_polar_axes(),
+        )
+    }
+
+    /// Whole-posture AT-MOST-BARELY-MULTI-OR-AT-LEAST-NEARLY-SATURATED-
+    /// OF-INTERIOR predicate — the COMPOUND-CELL DUAL of
+    /// [`Self::polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated`]
+    /// one PROJECTION-KIND axis over. Returns `Some(true)` iff exactly
+    /// one, exactly two, exactly `Self::FIELD_COUNT - 1`, or exactly
+    /// `Self::FIELD_COUNT` axes sit strictly between the two poles,
+    /// `Some(false)` iff another STRICT-INTERIOR-MIDDLE cardinality with
+    /// at least three interior axes, `None` iff no interior axis.
+    ///
+    /// **BOUNDARY-ZONE identity dual**: on every posture,
+    /// `interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated()
+    /// == { let c = self.count_interior_axes(); if c == 0 { None } else
+    /// { Some(c <= 2 || c >= Self::FIELD_COUNT - 1) } }`. Pinned via
+    /// `resource_limits_interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_equals_count_le_two_or_ge_field_count_minus_one`.
+    ///
+    /// **AT-MOST-BMNS ⇔ (AT-MOST-BARELY-MULTI OR AT-LEAST-NEARLY-
+    /// SATURATED) disjoint-union identity dual**: Pinned via
+    /// `resource_limits_interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_iff_at_most_barely_multi_or_at_least_nearly_saturated`.
+    ///
+    /// **AT-MOST-BMNS ⇔ (SATURATED-OR-SINGLETON OR BARELY-MULTI-OR-
+    /// NEARLY-SATURATED) four-cell disjoint-union identity dual**: Pinned
+    /// via
+    /// `resource_limits_interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_iff_saturated_or_singleton_or_barely_multi_or_nearly_saturated`.
+    ///
+    /// **AT-MOST-BARELY-MULTI-IMPLIES-AT-MOST-BMNS bridge / AT-LEAST-
+    /// NEARLY-SATURATED-IMPLIES-AT-MOST-BMNS bridge dual**: Pinned via
+    /// `resource_limits_interior_axis_is_at_most_barely_multi_true_implies_is_at_most_barely_multi_or_at_least_nearly_saturated_true`
+    /// and
+    /// `resource_limits_interior_axis_is_at_least_nearly_saturated_true_implies_is_at_most_barely_multi_or_at_least_nearly_saturated_true`.
+    ///
+    /// **Preset pins**: DEFAULT / HAND_AUTHORED_MID / HAND_AUTHORED_OTHER
+    /// pin `Some(true)` (interior count == FIELD_COUNT == 6 — CLOSED-
+    /// RIGHT-BRACKET fires); SATURATED-pole presets pin `None` (interior
+    /// count == 0); count-3 SPARSE / CONTIGUOUS_INTERIOR_BOTTOM postures
+    /// pin `Some(false)` (STRICT-INTERIOR-MIDDLE); count-4
+    /// ENDPOINTS_ONLY_BOTTOM_POSTURE pins `Some(false)` (interior count
+    /// == 4, STRICT-INTERIOR-MIDDLE).
+    ///
+    /// **ANY-fold bridge dual**: Pinned via
+    /// `resource_limits_interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_is_some_iff_has_interior_axis`.
+    ///
+    /// `const fn` so a caller can pin the interior-axis BOUNDARY-ZONE
+    /// verdict at compile time.
+    ///
+    /// Theory anchor: same as
+    /// [`Self::polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated`],
+    /// on the DUAL COMPOUND interior cell.
+    ///
+    /// Frontier inspiration: same as
+    /// [`Self::polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated`],
+    /// on the DUAL COMPOUND interior mask.
+    #[must_use]
+    pub const fn interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(
+        self,
+    ) -> Option<bool> {
+        Self::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+            self.count_interior_axes(),
+        )
     }
 }
 
@@ -111573,6 +112035,1151 @@ mod tests {
             .is_none());
         const _: () = assert!(EMPTY_RESOURCE_LIMITS
             .interior_axis_is_barely_multi_or_nearly_saturated()
+            .is_none());
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_agrees_with_witness_axis_presence_at_boundary_zone_disjunction(
+    ) {
+        // Two-arm dispatch identity — the BOUNDARY-ZONE witness is
+        // structurally the shipped presence-conditional helper applied to
+        // the CLOSED-BRACKET-UNION predicate `c <= 2 || c >= FIELD_COUNT
+        // - 1` on every count in `0..=FIELD_COUNT`. Pinning the
+        // delegation at every representable count catches a future
+        // rewrite that silently drifts from the presence-conditional
+        // composition (a `||` collapse to `&&` that would silently EMPTY
+        // the acceptance set on any FIELD_COUNT >= 5, a `<= 2` swap to
+        // `< 2` that would silently EXCLUDE the BARELY-MULTI cell, a `>=
+        // FIELD_COUNT - 1` swap to `> FIELD_COUNT - 1` that would
+        // silently EXCLUDE the NEARLY-SATURATED cell).
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+                    count,
+                ),
+                ResourceLimits::witness_axis_presence(
+                    count,
+                    count <= 2 || count >= ResourceLimits::FIELD_COUNT - 1,
+                ),
+                "witness_count_at_most_barely_multi_or_at_least_nearly_saturated({count}) != witness_axis_presence(count, count <= 2 || count >= FIELD_COUNT - 1)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_empty_arm_is_none(
+    ) {
+        // Empty-arm identity — the empty-axis count yields `None`,
+        // PRESERVING the has-axis distinction through the BOUNDARY-ZONE
+        // dispatch.
+        assert_eq!(
+            ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(0),
+            None,
+        );
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_at_one_is_some_true_at_field_count_ge_one(
+    ) {
+        // SINGLETON-endpoint acceptance — on any FIELD_COUNT >= 1 the
+        // atomic LEFT ENDPOINT cell (`c == 1`) is ACCEPTED by the
+        // CLOSED-LEFT-BRACKET half (`1 <= 2`).
+        if ResourceLimits::FIELD_COUNT >= 1 {
+            assert_eq!(
+                ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(1),
+                Some(true),
+                "witness_count_at_most_barely_multi_or_at_least_nearly_saturated(1) != Some(true) at SINGLETON on FIELD_COUNT >= 1",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_at_two_is_some_true_at_field_count_ge_two(
+    ) {
+        // BARELY-MULTI-endpoint acceptance — on any FIELD_COUNT >= 2 the
+        // atomic ADJACENT-LEFT-ENDPOINT cell (`c == 2`) is ACCEPTED by
+        // the CLOSED-LEFT-BRACKET half (`2 <= 2`).
+        if ResourceLimits::FIELD_COUNT >= 2 {
+            assert_eq!(
+                ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(2),
+                Some(true),
+                "witness_count_at_most_barely_multi_or_at_least_nearly_saturated(2) != Some(true) at BARELY-MULTI on FIELD_COUNT >= 2",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_at_field_count_minus_one_is_some_true_at_field_count_ge_two(
+    ) {
+        // NEARLY-SATURATED-endpoint acceptance — on any FIELD_COUNT >= 2
+        // the atomic ADJACENT-RIGHT-ENDPOINT cell (`c == FIELD_COUNT -
+        // 1`) is ACCEPTED by the CLOSED-RIGHT-BRACKET half
+        // (`FIELD_COUNT - 1 >= FIELD_COUNT - 1`).
+        if ResourceLimits::FIELD_COUNT >= 2 {
+            assert_eq!(
+                ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+                    ResourceLimits::FIELD_COUNT - 1,
+                ),
+                Some(true),
+                "witness_count_at_most_barely_multi_or_at_least_nearly_saturated(FIELD_COUNT - 1) != Some(true) at NEARLY-SATURATED on FIELD_COUNT >= 2",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_at_field_count_is_some_true_at_field_count_ge_one(
+    ) {
+        // SATURATED-endpoint acceptance — on any FIELD_COUNT >= 1 the
+        // atomic RIGHT ENDPOINT cell (`c == FIELD_COUNT`) is ACCEPTED by
+        // the CLOSED-RIGHT-BRACKET half (`FIELD_COUNT >= FIELD_COUNT -
+        // 1`).
+        if ResourceLimits::FIELD_COUNT >= 1 {
+            assert_eq!(
+                ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+                    ResourceLimits::FIELD_COUNT,
+                ),
+                Some(true),
+                "witness_count_at_most_barely_multi_or_at_least_nearly_saturated(FIELD_COUNT) != Some(true) at SATURATED on FIELD_COUNT >= 1",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_at_three_is_some_false_at_field_count_ge_five(
+    ) {
+        // STRICT-INTERIOR-MIDDLE rejection — on any FIELD_COUNT >= 5 the
+        // strictly-interior cell (`c == 3`) is REJECTED because `3 > 2`
+        // AND `3 < FIELD_COUNT - 1` at every FIELD_COUNT >= 5. Pin
+        // separates the FOUR-CELL BOUNDARY-ZONE from the STRICT-
+        // INTERIOR-MIDDLE at the first strictly-interior count.
+        if ResourceLimits::FIELD_COUNT >= 5 {
+            assert_eq!(
+                ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(3),
+                Some(false),
+                "witness_count_at_most_barely_multi_or_at_least_nearly_saturated(3) != Some(false) at STRICT-INTERIOR-MIDDLE on FIELD_COUNT >= 5",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_iff_at_most_barely_multi_or_at_least_nearly_saturated(
+    ) {
+        // BOUNDARY-ZONE ⇔ (AT-MOST-BARELY-MULTI OR AT-LEAST-NEARLY-
+        // SATURATED) disjoint-union pin — the two shipped closed
+        // brackets jointly ACCEPT the BOUNDARY-ZONE verdict on their
+        // respective landing intervals. Swept across `0..=FIELD_COUNT`.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            let disjunction =
+                ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+                    count,
+                );
+            let at_most_barely_multi = ResourceLimits::witness_count_at_most_barely_multi(count);
+            let at_least_nearly_saturated =
+                ResourceLimits::witness_count_at_least_nearly_saturated(count);
+            assert_eq!(
+                matches!(disjunction, Some(true)),
+                matches!(at_most_barely_multi, Some(true))
+                    || matches!(at_least_nearly_saturated, Some(true)),
+                "witness_count_at_most_barely_multi_or_at_least_nearly_saturated({count}) == Some(true) not equivalent to (at_most_barely_multi({count}) == Some(true) OR at_least_nearly_saturated({count}) == Some(true))",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_iff_saturated_or_singleton_or_barely_multi_or_nearly_saturated(
+    ) {
+        // FOUR-CELL BOUNDARY-ZONE ⇔ (SATURATED-OR-SINGLETON OR BARELY-
+        // MULTI-OR-NEARLY-SATURATED) atomic-partition pin — the
+        // BOUNDARY-ZONE is the LATTICE JOIN of the two shipped two-
+        // atomic-endpoint disjunctions. Swept across `0..=FIELD_COUNT`.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            let disjunction =
+                ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+                    count,
+                );
+            let saturated_or_singleton =
+                ResourceLimits::witness_count_saturated_or_singleton(count);
+            let barely_multi_or_nearly_saturated =
+                ResourceLimits::witness_count_barely_multi_or_nearly_saturated(count);
+            assert_eq!(
+                matches!(disjunction, Some(true)),
+                matches!(saturated_or_singleton, Some(true))
+                    || matches!(barely_multi_or_nearly_saturated, Some(true)),
+                "witness_count_at_most_barely_multi_or_at_least_nearly_saturated({count}) == Some(true) not equivalent to (saturated_or_singleton({count}) == Some(true) OR barely_multi_or_nearly_saturated({count}) == Some(true))",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_implies_witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+    ) {
+        // AT-MOST-BARELY-MULTI ⇒ BOUNDARY-ZONE bridge — the CLOSED-
+        // LEFT-BRACKET sits at the LEFT half via the tautology `c <= 2
+        // ⇒ c <= 2 || c >= FIELD_COUNT - 1`. Swept across
+        // `0..=FIELD_COUNT`.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            let at_most_barely_multi = ResourceLimits::witness_count_at_most_barely_multi(count);
+            let disjunction =
+                ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+                    count,
+                );
+            if matches!(at_most_barely_multi, Some(true)) {
+                assert_eq!(
+                    disjunction,
+                    Some(true),
+                    "witness_count_at_most_barely_multi({count}) == Some(true) but witness_count_at_most_barely_multi_or_at_least_nearly_saturated({count}) != Some(true)",
+                );
+            }
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_least_nearly_saturated_implies_witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+    ) {
+        // AT-LEAST-NEARLY-SATURATED ⇒ BOUNDARY-ZONE bridge — the
+        // CLOSED-RIGHT-BRACKET sits at the RIGHT half via the tautology
+        // `c >= FIELD_COUNT - 1 ⇒ c <= 2 || c >= FIELD_COUNT - 1`. Swept
+        // across `0..=FIELD_COUNT`.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            let at_least_nearly_saturated =
+                ResourceLimits::witness_count_at_least_nearly_saturated(count);
+            let disjunction =
+                ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+                    count,
+                );
+            if matches!(at_least_nearly_saturated, Some(true)) {
+                assert_eq!(
+                    disjunction,
+                    Some(true),
+                    "witness_count_at_least_nearly_saturated({count}) == Some(true) but witness_count_at_most_barely_multi_or_at_least_nearly_saturated({count}) != Some(true)",
+                );
+            }
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_or_singleton_implies_witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+    ) {
+        // SATURATED-OR-SINGLETON ⇒ BOUNDARY-ZONE bridge — each of the
+        // two atomic ENDPOINT cells lives INSIDE its respective closed
+        // bracket. Swept across `0..=FIELD_COUNT`.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            let saturated_or_singleton =
+                ResourceLimits::witness_count_saturated_or_singleton(count);
+            let disjunction =
+                ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+                    count,
+                );
+            if matches!(saturated_or_singleton, Some(true)) {
+                assert_eq!(
+                    disjunction,
+                    Some(true),
+                    "witness_count_saturated_or_singleton({count}) == Some(true) but witness_count_at_most_barely_multi_or_at_least_nearly_saturated({count}) != Some(true)",
+                );
+            }
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_multi_or_nearly_saturated_implies_witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+    ) {
+        // BARELY-MULTI-OR-NEARLY-SATURATED ⇒ BOUNDARY-ZONE bridge —
+        // each of the two atomic ADJACENT-TO-ENDPOINT cells lives INSIDE
+        // its respective closed bracket. Swept across `0..=FIELD_COUNT`.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            let barely_multi_or_nearly_saturated =
+                ResourceLimits::witness_count_barely_multi_or_nearly_saturated(count);
+            let disjunction =
+                ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+                    count,
+                );
+            if matches!(barely_multi_or_nearly_saturated, Some(true)) {
+                assert_eq!(
+                    disjunction,
+                    Some(true),
+                    "witness_count_barely_multi_or_nearly_saturated({count}) == Some(true) but witness_count_at_most_barely_multi_or_at_least_nearly_saturated({count}) != Some(true)",
+                );
+            }
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_is_some_iff_count_gt_zero(
+    ) {
+        // `is_some` bridge — the presence dispatch matches every shipped
+        // witness_count_* sibling one PREDICATE-KIND axis over.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+                    count,
+                )
+                .is_some(),
+                count > 0,
+                "witness_count_at_most_barely_multi_or_at_least_nearly_saturated({count}).is_some() != (count > 0)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_evaluates_at_compile_time_via_const_fn(
+    ) {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the BOUNDARY-ZONE verdict at compile time as a
+        // build-break.
+        const _: () = assert!(
+            ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(0)
+                .is_none()
+        );
+        const _: () = {
+            if ResourceLimits::FIELD_COUNT >= 1 {
+                assert!(matches!(
+                    ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+                        1,
+                    ),
+                    Some(true)
+                ));
+                assert!(matches!(
+                    ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+                        ResourceLimits::FIELD_COUNT,
+                    ),
+                    Some(true)
+                ));
+            }
+        };
+        const _: () = {
+            if ResourceLimits::FIELD_COUNT >= 2 {
+                assert!(matches!(
+                    ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+                        2,
+                    ),
+                    Some(true)
+                ));
+                assert!(matches!(
+                    ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+                        ResourceLimits::FIELD_COUNT - 1,
+                    ),
+                    Some(true)
+                ));
+            }
+        };
+        const _: () = {
+            if ResourceLimits::FIELD_COUNT >= 5 {
+                assert!(matches!(
+                    ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+                        3,
+                    ),
+                    Some(false)
+                ));
+            }
+        };
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_preset_pins(
+    ) {
+        // Preset pins on the atomic bottom BOUNDARY-ZONE cell —
+        // ENDPOINTS_ONLY_BOTTOM_POSTURE packs two bottom axes (`c == 2`
+        // — CLOSED-LEFT-BRACKET fires Some(true)); EMPTY_RESOURCE_LIMITS
+        // packs six bottom axes (`c == FIELD_COUNT == 6` — CLOSED-
+        // RIGHT-BRACKET fires Some(true)); absent-bottom presets pin
+        // None; count-3 postures pin Some(false) (STRICT-INTERIOR-
+        // MIDDLE); count-4 ENDPOINTS_ONLY interior pins Some(false).
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE
+                .bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS
+                .bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS
+                .bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS
+                .bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE
+                .bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE
+                .bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE
+                .bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE
+                .bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_preset_pins() {
+        // Preset pins dual on the atomic top BOUNDARY-ZONE cell —
+        // UNBOUNDED packs six top axes (CLOSED-RIGHT-BRACKET fires
+        // Some(true)); absent-top presets pin None. No shipped preset
+        // places 1..=5 top axes; other arms exercised via per-count
+        // synthetic fixtures in the identity pin below.
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS
+                .top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS.top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE
+                .top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE
+                .top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            None,
+        );
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_preset_pins()
+    {
+        // Preset pins on the COMPOUND polar BOUNDARY-ZONE cell —
+        // ENDPOINTS_ONLY_BOTTOM_POSTURE has polar count == 2 (CLOSED-
+        // LEFT-BRACKET fires Some(true)); both SATURATED-pole presets
+        // pack six polar axes (CLOSED-RIGHT-BRACKET fires Some(true));
+        // DEFAULT and hand-authored postures carry no polar axis (None);
+        // count-3 postures pin Some(false).
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE
+                .polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS.polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS
+                .polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS
+                .polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE
+                .polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE
+                .polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE.polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE
+                .polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_preset_pins(
+    ) {
+        // Preset pins on the COMPOUND interior BOUNDARY-ZONE cell —
+        // DEFAULT and both hand-authored postures pack six interior axes
+        // (CLOSED-RIGHT-BRACKET fires Some(true)); SATURATED-pole
+        // presets carry no interior axis (None); count-3 postures pin
+        // Some(false); count-4 ENDPOINTS_ONLY_BOTTOM_POSTURE pins
+        // Some(false) (STRICT-INTERIOR-MIDDLE — neither `c <= 2` nor `c
+        // >= FIELD_COUNT - 1`).
+        assert_eq!(
+            DEFAULT_RESOURCE_LIMITS
+                .interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            HAND_AUTHORED_MID_POSTURE
+                .interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE
+                .interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(true),
+        );
+        assert_eq!(
+            EMPTY_RESOURCE_LIMITS
+                .interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            UNBOUNDED_RESOURCE_LIMITS
+                .interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            None,
+        );
+        assert_eq!(
+            SPARSE_BOTTOM_POSTURE
+                .interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE
+                .interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(false),
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE
+                .interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_equals_count_le_two_or_ge_field_count_minus_one(
+    ) {
+        // COUNT-LE-TWO-OR-GE-FIELD_COUNT-MINUS-ONE identity — LOAD-
+        // BEARING structural pin. Walks per-count synthetic bottom-axis
+        // fixtures across the full 0..=FIELD_COUNT range.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(posture.count_bottom_axes(), count);
+            let expected = if count == 0 {
+                None
+            } else {
+                Some(count <= 2 || count >= ResourceLimits::FIELD_COUNT - 1)
+            };
+            assert_eq!(
+                posture.bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+                expected,
+                "is_at_most_barely_multi_or_at_least_nearly_saturated = (c <= 2 || c >= FIELD_COUNT - 1) identity failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_equals_count_le_two_or_ge_field_count_minus_one(
+    ) {
+        // COUNT-LE-TWO-OR-GE-FIELD_COUNT-MINUS-ONE identity dual on the
+        // top cell — walked via per-count synthetic top-axis fixtures.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(posture.count_top_axes(), count);
+            let expected = if count == 0 {
+                None
+            } else {
+                Some(count <= 2 || count >= ResourceLimits::FIELD_COUNT - 1)
+            };
+            assert_eq!(
+                posture.top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+                expected,
+                "is_at_most_barely_multi_or_at_least_nearly_saturated = (c <= 2 || c >= FIELD_COUNT - 1) identity failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_equals_count_le_two_or_ge_field_count_minus_one(
+    ) {
+        // COUNT-LE-TWO-OR-GE-FIELD_COUNT-MINUS-ONE identity on the
+        // COMPOUND polar cell — walked via per-count synthetic polar-
+        // axis fixtures alternating bottom/top pole placements.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for (i, slot) in fields.iter_mut().enumerate().take(count) {
+                *slot = if i % 2 == 0 { 0 } else { usize::MAX };
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(posture.count_polar_axes(), count);
+            let expected = if count == 0 {
+                None
+            } else {
+                Some(count <= 2 || count >= ResourceLimits::FIELD_COUNT - 1)
+            };
+            assert_eq!(
+                posture.polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+                expected,
+                "is_at_most_barely_multi_or_at_least_nearly_saturated = (c <= 2 || c >= FIELD_COUNT - 1) identity failed at polar count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_equals_count_le_two_or_ge_field_count_minus_one(
+    ) {
+        // COUNT-LE-TWO-OR-GE-FIELD_COUNT-MINUS-ONE identity dual on the
+        // COMPOUND interior cell — walked via per-count synthetic
+        // interior-axis fixtures. Interior count == FIELD_COUNT -
+        // polar_count.
+        for polar in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(polar) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let interior = ResourceLimits::FIELD_COUNT - polar;
+            assert_eq!(posture.count_interior_axes(), interior);
+            let expected = if interior == 0 {
+                None
+            } else {
+                Some(interior <= 2 || interior >= ResourceLimits::FIELD_COUNT - 1)
+            };
+            assert_eq!(
+                posture.interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+                expected,
+                "is_at_most_barely_multi_or_at_least_nearly_saturated = (c <= 2 || c >= FIELD_COUNT - 1) identity failed at interior count {interior} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_is_some_iff_has_bottom_axis(
+    ) {
+        // ANY-fold bridge — is_some ⇔ has_bottom_axis.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated()
+                    .is_some(),
+                a.has_bottom_axis(),
+                "is_at_most_barely_multi_or_at_least_nearly_saturated.is_some ⇔ has_bottom_axis failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_is_some_iff_has_top_axis(
+    ) {
+        // ANY-fold bridge dual on the top cell — walked via per-count
+        // synthetic top-axis fixtures.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            assert_eq!(
+                posture
+                    .top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated()
+                    .is_some(),
+                posture.has_top_axis(),
+                "is_at_most_barely_multi_or_at_least_nearly_saturated.is_some ⇔ has_top_axis failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_is_some_iff_has_polar_axis(
+    ) {
+        // ANY-fold bridge on the COMPOUND polar cell.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated()
+                    .is_some(),
+                a.has_polar_axis(),
+                "is_at_most_barely_multi_or_at_least_nearly_saturated.is_some ⇔ has_polar_axis failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_is_some_iff_has_interior_axis(
+    ) {
+        // ANY-fold bridge dual on the COMPOUND interior cell.
+        for a in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                a.interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated()
+                    .is_some(),
+                a.has_interior_axis(),
+                "is_at_most_barely_multi_or_at_least_nearly_saturated.is_some ⇔ has_interior_axis failed on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_iff_at_most_barely_multi_or_at_least_nearly_saturated(
+    ) {
+        // BOUNDARY-ZONE ⇔ (AT-MOST-BARELY-MULTI OR AT-LEAST-NEARLY-
+        // SATURATED) disjoint-union identity — LOAD-BEARING partition
+        // pin on the atomic bottom cell.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let disjunction =
+                posture.bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated();
+            let at_most_barely_multi = posture.bottom_axis_is_at_most_barely_multi();
+            let at_least_nearly_saturated = posture.bottom_axis_is_at_least_nearly_saturated();
+            assert_eq!(
+                matches!(disjunction, Some(true)),
+                matches!(at_most_barely_multi, Some(true))
+                    || matches!(at_least_nearly_saturated, Some(true)),
+                "bottom disjunction(true) ⇔ (at_most_barely_multi(true) OR at_least_nearly_saturated(true)) failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_iff_at_most_barely_multi_or_at_least_nearly_saturated(
+    ) {
+        // BOUNDARY-ZONE ⇔ (AT-MOST-BARELY-MULTI OR AT-LEAST-NEARLY-
+        // SATURATED) disjoint-union identity dual on the top cell.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let disjunction =
+                posture.top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated();
+            let at_most_barely_multi = posture.top_axis_is_at_most_barely_multi();
+            let at_least_nearly_saturated = posture.top_axis_is_at_least_nearly_saturated();
+            assert_eq!(
+                matches!(disjunction, Some(true)),
+                matches!(at_most_barely_multi, Some(true))
+                    || matches!(at_least_nearly_saturated, Some(true)),
+                "top disjunction(true) ⇔ (at_most_barely_multi(true) OR at_least_nearly_saturated(true)) failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_iff_at_most_barely_multi_or_at_least_nearly_saturated(
+    ) {
+        // BOUNDARY-ZONE ⇔ (AT-MOST-BARELY-MULTI OR AT-LEAST-NEARLY-
+        // SATURATED) disjoint-union identity on the COMPOUND polar cell.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for (i, slot) in fields.iter_mut().enumerate().take(count) {
+                *slot = if i % 2 == 0 { 0 } else { usize::MAX };
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let disjunction =
+                posture.polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated();
+            let at_most_barely_multi = posture.polar_axis_is_at_most_barely_multi();
+            let at_least_nearly_saturated = posture.polar_axis_is_at_least_nearly_saturated();
+            assert_eq!(
+                matches!(disjunction, Some(true)),
+                matches!(at_most_barely_multi, Some(true))
+                    || matches!(at_least_nearly_saturated, Some(true)),
+                "polar disjunction(true) ⇔ (at_most_barely_multi(true) OR at_least_nearly_saturated(true)) failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_iff_at_most_barely_multi_or_at_least_nearly_saturated(
+    ) {
+        // BOUNDARY-ZONE ⇔ (AT-MOST-BARELY-MULTI OR AT-LEAST-NEARLY-
+        // SATURATED) disjoint-union identity dual on the COMPOUND
+        // interior cell.
+        for polar in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(polar) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let disjunction =
+                posture.interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated();
+            let at_most_barely_multi = posture.interior_axis_is_at_most_barely_multi();
+            let at_least_nearly_saturated = posture.interior_axis_is_at_least_nearly_saturated();
+            assert_eq!(
+                matches!(disjunction, Some(true)),
+                matches!(at_most_barely_multi, Some(true))
+                    || matches!(at_least_nearly_saturated, Some(true)),
+                "interior disjunction(true) ⇔ (at_most_barely_multi(true) OR at_least_nearly_saturated(true)) failed at polar {polar} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_iff_saturated_or_singleton_or_barely_multi_or_nearly_saturated(
+    ) {
+        // BOUNDARY-ZONE ⇔ (SATURATED-OR-SINGLETON OR BARELY-MULTI-OR-
+        // NEARLY-SATURATED) four-cell atomic-partition identity on the
+        // atomic bottom cell.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let disjunction =
+                posture.bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated();
+            let saturated_or_singleton = posture.bottom_axis_is_saturated_or_singleton();
+            let bmns = posture.bottom_axis_is_barely_multi_or_nearly_saturated();
+            assert_eq!(
+                matches!(disjunction, Some(true)),
+                matches!(saturated_or_singleton, Some(true)) || matches!(bmns, Some(true)),
+                "bottom four-cell disjunction(true) ⇔ (saturated_or_singleton(true) OR BMNS(true)) failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_iff_saturated_or_singleton_or_barely_multi_or_nearly_saturated(
+    ) {
+        // BOUNDARY-ZONE ⇔ (SATURATED-OR-SINGLETON OR BARELY-MULTI-OR-
+        // NEARLY-SATURATED) four-cell atomic-partition identity dual on
+        // the top cell.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let disjunction =
+                posture.top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated();
+            let saturated_or_singleton = posture.top_axis_is_saturated_or_singleton();
+            let bmns = posture.top_axis_is_barely_multi_or_nearly_saturated();
+            assert_eq!(
+                matches!(disjunction, Some(true)),
+                matches!(saturated_or_singleton, Some(true)) || matches!(bmns, Some(true)),
+                "top four-cell disjunction(true) ⇔ (saturated_or_singleton(true) OR BMNS(true)) failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_iff_saturated_or_singleton_or_barely_multi_or_nearly_saturated(
+    ) {
+        // BOUNDARY-ZONE ⇔ (SATURATED-OR-SINGLETON OR BARELY-MULTI-OR-
+        // NEARLY-SATURATED) four-cell atomic-partition identity on the
+        // COMPOUND polar cell.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for (i, slot) in fields.iter_mut().enumerate().take(count) {
+                *slot = if i % 2 == 0 { 0 } else { usize::MAX };
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let disjunction =
+                posture.polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated();
+            let saturated_or_singleton = posture.polar_axis_is_saturated_or_singleton();
+            let bmns = posture.polar_axis_is_barely_multi_or_nearly_saturated();
+            assert_eq!(
+                matches!(disjunction, Some(true)),
+                matches!(saturated_or_singleton, Some(true)) || matches!(bmns, Some(true)),
+                "polar four-cell disjunction(true) ⇔ (saturated_or_singleton(true) OR BMNS(true)) failed at count {count} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_iff_saturated_or_singleton_or_barely_multi_or_nearly_saturated(
+    ) {
+        // BOUNDARY-ZONE ⇔ (SATURATED-OR-SINGLETON OR BARELY-MULTI-OR-
+        // NEARLY-SATURATED) four-cell atomic-partition identity dual on
+        // the COMPOUND interior cell.
+        for polar in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(polar) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            let disjunction =
+                posture.interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated();
+            let saturated_or_singleton = posture.interior_axis_is_saturated_or_singleton();
+            let bmns = posture.interior_axis_is_barely_multi_or_nearly_saturated();
+            assert_eq!(
+                matches!(disjunction, Some(true)),
+                matches!(saturated_or_singleton, Some(true)) || matches!(bmns, Some(true)),
+                "interior four-cell disjunction(true) ⇔ (saturated_or_singleton(true) OR BMNS(true)) failed at polar {polar} on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_at_most_barely_multi_true_implies_is_at_most_barely_multi_or_at_least_nearly_saturated_true(
+    ) {
+        // AT-MOST-BARELY-MULTI ⇒ BOUNDARY-ZONE bridge — LEFT-CLOSED-
+        // BRACKET INCLUSION pin on the atomic bottom cell. Walked via
+        // per-count synthetic bottom-axis fixtures.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if matches!(posture.bottom_axis_is_at_most_barely_multi(), Some(true)) {
+                assert_eq!(
+                    posture.bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+                    Some(true),
+                    "bottom at_most_barely_multi(true) ⇒ boundary_zone(true) failed at count {count} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_at_most_barely_multi_true_implies_is_at_most_barely_multi_or_at_least_nearly_saturated_true(
+    ) {
+        // AT-MOST-BARELY-MULTI ⇒ BOUNDARY-ZONE bridge dual on the top
+        // cell.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if matches!(posture.top_axis_is_at_most_barely_multi(), Some(true)) {
+                assert_eq!(
+                    posture.top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+                    Some(true),
+                    "top at_most_barely_multi(true) ⇒ boundary_zone(true) failed at count {count} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_most_barely_multi_true_implies_is_at_most_barely_multi_or_at_least_nearly_saturated_true(
+    ) {
+        // AT-MOST-BARELY-MULTI ⇒ BOUNDARY-ZONE bridge on the COMPOUND
+        // polar cell.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for (i, slot) in fields.iter_mut().enumerate().take(count) {
+                *slot = if i % 2 == 0 { 0 } else { usize::MAX };
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if matches!(posture.polar_axis_is_at_most_barely_multi(), Some(true)) {
+                assert_eq!(
+                    posture.polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+                    Some(true),
+                    "polar at_most_barely_multi(true) ⇒ boundary_zone(true) failed at count {count} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_most_barely_multi_true_implies_is_at_most_barely_multi_or_at_least_nearly_saturated_true(
+    ) {
+        // AT-MOST-BARELY-MULTI ⇒ BOUNDARY-ZONE bridge dual on the
+        // COMPOUND interior cell.
+        for polar in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(polar) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if matches!(posture.interior_axis_is_at_most_barely_multi(), Some(true)) {
+                assert_eq!(
+                    posture.interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+                    Some(true),
+                    "interior at_most_barely_multi(true) ⇒ boundary_zone(true) failed at polar {polar} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_bottom_axis_is_at_least_nearly_saturated_true_implies_is_at_most_barely_multi_or_at_least_nearly_saturated_true(
+    ) {
+        // AT-LEAST-NEARLY-SATURATED ⇒ BOUNDARY-ZONE bridge — RIGHT-
+        // CLOSED-BRACKET INCLUSION pin on the atomic bottom cell.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if matches!(
+                posture.bottom_axis_is_at_least_nearly_saturated(),
+                Some(true)
+            ) {
+                assert_eq!(
+                    posture.bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+                    Some(true),
+                    "bottom at_least_nearly_saturated(true) ⇒ boundary_zone(true) failed at count {count} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_top_axis_is_at_least_nearly_saturated_true_implies_is_at_most_barely_multi_or_at_least_nearly_saturated_true(
+    ) {
+        // AT-LEAST-NEARLY-SATURATED ⇒ BOUNDARY-ZONE bridge dual on the
+        // top cell.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(count) {
+                *slot = usize::MAX;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if matches!(posture.top_axis_is_at_least_nearly_saturated(), Some(true)) {
+                assert_eq!(
+                    posture.top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+                    Some(true),
+                    "top at_least_nearly_saturated(true) ⇒ boundary_zone(true) failed at count {count} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_polar_axis_is_at_least_nearly_saturated_true_implies_is_at_most_barely_multi_or_at_least_nearly_saturated_true(
+    ) {
+        // AT-LEAST-NEARLY-SATURATED ⇒ BOUNDARY-ZONE bridge on the
+        // COMPOUND polar cell.
+        for count in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for (i, slot) in fields.iter_mut().enumerate().take(count) {
+                *slot = if i % 2 == 0 { 0 } else { usize::MAX };
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if matches!(
+                posture.polar_axis_is_at_least_nearly_saturated(),
+                Some(true)
+            ) {
+                assert_eq!(
+                    posture.polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+                    Some(true),
+                    "polar at_least_nearly_saturated(true) ⇒ boundary_zone(true) failed at count {count} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_interior_axis_is_at_least_nearly_saturated_true_implies_is_at_most_barely_multi_or_at_least_nearly_saturated_true(
+    ) {
+        // AT-LEAST-NEARLY-SATURATED ⇒ BOUNDARY-ZONE bridge dual on the
+        // COMPOUND interior cell.
+        for polar in 0..=ResourceLimits::FIELD_COUNT {
+            let mut fields = [41_usize, 43, 47, 53, 59, 61];
+            for slot in fields.iter_mut().take(polar) {
+                *slot = 0;
+            }
+            let posture = ResourceLimits::from_field_values(fields);
+            if matches!(
+                posture.interior_axis_is_at_least_nearly_saturated(),
+                Some(true)
+            ) {
+                assert_eq!(
+                    posture.interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+                    Some(true),
+                    "interior at_least_nearly_saturated(true) ⇒ boundary_zone(true) failed at polar {polar} on {posture:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_axis_is_at_most_barely_multi_or_at_least_nearly_saturated_evaluates_at_compile_time_via_const_fn(
+    ) {
+        // const-fn compile-time evaluability across all four cells at
+        // their pole-of-fire preset — a body regression to a non-const
+        // combinator would fail compile here rather than silently at
+        // each downstream const context.
+        const _: () = assert!(matches!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE
+                .bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            UNBOUNDED_RESOURCE_LIMITS
+                .top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE
+                .polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            DEFAULT_RESOURCE_LIMITS
+                .interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated(),
+            Some(true)
+        ));
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .top_axis_is_at_most_barely_multi_or_at_least_nearly_saturated()
+            .is_none());
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
+            .bottom_axis_is_at_most_barely_multi_or_at_least_nearly_saturated()
+            .is_none());
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS
+            .polar_axis_is_at_most_barely_multi_or_at_least_nearly_saturated()
+            .is_none());
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS
+            .interior_axis_is_at_most_barely_multi_or_at_least_nearly_saturated()
             .is_none());
     }
 }

@@ -1525,13 +1525,118 @@ impl NarrowNumeric<f64> for f32 {
     }
 }
 
+/// The reader's widest type on each numeric axis — `i64` on the int
+/// column, `f64` on the float column — carrying its typed lift into
+/// [`NumericLiteral`]'s matching variant.
+///
+/// Companion to [`NarrowNumeric`] on the OTHER end of the narrowing
+/// pipeline: `NarrowNumeric<Wide>` projects a wide value INTO a
+/// narrower Rust field type; `WideNumeric` lifts the SAME wide value
+/// out again into the typed diagnostic carrier the rejection quotes.
+/// The two traits sandwich the four `extract_*_narrowed` extractors:
+/// EVERY narrowing site reads a wide (`extract_int` / `extract_float`),
+/// tries the narrow projection (`T::narrow`), and on failure lifts the
+/// wide back into a `NumericLiteral` so the operator-facing diagnostic
+/// echoes the author's own literal (never the width-cast peer).
+///
+/// The set is closed by CONSTRUCTION: the trait is `pub` but its impls
+/// live in this module and cover the TWO wide axes the reader can
+/// produce (`Sexp::as_int` → `i64`, `Sexp::as_float` → `f64`). A
+/// hypothetical third wide axis is not reachable until the reader
+/// grows a new atom projection AND [`NumericLiteral`] grows the
+/// matching variant AND this trait gains the impl — at which point the
+/// substrate's narrowing pipeline binds the new axis mechanically,
+/// with no per-extractor edit.
+///
+/// Pre-lift the wide-into-literal wrap lived at FOUR call sites — each
+/// of `extract_int_narrowed` / `extract_optional_int_narrowed` /
+/// `extract_float_narrowed` / `extract_optional_float_narrowed` spelled
+/// `NumericLiteral::<Variant>(wide)` byte-for-byte, threading the wide
+/// axis identity through a per-site literal constructor rather than
+/// through a typed method dispatched on the wide type itself. Post-lift
+/// the wrap lives in ONE `WideNumeric::as_literal` method dispatched
+/// through the `narrow_or_range_err` primitive; the four extractors
+/// name the axis exactly once (through the `W` type parameter on their
+/// `NarrowNumeric<W>` bound) and never spell the `NumericLiteral`
+/// variant at all. A regression that silently re-labeled one variant
+/// (`NumericLiteral::Int` → `NumericLiteral::Float` on the int axis's
+/// wrap) cannot survive the trait dispatch — the impl's return type is
+/// pinned by `NumericLiteral` itself, and the width identity riding
+/// [`NarrowNumeric::WIDTH`] cross-checks with the axis-typed literal at
+/// the operator-facing display boundary (`NumericWidth::U16` paired
+/// with `NumericLiteral::Int(70_000)` is coherent; `NumericLiteral::
+/// Float(70_000.0)` would be a shape drift the trait's per-axis impls
+/// forbid at rustc time).
+///
+/// Theory anchor: THEORY.md §II.1 invariant 3 (typed exit) — the
+/// wide-into-literal wrap IS the typed-exit projection at the numeric
+/// axis's rejection boundary; naming it as a trait method makes the
+/// axis identity load-bearing data rather than a per-site constructor
+/// call. THEORY.md §VI.1 (generation over composition) — the wrap
+/// recurred at FOUR sites (well past the three-times-rule trigger) and
+/// is lifted to one owner; adding a fifth extractor shape (e.g. a
+/// `Vec<T>` numeric variant, once the derive's `Kind::VecInt` /
+/// `Kind::VecFloat` arms exist) picks up the trait dispatch
+/// mechanically with no new per-site literal-constructor call.
+pub trait WideNumeric: Copy {
+    /// This wide value's typed lift into [`NumericLiteral`] — the
+    /// per-axis variant the operator-facing rejection quotes.
+    fn as_literal(self) -> NumericLiteral;
+}
+
+impl WideNumeric for i64 {
+    fn as_literal(self) -> NumericLiteral {
+        NumericLiteral::Int(self)
+    }
+}
+
+impl WideNumeric for f64 {
+    fn as_literal(self) -> NumericLiteral {
+        NumericLiteral::Float(self)
+    }
+}
+
+/// The narrowing rejection primitive — `T::narrow(wide)` followed by
+/// [`range_err`] wrapping the wide value in its typed [`NumericLiteral`]
+/// carrier via [`WideNumeric::as_literal`]. FOUR sites used to inline
+/// this three-line shape (`T::narrow(wide).ok_or_else(|| range_err(key,
+/// T::WIDTH, NumericLiteral::<Variant>(wide)))`), each spelling its
+/// axis's `NumericLiteral` variant constructor by hand. Post-lift the
+/// four extractors bind through this primitive; the axis identity
+/// rides the `W` type parameter (dispatched to the correct
+/// `NumericLiteral` variant by `WideNumeric`), and no extractor names
+/// `NumericLiteral::Int` or `NumericLiteral::Float` at all.
+///
+/// The `T: NarrowNumeric<W>` bound pins the narrowing partial function
+/// on the SAME wide type the caller extracted through `extract_int` /
+/// `extract_float`; the `W: WideNumeric` bound pins the wide-into-
+/// literal wrap on the SAME wide type; the two bounds ride the same
+/// `W` type parameter so a caller cannot pass a wide value from one
+/// axis into a narrowing primitive typed for the other axis. A future
+/// third wide axis lands as ONE `WideNumeric for <NewWide>` impl + ONE
+/// `NarrowNumeric<NewWide> for <NewNarrow>` impl per new narrow width;
+/// this helper picks up the axis mechanically with no signature change.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// four-times rule decisively crossed). THEORY.md §II.1 invariant 3
+/// (typed exit — the rejection boundary lives at ONE primitive whose
+/// axis identity is the type-parameter, not a per-site literal
+/// constructor).
+fn narrow_or_range_err<W, T>(key: &str, wide: W) -> Result<T>
+where
+    W: WideNumeric,
+    T: NarrowNumeric<W>,
+{
+    T::narrow(wide).ok_or_else(|| range_err(key, T::WIDTH, wide.as_literal()))
+}
+
 /// Required integer kwarg projected into the field's own width —
-/// [`extract_int`] followed by the typed [`NarrowNumeric`] projection,
-/// with [`LispError::KwargOutOfRange`] on a value the width cannot
-/// hold. The narrowing replacement for `extract_int(&kw, key)? as T`.
+/// [`extract_int`] followed by the typed [`NarrowNumeric`] projection
+/// via [`narrow_or_range_err`], with [`LispError::KwargOutOfRange`] on
+/// a value the width cannot hold. The narrowing replacement for
+/// `extract_int(&kw, key)? as T`.
 pub fn extract_int_narrowed<T: NarrowNumeric<i64>>(kw: &Kwargs<'_>, key: &str) -> Result<T> {
-    let wide = extract_int(kw, key)?;
-    T::narrow(wide).ok_or_else(|| range_err(key, T::WIDTH, NumericLiteral::Int(wide)))
+    narrow_or_range_err(key, extract_int(kw, key)?)
 }
 
 /// `Option` sibling of [`extract_int_narrowed`]. An ABSENT kwarg stays
@@ -1545,17 +1650,15 @@ pub fn extract_optional_int_narrowed<T: NarrowNumeric<i64>>(
     let Some(wide) = extract_optional_int(kw, key)? else {
         return Ok(None);
     };
-    T::narrow(wide)
-        .map(Some)
-        .ok_or_else(|| range_err(key, T::WIDTH, NumericLiteral::Int(wide)))
+    narrow_or_range_err(key, wide).map(Some)
 }
 
 /// Float-axis sibling of [`extract_int_narrowed`] — [`extract_float`]
-/// followed by the typed [`NarrowNumeric`] projection. The narrowing
-/// replacement for `extract_float(&kw, key)? as T`.
+/// followed by the typed [`NarrowNumeric`] projection via
+/// [`narrow_or_range_err`]. The narrowing replacement for
+/// `extract_float(&kw, key)? as T`.
 pub fn extract_float_narrowed<T: NarrowNumeric<f64>>(kw: &Kwargs<'_>, key: &str) -> Result<T> {
-    let wide = extract_float(kw, key)?;
-    T::narrow(wide).ok_or_else(|| range_err(key, T::WIDTH, NumericLiteral::Float(wide)))
+    narrow_or_range_err(key, extract_float(kw, key)?)
 }
 
 /// `Option` sibling of [`extract_float_narrowed`]; same absent-vs-
@@ -1567,9 +1670,7 @@ pub fn extract_optional_float_narrowed<T: NarrowNumeric<f64>>(
     let Some(wide) = extract_optional_float(kw, key)? else {
         return Ok(None);
     };
-    T::narrow(wide)
-        .map(Some)
-        .ok_or_else(|| range_err(key, T::WIDTH, NumericLiteral::Float(wide)))
+    narrow_or_range_err(key, wide).map(Some)
 }
 
 pub fn extract_bool(kw: &Kwargs<'_>, key: &str) -> Result<bool> {
@@ -2408,6 +2509,83 @@ mod tests {
         assert!(<f32 as NarrowNumeric<f64>>::narrow(f64::NAN)
             .expect("NaN passes through")
             .is_nan());
+    }
+
+    /// `WideNumeric` is the companion trait of `NarrowNumeric` on the
+    /// OTHER end of the narrowing pipeline: the wide value the reader
+    /// hands back gets lifted into its typed [`NumericLiteral`]
+    /// variant so the operator-facing rejection echoes exactly what
+    /// the author wrote. Pre-lift the wrap was spelled at FOUR call
+    /// sites as `NumericLiteral::<Variant>(wide)` byte-for-byte; post-
+    /// lift the wrap is a trait method dispatched on the wide type
+    /// itself, so a regression that silently re-labeled the axis
+    /// (`i64` wrapping through `NumericLiteral::Float`) is
+    /// unconstructible rather than merely untested. Pin the two-axis
+    /// coverage on the TWO wide types the substrate binds
+    /// (`i64` / `f64`), and pin the round-trip through a representative
+    /// negative-signed / positive-signed / fractional-float triple.
+    #[test]
+    fn wide_numeric_lifts_every_wide_axis_into_its_own_typed_literal_variant() {
+        assert_eq!(0_i64.as_literal(), NumericLiteral::Int(0));
+        assert_eq!(i64::MIN.as_literal(), NumericLiteral::Int(i64::MIN));
+        assert_eq!(i64::MAX.as_literal(), NumericLiteral::Int(i64::MAX));
+        assert_eq!(70_000_i64.as_literal(), NumericLiteral::Int(70_000));
+        assert_eq!(0.0_f64.as_literal(), NumericLiteral::Float(0.0));
+        assert!(
+            matches!(1.0e300_f64.as_literal(), NumericLiteral::Float(x) if (x - 1.0e300).abs() < f64::EPSILON),
+            "the wide axis lift must echo the author's own literal, unchanged",
+        );
+    }
+
+    /// The narrowing rejection primitive `narrow_or_range_err` binds
+    /// `T::WIDTH` on the NARROW type parameter AND `wide.as_literal()`
+    /// on the WIDE type parameter through ONE trait dispatch — so the
+    /// diagnostic's `(target, value)` pair is coherent by construction
+    /// (`NumericWidth::U16` alongside `NumericLiteral::Int(70_000)`,
+    /// never `NumericLiteral::Float(70_000.0)`). Pin both axes: the
+    /// `port 70000` case on the int column reaches `narrow_or_range_
+    /// err::<i64, u16>` with the two identities the LispError variant
+    /// carries; the `scale 1.0e300` case on the float column reaches
+    /// `narrow_or_range_err::<f64, f32>` with the peer identities on
+    /// the peer axis. Pre-lift the two rejections lived at DIFFERENT
+    /// per-site literal-constructor spellings; post-lift they share
+    /// ONE primitive whose axis identity rides the type parameter.
+    #[test]
+    fn narrow_or_range_err_lifts_the_wide_literal_wrap_out_of_the_four_extractors() {
+        let int_err: LispError = narrow_or_range_err::<i64, u16>("port", 70_000)
+            .expect_err("70000 is out of range for u16");
+        let LispError::KwargOutOfRange {
+            form,
+            target,
+            value,
+        } = &int_err
+        else {
+            panic!("expected KwargOutOfRange, got {int_err:?}");
+        };
+        assert_eq!(form, &KwargPath::named("port"));
+        assert_eq!(*target, NumericWidth::U16);
+        assert_eq!(*value, NumericLiteral::Int(70_000));
+
+        let float_err: LispError =
+            narrow_or_range_err::<f64, f32>("scale", 1.0e300).expect_err("1.0e300 overflows f32");
+        let LispError::KwargOutOfRange { target, value, .. } = &float_err else {
+            panic!("expected KwargOutOfRange, got {float_err:?}");
+        };
+        assert_eq!(*target, NumericWidth::F32);
+        assert!(
+            matches!(value, NumericLiteral::Float(x) if (*x - 1.0e300).abs() < f64::EPSILON),
+            "the diagnostic must echo the author's own literal, got {value:?}",
+        );
+
+        // The in-range path stays total — a narrowing primitive that
+        // rejected valid input would be worse than the truncation it
+        // replaced.
+        let ok_int: u16 =
+            narrow_or_range_err::<i64, u16>("port", 8080).expect("in-range int narrows through");
+        assert_eq!(ok_int, 8080);
+        let ok_float: f32 =
+            narrow_or_range_err::<f64, f32>("scale", 1.0).expect("in-range float narrows through");
+        assert!((ok_float - 1.0_f32).abs() < f32::EPSILON);
     }
 
     /// A domain whose numeric fields are the pointer-width pair —

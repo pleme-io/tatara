@@ -16818,6 +16818,204 @@ impl ResourceLimits {
         Self::witness_axis_presence(count, count < Self::FIELD_COUNT)
     }
 
+    /// SATURATED-OR-SINGLETON-KIND count witness —
+    /// `Self::witness_count_saturated_or_singleton(count)` returns
+    /// `Some(true)` iff `count == 1` OR `count == Self::FIELD_COUNT`
+    /// (the DISJOINT UNION of the two atomic count-half-line ENDPOINT
+    /// cells — the LEFT-endpoint SINGLETON landing at `c == 1` and the
+    /// RIGHT-endpoint SATURATED landing at `c == Self::FIELD_COUNT` —
+    /// the SINGLE-FIRE-POLES cell where the present arm hits EXACTLY
+    /// one edge of the count half-line), `Some(false)` iff `count > 1
+    /// && count < Self::FIELD_COUNT` (the STRICTLY-MULTI interior),
+    /// or `None` iff `count == 0`. The BOUNDARY primitive lifting the
+    /// shape `Self::witness_axis_presence(count, count == 1 || count
+    /// == Self::FIELD_COUNT)` — the two-endpoint disjunction that
+    /// names the "count is at one of the two half-line ENDPOINTS"
+    /// cell as a first-class typed exit rather than the two-operand
+    /// `||` composition of [`Self::witness_count_singleton`]'s LEFT-
+    /// ENDPOINT-EQUALITY pin and [`Self::witness_count_saturated`]'s
+    /// RIGHT-ENDPOINT-EQUALITY pin every downstream consumer would
+    /// otherwise spell out.
+    ///
+    /// The SATURATED-OR-SINGLETON-KIND specialization of
+    /// [`Self::witness_axis_presence`] on the ENDPOINT-DISJUNCTION
+    /// predicate `c == 1 || c == Self::FIELD_COUNT` — where
+    /// [`Self::witness_axis_presence`] takes an arbitrary boolean
+    /// predicate over the count, [`Self::witness_count_singleton`]
+    /// pins the predicate to the LOWER-ENDPOINT-EQUALITY `c == 1`,
+    /// [`Self::witness_count_saturated`] pins it to the UPPER-
+    /// ENDPOINT-EQUALITY `c == Self::FIELD_COUNT`, and
+    /// [`Self::witness_count_strictly_multi`] pins it to the STRICT-
+    /// INTERIOR bracket `1 < c < Self::FIELD_COUNT`, THIS combinator
+    /// PINS the predicate to the DISJOINT UNION of the two atomic
+    /// ENDPOINT-EQUALITY cells — the POINTWISE COMPLEMENT of
+    /// [`Self::witness_count_strictly_multi`] on the present arm and
+    /// the DISJOINT-UNION join of the [`Self::witness_count_singleton`]
+    /// and [`Self::witness_count_saturated`] atomic cells one
+    /// PARTITION-EXTENT axis over. Named at the substrate so a caller
+    /// reads `witness_count_saturated_or_singleton(count)` at the
+    /// callsite rather than the two-line `witness_count_singleton(c)
+    /// == Some(true) || witness_count_saturated(c) == Some(true)`
+    /// disjunction that would inline the same shape at every
+    /// consumer.
+    ///
+    /// **Two-arm dispatch identity — LOAD-BEARING structural pin**:
+    /// on every `count`, `witness_count_saturated_or_singleton(count)
+    /// == Self::witness_axis_presence(count, count == 1 || count ==
+    /// Self::FIELD_COUNT)`. The delegation through the shipped
+    /// presence-conditional helper is DIRECT — no new per-count scan,
+    /// no allocation. Pinned via
+    /// `resource_limits_witness_count_saturated_or_singleton_agrees_with_witness_axis_presence_at_endpoint_disjunction`.
+    ///
+    /// **Empty-arm identity**:
+    /// `witness_count_saturated_or_singleton(0) == None` — the empty-
+    /// axis count yields `None`, PRESERVING the has-axis distinction
+    /// through the SATURATED-OR-SINGLETON dispatch. Pinned via
+    /// `resource_limits_witness_count_saturated_or_singleton_empty_arm_is_none`.
+    ///
+    /// **SINGLETON-endpoint acceptance**:
+    /// `witness_count_saturated_or_singleton(1) == Some(true)` on any
+    /// `FIELD_COUNT >= 1` — the LEFT ENDPOINT of the disjunction
+    /// ACCEPTS the SATURATED-OR-SINGLETON verdict. Pinned via
+    /// `resource_limits_witness_count_saturated_or_singleton_at_one_is_some_true`.
+    ///
+    /// **SATURATED-endpoint acceptance**:
+    /// `witness_count_saturated_or_singleton(Self::FIELD_COUNT) ==
+    /// Some(true)` on any `FIELD_COUNT >= 1` — the RIGHT ENDPOINT of
+    /// the disjunction ACCEPTS the verdict. Pinned via
+    /// `resource_limits_witness_count_saturated_or_singleton_at_field_count_is_some_true`.
+    ///
+    /// **BARELY-MULTI-endpoint rejection at `Self::FIELD_COUNT >= 3`**:
+    /// `witness_count_saturated_or_singleton(2) == Some(false)` on
+    /// any `FIELD_COUNT >= 3` — the atomic cell strictly inside the
+    /// STRICTLY-MULTI interior AT THE LEFT edge is REJECTED because
+    /// `2 != 1` AND `2 != Self::FIELD_COUNT` (proper inequalities at
+    /// every `FIELD_COUNT >= 3`). Pinned via
+    /// `resource_limits_witness_count_saturated_or_singleton_at_two_is_some_false_at_field_count_ge_three`.
+    ///
+    /// **NEARLY-SATURATED-endpoint rejection at `Self::FIELD_COUNT >=
+    /// 3`**:
+    /// `witness_count_saturated_or_singleton(Self::FIELD_COUNT - 1)
+    /// == Some(false)` on any `FIELD_COUNT >= 3` — the atomic cell
+    /// strictly inside the STRICTLY-MULTI interior AT THE RIGHT edge
+    /// is REJECTED because `Self::FIELD_COUNT - 1 != 1` AND
+    /// `Self::FIELD_COUNT - 1 != Self::FIELD_COUNT` at every
+    /// `FIELD_COUNT >= 3`. Pinned via
+    /// `resource_limits_witness_count_saturated_or_singleton_at_field_count_minus_one_is_some_false_at_field_count_ge_three`.
+    ///
+    /// **SATURATED-OR-SINGLETON ⇔ (SINGLETON OR SATURATED) disjoint-
+    /// union pin — LOAD-BEARING partition pin**: for every `count`,
+    /// `witness_count_saturated_or_singleton(count) == Some(true) ⇔
+    /// (witness_count_singleton(count) == Some(true) ||
+    /// witness_count_saturated(count) == Some(true))`. The two atomic
+    /// ENDPOINT cells jointly ACCEPT the SATURATED-OR-SINGLETON
+    /// verdict on their respective landing counts and the interior
+    /// STRICTLY-MULTI half-line REJECTS on every cell strictly
+    /// between them. Pinned via
+    /// `resource_limits_witness_count_saturated_or_singleton_iff_singleton_or_saturated`.
+    ///
+    /// **SATURATED-OR-SINGLETON ⇔ NOT STRICTLY-MULTI on the present
+    /// arm — LOAD-BEARING complementarity pin**: for every `count`,
+    /// `witness_count_saturated_or_singleton(count) == Some(true) ⇔
+    /// witness_count_strictly_multi(count) == Some(false)`. The two
+    /// atomic ENDPOINT cells and the STRICT INTERIOR bracket
+    /// PARTITION the present half-line into two disjoint cells; the
+    /// POINTWISE COMPLEMENT of [`Self::witness_count_strictly_multi`]
+    /// on the present arm. Pinned via
+    /// `resource_limits_witness_count_saturated_or_singleton_iff_not_strictly_multi_on_present_arm`.
+    ///
+    /// **SINGLETON-IMPLIES-SATURATED-OR-SINGLETON refinement — LOAD-
+    /// BEARING nested-interval pin**: for every `count`,
+    /// `witness_count_singleton(count) == Some(true) ⇒
+    /// witness_count_saturated_or_singleton(count) == Some(true)`.
+    /// The SINGLETON atomic cell sits at the LEFT ENDPOINT of the
+    /// disjunction via the tautology `c == 1 ⇒ c == 1 || c ==
+    /// Self::FIELD_COUNT`. Pinned via
+    /// `resource_limits_witness_count_singleton_implies_witness_count_saturated_or_singleton`.
+    ///
+    /// **SATURATED-IMPLIES-SATURATED-OR-SINGLETON refinement — LOAD-
+    /// BEARING nested-interval pin**: for every `count`,
+    /// `witness_count_saturated(count) == Some(true) ⇒
+    /// witness_count_saturated_or_singleton(count) == Some(true)`.
+    /// The SATURATED atomic cell sits at the RIGHT ENDPOINT of the
+    /// disjunction via the tautology `c == Self::FIELD_COUNT ⇒
+    /// c == 1 || c == Self::FIELD_COUNT`. Pinned via
+    /// `resource_limits_witness_count_saturated_implies_witness_count_saturated_or_singleton`.
+    ///
+    /// **`is_some` bridge**:
+    /// `witness_count_saturated_or_singleton(count).is_some() ⇔
+    /// count > 0` — the presence dispatch matches the paired
+    /// [`Self::witness_axis_presence`]'s bridge and every shipped
+    /// witness_count_* sibling one PREDICATE-KIND axis over. Pinned
+    /// via
+    /// `resource_limits_witness_count_saturated_or_singleton_is_some_iff_count_gt_zero`.
+    ///
+    /// `const fn` so a caller can pin the SATURATED-OR-SINGLETON
+    /// verdict at compile time (`const _: () = assert!(matches!(
+    /// ResourceLimits::witness_count_saturated_or_singleton(1),
+    /// Some(true)));`) — sibling of the const-fn evaluability pins
+    /// the shipped witness_count_* combinators already carry at
+    /// their own exits.
+    ///
+    /// **Adoption compounds**: any future AXIS-CELL SATURATED-OR-
+    /// SINGLETON predicate (higher-order axial partitions that
+    /// isolate the two-atomic-endpoint disjoint union, pairwise-
+    /// quorum checks that flag the "sits at exactly one END of the
+    /// count half-line" regime, gauge-mesh checks that name the
+    /// SINGLE-FIRE-POLES cell) composes through this ONE combinator
+    /// rather than re-derived at every callsite. Body regressions at
+    /// the shared helper (a `||` collapse to `&&` that would silently
+    /// EMPTY the acceptance set on any `FIELD_COUNT >= 2`, a `== 1`
+    /// swap to `== 2` that would silently reclassify the atomic
+    /// LEFT-endpoint cell one CARDINALITY-STEP over, a
+    /// `Self::FIELD_COUNT` swap to bare literal `6` that would
+    /// freeze the RIGHT-endpoint at the shipped count, a
+    /// `Self::FIELD_COUNT` swap to `Self::FIELD_COUNT - 1` that
+    /// would silently reclassify the RIGHT-endpoint one CARDINALITY-
+    /// STEP inward toward NEARLY-SATURATED) fire immediately at the
+    /// helper's own pins rather than silently re-classifying every
+    /// downstream consumer. The substrate now names the DISJOINT
+    /// UNION of the two atomic ENDPOINT cells as a first-class typed
+    /// combinator on [`ResourceLimits`] — the POINTWISE COMPLEMENT
+    /// of [`Self::witness_count_strictly_multi`] on the present arm
+    /// and the DISJOINT-UNION join of [`Self::witness_count_singleton`]
+    /// and [`Self::witness_count_saturated`] one PARTITION-EXTENT
+    /// axis over, EXTENDING the substrate's cell family with the
+    /// TWO-ATOMIC-ENDPOINT-UNION slot.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// SATURATED-OR-SINGLETON-KIND count witness binds at ONE typed
+    /// named `const fn` on the algebra rather than a per-consumer
+    /// two-operand `||` composition of the paired atomic-endpoint
+    /// witnesses. THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the helper composes structurally through the shipped
+    /// [`Self::witness_axis_presence`] under the two-arm dispatch
+    /// identity above with no re-derivation at the caller.
+    /// THEORY.md §V.1 — knowable platform; the DISJOINT-UNION of the
+    /// two atomic ENDPOINT cells becomes a substrate-level theorem,
+    /// EXTENDING the algebra with the SINGLE-FIRE-POLES slot as the
+    /// POINTWISE COMPLEMENT of [`Self::witness_count_strictly_multi`]
+    /// on the present arm.
+    ///
+    /// Frontier inspiration: Racket's `(and (positive? count) (or
+    /// (= count 1) (= count FIELD-COUNT)))` short-circuiting ENDPOINT-
+    /// DISJUNCTION on a count; Idris's `Fin n` type refined to the
+    /// two-endpoint predicate `n == 0 || n == FIELD_COUNT - 1`;
+    /// APL's `(0<c) × ((c=1) ∨ (c=FIELD-COUNT))` present-arm two-
+    /// endpoint primitive; Kmett's `lattices` package's "meet-of-
+    /// atomic-endpoints" projection lifted through a presence-
+    /// preserving wrapper; Clojure's `(and (pos? c) (contains? #{1
+    /// FIELD-COUNT} c))` set-membership dispatch. Translation
+    /// through pleme-io primitives: plain `const fn` delegation
+    /// through the shipped [`Self::witness_axis_presence`] at the
+    /// ENDPOINT-DISJUNCTION `c == 1 || c == Self::FIELD_COUNT`
+    /// predicate — no new dep, no typeclass indirection, no
+    /// allocation, no closure.
+    #[must_use]
+    pub const fn witness_count_saturated_or_singleton(count: usize) -> Option<bool> {
+        Self::witness_axis_presence(count, count == 1 || count == Self::FIELD_COUNT)
+    }
+
     /// Presence-preserving negation on whole-posture `Option<bool>` witnesses —
     /// `Self::negate_axis_witness(w)` returns `Some(!b)` when `w` is `Some(b)`,
     /// or `None` when `w` is `None`. The BOUNDARY primitive lifting the shape
@@ -98328,6 +98526,273 @@ mod tests {
                 "interior_axis_is_partially_saturated != witness_count_partially_saturated(count_interior_axes) on {a:?}",
             );
         }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_or_singleton_agrees_with_witness_axis_presence_at_endpoint_disjunction(
+    ) {
+        // Two-arm dispatch identity — witness_count_saturated_or_singleton(count)
+        // is structurally the shipped presence-conditional helper applied to
+        // the ENDPOINT-DISJUNCTION predicate `c == 1 || c == FIELD_COUNT` on
+        // every count in `0..=FIELD_COUNT`. Pinning the delegation at every
+        // representable count catches a future rewrite that silently drifts
+        // from the presence-conditional composition (a `||` collapse to `&&`
+        // that would silently EMPTY the acceptance set on any FIELD_COUNT >=
+        // 2, an `== 1` swap to `== 2` that would silently reclassify the
+        // LEFT-endpoint atomic cell one CARDINALITY-STEP over, a
+        // `Self::FIELD_COUNT` swap to bare literal `6` that would freeze the
+        // RIGHT-endpoint at the shipped count, a `Self::FIELD_COUNT` swap to
+        // `Self::FIELD_COUNT - 1` that would reclassify the RIGHT-endpoint
+        // one CARDINALITY-STEP inward toward NEARLY-SATURATED).
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_saturated_or_singleton(count),
+                ResourceLimits::witness_axis_presence(
+                    count,
+                    count == 1 || count == ResourceLimits::FIELD_COUNT,
+                ),
+                "witness_count_saturated_or_singleton({count}) != witness_axis_presence(count, count == 1 || count == FIELD_COUNT)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_or_singleton_empty_arm_is_none() {
+        // Empty-arm identity — the empty-axis count yields `None`,
+        // PRESERVING the has-axis distinction through the SATURATED-
+        // OR-SINGLETON dispatch. Discards the ENDPOINT-DISJUNCTION
+        // predicate on the count == 0 posture, exactly as the paired
+        // witness_axis_presence helper does one PREDICATE-KIND axis
+        // under and the shipped witness_count_* siblings do at their
+        // own empty arms.
+        assert_eq!(
+            ResourceLimits::witness_count_saturated_or_singleton(0),
+            None,
+        );
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_or_singleton_at_one_is_some_true() {
+        // SINGLETON-endpoint acceptance — on any FIELD_COUNT >= 1
+        // the SINGLETON cell (`c == 1`) is the LEFT ENDPOINT of the
+        // disjunction and ACCEPTS the SATURATED-OR-SINGLETON verdict
+        // with `Some(true)`.
+        if ResourceLimits::FIELD_COUNT >= 1 {
+            assert_eq!(
+                ResourceLimits::witness_count_saturated_or_singleton(1),
+                Some(true),
+                "witness_count_saturated_or_singleton(1) != Some(true) at SINGLETON on FIELD_COUNT >= 1",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_or_singleton_at_field_count_is_some_true() {
+        // SATURATED-endpoint acceptance — on any FIELD_COUNT >= 1
+        // the SATURATED cell (`c == FIELD_COUNT`) is the RIGHT
+        // ENDPOINT of the disjunction and ACCEPTS the SATURATED-OR-
+        // SINGLETON verdict with `Some(true)`.
+        if ResourceLimits::FIELD_COUNT >= 1 {
+            assert_eq!(
+                ResourceLimits::witness_count_saturated_or_singleton(
+                    ResourceLimits::FIELD_COUNT,
+                ),
+                Some(true),
+                "witness_count_saturated_or_singleton(FIELD_COUNT) != Some(true) at SATURATED on FIELD_COUNT >= 1",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_or_singleton_at_two_is_some_false_at_field_count_ge_three(
+    ) {
+        // BARELY-MULTI rejection — on any FIELD_COUNT >= 3 the atomic
+        // cell strictly inside the STRICTLY-MULTI interior at the
+        // LEFT edge (`c == 2`) is REJECTED because `2 != 1` AND
+        // `2 != FIELD_COUNT` at every FIELD_COUNT >= 3. Pin separates
+        // the two-atomic-endpoint DISJOINT UNION from the CLOSED-
+        // LEFT-endpoint at_most_barely_multi bracket via the BARELY-
+        // MULTI cell — SATURATED-OR-SINGLETON REJECTS what
+        // at_most_barely_multi ACCEPTS at that cell.
+        if ResourceLimits::FIELD_COUNT >= 3 {
+            assert_eq!(
+                ResourceLimits::witness_count_saturated_or_singleton(2),
+                Some(false),
+                "witness_count_saturated_or_singleton(2) != Some(false) at BARELY-MULTI on FIELD_COUNT >= 3",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_or_singleton_at_field_count_minus_one_is_some_false_at_field_count_ge_three(
+    ) {
+        // NEARLY-SATURATED rejection — on any FIELD_COUNT >= 3 the
+        // atomic cell strictly inside the STRICTLY-MULTI interior at
+        // the RIGHT edge (`c == FIELD_COUNT - 1`) is REJECTED
+        // because `FIELD_COUNT - 1 != 1` AND `FIELD_COUNT - 1 !=
+        // FIELD_COUNT` at every FIELD_COUNT >= 3. Pin separates the
+        // two-atomic-endpoint DISJOINT UNION from the CLOSED-RIGHT-
+        // endpoint at_least_nearly_saturated bracket via the NEARLY-
+        // SATURATED cell — SATURATED-OR-SINGLETON REJECTS what
+        // at_least_nearly_saturated ACCEPTS at that cell.
+        if ResourceLimits::FIELD_COUNT >= 3 {
+            assert_eq!(
+                ResourceLimits::witness_count_saturated_or_singleton(
+                    ResourceLimits::FIELD_COUNT - 1,
+                ),
+                Some(false),
+                "witness_count_saturated_or_singleton(FIELD_COUNT - 1) != Some(false) at NEARLY-SATURATED on FIELD_COUNT >= 3",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_or_singleton_iff_singleton_or_saturated() {
+        // SATURATED-OR-SINGLETON ⇔ (SINGLETON OR SATURATED) disjoint-
+        // union pin — the two atomic ENDPOINT cells jointly ACCEPT
+        // the SATURATED-OR-SINGLETON verdict on their respective
+        // landing counts and the interior STRICTLY-MULTI half-line
+        // REJECTS on every cell strictly between them. Swept across
+        // `0..=FIELD_COUNT` to pin the biconditional at every
+        // representable count.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            let disjunction = ResourceLimits::witness_count_saturated_or_singleton(count);
+            let singleton = ResourceLimits::witness_count_singleton(count);
+            let saturated = ResourceLimits::witness_count_saturated(count);
+            assert_eq!(
+                matches!(disjunction, Some(true)),
+                matches!(singleton, Some(true)) || matches!(saturated, Some(true)),
+                "witness_count_saturated_or_singleton({count}) == Some(true) not equivalent to (witness_count_singleton({count}) == Some(true) OR witness_count_saturated({count}) == Some(true))",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_or_singleton_iff_not_strictly_multi_on_present_arm()
+    {
+        // SATURATED-OR-SINGLETON ⇔ NOT STRICTLY-MULTI on the present
+        // arm — the two atomic ENDPOINT cells and the STRICT INTERIOR
+        // bracket PARTITION the present half-line into two disjoint
+        // cells; the POINTWISE COMPLEMENT of witness_count_strictly_
+        // multi on the present arm. Swept over `1..=FIELD_COUNT` to
+        // pin the complementarity at every present-arm count.
+        let mut count = 1;
+        while count <= ResourceLimits::FIELD_COUNT {
+            let disjunction = ResourceLimits::witness_count_saturated_or_singleton(count);
+            let strictly_multi = ResourceLimits::witness_count_strictly_multi(count);
+            assert_eq!(
+                matches!(disjunction, Some(true)),
+                matches!(strictly_multi, Some(false)),
+                "witness_count_saturated_or_singleton({count}) == Some(true) not equivalent to witness_count_strictly_multi({count}) == Some(false) on present arm",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_singleton_implies_witness_count_saturated_or_singleton() {
+        // SINGLETON ⇒ SATURATED-OR-SINGLETON refinement pin — the
+        // SINGLETON atomic cell (`c == 1`) sits at the LEFT ENDPOINT
+        // of the disjunction via the tautology `c == 1 ⇒ c == 1 || c
+        // == FIELD_COUNT`. Swept across `0..=FIELD_COUNT` to pin the
+        // refinement at every representable count.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            let singleton = ResourceLimits::witness_count_singleton(count);
+            let disjunction = ResourceLimits::witness_count_saturated_or_singleton(count);
+            if matches!(singleton, Some(true)) {
+                assert_eq!(
+                    disjunction,
+                    Some(true),
+                    "witness_count_singleton({count}) == Some(true) but witness_count_saturated_or_singleton({count}) != Some(true)",
+                );
+            }
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_implies_witness_count_saturated_or_singleton() {
+        // SATURATED ⇒ SATURATED-OR-SINGLETON refinement pin — the
+        // SATURATED atomic cell (`c == FIELD_COUNT`) sits at the
+        // RIGHT ENDPOINT of the disjunction via the tautology
+        // `c == FIELD_COUNT ⇒ c == 1 || c == FIELD_COUNT`. Swept
+        // across `0..=FIELD_COUNT` to pin the refinement at every
+        // representable count.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            let saturated = ResourceLimits::witness_count_saturated(count);
+            let disjunction = ResourceLimits::witness_count_saturated_or_singleton(count);
+            if matches!(saturated, Some(true)) {
+                assert_eq!(
+                    disjunction,
+                    Some(true),
+                    "witness_count_saturated({count}) == Some(true) but witness_count_saturated_or_singleton({count}) != Some(true)",
+                );
+            }
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_or_singleton_is_some_iff_count_gt_zero() {
+        // `is_some` bridge — the presence dispatch matches the paired
+        // witness_axis_presence's bridge and every shipped
+        // witness_count_* sibling one PREDICATE-KIND axis over. Swept
+        // over `0..=FIELD_COUNT` to pin the presence identity at
+        // every representable count.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_saturated_or_singleton(count).is_some(),
+                count > 0,
+                "witness_count_saturated_or_singleton({count}).is_some() != (count > 0)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_or_singleton_evaluates_at_compile_time_via_const_fn()
+    {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the SATURATED-OR-SINGLETON verdict at
+        // compile time as a build-break. Sibling of the const-fn
+        // evaluability pins the shipped witness_count_* combinators
+        // already carry at their own exits.
+        const _: () = assert!(ResourceLimits::witness_count_saturated_or_singleton(0).is_none());
+        const _: () = {
+            if ResourceLimits::FIELD_COUNT >= 1 {
+                assert!(matches!(
+                    ResourceLimits::witness_count_saturated_or_singleton(1),
+                    Some(true)
+                ));
+                assert!(matches!(
+                    ResourceLimits::witness_count_saturated_or_singleton(
+                        ResourceLimits::FIELD_COUNT,
+                    ),
+                    Some(true)
+                ));
+            }
+        };
+        const _: () = {
+            if ResourceLimits::FIELD_COUNT >= 3 {
+                assert!(matches!(
+                    ResourceLimits::witness_count_saturated_or_singleton(2),
+                    Some(false)
+                ));
+                assert!(matches!(
+                    ResourceLimits::witness_count_saturated_or_singleton(
+                        ResourceLimits::FIELD_COUNT - 1,
+                    ),
+                    Some(false)
+                ));
+            }
+        };
     }
 
     #[test]

@@ -15902,6 +15902,222 @@ impl ResourceLimits {
         Self::witness_axis_presence(count, count >= Self::FIELD_COUNT - 1)
     }
 
+    /// BARELY-SUPER-HALF-SATURATED-KIND count witness —
+    /// `Self::witness_count_barely_super_half_saturated(count)` returns
+    /// `Some(true)` iff `count == Self::FIELD_COUNT / 2 + 1` (the ATOMIC
+    /// CELL one CARDINALITY-STEP above the balance-point at the LEFT
+    /// endpoint of the SUPER-HALF-SATURATED strict upper half),
+    /// `Some(false)` iff `count > 0` AND `count != Self::FIELD_COUNT /
+    /// 2 + 1`, or `None` iff `count == 0`. The BOUNDARY primitive
+    /// lifting the shape
+    /// `let c = self.count_X_axes(); Self::witness_axis_presence(c, c == Self::FIELD_COUNT / 2 + 1)`
+    /// that every AXIS-CELL BARELY-SUPER-HALF-SATURATED PREDICATE on
+    /// [`ResourceLimits`] carries at its exit —
+    /// [`Self::bottom_axis_is_barely_super_half_saturated`],
+    /// [`Self::top_axis_is_barely_super_half_saturated`],
+    /// [`Self::polar_axis_is_barely_super_half_saturated`],
+    /// [`Self::interior_axis_is_barely_super_half_saturated`] all wrap
+    /// the `c == Self::FIELD_COUNT / 2 + 1` ONE-ABOVE-BALANCE-POINT
+    /// equality of their paired [`Self::count_bottom_axes`]-family
+    /// count in the SAME two-line presence-conditional cascade. Pre-
+    /// lift each BARELY-SUPER-HALF-SATURATED predicate open-coded the
+    /// two-line
+    /// `let c = self.count_X_axes(); Self::witness_axis_presence(c, c == Self::FIELD_COUNT / 2 + 1)`
+    /// at its own exit — a four-point copy-paste whose consistency
+    /// the type system did not gate (a predicate that swapped
+    /// `c == Self::FIELD_COUNT / 2 + 1` for `c == Self::FIELD_COUNT / 2`
+    /// would silently collapse BARELY-SUPER-HALF-SATURATED into the
+    /// balance-point HALF-SATURATED cell; a predicate that swapped it
+    /// for `c >= Self::FIELD_COUNT / 2 + 1` would silently expand it
+    /// into the SUPER-HALF-SATURATED regime it names ONE cell within;
+    /// a predicate that swapped `Self::FIELD_COUNT` for a bare
+    /// literal `6` would silently miscompile at any future arity bump
+    /// — exactly the drift [`Self::FIELD_COUNT`] was named to
+    /// prevent). Post-lift the shape binds at ONE typed `const fn` on
+    /// [`ResourceLimits`], and every AXIS-CELL BARELY-SUPER-HALF-
+    /// SATURATED predicate composes through this helper — the
+    /// CARDINALITY-EQUALS-FIELD_COUNT-DIV-TWO-PLUS-ONE dispatch is a
+    /// substrate-level theorem rather than a per-consumer two-line
+    /// `let`-bound closure.
+    ///
+    /// The BARELY-SUPER-HALF-SATURATED-KIND specialization of
+    /// [`Self::witness_axis_presence`] on the CARDINALITY-EQUALS-
+    /// FIELD_COUNT-DIV-TWO-PLUS-ONE predicate
+    /// `c == Self::FIELD_COUNT / 2 + 1` — where
+    /// [`Self::witness_axis_presence`] takes an arbitrary boolean
+    /// predicate over the count, [`Self::witness_count_half_saturated`]
+    /// pins the predicate to the ATOMIC balance-point cell
+    /// `c == Self::FIELD_COUNT / 2`, [`Self::witness_count_barely_multi`]
+    /// pins it to the ATOMIC EXACT-TWO cell one CARDINALITY-STEP above
+    /// the SINGLETON endpoint on the LOWER end, and
+    /// [`Self::witness_count_super_half_saturated`] pins it to the
+    /// STRICT UPPER half `c * 2 > Self::FIELD_COUNT`, THIS combinator
+    /// PINS the predicate to the ATOMIC CELL one CARDINALITY-STEP
+    /// above the balance-point (the LEFT endpoint of the SUPER-HALF-
+    /// SATURATED strict upper half). The CARDINALITY-STEP DUAL of
+    /// [`Self::witness_count_half_saturated`] one axis over on the
+    /// SUPER-HALF side, and the SUPER-HALF-side twin of
+    /// [`Self::witness_count_barely_multi`] (the CARDINALITY-STEP
+    /// LEFT-BOUNDARY-CELL of a HALF-LINE regime — BARELY-MULTI as the
+    /// LEFT-BOUNDARY-CELL of the MULTI regime one CARDINALITY-STEP
+    /// past SINGLETON, BARELY-SUPER-HALF-SATURATED as the LEFT-
+    /// BOUNDARY-CELL of the SUPER-HALF-SATURATED regime one
+    /// CARDINALITY-STEP past HALF-SATURATED). Named at the substrate
+    /// so a caller reads
+    /// `witness_count_barely_super_half_saturated(count)` at the
+    /// callsite rather than
+    /// `witness_axis_presence(count, count == Self::FIELD_COUNT / 2 + 1)`
+    /// with the count-name repeated at both operands and the
+    /// balance-point-plus-one arithmetic threaded through the
+    /// helper's second argument.
+    ///
+    /// **Two-arm dispatch identity — LOAD-BEARING structural pin**:
+    /// on every `count`,
+    /// `witness_count_barely_super_half_saturated(count) ==
+    /// Self::witness_axis_presence(count, count == Self::FIELD_COUNT /
+    /// 2 + 1)`. The delegation through the shipped presence-
+    /// conditional helper is DIRECT — no new per-count scan, no
+    /// allocation. Pinned via
+    /// `resource_limits_witness_count_barely_super_half_saturated_agrees_with_witness_axis_presence_at_cardinality_field_count_div_two_plus_one`.
+    ///
+    /// **Empty-arm identity**:
+    /// `witness_count_barely_super_half_saturated(0) == None` — the
+    /// empty-axis count yields `None`, PRESERVING the has-axis
+    /// distinction through the BARELY-SUPER-HALF-SATURATED dispatch.
+    /// Pinned via
+    /// `resource_limits_witness_count_barely_super_half_saturated_empty_arm_is_none`.
+    ///
+    /// **One-above-balance-point endpoint acceptance**: on any
+    /// FIELD_COUNT >= 1 (so that `FIELD_COUNT / 2 + 1 > 0` — trivially
+    /// true on every non-empty arity, and always at most `FIELD_COUNT`
+    /// since `FIELD_COUNT / 2 + 1 <= FIELD_COUNT` iff `FIELD_COUNT >=
+    /// 2`, gated below),
+    /// `witness_count_barely_super_half_saturated(Self::FIELD_COUNT /
+    /// 2 + 1) == Some(true)` iff `Self::FIELD_COUNT >= 2` — the ATOMIC
+    /// ONE-ABOVE-BALANCE-POINT cell FIRES the BARELY-SUPER-HALF-
+    /// SATURATED verdict. Pinned via
+    /// `resource_limits_witness_count_barely_super_half_saturated_at_field_count_div_two_plus_one_is_some_true`.
+    ///
+    /// **Off-endpoint rejection**: for every `count in 1..=FIELD_COUNT`
+    /// with `count != Self::FIELD_COUNT / 2 + 1`,
+    /// `witness_count_barely_super_half_saturated(count) == Some(false)`
+    /// — every off-endpoint present-arm count REJECTS the verdict.
+    /// Swept across `1..=FIELD_COUNT` (INCLUDING both the balance-
+    /// point cell at `c == FIELD_COUNT / 2` and the SATURATED cell at
+    /// `c == FIELD_COUNT`) filtering out the acceptance cell, to pin
+    /// the rejection at every off-endpoint cell. Pinned via
+    /// `resource_limits_witness_count_barely_super_half_saturated_off_endpoint_rejects`.
+    ///
+    /// **BARELY-SUPER-HALF ⊥ HALF-SATURATED neighbour-separation pin
+    /// — LOAD-BEARING partition pin**: for every `count`, NOT
+    /// (`witness_count_barely_super_half_saturated(count) == Some(true)
+    /// && witness_count_half_saturated(count) == Some(true)`). The two
+    /// cells sit on adjacent points of the COUNT-EQUALS-K cell
+    /// partition (`c == Self::FIELD_COUNT / 2 + 1` vs
+    /// `c == Self::FIELD_COUNT / 2`) — the CARDINALITY-EQUALS-
+    /// FIELD_COUNT-DIV-TWO-PLUS-ONE primitive is DISJOINT from the
+    /// CARDINALITY-EQUALS-FIELD_COUNT-DIV-TWO primitive by
+    /// construction. The SUPER-HALF-side dual of the shipped
+    /// `witness_count_barely_multi ⊥ witness_count_singleton`
+    /// exclusion one PREDICATE-KIND axis over on the LOWER-END side.
+    /// Pinned via
+    /// `resource_limits_witness_count_barely_super_half_saturated_excludes_witness_count_half_saturated`.
+    ///
+    /// **BARELY-SUPER-HALF-IMPLIES-SUPER-HALF refinement — LOAD-
+    /// BEARING nested-interval pin**: for every `count`,
+    /// `witness_count_barely_super_half_saturated(count) == Some(true)
+    /// ⇒ witness_count_super_half_saturated(count) == Some(true)`.
+    /// The ATOMIC ONE-ABOVE-BALANCE-POINT cell sits STRICTLY inside
+    /// the STRICT UPPER half via the arithmetic identity
+    /// `c == FIELD_COUNT / 2 + 1 ⇒ c * 2 > FIELD_COUNT` (`(FIELD_COUNT
+    /// / 2 + 1) * 2 = 2 * (FIELD_COUNT / 2) + 2 >= FIELD_COUNT + 1 >
+    /// FIELD_COUNT` for every FIELD_COUNT) — the same refinement pin
+    /// the four shipped `_axis_is_barely_super_half_saturated` bodies
+    /// carry against their paired `_axis_is_super_half_saturated`
+    /// bodies lifted to the substrate one PREDICATE-KIND axis under.
+    /// Pinned via
+    /// `resource_limits_witness_count_barely_super_half_saturated_implies_witness_count_super_half_saturated`.
+    ///
+    /// **`is_some` bridge**:
+    /// `witness_count_barely_super_half_saturated(count).is_some() ⇔
+    /// count > 0` — the presence dispatch matches the paired
+    /// [`Self::witness_axis_presence`]'s bridge and every shipped
+    /// witness_count_* sibling one PREDICATE-KIND axis over (all
+    /// THIRTEEN PRESERVE the `count > 0` boundary). Pinned via
+    /// `resource_limits_witness_count_barely_super_half_saturated_is_some_iff_count_gt_zero`.
+    ///
+    /// `const fn` so a caller can pin the BARELY-SUPER-HALF-SATURATED
+    /// verdict at compile time (`const _: () = assert!(matches!(
+    /// ResourceLimits::witness_count_barely_super_half_saturated(
+    /// ResourceLimits::FIELD_COUNT / 2 + 1), Some(true)));` on any
+    /// FIELD_COUNT >= 2) — sibling of the const-fn evaluability pins
+    /// the four `_axis_is_barely_super_half_saturated` predicates
+    /// already carry at their own exits, and of the const-fn pins on
+    /// the shipped COUNT-EQUALS-K siblings
+    /// [`Self::witness_count_half_saturated`],
+    /// [`Self::witness_count_barely_multi`], and
+    /// [`Self::witness_count_nearly_saturated`] one CARDINALITY-STEP
+    /// axis over.
+    ///
+    /// **Adoption compounds**: the four shipped
+    /// `_axis_is_barely_super_half_saturated` predicates rewrite from
+    /// the open-coded two-line `let c = self.count_X_axes();
+    /// Self::witness_axis_presence(c, c == Self::FIELD_COUNT / 2 + 1)`
+    /// to the one-line
+    /// `Self::witness_count_barely_super_half_saturated(self.count_X_axes())`
+    /// composition at no semantic change; any future AXIS-CELL
+    /// BARELY-SUPER-HALF-SATURATED predicate (higher-order axial
+    /// partitions with a ONE-ABOVE-BALANCE-POINT cell, pairwise-
+    /// quorum checks that isolate the MINIMAL cardinality in the
+    /// SUPER-HALF-SATURATED regime) composes through this same
+    /// primitive. Body regressions at the shared helper (a `c ==
+    /// FIELD_COUNT / 2 + 1` collapse to `c == FIELD_COUNT / 2` that
+    /// would silently reclassify BARELY-SUPER-HALF-SATURATED into
+    /// HALF-SATURATED, a weakening to `c >= FIELD_COUNT / 2 + 1` that
+    /// would silently expand it into the SUPER-HALF-SATURATED regime,
+    /// an off-by-one on the `+ 1` addend) fire immediately at the
+    /// helper's own pins rather than silently re-classifying every
+    /// downstream `_axis_is_barely_super_half_saturated` reading. The
+    /// substrate now names the ATOMIC ONE-ABOVE-BALANCE-POINT cell as
+    /// a first-class typed combinator on [`ResourceLimits`] — the
+    /// LEFT-BOUNDARY-CELL of the SUPER-HALF-SATURATED regime the
+    /// substrate can point to WITHOUT re-deriving from the STRICT
+    /// UPPER half endpoint at every callsite.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// BARELY-SUPER-HALF-SATURATED-KIND count witness at every
+    /// `_axis_is_barely_super_half_saturated` body binds at ONE typed
+    /// named `const fn` on the algebra rather than a per-consumer
+    /// two-line `let`-bound composition through the paired
+    /// [`Self::witness_axis_presence`] helper. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the helper
+    /// composes structurally through the shipped
+    /// [`Self::witness_axis_presence`] under the two-arm dispatch
+    /// identity above with no re-derivation at the caller. THEORY.md
+    /// §V.1 — knowable platform; the CARDINALITY-EQUALS-FIELD_COUNT-
+    /// DIV-TWO-PLUS-ONE cell dispatch becomes a substrate-level
+    /// theorem, EXTENDING the COUNT-EQUALS-K atomic cell family with
+    /// the ONE-ABOVE-BALANCE-POINT slot as the SUPER-HALF-side twin
+    /// of the shipped LOWER-END BARELY-MULTI cell.
+    ///
+    /// Frontier inspiration: Racket's `(= (count p lst) (add1 (quotient
+    /// FIELD 2)))` one-above-balance-point dispatch on a boolean mask;
+    /// Idris's `Vect (S (k `div` 2)) a` shape at the cell one
+    /// constructor above the midpoint; APL's `(⌈(⍴v)÷2)=+/v` present-
+    /// arm one-above-halfway primitive; Kmett's `lattices` package's
+    /// "atomic above midpoint" projection lifted through a presence-
+    /// preserving wrapper; Lean's `Fin.succ (Fin.mk (n / 2))`
+    /// refinement to the cell one above the midpoint of a finite
+    /// index. Translation through pleme-io primitives: plain `const
+    /// fn` delegation through the shipped
+    /// [`Self::witness_axis_presence`] at the CARDINALITY-EQUALS-
+    /// FIELD_COUNT-DIV-TWO-PLUS-ONE predicate — no new dep, no
+    /// typeclass indirection, no allocation, no closure.
+    #[must_use]
+    pub const fn witness_count_barely_super_half_saturated(count: usize) -> Option<bool> {
+        Self::witness_axis_presence(count, count == Self::FIELD_COUNT / 2 + 1)
+    }
+
     /// Presence-preserving negation on whole-posture `Option<bool>` witnesses —
     /// `Self::negate_axis_witness(w)` returns `Some(!b)` when `w` is `Some(b)`,
     /// or `None` when `w` is `None`. The BOUNDARY primitive lifting the shape
@@ -29310,8 +29526,7 @@ impl ResourceLimits {
     /// allocation.
     #[must_use]
     pub const fn bottom_axis_is_barely_super_half_saturated(self) -> Option<bool> {
-        let c = self.count_bottom_axes();
-        Self::witness_axis_presence(c, c == Self::FIELD_COUNT / 2 + 1)
+        Self::witness_count_barely_super_half_saturated(self.count_bottom_axes())
     }
 
     /// Whole-posture BARELY-SUPER-HALF-SATURATED-OF-TOP predicate —
@@ -29394,8 +29609,7 @@ impl ResourceLimits {
     /// DUAL atomic top mask.
     #[must_use]
     pub const fn top_axis_is_barely_super_half_saturated(self) -> Option<bool> {
-        let c = self.count_top_axes();
-        Self::witness_axis_presence(c, c == Self::FIELD_COUNT / 2 + 1)
+        Self::witness_count_barely_super_half_saturated(self.count_top_axes())
     }
 
     /// Whole-posture BARELY-SUPER-HALF-SATURATED-OF-POLAR predicate —
@@ -29560,8 +29774,7 @@ impl ResourceLimits {
     /// no re-derivation.
     #[must_use]
     pub const fn polar_axis_is_barely_super_half_saturated(self) -> Option<bool> {
-        let c = self.count_polar_axes();
-        Self::witness_axis_presence(c, c == Self::FIELD_COUNT / 2 + 1)
+        Self::witness_count_barely_super_half_saturated(self.count_polar_axes())
     }
 
     /// Whole-posture BARELY-SUPER-HALF-SATURATED-OF-INTERIOR predicate
@@ -29650,8 +29863,7 @@ impl ResourceLimits {
     /// DUAL COMPOUND interior mask.
     #[must_use]
     pub const fn interior_axis_is_barely_super_half_saturated(self) -> Option<bool> {
-        let c = self.count_interior_axes();
-        Self::witness_axis_presence(c, c == Self::FIELD_COUNT / 2 + 1)
+        Self::witness_count_barely_super_half_saturated(self.count_interior_axes())
     }
 
     /// Whole-posture AT-MOST-HALF-SATURATED-OF-BOTTOM predicate —
@@ -96368,6 +96580,243 @@ mod tests {
                 a.interior_axis_is_at_least_nearly_saturated(),
                 ResourceLimits::witness_count_at_least_nearly_saturated(a.count_interior_axes()),
                 "interior_axis_is_at_least_nearly_saturated != witness_count_at_least_nearly_saturated(count_interior_axes) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_super_half_saturated_agrees_with_witness_axis_presence_at_cardinality_field_count_div_two_plus_one(
+    ) {
+        // Two-arm dispatch identity —
+        // witness_count_barely_super_half_saturated(count) is
+        // structurally the shipped presence-conditional helper applied
+        // to the CARDINALITY-EQUALS-FIELD_COUNT-DIV-TWO-PLUS-ONE
+        // predicate on every count in `0..=FIELD_COUNT`. Pinning the
+        // delegation at every representable count catches a future
+        // rewrite that silently drifts from the presence-conditional
+        // composition (a `c == FIELD_COUNT / 2 + 1` collapse to `c ==
+        // FIELD_COUNT / 2` sliding into HALF-SATURATED, a weakening to
+        // `c >= FIELD_COUNT / 2 + 1` expanding into the SUPER-HALF-
+        // SATURATED half-line, an off-by-one on the `+ 1` addend).
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_barely_super_half_saturated(count),
+                ResourceLimits::witness_axis_presence(
+                    count,
+                    count == ResourceLimits::FIELD_COUNT / 2 + 1
+                ),
+                "witness_count_barely_super_half_saturated({count}) != witness_axis_presence(count, count == FIELD_COUNT / 2 + 1)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_super_half_saturated_empty_arm_is_none() {
+        // Empty-arm identity — the empty-axis count yields `None`,
+        // PRESERVING the has-axis distinction through the BARELY-
+        // SUPER-HALF-SATURATED dispatch. Discards the CARDINALITY-
+        // EQUALS-FIELD_COUNT-DIV-TWO-PLUS-ONE predicate on the count ==
+        // 0 posture, exactly as the paired witness_axis_presence helper
+        // does one PREDICATE-KIND axis under and the shipped
+        // witness_count_* siblings do at their own empty arms.
+        assert_eq!(
+            ResourceLimits::witness_count_barely_super_half_saturated(0),
+            None,
+        );
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_super_half_saturated_at_field_count_div_two_plus_one_is_some_true(
+    ) {
+        // One-above-balance-point endpoint acceptance — on any
+        // FIELD_COUNT >= 2 the ATOMIC ONE-ABOVE-BALANCE-POINT cell (`c
+        // == FIELD_COUNT / 2 + 1`) FIRES the BARELY-SUPER-HALF-
+        // SATURATED verdict with `Some(true)`. The single acceptance
+        // cell of the CARDINALITY-EQUALS-FIELD_COUNT-DIV-TWO-PLUS-ONE
+        // dispatch — every other present-arm count either sits at or
+        // below the balance-point (HALF-SATURATED / SUB-HALF-SATURATED)
+        // or strictly above the LEFT-BOUNDARY-CELL (interior SUPER-
+        // HALF-SATURATED cells).
+        if ResourceLimits::FIELD_COUNT >= 2 {
+            assert_eq!(
+                ResourceLimits::witness_count_barely_super_half_saturated(
+                    ResourceLimits::FIELD_COUNT / 2 + 1
+                ),
+                Some(true),
+                "witness_count_barely_super_half_saturated(FIELD_COUNT / 2 + 1) != Some(true) at LEFT endpoint of SUPER-HALF",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_super_half_saturated_off_endpoint_rejects() {
+        // Off-endpoint rejection — every present-arm count off the
+        // ONE-ABOVE-BALANCE-POINT cell REJECTS the BARELY-SUPER-HALF-
+        // SATURATED verdict with `Some(false)`. Swept across
+        // `1..=FIELD_COUNT` (INCLUDING both the balance-point cell at
+        // `c == FIELD_COUNT / 2` and the SATURATED cell at `c ==
+        // FIELD_COUNT`) filtering out the acceptance cell to pin the
+        // rejection at every off-endpoint cell.
+        let mut count = 1;
+        while count <= ResourceLimits::FIELD_COUNT {
+            if count != ResourceLimits::FIELD_COUNT / 2 + 1 {
+                assert_eq!(
+                    ResourceLimits::witness_count_barely_super_half_saturated(count),
+                    Some(false),
+                    "witness_count_barely_super_half_saturated({count}) != Some(false) at off-endpoint present-arm count",
+                );
+            }
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_super_half_saturated_excludes_witness_count_half_saturated(
+    ) {
+        // BARELY-SUPER-HALF ⊥ HALF-SATURATED neighbour-separation pin
+        // — the two combinators sit on adjacent points of the COUNT-
+        // EQUALS-K cell partition (`c == FIELD_COUNT / 2 + 1` vs `c ==
+        // FIELD_COUNT / 2`), so their present-arm acceptance sets are
+        // DISJOINT by construction. Swept across `0..=FIELD_COUNT` to
+        // pin the exclusion at every representable count. The SUPER-
+        // HALF-side dual of the shipped `witness_count_barely_multi ⊥
+        // witness_count_singleton` neighbour exclusion one PREDICATE-
+        // KIND axis over on the LOWER-END side.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            let barely_super = ResourceLimits::witness_count_barely_super_half_saturated(count);
+            let half = ResourceLimits::witness_count_half_saturated(count);
+            assert!(
+                !(matches!(barely_super, Some(true)) && matches!(half, Some(true))),
+                "witness_count_barely_super_half_saturated({count}) == Some(true) AND witness_count_half_saturated({count}) == Some(true)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_super_half_saturated_implies_witness_count_super_half_saturated(
+    ) {
+        // BARELY-SUPER-HALF ⇒ SUPER-HALF-SATURATED refinement pin — the
+        // CARDINALITY-EQUALS-FIELD_COUNT-DIV-TWO-PLUS-ONE regime is a
+        // strict subset of the STRICT UPPER half around the balance-
+        // point via the arithmetic identity `c == FIELD_COUNT / 2 + 1
+        // ⇒ c * 2 > FIELD_COUNT` (which holds for every FIELD_COUNT
+        // since `(FIELD_COUNT / 2 + 1) * 2 >= FIELD_COUNT + 1`). Swept
+        // across `0..=FIELD_COUNT` to pin the subset relation at every
+        // representable count — the same refinement pin the four
+        // shipped `_axis_is_barely_super_half_saturated` bodies carry
+        // against their paired `_axis_is_super_half_saturated` bodies
+        // lifted one PREDICATE-KIND axis under.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            let barely_super = ResourceLimits::witness_count_barely_super_half_saturated(count);
+            let super_half = ResourceLimits::witness_count_super_half_saturated(count);
+            if matches!(barely_super, Some(true)) {
+                assert_eq!(
+                    super_half,
+                    Some(true),
+                    "witness_count_barely_super_half_saturated({count}) == Some(true) but witness_count_super_half_saturated({count}) != Some(true)",
+                );
+            }
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_super_half_saturated_is_some_iff_count_gt_zero() {
+        // `is_some` bridge — the presence dispatch matches the paired
+        // witness_axis_presence's bridge and every shipped
+        // witness_count_* sibling one PREDICATE-KIND axis over: all
+        // THIRTEEN PRESERVE the `count > 0` boundary. Swept over
+        // `0..=FIELD_COUNT` to pin the presence identity at every
+        // representable count.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_barely_super_half_saturated(count).is_some(),
+                count > 0,
+                "witness_count_barely_super_half_saturated({count}).is_some() != (count > 0)",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_super_half_saturated_evaluates_at_compile_time_via_const_fn(
+    ) {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the BARELY-SUPER-HALF-SATURATED verdict at
+        // compile time as a build-break. Sibling of the const-fn
+        // evaluability pins the four
+        // _axis_is_barely_super_half_saturated predicates already
+        // carry at their own exits, and of the const-fn pins on
+        // witness_count_half_saturated + witness_count_barely_multi +
+        // witness_count_nearly_saturated one CARDINALITY-STEP axis
+        // over.
+        const _: () =
+            assert!(ResourceLimits::witness_count_barely_super_half_saturated(0).is_none());
+        const _: () = {
+            if ResourceLimits::FIELD_COUNT >= 2 {
+                assert!(matches!(
+                    ResourceLimits::witness_count_barely_super_half_saturated(
+                        ResourceLimits::FIELD_COUNT / 2 + 1
+                    ),
+                    Some(true)
+                ));
+            }
+        };
+    }
+
+    #[test]
+    fn resource_limits_axis_is_barely_super_half_saturated_bodies_delegate_to_witness_count_barely_super_half_saturated(
+    ) {
+        // Body-delegation pin — the four shipped
+        // _axis_is_barely_super_half_saturated predicates delegate
+        // through witness_count_barely_super_half_saturated applied to
+        // their paired count_X_axes tally, at every posture in the
+        // canonical roster. Catches a future rewrite of any of the
+        // four predicate bodies that silently drifts from the
+        // substrate combinator (an axis-name mismatch on the count
+        // call, an inversion of the delegation direction, a swap to
+        // a sibling count helper). Mirrors the sibling delegation-pin
+        // shape the singleton + multi + saturated + strictly-multi +
+        // at-most-half + at-least-half + sub-half + super-half +
+        // barely-multi + nearly-saturated + half-saturated +
+        // at-least-nearly-saturated cohorts already carry one
+        // PREDICATE-KIND axis over.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.bottom_axis_is_barely_super_half_saturated(),
+                ResourceLimits::witness_count_barely_super_half_saturated(a.count_bottom_axes()),
+                "bottom_axis_is_barely_super_half_saturated != witness_count_barely_super_half_saturated(count_bottom_axes) on {a:?}",
+            );
+            assert_eq!(
+                a.top_axis_is_barely_super_half_saturated(),
+                ResourceLimits::witness_count_barely_super_half_saturated(a.count_top_axes()),
+                "top_axis_is_barely_super_half_saturated != witness_count_barely_super_half_saturated(count_top_axes) on {a:?}",
+            );
+            assert_eq!(
+                a.polar_axis_is_barely_super_half_saturated(),
+                ResourceLimits::witness_count_barely_super_half_saturated(a.count_polar_axes()),
+                "polar_axis_is_barely_super_half_saturated != witness_count_barely_super_half_saturated(count_polar_axes) on {a:?}",
+            );
+            assert_eq!(
+                a.interior_axis_is_barely_super_half_saturated(),
+                ResourceLimits::witness_count_barely_super_half_saturated(a.count_interior_axes()),
+                "interior_axis_is_barely_super_half_saturated != witness_count_barely_super_half_saturated(count_interior_axes) on {a:?}",
             );
         }
     }

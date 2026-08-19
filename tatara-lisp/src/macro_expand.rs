@@ -19298,6 +19298,198 @@ impl ResourceLimits {
         }
     }
 
+    /// ARM-SELECTING SIGNED-KIND CENTRAL-TENDENCY MIN-fold on a coupled
+    /// COUNT PAIR — `Self::signed_min_of_count_pair(lhs, rhs)` returns
+    /// `+lhs` (as `isize`) when `lhs <= rhs` and `-rhs` (as `isize`)
+    /// otherwise. The BOUNDARY primitive lifting the sign-split shape
+    /// `if lhs <= rhs { lhs as isize } else { -(rhs as isize) }` — every
+    /// WHOLE-POSTURE SIGNED-KIND ARM-AGNOSTIC CENTRAL-TENDENCY MIN-fold
+    /// projection on [`ResourceLimits`] carries this shape at its exit.
+    /// The `<=` tie convention picks the `+` sign at every balance
+    /// corner, matching [`Self::min_of_count_pair`]'s tie convention
+    /// verbatim on the DUAL (SIGNED, UNSIGNED) SIGNEDNESS axis.
+    ///
+    /// The `isize`-VALUED SIGNED-KIND DUAL of
+    /// [`Self::signed_max_of_count_pair`] one COMBINATOR-KIND axis over
+    /// on the SAME `(usize, usize) → isize` two-input surface — where
+    /// [`Self::signed_max_of_count_pair`] reads the paired tallies
+    /// through the SIGNED-MAX CENTRAL-TENDENCY fold (the WINNER's
+    /// identity carried through the OUTPUT sign and the WINNER's OWN
+    /// TALLY carried through the output magnitude), THIS combinator
+    /// reads the SAME paired tallies through the SIGNED-MIN CENTRAL-
+    /// TENDENCY fold (the LOSER's identity carried through the OUTPUT
+    /// sign and the LOSER's OWN TALLY carried through the output
+    /// magnitude). Jointly the (signed_max_of_count_pair,
+    /// signed_min_of_count_pair) pair CLOSES the SIGNED-KIND
+    /// `isize`-VALUED CENTRAL-TENDENCY (MAX, MIN) closure on the paired
+    /// `usize` count tally — where the ARM-AGNOSTIC pair
+    /// (max_of_count_pair, min_of_count_pair) reads the same
+    /// CENTRAL-TENDENCY column into `usize` and discards arm identity,
+    /// THIS SIGNED pair reads the same column into `isize` and
+    /// PRESERVES arm identity through the output sign. The
+    /// `isize`-VALUED SIGNED-KIND peer of [`Self::min_of_count_pair`]
+    /// one SIGNEDNESS axis over on the SAME `(usize, usize)` COUNT PAIR.
+    ///
+    /// **Bare-body identity — LOAD-BEARING structural pin**: on every
+    /// `(lhs, rhs)`, `signed_min_of_count_pair(lhs, rhs)` matches the
+    /// open-coded SIGNED-MIN split
+    /// `if lhs <= rhs { lhs as isize } else { -(rhs as isize) }`.
+    /// Pinned via
+    /// `resource_limits_signed_min_of_count_pair_agrees_with_open_coded_signed_min_split`.
+    ///
+    /// **ABSOLUTE-VALUE bridge to `min_of_count_pair` — LOAD-BEARING
+    /// substrate theorem**: on every `(lhs, rhs)`,
+    /// `signed_min_of_count_pair(lhs, rhs).unsigned_abs() ==
+    /// min_of_count_pair(lhs, rhs)`. Ties the SIGNED-MIN exit to the
+    /// UNSIGNED-MIN exit through the canonical [`isize::unsigned_abs`]
+    /// fold — the DIRECT proof that this projection strictly REFINES
+    /// [`Self::min_of_count_pair`] by splitting each magnitude cell
+    /// onto its (positive, negative) arm-identity partition, with the
+    /// balance corner grouped into the positive arm by the `<=` tie
+    /// convention. Pinned via
+    /// `resource_limits_signed_min_of_count_pair_unsigned_abs_equals_min_of_count_pair`.
+    ///
+    /// **Diagonal identity — POSITIVE on the tie cell**: for every `n`,
+    /// `signed_min_of_count_pair(n, n) == n as isize`. The diagonal
+    /// input pair collapses to the shared tally under the `<=` tie
+    /// convention, always routed onto the positive arm — the DUAL of
+    /// [`Self::signed_max_of_count_pair`]'s diagonal-to-positive pin
+    /// under a MIN's `<=` tie rather than a MAX's `>=` tie. Pinned via
+    /// `resource_limits_signed_min_of_count_pair_diagonal_inputs_fold_to_positive_operand`.
+    ///
+    /// **Sign-flip on input swap — SIGNED SYMMETRY pin**: for every
+    /// `(lhs, rhs)` with `lhs != rhs`, `signed_min_of_count_pair(lhs,
+    /// rhs) == -signed_min_of_count_pair(rhs, lhs)`. Unlike the ARM-
+    /// AGNOSTIC MIN combinator (which is strictly commutative), the
+    /// SIGNED-MIN flips its sign on input swap because the LOSER arm
+    /// identity is carried through the OUTPUT sign. The diagonal cell
+    /// `lhs == rhs` where both `signed_min_of_count_pair(n, n)` and its
+    /// swap read `+n` is the EXCEPTION carved out by the `<=` tie
+    /// convention. Pinned via
+    /// `resource_limits_signed_min_of_count_pair_flips_sign_on_input_swap_off_diagonal`.
+    ///
+    /// **STRICTLY-POSITIVE pin — LOAD-BEARING WIN-CONVENTION pin**:
+    /// for every `(lhs, rhs)`, `signed_min_of_count_pair(lhs, rhs) >
+    /// 0 ⇔ (lhs > 0 && lhs <= rhs)`. The SIGNED output is STRICTLY
+    /// positive iff the LHS strictly wins the MIN with a non-zero
+    /// tally — the `+lhs` branch fires with `lhs > 0`. The `lhs == 0`
+    /// cell is ROUTED via case 1 (`0 <= rhs` always) but returns
+    /// `+0`, EXCLUDED from the STRICTLY positive half by the
+    /// magnitude condition. Pinned via
+    /// `resource_limits_signed_min_of_count_pair_positive_iff_lhs_positive_and_lhs_le_rhs`.
+    ///
+    /// **STRICTLY-NEGATIVE pin — LOAD-BEARING DUAL of the STRICTLY-
+    /// POSITIVE pin**: for every `(lhs, rhs)`,
+    /// `signed_min_of_count_pair(lhs, rhs) < 0 ⇔ (rhs > 0 && lhs >
+    /// rhs)`. The SIGNED output is STRICTLY negative iff the RHS
+    /// strictly loses the MIN with a non-zero tally. The `rhs == 0`
+    /// case is routed via case 2 (`lhs > 0 = rhs`) but returns `-0 ==
+    /// 0`, EXCLUDED from the STRICTLY negative half by the magnitude
+    /// condition. LOAD-BEARING STRUCTURAL DIFFERENCE from the SIGNED-
+    /// MAX's `< 0 ⇔ lhs < rhs` bridge (which has no zero-suppression
+    /// because the SIGNED-MAX's `-rhs` branch is reached only when
+    /// `rhs > lhs >= 0`, forcing `rhs > 0`). Pinned via
+    /// `resource_limits_signed_min_of_count_pair_negative_iff_rhs_positive_and_lhs_gt_rhs`.
+    ///
+    /// **ZERO iff MIN-IS-ZERO pin — LOAD-BEARING KERNEL pin**: on
+    /// every `(lhs, rhs)`, `signed_min_of_count_pair(lhs, rhs) == 0 ⇔
+    /// (lhs == 0 || rhs == 0)`. The SIGNED-MIN output vanishes exactly
+    /// when EITHER input is zero — because `min(lhs, rhs) == 0` iff at
+    /// least one input is zero, and the sign of `+0`/`-0` collapses to
+    /// the same `isize` value 0. WIDER kernel than
+    /// [`Self::signed_max_of_count_pair`]'s `(0, 0)`-only kernel: the
+    /// LOAD-BEARING KERNEL DIFFERENCE between MAX (kernel = double-
+    /// zero) and MIN (kernel = at-least-one-zero) on the DUAL
+    /// (CENTRAL-TENDENCY MAX, CENTRAL-TENDENCY MIN) closure. Pinned
+    /// via
+    /// `resource_limits_signed_min_of_count_pair_zero_iff_lhs_or_rhs_is_zero`.
+    ///
+    /// **Bridge to `count_pair_ordering` — LOAD-BEARING structural
+    /// pin**: on every `(lhs, rhs)`,
+    /// `signed_min_of_count_pair(lhs, rhs) > 0 ⇔
+    /// (count_pair_ordering(lhs, rhs) != Ordering::Greater && lhs >
+    /// 0)`. The SIGNED-MIN's STRICTLY positive branch aligns with the
+    /// trichotomy verdict's {Less, Equal} legs FILTERED by `lhs > 0`
+    /// — the `lhs > 0` cofactor filters the `(0, rhs)` cells (routed
+    /// to `+0`) out of the STRICTLY positive half. Pinned via
+    /// `resource_limits_signed_min_of_count_pair_positive_iff_count_pair_ordering_not_greater_and_lhs_positive`.
+    ///
+    /// **PAIRED SUM identity to signed_max — LOAD-BEARING closure
+    /// pin**: on every `(lhs, rhs)`,
+    /// `signed_min_of_count_pair(lhs, rhs).unsigned_abs() +
+    /// signed_max_of_count_pair(lhs, rhs).unsigned_abs() == lhs + rhs`.
+    /// The paired (SIGNED-MAX, SIGNED-MIN) magnitudes fold to the SAME
+    /// operand-sum identity the (max_of_count_pair, min_of_count_pair)
+    /// UNSIGNED pair carries — the SIGNEDNESS axis preserves the SUM
+    /// invariant through the `unsigned_abs` fold. Pinned via
+    /// `resource_limits_signed_min_plus_signed_max_of_count_pair_magnitudes_equal_sum_of_operands`.
+    ///
+    /// `const fn` so a caller can pin the SIGNED-MIN verdict at
+    /// compile time (`const _: () = assert!(
+    /// ResourceLimits::signed_min_of_count_pair(3, 5) == 3);`) —
+    /// sibling of the const-fn evaluability pins the
+    /// [`Self::max_of_count_pair`], [`Self::min_of_count_pair`],
+    /// [`Self::signed_max_of_count_pair`],
+    /// [`Self::signed_count_difference`], and
+    /// [`Self::count_pair_ordering`] combinators already carry at
+    /// their own exits.
+    ///
+    /// **Adoption compounds**: [`Self::axial_signed_minority_count`]
+    /// and [`Self::atomic_signed_minority_count`] delegate through this
+    /// helper on their (count_polar, count_interior) and (count_bottom,
+    /// count_top) paired ARITHMETIC-QUANTIFIER tallies — the SIGNED-
+    /// MIN-of-TWO-ARMS fold is a substrate-level theorem rather than a
+    /// per-projection five-line sign-split. A body regression at the
+    /// helper (`<=` → `>=`, or a sign flip on either branch) fires
+    /// immediately at both swept `_signed_minority_count` pins rather
+    /// than silently re-classifying every downstream posture-reading
+    /// SIGNED-MIN. The (signed_max, signed_min) SIGNED-KIND
+    /// `isize`-VALUED CENTRAL-TENDENCY pair on the paired `usize`
+    /// count tally is now closed as two substrate combinators —
+    /// downstream SIGNED-KIND consumers on either statistic route
+    /// through ONE typed named `const fn` rather than a per-consumer
+    /// sign-split.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// SIGNED-KIND MIN-fold shape at every WHOLE-POSTURE SIGNED-MIN
+    /// projection body binds at ONE typed named `const fn` on the
+    /// algebra rather than a per-projection open-coded five-line sign-
+    /// split. THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; the helper composes mechanically under the bare-body
+    /// identity above with no re-derivation at the caller. The
+    /// (signed_max, signed_min) SIGNED-KIND CENTRAL-TENDENCY pair
+    /// mirrors the (max, min) ARM-AGNOSTIC pair one SIGNEDNESS axis
+    /// over, closing the CENTRAL-TENDENCY column on BOTH SIGNEDNESS
+    /// legs. THEORY.md §V.1 — knowable platform; the SIGNED-MIN-OF-
+    /// TWO-ARMS fold becomes a substrate-level theorem rather than a
+    /// per-projection convention.
+    ///
+    /// Frontier inspiration: Haskell's `if a <= b then fromIntegral a
+    /// else negate (fromIntegral b)` on the paired `(Word, Word) →
+    /// Int` sign-split — the DIRECT SIGNED-MIN combinator on a paired
+    /// non-negative tally. APL's `((⍺≤⍵)×⍺)-((⍺>⍵)×⍵)` scalar sign-
+    /// split on paired numeric scalars. Voting-theory's canonical
+    /// "losing tally with directional sign" figure that reads `+k` on
+    /// an LHS-at-or-below tally of `k` and `-k` on a strict RHS-loss
+    /// tally of `k` — the SIGNED loser-tally peer of the SIGNED
+    /// winner-tally. Classical descriptive statistics' SIGNED-MIN
+    /// order statistic on a two-point sample — closing the (MAX, MIN)
+    /// SIGNED-KIND CENTRAL-TENDENCY column on a two-point sample
+    /// opened by the DUAL [`Self::signed_max_of_count_pair`].
+    /// Translation through pleme-io primitives is the plain `const fn`
+    /// inline sign-split below — no closure, no `Ord::min` const-
+    /// stability workaround, no `isize::signum` indirection, no new
+    /// dep, no typeclass indirection.
+    #[must_use]
+    #[allow(clippy::cast_possible_wrap)]
+    pub const fn signed_min_of_count_pair(lhs: usize, rhs: usize) -> isize {
+        if lhs <= rhs {
+            lhs as isize
+        } else {
+            -(rhs as isize)
+        }
+    }
+
     /// Presence-preserving CLOSED-INTERVAL WIDTH from a coupled ENDPOINT PAIR
     /// on whole-posture `Option<usize>` axis-endpoint tallies —
     /// `Self::derive_axis_endpoint_span(first, last)` returns
@@ -24121,6 +24313,159 @@ impl ResourceLimits {
         Self::signed_max_of_count_pair(self.count_polar_axes(), self.count_interior_axes())
     }
 
+    /// Whole-posture SIGNED-KIND ARM-AGNOSTIC CENTRAL-TENDENCY MIN-fold
+    /// projection — `self.axial_signed_minority_count()` returns the
+    /// losing arm's tally on the COMPOUND (polar, interior) pair signed
+    /// by which arm loses: `+count_polar_axes()` when polar is at-or-
+    /// below interior (LHS-wins-MIN by the `<=` tie convention),
+    /// `-count_interior_axes()` when interior strictly loses. The
+    /// SIGNED-KIND peer of [`Self::axial_minority_count`] one
+    /// SIGNEDNESS axis over on the SAME COMPOUND (polar, interior)
+    /// tally pair, and the CENTRAL-TENDENCY MIN peer of
+    /// [`Self::axial_signed_majority_count`] one COMBINATOR-KIND axis
+    /// over — jointly the (axial_signed_majority_count,
+    /// axial_signed_minority_count) pair CLOSES the SIGNED-KIND
+    /// CENTRAL-TENDENCY column on the paired COMPOUND tally, and
+    /// jointly the (axial_signed_skew, axial_signed_majority_count,
+    /// axial_signed_minority_count) triple carries every SIGNED-KIND
+    /// reading (DISPERSION, MAX-CENTRAL-TENDENCY, MIN-CENTRAL-TENDENCY)
+    /// of the paired axial tally.
+    ///
+    /// A STRICT REFINEMENT of [`Self::axial_minority_count`] on the
+    /// arm-identity axis: the UNSIGNED axial MIN-fold collapses BOTH
+    /// arm-loss cells onto the SAME non-negative magnitude (discarding
+    /// arm identity — every uniform preset reads `0` regardless of
+    /// WHICH arm was zero), THIS projection reads BOTH arm identity
+    /// (via the sign) AND magnitude (via the absolute value) as ONE
+    /// `isize`. The `<=` tie convention picks the `+` sign at EVERY
+    /// axial-balanced corner (`count_polar == count_interior`), routing
+    /// the balance corner into the positive arm, matching
+    /// [`Self::axial_minority_count`]'s tie convention verbatim so
+    /// `axial_signed_minority_count().unsigned_abs()` agrees with
+    /// [`Self::axial_minority_count`] on every posture.
+    ///
+    /// **ABSOLUTE-VALUE bridge to axial_minority_count**: for every
+    /// posture `a`, `a.axial_signed_minority_count().unsigned_abs()
+    /// == a.axial_minority_count()`. LOAD-BEARING substrate theorem
+    /// tying the SIGNED CENTRAL-TENDENCY MIN reading to the UNSIGNED
+    /// CENTRAL-TENDENCY MIN reading through the canonical
+    /// `isize::unsigned_abs` fold. Pinned via
+    /// `resource_limits_axial_signed_minority_count_unsigned_abs_equals_axial_minority_count`.
+    ///
+    /// **STRICTLY-POSITIVE bridge**: for every posture `a`,
+    /// `a.axial_signed_minority_count() > 0 ⇔ (a.has_polar_axis() &&
+    /// !a.polar_is_majority())`. The SIGNED-MIN fires a strictly
+    /// positive value iff polar strictly wins the MIN with a non-zero
+    /// tally — the `<=` tie convention routes the balance corner
+    /// (polar == interior) into the positive arm on the SOME arm; the
+    /// `polar == 0` case collapses to `+0` (excluded from the STRICTLY
+    /// positive half by the has-polar cofactor). Pinned via
+    /// `resource_limits_axial_signed_minority_count_positive_iff_has_polar_axis_and_not_polar_is_majority`.
+    ///
+    /// **STRICTLY-NEGATIVE bridge**: for every posture `a`,
+    /// `a.axial_signed_minority_count() < 0 ⇔ (a.polar_is_majority()
+    /// && a.has_interior_axis())`. The SIGNED-MIN fires a strictly
+    /// negative value iff interior strictly loses the MIN with a
+    /// non-zero tally. The `interior == 0` case at an axially-polar
+    /// posture collapses to `-0`, so the has-interior cofactor filters
+    /// the ZERO corner out of the STRICTLY negative half — mirror of
+    /// the polar-cofactor filtering on the STRICTLY positive bridge.
+    /// Pinned via
+    /// `resource_limits_axial_signed_minority_count_negative_iff_polar_is_majority_and_has_interior_axis`.
+    ///
+    /// **ZERO iff HAS-AXIAL-UNIFORM-ARM pin**: on every posture `a`,
+    /// `a.axial_signed_minority_count() == 0 ⇔ (a.count_polar_axes()
+    /// == 0 || a.count_interior_axes() == 0)`, equivalently `⇔
+    /// a.is_axially_polar() || a.is_axially_interior()`. The SIGNED-
+    /// MIN vanishes exactly at the axially-uniform corners of the
+    /// COMPOUND partition — every uniform preset lands on the ZERO
+    /// cell regardless of WHICH arm saturates. Pinned via
+    /// `resource_limits_axial_signed_minority_count_zero_iff_has_axially_uniform_arm`.
+    ///
+    /// **Range bound**: for every posture `a`,
+    /// `-(FIELD_COUNT as isize / 2) <= a.axial_signed_minority_count()
+    /// <= FIELD_COUNT as isize / 2`. Direct consequence of the
+    /// ABSOLUTE-VALUE bridge composed with the UNSIGNED MIN's own
+    /// upper bound `axial_minority_count() <= FIELD_COUNT / 2` — the
+    /// SIGNED CENTRAL-TENDENCY MIN reading lies in the CLOSED
+    /// half-field interval. Pinned via
+    /// `resource_limits_axial_signed_minority_count_magnitude_bounded_above_by_half_field_count`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS
+    /// .axial_signed_minority_count() == 0` (polar-uniform (6, 0) →
+    /// interior loses (0 < 6) → `-0` collapses to 0);
+    /// `UNBOUNDED_RESOURCE_LIMITS.axial_signed_minority_count() == 0`
+    /// (same polar-uniform); `DEFAULT_RESOURCE_LIMITS
+    /// .axial_signed_minority_count() == 0` (interior-uniform (0, 6)
+    /// → polar loses (0 <= 6) → `+0`);
+    /// `HAND_AUTHORED_MID_POSTURE.axial_signed_minority_count() == 0`
+    /// (same interior-uniform);
+    /// `HAND_AUTHORED_OTHER_POSTURE.axial_signed_minority_count() ==
+    /// 0` (same). All FIVE uniform fixtures collapse to the ZERO cell
+    /// regardless of which arm is the winner — the DUAL of the SIGNED
+    /// MAX's non-zero preset pins that split `+6` vs `-6` on the arm
+    /// identity of the WINNING SATURATED arm. The MIN's kernel is
+    /// WIDER — it fires ZERO on every posture where at least one arm
+    /// is empty.
+    ///
+    /// **Truly-mixed test-local witnesses — LOAD-BEARING NON-ZERO
+    /// SIGNED MIN pin**: `SPARSE_BOTTOM_POSTURE
+    /// .axial_signed_minority_count() == 3` (3-polar + 3-interior tie
+    /// → polar is LHS-wins-MIN (`<=`) → `+3`);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE
+    /// .axial_signed_minority_count() == 3` (same 3-3 tie → `+3`);
+    /// `ENDPOINTS_ONLY_BOTTOM_POSTURE.axial_signed_minority_count()
+    /// == 2` (2-polar + 4-interior split → polar is the STRICT minority
+    /// (2 < 4) → `+2`). Every truly-mixed fixture fires the polar arm
+    /// as the SIGNED-MIN winner via the `<=` tie convention or the
+    /// strict-2-<-4 split — the LOAD-BEARING NON-ZERO SIGNED MIN
+    /// witnesses that no uniform preset can produce.
+    ///
+    /// Encoded as a single-composition delegation through the substrate
+    /// primitive [`Self::signed_min_of_count_pair`] on the paired
+    /// `(count_polar_axes(), count_interior_axes())` COMPOUND arm
+    /// tally — matching [`Self::axial_signed_majority_count`]'s
+    /// delegation shape verbatim through the DUAL
+    /// [`Self::signed_max_of_count_pair`] combinator. No open-coded
+    /// four-line `if p <= i` sign-split at the body, no `Ord::min`
+    /// (not const-stable), no `isize::abs` indirection, no new dep, no
+    /// typeclass indirection, no per-axis loop, no allocation.
+    ///
+    /// `const fn` so a caller can pin the exact SIGNED axial CENTRAL-
+    /// TENDENCY MIN value at compile time as a build-break (`const _:
+    /// () = assert!(EMPTY_RESOURCE_LIMITS
+    /// .axial_signed_minority_count() == 0);`).
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// SIGNED axial CENTRAL-TENDENCY MIN projection is a named typed
+    /// `isize` exit rather than an inline sign-split MIN-fold on the
+    /// paired axial tallies per consumer. THEORY.md §II.1 invariant 5
+    /// — composition preserves proofs; the CELL-KIND peer CLOSES the
+    /// SIGNEDNESS axis on the COMPOUND (polar, interior) CENTRAL-
+    /// TENDENCY MIN column with the LOAD-BEARING ABSOLUTE-VALUE fold
+    /// agreeing with [`Self::axial_minority_count`]. THEORY.md §V.1 —
+    /// knowable platform; the SIGNED axial CENTRAL-TENDENCY MIN
+    /// verdict is a TYPE-level operation on the posture algebra
+    /// returning a `const`-evaluable `isize`.
+    ///
+    /// Frontier inspiration: classical descriptive statistics' SIGNED-
+    /// MIN order statistic on a paired two-arm tally with the sign
+    /// discriminating the LOSING arm — the DUAL of the SIGNED-MAX
+    /// order statistic [`Self::axial_signed_majority_count`] carries
+    /// one COMBINATOR-KIND axis over. Voting-theory's "losing tally
+    /// with directional sign" figure that reads `+k` on a polar-loss
+    /// tally of `k` polar votes and `-k` on an interior-strict-loss
+    /// tally of `k` interior votes. Haskell's `if p <= i then p else
+    /// -i` on the paired arm tally. Translation through pleme-io
+    /// primitives: single-composition delegation through the substrate
+    /// combinator on the two already-lifted ARITHMETIC-QUANTIFIER
+    /// tallies — no new dep, no typeclass indirection, no per-axis
+    /// loop, no allocation.
+    #[must_use]
+    pub const fn axial_signed_minority_count(self) -> isize {
+        Self::signed_min_of_count_pair(self.count_polar_axes(), self.count_interior_axes())
+    }
+
     /// Whole-posture SIGNED-KIND ATOMIC ARM-AGNOSTIC CENTRAL-TENDENCY
     /// MAX-fold projection — `self.atomic_signed_majority_count()`
     /// returns the winning atomic arm's tally on the ATOMIC (bottom,
@@ -24309,6 +24654,135 @@ impl ResourceLimits {
     #[must_use]
     pub const fn atomic_signed_majority_count(self) -> isize {
         Self::signed_max_of_count_pair(self.count_bottom_axes(), self.count_top_axes())
+    }
+
+    /// Whole-posture SIGNED-KIND ATOMIC ARM-AGNOSTIC CENTRAL-TENDENCY
+    /// MIN-fold projection — `self.atomic_signed_minority_count()`
+    /// returns the losing arm's tally on the ATOMIC (bottom, top) pair
+    /// signed by which arm loses: `+count_bottom_axes()` when bottom
+    /// is at-or-below top (LHS-wins-MIN by the `<=` tie convention),
+    /// `-count_top_axes()` when top strictly loses. The SIGNED-KIND
+    /// peer of [`Self::atomic_minority_count`] one SIGNEDNESS axis
+    /// over on the SAME ATOMIC (bottom, top) tally pair, the CENTRAL-
+    /// TENDENCY MIN peer of [`Self::atomic_signed_majority_count`] one
+    /// COMBINATOR-KIND axis over, and the direct CELL-KIND peer of
+    /// [`Self::axial_signed_minority_count`] one CELL-KIND axis over
+    /// on the ATOMIC (bottom, top) tally pair rather than the COMPOUND
+    /// (polar, interior) pair.
+    ///
+    /// **ABSOLUTE-VALUE bridge to atomic_minority_count**: for every
+    /// posture `a`, `a.atomic_signed_minority_count().unsigned_abs()
+    /// == a.atomic_minority_count()`. LOAD-BEARING substrate theorem
+    /// tying the SIGNED ATOMIC CENTRAL-TENDENCY MIN reading to the
+    /// UNSIGNED ATOMIC CENTRAL-TENDENCY MIN reading through the
+    /// canonical `isize::unsigned_abs` fold — the DIRECT proof that
+    /// this projection strictly REFINES `atomic_minority_count` by
+    /// splitting each magnitude cell onto its (positive, negative)
+    /// arm-identity partition, with EVERY atomic-balance corner
+    /// (including the atomically-empty (0, 0) corner) grouped into the
+    /// positive arm by the `<=` tie convention. Pinned via
+    /// `resource_limits_atomic_signed_minority_count_unsigned_abs_equals_atomic_minority_count`.
+    ///
+    /// **STRICTLY-POSITIVE bridge**: for every posture `a`,
+    /// `a.atomic_signed_minority_count() > 0 ⇔ (a.has_bottom_axis()
+    /// && !a.bottom_is_majority())`. The SIGNED-MIN fires a strictly
+    /// positive value iff bottom strictly wins the MIN with a
+    /// non-zero tally. Filters the ZERO corners (atomic-empty (0, 0)
+    /// and atomic-top-only) out of the STRICTLY positive half via the
+    /// has-bottom cofactor. Pinned via
+    /// `resource_limits_atomic_signed_minority_count_positive_iff_has_bottom_axis_and_not_bottom_is_majority`.
+    ///
+    /// **STRICTLY-NEGATIVE bridge**: for every posture `a`,
+    /// `a.atomic_signed_minority_count() < 0 ⇔ (a.bottom_is_majority()
+    /// && a.has_top_axis())`. The SIGNED-MIN fires a strictly
+    /// negative value iff top strictly loses the MIN with a non-zero
+    /// tally. Top is then the LOSER carried by the negative sign. The
+    /// has-top cofactor filters the ZERO corner (bottom_is_majority
+    /// with no top axis) out of the STRICTLY negative half. Every
+    /// shipped truly-mixed BOTTOM-CARRYING fixture has top empty so
+    /// this predicate reads FALSE on all shipped fixtures — LOAD-
+    /// BEARING pin that the atomic SIGNED-MIN's strict-negative
+    /// regime is INHABITED only by postures with BOTH atomic arms
+    /// non-zero. Pinned via
+    /// `resource_limits_atomic_signed_minority_count_negative_iff_bottom_is_majority_and_has_top_axis`.
+    ///
+    /// **ZERO iff HAS-ATOMICALLY-UNIFORM-ARM pin**: on every posture
+    /// `a`, `a.atomic_signed_minority_count() == 0 ⇔
+    /// (a.count_bottom_axes() == 0 || a.count_top_axes() == 0)`. The
+    /// SIGNED-ATOMIC-MIN vanishes exactly when at least one atomic arm
+    /// is empty — including every axially-interior posture where BOTH
+    /// arms are zero. Every uniform preset lands on the ZERO cell (the
+    /// atomically-empty presets AND both atomic-uniform presets pin
+    /// the loser at 0). Pinned via
+    /// `resource_limits_atomic_signed_minority_count_zero_iff_has_atomically_uniform_arm`.
+    ///
+    /// **Range bound**: for every posture `a`,
+    /// `-(FIELD_COUNT as isize / 2) <= a.atomic_signed_minority_count()
+    /// <= FIELD_COUNT as isize / 2`. Direct consequence of the
+    /// ABSOLUTE-VALUE bridge composed with the UNSIGNED ATOMIC MIN's
+    /// own upper bound `atomic_minority_count() <= FIELD_COUNT / 2`.
+    /// Pinned via
+    /// `resource_limits_atomic_signed_minority_count_magnitude_bounded_above_by_half_field_count`.
+    ///
+    /// **Preset pins**: `EMPTY_RESOURCE_LIMITS
+    /// .atomic_signed_minority_count() == 0` (atomic-bottom-uniform
+    /// (6, 0) → top loses (0 < 6) → `-0` collapses to 0);
+    /// `UNBOUNDED_RESOURCE_LIMITS.atomic_signed_minority_count() == 0`
+    /// (atomic-top-uniform (0, 6) → bottom loses (0 <= 6) → `+0`);
+    /// `DEFAULT_RESOURCE_LIMITS.atomic_signed_minority_count() == 0`
+    /// (atomically-empty interior-uniform (0, 0) → `+0` via `<=` tie);
+    /// `HAND_AUTHORED_MID_POSTURE.atomic_signed_minority_count() == 0`
+    /// (same atomically-empty);
+    /// `HAND_AUTHORED_OTHER_POSTURE.atomic_signed_minority_count() ==
+    /// 0` (same). All FIVE uniform presets collapse to the ZERO cell —
+    /// where the atomic SIGNED-MAX peer split them onto `+6`, `-6`,
+    /// `+0` on arm identity, THIS SIGNED-MIN collapses them ALL to 0
+    /// because every uniform posture has at least one atomic arm at
+    /// zero.
+    ///
+    /// **Truly-mixed test-local witnesses**: `SPARSE_BOTTOM_POSTURE
+    /// .atomic_signed_minority_count() == 0` (3-bottom + 0-top → top
+    /// loses → `-0` collapses to 0);
+    /// `CONTIGUOUS_INTERIOR_BOTTOM_POSTURE
+    /// .atomic_signed_minority_count() == 0` (same 3-bottom + 0-top →
+    /// 0); `ENDPOINTS_ONLY_BOTTOM_POSTURE
+    /// .atomic_signed_minority_count() == 0` (2-bottom + 0-top → 0).
+    /// EVERY shipped truly-mixed fixture places no axis at the top
+    /// pole, so the atomic MIN reads 0 (with negative sign for the
+    /// strict-loser cases, collapsed to `isize` 0). The atomic SIGNED-
+    /// MIN's kernel is STRUCTURALLY WIDER than the atomic SIGNED-MAX's
+    /// kernel — it fires ZERO on every fixture in the shipped preset
+    /// family, matching the axial SIGNED-MIN's ZERO on all uniform
+    /// presets on the DUAL CELL-KIND cell.
+    ///
+    /// Encoded as a single-composition delegation through the substrate
+    /// primitive [`Self::signed_min_of_count_pair`] on the paired
+    /// `(count_bottom_axes(), count_top_axes())` ATOMIC arm tally —
+    /// matching [`Self::atomic_signed_majority_count`]'s delegation
+    /// shape verbatim through the DUAL [`Self::signed_max_of_count_pair`]
+    /// combinator, and matching
+    /// [`Self::axial_signed_minority_count`]'s delegation shape
+    /// verbatim on the DUAL (ATOMIC vs COMPOUND) CELL-KIND cell.
+    ///
+    /// `const fn` so a caller can pin the exact SIGNED atomic CENTRAL-
+    /// TENDENCY MIN value at compile time as a build-break (`const _:
+    /// () = assert!(EMPTY_RESOURCE_LIMITS
+    /// .atomic_signed_minority_count() == 0);`).
+    ///
+    /// Theory anchor: same as [`Self::axial_signed_minority_count`],
+    /// on the DUAL CELL-KIND cell. THEORY.md §II.1 invariant 3 —
+    /// typed exit; THEORY.md §II.1 invariant 5 — composition preserves
+    /// proofs; THEORY.md §V.1 — knowable platform.
+    ///
+    /// Frontier inspiration: same as [`Self::axial_signed_minority_count`],
+    /// through the DUAL (ATOMIC vs COMPOUND) arm-selection combinator
+    /// on the two atomic pole tallies. Translation through pleme-io
+    /// primitives: plain `const fn` sign-split delegation on the two
+    /// already-lifted ATOMIC ARITHMETIC-QUANTIFIER tallies — no new
+    /// dep, no typeclass indirection, no per-axis loop, no allocation.
+    #[must_use]
+    pub const fn atomic_signed_minority_count(self) -> isize {
+        Self::signed_min_of_count_pair(self.count_bottom_axes(), self.count_top_axes())
     }
 
     /// Whole-posture INDEX-OF-FIRST-BOTTOM projection —
@@ -81296,6 +81770,722 @@ mod tests {
         const _: () = assert!(EMPTY_RESOURCE_LIMITS.atomic_signed_majority_count() == 6);
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.atomic_signed_majority_count() == -6);
         const _: () = assert!(DEFAULT_RESOURCE_LIMITS.atomic_signed_majority_count() == 0);
+    }
+
+    #[test]
+    fn resource_limits_signed_min_of_count_pair_agrees_with_open_coded_signed_min_split() {
+        // Bare-body identity — the helper's verdict on every (lhs, rhs)
+        // `usize` pair agrees with the open-coded SIGNED-MIN split
+        // `if lhs <= rhs { lhs as isize } else { -(rhs as isize) }`.
+        // Swept over a 5×5 = 25-cell constellation of the (usize,
+        // usize) input regime whose components exhaust the relative-
+        // order trichotomy at multiple magnitude bands. DUAL of the
+        // SIGNED-MAX bare-body pin one COMBINATOR-KIND axis over on
+        // the SAME SIGNED-KIND `isize`-VALUED CENTRAL-TENDENCY column.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let via_helper = ResourceLimits::signed_min_of_count_pair(lhs, rhs);
+                #[allow(clippy::cast_possible_wrap)]
+                let via_open_code = if lhs <= rhs {
+                    lhs as isize
+                } else {
+                    -(rhs as isize)
+                };
+                assert_eq!(
+                    via_helper, via_open_code,
+                    "helper != open-coded SIGNED-MIN split at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_min_of_count_pair_unsigned_abs_equals_min_of_count_pair() {
+        // ABSOLUTE-VALUE bridge to `min_of_count_pair` — LOAD-BEARING
+        // substrate theorem. On every `(lhs, rhs)`, the SIGNED-MIN
+        // exit agrees with the UNSIGNED-MIN exit after collapsing the
+        // sign through `isize::unsigned_abs`. DUAL of the
+        // `signed_max_of_count_pair.unsigned_abs() == max_of_count_pair`
+        // bridge one COMBINATOR-KIND axis over on the SAME SIGNEDNESS
+        // axis at the CENTRAL-TENDENCY column.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                assert_eq!(
+                    ResourceLimits::signed_min_of_count_pair(lhs, rhs).unsigned_abs(),
+                    ResourceLimits::min_of_count_pair(lhs, rhs),
+                    "signed_min.unsigned_abs() != min at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_min_of_count_pair_diagonal_inputs_fold_to_positive_operand() {
+        // Diagonal identity — POSITIVE on the tie cell. For every `n`,
+        // `signed_min_of_count_pair(n, n) == n as isize`. The diagonal
+        // input pair collapses to the shared tally under the `<=` tie
+        // convention, always routed onto the positive arm. LOAD-
+        // BEARING WIN-CONVENTION pin — a body regression that swapped
+        // the `<=` for `<` would return `-n` on every diagonal-non-
+        // zero cell and fire immediately here. Mirror of the SIGNED-
+        // MAX diagonal-to-positive pin on the DUAL (MIN, MAX) closure
+        // — both SIGNED-KIND CENTRAL-TENDENCY combinators route the
+        // diagonal onto the positive arm.
+        for n in [0usize, 1, 3, 6, 100] {
+            #[allow(clippy::cast_possible_wrap)]
+            let expected = n as isize;
+            assert_eq!(
+                ResourceLimits::signed_min_of_count_pair(n, n),
+                expected,
+                "diagonal fold to +operand regressed at n={n}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_min_of_count_pair_flips_sign_on_input_swap_off_diagonal() {
+        // Sign-flip on input swap — SIGNED SYMMETRY pin. For every
+        // `(lhs, rhs)` with `lhs != rhs`, `signed_min_of_count_pair(
+        // lhs, rhs) == -signed_min_of_count_pair(rhs, lhs)`. Unlike
+        // the ARM-AGNOSTIC MIN combinator (which is strictly
+        // commutative), the SIGNED-MIN flips its sign on input swap
+        // because the LOSER arm identity is carried through the OUTPUT
+        // sign. Mirror of the SIGNED-MAX sign-flip pin on the DUAL
+        // (MIN, MAX) closure. The diagonal cell `lhs == rhs` (where
+        // both the helper and its swap read `+n` via the `<=` tie
+        // convention) is the EXCEPTION carved out by the tie convention.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                if lhs == rhs {
+                    continue;
+                }
+                assert_eq!(
+                    ResourceLimits::signed_min_of_count_pair(lhs, rhs),
+                    -ResourceLimits::signed_min_of_count_pair(rhs, lhs),
+                    "sign-flip on input swap regressed at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_min_of_count_pair_positive_iff_lhs_positive_and_lhs_le_rhs() {
+        // STRICTLY-POSITIVE pin — LOAD-BEARING WIN-CONVENTION pin. For
+        // every `(lhs, rhs)`, `signed_min_of_count_pair(lhs, rhs) > 0
+        // ⇔ (lhs > 0 && lhs <= rhs)`. The SIGNED output is STRICTLY
+        // positive iff the LHS strictly wins the MIN with a non-zero
+        // tally — the `+lhs` branch fires with `lhs > 0`. The `lhs ==
+        // 0` case is ROUTED via case 1 (`0 <= rhs` always) but returns
+        // `+0`, EXCLUDED from the STRICTLY positive half by the
+        // magnitude condition.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let strictly_positive = ResourceLimits::signed_min_of_count_pair(lhs, rhs) > 0;
+                let lhs_strict_min_winner = lhs > 0 && lhs <= rhs;
+                assert_eq!(
+                    strictly_positive, lhs_strict_min_winner,
+                    "STRICTLY-POSITIVE ⇔ (lhs > 0 && lhs <= rhs) regressed at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_min_of_count_pair_negative_iff_rhs_positive_and_lhs_gt_rhs() {
+        // STRICTLY-NEGATIVE pin — LOAD-BEARING DUAL of the STRICTLY-
+        // POSITIVE bridge. For every `(lhs, rhs)`,
+        // `signed_min_of_count_pair(lhs, rhs) < 0 ⇔ (rhs > 0 && lhs >
+        // rhs)`. The SIGNED output is STRICTLY negative iff the RHS
+        // strictly loses the MIN with a non-zero tally — the `-rhs`
+        // branch fires with `rhs > 0`. The `rhs == 0` case is ROUTED
+        // via case 2 (`lhs > 0 = rhs`) but returns `-0 == 0`,
+        // EXCLUDED from the STRICTLY negative half by the magnitude
+        // condition. LOAD-BEARING structural difference from the
+        // SIGNED-MAX's `< 0 ⇔ lhs < rhs` bridge (which has no zero-
+        // suppression because the SIGNED-MAX's `-rhs` branch is
+        // reached only when `rhs > lhs >= 0`, forcing `rhs > 0`).
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let strictly_negative = ResourceLimits::signed_min_of_count_pair(lhs, rhs) < 0;
+                let rhs_strict_min_loser = rhs > 0 && lhs > rhs;
+                assert_eq!(
+                    strictly_negative, rhs_strict_min_loser,
+                    "STRICTLY-NEGATIVE ⇔ (rhs > 0 && lhs > rhs) regressed at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_min_of_count_pair_zero_iff_lhs_or_rhs_is_zero() {
+        // ZERO iff LHS-OR-RHS-IS-ZERO pin — LOAD-BEARING KERNEL pin.
+        // On every `(lhs, rhs)`, `signed_min_of_count_pair(lhs, rhs)
+        // == 0 ⇔ (lhs == 0 || rhs == 0)`. The SIGNED-MIN output
+        // vanishes exactly when at least one input is zero, because
+        // `min(lhs, rhs) == 0` iff at least one input is zero and the
+        // sign of `+0`/`-0` collapses to the same `isize` value 0.
+        // WIDER kernel than the SIGNED-MAX's DOUBLE-ZERO-only kernel:
+        // the LOAD-BEARING KERNEL DIFFERENCE between MAX (kernel =
+        // double-zero) and MIN (kernel = at-least-one-zero) on the
+        // (MAX, MIN) closure at the same SIGNEDNESS axis.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let is_zero = ResourceLimits::signed_min_of_count_pair(lhs, rhs) == 0;
+                let has_zero_input = lhs == 0 || rhs == 0;
+                assert_eq!(
+                    is_zero, has_zero_input,
+                    "ZERO ⇔ (lhs == 0 || rhs == 0) regressed at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_min_of_count_pair_positive_iff_count_pair_ordering_not_greater_and_lhs_positive(
+    ) {
+        // Bridge to `count_pair_ordering` — LOAD-BEARING structural
+        // pin. The SIGNED-MIN's STRICTLY positive branch aligns with
+        // the trichotomy verdict's {Less, Equal} legs FILTERED by
+        // `lhs > 0` — the `<=` tie convention on the SIGN
+        // discriminator routes the balance corner onto the POSITIVE
+        // half, matching the Ordering-KIND TRICHOTOMY combinator's
+        // balance-at-Equal-and-not-Greater convention. The `lhs > 0`
+        // cofactor filters the `(0, rhs)` cells (routed to `+0`, i.e.
+        // NOT strictly positive) out of the STRICTLY positive half.
+        // Cross-pins the two combinators one COMBINATOR-KIND axis
+        // apart on the SAME paired count input. LOAD-BEARING
+        // structural difference from the DUAL SIGNED-MAX bridge
+        // (`>= 0 ⇔ ordering != Less`, unfiltered) because the
+        // SIGNED-MIN's `+0` branch at `lhs == 0` opens a NON-NEGATIVE
+        // ZERO cell that the SIGNED-MAX's `>= 0 ⇔ lhs >= rhs`
+        // structure does not have.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let strictly_positive = ResourceLimits::signed_min_of_count_pair(lhs, rhs) > 0;
+                let ordering_not_greater =
+                    ResourceLimits::count_pair_ordering(lhs, rhs) != Ordering::Greater;
+                let expected = ordering_not_greater && lhs > 0;
+                assert_eq!(
+                    strictly_positive, expected,
+                    "SIGNED-MIN > 0 ⇔ (ordering != Greater && lhs > 0) regressed at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_min_plus_signed_max_of_count_pair_magnitudes_equal_sum_of_operands() {
+        // PAIRED SUM identity to signed_max — LOAD-BEARING closure
+        // pin. On every `(lhs, rhs)`, the paired (SIGNED-MAX, SIGNED-
+        // MIN) magnitudes sum to the operand sum. Direct consequence
+        // of the two ABSOLUTE-VALUE bridges composed with the ARM-
+        // AGNOSTIC MAX + MIN sum identity `max(a, b) + min(a, b) == a
+        // + b` — the SIGNEDNESS axis preserves the SUM invariant
+        // through the `unsigned_abs` fold. Cross-pins the (SIGNED-MAX,
+        // SIGNED-MIN) SIGNED-KIND CENTRAL-TENDENCY closure against the
+        // (max, min) UNSIGNED CENTRAL-TENDENCY closure through the
+        // paired ABSOLUTE-VALUE bridges.
+        for lhs in [0usize, 2, 3, 4, 6] {
+            for rhs in [0usize, 2, 3, 4, 6] {
+                let sum_of_magnitudes = ResourceLimits::signed_min_of_count_pair(lhs, rhs)
+                    .unsigned_abs()
+                    + ResourceLimits::signed_max_of_count_pair(lhs, rhs).unsigned_abs();
+                assert_eq!(
+                    sum_of_magnitudes,
+                    lhs + rhs,
+                    "|signed_min| + |signed_max| != lhs + rhs at (lhs, rhs)=({lhs}, {rhs})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_signed_min_of_count_pair_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — proves the helper's `pub const fn` signature
+        // preserves compile-time evaluability across the LHS-wins,
+        // RHS-strict-wins, diagonal-tie, and double-zero cells of the
+        // (usize, usize) joint-input regime. Sibling of the const-fn
+        // evaluability pins the (max_of_count_pair, min_of_count_pair,
+        // signed_max_of_count_pair, signed_count_difference,
+        // absolute_count_difference) combinators carry at their own
+        // exits.
+        const _: () = assert!(ResourceLimits::signed_min_of_count_pair(5, 3) == -3);
+        const _: () = assert!(ResourceLimits::signed_min_of_count_pair(3, 5) == 3);
+        const _: () = assert!(ResourceLimits::signed_min_of_count_pair(4, 4) == 4);
+        const _: () = assert!(ResourceLimits::signed_min_of_count_pair(0, 0) == 0);
+        const _: () = assert!(ResourceLimits::signed_min_of_count_pair(0, 6) == 0);
+        const _: () = assert!(ResourceLimits::signed_min_of_count_pair(6, 0) == 0);
+    }
+
+    #[test]
+    fn resource_limits_signed_min_fold_family_bodies_delegate_to_signed_min_of_count_pair() {
+        // Sweep-of-family pin — asserts each of the two WHOLE-POSTURE
+        // SIGNED-KIND MIN-fold projection bodies
+        // (axial_signed_minority_count — SIGNED-MIN of
+        // (count_polar_axes, count_interior_axes);
+        // atomic_signed_minority_count — SIGNED-MIN of
+        // (count_bottom_axes, count_top_axes)) agrees with the helper-
+        // based shape `ResourceLimits::signed_min_of_count_pair(
+        // self.count_A(), self.count_B())` on every posture from the
+        // EMPTY / DEFAULT / UNBOUNDED / HAND_AUTHORED_MID /
+        // HAND_AUTHORED_OTHER / SPARSE_BOTTOM /
+        // CONTIGUOUS_INTERIOR_BOTTOM / ENDPOINTS_ONLY_BOTTOM
+        // constellation (2×8 = 16 composed SIGNED-MIN verdicts). A
+        // future body regression that swapped the `<=` for `>=` at the
+        // helper would silently invert the LOSER convention on every
+        // strict-majority posture; the sweep pin gates the LOAD-
+        // BEARING regime on every posture where the pair splits.
+        // Mirror of the SIGNED-MAX-family sweep pin one COMBINATOR-
+        // KIND axis over on the (MAX, MIN) closure.
+        for posture in [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ] {
+            assert_eq!(
+                posture.axial_signed_minority_count(),
+                ResourceLimits::signed_min_of_count_pair(
+                    posture.count_polar_axes(),
+                    posture.count_interior_axes(),
+                ),
+                "axial_signed_minority_count delegation regressed on {posture:?}",
+            );
+            assert_eq!(
+                posture.atomic_signed_minority_count(),
+                ResourceLimits::signed_min_of_count_pair(
+                    posture.count_bottom_axes(),
+                    posture.count_top_axes(),
+                ),
+                "atomic_signed_minority_count delegation regressed on {posture:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_minority_count_preset_pins_collapse_every_uniform_to_zero() {
+        // Preset pins on the SIGNED-KIND CENTRAL-TENDENCY MIN closure
+        // — every uniform preset lands on the ZERO cell regardless of
+        // which arm saturates, because the LOSING arm has count 0 on
+        // every uniform posture. Where the SIGNED-MAX peer split the
+        // saturated corner onto (`+6`, `-6`) on arm identity, the
+        // SIGNED-MIN peer collapses them ALL to 0 via the WIDER
+        // KERNEL (at-least-one-arm-zero rather than double-zero).
+        assert_eq!(EMPTY_RESOURCE_LIMITS.axial_signed_minority_count(), 0);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.axial_signed_minority_count(), 0);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.axial_signed_minority_count(), 0);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.axial_signed_minority_count(), 0);
+        assert_eq!(HAND_AUTHORED_OTHER_POSTURE.axial_signed_minority_count(), 0);
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_minority_count_test_local_witnesses_pin_positive_three_on_ties_and_positive_two_on_endpoints(
+    ) {
+        // Truly-mixed witnesses on the SIGNED-KIND CENTRAL-TENDENCY
+        // MIN projection — the two 3+3 ties each fire `+3` at the
+        // balance corner via the `<=` tie convention (polar wins the
+        // MIN on tie via LHS-order). ENDPOINTS_ONLY carries a 2 + 4
+        // interior-strict split so the SIGNED-MIN fires `+2` (polar
+        // strictly loses at 2 < 4 → polar tally with positive sign).
+        // LOAD-BEARING NON-ZERO SIGNED MIN witnesses that distinguish
+        // THIS CENTRAL-TENDENCY MIN reading from every uniform preset
+        // (which all collapse to ZERO under the wider kernel).
+        // Contrast with the SIGNED-MAX peer's ENDPOINTS_ONLY reading
+        // `-4` (interior wins MAX strictly) — the (SIGNED-MAX,
+        // SIGNED-MIN) pair reads the same 2+4 split as (`-4`, `+2`)
+        // with the two arm identities on opposite signs.
+        assert_eq!(SPARSE_BOTTOM_POSTURE.axial_signed_minority_count(), 3);
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.axial_signed_minority_count(),
+            3,
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.axial_signed_minority_count(),
+            2,
+        );
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_minority_count_unsigned_abs_equals_axial_minority_count() {
+        // ABSOLUTE-VALUE bridge to axial_minority_count — LOAD-BEARING
+        // structural pin. On every posture, the SIGNED CENTRAL-
+        // TENDENCY MIN reading agrees with the UNSIGNED CENTRAL-
+        // TENDENCY MIN reading after collapsing the sign through
+        // `isize::unsigned_abs`. Ties the SIGNED-KIND projection to
+        // the UNSIGNED-KIND projection through the canonical
+        // `unsigned_abs` fold. DUAL of the SIGNED-MAX-unsigned-abs-
+        // equals-max bridge on the (MAX, MIN) closure.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_signed_minority_count().unsigned_abs(),
+                a.axial_minority_count(),
+                "axial_signed_minority_count().unsigned_abs() != axial_minority_count() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_minority_count_positive_iff_has_polar_axis_and_not_polar_is_majority(
+    ) {
+        // STRICTLY-POSITIVE-SIGN bridge — LOAD-BEARING structural
+        // pin. The SIGNED CENTRAL-TENDENCY MIN reading fires a
+        // strictly positive value iff the polar arm strictly wins
+        // the MIN with a non-zero tally — equivalently iff polar > 0
+        // AND polar <= interior. The `<=` tie convention routes the
+        // balance corner into the positive arm on the SOME arm; the
+        // `polar == 0` case collapses to the ZERO cell (routed via
+        // the `+0` branch) so the has-polar cofactor filters the ZERO
+        // corner out of the STRICTLY positive half.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_signed_minority_count() > 0,
+                a.has_polar_axis() && !a.polar_is_majority(),
+                "axial_signed_minority_count() > 0 != (has_polar_axis && !polar_is_majority) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_minority_count_negative_iff_polar_is_majority_and_has_interior_axis(
+    ) {
+        // STRICTLY-NEGATIVE-SIGN bridge — LOAD-BEARING structural
+        // pin. The SIGNED CENTRAL-TENDENCY MIN reading fires a
+        // strictly negative value iff the interior arm strictly loses
+        // the MIN with a non-zero tally — equivalently iff polar >
+        // interior AND interior > 0. Interior is then the LOSER
+        // carried by the negative sign. The `interior == 0` case at
+        // an axially-polar posture (polar_is_majority AND
+        // !has_interior_axis) collapses to the ZERO cell (routed via
+        // `-0`), so the has-interior cofactor filters the ZERO corner
+        // out of the STRICTLY negative half — mirror of the polar-
+        // cofactor filtering on the STRICTLY positive bridge.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.axial_signed_minority_count() < 0,
+                a.polar_is_majority() && a.has_interior_axis(),
+                "axial_signed_minority_count() < 0 != (polar_is_majority && has_interior_axis) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_minority_count_zero_iff_has_axially_uniform_arm() {
+        // ZERO iff HAS-AXIAL-UNIFORM-ARM pin — LOAD-BEARING structural
+        // pin. The SIGNED-MIN vanishes exactly at the axially-uniform
+        // corners of the COMPOUND partition, equivalently at every
+        // posture where at least one arm's count is zero. The LOAD-
+        // BEARING structural difference from the SIGNED-MAX peer
+        // (which vanishes ONLY when BOTH arms are zero, but on the
+        // AXIAL cell the exhaustive partition forbids this so
+        // SIGNED-MAX is never zero) — SIGNED-MIN reaches the ZERO
+        // cell on every uniform preset via the wider kernel.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let is_zero = a.axial_signed_minority_count() == 0;
+            let has_uniform_arm = a.count_polar_axes() == 0 || a.count_interior_axes() == 0;
+            assert_eq!(
+                is_zero, has_uniform_arm,
+                "axial_signed_minority_count() == 0 != has_axially_uniform_arm on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_minority_count_magnitude_bounded_above_by_half_field_count() {
+        // MAGNITUDE upper bound — LOAD-BEARING structural pin. The
+        // SIGNED CENTRAL-TENDENCY MIN reading lies in
+        // `[-FIELD_COUNT/2, FIELD_COUNT/2]` — direct consequence of
+        // `axial_minority_count() <= FIELD_COUNT / 2` transported
+        // through the `unsigned_abs` bridge. Note the (BROADER-RANGE
+        // signed_max, TIGHTER-RANGE signed_min) pair partitions the
+        // SIGNED axial reading into the MAX CENTRAL-TENDENCY statistic
+        // (magnitude in `[FIELD_COUNT/2, FIELD_COUNT]` with UNREACHABLE
+        // middle strip) and the MIN CENTRAL-TENDENCY statistic
+        // (magnitude in `[0, FIELD_COUNT/2]` including zero).
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let k = a.axial_signed_minority_count();
+            let half = ResourceLimits::FIELD_COUNT / 2;
+            assert!(
+                k.unsigned_abs() <= half,
+                "|axial_signed_minority_count()| = {} > FIELD_COUNT/2 = {half} on {a:?}",
+                k.unsigned_abs(),
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_axial_signed_minority_count_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the SIGNED axial CENTRAL-TENDENCY MIN
+        // closure — the SIGNED reading is evaluable in const context
+        // so a caller can pin the ZERO cell (every uniform preset) at
+        // compile time as a build-break. Sibling of the const-fn
+        // evaluability pins on the (axial_majority_count,
+        // axial_minority_count) UNSIGNED CENTRAL-TENDENCY closure one
+        // SIGNEDNESS axis under, and on `axial_signed_majority_count`
+        // one COMBINATOR-KIND axis over.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.axial_signed_minority_count() == 0);
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.axial_signed_minority_count() == 0);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.axial_signed_minority_count() == 0);
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_minority_count_preset_pins_collapse_every_uniform_to_zero() {
+        // Preset pins on the SIGNED-KIND ATOMIC CENTRAL-TENDENCY MIN
+        // closure — every uniform preset lands on the ZERO cell
+        // regardless of which arm saturates, because at least one
+        // atomic arm's count is zero on every uniform posture. Where
+        // the atomic SIGNED-MAX peer split the saturated corner onto
+        // (`+6`, `-6`, `+0`) on arm identity, the atomic SIGNED-MIN
+        // peer collapses them ALL to 0 via the WIDER KERNEL.
+        assert_eq!(EMPTY_RESOURCE_LIMITS.atomic_signed_minority_count(), 0);
+        assert_eq!(UNBOUNDED_RESOURCE_LIMITS.atomic_signed_minority_count(), 0);
+        assert_eq!(DEFAULT_RESOURCE_LIMITS.atomic_signed_minority_count(), 0);
+        assert_eq!(HAND_AUTHORED_MID_POSTURE.atomic_signed_minority_count(), 0);
+        assert_eq!(
+            HAND_AUTHORED_OTHER_POSTURE.atomic_signed_minority_count(),
+            0
+        );
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_minority_count_test_local_witnesses_pin_zero_on_every_truly_mixed_fixture(
+    ) {
+        // Truly-mixed witnesses on the SIGNED-KIND ATOMIC CENTRAL-
+        // TENDENCY MIN projection — every truly-mixed BOTTOM-CARRYING
+        // fixture has (count_bottom, count_top) as (3, 0), (3, 0),
+        // (2, 0) respectively, so the SIGNED-MIN fires 0 in every case
+        // (top is the STRICT loser with count 0, and `-0 == 0`). Where
+        // the atomic SIGNED-MAX peer fires `+3`, `+3`, `+2` on the
+        // same fixtures (bottom's winning tally), the SIGNED-MIN fires
+        // `0`, `0`, `0` on all three (top's losing tally).
+        assert_eq!(SPARSE_BOTTOM_POSTURE.atomic_signed_minority_count(), 0);
+        assert_eq!(
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE.atomic_signed_minority_count(),
+            0,
+        );
+        assert_eq!(
+            ENDPOINTS_ONLY_BOTTOM_POSTURE.atomic_signed_minority_count(),
+            0,
+        );
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_minority_count_unsigned_abs_equals_atomic_minority_count() {
+        // ABSOLUTE-VALUE bridge to atomic_minority_count — LOAD-
+        // BEARING structural pin. On every posture, the SIGNED ATOMIC
+        // CENTRAL-TENDENCY MIN reading agrees with the UNSIGNED ATOMIC
+        // CENTRAL-TENDENCY MIN reading after collapsing the sign
+        // through `isize::unsigned_abs`. DUAL of the SIGNED-MAX-
+        // unsigned-abs-equals-max bridge on the atomic (MAX, MIN)
+        // closure.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_signed_minority_count().unsigned_abs(),
+                a.atomic_minority_count(),
+                "atomic_signed_minority_count().unsigned_abs() != atomic_minority_count() on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_minority_count_positive_iff_has_bottom_axis_and_not_bottom_is_majority(
+    ) {
+        // STRICTLY-POSITIVE-SIGN bridge — LOAD-BEARING structural
+        // pin. The SIGNED ATOMIC CENTRAL-TENDENCY MIN reading fires
+        // a strictly positive value iff the bottom arm strictly wins
+        // the MIN with a non-zero tally — equivalently iff bottom > 0
+        // AND bottom <= top. Filters the ZERO corners (both atomic-
+        // empty (0, 0) and atomic-top-only) out of the STRICTLY
+        // positive half via the has-bottom cofactor.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_signed_minority_count() > 0,
+                a.has_bottom_axis() && !a.bottom_is_majority(),
+                "atomic_signed_minority_count() > 0 != (has_bottom_axis && !bottom_is_majority) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_minority_count_negative_iff_bottom_is_majority_and_has_top_axis(
+    ) {
+        // STRICTLY-NEGATIVE-SIGN bridge — LOAD-BEARING structural
+        // pin. The SIGNED ATOMIC CENTRAL-TENDENCY MIN reading fires
+        // a strictly negative value iff the top arm strictly loses
+        // the MIN with a non-zero tally — equivalently iff bottom >
+        // top AND top > 0. Top is then the LOSER carried by the
+        // negative sign. The has-top cofactor filters the ZERO corner
+        // (bottom_is_majority with no top axis) out of the STRICTLY
+        // negative half — mirror of the has-bottom cofactor on the
+        // STRICTLY positive bridge. Every truly-mixed BOTTOM-CARRYING
+        // fixture has top empty so this predicate reads FALSE on all
+        // shipped fixtures — LOAD-BEARING pin that the atomic
+        // SIGNED-MIN's strict-negative regime is INHABITED only by
+        // postures with BOTH atomic arms non-zero AND bottom
+        // strictly dominant.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            assert_eq!(
+                a.atomic_signed_minority_count() < 0,
+                a.bottom_is_majority() && a.has_top_axis(),
+                "atomic_signed_minority_count() < 0 != (bottom_is_majority && has_top_axis) on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_minority_count_zero_iff_has_atomically_uniform_arm() {
+        // ZERO iff HAS-ATOMICALLY-UNIFORM-ARM pin — LOAD-BEARING
+        // structural pin. The SIGNED-ATOMIC-MIN vanishes exactly when
+        // at least one atomic arm is empty. Every uniform preset AND
+        // every truly-mixed BOTTOM-CARRYING fixture in the shipped
+        // family lands on the ZERO cell because top is empty in every
+        // fixture — the SIGNED atomic MIN's kernel is STRUCTURALLY
+        // WIDER than the SIGNED axial MIN's kernel.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let is_zero = a.atomic_signed_minority_count() == 0;
+            let has_uniform_arm = a.count_bottom_axes() == 0 || a.count_top_axes() == 0;
+            assert_eq!(
+                is_zero, has_uniform_arm,
+                "atomic_signed_minority_count() == 0 != has_atomically_uniform_arm on {a:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_minority_count_magnitude_bounded_above_by_half_field_count() {
+        // MAGNITUDE upper bound — LOAD-BEARING structural pin. The
+        // SIGNED atomic CENTRAL-TENDENCY MIN reading lies in
+        // `[-FIELD_COUNT/2, FIELD_COUNT/2]` — direct consequence of
+        // `atomic_minority_count() <= FIELD_COUNT / 2` transported
+        // through the `unsigned_abs` bridge. DUAL of the SIGNED-
+        // atomic-MAX magnitude bound pin on the (MAX, MIN) closure.
+        let postures = [
+            EMPTY_RESOURCE_LIMITS,
+            DEFAULT_RESOURCE_LIMITS,
+            UNBOUNDED_RESOURCE_LIMITS,
+            HAND_AUTHORED_MID_POSTURE,
+            HAND_AUTHORED_OTHER_POSTURE,
+            SPARSE_BOTTOM_POSTURE,
+            CONTIGUOUS_INTERIOR_BOTTOM_POSTURE,
+            ENDPOINTS_ONLY_BOTTOM_POSTURE,
+        ];
+        for a in postures {
+            let k = a.atomic_signed_minority_count();
+            let half = ResourceLimits::FIELD_COUNT / 2;
+            assert!(
+                k.unsigned_abs() <= half,
+                "|atomic_signed_minority_count()| = {} > FIELD_COUNT/2 = {half} on {a:?}",
+                k.unsigned_abs(),
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_atomic_signed_minority_count_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin on the SIGNED atomic CENTRAL-TENDENCY MIN
+        // closure — the SIGNED atomic reading is evaluable in const
+        // context so a caller can pin the ZERO cell (every uniform
+        // preset) at compile time as a build-break. Mirror of the
+        // const-fn evaluability pins on the (atomic_majority_count,
+        // atomic_minority_count) UNSIGNED closure one SIGNEDNESS axis
+        // under, and on `atomic_signed_majority_count` one
+        // COMBINATOR-KIND axis over.
+        const _: () = assert!(EMPTY_RESOURCE_LIMITS.atomic_signed_minority_count() == 0);
+        const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS.atomic_signed_minority_count() == 0);
+        const _: () = assert!(DEFAULT_RESOURCE_LIMITS.atomic_signed_minority_count() == 0);
     }
 
     #[test]

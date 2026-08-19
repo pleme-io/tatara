@@ -17013,7 +17013,10 @@ impl ResourceLimits {
     /// allocation, no closure.
     #[must_use]
     pub const fn witness_count_saturated_or_singleton(count: usize) -> Option<bool> {
-        Self::witness_axis_presence(count, count == 1 || count == Self::FIELD_COUNT)
+        Self::join_axis_witnesses(
+            Self::witness_count_singleton(count),
+            Self::witness_count_saturated(count),
+        )
     }
 
     /// BARELY-MULTI-OR-NEARLY-SATURATED-KIND count witness —
@@ -17199,7 +17202,10 @@ impl ResourceLimits {
     /// indirection, no allocation, no closure.
     #[must_use]
     pub const fn witness_count_barely_multi_or_nearly_saturated(count: usize) -> Option<bool> {
-        Self::witness_axis_presence(count, count == 2 || count == Self::FIELD_COUNT - 1)
+        Self::join_axis_witnesses(
+            Self::witness_count_barely_multi(count),
+            Self::witness_count_nearly_saturated(count),
+        )
     }
 
     /// AT-MOST-BARELY-MULTI-OR-AT-LEAST-NEARLY-SATURATED-KIND count witness —
@@ -17425,7 +17431,10 @@ impl ResourceLimits {
     pub const fn witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
         count: usize,
     ) -> Option<bool> {
-        Self::witness_axis_presence(count, count <= 2 || count >= Self::FIELD_COUNT - 1)
+        Self::join_axis_witnesses(
+            Self::witness_count_at_most_barely_multi(count),
+            Self::witness_count_at_least_nearly_saturated(count),
+        )
     }
 
     /// STRICT-INTERIOR-MIDDLE-KIND count witness —
@@ -17665,6 +17674,182 @@ impl ResourceLimits {
         match w {
             Some(b) => Some(!b),
             None => None,
+        }
+    }
+
+    /// Presence-conjunctive LATTICE JOIN on whole-posture `Option<bool>`
+    /// witness pairs — `Self::join_axis_witnesses(lhs, rhs)` returns
+    /// `Some(a || b)` when both `lhs == Some(a)` and `rhs == Some(b)`, or
+    /// `None` if either input is `None`. The BOUNDARY primitive lifting
+    /// the shape
+    /// `match (lhs, rhs) { (Some(a), Some(b)) => Some(a || b), _ => None }`
+    /// (equivalently the nightly-only `lhs.zip(rhs).map(|(a, b)| a || b)`
+    /// closure form Rust `const fn` cannot express on stable, since
+    /// `Option::map`/`Option::zip` are not const-callable on the closure
+    /// signature) that every WHOLE-POSTURE `Option<bool>` COMPOUND-OR
+    /// COUNT WITNESS on [`ResourceLimits`] carries at its exit —
+    /// [`Self::witness_count_saturated_or_singleton`],
+    /// [`Self::witness_count_barely_multi_or_nearly_saturated`], and
+    /// [`Self::witness_count_at_most_barely_multi_or_at_least_nearly_saturated`]
+    /// all wrap the disjunction of two paired atomic count-witnesses in
+    /// the same presence-conjunctive JOIN dispatch. Pre-lift each COMPOUND-
+    /// OR witness open-coded the single-line
+    /// `Self::witness_axis_presence(count, pred_a || pred_b)` at its own
+    /// exit — the SAME `||` composition of two paired atomic predicates
+    /// appeared verbatim on THREE sibling COMPOUND-OR witnesses, a copy-
+    /// paste cascade whose consistency the type system did not gate (a
+    /// witness that swapped its `pred_b` for a sibling atomic predicate
+    /// would silently drift the RIGHT-arm cell of the disjunction to a
+    /// neighbouring count without any body-shape signal, a witness that
+    /// collapsed `||` to `&&` would silently EMPTY the acceptance set
+    /// wherever the two paired atomic predicates do not overlap on the
+    /// count half-line, a witness that dropped the second disjunct
+    /// entirely would silently narrow the compound cell to a single atomic
+    /// cell). Post-lift the shape binds at ONE typed `const fn` on
+    /// [`ResourceLimits`], and every future WHOLE-POSTURE COMPOUND-OR
+    /// COUNT WITNESS composes structurally through two paired atomic
+    /// count-witnesses (each already an established substrate primitive)
+    /// joined through this helper — the "compound witness is the LATTICE
+    /// JOIN of its atomic constituents" identity is a substrate-level
+    /// theorem rather than a per-witness convention.
+    ///
+    /// The BINARY COMBINATOR-KIND peer of [`Self::negate_axis_witness`]
+    /// one INPUT-ARITY axis over: presence-preserving unary complement
+    /// over `Option<bool>` there, presence-conjunctive binary JOIN over
+    /// `(Option<bool>, Option<bool>)` here — jointly the two combinators
+    /// OPEN the substrate's `Option<bool>`-algebra surface on the
+    /// (unary-NOT, binary-OR) mask, sharing the same presence-preserving
+    /// treatment of the `None` empty arm across both output shapes.
+    /// Composed with the shipped unary complement under DE MORGAN, the
+    /// paired MEET (presence-conjunctive AND) recovers pointwise as
+    /// `negate(join(negate(lhs), negate(rhs)))` — no separate substrate
+    /// helper needed for the AND variant until a body actually calls for
+    /// it.
+    ///
+    /// **Two-arm dispatch identity — LOAD-BEARING structural pin**: on
+    /// every `(lhs, rhs)`, `join_axis_witnesses(lhs, rhs) == match
+    /// (lhs, rhs) { (Some(a), Some(b)) => Some(a || b), _ => None }`.
+    /// Pinned via
+    /// `resource_limits_join_axis_witnesses_agrees_with_open_coded_match`.
+    ///
+    /// **Empty-arm identity — LEFT**: on every `w`,
+    /// `join_axis_witnesses(None, w) == None`. The absent LEFT input
+    /// COLLAPSES the JOIN to the empty arm regardless of the RIGHT
+    /// input's presence — the presence-conjunctive convention preserves
+    /// the has-both-axes distinction the compound `Option<bool>` exit
+    /// was defined to name. Pinned via
+    /// `resource_limits_join_axis_witnesses_left_none_arm_is_none`.
+    ///
+    /// **Empty-arm identity — RIGHT**: on every `w`,
+    /// `join_axis_witnesses(w, None) == None`. The absent RIGHT input
+    /// COLLAPSES the JOIN to the empty arm regardless of the LEFT input's
+    /// presence — the presence-conjunctive convention is symmetric across
+    /// the two input positions. Pinned via
+    /// `resource_limits_join_axis_witnesses_right_none_arm_is_none`.
+    ///
+    /// **Present-arm identity — DISJUNCTION**: for every `(a, b)`,
+    /// `join_axis_witnesses(Some(a), Some(b)) == Some(a || b)` — the
+    /// helper ORs the two present-arm booleans verbatim, matching the
+    /// `pred_a || pred_b` composition every COMPOUND-OR witness pre-lift
+    /// open-coded inside `witness_axis_presence`. Pinned via
+    /// `resource_limits_join_axis_witnesses_present_both_arm_disjoins`.
+    ///
+    /// **Commutativity identity**: on every `(lhs, rhs)`,
+    /// `join_axis_witnesses(lhs, rhs) == join_axis_witnesses(rhs, lhs)`
+    /// — the boolean OR the present arm carries is commutative and the
+    /// empty-arm dispatch treats the two input positions symmetrically,
+    /// so the JOIN is a commutative binary combinator on the
+    /// `Option<bool>` algebra. Pinned via
+    /// `resource_limits_join_axis_witnesses_is_commutative`.
+    ///
+    /// **Associativity identity**: on every `(lhs, mid, rhs)`,
+    /// `join_axis_witnesses(lhs, join_axis_witnesses(mid, rhs)) ==
+    /// join_axis_witnesses(join_axis_witnesses(lhs, mid), rhs)` — the
+    /// boolean OR the present arm carries is associative and the
+    /// presence-conjunctive empty-arm dispatch (any `None` COLLAPSES
+    /// to `None` at any bracketing) is associative under the same fold,
+    /// so the JOIN can be chained without a parenthesization convention.
+    /// Pinned via
+    /// `resource_limits_join_axis_witnesses_is_associative`.
+    ///
+    /// **Idempotence identity**: on every `w`,
+    /// `join_axis_witnesses(w, w) == w`. The boolean OR is idempotent on
+    /// the diagonal (`b || b == b`) and the empty-arm dispatch preserves
+    /// `None` on the diagonal, so the JOIN is a semilattice on the
+    /// `Option<bool>` algebra. Pinned via
+    /// `resource_limits_join_axis_witnesses_is_idempotent`.
+    ///
+    /// **`Some(true)` absorbs on the present arm**: on every present-arm
+    /// `Some(x)`, `join_axis_witnesses(Some(true), Some(x)) == Some(true)`
+    /// and `join_axis_witnesses(Some(x), Some(true)) == Some(true)`. The
+    /// RIGHT input's TRUTH-VALUE is DISCARDED when the LEFT input is
+    /// `Some(true)`, and symmetrically. Names `Some(true)` as the JOIN's
+    /// top-absorbing element on the present arm — the exact witness a
+    /// compound OR-cell fires on when at least one of its atomic
+    /// constituents fires. Absorption defers to the presence-conjunctive
+    /// convention: `Some(true)` does NOT rescue an absent counterpart.
+    /// Pinned via
+    /// `resource_limits_join_axis_witnesses_some_true_absorbs_on_present_arm`.
+    ///
+    /// **`is_some` bridge**:
+    /// `join_axis_witnesses(lhs, rhs).is_some() == (lhs.is_some() &&
+    /// rhs.is_some())`. The presence-conjunctive dispatch on the output
+    /// tracks the AND of the two inputs' presence bits — the compound
+    /// witness's has-both-axes-at-pole projection agrees with the paired
+    /// atomic witnesses' presence AND. Pinned via
+    /// `resource_limits_join_axis_witnesses_is_some_bridge`.
+    ///
+    /// `const fn` so a caller can pin the helper's verdict at compile
+    /// time (`const _: () = assert!(matches!(
+    /// ResourceLimits::join_axis_witnesses(Some(true), Some(false)),
+    /// Some(true)));`) — sibling of the const-fn evaluability pins the
+    /// paired [`Self::witness_axis_presence`] and
+    /// [`Self::negate_axis_witness`] combinators already carry at their
+    /// own exits.
+    ///
+    /// **Adoption compounds**: the three shipped WHOLE-POSTURE COMPOUND-
+    /// OR count witnesses rewrite from the open-coded
+    /// `Self::witness_axis_presence(count, pred_a || pred_b)` shape to
+    /// the two-line `Self::join_axis_witnesses(
+    /// Self::witness_count_A(count), Self::witness_count_B(count))`
+    /// composition at no semantic change; any future COMPOUND-OR count
+    /// witness composes through this same primitive with its paired
+    /// atomic count-witness constituents.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 — typed exit; the
+    /// presence-conjunctive JOIN shape at every COMPOUND-OR count
+    /// witness body binds at ONE typed named `const fn` on the algebra
+    /// rather than a per-witness one-line inline `||` composition
+    /// buried inside a `witness_axis_presence` call. THEORY.md §II.1
+    /// invariant 5 — composition preserves proofs; the helper composes
+    /// mechanically under the two-arm identity above with no re-
+    /// derivation at the caller, and every compound witness that adopts
+    /// it inherits the commutativity, associativity, idempotence, and
+    /// `Some(true)`-absorption theorems for free. THEORY.md §V.1 —
+    /// knowable platform; the compound-witness-is-LATTICE-JOIN-of-
+    /// atomic-witnesses fact becomes a substrate-level theorem rather
+    /// than a per-witness convention.
+    ///
+    /// Frontier inspiration: Haskell's `liftA2 (||)` on `Maybe Bool`
+    /// under the `Applicative Maybe` instance (which is the
+    /// presence-conjunctive dispatch verbatim — `Nothing` on either
+    /// argument yields `Nothing`, both `Just` yields `Just (||)` of the
+    /// two payloads); Idris's `Applicative.liftA2 (||)` on `Maybe Bool`
+    /// under a total function signature; Racket's `(and lhs rhs (or (car
+    /// lhs) (car rhs)))` present-arm-preserving disjunction guard;
+    /// Clojure's `(when (and lhs rhs) (or @lhs @rhs))` present-arm-
+    /// preserving JOIN dispatch; APL's `∨/¨lhs,¨rhs` per-cell OR under
+    /// the box-and-fill applicative. Translation through pleme-io
+    /// primitives is the plain `const fn` two-arm match below on the
+    /// `(Option<bool>, Option<bool>)` split — no closure, no typeclass
+    /// indirection, no higher-kinded machinery, and no dependency on
+    /// `Option::zip` or `Option::map` (which take a closure and are not
+    /// const-callable on stable Rust).
+    #[must_use]
+    pub const fn join_axis_witnesses(lhs: Option<bool>, rhs: Option<bool>) -> Option<bool> {
+        match (lhs, rhs) {
+            (Some(a), Some(b)) => Some(a || b),
+            _ => None,
         }
     }
 
@@ -114141,5 +114326,345 @@ mod tests {
         const _: () = assert!(UNBOUNDED_RESOURCE_LIMITS
             .interior_axis_is_strict_interior_middle()
             .is_none());
+    }
+
+    #[test]
+    fn resource_limits_join_axis_witnesses_agrees_with_open_coded_match() {
+        // Two-arm dispatch identity — the helper's verdict on every
+        // `(lhs, rhs)` pair agrees with the open-coded shape
+        // `match (lhs, rhs) { (Some(a), Some(b)) => Some(a || b), _ =>
+        // None }` that every WHOLE-POSTURE `Option<bool>` COMPOUND-OR
+        // count witness on ResourceLimits carries at its exit. Swept
+        // over the full 3 * 3 = 9 `(Option<bool>, Option<bool>)` input
+        // regime (None, Some(false), Some(true) on each side) so the
+        // two-arm dispatch is pinned exhaustively.
+        let vals = [None, Some(false), Some(true)];
+        for lhs in vals {
+            for rhs in vals {
+                let via_helper = ResourceLimits::join_axis_witnesses(lhs, rhs);
+                let via_open_code = match (lhs, rhs) {
+                    (Some(a), Some(b)) => Some(a || b),
+                    _ => None,
+                };
+                assert_eq!(
+                    via_helper, via_open_code,
+                    "helper != open-coded shape at (lhs, rhs) = ({lhs:?}, {rhs:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_join_axis_witnesses_left_none_arm_is_none() {
+        // LEFT empty-arm identity — the absent LEFT input COLLAPSES the
+        // JOIN to None regardless of the RIGHT input's presence. Pins
+        // the has-both-axes-at-pole distinction the presence-conjunctive
+        // convention preserves — a helper that swapped the LEFT empty
+        // arm for `Some(false)` would silently reclassify the "one
+        // side of the compound has no axis at pole" cell as
+        // `Some(false)`, breaking the empty-arm PRESERVATION every
+        // compound OR witness rides on.
+        for rhs in [None, Some(false), Some(true)] {
+            assert_eq!(
+                ResourceLimits::join_axis_witnesses(None, rhs),
+                None,
+                "LEFT empty arm violated at rhs = {rhs:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_join_axis_witnesses_right_none_arm_is_none() {
+        // RIGHT empty-arm identity — the absent RIGHT input COLLAPSES the
+        // JOIN to None regardless of the LEFT input's presence. Symmetric
+        // sibling of the LEFT-empty pin — jointly the two pins fix the
+        // presence-conjunctive treatment of the empty arm at both input
+        // positions, matching the JOIN's commutative structure the
+        // separately shipped commutativity pin also carries.
+        for lhs in [None, Some(false), Some(true)] {
+            assert_eq!(
+                ResourceLimits::join_axis_witnesses(lhs, None),
+                None,
+                "RIGHT empty arm violated at lhs = {lhs:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_join_axis_witnesses_present_both_arm_disjoins() {
+        // Present-both-arm identity — for every (a, b), the helper ORs
+        // the two present-arm booleans verbatim and wraps them in Some.
+        // Swept over the full 2 * 2 = 4 (bool, bool) present-arm regime
+        // so the disjunction is pinned at every cell of the boolean
+        // JOIN table (FF -> F, FT -> T, TF -> T, TT -> T). Catches a
+        // helper that collapsed `||` to `&&` (silently emptying the
+        // acceptance set of every compound OR witness wherever the two
+        // atomic constituents do not overlap on the count half-line) or
+        // dropped either disjunct at the JOIN cell.
+        for a in [false, true] {
+            for b in [false, true] {
+                assert_eq!(
+                    ResourceLimits::join_axis_witnesses(Some(a), Some(b)),
+                    Some(a || b),
+                    "present-both arm violated at (Some({a}), Some({b}))",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_join_axis_witnesses_is_commutative() {
+        // Commutativity identity — join(lhs, rhs) == join(rhs, lhs) on
+        // every input pair. The boolean OR the present arm carries is
+        // commutative and the empty-arm dispatch is symmetric across
+        // the two input positions, so the JOIN is a commutative binary
+        // combinator on the Option<bool> algebra. Swept over the full
+        // 3 * 3 = 9 input regime so commutativity is pinned exhaustively.
+        let vals = [None, Some(false), Some(true)];
+        for lhs in vals {
+            for rhs in vals {
+                assert_eq!(
+                    ResourceLimits::join_axis_witnesses(lhs, rhs),
+                    ResourceLimits::join_axis_witnesses(rhs, lhs),
+                    "commutativity violated at (lhs, rhs) = ({lhs:?}, {rhs:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_join_axis_witnesses_is_associative() {
+        // Associativity identity — join(lhs, join(mid, rhs)) ==
+        // join(join(lhs, mid), rhs) on every input triple. The boolean
+        // OR is associative and the presence-conjunctive empty-arm
+        // dispatch (any None COLLAPSES to None at any bracketing) is
+        // associative under the same fold. Swept over the full
+        // 3 ^ 3 = 27 input regime so associativity is pinned
+        // exhaustively — future compound OR witnesses may chain the
+        // JOIN over any number of atomic constituents without a
+        // parenthesization convention.
+        let vals = [None, Some(false), Some(true)];
+        for lhs in vals {
+            for mid in vals {
+                for rhs in vals {
+                    let left = ResourceLimits::join_axis_witnesses(
+                        lhs,
+                        ResourceLimits::join_axis_witnesses(mid, rhs),
+                    );
+                    let right = ResourceLimits::join_axis_witnesses(
+                        ResourceLimits::join_axis_witnesses(lhs, mid),
+                        rhs,
+                    );
+                    assert_eq!(
+                        left, right,
+                        "associativity violated at (lhs, mid, rhs) = ({lhs:?}, {mid:?}, {rhs:?})",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_join_axis_witnesses_is_idempotent() {
+        // Idempotence identity — join(w, w) == w on every input. The
+        // boolean OR is idempotent on the diagonal (b || b == b) and
+        // the empty-arm dispatch preserves None on the diagonal, so
+        // the JOIN is a semilattice on the Option<bool> algebra.
+        // Names the "compound witness fired against itself yields the
+        // same witness" property — a compound OR witness composed
+        // through two IDENTICAL atomic constituents collapses to the
+        // atomic witness itself, matching the mathematical semilattice
+        // structure of the JOIN.
+        for w in [None, Some(false), Some(true)] {
+            assert_eq!(
+                ResourceLimits::join_axis_witnesses(w, w),
+                w,
+                "idempotence violated at w = {w:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn resource_limits_join_axis_witnesses_some_true_absorbs_on_present_arm() {
+        // Some(true)-absorbs-on-present-arm identity — for every present-
+        // arm input `Some(x)`, join(Some(true), Some(x)) == Some(true)
+        // and join(Some(x), Some(true)) == Some(true). Names Some(true)
+        // as the top-absorbing element of the JOIN on the present arm —
+        // the exact witness a compound OR-cell fires on when at least
+        // one of its atomic constituents fires. Absorption fails on the
+        // empty arm (join(Some(true), None) == None) — the presence-
+        // conjunctive convention takes precedence over top-absorption.
+        for x in [false, true] {
+            assert_eq!(
+                ResourceLimits::join_axis_witnesses(Some(true), Some(x)),
+                Some(true),
+                "Some(true) LEFT-absorb violated at rhs = Some({x})",
+            );
+            assert_eq!(
+                ResourceLimits::join_axis_witnesses(Some(x), Some(true)),
+                Some(true),
+                "Some(true) RIGHT-absorb violated at lhs = Some({x})",
+            );
+        }
+        // Presence-conjunctive convention takes precedence — the top-
+        // absorbing element does NOT rescue an absent counterpart.
+        assert_eq!(
+            ResourceLimits::join_axis_witnesses(Some(true), None),
+            None,
+            "presence-conjunctive convention violated on (Some(true), None)",
+        );
+        assert_eq!(
+            ResourceLimits::join_axis_witnesses(None, Some(true)),
+            None,
+            "presence-conjunctive convention violated on (None, Some(true))",
+        );
+    }
+
+    #[test]
+    fn resource_limits_join_axis_witnesses_is_some_bridge() {
+        // is_some bridge — join(lhs, rhs).is_some() == lhs.is_some() &&
+        // rhs.is_some() on every input pair. The presence-conjunctive
+        // dispatch on the output tracks the AND of the two inputs'
+        // presence bits — the compound witness's has-both-axes-at-pole
+        // projection agrees with the paired atomic witnesses' presence
+        // AND. Swept over the full 3 * 3 = 9 input regime so the
+        // presence bridge is pinned exhaustively.
+        let vals = [None, Some(false), Some(true)];
+        for lhs in vals {
+            for rhs in vals {
+                assert_eq!(
+                    ResourceLimits::join_axis_witnesses(lhs, rhs).is_some(),
+                    lhs.is_some() && rhs.is_some(),
+                    "is_some bridge violated at (lhs, rhs) = ({lhs:?}, {rhs:?})",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_saturated_or_singleton_delegates_through_join_axis_witnesses()
+    {
+        // Body-delegation pin — the swept witness_count_saturated_or_
+        // singleton body composes structurally through join_axis_
+        // witnesses(witness_count_singleton, witness_count_saturated)
+        // on every count in `0..=FIELD_COUNT`. Catches a future rewrite
+        // of the compound witness body that silently drifts from the
+        // atomic constituents (a swap of witness_count_singleton for a
+        // sibling atomic count-witness on the LEFT arm, a swap of
+        // witness_count_saturated for a sibling on the RIGHT arm, an
+        // inversion of the two arms which is invisible under
+        // commutativity but visible as a code-shape drift, an inlining
+        // of the disjunction back inside witness_axis_presence). Mirrors
+        // the sibling "delegates through" pin the shipped negate_axis_
+        // witness and project_axis_count_zero combinators carry against
+        // their own paired axial-cell adopters one COMBINATOR-ARITY
+        // axis over.
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_saturated_or_singleton(count),
+                ResourceLimits::join_axis_witnesses(
+                    ResourceLimits::witness_count_singleton(count),
+                    ResourceLimits::witness_count_saturated(count),
+                ),
+                "witness_count_saturated_or_singleton({count}) != join_axis_witnesses(witness_count_singleton({count}), witness_count_saturated({count}))",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_barely_multi_or_nearly_saturated_delegates_through_join_axis_witnesses(
+    ) {
+        // Body-delegation pin — the swept witness_count_barely_multi_or_
+        // nearly_saturated body composes structurally through join_axis_
+        // witnesses(witness_count_barely_multi, witness_count_nearly_
+        // saturated) on every count in `0..=FIELD_COUNT`. Catches a
+        // future rewrite of the compound witness body that silently
+        // drifts from the two atomic ADJACENT-TO-ENDPOINT constituents
+        // (a swap of witness_count_barely_multi for a sibling on the
+        // LEFT arm, a swap of witness_count_nearly_saturated for a
+        // sibling on the RIGHT arm, an inlining of the disjunction
+        // back inside witness_axis_presence).
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_barely_multi_or_nearly_saturated(count),
+                ResourceLimits::join_axis_witnesses(
+                    ResourceLimits::witness_count_barely_multi(count),
+                    ResourceLimits::witness_count_nearly_saturated(count),
+                ),
+                "witness_count_barely_multi_or_nearly_saturated({count}) != join_axis_witnesses(witness_count_barely_multi({count}), witness_count_nearly_saturated({count}))",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_witness_count_at_most_barely_multi_or_at_least_nearly_saturated_delegates_through_join_axis_witnesses(
+    ) {
+        // Body-delegation pin — the swept witness_count_at_most_barely_
+        // multi_or_at_least_nearly_saturated body composes structurally
+        // through join_axis_witnesses(witness_count_at_most_barely_multi,
+        // witness_count_at_least_nearly_saturated) on every count in
+        // `0..=FIELD_COUNT`. Catches a future rewrite of the compound
+        // witness body that silently drifts from the two paired closed-
+        // bracket constituents (a swap of witness_count_at_most_barely_
+        // multi for a sibling on the LEFT arm, a swap of witness_count_
+        // at_least_nearly_saturated for a sibling on the RIGHT arm,
+        // an inlining of the disjunction back inside witness_axis_
+        // presence, a re-composition through the atomic ENDPOINT +
+        // ADJACENT-TO-ENDPOINT pair `saturated_or_singleton` +
+        // `barely_multi_or_nearly_saturated` which agrees pointwise on
+        // the FOUR-CELL BOUNDARY-ZONE but which is a different four-
+        // constituent decomposition of the same JOIN).
+        let mut count = 0;
+        while count <= ResourceLimits::FIELD_COUNT {
+            assert_eq!(
+                ResourceLimits::witness_count_at_most_barely_multi_or_at_least_nearly_saturated(
+                    count
+                ),
+                ResourceLimits::join_axis_witnesses(
+                    ResourceLimits::witness_count_at_most_barely_multi(count),
+                    ResourceLimits::witness_count_at_least_nearly_saturated(count),
+                ),
+                "witness_count_at_most_barely_multi_or_at_least_nearly_saturated({count}) != join_axis_witnesses(witness_count_at_most_barely_multi({count}), witness_count_at_least_nearly_saturated({count}))",
+            );
+            count += 1;
+        }
+    }
+
+    #[test]
+    fn resource_limits_join_axis_witnesses_evaluates_at_compile_time_via_const_fn() {
+        // Const-fn pin — the helper evaluates in const context so a
+        // caller can pin the two-arm identity at compile time as a
+        // build-break. Sibling of the const-fn evaluability pins the
+        // paired witness_axis_presence and negate_axis_witness
+        // combinators already carry at their own exits. Covers the four
+        // present-both cells of the boolean JOIN table plus the four
+        // empty-arm cells (None-LEFT with either present-arm value,
+        // None-RIGHT with either present-arm value) plus the None-both
+        // cell so the whole 3 * 3 dispatch is pinned at compile time.
+        const _: () = assert!(matches!(
+            ResourceLimits::join_axis_witnesses(Some(false), Some(false)),
+            Some(false)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::join_axis_witnesses(Some(false), Some(true)),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::join_axis_witnesses(Some(true), Some(false)),
+            Some(true)
+        ));
+        const _: () = assert!(matches!(
+            ResourceLimits::join_axis_witnesses(Some(true), Some(true)),
+            Some(true)
+        ));
+        const _: () = assert!(ResourceLimits::join_axis_witnesses(None, Some(false)).is_none());
+        const _: () = assert!(ResourceLimits::join_axis_witnesses(None, Some(true)).is_none());
+        const _: () = assert!(ResourceLimits::join_axis_witnesses(Some(false), None).is_none());
+        const _: () = assert!(ResourceLimits::join_axis_witnesses(Some(true), None).is_none());
+        const _: () = assert!(ResourceLimits::join_axis_witnesses(None, None).is_none());
     }
 }

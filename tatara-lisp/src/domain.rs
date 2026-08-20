@@ -1543,16 +1543,23 @@ pub trait AtomKwarg<'a>: Sized {
     /// shape gate; [`narrow_or_range_err_at`] rides `T::WIDTH` on
     /// the range gate.
     ///
-    /// TWO per-item projection sites used to inline this compose
-    /// shape (`Self::project(s).ok_or_else(|| type_err_at(key, idx,
-    /// Self::SHAPE, s))`): [`extract_string_list`]'s per-item body
-    /// on the `<&'a str>` axis, and [`extract_narrowed_list`]'s
-    /// per-item body on the `<W as WideNumeric>` axis (`W`
-    /// inheriting [`AtomKwarg`]'s shape gate through the
-    /// supertrait bound). Post-lift both sites route through this
-    /// default; the axis identity rides the `Self` type parameter
-    /// through the SAME atom-family shape-gate composition rather
-    /// than restated as a per-site pair.
+    /// THREE per-item projection sites route through this default —
+    /// [`extract_string_list`]'s per-item body on the `<&'a str>`
+    /// axis, [`extract_narrowed_list`]'s per-item body on the
+    /// `<W as WideNumeric>` axis (`W` inheriting [`AtomKwarg`]'s
+    /// shape gate through the supertrait bound), and
+    /// [`extract_bool_list`]'s per-item body on the `<bool>` axis.
+    /// The first two sites used to inline this compose shape
+    /// (`Self::project(s).ok_or_else(|| type_err_at(key, idx,
+    /// Self::SHAPE, s))`); the third routed `Vec<bool>` through
+    /// [`extract_vec_via_serde`]'s serde bridge, so its per-item
+    /// shape mismatch surfaced as a
+    /// [`LispError::KwargDeserialize`] substring rather than a typed
+    /// atom-family rejection. Post-lift the axis identity rides the
+    /// `Self` type parameter through the SAME atom-family
+    /// shape-gate composition at all three sites rather than
+    /// restated as a per-site pair (or leaking through the serde
+    /// bridge on the bool axis).
     ///
     /// Provided as a trait default composing `(Self::SHAPE,
     /// Self::project)` through [`type_err_at`] — per-atom impls do
@@ -2166,6 +2173,68 @@ pub fn extract_bool(kw: &Kwargs<'_>, key: &str) -> Result<bool> {
 /// `<bool as AtomKwarg<'_>>::extract_optional_kwarg`.
 pub fn extract_optional_bool(kw: &Kwargs<'_>, key: &str) -> Result<Option<bool>> {
     <bool as AtomKwarg<'_>>::extract_optional_kwarg(kw, key)
+}
+
+/// `Vec<bool>` list-typed kwarg — the list-family peer of
+/// [`extract_bool`] on the per-item atom-family shape gate. Composes
+/// [`extract_list`]'s outer-shape skeleton (absent kwarg →
+/// `Ok(Vec::new())`, present-but-not-a-list →
+/// `type_err(key, ExpectedKwargShape::List, v)`) with
+/// [`AtomKwarg::project_at`]'s per-item shape gate on the `bool` axis
+/// — a per-item non-bool element inside `:flags (list #t 5 #f)`
+/// rejects as `LispError::TypeMismatch { form: Item { key: "flags",
+/// idx: 1 }, expected: Bool, got: Int }`, the SAME axis-typed
+/// diagnostic variant its scalar peer [`extract_bool`] emits at the
+/// atom shape gate.
+///
+/// Pre-lift the derive routed `Vec<bool>` fields through
+/// [`extract_vec_via_serde`] — the universal serde bridge — so a
+/// per-item shape mismatch on `:flags (list #t "yes")` surfaced as a
+/// mystery `LispError::KwargDeserialize { message: "invalid type:
+/// string \"yes\", expected a boolean at path .1", .. }` diagnostic
+/// keyed off a substring rather than as the typed
+/// `TypeMismatch { form: Item { key: "flags", idx: 1 }, expected:
+/// Bool, got: String }` its scalar peer [`extract_bool`] already
+/// emits at the atom shape gate. Post-lift the per-item bool gate
+/// matches the scalar bool gate's rejection shape byte-for-byte
+/// modulo the `KwargPath::Item { key, idx }` → `KwargPath::Named(key)`
+/// per-path shift, and the two gates share ONE rejection vocabulary.
+///
+/// The outer-shape label is [`ExpectedKwargShape::List`] (the same
+/// label the numeric-list peers [`extract_narrowed_list`] +
+/// [`extract_vec_via_serde`] emit) rather than a hypothetical
+/// `ListOfBools` element-typed refinement — the seven-variant
+/// [`ExpectedKwargShape`] closed set stays at its current shape.
+/// The per-item shape gate keeps `<bool>::SHAPE`'s axis-typed
+/// rejection label ([`ExpectedKwargShape::Bool`]) — the same label
+/// the scalar-kwarg peer's shape gate emits — so a per-item shape
+/// mismatch on the bool axis reads `expected bool, got string`, not
+/// the wider `expected list of bools, got string`.
+///
+/// Sibling posture to [`extract_string_list`] on the non-numeric
+/// atom-family list surface: both share ONE
+/// [`AtomKwarg::project_at`] per-item shape-gate composition, the
+/// only shape delta being the axis identity riding through the
+/// `Self` type parameter (`<&str>::SHAPE` = `String` vs.
+/// `<bool>::SHAPE` = `Bool`) and the return-type ownership
+/// (`String::from`-lifted for the borrow-off-Sexp `&'a str` axis vs.
+/// direct-return for the `Copy` `bool` axis).
+///
+/// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry — a
+/// per-item shape failure on a list-typed kwarg IS a typed-entry
+/// gate the bool-vec surface used to leak past through the serde
+/// bridge). THEORY.md §VI.1 (generation over composition — the
+/// atom-family per-item shape-gate composition now recurs at THREE
+/// list-family sites (string / numeric / bool) all routing through
+/// ONE [`AtomKwarg::project_at`] trait default). THEORY.md §V.1
+/// (knowable platform — the per-item bool rejection now surfaces
+/// the same pattern-matchable [`LispError::TypeMismatch`] variant
+/// every authoring surface (LSP, `tatara-check`, REPL) already binds
+/// to for the scalar peer).
+pub fn extract_bool_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<bool>> {
+    extract_list(kw, key, ExpectedKwargShape::List, |idx, s| {
+        <bool as AtomKwarg<'_>>::project_at(key, idx, s)
+    })
 }
 
 // ── Universal serde-Deserialize fallthrough (enums, nested structs, …) ──
@@ -4633,6 +4702,67 @@ mod tests {
         );
     }
 
+    /// Bool-axis peer of [`VecPortsSpec`] on the non-numeric atom-
+    /// family list surface: `flags: Vec<bool>` used to fall through
+    /// `Kind::VecDeserialize` (the universal serde bridge), so a
+    /// per-item non-bool element on `:flags (list #t "yes")`
+    /// surfaced as a mystery
+    /// `KwargDeserialize { message: "invalid type: string \"yes\",
+    /// expected a boolean at path .1" }` substring rather than as
+    /// the typed
+    /// `TypeMismatch { form: Item { key: "flags", idx: 1 },
+    /// expected: Bool, got: String }` its scalar peer
+    /// (`enabled: bool`) already emits at the atom shape gate. Post-
+    /// lift the derive routes `Vec<bool>` to `extract_bool_list`,
+    /// which composes `<bool as AtomKwarg<'_>>::project_at` per
+    /// item; the two gates on the same axis (scalar `enabled: bool`
+    /// vs. per-item `flags: Vec<bool>`) now speak the same typed
+    /// rejection vocabulary.
+    #[derive(DeriveTataraDomain, Serialize, Debug, PartialEq)]
+    #[tatara(keyword = "defvecflags")]
+    struct VecFlagsSpec {
+        flags: Vec<bool>,
+    }
+
+    #[test]
+    fn vec_bool_field_parses_all_bool_list_through_the_per_item_atom_gate() {
+        let forms = read(r"(defvecflags :flags (#t #f #t))").expect("reads");
+        let spec = VecFlagsSpec::compile_from_sexp(&forms[0])
+            .expect("all-bool per-item values must parse");
+        assert_eq!(spec.flags, vec![true, false, true]);
+    }
+
+    #[test]
+    fn vec_bool_field_rejects_per_item_non_bool_with_typed_shape_and_item_path() {
+        // The per-item bool-axis cousin of the scalar `enabled: bool`
+        // canonical rejection (`extract_bool` on `:enabled 1` naming
+        // `expected bool, got int`). Post-lift the failure carries
+        // the item index (1) alongside the same
+        // `ExpectedKwargShape::Bool` + `SexpShape::String` pair the
+        // scalar peer emits — authoring surfaces pattern-match on
+        // the SAME `LispError::TypeMismatch { form: Item {..},
+        // expected: Bool, got: String }` variant they already bind
+        // for the scalar bool gate, not on a serde substring.
+        let forms = read(r#"(defvecflags :flags (#t "yes" #f))"#).expect("reads");
+        let err = VecFlagsSpec::compile_from_sexp(&forms[0])
+            .expect_err("\"yes\" is not a bool and must not parse");
+        let LispError::TypeMismatch {
+            form,
+            expected,
+            got,
+        } = &err
+        else {
+            panic!("expected TypeMismatch (typed atom-family gate), got {err:?}");
+        };
+        assert_eq!(form, &KwargPath::item("flags", 1));
+        assert_eq!(*expected, ExpectedKwargShape::Bool);
+        assert_eq!(*got, SexpShape::String);
+        assert_eq!(
+            err.to_string(),
+            "compile error in :flags[1]: expected bool, got string",
+        );
+    }
+
     #[test]
     fn vec_f32_field_rejects_per_item_lossy_to_inf_with_typed_width_and_item_path() {
         // Float-axis peer of
@@ -5536,6 +5666,104 @@ mod tests {
         );
         assert!(msg.contains("expected string"), "got: {msg}");
         assert!(msg.contains("got int"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_bool_list_absent_kwarg_returns_empty_vec() {
+        // `:flags` absent — an absent list-typed kwarg is the empty
+        // list, never an error. Same posture `extract_list` gives every
+        // list-typed extractor (`extract_string_list`,
+        // `extract_narrowed_list`, `extract_vec_via_serde`).
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        assert!(extract_bool_list(&kw, "flags").unwrap().is_empty());
+    }
+
+    #[test]
+    fn extract_bool_list_returns_bools_when_all_items_are_bools() {
+        // Happy-path: `(list #t #f #t)` on the bool axis projects to
+        // `Vec<bool>` byte-identically to the per-item
+        // `<bool as AtomKwarg<'_>>::project` verdicts.
+        let args = kwargs_of("(_ :flags (#t #f #t))");
+        let kw = parse_kwargs(&args).unwrap();
+        assert_eq!(
+            extract_bool_list(&kw, "flags").unwrap(),
+            vec![true, false, true]
+        );
+    }
+
+    #[test]
+    fn extract_bool_list_type_err_on_scalar_names_got_bool() {
+        // `:flags #t` — list-typed kwarg given a scalar. The outer-
+        // shape gate rejects with `ExpectedKwargShape::List` (the same
+        // label the numeric-list peer `extract_narrowed_list` emits),
+        // and names the actual outer shape (`bool` in this case).
+        let args = kwargs_of("(_ :flags #t)");
+        let kw = parse_kwargs(&args).unwrap();
+        let msg = type_err_message(extract_bool_list(&kw, "flags").unwrap_err());
+        assert!(msg.contains("expected list"), "got: {msg}");
+        assert!(msg.contains("got bool"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_bool_list_type_err_on_non_bool_item_names_index_and_got_string() {
+        // `:flags (#t "yes" #f)` — outer is a list, the second item
+        // isn't a bool. Diagnostic names BOTH the item path
+        // (`:flags[1]`) and the narrower per-item expectation
+        // (`expected bool`, not the outer `expected list`) so authors
+        // see structurally where the failure is. Pre-lift this routed
+        // through `extract_vec_via_serde` and surfaced as a serde
+        // substring like `invalid type: string ..., expected a boolean`;
+        // post-lift it rides the typed atom-family gate
+        // `<bool as AtomKwarg<'_>>::project_at`, matching the shape
+        // its peer `extract_string_list` emits on the string axis
+        // byte-for-byte modulo axis identity.
+        let args = kwargs_of(r#"(_ :flags (#t "yes" #f))"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_bool_list(&kw, "flags").unwrap_err();
+        let msg = type_err_message(err);
+        assert!(
+            msg.contains(":flags[1]"),
+            "expected indexed item path, got: {msg}"
+        );
+        assert!(msg.contains("expected bool"), "got: {msg}");
+        assert!(msg.contains("got string"), "got: {msg}");
+
+        // Extractor identity — extract_bool_list's per-item rejection
+        // at a non-bool element MUST match the direct
+        // <bool as AtomKwarg>::project_at call at the same
+        // axis/key/idx byte-for-byte, so the atom-family shape gate
+        // does NOT drift between the two paths a bool-list caller can
+        // reach through.
+        let mixed_args = kwargs_of(r#"(_ :flags (#t "yes" #f))"#);
+        let mixed_kw = parse_kwargs(&mixed_args).unwrap();
+        let list_err = extract_bool_list(&mixed_kw, "flags").unwrap_err();
+        let direct_err = <bool as AtomKwarg<'_>>::project_at(
+            "flags",
+            1,
+            &Sexp::Atom(Atom::Str("yes".to_string())),
+        )
+        .unwrap_err();
+        match (&list_err, &direct_err) {
+            (
+                LispError::TypeMismatch {
+                    form: form_a,
+                    expected: exp_a,
+                    got: got_a,
+                },
+                LispError::TypeMismatch {
+                    form: form_b,
+                    expected: exp_b,
+                    got: got_b,
+                },
+            ) => {
+                assert_eq!(form_a, form_b, "path variant identity");
+                assert_eq!(exp_a, exp_b, "axis-typed SHAPE identity");
+                assert_eq!(*exp_a, ExpectedKwargShape::Bool);
+                assert_eq!(got_a, got_b, "actual-shape witness identity");
+            }
+            other => panic!("both routes must produce TypeMismatch, got {other:?}"),
+        }
     }
 
     #[test]

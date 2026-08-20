@@ -1248,6 +1248,25 @@ fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2
         Kind::OptionalBool => quote! {
             ::tatara_lisp::domain::extract_optional_bool(&kw, #key)?
         },
+        // `Vec<bool>` routes through the typed bool-list extractor
+        // (which decodes each element via the `<bool as AtomKwarg<'_>>::
+        // project_at` per-item atom-family shape gate) rather than
+        // through `extract_vec_via_serde`. Pre-lift `Vec<bool>` fell
+        // through to `Kind::VecDeserialize` — the universal
+        // `sexp_to_json` + `serde_json::from_value` bridge — so a
+        // per-item shape mismatch on `:flags (list #t "yes")` into a
+        // `Vec<bool>` field surfaced as a
+        // `KwargDeserialize { message: "invalid type: string \"yes\",
+        // expected a boolean at path .1" }` substring rather than as
+        // the typed
+        // `TypeMismatch { form: Item { key: "flags", idx: 1 },
+        // expected: Bool, got: String }` its SCALAR peer (`enabled:
+        // bool`) already emits at the atom shape gate; post-lift the
+        // two gates on the same axis speak the same typed rejection
+        // vocabulary.
+        Kind::VecBool => quote! {
+            ::tatara_lisp::domain::extract_bool_list(&kw, #key)?
+        },
         // Fall-through: anything with `serde::Deserialize` works via the
         // sexp_to_json bridge. Unlocks enums, nested structs, Vec<Struct>.
         // The boilerplate that used to live here (sexp_to_json +
@@ -1304,6 +1323,20 @@ enum Kind {
     VecFloat(&'static str),
     Bool,
     OptionalBool,
+    /// `Vec<bool>` — routes through
+    /// [`tatara_lisp::domain::extract_bool_list`], the typed
+    /// list-family peer of `extract_bool` on the atom-family
+    /// per-item shape gate ([`tatara_lisp::domain::AtomKwarg::
+    /// project_at`] on the `<bool>` axis). Pre-lift `Vec<bool>` fell
+    /// through to [`Self::VecDeserialize`] — the universal
+    /// `sexp_to_json` + `serde_json::from_value` bridge — so a
+    /// per-item non-bool element inside `:flags (list #t "yes")`
+    /// surfaced as a mystery serde substring diagnostic instead of
+    /// the typed
+    /// `LispError::TypeMismatch { form: Item { key, idx }, expected:
+    /// Bool, got: String }` variant its scalar peer (`enabled: bool`)
+    /// already emits at the atom shape gate.
+    VecBool,
     /// Fall-through: any type implementing `serde::Deserialize`.
     Deserialize,
     OptionalDeserialize,
@@ -1359,6 +1392,7 @@ fn classify_vec(last: &syn::PathSegment) -> Kind {
         Kind::String => Kind::VecString,
         Kind::Int(t) => Kind::VecInt(t),
         Kind::Float(t) => Kind::VecFloat(t),
+        Kind::Bool => Kind::VecBool,
         _ => Kind::VecDeserialize,
     }
 }
@@ -1864,23 +1898,50 @@ mod classify_tests {
     }
 
     #[test]
+    fn vec_of_bool_folds_into_kind_vec_bool() {
+        // `Vec<bool>` routes through `classify_vec`'s per-primitive
+        // sharpening arm to `Kind::VecBool` — the payload-free peer
+        // of `Kind::VecInt(_)` / `Kind::VecFloat(_)` on the
+        // non-narrowing bool axis (a bool has no "wider" `Sexp`
+        // return to narrow, so no width literal rides the payload;
+        // the atom projection IS already the field type). The
+        // emitted extractor is `extract_bool_list`, which decodes
+        // each element via `<bool as AtomKwarg<'_>>::project_at` —
+        // the atom-family per-item shape gate the string-list peer
+        // (`extract_string_list`) and the numeric-list peer
+        // (`extract_narrowed_list`'s per-item body) already bind
+        // through.
+        //
+        // Pre-lift `Vec<bool>` fell through to `Kind::VecDeserialize`
+        // (the universal `sexp_to_json` + serde bridge), so a per-
+        // item shape mismatch on `:flags (list #t "yes")` into a
+        // `Vec<bool>` field surfaced as a
+        // `KwargDeserialize { message: "invalid type: string \"yes\",
+        // expected a boolean at path .1" }` substring rather than as
+        // the typed
+        // `TypeMismatch { form: Item { key: "flags", idx: 1 },
+        // expected: Bool, got: String }` its scalar peer
+        // (`enabled: bool`) already emits; post-lift the two gates on
+        // the same axis speak the same typed rejection vocabulary. A
+        // regression that dropped `Vec<bool>` from `classify_vec`'s
+        // per-primitive routing (folding it back into
+        // `Kind::VecDeserialize`) would silently rewire every
+        // `Vec<bool>` field back to `extract_vec_via_serde` — the
+        // operator would see NO diagnostic drift at the derive site
+        // but the downstream per-item rejection would revert to the
+        // mystery serde substring shape.
+        assert!(matches!(classify(&parse_ty("Vec<bool>")), Kind::VecBool));
+    }
+
+    #[test]
     fn vec_of_non_narrowable_type_falls_through_to_kind_vec_deserialize() {
-        // The three non-primitive `Vec<T>` shapes still route through
+        // The two non-primitive `Vec<T>` shapes still route through
         // `classify_vec`'s catch-all arm to `Kind::VecDeserialize` —
         // the sexp_to_json + `serde_json::from_value` bridge that
         // unlocks nested-struct vecs, foreign-enum vecs, and nested
-        // vecs. `Vec<bool>` stays here too, since the derive has no
-        // per-item narrowed extractor for the bool axis (a bool has
-        // no "wider" `Sexp::as_bool` return the way `Sexp::as_int`
-        // narrows into u16 / i32 / etc. — the atom projection IS
-        // already the field type, so the `Kind::VecDeserialize`
-        // bridge's per-item shape gate suffices). Pin the residual
-        // fall-through: a regression that folded `Vec<MonitorSpec>`
-        // or `Vec<Vec<String>>` into a narrowed arm would fail here.
-        assert!(matches!(
-            classify(&parse_ty("Vec<bool>")),
-            Kind::VecDeserialize
-        ));
+        // vecs. Pin the residual fall-through: a regression that
+        // folded `Vec<MonitorSpec>` or `Vec<Vec<String>>` into a
+        // narrowed arm would fail here.
         assert!(matches!(
             classify(&parse_ty("Vec<MonitorSpec>")),
             Kind::VecDeserialize

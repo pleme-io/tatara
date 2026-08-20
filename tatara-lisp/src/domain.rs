@@ -1515,14 +1515,14 @@ where
 /// rust-level typed-entry gate for list-shaped kwargs, and naming its single
 /// skeleton lifts the gate from two-site duplication to one function the
 /// substrate's diagnostic promotions hang off of.
-fn extract_list<T, F>(
-    kw: &Kwargs<'_>,
+fn extract_list<'a, T, F>(
+    kw: &'a Kwargs<'a>,
     key: &str,
     list_shape: ExpectedKwargShape,
     mut item: F,
 ) -> Result<Vec<T>>
 where
-    F: FnMut(usize, &Sexp) -> Result<T>,
+    F: FnMut(usize, &'a Sexp) -> Result<T>,
 {
     let Some(v) = optional(kw, key) else {
         return Ok(Vec::new());
@@ -1869,6 +1869,158 @@ pub trait AtomKwarg<'a>: Sized {
     fn project_at(key: &str, idx: usize, sexp: &'a Sexp) -> Result<Self> {
         Self::project(sexp).ok_or_else(|| type_err_at(key, idx, Self::SHAPE, sexp))
     }
+
+    /// The owned counterpart of [`Self`] used as the element type when
+    /// this axis feeds into a list-family extractor's `Vec` return.
+    /// Bundled with [`Self::to_owned_item`] as the per-axis
+    /// borrow-to-owned lift that lets the list-family default
+    /// [`Self::extract_list_kwarg`] return `Vec<Self::Owned>` — an
+    /// owned collection whose element type does NOT thread the trait's
+    /// `'a` lifetime — even when `Self` itself is a borrow-off-Sexp
+    /// type (`&'a str`).
+    ///
+    /// For the three `'static`-`Self` axes (`bool` / `i64` / `f64`),
+    /// [`Self::Owned`] IS [`Self`] and [`Self::to_owned_item`] is the
+    /// identity — the trait default is a `no-op` copy. For the
+    /// borrow-off-Sexp `<&'a str>` axis, [`Self::Owned = String`]
+    /// and [`Self::to_owned_item`] is [`String::from`] — the lift
+    /// that erases the sexp-borrow lifetime so `Vec<String>` (the
+    /// owned collection every consumer of [`extract_string_list`]
+    /// binds to) can be returned from the trait default without
+    /// threading `'a` out through the return type.
+    ///
+    /// Peer to [`Self::SHAPE`] / [`Self::LIST_SHAPE`] on the axis-typed
+    /// rejection-label surface: `SHAPE` names the SCALAR-atom shape
+    /// this axis's extractors gate against, `LIST_SHAPE` names the
+    /// OUTER-LIST shape, [`Self::Owned`] names the OWNED-ELEMENT type
+    /// this axis's list-family return-shape adopts.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 (free middle —
+    /// the borrow-to-owned lift lives at ONE per-axis substrate
+    /// primitive, not restated at every list-extractor callsite; the
+    /// [`extract_string_list`] pre-lift inline `.map(String::from)`
+    /// closure fold at the per-item projection is now the axis's
+    /// [`Self::to_owned_item`] trait method, shared with every future
+    /// list-family caller through the trait default
+    /// [`Self::extract_list_kwarg`]). THEORY.md §VI.1 (generation
+    /// over composition — the borrow-to-owned lift recurs at TWO
+    /// list-family callsites past the ≥ 2 duplication threshold
+    /// ([`extract_string_list`]'s `.map(String::from)`, and
+    /// [`extract_bool_list`]'s identity noise on the `bool` axis
+    /// pre-lift — the LATTER inlines `<bool>::project_at` directly
+    /// rather than via `.map(id)`, but post-lift both take the SAME
+    /// [`Self::to_owned_item`] trait dispatch through the shared
+    /// list-family trait default, closing the pair at rustc time).
+    type Owned;
+
+    /// Lift [`Self`] into its owned counterpart [`Self::Owned`] —
+    /// identity on the three `'static`-`Self` axes (bool / i64 / f64),
+    /// [`String::from`] on the borrow-off-Sexp `<&'a str>` axis. The
+    /// per-axis borrow-to-owned lift shared through the list-family
+    /// trait default [`Self::extract_list_kwarg`] and its optional
+    /// peer [`Self::extract_optional_list_kwarg`].
+    ///
+    /// A future new atom-family axis (a hypothetical `Symbol<'a>`
+    /// primitive paired with an owned `SymbolBuf` counterpart) plugs
+    /// in via ONE additional [`Self::Owned = SymbolBuf`] / [`Self::to_owned_item`]
+    /// pair — the extractor-composition trait defaults inherit
+    /// mechanically without a per-axis list-extractor edit.
+    fn to_owned_item(self) -> Self::Owned;
+
+    /// Required list-family extractor — reads the kwarg at `key`,
+    /// gates the outer value's list-shape via [`Self::LIST_SHAPE`]
+    /// through the shared [`extract_list`] skeleton, and per-item
+    /// projects each element via [`Self::project_at`] lifted into
+    /// [`Self::to_owned_item`]. The list-family peer of
+    /// [`Self::extract_kwarg`] on the same per-axis
+    /// `(LIST_SHAPE, project_at, to_owned_item)` primitive triple.
+    ///
+    /// Where [`Self::extract_kwarg`] composes the `(SHAPE, project)`
+    /// scalar-family pair through the [`extract_atom`] outer skeleton,
+    /// [`Self::extract_list_kwarg`] composes the `(LIST_SHAPE,
+    /// project_at, to_owned_item)` list-family triple through the
+    /// [`extract_list`] outer skeleton. Both defaults live at ONE
+    /// per-axis trait dispatch site; the [`extract_string_list`] /
+    /// [`extract_bool_list`] free-function extractors reduce
+    /// post-lift to one-line delegates through this default, and a
+    /// hypothetical new atom-family axis (`Symbol` / `Duration`)
+    /// picks up its list-family extractor mechanically through the
+    /// SAME per-axis trait triple.
+    ///
+    /// Contract:
+    ///   1. Absent kwarg → `Ok(Vec::new())` — the [`extract_list`]
+    ///      absent-tolerant posture on every axis.
+    ///   2. Present-but-not-a-list kwarg (`:tags "solo"` /
+    ///      `:flags #t`) → `LispError::TypeMismatch { form:
+    ///      KwargPath::Named(key), expected: Self::LIST_SHAPE, got:
+    ///      SexpShape::<outer> }` — the axis-typed outer-shape
+    ///      rejection.
+    ///   3. Present list with a per-item shape mismatch (`:tags
+    ///      (list "a" 5)` / `:flags (list #t "yes")`) →
+    ///      `LispError::TypeMismatch { form: KwargPath::Item { key,
+    ///      idx }, expected: Self::SHAPE, got: SexpShape::<item> }`
+    ///      — the axis-typed per-item rejection through
+    ///      [`Self::project_at`]'s trait dispatch.
+    ///   4. All-items-project-successfully → `Ok(vec![
+    ///      Self::to_owned_item(item_0), Self::to_owned_item(item_1),
+    ///      ... ])` — an owned `Vec<Self::Owned>` with the sexp-
+    ///      borrow lifetime erased through [`Self::to_owned_item`].
+    ///
+    /// Provided as a trait default composing `(Self::LIST_SHAPE,
+    /// Self::project_at, Self::to_owned_item)` — per-atom impls do
+    /// not override this. A future diagnostic promotion at
+    /// [`extract_list`]'s outer-shape gate (a span, a suggested-value
+    /// hint on the outer rejection) flows through ONE trait default
+    /// into every atom-family list-family extractor with no per-caller
+    /// edit — the SAME property [`Self::extract_kwarg`] gives its four
+    /// scalar peers on the atom-family scalar surface.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry — the
+    /// list-family per-item shape gate IS the rust-level typed-entry
+    /// gate for list-typed atom-family kwargs, and the axis identity
+    /// rides `Self` through both the outer-shape [`Self::LIST_SHAPE`]
+    /// gate and the per-item [`Self::project_at`] gate). THEORY.md
+    /// §VI.1 (generation over composition — the list-family
+    /// composition `(LIST_SHAPE, project_at, to_owned_item)`
+    /// recurs at TWO free-function sites ([`extract_string_list`] /
+    /// [`extract_bool_list`]) past the ≥ 2 duplication threshold;
+    /// lifting it to ONE trait default closes them at rustc time).
+    /// THEORY.md §V.1 (knowable platform — every atom-family
+    /// list-family extractor's rejection variant now surfaces from
+    /// ONE per-axis trait dispatch site, so a future audit-trail
+    /// metric jointly labeled by "which axis" and "which gate fired"
+    /// binds mechanically without a per-extractor bifurcation).
+    fn extract_list_kwarg(kw: &'a Kwargs<'a>, key: &str) -> Result<Vec<Self::Owned>> {
+        extract_list(kw, key, Self::LIST_SHAPE, |idx, s| {
+            Self::project_at(key, idx, s).map(Self::to_owned_item)
+        })
+    }
+
+    /// `Option<Vec<Self::Owned>>` sibling of
+    /// [`Self::extract_list_kwarg`] — same per-axis dispatch shape,
+    /// absent kwarg short-circuits to `Ok(None)` via the shared
+    /// [`optional_from_required`] substrate primitive; present kwarg
+    /// delegates to [`Self::extract_list_kwarg`]. Peer to
+    /// [`Self::extract_optional_kwarg`] on the atom-family scalar
+    /// surface — both defaults ride the SAME
+    /// [`optional_from_required`] present-vs-absent bifurcation
+    /// primitive, differing only in which required-peer they
+    /// compose ([`Self::extract_kwarg`] vs.
+    /// [`Self::extract_list_kwarg`]).
+    ///
+    /// Post-lift the four free-function list-family peers
+    /// ([`extract_optional_string_list`] /
+    /// [`extract_optional_bool_list`]) reduce to one-line delegates
+    /// through this trait default. Distinguishes an ABSENT kwarg
+    /// (`Ok(None)`) from a PRESENT empty list
+    /// (`Ok(Some(Vec::new()))`) via the [`optional_from_required`]
+    /// bifurcation the eight sibling optional peers already share.
+    fn extract_optional_list_kwarg(
+        kw: &'a Kwargs<'a>,
+        key: &str,
+    ) -> Result<Option<Vec<Self::Owned>>> {
+        optional_from_required(kw, key, Self::extract_list_kwarg)
+    }
 }
 
 impl<'a> AtomKwarg<'a> for &'a str {
@@ -1887,8 +2039,23 @@ impl<'a> AtomKwarg<'a> for &'a str {
     /// [`ExpectedKwargShape::List`] on any reachable axis.
     const LIST_SHAPE: ExpectedKwargShape = ExpectedKwargShape::ListOfStrings;
 
+    /// String-axis borrow-to-owned lift — `Vec<String>` is the owned
+    /// collection every consumer of [`extract_string_list`] binds to,
+    /// but the per-item projection [`Self::project_at`] returns
+    /// `&'a str` borrowing off the sexp. [`String::from`] here erases
+    /// the sexp-borrow lifetime so the trait default
+    /// [`Self::extract_list_kwarg`] returns `Vec<String>` — the exact
+    /// return shape the pre-lift free-function `extract_string_list`
+    /// achieved through an inline `.map(String::from)` closure fold.
+    /// Post-lift the fold lives at ONE per-axis trait dispatch site.
+    type Owned = String;
+
     fn project(sexp: &'a Sexp) -> Option<Self> {
         sexp.as_string()
+    }
+
+    fn to_owned_item(self) -> Self::Owned {
+        Self::Owned::from(self)
     }
 }
 
@@ -1913,8 +2080,20 @@ impl<'a> AtomKwarg<'a> for bool {
     /// the two wide-numeric axes.
     const LIST_SHAPE: ExpectedKwargShape = ExpectedKwargShape::ListOfBools;
 
+    /// Bool-axis owned identity — `bool` is `Copy + 'static`, so the
+    /// borrow-to-owned lift is a no-op copy on the wide-int / wide-
+    /// float / bool axes. Sibling to the two `'static`-`Copy` numeric
+    /// axes' identity lifts (`<i64>::Owned = i64`,
+    /// `<f64>::Owned = f64`) and the borrow-off-Sexp string axis's
+    /// `<&'a str>::Owned = String` lift.
+    type Owned = bool;
+
     fn project(sexp: &'a Sexp) -> Option<Self> {
         sexp.as_bool()
+    }
+
+    fn to_owned_item(self) -> Self::Owned {
+        self
     }
 }
 
@@ -1954,8 +2133,19 @@ impl<'a> AtomKwarg<'a> for i64 {
     /// on the ambiguous trait default [`ExpectedKwargShape::List`].
     const LIST_SHAPE: ExpectedKwargShape = ExpectedKwargShape::ListOfInts;
 
+    /// Wide-int-axis owned identity — `i64` is `Copy + 'static`, so
+    /// the borrow-to-owned lift is a no-op copy. Sibling to the
+    /// wide-float axis's identity lift (`<f64>::Owned = f64`) and the
+    /// non-numeric axes' `<bool>::Owned = bool` /
+    /// `<&'a str>::Owned = String` peers.
+    type Owned = i64;
+
     fn project(sexp: &'a Sexp) -> Option<Self> {
         sexp.as_int()
+    }
+
+    fn to_owned_item(self) -> Self::Owned {
+        self
     }
 }
 
@@ -1987,8 +2177,21 @@ impl<'a> AtomKwarg<'a> for f64 {
     /// `<f64>` → `ListOfNumbers`.
     const LIST_SHAPE: ExpectedKwargShape = ExpectedKwargShape::ListOfNumbers;
 
+    /// Wide-float-axis owned identity — `f64` is `Copy + 'static`,
+    /// so the borrow-to-owned lift is a no-op copy. Peer to the
+    /// wide-int axis's `<i64>::Owned = i64` identity lift; every
+    /// numeric axis's owned-collection element type IS the wide
+    /// axis itself, so a `Vec<f64>` return from the trait default
+    /// `<f64>::extract_list_kwarg` is byte-identical to a
+    /// hand-written `Vec<f64>` collect.
+    type Owned = f64;
+
     fn project(sexp: &'a Sexp) -> Option<Self> {
         sexp.as_float()
+    }
+
+    fn to_owned_item(self) -> Self::Owned {
+        self
     }
 }
 
@@ -2005,10 +2208,19 @@ pub fn extract_optional_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Opti
     <&'a str as AtomKwarg<'a>>::extract_optional_kwarg(kw, key)
 }
 
-pub fn extract_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<String>> {
-    extract_list(kw, key, <&str as AtomKwarg<'_>>::LIST_SHAPE, |idx, s| {
-        <&str as AtomKwarg<'_>>::project_at(key, idx, s).map(String::from)
-    })
+/// Required `Vec<String>` list-typed kwarg — one-line delegate to
+/// `<&'a str as AtomKwarg<'a>>::extract_list_kwarg`, whose default
+/// composes `(<&'a str>::LIST_SHAPE, <&'a str>::project_at,
+/// <&'a str>::to_owned_item)` through [`extract_list`]. Pre-lift the
+/// composition lived inline as
+/// `extract_list(kw, key, <&str>::LIST_SHAPE, |idx, s| <&str>::
+/// project_at(key, idx, s).map(String::from))`; post-lift the
+/// `.map(String::from)` borrow-to-owned lift rides through
+/// `<&'a str as AtomKwarg<'a>>::to_owned_item` at ONE per-axis trait
+/// dispatch site, shared with every future list-family caller on the
+/// string axis through the trait default.
+pub fn extract_string_list<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Vec<String>> {
+    <&'a str as AtomKwarg<'a>>::extract_list_kwarg(kw, key)
 }
 
 /// `Option<Vec<String>>` sibling of [`extract_string_list`] — the
@@ -2080,8 +2292,11 @@ pub fn extract_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<String>> {
 /// surfaces the same pattern-matchable
 /// [`LispError::TypeMismatch`] variant every authoring surface (LSP,
 /// `tatara-check`, REPL) already binds to for the required peer).
-pub fn extract_optional_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Option<Vec<String>>> {
-    optional_from_required(kw, key, extract_string_list)
+pub fn extract_optional_string_list<'a>(
+    kw: &'a Kwargs<'a>,
+    key: &str,
+) -> Result<Option<Vec<String>>> {
+    <&'a str as AtomKwarg<'a>>::extract_optional_list_kwarg(kw, key)
 }
 
 /// Required integer kwarg — one-line delegate to `<i64 as
@@ -2954,10 +3169,8 @@ pub fn extract_optional_bool(kw: &Kwargs<'_>, key: &str) -> Result<Option<bool>>
 /// the same pattern-matchable [`LispError::TypeMismatch`] variant
 /// every authoring surface (LSP, `tatara-check`, REPL) already binds
 /// to for the scalar peer).
-pub fn extract_bool_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<bool>> {
-    extract_list(kw, key, <bool as AtomKwarg<'_>>::LIST_SHAPE, |idx, s| {
-        <bool as AtomKwarg<'_>>::project_at(key, idx, s)
-    })
+pub fn extract_bool_list<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Vec<bool>> {
+    <bool as AtomKwarg<'a>>::extract_list_kwarg(kw, key)
 }
 
 /// `Option<Vec<bool>>` sibling of [`extract_bool_list`] — the
@@ -3034,8 +3247,8 @@ pub fn extract_bool_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<bool>> {
 /// pattern-matchable [`LispError::TypeMismatch`] variant every
 /// authoring surface (LSP, `tatara-check`, REPL) already binds to
 /// for the required peer).
-pub fn extract_optional_bool_list(kw: &Kwargs<'_>, key: &str) -> Result<Option<Vec<bool>>> {
-    optional_from_required(kw, key, extract_bool_list)
+pub fn extract_optional_bool_list<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Option<Vec<bool>>> {
+    <bool as AtomKwarg<'a>>::extract_optional_list_kwarg(kw, key)
 }
 
 // ── Universal serde-Deserialize fallthrough (enums, nested structs, …) ──
@@ -5209,6 +5422,235 @@ mod tests {
             }
             other => panic!("expected TypeMismatch, got {other:?}"),
         }
+    }
+
+    /// The [`AtomKwarg::extract_list_kwarg`] /
+    /// [`AtomKwarg::extract_optional_list_kwarg`] trait defaults
+    /// compose the per-axis `(LIST_SHAPE, project_at, to_owned_item)`
+    /// primitive triple through the shared [`extract_list`] /
+    /// [`optional_from_required`] substrate skeletons. Post-lift the
+    /// two atom-family list-family free-function extractors
+    /// ([`extract_string_list`] on the `<&'a str>` axis,
+    /// [`extract_bool_list`] on the `<bool>` axis) reduce to one-line
+    /// delegates through the trait defaults, and the atom-family
+    /// list-family composition lives at ONE per-axis trait dispatch
+    /// site — the SAME property [`AtomKwarg::extract_kwarg`] gives its
+    /// four scalar peers on the atom-family scalar surface.
+    ///
+    /// Pin the byte-identity of every rejection variant flowing
+    /// through the trait dispatch against the pre-lift free-function
+    /// bytes, and pin the [`AtomKwarg::Owned`] / [`AtomKwarg::to_owned_item`]
+    /// per-axis borrow-to-owned lift identity at rustc time.
+    ///
+    /// A regression that silently swapped either the outer-shape
+    /// [`AtomKwarg::LIST_SHAPE`] dispatch or the per-item
+    /// [`AtomKwarg::project_at`] dispatch on either axis (a bool-axis
+    /// list extractor accidentally routing through
+    /// `<&str as AtomKwarg<'_>>::LIST_SHAPE = ListOfStrings`, letting
+    /// the operator see the wrong axis label on a scalar-not-a-list
+    /// rejection) surfaces here as a byte drift between the two
+    /// routes.
+    #[test]
+    fn atom_kwarg_extract_list_kwarg_composes_the_per_axis_triple_at_every_axis() {
+        // (1) Owned identity — the four per-axis borrow-to-owned
+        //     lifts at rustc time. `<&str>::Owned = String` (the
+        //     borrow-off-Sexp lift that erases the sexp-borrow
+        //     lifetime); `<bool>::Owned = bool`, `<i64>::Owned = i64`,
+        //     `<f64>::Owned = f64` (the `'static`-`Copy` identity
+        //     lifts). A regression that silently redefined any axis's
+        //     `Owned` fails to compile the enclosing const-shaped
+        //     assertion below.
+        let owned_bool_true: <bool as AtomKwarg<'_>>::Owned =
+            <bool as AtomKwarg<'_>>::to_owned_item(true);
+        let owned_bool_false: <bool as AtomKwarg<'_>>::Owned =
+            <bool as AtomKwarg<'_>>::to_owned_item(false);
+        assert!(owned_bool_true, "bool-axis identity lift on true");
+        assert!(!owned_bool_false, "bool-axis identity lift on false");
+        let owned_int: <i64 as AtomKwarg<'_>>::Owned = <i64 as AtomKwarg<'_>>::to_owned_item(42);
+        assert_eq!(owned_int, 42_i64);
+        let owned_float: <f64 as AtomKwarg<'_>>::Owned = <f64 as AtomKwarg<'_>>::to_owned_item(1.5);
+        assert!((owned_float - 1.5_f64).abs() < f64::EPSILON);
+        let owned_string: <&str as AtomKwarg<'_>>::Owned =
+            <&'_ str as AtomKwarg<'_>>::to_owned_item("hi");
+        assert_eq!(owned_string, String::from("hi"));
+
+        // (2) Happy-path trait-dispatch identity — the trait default's
+        //     `Vec<Self::Owned>` return matches the free-function
+        //     extractor's `Vec<String>` / `Vec<bool>` return
+        //     byte-for-byte at every axis.
+        let string_args = kwargs_of(r#"(_ :tags ("a" "b" "c"))"#);
+        let string_kw = parse_kwargs(&string_args).unwrap();
+        assert_eq!(
+            <&str as AtomKwarg<'_>>::extract_list_kwarg(&string_kw, "tags").unwrap(),
+            extract_string_list(&string_kw, "tags").unwrap(),
+        );
+        assert_eq!(
+            <&str as AtomKwarg<'_>>::extract_list_kwarg(&string_kw, "tags").unwrap(),
+            vec![String::from("a"), String::from("b"), String::from("c"),],
+        );
+
+        let bool_args = kwargs_of("(_ :flags (#t #f #t))");
+        let bool_kw = parse_kwargs(&bool_args).unwrap();
+        assert_eq!(
+            <bool as AtomKwarg<'_>>::extract_list_kwarg(&bool_kw, "flags").unwrap(),
+            extract_bool_list(&bool_kw, "flags").unwrap(),
+        );
+        assert_eq!(
+            <bool as AtomKwarg<'_>>::extract_list_kwarg(&bool_kw, "flags").unwrap(),
+            vec![true, false, true],
+        );
+
+        // (3) Outer-shape rejection identity — scalar-not-a-list
+        //     kwarg through the trait dispatch surfaces the SAME
+        //     axis-typed `ExpectedKwargShape` rejection its
+        //     free-function peer emits. The rejection routes through
+        //     the shared `extract_list` skeleton at ONE substrate
+        //     site.
+        let string_scalar = kwargs_of(r#"(_ :xs "solo")"#);
+        let string_scalar_kw = parse_kwargs(&string_scalar).unwrap();
+        let string_scalar_err =
+            <&str as AtomKwarg<'_>>::extract_list_kwarg(&string_scalar_kw, "xs").unwrap_err();
+        match string_scalar_err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(form, KwargPath::named("xs"));
+                assert_eq!(expected, ExpectedKwargShape::ListOfStrings);
+                assert_eq!(got, SexpShape::String);
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+
+        let bool_scalar = kwargs_of("(_ :flags #t)");
+        let bool_scalar_kw = parse_kwargs(&bool_scalar).unwrap();
+        let bool_scalar_err =
+            <bool as AtomKwarg<'_>>::extract_list_kwarg(&bool_scalar_kw, "flags").unwrap_err();
+        match bool_scalar_err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(form, KwargPath::named("flags"));
+                assert_eq!(expected, ExpectedKwargShape::ListOfBools);
+                assert_eq!(got, SexpShape::Bool);
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+
+        // (4) Per-item shape-gate identity — a present list with a
+        //     non-axis element rides `Self::project_at` through the
+        //     trait dispatch; the per-item rejection carries the
+        //     axis-typed `SHAPE` label + item-indexed KwargPath.
+        let mixed_string = kwargs_of(r#"(_ :tags ("a" 5 "c"))"#);
+        let mixed_string_kw = parse_kwargs(&mixed_string).unwrap();
+        let mixed_string_err =
+            <&str as AtomKwarg<'_>>::extract_list_kwarg(&mixed_string_kw, "tags").unwrap_err();
+        match mixed_string_err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(form, KwargPath::item("tags", 1));
+                assert_eq!(expected, ExpectedKwargShape::String);
+                assert_eq!(got, SexpShape::Int);
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+
+        let mixed_bool = kwargs_of(r#"(_ :flags (#t "yes" #f))"#);
+        let mixed_bool_kw = parse_kwargs(&mixed_bool).unwrap();
+        let mixed_bool_err =
+            <bool as AtomKwarg<'_>>::extract_list_kwarg(&mixed_bool_kw, "flags").unwrap_err();
+        match mixed_bool_err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(form, KwargPath::item("flags", 1));
+                assert_eq!(expected, ExpectedKwargShape::Bool);
+                assert_eq!(got, SexpShape::String);
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+
+        // (5) Absent-kwarg posture — trait default matches
+        //     [`extract_list`]'s absent-tolerant contract:
+        //     `Ok(Vec::new())` at every axis, byte-identical to the
+        //     free-function peer.
+        let absent_args = kwargs_of("(_ :other 1)");
+        let absent_kw = parse_kwargs(&absent_args).unwrap();
+        assert_eq!(
+            <&str as AtomKwarg<'_>>::extract_list_kwarg(&absent_kw, "tags").unwrap(),
+            Vec::<String>::new(),
+        );
+        assert_eq!(
+            <bool as AtomKwarg<'_>>::extract_list_kwarg(&absent_kw, "flags").unwrap(),
+            Vec::<bool>::new(),
+        );
+
+        // (6) Optional peer — present-vs-absent bifurcation through
+        //     [`optional_from_required`]. Absent → `Ok(None)`;
+        //     present-empty → `Ok(Some(Vec::new()))`. Byte-identical
+        //     to the free-function optional peer.
+        assert_eq!(
+            <&str as AtomKwarg<'_>>::extract_optional_list_kwarg(&absent_kw, "tags").unwrap(),
+            None,
+        );
+        assert_eq!(
+            <bool as AtomKwarg<'_>>::extract_optional_list_kwarg(&absent_kw, "flags").unwrap(),
+            None,
+        );
+        let present_empty_string = kwargs_of("(_ :tags ())");
+        let present_empty_string_kw = parse_kwargs(&present_empty_string).unwrap();
+        assert_eq!(
+            <&str as AtomKwarg<'_>>::extract_optional_list_kwarg(&present_empty_string_kw, "tags",)
+                .unwrap(),
+            Some(Vec::<String>::new()),
+        );
+        let present_empty_bool = kwargs_of("(_ :flags ())");
+        let present_empty_bool_kw = parse_kwargs(&present_empty_bool).unwrap();
+        assert_eq!(
+            <bool as AtomKwarg<'_>>::extract_optional_list_kwarg(&present_empty_bool_kw, "flags",)
+                .unwrap(),
+            Some(Vec::<bool>::new()),
+        );
+
+        // (7) Free-function delegate byte-identity — the four
+        //     public list-family free-function extractors reduce
+        //     post-lift to one-line delegates through the trait
+        //     defaults, so the SAME kwarg through EITHER route
+        //     produces byte-identical results (Ok and Err arms).
+        assert_eq!(
+            extract_string_list(&string_scalar_kw, "xs")
+                .unwrap_err()
+                .to_string(),
+            <&str as AtomKwarg<'_>>::extract_list_kwarg(&string_scalar_kw, "xs")
+                .unwrap_err()
+                .to_string(),
+        );
+        assert_eq!(
+            extract_bool_list(&bool_scalar_kw, "flags")
+                .unwrap_err()
+                .to_string(),
+            <bool as AtomKwarg<'_>>::extract_list_kwarg(&bool_scalar_kw, "flags")
+                .unwrap_err()
+                .to_string(),
+        );
+        assert_eq!(
+            extract_optional_string_list(&present_empty_string_kw, "tags").unwrap(),
+            <&str as AtomKwarg<'_>>::extract_optional_list_kwarg(&present_empty_string_kw, "tags",)
+                .unwrap(),
+        );
+        assert_eq!(
+            extract_optional_bool_list(&present_empty_bool_kw, "flags").unwrap(),
+            <bool as AtomKwarg<'_>>::extract_optional_list_kwarg(&present_empty_bool_kw, "flags",)
+                .unwrap(),
+        );
     }
 
     /// [`WideNumeric`] is a `for<'a> AtomKwarg<'a>` supertrait

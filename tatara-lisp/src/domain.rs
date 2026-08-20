@@ -1404,20 +1404,36 @@ pub fn extract_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<String>> {
     })
 }
 
+/// Required integer kwarg — one-line delegate to `<i64 as
+/// WideNumeric>::extract_kwarg`, whose default composes
+/// `(<i64>::SHAPE, <i64>::as_wide)` through [`extract_atom`]. The
+/// axis identity rides the `<i64>` type parameter through ONE trait
+/// dispatch; a regression that silently swapped the axis (an
+/// int-axis extractor accidentally routing through
+/// `ExpectedKwargShape::Number` / `Sexp::as_float`) cannot survive
+/// the trait dispatch — the associated const's type + the impl's
+/// return type both pin the axis at rustc time.
 pub fn extract_int(kw: &Kwargs<'_>, key: &str) -> Result<i64> {
-    extract_atom(kw, key, ExpectedKwargShape::Int, Sexp::as_int)
+    <i64 as WideNumeric>::extract_kwarg(kw, key)
 }
 
+/// `Option` sibling of [`extract_int`] — one-line delegate to
+/// `<i64 as WideNumeric>::extract_optional_kwarg`.
 pub fn extract_optional_int(kw: &Kwargs<'_>, key: &str) -> Result<Option<i64>> {
-    extract_optional_atom(kw, key, ExpectedKwargShape::Int, Sexp::as_int)
+    <i64 as WideNumeric>::extract_optional_kwarg(kw, key)
 }
 
+/// Float-axis sibling of [`extract_int`] — one-line delegate to
+/// `<f64 as WideNumeric>::extract_kwarg`, whose default composes
+/// `(<f64>::SHAPE, <f64>::as_wide)` through [`extract_atom`].
 pub fn extract_float(kw: &Kwargs<'_>, key: &str) -> Result<f64> {
-    extract_atom(kw, key, ExpectedKwargShape::Number, Sexp::as_float)
+    <f64 as WideNumeric>::extract_kwarg(kw, key)
 }
 
+/// `Option` sibling of [`extract_float`] — one-line delegate to
+/// `<f64 as WideNumeric>::extract_optional_kwarg`.
 pub fn extract_optional_float(kw: &Kwargs<'_>, key: &str) -> Result<Option<f64>> {
-    extract_optional_atom(kw, key, ExpectedKwargShape::Number, Sexp::as_float)
+    <f64 as WideNumeric>::extract_optional_kwarg(kw, key)
 }
 
 // ── The narrowing axis: a wide reader value → the field's Rust width ──
@@ -1579,6 +1595,49 @@ impl NarrowNumeric<f64> for f32 {
 /// `Kind::VecFloat` arms exist) picks up the trait dispatch
 /// mechanically with no new per-site literal-constructor call.
 pub trait WideNumeric: Copy {
+    /// The axis's typed [`ExpectedKwargShape`] — the rejection label
+    /// the wide-axis kwarg gate quotes on a type mismatch, dispatched
+    /// on the wide type itself rather than through a per-site
+    /// hand-written [`ExpectedKwargShape`] constant. Post-lift the
+    /// pre-existing `extract_int` (`ExpectedKwargShape::Int`) and
+    /// `extract_float` (`ExpectedKwargShape::Number`) name the axis
+    /// exactly once through the trait dispatch: `<i64 as
+    /// WideNumeric>::SHAPE` IS `ExpectedKwargShape::Int`; `<f64 as
+    /// WideNumeric>::SHAPE` IS `ExpectedKwargShape::Number`. A
+    /// regression that swapped one axis's rejection label (an int
+    /// axis silently taking the `Number` shape and letting float
+    /// literals slide past on integer-typed fields) cannot survive
+    /// the trait dispatch — the associated const's type pins the
+    /// axis at rustc time.
+    const SHAPE: ExpectedKwargShape;
+
+    /// The axis's per-[`Sexp`] atom projection — the SAME
+    /// `Option<Self>` a hand-written [`extract_atom`] call would
+    /// pass as its `project` function, dispatched on the wide type
+    /// itself rather than through a per-site `Sexp::as_int` /
+    /// `Sexp::as_float` reference. Post-lift the two impls bind
+    /// `<i64 as WideNumeric>::as_wide` to [`Sexp::as_int`] and
+    /// `<f64 as WideNumeric>::as_wide` to [`Sexp::as_float`], and
+    /// the trait's default [`Self::extract_kwarg`] /
+    /// [`Self::extract_optional_kwarg`] compose `(Self::SHAPE,
+    /// Self::as_wide)` through the shared [`extract_atom`] /
+    /// [`extract_optional_atom`] atom-family skeletons. A regression
+    /// that swapped the axis's projection (an int axis silently
+    /// reading `Sexp::as_float`, so a Lisp `:port 8080.5` would
+    /// truncate through `f64 as i64` rather than fail the outer
+    /// `Int` gate) cannot survive the trait dispatch — the impl's
+    /// return type pins the axis at rustc time.
+    ///
+    /// This is the PER-ELEMENT primitive a future
+    /// `extract_narrowed_list<W, T>` binds directly, without going
+    /// through the kwarg extractor — the atom projection lifted out
+    /// of `extract_int` / `extract_float` so a per-item narrowing
+    /// walk (Vec of narrowed numerics, once the derive's
+    /// `Kind::VecInt` / `Kind::VecFloat` arms exist) can call
+    /// `W::as_wide(sexp).ok_or_else(|| type_err_at(key, idx,
+    /// W::SHAPE, sexp))` uniformly at both axes.
+    fn as_wide(sexp: &Sexp) -> Option<Self>;
+
     /// This wide value's typed lift into [`NumericLiteral`] — the
     /// per-axis variant the operator-facing rejection quotes.
     fn as_literal(self) -> NumericLiteral;
@@ -1598,38 +1657,48 @@ pub trait WideNumeric: Copy {
     /// letting integer-typed fields silently accept floats) cannot
     /// survive the trait dispatch — the impl's return type pins the
     /// axis at rustc time.
-    fn extract_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Self>;
+    ///
+    /// Provided as a trait default composing `(Self::SHAPE,
+    /// Self::as_wide)` through the shared [`extract_atom`]
+    /// skeleton; per-axis impls no longer override this — the
+    /// axis-typed rejection label and per-atom projection ARE the
+    /// two per-axis primitives, and the extractor is their
+    /// mechanical composition.
+    fn extract_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Self> {
+        extract_atom(kw, key, Self::SHAPE, Self::as_wide)
+    }
 
     /// The `Option` sibling of [`WideNumeric::extract_kwarg`] — same
     /// per-axis dispatch shape, absent kwarg returns `Ok(None)`.
-    fn extract_optional_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Option<Self>>;
+    /// Provided as a trait default composing `(Self::SHAPE,
+    /// Self::as_wide)` through the shared [`extract_optional_atom`]
+    /// skeleton on the same footing as [`Self::extract_kwarg`].
+    fn extract_optional_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Option<Self>> {
+        extract_optional_atom(kw, key, Self::SHAPE, Self::as_wide)
+    }
 }
 
 impl WideNumeric for i64 {
+    const SHAPE: ExpectedKwargShape = ExpectedKwargShape::Int;
+
+    fn as_wide(sexp: &Sexp) -> Option<Self> {
+        sexp.as_int()
+    }
+
     fn as_literal(self) -> NumericLiteral {
         NumericLiteral::Int(self)
-    }
-
-    fn extract_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Self> {
-        extract_int(kw, key)
-    }
-
-    fn extract_optional_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Option<Self>> {
-        extract_optional_int(kw, key)
     }
 }
 
 impl WideNumeric for f64 {
+    const SHAPE: ExpectedKwargShape = ExpectedKwargShape::Number;
+
+    fn as_wide(sexp: &Sexp) -> Option<Self> {
+        sexp.as_float()
+    }
+
     fn as_literal(self) -> NumericLiteral {
         NumericLiteral::Float(self)
-    }
-
-    fn extract_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Self> {
-        extract_float(kw, key)
-    }
-
-    fn extract_optional_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Option<Self>> {
-        extract_optional_float(kw, key)
     }
 }
 
@@ -2598,6 +2667,171 @@ mod tests {
         assert!(
             matches!(1.0e300_f64.as_literal(), NumericLiteral::Float(x) if (x - 1.0e300).abs() < f64::EPSILON),
             "the wide axis lift must echo the author's own literal, unchanged",
+        );
+    }
+
+    /// `WideNumeric::SHAPE` + `WideNumeric::as_wide` are the TWO
+    /// per-axis primitives the trait's default [`WideNumeric::
+    /// extract_kwarg`] / [`WideNumeric::extract_optional_kwarg`]
+    /// compose through the shared [`extract_atom`] /
+    /// [`extract_optional_atom`] atom-family skeletons. Pre-lift each
+    /// axis's `(ExpectedKwargShape, Sexp::as_X)` pair lived in a
+    /// hand-written `extract_int` / `extract_float` function body;
+    /// post-lift the pair is an associated const + an associated
+    /// function on the wide type itself, so the axis identity rides
+    /// ONE trait dispatch and a regression that silently swapped one
+    /// axis's rejection label (`ExpectedKwargShape::Int` → `Number`)
+    /// or one axis's atom projection (`Sexp::as_int` → `Sexp::as_
+    /// float`) surfaces at rustc time as an impl-return / const-type
+    /// mismatch rather than as a silent runtime drift. Pin both axes:
+    /// (1) the axis-typed `SHAPE` per wide type (`Int` on `<i64>`,
+    /// `Number` on `<f64>`), (2) the per-atom `as_wide` projection
+    /// through a representative int atom, a representative float atom
+    /// (which the int axis rejects and the float axis accepts, per
+    /// `Sexp::as_int` / `Sexp::as_float` semantics), and a type-
+    /// mismatched bool atom (which BOTH axes reject as `None`,
+    /// exactly the case the outer atom-family skeleton lifts into a
+    /// `TypeMismatch { expected: Self::SHAPE }` rejection).
+    ///
+    /// This test also pins the PER-ELEMENT primitive a future
+    /// `extract_narrowed_list<W, T>` binds — the atom projection
+    /// lifted out of the kwarg extractor so a per-item narrowing
+    /// walk (Vec of narrowed numerics) can call `W::as_wide` on
+    /// each `Sexp` element directly, without threading it through
+    /// the per-kwarg outer skeleton.
+    #[test]
+    fn wide_numeric_shape_and_as_wide_are_the_two_per_axis_primitives_the_extractor_default_composes(
+    ) {
+        // (1) SHAPE per axis — the associated const's type pins the
+        //     axis-typed rejection label at rustc time; a regression
+        //     that silently swapped `Int` and `Number` would fail
+        //     to compile the impl's const clause.
+        assert_eq!(<i64 as WideNumeric>::SHAPE, ExpectedKwargShape::Int);
+        assert_eq!(<f64 as WideNumeric>::SHAPE, ExpectedKwargShape::Number);
+
+        // (2) as_wide per axis — the per-atom projection lifted out
+        //     of `extract_int` / `extract_float` bodies so the same
+        //     projection is reusable per-element for a future
+        //     `extract_narrowed_list<W, T>`.
+        let int_atom = Sexp::Atom(Atom::Int(8080));
+        let float_atom = Sexp::Atom(Atom::Float(1.5));
+        let bool_atom = Sexp::Atom(Atom::Bool(false));
+
+        // Int axis: accepts an int atom byte-for-byte identical to
+        // `Sexp::as_int`; rejects the float atom (an int-typed field
+        // must not silently truncate `1.5` — the outer skeleton
+        // lifts this `None` into a `TypeMismatch { expected: Int }`
+        // rejection with the caller's kwarg path); rejects the bool
+        // atom.
+        assert_eq!(<i64 as WideNumeric>::as_wide(&int_atom), Some(8080_i64));
+        assert_eq!(<i64 as WideNumeric>::as_wide(&int_atom), int_atom.as_int());
+        assert_eq!(<i64 as WideNumeric>::as_wide(&float_atom), None);
+        assert_eq!(<i64 as WideNumeric>::as_wide(&bool_atom), None);
+
+        // Float axis: accepts both a float atom AND an int atom
+        // byte-for-byte identical to `Sexp::as_float` (the `Number`
+        // shape is the union of int + float atoms — a `:threshold 1`
+        // field must accept both `1` and `1.0` per the pre-existing
+        // `Sexp::as_float` contract); rejects the bool atom.
+        let read_float = <f64 as WideNumeric>::as_wide(&float_atom).expect("float atom reads");
+        assert!((read_float - 1.5_f64).abs() < f64::EPSILON);
+        let read_int_as_float = <f64 as WideNumeric>::as_wide(&int_atom)
+            .expect("int atom widens through Sexp::as_float");
+        assert!((read_int_as_float - 8080.0_f64).abs() < f64::EPSILON);
+        assert_eq!(
+            <f64 as WideNumeric>::as_wide(&float_atom),
+            float_atom.as_float()
+        );
+        assert_eq!(
+            <f64 as WideNumeric>::as_wide(&int_atom),
+            int_atom.as_float()
+        );
+        assert_eq!(<f64 as WideNumeric>::as_wide(&bool_atom), None);
+    }
+
+    /// The four public `extract_int` / `extract_optional_int` /
+    /// `extract_float` / `extract_optional_float` extractors are now
+    /// one-line delegates to the [`WideNumeric`] trait dispatch, so
+    /// their verdicts MUST be byte-identical to the trait-method call
+    /// they delegate to on every input (TOTAL, TYPE-MISMATCH with the
+    /// same axis-typed `ExpectedKwargShape`, ABSENT). Pin the
+    /// delegation identity at the operator-visible level: for every
+    /// input each function accepts / rejects, the corresponding trait
+    /// method must produce the SAME `Ok` value or the SAME
+    /// `LispError::TypeMismatch` variant with the SAME
+    /// `ExpectedKwargShape`. A regression that silently swapped one
+    /// delegate's axis (`extract_int` accidentally routing through
+    /// `<f64>::extract_kwarg`, so `:port "seven"` failed with the
+    /// `Number` rejection label instead of `Int`) surfaces here as
+    /// an axis-typed identity mismatch, not as a silent drift.
+    #[test]
+    fn extract_int_and_extract_float_delegate_to_the_wide_numeric_trait_dispatch() {
+        // TOTAL — every axis on a matching literal.
+        let int_args = kwargs_of("(_ :port 8080)");
+        let int_kw = parse_kwargs(&int_args).unwrap();
+        assert_eq!(
+            extract_int(&int_kw, "port").unwrap(),
+            <i64 as WideNumeric>::extract_kwarg(&int_kw, "port").unwrap(),
+        );
+        assert_eq!(
+            extract_optional_int(&int_kw, "port").unwrap(),
+            <i64 as WideNumeric>::extract_optional_kwarg(&int_kw, "port").unwrap(),
+        );
+
+        let float_args = kwargs_of("(_ :scale 1.5)");
+        let float_kw = parse_kwargs(&float_args).unwrap();
+        let via_delegate = extract_float(&float_kw, "scale").unwrap();
+        let via_trait = <f64 as WideNumeric>::extract_kwarg(&float_kw, "scale").unwrap();
+        assert!((via_delegate - via_trait).abs() < f64::EPSILON);
+        let via_delegate_opt = extract_optional_float(&float_kw, "scale").unwrap();
+        let via_trait_opt =
+            <f64 as WideNumeric>::extract_optional_kwarg(&float_kw, "scale").unwrap();
+        assert!(
+            matches!((via_delegate_opt, via_trait_opt), (Some(a), Some(b)) if (a - b).abs() < f64::EPSILON),
+        );
+
+        // TYPE-MISMATCH — the delegate and the trait method both
+        // fail with the SAME axis-typed `ExpectedKwargShape`.
+        let bool_args = kwargs_of("(_ :n #f)");
+        let bool_kw = parse_kwargs(&bool_args).unwrap();
+
+        let int_delegate_err = extract_int(&bool_kw, "n").unwrap_err();
+        let int_trait_err = <i64 as WideNumeric>::extract_kwarg(&bool_kw, "n").unwrap_err();
+        let expected_from_delegate = match &int_delegate_err {
+            LispError::TypeMismatch { expected, .. } => *expected,
+            other => panic!("expected TypeMismatch on int delegate, got {other:?}"),
+        };
+        let expected_from_trait = match &int_trait_err {
+            LispError::TypeMismatch { expected, .. } => *expected,
+            other => panic!("expected TypeMismatch on int trait, got {other:?}"),
+        };
+        assert_eq!(expected_from_delegate, ExpectedKwargShape::Int);
+        assert_eq!(expected_from_delegate, expected_from_trait);
+
+        let float_delegate_err = extract_float(&bool_kw, "n").unwrap_err();
+        let float_trait_err = <f64 as WideNumeric>::extract_kwarg(&bool_kw, "n").unwrap_err();
+        let expected_from_delegate = match &float_delegate_err {
+            LispError::TypeMismatch { expected, .. } => *expected,
+            other => panic!("expected TypeMismatch on float delegate, got {other:?}"),
+        };
+        let expected_from_trait = match &float_trait_err {
+            LispError::TypeMismatch { expected, .. } => *expected,
+            other => panic!("expected TypeMismatch on float trait, got {other:?}"),
+        };
+        assert_eq!(expected_from_delegate, ExpectedKwargShape::Number);
+        assert_eq!(expected_from_delegate, expected_from_trait);
+
+        // ABSENT — the optional delegates short-circuit to the same
+        // `Ok(None)` as the trait's optional method.
+        let absent_args = kwargs_of("(_ :other 1)");
+        let absent_kw = parse_kwargs(&absent_args).unwrap();
+        assert_eq!(
+            extract_optional_int(&absent_kw, "missing").unwrap(),
+            <i64 as WideNumeric>::extract_optional_kwarg(&absent_kw, "missing").unwrap(),
+        );
+        assert_eq!(
+            extract_optional_float(&absent_kw, "missing").unwrap(),
+            <f64 as WideNumeric>::extract_optional_kwarg(&absent_kw, "missing").unwrap(),
         );
     }
 

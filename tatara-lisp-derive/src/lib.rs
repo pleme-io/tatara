@@ -1100,6 +1100,91 @@ fn has_serde_default(field: &syn::Field) -> bool {
     find_named_sub_key(&field.attrs, "serde", "default", |_meta| Ok(())).is_some()
 }
 
+/// The SIX numeric-narrowed extractor arms in [`extractor_for`] —
+/// `Kind::Int(_)`, `Kind::OptionalInt(_)`, `Kind::VecInt(_)`,
+/// `Kind::Float(_)`, `Kind::OptionalFloat(_)`, `Kind::VecFloat(_)`
+/// — each emit the SAME two-primitive composition:
+///
+/// ```ignore
+/// let narrowed: TokenStream2 = rust_ty.parse().unwrap();
+/// quote! {
+///     ::tatara_lisp::domain::<extractor>::<#narrowed>(&kw, #key)?
+/// }
+/// ```
+///
+/// where `<extractor>` is one of six axis-mode-suffixed function
+/// names in `tatara_lisp::domain` (`extract_int_narrowed` /
+/// `extract_optional_int_narrowed` / `extract_int_list_narrowed`
+/// on the int axis, and their `float` peers). Pre-lift the six
+/// arms each hand-wrote the `rust_ty.parse().unwrap() → quote! {
+/// ::tatara_lisp::domain::<name>::<#narrowed>(...) }` scaffold
+/// with only the extractor name varying between arms — a duplicated
+/// two-step (parse the payload as a TURBOFISH, wrap it in the
+/// axis-mode-specific extractor call) that recurred at exactly the
+/// PRIME-DIRECTIVE ≥2 threshold (three times over) at ONE derive
+/// call site.
+///
+/// Post-lift the scaffold lives here at ONE substrate entry: the
+/// helper parses the [`Kind`] payload's width literal (`"u16"`,
+/// `"f32"`, `"usize"`, …) as a `TokenStream2` TURBOFISH, resolves
+/// the extractor `Ident` at the derive's call-site span (matching
+/// the `Ident::new` discipline the peer `via_ident` /
+/// `unknown_ident` resolvers on line 185 already use), and emits
+/// the fully-qualified `::tatara_lisp::domain::<extractor>::<T>(
+/// &kw, #key)?` call the six arms all share. Each of the six
+/// numeric-narrowed arms is now a ONE-LINE delegate onto this
+/// helper.
+///
+/// The `extractor` parameter is a `&'static str` — the ONE
+/// per-arm axis-mode identity — chosen for two reasons:
+///
+/// 1. it composes byte-for-byte with the `#[static]`-lifetime
+///    `Kind::Int(&'static str)` / `Kind::VecInt(&'static str)` /
+///    etc. payload's own `'static` lifetime origin, so the six
+///    call sites don't need to `.to_string()` anything to feed
+///    the helper;
+/// 2. the string identity (six known values —
+///    `extract_int_narrowed` / `extract_optional_int_narrowed` /
+///    `extract_int_list_narrowed` / `extract_float_narrowed` /
+///    `extract_optional_float_narrowed` /
+///    `extract_float_list_narrowed`) is pinned per-arm at the
+///    derive's `extractor_for` call site, so a regression that
+///    silently swapped ONE arm's extractor name would surface at
+///    the six-arm-labeled sibling test in
+///    `narrowed_extractor_call_tests` below rather than as silent
+///    drift at every downstream implementor with a field of that
+///    (axis, mode) shape.
+///
+/// Future structural promotion of the emitted call (a caller-supplied
+/// diagnostic span, a `?`-suppressed variant that plumbs the
+/// axis-typed rejection through a `Result` chain rather than a `?`,
+/// or an extension of the six-name set with a new axis or mode) lands
+/// at ONE substrate primitive here — the six per-Kind arms and every
+/// future new numeric-narrowed arm pick up the upgrade mechanically,
+/// with no per-arm hand-edit. Same property [`extract_atom`] /
+/// [`extract_optional_atom`] / [`extract_list`] give the atom-family
+/// / list-family primitives on the `tatara_lisp::domain` side.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition;
+/// the (parse-payload-as-turbofish, wrap-in-axis-mode-extractor-call)
+/// two-step recurred at the six axis-mode arms (well past the
+/// PRIME-DIRECTIVE ≥2 trigger) and is lifted to one owner here,
+/// exactly as the atom skeleton was lifted on the domain side.
+/// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+/// six arms now compose structurally through ONE helper, so a future
+/// third numeric axis or a fourth mode lands as ONE new one-line
+/// delegate at the [`extractor_for`] match plus a new `&'static str`
+/// axis-mode extractor name flowed through the same helper — the
+/// derive's numeric-narrowing emission surface stays at ONE substrate
+/// primitive.
+fn narrowed_extractor_call(extractor: &'static str, rust_ty: &str, key: &str) -> TokenStream2 {
+    let narrowed: TokenStream2 = rust_ty.parse().unwrap();
+    let extractor = Ident::new(extractor, proc_macro2::Span::call_site());
+    quote! {
+        ::tatara_lisp::domain::#extractor::<#narrowed>(&kw, #key)?
+    }
+}
+
 fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2, String> {
     let kind = classify(ty);
     let base = match kind {
@@ -1112,93 +1197,50 @@ fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2
         Kind::VecString => quote! {
             ::tatara_lisp::domain::extract_string_list(&kw, #key)?
         },
-        // ── Vec<T> numeric-narrowed arms ─────────────────────────
+        // ── The six numeric-narrowed arms: NARROWED, never `as`-cast ──
         //
-        // Pre-lift `Vec<u16>` / `Vec<i32>` / `Vec<f32>` / etc. all
-        // fell through `classify_vec`'s catch-all to
-        // `Kind::VecDeserialize` — the universal `sexp_to_json` +
-        // `serde_json::from_value` bridge. On a per-item
-        // out-of-range value inside `:ports (list 80 70000)` the
-        // rejection surfaced as `LispError::KwargDeserialize
-        // { message: "invalid value: integer 70000, expected u16" }`
-        // — a substring the operator had to parse, structurally
-        // distinct from the typed
-        // `LispError::KwargOutOfRange { target: U16, value:
-        // Int(70000), .. }` its SCALAR peer (`port: u16`)
-        // already emits. The two gates on the same numeric width
-        // spoke two different rejection vocabularies.
+        // Pre-lift each of the six arms (three per axis: scalar /
+        // optional / list) hand-wrote the two-step (parse the
+        // payload's width literal as a turbofish, wrap it in the
+        // axis-mode-specific extractor call) at six sites in
+        // this match. Post-lift they collapse to one-line delegates
+        // onto [`narrowed_extractor_call`], which owns the shared
+        // scaffold at ONE substrate primitive — see its docstring
+        // for the load-bearing invariants.
         //
-        // Post-lift the two arms route through the axis-typed
-        // `extract_int_list_narrowed::<T>` /
-        // `extract_float_list_narrowed::<T>` primitives in
-        // `tatara_lisp::domain`. The rejection shape on a per-item
-        // narrowing failure now matches the scalar peer byte-for-
-        // byte modulo the `KwargPath::Item { key, idx }` →
-        // `KwargPath::Named(key)` per-path shift, and the width
-        // identity rides the TURBOFISH exactly once at emit — so
-        // the diagnostic's `target` cannot drift from the
-        // element's Rust type. Same discipline the scalar
-        // `Kind::Int(_)` / `Kind::Float(_)` arms above already
-        // give: this derive contains no `as` cast on any numeric
-        // path (scalar or list) and never names the width by
-        // string literal.
-        Kind::VecInt(rust_ty) => {
-            let narrowed: TokenStream2 = rust_ty.parse().unwrap();
-            quote! {
-                ::tatara_lisp::domain::extract_int_list_narrowed::<#narrowed>(&kw, #key)?
-            }
-        }
-        Kind::VecFloat(rust_ty) => {
-            let narrowed: TokenStream2 = rust_ty.parse().unwrap();
-            quote! {
-                ::tatara_lisp::domain::extract_float_list_narrowed::<#narrowed>(&kw, #key)?
-            }
-        }
-        // ── The four numeric arms: NARROWED, never `as`-cast ──
-        //
-        // These four used to emit the reader's wide value followed by a
-        // raw Rust `as` downcast — `extract_int(&kw, "port")? as u32`.
-        // `as` is total by truncating, so `:port 4294967296` landed as
-        // `0` and `:port -1` as `4294967295`, in the struct, silently,
-        // with nothing red anywhere. The author read back a number they
-        // never wrote.
-        //
-        // The width now rides the TURBOFISH into
+        // The scalar-mode axis matters here: the pre-lift emitted
+        // code for `Kind::Int(_)` used to end with a raw Rust `as`
+        // downcast — `extract_int(&kw, "port")? as u32`. `as` is
+        // TOTAL by truncating, so `:port 4294967296` landed as `0`
+        // and `:port -1` as `4294967295`, in the struct, silently,
+        // with nothing red anywhere. The author read back a number
+        // they never wrote. The width now rides the TURBOFISH into
         // `tatara_lisp::domain`'s `NarrowNumeric` projection, which
         // returns `LispError::KwargOutOfRange` for a value the field
         // cannot hold. Two consequences worth naming: this derive no
-        // longer contains the word `as` on any numeric path (there is
-        // no truncation left to regress), and the emitted code names
-        // the width exactly ONCE — as a type — so the diagnostic's
-        // `target` cannot drift from the field's actual Rust type.
-        //
-        // `rust_ty` is still the `Kind::Int` / `Kind::Float` payload,
-        // now spliced as the generic argument rather than as a cast
-        // target; the `classify` unit pins on those payloads keep
-        // their meaning unchanged.
-        Kind::Int(rust_ty) => {
-            let narrowed: TokenStream2 = rust_ty.parse().unwrap();
-            quote! {
-                ::tatara_lisp::domain::extract_int_narrowed::<#narrowed>(&kw, #key)?
-            }
+        // longer contains the word `as` on any numeric path (there
+        // is no truncation left to regress), and the emitted code
+        // names the width exactly ONCE — as a type — so the
+        // diagnostic's `target` cannot drift from the field's actual
+        // Rust type. The list-mode arms give the peer promise on the
+        // per-item path (`extract_int_list_narrowed::<u16>` rejects
+        // per-item out-of-range values with the same typed
+        // `LispError::KwargOutOfRange { form: Item { key, idx },
+        // target: U16, .. }` variant its scalar peer emits) — see
+        // the `vec_u16_field_rejects_per_item_out_of_range_with_
+        // typed_width_and_item_path` test in `tatara-lisp/src/
+        // domain.rs` for the end-to-end pin.
+        Kind::VecInt(rust_ty) => narrowed_extractor_call("extract_int_list_narrowed", rust_ty, key),
+        Kind::VecFloat(rust_ty) => {
+            narrowed_extractor_call("extract_float_list_narrowed", rust_ty, key)
         }
+        Kind::Int(rust_ty) => narrowed_extractor_call("extract_int_narrowed", rust_ty, key),
         Kind::OptionalInt(rust_ty) => {
-            let narrowed: TokenStream2 = rust_ty.parse().unwrap();
-            quote! {
-                ::tatara_lisp::domain::extract_optional_int_narrowed::<#narrowed>(&kw, #key)?
-            }
+            narrowed_extractor_call("extract_optional_int_narrowed", rust_ty, key)
         }
-        Kind::Float(rust_ty) => {
-            let narrowed: TokenStream2 = rust_ty.parse().unwrap();
-            quote! {
-                ::tatara_lisp::domain::extract_float_narrowed::<#narrowed>(&kw, #key)?
-            }
-        }
+        Kind::Float(rust_ty) => narrowed_extractor_call("extract_float_narrowed", rust_ty, key),
         Kind::OptionalFloat(rust_ty) => {
-            let narrowed: TokenStream2 = rust_ty.parse().unwrap();
-            quote! {
-                ::tatara_lisp::domain::extract_optional_float_narrowed::<#narrowed>(&kw, #key)?
-            }
+            narrowed_extractor_call("extract_optional_float_narrowed", rust_ty, key)
         }
         Kind::Bool => quote! {
             ::tatara_lisp::domain::extract_bool(&kw, #key)?
@@ -1941,6 +1983,289 @@ mod classify_tests {
         let ty = parse_ty("Cow<'a>");
         let seg = last_segment(&ty);
         assert_first_generic_type_err(seg, "no type argument found");
+    }
+}
+
+#[cfg(test)]
+mod narrowed_extractor_call_tests {
+    use super::narrowed_extractor_call;
+    use quote::quote;
+
+    // The `(extractor, rust_ty, key) -> TokenStream2` helper is the
+    // derive's PRIVATE emission scaffold for the SIX numeric-narrowed
+    // arms in `extractor_for` (`Kind::Int(_)` / `Kind::OptionalInt(_)`
+    // / `Kind::VecInt(_)` / `Kind::Float(_)` / `Kind::OptionalFloat(_)`
+    // / `Kind::VecFloat(_)`). Each arm is now a one-line delegate onto
+    // this helper; the shared scaffold — parse the payload's width
+    // literal as a TURBOFISH, resolve the extractor `Ident` at the
+    // derive's call-site span, emit the fully-qualified
+    // `::tatara_lisp::domain::<extractor>::<T>(&kw, #key)?` call —
+    // lives at ONE substrate primitive.
+    //
+    // A regression here silently swaps the emitted code at every
+    // `#[derive(TataraDomain)]` implementor with a numeric-narrowed
+    // field. The tests below pin the FIVE promises the helper owns at
+    // the boundary of its emission shape:
+    //
+    // 1. TURBOFISH — the `rust_ty` payload (`"u16"`, `"f32"`, …)
+    //    rides the emitted `::<T>(&kw, #key)?` as a Rust type, NOT as
+    //    a string literal or a cast target. Pinned by the width-per-
+    //    arm sweep test below (any of the ten integer widths and two
+    //    float widths land in the turbofish slot verbatim).
+    // 2. AXIS-MODE EXTRACTOR IDENTITY — the `extractor` `&'static str`
+    //    payload rides the emitted `::tatara_lisp::domain::<extractor>`
+    //    path as an `Ident` at the call-site span, not as a string
+    //    literal or a `Path` composed by string concatenation. Pinned
+    //    by the six-arm sweep test that walks each of the SIX
+    //    axis-mode extractor names the derive knows about
+    //    (`extract_int_narrowed`, `extract_optional_int_narrowed`,
+    //    `extract_int_list_narrowed`, `extract_float_narrowed`,
+    //    `extract_optional_float_narrowed`,
+    //    `extract_float_list_narrowed`).
+    // 3. FULLY-QUALIFIED SUBSTRATE PATH — the emission is
+    //    `::tatara_lisp::domain::<extractor>` — leading `::` +
+    //    two-segment path — so the emission is hygienic in the derived
+    //    code's outer scope regardless of what the implementor's crate
+    //    imports (the same discipline every peer non-narrowed arm's
+    //    `::tatara_lisp::domain::extract_*` emission gives).
+    // 4. KEY LITERAL PASS-THROUGH — the `key` parameter rides the
+    //    emitted call's second argument as a Rust string literal, so
+    //    the emitted call reads the SAME kwarg the derive's per-field
+    //    `#key` interpolation names (kebab-cased from the Rust field
+    //    ident by `snake_to_kebab`). Pinned by the key-literal test.
+    // 5. `?`-SUFFIX — the emission ends with the `?` operator so the
+    //    caller-visible expression type is the narrowed `T` /
+    //    `Option<T>` / `Vec<T>` (not a `Result`), matching the shape
+    //    every peer `Kind::*` arm's `extract_*(&kw, #key)?` emission
+    //    gives. Pinned by the `?`-suffix test.
+    //
+    // Peer to the `classify_tests` module above — that module pins
+    // the `(syn::Type -> Kind)` projection (what each field type
+    // decodes to), this module pins the `(Kind::* -> TokenStream2)`
+    // projection (what each Kind emits). Together the two test
+    // modules close the derive's `syn::Type -> emitted extractor
+    // call` end-to-end pipeline at the test-module boundary.
+    //
+    // Theory anchor: THEORY.md §II.1 invariant 1 (typed entry) — the
+    // helper IS the derive's rust-level typed-entry projection at the
+    // numeric field's `syn::Type -> emitted extractor call` boundary;
+    // naming its FIVE emission promises as pinned facts here makes
+    // future upgrades (a caller-supplied diagnostic span, a `?`-
+    // suppressed variant, a new axis or mode) fail at the boundary of
+    // the shape they change rather than at downstream implementors'
+    // compile-time noise.
+
+    fn call_string(extractor: &'static str, rust_ty: &str, key: &str) -> String {
+        narrowed_extractor_call(extractor, rust_ty, key).to_string()
+    }
+
+    #[test]
+    fn helper_emits_the_two_step_narrowed_extractor_call_at_every_supported_integer_width() {
+        // Promise 1 (TURBOFISH) — the `rust_ty` payload rides the
+        // emitted call as a Rust type. Sweep the ten integer widths
+        // the derive's `Kind::Int(_)` payload spans so a regression
+        // that (a) lost the turbofish, (b) rendered the width as a
+        // string literal, or (c) dropped the width entirely surfaces
+        // per-width rather than only on one canonical width.
+        //
+        // The `<` marker + width + `>` bracketing pins the turbofish
+        // shape; the trailing `(&kw, "port")?` pins the arg + `?`
+        // shape.
+        for width in [
+            "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "usize", "isize",
+        ] {
+            let body = call_string("extract_int_narrowed", width, "port");
+            let expected_turbofish = format!(":: < {width} >");
+            assert!(
+                body.contains(&expected_turbofish),
+                "width {width} must ride the turbofish `::<{width}>`, got: {body}",
+            );
+            assert!(
+                body.ends_with(r#"("port") ?"#) || body.ends_with(r#"(& kw , "port") ?"#),
+                "emission must end with `(&kw, \"port\")?`, got: {body}",
+            );
+        }
+    }
+
+    #[test]
+    fn helper_emits_the_two_step_narrowed_extractor_call_at_every_supported_float_width() {
+        // Float-axis peer of the integer sweep — Promise 1
+        // (TURBOFISH) at the two float widths the derive's
+        // `Kind::Float(_)` payload spans. A regression that dropped
+        // `f32` from the payload set would still emit here (the helper
+        // is width-agnostic) but the sibling `classify_tests` pin on
+        // `Kind::Float("f32")` would fail — the two test modules
+        // together close the axis identity at both derive layers.
+        for width in ["f32", "f64"] {
+            let body = call_string("extract_float_narrowed", width, "threshold");
+            let expected_turbofish = format!(":: < {width} >");
+            assert!(
+                body.contains(&expected_turbofish),
+                "width {width} must ride the turbofish `::<{width}>`, got: {body}",
+            );
+        }
+    }
+
+    #[test]
+    fn helper_emits_the_axis_mode_extractor_ident_at_every_six_narrowed_arm() {
+        // Promise 2 (AXIS-MODE EXTRACTOR IDENTITY) — the `extractor`
+        // string rides the emitted call as an `Ident` at the derive's
+        // call-site span. Sweep the SIX axis-mode extractor names the
+        // derive's numeric-narrowed arms map to, so a regression that
+        // silently swapped ONE arm's name at the `extractor_for`
+        // dispatch site (e.g. an int-list arm accidentally routing
+        // through the float-list extractor) would surface here rather
+        // than as a mystery type-mismatch at every downstream consumer
+        // with a `Vec<u16>` field.
+        //
+        // The full path `:: tatara_lisp :: domain :: <extractor>` (the
+        // proc_macro2-formatted spelling of `::tatara_lisp::domain::
+        // <extractor>`) pins the extractor as a load-bearing token in
+        // the emission's path prefix.
+        for extractor in [
+            "extract_int_narrowed",
+            "extract_optional_int_narrowed",
+            "extract_int_list_narrowed",
+            "extract_float_narrowed",
+            "extract_optional_float_narrowed",
+            "extract_float_list_narrowed",
+        ] {
+            let body = call_string(extractor, "u16", "port");
+            let expected_path = format!(":: tatara_lisp :: domain :: {extractor}");
+            assert!(
+                body.contains(&expected_path),
+                "extractor {extractor} must ride the emitted path as `{expected_path}`, got: {body}",
+            );
+        }
+    }
+
+    #[test]
+    fn helper_emits_the_fully_qualified_substrate_path_with_a_leading_double_colon() {
+        // Promise 3 (FULLY-QUALIFIED SUBSTRATE PATH) — the emitted
+        // path starts with `::` so it resolves against the crate root
+        // regardless of what the implementor's `use` imports bring
+        // into scope. A regression that dropped the leading `::` would
+        // silently drift the resolution to whatever `tatara_lisp` the
+        // implementor's scope resolves (a re-export, a local alias, a
+        // stub) rather than the substrate crate.
+        //
+        // Pinned separately from the extractor-identity sweep because
+        // it's a distinct promise (path hygiene) — a refactor that
+        // (say) resolved the extractor `Ident` correctly but emitted
+        // it as a bare `tatara_lisp::domain::…` would pass the peer
+        // sweep and fail here.
+        let body = call_string("extract_int_narrowed", "i32", "count");
+        assert!(
+            body.starts_with(":: tatara_lisp :: domain ::"),
+            "emission must start with the fully-qualified `::tatara_lisp::domain::…` path, got: {body}",
+        );
+    }
+
+    #[test]
+    fn helper_emits_the_key_literal_as_the_second_positional_argument() {
+        // Promise 4 (KEY LITERAL PASS-THROUGH) — the `key` parameter
+        // rides the emitted call's second argument as a Rust string
+        // literal. Sweep three representative kebab-cased key shapes
+        // the derive's `snake_to_kebab` projection emits
+        // (single-word, hyphenated, digit-suffixed) so a regression
+        // that (a) dropped the key, (b) interpolated it as an ident
+        // instead of a string literal, or (c) reordered the arg
+        // positions surfaces per-shape.
+        for (key, expected_lit) in [
+            ("port", "\"port\""),
+            ("window-seconds", "\"window-seconds\""),
+            ("scale-v2", "\"scale-v2\""),
+        ] {
+            let body = call_string("extract_int_narrowed", "u16", key);
+            assert!(
+                body.contains(expected_lit),
+                "key {key} must ride the emitted call as string literal {expected_lit}, got: {body}",
+            );
+        }
+    }
+
+    #[test]
+    fn helper_emits_the_question_mark_suffix_so_the_expression_projects_to_the_narrowed_value() {
+        // Promise 5 (?-SUFFIX) — the emission ends with `?` so the
+        // caller-visible expression type is the narrowed `T` / peer
+        // shape, matching every non-narrowed arm's
+        // `extract_*(&kw, #key)?` shape. A regression that dropped
+        // the `?` would leave the derived-code expression as a
+        // `Result<T, LispError>` — every consumer struct field
+        // initializer would fail at the derived-code compile-time
+        // with a type mismatch, but the derive's own emission would
+        // still pass its own compile.
+        let body = call_string("extract_int_narrowed", "u32", "count");
+        assert!(
+            body.trim_end().ends_with('?'),
+            "emission must end with the `?` operator, got: {body}",
+        );
+    }
+
+    #[test]
+    fn helper_emission_is_token_equivalent_to_the_pre_lift_scalar_int_narrowed_arm() {
+        // Cross-check — the helper's emission at the canonical scalar
+        // `Kind::Int("u16")` arm is TOKEN-EQUIVALENT (byte-identical
+        // modulo whitespace) to the pre-lift hand-written
+        // `quote! { ::tatara_lisp::domain::extract_int_narrowed
+        // ::<u16>(&kw, "port")? }` scaffold the arm used to inline.
+        // A regression at any of Promises 1-5 that individually
+        // passes the per-promise pins above but composes into a
+        // token stream distinct from the pre-lift emission would
+        // surface here — one final structural pin above the
+        // per-promise arms.
+        let key = "port";
+        let narrowed: proc_macro2::TokenStream = "u16".parse().unwrap();
+        let expected = quote! {
+            ::tatara_lisp::domain::extract_int_narrowed::<#narrowed>(&kw, #key)?
+        }
+        .to_string();
+        let actual = call_string("extract_int_narrowed", "u16", key);
+        assert_eq!(
+            actual, expected,
+            "helper emission must be token-equivalent to the pre-lift hand-written scalar-int arm",
+        );
+    }
+
+    #[test]
+    fn helper_emission_is_token_equivalent_to_the_pre_lift_optional_float_narrowed_arm() {
+        // Float-axis / optional-mode peer of the scalar-int
+        // token-equivalence pin — closes the axis + mode diagonal on
+        // the cross-check. Ensures the pre-lift `Kind::OptionalFloat`
+        // arm's exact emission survives the lift byte-for-byte modulo
+        // whitespace normalization.
+        let key = "threshold";
+        let narrowed: proc_macro2::TokenStream = "f32".parse().unwrap();
+        let expected = quote! {
+            ::tatara_lisp::domain::extract_optional_float_narrowed::<#narrowed>(&kw, #key)?
+        }
+        .to_string();
+        let actual = call_string("extract_optional_float_narrowed", "f32", key);
+        assert_eq!(
+            actual, expected,
+            "helper emission must be token-equivalent to the pre-lift hand-written optional-float arm",
+        );
+    }
+
+    #[test]
+    fn helper_emission_is_token_equivalent_to_the_pre_lift_vec_int_list_narrowed_arm() {
+        // List-mode peer of the scalar / optional token-equivalence
+        // pins — closes the mode axis on the cross-check. Ensures the
+        // pre-lift `Kind::VecInt` arm's exact emission survives the
+        // lift byte-for-byte modulo whitespace normalization, with
+        // the list-mode extractor name (`extract_int_list_narrowed`)
+        // in place of the scalar / optional peer's name.
+        let key = "ports";
+        let narrowed: proc_macro2::TokenStream = "u16".parse().unwrap();
+        let expected = quote! {
+            ::tatara_lisp::domain::extract_int_list_narrowed::<#narrowed>(&kw, #key)?
+        }
+        .to_string();
+        let actual = call_string("extract_int_list_narrowed", "u16", key);
+        assert_eq!(
+            actual, expected,
+            "helper emission must be token-equivalent to the pre-lift hand-written vec-int arm",
+        );
     }
 }
 

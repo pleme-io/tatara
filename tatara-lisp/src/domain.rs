@@ -2314,6 +2314,86 @@ pub fn extract_bool_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<bool>> {
     })
 }
 
+/// `Option<Vec<bool>>` sibling of [`extract_bool_list`] — the
+/// list-family peer of [`extract_optional_bool`] on the
+/// present-vs-absent axis, and the bool-axis peer of
+/// [`extract_optional_string_list`] on the atom-family non-numeric
+/// list surface. Distinguishes an ABSENT kwarg (`Ok(None)`) from a
+/// PRESENT empty list (`Ok(Some(Vec::new()))`) — the required peer
+/// [`extract_bool_list`] collapses both cases to `Ok(Vec::new())`,
+/// which fits `Vec<bool>` fields (where "no items" and "no kwarg"
+/// are semantically the same) but loses the present-vs-absent
+/// distinction an `Option<Vec<bool>>` field needs (where `None` and
+/// `Some(vec![])` are DISTINCT operator intents — "the operator did
+/// not name this kwarg" vs. "the operator explicitly bound the
+/// kwarg to an empty list").
+///
+/// A present-but-non-list kwarg (`:flags #t`) rejects with the SAME
+/// typed [`LispError::TypeMismatch`] variant the required peer
+/// [`extract_bool_list`] emits (`expected list, got bool`); a per-
+/// item non-bool element inside a present list
+/// (`:flags (list #t "yes" #f)`) rejects with the SAME
+/// [`LispError::TypeMismatch { form: Item { key, idx }, expected:
+/// Bool, got: String }`] variant its per-item peer emits through
+/// the shared [`AtomKwarg::project_at`] atom-family shape gate. The
+/// two peers ([`extract_bool_list`] and this one) delegate to the
+/// SAME per-item gate — only the outer present-vs-absent axis's
+/// return shape differs (`Vec<bool>` vs. `Option<Vec<bool>>`).
+///
+/// Sibling posture to [`extract_optional_string_list`] on the
+/// atom-family non-numeric list surface: both distinguish `None`
+/// (absent) from `Some(_)` (present-and-decoded) at the `Option`
+/// layer via the same `kw.contains_key(key)` short-circuit, and
+/// both delegate their present-branch decode to their required peer
+/// ([`extract_bool_list`] / [`extract_string_list`]). Peer to
+/// [`extract_optional_via_serde`] on the universal-serde-fallthrough
+/// axis: both share the `kw.contains_key(key)` present-vs-absent
+/// bifurcation; the differences are that this extractor rides the
+/// typed atom-family per-item shape gate rather than the serde
+/// bridge's per-item `from_value_with_path` decode, so a per-item
+/// shape mismatch surfaces as a pattern-matchable
+/// [`LispError::TypeMismatch`] variant rather than as a
+/// [`LispError::KwargDeserialize`] substring.
+///
+/// Pre-lift the derive routed `Option<Vec<bool>>` through the
+/// universal-serde bridge ([`extract_optional_via_serde`] via
+/// [`crate::domain::from_value_with_path`]) — [`classify_option`]
+/// in [`tatara_lisp_derive`] had no arm for `Option<Vec<bool>>` and
+/// fell through to `Kind::OptionalDeserialize`, matching the pre-
+/// lift posture that [`Option<Vec<String>>`] shared before its per-
+/// axis route landed. So a per-item shape mismatch inside
+/// `Option<Vec<bool>>` surfaced as a mystery
+/// `LispError::KwargDeserialize { message: "invalid type: string
+/// \"yes\", expected a boolean at path .1" }` substring rather than
+/// as the typed
+/// `LispError::TypeMismatch { form: Item { key, idx }, expected:
+/// Bool, got: String }` its required peer's per-item gate already
+/// emits. Post-lift the two `Option<Vec<bool>>` / `Vec<bool>` peers
+/// on the bool axis share ONE rejection vocabulary — the same
+/// closure the string-axis optional-vec peer already made on its
+/// own pair.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry — a
+/// per-item shape failure on an `Option<Vec<bool>>` kwarg IS a
+/// typed-entry gate the optional-bool-vec surface used to leak past
+/// through the serde bridge). THEORY.md §VI.1 (generation over
+/// composition — the present-vs-absent + delegate-to-required
+/// posture now recurs at FOUR sites (`extract_optional_string` /
+/// `extract_optional_bool` / `extract_optional_string_list` / this
+/// — all routing through the SAME [`optional`] short-circuit paired
+/// with required-peer delegation). THEORY.md §V.1 (knowable
+/// platform — the per-item bool rejection now surfaces the same
+/// pattern-matchable [`LispError::TypeMismatch`] variant every
+/// authoring surface (LSP, `tatara-check`, REPL) already binds to
+/// for the required peer).
+pub fn extract_optional_bool_list(kw: &Kwargs<'_>, key: &str) -> Result<Option<Vec<bool>>> {
+    if kw.contains_key(key) {
+        extract_bool_list(kw, key).map(Some)
+    } else {
+        Ok(None)
+    }
+}
+
 // ── Universal serde-Deserialize fallthrough (enums, nested structs, …) ──
 //
 // `#[derive(TataraDomain)]` covers `String` / numeric / `bool` / their
@@ -4973,6 +5053,136 @@ mod tests {
         assert_eq!(*got, SexpShape::String);
     }
 
+    /// Optional-vec-bool derive fixture — closes the
+    /// present-vs-absent hole on the bool-vec axis. Pre-lift the
+    /// derive routed `Option<Vec<bool>>` through
+    /// `Kind::OptionalDeserialize` (the universal serde bridge —
+    /// `classify_option` had no arm for `Option<Vec<bool>>` and fell
+    /// through to the catch-all), so a per-item non-bool element on
+    /// `:flags (list #t "yes")` into an `Option<Vec<bool>>` field
+    /// surfaced as a mystery
+    /// `KwargDeserialize { message: "invalid type: string \"yes\",
+    /// expected a boolean at path .1" }` substring rather than as
+    /// the typed
+    /// `TypeMismatch { form: Item { key: "flags", idx: 1 },
+    /// expected: Bool, got: String }` its REQUIRED peer
+    /// (`flags: Vec<bool>`) already emits at the atom shape gate.
+    /// Post-lift the derive routes `Option<Vec<bool>>` to
+    /// `extract_optional_bool_list`, which delegates its present-
+    /// branch decode to the SAME `extract_bool_list` the required
+    /// peer binds; the two peers on the same axis now speak the
+    /// SAME typed rejection vocabulary. Sibling posture to
+    /// `OptVecTagsSpec` on the optional-vec-string axis and
+    /// `VecFlagsSpec` on the required-vec-bool axis — all three
+    /// substrate primitives closed the SAME class of per-item serde-
+    /// bridge leak.
+    #[derive(DeriveTataraDomain, Serialize, Debug, PartialEq)]
+    #[tatara(keyword = "defoptvecflags")]
+    struct OptVecFlagsSpec {
+        flags: Option<Vec<bool>>,
+    }
+
+    #[test]
+    fn optional_vec_bool_field_absent_kwarg_parses_as_none() {
+        // `:flags` absent → `Ok(None)` — distinct from a present empty
+        // list (`:flags ()` → `Ok(Some(vec![]))`). The load-bearing
+        // present-vs-absent bifurcation an `Option<Vec<T>>` field
+        // preserves that a `Vec<T>` field collapses.
+        let forms = read(r"(defoptvecflags)").expect("reads");
+        let spec = OptVecFlagsSpec::compile_from_sexp(&forms[0])
+            .expect("absent optional list must parse as None");
+        assert_eq!(spec.flags, None);
+    }
+
+    #[test]
+    fn optional_vec_bool_field_present_empty_parses_as_some_empty_vec() {
+        // `:flags ()` → `Ok(Some(Vec::new()))` — a PRESENT empty list
+        // is Some(vec![]), not None. Sibling to the absent-kwarg pin.
+        let forms = read(r"(defoptvecflags :flags ())").expect("reads");
+        let spec = OptVecFlagsSpec::compile_from_sexp(&forms[0])
+            .expect("present empty list must parse as Some(vec![])");
+        assert_eq!(spec.flags, Some(Vec::<bool>::new()));
+    }
+
+    #[test]
+    fn optional_vec_bool_field_parses_all_bool_list_through_the_per_item_atom_gate() {
+        // Happy-path: a present list of bools decodes byte-identically
+        // to the required peer `Vec<bool>` field's decode, wrapped in
+        // `Some`.
+        let forms = read(r"(defoptvecflags :flags (#t #f #t))").expect("reads");
+        let spec = OptVecFlagsSpec::compile_from_sexp(&forms[0])
+            .expect("all-bool per-item values must parse");
+        assert_eq!(spec.flags, Some(vec![true, false, true]));
+    }
+
+    #[test]
+    fn optional_vec_bool_field_rejects_per_item_non_bool_with_typed_shape_and_item_path() {
+        // The per-item bool-axis cousin of the required-peer
+        // `VecFlagsSpec::vec_bool_field_rejects_per_item_non_bool_...`
+        // canonical rejection. Post-lift the failure carries the
+        // item index (1) alongside the same
+        // `ExpectedKwargShape::Bool` + `SexpShape::String` pair the
+        // required peer emits — authoring surfaces pattern-match on
+        // the SAME `LispError::TypeMismatch { form: Item {..},
+        // expected: Bool, got: String }` variant they already bind
+        // for the required peer's per-item gate, not on a serde
+        // substring. Pre-lift the derive routed
+        // `Option<Vec<bool>>` through `Kind::OptionalDeserialize`
+        // and the same failure surfaced as
+        // `KwargDeserialize { message: "invalid type: string \"yes\",
+        // expected a boolean at path .1" }` — a regression that
+        // reverted `Kind::OptionalVecBool` back to
+        // `Kind::OptionalDeserialize` would surface here as the
+        // substrate-typed `TypeMismatch` variant absent from the
+        // error's tag (replaced by `KwargDeserialize`).
+        let forms = read(r#"(defoptvecflags :flags (#t "yes" #f))"#).expect("reads");
+        let err = OptVecFlagsSpec::compile_from_sexp(&forms[0])
+            .expect_err("\"yes\" is not a bool and must not parse");
+        let LispError::TypeMismatch {
+            form,
+            expected,
+            got,
+        } = &err
+        else {
+            panic!("expected TypeMismatch (typed atom-family gate), got {err:?}");
+        };
+        assert_eq!(form, &KwargPath::item("flags", 1));
+        assert_eq!(*expected, ExpectedKwargShape::Bool);
+        assert_eq!(*got, SexpShape::String);
+        assert_eq!(
+            err.to_string(),
+            "compile error in :flags[1]: expected bool, got string",
+        );
+    }
+
+    #[test]
+    fn optional_vec_bool_field_rejects_present_scalar_with_typed_outer_shape() {
+        // A PRESENT non-list kwarg (`:flags #t`) rejects with the
+        // SAME `expected list` outer-shape diagnostic the required
+        // peer `extract_bool_list` emits — the present-vs-absent
+        // bifurcation happens BEFORE the required peer's outer gate,
+        // so the outer-shape rejection variant is byte-identical to
+        // the required peer's. The outer label is
+        // `ExpectedKwargShape::List` (not a hypothetical
+        // `ListOfBools` refinement) — the seven-variant
+        // `ExpectedKwargShape` closed set stays at its current
+        // shape, matching the required peer's outer-gate posture.
+        let forms = read(r"(defoptvecflags :flags #t)").expect("reads");
+        let err = OptVecFlagsSpec::compile_from_sexp(&forms[0])
+            .expect_err("a scalar bool is not a list of bools and must not parse");
+        let LispError::TypeMismatch {
+            form,
+            expected,
+            got,
+        } = &err
+        else {
+            panic!("expected TypeMismatch (outer atom-family gate), got {err:?}");
+        };
+        assert_eq!(form, &KwargPath::named("flags"));
+        assert_eq!(*expected, ExpectedKwargShape::List);
+        assert_eq!(*got, SexpShape::Bool);
+    }
+
     #[test]
     fn vec_f32_field_rejects_per_item_lossy_to_inf_with_typed_width_and_item_path() {
         // Float-axis peer of
@@ -6080,6 +6290,131 @@ mod tests {
         )
         .unwrap_err();
         match (&list_err, &direct_err) {
+            (
+                LispError::TypeMismatch {
+                    form: form_a,
+                    expected: exp_a,
+                    got: got_a,
+                },
+                LispError::TypeMismatch {
+                    form: form_b,
+                    expected: exp_b,
+                    got: got_b,
+                },
+            ) => {
+                assert_eq!(form_a, form_b, "path variant identity");
+                assert_eq!(exp_a, exp_b, "axis-typed SHAPE identity");
+                assert_eq!(*exp_a, ExpectedKwargShape::Bool);
+                assert_eq!(got_a, got_b, "actual-shape witness identity");
+            }
+            other => panic!("both routes must produce TypeMismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn extract_optional_bool_list_absent_kwarg_returns_none() {
+        // `:flags` absent — the OPTIONAL list-family posture bifurcates
+        // absent from present-empty. `extract_bool_list` collapses
+        // both cases to `Ok(Vec::new())`; the optional peer distinguishes
+        // them: absent → `Ok(None)`, present-empty → `Ok(Some(vec![]))`.
+        // Pin the None arm here; the sibling
+        // `extract_optional_bool_list_present_empty_returns_some_empty_vec`
+        // test pins the other end of the bifurcation.
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        assert_eq!(extract_optional_bool_list(&kw, "flags").unwrap(), None);
+    }
+
+    #[test]
+    fn extract_optional_bool_list_present_empty_returns_some_empty_vec() {
+        // `:flags ()` — a PRESENT empty list is Some(Vec::new()), not
+        // None. The load-bearing distinction between "the operator did
+        // not name this kwarg" and "the operator explicitly bound the
+        // kwarg to an empty list" — a `Vec<bool>` field collapses
+        // both to the empty vec, but an `Option<Vec<bool>>` field
+        // preserves the operator's intent.
+        let args = kwargs_of("(_ :flags ())");
+        let kw = parse_kwargs(&args).unwrap();
+        assert_eq!(
+            extract_optional_bool_list(&kw, "flags").unwrap(),
+            Some(Vec::<bool>::new())
+        );
+    }
+
+    #[test]
+    fn extract_optional_bool_list_returns_some_vec_when_all_items_are_bools() {
+        // Happy-path: `(list #t #f #t)` under a present kwarg on the
+        // bool axis projects to `Some(vec![true, false, true])`
+        // byte-identically to what the required peer `extract_bool_list`
+        // would return, wrapped in `Some`.
+        let args = kwargs_of("(_ :flags (#t #f #t))");
+        let kw = parse_kwargs(&args).unwrap();
+        assert_eq!(
+            extract_optional_bool_list(&kw, "flags").unwrap(),
+            Some(vec![true, false, true])
+        );
+    }
+
+    #[test]
+    fn extract_optional_bool_list_type_err_on_scalar_names_got_bool() {
+        // `:flags #t` — a PRESENT kwarg with a non-list scalar rejects
+        // with the SAME outer `expected list` diagnostic the required
+        // peer `extract_bool_list` emits, and names the actual outer
+        // shape (`bool`). The present-vs-absent bifurcation happens
+        // BEFORE the required peer's outer gate, so the outer-shape
+        // rejection variant is byte-identical to the required peer's.
+        let args = kwargs_of("(_ :flags #t)");
+        let kw = parse_kwargs(&args).unwrap();
+        let msg = type_err_message(extract_optional_bool_list(&kw, "flags").unwrap_err());
+        assert!(msg.contains("expected list"), "got: {msg}");
+        assert!(msg.contains("got bool"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_optional_bool_list_type_err_on_non_bool_item_names_index_and_got_string() {
+        // `:flags (#t "yes" #f)` — outer is a list, the second item
+        // isn't a bool. Diagnostic names BOTH the item path
+        // (`:flags[1]`) and the narrower per-item expectation
+        // (`expected bool`), the SAME typed `LispError::TypeMismatch
+        // { form: Item { key: "flags", idx: 1 }, expected: Bool, got:
+        // String }` variant its required peer `extract_bool_list` emits
+        // at the per-item atom-family shape gate. Pre-lift the derive
+        // routed `Option<Vec<bool>>` through `extract_optional_via_serde`
+        // (the universal serde bridge — `classify_option` had no arm
+        // for `Option<Vec<bool>>` and fell through to
+        // `Kind::OptionalDeserialize`), so a per-item shape mismatch
+        // surfaced as a mystery
+        // `KwargDeserialize { message: "invalid type: string ..., expected
+        // a boolean at path .1" }` substring rather than as the typed
+        // atom-family rejection. Post-lift the optional peer rides the
+        // SAME atom-family gate its required peer already binds through
+        // `<bool as AtomKwarg<'_>>::project_at`, so a per-item shape
+        // mismatch surfaces as the SAME pattern-matchable typed variant
+        // — the two peers on the bool axis speak ONE rejection
+        // vocabulary.
+        let args = kwargs_of(r#"(_ :flags (#t "yes" #f))"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_optional_bool_list(&kw, "flags").unwrap_err();
+        let msg = type_err_message(err);
+        assert!(
+            msg.contains(":flags[1]"),
+            "expected indexed item path, got: {msg}"
+        );
+        assert!(msg.contains("expected bool"), "got: {msg}");
+        assert!(msg.contains("got string"), "got: {msg}");
+
+        // Extractor identity — extract_optional_bool_list's per-item
+        // rejection at a non-bool element MUST match the required-peer
+        // extract_bool_list's rejection at the same input byte-for-byte,
+        // so the atom-family shape gate does NOT drift between the two
+        // peers on the bool axis. The two paths differ only at the
+        // outer present-vs-absent axis (`Option<Vec<bool>>` wrapper vs.
+        // bare `Vec<bool>`), never at the per-item shape gate.
+        let mixed_args = kwargs_of(r#"(_ :flags (#t "yes" #f))"#);
+        let mixed_kw = parse_kwargs(&mixed_args).unwrap();
+        let optional_err = extract_optional_bool_list(&mixed_kw, "flags").unwrap_err();
+        let required_err = extract_bool_list(&mixed_kw, "flags").unwrap_err();
+        match (&optional_err, &required_err) {
             (
                 LispError::TypeMismatch {
                     form: form_a,

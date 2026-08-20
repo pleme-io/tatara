@@ -49,7 +49,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.2.339"
+version = "0.2.340"
 edition = "2021"
 authors = ["Pleme.io <engineering@pleme.io>"]
 license = "MIT"

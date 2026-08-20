@@ -2755,6 +2755,100 @@ pub fn extract_vec_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) ->
     })
 }
 
+/// `Option<Vec<T>>` sibling of [`extract_vec_via_serde`] — the
+/// present-vs-absent bifurcated peer of the required-vec serde bridge
+/// on the universal-serde-fallthrough list-family surface.
+/// Distinguishes an ABSENT kwarg (`Ok(None)`) from a PRESENT empty
+/// list (`Ok(Some(Vec::new()))`) — the required peer's posture
+/// collapses both cases to `Ok(Vec::new())`, which fits `Vec<T>`
+/// fields (where "no items" and "no kwarg" are semantically the same)
+/// but loses the present-vs-absent distinction an `Option<Vec<T>>`
+/// field needs (where `None` and `Some(vec![])` are DISTINCT operator
+/// intents — "the operator did not name this kwarg" vs. "the operator
+/// explicitly bound the kwarg to an empty list").
+///
+/// A present-but-non-list kwarg (`:steps "scalar"`) rejects with the
+/// SAME typed [`LispError::TypeMismatch`] variant the required peer
+/// [`extract_vec_via_serde`] emits (`expected list, got string`) via
+/// the shared [`extract_list`] outer-shape gate; a per-item serde
+/// decode failure inside a present list (`:steps ((:notify-ref "ok")
+/// (:notify-ref 7))`) rejects with the SAME structural
+/// [`LispError::KwargDeserialize { path: KwargPath::Item { key, idx },
+/// message }`] variant its per-item peer emits through
+/// [`from_value_with_path`] at [`KwargPath::item(key, idx)`]. The
+/// two peers ([`extract_vec_via_serde`] and this one) delegate to the
+/// SAME per-item bridge — only the outer present-vs-absent axis's
+/// return shape differs (`Vec<T>` vs. `Option<Vec<T>>`).
+///
+/// Sibling posture to the four atom-family optional-vec peers
+/// ([`extract_optional_string_list`] / [`extract_optional_bool_list`] /
+/// [`extract_optional_narrowed_list`] on the string / bool / numeric
+/// axes) on the universal-serde-fallthrough axis: all five share the
+/// present-vs-absent bifurcation the [`optional_from_required`]
+/// substrate primitive owns, and each delegates its present-branch
+/// per-item decode to its own axis-typed required peer. The differences
+/// are that this extractor rides the universal serde bridge's per-item
+/// [`from_value_with_path`] decode rather than an atom-family
+/// [`AtomKwarg::project_at`] shape gate or a numeric-narrowing
+/// [`NarrowNumeric::narrow`] projection, so a per-item shape/decode
+/// mismatch surfaces as a pattern-matchable
+/// [`LispError::KwargDeserialize { path: KwargPath::Item { key, idx },
+/// .. }`] variant — the SAME rejection shape its required peer emits,
+/// where the atom-family peers surface the typed
+/// [`LispError::TypeMismatch { form: KwargPath::Item { key, idx },
+/// .. }`] variant of the axis-typed shape gate.
+///
+/// Pre-lift the derive routed `Option<Vec<Nested>>` (any non-atomic
+/// inner type — a struct, an enum, a nested `Vec<T>`) through the
+/// universal `extract_optional_via_serde::<Vec<Nested>>` bridge —
+/// [`classify_option`] in [`tatara_lisp_derive`] had no arm for
+/// `Kind::VecDeserialize` and fell through to
+/// `Kind::OptionalDeserialize`, matching the pre-lift posture that
+/// [`Vec<bool>`] / [`Vec<u16>`] / [`Option<Vec<String>>`] /
+/// [`Option<Vec<u16>>`] / etc. shared before their per-axis routes
+/// landed. So a per-item shape mismatch inside `Option<Vec<Nested>>`
+/// surfaced as a serde-substring
+/// `LispError::KwargDeserialize { path: KwargPath::Named(key),
+/// message: "invalid type: ..., expected ..., at path .1" }`
+/// diagnostic keyed off the substring inside the message rather than
+/// as the typed
+/// `LispError::KwargDeserialize { path: KwargPath::Item { key, idx },
+/// .. }` its required peer [`extract_vec_via_serde`] already emits
+/// through the per-item bridge — the SAME class of gate-leak the
+/// recent per-axis [`extract_bool_list`] / [`extract_narrowed_list`] /
+/// [`extract_optional_bool_list`] / [`extract_optional_narrowed_list`]
+/// closures already closed on the atom-family surface. Post-lift the
+/// two `Option<Vec<T>>` / `Vec<T>` peers on the universal-serde
+/// fallthrough axis share ONE rejection vocabulary, closing the LAST
+/// atom-family × mode Cartesian-product hole in the derive's typed-
+/// entry surface for `Option<Vec<T>>`-shaped fields — every
+/// `Option<Vec<T>>` field now surfaces per-item rejections through a
+/// [`KwargPath::Item { key, idx }`] path root rather than a
+/// [`KwargPath::Named(key)`] one.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry — a
+/// per-item shape failure on an `Option<Vec<Nested>>` kwarg IS a
+/// typed-entry gate the optional-nested-vec surface used to leak past
+/// through the universal serde bridge). THEORY.md §VI.1 (generation
+/// over composition — the present-vs-absent + delegate-to-required
+/// posture now recurs at FIVE list-family peer sites
+/// ([`extract_optional_string_list`] / [`extract_optional_bool_list`] /
+/// [`extract_optional_narrowed_list`] / this), all routing through the
+/// SAME [`optional_from_required`] substrate primitive). THEORY.md
+/// §V.1 (knowable platform — the per-item rejection on
+/// `Option<Vec<T>>` now surfaces the same pattern-matchable
+/// [`LispError::KwargDeserialize { path: KwargPath::Item { .. }, ..
+/// }`] variant every authoring surface (LSP, `tatara-check`, REPL)
+/// already binds to for the required peer, so a future span-carrying
+/// promotion of [`KwargPath::Item`] binds mechanically for
+/// `Option<Vec<T>>` fields too).
+pub fn extract_optional_vec_via_serde<T: DeserializeOwned>(
+    kw: &Kwargs<'_>,
+    key: &str,
+) -> Result<Option<Vec<T>>> {
+    optional_from_required(kw, key, extract_vec_via_serde::<T>)
+}
+
 // ── Domain registry (runtime-registered, callable by keyword) ───────
 
 /// Erased handler that knows how to compile a form and hand back a typed
@@ -5994,6 +6088,138 @@ mod tests {
         let msg = format!("{err}");
         assert!(msg.contains(":steps"), "got: {msg}");
         assert!(msg.contains("deserialize:"), "got: {msg}");
+    }
+
+    // ── extract_optional_vec_via_serde — the present-vs-absent peer of
+    //    extract_vec_via_serde on the universal-serde-fallthrough
+    //    list-family surface. Pins the four load-bearing contract
+    //    corners the peer inherits from the shared
+    //    `optional_from_required` + `extract_vec_via_serde`
+    //    composition: absent → `Ok(None)` (no per-item bridge invoked),
+    //    present-empty → `Ok(Some(Vec::new()))` (distinguishable from
+    //    absent), present-non-list → outer-shape `TypeMismatch`
+    //    (matching the required peer at the shared `extract_list`
+    //    gate), present-per-item-failure → typed
+    //    `KwargDeserialize { path: KwargPath::Item { key, idx }, .. }`
+    //    (matching the required peer at the shared per-item bridge).
+
+    #[test]
+    fn extract_optional_vec_via_serde_returns_none_when_kwarg_absent() {
+        // Absent `:steps` — the primitive must return `Ok(None)`
+        // without invoking the per-item serde bridge. A regression that
+        // collapsed absent into the required peer's absent-tolerant
+        // posture (`Ok(Vec::new())` wrapped in `Some`) would surface
+        // here as `Some(vec![])` instead of `None`, silently losing the
+        // `None` / `Some(vec![])` distinction the field carries.
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        let v: Option<Vec<EscalationStep>> = extract_optional_vec_via_serde(&kw, "steps").unwrap();
+        assert_eq!(v, None);
+    }
+
+    #[test]
+    fn extract_optional_vec_via_serde_returns_some_empty_vec_when_kwarg_is_empty_list() {
+        // Load-bearing sub-case of the present-arm contract: a PRESENT
+        // empty list (`:steps ()`) must wrap as `Some(vec![])`, NOT
+        // collapse to `None`. This is the exact distinction the outer
+        // `optional_from_required` gate exists to preserve on the
+        // universal-serde-fallthrough axis — a regression that inspected
+        // the required extractor's result-shape (e.g. `.filter(|v|
+        // !v.is_empty())` before wrapping) would surface here as `None`
+        // where the operator wrote `()` explicitly.
+        let args = kwargs_of("(_ :steps ())");
+        let kw = parse_kwargs(&args).unwrap();
+        let v: Option<Vec<EscalationStep>> = extract_optional_vec_via_serde(&kw, "steps").unwrap();
+        assert_eq!(v, Some(Vec::<EscalationStep>::new()));
+    }
+
+    #[test]
+    fn extract_optional_vec_via_serde_collects_nested_structs_when_kwarg_present() {
+        // Happy path: a present, well-formed list decodes byte-
+        // identically to what the required peer `extract_vec_via_serde`
+        // returns, wrapped in `Some`. Delegating to the required peer
+        // proves the wrapping is transparent — the primitive does NOT
+        // decorate, transform, or filter the required extractor's
+        // output; it only wraps.
+        let args = kwargs_of(
+            r#"(_ :steps (
+                  (:notify-ref "a" :wait-minutes 0)
+                  (:notify-ref "b" :wait-minutes 5)
+                  (:notify-ref "c")))"#,
+        );
+        let kw = parse_kwargs(&args).unwrap();
+        let via_primitive: Option<Vec<EscalationStep>> =
+            extract_optional_vec_via_serde(&kw, "steps").unwrap();
+        let via_required: Vec<EscalationStep> = extract_vec_via_serde(&kw, "steps").unwrap();
+        assert_eq!(via_primitive, Some(via_required));
+    }
+
+    #[test]
+    fn extract_optional_vec_via_serde_rejects_present_non_list_kwarg_via_shared_shape_gate() {
+        // Present-but-non-list `:steps "scalar"` — the primitive must
+        // forward the SAME `LispError::TypeMismatch` variant the
+        // required peer emits at the shared `extract_list` outer-shape
+        // gate (`expected list, got string`). Delegating to
+        // `extract_vec_via_serde` and comparing the rendered message
+        // pins that the two peers share ONE rejection vocabulary on
+        // the outer-shape axis — a regression that wrapped a present
+        // sexp in `Some(_)` without decoding it (a permissive posture
+        // that bypassed the required extractor's outer gate) would
+        // surface here as `Ok(Some(...))` instead of an error.
+        let args = kwargs_of(r#"(_ :steps "scalar")"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let via_primitive_err = extract_optional_vec_via_serde::<EscalationStep>(&kw, "steps")
+            .expect_err("scalar :steps is not a list");
+        let via_required_err = extract_vec_via_serde::<EscalationStep>(&kw, "steps")
+            .expect_err("scalar :steps is not a list");
+        assert!(matches!(via_primitive_err, LispError::TypeMismatch { .. }));
+        assert_eq!(
+            type_err_message(via_primitive_err),
+            type_err_message(via_required_err),
+        );
+    }
+
+    #[test]
+    fn extract_optional_vec_via_serde_present_per_item_shape_mismatch_carries_kwarg_path_item() {
+        // The load-bearing gate-closure this extractor exists to
+        // enforce: a per-item serde-decode failure inside a PRESENT
+        // list on an `Option<Vec<Nested>>` field surfaces as the SAME
+        // structural `LispError::KwargDeserialize { path:
+        // KwargPath::Item { key, idx }, .. }` variant its required
+        // peer emits through the per-item bridge — NOT as a
+        // `KwargPath::Named(key)` root with the failing index buried
+        // in a serde-substring `at path .1.notifyRef`. Pre-lift the
+        // derive routed `Option<Vec<EscalationStep>>` through the
+        // universal `extract_optional_via_serde::<Vec<EscalationStep>>`
+        // bridge, so the outer serde round-trip landed the path at
+        // `KwargPath::Named("steps")` and the per-item index rode a
+        // substring inside the message. Post-lift the two peers on the
+        // same axis speak the same typed rejection vocabulary, with
+        // the failing item's index rides `KwargPath::Item { idx: 1 }`
+        // as a pattern-matchable slot.
+        //
+        // A regression that dropped the per-item path root back to
+        // `KwargPath::Named` (e.g. by delegating to
+        // `extract_optional_via_serde::<Vec<T>>` instead of
+        // `extract_vec_via_serde::<T>` inside the primitive) would
+        // surface here as the wrong `KwargPath` variant.
+        let args = kwargs_of(
+            r#"(_ :steps (
+                  (:notify-ref "ok")
+                  (:notify-ref 7)))"#,
+        );
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_optional_vec_via_serde::<EscalationStep>(&kw, "steps").unwrap_err();
+        assert!(
+            matches!(
+                err,
+                LispError::KwargDeserialize {
+                    path: KwargPath::Item { ref key, idx: 1 },
+                    ref message,
+                } if key == "steps" && !message.is_empty()
+            ),
+            "expected KwargDeserialize {{ path: KwargPath::Item {{ key: \"steps\", idx: 1 }}, .. }}, got {err:?}"
+        );
     }
 
     // ── Duplicate-keyword rejection (typed-entry hardening) ─────────────

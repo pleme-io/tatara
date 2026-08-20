@@ -1203,21 +1203,78 @@ fn type_err_at(key: &str, idx: usize, expected: ExpectedKwargShape, got: &Sexp) 
     type_mismatch(kwarg_item_form(key, idx), expected, got)
 }
 
+/// Structural range-mismatch builder. Pairs a typed `form: KwargPath`
+/// (typically `kwarg_form(_)` / `kwarg_item_form(_, _)` /
+/// `kwargs_pos_form(_)`) with the typed `target: NumericWidth` narrow
+/// axis identity and the author's literal `value: NumericLiteral`.
+/// Returns the dedicated [`LispError::KwargOutOfRange`] variant so
+/// authoring surfaces (REPL, LSP, `tatara-check`) bind to first-class
+/// `form`/`target`/`value` fields — pattern-matching on
+/// `KwargPath::Item { .. }` etc. directly — instead of substring-
+/// parsing the rendered message.
+///
+/// KwargPath-parameterized peer of [`type_mismatch`] on the numeric-
+/// narrowing axis. Pre-lift the [`LispError::KwargOutOfRange`] struct-
+/// literal lived inline at TWO sites in this module — [`range_err`]
+/// (the `KwargPath::Named(key)` scalar-kwarg path) and [`range_err_at`]
+/// (the `KwargPath::Item { key, idx }` per-item path) — while its
+/// sibling axis (the shape-gate rejection surface) had ONE lifted
+/// [`type_mismatch`] primitive both [`type_err`] / [`type_err_at`]
+/// delegated through. Post-lift the two axes emit symmetrically:
+/// [`type_mismatch`] owns every [`LispError::TypeMismatch`] struct-
+/// literal construction; this primitive owns every
+/// [`LispError::KwargOutOfRange`] struct-literal construction. The
+/// scaffold difference between the axes collapses to zero — a reader
+/// finding one now finds the other, and future span promotions on
+/// [`KwargPath`] land at ONE primitive per axis rather than at four
+/// wrapper sites.
+///
+/// Two consumers in this module route through this primitive:
+/// [`range_err`] (composing `kwarg_form(key)` + this primitive) and
+/// [`range_err_at`] (composing `kwarg_item_form(key, idx)` + this
+/// primitive). Public visibility mirrors [`type_mismatch`]'s public
+/// visibility so hand-written [`TataraDomain`] impls that construct a
+/// [`LispError::KwargOutOfRange`] with a custom [`KwargPath`]
+/// (`KwargPath::Slot(_)` for a not-yet-keyed kwargs slot, or a future
+/// third path shape) have ONE substrate entry to route through rather
+/// than re-inlining the struct-literal at their own call site — the
+/// same posture the [`type_mismatch`] sibling already carries for the
+/// shape-mismatch axis.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// [`LispError::KwargOutOfRange`] struct-literal lived at two sites,
+/// crossing the ≥2 duplication threshold on the substrate's rejection-
+/// construction surface. THEORY.md §V.1 — knowable platform; the
+/// numeric-narrowing gate's rejection-shape identity lives in ONE
+/// primitive so authoring surfaces pick up the diagnostic-shape
+/// promotion mechanically once the variant is structurally extended
+/// (e.g. threading `pos: Option<usize>` from `Sexp` spans, adding a
+/// `source: NarrowingCause` chain). THEORY.md §II.1 invariant 3
+/// (typed exit) — the range-rejection boundary lives at ONE primitive
+/// whose axis identity is the type-parameter payload
+/// ([`NumericWidth`] + [`NumericLiteral`] carriers), not a per-site
+/// literal constructor.
+#[must_use]
+pub fn range_mismatch(form: KwargPath, target: NumericWidth, value: NumericLiteral) -> LispError {
+    LispError::KwargOutOfRange {
+        form,
+        target,
+        value,
+    }
+}
+
 /// Range-axis sibling of [`type_err`] — the kwarg's `Sexp` shape was
 /// RIGHT but the value does not fit the field's Rust width. Pairs the
 /// same `kwarg_form(_)` typed path with the typed `NumericWidth` target
-/// and the author's literal, returning [`LispError::KwargOutOfRange`].
+/// and the author's literal, returning [`LispError::KwargOutOfRange`]
+/// via the KwargPath-parameterized [`range_mismatch`] primitive.
 ///
 /// Named beside `type_err` / `type_err_at` deliberately: the three are
 /// the typed-entry kwarg gate's whole rejection vocabulary — shape,
 /// per-item shape, and range — so a reader who finds one finds all
 /// three, and a future span lift touches one neighbourhood.
 fn range_err(key: &str, target: NumericWidth, value: NumericLiteral) -> LispError {
-    LispError::KwargOutOfRange {
-        form: kwarg_form(key),
-        target,
-        value,
-    }
+    range_mismatch(kwarg_form(key), target, value)
 }
 
 /// Item-indexed sibling of [`range_err`] — the per-item narrowing gate's
@@ -1228,8 +1285,8 @@ fn range_err(key: &str, target: NumericWidth, value: NumericLiteral) -> LispErro
 /// `:<key>[<idx>]` typed path already used by [`type_err_at`]) with
 /// the same typed [`NumericWidth`] / [`NumericLiteral`] pair
 /// [`range_err`] carries, returning [`LispError::KwargOutOfRange`]
-/// with `form: KwargPath::Item { key, idx }` so an authoring surface
-/// can pattern-match the failing element's identity structurally.
+/// with `form: KwargPath::Item { key, idx }` via the shared
+/// KwargPath-parameterized [`range_mismatch`] primitive.
 ///
 /// This is the second-to-last member of the typed-entry kwarg gate's
 /// per-item rejection vocabulary — shape-per-item lives at
@@ -1242,11 +1299,7 @@ fn range_err(key: &str, target: NumericWidth, value: NumericLiteral) -> LispErro
 /// on scalar kwargs, the shape gate on per-item kwargs) inherits
 /// positional rendering mechanically.
 fn range_err_at(key: &str, idx: usize, target: NumericWidth, value: NumericLiteral) -> LispError {
-    LispError::KwargOutOfRange {
-        form: kwarg_item_form(key, idx),
-        target,
-        value,
-    }
+    range_mismatch(kwarg_item_form(key, idx), target, value)
 }
 
 /// Required atomic-kwarg extractor — fronts every typed-atom public
@@ -3971,6 +4024,133 @@ mod tests {
         let ok_float: f32 =
             narrow_or_range_err::<f64, f32>("scale", 1.0).expect("in-range float narrows through");
         assert!((ok_float - 1.0_f32).abs() < f32::EPSILON);
+    }
+
+    /// The KwargPath-parameterized [`range_mismatch`] primitive is
+    /// the axis-symmetric sibling of [`type_mismatch`] on the
+    /// [`LispError::KwargOutOfRange`] axis. Pre-lift the struct-
+    /// literal `LispError::KwargOutOfRange { form, target, value }`
+    /// lived inline at TWO sites in `domain.rs` — the scalar-kwarg
+    /// [`range_err`] wrapper (composing `kwarg_form(key)` into the
+    /// slot) and the per-item [`range_err_at`] wrapper (composing
+    /// `kwarg_item_form(key, idx)` into the slot). Post-lift both
+    /// wrappers delegate through the KwargPath-parameterized primitive
+    /// and the struct-literal construction lives at ONE named
+    /// substrate entry.
+    ///
+    /// Pin every rejection axis the primitive owns:
+    ///   1. `KwargPath::Named` path — feeding `kwarg_form("port")`
+    ///      yields the SAME variant `range_err("port", U16, Int(70000))`
+    ///      constructs.
+    ///   2. `KwargPath::Item` path — feeding `kwarg_item_form("ports",
+    ///      1)` yields the SAME variant `range_err_at("ports", 1, U16,
+    ///      Int(70000))` constructs.
+    ///   3. `KwargPath::Slot` path — feeding `kwargs_pos_form(3)`
+    ///      yields a `KwargOutOfRange` with a `KwargPath::Slot(3)`
+    ///      form slot (the not-yet-keyed-slot path the wrappers do
+    ///      not thread today, but the primitive's public surface
+    ///      admits — same posture the sibling [`type_mismatch`]
+    ///      admits `kwargs_pos_form` at the shape-mismatch axis).
+    ///   4. Axis-typed payload — the `target: NumericWidth` and
+    ///      `value: NumericLiteral` carriers are stored verbatim; a
+    ///      regression that dropped one field or reordered them would
+    ///      fail the struct-destructure assertion.
+    ///
+    /// A regression that drifted [`range_err`] / [`range_err_at`] from
+    /// the primitive (or hand-rolled a THIRD `LispError::KwargOutOfRange
+    /// { ... }` struct-literal somewhere in the substrate) would
+    /// register as a byte-difference between the primitive's output
+    /// and the wrappers' outputs at this test — the SAME safety net
+    /// [`type_mismatch`]'s sibling test suite already carries for the
+    /// TypeMismatch axis.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// the primitive is the ONE substrate entry both wrappers route
+    /// through. THEORY.md §V.1 — knowable platform; the axis-typed
+    /// `(target, value)` payload rides ONE primitive so a future
+    /// span-carrying promotion of [`KwargPath`] lands at ONE site
+    /// and every consumer inherits mechanically.
+    #[test]
+    fn range_mismatch_binds_wrappers_and_the_typed_payload_to_one_substrate_entry() {
+        // Helper: pattern-match against `LispError::KwargOutOfRange`
+        // and return the three typed slots by value. `LispError` does
+        // not derive `PartialEq` (the `Sexp` payload in
+        // [`LispError::TypeMismatch`]-family variants precludes it in
+        // general), so the test compares the STRUCTURAL slots rather
+        // than the variants directly.
+        fn parts(err: &LispError) -> (&KwargPath, NumericWidth, NumericLiteral) {
+            let LispError::KwargOutOfRange {
+                form,
+                target,
+                value,
+            } = err
+            else {
+                panic!("expected KwargOutOfRange, got {err:?}");
+            };
+            (form, *target, *value)
+        }
+
+        // (1) `KwargPath::Named` — the scalar-kwarg path
+        //     `range_err("port", ...)` composes.
+        let via_primitive = range_mismatch(
+            kwarg_form("port"),
+            NumericWidth::U16,
+            NumericLiteral::Int(70_000),
+        );
+        let via_wrapper = range_err("port", NumericWidth::U16, NumericLiteral::Int(70_000));
+        let (p_form, p_target, p_value) = parts(&via_primitive);
+        let (w_form, w_target, w_value) = parts(&via_wrapper);
+        assert_eq!(p_form, w_form);
+        assert_eq!(p_target, w_target);
+        assert_eq!(p_value, w_value);
+        assert_eq!(p_form, &KwargPath::named("port"));
+        assert_eq!(p_target, NumericWidth::U16);
+        assert_eq!(p_value, NumericLiteral::Int(70_000));
+
+        // (2) `KwargPath::Item` — the per-item path
+        //     `range_err_at("ports", 1, ...)` composes.
+        let via_primitive_at = range_mismatch(
+            kwarg_item_form("ports", 1),
+            NumericWidth::U16,
+            NumericLiteral::Int(70_000),
+        );
+        let via_wrapper_at =
+            range_err_at("ports", 1, NumericWidth::U16, NumericLiteral::Int(70_000));
+        let (p_form, p_target, p_value) = parts(&via_primitive_at);
+        let (w_form, w_target, w_value) = parts(&via_wrapper_at);
+        assert_eq!(p_form, w_form);
+        assert_eq!(p_target, w_target);
+        assert_eq!(p_value, w_value);
+        assert_eq!(p_form, &KwargPath::item("ports", 1));
+
+        // (3) `KwargPath::Slot` — the not-yet-keyed-slot path the
+        //     primitive's public surface admits by design (mirrors
+        //     `type_mismatch`'s admission of `kwargs_pos_form`).
+        let via_slot = range_mismatch(
+            kwargs_pos_form(3),
+            NumericWidth::I32,
+            NumericLiteral::Int(-1),
+        );
+        let (form, target, value) = parts(&via_slot);
+        assert_eq!(form, &KwargPath::Slot(3));
+        assert_eq!(target, NumericWidth::I32);
+        assert_eq!(value, NumericLiteral::Int(-1));
+
+        // (4) Float-axis payload variant — the primitive stores the
+        //     `NumericLiteral::Float` carrier verbatim, no coercion to
+        //     `Int`. A regression that swapped the payload's variant
+        //     (an int-axis rejection accidentally storing the value
+        //     as `Float`) would surface here.
+        let float_via_primitive = range_mismatch(
+            kwarg_form("scale"),
+            NumericWidth::F32,
+            NumericLiteral::Float(1.0e300),
+        );
+        let (_, _, value) = parts(&float_via_primitive);
+        assert!(
+            matches!(value, NumericLiteral::Float(x) if (x - 1.0e300).abs() < f64::EPSILON),
+            "float-axis payload carrier must ride NumericLiteral::Float verbatim, got {value:?}",
+        );
     }
 
     /// `WideNumeric::extract_kwarg` / `WideNumeric::extract_optional_

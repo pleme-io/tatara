@@ -1417,12 +1417,131 @@ where
         .collect()
 }
 
-pub fn extract_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<&'a str> {
-    extract_atom(kw, key, ExpectedKwargShape::String, Sexp::as_string)
+/// Atom-typed kwarg trait — the non-numeric peer of [`WideNumeric`]
+/// on the atom-family kwarg extraction axis. Bundles the two
+/// per-atom primitives every non-numeric atom extractor used to
+/// spell inline ([`Self::SHAPE`] — the axis-typed rejection label;
+/// [`Self::project`] — the `&Sexp -> Option<Self>` projection) and
+/// provides [`Self::extract_kwarg`] / [`Self::extract_optional_kwarg`]
+/// as defaults composing them through the shared [`extract_atom`] /
+/// [`extract_optional_atom`] atom-family skeletons.
+///
+/// Pre-lift: four hand-rolled two-argument `extract_atom` /
+/// `extract_optional_atom` calls at [`extract_string`] /
+/// [`extract_optional_string`] / [`extract_bool`] /
+/// [`extract_optional_bool`], each spelling its atom's
+/// `ExpectedKwargShape` and `Sexp::as_<projection>` pair by hand.
+/// Post-lift: four one-line delegates to the trait dispatch, with
+/// the per-atom pair pinned as ONE trait impl per axis
+/// (`AtomKwarg<'a> for &'a str` and `AtomKwarg<'a> for bool`). A
+/// regression that silently swapped one extractor's projection (a
+/// string axis silently reading `Sexp::as_bool`, so `:name #t`
+/// would land as `"true"` in a `String` field) cannot survive the
+/// trait dispatch — the impl's return type pins the axis at rustc
+/// time.
+///
+/// Peer to [`WideNumeric`] on the numeric axes: both traits share
+/// the same skeleton (SHAPE + projection → default extract_kwarg /
+/// extract_optional_kwarg composing extract_atom); the difference
+/// is that `WideNumeric` also bundles the numeric-narrowing wide-
+/// into-literal lift ([`WideNumeric::as_literal`]) needed by the
+/// narrowing pipeline. A future run that lifts `WideNumeric` to
+/// extend `AtomKwarg` as a supertrait (`WideNumeric: for<'a>
+/// AtomKwarg<'a>`) would collapse the two atom-family skeletons to
+/// ONE, keeping `WideNumeric` as the numeric-specific extension of
+/// the shared atom-kwarg contract — no per-caller change needed on
+/// the numeric-narrowing side, because the SHAPE + projection pair
+/// numeric callers reach through today would flow via inheritance.
+///
+/// The `'a` lifetime rides the trait so `&'a str` (whose atom
+/// projection borrows from the sexp) can implement it alongside
+/// `bool` (which is owned). The `Self: Sized` bound holds trivially
+/// for both.
+///
+/// A new atom-shaped kwarg type — a future `Symbol<'a>` primitive
+/// paired with `Sexp::as_symbol_str`, or a `Duration` primitive
+/// pairing an `ExpectedKwargShape::Duration` extension with a
+/// bespoke `Sexp` projection — plugs in via ONE `impl AtomKwarg`
+/// block (the SHAPE + projection pair) and picks up
+/// [`Self::extract_kwarg`] + [`Self::extract_optional_kwarg`]
+/// mechanically. No new public extractor names, no re-hand-rolled
+/// `extract_atom` skeleton.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry — the
+/// atom-typed kwarg gate IS the rust-level typed-entry rejection
+/// for primitive kwargs). THEORY.md §VI.1 (generation over
+/// composition — the SHAPE + projection pair recurs at FOUR sites
+/// past the three-times-rule trigger; lifting it to one trait
+/// skeleton closes them at rustc time). THEORY.md §V.1 (knowable
+/// platform — the four public extractors share ONE trait dispatch,
+/// so a future diagnostic promotion at [`extract_atom`] /
+/// [`extract_optional_atom`] flows through the trait defaults into
+/// every atom-kwarg extractor without per-extractor edits).
+pub trait AtomKwarg<'a>: Sized {
+    /// The axis's typed [`ExpectedKwargShape`] — the rejection
+    /// label this atom's outer type-gate quotes on a shape
+    /// mismatch. `<&'a str as AtomKwarg<'a>>::SHAPE` IS
+    /// [`ExpectedKwargShape::String`]; `<bool as AtomKwarg<'a>>::SHAPE`
+    /// IS [`ExpectedKwargShape::Bool`]. A regression that silently
+    /// swapped an axis's rejection label (a string axis returning
+    /// `Bool` on `:name 5`, letting the operator see the wrong
+    /// expected shape) would fail to compile the impl's const
+    /// clause.
+    const SHAPE: ExpectedKwargShape;
+
+    /// The axis's per-[`Sexp`] atom projection — the SAME
+    /// `Option<Self>` a hand-written [`extract_atom`] call would
+    /// pass as its `project` function. `<&'a str as
+    /// AtomKwarg<'a>>::project` IS [`Sexp::as_string`]; `<bool as
+    /// AtomKwarg<'_>>::project` IS [`Sexp::as_bool`].
+    fn project(sexp: &'a Sexp) -> Option<Self>;
+
+    /// Required atom-kwarg extractor — reads the kwarg at `key`,
+    /// projects it via [`Self::project`], and lifts a `None` (present-
+    /// but-not-this-axis or missing) into the atom-family
+    /// `LispError::TypeMismatch { expected: Self::SHAPE }`
+    /// rejection through the shared [`extract_atom`] skeleton.
+    /// Provided as a trait default composing `(Self::SHAPE,
+    /// Self::project)` — per-atom impls do not override this.
+    fn extract_kwarg(kw: &'a Kwargs<'a>, key: &str) -> Result<Self> {
+        extract_atom(kw, key, Self::SHAPE, Self::project)
+    }
+
+    /// `Option` sibling of [`Self::extract_kwarg`] — same per-axis
+    /// dispatch shape, absent kwarg short-circuits to `Ok(None)`
+    /// via the shared [`extract_optional_atom`] skeleton.
+    fn extract_optional_kwarg(kw: &'a Kwargs<'a>, key: &str) -> Result<Option<Self>> {
+        extract_optional_atom(kw, key, Self::SHAPE, Self::project)
+    }
 }
 
+impl<'a> AtomKwarg<'a> for &'a str {
+    const SHAPE: ExpectedKwargShape = ExpectedKwargShape::String;
+
+    fn project(sexp: &'a Sexp) -> Option<Self> {
+        sexp.as_string()
+    }
+}
+
+impl<'a> AtomKwarg<'a> for bool {
+    const SHAPE: ExpectedKwargShape = ExpectedKwargShape::Bool;
+
+    fn project(sexp: &'a Sexp) -> Option<Self> {
+        sexp.as_bool()
+    }
+}
+
+/// Required string kwarg — one-line delegate to `<&'a str as
+/// AtomKwarg<'a>>::extract_kwarg`, whose default composes
+/// `(<&'a str>::SHAPE, <&'a str>::project)` through [`extract_atom`].
+pub fn extract_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<&'a str> {
+    <&'a str as AtomKwarg<'a>>::extract_kwarg(kw, key)
+}
+
+/// `Option` sibling of [`extract_string`] — one-line delegate to
+/// `<&'a str as AtomKwarg<'a>>::extract_optional_kwarg`.
 pub fn extract_optional_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Option<&'a str>> {
-    extract_optional_atom(kw, key, ExpectedKwargShape::String, Sexp::as_string)
+    <&'a str as AtomKwarg<'a>>::extract_optional_kwarg(kw, key)
 }
 
 pub fn extract_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<String>> {
@@ -1957,12 +2076,17 @@ pub fn extract_float_list_narrowed<T: NarrowNumeric<f64>>(
     extract_narrowed_list::<f64, T>(kw, key)
 }
 
+/// Required bool kwarg — one-line delegate to `<bool as
+/// AtomKwarg<'_>>::extract_kwarg`, whose default composes
+/// `(<bool>::SHAPE, <bool>::project)` through [`extract_atom`].
 pub fn extract_bool(kw: &Kwargs<'_>, key: &str) -> Result<bool> {
-    extract_atom(kw, key, ExpectedKwargShape::Bool, Sexp::as_bool)
+    <bool as AtomKwarg<'_>>::extract_kwarg(kw, key)
 }
 
+/// `Option` sibling of [`extract_bool`] — one-line delegate to
+/// `<bool as AtomKwarg<'_>>::extract_optional_kwarg`.
 pub fn extract_optional_bool(kw: &Kwargs<'_>, key: &str) -> Result<Option<bool>> {
-    extract_optional_atom(kw, key, ExpectedKwargShape::Bool, Sexp::as_bool)
+    <bool as AtomKwarg<'_>>::extract_optional_kwarg(kw, key)
 }
 
 // ── Universal serde-Deserialize fallthrough (enums, nested structs, …) ──
@@ -3126,6 +3250,204 @@ mod tests {
             <f64 as WideNumeric>::extract_optional_kwarg(&absent_kw, "missing").unwrap(),
             None,
         );
+    }
+
+    /// The [`AtomKwarg`] trait bundles the two per-atom primitives
+    /// (`SHAPE` + `project`) every non-numeric atom extractor used
+    /// to spell inline through [`extract_atom`] /
+    /// [`extract_optional_atom`]. Pin the two per-axis primitives
+    /// AND their default composition at the trait dispatch level so
+    /// a regression that silently swapped one axis's SHAPE or
+    /// projection is a rustc-time failure, not a runtime drift:
+    ///
+    /// (1) `SHAPE` per axis — the associated const's type pins the
+    ///     axis-typed rejection label. A regression that swapped
+    ///     `<&str>::SHAPE = Bool` (so `:name 5` reported the wrong
+    ///     expected shape) would fail to compile the impl's const
+    ///     clause.
+    ///
+    /// (2) `project` per axis — the per-atom projection lifted out
+    ///     of `extract_string` / `extract_bool` bodies. `<&str>::
+    ///     project` MUST be byte-identical to [`Sexp::as_string`]
+    ///     and `<bool>::project` byte-identical to [`Sexp::as_bool`]
+    ///     on every atom shape. A regression that silently rerouted
+    ///     `<&str>::project` through `Sexp::as_bool` (so `:name #t`
+    ///     landed as `"true"` in a `String` field) surfaces here as
+    ///     a per-atom mismatch.
+    ///
+    /// (3) The trait DEFAULT `extract_kwarg` /
+    ///     `extract_optional_kwarg` — composes `(Self::SHAPE,
+    ///     Self::project)` through the shared atom-family
+    ///     skeleton. Its verdict on TOTAL / TYPE-MISMATCH / ABSENT
+    ///     inputs MUST match a hand-rolled `extract_atom(kw, key,
+    ///     Self::SHAPE, Self::project)` call byte-for-byte at both
+    ///     axes.
+    #[test]
+    fn atom_kwarg_shape_and_project_are_the_two_per_axis_primitives_the_extractor_default_composes()
+    {
+        // (1) SHAPE per axis.
+        assert_eq!(<&str as AtomKwarg<'_>>::SHAPE, ExpectedKwargShape::String);
+        assert_eq!(<bool as AtomKwarg<'_>>::SHAPE, ExpectedKwargShape::Bool);
+
+        // (2) project per axis — byte-identical to the pre-lift
+        //     `Sexp::as_string` / `Sexp::as_bool` calls at every
+        //     atom shape (accept its own, reject the other axes).
+        let string_atom = Sexp::Atom(Atom::Str("hello".to_string()));
+        let bool_atom = Sexp::Atom(Atom::Bool(true));
+        let int_atom = Sexp::Atom(Atom::Int(5));
+
+        assert_eq!(
+            <&str as AtomKwarg<'_>>::project(&string_atom),
+            string_atom.as_string(),
+        );
+        assert_eq!(<&str as AtomKwarg<'_>>::project(&bool_atom), None);
+        assert_eq!(<&str as AtomKwarg<'_>>::project(&int_atom), None);
+
+        assert_eq!(
+            <bool as AtomKwarg<'_>>::project(&bool_atom),
+            bool_atom.as_bool(),
+        );
+        assert_eq!(<bool as AtomKwarg<'_>>::project(&string_atom), None);
+        assert_eq!(<bool as AtomKwarg<'_>>::project(&int_atom), None);
+    }
+
+    /// The four public `extract_string` / `extract_optional_string`
+    /// / `extract_bool` / `extract_optional_bool` extractors are
+    /// now one-line delegates to the [`AtomKwarg`] trait dispatch,
+    /// so their verdicts MUST be byte-identical to the trait-method
+    /// call they delegate to on every input (TOTAL, TYPE-MISMATCH
+    /// with the same axis-typed `ExpectedKwargShape`, ABSENT on the
+    /// optional peer). Pin the delegation identity at the operator-
+    /// visible level: for every input each function accepts /
+    /// rejects, the corresponding trait method must produce the
+    /// SAME `Ok` value or the SAME `LispError::TypeMismatch`
+    /// variant with the SAME `ExpectedKwargShape`. A regression
+    /// that silently swapped one delegate's axis (`extract_string`
+    /// accidentally routing through `<bool>::extract_kwarg`, so
+    /// `:name "seven"` failed with the `Bool` rejection label
+    /// instead of `String`) surfaces here as an axis-typed identity
+    /// mismatch, not as a silent drift in the operator diagnostic.
+    #[test]
+    fn extract_string_and_extract_bool_delegate_to_the_atom_kwarg_trait_dispatch() {
+        // (1) TOTAL path — each public wrapper round-trips the
+        //     author's atom unchanged, identical to the trait
+        //     dispatch.
+        let string_args = kwargs_of("(_ :name \"alice\")");
+        let string_kw = parse_kwargs(&string_args).unwrap();
+        assert_eq!(extract_string(&string_kw, "name").unwrap(), "alice");
+        assert_eq!(
+            <&str as AtomKwarg<'_>>::extract_kwarg(&string_kw, "name").unwrap(),
+            extract_string(&string_kw, "name").unwrap(),
+        );
+        assert_eq!(
+            <&str as AtomKwarg<'_>>::extract_optional_kwarg(&string_kw, "name").unwrap(),
+            extract_optional_string(&string_kw, "name").unwrap(),
+        );
+
+        let bool_args = kwargs_of("(_ :enabled #t)");
+        let bool_kw = parse_kwargs(&bool_args).unwrap();
+        assert!(extract_bool(&bool_kw, "enabled").unwrap());
+        assert_eq!(
+            <bool as AtomKwarg<'_>>::extract_kwarg(&bool_kw, "enabled").unwrap(),
+            extract_bool(&bool_kw, "enabled").unwrap(),
+        );
+        assert_eq!(
+            <bool as AtomKwarg<'_>>::extract_optional_kwarg(&bool_kw, "enabled").unwrap(),
+            extract_optional_bool(&bool_kw, "enabled").unwrap(),
+        );
+
+        // (2) TYPE-MISMATCH path — the axis-typed
+        //     `ExpectedKwargShape` rides the rejection identity.
+        //     Feeding the wrong atom shape at each axis MUST land
+        //     with the axis's own `SHAPE`; a swapped delegate
+        //     would surface here as the wrong axis's label.
+        let cross_args = kwargs_of("(_ :name 5 :enabled \"maybe\")");
+        let cross_kw = parse_kwargs(&cross_args).unwrap();
+
+        let string_mismatch = extract_string(&cross_kw, "name").unwrap_err();
+        let string_trait_mismatch =
+            <&str as AtomKwarg<'_>>::extract_kwarg(&cross_kw, "name").unwrap_err();
+        assert!(
+            matches!(
+                &string_mismatch,
+                LispError::TypeMismatch { expected, .. }
+                    if *expected == ExpectedKwargShape::String,
+            ),
+            "string axis's ExpectedKwargShape is String, got {string_mismatch:?}",
+        );
+        assert!(
+            matches!(
+                &string_trait_mismatch,
+                LispError::TypeMismatch { expected, .. }
+                    if *expected == ExpectedKwargShape::String,
+            ),
+            "trait dispatch must match wrapper axis, got {string_trait_mismatch:?}",
+        );
+
+        let bool_mismatch = extract_bool(&cross_kw, "enabled").unwrap_err();
+        let bool_trait_mismatch =
+            <bool as AtomKwarg<'_>>::extract_kwarg(&cross_kw, "enabled").unwrap_err();
+        assert!(
+            matches!(
+                &bool_mismatch,
+                LispError::TypeMismatch { expected, .. }
+                    if *expected == ExpectedKwargShape::Bool,
+            ),
+            "bool axis's ExpectedKwargShape is Bool, got {bool_mismatch:?}",
+        );
+        assert!(
+            matches!(
+                &bool_trait_mismatch,
+                LispError::TypeMismatch { expected, .. }
+                    if *expected == ExpectedKwargShape::Bool,
+            ),
+            "trait dispatch must match wrapper axis, got {bool_trait_mismatch:?}",
+        );
+
+        // (3) ABSENT path on the optional wrapper — an absent
+        //     kwarg short-circuits to `Ok(None)`, matched by the
+        //     trait's optional default. The required wrapper
+        //     rejects with `MissingRequired`; the trait's required
+        //     default MUST reject in the same shape.
+        let absent_args = kwargs_of("(_ :other 1)");
+        let absent_kw = parse_kwargs(&absent_args).unwrap();
+        assert_eq!(
+            extract_optional_string(&absent_kw, "missing").unwrap(),
+            None
+        );
+        assert_eq!(
+            <&str as AtomKwarg<'_>>::extract_optional_kwarg(&absent_kw, "missing").unwrap(),
+            None,
+        );
+        assert_eq!(extract_optional_bool(&absent_kw, "missing").unwrap(), None);
+        assert_eq!(
+            <bool as AtomKwarg<'_>>::extract_optional_kwarg(&absent_kw, "missing").unwrap(),
+            None,
+        );
+
+        let required_string_missing = extract_string(&absent_kw, "missing").unwrap_err();
+        let trait_string_missing =
+            <&str as AtomKwarg<'_>>::extract_kwarg(&absent_kw, "missing").unwrap_err();
+        assert!(matches!(
+            &required_string_missing,
+            LispError::MissingKwarg { .. },
+        ));
+        assert!(matches!(
+            &trait_string_missing,
+            LispError::MissingKwarg { .. },
+        ));
+
+        let required_bool_missing = extract_bool(&absent_kw, "missing").unwrap_err();
+        let trait_bool_missing =
+            <bool as AtomKwarg<'_>>::extract_kwarg(&absent_kw, "missing").unwrap_err();
+        assert!(matches!(
+            &required_bool_missing,
+            LispError::MissingKwarg { .. },
+        ));
+        assert!(matches!(
+            &trait_bool_missing,
+            LispError::MissingKwarg { .. },
+        ));
     }
 
     /// `extract_narrowed<W, T>` / `extract_optional_narrowed<W, T>`

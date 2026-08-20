@@ -1422,6 +1422,96 @@ where
         .collect()
 }
 
+/// Present-vs-absent bifurcation over an absent-tolerant required
+/// list-family extractor — the SAME `if kw.contains_key(key) {
+/// extract_required(kw, key).map(Some) } else { Ok(None) }` shape that
+/// lived inline at THREE call sites past this lift
+/// ([`extract_optional_string_list`] / [`extract_optional_bool_list`] /
+/// [`extract_optional_narrowed_list`]), collapsed to ONE substrate
+/// primitive.
+///
+/// Semantic role: convert an absent-tolerant required list-family
+/// extractor (one whose absent-kwarg posture is `Ok(Vec::new())` —
+/// [`extract_list`]'s outer contract, inherited by
+/// [`extract_string_list`] / [`extract_bool_list`] /
+/// [`extract_narrowed_list`]) into its `Option<Vec<T>>`-shaped optional
+/// peer (whose absent-kwarg posture is `Ok(None)` — the load-bearing
+/// distinction from a PRESENT empty list `Ok(Some(Vec::new()))`). The
+/// required peer collapses "no items" and "no kwarg" to the same empty
+/// vec — which fits `Vec<T>` fields where the two are
+/// semantically equivalent — but loses the operator's intent on
+/// `Option<Vec<T>>` fields where "the operator did not name this
+/// kwarg" and "the operator explicitly bound the kwarg to an empty
+/// list" are DISTINCT.
+///
+/// The primitive's contract:
+///   1. Absent kwarg → `Ok(None)`. `extract_required` is NOT invoked,
+///      so its own absent-tolerant posture (`Ok(Vec::new())`) does
+///      not leak into the optional peer's result.
+///   2. Present kwarg → `extract_required(kw, key).map(Some)`. Every
+///      rejection variant the required extractor emits (outer-shape
+///      mismatch on `:tags 7`, per-item shape/narrowing rejection on
+///      `:tags (list "a" 7)` / `:ports (list 80 70000)`) propagates
+///      unchanged, wrapped in `Err(_)`; a successful decode wraps in
+///      `Some(_)`. The two peers share ONE rejection vocabulary.
+///
+/// Peer to [`extract_optional_atom`] on the atom-family (scalar) axis:
+/// both encode the present-vs-absent bifurcation as a private
+/// substrate primitive, differing only in the shape of the required
+/// half — [`extract_optional_atom`] takes an `(expected, project)`
+/// pair and inlines the projection; this primitive takes a full
+/// required-shape extractor closure. The scalar-axis peer can inline
+/// the projection because its required peer emits `MissingKwarg` on
+/// absence (so we must NOT delegate on absence); the list-family
+/// peer's required extractor is absent-tolerant (returns `Vec::new()`
+/// on absence), so the outer `contains_key` gate exists specifically
+/// to prevent the required peer's absent-tolerant posture from
+/// collapsing the `None` / `Some(vec![])` distinction — a subtlety
+/// the private primitive names once so no per-optional-list-peer
+/// caller has to.
+///
+/// A future new optional list-family extractor — a hypothetical
+/// `extract_optional_symbol_list` (paired with a `Symbol` atom
+/// impl of [`AtomKwarg`]), or an `extract_optional_vec_domain<D>`
+/// for `Option<Vec<Nested>>` fields once the derive's
+/// `Kind::VecDeserialize` catch-all sharpens into a typed nested-
+/// domain arm — plugs in as a one-line delegate to this primitive,
+/// same posture the THREE existing optional-list peers now take. No
+/// new inline bifurcation, no risk of the "absent-collapses-into-
+/// present-empty" trap the required peer's posture used to invite.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// present-vs-absent + delegate-to-required shape recurred at THREE
+/// list-family sites past the three-times-rule trigger, all with a
+/// byte-identical `if kw.contains_key(key) {...} else { Ok(None) }`
+/// body; lifting the shape to ONE primitive closes them at rustc
+/// time). THEORY.md §II.1 invariant 2 (free middle — the optional-
+/// vs-required peer distinction lives at ONE substrate primitive,
+/// not restated at every optional-list-peer callsite; a future
+/// diagnostic promotion on the present-vs-absent gate — a probe, a
+/// metric, a span — lands at THIS one owner and flows to every
+/// existing + future optional-list peer without a per-caller edit).
+/// THEORY.md §V.1 (knowable platform — every optional-list peer's
+/// present-vs-absent bifurcation now routes through ONE named
+/// substrate primitive, so a future audit-trail metric jointly
+/// labeled by "which optional-list peer fired" and "was the kwarg
+/// present" binds mechanically without a per-peer bifurcation
+/// re-implementation).
+fn optional_from_required<F, T>(
+    kw: &Kwargs<'_>,
+    key: &str,
+    extract_required: F,
+) -> Result<Option<T>>
+where
+    F: FnOnce(&Kwargs<'_>, &str) -> Result<T>,
+{
+    if kw.contains_key(key) {
+        extract_required(kw, key).map(Some)
+    } else {
+        Ok(None)
+    }
+}
+
 /// Atom-typed kwarg trait — the non-numeric peer of [`WideNumeric`]
 /// on the atom-family kwarg extraction axis. Bundles the two
 /// per-atom primitives every non-numeric atom extractor used to
@@ -1707,11 +1797,7 @@ pub fn extract_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<String>> {
 /// [`LispError::TypeMismatch`] variant every authoring surface (LSP,
 /// `tatara-check`, REPL) already binds to for the required peer).
 pub fn extract_optional_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Option<Vec<String>>> {
-    if kw.contains_key(key) {
-        extract_string_list(kw, key).map(Some)
-    } else {
-        Ok(None)
-    }
+    optional_from_required(kw, key, extract_string_list)
 }
 
 /// Required integer kwarg — one-line delegate to `<i64 as
@@ -2311,11 +2397,7 @@ where
     W: WideNumeric,
     T: NarrowNumeric<W>,
 {
-    if kw.contains_key(key) {
-        extract_narrowed_list::<W, T>(kw, key).map(Some)
-    } else {
-        Ok(None)
-    }
+    optional_from_required(kw, key, extract_narrowed_list::<W, T>)
 }
 
 /// `Vec<T>` integer-list field projected into the item's own width —
@@ -2535,11 +2617,7 @@ pub fn extract_bool_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<bool>> {
 /// authoring surface (LSP, `tatara-check`, REPL) already binds to
 /// for the required peer).
 pub fn extract_optional_bool_list(kw: &Kwargs<'_>, key: &str) -> Result<Option<Vec<bool>>> {
-    if kw.contains_key(key) {
-        extract_bool_list(kw, key).map(Some)
-    } else {
-        Ok(None)
-    }
+    optional_from_required(kw, key, extract_bool_list)
 }
 
 // ── Universal serde-Deserialize fallthrough (enums, nested structs, …) ──
@@ -6426,6 +6504,138 @@ mod tests {
 
     fn type_err_message(err: LispError) -> String {
         format!("{err}")
+    }
+
+    // ── optional_from_required — the primitive under the THREE optional-
+    // list peers (`extract_optional_string_list` / `extract_optional_bool_list`
+    // / `extract_optional_narrowed_list`) tests ─────────────────────────
+    //
+    // The primitive owns the "present-vs-absent bifurcation over an
+    // absent-tolerant required list-family extractor" shape. The three
+    // observable properties every optional-list peer inherits from it:
+    //   (1) absent kwarg → `Ok(None)`, and the required extractor is NOT
+    //       invoked — so its absent-tolerant `Ok(Vec::new())` posture
+    //       cannot leak into the optional peer's result and collapse the
+    //       `None` / `Some(vec![])` distinction.
+    //   (2) present kwarg → the required extractor's result is wrapped in
+    //       `Some(_)` on success.
+    //   (3) present kwarg + required extractor rejects → the required's
+    //       rejection propagates through unchanged (byte-identical
+    //       variant identity + payload), so both peers on the same axis
+    //       share ONE rejection vocabulary.
+    //
+    // Pinning the three properties at the primitive itself — rather than
+    // only at the three peer sites through their behavior sweeps — means
+    // a regression that changes the primitive's shape (a swap to
+    // `optional(kw, key).is_some()` posture — semantically equivalent
+    // today but a substrate primitive to name; a hypothetical fault-
+    // injection point on the bifurcation gate; a diagnostic promotion
+    // that fires the required extractor even on absence) surfaces HERE
+    // rather than only at the three peer sites' behavior tests where the
+    // primitive is one layer down.
+
+    #[test]
+    fn optional_from_required_returns_none_when_kwarg_absent_and_never_invokes_required() {
+        // (1) Absent kwarg (`:tags` is NOT present in `(_ :other 1)`) —
+        // the primitive must return `Ok(None)` WITHOUT invoking the
+        // required extractor. Prove non-invocation with a closure that
+        // would panic if called: reaching the closure body is a
+        // regression that would collapse an absent kwarg into the
+        // required peer's absent-tolerant posture (`Ok(Vec::new())`
+        // wrapped in `Some`, losing the `None` / `Some(vec![])`
+        // distinction).
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        let result: Result<Option<Vec<String>>> = optional_from_required(&kw, "tags", |_, _| {
+            panic!("required extractor invoked on absent kwarg")
+        });
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[test]
+    fn optional_from_required_wraps_required_success_in_some_when_kwarg_present() {
+        // (2) Present kwarg (`:tags ("a" "b")` is present) — the
+        // primitive must invoke the required extractor and wrap its
+        // successful result in `Some(_)`. Delegate to
+        // [`extract_string_list`] to prove the wrapping is byte-identical
+        // to the required peer's own result — the primitive does NOT
+        // decorate, transform, or filter the required extractor's
+        // output; it only wraps.
+        let args = kwargs_of(r#"(_ :tags ("a" "b"))"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let via_primitive: Option<Vec<String>> =
+            optional_from_required(&kw, "tags", extract_string_list).unwrap();
+        let via_required: Vec<String> = extract_string_list(&kw, "tags").unwrap();
+        assert_eq!(via_primitive, Some(via_required));
+    }
+
+    #[test]
+    fn optional_from_required_wraps_present_empty_list_in_some_empty_vec_not_none() {
+        // (2) Load-bearing sub-case of the present-arm contract: a
+        // PRESENT empty list (`:tags ()`) must wrap as `Some(vec![])`,
+        // NOT collapse to `None`. This is the exact distinction the
+        // outer `contains_key` gate exists to preserve — a regression
+        // that inspected the required extractor's result-shape (e.g.
+        // `.filter(|v| !v.is_empty())` before wrapping) would surface
+        // here as `None` where the operator wrote `()` explicitly.
+        let args = kwargs_of("(_ :tags ())");
+        let kw = parse_kwargs(&args).unwrap();
+        let result: Option<Vec<String>> =
+            optional_from_required(&kw, "tags", extract_string_list).unwrap();
+        assert_eq!(result, Some(Vec::<String>::new()));
+    }
+
+    #[test]
+    fn optional_from_required_propagates_required_error_unchanged() {
+        // (3) Present kwarg + required extractor rejects → the required
+        // extractor's rejection variant propagates through the
+        // primitive byte-identically. Feed a synthetic required
+        // extractor that returns a pinned `LispError::MissingKwarg`
+        // (regardless of what's actually in the kwarg map — the
+        // primitive shouldn't inspect the required extractor's
+        // internals, only wire its result); pin that the exact same
+        // `LispError` variant + payload comes out. Any wrapping that
+        // altered the error path (`.map_err(|e| some_transform(e))`,
+        // structural repackaging) would drift the two peers' rejection
+        // vocabularies apart.
+        let args = kwargs_of("(_ :tags 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        let injected = missing_kwarg("synthetic");
+        let injected_display = format!("{injected}");
+        let result: Result<Option<Vec<String>>> =
+            optional_from_required(&kw, "tags", |_, _| Err(injected));
+        let err =
+            result.expect_err("required extractor injected an error; primitive must propagate");
+        assert!(
+            matches!(err, LispError::MissingKwarg { .. }),
+            "expected LispError::MissingKwarg propagated verbatim, got {err:?}",
+        );
+        assert_eq!(format!("{err}"), injected_display);
+    }
+
+    #[test]
+    fn optional_from_required_present_arm_forwards_required_rejection_on_shape_mismatch() {
+        // (3) End-to-end propagation with a real required extractor:
+        // `:tags 7` is present but not a list. `extract_string_list`
+        // rejects with `LispError::TypeMismatch { expected:
+        // ListOfStrings, got: Int }`; the primitive must forward that
+        // exact variant + rendered message. Pinning here rather than
+        // only at `extract_optional_string_list_type_err_on_scalar_names_got_int`
+        // means a future regression that bypassed the required
+        // extractor's outer gate (e.g., a permissive posture that
+        // wrapped any present sexp in `Some` without decoding it)
+        // surfaces at the primitive layer directly.
+        let args = kwargs_of("(_ :tags 7)");
+        let kw = parse_kwargs(&args).unwrap();
+        let via_primitive_err = optional_from_required(&kw, "tags", extract_string_list)
+            .expect_err("scalar :tags is not a list");
+        let via_required_err =
+            extract_string_list(&kw, "tags").expect_err("scalar :tags is not a list");
+        assert!(matches!(via_primitive_err, LispError::TypeMismatch { .. }));
+        assert_eq!(
+            type_err_message(via_primitive_err),
+            type_err_message(via_required_err),
+        );
     }
 
     #[test]

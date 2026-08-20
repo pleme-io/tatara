@@ -1131,52 +1131,54 @@ fn has_serde_default(field: &syn::Field) -> bool {
 /// the `Ident::new` discipline the peer `via_ident` /
 /// `unknown_ident` resolvers on line 185 already use), and emits
 /// the fully-qualified `::tatara_lisp::domain::<extractor>::<T>(
-/// &kw, #key)?` call the six arms all share. Each of the six
-/// numeric-narrowed arms is now a ONE-LINE delegate onto this
-/// helper.
+/// &kw, #key)?` call every numeric-narrowed arm shares. Each of
+/// the eight numeric-narrowed arms (four per axis: scalar / optional-
+/// scalar / vec / optional-vec, both int and float) is now a
+/// ONE-LINE delegate onto this helper.
 ///
 /// The `extractor` parameter is a `&'static str` — the ONE
 /// per-arm axis-mode identity — chosen for two reasons:
 ///
 /// 1. it composes byte-for-byte with the `#[static]`-lifetime
 ///    `Kind::Int(&'static str)` / `Kind::VecInt(&'static str)` /
-///    etc. payload's own `'static` lifetime origin, so the six
-///    call sites don't need to `.to_string()` anything to feed
-///    the helper;
-/// 2. the string identity (six known values —
+///    `Kind::OptionalVecInt(&'static str)` / etc. payload's own
+///    `'static` lifetime origin, so the eight call sites don't need
+///    to `.to_string()` anything to feed the helper;
+/// 2. the string identity (eight known values —
 ///    `extract_int_narrowed` / `extract_optional_int_narrowed` /
-///    `extract_int_list_narrowed` / `extract_float_narrowed` /
-///    `extract_optional_float_narrowed` /
-///    `extract_float_list_narrowed`) is pinned per-arm at the
-///    derive's `extractor_for` call site, so a regression that
+///    `extract_int_list_narrowed` / `extract_optional_int_list_narrowed` /
+///    `extract_float_narrowed` / `extract_optional_float_narrowed` /
+///    `extract_float_list_narrowed` /
+///    `extract_optional_float_list_narrowed`) is pinned per-arm at
+///    the derive's `extractor_for` call site, so a regression that
 ///    silently swapped ONE arm's extractor name would surface at
-///    the six-arm-labeled sibling test in
-///    `narrowed_extractor_call_tests` below rather than as silent
-///    drift at every downstream implementor with a field of that
-///    (axis, mode) shape.
+///    the sibling test in `narrowed_extractor_call_tests` below
+///    rather than as silent drift at every downstream implementor
+///    with a field of that (axis, mode) shape.
 ///
 /// Future structural promotion of the emitted call (a caller-supplied
 /// diagnostic span, a `?`-suppressed variant that plumbs the
 /// axis-typed rejection through a `Result` chain rather than a `?`,
-/// or an extension of the six-name set with a new axis or mode) lands
-/// at ONE substrate primitive here — the six per-Kind arms and every
-/// future new numeric-narrowed arm pick up the upgrade mechanically,
-/// with no per-arm hand-edit. Same property [`extract_atom`] /
-/// [`extract_optional_atom`] / [`extract_list`] give the atom-family
-/// / list-family primitives on the `tatara_lisp::domain` side.
+/// or an extension of the eight-name set with a new axis or mode)
+/// lands at ONE substrate primitive here — the eight per-Kind arms
+/// and every future new numeric-narrowed arm pick up the upgrade
+/// mechanically, with no per-arm hand-edit. Same property
+/// [`extract_atom`] / [`extract_optional_atom`] / [`extract_list`]
+/// give the atom-family / list-family primitives on the
+/// `tatara_lisp::domain` side.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition;
 /// the (parse-payload-as-turbofish, wrap-in-axis-mode-extractor-call)
-/// two-step recurred at the six axis-mode arms (well past the
+/// two-step recurred at the eight axis-mode arms (well past the
 /// PRIME-DIRECTIVE ≥2 trigger) and is lifted to one owner here,
 /// exactly as the atom skeleton was lifted on the domain side.
 /// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
-/// six arms now compose structurally through ONE helper, so a future
-/// third numeric axis or a fourth mode lands as ONE new one-line
-/// delegate at the [`extractor_for`] match plus a new `&'static str`
-/// axis-mode extractor name flowed through the same helper — the
-/// derive's numeric-narrowing emission surface stays at ONE substrate
-/// primitive.
+/// eight arms now compose structurally through ONE helper, so a
+/// future third numeric axis or a fifth mode lands as ONE new
+/// one-line delegate at the [`extractor_for`] match plus a new
+/// `&'static str` axis-mode extractor name flowed through the same
+/// helper — the derive's numeric-narrowing emission surface stays
+/// at ONE substrate primitive.
 fn narrowed_extractor_call(extractor: &'static str, rust_ty: &str, key: &str) -> TokenStream2 {
     let narrowed: TokenStream2 = rust_ty.parse().unwrap();
     let extractor = Ident::new(extractor, proc_macro2::Span::call_site());
@@ -1248,14 +1250,14 @@ fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2
         },
         // ── The six numeric-narrowed arms: NARROWED, never `as`-cast ──
         //
-        // Pre-lift each of the six arms (three per axis: scalar /
-        // optional / list) hand-wrote the two-step (parse the
-        // payload's width literal as a turbofish, wrap it in the
-        // axis-mode-specific extractor call) at six sites in
-        // this match. Post-lift they collapse to one-line delegates
-        // onto [`narrowed_extractor_call`], which owns the shared
-        // scaffold at ONE substrate primitive — see its docstring
-        // for the load-bearing invariants.
+        // Pre-lift each of the eight arms (four per axis: scalar /
+        // optional-scalar / vec / optional-vec) hand-wrote the two-
+        // step (parse the payload's width literal as a turbofish,
+        // wrap it in the axis-mode-specific extractor call) at eight
+        // sites in this match. Post-lift they collapse to one-line
+        // delegates onto [`narrowed_extractor_call`], which owns the
+        // shared scaffold at ONE substrate primitive — see its
+        // docstring for the load-bearing invariants.
         //
         // The scalar-mode axis matters here: the pre-lift emitted
         // code for `Kind::Int(_)` used to end with a raw Rust `as`
@@ -1282,6 +1284,24 @@ fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2
         Kind::VecInt(rust_ty) => narrowed_extractor_call("extract_int_list_narrowed", rust_ty, key),
         Kind::VecFloat(rust_ty) => {
             narrowed_extractor_call("extract_float_list_narrowed", rust_ty, key)
+        }
+        // Optional-vec numeric-narrowed peers of the required-vec
+        // arms directly above — the width payload rides the SAME
+        // `narrowed_extractor_call` helper into the outer-`Option`
+        // extractor's turbofish, so a per-item narrowing failure on
+        // `Option<Vec<u16>>` / `Option<Vec<f32>>` surfaces with the
+        // SAME `NumericWidth::U16` / `NumericWidth::F32` identity its
+        // required peer emits. Together these two arms close the last
+        // two atom-family list-family axis-mode combinations that
+        // still fell through the universal-serde bridge; post-lift
+        // the derive dispatch surface covers the full Cartesian
+        // product across {scalar, optional-scalar, vec, optional-vec}
+        // × {String, Bool, Int, Float} for the atom-family axes.
+        Kind::OptionalVecInt(rust_ty) => {
+            narrowed_extractor_call("extract_optional_int_list_narrowed", rust_ty, key)
+        }
+        Kind::OptionalVecFloat(rust_ty) => {
+            narrowed_extractor_call("extract_optional_float_list_narrowed", rust_ty, key)
         }
         Kind::Int(rust_ty) => narrowed_extractor_call("extract_int_narrowed", rust_ty, key),
         Kind::OptionalInt(rust_ty) => {
@@ -1449,6 +1469,56 @@ enum Kind {
     /// / required-vec-float axes each grew ONE arm through their per-
     /// axis extension).
     OptionalVecBool,
+    /// `Option<Vec<T>>` on the integer-narrowing axis — routes through
+    /// [`tatara_lisp::domain::extract_optional_int_list_narrowed::<T>`],
+    /// the present-vs-absent bifurcated peer of [`Self::VecInt`] on the
+    /// int axis and the numeric-narrowing peer of [`Self::OptionalVecBool`]
+    /// / [`Self::OptionalVecString`] on the optional-vec atom-family
+    /// surface. Carries the width literal the required-peer [`Self::VecInt`]
+    /// arm threads through the emitted extractor's TURBOFISH — the width
+    /// identity rides `extract_optional_int_list_narrowed::<T>` in ONE
+    /// place at emit, so the per-item narrowing rejection carries the
+    /// same typed `NumericWidth` identity
+    /// ([`crate::error::LispError::KwargOutOfRange.target`]) its
+    /// required peer emits, only wrapped in the `Option` layer.
+    ///
+    /// Pre-lift `Option<Vec<T>>` on every integer width fell through
+    /// `classify_option`'s catch-all arm to
+    /// [`Self::OptionalDeserialize`] (the universal `sexp_to_json` +
+    /// `serde_json::from_value` bridge — no `Option<Vec<T>>` numeric
+    /// arm on the recursor), so a per-item out-of-range value on
+    /// `:ports (list 80 70000)` into an `Option<Vec<u16>>` field
+    /// surfaced as a mystery
+    /// `KwargDeserialize { message: "invalid value: integer 70000,
+    /// expected u16 at path .1" }` substring rather than as the typed
+    /// `KwargOutOfRange { form: Item { key, idx }, target: U16, value:
+    /// Int(70_000) }` its REQUIRED peer (`ports: Vec<u16>`) already
+    /// emits at the per-item narrowing gate. Post-lift the two peers
+    /// on the same integer axis speak the same typed rejection
+    /// vocabulary. Sibling routing lift to [`Self::VecInt`] on the
+    /// required-vec-int axis, to [`Self::OptionalInt`] on the
+    /// optional-scalar-int axis, and to [`Self::OptionalVecBool`] /
+    /// [`Self::OptionalVecString`] on the optional-vec atom-family
+    /// non-numeric surface. Together with [`Self::OptionalVecFloat`],
+    /// closes the last two remaining atom-family list-family axis-
+    /// mode combinations that still fell through the universal-serde
+    /// bridge — completing the Cartesian product across {scalar,
+    /// optional-scalar, vec, optional-vec} × {String, Bool, Int,
+    /// Float} for the atom-family axes at the derive dispatch surface.
+    OptionalVecInt(&'static str),
+    /// Sibling of [`Self::OptionalVecInt`] on the float axis —
+    /// `Option<Vec<f32>>` / `Option<Vec<f64>>`. Routes through
+    /// [`tatara_lisp::domain::extract_optional_float_list_narrowed::<T>`]
+    /// so a per-item lossy-to-inf overflow on the float axis
+    /// (`(list 1.0 1.0e300)` into an `Option<Vec<f32>>` field)
+    /// rejects as the typed `NumericWidth::F32` /
+    /// `NumericLiteral::Float(_)` pair the required peer
+    /// [`Self::VecFloat`] emits, not the mystery serde substring the
+    /// universal-Deserialize fallthrough would surface. See the doc-
+    /// paragraph on [`Self::OptionalVecInt`] for the full pre-/post-
+    /// lift shape — the axis identity riding `<f32>` / `<f64>` is
+    /// what changes here, not the scaffold.
+    OptionalVecFloat(&'static str),
     /// Fall-through: any type implementing `serde::Deserialize`.
     Deserialize,
     OptionalDeserialize,
@@ -1526,6 +1596,42 @@ fn classify_option(last: &syn::PathSegment) -> Kind {
         // optional-vec-string `Option<Vec<String>>` →
         // `Kind::OptionalVecString` arm above.
         Kind::VecBool => Kind::OptionalVecBool,
+        // `Option<Vec<T>>` on the integer-narrowing axis composes the
+        // outer `Option` recursor with the `Vec<T>` recursor
+        // `classify_vec`, which projects `Vec<u16>` / `Vec<i32>` / etc.
+        // to `Kind::VecInt(<literal>)`. This arm sharpens the composed
+        // `Option<VecInt(<literal>)>` to the typed `Kind::OptionalVecInt`
+        // variant, forwarding the width payload through unchanged so
+        // the per-item narrowing gate rides `<T>` in ONE turbofish at
+        // emit — same posture the required-peer `Kind::VecInt` arm on
+        // `classify_vec` and the scalar-peer `Kind::OptionalInt` arm
+        // above take on the int axis. Pre-lift `Option<Vec<u16>>` fell
+        // through the catch-all to `Kind::OptionalDeserialize` (the
+        // universal `sexp_to_json` + `serde_json::from_value` bridge —
+        // whose per-item narrowing failure surfaces as a
+        // `LispError::KwargDeserialize` substring rather than the typed
+        // `LispError::KwargOutOfRange { target, value }` its required
+        // peer `Kind::VecInt` already emits at the per-item narrowing
+        // gate). Sibling routing lift to the required-vec-int
+        // `Kind::VecInt` arm on `classify_vec` and to the
+        // optional-scalar-int `Kind::OptionalInt` arm above; together
+        // with the peer `Kind::VecFloat → Kind::OptionalVecFloat` arm
+        // below, closes the last two remaining atom-family list-family
+        // axis-mode combinations that still fell through the universal-
+        // serde bridge at `classify_option` — completing the Cartesian
+        // product across {scalar, optional-scalar, vec, optional-vec}
+        // × {String, Bool, Int, Float} for the atom-family axes at the
+        // derive dispatch surface.
+        Kind::VecInt(t) => Kind::OptionalVecInt(t),
+        // Float-axis sibling of the `Kind::VecInt → Kind::OptionalVecInt`
+        // arm above. `Option<Vec<f32>>` / `Option<Vec<f64>>` compose
+        // through `classify_vec`'s `Vec<f32>` / `Vec<f64>` →
+        // `Kind::VecFloat(<literal>)` projection and sharpen here to
+        // `Kind::OptionalVecFloat`, forwarding the float-width payload
+        // through unchanged. Same pre-/post-lift shape as its int-axis
+        // peer — the axis identity riding `<f32>` / `<f64>` is what
+        // changes, not the scaffold.
+        Kind::VecFloat(t) => Kind::OptionalVecFloat(t),
         _ => Kind::OptionalDeserialize,
     }
 }
@@ -1937,32 +2043,32 @@ mod classify_tests {
         // `Kind::OptionalDeserialize`. Pin the catch-all: a nested
         // struct (`Option<MonitorSpec>`), an enum
         // (`Option<Severity>`), and the residual `Option<Vec<T>>`
-        // shapes on axes with no typed peer yet (`Option<Vec<u16>>`,
-        // `Option<Vec<f32>>`, `Option<Vec<MonitorSpec>>`) all land at
-        // the same arm. The two `Option<Vec<T>>` axes with a typed
-        // peer today — `Option<Vec<String>>` sharpening to
-        // `Kind::OptionalVecString`, `Option<Vec<bool>>` sharpening
-        // to `Kind::OptionalVecBool` — are pinned by the sibling
+        // shape with no typed peer today (`Option<Vec<MonitorSpec>>`
+        // and any hypothetical future `Option<Vec<<nested>>>`) lands
+        // at the same arm. All four `Option<Vec<T>>` atom-family axes
+        // now have typed peers — `Option<Vec<String>>` /
+        // `Option<Vec<bool>>` / `Option<Vec<Int>>` /
+        // `Option<Vec<Float>>` sharpening to `Kind::OptionalVecString`
+        // / `Kind::OptionalVecBool` / `Kind::OptionalVecInt(_)` /
+        // `Kind::OptionalVecFloat(_)` respectively, closing the
+        // Cartesian product across {scalar, optional-scalar, vec,
+        // optional-vec} × {String, Bool, Int, Float} — pinned by the
+        // sibling
         // `optional_vec_of_string_classifies_as_kind_optional_vec_string`
         // / `optional_vec_of_bool_classifies_as_kind_optional_vec_bool`
-        // tests. A regression that added a new Kind variant for one
-        // of the remaining compositions without updating the recursor
-        // arm mapping would silently drift the extractor at every
-        // consumer.
+        // /
+        // `optional_vec_of_supported_integer_width_classifies_as_kind_optional_vec_int_with_matching_type_literal`
+        // /
+        // `optional_vec_of_supported_float_width_classifies_as_kind_optional_vec_float_with_matching_type_literal`
+        // tests. A regression that added a new Kind variant for one of
+        // the remaining compositions without updating the recursor arm
+        // mapping would silently drift the extractor at every consumer.
         assert!(matches!(
             classify(&parse_ty("Option<MonitorSpec>")),
             Kind::OptionalDeserialize
         ));
         assert!(matches!(
             classify(&parse_ty("Option<Severity>")),
-            Kind::OptionalDeserialize
-        ));
-        assert!(matches!(
-            classify(&parse_ty("Option<Vec<u16>>")),
-            Kind::OptionalDeserialize
-        ));
-        assert!(matches!(
-            classify(&parse_ty("Option<Vec<f32>>")),
             Kind::OptionalDeserialize
         ));
         assert!(matches!(
@@ -2038,6 +2144,107 @@ mod classify_tests {
         assert!(matches!(
             classify(&parse_ty("Option<Vec<bool>>")),
             Kind::OptionalVecBool
+        ));
+    }
+
+    #[test]
+    fn optional_vec_of_supported_integer_width_classifies_as_kind_optional_vec_int_with_matching_type_literal(
+    ) {
+        // `Option<Vec<T>>` where `T` is one of the ten supported integer
+        // widths composes the outer `Option` recursor with the `Vec<T>`
+        // recursor `classify_vec` (which projects `Vec<u16>` to
+        // `Kind::VecInt("u16")`); `classify_option`'s per-narrowed-vec
+        // arm sharpens the composition to
+        // `Kind::OptionalVecInt(<literal>)`, forwarding the width payload
+        // through unchanged so the per-item narrowing gate rides `<T>` in
+        // ONE turbofish at emit — same posture the required-peer
+        // `Kind::VecInt(_)` arm and the scalar-peer `Kind::OptionalInt(_)`
+        // arm take on the int axis.
+        //
+        // Pre-lift `Option<Vec<u16>>` / `Option<Vec<i32>>` / etc. fell
+        // through the catch-all to `Kind::OptionalDeserialize` (the
+        // universal `sexp_to_json` + `serde_json::from_value` bridge —
+        // whose per-item narrowing failure surfaced as a
+        // `LispError::KwargDeserialize { message: "invalid value:
+        // integer 70000, expected u16 at path .1" }` substring rather
+        // than as the typed `KwargOutOfRange { target: U16, value:
+        // Int(70_000) }` its required peer `Kind::VecInt("u16")` already
+        // emits at the per-item narrowing gate). Post-lift the two peers
+        // on the same integer axis speak the same typed rejection
+        // vocabulary.
+        //
+        // Sweep the same ten widths the required-peer `Kind::VecInt(_)`
+        // classify sweep pins so a regression that (a) dropped ONE width
+        // from `classify_option`'s per-narrowed-vec routing (e.g.
+        // accidentally leaving `Option<Vec<u16>>` on the fall-through),
+        // (b) mis-labeled ONE width's payload, or (c) collapsed the
+        // payload to a shared literal would surface here rather than as
+        // silent routing drift at every downstream consumer with a
+        // per-width optional-numeric-vec field.
+        assert!(matches!(
+            classify(&parse_ty("Option<Vec<i8>>")),
+            Kind::OptionalVecInt("i8")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<Vec<i16>>")),
+            Kind::OptionalVecInt("i16")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<Vec<i32>>")),
+            Kind::OptionalVecInt("i32")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<Vec<i64>>")),
+            Kind::OptionalVecInt("i64")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<Vec<u8>>")),
+            Kind::OptionalVecInt("u8")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<Vec<u16>>")),
+            Kind::OptionalVecInt("u16")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<Vec<u32>>")),
+            Kind::OptionalVecInt("u32")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<Vec<u64>>")),
+            Kind::OptionalVecInt("u64")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<Vec<usize>>")),
+            Kind::OptionalVecInt("usize")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<Vec<isize>>")),
+            Kind::OptionalVecInt("isize")
+        ));
+    }
+
+    #[test]
+    fn optional_vec_of_supported_float_width_classifies_as_kind_optional_vec_float_with_matching_type_literal(
+    ) {
+        // Float-axis sibling of the integer-axis optional-vec classify
+        // sweep — `Option<Vec<f32>>` / `Option<Vec<f64>>` each route
+        // through `Kind::OptionalVecFloat(<literal>)`, threading the
+        // width name through the payload for the emitted narrowing
+        // turbofish on `extract_optional_float_list_narrowed`'s per-
+        // item `f64` return. Pin per-width so a regression that dropped
+        // `Option<Vec<f32>>` (folding it back into
+        // `Kind::OptionalDeserialize`) would silently rewire every
+        // `Option<Vec<f32>>` field back to the universal-serde bridge —
+        // the operator would see NO diagnostic drift at the derive site
+        // but the downstream per-item rejection would revert to the
+        // mystery serde substring shape.
+        assert!(matches!(
+            classify(&parse_ty("Option<Vec<f64>>")),
+            Kind::OptionalVecFloat("f64")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<Vec<f32>>")),
+            Kind::OptionalVecFloat("f32")
         ));
     }
 
@@ -2283,13 +2490,14 @@ mod narrowed_extractor_call_tests {
     use quote::quote;
 
     // The `(extractor, rust_ty, key) -> TokenStream2` helper is the
-    // derive's PRIVATE emission scaffold for the SIX numeric-narrowed
+    // derive's PRIVATE emission scaffold for the EIGHT numeric-narrowed
     // arms in `extractor_for` (`Kind::Int(_)` / `Kind::OptionalInt(_)`
-    // / `Kind::VecInt(_)` / `Kind::Float(_)` / `Kind::OptionalFloat(_)`
-    // / `Kind::VecFloat(_)`). Each arm is now a one-line delegate onto
-    // this helper; the shared scaffold — parse the payload's width
-    // literal as a TURBOFISH, resolve the extractor `Ident` at the
-    // derive's call-site span, emit the fully-qualified
+    // / `Kind::VecInt(_)` / `Kind::OptionalVecInt(_)` /
+    // `Kind::Float(_)` / `Kind::OptionalFloat(_)` / `Kind::VecFloat(_)`
+    // / `Kind::OptionalVecFloat(_)`). Each arm is now a one-line
+    // delegate onto this helper; the shared scaffold — parse the
+    // payload's width literal as a TURBOFISH, resolve the extractor
+    // `Ident` at the derive's call-site span, emit the fully-qualified
     // `::tatara_lisp::domain::<extractor>::<T>(&kw, #key)?` call —
     // lives at ONE substrate primitive.
     //
@@ -2307,12 +2515,14 @@ mod narrowed_extractor_call_tests {
     //    payload rides the emitted `::tatara_lisp::domain::<extractor>`
     //    path as an `Ident` at the call-site span, not as a string
     //    literal or a `Path` composed by string concatenation. Pinned
-    //    by the six-arm sweep test that walks each of the SIX
+    //    by the eight-arm sweep test that walks each of the EIGHT
     //    axis-mode extractor names the derive knows about
     //    (`extract_int_narrowed`, `extract_optional_int_narrowed`,
-    //    `extract_int_list_narrowed`, `extract_float_narrowed`,
-    //    `extract_optional_float_narrowed`,
-    //    `extract_float_list_narrowed`).
+    //    `extract_int_list_narrowed`,
+    //    `extract_optional_int_list_narrowed`,
+    //    `extract_float_narrowed`, `extract_optional_float_narrowed`,
+    //    `extract_float_list_narrowed`,
+    //    `extract_optional_float_list_narrowed`).
     // 3. FULLY-QUALIFIED SUBSTRATE PATH — the emission is
     //    `::tatara_lisp::domain::<extractor>` — leading `::` +
     //    two-segment path — so the emission is hygienic in the derived
@@ -2398,10 +2608,10 @@ mod narrowed_extractor_call_tests {
     }
 
     #[test]
-    fn helper_emits_the_axis_mode_extractor_ident_at_every_six_narrowed_arm() {
+    fn helper_emits_the_axis_mode_extractor_ident_at_every_eight_narrowed_arm() {
         // Promise 2 (AXIS-MODE EXTRACTOR IDENTITY) — the `extractor`
         // string rides the emitted call as an `Ident` at the derive's
-        // call-site span. Sweep the SIX axis-mode extractor names the
+        // call-site span. Sweep the EIGHT axis-mode extractor names the
         // derive's numeric-narrowed arms map to, so a regression that
         // silently swapped ONE arm's name at the `extractor_for`
         // dispatch site (e.g. an int-list arm accidentally routing
@@ -2417,9 +2627,11 @@ mod narrowed_extractor_call_tests {
             "extract_int_narrowed",
             "extract_optional_int_narrowed",
             "extract_int_list_narrowed",
+            "extract_optional_int_list_narrowed",
             "extract_float_narrowed",
             "extract_optional_float_narrowed",
             "extract_float_list_narrowed",
+            "extract_optional_float_list_narrowed",
         ] {
             let body = call_string(extractor, "u16", "port");
             let expected_path = format!(":: tatara_lisp :: domain :: {extractor}");

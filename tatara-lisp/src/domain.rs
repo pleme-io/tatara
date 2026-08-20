@@ -2207,6 +2207,117 @@ where
     })
 }
 
+/// `Option<Vec<T>>` numeric-narrowed list-typed kwarg — the
+/// WideNumeric/NarrowNumeric-axis peer of [`extract_optional_bool_list`]
+/// / [`extract_optional_string_list`] on the non-numeric atom-family
+/// list surface, and the present-vs-absent bifurcated peer of
+/// [`extract_narrowed_list<W, T>`] on the same numeric-narrowing axis.
+/// Distinguishes an ABSENT kwarg (`Ok(None)`) from a PRESENT empty
+/// list (`Ok(Some(Vec::new()))`) — the required peer
+/// [`extract_narrowed_list`] collapses both cases to `Ok(Vec::new())`,
+/// which fits `Vec<T>` fields (where "no items" and "no kwarg" are
+/// semantically the same) but loses the present-vs-absent distinction
+/// an `Option<Vec<T>>` field needs (where `None` and `Some(vec![])`
+/// are DISTINCT operator intents — "the operator did not name this
+/// kwarg" vs. "the operator explicitly bound the kwarg to an empty
+/// list").
+///
+/// A present-but-non-list kwarg (`:ports 80`) rejects with the SAME
+/// typed [`LispError::TypeMismatch`] variant the required peer
+/// [`extract_narrowed_list`] emits (`expected list, got int`); a per-
+/// item non-numeric element inside a present list
+/// (`:ports (list 80 "yes" 443)`) rejects with the SAME
+/// [`LispError::TypeMismatch { form: Item { key, idx }, expected:
+/// Int, got: String }`] variant its per-item peer emits through the
+/// shared [`AtomKwarg::project_at`] atom-family shape gate; a per-
+/// item out-of-range narrowing failure inside a present list
+/// (`:ports (list 80 70000)` into `Option<Vec<u16>>`) rejects with
+/// the SAME [`LispError::KwargOutOfRange { form: Item { key, idx },
+/// target, value }`] variant its per-item peer emits through the
+/// shared [`narrow_or_range_err_at`] narrowing gate. The two peers
+/// ([`extract_narrowed_list`] and this one) delegate to the SAME
+/// per-item gate — only the outer present-vs-absent axis's return
+/// shape differs (`Vec<T>` vs. `Option<Vec<T>>`).
+///
+/// Sibling posture to [`extract_optional_bool_list`] +
+/// [`extract_optional_string_list`] on the atom-family non-numeric
+/// list surface: all three distinguish `None` (absent) from
+/// `Some(_)` (present-and-decoded) at the `Option` layer via the
+/// same `kw.contains_key(key)` short-circuit, and all three delegate
+/// their present-branch decode to their required peer
+/// ([`extract_narrowed_list`] / [`extract_bool_list`] /
+/// [`extract_string_list`]). Peer to [`extract_optional_via_serde`]
+/// on the universal-serde-fallthrough axis: both share the
+/// `kw.contains_key(key)` present-vs-absent bifurcation; the
+/// differences are that this extractor rides the typed WideNumeric
+/// per-item shape gate PLUS the NarrowNumeric per-item narrowing
+/// gate rather than the serde bridge's per-item
+/// `from_value_with_path` decode, so a per-item shape mismatch
+/// surfaces as a pattern-matchable [`LispError::TypeMismatch`]
+/// variant and a per-item narrowing failure surfaces as a pattern-
+/// matchable [`LispError::KwargOutOfRange`] variant, rather than as
+/// [`LispError::KwargDeserialize`] substrings.
+///
+/// Pre-lift the derive routed `Option<Vec<u16>>` / `Option<Vec<f32>>`
+/// / etc. through the universal-serde bridge
+/// ([`extract_optional_via_serde`] via
+/// [`crate::domain::from_value_with_path`]) — [`classify_option`]
+/// in [`tatara_lisp_derive`] had no arm for `Option<Vec<T>>` on the
+/// numeric axes and fell through to `Kind::OptionalDeserialize`,
+/// matching the pre-lift posture that [`Option<Vec<String>>`] and
+/// [`Option<Vec<bool>>`] shared before their per-axis routes landed.
+/// So a per-item shape mismatch inside `Option<Vec<u16>>` surfaced
+/// as a mystery
+/// `LispError::KwargDeserialize { message: "invalid value: integer
+/// 70000, expected u16 at path .1" }` substring rather than as the
+/// typed
+/// `LispError::KwargOutOfRange { form: Item { key, idx: 1 },
+/// target: U16, value: Int(70_000) }` its required peer's per-item
+/// narrowing gate already emits. Post-lift the two
+/// `Option<Vec<T>>` / `Vec<T>` peers on the numeric-narrowing axis
+/// share ONE rejection vocabulary — the same closure the bool-axis
+/// [`extract_optional_bool_list`] and the string-axis
+/// [`extract_optional_string_list`] peers already made on their own
+/// pairs. Completes the Cartesian product across
+/// {scalar, optional-scalar, vec, optional-vec} ×
+/// {String, Bool, Int, Float} for the atom-family axes — every
+/// scalar-typed field on the atom-family surface now composes with
+/// its `Option` / `Vec` / `Option<Vec>` wrappers through the same
+/// typed rejection vocabulary its scalar peer emits, and no
+/// atom-family list-family axis-mode combination still falls
+/// through the universal-serde bridge.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry — a
+/// per-item narrowing failure on an `Option<Vec<T>>` numeric kwarg
+/// IS a typed-entry gate the optional-numeric-vec surface used to
+/// leak past through the serde bridge). THEORY.md §VI.1 (generation
+/// over composition — the present-vs-absent + delegate-to-required
+/// posture now recurs at FOUR sites ([`extract_optional_string`] /
+/// [`extract_optional_bool`] / [`extract_optional_string_list`] /
+/// [`extract_optional_bool_list`] / this), all routing through the
+/// SAME `kw.contains_key(key)` short-circuit paired with required-
+/// peer delegation; the numeric-narrowing skeleton recurs at the
+/// (two axes × Option<Vec<T>>) product of the substrate's optional-
+/// numeric-vec surface, and lifting it to ONE primitive closes both
+/// axes at rustc time). THEORY.md §V.1 (knowable platform — the
+/// per-item narrowing rejection now surfaces the same pattern-
+/// matchable [`LispError::KwargOutOfRange`] variant every authoring
+/// surface (LSP, `tatara-check`, REPL) already binds to for the
+/// required peer, so `NumericWidth::U16` histogram bucketing over
+/// per-item failures binds mechanically for `Option<Vec<T>>` fields
+/// too).
+pub fn extract_optional_narrowed_list<W, T>(kw: &Kwargs<'_>, key: &str) -> Result<Option<Vec<T>>>
+where
+    W: WideNumeric,
+    T: NarrowNumeric<W>,
+{
+    if kw.contains_key(key) {
+        extract_narrowed_list::<W, T>(kw, key).map(Some)
+    } else {
+        Ok(None)
+    }
+}
+
 /// `Vec<T>` integer-list field projected into the item's own width —
 /// one-line delegate to [`extract_narrowed_list`] at the `W = i64`
 /// axis. The list-family peer of [`extract_int_narrowed`] on the
@@ -2237,6 +2348,43 @@ pub fn extract_float_list_narrowed<T: NarrowNumeric<f64>>(
     key: &str,
 ) -> Result<Vec<T>> {
     extract_narrowed_list::<f64, T>(kw, key)
+}
+
+/// `Option<Vec<T>>` integer-list field projected into the item's own
+/// width — one-line delegate to [`extract_optional_narrowed_list`]
+/// at the `W = i64` axis. The list-family peer of
+/// [`extract_optional_int_narrowed`] on the present-vs-absent
+/// axis, and the numeric-narrowing peer of
+/// [`extract_optional_bool_list`] on the optional-vec atom-family
+/// surface. Absent kwarg returns `Ok(None)`; present empty list
+/// returns `Ok(Some(Vec::new()))`; present list with a per-item
+/// out-of-range value rejects with
+/// `LispError::KwargOutOfRange { form: KwargPath::Item { key, idx },
+/// target, value }` — the SAME rejection shape the required peer
+/// [`extract_int_list_narrowed`] emits, only wrapped in the
+/// `Option` layer for a present-vs-decoded return path.
+pub fn extract_optional_int_list_narrowed<T: NarrowNumeric<i64>>(
+    kw: &Kwargs<'_>,
+    key: &str,
+) -> Result<Option<Vec<T>>> {
+    extract_optional_narrowed_list::<i64, T>(kw, key)
+}
+
+/// Float-axis sibling of [`extract_optional_int_list_narrowed`] —
+/// one-line delegate to [`extract_optional_narrowed_list`] at the
+/// `W = f64` axis. Same absent / present-empty / present-decoded
+/// semantics as its int-axis peer; the rejection shape on a per-
+/// item lossy-to-inf overflow (`1.0e300 → f32`) is
+/// `LispError::KwargOutOfRange { form: KwargPath::Item { key, idx },
+/// target: NumericWidth::F32, value: NumericLiteral::Float(1.0e300),
+/// .. }` — the SAME rejection shape the required peer
+/// [`extract_float_list_narrowed`] emits, only wrapped in the
+/// `Option` layer.
+pub fn extract_optional_float_list_narrowed<T: NarrowNumeric<f64>>(
+    kw: &Kwargs<'_>,
+    key: &str,
+) -> Result<Option<Vec<T>>> {
+    extract_optional_narrowed_list::<f64, T>(kw, key)
 }
 
 /// Required bool kwarg — one-line delegate to `<bool as
@@ -4545,6 +4693,88 @@ mod tests {
         }
     }
 
+    /// Optional-vec sibling of
+    /// [`extract_star_list_narrowed_delegates_agree_with_the_generic_list_primitive`]
+    /// — pin the delegation identity between the caller-shaped
+    /// `extract_optional_{int,float}_list_narrowed::<T>` wrappers and
+    /// the generic `extract_optional_narrowed_list::<W, T>` primitive
+    /// at the axis. For every input the wrapper accepts or rejects,
+    /// the generic call at the matching axis must produce the same
+    /// verdict — same pattern the required-vec peer test pins for the
+    /// numeric-narrowing primitive, only lifted to the outer
+    /// present-vs-absent axis.
+    #[test]
+    fn extract_star_optional_list_narrowed_delegates_agree_with_the_generic_primitive() {
+        // Absent kwarg, int axis — both routes must return `None`.
+        let absent_args = kwargs_of("(_ :other 1)");
+        let absent_kw = parse_kwargs(&absent_args).unwrap();
+        assert_eq!(
+            extract_optional_int_list_narrowed::<u16>(&absent_kw, "ports").unwrap(),
+            extract_optional_narrowed_list::<i64, u16>(&absent_kw, "ports").unwrap(),
+        );
+        assert_eq!(
+            extract_optional_int_list_narrowed::<u16>(&absent_kw, "ports").unwrap(),
+            None,
+        );
+
+        // Present empty, float axis — both routes must return
+        // `Some(Vec::new())` and the load-bearing present-vs-absent
+        // distinction must survive the delegation.
+        let empty_args = kwargs_of("(_ :scales ())");
+        let empty_kw = parse_kwargs(&empty_args).unwrap();
+        assert_eq!(
+            extract_optional_float_list_narrowed::<f32>(&empty_kw, "scales").unwrap(),
+            extract_optional_narrowed_list::<f64, f32>(&empty_kw, "scales").unwrap(),
+        );
+        assert_eq!(
+            extract_optional_float_list_narrowed::<f32>(&empty_kw, "scales").unwrap(),
+            Some(Vec::<f32>::new()),
+        );
+
+        // Present, in-range, int axis — same decoded `Some(vec![…])`
+        // through either surface.
+        let int_ok_args = kwargs_of("(_ :ports (80 443))");
+        let int_ok_kw = parse_kwargs(&int_ok_args).unwrap();
+        assert_eq!(
+            extract_optional_int_list_narrowed::<u16>(&int_ok_kw, "ports").unwrap(),
+            extract_optional_narrowed_list::<i64, u16>(&int_ok_kw, "ports").unwrap(),
+        );
+
+        // Rejecting, int axis — same `KwargOutOfRange { form, target,
+        // value }` triple through either surface.
+        let int_bad_args = kwargs_of("(_ :ports (80 70000))");
+        let int_bad_kw = parse_kwargs(&int_bad_args).unwrap();
+        let via_wrapper =
+            extract_optional_int_list_narrowed::<u16>(&int_bad_kw, "ports").unwrap_err();
+        let via_generic =
+            extract_optional_narrowed_list::<i64, u16>(&int_bad_kw, "ports").unwrap_err();
+        match (&via_wrapper, &via_generic) {
+            (
+                LispError::KwargOutOfRange {
+                    form: f1,
+                    target: t1,
+                    value: v1,
+                },
+                LispError::KwargOutOfRange {
+                    form: f2,
+                    target: t2,
+                    value: v2,
+                },
+            ) => {
+                assert_eq!(f1, f2);
+                assert_eq!(t1, t2);
+                assert_eq!(v1, v2);
+                assert!(
+                    matches!(f1, KwargPath::Item { key, idx: 1 } if key == "ports"),
+                    "wrapper delegation must carry the same item-path shape, got {f1:?}"
+                );
+                assert_eq!(*t1, NumericWidth::U16);
+                assert_eq!(*v1, NumericLiteral::Int(70_000));
+            }
+            _ => panic!("both must be KwargOutOfRange, got {via_wrapper:?} vs {via_generic:?}"),
+        }
+    }
+
     /// A domain whose numeric fields are the pointer-width pair —
     /// `isize` is the SIGNED peer of `usize` on the pointer-width column.
     /// Pin the full (classify → extract → narrow → derive) chain for the
@@ -5181,6 +5411,192 @@ mod tests {
         assert_eq!(form, &KwargPath::named("flags"));
         assert_eq!(*expected, ExpectedKwargShape::List);
         assert_eq!(*got, SexpShape::Bool);
+    }
+
+    /// Optional-vec-numeric derive fixture — closes the present-vs-
+    /// absent hole on both numeric-narrowing axes (int + float). Pre-
+    /// lift the derive routed `Option<Vec<u16>>` / `Option<Vec<f32>>`
+    /// through `Kind::OptionalDeserialize` (the universal serde bridge
+    /// — `classify_option` had no arm for `Option<Vec<T>>` on the
+    /// numeric axes and fell through to the catch-all), so a per-item
+    /// out-of-range value on `:ports (list 80 70000)` into an
+    /// `Option<Vec<u16>>` field surfaced as a mystery
+    /// `KwargDeserialize { message: "invalid value: integer 70000,
+    /// expected u16 at path .1" }` substring rather than as the typed
+    /// `KwargOutOfRange { form: Item { key: "ports", idx: 1 },
+    /// target: U16, value: Int(70_000) }` its REQUIRED peer
+    /// (`ports: Vec<u16>` on `VecPortsSpec`) already emits at the
+    /// per-item narrowing gate.
+    ///
+    /// Post-lift the derive routes `Option<Vec<u16>>` to
+    /// `extract_optional_int_list_narrowed::<u16>` and
+    /// `Option<Vec<f32>>` to `extract_optional_float_list_narrowed
+    /// ::<f32>`, both one-line delegates onto the SAME
+    /// `extract_optional_narrowed_list::<W, T>` combinator whose
+    /// present-branch decode routes through the SAME
+    /// `extract_narrowed_list::<W, T>` primitive the required peer
+    /// `VecPortsSpec` binds; the two peers on the same axis now speak
+    /// the SAME typed rejection vocabulary. Sibling posture to
+    /// `OptVecFlagsSpec` on the optional-vec-bool axis, `OptVecTagsSpec`
+    /// on the optional-vec-string axis, and `VecPortsSpec` on the
+    /// required-vec-numeric axis — the four together complete the
+    /// Cartesian product across {scalar, optional-scalar, vec,
+    /// optional-vec} × {String, Bool, Int, Float} for the atom-family
+    /// axes at the derive dispatch surface.
+    #[derive(DeriveTataraDomain, Serialize, Debug, PartialEq)]
+    #[tatara(keyword = "defoptvecports")]
+    struct OptVecPortsSpec {
+        ports: Option<Vec<u16>>,
+        scales: Option<Vec<f32>>,
+    }
+
+    #[test]
+    fn optional_vec_numeric_fields_absent_kwarg_parses_as_none() {
+        // Both fields absent → both `None`. The load-bearing present-
+        // vs-absent bifurcation an `Option<Vec<T>>` field preserves
+        // that a `Vec<T>` field collapses. Sibling to the bool-axis /
+        // string-axis absent-kwarg tests.
+        let forms = read(r"(defoptvecports)").expect("reads");
+        let spec = OptVecPortsSpec::compile_from_sexp(&forms[0])
+            .expect("absent optional numeric-vec fields must parse as None");
+        assert_eq!(spec.ports, None);
+        assert_eq!(spec.scales, None);
+    }
+
+    #[test]
+    fn optional_vec_numeric_fields_present_empty_parses_as_some_empty_vec() {
+        // Both fields present as empty lists → both
+        // `Some(Vec::new())`. The `Vec<T>` peer would collapse this to
+        // `Ok(Vec::new())`, indistinguishable from the absent case;
+        // the `Option<Vec<T>>` peer preserves the operator's intent
+        // ("this kwarg is bound to an empty list"). Sibling to the
+        // bool-axis / string-axis present-empty pins.
+        let forms = read(r"(defoptvecports :ports () :scales ())").expect("reads");
+        let spec = OptVecPortsSpec::compile_from_sexp(&forms[0])
+            .expect("present empty optional numeric-vec fields must parse as Some(vec![])");
+        assert_eq!(spec.ports, Some(Vec::<u16>::new()));
+        assert_eq!(spec.scales, Some(Vec::<f32>::new()));
+    }
+
+    #[test]
+    fn optional_vec_numeric_fields_parse_in_range_lists_through_the_per_item_narrowing_gate() {
+        // Happy-path: both fields present as in-range lists decode
+        // byte-identically to their required-peer `Vec<T>` fields'
+        // decodes, wrapped in `Some`. Sibling to
+        // `VecPortsSpec::vec_u16_field_parses_in_range_list_through_
+        // the_per_item_narrowing_gate` at the outer present-vs-
+        // absent axis.
+        let forms =
+            read(r"(defoptvecports :ports (80 443 8080) :scales (1.0 2.5))").expect("reads");
+        let spec = OptVecPortsSpec::compile_from_sexp(&forms[0])
+            .expect("in-range per-item values must parse");
+        assert_eq!(spec.ports, Some(vec![80u16, 443, 8080]));
+        let scales = spec.scales.as_ref().expect("present list must be Some");
+        assert_eq!(scales.len(), 2);
+        assert!((scales[0] - 1.0_f32).abs() < f32::EPSILON);
+        assert!((scales[1] - 2.5_f32).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn optional_vec_u16_field_rejects_per_item_out_of_range_with_typed_width_and_item_path() {
+        // The per-item cousin of the scalar `u16` canonical rejection
+        // and the required-peer
+        // `VecPortsSpec::vec_u16_field_rejects_per_item_out_of_range_
+        // with_typed_width_and_item_path` at the outer present-vs-
+        // absent axis. Post-lift the failure carries the item index
+        // (1) alongside the same `NumericWidth::U16` /
+        // `NumericLiteral::Int(70_000)` pair the required peer emits
+        // — authoring surfaces pattern-match on the SAME
+        // `LispError::KwargOutOfRange { form: Item {..}, target,
+        // value }` variant they already bind for the required peer's
+        // per-item narrowing gate, not on a serde substring.
+        //
+        // Pre-lift the derive routed `Option<Vec<u16>>` through
+        // `Kind::OptionalDeserialize` (the universal serde bridge —
+        // `classify_option` had no arm for `Option<Vec<u16>>` and
+        // fell through to the catch-all), and the same failure
+        // surfaced as `KwargDeserialize { message: "invalid value:
+        // integer 70000, expected u16 at path .1" }` — a regression
+        // that reverted `Kind::OptionalVecInt("u16")` back to
+        // `Kind::OptionalDeserialize` would surface here as the
+        // substrate-typed `KwargOutOfRange` variant absent from the
+        // error's tag (replaced by `KwargDeserialize`).
+        let forms = read(r"(defoptvecports :ports (80 70000) :scales (1.0))").expect("reads");
+        let err = OptVecPortsSpec::compile_from_sexp(&forms[0])
+            .expect_err("70000 is out of range for u16 and must not parse");
+        let LispError::KwargOutOfRange {
+            form,
+            target,
+            value,
+        } = &err
+        else {
+            panic!("expected KwargOutOfRange (typed narrowing gate), got {err:?}");
+        };
+        assert_eq!(form, &KwargPath::item("ports", 1));
+        assert_eq!(*target, NumericWidth::U16);
+        assert_eq!(*value, NumericLiteral::Int(70_000));
+        assert_eq!(
+            err.to_string(),
+            "compile error in :ports[1]: 70000 is out of range for u16",
+        );
+    }
+
+    #[test]
+    fn optional_vec_f32_field_rejects_per_item_lossy_to_inf_with_typed_width_and_item_path() {
+        // Float-axis peer of the u16 optional-vec test above — the
+        // third `:scales` item lossy-to-inf overflows f32 (finite
+        // input, infinite output). Same `KwargPath::Item` +
+        // `NumericWidth::F32` + `NumericLiteral::Float(_)` rejection
+        // shape the required-peer
+        // `VecPortsSpec::vec_f32_field_rejects_per_item_lossy_to_inf_
+        // with_typed_width_and_item_path` and the scalar
+        // `extract_float_narrowed::<f32>` peer emit — the outer
+        // `Option` wrap does not drift the per-item narrowing gate.
+        let forms = read(r"(defoptvecports :ports (80) :scales (1.0 2.0 1.0e300))").expect("reads");
+        let err = OptVecPortsSpec::compile_from_sexp(&forms[0])
+            .expect_err("1.0e300 overflows f32 and must not parse");
+        let LispError::KwargOutOfRange {
+            form,
+            target,
+            value,
+        } = &err
+        else {
+            panic!("expected KwargOutOfRange (typed narrowing gate), got {err:?}");
+        };
+        assert_eq!(form, &KwargPath::item("scales", 2));
+        assert_eq!(*target, NumericWidth::F32);
+        assert!(
+            matches!(value, NumericLiteral::Float(x) if (*x - 1.0e300).abs() < f64::EPSILON),
+            "diagnostic must echo the author's own literal, got {value:?}",
+        );
+    }
+
+    #[test]
+    fn optional_vec_numeric_field_rejects_present_scalar_with_typed_outer_shape() {
+        // A PRESENT non-list kwarg (`:ports 80`) rejects with the
+        // SAME `expected list` outer-shape diagnostic the required
+        // peer `extract_int_list_narrowed` emits — the present-vs-
+        // absent bifurcation happens BEFORE the required peer's
+        // outer gate, so the outer-shape rejection variant is byte-
+        // identical to the required peer's. The outer label is
+        // `ExpectedKwargShape::List` (not a hypothetical
+        // `ListOfInts` refinement) — the seven-variant
+        // `ExpectedKwargShape` closed set stays at its current
+        // shape, matching the required peer's outer-gate posture.
+        let forms = read(r"(defoptvecports :ports 80 :scales ())").expect("reads");
+        let err = OptVecPortsSpec::compile_from_sexp(&forms[0])
+            .expect_err("a scalar int is not a list of ints and must not parse");
+        let LispError::TypeMismatch {
+            form,
+            expected,
+            got,
+        } = &err
+        else {
+            panic!("expected TypeMismatch (outer atom-family gate), got {err:?}");
+        };
+        assert_eq!(form, &KwargPath::named("ports"));
+        assert_eq!(*expected, ExpectedKwargShape::List);
+        assert_eq!(*got, SexpShape::Int);
     }
 
     #[test]
@@ -6434,6 +6850,165 @@ mod tests {
             }
             other => panic!("both routes must produce TypeMismatch, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn extract_optional_int_list_narrowed_absent_kwarg_returns_none() {
+        // `:ports` absent — the OPTIONAL numeric-list posture bifurcates
+        // absent from present-empty. `extract_int_list_narrowed`
+        // collapses both cases to `Ok(Vec::new())`; the optional peer
+        // distinguishes them: absent → `Ok(None)`, present-empty →
+        // `Ok(Some(vec![]))`. Sibling to the peer bool-axis /
+        // string-axis absent-kwarg tests.
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        assert_eq!(
+            extract_optional_int_list_narrowed::<u16>(&kw, "ports").unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn extract_optional_int_list_narrowed_present_empty_returns_some_empty_vec() {
+        // `:ports ()` — a PRESENT empty list is Some(Vec::new()), not
+        // None. The load-bearing distinction between "the operator did
+        // not name this kwarg" and "the operator explicitly bound the
+        // kwarg to an empty list" — a `Vec<u16>` field collapses both
+        // to the empty vec, but an `Option<Vec<u16>>` field preserves
+        // the operator's intent.
+        let args = kwargs_of("(_ :ports ())");
+        let kw = parse_kwargs(&args).unwrap();
+        assert_eq!(
+            extract_optional_int_list_narrowed::<u16>(&kw, "ports").unwrap(),
+            Some(Vec::<u16>::new())
+        );
+    }
+
+    #[test]
+    fn extract_optional_int_list_narrowed_returns_some_vec_when_all_items_in_range() {
+        // Happy-path: `(list 80 443 8080)` under a present kwarg on the
+        // int axis projects to `Some(vec![80u16, 443, 8080])` byte-
+        // identically to what the required peer
+        // `extract_int_list_narrowed::<u16>` returns, wrapped in `Some`.
+        let args = kwargs_of("(_ :ports (80 443 8080))");
+        let kw = parse_kwargs(&args).unwrap();
+        assert_eq!(
+            extract_optional_int_list_narrowed::<u16>(&kw, "ports").unwrap(),
+            Some(vec![80u16, 443, 8080])
+        );
+    }
+
+    #[test]
+    fn extract_optional_int_list_narrowed_range_err_on_per_item_names_index_and_target() {
+        // `:ports (list 80 70000)` on `Option<Vec<u16>>` — the second
+        // item overflows u16. Diagnostic names BOTH the item path
+        // (`:ports[1]`) and the axis-typed width (`NumericWidth::U16`
+        // / `NumericLiteral::Int(70_000)`), the SAME typed
+        // `LispError::KwargOutOfRange { form: Item { key, idx },
+        // target, value }` variant its required peer
+        // `extract_int_list_narrowed::<u16>` emits at the per-item
+        // narrowing gate. Pre-lift the derive routed
+        // `Option<Vec<u16>>` through `extract_optional_via_serde` (the
+        // universal serde bridge — `classify_option` had no arm for
+        // `Option<Vec<u16>>` and fell through to
+        // `Kind::OptionalDeserialize`), so a per-item out-of-range
+        // value surfaced as a mystery
+        // `KwargDeserialize { message: "invalid value: integer 70000,
+        // expected u16 at path .1" }` substring rather than as the
+        // typed axis-typed rejection. Post-lift the optional peer
+        // rides the SAME narrowing gate its required peer already
+        // binds through `narrow_or_range_err_at::<W, T>`, so a per-
+        // item narrowing failure surfaces as the SAME pattern-
+        // matchable typed variant — the two peers on the int axis
+        // speak ONE rejection vocabulary.
+        let args = kwargs_of("(_ :ports (80 70000))");
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_optional_int_list_narrowed::<u16>(&kw, "ports").unwrap_err();
+        let LispError::KwargOutOfRange {
+            form,
+            target,
+            value,
+        } = &err
+        else {
+            panic!("expected KwargOutOfRange (typed narrowing gate), got {err:?}");
+        };
+        assert_eq!(form, &KwargPath::item("ports", 1));
+        assert_eq!(*target, NumericWidth::U16);
+        assert_eq!(*value, NumericLiteral::Int(70_000));
+
+        // Extractor identity — extract_optional_int_list_narrowed's
+        // per-item rejection at an out-of-range element MUST match the
+        // required-peer extract_int_list_narrowed's rejection at the
+        // same input byte-for-byte, so the narrowing gate does NOT
+        // drift between the two peers on the int axis. The two paths
+        // differ only at the outer present-vs-absent axis
+        // (`Option<Vec<u16>>` wrapper vs. bare `Vec<u16>`), never at
+        // the per-item narrowing gate.
+        let optional_err = extract_optional_int_list_narrowed::<u16>(&kw, "ports").unwrap_err();
+        let required_err = extract_int_list_narrowed::<u16>(&kw, "ports").unwrap_err();
+        match (&optional_err, &required_err) {
+            (
+                LispError::KwargOutOfRange {
+                    form: f_a,
+                    target: t_a,
+                    value: v_a,
+                },
+                LispError::KwargOutOfRange {
+                    form: f_b,
+                    target: t_b,
+                    value: v_b,
+                },
+            ) => {
+                assert_eq!(f_a, f_b, "path variant identity");
+                assert_eq!(t_a, t_b, "axis-typed WIDTH identity");
+                assert_eq!(v_a, v_b, "wide-value witness identity");
+            }
+            other => panic!("both routes must produce KwargOutOfRange, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn extract_optional_float_list_narrowed_absent_present_and_narrowing_gate() {
+        // Float-axis peer of the four int-axis pins collapsed to one
+        // — the axis identity riding `<f64>` is what changes, not the
+        // scaffold. Absent kwarg → None; present empty → Some(vec![]);
+        // present all-in-range → Some(decoded); present per-item
+        // lossy-to-inf overflow → typed `KwargOutOfRange { target:
+        // F32, value: Float(_) }` (the SAME variant the required peer
+        // `extract_float_list_narrowed::<f32>` emits, the SAME variant
+        // the scalar `extract_float_narrowed::<f32>` emits on
+        // `:scale 1.0e300`).
+        let absent_args = kwargs_of("(_ :other 1)");
+        let absent = parse_kwargs(&absent_args).unwrap();
+        assert_eq!(
+            extract_optional_float_list_narrowed::<f32>(&absent, "scales").unwrap(),
+            None
+        );
+
+        let empty_args = kwargs_of("(_ :scales ())");
+        let present_empty = parse_kwargs(&empty_args).unwrap();
+        assert_eq!(
+            extract_optional_float_list_narrowed::<f32>(&present_empty, "scales").unwrap(),
+            Some(Vec::<f32>::new())
+        );
+
+        let ok_args = kwargs_of("(_ :scales (1.0 2.5))");
+        let present_ok = parse_kwargs(&ok_args).unwrap();
+        let decoded = extract_optional_float_list_narrowed::<f32>(&present_ok, "scales")
+            .unwrap()
+            .expect("present list must return Some");
+        assert_eq!(decoded.len(), 2);
+        assert!((decoded[0] - 1.0_f32).abs() < f32::EPSILON);
+        assert!((decoded[1] - 2.5_f32).abs() < f32::EPSILON);
+
+        let overflow_args = kwargs_of("(_ :scales (1.0 1.0e300))");
+        let overflow = parse_kwargs(&overflow_args).unwrap();
+        let err = extract_optional_float_list_narrowed::<f32>(&overflow, "scales").unwrap_err();
+        let LispError::KwargOutOfRange { form, target, .. } = &err else {
+            panic!("expected KwargOutOfRange (typed narrowing gate), got {err:?}");
+        };
+        assert_eq!(form, &KwargPath::item("scales", 1));
+        assert_eq!(*target, NumericWidth::F32);
     }
 
     #[test]

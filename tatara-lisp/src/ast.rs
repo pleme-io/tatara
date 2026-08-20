@@ -10978,7 +10978,7 @@ impl AtomKind {
     /// `atom_kind_labels_align_with_all_by_index`). Sibling posture to
     /// [`SexpShape::LABELS`] (`[&'static str; 12]` — the superset
     /// carving this AtomKind subset embeds into),
-    /// [`crate::error::ExpectedKwargShape::LABELS`] (`[&'static str; 7]`),
+    /// [`crate::error::ExpectedKwargShape::LABELS`] (`[&'static str; 10]`),
     /// [`crate::error::KwargPathKind::LABELS`] (`[&'static str; 3]`),
     /// [`crate::error::MacroDefHead::KEYWORDS`] (`[&'static str; 3]`),
     /// [`Atom::BOOL_LITERALS`] (`[&'static str; 2]`), and

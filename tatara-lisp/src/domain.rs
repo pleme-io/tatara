@@ -1749,21 +1749,25 @@ pub trait AtomKwarg<'a>: Sized {
     /// as a per-extractor inline `ExpectedKwargShape` literal.
     ///
     /// Defaults to [`ExpectedKwargShape::List`] — the bare-list
-    /// rejection label the `<bool>` / `<i64>` / `<f64>` axes emit
-    /// today. Overridden on the `<&'a str>` axis to
-    /// [`ExpectedKwargShape::ListOfStrings`] — the element-typed
-    /// refinement `extract_string_list` already emits, so a
-    /// `:tags "solo"` kwarg rejects as
-    /// `expected list of strings, got string` rather than the
-    /// ambiguous `expected list, got string`. A future run that
-    /// extends the [`ExpectedKwargShape`] closed set with
-    /// axis-typed refinements (a hypothetical `ListOfBools` /
-    /// `ListOfInts` / `ListOfNumbers` trio — named in
-    /// [`crate::error::ExpectedKwargShape`]'s docstring as the
-    /// natural extensions of the seven-variant closed set) lands as
-    /// ONE `LIST_SHAPE` override per axis, and the three list
-    /// extractors pick up the sharpened label mechanically through
-    /// the trait dispatch — no per-extractor edit.
+    /// rejection label a hypothetical new atom-family axis (a
+    /// `Symbol` primitive, say) would inherit before authoring its
+    /// own override. All four axes that ship today override this
+    /// default: `<&'a str>` → [`ExpectedKwargShape::ListOfStrings`],
+    /// `<bool>` → [`ExpectedKwargShape::ListOfBools`],
+    /// `<i64>` → [`ExpectedKwargShape::ListOfInts`],
+    /// `<f64>` → [`ExpectedKwargShape::ListOfNumbers`]. Post-lift no
+    /// list-family extractor emits the ambiguous bare-list label on
+    /// any reachable axis; a `:tags "solo"` kwarg rejects as
+    /// `expected list of strings, got string`, a `:flags #t` kwarg
+    /// as `expected list of bools, got bool`, a `:ports 80` kwarg
+    /// into `Vec<u16>` as `expected list of ints, got int`, and a
+    /// `:scales 1.0` kwarg into `Vec<f32>` as `expected list of
+    /// numbers, got number` — each through the SAME per-axis trait
+    /// dispatch mechanism. A future new atom-family axis binding an
+    /// element-typed refinement variant lands as ONE `LIST_SHAPE`
+    /// override on the new axis's impl, and every list-family
+    /// extractor already reaching through the trait dispatch picks
+    /// it up mechanically — no per-extractor edit.
     ///
     /// Peer to [`Self::SHAPE`] on the axis-typed rejection-label
     /// surface: `SHAPE` names the SCALAR-atom shape the extractor
@@ -1872,14 +1876,15 @@ impl<'a> AtomKwarg<'a> for &'a str {
 
     /// String-axis override of the [`AtomKwarg::LIST_SHAPE`] trait
     /// default — the element-typed refinement
-    /// [`ExpectedKwargShape::ListOfStrings`] that [`extract_string_list`]
-    /// already emits at its outer-shape gate. The other atom axes
-    /// (`bool` / `i64` / `f64`) inherit the trait's `List` default
-    /// today; a future run that adds a `ListOfBools` / `ListOfInts` /
-    /// `ListOfNumbers` variant to [`crate::error::ExpectedKwargShape`]
-    /// lands as ONE new override per axis alongside this one — the
-    /// three list-family extractors already route through the trait
-    /// dispatch, so no per-extractor edit is needed.
+    /// [`ExpectedKwargShape::ListOfStrings`] that
+    /// [`extract_string_list`] emits at its outer-shape gate. Peer
+    /// to the three sibling axis overrides that close the atom-
+    /// family list surface: `<bool>` → `ListOfBools`,
+    /// `<i64>` → `ListOfInts`, `<f64>` → `ListOfNumbers`. Post-lift
+    /// all four atom-family list-family axes carry an element-
+    /// typed refinement label, and no list-family extractor
+    /// emits the ambiguous trait default
+    /// [`ExpectedKwargShape::List`] on any reachable axis.
     const LIST_SHAPE: ExpectedKwargShape = ExpectedKwargShape::ListOfStrings;
 
     fn project(sexp: &'a Sexp) -> Option<Self> {
@@ -1892,22 +1897,20 @@ impl<'a> AtomKwarg<'a> for bool {
 
     /// Bool-axis override of the [`AtomKwarg::LIST_SHAPE`] trait
     /// default — the element-typed refinement
-    /// [`ExpectedKwargShape::ListOfBools`] that [`extract_bool_list`]
-    /// emits at its outer-shape gate through the per-axis trait
-    /// dispatch. Sibling to the `<&'a str>` axis's `ListOfStrings`
-    /// override on the atom-family non-numeric list-of-atoms
-    /// element-typed refinement surface; the two overrides collapse
-    /// the pre-lift ambiguous `expected list, got X` diagnostic into
-    /// the axis-typed `expected list of bools, got X` /
-    /// `expected list of strings, got X` refinements at BOTH
-    /// non-numeric atom-family list-family sites through ONE per-axis
-    /// trait-const dispatch each. The remaining wide-numeric axes
-    /// (`<i64>` / `<f64>`) still inherit the trait default
-    /// [`ExpectedKwargShape::List`]; their per-axis `ListOfInts` /
-    /// `ListOfNumbers` refinements land as ONE new override per axis
-    /// alongside this one, with no per-extractor edit needed — the
-    /// [`extract_narrowed_list<W, T>`] site already routes through
-    /// the trait dispatch.
+    /// [`ExpectedKwargShape::ListOfBools`] that
+    /// [`extract_bool_list`] emits at its outer-shape gate through
+    /// the per-axis trait dispatch. Peer to the three sibling axis
+    /// overrides that close the atom-family list surface:
+    /// `<&'a str>` → `ListOfStrings`, `<i64>` → `ListOfInts`,
+    /// `<f64>` → `ListOfNumbers`. Post-lift the four overrides
+    /// collapse the pre-lift ambiguous `expected list, got X`
+    /// diagnostic into the axis-typed `expected list of bools, got
+    /// X` / `expected list of strings, got X` / `expected list of
+    /// ints, got X` / `expected list of numbers, got X` refinements
+    /// at EVERY atom-family list-family site through ONE per-axis
+    /// trait-const dispatch each — no axis falls through to the
+    /// bare-list label any more, on the two non-numeric axes or on
+    /// the two wide-numeric axes.
     const LIST_SHAPE: ExpectedKwargShape = ExpectedKwargShape::ListOfBools;
 
     fn project(sexp: &'a Sexp) -> Option<Self> {
@@ -1932,6 +1935,25 @@ impl<'a> AtomKwarg<'a> for bool {
 impl<'a> AtomKwarg<'a> for i64 {
     const SHAPE: ExpectedKwargShape = ExpectedKwargShape::Int;
 
+    /// Wide-int-axis override of the [`AtomKwarg::LIST_SHAPE`] trait
+    /// default — the element-typed refinement
+    /// [`ExpectedKwargShape::ListOfInts`] that
+    /// [`extract_narrowed_list::<i64, T>`] emits at its outer-shape
+    /// gate through the per-axis trait dispatch (reached from the
+    /// generic list extractor via the
+    /// `W: WideNumeric: for<'a> AtomKwarg<'a>` supertrait bound).
+    /// Every narrow-int width the extractor is instantiated at
+    /// (`u16` / `i32` / `usize` / …) inherits the sharpened outer-
+    /// shape label mechanically — no per-extractor edit, no per-
+    /// width bookkeeping. Sibling to the `<f64>` axis's
+    /// `ListOfNumbers` override and the two non-numeric axes'
+    /// `<&'a str>::LIST_SHAPE = ListOfStrings` /
+    /// `<bool>::LIST_SHAPE = ListOfBools` overrides; together the
+    /// four axis overrides close every reachable atom-family list-
+    /// surface axis at the trait-dispatch layer, leaving no axis
+    /// on the ambiguous trait default [`ExpectedKwargShape::List`].
+    const LIST_SHAPE: ExpectedKwargShape = ExpectedKwargShape::ListOfInts;
+
     fn project(sexp: &'a Sexp) -> Option<Self> {
         sexp.as_int()
     }
@@ -1939,6 +1961,31 @@ impl<'a> AtomKwarg<'a> for i64 {
 
 impl<'a> AtomKwarg<'a> for f64 {
     const SHAPE: ExpectedKwargShape = ExpectedKwargShape::Number;
+
+    /// Wide-float-axis override of the [`AtomKwarg::LIST_SHAPE`]
+    /// trait default — the element-typed refinement
+    /// [`ExpectedKwargShape::ListOfNumbers`] that
+    /// [`extract_narrowed_list::<f64, T>`] emits at its outer-shape
+    /// gate through the per-axis trait dispatch. The `"numbers"`
+    /// (not `"floats"`) naming mirrors the scalar-axis
+    /// [`Self::SHAPE = Number`] posture: the per-item gate
+    /// [`Self::project = Sexp::as_float`] accepts BOTH
+    /// `Sexp::Atom(Float(_))` and `Sexp::Atom(Int(_))`, so the
+    /// outer-shape label names the union rather than the narrower
+    /// `"floats"`. Every narrow-float width (`f32` / …) inherits
+    /// the sharpened outer-shape label mechanically through the
+    /// generic list extractor's supertrait bound.
+    ///
+    /// Peer to the `<i64>::LIST_SHAPE = ListOfInts` override on the
+    /// wide-int axis — together the two wide-numeric overrides
+    /// close the last two atom-family list-surface axes that used
+    /// to fall through to the ambiguous trait default
+    /// [`ExpectedKwargShape::List`]. Post-lift the four
+    /// atom-family list extractors' outer-shape rejection labels
+    /// form a total axis-typed carving: `<&str>` → `ListOfStrings`,
+    /// `<bool>` → `ListOfBools`, `<i64>` → `ListOfInts`,
+    /// `<f64>` → `ListOfNumbers`.
+    const LIST_SHAPE: ExpectedKwargShape = ExpectedKwargShape::ListOfNumbers;
 
     fn project(sexp: &'a Sexp) -> Option<Self> {
         sexp.as_float()
@@ -2602,14 +2649,22 @@ where
 /// trait const on the wide axis (`<W as AtomKwarg<'_>>::LIST_SHAPE`,
 /// reached through the `W: WideNumeric: for<'a> AtomKwarg<'a>`
 /// supertrait bound) rather than baked as an inline
-/// `ExpectedKwargShape` literal. Both wide-numeric axes inherit the
-/// trait default [`ExpectedKwargShape::List`] today — the same label
-/// `extract_vec_via_serde` emits on a non-list kwarg — so a future
-/// axis-typed refinement (a hypothetical `ListOfInts` / `ListOfNumbers`
-/// extension of the [`crate::error::ExpectedKwargShape`] closed set)
-/// lands as ONE trait override per axis and sharpens the label
-/// through THIS extractor mechanically, at both narrow widths at
-/// once, with no per-extractor edit. The per-item shape gate keeps
+/// `ExpectedKwargShape` literal. Both wide-numeric axes override
+/// the trait default: `<i64>::LIST_SHAPE = ListOfInts` and
+/// `<f64>::LIST_SHAPE = ListOfNumbers` — the element-typed
+/// refinement labels this extractor emits on a scalar-typed kwarg
+/// through the per-axis trait dispatch. Every narrow width the
+/// extractor is instantiated at (`u16` / `i32` / `usize` / `f32` /
+/// …) inherits the sharpened outer-shape label mechanically from
+/// its wide axis's ONE trait override — no per-extractor edit, no
+/// per-width bookkeeping. A `:ports 80` kwarg into `Vec<u16>` now
+/// rejects as `expected list of ints, got int` rather than the
+/// pre-lift ambiguous `expected list, got int`; a
+/// `:scales 1.0` kwarg into `Vec<f32>` as `expected list of
+/// numbers, got number` (the `"numbers"` naming mirrors the
+/// scalar-axis Number vs Float posture — the per-item gate
+/// accepts BOTH float and int atoms, so the outer-shape label
+/// names the union). The per-item shape gate keeps
 /// [`WideNumeric::SHAPE`]'s axis-typed rejection label
 /// (`ExpectedKwargShape::Int` on `<i64>`, `ExpectedKwargShape::Number`
 /// on `<f64>`) — the same label the scalar-kwarg peer's shape gate
@@ -2657,8 +2712,10 @@ where
 ///
 /// A present-but-non-list kwarg (`:ports 80`) rejects with the SAME
 /// typed [`LispError::TypeMismatch`] variant the required peer
-/// [`extract_narrowed_list`] emits (`expected list, got int`); a per-
-/// item non-numeric element inside a present list
+/// [`extract_narrowed_list`] emits (`expected list of ints, got int`
+/// through the `<i64>::LIST_SHAPE = ListOfInts` per-axis trait-const
+/// override, or `expected list of numbers, got X` on the wide-float
+/// axis peer); a per-item non-numeric element inside a present list
 /// (`:ports (list 80 "yes" 443)`) rejects with the SAME
 /// [`LispError::TypeMismatch { form: Item { key, idx }, expected:
 /// Int, got: String }`] variant its per-item peer emits through the
@@ -5021,35 +5078,35 @@ mod tests {
     /// [`extract_narrowed_list<W, T>`] on both wide-numeric axes
     /// through the `W: AtomKwarg` supertrait bound) bind through
     /// ONE per-axis trait const rather than a per-extractor inline
-    /// literal. Today the string-axis override lifts
-    /// [`ExpectedKwargShape::ListOfStrings`] into the trait dispatch;
-    /// the other three axes inherit the trait default
-    /// [`ExpectedKwargShape::List`], which matches every list-
-    /// extractor's pre-lift inline literal byte-for-byte so no
-    /// operator-facing diagnostic changes across the lift. A future
-    /// run adding `ListOfBools` / `ListOfInts` / `ListOfNumbers` to
-    /// [`crate::error::ExpectedKwargShape`] lands as ONE trait
-    /// override per axis; the three list extractors pick up the
-    /// sharpened label mechanically through the trait dispatch.
+    /// literal. All four atom-family axes override the trait
+    /// default: `<&str>` → [`ExpectedKwargShape::ListOfStrings`],
+    /// `<bool>` → [`ExpectedKwargShape::ListOfBools`],
+    /// `<i64>` → [`ExpectedKwargShape::ListOfInts`],
+    /// `<f64>` → [`ExpectedKwargShape::ListOfNumbers`]. Post-lift
+    /// every list-family extractor rejects a scalar-typed kwarg
+    /// with an element-typed refinement label, on any reachable
+    /// axis — the ambiguous bare-list default
+    /// [`ExpectedKwargShape::List`] never surfaces from these
+    /// extractors any more.
     ///
-    /// Pin the axis-typed identity at the four impls: the string
-    /// axis carries the element-typed refinement `ListOfStrings`;
-    /// the other three axes carry the trait default `List`. A
-    /// regression that reverted one extractor to an inline literal
-    /// (e.g. `extract_string_list(kw, key, ExpectedKwargShape::
+    /// Pin the axis-typed identity at the four impls: every axis
+    /// carries its element-typed refinement variant. A regression
+    /// that reverted one extractor to an inline literal (e.g.
+    /// `extract_string_list(kw, key, ExpectedKwargShape::
     /// ListOfStrings, ...)` restated inline alongside the trait
     /// override) would still compile but silently break the
-    /// single-source-of-truth contract this pin anchors — the
-    /// extractor + the trait const would speak the same bytes
-    /// today, then drift the moment the closed set gained a
-    /// per-axis refinement variant.
+    /// single-source-of-truth contract this pin anchors; a
+    /// regression that reverted ONE of the four axis overrides to
+    /// the trait default surfaces here as the axis's rejection
+    /// label degrading from the axis-typed refinement to the bare
+    /// `List` label.
     #[test]
     fn atom_kwarg_list_shape_is_the_one_per_axis_outer_list_rejection_label() {
-        // (1) Per-axis identity — the string axis carries the
-        //     element-typed refinement; the other three inherit the
-        //     trait default. Rustc-level const evaluation, so a
-        //     regression that flipped the override or the default
-        //     fails to compile the enclosing arm.
+        // (1) Per-axis identity — all four axes carry their axis-
+        //     typed element-typed refinement variant. Rustc-level
+        //     const evaluation, so a regression that flipped any
+        //     override back to the trait default fails to compile
+        //     the enclosing arm.
         assert_eq!(
             <&str as AtomKwarg<'_>>::LIST_SHAPE,
             ExpectedKwargShape::ListOfStrings,
@@ -5058,8 +5115,14 @@ mod tests {
             <bool as AtomKwarg<'_>>::LIST_SHAPE,
             ExpectedKwargShape::ListOfBools,
         );
-        assert_eq!(<i64 as AtomKwarg<'_>>::LIST_SHAPE, ExpectedKwargShape::List,);
-        assert_eq!(<f64 as AtomKwarg<'_>>::LIST_SHAPE, ExpectedKwargShape::List,);
+        assert_eq!(
+            <i64 as AtomKwarg<'_>>::LIST_SHAPE,
+            ExpectedKwargShape::ListOfInts,
+        );
+        assert_eq!(
+            <f64 as AtomKwarg<'_>>::LIST_SHAPE,
+            ExpectedKwargShape::ListOfNumbers,
+        );
 
         // (2) Extractor identity — extract_string_list's outer-shape
         //     rejection at a scalar kwarg (`:xs "solo"`) MUST carry
@@ -5100,14 +5163,16 @@ mod tests {
             other => panic!("expected TypeMismatch, got {other:?}"),
         }
 
-        // (4) Numeric-axis extractor identity — extract_narrowed_list
+        // (4) Wide-int-axis extractor identity — extract_narrowed_list
         //     inherits `<W>::LIST_SHAPE` through the WideNumeric:
         //     AtomKwarg supertrait bound. Rejection at a scalar
         //     kwarg (`:ports 80`) into a narrowed Vec<u16> carries
-        //     the trait default `List` today; a future
-        //     `<i64>::LIST_SHAPE = ListOfInts` override sharpens
-        //     the label through this extractor at both narrow
-        //     widths (u16 / i32 / …) at once.
+        //     the axis-typed refinement `ListOfInts` through the
+        //     `<i64>::LIST_SHAPE = ListOfInts` per-axis trait-const
+        //     override; every narrow-int width (u16 / i32 / usize /
+        //     …) picks up the sharpened outer-shape label
+        //     mechanically at ONE trait override on the wide axis
+        //     rather than at each narrow-width instantiation.
         let numeric_args = kwargs_of("(_ :ports 80)");
         let numeric_kw = parse_kwargs(&numeric_args).unwrap();
         let numeric_err = extract_narrowed_list::<i64, u16>(&numeric_kw, "ports").unwrap_err();
@@ -5115,17 +5180,24 @@ mod tests {
             LispError::TypeMismatch { form, expected, .. } => {
                 assert_eq!(form, KwargPath::named("ports"));
                 assert_eq!(expected, <i64 as AtomKwarg<'_>>::LIST_SHAPE);
-                assert_eq!(expected, ExpectedKwargShape::List);
+                assert_eq!(expected, ExpectedKwargShape::ListOfInts);
             }
             other => panic!("expected TypeMismatch, got {other:?}"),
         }
 
-        // (5) Float-axis extractor identity — same shape as (4) on
-        //     the wide-float axis. Pins both wide-numeric axes so a
-        //     regression that silently split `<i64>::LIST_SHAPE`
-        //     from `<f64>::LIST_SHAPE` (e.g. by adding an override
-        //     to one but not the other during a partial refactor)
-        //     surfaces here as a per-axis label drift.
+        // (5) Wide-float-axis extractor identity — same shape as (4)
+        //     on the wide-float axis, carrying the peer refinement
+        //     `ListOfNumbers` through the
+        //     `<f64>::LIST_SHAPE = ListOfNumbers` override. The
+        //     `"numbers"` naming (not `"floats"`) mirrors the
+        //     scalar-axis Number vs Float posture — the per-item
+        //     gate accepts BOTH float atoms and int atoms through
+        //     Sexp::as_float, so the outer-shape label names the
+        //     union rather than the narrower "floats". A regression
+        //     that silently split `<i64>::LIST_SHAPE` from
+        //     `<f64>::LIST_SHAPE` (e.g. by demoting one override to
+        //     the trait default during a partial refactor) surfaces
+        //     here as a per-axis label drift.
         let float_args = kwargs_of("(_ :scales 1.0)");
         let float_kw = parse_kwargs(&float_args).unwrap();
         let float_err = extract_narrowed_list::<f64, f32>(&float_kw, "scales").unwrap_err();
@@ -5133,7 +5205,7 @@ mod tests {
             LispError::TypeMismatch { form, expected, .. } => {
                 assert_eq!(form, KwargPath::named("scales"));
                 assert_eq!(expected, <f64 as AtomKwarg<'_>>::LIST_SHAPE);
-                assert_eq!(expected, ExpectedKwargShape::List);
+                assert_eq!(expected, ExpectedKwargShape::ListOfNumbers);
             }
             other => panic!("expected TypeMismatch, got {other:?}"),
         }
@@ -6783,15 +6855,21 @@ mod tests {
     #[test]
     fn optional_vec_numeric_field_rejects_present_scalar_with_typed_outer_shape() {
         // A PRESENT non-list kwarg (`:ports 80`) rejects with the
-        // SAME `expected list` outer-shape diagnostic the required
-        // peer `extract_int_list_narrowed` emits — the present-vs-
-        // absent bifurcation happens BEFORE the required peer's
-        // outer gate, so the outer-shape rejection variant is byte-
-        // identical to the required peer's. The outer label is
-        // `ExpectedKwargShape::List` (not a hypothetical
-        // `ListOfInts` refinement) — the seven-variant
-        // `ExpectedKwargShape` closed set stays at its current
-        // shape, matching the required peer's outer-gate posture.
+        // SAME axis-typed outer-shape diagnostic the required peer
+        // `extract_int_list_narrowed` emits through the
+        // `<i64>::LIST_SHAPE = ListOfInts` per-axis trait-const
+        // override — the present-vs-absent bifurcation happens
+        // BEFORE the required peer's outer gate, so the outer-shape
+        // rejection variant is byte-identical to the required peer's.
+        // The outer label is `ExpectedKwargShape::ListOfInts` (the
+        // element-typed refinement), NOT the ambiguous bare `List`
+        // default any wide-numeric list-family site emitted pre-lift.
+        // A regression that reverted the `<i64>::LIST_SHAPE` override
+        // to the trait default surfaces here as `expected =
+        // ExpectedKwargShape::List`, and the failure-mode names the
+        // exact axis whose override degraded — sibling to the bool
+        // axis's peer pin
+        // `optional_vec_bool_field_rejects_present_scalar_with_typed_outer_shape`.
         let forms = read(r"(defoptvecports :ports 80 :scales ())").expect("reads");
         let err = OptVecPortsSpec::compile_from_sexp(&forms[0])
             .expect_err("a scalar int is not a list of ints and must not parse");
@@ -6804,8 +6882,57 @@ mod tests {
             panic!("expected TypeMismatch (outer atom-family gate), got {err:?}");
         };
         assert_eq!(form, &KwargPath::named("ports"));
-        assert_eq!(*expected, ExpectedKwargShape::List);
+        assert_eq!(*expected, ExpectedKwargShape::ListOfInts);
         assert_eq!(*got, SexpShape::Int);
+        assert_eq!(
+            err.to_string(),
+            "compile error in :ports: expected list of ints, got int",
+            "the axis-typed refinement label must surface in the rendered \
+             diagnostic through the <i64>::LIST_SHAPE = ListOfInts per-axis \
+             trait-const dispatch — a regression that degrades this label to \
+             the bare `List` default surfaces here as a byte drift",
+        );
+    }
+
+    #[test]
+    fn optional_vec_scales_field_rejects_present_scalar_with_typed_outer_shape() {
+        // Wide-float-axis peer of
+        // `optional_vec_numeric_field_rejects_present_scalar_with_typed_outer_shape`
+        // — a PRESENT scalar-float kwarg (`:scales 1.0`) rejects
+        // through the `<f64>::LIST_SHAPE = ListOfNumbers` per-axis
+        // trait-const override, emitting the axis-typed refinement
+        // `ExpectedKwargShape::ListOfNumbers` at the outer-shape
+        // gate. The `"numbers"` (not `"floats"`) naming mirrors the
+        // scalar-axis Number vs Float posture — the per-item gate
+        // accepts BOTH float atoms and int atoms through
+        // Sexp::as_float, so the outer-shape label names the union
+        // rather than the narrower `"floats"`. Together with the
+        // int-axis peer this pins the FOUR-axis carving square on
+        // the atom-family list-family outer-shape surface
+        // (ListOfStrings on <&str>, ListOfBools on <bool>,
+        // ListOfInts on <i64>, ListOfNumbers on <f64>).
+        let forms = read(r"(defoptvecports :ports (80) :scales 1.0)").expect("reads");
+        let err = OptVecPortsSpec::compile_from_sexp(&forms[0])
+            .expect_err("a scalar float is not a list of numbers and must not parse");
+        let LispError::TypeMismatch {
+            form,
+            expected,
+            got,
+        } = &err
+        else {
+            panic!("expected TypeMismatch (outer atom-family gate), got {err:?}");
+        };
+        assert_eq!(form, &KwargPath::named("scales"));
+        assert_eq!(*expected, ExpectedKwargShape::ListOfNumbers);
+        assert_eq!(*got, SexpShape::Float);
+        assert_eq!(
+            err.to_string(),
+            "compile error in :scales: expected list of numbers, got float",
+            "the axis-typed refinement label must surface in the rendered \
+             diagnostic through the <f64>::LIST_SHAPE = ListOfNumbers per-axis \
+             trait-const dispatch — a regression that degrades this label to \
+             the bare `List` default surfaces here as a byte drift",
+        );
     }
 
     #[test]

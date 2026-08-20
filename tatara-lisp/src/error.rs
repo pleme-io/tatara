@@ -722,7 +722,7 @@ const _: () = crate::ast::assert_str_array_is_concatenation_of_two_scalar_replic
 // Compile-time per-position ORDER witnesses closing the (`&'static
 // str`)-row FULL-ARRAY LITERAL column across the FIVE remaining scalar-
 // composed `[&'static str; N]` label vocabularies in this module —
-// `ExpectedKwargShape::LABELS` (8), `KwargPathKind::LABELS` (3),
+// `ExpectedKwargShape::LABELS` (10), `KwargPathKind::LABELS` (3),
 // `MacroDefHead::KEYWORDS` (3), `CompilerSpecIoStage::LABELS` (4),
 // `StructuralKind::LABELS` (2). Peer to ast.rs's FIVE-witness
 // (str)-row cluster on `Atom::BOOL_LITERALS` (2), `AtomKind::LABELS`
@@ -764,21 +764,20 @@ const _: () = crate::ast::assert_str_array_is_concatenation_of_two_scalar_replic
 //      stays silent because the drifted str remains distinct from
 //      its peers.
 //
-// Future extensions that benefit: adding a hypothetical ninth
+// Future extensions that benefit: adding a hypothetical eleventh
 // expected-shape variant (a distinct `Float` once `extract_float`
-// stops accepting integers, a `Symbol`, or the sibling
-// `ListOfInts` / `ListOfNumbers` refinements the wide-numeric axes
-// still inherit `List` for) extends `ExpectedKwargShape::ALL` AND
-// `ExpectedKwargShape::LABELS` AND requires widening this witness's
-// `<8, 8, 0>` const-generic turbofish AND appending the new label
-// literal to the RHS listing in lockstep — rustc's forced-arity
-// check on `[&'static str; N]` fails compilation if either side
-// drifts out of lockstep. Analogous single-variant extensions on the
-// four sibling algebras (`KwargPathKind`, `MacroDefHead`,
-// `CompilerSpecIoStage`, `StructuralKind`) propagate through their
-// respective `<N, N, 0>` witnesses under the same forced-arity
-// gate.
-const _: () = crate::ast::assert_str_array_slice_equals_str_array::<8, 8, 0>(
+// stops accepting integers, a `Symbol`, or a parameterized
+// `ListOf(Box<Self>)` for nested-typed-vec extractors) extends
+// `ExpectedKwargShape::ALL` AND `ExpectedKwargShape::LABELS` AND
+// requires widening this witness's `<10, 10, 0>` const-generic
+// turbofish AND appending the new label literal to the RHS listing
+// in lockstep — rustc's forced-arity check on `[&'static str; N]`
+// fails compilation if either side drifts out of lockstep. Analogous
+// single-variant extensions on the four sibling algebras
+// (`KwargPathKind`, `MacroDefHead`, `CompilerSpecIoStage`,
+// `StructuralKind`) propagate through their respective `<N, N, 0>`
+// witnesses under the same forced-arity gate.
+const _: () = crate::ast::assert_str_array_slice_equals_str_array::<10, 10, 0>(
     &ExpectedKwargShape::LABELS,
     &[
         "keyword",
@@ -789,6 +788,8 @@ const _: () = crate::ast::assert_str_array_slice_equals_str_array::<8, 8, 0>(
         "list",
         "list of strings",
         "list of bools",
+        "list of ints",
+        "list of numbers",
     ],
 );
 const _: () = crate::ast::assert_str_array_slice_equals_str_array::<3, 3, 0>(
@@ -7032,43 +7033,105 @@ pub enum ExpectedKwargShape {
     /// `LIST_SHAPE` override lifts THIS variant into the trait
     /// dispatch, matching the shape the string-axis
     /// [`Self::ListOfStrings`] override took at the prior lift; the
-    /// remaining wide-numeric axes (`<i64>` / `<f64>`) still inherit
-    /// the trait default [`Self::List`] until their per-axis
-    /// `ListOfInts` / `ListOfNumbers` refinements land.
+    /// sibling wide-numeric axes carry [`Self::ListOfInts`] on
+    /// `<i64>` and [`Self::ListOfNumbers`] on `<f64>` through the
+    /// SAME per-axis trait-const dispatch, closing every reachable
+    /// axis on the atom-family list surface with an element-typed
+    /// refinement label.
     ListOfBools,
+    /// `"list of ints"` — emitted by [`crate::domain::extract_narrowed_list`]'s
+    /// outer-shape gate on the wide-int axis (`<W = i64>`) when the
+    /// kwarg's value isn't a `Sexp::List(_)`. Wider than `List`:
+    /// names the expected element-type so the diagnostic reads
+    /// `expected list of ints, got int` instead of the ambiguous
+    /// `expected list, got int`. The per-item gate fires `Int` (the
+    /// narrower expected-shape for the element-type failure — same
+    /// axis-typed rejection the scalar-int peer `extract_int` emits
+    /// through the shared [`crate::domain::AtomKwarg::project_at`]
+    /// atom-family shape gate).
+    ///
+    /// Sibling posture to [`Self::ListOfStrings`] /
+    /// [`Self::ListOfBools`] on the atom-family non-numeric list
+    /// surface — all three name the outer-list-of-atoms element-
+    /// typed refinement the axis-typed extractor emits at its
+    /// outer-shape gate, per the [`crate::domain::AtomKwarg::LIST_SHAPE`]
+    /// per-axis trait-const dispatch. The `<i64>` axis's
+    /// `LIST_SHAPE` override lifts THIS variant into the trait
+    /// dispatch (reached through the
+    /// `W: WideNumeric: for<'a> AtomKwarg<'a>` supertrait bound on
+    /// [`crate::domain::extract_narrowed_list`]) so every narrow-int
+    /// width (`u16` / `i32` / `usize` / …) inherits the sharpened
+    /// label mechanically. The final axis
+    /// ([`Self::ListOfNumbers`] on `<f64>`) closes the four-axis
+    /// square on the atom-family list surface.
+    ListOfInts,
+    /// `"list of numbers"` — emitted by [`crate::domain::extract_narrowed_list`]'s
+    /// outer-shape gate on the wide-float axis (`<W = f64>`) when
+    /// the kwarg's value isn't a `Sexp::List(_)`. Wider than
+    /// `List`: names the expected element-type (the union
+    /// `Sexp::as_float` decodes — `Sexp::Atom(Float(_))` ∪
+    /// `Sexp::Atom(Int(_))`, matching the scalar-float peer's
+    /// `Number` label rather than the narrower `Float`) so the
+    /// diagnostic reads `expected list of numbers, got string`
+    /// instead of the ambiguous `expected list, got string`. The
+    /// per-item gate fires `Number` (the narrower expected-shape
+    /// for the element-type failure — same axis-typed rejection the
+    /// scalar-float peer `extract_float` emits through the shared
+    /// [`crate::domain::AtomKwarg::project_at`] atom-family shape
+    /// gate).
+    ///
+    /// Sibling posture to [`Self::ListOfInts`] on the wide-int
+    /// axis — the `"numbers"` (not `"floats"`) naming mirrors
+    /// [`Self::Number`] vs. [`SexpShape::Float`]: the per-item
+    /// gate accepts BOTH float atoms and int atoms through
+    /// `Sexp::as_float`, so the expected-shape label names the
+    /// union rather than the narrower `"floats"`. The `<f64>`
+    /// axis's `LIST_SHAPE` override lifts THIS variant into the
+    /// trait dispatch through the SAME
+    /// `W: WideNumeric: for<'a> AtomKwarg<'a>` supertrait bound
+    /// [`Self::ListOfInts`] inherits through on the peer axis.
+    /// With both wide-numeric axes lifted, all four atom-family
+    /// list-surface axes (`<&str>` / `<bool>` / `<i64>` / `<f64>`)
+    /// now carry an element-typed refinement label — no axis falls
+    /// through to the ambiguous [`Self::List`] default.
+    ListOfNumbers,
 }
 
 impl ExpectedKwargShape {
-    /// The closed set of eight reachable expected-kwarg shapes — single
+    /// The closed set of ten reachable expected-kwarg shapes — single
     /// source of truth that drives the [`Self::label`] / [`fmt::Display`]
     /// projection AND the [`FromStr`] decode sweep keyed on
-    /// [`Self::label`]. Adding a hypothetical ninth variant (e.g.
+    /// [`Self::label`]. Adding a hypothetical eleventh variant (e.g.
     /// `Float` once `extract_float` stops accepting integers, `Symbol`
-    /// if a future extractor accepts only `Sexp::Atom(Symbol)`, a
+    /// if a future extractor accepts only `Sexp::Atom(Symbol)`, or a
     /// parameterized `ListOf(Box<Self>)` for nested-typed-vec
-    /// extractors, or the sibling `ListOfInts` / `ListOfNumbers`
-    /// refinements the wide-numeric axes still inherit `List` for)
-    /// lands at one [`Self::ALL`] entry + one [`Self::label`] arm —
-    /// exhaustively checked by the compiler (the `[Self; 8]` array
-    /// literal forces the arity) AND by the per-variant truth-table
-    /// tests below.
+    /// extractors) lands at one [`Self::ALL`] entry + one
+    /// [`Self::label`] arm — exhaustively checked by the compiler
+    /// (the `[Self; 10]` array literal forces the arity) AND by the
+    /// per-variant truth-table tests below. Every axis on the atom-
+    /// family list surface now carries its element-typed refinement
+    /// variant ([`Self::ListOfStrings`] / [`Self::ListOfBools`] /
+    /// [`Self::ListOfInts`] / [`Self::ListOfNumbers`]) — the
+    /// four-of-ten axis-typed carving closes the last gate-leak
+    /// where the ambiguous [`Self::List`] label leaked through the
+    /// two wide-numeric list extractors' outer-shape gate.
     ///
     /// Sibling closed-set lift to every other typed-shape enum the
     /// substrate carries: this crate's own [`SexpShape::ALL`] (the
     /// twelve reachable outer shapes the reader can produce — peer
     /// axis on the same `Sexp` algebra, whose vocabulary overlaps
-    /// with this set on five of eight entries — `"keyword"`,
+    /// with this set on five of ten entries — `"keyword"`,
     /// `"string"`, `"int"`, `"bool"`, `"list"` — and does NOT overlap
-    /// on three — `"number"` ⊎ `"list of strings"` ⊎
-    /// `"list of bools"`; the overlap is
-    /// intentional and pinned by the cross-axis tests), and across
-    /// the workspace ([`MacroDefHead::ALL`], [`UnquoteForm::ALL`],
-    /// [`crate::ast::AtomKind::ALL`], [`crate::ast::QuoteForm::ALL`],
-    /// `ConditionKind::ALL`, `ProcessPhase::ALL`,
-    /// `ProcessSignal::ALL`, `ChannelKind::ALL`, `IntentKind::ALL`,
-    /// `LifetimeKind::ALL`, `RequestorKind::ALL`, `ReceiptKind::ALL`,
-    /// …) every one of which paired its typed projection with `ALL`
-    /// before this lift.
+    /// on five — `"number"` ⊎ `"list of strings"` ⊎
+    /// `"list of bools"` ⊎ `"list of ints"` ⊎ `"list of numbers"`;
+    /// the overlap is intentional and pinned by the cross-axis
+    /// tests), and across the workspace ([`MacroDefHead::ALL`],
+    /// [`UnquoteForm::ALL`], [`crate::ast::AtomKind::ALL`],
+    /// [`crate::ast::QuoteForm::ALL`], `ConditionKind::ALL`,
+    /// `ProcessPhase::ALL`, `ProcessSignal::ALL`, `ChannelKind::ALL`,
+    /// `IntentKind::ALL`, `LifetimeKind::ALL`, `RequestorKind::ALL`,
+    /// `ReceiptKind::ALL`, …) every one of which paired its typed
+    /// projection with `ALL` before this lift.
     ///
     /// Future consumers that compose against `ALL`: LSP / REPL
     /// completion for the operator-facing rendered expected-shape
@@ -7082,7 +7145,7 @@ impl ExpectedKwargShape {
     /// `tatara_lisp_type_mismatch_total{expected="number"}`) — the
     /// metric label set IS [`Self::ALL`] mapped through
     /// [`Self::label`].
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 10] = [
         Self::Keyword,
         Self::String,
         Self::Int,
@@ -7091,11 +7154,13 @@ impl ExpectedKwargShape {
         Self::List,
         Self::ListOfStrings,
         Self::ListOfBools,
+        Self::ListOfInts,
+        Self::ListOfNumbers,
     ];
 
     /// Canonical `&'static str` bytes for the `Keyword` expected-shape —
     /// aliases [`SexpShape::KEYWORD_LABEL`] on the ExpectedKwargShape ⊂
-    /// SexpShape 5-of-8 subset carving so the shared `"keyword"`
+    /// SexpShape 5-of-10 subset carving so the shared `"keyword"`
     /// vocabulary binds at ONE `pub const` on the parent-superset's
     /// `SexpShape::KEYWORD_LABEL` arm rather than at TWO independent
     /// literal-discipline sites (the per-role `pub const` here AND the
@@ -7113,15 +7178,20 @@ impl ExpectedKwargShape {
     /// [`Self::BOOL_LABEL`], [`Self::LIST_LABEL`] — the FIVE
     /// ExpectedKwargShape variants that share bytes with a matching
     /// [`SexpShape`] carving arm all bind through this same alias
-    /// chain. The THREE non-overlapping siblings [`Self::NUMBER_LABEL`]
+    /// chain. The FIVE non-overlapping siblings [`Self::NUMBER_LABEL`]
     /// (`"number"` — the wider numeric-union label distinct from
     /// [`SexpShape::FLOAT_LABEL`]'s `"float"`),
     /// [`Self::LIST_OF_STRINGS_LABEL`] (`"list of strings"` — an
-    /// element-typed refinement with no [`SexpShape`] peer), and
+    /// element-typed refinement with no [`SexpShape`] peer),
     /// [`Self::LIST_OF_BOOLS_LABEL`] (`"list of bools"` — the peer
-    /// element-typed refinement on the bool axis, same posture as
-    /// ListOfStrings on the string axis) stay as direct literals
-    /// since there is no superset arm to alias through. The 5-of-8
+    /// element-typed refinement on the bool axis),
+    /// [`Self::LIST_OF_INTS_LABEL`] (`"list of ints"` — the peer
+    /// element-typed refinement on the wide-int axis), and
+    /// [`Self::LIST_OF_NUMBERS_LABEL`] (`"list of numbers"` — the
+    /// peer element-typed refinement on the wide-float axis, whose
+    /// `"numbers"` naming mirrors [`Self::NUMBER_LABEL`]'s wider
+    /// union-vs-narrower-`"float"` posture) stay as direct literals
+    /// since there is no superset arm to alias through. The 5-of-10
     /// carving IS the intersection
     /// `ExpectedKwargShape::ALL ∩ SexpShape::ALL` on the
     /// `&'static str` label vocabulary.
@@ -7129,16 +7199,16 @@ impl ExpectedKwargShape {
 
     /// Canonical `&'static str` bytes for the `String` expected-shape —
     /// aliases [`SexpShape::STRING_LABEL`] on the ExpectedKwargShape ⊂
-    /// SexpShape 5-of-8 subset carving. Per-role peer of `Self::String`
+    /// SexpShape 5-of-10 subset carving. Per-role peer of `Self::String`
     /// on the closed-set outer algebra. Emitted by `extract_string` /
     /// `extract_optional_string` AND by `extract_string_list`'s per-
     /// item gate. See [`Self::KEYWORD_LABEL`] for the alias-chain shape
-    /// every sibling in the 5-of-8 carving shares.
+    /// every sibling in the 5-of-10 carving shares.
     pub const STRING_LABEL: &'static str = SexpShape::STRING_LABEL;
 
     /// Canonical `&'static str` bytes for the `Int` expected-shape —
     /// aliases [`SexpShape::INT_LABEL`] on the ExpectedKwargShape ⊂
-    /// SexpShape 5-of-8 subset carving. Per-role peer of `Self::Int`
+    /// SexpShape 5-of-10 subset carving. Per-role peer of `Self::Int`
     /// on the closed-set outer algebra; the sibling
     /// [`Self::NUMBER_LABEL`] distinguishes the wider numeric-union
     /// case `extract_float` emits (which has NO [`SexpShape`] peer —
@@ -7159,14 +7229,14 @@ impl ExpectedKwargShape {
     /// alias through. Divergence pinned by
     /// `sexp_shape_atom_carving_labels_align_with_expected_kwarg_shape_labels`'s
     /// `assert_ne!(SexpShape::FLOAT_LABEL, ExpectedKwargShape::NUMBER_LABEL)`
-    /// disjointness pin — the THREE non-overlapping arms of the 8-arm
-    /// closed set are the natural residual once the 5-of-8 subset
+    /// disjointness pin — the FIVE non-overlapping arms of the 10-arm
+    /// closed set are the natural residual once the 5-of-10 subset
     /// carving aliases through [`SexpShape`].
     pub const NUMBER_LABEL: &'static str = "number";
 
     /// Canonical `&'static str` bytes for the `Bool` expected-shape —
     /// aliases [`SexpShape::BOOL_LABEL`] on the ExpectedKwargShape ⊂
-    /// SexpShape 5-of-8 subset carving. Per-role peer of `Self::Bool`
+    /// SexpShape 5-of-10 subset carving. Per-role peer of `Self::Bool`
     /// on the closed-set outer algebra. Emitted by `extract_bool` /
     /// `extract_optional_bool` when the kwarg's value isn't a
     /// `Sexp::Atom(Bool(_))`. See [`Self::KEYWORD_LABEL`] for the
@@ -7175,7 +7245,7 @@ impl ExpectedKwargShape {
 
     /// Canonical `&'static str` bytes for the `List` expected-shape —
     /// aliases [`SexpShape::LIST_LABEL`] on the ExpectedKwargShape ⊂
-    /// SexpShape 5-of-8 subset carving. Per-role peer of `Self::List`
+    /// SexpShape 5-of-10 subset carving. Per-role peer of `Self::List`
     /// on the closed-set outer algebra; the wider
     /// [`Self::LIST_OF_STRINGS_LABEL`] names the element-typed variant
     /// (which has NO [`SexpShape`] peer — the SexpShape algebra
@@ -7209,11 +7279,70 @@ impl ExpectedKwargShape {
     ///
     /// Sibling posture to [`Self::LIST_OF_STRINGS_LABEL`] on the atom-
     /// family non-numeric list-of-atoms element-typed refinement axis;
-    /// the three non-overlapping arms of the 8-arm closed set
+    /// the FIVE non-overlapping arms of the 10-arm closed set
     /// ([`Self::NUMBER_LABEL`], [`Self::LIST_OF_STRINGS_LABEL`],
-    /// [`Self::LIST_OF_BOOLS_LABEL`]) are the natural residual once
-    /// the 5-of-8 subset carving aliases through [`SexpShape`].
+    /// [`Self::LIST_OF_BOOLS_LABEL`], [`Self::LIST_OF_INTS_LABEL`],
+    /// [`Self::LIST_OF_NUMBERS_LABEL`]) are the natural residual once
+    /// the 5-of-10 subset carving aliases through [`SexpShape`].
     pub const LIST_OF_BOOLS_LABEL: &'static str = "list of bools";
+
+    /// Canonical `&'static str` bytes for the `ListOfInts`
+    /// expected-shape — emitted by
+    /// [`crate::domain::extract_narrowed_list`]'s outer-shape gate
+    /// on the wide-int axis (`<W = i64>`) when the kwarg's value
+    /// isn't a `Sexp::List(_)`. The `"list of ints"` naming is
+    /// load-bearing: it names the element-type (Int) so the
+    /// diagnostic reads `expected list of ints, got int` instead of
+    /// the ambiguous `expected list, got int`. INTENTIONALLY NOT
+    /// aliased through [`SexpShape`]: the parent-superset algebra
+    /// doesn't type-index list-of-ints as a distinct shape (same
+    /// posture as [`Self::LIST_OF_STRINGS_LABEL`] on the string
+    /// axis and [`Self::LIST_OF_BOOLS_LABEL`] on the bool axis), so
+    /// this constant has NO peer on the parent-superset algebra to
+    /// alias through. Divergence pinned by
+    /// `expected_kwarg_shape_residual_labels_lie_outside_sexp_shape_label_vocabulary`.
+    ///
+    /// Sibling posture to [`Self::LIST_OF_STRINGS_LABEL`] /
+    /// [`Self::LIST_OF_BOOLS_LABEL`] / [`Self::LIST_OF_NUMBERS_LABEL`]
+    /// on the atom-family list-of-atoms element-typed refinement
+    /// axis; the FIVE non-overlapping arms of the 10-arm closed
+    /// set are the natural residual once the 5-of-10 subset carving
+    /// aliases through [`SexpShape`]. Every narrow-int width
+    /// (`u16` / `i32` / `usize` / …) inherits this refined outer-
+    /// shape label mechanically through the
+    /// `W: WideNumeric: for<'a> AtomKwarg<'a>` supertrait bound on
+    /// [`crate::domain::extract_narrowed_list`].
+    pub const LIST_OF_INTS_LABEL: &'static str = "list of ints";
+
+    /// Canonical `&'static str` bytes for the `ListOfNumbers`
+    /// expected-shape — emitted by
+    /// [`crate::domain::extract_narrowed_list`]'s outer-shape gate
+    /// on the wide-float axis (`<W = f64>`) when the kwarg's value
+    /// isn't a `Sexp::List(_)`. The `"list of numbers"` naming
+    /// (not `"list of floats"`) is load-bearing: the per-item gate
+    /// accepts BOTH `Sexp::Atom(Float(_))` and
+    /// `Sexp::Atom(Int(_))` through `Sexp::as_float`, so the outer-
+    /// shape label names the union — mirror of
+    /// [`Self::NUMBER_LABEL`] vs. [`SexpShape::FLOAT_LABEL`] on the
+    /// scalar axis, where the wider `"number"` label rides through
+    /// the scalar-float outer-shape gate rather than the narrower
+    /// `"float"`. INTENTIONALLY NOT aliased through [`SexpShape`]:
+    /// the parent-superset algebra doesn't type-index list-of-
+    /// numbers as a distinct shape (same posture as
+    /// [`Self::LIST_OF_STRINGS_LABEL`] / [`Self::LIST_OF_BOOLS_LABEL`]
+    /// / [`Self::LIST_OF_INTS_LABEL`]).
+    ///
+    /// Sibling posture to [`Self::LIST_OF_INTS_LABEL`] on the peer
+    /// wide-numeric axis; together the two pair the atom-family
+    /// list-family surface's numeric-axis element-typed refinements
+    /// alongside the non-numeric pair
+    /// ([`Self::LIST_OF_STRINGS_LABEL`] on `<&str>`,
+    /// [`Self::LIST_OF_BOOLS_LABEL`] on `<bool>`). Every narrow-
+    /// float width (`f32` / …) inherits this refined outer-shape
+    /// label mechanically through the
+    /// `W: WideNumeric: for<'a> AtomKwarg<'a>` supertrait bound on
+    /// [`crate::domain::extract_narrowed_list`].
+    pub const LIST_OF_NUMBERS_LABEL: &'static str = "list of numbers";
 
     /// Closed-set forced-arity ALL array over the canonical expected-
     /// shape `&'static str` bytes, in declaration order matching
@@ -7230,20 +7359,20 @@ impl ExpectedKwargShape {
     /// consumers.
     ///
     /// Future consumers that compose against `LABELS`: LSP completion
-    /// surfacing the seven expected-shape labels in a
+    /// surfacing the ten expected-shape labels in a
     /// `expected=` metrics query bar, a `tatara-check` coverage
     /// assertion sweeping `LABELS` over workspace `.lisp` files'
     /// kwarg-gate rejection sites, a Sekiban audit-trail metric
     /// labeled by the canonical expected-shape (e.g.
     /// `tatara_lisp_type_mismatch_total{expected="number"}`) whose
-    /// metric-label set IS `LABELS`. Adding an eighth variant (e.g.
+    /// metric-label set IS `LABELS`. Adding an eleventh variant (e.g.
     /// `Float` once `extract_float` stops accepting integers,
-    /// `Symbol`, or a parameterized `ListOfInts`) extends
+    /// `Symbol`, or a parameterized `ListOf(Box<Self>)`) extends
     /// [`Self::ALL`] AND [`Self::LABELS`] AND [`Self::label`]'s arm
     /// AND one new per-role `pub const` in lockstep — rustc's forced-
     /// arity check on the two `[_; N]` arrays fails compilation if
     /// EITHER ALL array grows without the other.
-    pub const LABELS: [&'static str; 8] = [
+    pub const LABELS: [&'static str; 10] = [
         Self::KEYWORD_LABEL,
         Self::STRING_LABEL,
         Self::INT_LABEL,
@@ -7252,6 +7381,8 @@ impl ExpectedKwargShape {
         Self::LIST_LABEL,
         Self::LIST_OF_STRINGS_LABEL,
         Self::LIST_OF_BOOLS_LABEL,
+        Self::LIST_OF_INTS_LABEL,
+        Self::LIST_OF_NUMBERS_LABEL,
     ];
 
     /// Project the typed `ExpectedKwargShape` to the canonical
@@ -7269,10 +7400,11 @@ impl ExpectedKwargShape {
     /// `impl Self` ([`Self::KEYWORD_LABEL`], [`Self::STRING_LABEL`],
     /// [`Self::INT_LABEL`], [`Self::NUMBER_LABEL`],
     /// [`Self::BOOL_LABEL`], [`Self::LIST_LABEL`],
-    /// [`Self::LIST_OF_STRINGS_LABEL`]) so the seven canonical
-    /// expected-shape byte-strings bind at ONE typed source of truth
-    /// per role rather than as inline literals scattered across the
-    /// `match` body. Sibling posture to
+    /// [`Self::LIST_OF_STRINGS_LABEL`], [`Self::LIST_OF_BOOLS_LABEL`],
+    /// [`Self::LIST_OF_INTS_LABEL`], [`Self::LIST_OF_NUMBERS_LABEL`])
+    /// so the ten canonical expected-shape byte-strings bind at ONE
+    /// typed source of truth per role rather than as inline literals
+    /// scattered across the `match` body. Sibling posture to
     /// `KwargPathKind::label`'s post-lift arms.
     ///
     /// The bidirectional contract is anchored by tests:
@@ -7296,6 +7428,8 @@ impl ExpectedKwargShape {
             Self::List => Self::LIST_LABEL,
             Self::ListOfStrings => Self::LIST_OF_STRINGS_LABEL,
             Self::ListOfBools => Self::LIST_OF_BOOLS_LABEL,
+            Self::ListOfInts => Self::LIST_OF_INTS_LABEL,
+            Self::ListOfNumbers => Self::LIST_OF_NUMBERS_LABEL,
         }
     }
 }
@@ -16251,6 +16385,8 @@ mod tests {
         assert_eq!(ExpectedKwargShape::List.label(), "list");
         assert_eq!(ExpectedKwargShape::ListOfStrings.label(), "list of strings");
         assert_eq!(ExpectedKwargShape::ListOfBools.label(), "list of bools");
+        assert_eq!(ExpectedKwargShape::ListOfInts.label(), "list of ints");
+        assert_eq!(ExpectedKwargShape::ListOfNumbers.label(), "list of numbers",);
     }
 
     #[test]
@@ -16274,6 +16410,14 @@ mod tests {
         assert_eq!(
             format!("{}", ExpectedKwargShape::ListOfBools),
             "list of bools"
+        );
+        assert_eq!(
+            format!("{}", ExpectedKwargShape::ListOfInts),
+            "list of ints"
+        );
+        assert_eq!(
+            format!("{}", ExpectedKwargShape::ListOfNumbers),
+            "list of numbers"
         );
     }
 
@@ -16368,7 +16512,7 @@ mod tests {
         // candidate-list projection on the trait. Distinctness of the
         // sorted result is covered by
         // `assert_closed_set_well_formed::<ExpectedKwargShape>()`.
-        assert_eq!(ExpectedKwargShape::ALL.len(), 8);
+        assert_eq!(ExpectedKwargShape::ALL.len(), 10);
         assert_eq!(
             <ExpectedKwargShape as crate::ClosedSet>::sorted_labels(),
             vec![
@@ -16377,6 +16521,8 @@ mod tests {
                 "keyword",
                 "list",
                 "list of bools",
+                "list of ints",
+                "list of numbers",
                 "list of strings",
                 "number",
                 "string",
@@ -16497,9 +16643,19 @@ mod tests {
             "list of bools".parse::<ExpectedKwargShape>().unwrap(),
             ExpectedKwargShape::ListOfBools
         );
+        assert_eq!(
+            "list of ints".parse::<ExpectedKwargShape>().unwrap(),
+            ExpectedKwargShape::ListOfInts
+        );
+        assert_eq!(
+            "list of numbers".parse::<ExpectedKwargShape>().unwrap(),
+            ExpectedKwargShape::ListOfNumbers
+        );
         "number".parse::<SexpShape>().unwrap_err();
         "list of strings".parse::<SexpShape>().unwrap_err();
         "list of bools".parse::<SexpShape>().unwrap_err();
+        "list of ints".parse::<SexpShape>().unwrap_err();
+        "list of numbers".parse::<SexpShape>().unwrap_err();
     }
 
     // ── ExpectedKwargShape per-role `pub const` + LABELS ALL array lift ─
@@ -16703,6 +16859,20 @@ mod tests {
              ExpectedKwargShape::LIST_OF_BOOLS_LABEL — the match \
              arm reverted to an inline literal"
         );
+        assert_eq!(
+            ExpectedKwargShape::ListOfInts.label(),
+            ExpectedKwargShape::LIST_OF_INTS_LABEL,
+            "ExpectedKwargShape::ListOfInts.label() drifted from \
+             ExpectedKwargShape::LIST_OF_INTS_LABEL — the match \
+             arm reverted to an inline literal"
+        );
+        assert_eq!(
+            ExpectedKwargShape::ListOfNumbers.label(),
+            ExpectedKwargShape::LIST_OF_NUMBERS_LABEL,
+            "ExpectedKwargShape::ListOfNumbers.label() drifted from \
+             ExpectedKwargShape::LIST_OF_NUMBERS_LABEL — the match \
+             arm reverted to an inline literal"
+        );
     }
 
     #[test]
@@ -16731,10 +16901,62 @@ mod tests {
     }
 
     #[test]
+    fn expected_kwarg_shape_list_of_ints_label_projects_canonical_bytes() {
+        // Pins the exact `"list of ints"` bytes at the typed
+        // constant. `extract_narrowed_list::<i64, T>`'s outer-shape
+        // gate emits this exact expected-shape (via the
+        // `<i64 as AtomKwarg<'_>>::LIST_SHAPE` per-axis trait-const
+        // override, reached through the
+        // `W: WideNumeric: for<'a> AtomKwarg<'a>` supertrait bound);
+        // the naming (not the narrower `"list"`) is load-bearing —
+        // it names the element-type so the diagnostic reads
+        // `expected list of ints, got int` instead of the ambiguous
+        // `expected list, got int` bytes every narrow-int width
+        // (`u16` / `i32` / `usize` / …) emitted pre-lift. Sibling
+        // posture to `expected_kwarg_shape_list_of_strings_label_projects_canonical_bytes`
+        // and `expected_kwarg_shape_list_of_bools_label_projects_canonical_bytes`;
+        // together the four axis-typed refinement pins anchor
+        // the full atom-family list-family element-typed refinement
+        // label surface at the trait-dispatch layer.
+        assert_eq!(
+            ExpectedKwargShape::LIST_OF_INTS_LABEL,
+            "list of ints",
+            "ExpectedKwargShape::LIST_OF_INTS_LABEL drifted from \
+             the substrate-canonical extract-narrowed-list outer-\
+             shape gate label `\"list of ints\"` on the <i64> axis"
+        );
+    }
+
+    #[test]
+    fn expected_kwarg_shape_list_of_numbers_label_projects_canonical_bytes() {
+        // Pins the exact `"list of numbers"` bytes at the typed
+        // constant. `extract_narrowed_list::<f64, T>`'s outer-shape
+        // gate emits this exact expected-shape (via the
+        // `<f64 as AtomKwarg<'_>>::LIST_SHAPE` per-axis trait-const
+        // override); the `"numbers"` naming (not `"floats"`) mirrors
+        // `Number` vs. `Float` on the scalar axis — the per-item
+        // gate accepts BOTH `Sexp::Atom(Float(_))` and
+        // `Sexp::Atom(Int(_))` through `Sexp::as_float`, so the
+        // outer-shape label names the union rather than the narrower
+        // `"floats"`. A regression to `"list"` here would silently
+        // collapse the structurally distinct extractor gate into the
+        // ambiguous default. Sibling posture to
+        // `expected_kwarg_shape_list_of_ints_label_projects_canonical_bytes`
+        // on the peer wide-numeric axis.
+        assert_eq!(
+            ExpectedKwargShape::LIST_OF_NUMBERS_LABEL,
+            "list of numbers",
+            "ExpectedKwargShape::LIST_OF_NUMBERS_LABEL drifted from \
+             the substrate-canonical extract-narrowed-list outer-\
+             shape gate label `\"list of numbers\"` on the <f64> axis"
+        );
+    }
+
+    #[test]
     fn expected_kwarg_shape_labels_has_expected_cardinality() {
-        // Cardinality contract: `Self::LABELS.len() == 8` — pinned at
+        // Cardinality contract: `Self::LABELS.len() == 10` — pinned at
         // the declaration site by rustc's forced-arity check on
-        // `[&'static str; 8]`. This test surfaces the arity as a
+        // `[&'static str; 10]`. This test surfaces the arity as a
         // fail-loud runtime pin so a future refactor that switches
         // the array type to `&[&'static str]` (dropping the compile-
         // time arity forcing) doesn't silently loosen the closed-set
@@ -16743,8 +16965,8 @@ mod tests {
         // `KwargPathKind::LABELS` family.
         assert_eq!(
             ExpectedKwargShape::LABELS.len(),
-            8,
-            "ExpectedKwargShape::LABELS cardinality drifted from 8 \
+            10,
+            "ExpectedKwargShape::LABELS cardinality drifted from 10 \
              — the expected-shape closed set gained or lost a variant \
              without the ALL / LABELS pair being updated in tandem"
         );
@@ -16785,7 +17007,7 @@ mod tests {
 
     #[test]
     fn expected_kwarg_shape_labels_pairwise_distinct() {
-        // PAIRWISE DISJOINTNESS: the seven `&'static str` labels on
+        // PAIRWISE DISJOINTNESS: the ten `&'static str` labels on
         // the expected-shape algebra MUST differ so the derive-
         // generated FromStr's linear sweep cannot route two variants
         // through the same arm. Family-wide sweep over LABELS ×
@@ -17086,19 +17308,21 @@ mod tests {
         // — those pin the substitution-subset composition through the
         // superset via runtime pointer-equality on a value-carrying
         // method; THIS pin pins the ExpectedKwargShape ⊂ SexpShape
-        // 5-of-7 subset carving's alias-chain through the parent-
+        // 5-of-10 subset carving's alias-chain through the parent-
         // superset via compile-time `pub const` identity on a
         // vocabulary-carrying constant.
         //
-        // The TWO non-overlapping ExpectedKwargShape arms
-        // (`NUMBER_LABEL` and `LIST_OF_STRINGS_LABEL`) stay OUTSIDE
-        // this pin's sweep — those are direct-literal constants with
-        // no [`SexpShape`] peer to alias through.
+        // The FIVE non-overlapping ExpectedKwargShape arms
+        // (`NUMBER_LABEL`, `LIST_OF_STRINGS_LABEL`,
+        // `LIST_OF_BOOLS_LABEL`, `LIST_OF_INTS_LABEL`,
+        // `LIST_OF_NUMBERS_LABEL`) stay OUTSIDE this pin's sweep —
+        // those are direct-literal constants with no [`SexpShape`]
+        // peer to alias through.
         //
         // Theory anchor: THEORY.md §II.1 invariant 5 (composition
         // preserves proofs) — the alias-chain composition law
         // `ExpectedKwargShape::X_LABEL == SexpShape::X_LABEL` on the
-        // 5-of-7 subset carving is a rustc-time typed identity, not a
+        // 5-of-10 subset carving is a rustc-time typed identity, not a
         // runtime byte-equality convention.
         assert!(
             std::ptr::eq(
@@ -17139,17 +17363,18 @@ mod tests {
 
     #[test]
     fn expected_kwarg_shape_residual_labels_lie_outside_sexp_shape_label_vocabulary() {
-        // RESIDUAL-CARVING DISJOINTNESS CONTRACT: the THREE
-        // ExpectedKwargShape arms that lie OUTSIDE the 5-of-8 aliased
+        // RESIDUAL-CARVING DISJOINTNESS CONTRACT: the FIVE
+        // ExpectedKwargShape arms that lie OUTSIDE the 5-of-10 aliased
         // subset carving (`NUMBER_LABEL`, `LIST_OF_STRINGS_LABEL`,
-        // `LIST_OF_BOOLS_LABEL`) MUST carry vocabulary distinct from
+        // `LIST_OF_BOOLS_LABEL`, `LIST_OF_INTS_LABEL`,
+        // `LIST_OF_NUMBERS_LABEL`) MUST carry vocabulary distinct from
         // EVERY per-role `SexpShape::X_LABEL` constant — otherwise the
-        // 5-of-8 carving would fail its subset-and-residual invariant
+        // 5-of-10 carving would fail its subset-and-residual invariant
         // (the subset would carry MORE than 5 aliasable arms, or the
-        // residual would carry FEWER than 3 direct-literal arms). The
+        // residual would carry FEWER than 5 direct-literal arms). The
         // pre-existing pin
         // `sexp_shape_atom_carving_labels_align_with_expected_kwarg_shape_labels`
-        // anchors ONE of the three disjointness edges (SexpShape::FLOAT
+        // anchors ONE of the five disjointness edges (SexpShape::FLOAT
         // vs ExpectedKwargShape::NUMBER); THIS pin anchors the
         // whole-family disjointness of every residual arm against
         // every SexpShape label at once.
@@ -17157,8 +17382,8 @@ mod tests {
         // A regression that adds `SexpShape::Number` as a new variant
         // (renaming Float to Number) would fail HERE by making
         // `ExpectedKwargShape::NUMBER_LABEL` collide with the newly
-        // added `SexpShape::NUMBER_LABEL`; the 5-of-8 carving MUST be
-        // re-derived to 6-of-8 in that case (aliasing NUMBER_LABEL
+        // added `SexpShape::NUMBER_LABEL`; the 5-of-10 carving MUST be
+        // re-derived to 6-of-10 in that case (aliasing NUMBER_LABEL
         // through the new SexpShape arm). The pin surfaces the
         // structural-partition-change requirement at the disjointness
         // gate rather than through a silent literal-duplication.
@@ -17167,17 +17392,27 @@ mod tests {
             assert_ne!(
                 ExpectedKwargShape::NUMBER_LABEL,
                 via_shape,
-                "ExpectedKwargShape::NUMBER_LABEL `\"number\"` collides with SexpShape::{shape:?}.label() `{via_shape}` — the 5-of-8 aliased subset carving's residual arm {{NUMBER}} MUST lie outside every SexpShape label; a collision means the carving needs to be re-derived to a 6-of-8 subset aliased through the newly-overlapping SexpShape arm",
+                "ExpectedKwargShape::NUMBER_LABEL `\"number\"` collides with SexpShape::{shape:?}.label() `{via_shape}` — the 5-of-10 aliased subset carving's residual arm {{NUMBER}} MUST lie outside every SexpShape label; a collision means the carving needs to be re-derived to a 6-of-10 subset aliased through the newly-overlapping SexpShape arm",
             );
             assert_ne!(
                 ExpectedKwargShape::LIST_OF_STRINGS_LABEL,
                 via_shape,
-                "ExpectedKwargShape::LIST_OF_STRINGS_LABEL `\"list of strings\"` collides with SexpShape::{shape:?}.label() `{via_shape}` — the 5-of-8 aliased subset carving's residual arm {{LIST_OF_STRINGS}} MUST lie outside every SexpShape label",
+                "ExpectedKwargShape::LIST_OF_STRINGS_LABEL `\"list of strings\"` collides with SexpShape::{shape:?}.label() `{via_shape}` — the 5-of-10 aliased subset carving's residual arm {{LIST_OF_STRINGS}} MUST lie outside every SexpShape label",
             );
             assert_ne!(
                 ExpectedKwargShape::LIST_OF_BOOLS_LABEL,
                 via_shape,
-                "ExpectedKwargShape::LIST_OF_BOOLS_LABEL `\"list of bools\"` collides with SexpShape::{shape:?}.label() `{via_shape}` — the 5-of-8 aliased subset carving's residual arm {{LIST_OF_BOOLS}} MUST lie outside every SexpShape label",
+                "ExpectedKwargShape::LIST_OF_BOOLS_LABEL `\"list of bools\"` collides with SexpShape::{shape:?}.label() `{via_shape}` — the 5-of-10 aliased subset carving's residual arm {{LIST_OF_BOOLS}} MUST lie outside every SexpShape label",
+            );
+            assert_ne!(
+                ExpectedKwargShape::LIST_OF_INTS_LABEL,
+                via_shape,
+                "ExpectedKwargShape::LIST_OF_INTS_LABEL `\"list of ints\"` collides with SexpShape::{shape:?}.label() `{via_shape}` — the 5-of-10 aliased subset carving's residual arm {{LIST_OF_INTS}} MUST lie outside every SexpShape label",
+            );
+            assert_ne!(
+                ExpectedKwargShape::LIST_OF_NUMBERS_LABEL,
+                via_shape,
+                "ExpectedKwargShape::LIST_OF_NUMBERS_LABEL `\"list of numbers\"` collides with SexpShape::{shape:?}.label() `{via_shape}` — the 5-of-10 aliased subset carving's residual arm {{LIST_OF_NUMBERS}} MUST lie outside every SexpShape label",
             );
         }
     }
@@ -22208,7 +22443,7 @@ mod tests {
     fn assert_str_array_slice_equals_str_array_accepts_every_family_wide_error_module_array_full_array_literal_listing(
     ) {
         use crate::ast::assert_str_array_slice_equals_str_array;
-        assert_str_array_slice_equals_str_array::<8, 8, 0>(
+        assert_str_array_slice_equals_str_array::<10, 10, 0>(
             &ExpectedKwargShape::LABELS,
             &[
                 "keyword",
@@ -22219,6 +22454,8 @@ mod tests {
                 "list",
                 "list of strings",
                 "list of bools",
+                "list of ints",
+                "list of numbers",
             ],
         );
         assert_str_array_slice_equals_str_array::<3, 3, 0>(

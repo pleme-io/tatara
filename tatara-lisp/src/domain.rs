@@ -2362,14 +2362,64 @@ pub fn extract_optional_float(kw: &Kwargs<'_>, key: &str) -> Result<Option<f64>>
 // A future `classify` arm for a width with no impl is a compile error
 // at the consumer, not a mislabeled runtime message.
 
-/// A narrower numeric type reachable from the reader's wide `Wide`
-/// value — `i64` on the int axis, `f64` on the float axis.
+/// A narrower numeric type reachable from the reader's wide
+/// [`Self::Wide`] value — `i64` on the int axis, `f64` on the float
+/// axis.
 ///
 /// Implemented for exactly the nine widths `#[derive(TataraDomain)]`
 /// recognises, which is what makes [`NumericWidth`] a genuinely closed
 /// set: the enum's variants and this trait's impls are the same list,
 /// generated from the same macro invocation below.
-pub trait NarrowNumeric<Wide>: Sized + Copy {
+///
+/// The wide axis rides an ASSOCIATED type ([`Self::Wide`]) rather than
+/// a generic parameter, because every narrow width has exactly ONE
+/// wide axis it narrows FROM — every `NarrowNumeric` impl in the
+/// substrate is either `<i64 as Wide>` on the integer widths or
+/// `<f64 as Wide>` on the float widths, never both, and a
+/// hypothetical narrow width impl'd for BOTH wide axes would be a
+/// category error (a `u16` cannot be reached from an `f64` without
+/// TRUNCATING, which is exactly the corruption the narrowing pipeline
+/// exists to reject). Post-associated-type-lift the derive's
+/// `Kind::{Int,Float,VecInt,VecFloat,Optional*Int,Optional*Float}` arm
+/// dispatch inherits the wide axis mechanically from
+/// `<T as NarrowNumeric>::Wide` rather than restating the axis in the
+/// arm name — a future run collapsing the four per-axis-per-shape
+/// derive arms onto ONE per-shape trait-dispatch call site (`<T as
+/// NarrowKwarg>::extract_narrowed_kwarg` / `_optional_kwarg` /
+/// `_list_kwarg` / `_optional_list_kwarg`) picks up the wide axis
+/// from the type parameter alone, no per-axis emit path.
+///
+/// The four trait defaults ([`Self::extract_narrowed_kwarg`] /
+/// [`Self::extract_optional_narrowed_kwarg`] /
+/// [`Self::extract_narrowed_list_kwarg`] /
+/// [`Self::extract_optional_narrowed_list_kwarg`]) compose the
+/// wide-axis extractor + [`Self::narrow`] gate + wide-into-literal
+/// diagnostic wrap at ONE per-narrow-type trait dispatch site — the
+/// narrowing-family peer of the [`AtomKwarg`] atom-family
+/// scalar-and-list quadruple (`extract_kwarg` / `extract_optional_
+/// kwarg` / `extract_list_kwarg` / `extract_optional_list_kwarg`).
+/// Pre-lift the four narrowing-family primitives ([`extract_narrowed`]
+/// / [`extract_optional_narrowed`] / [`extract_narrowed_list`] /
+/// [`extract_optional_narrowed_list`]) took the axis as an EXPLICIT
+/// `W` type parameter callers had to supply at every callsite; every
+/// axis-typed public wrapper (`extract_int_narrowed<T>` and its seven
+/// peers) restated the `<i64, T>` / `<f64, T>` axis choice in the
+/// wrapper NAME (`_int_` vs. `_float_`) AND passed it as the
+/// turbofish's first argument. Post-lift the axis choice lives at ONE
+/// per-narrow-type `type Wide = i64|f64` associated-type binding, and
+/// the eight axis-typed public wrappers reduce to trait-dispatch
+/// one-liners composing `<T as NarrowNumeric>::extract_*_kwarg`
+/// through this trait's defaults.
+pub trait NarrowNumeric: Sized + Copy {
+    /// The wide axis this narrow type is reachable FROM — `i64` on
+    /// every integer width, `f64` on `f32` and `f64`. Bound to
+    /// [`WideNumeric`] so the trait defaults below can compose
+    /// [`extract_narrowed`] etc. (which take
+    /// `W: WideNumeric, T: NarrowNumeric<Wide = W>`) with
+    /// `Self::Wide` in the `W` slot without a per-caller bound
+    /// re-statement.
+    type Wide: WideNumeric;
+
     /// This type's identity in the typed diagnostic — the value that
     /// rides [`LispError::KwargOutOfRange`]'s `target` slot.
     const WIDTH: NumericWidth;
@@ -2377,17 +2427,126 @@ pub trait NarrowNumeric<Wide>: Sized + Copy {
     /// The partial projection. `None` means "this wide value has no
     /// representation at this width" and becomes a typed rejection;
     /// it never means "here is a nearby value instead".
-    fn narrow(wide: Wide) -> Option<Self>;
+    fn narrow(wide: Self::Wide) -> Option<Self>;
+
+    /// Required scalar-narrowed kwarg extractor — the trait-dispatch
+    /// peer of [`extract_narrowed<Self::Wide, Self>`], reading the
+    /// wide value through the atom-family
+    /// [`AtomKwarg::extract_kwarg`] on the [`Self::Wide`] axis (via
+    /// the [`WideNumeric`] supertrait bound), narrowing through
+    /// [`Self::narrow`], and lifting a per-item out-of-range wide back
+    /// into its axis-typed [`NumericLiteral`] carrier via the shared
+    /// [`narrow_or_range_err`] rejection primitive so the diagnostic's
+    /// `(target: Self::WIDTH, value)` pair is coherent by
+    /// construction. Provided as a trait default composing
+    /// `(Self::Wide, Self)` through [`extract_narrowed`], so every
+    /// narrow-width `impl NarrowNumeric for _` binding
+    /// [`Self::Wide`] inherits the composition mechanically — no
+    /// per-impl restatement, no per-width bookkeeping.
+    ///
+    /// The narrowing-family peer of [`AtomKwarg::extract_kwarg`] on
+    /// the atom-family scalar-kwarg quadruple: both traits share the
+    /// same skeleton (a per-axis primitive → a shared composition
+    /// through the substrate's `extract_*` free-function skeleton →
+    /// a trait default composing the two). The difference is that
+    /// [`AtomKwarg`] composes `(SHAPE, project)` through
+    /// [`extract_atom`] and [`NarrowNumeric`] composes
+    /// `(Self::Wide::extract_kwarg, Self::narrow, Self::WIDTH)`
+    /// through [`extract_narrowed`]; both trait defaults live at ONE
+    /// per-narrow-type dispatch site rather than at per-consumer
+    /// inline compositions.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 (free middle — the
+    /// narrowing-family scalar-kwarg composition
+    /// `(extract_kwarg, narrow, WIDTH)` lives at ONE per-narrow-type
+    /// trait dispatch site, not restated at every axis-typed public
+    /// wrapper). THEORY.md §V.1 (knowable platform — a future
+    /// diagnostic promotion on the scalar-narrowed rejection surface
+    /// binds at ONE substrate primitive and flows to every narrow-
+    /// width impl mechanically through the trait default).
+    fn extract_narrowed_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Self> {
+        extract_narrowed::<Self::Wide, Self>(kw, key)
+    }
+
+    /// The `Option` sibling of [`Self::extract_narrowed_kwarg`] — the
+    /// trait-dispatch peer of [`extract_optional_narrowed<Self::Wide,
+    /// Self>`] on the present-vs-absent bifurcated axis. Provided as
+    /// a trait default composing `(Self::Wide, Self)` through
+    /// [`extract_optional_narrowed`], which in turn delegates through
+    /// [`optional_from_required`] with [`extract_narrowed`] in the
+    /// required-slot — so the `kw.contains_key(key)` short-circuit
+    /// lives at ONE substrate primitive, and every narrow-width impl
+    /// inherits the "absent → `Ok(None)`, present → delegate through
+    /// required peer" contract mechanically.
+    ///
+    /// The narrowing-family peer of [`AtomKwarg::extract_optional_
+    /// kwarg`] on the atom-family present-vs-absent axis: both trait
+    /// defaults route through [`optional_from_required`] with their
+    /// respective required peer in the required-slot.
+    fn extract_optional_narrowed_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Option<Self>> {
+        extract_optional_narrowed::<Self::Wide, Self>(kw, key)
+    }
+
+    /// Required list-narrowed kwarg extractor — the trait-dispatch
+    /// peer of [`extract_narrowed_list<Self::Wide, Self>`], reading
+    /// the outer-shape gate through the atom-family
+    /// [`AtomKwarg::LIST_SHAPE`] on the [`Self::Wide`] axis (`ListOfInts`
+    /// on `<i64>`, `ListOfNumbers` on `<f64>`), the per-item shape gate
+    /// through [`AtomKwarg::project_at`] on the same axis, and the
+    /// per-item narrowing gate through [`narrow_or_range_err_at`] +
+    /// [`Self::narrow`]. Provided as a trait default composing
+    /// `(Self::Wide, Self)` through [`extract_narrowed_list`], so
+    /// every narrow-width impl inherits the outer-shape + per-item
+    /// shape + per-item narrowing three-gate composition mechanically.
+    ///
+    /// The narrowing-family peer of [`AtomKwarg::extract_list_kwarg`]
+    /// on the atom-family list-kwarg axis: both trait defaults share
+    /// the same shape (`(outer_shape, per_item_shape,
+    /// per_item_projection)` triple through
+    /// [`extract_list`]'s outer skeleton), only the per-item
+    /// projection differs (`Self::to_owned_item` on the atom-family
+    /// side vs. `narrow_or_range_err_at::<Self::Wide, Self>` on the
+    /// narrowing-family side).
+    fn extract_narrowed_list_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Vec<Self>> {
+        extract_narrowed_list::<Self::Wide, Self>(kw, key)
+    }
+
+    /// The `Option<Vec<Self>>` sibling of
+    /// [`Self::extract_narrowed_list_kwarg`] — the trait-dispatch peer
+    /// of [`extract_optional_narrowed_list<Self::Wide, Self>`] on the
+    /// present-vs-absent bifurcated list axis. Provided as a trait
+    /// default composing `(Self::Wide, Self)` through
+    /// [`extract_optional_narrowed_list`], which in turn delegates
+    /// through [`optional_from_required`] with
+    /// [`extract_narrowed_list`] in the required-slot. Absent kwarg
+    /// returns `Ok(None)`; present empty list returns
+    /// `Ok(Some(Vec::new()))`; a present list with a per-item
+    /// out-of-range or shape-mismatched element rejects with the SAME
+    /// typed rejection its required peer emits, only wrapped in the
+    /// `Option` layer.
+    ///
+    /// The narrowing-family peer of [`AtomKwarg::extract_optional_
+    /// list_kwarg`] on the atom-family optional-list axis: both trait
+    /// defaults route through [`optional_from_required`] with their
+    /// respective required-list peer in the required-slot.
+    fn extract_optional_narrowed_list_kwarg(
+        kw: &Kwargs<'_>,
+        key: &str,
+    ) -> Result<Option<Vec<Self>>> {
+        extract_optional_narrowed_list::<Self::Wide, Self>(kw, key)
+    }
 }
 
-/// Emit the `NarrowNumeric<i64>` impls for the integer widths. Each is
-/// `TryFrom<i64>` verbatim — the std conversion is already the exact
-/// partial function we want (rejects too-large AND negative-into-
-/// unsigned), so the impl delegates rather than re-deriving bounds
-/// arithmetic that could disagree with std.
+/// Emit the `NarrowNumeric` (with `type Wide = i64`) impls for the
+/// integer widths. Each is `TryFrom<i64>` verbatim — the std
+/// conversion is already the exact partial function we want (rejects
+/// too-large AND negative-into-unsigned), so the impl delegates
+/// rather than re-deriving bounds arithmetic that could disagree
+/// with std.
 macro_rules! impl_narrow_int {
     ($($ty:ty => $width:ident),+ $(,)?) => {$(
-        impl NarrowNumeric<i64> for $ty {
+        impl NarrowNumeric for $ty {
+            type Wide = i64;
             const WIDTH: NumericWidth = NumericWidth::$width;
             fn narrow(wide: i64) -> Option<Self> {
                 <$ty as ::core::convert::TryFrom<i64>>::try_from(wide).ok()
@@ -2409,14 +2568,16 @@ impl_narrow_int! {
     isize => Isize,
 }
 
-impl NarrowNumeric<f64> for f64 {
+impl NarrowNumeric for f64 {
+    type Wide = f64;
     const WIDTH: NumericWidth = NumericWidth::F64;
     fn narrow(wide: f64) -> Option<Self> {
         Some(wide)
     }
 }
 
-impl NarrowNumeric<f64> for f32 {
+impl NarrowNumeric for f32 {
+    type Wide = f64;
     const WIDTH: NumericWidth = NumericWidth::F32;
     /// Rejects exactly one thing: a FINITE `f64` whose magnitude
     /// overflows to `inf` at `f32`. Precision loss inside the range is
@@ -2623,7 +2784,7 @@ impl WideNumeric for f64 {
 fn narrow_or_range_err<W, T>(key: &str, wide: W) -> Result<T>
 where
     W: WideNumeric,
-    T: NarrowNumeric<W>,
+    T: NarrowNumeric<Wide = W>,
 {
     narrow_or_range_mismatch(kwarg_form(key), wide)
 }
@@ -2677,7 +2838,7 @@ where
 pub fn narrow_or_range_mismatch<W, T>(form: KwargPath, wide: W) -> Result<T>
 where
     W: WideNumeric,
-    T: NarrowNumeric<W>,
+    T: NarrowNumeric<Wide = W>,
 {
     T::narrow(wide).ok_or_else(|| range_mismatch(form, T::WIDTH, wide.as_literal()))
 }
@@ -2700,7 +2861,7 @@ where
 pub fn extract_narrowed<W, T>(kw: &Kwargs<'_>, key: &str) -> Result<T>
 where
     W: WideNumeric,
-    T: NarrowNumeric<W>,
+    T: NarrowNumeric<Wide = W>,
 {
     narrow_or_range_err(key, <W as WideNumeric>::extract_kwarg(kw, key)?)
 }
@@ -2766,41 +2927,54 @@ where
 pub fn extract_optional_narrowed<W, T>(kw: &Kwargs<'_>, key: &str) -> Result<Option<T>>
 where
     W: WideNumeric,
-    T: NarrowNumeric<W>,
+    T: NarrowNumeric<Wide = W>,
 {
     optional_from_required(kw, key, extract_narrowed::<W, T>)
 }
 
 /// Required integer kwarg projected into the field's own width —
-/// one-line delegate to [`extract_narrowed`] at the `W = i64` axis.
-/// The narrowing replacement for `extract_int(&kw, key)? as T`.
-pub fn extract_int_narrowed<T: NarrowNumeric<i64>>(kw: &Kwargs<'_>, key: &str) -> Result<T> {
-    extract_narrowed::<i64, T>(kw, key)
+/// one-line delegate to `<T as NarrowNumeric>::extract_narrowed_kwarg`,
+/// whose trait default composes `(T::Wide = i64, T)` through
+/// [`extract_narrowed`]. The narrowing replacement for
+/// `extract_int(&kw, key)? as T`. The `T: NarrowNumeric<Wide = i64>`
+/// bound pins the axis identity at rustc time — a caller cannot
+/// accidentally invoke this wrapper against a float-axis narrow width
+/// (which impls `NarrowNumeric<Wide = f64>`).
+pub fn extract_int_narrowed<T: NarrowNumeric<Wide = i64>>(kw: &Kwargs<'_>, key: &str) -> Result<T> {
+    <T as NarrowNumeric>::extract_narrowed_kwarg(kw, key)
 }
 
 /// `Option` sibling of [`extract_int_narrowed`] — one-line delegate
-/// to [`extract_optional_narrowed`] at the `W = i64` axis.
-pub fn extract_optional_int_narrowed<T: NarrowNumeric<i64>>(
+/// to `<T as NarrowNumeric>::extract_optional_narrowed_kwarg`, whose
+/// trait default composes `(T::Wide = i64, T)` through
+/// [`extract_optional_narrowed`].
+pub fn extract_optional_int_narrowed<T: NarrowNumeric<Wide = i64>>(
     kw: &Kwargs<'_>,
     key: &str,
 ) -> Result<Option<T>> {
-    extract_optional_narrowed::<i64, T>(kw, key)
+    <T as NarrowNumeric>::extract_optional_narrowed_kwarg(kw, key)
 }
 
 /// Float-axis sibling of [`extract_int_narrowed`] — one-line delegate
-/// to [`extract_narrowed`] at the `W = f64` axis. The narrowing
-/// replacement for `extract_float(&kw, key)? as T`.
-pub fn extract_float_narrowed<T: NarrowNumeric<f64>>(kw: &Kwargs<'_>, key: &str) -> Result<T> {
-    extract_narrowed::<f64, T>(kw, key)
+/// to `<T as NarrowNumeric>::extract_narrowed_kwarg`, whose trait
+/// default composes `(T::Wide = f64, T)` through [`extract_narrowed`].
+/// The narrowing replacement for `extract_float(&kw, key)? as T`.
+pub fn extract_float_narrowed<T: NarrowNumeric<Wide = f64>>(
+    kw: &Kwargs<'_>,
+    key: &str,
+) -> Result<T> {
+    <T as NarrowNumeric>::extract_narrowed_kwarg(kw, key)
 }
 
 /// `Option` sibling of [`extract_float_narrowed`] — one-line delegate
-/// to [`extract_optional_narrowed`] at the `W = f64` axis.
-pub fn extract_optional_float_narrowed<T: NarrowNumeric<f64>>(
+/// to `<T as NarrowNumeric>::extract_optional_narrowed_kwarg`, whose
+/// trait default composes `(T::Wide = f64, T)` through
+/// [`extract_optional_narrowed`].
+pub fn extract_optional_float_narrowed<T: NarrowNumeric<Wide = f64>>(
     kw: &Kwargs<'_>,
     key: &str,
 ) -> Result<Option<T>> {
-    extract_optional_narrowed::<f64, T>(kw, key)
+    <T as NarrowNumeric>::extract_optional_narrowed_kwarg(kw, key)
 }
 
 /// Item-indexed narrowing rejection primitive — sibling of
@@ -2830,7 +3004,7 @@ pub fn extract_optional_float_narrowed<T: NarrowNumeric<f64>>(
 fn narrow_or_range_err_at<W, T>(key: &str, idx: usize, wide: W) -> Result<T>
 where
     W: WideNumeric,
-    T: NarrowNumeric<W>,
+    T: NarrowNumeric<Wide = W>,
 {
     narrow_or_range_mismatch(kwarg_item_form(key, idx), wide)
 }
@@ -2902,7 +3076,7 @@ where
 pub fn extract_narrowed_list<W, T>(kw: &Kwargs<'_>, key: &str) -> Result<Vec<T>>
 where
     W: WideNumeric,
-    T: NarrowNumeric<W>,
+    T: NarrowNumeric<Wide = W>,
 {
     extract_list(kw, key, <W as AtomKwarg<'_>>::LIST_SHAPE, |idx, s| {
         let wide = <W as AtomKwarg<'_>>::project_at(key, idx, s)?;
@@ -3014,7 +3188,7 @@ where
 pub fn extract_optional_narrowed_list<W, T>(kw: &Kwargs<'_>, key: &str) -> Result<Option<Vec<T>>>
 where
     W: WideNumeric,
-    T: NarrowNumeric<W>,
+    T: NarrowNumeric<Wide = W>,
 {
     optional_from_required(kw, key, extract_narrowed_list::<W, T>)
 }
@@ -3028,11 +3202,11 @@ where
 /// error); a present list with a per-item out-of-range value rejects
 /// with `LispError::KwargOutOfRange { form: KwargPath::Item { key,
 /// idx }, .. }`.
-pub fn extract_int_list_narrowed<T: NarrowNumeric<i64>>(
+pub fn extract_int_list_narrowed<T: NarrowNumeric<Wide = i64>>(
     kw: &Kwargs<'_>,
     key: &str,
 ) -> Result<Vec<T>> {
-    extract_narrowed_list::<i64, T>(kw, key)
+    <T as NarrowNumeric>::extract_narrowed_list_kwarg(kw, key)
 }
 
 /// Float-axis sibling of [`extract_int_list_narrowed`] — one-line
@@ -3044,11 +3218,11 @@ pub fn extract_int_list_narrowed<T: NarrowNumeric<i64>>(
 /// `LispError::KwargOutOfRange { form: KwargPath::Item { key, idx },
 /// target: NumericWidth::F32, value: NumericLiteral::Float(1.0e300),
 /// .. }`.
-pub fn extract_float_list_narrowed<T: NarrowNumeric<f64>>(
+pub fn extract_float_list_narrowed<T: NarrowNumeric<Wide = f64>>(
     kw: &Kwargs<'_>,
     key: &str,
 ) -> Result<Vec<T>> {
-    extract_narrowed_list::<f64, T>(kw, key)
+    <T as NarrowNumeric>::extract_narrowed_list_kwarg(kw, key)
 }
 
 /// `Option<Vec<T>>` integer-list field projected into the item's own
@@ -3064,11 +3238,11 @@ pub fn extract_float_list_narrowed<T: NarrowNumeric<f64>>(
 /// target, value }` — the SAME rejection shape the required peer
 /// [`extract_int_list_narrowed`] emits, only wrapped in the
 /// `Option` layer for a present-vs-decoded return path.
-pub fn extract_optional_int_list_narrowed<T: NarrowNumeric<i64>>(
+pub fn extract_optional_int_list_narrowed<T: NarrowNumeric<Wide = i64>>(
     kw: &Kwargs<'_>,
     key: &str,
 ) -> Result<Option<Vec<T>>> {
-    extract_optional_narrowed_list::<i64, T>(kw, key)
+    <T as NarrowNumeric>::extract_optional_narrowed_list_kwarg(kw, key)
 }
 
 /// Float-axis sibling of [`extract_optional_int_list_narrowed`] —
@@ -3081,11 +3255,11 @@ pub fn extract_optional_int_list_narrowed<T: NarrowNumeric<i64>>(
 /// .. }` — the SAME rejection shape the required peer
 /// [`extract_float_list_narrowed`] emits, only wrapped in the
 /// `Option` layer.
-pub fn extract_optional_float_list_narrowed<T: NarrowNumeric<f64>>(
+pub fn extract_optional_float_list_narrowed<T: NarrowNumeric<Wide = f64>>(
     kw: &Kwargs<'_>,
     key: &str,
 ) -> Result<Option<Vec<T>>> {
-    extract_optional_narrowed_list::<f64, T>(kw, key)
+    <T as NarrowNumeric>::extract_optional_narrowed_list_kwarg(kw, key)
 }
 
 /// Required bool kwarg — one-line delegate to `<bool as
@@ -4200,18 +4374,18 @@ mod tests {
     /// rather than merely untested.
     #[test]
     fn every_supported_width_reports_its_own_typed_identity() {
-        assert_eq!(<i8 as NarrowNumeric<i64>>::WIDTH, NumericWidth::I8);
-        assert_eq!(<i16 as NarrowNumeric<i64>>::WIDTH, NumericWidth::I16);
-        assert_eq!(<i32 as NarrowNumeric<i64>>::WIDTH, NumericWidth::I32);
-        assert_eq!(<i64 as NarrowNumeric<i64>>::WIDTH, NumericWidth::I64);
-        assert_eq!(<u8 as NarrowNumeric<i64>>::WIDTH, NumericWidth::U8);
-        assert_eq!(<u16 as NarrowNumeric<i64>>::WIDTH, NumericWidth::U16);
-        assert_eq!(<u32 as NarrowNumeric<i64>>::WIDTH, NumericWidth::U32);
-        assert_eq!(<u64 as NarrowNumeric<i64>>::WIDTH, NumericWidth::U64);
-        assert_eq!(<usize as NarrowNumeric<i64>>::WIDTH, NumericWidth::Usize);
-        assert_eq!(<isize as NarrowNumeric<i64>>::WIDTH, NumericWidth::Isize);
-        assert_eq!(<f32 as NarrowNumeric<f64>>::WIDTH, NumericWidth::F32);
-        assert_eq!(<f64 as NarrowNumeric<f64>>::WIDTH, NumericWidth::F64);
+        assert_eq!(<i8 as NarrowNumeric>::WIDTH, NumericWidth::I8);
+        assert_eq!(<i16 as NarrowNumeric>::WIDTH, NumericWidth::I16);
+        assert_eq!(<i32 as NarrowNumeric>::WIDTH, NumericWidth::I32);
+        assert_eq!(<i64 as NarrowNumeric>::WIDTH, NumericWidth::I64);
+        assert_eq!(<u8 as NarrowNumeric>::WIDTH, NumericWidth::U8);
+        assert_eq!(<u16 as NarrowNumeric>::WIDTH, NumericWidth::U16);
+        assert_eq!(<u32 as NarrowNumeric>::WIDTH, NumericWidth::U32);
+        assert_eq!(<u64 as NarrowNumeric>::WIDTH, NumericWidth::U64);
+        assert_eq!(<usize as NarrowNumeric>::WIDTH, NumericWidth::Usize);
+        assert_eq!(<isize as NarrowNumeric>::WIDTH, NumericWidth::Isize);
+        assert_eq!(<f32 as NarrowNumeric>::WIDTH, NumericWidth::F32);
+        assert_eq!(<f64 as NarrowNumeric>::WIDTH, NumericWidth::F64);
     }
 
     /// `f32`'s narrowing rejects exactly one thing — a FINITE input that
@@ -4221,14 +4395,14 @@ mod tests {
     /// dressed as a fix.
     #[test]
     fn f32_narrowing_rejects_only_finite_overflow() {
-        assert_eq!(<f32 as NarrowNumeric<f64>>::narrow(1.0), Some(1.0_f32));
-        assert_eq!(<f32 as NarrowNumeric<f64>>::narrow(1.0e300), None);
-        assert_eq!(<f32 as NarrowNumeric<f64>>::narrow(-1.0e300), None);
+        assert_eq!(<f32 as NarrowNumeric>::narrow(1.0), Some(1.0_f32));
+        assert_eq!(<f32 as NarrowNumeric>::narrow(1.0e300), None);
+        assert_eq!(<f32 as NarrowNumeric>::narrow(-1.0e300), None);
         assert_eq!(
-            <f32 as NarrowNumeric<f64>>::narrow(f64::INFINITY),
+            <f32 as NarrowNumeric>::narrow(f64::INFINITY),
             Some(f32::INFINITY)
         );
-        assert!(<f32 as NarrowNumeric<f64>>::narrow(f64::NAN)
+        assert!(<f32 as NarrowNumeric>::narrow(f64::NAN)
             .expect("NaN passes through")
             .is_nan());
     }
@@ -5977,6 +6151,311 @@ mod tests {
             }
             _ => panic!("both must be KwargOutOfRange, got {via_wrapper:?} vs {via_generic:?}"),
         }
+    }
+
+    /// [`NarrowNumeric`] now carries an associated [`NarrowNumeric::Wide`]
+    /// type (bound to [`WideNumeric`]) plus four trait-default
+    /// extractors — [`NarrowNumeric::extract_narrowed_kwarg`] /
+    /// [`NarrowNumeric::extract_optional_narrowed_kwarg`] /
+    /// [`NarrowNumeric::extract_narrowed_list_kwarg`] /
+    /// [`NarrowNumeric::extract_optional_narrowed_list_kwarg`] — that
+    /// compose `(Self::Wide, Self)` through the shared substrate-level
+    /// [`extract_narrowed`] / [`extract_optional_narrowed`] /
+    /// [`extract_narrowed_list`] / [`extract_optional_narrowed_list`]
+    /// primitives at ONE per-narrow-type dispatch site. The eight
+    /// public `extract_{int,float}[_optional][_list]_narrowed`
+    /// free-fn wrappers now reduce to one-line trait-dispatch
+    /// delegates, and their axis-typed `T: NarrowNumeric<Wide = i64>` /
+    /// `T: NarrowNumeric<Wide = f64>` bounds pin the axis identity at
+    /// rustc time — a caller cannot accidentally invoke the int-axis
+    /// wrapper against a float-axis narrow width or vice versa. Peer
+    /// to [`atom_kwarg_extract_list_kwarg_composes_the_per_axis_triple_at_every_axis`]
+    /// on the atom-family list-kwarg dispatch, and to
+    /// [`extract_narrowed_generic_primitives_close_the_two_axes_at_the_type_parameter`]
+    /// on the generic narrowing primitives — this test pins the
+    /// trait-dispatch layer that sits BETWEEN the public wrappers and
+    /// the generic primitives on the narrowing-family surface.
+    ///
+    /// Pin:
+    /// (1) `Wide` associated type at rustc time on every narrow
+    ///     impl — the twelve `impl NarrowNumeric for _ { type Wide =
+    ///     … }` bindings partition into the ten integer widths bound
+    ///     to `type Wide = i64` and the two float widths bound to
+    ///     `type Wide = f64`; a regression that silently swapped the
+    ///     wide-axis binding on any narrow width fails to compile the
+    ///     enclosing turbofish assertion below.
+    /// (2) Happy-path trait-dispatch identity — the four trait
+    ///     defaults route through the same generic primitive their
+    ///     free-fn peer already does, so byte-identical `Ok` returns
+    ///     on the same in-range input flow through both routes at
+    ///     both axes for a representative narrow width (`u16` on int,
+    ///     `f32` on float).
+    /// (3) Outer-shape rejection identity — a scalar-not-a-list
+    ///     kwarg through the trait-dispatch list-family extractor
+    ///     rejects with the SAME axis-typed `ListOfInts` /
+    ///     `ListOfNumbers` label its free-fn peer emits through the
+    ///     shared `<W as AtomKwarg<'_>>::LIST_SHAPE` per-axis trait-
+    ///     const override.
+    /// (4) Per-item shape-gate identity — a present list with a
+    ///     non-axis element rides `<W as AtomKwarg<'_>>::project_at`
+    ///     through the trait-dispatch list-family extractor; the
+    ///     per-item rejection carries the axis-typed `Int` / `Number`
+    ///     `ExpectedKwargShape` label + item-indexed `KwargPath`.
+    /// (5) Per-item narrowing-gate identity — a present list with a
+    ///     per-item out-of-range value routes through
+    ///     `narrow_or_range_err_at::<Self::Wide, Self>` and rejects
+    ///     with the typed `LispError::KwargOutOfRange { form: Item {
+    ///     key, idx }, target: Self::WIDTH, value: … }` variant.
+    /// (6) Free-fn wrappers reduce to one-line trait-dispatch
+    ///     delegates — `extract_int_narrowed<T>` / its seven peers
+    ///     produce byte-identical `Ok` and `Err` arms with their
+    ///     trait-default counterparts on the SAME kwarg, so a future
+    ///     diagnostic promotion at the trait-default layer flows
+    ///     transitively to the free-fn wrappers with no per-wrapper
+    ///     edit.
+    ///
+    /// A regression that silently swapped either the associated-type
+    /// binding or the trait-default composition on any narrow width
+    /// surfaces here as either a rustc-time compile error (the
+    /// `<T as NarrowNumeric>::Wide` turbofish equality) or a
+    /// byte-drift between the two routes (the diagnostic-identity
+    /// checks).
+    #[test]
+    fn narrow_numeric_extract_kwarg_defaults_compose_the_per_axis_pair_at_every_narrow_width() {
+        // (1) `Wide` associated-type identity — the twelve narrow
+        //     widths partition into the two wide axes at rustc time.
+        //     A regression that silently redefined any axis's `Wide`
+        //     fails to compile the enclosing const-shaped assertion
+        //     below.
+        const _: () = {
+            const fn assert_wide<T, W>()
+            where
+                T: NarrowNumeric<Wide = W>,
+                W: WideNumeric,
+            {
+            }
+            assert_wide::<i8, i64>();
+            assert_wide::<i16, i64>();
+            assert_wide::<i32, i64>();
+            assert_wide::<i64, i64>();
+            assert_wide::<u8, i64>();
+            assert_wide::<u16, i64>();
+            assert_wide::<u32, i64>();
+            assert_wide::<u64, i64>();
+            assert_wide::<usize, i64>();
+            assert_wide::<isize, i64>();
+            assert_wide::<f32, f64>();
+            assert_wide::<f64, f64>();
+        };
+
+        // (2) Happy-path trait-dispatch identity — the four trait
+        //     defaults route through the same generic primitive their
+        //     free-fn peer already does. Both axes; both required and
+        //     optional; both scalar and list.
+        let int_ok_args = kwargs_of("(_ :port 8080)");
+        let int_ok_kw = parse_kwargs(&int_ok_args).unwrap();
+        assert_eq!(
+            <u16 as NarrowNumeric>::extract_narrowed_kwarg(&int_ok_kw, "port").unwrap(),
+            extract_int_narrowed::<u16>(&int_ok_kw, "port").unwrap(),
+        );
+        assert_eq!(
+            <u16 as NarrowNumeric>::extract_optional_narrowed_kwarg(&int_ok_kw, "port").unwrap(),
+            extract_optional_int_narrowed::<u16>(&int_ok_kw, "port").unwrap(),
+        );
+
+        let float_ok_args = kwargs_of("(_ :scale 1.0)");
+        let float_ok_kw = parse_kwargs(&float_ok_args).unwrap();
+        let via_trait =
+            <f32 as NarrowNumeric>::extract_narrowed_kwarg(&float_ok_kw, "scale").unwrap();
+        let via_wrapper = extract_float_narrowed::<f32>(&float_ok_kw, "scale").unwrap();
+        assert!((via_trait - via_wrapper).abs() < f32::EPSILON);
+
+        let int_list_args = kwargs_of("(_ :ports (80 443 8080))");
+        let int_list_kw = parse_kwargs(&int_list_args).unwrap();
+        assert_eq!(
+            <u16 as NarrowNumeric>::extract_narrowed_list_kwarg(&int_list_kw, "ports").unwrap(),
+            extract_int_list_narrowed::<u16>(&int_list_kw, "ports").unwrap(),
+        );
+        assert_eq!(
+            <u16 as NarrowNumeric>::extract_narrowed_list_kwarg(&int_list_kw, "ports").unwrap(),
+            vec![80_u16, 443_u16, 8080_u16],
+        );
+        assert_eq!(
+            <u16 as NarrowNumeric>::extract_optional_narrowed_list_kwarg(&int_list_kw, "ports")
+                .unwrap(),
+            extract_optional_int_list_narrowed::<u16>(&int_list_kw, "ports").unwrap(),
+        );
+
+        let float_list_args = kwargs_of("(_ :scales (1.0 2.0 3.0))");
+        let float_list_kw = parse_kwargs(&float_list_args).unwrap();
+        let list_via_trait =
+            <f32 as NarrowNumeric>::extract_narrowed_list_kwarg(&float_list_kw, "scales").unwrap();
+        let list_via_wrapper =
+            extract_float_list_narrowed::<f32>(&float_list_kw, "scales").unwrap();
+        assert_eq!(list_via_trait.len(), list_via_wrapper.len());
+        for (a, b) in list_via_trait.iter().zip(list_via_wrapper.iter()) {
+            assert!((a - b).abs() < f32::EPSILON);
+        }
+
+        // (3) Outer-shape rejection identity — a scalar-not-a-list
+        //     kwarg through the trait-dispatch list-family extractor
+        //     surfaces the axis-typed `ListOfInts` / `ListOfNumbers`
+        //     label the shared `<W as AtomKwarg<'_>>::LIST_SHAPE`
+        //     override carries.
+        let int_scalar = kwargs_of("(_ :ports 80)");
+        let int_scalar_kw = parse_kwargs(&int_scalar).unwrap();
+        let int_outer_err =
+            <u16 as NarrowNumeric>::extract_narrowed_list_kwarg(&int_scalar_kw, "ports")
+                .unwrap_err();
+        match int_outer_err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(form, KwargPath::named("ports"));
+                assert_eq!(expected, ExpectedKwargShape::ListOfInts);
+                assert_eq!(got, SexpShape::Int);
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+        let float_scalar = kwargs_of("(_ :scales 1.0)");
+        let float_scalar_kw = parse_kwargs(&float_scalar).unwrap();
+        let float_outer_err =
+            <f32 as NarrowNumeric>::extract_narrowed_list_kwarg(&float_scalar_kw, "scales")
+                .unwrap_err();
+        match float_outer_err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(form, KwargPath::named("scales"));
+                assert_eq!(expected, ExpectedKwargShape::ListOfNumbers);
+                assert_eq!(got, SexpShape::Float);
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+
+        // (4) Per-item shape-gate identity — a present list with a
+        //     non-axis element rides `<W as AtomKwarg<'_>>::project_at`
+        //     through the trait dispatch; per-item rejection carries
+        //     the axis-typed `Int` / `Number` label + item-indexed path.
+        let mixed_int = kwargs_of(r#"(_ :ports (80 "yes" 443))"#);
+        let mixed_int_kw = parse_kwargs(&mixed_int).unwrap();
+        let mixed_int_err =
+            <u16 as NarrowNumeric>::extract_narrowed_list_kwarg(&mixed_int_kw, "ports")
+                .unwrap_err();
+        match mixed_int_err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(form, KwargPath::item("ports", 1));
+                assert_eq!(expected, ExpectedKwargShape::Int);
+                assert_eq!(got, SexpShape::String);
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+
+        // (5) Per-item narrowing-gate identity — a present list with
+        //     a per-item out-of-range value routes through
+        //     `narrow_or_range_err_at::<Self::Wide, Self>` and rejects
+        //     with the typed `KwargOutOfRange { form: Item { key, idx },
+        //     target: Self::WIDTH, value }` variant.
+        let range_int = kwargs_of("(_ :ports (80 70000))");
+        let range_int_kw = parse_kwargs(&range_int).unwrap();
+        let range_int_err =
+            <u16 as NarrowNumeric>::extract_narrowed_list_kwarg(&range_int_kw, "ports")
+                .unwrap_err();
+        match range_int_err {
+            LispError::KwargOutOfRange {
+                form,
+                target,
+                value,
+            } => {
+                assert_eq!(form, KwargPath::item("ports", 1));
+                assert_eq!(target, NumericWidth::U16);
+                assert_eq!(value, NumericLiteral::Int(70_000));
+            }
+            other => panic!("expected KwargOutOfRange, got {other:?}"),
+        }
+        let range_float = kwargs_of("(_ :scales (1.0 1.0e300))");
+        let range_float_kw = parse_kwargs(&range_float).unwrap();
+        let range_float_err =
+            <f32 as NarrowNumeric>::extract_narrowed_list_kwarg(&range_float_kw, "scales")
+                .unwrap_err();
+        match range_float_err {
+            LispError::KwargOutOfRange {
+                form,
+                target,
+                value,
+            } => {
+                assert_eq!(form, KwargPath::item("scales", 1));
+                assert_eq!(target, NumericWidth::F32);
+                assert!(
+                    matches!(value, NumericLiteral::Float(x) if (x - 1.0e300).abs() < f64::EPSILON),
+                    "the diagnostic must echo the author's own literal, got {value:?}",
+                );
+            }
+            other => panic!("expected KwargOutOfRange, got {other:?}"),
+        }
+
+        // (6) Absent-vs-present bifurcation on the optional peers —
+        //     absent kwarg short-circuits to `Ok(None)` through the
+        //     trait dispatch, present-empty list returns
+        //     `Ok(Some(Vec::new()))`.
+        let absent_args = kwargs_of("(_ :other 1)");
+        let absent_kw = parse_kwargs(&absent_args).unwrap();
+        assert_eq!(
+            <u16 as NarrowNumeric>::extract_optional_narrowed_kwarg(&absent_kw, "missing").unwrap(),
+            None,
+        );
+        assert_eq!(
+            <f32 as NarrowNumeric>::extract_optional_narrowed_list_kwarg(&absent_kw, "missing")
+                .unwrap(),
+            None,
+        );
+        let present_empty = kwargs_of("(_ :ports ())");
+        let present_empty_kw = parse_kwargs(&present_empty).unwrap();
+        assert_eq!(
+            <u16 as NarrowNumeric>::extract_optional_narrowed_list_kwarg(
+                &present_empty_kw,
+                "ports",
+            )
+            .unwrap(),
+            Some(Vec::<u16>::new()),
+        );
+
+        // (7) Free-fn wrapper byte-identity vs. trait dispatch on the
+        //     rejection arms — a future diagnostic promotion at the
+        //     trait-default layer flows transitively to the free-fn
+        //     wrappers with no per-wrapper edit.
+        assert_eq!(
+            extract_int_list_narrowed::<u16>(&int_scalar_kw, "ports")
+                .unwrap_err()
+                .to_string(),
+            <u16 as NarrowNumeric>::extract_narrowed_list_kwarg(&int_scalar_kw, "ports")
+                .unwrap_err()
+                .to_string(),
+        );
+        assert_eq!(
+            extract_int_list_narrowed::<u16>(&range_int_kw, "ports")
+                .unwrap_err()
+                .to_string(),
+            <u16 as NarrowNumeric>::extract_narrowed_list_kwarg(&range_int_kw, "ports")
+                .unwrap_err()
+                .to_string(),
+        );
+        assert_eq!(
+            extract_optional_int_list_narrowed::<u16>(&present_empty_kw, "ports").unwrap(),
+            <u16 as NarrowNumeric>::extract_optional_narrowed_list_kwarg(
+                &present_empty_kw,
+                "ports"
+            )
+            .unwrap(),
+        );
     }
 
     /// [`extract_optional_narrowed<W, T>`] is now a one-line delegate

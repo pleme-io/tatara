@@ -1323,16 +1323,58 @@ where
 /// ```
 ///
 /// into ONE generic primitive. Same `T`/`project`/`expected` shape as
-/// `extract_atom`; the difference is the `kw.get(key)` short-circuit at
-/// the `None` arm — an absent kwarg is not an error for optional
-/// extractors, only a malformed-present one is. The `.copied()` on
-/// `kw.get(key)` projects `Option<&&'a Sexp>` to `Option<&'a Sexp>` so
-/// the `project` call gets the same `&'a Sexp` shape as the required
-/// path — type-checks against the same projection functions
-/// (`Sexp::as_string`, `Sexp::as_int`, etc.) without per-call casts.
+/// `extract_atom`; the difference is the present-vs-absent short-circuit
+/// at the `None` arm — an absent kwarg is not an error for optional
+/// extractors, only a malformed-present one is.
 ///
-/// Future structural promotion of the type-mismatch diagnostic lands at
-/// ONE call site inside this helper — same property as `extract_atom`.
+/// Post-lift the primitive delegates through [`optional_from_required`]
+/// with [`extract_atom`] in the required slot — the SEVENTH consumer
+/// of the substrate's present-vs-absent bifurcation primitive after
+/// the four list-family peers ([`extract_optional_string_list`] /
+/// [`extract_optional_bool_list`] / [`extract_optional_narrowed_list`]
+/// / [`extract_optional_vec_via_serde`]) and the two owned-scalar
+/// peers ([`extract_optional_via_serde`] on the universal-serde axis,
+/// [`extract_optional_narrowed`] on the numeric-narrowed axis). The
+/// borrowed-`T` shape (`T = &'a str` on the string axis, via
+/// [`AtomKwarg`]'s `'a` trait lifetime threading through
+/// [`AtomKwarg::project`]) rides the primitive's `'a` lifetime through
+/// the `F: FnOnce(&'a Kwargs<'a>, &str) -> Result<T>` bound — the same
+/// bound the six owned-`T` peers coerce their fn-item `for<'x>
+/// fn(&'x Kwargs<'x>, &str) -> Result<T>` HRTB signatures to at each
+/// call site.
+///
+/// Pre-lift the primitive spelled the two-arm bifurcation inline
+/// (`match optional(kw, key) { None => Ok(None); Some(v) =>
+/// project(v).map(Some).ok_or_else(|| type_err(key, expected, v)) }`)
+/// — the LAST inline present-vs-absent bifurcation on the
+/// extract_optional_ family. Post-lift the substrate primitive owns
+/// the bifurcation at ONE named site across every axis (list-family
+/// plus scalar universal-serde plus scalar numeric-narrowed plus
+/// scalar atom-shape); a future diagnostic promotion on the present-
+/// vs-absent gate (a probe, a metric, a span) lands at ONE owner
+/// and flows to the atom-family scalar peer here without a per-
+/// caller edit.
+///
+/// The delegate wraps [`extract_atom`] in a closure so the primitive's
+/// `FnOnce(&'a Kwargs<'a>, &str) -> Result<T>` extractor slot receives
+/// the atom-family's `(expected, project)` pair through the closure's
+/// capture. The wrap re-runs the kwarg lookup inside [`extract_atom`]'s
+/// [`required`] call on the present arm — a second HashMap probe past
+/// the primitive's outer `kw.contains_key(key)` gate — matching the
+/// double-lookup posture the six pre-existing owned-`T` peers already
+/// accept in exchange for the SAME uniform bifurcation site every
+/// diagnostic-promotion consumer binds to. A future
+/// [`optional_from_required`] optimization that threads the resolved
+/// `&Sexp` through the required extractor's slot (collapsing the
+/// double-lookup at ONE substrate primitive) lands here and every
+/// existing peer inherits the improvement mechanically.
+///
+/// Future structural promotion of the type-mismatch diagnostic lands
+/// at ONE call site inside [`extract_atom`] — same property as
+/// [`extract_atom`]'s scalar-required peer — AND a future promotion
+/// of the present-vs-absent gate lands at ONE call site inside
+/// [`optional_from_required`], flowing through this atom-family
+/// scalar peer alongside every other extract_optional_ consumer.
 fn extract_optional_atom<'a, T, F>(
     kw: &'a Kwargs<'a>,
     key: &str,
@@ -1342,12 +1384,7 @@ fn extract_optional_atom<'a, T, F>(
 where
     F: FnOnce(&'a Sexp) -> Option<T>,
 {
-    match optional(kw, key) {
-        None => Ok(None),
-        Some(v) => project(v)
-            .map(Some)
-            .ok_or_else(|| type_err(key, expected, v)),
-    }
+    optional_from_required(kw, key, |kw, key| extract_atom(kw, key, expected, project))
 }
 
 /// List-typed kwarg extractor — fronts every public `extract_*` helper
@@ -1423,52 +1460,74 @@ where
 }
 
 /// Present-vs-absent bifurcation over an absent-tolerant required
-/// list-family extractor — the SAME `if kw.contains_key(key) {
+/// extractor — the SAME `if kw.contains_key(key) {
 /// extract_required(kw, key).map(Some) } else { Ok(None) }` shape that
 /// lived inline at THREE call sites past this lift
 /// ([`extract_optional_string_list`] / [`extract_optional_bool_list`] /
 /// [`extract_optional_narrowed_list`]), collapsed to ONE substrate
 /// primitive.
 ///
-/// Semantic role: convert an absent-tolerant required list-family
-/// extractor (one whose absent-kwarg posture is `Ok(Vec::new())` —
-/// [`extract_list`]'s outer contract, inherited by
-/// [`extract_string_list`] / [`extract_bool_list`] /
-/// [`extract_narrowed_list`]) into its `Option<Vec<T>>`-shaped optional
-/// peer (whose absent-kwarg posture is `Ok(None)` — the load-bearing
-/// distinction from a PRESENT empty list `Ok(Some(Vec::new()))`). The
-/// required peer collapses "no items" and "no kwarg" to the same empty
-/// vec — which fits `Vec<T>` fields where the two are
-/// semantically equivalent — but loses the operator's intent on
-/// `Option<Vec<T>>` fields where "the operator did not name this
-/// kwarg" and "the operator explicitly bound the kwarg to an empty
-/// list" are DISTINCT.
+/// Semantic role: convert an absent-tolerant required extractor
+/// (one whose absent-kwarg posture must not leak into the optional
+/// peer — [`extract_list`]'s `Ok(Vec::new())` outer contract on the
+/// list-family axis, [`extract_atom`]'s `LispError::MissingKwarg`
+/// rejection on the scalar-atom axis via [`required`]) into its
+/// `Option<T>`-shaped optional peer (whose absent-kwarg posture is
+/// `Ok(None)`). On the list-family axis this preserves the
+/// load-bearing distinction between `None` (absent) and
+/// `Some(vec![])` (a PRESENT empty list) — the required peer
+/// collapses "no items" and "no kwarg" to the same empty vec, which
+/// fits `Vec<T>` fields where the two are semantically equivalent
+/// but loses the operator's intent on `Option<Vec<T>>` fields where
+/// "the operator did not name this kwarg" and "the operator
+/// explicitly bound the kwarg to an empty list" are DISTINCT. On the
+/// scalar-atom axis (via [`extract_optional_atom`], which delegates
+/// through this primitive) it flips the required peer's typed-entry
+/// rejection on absence (`LispError::MissingKwarg`) into the
+/// operator-intentional `Ok(None)` on the optional axis — the
+/// missing-kwarg gate is a REQUIRED-peer contract, not an
+/// OPTIONAL-peer contract.
 ///
 /// The primitive's contract:
 ///   1. Absent kwarg → `Ok(None)`. `extract_required` is NOT invoked,
-///      so its own absent-tolerant posture (`Ok(Vec::new())`) does
-///      not leak into the optional peer's result.
+///      so neither the list-family peer's absent-tolerant posture
+///      (`Ok(Vec::new())`) nor the scalar-atom peer's absent-rejecting
+///      posture (`LispError::MissingKwarg`) leaks into the optional
+///      peer's result.
 ///   2. Present kwarg → `extract_required(kw, key).map(Some)`. Every
 ///      rejection variant the required extractor emits (outer-shape
 ///      mismatch on `:tags 7`, per-item shape/narrowing rejection on
-///      `:tags (list "a" 7)` / `:ports (list 80 70000)`) propagates
-///      unchanged, wrapped in `Err(_)`; a successful decode wraps in
-///      `Some(_)`. The two peers share ONE rejection vocabulary.
+///      `:tags (list "a" 7)` / `:ports (list 80 70000)`, scalar-atom
+///      shape mismatch on `:name 5` on the atom-family axis)
+///      propagates unchanged, wrapped in `Err(_)`; a successful
+///      decode wraps in `Some(_)`. The two peers on every axis
+///      share ONE rejection vocabulary.
+///
+/// The `'a` lifetime rides both the `kw` parameter (`&'a Kwargs<'a>`,
+/// matching the `&'a Kwargs<'a>` shape [`extract_optional_atom`] +
+/// [`AtomKwarg::extract_optional_kwarg`] already carry) AND the
+/// `extract_required` bound (`F: FnOnce(&'a Kwargs<'a>, &str) ->
+/// Result<T>`) so `T` may borrow from `kw` — an
+/// [`extract_optional_atom`]-shape caller whose `T = &'a str` on the
+/// string axis threads its borrowed slot through the primitive
+/// without an intermediate copy or an axis-only inline duplication.
+/// Owned-`T` callers (the six list-family + scalar-serde peers
+/// listed below) pass `fn` items with a `for<'x> fn(&'x Kwargs<'x>,
+/// &str) -> Result<T>` HRTB signature; the compiler coerces each
+/// item to `FnOnce(&'a Kwargs<'a>, &str) -> Result<T>` at the
+/// specific `'a` chosen by the call site, so no per-caller signature
+/// change is needed on the pre-existing consumers.
 ///
 /// Peer to [`extract_optional_atom`] on the atom-family (scalar) axis:
 /// both encode the present-vs-absent bifurcation as a private
 /// substrate primitive, differing only in the shape of the required
 /// half — [`extract_optional_atom`] takes an `(expected, project)`
-/// pair and inlines the projection; this primitive takes a full
-/// required-shape extractor closure. The scalar-axis peer can inline
-/// the projection because its required peer emits `MissingKwarg` on
-/// absence (so we must NOT delegate on absence); the list-family
-/// peer's required extractor is absent-tolerant (returns `Vec::new()`
-/// on absence), so the outer `contains_key` gate exists specifically
-/// to prevent the required peer's absent-tolerant posture from
-/// collapsing the `None` / `Some(vec![])` distinction — a subtlety
-/// the private primitive names once so no per-optional-list-peer
-/// caller has to.
+/// pair and delegates through this primitive with `extract_atom` in
+/// the required slot; the six list-family + scalar-serde peers
+/// listed below take a full required-shape extractor closure
+/// directly. Post-lift the two shapes route through the SAME
+/// primitive, so every axis of the extract_optional_ family binds
+/// its present-vs-absent gate at ONE substrate site.
 ///
 /// A future new optional peer — a hypothetical
 /// `extract_optional_symbol_list` (paired with a `Symbol` atom
@@ -1476,54 +1535,53 @@ where
 /// for `Option<Vec<Nested>>` fields once the derive's
 /// `Kind::VecDeserialize` catch-all sharpens into a typed nested-
 /// domain arm — plugs in as a one-line delegate to this primitive,
-/// same posture the SIX existing optional peers (four list-family
+/// same posture the SEVEN existing optional peers (four list-family
 /// — [`extract_optional_string_list`] /
 /// [`extract_optional_bool_list`] /
 /// [`extract_optional_narrowed_list`] /
 /// [`extract_optional_vec_via_serde`] — plus the scalar-family
-/// universal-serde peer [`extract_optional_via_serde`] and the
-/// scalar-family numeric-narrowed peer [`extract_optional_narrowed`])
-/// now take. The only remaining inline peer on the extract_optional_
-/// family is [`extract_optional_atom`], whose `T` borrows from `kw`
-/// (e.g. `T = &'a str` on the string axis) — [`optional_from_required`]'s
-/// erased-lifetime `F: FnOnce(&Kwargs<'_>, &str) -> Result<T>`
-/// bound cannot thread the borrow, so the atom-family scalar peer
-/// stays inline as a design invariant of this primitive, not an
-/// oversight. No new inline bifurcation for the owned-T peers, no
-/// risk of the "absent-collapses-into-present-empty" trap the
-/// required peer's posture used to invite.
+/// universal-serde peer [`extract_optional_via_serde`], the
+/// scalar-family numeric-narrowed peer
+/// [`extract_optional_narrowed`], and the scalar-family atom-shape
+/// peer [`extract_optional_atom`]) now take. Post-lift the
+/// extract_optional_ family reaches its structural terminus: every
+/// public optional peer routes its present-vs-absent bifurcation
+/// through ONE named substrate primitive, with no inline
+/// exceptions.
 ///
 /// Theory anchor: THEORY.md §VI.1 (generation over composition — the
-/// present-vs-absent + delegate-to-required shape recurs at SIX
+/// present-vs-absent + delegate-to-required shape recurs at SEVEN
 /// peer sites past the three-times-rule trigger, four on the list-
-/// family axis + two on the scalar family (universal-serde +
-/// numeric-narrowed), all sharing the byte-identical `if
-/// kw.contains_key(key) {...} else { Ok(None) }` present-vs-absent
-/// contract pre-lift (the pre-lift shape lived as an inline
-/// `contains_key` bifurcation at the four list-family sites, and as
-/// an `extract_optional_atom`-composed shape at the two scalar
-/// sites — both variants short-circuit at the SAME `kw.contains_key`
-/// moment, only the substrate-primitive owning the check differs);
-/// lifting the shape to ONE primitive closes them at rustc time).
-/// THEORY.md §II.1 invariant 2 (free middle —
-/// the optional-vs-required peer distinction lives at ONE
-/// substrate primitive, not restated at every optional-peer
-/// callsite; a future diagnostic promotion on the present-vs-
-/// absent gate — a probe, a metric, a span — lands at THIS one
-/// owner and flows to every existing + future optional peer with
-/// no per-caller edit). THEORY.md §V.1 (knowable platform — every
-/// optional peer's present-vs-absent bifurcation (list-family +
-/// scalar universal-serde) now routes through ONE named substrate
-/// primitive, so a future audit-trail metric jointly labeled by
-/// "which optional peer fired" and "was the kwarg present" binds
-/// mechanically without a per-peer bifurcation re-implementation).
-fn optional_from_required<F, T>(
-    kw: &Kwargs<'_>,
+/// family axis + three on the scalar family (universal-serde +
+/// numeric-narrowed + atom-shape), all sharing the byte-identical
+/// `if kw.contains_key(key) {...} else { Ok(None) }` present-vs-
+/// absent contract pre-lift (the pre-lift shape lived as an inline
+/// `contains_key` bifurcation at the four list-family sites, as an
+/// [`extract_optional_atom`]-composed shape at the two owned-scalar
+/// sites, and as an inline `match optional(kw, key)` bifurcation at
+/// [`extract_optional_atom`] itself — every variant short-circuits
+/// at the SAME `kw.contains_key` moment, only the substrate-
+/// primitive owning the check differs); lifting the shape to ONE
+/// primitive closes them at rustc time). THEORY.md §II.1 invariant
+/// 2 (free middle — the optional-vs-required peer distinction lives
+/// at ONE substrate primitive, not restated at every optional-peer
+/// callsite; a future diagnostic promotion on the present-vs-absent
+/// gate — a probe, a metric, a span — lands at THIS one owner and
+/// flows to every existing + future optional peer with no per-
+/// caller edit). THEORY.md §V.1 (knowable platform — every optional
+/// peer's present-vs-absent bifurcation (list-family + scalar
+/// universal-serde + scalar numeric-narrowed + scalar atom-shape)
+/// now routes through ONE named substrate primitive, so a future
+/// audit-trail metric jointly labeled by "which optional peer fired"
+/// and "was the kwarg present" binds mechanically without a per-peer
+/// bifurcation re-implementation).
+fn optional_from_required<'a, F, T>(
+    kw: &'a Kwargs<'a>,
     key: &str,
     extract_required: F,
 ) -> Result<Option<T>>
 where
-    F: FnOnce(&Kwargs<'_>, &str) -> Result<T>,
+    F: FnOnce(&'a Kwargs<'a>, &str) -> Result<T>,
 {
     if kw.contains_key(key) {
         extract_required(kw, key).map(Some)
@@ -2215,20 +2273,22 @@ where
 /// identity differs.
 ///
 /// Theory anchor: THEORY.md §VI.1 (generation over composition — the
-/// present-vs-absent + delegate-to-required posture now recurs at SIX
-/// peer sites all routing through the SAME [`optional_from_required`]
-/// substrate primitive; the three-times-rule trigger keeps holding as
-/// the scalar-narrowed axis lands as the sixth consumer). THEORY.md
-/// §II.1 invariant 2 (free middle — the optional-vs-required peer
-/// distinction lives at ONE substrate primitive, not restated at every
-/// optional-peer callsite; a future diagnostic promotion on the
-/// present-vs-absent gate flows to the scalar-narrowed peer here
-/// mechanically). THEORY.md §V.1 (knowable platform — the rejection
-/// on `Option<T>` on the scalar-narrowed axis now surfaces through
-/// the SAME [`optional_from_required`] primitive every list-family +
-/// scalar-serde peer already binds to, so a future audit-trail metric
-/// jointly labeled by "which optional peer fired" and "was the kwarg
-/// present" covers the scalar-narrowed peer without a per-peer
+/// present-vs-absent + delegate-to-required posture now recurs at
+/// SEVEN peer sites all routing through the SAME
+/// [`optional_from_required`] substrate primitive; the three-times-rule
+/// trigger keeps holding as the scalar-narrowed axis lands as the
+/// sixth consumer alongside the atom-family scalar peer
+/// [`extract_optional_atom`] as the seventh). THEORY.md §II.1
+/// invariant 2 (free middle — the optional-vs-required peer distinction
+/// lives at ONE substrate primitive, not restated at every optional-
+/// peer callsite; a future diagnostic promotion on the present-vs-
+/// absent gate flows to the scalar-narrowed peer here mechanically).
+/// THEORY.md §V.1 (knowable platform — the rejection on `Option<T>`
+/// on the scalar-narrowed axis now surfaces through the SAME
+/// [`optional_from_required`] primitive every list-family + scalar-
+/// serde + scalar-atom peer already binds to, so a future audit-trail
+/// metric jointly labeled by "which optional peer fired" and "was the
+/// kwarg present" covers the scalar-narrowed peer without a per-peer
 /// bifurcation re-implementation).
 pub fn extract_optional_narrowed<W, T>(kw: &Kwargs<'_>, key: &str) -> Result<Option<T>>
 where
@@ -2831,13 +2891,18 @@ pub fn extract_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) -> Res
 /// from_value_with_path(sexp, KwargPath::named(key)).map(Some)`) —
 /// the LAST inline present-vs-absent bifurcation on the extract_
 /// optional_ scalar family whose T is owned (not lifetime-bound to
-/// `kw`, which would block delegation through
-/// [`optional_from_required`]'s erased-lifetime `F` bound and keep
-/// the inline shape at [`extract_optional_atom`]). Post-lift the
-/// substrate primitive owns the bifurcation and every scalar-serde
-/// caller (and its list-family sibling) inherits its "absent →
-/// `Ok(None)`, present → delegate through required peer" contract
-/// mechanically; a future diagnostic promotion on the present-vs-
+/// `kw`, which pre-lift blocked delegation through
+/// [`optional_from_required`]'s erased-lifetime `F` bound and kept
+/// the inline shape at [`extract_optional_atom`] as a design
+/// invariant of the primitive). Post-lift the substrate primitive's
+/// `F` bound rides an explicit `'a` lifetime (`for<'a> F: FnOnce
+/// (&'a Kwargs<'a>, &str) -> Result<T>` at the call site, coerced
+/// from every fn-item consumer's HRTB signature; specific `'a` for
+/// the borrowed-`T` closure caller) so the atom-family scalar peer
+/// [`extract_optional_atom`] delegates through the SAME primitive
+/// too — the substrate now owns the bifurcation at ONE named site
+/// across every axis of the extract_optional_ family with no inline
+/// exceptions; a future diagnostic promotion on the present-vs-
 /// absent gate (a probe, a metric, a span) lands at ONE owner and
 /// flows to the scalar peer here without a per-caller edit.
 ///
@@ -2845,16 +2910,17 @@ pub fn extract_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) -> Res
 /// scalar `Option<T>` serde-decode failure IS a typed-entry gate
 /// the present-vs-absent bifurcation lifts through the primitive).
 /// THEORY.md §VI.1 (generation over composition — the present-vs-
-/// absent + delegate-to-required posture now recurs at SIX peer
+/// absent + delegate-to-required posture now recurs at SEVEN peer
 /// sites all routing through the SAME [`optional_from_required`]
 /// substrate primitive; the three-times-rule trigger keeps holding
-/// as the scalar-narrowed peer [`extract_optional_narrowed`] lands
-/// as the sixth consumer). THEORY.md §V.1 (knowable platform — the
-/// rejection on `Option<T>` now surfaces the same pattern-matchable
-/// [`LispError::KwargDeserialize { path: KwargPath::Named(key), ..
-/// }`] variant its required peer emits, so a future span-carrying
-/// promotion of [`KwargPath::Named`] binds mechanically for the
-/// scalar peer too).
+/// as the scalar-narrowed peer [`extract_optional_narrowed`] and the
+/// atom-family scalar peer [`extract_optional_atom`] land as the
+/// sixth and seventh consumers). THEORY.md §V.1 (knowable platform
+/// — the rejection on `Option<T>` now surfaces the same pattern-
+/// matchable [`LispError::KwargDeserialize { path: KwargPath::Named
+/// (key), .. }`] variant its required peer emits, so a future
+/// span-carrying promotion of [`KwargPath::Named`] binds
+/// mechanically for the scalar peer too).
 pub fn extract_optional_via_serde<T: DeserializeOwned>(
     kw: &Kwargs<'_>,
     key: &str,
@@ -2948,11 +3014,12 @@ pub fn extract_vec_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) ->
 /// typed-entry gate the optional-nested-vec surface used to leak past
 /// through the universal serde bridge). THEORY.md §VI.1 (generation
 /// over composition — the present-vs-absent + delegate-to-required
-/// posture now recurs at SIX peer sites (four list-family —
+/// posture now recurs at SEVEN peer sites (four list-family —
 /// [`extract_optional_string_list`] / [`extract_optional_bool_list`] /
-/// [`extract_optional_narrowed_list`] / this — plus two scalar-family
-/// — [`extract_optional_via_serde`] on the universal-serde axis and
-/// [`extract_optional_narrowed`] on the numeric-narrowed axis), all
+/// [`extract_optional_narrowed_list`] / this — plus three scalar-
+/// family — [`extract_optional_via_serde`] on the universal-serde
+/// axis, [`extract_optional_narrowed`] on the numeric-narrowed axis,
+/// and [`extract_optional_atom`] on the atom-shape axis), all
 /// routing through the SAME [`optional_from_required`] substrate
 /// primitive). THEORY.md
 /// §V.1 (knowable platform — the per-item rejection on
@@ -7142,13 +7209,14 @@ mod tests {
         format!("{err}")
     }
 
-    // ── optional_from_required — the primitive under the SIX optional
-    // peers (four list-family — `extract_optional_string_list` /
-    // `extract_optional_bool_list` / `extract_optional_narrowed_list` /
-    // `extract_optional_vec_via_serde` — plus the two scalar-family
-    // peers `extract_optional_via_serde` on the universal-serde axis
-    // and `extract_optional_narrowed` on the numeric-narrowed axis)
-    // tests ────────────────────────────────────────────────────────────
+    // ── optional_from_required — the primitive under the SEVEN
+    // optional peers (four list-family — `extract_optional_string_list`
+    // / `extract_optional_bool_list` / `extract_optional_narrowed_list`
+    // / `extract_optional_vec_via_serde` — plus the three scalar-family
+    // peers `extract_optional_via_serde` on the universal-serde axis,
+    // `extract_optional_narrowed` on the numeric-narrowed axis, and
+    // `extract_optional_atom` on the atom-shape axis) tests
+    // ────────────────────────────────────────────────────────────────────
     //
     // The primitive owns the "present-vs-absent bifurcation over an
     // absent-tolerant required list-family extractor" shape. The three
@@ -11104,6 +11172,271 @@ mod tests {
         let v = extract_optional_atom(&kw, "ratio", ExpectedKwargShape::Number, Sexp::as_float)
             .expect("present-and-correct optional kwarg must succeed");
         assert_eq!(v, Some(3.5));
+    }
+
+    /// [`extract_optional_atom`] is now a one-line delegate to
+    /// `optional_from_required(kw, key, |kw, key| extract_atom(kw, key,
+    /// expected, project))` — the SEVENTH consumer of the
+    /// [`optional_from_required`] present-vs-absent substrate primitive
+    /// (after the four list-family peers plus
+    /// [`extract_optional_via_serde`] on the universal-serde axis and
+    /// [`extract_optional_narrowed`] on the numeric-narrowed axis).
+    /// Post-lift the primitive's `F: FnOnce(&'a Kwargs<'a>, &str) ->
+    /// Result<T>` bound rides an explicit `'a` lifetime so `T` may
+    /// borrow from `kw` — the closure-wrapped [`extract_atom`] extractor
+    /// on the `<&'a str as AtomKwarg<'a>>` string axis threads its
+    /// borrowed slot through the primitive without an intermediate
+    /// copy or an axis-only inline duplication.
+    ///
+    /// Pin the delegation-identity contract at the operator-visible
+    /// level: for every input a caller-shaped [`extract_optional_atom`]
+    /// accepts or rejects, the hand-composed
+    /// `optional_from_required(kw, key, |kw, key| extract_atom(kw, key,
+    /// expected, project))` must produce the byte-identical verdict —
+    /// same `Ok(Some(_))` / `Ok(None)` / `Err(_)` shape, same
+    /// [`LispError`] variant on rejection, same axis-typed
+    /// [`ExpectedKwargShape`] payload on shape mismatch, same
+    /// [`KwargPath::Named`] form on the failing kwarg. Sweep the pair
+    /// across the THREE canonical verdicts (absent, present-wrong-shape,
+    /// present-correct-shape) × BOTH ownership axes (borrowed `<&'a
+    /// str>` on the string axis, owned `<bool>` on the bool axis) to
+    /// lock the delegation shape across both the atom-family
+    /// borrowed-T and owned-T cases the primitive's `'a`-lifted `F`
+    /// bound admits.
+    ///
+    /// A regression that swapped the extractor's body back to the
+    /// pre-lift inline `match optional(kw, key) { None => Ok(None);
+    /// Some(v) => project(v).map(Some).ok_or_else(|| type_err(...)) }`
+    /// composition (byte-equivalent today but bypassing
+    /// [`optional_from_required`] — a diagnostic-promotion divergence
+    /// at the substrate primitive layer) would still pass THIS test on
+    /// present inputs (both paths produce the same diagnostic bytes on
+    /// the shape mismatch); the load-bearing proof this test carries
+    /// is the FORWARD compatibility of the delegation across a
+    /// `optional_from_required` diagnostic promotion (a probe, a
+    /// metric, a span on the present-vs-absent gate — every future
+    /// promotion at that primitive flows to the atom-family scalar
+    /// peer here through this delegate, sight-unseen by every caller).
+    ///
+    /// Peer to
+    /// [`extract_optional_narrowed_delegates_through_optional_from_required_across_the_four_verdicts`]
+    /// on the numeric-narrowed axis — that test pins the scalar-
+    /// narrowed peer's delegation through the same primitive at the
+    /// numeric-width axis level; this test pins the atom-family
+    /// scalar peer's delegation at the ownership axis level (borrowed
+    /// vs. owned `T`), closing the family loop on the substrate
+    /// primitive every extract_optional_ consumer now binds through
+    /// with no inline exceptions.
+    #[test]
+    fn extract_optional_atom_delegates_through_optional_from_required_across_borrowed_and_owned_axes(
+    ) {
+        // (1) ABSENT, string (borrowed-T) axis — both paths short-
+        //     circuit to `Ok(None)` without invoking the required
+        //     extractor's shape gate.
+        let absent_args = kwargs_of("(_ :other 1)");
+        let absent_kw = parse_kwargs(&absent_args).unwrap();
+        assert_eq!(
+            extract_optional_atom::<&str, _>(
+                &absent_kw,
+                "missing",
+                ExpectedKwargShape::String,
+                Sexp::as_string,
+            )
+            .unwrap(),
+            optional_from_required(&absent_kw, "missing", |kw, key| extract_atom(
+                kw,
+                key,
+                ExpectedKwargShape::String,
+                Sexp::as_string,
+            ))
+            .unwrap(),
+        );
+        assert_eq!(
+            extract_optional_atom::<&str, _>(
+                &absent_kw,
+                "missing",
+                ExpectedKwargShape::String,
+                Sexp::as_string,
+            )
+            .unwrap(),
+            None,
+        );
+
+        // (1) ABSENT, bool (owned-T) axis — peer identity on the peer
+        //     axis; the primitive's `'a`-lifted `F` bound admits BOTH
+        //     the borrowed and owned atom-family projections through
+        //     ONE signature.
+        assert_eq!(
+            extract_optional_atom::<bool, _>(
+                &absent_kw,
+                "missing",
+                ExpectedKwargShape::Bool,
+                Sexp::as_bool,
+            )
+            .unwrap(),
+            optional_from_required(&absent_kw, "missing", |kw, key| extract_atom(
+                kw,
+                key,
+                ExpectedKwargShape::Bool,
+                Sexp::as_bool,
+            ))
+            .unwrap(),
+        );
+
+        // (2) PRESENT, correct shape, string axis — both paths return
+        //     `Ok(Some(&'a str))` wrapping the same borrowed slot;
+        //     equality on `&str` proves the delegate's lifetime
+        //     threading matches the pre-lift inline shape.
+        let str_ok_args = kwargs_of(r#"(_ :name "prom-up")"#);
+        let str_ok_kw = parse_kwargs(&str_ok_args).unwrap();
+        assert_eq!(
+            extract_optional_atom::<&str, _>(
+                &str_ok_kw,
+                "name",
+                ExpectedKwargShape::String,
+                Sexp::as_string,
+            )
+            .unwrap(),
+            optional_from_required(&str_ok_kw, "name", |kw, key| extract_atom(
+                kw,
+                key,
+                ExpectedKwargShape::String,
+                Sexp::as_string,
+            ))
+            .unwrap(),
+        );
+        assert_eq!(
+            extract_optional_atom::<&str, _>(
+                &str_ok_kw,
+                "name",
+                ExpectedKwargShape::String,
+                Sexp::as_string,
+            )
+            .unwrap(),
+            Some("prom-up"),
+        );
+
+        // (2) PRESENT, correct shape, bool axis — peer identity on
+        //     the owned-T axis; both paths return `Ok(Some(true))`.
+        let bool_ok_args = kwargs_of("(_ :enabled #t)");
+        let bool_ok_kw = parse_kwargs(&bool_ok_args).unwrap();
+        assert_eq!(
+            extract_optional_atom::<bool, _>(
+                &bool_ok_kw,
+                "enabled",
+                ExpectedKwargShape::Bool,
+                Sexp::as_bool,
+            )
+            .unwrap(),
+            optional_from_required(&bool_ok_kw, "enabled", |kw, key| extract_atom(
+                kw,
+                key,
+                ExpectedKwargShape::Bool,
+                Sexp::as_bool,
+            ))
+            .unwrap(),
+        );
+        assert_eq!(
+            extract_optional_atom::<bool, _>(
+                &bool_ok_kw,
+                "enabled",
+                ExpectedKwargShape::Bool,
+                Sexp::as_bool,
+            )
+            .unwrap(),
+            Some(true),
+        );
+
+        // (3) PRESENT, wrong shape, string axis — both paths surface
+        //     the SAME `LispError::TypeMismatch` variant with the SAME
+        //     axis-typed `ExpectedKwargShape::String` label, the SAME
+        //     `KwargPath::Named("name")` form, and the SAME
+        //     `SexpShape::Int` got-payload.
+        let str_shape_args = kwargs_of("(_ :name 42)");
+        let str_shape_kw = parse_kwargs(&str_shape_args).unwrap();
+        let via_wrapper = extract_optional_atom::<&str, _>(
+            &str_shape_kw,
+            "name",
+            ExpectedKwargShape::String,
+            Sexp::as_string,
+        )
+        .expect_err("int is not a string");
+        let via_primitive = optional_from_required(&str_shape_kw, "name", |kw, key| {
+            extract_atom(kw, key, ExpectedKwargShape::String, Sexp::as_string)
+        })
+        .expect_err("int is not a string");
+        match (&via_wrapper, &via_primitive) {
+            (
+                LispError::TypeMismatch {
+                    form: f1,
+                    expected: e1,
+                    got: g1,
+                },
+                LispError::TypeMismatch {
+                    form: f2,
+                    expected: e2,
+                    got: g2,
+                },
+            ) => {
+                assert_eq!(f1, f2);
+                assert_eq!(e1, e2);
+                assert_eq!(g1, g2);
+                assert_eq!(*e1, ExpectedKwargShape::String);
+                assert_eq!(*g1, SexpShape::Int);
+                assert_eq!(f1, &KwargPath::named("name"));
+            }
+            _ => panic!("both must be TypeMismatch, got {via_wrapper:?} vs {via_primitive:?}"),
+        }
+        // Rendered diagnostic parity — a `type_err`-shape divergence at
+        // the primitive layer that preserved variant identity but
+        // drifted the rendered path would surface here.
+        assert_eq!(
+            type_err_message(via_wrapper),
+            type_err_message(via_primitive),
+        );
+
+        // (3) PRESENT, wrong shape, bool axis — peer identity on the
+        //     owned-T axis; `ExpectedKwargShape::Bool` label and
+        //     `SexpShape::String` got-payload.
+        let bool_shape_args = kwargs_of(r#"(_ :enabled "yes")"#);
+        let bool_shape_kw = parse_kwargs(&bool_shape_args).unwrap();
+        let via_wrapper = extract_optional_atom::<bool, _>(
+            &bool_shape_kw,
+            "enabled",
+            ExpectedKwargShape::Bool,
+            Sexp::as_bool,
+        )
+        .expect_err("string is not a bool");
+        let via_primitive = optional_from_required(&bool_shape_kw, "enabled", |kw, key| {
+            extract_atom(kw, key, ExpectedKwargShape::Bool, Sexp::as_bool)
+        })
+        .expect_err("string is not a bool");
+        match (&via_wrapper, &via_primitive) {
+            (
+                LispError::TypeMismatch {
+                    form: f1,
+                    expected: e1,
+                    got: g1,
+                },
+                LispError::TypeMismatch {
+                    form: f2,
+                    expected: e2,
+                    got: g2,
+                },
+            ) => {
+                assert_eq!(f1, f2);
+                assert_eq!(e1, e2);
+                assert_eq!(g1, g2);
+                assert_eq!(*e1, ExpectedKwargShape::Bool);
+                assert_eq!(*g1, SexpShape::String);
+                assert_eq!(f1, &KwargPath::named("enabled"));
+            }
+            _ => panic!("both must be TypeMismatch, got {via_wrapper:?} vs {via_primitive:?}"),
+        }
+        assert_eq!(
+            type_err_message(via_wrapper),
+            type_err_message(via_primitive),
+        );
     }
 
     #[test]

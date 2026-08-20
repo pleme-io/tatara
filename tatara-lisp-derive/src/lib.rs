@@ -1197,6 +1197,31 @@ fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2
         Kind::VecString => quote! {
             ::tatara_lisp::domain::extract_string_list(&kw, #key)?
         },
+        // `Option<Vec<String>>` routes through the typed
+        // optional-string-list extractor (which delegates its per-item
+        // decode to the same `<&str as AtomKwarg<'_>>::project_at`
+        // atom-family shape gate the required peer `extract_string_list`
+        // binds) rather than through `extract_optional_via_serde`.
+        // Pre-lift `Option<Vec<String>>` fell through
+        // `classify_option`'s catch-all arm to
+        // `Kind::OptionalDeserialize` — the universal `sexp_to_json` +
+        // `serde_json::from_value` bridge — so a per-item shape
+        // mismatch on `:tags (list "ok" 5)` into an
+        // `Option<Vec<String>>` field surfaced as a
+        // `KwargDeserialize { message: "invalid type: integer ...,
+        // expected a string at path .1" }` substring rather than as
+        // the typed
+        // `TypeMismatch { form: Item { key: "tags", idx: 1 },
+        // expected: String, got: Int }` its REQUIRED peer
+        // (`tags: Vec<String>`) already emits at the atom shape gate;
+        // post-lift the two peers on the same axis speak the same
+        // typed rejection vocabulary. Sibling routing lift to
+        // [`Self::VecBool`] on the required-vec axis and to
+        // [`Self::OptionalString`] / [`Self::OptionalBool`] on the
+        // optional-scalar axis.
+        Kind::OptionalVecString => quote! {
+            ::tatara_lisp::domain::extract_optional_string_list(&kw, #key)?
+        },
         // ── The six numeric-narrowed arms: NARROWED, never `as`-cast ──
         //
         // Pre-lift each of the six arms (three per axis: scalar /
@@ -1337,6 +1362,36 @@ enum Kind {
     /// Bool, got: String }` variant its scalar peer (`enabled: bool`)
     /// already emits at the atom shape gate.
     VecBool,
+    /// `Option<Vec<String>>` — routes through
+    /// [`tatara_lisp::domain::extract_optional_string_list`], the
+    /// present-vs-absent bifurcated peer of [`Self::VecString`] on
+    /// the string axis. Distinguishes an absent kwarg (`Ok(None)`)
+    /// from a present empty list (`Ok(Some(Vec::new()))`) — the
+    /// [`Self::VecString`] posture collapses both cases (both land
+    /// as `Ok(Vec::new())`), which fits `Vec<String>` fields but
+    /// loses the operator's intent on `Option<Vec<String>>` fields.
+    /// Delegates its present-branch per-item decode to the SAME
+    /// [`tatara_lisp::domain::extract_string_list`] the required
+    /// peer binds, so a per-item non-string element inside
+    /// `:tags (list "ok" 5)` rejects with the SAME typed
+    /// `LispError::TypeMismatch { form: Item { key, idx }, expected:
+    /// String, got: Int }` variant its required peer emits at the
+    /// atom shape gate. Pre-lift `Option<Vec<String>>` fell through
+    /// `classify_option`'s catch-all arm to
+    /// [`Self::OptionalDeserialize`] (the universal `sexp_to_json` +
+    /// `serde_json::from_value` bridge — no `Option<Vec<T>>` arm on
+    /// the recursor), so a per-item shape mismatch surfaced as a
+    /// mystery `KwargDeserialize` substring rather than the typed
+    /// atom-family rejection its required peer already emits. Post-
+    /// lift the two peers on the string axis speak ONE rejection
+    /// vocabulary. Sibling routing lift to [`Self::VecBool`] on the
+    /// required-vec axis and to [`Self::OptionalString`] on the
+    /// optional-scalar axis; the optional-vec-bool /
+    /// optional-vec-int / optional-vec-float axes still fall through
+    /// to [`Self::OptionalDeserialize`] — same posture the required-
+    /// vec-bool / required-vec-int / required-vec-float axes had
+    /// before their per-axis typed extractors landed.
+    OptionalVecString,
     /// Fall-through: any type implementing `serde::Deserialize`.
     Deserialize,
     OptionalDeserialize,
@@ -1380,6 +1435,25 @@ fn classify_option(last: &syn::PathSegment) -> Kind {
         Kind::Int(t) => Kind::OptionalInt(t),
         Kind::Float(t) => Kind::OptionalFloat(t),
         Kind::Bool => Kind::OptionalBool,
+        // `Option<Vec<String>>` composes the outer `Option` recursor
+        // with the `Vec<T>` recursor `classify_vec`, which projects
+        // `Vec<String>` to `Kind::VecString`. This arm sharpens the
+        // composed `Option<VecString>` to the typed
+        // `Kind::OptionalVecString` variant rather than letting it
+        // fall through the catch-all to `Kind::OptionalDeserialize`
+        // (the universal `sexp_to_json` + `serde_json::from_value`
+        // bridge, whose per-item shape mismatch surfaces as a
+        // `LispError::KwargDeserialize` substring rather than the
+        // typed `LispError::TypeMismatch { form: Item { key, idx },
+        // expected: String, got: <shape> }` variant its required
+        // peer `Kind::VecString` already emits at the atom-family
+        // shape gate). Sibling routing lift to the required-vec
+        // `Vec<bool>` → `Kind::VecBool` arm on `classify_vec` below;
+        // the peer optional-vec-bool / optional-vec-int /
+        // optional-vec-float axes still fall through to the
+        // catch-all here — a future run picks them up in ONE arm
+        // extension each.
+        Kind::VecString => Kind::OptionalVecString,
         _ => Kind::OptionalDeserialize,
     }
 }
@@ -1790,13 +1864,17 @@ mod classify_tests {
         // through `classify_option`'s catch-all arm to
         // `Kind::OptionalDeserialize`. Pin the catch-all: a nested
         // struct (`Option<MonitorSpec>`), an enum
-        // (`Option<Severity>`), even a `Vec` (`Option<Vec<String>>` —
-        // supported at the `Option` layer but NOT recognized as
-        // `OptionalVecString`, because no such Kind variant exists) all
-        // land at the same arm. A regression that added a new Kind
-        // variant for one of these compositions without updating the
-        // recursor arm mapping would silently drift the extractor at
-        // every consumer.
+        // (`Option<Severity>`), and the residual `Option<Vec<T>>`
+        // shapes on axes with no typed peer yet (`Option<Vec<bool>>`,
+        // `Option<Vec<u16>>`, `Option<Vec<f32>>`,
+        // `Option<Vec<MonitorSpec>>`) all land at the same arm.
+        // `Option<Vec<String>>` — the ONE `Option<Vec<T>>` axis with
+        // a typed peer today — sharpens to `Kind::OptionalVecString`
+        // (pinned by the sibling test
+        // `optional_vec_of_string_classifies_as_kind_optional_vec_string`).
+        // A regression that added a new Kind variant for one of the
+        // remaining compositions without updating the recursor arm
+        // mapping would silently drift the extractor at every consumer.
         assert!(matches!(
             classify(&parse_ty("Option<MonitorSpec>")),
             Kind::OptionalDeserialize
@@ -1806,8 +1884,55 @@ mod classify_tests {
             Kind::OptionalDeserialize
         ));
         assert!(matches!(
-            classify(&parse_ty("Option<Vec<String>>")),
+            classify(&parse_ty("Option<Vec<bool>>")),
             Kind::OptionalDeserialize
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<Vec<u16>>")),
+            Kind::OptionalDeserialize
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<Vec<f32>>")),
+            Kind::OptionalDeserialize
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Option<Vec<MonitorSpec>>")),
+            Kind::OptionalDeserialize
+        ));
+    }
+
+    #[test]
+    fn optional_vec_of_string_classifies_as_kind_optional_vec_string() {
+        // `Option<Vec<String>>` composes the outer `Option` recursor
+        // with the `Vec<T>` recursor `classify_vec` (which projects
+        // `Vec<String>` to `Kind::VecString`); `classify_option`'s
+        // per-primitive-vec arm sharpens the composition to
+        // `Kind::OptionalVecString` rather than letting it fall
+        // through the catch-all to `Kind::OptionalDeserialize` — the
+        // universal `sexp_to_json` + `serde_json::from_value` bridge
+        // whose per-item shape mismatch surfaces as a mystery
+        // `LispError::KwargDeserialize` substring rather than the
+        // typed `LispError::TypeMismatch { form: Item { key, idx },
+        // expected: String, got: <shape> }` variant its REQUIRED peer
+        // `Kind::VecString` already emits at the atom-family shape gate.
+        //
+        // Sibling routing lift to `Kind::VecBool` on the required-vec
+        // bool axis and `Kind::VecInt(_)` / `Kind::VecFloat(_)` on the
+        // required-vec numeric axes; the peer optional-vec-bool /
+        // optional-vec-int / optional-vec-float axes still fall through
+        // the catch-all (pinned by the sibling
+        // `option_of_non_primitive_classifies_as_kind_optional_deserialize`
+        // test's `Option<Vec<bool>>` / `Option<Vec<u16>>` /
+        // `Option<Vec<f32>>` sweep). A regression that dropped this arm
+        // (folding `Option<Vec<String>>` back into
+        // `Kind::OptionalDeserialize`) would silently rewire every
+        // `Option<Vec<String>>` field back to the serde bridge — the
+        // operator would see NO diagnostic drift at the derive site but
+        // the per-item rejection would revert to the mystery serde
+        // substring shape.
+        assert!(matches!(
+            classify(&parse_ty("Option<Vec<String>>")),
+            Kind::OptionalVecString
         ));
     }
 

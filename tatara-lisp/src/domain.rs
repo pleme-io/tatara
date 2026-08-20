@@ -1637,6 +1637,83 @@ pub fn extract_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<String>> {
     })
 }
 
+/// `Option<Vec<String>>` sibling of [`extract_string_list`] — the
+/// list-family peer of [`extract_optional_string`] on the
+/// present-vs-absent axis. Distinguishes an ABSENT kwarg (`Ok(None)`)
+/// from a PRESENT empty list (`Ok(Some(Vec::new()))`) — the
+/// [`extract_string_list`]-flavored posture collapses both cases to
+/// `Ok(Vec::new())`, which fits `Vec<String>` fields (where "no items"
+/// and "no kwarg" are semantically the same) but loses the present-vs-
+/// absent distinction a `Option<Vec<String>>` field needs (where
+/// `None` and `Some(vec![])` are DISTINCT operator intents — "the
+/// operator did not name this kwarg" vs. "the operator explicitly
+/// bound the kwarg to an empty list").
+///
+/// A present-but-non-list kwarg (`:tags "solo"`) rejects with the
+/// SAME typed [`LispError::TypeMismatch`] variant the required peer
+/// [`extract_string_list`] emits (`expected list of strings, got
+/// string`); a per-item non-string element inside a present list
+/// (`:tags (list "a" 5 "b")`) rejects with the SAME
+/// [`LispError::TypeMismatch { form: Item { key, idx }, expected:
+/// String, got: Int }`] variant its per-item peer emits through the
+/// shared [`AtomKwarg::project_at`] atom-family shape gate. The two
+/// peers ([`extract_string_list`] and this one) delegate to the SAME
+/// per-item gate — only the outer present-vs-absent axis's return
+/// shape differs (`Vec<String>` vs. `Option<Vec<String>>`).
+///
+/// Sibling posture to [`extract_optional_string`] on the atom-family
+/// non-numeric axis: both distinguish `None` (absent) from `Some(_)`
+/// (present-and-decoded) at the `Option` layer, and both delegate
+/// their present-branch decode to their required peer
+/// ([`extract_string`] / [`extract_string_list`]). Peer to
+/// [`extract_optional_via_serde`] on the universal-serde-fallthrough
+/// axis: both share the `kw.contains_key(key)` present-vs-absent
+/// bifurcation; the differences are that this extractor rides the
+/// typed atom-family per-item shape gate rather than the serde
+/// bridge's per-item `from_value_with_path` decode, so a per-item
+/// shape mismatch surfaces as a pattern-matchable
+/// [`LispError::TypeMismatch`] variant rather than as a
+/// [`LispError::KwargDeserialize`] substring.
+///
+/// Pre-lift the derive routed `Option<Vec<String>>` through the
+/// universal-serde bridge ([`extract_optional_via_serde`] via
+/// [`crate::domain::from_value_with_path`]) — [`classify_option`] in
+/// [`tatara_lisp_derive`] had no arm for `Option<Vec<T>>` and fell
+/// through to `Kind::OptionalDeserialize`, matching the pre-lift
+/// posture that [`Vec<bool>`] / [`Vec<u16>`] / etc. shared before
+/// their per-axis routes landed. So a per-item shape mismatch inside
+/// `Option<Vec<String>>` surfaced as a mystery
+/// `LispError::KwargDeserialize { message: "invalid type: integer
+/// ..., expected a string at path .1" }` substring rather than as
+/// the typed
+/// `LispError::TypeMismatch { form: Item { key, idx }, expected:
+/// String, got: Int }` its required peer's per-item gate already
+/// emits — the SAME class of gate-leak the recent per-axis
+/// [`extract_bool_list`] / [`extract_narrowed_list`] / [`Kind::VecBool`] /
+/// [`Kind::VecInt`] closures already closed on the required-side
+/// `Vec<T>` surface. Post-lift the two `Option<Vec<T>>` / `Vec<T>`
+/// peers on the string axis share ONE rejection vocabulary.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry — a
+/// per-item shape failure on an `Option<Vec<String>>` kwarg IS a
+/// typed-entry gate the optional-string-vec surface used to leak
+/// past through the serde bridge). THEORY.md §VI.1 (generation over
+/// composition — the present-vs-absent + delegate-to-required
+/// posture recurs at THREE sites now — [`extract_optional_string`] /
+/// [`extract_optional_bool`] / this — all routing through the SAME
+/// [`optional`] short-circuit + required-peer delegation). THEORY.md
+/// §V.1 (knowable platform — the per-item string rejection now
+/// surfaces the same pattern-matchable
+/// [`LispError::TypeMismatch`] variant every authoring surface (LSP,
+/// `tatara-check`, REPL) already binds to for the required peer).
+pub fn extract_optional_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Option<Vec<String>>> {
+    if kw.contains_key(key) {
+        extract_string_list(kw, key).map(Some)
+    } else {
+        Ok(None)
+    }
+}
+
 /// Required integer kwarg — one-line delegate to `<i64 as
 /// WideNumeric>::extract_kwarg`, whose default composes
 /// `(<i64>::SHAPE, <i64>::as_wide)` through [`extract_atom`]. The
@@ -4763,6 +4840,139 @@ mod tests {
         );
     }
 
+    /// Optional-vec-string derive fixture — closes the
+    /// present-vs-absent hole on the string-vec axis. Pre-lift the
+    /// derive routed `Option<Vec<String>>` through
+    /// `Kind::OptionalDeserialize` (the universal serde bridge —
+    /// `classify_option` had no arm for `Option<Vec<T>>` and fell
+    /// through to the catch-all), so a per-item non-string element
+    /// on `:tags (list "ok" 5)` into an `Option<Vec<String>>` field
+    /// surfaced as a mystery
+    /// `KwargDeserialize { message: "invalid type: integer 5,
+    /// expected a string at path .1" }` substring rather than as
+    /// the typed
+    /// `TypeMismatch { form: Item { key: "tags", idx: 1 },
+    /// expected: String, got: Int }` its REQUIRED peer
+    /// (`tags: Vec<String>`) already emits at the atom shape gate.
+    /// Post-lift the derive routes `Option<Vec<String>>` to
+    /// `extract_optional_string_list`, which delegates its present-
+    /// branch decode to the SAME `extract_string_list` the required
+    /// peer binds; the two peers on the same axis now speak the
+    /// SAME typed rejection vocabulary. Sibling posture to
+    /// `VecFlagsSpec` on the required-vec-bool axis and
+    /// `VecPortsSpec` on the required-vec-numeric axis — all three
+    /// substrate primitives closed the SAME class of per-item serde-
+    /// bridge leak.
+    #[derive(DeriveTataraDomain, Serialize, Debug, PartialEq)]
+    #[tatara(keyword = "defoptvectags")]
+    struct OptVecTagsSpec {
+        tags: Option<Vec<String>>,
+    }
+
+    #[test]
+    fn optional_vec_string_field_absent_kwarg_parses_as_none() {
+        // `:tags` absent → `Ok(None)` — distinct from a present empty
+        // list (`:tags ()` → `Ok(Some(vec![]))`). The load-bearing
+        // present-vs-absent bifurcation an `Option<Vec<T>>` field
+        // preserves that a `Vec<T>` field collapses.
+        let forms = read(r"(defoptvectags)").expect("reads");
+        let spec = OptVecTagsSpec::compile_from_sexp(&forms[0])
+            .expect("absent optional list must parse as None");
+        assert_eq!(spec.tags, None);
+    }
+
+    #[test]
+    fn optional_vec_string_field_present_empty_parses_as_some_empty_vec() {
+        // `:tags ()` → `Ok(Some(Vec::new()))` — a PRESENT empty list
+        // is Some(vec![]), not None. Sibling to the absent-kwarg pin.
+        let forms = read(r"(defoptvectags :tags ())").expect("reads");
+        let spec = OptVecTagsSpec::compile_from_sexp(&forms[0])
+            .expect("present empty list must parse as Some(vec![])");
+        assert_eq!(spec.tags, Some(Vec::<String>::new()));
+    }
+
+    #[test]
+    fn optional_vec_string_field_parses_all_string_list_through_the_per_item_atom_gate() {
+        // Happy-path: a present list of strings decodes byte-identically
+        // to the required peer `Vec<String>` field's decode, wrapped in
+        // `Some`.
+        let forms = read(r#"(defoptvectags :tags ("alpha" "beta" "gamma"))"#).expect("reads");
+        let spec = OptVecTagsSpec::compile_from_sexp(&forms[0])
+            .expect("all-string per-item values must parse");
+        assert_eq!(
+            spec.tags,
+            Some(vec![
+                "alpha".to_string(),
+                "beta".to_string(),
+                "gamma".to_string(),
+            ])
+        );
+    }
+
+    #[test]
+    fn optional_vec_string_field_rejects_per_item_non_string_with_typed_shape_and_item_path() {
+        // The per-item string-axis cousin of the required-peer
+        // `VecFlagsSpec::vec_bool_field_rejects_per_item_non_bool_...`
+        // canonical rejection. Post-lift the failure carries the
+        // item index (1) alongside the same
+        // `ExpectedKwargShape::String` + `SexpShape::Int` pair the
+        // required peer emits — authoring surfaces pattern-match on
+        // the SAME `LispError::TypeMismatch { form: Item {..},
+        // expected: String, got: Int }` variant they already bind
+        // for the required peer's per-item gate, not on a serde
+        // substring. Pre-lift the derive routed
+        // `Option<Vec<String>>` through `Kind::OptionalDeserialize`
+        // and the same failure surfaced as
+        // `KwargDeserialize { message: "invalid type: integer 5,
+        // expected a string at path .1" }` — a regression that
+        // reverted `Kind::OptionalVecString` back to
+        // `Kind::OptionalDeserialize` would surface here as the
+        // substrate-typed `TypeMismatch` variant absent from the
+        // error's tag (replaced by `KwargDeserialize`).
+        let forms = read(r#"(defoptvectags :tags ("ok" 5))"#).expect("reads");
+        let err = OptVecTagsSpec::compile_from_sexp(&forms[0])
+            .expect_err("5 is not a string and must not parse");
+        let LispError::TypeMismatch {
+            form,
+            expected,
+            got,
+        } = &err
+        else {
+            panic!("expected TypeMismatch (typed atom-family gate), got {err:?}");
+        };
+        assert_eq!(form, &KwargPath::item("tags", 1));
+        assert_eq!(*expected, ExpectedKwargShape::String);
+        assert_eq!(*got, SexpShape::Int);
+        assert_eq!(
+            err.to_string(),
+            "compile error in :tags[1]: expected string, got int",
+        );
+    }
+
+    #[test]
+    fn optional_vec_string_field_rejects_present_scalar_with_typed_outer_shape() {
+        // A PRESENT non-list kwarg (`:tags "solo"`) rejects with the
+        // SAME `expected list of strings` outer-shape diagnostic the
+        // required peer `extract_string_list` emits — the present-vs-
+        // absent bifurcation happens BEFORE the required peer's outer
+        // gate, so the outer-shape rejection variant is byte-identical
+        // to the required peer's.
+        let forms = read(r#"(defoptvectags :tags "solo")"#).expect("reads");
+        let err = OptVecTagsSpec::compile_from_sexp(&forms[0])
+            .expect_err("a scalar string is not a list of strings and must not parse");
+        let LispError::TypeMismatch {
+            form,
+            expected,
+            got,
+        } = &err
+        else {
+            panic!("expected TypeMismatch (outer atom-family gate), got {err:?}");
+        };
+        assert_eq!(form, &KwargPath::named("tags"));
+        assert_eq!(*expected, ExpectedKwargShape::ListOfStrings);
+        assert_eq!(*got, SexpShape::String);
+    }
+
     #[test]
     fn vec_f32_field_rejects_per_item_lossy_to_inf_with_typed_width_and_item_path() {
         // Float-axis peer of
@@ -5666,6 +5876,131 @@ mod tests {
         );
         assert!(msg.contains("expected string"), "got: {msg}");
         assert!(msg.contains("got int"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_optional_string_list_absent_kwarg_returns_none() {
+        // `:tags` absent — the OPTIONAL list-family posture bifurcates
+        // absent from present-empty. `extract_string_list` collapses
+        // both cases to `Ok(Vec::new())`; the optional peer distinguishes
+        // them: absent → `Ok(None)`, present-empty → `Ok(Some(vec![]))`.
+        // Pin the None arm here; the sibling
+        // `extract_optional_string_list_present_empty_returns_some_empty_vec`
+        // test pins the other end of the bifurcation.
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        assert_eq!(extract_optional_string_list(&kw, "tags").unwrap(), None);
+    }
+
+    #[test]
+    fn extract_optional_string_list_present_empty_returns_some_empty_vec() {
+        // `:tags ()` — a PRESENT empty list is Some(Vec::new()), not
+        // None. The load-bearing distinction between "the operator did
+        // not name this kwarg" and "the operator explicitly bound the
+        // kwarg to an empty list" — a `Vec<String>` field collapses
+        // both to the empty vec, but an `Option<Vec<String>>` field
+        // preserves the operator's intent.
+        let args = kwargs_of("(_ :tags ())");
+        let kw = parse_kwargs(&args).unwrap();
+        assert_eq!(
+            extract_optional_string_list(&kw, "tags").unwrap(),
+            Some(Vec::<String>::new())
+        );
+    }
+
+    #[test]
+    fn extract_optional_string_list_returns_some_vec_when_all_items_are_strings() {
+        // Happy-path: `(list "a" "b" "c")` under a present kwarg on the
+        // string axis projects to `Some(vec!["a", "b", "c"])`
+        // byte-identically to what the required peer `extract_string_list`
+        // would return, wrapped in `Some`.
+        let args = kwargs_of(r#"(_ :tags ("a" "b" "c"))"#);
+        let kw = parse_kwargs(&args).unwrap();
+        assert_eq!(
+            extract_optional_string_list(&kw, "tags").unwrap(),
+            Some(vec!["a".to_string(), "b".to_string(), "c".to_string()])
+        );
+    }
+
+    #[test]
+    fn extract_optional_string_list_type_err_on_scalar_names_got_int() {
+        // `:tags 7` — a PRESENT kwarg with a non-list scalar rejects
+        // with the SAME outer `expected list of strings` diagnostic
+        // the required peer `extract_string_list` emits, and names the
+        // actual outer shape (`int`). The present-vs-absent
+        // bifurcation happens BEFORE the required peer's outer gate,
+        // so the outer-shape rejection variant is byte-identical to
+        // the required peer's.
+        let args = kwargs_of("(_ :tags 7)");
+        let kw = parse_kwargs(&args).unwrap();
+        let msg = type_err_message(extract_optional_string_list(&kw, "tags").unwrap_err());
+        assert!(msg.contains("expected list of strings"), "got: {msg}");
+        assert!(msg.contains("got int"), "got: {msg}");
+    }
+
+    #[test]
+    fn extract_optional_string_list_type_err_on_non_string_item_names_index_and_got_int() {
+        // `:tags ("ok" 7)` — outer is a list, the second item isn't a
+        // string. Diagnostic names BOTH the item path (`:tags[1]`) and
+        // the narrower per-item expectation (`expected string`), the
+        // SAME typed `LispError::TypeMismatch { form: Item { key: "tags",
+        // idx: 1 }, expected: String, got: Int }` variant its required
+        // peer `extract_string_list` emits at the per-item atom-family
+        // shape gate. Pre-lift the derive routed `Option<Vec<String>>`
+        // through `extract_optional_via_serde` (the universal serde
+        // bridge — `classify_option` had no arm for `Option<Vec<T>>`
+        // and fell through to `Kind::OptionalDeserialize`), so a
+        // per-item shape mismatch surfaced as a mystery
+        // `KwargDeserialize { message: "invalid type: integer ..., expected
+        // a string at path .1" }` substring rather than as the typed
+        // atom-family rejection. Post-lift the optional peer rides the
+        // SAME atom-family gate its required peer already binds through
+        // `<&str as AtomKwarg<'_>>::project_at`, so a per-item shape
+        // mismatch surfaces as the SAME pattern-matchable typed variant
+        // — the two peers on the string axis speak ONE rejection
+        // vocabulary.
+        let args = kwargs_of(r#"(_ :tags ("ok" 7))"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let err = extract_optional_string_list(&kw, "tags").unwrap_err();
+        let msg = type_err_message(err);
+        assert!(
+            msg.contains(":tags[1]"),
+            "expected indexed item path, got: {msg}"
+        );
+        assert!(msg.contains("expected string"), "got: {msg}");
+        assert!(msg.contains("got int"), "got: {msg}");
+
+        // Extractor identity — extract_optional_string_list's per-item
+        // rejection at a non-string element MUST match the required-peer
+        // extract_string_list's rejection at the same input byte-for-byte,
+        // so the atom-family shape gate does NOT drift between the two
+        // peers on the string axis. The two paths differ only at the
+        // outer present-vs-absent axis (`Option<Vec<String>>` wrapper vs.
+        // bare `Vec<String>`), never at the per-item shape gate.
+        let mixed_args = kwargs_of(r#"(_ :tags ("ok" 7))"#);
+        let mixed_kw = parse_kwargs(&mixed_args).unwrap();
+        let optional_err = extract_optional_string_list(&mixed_kw, "tags").unwrap_err();
+        let required_err = extract_string_list(&mixed_kw, "tags").unwrap_err();
+        match (&optional_err, &required_err) {
+            (
+                LispError::TypeMismatch {
+                    form: form_a,
+                    expected: exp_a,
+                    got: got_a,
+                },
+                LispError::TypeMismatch {
+                    form: form_b,
+                    expected: exp_b,
+                    got: got_b,
+                },
+            ) => {
+                assert_eq!(form_a, form_b, "path variant identity");
+                assert_eq!(exp_a, exp_b, "axis-typed SHAPE identity");
+                assert_eq!(*exp_a, ExpectedKwargShape::String);
+                assert_eq!(got_a, got_b, "actual-shape witness identity");
+            }
+            other => panic!("both routes must produce TypeMismatch, got {other:?}"),
+        }
     }
 
     #[test]

@@ -1476,15 +1476,16 @@ where
 /// for `Option<Vec<Nested>>` fields once the derive's
 /// `Kind::VecDeserialize` catch-all sharpens into a typed nested-
 /// domain arm — plugs in as a one-line delegate to this primitive,
-/// same posture the FIVE existing optional peers (four list-family
+/// same posture the SIX existing optional peers (four list-family
 /// — [`extract_optional_string_list`] /
 /// [`extract_optional_bool_list`] /
 /// [`extract_optional_narrowed_list`] /
 /// [`extract_optional_vec_via_serde`] — plus the scalar-family
-/// universal-serde peer [`extract_optional_via_serde`]) now take.
-/// The only remaining inline peer on the extract_optional_ family
-/// is [`extract_optional_atom`], whose `T` borrows from `kw` (e.g.
-/// `T = &'a str` on the string axis) — [`optional_from_required`]'s
+/// universal-serde peer [`extract_optional_via_serde`] and the
+/// scalar-family numeric-narrowed peer [`extract_optional_narrowed`])
+/// now take. The only remaining inline peer on the extract_optional_
+/// family is [`extract_optional_atom`], whose `T` borrows from `kw`
+/// (e.g. `T = &'a str` on the string axis) — [`optional_from_required`]'s
 /// erased-lifetime `F: FnOnce(&Kwargs<'_>, &str) -> Result<T>`
 /// bound cannot thread the borrow, so the atom-family scalar peer
 /// stays inline as a design invariant of this primitive, not an
@@ -1493,12 +1494,18 @@ where
 /// required peer's posture used to invite.
 ///
 /// Theory anchor: THEORY.md §VI.1 (generation over composition — the
-/// present-vs-absent + delegate-to-required shape recurs at FIVE
+/// present-vs-absent + delegate-to-required shape recurs at SIX
 /// peer sites past the three-times-rule trigger, four on the list-
-/// family axis + one on the scalar universal-serde axis, all with
-/// a byte-identical `if kw.contains_key(key) {...} else { Ok(None)
-/// }` body pre-lift; lifting the shape to ONE primitive closes
-/// them at rustc time). THEORY.md §II.1 invariant 2 (free middle —
+/// family axis + two on the scalar family (universal-serde +
+/// numeric-narrowed), all sharing the byte-identical `if
+/// kw.contains_key(key) {...} else { Ok(None) }` present-vs-absent
+/// contract pre-lift (the pre-lift shape lived as an inline
+/// `contains_key` bifurcation at the four list-family sites, and as
+/// an `extract_optional_atom`-composed shape at the two scalar
+/// sites — both variants short-circuit at the SAME `kw.contains_key`
+/// moment, only the substrate-primitive owning the check differs);
+/// lifting the shape to ONE primitive closes them at rustc time).
+/// THEORY.md §II.1 invariant 2 (free middle —
 /// the optional-vs-required peer distinction lives at ONE
 /// substrate primitive, not restated at every optional-peer
 /// callsite; a future diagnostic promotion on the present-vs-
@@ -2171,15 +2178,64 @@ where
 /// `None`; a PRESENT but out-of-range one is a rejection, never a
 /// `None` — silently dropping a value the author wrote would be the
 /// same corruption in a different costume.
+///
+/// Delegates to [`optional_from_required`] with [`extract_narrowed::<W, T>`]
+/// as its required extractor — the SIXTH consumer of the primitive
+/// after the four list-family peers ([`extract_optional_string_list`] /
+/// [`extract_optional_bool_list`] / [`extract_optional_narrowed_list`] /
+/// [`extract_optional_vec_via_serde`]) and the scalar universal-serde
+/// peer [`extract_optional_via_serde`]. Pre-lift this extractor
+/// composed `<W as WideNumeric>::extract_optional_kwarg` (the atom-family
+/// present-vs-absent bifurcation on the WIDE side of the narrowing)
+/// with a post-hoc [`narrow_or_range_err`] on the `Some(_)` arm — the
+/// LAST scalar `extract_optional_*` extractor whose present-vs-absent
+/// gate did NOT route through [`optional_from_required`]. Post-lift the
+/// substrate primitive owns the bifurcation and every scalar-narrowed
+/// caller inherits its "absent → `Ok(None)`, present → delegate through
+/// required peer" contract mechanically; a future diagnostic promotion
+/// on the present-vs-absent gate (a probe, a metric, a span) lands at
+/// ONE owner and flows to the scalar-narrowed peer here without a
+/// per-caller edit — the same lift the list-family
+/// [`extract_optional_narrowed_list`] cousin already took on its
+/// present-vs-absent axis.
+///
+/// The refactor is semantic-preserving on every axis-mode ×
+/// input-shape input: an ABSENT kwarg (Ok(None), no required-peer
+/// invocation), a PRESENT wrong-shape kwarg (the SAME
+/// [`LispError::TypeMismatch`] variant [`extract_narrowed`] emits at
+/// the WideNumeric shape gate), a PRESENT out-of-range kwarg (the SAME
+/// [`LispError::KwargOutOfRange`] variant [`extract_narrowed`] emits
+/// at the [`narrow_or_range_err`] narrowing gate), and a PRESENT
+/// in-range kwarg (`Ok(Some(_))` wrapping the same narrowed value).
+/// The two paths bifurcate on WHICH atom-family present-vs-absent
+/// gate owns the short-circuit ([`extract_optional_atom`] on the
+/// WideNumeric side pre-lift, [`optional_from_required`]'s
+/// [`kw.contains_key`] gate post-lift) — both check the SAME key,
+/// both short-circuit at the SAME moment, only the substrate-primitive
+/// identity differs.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// present-vs-absent + delegate-to-required posture now recurs at SIX
+/// peer sites all routing through the SAME [`optional_from_required`]
+/// substrate primitive; the three-times-rule trigger keeps holding as
+/// the scalar-narrowed axis lands as the sixth consumer). THEORY.md
+/// §II.1 invariant 2 (free middle — the optional-vs-required peer
+/// distinction lives at ONE substrate primitive, not restated at every
+/// optional-peer callsite; a future diagnostic promotion on the
+/// present-vs-absent gate flows to the scalar-narrowed peer here
+/// mechanically). THEORY.md §V.1 (knowable platform — the rejection
+/// on `Option<T>` on the scalar-narrowed axis now surfaces through
+/// the SAME [`optional_from_required`] primitive every list-family +
+/// scalar-serde peer already binds to, so a future audit-trail metric
+/// jointly labeled by "which optional peer fired" and "was the kwarg
+/// present" covers the scalar-narrowed peer without a per-peer
+/// bifurcation re-implementation).
 pub fn extract_optional_narrowed<W, T>(kw: &Kwargs<'_>, key: &str) -> Result<Option<T>>
 where
     W: WideNumeric,
     T: NarrowNumeric<W>,
 {
-    let Some(wide) = <W as WideNumeric>::extract_optional_kwarg(kw, key)? else {
-        return Ok(None);
-    };
-    narrow_or_range_err(key, wide).map(Some)
+    optional_from_required(kw, key, extract_narrowed::<W, T>)
 }
 
 /// Required integer kwarg projected into the field's own width —
@@ -2789,10 +2845,11 @@ pub fn extract_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) -> Res
 /// scalar `Option<T>` serde-decode failure IS a typed-entry gate
 /// the present-vs-absent bifurcation lifts through the primitive).
 /// THEORY.md §VI.1 (generation over composition — the present-vs-
-/// absent + delegate-to-required posture now recurs at FIVE peer
+/// absent + delegate-to-required posture now recurs at SIX peer
 /// sites all routing through the SAME [`optional_from_required`]
 /// substrate primitive; the three-times-rule trigger keeps holding
-/// as new axes land). THEORY.md §V.1 (knowable platform — the
+/// as the scalar-narrowed peer [`extract_optional_narrowed`] lands
+/// as the sixth consumer). THEORY.md §V.1 (knowable platform — the
 /// rejection on `Option<T>` now surfaces the same pattern-matchable
 /// [`LispError::KwargDeserialize { path: KwargPath::Named(key), ..
 /// }`] variant its required peer emits, so a future span-carrying
@@ -2891,10 +2948,13 @@ pub fn extract_vec_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) ->
 /// typed-entry gate the optional-nested-vec surface used to leak past
 /// through the universal serde bridge). THEORY.md §VI.1 (generation
 /// over composition — the present-vs-absent + delegate-to-required
-/// posture now recurs at FIVE list-family peer sites
-/// ([`extract_optional_string_list`] / [`extract_optional_bool_list`] /
-/// [`extract_optional_narrowed_list`] / this), all routing through the
-/// SAME [`optional_from_required`] substrate primitive). THEORY.md
+/// posture now recurs at SIX peer sites (four list-family —
+/// [`extract_optional_string_list`] / [`extract_optional_bool_list`] /
+/// [`extract_optional_narrowed_list`] / this — plus two scalar-family
+/// — [`extract_optional_via_serde`] on the universal-serde axis and
+/// [`extract_optional_narrowed`] on the numeric-narrowed axis), all
+/// routing through the SAME [`optional_from_required`] substrate
+/// primitive). THEORY.md
 /// §V.1 (knowable platform — the per-item rejection on
 /// `Option<Vec<T>>` now surfaces the same pattern-matchable
 /// [`LispError::KwargDeserialize { path: KwargPath::Item { .. }, ..
@@ -4712,6 +4772,224 @@ mod tests {
                 assert_eq!(*t1, NumericWidth::F32);
             }
             _ => panic!("both must be KwargOutOfRange, got {via_wrapper:?} vs {via_generic:?}"),
+        }
+    }
+
+    /// [`extract_optional_narrowed<W, T>`] is now a one-line delegate
+    /// to `optional_from_required(kw, key, extract_narrowed::<W, T>)`
+    /// — the SIXTH consumer of the [`optional_from_required`] present-
+    /// vs-absent substrate primitive (after the four list-family peers
+    /// plus [`extract_optional_via_serde`] on the universal-serde
+    /// axis). Pin the delegation-identity contract at the operator-
+    /// visible level: for every input a caller-shaped
+    /// [`extract_optional_narrowed::<W, T>`] accepts or rejects, the
+    /// hand-composed [`optional_from_required(kw, key, extract_narrowed::<W, T>)`]
+    /// must produce the byte-identical verdict — same `Ok(Some(_))` /
+    /// `Ok(None)` / `Err(_)` shape, same [`LispError`] variant on
+    /// rejection, same typed `NumericWidth` / `NumericLiteral` payload
+    /// on out-of-range, same [`ExpectedKwargShape`] payload on
+    /// shape-mismatch. Sweep the pair across the FOUR canonical
+    /// verdicts × BOTH axes ({int, float} × {absent, present-wrong-
+    /// shape, present-out-of-range, present-in-range}) to lock the
+    /// delegation shape — a regression that swapped the extractor's
+    /// body back to the pre-lift inline
+    /// `let Some(wide) = <W as WideNumeric>::extract_optional_kwarg(...)? ...`
+    /// composition (byte-equivalent today but reaching for the
+    /// atom-family primitive rather than [`optional_from_required`]
+    /// — a diagnostic-promotion divergence at the substrate primitive
+    /// layer) would still pass THIS test (both paths produce the same
+    /// diagnostic bytes on every input listed above); the load-bearing
+    /// proof this test carries is the FORWARD compatibility of the
+    /// delegation across a `optional_from_required` diagnostic
+    /// promotion (a probe, a metric, a span on the present-vs-absent
+    /// gate — every future promotion at that primitive flows to the
+    /// scalar-narrowed peer here through this delegate, sight-unseen
+    /// by every caller).
+    ///
+    /// Peer to
+    /// [`extract_star_narrowed_delegates_agree_with_the_generic_primitives_at_both_verdicts`]
+    /// on the narrowed-extractor family — that test pins the four
+    /// public `extract_*_narrowed` wrappers as one-line delegates to
+    /// [`extract_narrowed`] / [`extract_optional_narrowed`] at the
+    /// axis-parameter level; this test pins the newly-composed
+    /// [`extract_optional_narrowed`] delegate to
+    /// [`optional_from_required`] at the present-vs-absent primitive
+    /// level, closing the family loop on the substrate primitive
+    /// every other optional peer already binds through.
+    #[test]
+    fn extract_optional_narrowed_delegates_through_optional_from_required_across_the_four_verdicts()
+    {
+        // (1) ABSENT, int axis — both paths short-circuit to
+        //     `Ok(None)` without invoking the required extractor's
+        //     shape gate.
+        let absent_args = kwargs_of("(_ :other 1)");
+        let absent_kw = parse_kwargs(&absent_args).unwrap();
+        assert_eq!(
+            extract_optional_narrowed::<i64, u16>(&absent_kw, "missing").unwrap(),
+            optional_from_required(&absent_kw, "missing", extract_narrowed::<i64, u16>).unwrap(),
+        );
+        assert_eq!(
+            extract_optional_narrowed::<i64, u16>(&absent_kw, "missing").unwrap(),
+            None,
+        );
+
+        // (1) ABSENT, float axis — peer identity on the peer axis.
+        assert_eq!(
+            extract_optional_narrowed::<f64, f32>(&absent_kw, "missing").unwrap(),
+            optional_from_required(&absent_kw, "missing", extract_narrowed::<f64, f32>).unwrap(),
+        );
+
+        // (2) PRESENT, in range, int axis — both paths return
+        //     `Ok(Some(narrow))` wrapping the same value.
+        let int_ok_args = kwargs_of("(_ :port 8080)");
+        let int_ok_kw = parse_kwargs(&int_ok_args).unwrap();
+        assert_eq!(
+            extract_optional_narrowed::<i64, u16>(&int_ok_kw, "port").unwrap(),
+            optional_from_required(&int_ok_kw, "port", extract_narrowed::<i64, u16>).unwrap(),
+        );
+        assert_eq!(
+            extract_optional_narrowed::<i64, u16>(&int_ok_kw, "port").unwrap(),
+            Some(8080_u16),
+        );
+
+        // (2) PRESENT, in range, float axis — peer identity on the
+        //     peer axis.
+        let float_ok_args = kwargs_of("(_ :scale 1.0)");
+        let float_ok_kw = parse_kwargs(&float_ok_args).unwrap();
+        let via_wrapper = extract_optional_narrowed::<f64, f32>(&float_ok_kw, "scale").unwrap();
+        let via_primitive =
+            optional_from_required(&float_ok_kw, "scale", extract_narrowed::<f64, f32>).unwrap();
+        match (via_wrapper, via_primitive) {
+            (Some(a), Some(b)) => assert!((a - b).abs() < f32::EPSILON),
+            other => panic!("both must be Some(f32), got {other:?}"),
+        }
+
+        // (3) PRESENT, wrong shape, int axis — both paths surface the
+        //     SAME `LispError::TypeMismatch` variant with the SAME
+        //     axis-typed `ExpectedKwargShape::Int` label and the SAME
+        //     `KwargPath::Named` form.
+        let int_shape_args = kwargs_of(r#"(_ :port "hello")"#);
+        let int_shape_kw = parse_kwargs(&int_shape_args).unwrap();
+        let via_wrapper = extract_optional_narrowed::<i64, u16>(&int_shape_kw, "port")
+            .expect_err("string is not an int");
+        let via_primitive =
+            optional_from_required(&int_shape_kw, "port", extract_narrowed::<i64, u16>)
+                .expect_err("string is not an int");
+        match (&via_wrapper, &via_primitive) {
+            (
+                LispError::TypeMismatch {
+                    form: f1,
+                    expected: e1,
+                    got: g1,
+                },
+                LispError::TypeMismatch {
+                    form: f2,
+                    expected: e2,
+                    got: g2,
+                },
+            ) => {
+                assert_eq!(f1, f2);
+                assert_eq!(e1, e2);
+                assert_eq!(g1, g2);
+                assert_eq!(*e1, ExpectedKwargShape::Int);
+                assert_eq!(*g1, SexpShape::String);
+                assert_eq!(f1, &KwargPath::named("port"));
+            }
+            _ => panic!("both must be TypeMismatch, got {via_wrapper:?} vs {via_primitive:?}"),
+        }
+
+        // (3) PRESENT, wrong shape, float axis — peer identity on the
+        //     peer axis; `ExpectedKwargShape::Number` (the wider
+        //     numeric-union label the WideNumeric<f64> shape gate
+        //     emits).
+        let float_shape_args = kwargs_of(r#"(_ :scale "hello")"#);
+        let float_shape_kw = parse_kwargs(&float_shape_args).unwrap();
+        let via_wrapper = extract_optional_narrowed::<f64, f32>(&float_shape_kw, "scale")
+            .expect_err("string is not a float");
+        let via_primitive =
+            optional_from_required(&float_shape_kw, "scale", extract_narrowed::<f64, f32>)
+                .expect_err("string is not a float");
+        match (&via_wrapper, &via_primitive) {
+            (
+                LispError::TypeMismatch {
+                    form: f1,
+                    expected: e1,
+                    got: g1,
+                },
+                LispError::TypeMismatch {
+                    form: f2,
+                    expected: e2,
+                    got: g2,
+                },
+            ) => {
+                assert_eq!(f1, f2);
+                assert_eq!(e1, e2);
+                assert_eq!(g1, g2);
+                assert_eq!(*e1, ExpectedKwargShape::Number);
+            }
+            _ => panic!("both must be TypeMismatch, got {via_wrapper:?} vs {via_primitive:?}"),
+        }
+
+        // (4) PRESENT, out of range, int axis — canonical
+        //     `port 70000 → u16` case. Both paths surface the SAME
+        //     `LispError::KwargOutOfRange` variant with the SAME
+        //     `NumericWidth::U16` target and `NumericLiteral::Int(70_000)`
+        //     value.
+        let int_range_args = kwargs_of("(_ :port 70000)");
+        let int_range_kw = parse_kwargs(&int_range_args).unwrap();
+        let via_wrapper = extract_optional_narrowed::<i64, u16>(&int_range_kw, "port")
+            .expect_err("70000 overflows u16");
+        let via_primitive =
+            optional_from_required(&int_range_kw, "port", extract_narrowed::<i64, u16>)
+                .expect_err("70000 overflows u16");
+        match (&via_wrapper, &via_primitive) {
+            (
+                LispError::KwargOutOfRange {
+                    target: t1,
+                    value: v1,
+                    ..
+                },
+                LispError::KwargOutOfRange {
+                    target: t2,
+                    value: v2,
+                    ..
+                },
+            ) => {
+                assert_eq!(t1, t2);
+                assert_eq!(v1, v2);
+                assert_eq!(*t1, NumericWidth::U16);
+                assert_eq!(*v1, NumericLiteral::Int(70_000));
+            }
+            _ => panic!("both must be KwargOutOfRange, got {via_wrapper:?} vs {via_primitive:?}"),
+        }
+
+        // (4) PRESENT, out of range, float axis — peer identity on
+        //     the peer axis. `1.0e300 → f32` overflows to infinity.
+        let float_range_args = kwargs_of("(_ :scale 1.0e300)");
+        let float_range_kw = parse_kwargs(&float_range_args).unwrap();
+        let via_wrapper = extract_optional_narrowed::<f64, f32>(&float_range_kw, "scale")
+            .expect_err("1.0e300 overflows f32");
+        let via_primitive =
+            optional_from_required(&float_range_kw, "scale", extract_narrowed::<f64, f32>)
+                .expect_err("1.0e300 overflows f32");
+        match (&via_wrapper, &via_primitive) {
+            (
+                LispError::KwargOutOfRange {
+                    target: t1,
+                    value: v1,
+                    ..
+                },
+                LispError::KwargOutOfRange {
+                    target: t2,
+                    value: v2,
+                    ..
+                },
+            ) => {
+                assert_eq!(t1, t2);
+                assert_eq!(v1, v2);
+                assert_eq!(*t1, NumericWidth::F32);
+            }
+            _ => panic!("both must be KwargOutOfRange, got {via_wrapper:?} vs {via_primitive:?}"),
         }
     }
 
@@ -6864,11 +7142,13 @@ mod tests {
         format!("{err}")
     }
 
-    // ── optional_from_required — the primitive under the FIVE optional
+    // ── optional_from_required — the primitive under the SIX optional
     // peers (four list-family — `extract_optional_string_list` /
     // `extract_optional_bool_list` / `extract_optional_narrowed_list` /
-    // `extract_optional_vec_via_serde` — plus the scalar universal-serde
-    // peer `extract_optional_via_serde`) tests ─────────────────────────
+    // `extract_optional_vec_via_serde` — plus the two scalar-family
+    // peers `extract_optional_via_serde` on the universal-serde axis
+    // and `extract_optional_narrowed` on the numeric-narrowed axis)
+    // tests ────────────────────────────────────────────────────────────
     //
     // The primitive owns the "present-vs-absent bifurcation over an
     // absent-tolerant required list-family extractor" shape. The three

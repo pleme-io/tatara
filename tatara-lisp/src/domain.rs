@@ -1531,6 +1531,36 @@ impl<'a> AtomKwarg<'a> for bool {
     }
 }
 
+// Numeric-axis impls of the shared atom-family contract — the wide-int
+// (`i64`) and wide-float (`f64`) axes ride the SAME `SHAPE + project`
+// primitive pair the non-numeric atom axes (`&str`, `bool`) close.
+// Post-supertrait-lift these two impls carry the axis-typed
+// `ExpectedKwargShape` + per-atom projection the [`WideNumeric`] trait
+// used to name inline; the [`WideNumeric`] impls below then extend the
+// shared contract with the numeric-only `as_literal` method that maps a
+// wide value into its [`NumericLiteral`] carrier for the
+// `narrow_or_range_err` rejection primitive. The lift pins one owner
+// for the atom-family composition (`extract_atom(kw, key, SHAPE,
+// project)`) across BOTH the numeric and non-numeric axes: the
+// composition lives on [`AtomKwarg::extract_kwarg`] /
+// [`AtomKwarg::extract_optional_kwarg`] alone, no longer restated on
+// [`WideNumeric`].
+impl<'a> AtomKwarg<'a> for i64 {
+    const SHAPE: ExpectedKwargShape = ExpectedKwargShape::Int;
+
+    fn project(sexp: &'a Sexp) -> Option<Self> {
+        sexp.as_int()
+    }
+}
+
+impl<'a> AtomKwarg<'a> for f64 {
+    const SHAPE: ExpectedKwargShape = ExpectedKwargShape::Number;
+
+    fn project(sexp: &'a Sexp) -> Option<Self> {
+        sexp.as_float()
+    }
+}
+
 /// Required string kwarg — one-line delegate to `<&'a str as
 /// AtomKwarg<'a>>::extract_kwarg`, whose default composes
 /// `(<&'a str>::SHAPE, <&'a str>::project)` through [`extract_atom`].
@@ -1742,109 +1772,102 @@ impl NarrowNumeric<f64> for f32 {
 /// `Vec<T>` numeric variant, once the derive's `Kind::VecInt` /
 /// `Kind::VecFloat` arms exist) picks up the trait dispatch
 /// mechanically with no new per-site literal-constructor call.
-pub trait WideNumeric: Copy {
-    /// The axis's typed [`ExpectedKwargShape`] — the rejection label
-    /// the wide-axis kwarg gate quotes on a type mismatch, dispatched
-    /// on the wide type itself rather than through a per-site
-    /// hand-written [`ExpectedKwargShape`] constant. Post-lift the
-    /// pre-existing `extract_int` (`ExpectedKwargShape::Int`) and
-    /// `extract_float` (`ExpectedKwargShape::Number`) name the axis
-    /// exactly once through the trait dispatch: `<i64 as
-    /// WideNumeric>::SHAPE` IS `ExpectedKwargShape::Int`; `<f64 as
-    /// WideNumeric>::SHAPE` IS `ExpectedKwargShape::Number`. A
-    /// regression that swapped one axis's rejection label (an int
-    /// axis silently taking the `Number` shape and letting float
-    /// literals slide past on integer-typed fields) cannot survive
-    /// the trait dispatch — the associated const's type pins the
-    /// axis at rustc time.
-    const SHAPE: ExpectedKwargShape;
-
-    /// The axis's per-[`Sexp`] atom projection — the SAME
-    /// `Option<Self>` a hand-written [`extract_atom`] call would
-    /// pass as its `project` function, dispatched on the wide type
-    /// itself rather than through a per-site `Sexp::as_int` /
-    /// `Sexp::as_float` reference. Post-lift the two impls bind
-    /// `<i64 as WideNumeric>::as_wide` to [`Sexp::as_int`] and
-    /// `<f64 as WideNumeric>::as_wide` to [`Sexp::as_float`], and
-    /// the trait's default [`Self::extract_kwarg`] /
-    /// [`Self::extract_optional_kwarg`] compose `(Self::SHAPE,
-    /// Self::as_wide)` through the shared [`extract_atom`] /
-    /// [`extract_optional_atom`] atom-family skeletons. A regression
-    /// that swapped the axis's projection (an int axis silently
-    /// reading `Sexp::as_float`, so a Lisp `:port 8080.5` would
-    /// truncate through `f64 as i64` rather than fail the outer
-    /// `Int` gate) cannot survive the trait dispatch — the impl's
-    /// return type pins the axis at rustc time.
-    ///
-    /// This is the PER-ELEMENT primitive a future
-    /// `extract_narrowed_list<W, T>` binds directly, without going
-    /// through the kwarg extractor — the atom projection lifted out
-    /// of `extract_int` / `extract_float` so a per-item narrowing
-    /// walk (Vec of narrowed numerics, once the derive's
-    /// `Kind::VecInt` / `Kind::VecFloat` arms exist) can call
-    /// `W::as_wide(sexp).ok_or_else(|| type_err_at(key, idx,
-    /// W::SHAPE, sexp))` uniformly at both axes.
-    fn as_wide(sexp: &Sexp) -> Option<Self>;
-
+pub trait WideNumeric: Copy + for<'a> AtomKwarg<'a> {
     /// This wide value's typed lift into [`NumericLiteral`] — the
-    /// per-axis variant the operator-facing rejection quotes.
+    /// per-axis variant the operator-facing rejection quotes. This is
+    /// the ONE numeric-specific per-axis primitive that keeps
+    /// [`WideNumeric`] as an extension trait over the shared
+    /// [`AtomKwarg`] atom-family contract; every other per-axis
+    /// primitive ([`AtomKwarg::SHAPE`], [`AtomKwarg::project`], and
+    /// the composed [`AtomKwarg::extract_kwarg`] /
+    /// [`AtomKwarg::extract_optional_kwarg`] defaults) rides the
+    /// supertrait's contract, on the SAME footing the non-numeric
+    /// atom axes (`&str`, `bool`) already close.
     fn as_literal(self) -> NumericLiteral;
 
-    /// The wide-axis kwarg extractor — the SAME `extract_atom`-based
-    /// projection [`extract_int`] / [`extract_float`] name, dispatched
-    /// on the wide type itself rather than through a per-axis
-    /// `extract_XXX_narrowed` function's hand-written call. Post-lift
-    /// the four `extract_*_narrowed` extractors bind to
-    /// [`extract_narrowed`] / [`extract_optional_narrowed`] and the
-    /// axis identity rides ONE trait dispatch: `<i64 as WideNumeric>::
-    /// extract_kwarg` IS [`extract_int`]; `<f64 as WideNumeric>::
-    /// extract_kwarg` IS [`extract_float`]. A regression that silently
-    /// swapped the axis's wide extractor (an int-axis narrowed
-    /// extractor accidentally reading `extract_float`, widening the
-    /// rejection's `ExpectedKwargShape` from `Int` to `Number` and
-    /// letting integer-typed fields silently accept floats) cannot
-    /// survive the trait dispatch — the impl's return type pins the
-    /// axis at rustc time.
+    /// Axis-typed [`ExpectedKwargShape`] rejection label — one-line
+    /// delegate to the shared [`AtomKwarg`] supertrait's [`AtomKwarg::
+    /// SHAPE`] associated const, so a caller reaching for the wide
+    /// axis's label through the `<i64 as WideNumeric>::SHAPE` /
+    /// `<f64 as WideNumeric>::SHAPE` path lands on the SAME
+    /// axis-typed constant the shared atom-family contract already
+    /// owns. Provided as a default that hard-codes the equivalence to
+    /// the supertrait const; per-axis [`WideNumeric`] impls (`i64` /
+    /// `f64`) no longer restate SHAPE — the associated const lives on
+    /// the [`AtomKwarg`] impls that carry every atom axis's
+    /// per-axis rejection label.
+    const SHAPE: ExpectedKwargShape = <Self as AtomKwarg<'static>>::SHAPE;
+
+    /// Per-[`Sexp`] atom projection — one-line delegate to the
+    /// [`AtomKwarg`] supertrait's [`AtomKwarg::project`] method, so a
+    /// caller reaching for the wide axis's projection through the
+    /// `<i64 as WideNumeric>::as_wide` / `<f64 as WideNumeric>::
+    /// as_wide` path lands on the SAME per-atom `Option<Self>` the
+    /// shared atom-family contract already owns. Provided as a
+    /// default that hard-codes the equivalence to the supertrait
+    /// method; per-axis [`WideNumeric`] impls (`i64` / `f64`) no
+    /// longer restate the projection — it lives on the [`AtomKwarg`]
+    /// impls that carry every atom axis's per-atom projection.
     ///
-    /// Provided as a trait default composing `(Self::SHAPE,
-    /// Self::as_wide)` through the shared [`extract_atom`]
-    /// skeleton; per-axis impls no longer override this — the
-    /// axis-typed rejection label and per-atom projection ARE the
-    /// two per-axis primitives, and the extractor is their
-    /// mechanical composition.
-    fn extract_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Self> {
-        extract_atom(kw, key, Self::SHAPE, Self::as_wide)
+    /// This is the PER-ELEMENT primitive
+    /// [`extract_narrowed_list<W, T>`] binds directly, without going
+    /// through the kwarg extractor — the atom projection lifted out
+    /// of `extract_int` / `extract_float` so a per-item narrowing
+    /// walk (Vec of narrowed numerics) can call `W::as_wide(sexp)
+    /// .ok_or_else(|| type_err_at(key, idx, W::SHAPE, sexp))`
+    /// uniformly at both axes, through the SAME supertrait dispatch
+    /// the scalar peer takes.
+    fn as_wide(sexp: &Sexp) -> Option<Self> {
+        <Self as AtomKwarg<'_>>::project(sexp)
     }
 
-    /// The `Option` sibling of [`WideNumeric::extract_kwarg`] — same
-    /// per-axis dispatch shape, absent kwarg returns `Ok(None)`.
-    /// Provided as a trait default composing `(Self::SHAPE,
-    /// Self::as_wide)` through the shared [`extract_optional_atom`]
-    /// skeleton on the same footing as [`Self::extract_kwarg`].
+    /// Wide-axis kwarg extractor — one-line delegate to the
+    /// [`AtomKwarg`] supertrait's [`AtomKwarg::extract_kwarg`]
+    /// method. Pre-supertrait-lift this method restated the
+    /// `extract_atom(kw, key, Self::SHAPE, Self::as_wide)`
+    /// composition inline, duplicating the atom-family skeleton the
+    /// non-numeric [`AtomKwarg`] impls (`&str`, `bool`) already
+    /// carry. Post-supertrait-lift the composition lives on ONE
+    /// owner — [`AtomKwarg::extract_kwarg`] — and this method is a
+    /// per-axis convenience that keeps `<i64 as WideNumeric>::
+    /// extract_kwarg` / `<f64 as WideNumeric>::extract_kwarg` as
+    /// stable authoring surfaces while routing every caller through
+    /// the SAME shared composition the atom-family axes bind.
+    fn extract_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Self> {
+        <Self as AtomKwarg<'_>>::extract_kwarg(kw, key)
+    }
+
+    /// The `Option` sibling of [`WideNumeric::extract_kwarg`] —
+    /// one-line delegate to the [`AtomKwarg`] supertrait's
+    /// [`AtomKwarg::extract_optional_kwarg`] method on the same
+    /// footing as [`Self::extract_kwarg`]. Pre-supertrait-lift this
+    /// restated the `extract_optional_atom(kw, key, Self::SHAPE,
+    /// Self::as_wide)` composition; post-lift the composition lives
+    /// on ONE owner — [`AtomKwarg::extract_optional_kwarg`] — and
+    /// this method routes through the SAME shared composition the
+    /// atom-family axes bind.
     fn extract_optional_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Option<Self>> {
-        extract_optional_atom(kw, key, Self::SHAPE, Self::as_wide)
+        <Self as AtomKwarg<'_>>::extract_optional_kwarg(kw, key)
     }
 }
 
+// Numeric-axis [`WideNumeric`] impls — post-supertrait-lift these
+// impls carry ONLY the numeric-specific [`as_literal`] method; the
+// atom-family per-axis primitives (SHAPE + project + the composed
+// extract_kwarg / extract_optional_kwarg defaults) ride the
+// [`AtomKwarg`] supertrait's impls above, on the SAME footing the
+// non-numeric atom axes (`&str`, `bool`) already close. A future
+// third wide axis lands as ONE `impl<'a> AtomKwarg<'a> for <NewWide>`
+// closing the atom-family shape + projection + composed extractor
+// contract, plus ONE `impl WideNumeric for <NewWide>` adding the
+// numeric-only wide-into-literal lift.
 impl WideNumeric for i64 {
-    const SHAPE: ExpectedKwargShape = ExpectedKwargShape::Int;
-
-    fn as_wide(sexp: &Sexp) -> Option<Self> {
-        sexp.as_int()
-    }
-
     fn as_literal(self) -> NumericLiteral {
         NumericLiteral::Int(self)
     }
 }
 
 impl WideNumeric for f64 {
-    const SHAPE: ExpectedKwargShape = ExpectedKwargShape::Number;
-
-    fn as_wide(sexp: &Sexp) -> Option<Self> {
-        sexp.as_float()
-    }
-
     fn as_literal(self) -> NumericLiteral {
         NumericLiteral::Float(self)
     }
@@ -1904,7 +1927,7 @@ where
     W: WideNumeric,
     T: NarrowNumeric<W>,
 {
-    narrow_or_range_err(key, W::extract_kwarg(kw, key)?)
+    narrow_or_range_err(key, <W as WideNumeric>::extract_kwarg(kw, key)?)
 }
 
 /// `Option` sibling of [`extract_narrowed`]. An ABSENT kwarg stays
@@ -1916,7 +1939,7 @@ where
     W: WideNumeric,
     T: NarrowNumeric<W>,
 {
-    let Some(wide) = W::extract_optional_kwarg(kw, key)? else {
+    let Some(wide) = <W as WideNumeric>::extract_optional_kwarg(kw, key)? else {
         return Ok(None);
     };
     narrow_or_range_err(key, wide).map(Some)
@@ -2039,7 +2062,8 @@ where
     T: NarrowNumeric<W>,
 {
     extract_list(kw, key, ExpectedKwargShape::List, |idx, s| {
-        let wide = W::as_wide(s).ok_or_else(|| type_err_at(key, idx, W::SHAPE, s))?;
+        let wide =
+            W::as_wide(s).ok_or_else(|| type_err_at(key, idx, <W as WideNumeric>::SHAPE, s))?;
         narrow_or_range_err_at::<W, T>(key, idx, wide)
     })
 }
@@ -3448,6 +3472,154 @@ mod tests {
             &trait_bool_missing,
             LispError::MissingKwarg { .. },
         ));
+    }
+
+    /// [`WideNumeric`] is a `for<'a> AtomKwarg<'a>` supertrait
+    /// extension: post-lift the atom-family per-axis primitives
+    /// (`SHAPE` + `project` + the composed `extract_kwarg` /
+    /// `extract_optional_kwarg` defaults) live on the shared
+    /// [`AtomKwarg`] contract, and [`WideNumeric`] adds ONE numeric-
+    /// specific per-axis primitive on top: [`WideNumeric::as_literal`],
+    /// the wide-into-`NumericLiteral` lift the
+    /// [`narrow_or_range_err`] rejection primitive quotes. Every
+    /// other per-axis primitive [`WideNumeric`] exposes (`SHAPE`,
+    /// `as_wide`, `extract_kwarg`, `extract_optional_kwarg`) is now
+    /// a one-line delegate to the [`AtomKwarg`] supertrait's own
+    /// contract, so a caller reaching for either the numeric-axis
+    /// (`<i64>`, `<f64>`) or the non-numeric-axis (`<&str>`,
+    /// `<bool>`) path lands on the SAME shared atom-family
+    /// composition — the `extract_atom(kw, key, SHAPE, project)`
+    /// skeleton lives on ONE owner rather than restated on both
+    /// traits.
+    ///
+    /// Pin the delegate identity at the four supertrait-owned
+    /// surfaces per numeric axis so a regression that silently
+    /// unmoored [`WideNumeric`]'s delegate from the supertrait's
+    /// composition (e.g. reintroducing a `WideNumeric::extract_kwarg`
+    /// body that inlined `extract_atom(kw, key, Self::SHAPE,
+    /// Self::as_wide)` alongside the [`AtomKwarg::extract_kwarg`]
+    /// body already carrying the composition) surfaces here as a
+    /// byte-identity mismatch between the two routes:
+    ///
+    /// (1) `SHAPE` per axis — `<i64 as WideNumeric>::SHAPE` IS
+    ///     `<i64 as AtomKwarg<'_>>::SHAPE`, and same for `<f64>`.
+    /// (2) `as_wide` per axis — `<i64 as WideNumeric>::as_wide(s)`
+    ///     IS `<i64 as AtomKwarg<'_>>::project(s)` at every atom
+    ///     shape (accept own axis, reject the other atoms with
+    ///     `None`), and same for `<f64>`.
+    /// (3) `extract_kwarg` per axis — verdicts on TOTAL /
+    ///     TYPE-MISMATCH (with the axis-typed `ExpectedKwargShape`)
+    ///     / ABSENT match the supertrait's [`AtomKwarg::
+    ///     extract_kwarg`] byte-for-byte at both axes.
+    /// (4) `extract_optional_kwarg` per axis — same delegate
+    ///     shape; an absent kwarg short-circuits to `Ok(None)`
+    ///     through both routes.
+    #[test]
+    fn wide_numeric_delegates_every_atom_family_primitive_to_the_atom_kwarg_supertrait() {
+        // (1) SHAPE per axis — the supertrait delegate matches the
+        //     [`AtomKwarg`] impl's associated const byte-for-byte at
+        //     both wide axes.
+        assert_eq!(<i64 as WideNumeric>::SHAPE, <i64 as AtomKwarg<'_>>::SHAPE,);
+        assert_eq!(<i64 as WideNumeric>::SHAPE, ExpectedKwargShape::Int);
+        assert_eq!(<f64 as WideNumeric>::SHAPE, <f64 as AtomKwarg<'_>>::SHAPE,);
+        assert_eq!(<f64 as WideNumeric>::SHAPE, ExpectedKwargShape::Number);
+
+        // (2) as_wide per axis — the supertrait delegate matches the
+        //     [`AtomKwarg::project`] method at every atom shape (own
+        //     axis accepted; other atoms rejected with `None`).
+        let int_atom = Sexp::Atom(Atom::Int(8080));
+        let float_atom = Sexp::Atom(Atom::Float(1.5));
+        let bool_atom = Sexp::Atom(Atom::Bool(false));
+        let string_atom = Sexp::Atom(Atom::Str("hi".to_string()));
+
+        for sexp in [&int_atom, &float_atom, &bool_atom, &string_atom] {
+            assert_eq!(
+                <i64 as WideNumeric>::as_wide(sexp),
+                <i64 as AtomKwarg<'_>>::project(sexp),
+                "int-axis as_wide delegate diverged from AtomKwarg::project",
+            );
+            // Float delegate identity — NaN would not compare equal
+            // under `Some(_) == Some(_)`, but no test atom here is
+            // NaN, so `Option<f64>` equality holds bit-for-bit.
+            assert_eq!(
+                <f64 as WideNumeric>::as_wide(sexp),
+                <f64 as AtomKwarg<'_>>::project(sexp),
+                "float-axis as_wide delegate diverged from AtomKwarg::project",
+            );
+        }
+
+        // (3) extract_kwarg per axis — TOTAL, TYPE-MISMATCH,
+        //     axis-typed rejection label all match the supertrait
+        //     dispatch byte-for-byte.
+        let int_args = kwargs_of("(_ :port 8080)");
+        let int_kw = parse_kwargs(&int_args).unwrap();
+        assert_eq!(
+            <i64 as WideNumeric>::extract_kwarg(&int_kw, "port").unwrap(),
+            <i64 as AtomKwarg<'_>>::extract_kwarg(&int_kw, "port").unwrap(),
+        );
+
+        let float_args = kwargs_of("(_ :scale 1.5)");
+        let float_kw = parse_kwargs(&float_args).unwrap();
+        let via_wide = <f64 as WideNumeric>::extract_kwarg(&float_kw, "scale").unwrap();
+        let via_atom = <f64 as AtomKwarg<'_>>::extract_kwarg(&float_kw, "scale").unwrap();
+        assert!((via_wide - via_atom).abs() < f64::EPSILON);
+
+        // TYPE-MISMATCH — both routes emit the SAME axis-typed
+        // `ExpectedKwargShape` (`Int` on `<i64>`, `Number` on
+        // `<f64>`). A regression that unmoored the delegate would
+        // let one route quote a different axis label than the other.
+        let bool_args = kwargs_of("(_ :n #t)");
+        let bool_kw = parse_kwargs(&bool_args).unwrap();
+        let int_wide_err = <i64 as WideNumeric>::extract_kwarg(&bool_kw, "n").unwrap_err();
+        let int_atom_err = <i64 as AtomKwarg<'_>>::extract_kwarg(&bool_kw, "n").unwrap_err();
+        let (
+            LispError::TypeMismatch {
+                expected: wide_int_exp,
+                ..
+            },
+            LispError::TypeMismatch {
+                expected: atom_int_exp,
+                ..
+            },
+        ) = (&int_wide_err, &int_atom_err)
+        else {
+            panic!("expected TypeMismatch on both routes, got {int_wide_err:?} / {int_atom_err:?}");
+        };
+        assert_eq!(wide_int_exp, atom_int_exp);
+        assert_eq!(*wide_int_exp, ExpectedKwargShape::Int);
+
+        let float_wide_err = <f64 as WideNumeric>::extract_kwarg(&bool_kw, "n").unwrap_err();
+        let float_atom_err = <f64 as AtomKwarg<'_>>::extract_kwarg(&bool_kw, "n").unwrap_err();
+        let (
+            LispError::TypeMismatch {
+                expected: wide_float_exp,
+                ..
+            },
+            LispError::TypeMismatch {
+                expected: atom_float_exp,
+                ..
+            },
+        ) = (&float_wide_err, &float_atom_err)
+        else {
+            panic!(
+                "expected TypeMismatch on both routes, got {float_wide_err:?} / {float_atom_err:?}",
+            );
+        };
+        assert_eq!(wide_float_exp, atom_float_exp);
+        assert_eq!(*wide_float_exp, ExpectedKwargShape::Number);
+
+        // (4) extract_optional_kwarg per axis — ABSENT short-
+        //     circuits to `Ok(None)` through both routes.
+        let absent_args = kwargs_of("(_ :other 1)");
+        let absent_kw = parse_kwargs(&absent_args).unwrap();
+        assert_eq!(
+            <i64 as WideNumeric>::extract_optional_kwarg(&absent_kw, "missing").unwrap(),
+            <i64 as AtomKwarg<'_>>::extract_optional_kwarg(&absent_kw, "missing").unwrap(),
+        );
+        assert_eq!(
+            <f64 as WideNumeric>::extract_optional_kwarg(&absent_kw, "missing").unwrap(),
+            <f64 as AtomKwarg<'_>>::extract_optional_kwarg(&absent_kw, "missing").unwrap(),
+        );
     }
 
     /// `extract_narrowed<W, T>` / `extract_optional_narrowed<W, T>`

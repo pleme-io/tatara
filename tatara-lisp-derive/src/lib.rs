@@ -1112,6 +1112,48 @@ fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2
         Kind::VecString => quote! {
             ::tatara_lisp::domain::extract_string_list(&kw, #key)?
         },
+        // ── Vec<T> numeric-narrowed arms ─────────────────────────
+        //
+        // Pre-lift `Vec<u16>` / `Vec<i32>` / `Vec<f32>` / etc. all
+        // fell through `classify_vec`'s catch-all to
+        // `Kind::VecDeserialize` — the universal `sexp_to_json` +
+        // `serde_json::from_value` bridge. On a per-item
+        // out-of-range value inside `:ports (list 80 70000)` the
+        // rejection surfaced as `LispError::KwargDeserialize
+        // { message: "invalid value: integer 70000, expected u16" }`
+        // — a substring the operator had to parse, structurally
+        // distinct from the typed
+        // `LispError::KwargOutOfRange { target: U16, value:
+        // Int(70000), .. }` its SCALAR peer (`port: u16`)
+        // already emits. The two gates on the same numeric width
+        // spoke two different rejection vocabularies.
+        //
+        // Post-lift the two arms route through the axis-typed
+        // `extract_int_list_narrowed::<T>` /
+        // `extract_float_list_narrowed::<T>` primitives in
+        // `tatara_lisp::domain`. The rejection shape on a per-item
+        // narrowing failure now matches the scalar peer byte-for-
+        // byte modulo the `KwargPath::Item { key, idx }` →
+        // `KwargPath::Named(key)` per-path shift, and the width
+        // identity rides the TURBOFISH exactly once at emit — so
+        // the diagnostic's `target` cannot drift from the
+        // element's Rust type. Same discipline the scalar
+        // `Kind::Int(_)` / `Kind::Float(_)` arms above already
+        // give: this derive contains no `as` cast on any numeric
+        // path (scalar or list) and never names the width by
+        // string literal.
+        Kind::VecInt(rust_ty) => {
+            let narrowed: TokenStream2 = rust_ty.parse().unwrap();
+            quote! {
+                ::tatara_lisp::domain::extract_int_list_narrowed::<#narrowed>(&kw, #key)?
+            }
+        }
+        Kind::VecFloat(rust_ty) => {
+            let narrowed: TokenStream2 = rust_ty.parse().unwrap();
+            quote! {
+                ::tatara_lisp::domain::extract_float_list_narrowed::<#narrowed>(&kw, #key)?
+            }
+        }
         // ── The four numeric arms: NARROWED, never `as`-cast ──
         //
         // These four used to emit the reader's wide value followed by a
@@ -1200,6 +1242,24 @@ enum Kind {
     OptionalInt(&'static str),
     Float(&'static str),
     OptionalFloat(&'static str),
+    /// `Vec<T>` where `T` is one of the supported integer widths
+    /// (`i8` / `i16` / `i32` / `i64` / `u8` / `u16` / `u32` /
+    /// `u64` / `usize` / `isize`). Carries the width literal the
+    /// scalar `Int(_)` arm threads through the emitted extractor's
+    /// TURBOFISH — post-lift the width identity rides
+    /// `extract_int_list_narrowed::<T>` in ONE place at emit, so
+    /// the per-item rejection carries the typed `NumericWidth`
+    /// identity ([`crate::error::LispError::KwargOutOfRange.target`])
+    /// its scalar peer already emits.
+    VecInt(&'static str),
+    /// Sibling of [`Self::VecInt`] on the float axis — `Vec<f32>` /
+    /// `Vec<f64>`. Routes through `extract_float_list_narrowed::<T>`
+    /// so a per-item lossy-to-inf overflow on the float axis
+    /// (`(list 1.0 1.0e300)` into a `Vec<f32>` field) rejects as
+    /// the typed `NumericWidth::F32` / `NumericLiteral::Float(_)`
+    /// pair the scalar peer emits, not the mystery serde
+    /// substring the universal-Deserialize fallthrough would.
+    VecFloat(&'static str),
     Bool,
     OptionalBool,
     /// Fall-through: any type implementing `serde::Deserialize`.
@@ -1255,6 +1315,8 @@ fn classify_vec(last: &syn::PathSegment) -> Kind {
     };
     match classify(inner) {
         Kind::String => Kind::VecString,
+        Kind::Int(t) => Kind::VecInt(t),
+        Kind::Float(t) => Kind::VecFloat(t),
         _ => Kind::VecDeserialize,
     }
 }
@@ -1674,24 +1736,105 @@ mod classify_tests {
     }
 
     #[test]
-    fn vec_of_non_string_classifies_as_kind_vec_deserialize() {
-        // `Vec<T>` where `T` is NOT `String` routes through
-        // `classify_vec`'s catch-all arm to `Kind::VecDeserialize` —
-        // even for supported primitives (`Vec<i64>`, `Vec<bool>`,
-        // `Vec<f64>`). This is a deliberate asymmetry with
-        // `classify_option`: the `Option` recursor sharpens per-primitive
-        // but the `Vec` recursor sharpens only for `String`. Pin the
-        // asymmetry — every non-`String` element type routes through
-        // the serde bridge (which decodes each element via the
-        // sexp_to_json round-trip) rather than through a hypothetical
-        // `Kind::VecInt` / `Kind::VecFloat` primitive-list extractor.
-        // A refactor that broadened `classify_vec`'s per-primitive
-        // sharpening without a matching Kind variant + extractor pair
-        // would produce a shape mismatch at emit time.
+    fn vec_of_supported_integer_width_classifies_as_kind_vec_int_with_matching_type_literal() {
+        // `Vec<T>` where `T` is one of the ten supported integer widths
+        // routes through `classify_vec`'s per-primitive sharpening arm
+        // to `Kind::VecInt(<literal>)` — the payload IS the turbofish
+        // the emitted `extract_int_list_narrowed::<T>` narrows each
+        // per-item wide `i64` into. Pre-lift these fell through to
+        // `Kind::VecDeserialize` (the universal `sexp_to_json` + serde
+        // bridge), so a per-item out-of-range value on `:ports (list
+        // 80 70000)` into a `Vec<u16>` field surfaced as a
+        // `KwargDeserialize { message: "invalid value: integer ..." }`
+        // substring rather than as the typed
+        // `KwargOutOfRange { target: U16, value: Int(70_000), .. }`
+        // its SCALAR peer (`port: u16`) already emits; post-lift the
+        // two gates on the same width speak the same typed rejection
+        // vocabulary.
+        //
+        // Sweeps the same ten widths the scalar `Kind::Int(_)` arm
+        // pins so a regression that (a) dropped ONE width from
+        // `classify_vec`'s per-primitive routing (e.g. accidentally
+        // leaving `Vec<u16>` on the fall-through), (b) mis-labeled
+        // ONE width's payload, or (c) collapsed the payload to a
+        // shared literal would surface here rather than as silent
+        // routing drift at every downstream consumer with a
+        // per-width numeric-vec field.
+        assert!(matches!(classify(&parse_ty("Vec<i8>")), Kind::VecInt("i8")));
+        assert!(matches!(
+            classify(&parse_ty("Vec<i16>")),
+            Kind::VecInt("i16")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Vec<i32>")),
+            Kind::VecInt("i32")
+        ));
         assert!(matches!(
             classify(&parse_ty("Vec<i64>")),
-            Kind::VecDeserialize
+            Kind::VecInt("i64")
         ));
+        assert!(matches!(classify(&parse_ty("Vec<u8>")), Kind::VecInt("u8")));
+        assert!(matches!(
+            classify(&parse_ty("Vec<u16>")),
+            Kind::VecInt("u16")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Vec<u32>")),
+            Kind::VecInt("u32")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Vec<u64>")),
+            Kind::VecInt("u64")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Vec<usize>")),
+            Kind::VecInt("usize")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Vec<isize>")),
+            Kind::VecInt("isize")
+        ));
+    }
+
+    #[test]
+    fn vec_of_supported_float_width_classifies_as_kind_vec_float_with_matching_type_literal() {
+        // Float-axis sibling of
+        // `vec_of_supported_integer_width_classifies_as_kind_vec_int_with_matching_type_literal`
+        // — `Vec<f32>` / `Vec<f64>` each route through
+        // `Kind::VecFloat(<literal>)`, threading the width name
+        // through the payload for the emitted narrowing turbofish
+        // on `extract_float_list_narrowed`'s per-item `f64` return.
+        // Pin per-width so a regression that dropped `Vec<f32>`
+        // (folding it back into `Kind::VecDeserialize`) would
+        // silently rewire every `Vec<f32>` field back to
+        // `extract_vec_via_serde` — the operator would see NO
+        // diagnostic drift at the derive site but the downstream
+        // per-item rejection would revert to the mystery serde
+        // substring shape.
+        assert!(matches!(
+            classify(&parse_ty("Vec<f64>")),
+            Kind::VecFloat("f64")
+        ));
+        assert!(matches!(
+            classify(&parse_ty("Vec<f32>")),
+            Kind::VecFloat("f32")
+        ));
+    }
+
+    #[test]
+    fn vec_of_non_narrowable_type_falls_through_to_kind_vec_deserialize() {
+        // The three non-primitive `Vec<T>` shapes still route through
+        // `classify_vec`'s catch-all arm to `Kind::VecDeserialize` —
+        // the sexp_to_json + `serde_json::from_value` bridge that
+        // unlocks nested-struct vecs, foreign-enum vecs, and nested
+        // vecs. `Vec<bool>` stays here too, since the derive has no
+        // per-item narrowed extractor for the bool axis (a bool has
+        // no "wider" `Sexp::as_bool` return the way `Sexp::as_int`
+        // narrows into u16 / i32 / etc. — the atom projection IS
+        // already the field type, so the `Kind::VecDeserialize`
+        // bridge's per-item shape gate suffices). Pin the residual
+        // fall-through: a regression that folded `Vec<MonitorSpec>`
+        // or `Vec<Vec<String>>` into a narrowed arm would fail here.
         assert!(matches!(
             classify(&parse_ty("Vec<bool>")),
             Kind::VecDeserialize

@@ -1890,6 +1890,26 @@ impl<'a> AtomKwarg<'a> for &'a str {
 impl<'a> AtomKwarg<'a> for bool {
     const SHAPE: ExpectedKwargShape = ExpectedKwargShape::Bool;
 
+    /// Bool-axis override of the [`AtomKwarg::LIST_SHAPE`] trait
+    /// default — the element-typed refinement
+    /// [`ExpectedKwargShape::ListOfBools`] that [`extract_bool_list`]
+    /// emits at its outer-shape gate through the per-axis trait
+    /// dispatch. Sibling to the `<&'a str>` axis's `ListOfStrings`
+    /// override on the atom-family non-numeric list-of-atoms
+    /// element-typed refinement surface; the two overrides collapse
+    /// the pre-lift ambiguous `expected list, got X` diagnostic into
+    /// the axis-typed `expected list of bools, got X` /
+    /// `expected list of strings, got X` refinements at BOTH
+    /// non-numeric atom-family list-family sites through ONE per-axis
+    /// trait-const dispatch each. The remaining wide-numeric axes
+    /// (`<i64>` / `<f64>`) still inherit the trait default
+    /// [`ExpectedKwargShape::List`]; their per-axis `ListOfInts` /
+    /// `ListOfNumbers` refinements land as ONE new override per axis
+    /// alongside this one, with no per-extractor edit needed — the
+    /// [`extract_narrowed_list<W, T>`] site already routes through
+    /// the trait dispatch.
+    const LIST_SHAPE: ExpectedKwargShape = ExpectedKwargShape::ListOfBools;
+
     fn project(sexp: &'a Sexp) -> Option<Self> {
         sexp.as_bool()
     }
@@ -2813,7 +2833,8 @@ pub fn extract_optional_bool(kw: &Kwargs<'_>, key: &str) -> Result<Option<bool>>
 /// [`extract_bool`] on the per-item atom-family shape gate. Composes
 /// [`extract_list`]'s outer-shape skeleton (absent kwarg →
 /// `Ok(Vec::new())`, present-but-not-a-list →
-/// `type_err(key, ExpectedKwargShape::List, v)`) with
+/// `type_err(key, ExpectedKwargShape::ListOfBools, v)` via the
+/// `<bool>::LIST_SHAPE` per-axis trait-const override) with
 /// [`AtomKwarg::project_at`]'s per-item shape gate on the `bool` axis
 /// — a per-item non-bool element inside `:flags (list #t 5 #f)`
 /// rejects as `LispError::TypeMismatch { form: Item { key: "flags",
@@ -2835,16 +2856,21 @@ pub fn extract_optional_bool(kw: &Kwargs<'_>, key: &str) -> Result<Option<bool>>
 /// per-path shift, and the two gates share ONE rejection vocabulary.
 ///
 /// The outer-shape label routes through the [`AtomKwarg::LIST_SHAPE`]
-/// trait const on the `<bool>` axis, which inherits the trait
-/// default [`ExpectedKwargShape::List`] today — the same label the
-/// numeric-list peers [`extract_narrowed_list`] +
-/// [`extract_vec_via_serde`] emit. A future run that adds a
-/// `<bool>::LIST_SHAPE = ListOfBools` override (paired with a
-/// `ListOfBools` variant on [`crate::error::ExpectedKwargShape`])
-/// sharpens the label through THIS extractor mechanically with no
-/// per-extractor edit, in lockstep with the sibling
-/// `<&str>::LIST_SHAPE = ListOfStrings` override that already lifts
-/// [`extract_string_list`]'s outer-shape gate.
+/// trait const on the `<bool>` axis, which post-lift carries the
+/// axis-typed override [`ExpectedKwargShape::ListOfBools`] — the
+/// element-typed refinement paired with the sibling
+/// `<&str>::LIST_SHAPE = ListOfStrings` override on the atom-family
+/// non-numeric list-of-atoms surface. The two overrides collapse the
+/// pre-lift ambiguous `expected list, got X` bytes into the axis-
+/// typed `expected list of bools, got X` / `expected list of strings,
+/// got X` refinements at BOTH non-numeric atom-family list-family
+/// sites through ONE per-axis trait-const dispatch each. The
+/// wide-numeric peers [`extract_narrowed_list`] still inherit the
+/// trait default [`ExpectedKwargShape::List`] pending their
+/// per-axis `ListOfInts` / `ListOfNumbers` refinements, which land
+/// as ONE new override per axis alongside these two with no per-
+/// extractor edit.
+///
 /// The per-item shape gate keeps `<bool>::SHAPE`'s axis-typed
 /// rejection label ([`ExpectedKwargShape::Bool`]) — the same label
 /// the scalar-kwarg peer's shape gate emits — so a per-item shape
@@ -2893,8 +2919,10 @@ pub fn extract_bool_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<bool>> {
 ///
 /// A present-but-non-list kwarg (`:flags #t`) rejects with the SAME
 /// typed [`LispError::TypeMismatch`] variant the required peer
-/// [`extract_bool_list`] emits (`expected list, got bool`); a per-
-/// item non-bool element inside a present list
+/// [`extract_bool_list`] emits (`expected list of bools, got bool` —
+/// via the `<bool>::LIST_SHAPE = ListOfBools` per-axis trait-const
+/// override sharpening the pre-lift ambiguous `expected list, got
+/// bool` bytes); a per-item non-bool element inside a present list
 /// (`:flags (list #t "yes" #f)`) rejects with the SAME
 /// [`LispError::TypeMismatch { form: Item { key, idx }, expected:
 /// Bool, got: String }`] variant its per-item peer emits through
@@ -5028,7 +5056,7 @@ mod tests {
         );
         assert_eq!(
             <bool as AtomKwarg<'_>>::LIST_SHAPE,
-            ExpectedKwargShape::List,
+            ExpectedKwargShape::ListOfBools,
         );
         assert_eq!(<i64 as AtomKwarg<'_>>::LIST_SHAPE, ExpectedKwargShape::List,);
         assert_eq!(<f64 as AtomKwarg<'_>>::LIST_SHAPE, ExpectedKwargShape::List,);
@@ -5054,10 +5082,12 @@ mod tests {
 
         // (3) Bool-axis extractor identity — extract_bool_list's
         //     outer-shape rejection at a scalar kwarg (`:flags #t`)
-        //     carries the trait default `List` today; a future
-        //     `<bool>::LIST_SHAPE = ListOfBools` override sharpens
-        //     the label through this same extractor with no
-        //     per-extractor edit.
+        //     carries the axis-typed refinement `ListOfBools` through
+        //     the `<bool>::LIST_SHAPE` override, sibling to the
+        //     `<&str>::LIST_SHAPE = ListOfStrings` override at case
+        //     (2) — both non-numeric atom-family list-family axes
+        //     now surface the axis-typed refinement label rather
+        //     than the ambiguous trait default `List`.
         let bool_args = kwargs_of("(_ :flags #t)");
         let bool_kw = parse_kwargs(&bool_args).unwrap();
         let bool_err = extract_bool_list(&bool_kw, "flags").unwrap_err();
@@ -5065,7 +5095,7 @@ mod tests {
             LispError::TypeMismatch { form, expected, .. } => {
                 assert_eq!(form, KwargPath::named("flags"));
                 assert_eq!(expected, <bool as AtomKwarg<'_>>::LIST_SHAPE);
-                assert_eq!(expected, ExpectedKwargShape::List);
+                assert_eq!(expected, ExpectedKwargShape::ListOfBools);
             }
             other => panic!("expected TypeMismatch, got {other:?}"),
         }
@@ -6558,15 +6588,20 @@ mod tests {
     #[test]
     fn optional_vec_bool_field_rejects_present_scalar_with_typed_outer_shape() {
         // A PRESENT non-list kwarg (`:flags #t`) rejects with the
-        // SAME `expected list` outer-shape diagnostic the required
-        // peer `extract_bool_list` emits — the present-vs-absent
-        // bifurcation happens BEFORE the required peer's outer gate,
-        // so the outer-shape rejection variant is byte-identical to
-        // the required peer's. The outer label is
-        // `ExpectedKwargShape::List` (not a hypothetical
-        // `ListOfBools` refinement) — the seven-variant
-        // `ExpectedKwargShape` closed set stays at its current
-        // shape, matching the required peer's outer-gate posture.
+        // SAME axis-typed `expected list of bools` outer-shape
+        // diagnostic the required peer `extract_bool_list` emits
+        // through its `<bool>::LIST_SHAPE` per-axis trait-const
+        // override — the present-vs-absent bifurcation happens
+        // BEFORE the required peer's outer gate, so the outer-shape
+        // rejection variant is byte-identical to the required peer's.
+        // The outer label is [`ExpectedKwargShape::ListOfBools`] —
+        // the element-typed refinement paired with the sibling
+        // [`ExpectedKwargShape::ListOfStrings`] on the atom-family
+        // non-numeric list-of-atoms surface; the two overrides
+        // together sharpen the outer diagnostic at BOTH non-numeric
+        // atom-family list-family sites past the pre-lift ambiguous
+        // `expected list, got bool` bytes into the axis-typed
+        // `expected list of bools, got bool`.
         let forms = read(r"(defoptvecflags :flags #t)").expect("reads");
         let err = OptVecFlagsSpec::compile_from_sexp(&forms[0])
             .expect_err("a scalar bool is not a list of bools and must not parse");
@@ -6579,8 +6614,12 @@ mod tests {
             panic!("expected TypeMismatch (outer atom-family gate), got {err:?}");
         };
         assert_eq!(form, &KwargPath::named("flags"));
-        assert_eq!(*expected, ExpectedKwargShape::List);
+        assert_eq!(*expected, ExpectedKwargShape::ListOfBools);
         assert_eq!(*got, SexpShape::Bool);
+        assert_eq!(
+            err.to_string(),
+            "compile error in :flags: expected list of bools, got bool",
+        );
     }
 
     /// Optional-vec-numeric derive fixture — closes the present-vs-
@@ -8167,14 +8206,36 @@ mod tests {
     #[test]
     fn extract_bool_list_type_err_on_scalar_names_got_bool() {
         // `:flags #t` — list-typed kwarg given a scalar. The outer-
-        // shape gate rejects with `ExpectedKwargShape::List` (the same
-        // label the numeric-list peer `extract_narrowed_list` emits),
-        // and names the actual outer shape (`bool` in this case).
+        // shape gate rejects with the axis-typed refinement
+        // `ExpectedKwargShape::ListOfBools` (via the
+        // `<bool>::LIST_SHAPE` per-axis trait-const override — sibling
+        // to the `<&str>::LIST_SHAPE = ListOfStrings` override the
+        // string-axis peer `extract_string_list` binds), and names
+        // the actual outer shape (`bool` in this case). The full
+        // rendered diagnostic reads
+        // `expected list of bools, got bool` — sharper than the
+        // pre-lift ambiguous `expected list, got bool` bytes the
+        // wide-numeric peers `extract_narrowed_list` still emit
+        // pending their per-axis refinements.
         let args = kwargs_of("(_ :flags #t)");
         let kw = parse_kwargs(&args).unwrap();
-        let msg = type_err_message(extract_bool_list(&kw, "flags").unwrap_err());
-        assert!(msg.contains("expected list"), "got: {msg}");
-        assert!(msg.contains("got bool"), "got: {msg}");
+        let err = extract_bool_list(&kw, "flags").unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "compile error in :flags: expected list of bools, got bool",
+        );
+        match err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(form, KwargPath::named("flags"));
+                assert_eq!(expected, ExpectedKwargShape::ListOfBools);
+                assert_eq!(got, SexpShape::Bool);
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
     }
 
     #[test]
@@ -8285,16 +8346,33 @@ mod tests {
     #[test]
     fn extract_optional_bool_list_type_err_on_scalar_names_got_bool() {
         // `:flags #t` — a PRESENT kwarg with a non-list scalar rejects
-        // with the SAME outer `expected list` diagnostic the required
-        // peer `extract_bool_list` emits, and names the actual outer
-        // shape (`bool`). The present-vs-absent bifurcation happens
-        // BEFORE the required peer's outer gate, so the outer-shape
-        // rejection variant is byte-identical to the required peer's.
+        // with the SAME axis-typed `expected list of bools` outer-
+        // shape diagnostic the required peer `extract_bool_list`
+        // emits through its `<bool>::LIST_SHAPE` per-axis trait-const
+        // override, and names the actual outer shape (`bool`). The
+        // present-vs-absent bifurcation happens BEFORE the required
+        // peer's outer gate, so the outer-shape rejection variant is
+        // byte-identical to the required peer's — including the
+        // sharpened element-typed refinement label.
         let args = kwargs_of("(_ :flags #t)");
         let kw = parse_kwargs(&args).unwrap();
-        let msg = type_err_message(extract_optional_bool_list(&kw, "flags").unwrap_err());
-        assert!(msg.contains("expected list"), "got: {msg}");
-        assert!(msg.contains("got bool"), "got: {msg}");
+        let err = extract_optional_bool_list(&kw, "flags").unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "compile error in :flags: expected list of bools, got bool",
+        );
+        match err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(form, KwargPath::named("flags"));
+                assert_eq!(expected, ExpectedKwargShape::ListOfBools);
+                assert_eq!(got, SexpShape::Bool);
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
     }
 
     #[test]

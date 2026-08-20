@@ -1191,9 +1191,14 @@ fn type_err(key: &str, expected: ExpectedKwargShape, got: &Sexp) -> LispError {
 /// Item-indexed sibling of `type_err` — pairs `kwarg_item_form` with
 /// `type_mismatch` so a per-item failure inside a list-typed kwarg names
 /// `KwargPath::Item { key, idx }` plus the structural `expected`/`got` shape.
-/// Used by `extract_string_list`'s per-item path; future per-item type-mismatch
-/// sites (e.g. typed enums-of-strings, typed numeric vecs) bind here
-/// rather than re-inlining the shape.
+/// Bound through the atom-family per-axis shape gate
+/// [`AtomKwarg::project_at`] (the one owner of the
+/// `Self::project(sexp).ok_or_else(|| type_err_at(key, idx, Self::SHAPE,
+/// sexp))` composition every atom-projection list-family extractor —
+/// `extract_string_list`, `extract_narrowed_list` — routes through).
+/// Future per-item type-mismatch sites bind through [`AtomKwarg::project_at`]
+/// rather than re-inlining the composition; direct calls stay for the
+/// bespoke element-shape paths outside the atom family.
 fn type_err_at(key: &str, idx: usize, expected: ExpectedKwargShape, got: &Sexp) -> LispError {
     type_mismatch(kwarg_item_form(key, idx), expected, got)
 }
@@ -1513,6 +1518,51 @@ pub trait AtomKwarg<'a>: Sized {
     fn extract_optional_kwarg(kw: &'a Kwargs<'a>, key: &str) -> Result<Option<Self>> {
         extract_optional_atom(kw, key, Self::SHAPE, Self::project)
     }
+
+    /// Item-indexed shape gate — the LIST-family per-item peer of
+    /// [`Self::extract_kwarg`] on the same `(SHAPE, project)` per-axis
+    /// primitive pair. Projects `sexp` via [`Self::project`] and lifts
+    /// a `None` (present-but-not-this-axis) into the atom-family
+    /// `LispError::TypeMismatch { form: KwargPath::Item { key, idx },
+    /// expected: Self::SHAPE }` rejection through the shared
+    /// [`type_err_at`] item-indexed rejection primitive.
+    ///
+    /// Where [`Self::extract_kwarg`] composes `(SHAPE, project)`
+    /// through the SCALAR-kwarg outer skeleton [`extract_atom`],
+    /// [`Self::project_at`] composes the SAME per-axis primitives
+    /// through the LIST-item outer skeleton [`type_err_at`]. The
+    /// same axis rides both scalar and per-item shape gates, so a
+    /// caller reaching for the atom-family shape rejection at either
+    /// path lands on ONE per-axis primitive pair.
+    ///
+    /// Peer to [`narrow_or_range_err_at`] on the shape (not range)
+    /// axis: both are per-item rejection primitives sharing a
+    /// `KwargPath::Item` typed path and an axis-typed target,
+    /// differing only in which axis-typed target rides the
+    /// rejection — [`Self::project_at`] rides [`Self::SHAPE`] on the
+    /// shape gate; [`narrow_or_range_err_at`] rides `T::WIDTH` on
+    /// the range gate.
+    ///
+    /// TWO per-item projection sites used to inline this compose
+    /// shape (`Self::project(s).ok_or_else(|| type_err_at(key, idx,
+    /// Self::SHAPE, s))`): [`extract_string_list`]'s per-item body
+    /// on the `<&'a str>` axis, and [`extract_narrowed_list`]'s
+    /// per-item body on the `<W as WideNumeric>` axis (`W`
+    /// inheriting [`AtomKwarg`]'s shape gate through the
+    /// supertrait bound). Post-lift both sites route through this
+    /// default; the axis identity rides the `Self` type parameter
+    /// through the SAME atom-family shape-gate composition rather
+    /// than restated as a per-site pair.
+    ///
+    /// Provided as a trait default composing `(Self::SHAPE,
+    /// Self::project)` through [`type_err_at`] — per-atom impls do
+    /// not override this. A future diagnostic promotion at
+    /// [`type_err_at`] (a span, a suggested-value hint) flows
+    /// through ONE trait default into every atom-family per-item
+    /// projection site with no per-caller edit.
+    fn project_at(key: &str, idx: usize, sexp: &'a Sexp) -> Result<Self> {
+        Self::project(sexp).ok_or_else(|| type_err_at(key, idx, Self::SHAPE, sexp))
+    }
 }
 
 impl<'a> AtomKwarg<'a> for &'a str {
@@ -1576,9 +1626,7 @@ pub fn extract_optional_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Opti
 
 pub fn extract_string_list(kw: &Kwargs<'_>, key: &str) -> Result<Vec<String>> {
     extract_list(kw, key, ExpectedKwargShape::ListOfStrings, |idx, s| {
-        s.as_string()
-            .map(String::from)
-            .ok_or_else(|| type_err_at(key, idx, ExpectedKwargShape::String, s))
+        <&str as AtomKwarg<'_>>::project_at(key, idx, s).map(String::from)
     })
 }
 
@@ -1809,14 +1857,20 @@ pub trait WideNumeric: Copy + for<'a> AtomKwarg<'a> {
     /// longer restate the projection — it lives on the [`AtomKwarg`]
     /// impls that carry every atom axis's per-atom projection.
     ///
-    /// This is the PER-ELEMENT primitive
-    /// [`extract_narrowed_list<W, T>`] binds directly, without going
-    /// through the kwarg extractor — the atom projection lifted out
-    /// of `extract_int` / `extract_float` so a per-item narrowing
-    /// walk (Vec of narrowed numerics) can call `W::as_wide(sexp)
-    /// .ok_or_else(|| type_err_at(key, idx, W::SHAPE, sexp))`
-    /// uniformly at both axes, through the SAME supertrait dispatch
-    /// the scalar peer takes.
+    /// The PER-ELEMENT primitive [`extract_narrowed_list<W, T>`]
+    /// composes through the atom-family shape gate
+    /// [`AtomKwarg::project_at`] — the wide-into-item projection
+    /// lifted out of `extract_int` / `extract_float` so a per-item
+    /// narrowing walk (Vec of narrowed numerics) reaches its axis's
+    /// atom projection uniformly at both axes, through the SAME
+    /// atom-family shape-gate composition the non-numeric per-item
+    /// atom-projection extractors (`extract_string_list`) already
+    /// bind. This method stays as the direct-projection convenience
+    /// for callers that want the raw `Option<Self>` (a hypothetical
+    /// tolerant reader that keeps walking past a per-item shape
+    /// mismatch); the rejecting shape-gate composition lives on the
+    /// supertrait's [`AtomKwarg::project_at`] default rather than
+    /// restated per callsite.
     fn as_wide(sexp: &Sexp) -> Option<Self> {
         <Self as AtomKwarg<'_>>::project(sexp)
     }
@@ -2009,14 +2063,16 @@ where
 /// [`extract_narrowed`] on the per-item path a `Vec<T>` numeric-narrowed
 /// kwarg walks. The axis identity rides the `W: WideNumeric` type
 /// parameter, so `extract_narrowed_list::<i64, T>` dispatches through
-/// [`WideNumeric::as_wide`] (`Sexp::as_int`) plus
-/// [`NarrowNumeric::narrow`] (`TryFrom<i64>::try_from`) and
+/// the atom-family per-item shape gate [`AtomKwarg::project_at`]
+/// (composing `<i64>::SHAPE = Int` + `<i64>::project = Sexp::as_int`)
+/// plus [`NarrowNumeric::narrow`] (`TryFrom<i64>::try_from`) and
 /// `extract_narrowed_list::<f64, T>` dispatches through
-/// [`WideNumeric::as_wide`] (`Sexp::as_float`) plus its `T::narrow`
-/// peer, both threaded through the SAME [`extract_list`] outer-shape
-/// skeleton and the SAME per-item rejection primitives (`type_err_at`
-/// on a per-item shape mismatch, [`narrow_or_range_err_at`] on a
-/// per-item range mismatch). Pre-lift the derive routed `Vec<u16>` /
+/// [`AtomKwarg::project_at`] (composing `<f64>::SHAPE = Number` +
+/// `<f64>::project = Sexp::as_float`) plus its `T::narrow` peer,
+/// both threaded through the SAME [`extract_list`] outer-shape
+/// skeleton and the SAME per-item rejection primitives
+/// ([`AtomKwarg::project_at`] on a per-item shape mismatch,
+/// [`narrow_or_range_err_at`] on a per-item range mismatch). Pre-lift the derive routed `Vec<u16>` /
 /// `Vec<i32>` / `Vec<f32>` / etc. through [`extract_vec_via_serde`] —
 /// the universal serde bridge — so a per-item narrowing failure on
 /// `:ports (list 80 70000)` surfaced as a mystery `KwargDeserialize
@@ -2062,8 +2118,7 @@ where
     T: NarrowNumeric<W>,
 {
     extract_list(kw, key, ExpectedKwargShape::List, |idx, s| {
-        let wide =
-            W::as_wide(s).ok_or_else(|| type_err_at(key, idx, <W as WideNumeric>::SHAPE, s))?;
+        let wide = <W as AtomKwarg<'_>>::project_at(key, idx, s)?;
         narrow_or_range_err_at::<W, T>(key, idx, wide)
     })
 }
@@ -3472,6 +3527,260 @@ mod tests {
             &trait_bool_missing,
             LispError::MissingKwarg { .. },
         ));
+    }
+
+    /// The atom-family per-item shape gate lives on ONE owner —
+    /// [`AtomKwarg::project_at`] — for every atom axis the substrate
+    /// carries: the two non-numeric axes ([`&'a str`], [`bool`]) that
+    /// close the shared `SHAPE + project` primitive pair directly, and
+    /// the two numeric axes ([`i64`], [`f64`]) that inherit the same
+    /// gate through the [`WideNumeric: for<'a> AtomKwarg<'a>`]
+    /// supertrait bound. Pre-lift TWO per-item projection sites
+    /// (`extract_string_list`'s per-item body on the string axis,
+    /// `extract_narrowed_list`'s per-item body on the two numeric
+    /// axes) inlined the compose shape `Self::project(s).ok_or_else(||
+    /// type_err_at(key, idx, Self::SHAPE, s))`, each spelling its
+    /// axis's `SHAPE` and `project` pair by hand; post-lift both
+    /// sites route through this ONE trait default, with the axis
+    /// identity riding the `Self` type parameter through the SAME
+    /// atom-family shape-gate composition.
+    ///
+    /// Pin FOUR promises the gate owns at its emission boundary:
+    ///
+    /// (1) TOTAL at every atom axis — `<T as AtomKwarg<'_>>::project_at
+    ///     (key, idx, sexp)` returns `Ok(v)` on a shape-match at every
+    ///     supported axis (str, bool, i64, f64), byte-identical to the
+    ///     scalar `Self::project` per-atom projection wrapped in `Ok`.
+    /// (2) SHAPE-ERR at every atom axis — `<T as AtomKwarg<'_>>::
+    ///     project_at(key, idx, sexp)` on a shape-mismatch rejects
+    ///     with `LispError::TypeMismatch { form: Item { key, idx },
+    ///     expected: Self::SHAPE, got: <sexp shape> }` — the exact
+    ///     variant every per-item shape rejection surface
+    ///     (`extract_string_list`, `extract_narrowed_list`,
+    ///     `extract_vec_via_serde` outer) pattern-matches on.
+    /// (3) EXTRACTOR IDENTITY — the two atom-family per-item list
+    ///     extractors (`extract_string_list`, `extract_narrowed_list`)
+    ///     that route through the gate emit the SAME
+    ///     `LispError::TypeMismatch` variant on a per-item shape
+    ///     mismatch as a direct `<T as AtomKwarg<'_>>::project_at`
+    ///     call at the same axis + key + idx. A regression that
+    ///     silently reintroduced an inline `type_err_at(key, idx,
+    ///     ExpectedKwargShape::String, s)` body on the extractor
+    ///     side, restating the composition alongside the trait
+    ///     default's, surfaces here as a variant-identity mismatch
+    ///     between the two routes.
+    /// (4) AXIS IDENTITY — the `<W as AtomKwarg<'_>>::project_at`
+    ///     path at the two numeric axes rides the numeric-axis
+    ///     `SHAPE` (`ExpectedKwargShape::Int` on `<i64>`,
+    ///     `ExpectedKwargShape::Number` on `<f64>`) through the
+    ///     supertrait's shape gate, on the SAME footing the two
+    ///     non-numeric axes do. A regression that split the gate
+    ///     per-axis-family (a numeric-only `WideNumeric::project_at`
+    ///     alongside the atom-family `AtomKwarg::project_at`) would
+    ///     surface here as axis identity drift.
+    #[test]
+    fn atom_kwarg_project_at_is_the_one_owner_of_the_atom_family_per_item_shape_gate() {
+        let string_atom = Sexp::Atom(Atom::Str("hello".to_string()));
+        let bool_atom = Sexp::Atom(Atom::Bool(true));
+        let int_atom = Sexp::Atom(Atom::Int(42));
+        let float_atom = Sexp::Atom(Atom::Float(2.5));
+
+        // (1) TOTAL at every atom axis — accept own atom, byte-identical
+        //     to the scalar Self::project projection lifted to Ok.
+        assert_eq!(
+            <&str as AtomKwarg<'_>>::project_at("xs", 0, &string_atom).unwrap(),
+            <&str as AtomKwarg<'_>>::project(&string_atom).unwrap(),
+        );
+        assert_eq!(
+            <bool as AtomKwarg<'_>>::project_at("flags", 3, &bool_atom).unwrap(),
+            <bool as AtomKwarg<'_>>::project(&bool_atom).unwrap(),
+        );
+        assert_eq!(
+            <i64 as AtomKwarg<'_>>::project_at("ports", 1, &int_atom).unwrap(),
+            <i64 as AtomKwarg<'_>>::project(&int_atom).unwrap(),
+        );
+        // Int widens to Float via Sexp::as_float — same posture the
+        // scalar Sexp::as_float consumer already gives on the int axis.
+        assert_eq!(
+            <f64 as AtomKwarg<'_>>::project_at("scales", 2, &float_atom).unwrap(),
+            <f64 as AtomKwarg<'_>>::project(&float_atom).unwrap(),
+        );
+
+        // (2) SHAPE-ERR at every atom axis — sweep the four cells
+        //     (str/bool/i64/f64) individually so each per-axis
+        //     rejection identity is pinned at rustc time; the SHAPE
+        //     label lifted rides the axis-Self through the trait
+        //     dispatch and cannot silently swap.
+
+        // (2a) The <&str> axis rejects an int atom with SHAPE::String.
+        let string_axis_err = <&str as AtomKwarg<'_>>::project_at("xs", 1, &int_atom).unwrap_err();
+        match string_axis_err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(
+                    form,
+                    KwargPath::Item {
+                        key: "xs".into(),
+                        idx: 1,
+                    }
+                );
+                assert_eq!(expected, ExpectedKwargShape::String);
+                assert_eq!(got, SexpShape::Int);
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+
+        // (2b) The <bool> axis rejects a string atom with SHAPE::Bool.
+        let bool_axis_err =
+            <bool as AtomKwarg<'_>>::project_at("flags", 0, &string_atom).unwrap_err();
+        match bool_axis_err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(
+                    form,
+                    KwargPath::Item {
+                        key: "flags".into(),
+                        idx: 0,
+                    }
+                );
+                assert_eq!(expected, ExpectedKwargShape::Bool);
+                assert_eq!(got, SexpShape::String);
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+
+        // (2c) The <i64> axis inherits the shape gate through the
+        //      WideNumeric supertrait — rejects a string atom with
+        //      SHAPE::Int (the axis-typed label WideNumeric::SHAPE
+        //      delegates to on the supertrait).
+        let int_axis_err =
+            <i64 as AtomKwarg<'_>>::project_at("ports", 2, &string_atom).unwrap_err();
+        match int_axis_err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(
+                    form,
+                    KwargPath::Item {
+                        key: "ports".into(),
+                        idx: 2,
+                    }
+                );
+                assert_eq!(expected, ExpectedKwargShape::Int);
+                assert_eq!(got, SexpShape::String);
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+
+        // (2d) The <f64> axis inherits the shape gate the same way —
+        //      rejects a bool atom with SHAPE::Number.
+        let float_axis_err =
+            <f64 as AtomKwarg<'_>>::project_at("scales", 4, &bool_atom).unwrap_err();
+        match float_axis_err {
+            LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } => {
+                assert_eq!(
+                    form,
+                    KwargPath::Item {
+                        key: "scales".into(),
+                        idx: 4,
+                    }
+                );
+                assert_eq!(expected, ExpectedKwargShape::Number);
+                assert_eq!(got, SexpShape::Bool);
+            }
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+
+        // (3) EXTRACTOR IDENTITY — extract_string_list's per-item
+        //     rejection at a non-string element MUST match the direct
+        //     <&str as AtomKwarg>::project_at call at the same
+        //     axis/key/idx byte-for-byte modulo the projected T.
+        let mixed_args = kwargs_of(r#"(_ :xs ("ok" 9 "never"))"#);
+        let mixed_kw = parse_kwargs(&mixed_args).unwrap();
+        let list_err = extract_string_list(&mixed_kw, "xs").unwrap_err();
+        let direct_err =
+            <&str as AtomKwarg<'_>>::project_at("xs", 1, &Sexp::Atom(Atom::Int(9))).unwrap_err();
+        match (&list_err, &direct_err) {
+            (
+                LispError::TypeMismatch {
+                    form: form_a,
+                    expected: exp_a,
+                    got: got_a,
+                },
+                LispError::TypeMismatch {
+                    form: form_b,
+                    expected: exp_b,
+                    got: got_b,
+                },
+            ) => {
+                assert_eq!(form_a, form_b, "path variant identity");
+                assert_eq!(exp_a, exp_b, "axis-typed SHAPE identity");
+                assert_eq!(got_a, got_b, "actual-shape witness identity");
+            }
+            other => panic!("both routes must produce TypeMismatch, got {other:?}"),
+        }
+
+        // (3, numeric axis) — extract_narrowed_list's per-item
+        //     rejection at a non-int element MUST match the direct
+        //     <i64 as AtomKwarg>::project_at call at the same axis
+        //     byte-for-byte. Distinct from the range-err path (Int(70000)
+        //     rejects with KwargOutOfRange, not TypeMismatch); this
+        //     pins the SHAPE-err arm alone.
+        let bad_shape_args = kwargs_of(r#"(_ :ports (80 "nope"))"#);
+        let bad_shape_kw = parse_kwargs(&bad_shape_args).unwrap();
+        let narrowed_err = extract_narrowed_list::<i64, u16>(&bad_shape_kw, "ports").unwrap_err();
+        let numeric_direct_err = <i64 as AtomKwarg<'_>>::project_at(
+            "ports",
+            1,
+            &Sexp::Atom(Atom::Str("nope".to_string())),
+        )
+        .unwrap_err();
+        match (&narrowed_err, &numeric_direct_err) {
+            (
+                LispError::TypeMismatch {
+                    form: form_a,
+                    expected: exp_a,
+                    got: got_a,
+                },
+                LispError::TypeMismatch {
+                    form: form_b,
+                    expected: exp_b,
+                    got: got_b,
+                },
+            ) => {
+                assert_eq!(form_a, form_b);
+                assert_eq!(exp_a, exp_b);
+                assert_eq!(*exp_a, ExpectedKwargShape::Int);
+                assert_eq!(got_a, got_b);
+            }
+            other => panic!("both numeric-axis routes must produce TypeMismatch, got {other:?}"),
+        }
+
+        // (4) AXIS IDENTITY — the numeric-axis project_at return
+        //     value is byte-identical to the WideNumeric::as_wide
+        //     projection lifted to Ok, so the shape gate does NOT
+        //     drift between the two atom-family paths a numeric
+        //     caller can reach through.
+        assert_eq!(
+            <i64 as AtomKwarg<'_>>::project_at("ports", 0, &int_atom).unwrap(),
+            <i64 as WideNumeric>::as_wide(&int_atom).unwrap(),
+        );
+        assert_eq!(
+            <f64 as AtomKwarg<'_>>::project_at("scales", 0, &float_atom).unwrap(),
+            <f64 as WideNumeric>::as_wide(&float_atom).unwrap(),
+        );
     }
 
     /// [`WideNumeric`] is a `for<'a> AtomKwarg<'a>` supertrait

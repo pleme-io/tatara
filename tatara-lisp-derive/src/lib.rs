@@ -1529,7 +1529,43 @@ fn trait_dispatch_call(
     method: &'static str,
     key: &str,
 ) -> TokenStream2 {
-    let path: TokenStream2 = trait_path.parse().unwrap();
+    // Sharpened parse: `syn::parse_str::<syn::Path>` — the syntactic
+    // path parser — replaces the pre-tightening
+    // `TokenStream2::parse` lexer-level parse. The `TokenStream2`
+    // parse accepted ANY string proc_macro2 could tokenize (e.g.
+    // `"foo bar"` lexes as two adjacent idents; `"1invalid"` lexes
+    // as an int-then-ident pair; `"as"` lexes as a keyword), and
+    // `quote! { <#self_ty as #path>::#tail }` then spliced the
+    // broken tokens into the derived code — invalid Rust that
+    // would fail at the derive consumer's rustc pass with a
+    // synthetic-span error hard to trace back to the offending
+    // trait-path const. Post-tightening the parse rejects at the
+    // primitive's own `unwrap_or_else` panic with a `syn::Error`-
+    // carried diagnostic naming both the offending trait_path
+    // literal and the syn-level parse failure verbatim — matching
+    // the failure locus every peer typed-entry gate on the
+    // derive's emission surface (the `SerdeDefault::Path` arm's
+    // `syn::parse_str::<syn::Path>` gate, the field-attribute
+    // sharpen every `extract_keyword` / `serde_default` / atom /
+    // narrow / deserialize trait-dispatch primitive already
+    // carries) already surfaces at.
+    //
+    // The two workspace-shipped trait-path consts
+    // (`NARROW_TRAIT_PATH` = `::tatara_lisp::domain::NarrowNumeric`,
+    // `DESERIALIZE_TRAIT_PATH` =
+    // `::tatara_lisp::domain::DeserializeKwarg`) both parse
+    // byte-identically post-sharpen — `syn::Path`'s `ToTokens`
+    // impl emits the same segment + `::` separator stream
+    // `TokenStream2::parse` produces on an equivalent input, so
+    // every downstream trait-dispatched arm (all EIGHT numeric-
+    // narrowed arms through `narrow_trait_dispatch_call`, all
+    // FOUR universal-serde-fallthrough arms through
+    // `deserialize_trait_dispatch_call`) emits byte-identically.
+    // A hypothetical third trait axis whose trait path does NOT
+    // end with `>` inherits the sharpened parse for free through
+    // the same primitive.
+    let path: syn::Path = syn::parse_str(trait_path)
+        .unwrap_or_else(|e| panic!("invalid trait path {trait_path:?}: {e}"));
     let tail = trait_dispatch_tail(method, key);
     quote! {
         <#self_ty as #path>::#tail
@@ -5251,6 +5287,133 @@ mod trait_dispatch_call_tests {
             ATOM_TRAIT_PATH, "::tatara_lisp::domain::AtomKwarg<'_>",
             "ATOM_TRAIT_PATH must carry the fully-qualified AtomKwarg<'_> trait path verbatim",
         );
+    }
+
+    // ── Sharpened parse pins: `syn::parse_str::<syn::Path>` ─────────
+    //
+    // The primitive's `trait_path` parse is post-lift a
+    // `syn::parse_str::<syn::Path>` — the syntactic-level path parser
+    // — rather than a `TokenStream2::parse` lexer-level gate. The
+    // sharpen (a) rejects lexically-valid but syntactically-invalid
+    // trait-path strings (adjacent idents without `::`, leading-digit
+    // segments, reserved-keyword segments) at the primitive's own
+    // panic boundary rather than as broken emit tokens at every
+    // trait-dispatched arm's implementor compile, and (b) preserves
+    // byte-identical emission for every workspace-shipped trait-path
+    // const because `syn::Path`'s `ToTokens` emits the same segment +
+    // `::` separator stream the pre-lift `TokenStream2::parse` gate
+    // produced on an equivalent input. Peer to the
+    // `path_default_arm_*` pins on the `SerdeDefault::Path` sharpen
+    // in `wrap_with_missing_key_default_tests` below — same class of
+    // lexer-to-syntactic tightening, same failure-locus discipline.
+
+    #[test]
+    fn every_workspace_trait_path_const_parses_as_syn_path_at_the_sharpened_gate() {
+        // Closed-set survival pin — the two participating trait-path
+        // consts (`NARROW_TRAIT_PATH`, `DESERIALIZE_TRAIT_PATH`) that
+        // flow through the primitive MUST parse cleanly at the
+        // sharpened `syn::parse_str::<syn::Path>` gate. A regression
+        // that drifted one of the two consts to a syntactically-
+        // invalid path (a typo introducing adjacent idents, a
+        // leading-digit segment, a segment named after a reserved
+        // keyword) would trip this test rather than surfacing as a
+        // panic at every derive consumer's compile.
+        //
+        // The `syn::Path` result is discarded — the test's purpose is
+        // the closed-set survival assertion at the sharpened parser,
+        // not the parsed handle itself.
+        for trait_path in [NARROW_TRAIT_PATH, DESERIALIZE_TRAIT_PATH] {
+            let parsed: syn::Result<syn::Path> = syn::parse_str(trait_path);
+            assert!(
+                parsed.is_ok(),
+                "workspace trait-path const {trait_path:?} must parse as syn::Path at the sharpened gate, got: {:?}",
+                parsed.err(),
+            );
+        }
+    }
+
+    #[test]
+    fn primitive_emits_the_syn_path_to_tokens_stream_at_the_trait_slot() {
+        // Byte-identity pin — for every workspace-shipped trait-path
+        // const the primitive's emission at the trait slot equals what
+        // `syn::Path`'s `ToTokens` produces for the same input. Pins
+        // that the sharpened parser did NOT drift the emission at the
+        // primitive's own `<#self_ty as #path>::#tail` interpolation
+        // seam — a regression that (say) swapped the direct `#path`
+        // splice for a stringified re-parse whose `Spacing` diverges
+        // would surface here rather than as silent drift at every
+        // trait-dispatched arm's downstream implementor.
+        //
+        // Sweep both participating axes at a canonical (self_ty,
+        // method, key) triple; the trait_path IS the sweep variable.
+        for (trait_path, self_ty_src, method, key) in [
+            (NARROW_TRAIT_PATH, "u16", "extract_narrowed_kwarg", "port"),
+            (
+                DESERIALIZE_TRAIT_PATH,
+                "Severity",
+                "extract_kwarg",
+                "config",
+            ),
+        ] {
+            let path: syn::Path = syn::parse_str(trait_path).unwrap();
+            let self_ty: proc_macro2::TokenStream = self_ty_src.parse().unwrap();
+            let tail = trait_dispatch_tail(method, key);
+            let expected = quote! {
+                <#self_ty as #path>::#tail
+            }
+            .to_string();
+
+            let self_ty_for_actual: proc_macro2::TokenStream = self_ty_src.parse().unwrap();
+            let actual =
+                trait_dispatch_call(self_ty_for_actual, trait_path, method, key).to_string();
+            assert_eq!(
+                actual, expected,
+                "primitive emission at trait_path {trait_path:?} must match syn::Path's ToTokens byte-for-byte",
+            );
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid trait path")]
+    fn primitive_rejects_a_syntactically_invalid_trait_path_at_the_sharpened_gate() {
+        // Sharpen behavior pin — a lexically-valid but syntactically-
+        // invalid trait path (`"foo bar"` — two adjacent idents with
+        // no `::` separator between them) rejects at the primitive's
+        // own `unwrap_or_else` panic with the sharpened `"invalid
+        // trait path"` diagnostic prefix. Pre-tightening the same
+        // input passed the `TokenStream2::parse` lexer gate (proc_macro2
+        // tokenizes `"foo bar"` as two adjacent Ident tokens) and
+        // then `quote! { <#self_ty as #path>::#tail }` spliced the
+        // broken tokens into the derived code as `<u16 as foo bar>::…`
+        // — invalid Rust that failed at the derive consumer's rustc
+        // pass with a synthetic-span error. Post-tightening the parse
+        // rejects at the primitive's own Err boundary, so a hypothetical
+        // regression that drifted one of the closed-set trait-path
+        // consts to a syntactically-invalid path surfaces here rather
+        // than as broken emit tokens at every trait-dispatched arm's
+        // downstream implementor.
+        //
+        // The test uses a `&'static str` literal — the same lifetime
+        // shape the closed-set trait-path consts carry — so the failure
+        // locus matches how a real drift-in-the-const would trip.
+        let self_ty: proc_macro2::TokenStream = "u16".parse().unwrap();
+        let _ = trait_dispatch_call(self_ty, "foo bar", "extract_kwarg", "field");
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid trait path")]
+    fn primitive_rejects_a_reserved_keyword_segment_at_the_sharpened_gate() {
+        // Peer of the adjacent-idents pin — a trait path whose segment
+        // is a reserved Rust keyword (`"as"`) also rejects at the
+        // sharpened gate. Pre-tightening `"as"` lexed as a single
+        // keyword token and `quote! { <#self_ty as #path>::… }`
+        // spliced it as `<u16 as as>::…` — invalid Rust. Post-
+        // tightening the `syn::parse_str::<syn::Path>` gate rejects
+        // with `expected identifier, found keyword \`as\`` before the
+        // splice happens. Closes the second class of syntactic
+        // rejection alongside the adjacent-idents pin above.
+        let self_ty: proc_macro2::TokenStream = "u16".parse().unwrap();
+        let _ = trait_dispatch_call(self_ty, "as", "extract_kwarg", "field");
     }
 }
 

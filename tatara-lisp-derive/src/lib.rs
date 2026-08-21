@@ -2185,6 +2185,48 @@ fn wrap_with_missing_key_default(
 }
 
 fn extractor_for(ty: &Type, key: &str, default: &SerdeDefault) -> Result<TokenStream2, String> {
+    // Malformed-outer-wrapper gate — a pre-classify walk that rejects
+    // `Option` / `Vec` outer segments carrying no `<T>` type argument
+    // at the derive's own Err surface, so the operator sees a spanned
+    // compile error at the field's own `syn::Type` position rather
+    // than the opaque `<Option<'a> as DeserializeKwarg>` trait-bound-
+    // not-satisfied error at rustc's later derive-consumer pass.
+    //
+    // Pre-lift the malformed arms in [`classify_option`] /
+    // [`classify_vec`] silently folded the outer type through
+    // `Kind::(Optional|Vec)Deserialize(quote! { #ty })`, and the
+    // downstream [`Kind::OptionalDeserialize`] /
+    // [`Kind::VecDeserialize`] extractor emitted
+    // `<Option<'a> as DeserializeKwarg>::extract_optional_kwarg(...)`
+    // / `<Vec<'a> as DeserializeKwarg>::extract_vec_kwarg(...)` —
+    // invalid Rust (the trait bound is on the inner `T`, not on the
+    // `Option<'a>` / `Vec<'a>` outer wrapper itself) that rustc
+    // rejected at the derive consumer's pass with a synthetic-span
+    // error hard to trace back to the offending field. Post-lift the
+    // gate surfaces the typed [`MalformedGenericArg`] rejection at
+    // the field's own syn span through the derive's already-typed
+    // `spanned_compile_error(&field.ty, err)` return path — the SAME
+    // spanned-error surface every peer typed-entry gate on the
+    // derive's Err axis (`SerdeDefault::Path`'s malformed
+    // `#[serde(default = "…")]` path, the struct/named-fields gates,
+    // the `derive_closed_set` enum-only gate) already routes through.
+    //
+    // The compounding property: a future third malformed mode
+    // (a [`syn::PathArguments::Parenthesized`] arg shape — a
+    // `Fn(T) -> U`-style parenthesized generic on the outer segment)
+    // lands as ONE new [`MalformedGenericArg`] variant, and its
+    // Display projection carries the operator-facing message
+    // through this gate mechanically — no per-arm scaffold at the
+    // extractor boundary. Theory anchor: THEORY.md §II.1 invariant 1
+    // (typed entry — the malformed-outer-wrapper axis is validated
+    // at the derive's outer boundary with a spanned diagnostic that
+    // names both the offending field type AND the underlying
+    // rejection class; invalid outer wrappers become UNREPRESENTABLE
+    // at the derive's own Err surface rather than surfacing as
+    // opaque trait-bound errors at every downstream implementor).
+    if let Some(malformed) = walk_for_malformed_outer_wrapper(ty) {
+        return Err(malformed.to_string());
+    }
     let kind = classify(ty);
     let base = match kind {
         // Atom-family scalar-family peers of the atom-family
@@ -3091,6 +3133,82 @@ fn first_generic_type(seg: &syn::PathSegment) -> Result<&Type, MalformedGenericA
         }
     }
     Err(MalformedGenericArg::NoTypeArgument)
+}
+
+/// Walk `ty` looking for the FIRST malformed `Option<T>` / `Vec<T>`
+/// outer segment — a segment whose ident matches `"Option"` /
+/// `"Vec"` but whose `first_generic_type` gate rejects with a
+/// [`MalformedGenericArg`] variant (either no angle brackets, or
+/// angle brackets carrying no [`syn::GenericArgument::Type`]).
+/// Returns `Some(err)` on the first malformed segment encountered
+/// in the recursive walk; `None` when every `Option` / `Vec` outer
+/// segment in the type carries a well-formed `<T>` type argument
+/// (or when the type is not an `Option` / `Vec` outer at all).
+///
+/// The recursion mirrors the [`classify`] → [`classify_option`] /
+/// [`classify_vec`] recursor's SAME walk shape: at each outer
+/// segment named `Option` / `Vec`, descend into the extracted
+/// generic arg and re-walk. Every non-`Option`-non-`Vec` outer
+/// segment terminates the walk at `None` (no malformed shape to
+/// surface), matching how the classifier's fall-through arms fold
+/// non-atomic non-collection types into
+/// [`Kind::Deserialize`] / [`Kind::OptionalDeserialize`] /
+/// [`Kind::VecDeserialize`] rather than continuing the walk.
+///
+/// Pre-lift the derive silently absorbed the malformed shape at the
+/// [`classify_option`] / [`classify_vec`] fall-through arms
+/// (`return Kind::(Optional|Vec)Deserialize(quote! { #ty });`) —
+/// the whole outer wrapper rode through as the cached payload,
+/// and the emitted `<Option<'a> as DeserializeKwarg>::extract_optional_kwarg(...)`
+/// / `<Vec<'a> as DeserializeKwarg>::extract_vec_kwarg(...)` UFCS
+/// call then failed at rustc with a `trait bound
+/// DeserializeOwned is not satisfied` diagnostic at a synthetic
+/// derive-generated span. The message named neither the offending
+/// field nor the malformed-outer-wrapper class; the operator had
+/// to trace back through the derive's macro-expansion output to
+/// find that the diagnostic sat on the OUTER `Option<'a>` /
+/// `Vec<'a>` wrapper rather than on the inner `T` slot.
+///
+/// Post-lift the walk pre-checks the outer wrapper at the derive's
+/// own [`extractor_for`] boundary; a Some(err) short-circuits
+/// through the field-init loop's `Err(err) => spanned_compile_error(
+/// &field.ty, err)` return path with the typed
+/// [`MalformedGenericArg::Display`] wording at the field's own
+/// `syn::Type` span. The pre-lift silent gate-leak collapses onto
+/// ONE substrate diagnostic surface at the derive's own Err path
+/// — matching the operator-facing sharpen the peer typed-entry
+/// gate [`SerdeDefault::Path`]'s `syn::parse_str::<syn::Path>`
+/// carries on the `#[serde(default = "…")]` axis.
+///
+/// The recursion admits arbitrarily-nested well-formed
+/// `Option<Vec<Option<T>>>` shapes and returns `None` unless SOME
+/// segment in the chain is malformed; the first Malformed segment
+/// found in the walk wins, matching how a compile-error diagnostic
+/// stops at the first source of drift rather than aggregating.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry — the
+/// malformed-outer-wrapper axis becomes UNREPRESENTABLE at the
+/// derive's Err boundary rather than surfacing as an opaque
+/// trait-bound-not-satisfied error at every downstream
+/// implementor). THEORY.md §VI.1 (generation over composition —
+/// the walk composes structurally against the peer classifier's
+/// recursor shape at ONE dedicated primitive; a future third
+/// malformed mode picks up the derive-time diagnostic at ZERO
+/// extra scaffolding through the shared [`MalformedGenericArg`]
+/// Display projection).
+fn walk_for_malformed_outer_wrapper(ty: &Type) -> Option<MalformedGenericArg> {
+    let Type::Path(path) = ty else {
+        return None;
+    };
+    let last = path.path.segments.last()?;
+    let name = last.ident.to_string();
+    if name != "Option" && name != "Vec" {
+        return None;
+    }
+    match first_generic_type(last) {
+        Ok(inner) => walk_for_malformed_outer_wrapper(inner),
+        Err(err) => Some(err),
+    }
 }
 
 #[cfg(test)]
@@ -4346,6 +4464,245 @@ mod classify_tests {
             MalformedGenericArg::NoTypeArgument.to_string(),
             "no type argument found",
         );
+    }
+}
+
+#[cfg(test)]
+mod walk_for_malformed_outer_wrapper_tests {
+    //! Contract tests for [`super::walk_for_malformed_outer_wrapper`]
+    //! — the derive's PRIVATE malformed-outer-wrapper gate the
+    //! [`super::extractor_for`] boundary pre-checks each field's
+    //! `syn::Type` through before dispatching classify → emit. Every
+    //! `Option<T>` / `Vec<T>` outer segment carrying a malformed
+    //! `<T>` slot (no angle brackets, or angle brackets with only
+    //! lifetime / const-generic / associated-type args and no
+    //! `syn::GenericArgument::Type` inside) surfaces the typed
+    //! [`super::MalformedGenericArg`] rejection through the derive's
+    //! own `spanned_compile_error(&field.ty, err.to_string())` return
+    //! path — a spanned diagnostic at the field's own `syn::Type`
+    //! position, rather than the opaque `<Option<'a> as
+    //! DeserializeKwarg>` trait-bound-not-satisfied error at rustc's
+    //! later derive-consumer pass.
+    //!
+    //! Four contract axes pinned here:
+    //!
+    //! 1. WELL-FORMED PASSES — every workspace-shipped field type
+    //!    shape (primitive, `Option<T>`, `Vec<T>`, `Option<Vec<T>>`,
+    //!    nested through arbitrary depth) projects to `None`. The
+    //!    gate is a pre-filter that admits well-formed types
+    //!    verbatim; a regression that (say) rejected `Option<T>` on
+    //!    a lifetime-carrying inner generic (`Option<&'a str>`)
+    //!    would break every downstream implementor with a
+    //!    reference-typed field.
+    //! 2. MALFORMED OPTION REJECTS — `Option` outer segments
+    //!    carrying no `<T>` type arg (bare `Option` / `Option<'a>`)
+    //!    surface the [`super::MalformedGenericArg::NoAngleBrackets`]
+    //!    / [`super::MalformedGenericArg::NoTypeArgument`] variants
+    //!    respectively. Pins the gate's `Option`-arm dispatch.
+    //! 3. MALFORMED VEC REJECTS — sibling of axis 2 on the `Vec`
+    //!    outer segment. Pins the gate's `Vec`-arm dispatch and
+    //!    confirms the recursion admits both outer wrapper names
+    //!    symmetrically.
+    //! 4. RECURSIVE WALK — a malformed segment nested inside a
+    //!    well-formed outer wrapper (e.g. `Option<Vec<'a>>`,
+    //!    `Vec<Option>`) surfaces at the innermost malformed segment
+    //!    rather than at the outer wrapper. Pins the recursor's
+    //!    depth-first traversal: the FIRST malformed segment in the
+    //!    walk wins, matching how a compile-error diagnostic stops
+    //!    at the first source of drift.
+    //!
+    //! Peer to [`super::classify_tests`] on the classify surface: the
+    //! classifier's fall-through arm folds these malformed shapes
+    //! into `Kind::(Optional|Vec)Deserialize(quote! { #ty })` (the
+    //! pre-lift silent gate-leak), while this module pins the
+    //! derive's outer boundary that closes the leak at the operator-
+    //! facing Err surface. A regression to EITHER side surfaces at
+    //! its OWN test-module boundary.
+
+    use super::{walk_for_malformed_outer_wrapper, MalformedGenericArg};
+    use syn::{parse_str, Type};
+
+    fn parse_ty(s: &str) -> Type {
+        parse_str(s).expect("valid Rust type syntax")
+    }
+
+    #[test]
+    fn well_formed_primitive_projects_to_none() {
+        // Promise 1 (WELL-FORMED PASSES) — a bare primitive field
+        // type is not an `Option` / `Vec` outer at all, so the gate
+        // terminates immediately at the outer segment's non-match
+        // arm. Rules out a regression that spuriously walked into
+        // non-collection outer segments (e.g. a `String` or
+        // `MonitorSpec` field would then panic through the
+        // `first_generic_type` gate on the missing angle brackets).
+        assert_eq!(walk_for_malformed_outer_wrapper(&parse_ty("String")), None);
+        assert_eq!(walk_for_malformed_outer_wrapper(&parse_ty("bool")), None);
+        assert_eq!(walk_for_malformed_outer_wrapper(&parse_ty("u16")), None);
+        assert_eq!(
+            walk_for_malformed_outer_wrapper(&parse_ty("MonitorSpec")),
+            None,
+        );
+    }
+
+    #[test]
+    fn well_formed_option_and_vec_project_to_none() {
+        // Promise 1 (WELL-FORMED PASSES) — `Option<T>` / `Vec<T>`
+        // outer segments with a well-formed `<T>` type argument
+        // recurse into the inner `T` and terminate at `None` when
+        // the inner isn't another collection wrapper. Pins the
+        // recursion's happy path across the derive's supported
+        // atom-family axes.
+        assert_eq!(
+            walk_for_malformed_outer_wrapper(&parse_ty("Option<String>")),
+            None,
+        );
+        assert_eq!(
+            walk_for_malformed_outer_wrapper(&parse_ty("Vec<String>")),
+            None,
+        );
+        assert_eq!(
+            walk_for_malformed_outer_wrapper(&parse_ty("Option<u16>")),
+            None,
+        );
+        assert_eq!(
+            walk_for_malformed_outer_wrapper(&parse_ty("Vec<bool>")),
+            None,
+        );
+    }
+
+    #[test]
+    fn well_formed_option_vec_of_nested_type_projects_to_none() {
+        // Promise 1 (WELL-FORMED PASSES) — arbitrarily-nested
+        // well-formed `Option<Vec<Option<T>>>` shapes recurse
+        // through every collection layer and terminate at the
+        // innermost non-collection type. Pins the recursor's
+        // arbitrary-depth admissibility on the SAME nested shape
+        // the sibling `classify_tests` module exercises through
+        // `Option<Vec<Vec<String>>>`.
+        assert_eq!(
+            walk_for_malformed_outer_wrapper(&parse_ty("Option<Vec<Vec<String>>>")),
+            None,
+        );
+        assert_eq!(
+            walk_for_malformed_outer_wrapper(&parse_ty("Option<Vec<MonitorSpec>>")),
+            None,
+        );
+        assert_eq!(
+            walk_for_malformed_outer_wrapper(&parse_ty("Vec<Option<u32>>")),
+            None,
+        );
+    }
+
+    #[test]
+    fn bare_option_without_angle_brackets_surfaces_no_angle_brackets_variant() {
+        // Promise 2 (MALFORMED OPTION REJECTS) — a bare `Option`
+        // outer segment with NO `<T>` parameter (a syntactically-
+        // valid but semantically-incomplete field type both syn
+        // and rustc admit as a raw path) surfaces the typed
+        // `NoAngleBrackets` variant. Pre-lift the derive folded
+        // this shape through
+        // `Kind::OptionalDeserialize(quote! { #ty })` and the
+        // emitted `<Option as DeserializeKwarg>::extract_optional_kwarg(...)`
+        // call failed at rustc with a mystery trait-bound diagnostic
+        // at a synthetic derive span. Post-lift the gate surfaces
+        // the typed rejection at the operator's own field-type span.
+        assert_eq!(
+            walk_for_malformed_outer_wrapper(&parse_ty("Option")),
+            Some(MalformedGenericArg::NoAngleBrackets),
+        );
+    }
+
+    #[test]
+    fn option_with_lifetime_arg_only_surfaces_no_type_argument_variant() {
+        // Promise 2 (MALFORMED OPTION REJECTS) — an `Option<'a>`
+        // outer segment carries angle brackets but no
+        // `syn::GenericArgument::Type` inside (the sole arg is a
+        // lifetime). Peer to the bare-`Option` gate on the SAME
+        // typed-Err surface. The two variants together cover the
+        // closed set of syntactically-distinct malformed shapes
+        // both `classify_option`'s `let Ok(inner) =
+        // first_generic_type(last) else { ... };` gate silently
+        // absorbed pre-lift.
+        assert_eq!(
+            walk_for_malformed_outer_wrapper(&parse_ty("Option<'a>")),
+            Some(MalformedGenericArg::NoTypeArgument),
+        );
+    }
+
+    #[test]
+    fn bare_vec_without_angle_brackets_surfaces_no_angle_brackets_variant() {
+        // Promise 3 (MALFORMED VEC REJECTS) — Vec-axis sibling of
+        // the bare-`Option` gate on Promise 2. Confirms the
+        // recursor admits both `Option` and `Vec` outer wrapper
+        // names symmetrically; a regression that dispatched only
+        // on `Option` would surface here.
+        assert_eq!(
+            walk_for_malformed_outer_wrapper(&parse_ty("Vec")),
+            Some(MalformedGenericArg::NoAngleBrackets),
+        );
+    }
+
+    #[test]
+    fn vec_with_lifetime_arg_only_surfaces_no_type_argument_variant() {
+        // Promise 3 (MALFORMED VEC REJECTS) — Vec-axis sibling of
+        // the `Option<'a>` gate on Promise 2. `Vec<'a>` is not
+        // idiomatic Rust (Vec doesn't carry lifetime parameters
+        // in its actual signature), but the syn-level parse admits
+        // the shape and the derive's classifier fall-through
+        // silently absorbs it pre-lift.
+        assert_eq!(
+            walk_for_malformed_outer_wrapper(&parse_ty("Vec<'a>")),
+            Some(MalformedGenericArg::NoTypeArgument),
+        );
+    }
+
+    #[test]
+    fn malformed_vec_nested_inside_well_formed_option_surfaces_at_the_inner_segment() {
+        // Promise 4 (RECURSIVE WALK) — a malformed inner segment
+        // nested inside a well-formed outer wrapper surfaces at
+        // the FIRST malformed segment in the depth-first walk. The
+        // outer `Option<...>` gate passes (the inner IS a type
+        // argument), the recursion descends into `Vec<'a>`, and
+        // the inner `Vec` gate rejects with `NoTypeArgument`.
+        // Pins the depth-first-first-malformed-wins contract that
+        // matches how a compile-error diagnostic stops at the
+        // first source of drift rather than aggregating.
+        assert_eq!(
+            walk_for_malformed_outer_wrapper(&parse_ty("Option<Vec<'a>>")),
+            Some(MalformedGenericArg::NoTypeArgument),
+        );
+    }
+
+    #[test]
+    fn malformed_option_nested_inside_well_formed_vec_surfaces_at_the_inner_segment() {
+        // Promise 4 (RECURSIVE WALK) — mirror of the previous
+        // test with the collection wrappers swapped. A bare
+        // `Option` (no angle brackets) nested inside a
+        // well-formed `Vec<T>` surfaces the inner segment's
+        // `NoAngleBrackets` variant, confirming both variants
+        // propagate correctly through the recursion.
+        assert_eq!(
+            walk_for_malformed_outer_wrapper(&parse_ty("Vec<Option>")),
+            Some(MalformedGenericArg::NoAngleBrackets),
+        );
+    }
+
+    #[test]
+    fn non_path_types_project_to_none_without_walking() {
+        // Boundary contract — the walk's outer `let Type::Path(...)
+        // = ty else { return None; };` gate short-circuits on any
+        // non-path type shape (tuple types, reference types,
+        // trait objects, function types). Rules out a regression
+        // that panicked or false-positive-rejected these shapes;
+        // they fall through the classifier's own recursor to
+        // `Kind::Deserialize(quote! { #ty })` and get their
+        // rejection at the downstream `DeserializeOwned` trait-
+        // bound gate rather than through this pre-check.
+        assert_eq!(
+            walk_for_malformed_outer_wrapper(&parse_ty("(i32, String)")),
+            None,
+        );
+        assert_eq!(walk_for_malformed_outer_wrapper(&parse_ty("&'a str")), None,);
     }
 }
 

@@ -3764,6 +3764,126 @@ pub fn extract_optional_vec_via_serde<T: DeserializeOwned>(
     optional_from_required(kw, key, extract_vec_via_serde::<T>)
 }
 
+/// Universal-serde-fallthrough peer of the atom-family [`AtomKwarg`]
+/// trait — same posture (`Self`-bound trait with four mode-suffixed
+/// trait defaults composing per-axis primitives through a shared
+/// substrate skeleton), but the axis is the `serde::Deserialize`
+/// universal-JSON bridge rather than one of the four atom-family
+/// axes (`&str` / `bool` / `i64` / `f64`).
+///
+/// The four trait defaults ([`Self::extract_kwarg`] /
+/// [`Self::extract_optional_kwarg`] / [`Self::extract_vec_kwarg`] /
+/// [`Self::extract_optional_vec_kwarg`]) delegate to the four
+/// [`extract_via_serde`] / [`extract_optional_via_serde`] /
+/// [`extract_vec_via_serde`] / [`extract_optional_vec_via_serde`]
+/// free functions at the substrate — the ONE
+/// [`from_value_with_path`] + [`optional_from_required`] +
+/// [`extract_list`] composition every serde-Deserialize kwarg field
+/// already funnels through, exposed here through a `Self`-bound
+/// trait so the derive macro's `Kind::(Optional?)(Vec?)Deserialize`
+/// emission surface dispatches through the SAME
+/// `<T as ::tatara_lisp::domain::DeserializeKwarg>::<method>(&kw,
+/// #key)?` UFCS shape its atom-family and numeric-narrowed peers
+/// already use ([`AtomKwarg`] and [`NarrowNumeric`] on those axes).
+///
+/// A blanket impl for every `T: DeserializeOwned` binds the trait
+/// mechanically — the same closed set the four free-function peers
+/// already gate against — so a hand-written `TataraDomain` impl AND
+/// the derive share ONE trait-dispatch surface at the universal-
+/// serde-fallthrough axis with no axis-typed impl per field-type at
+/// downstream consumer sites.
+///
+/// Post-lift the derive's non-narrowed emission surface consists of
+/// ONE trait dispatch primitive per axis-family:
+///
+/// | axis-family        | trait                      | derive helper                        |
+/// |--------------------|----------------------------|--------------------------------------|
+/// | atom-family        | [`AtomKwarg<'a>`]          | `atom_trait_dispatch_call`           |
+/// | numeric-narrowed   | [`NarrowNumeric`]          | `narrow_trait_dispatch_call`         |
+/// | universal-serde    | [`DeserializeKwarg`]       | `deserialize_trait_dispatch_call`    |
+///
+/// A future audit-trail metric, span-carrying diagnostic promotion,
+/// or `?`-suppressed variant on any one of the four modes lands at
+/// ONE trait default here and flows through every
+/// `Kind::(Optional?)(Vec?)Deserialize`-shaped derive emission
+/// mechanically — the same load-bearing shape [`AtomKwarg`]'s trait
+/// defaults give the four atom-family axes.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 2 (free middle — the
+/// universal-serde-fallthrough emission surface lives at ONE trait
+/// dispatch primitive, not restated inline at every derive call
+/// site OR at every hand-written `TataraDomain` impl on the same
+/// axis). THEORY.md §VI.1 (generation over composition — the four
+/// mode-suffixed extractor calls recurred at four derive arms past
+/// the ≥ 2 duplication threshold; lifting them to one trait
+/// dispatch closes the four arms at rustc time with axis identity
+/// riding `Self` at the trait bound rather than the derive's emit
+/// string). THEORY.md §V.1 (knowable platform — the four modes
+/// share ONE trait dispatch, so a future diagnostic promotion at
+/// [`from_value_with_path`] flows through the trait defaults into
+/// every consumer without per-consumer edits).
+pub trait DeserializeKwarg: DeserializeOwned {
+    /// Required scalar kwarg — the trait-dispatched peer of
+    /// [`extract_via_serde`]. Composes the substrate's serde
+    /// bridge through [`from_value_with_path`] at
+    /// [`KwargPath::named(key)`] — same posture the four
+    /// atom-family peers give through [`AtomKwarg::extract_kwarg`].
+    fn extract_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Self> {
+        extract_via_serde(kw, key)
+    }
+
+    /// `Option<Self>` sibling of [`Self::extract_kwarg`] — the
+    /// trait-dispatched peer of [`extract_optional_via_serde`].
+    /// Absent kwarg short-circuits to `Ok(None)` through the
+    /// shared [`optional_from_required`] present-vs-absent
+    /// bifurcation primitive; present kwarg flows through
+    /// [`Self::extract_kwarg`] and wraps the decoded value in
+    /// `Some(_)`.
+    fn extract_optional_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Option<Self>> {
+        extract_optional_via_serde(kw, key)
+    }
+
+    /// `Vec<Self>` sibling — the trait-dispatched peer of
+    /// [`extract_vec_via_serde`]. Absent kwarg → `Ok(Vec::new())`;
+    /// present-but-non-list kwarg rejects with the axis-typed
+    /// [`LispError::TypeMismatch`] variant the shared
+    /// [`extract_list`] outer-shape gate emits; per-item decode
+    /// failure inside a present list rejects with the SAME
+    /// [`LispError::KwargDeserialize { path: KwargPath::Item {
+    /// key, idx }, .. }`] variant [`from_value_with_path`] emits
+    /// at [`KwargPath::item(key, idx)`].
+    fn extract_vec_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Vec<Self>> {
+        extract_vec_via_serde(kw, key)
+    }
+
+    /// `Option<Vec<Self>>` sibling — the trait-dispatched peer of
+    /// [`extract_optional_vec_via_serde`]. Distinguishes an
+    /// ABSENT kwarg (`Ok(None)`) from a PRESENT empty list
+    /// (`Ok(Some(Vec::new()))`) — the present-vs-absent
+    /// bifurcation the shared [`optional_from_required`]
+    /// primitive owns. Peer to
+    /// [`AtomKwarg::extract_optional_list_kwarg`] on the
+    /// atom-family list-family surface — both trait defaults
+    /// route their present-vs-absent bifurcation through the SAME
+    /// [`optional_from_required`] substrate primitive, differing
+    /// only in which required-peer they compose
+    /// ([`Self::extract_vec_kwarg`] vs.
+    /// [`AtomKwarg::extract_list_kwarg`]).
+    fn extract_optional_vec_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Option<Vec<Self>>> {
+        extract_optional_vec_via_serde(kw, key)
+    }
+}
+
+/// Blanket impl — every `T: DeserializeOwned` picks up the four
+/// [`DeserializeKwarg`] trait defaults mechanically. The same
+/// closed set the four free-function peers ([`extract_via_serde`] /
+/// [`extract_optional_via_serde`] / [`extract_vec_via_serde`] /
+/// [`extract_optional_vec_via_serde`]) already gate against;
+/// downstream consumer sites (hand-written `TataraDomain` impls,
+/// the derive's per-field emission) reach the four defaults
+/// through UFCS without an axis-typed impl per field-type.
+impl<T: DeserializeOwned> DeserializeKwarg for T {}
+
 // ── Domain registry (runtime-registered, callable by keyword) ───────
 
 /// Erased handler that knows how to compile a form and hand back a typed
@@ -8586,6 +8706,156 @@ mod tests {
                 } if key == "steps" && !message.is_empty()
             ),
             "expected KwargDeserialize {{ path: KwargPath::Item {{ key: \"steps\", idx: 1 }}, .. }}, got {err:?}"
+        );
+    }
+
+    // ── DeserializeKwarg — four trait-default delegation-identity pins ──
+    //
+    // Peer to the four `AtomKwarg` trait-default pins on the atom-family
+    // axes (`extract_owned_kwarg_defaults_lift_the_extracted_value_
+    // through_to_owned_item_per_axis` and the earlier
+    // `extract_list_kwarg` / `extract_optional_list_kwarg` sweep). The
+    // trait's blanket impl for every `T: DeserializeOwned` binds
+    // mechanically, so the four defaults are the substrate's ONE
+    // dispatch surface every derive-emitted
+    // `Kind::(Optional?)(Vec?)Deserialize` field routes through
+    // post-lift via UFCS at
+    // `<T as DeserializeKwarg>::extract_(optional_)?(vec_)?kwarg(&kw,
+    // #key)?`. A regression that silently reshaped the delegation
+    // (e.g. a `Self::extract_kwarg` override that bypassed
+    // `extract_via_serde`'s `from_value_with_path` bridge, or an
+    // `extract_optional_kwarg` that unwrapped `None` to `Default`)
+    // would surface here as (a) inequality on the present-arm output,
+    // (b) inequality on the rejection message, or (c) a wrong
+    // `LispError` variant.
+    //
+    // Four peers × two modes = ONE promise: the four trait defaults
+    // are byte-identical delegates onto the four free-function peers
+    // on the universal-serde-fallthrough axis. The trait's whole
+    // point is that the derive stops routing through those bare
+    // free-function names and instead threads the axis identity
+    // through `Self` at the UFCS trait bound; the delegation-
+    // identity pins here make the "no functional change on the
+    // present-arm / rejection axis" contract structural rather than
+    // eyeballed.
+
+    #[test]
+    fn deserialize_kwarg_extract_kwarg_default_matches_extract_via_serde_byte_identically() {
+        let args = kwargs_of("(_ :level Warning)");
+        let kw = parse_kwargs(&args).unwrap();
+        let via_trait: Severity =
+            <Severity as DeserializeKwarg>::extract_kwarg(&kw, "level").unwrap();
+        let via_freefn: Severity = extract_via_serde(&kw, "level").unwrap();
+        assert_eq!(via_trait, via_freefn);
+    }
+
+    #[test]
+    fn deserialize_kwarg_extract_optional_kwarg_default_forwards_rejection_and_absent_arms() {
+        // Absent-arm: `None`, no substrate work.
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        assert_eq!(
+            <Severity as DeserializeKwarg>::extract_optional_kwarg(&kw, "level").unwrap(),
+            None,
+        );
+        // Present-arm: byte-identical to `extract_optional_via_serde`.
+        let args = kwargs_of("(_ :level Critical)");
+        let kw = parse_kwargs(&args).unwrap();
+        let via_trait: Option<Severity> =
+            <Severity as DeserializeKwarg>::extract_optional_kwarg(&kw, "level").unwrap();
+        let via_freefn: Option<Severity> = extract_optional_via_serde(&kw, "level").unwrap();
+        assert_eq!(via_trait, via_freefn);
+        // Present-but-non-decodable: `LispError::KwargDeserialize {
+        // path: KwargPath::Named("level"), .. }` — SAME variant the
+        // required peer emits at the shared `from_value_with_path`
+        // bridge.
+        let args = kwargs_of("(_ :level 5)");
+        let kw = parse_kwargs(&args).unwrap();
+        let via_trait_err = <Severity as DeserializeKwarg>::extract_optional_kwarg(&kw, "level")
+            .expect_err("5 is not a Severity");
+        let via_freefn_err =
+            extract_optional_via_serde::<Severity>(&kw, "level").expect_err("5 is not a Severity");
+        assert!(matches!(
+            via_trait_err,
+            LispError::KwargDeserialize {
+                path: KwargPath::Named(ref k),
+                ..
+            } if k == "level"
+        ));
+        assert_eq!(
+            type_err_message(via_trait_err),
+            type_err_message(via_freefn_err),
+        );
+    }
+
+    #[test]
+    fn deserialize_kwarg_extract_vec_kwarg_default_collects_and_indexes_failing_item() {
+        // Happy path.
+        let args = kwargs_of(
+            r#"(_ :steps (
+                  (:notify-ref "a" :wait-minutes 0)
+                  (:notify-ref "b" :wait-minutes 5)))"#,
+        );
+        let kw = parse_kwargs(&args).unwrap();
+        let via_trait: Vec<EscalationStep> =
+            <EscalationStep as DeserializeKwarg>::extract_vec_kwarg(&kw, "steps").unwrap();
+        let via_freefn: Vec<EscalationStep> = extract_vec_via_serde(&kw, "steps").unwrap();
+        assert_eq!(via_trait, via_freefn);
+        // Per-item failure indexes at `KwargPath::Item { idx: 1 }` —
+        // SAME structural variant `extract_vec_via_serde` emits.
+        let args = kwargs_of(
+            r#"(_ :steps (
+                  (:notify-ref "ok")
+                  (:notify-ref 7)))"#,
+        );
+        let kw = parse_kwargs(&args).unwrap();
+        let err = <EscalationStep as DeserializeKwarg>::extract_vec_kwarg(&kw, "steps")
+            .expect_err("7 is not a notify-ref string");
+        assert!(
+            matches!(
+                err,
+                LispError::KwargDeserialize {
+                    path: KwargPath::Item { ref key, idx: 1 },
+                    ..
+                } if key == "steps"
+            ),
+            "expected KwargDeserialize on the per-item bridge, got {err:?}",
+        );
+    }
+
+    #[test]
+    fn deserialize_kwarg_extract_optional_vec_kwarg_default_preserves_present_vs_absent() {
+        // Absent → `None`.
+        let args = kwargs_of("(_ :other 1)");
+        let kw = parse_kwargs(&args).unwrap();
+        assert_eq!(
+            <EscalationStep as DeserializeKwarg>::extract_optional_vec_kwarg(&kw, "steps").unwrap(),
+            None,
+        );
+        // Present-empty → `Some(vec![])`. The exact bifurcation the
+        // `optional_from_required` gate exists to preserve — a
+        // regression that collapsed present-empty to `None` would
+        // surface here.
+        let args = kwargs_of("(_ :steps ())");
+        let kw = parse_kwargs(&args).unwrap();
+        assert_eq!(
+            <EscalationStep as DeserializeKwarg>::extract_optional_vec_kwarg(&kw, "steps").unwrap(),
+            Some(Vec::<EscalationStep>::new()),
+        );
+        // Present-non-list → SAME `LispError::TypeMismatch` variant
+        // `extract_optional_vec_via_serde` emits at the shared
+        // `extract_list` outer-shape gate.
+        let args = kwargs_of(r#"(_ :steps "scalar")"#);
+        let kw = parse_kwargs(&args).unwrap();
+        let via_trait_err =
+            <EscalationStep as DeserializeKwarg>::extract_optional_vec_kwarg(&kw, "steps")
+                .expect_err("scalar :steps is not a list");
+        let via_freefn_err = extract_optional_vec_via_serde::<EscalationStep>(&kw, "steps")
+            .expect_err("scalar :steps is not a list");
+        assert!(matches!(via_trait_err, LispError::TypeMismatch { .. }));
+        assert_eq!(
+            type_err_message(via_trait_err),
+            type_err_message(via_freefn_err),
         );
     }
 

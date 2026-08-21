@@ -2212,10 +2212,33 @@ fn extractor_for(ty: &Type, key: &str, default: &SerdeDefault) -> Result<TokenSt
             wrap_with_missing_key_default(base, key, quote! { ::std::default::Default::default() })
         }
         SerdeDefault::Path(path) => {
-            let path_ts: TokenStream2 = path
-                .parse()
+            // Sharpened parse: `syn::parse_str::<syn::Path>` — the
+            // syntactic path parser — replaces the pre-tightening
+            // `TokenStream2::parse` lexer-level parse. The
+            // `TokenStream2` parse accepted ANY string proc_macro2
+            // could tokenize (e.g. `"foo bar"` lexes as two
+            // adjacent idents), and `quote! { #path_ts() }` then
+            // spliced the broken tokens into the derived code as
+            // `foo bar ()` — invalid Rust that fails at the derive
+            // consumer's rustc pass with a synthetic-span error
+            // hard to trace back to the `#[serde(default = "…")]`
+            // attribute. Post-tightening the parse rejects at the
+            // derive's Err surface with a `syn::Error`-carried
+            // diagnostic that `spanned_compile_error` will span
+            // at the field's own `syn::Type` position — matching
+            // the failure locus every other typed-entry gate in
+            // the derive (`extract_keyword`, the atom / narrow /
+            // deserialize trait-dispatch primitives) already
+            // carries. `#path` interpolates via `syn::Path`'s own
+            // `ToTokens` impl, emitting the same segment + `::`
+            // separator stream `TokenStream2::parse` produces on
+            // an equivalent input, so every workspace-existing
+            // `#[serde(default = "default_true")]` /
+            // `#[serde(default = "path::to::fn")]` field emits
+            // byte-identically post-lift.
+            let path: syn::Path = syn::parse_str(path)
                 .map_err(|e| format!("invalid #[serde(default = {path:?})] path: {e}"))?;
-            wrap_with_missing_key_default(base, key, quote! { #path_ts() })
+            wrap_with_missing_key_default(base, key, quote! { #path() })
         }
     })
 }
@@ -5451,17 +5474,21 @@ mod wrap_with_missing_key_default_tests {
         // `extractor_for` must produce byte-identical emission to a
         // manual invocation of `wrap_with_missing_key_default` with
         // the arm's own base extractor and the arm's own parsed
-        // `#path_ts()` fallback expression. Sweep a bare-ident path
+        // `#path()` fallback expression. Sweep a bare-ident path
         // ("default_true" — the shape tatara-init's config.rs binds
         // for `reap_zombies`) so the delegate pin fires on the
         // consumer-representative shape rather than on an artificial
         // dotted path.
         //
-        // A regression that reintroduced a hand-rolled `quote! { if
-        // kw.contains_key(#key) { #base } else { #path_ts() } }`
-        // block at this arm (breaking the substrate-lift claim)
-        // would surface here rather than as silent drift at every
-        // consumer struct with a `#[serde(default = "path")]` field.
+        // Post-tightening the arm parses the path string as a
+        // `syn::Path` (the syntactic-level parser) rather than as
+        // `TokenStream2` (the lexer-level parser); the expected side
+        // mirrors that, so a regression that (a) reintroduced a
+        // hand-rolled `quote! { if kw.contains_key(#key) { #base }
+        // else { #path() } }` block at this arm, or (b) silently
+        // relaxed the parse back to `TokenStream2::parse`, surfaces
+        // here rather than as silent drift at every consumer struct
+        // with a `#[serde(default = "path")]` field.
         let ty: syn::Type = parse_str("bool").unwrap();
         let actual = extractor_for(
             &ty,
@@ -5471,8 +5498,8 @@ mod wrap_with_missing_key_default_tests {
         .expect("SerdeDefault::Path arm must succeed on a bool field");
         let base = extractor_for(&ty, "reap-zombies", &SerdeDefault::Absent)
             .expect("SerdeDefault::Absent arm must succeed on a bool field");
-        let path_ts: proc_macro2::TokenStream = "default_true".parse().unwrap();
-        let expected = wrap_with_missing_key_default(base, "reap-zombies", quote! { #path_ts() });
+        let path: syn::Path = syn::parse_str("default_true").unwrap();
+        let expected = wrap_with_missing_key_default(base, "reap-zombies", quote! { #path() });
         assert_eq!(
             actual.to_string(),
             expected.to_string(),
@@ -5515,26 +5542,114 @@ mod wrap_with_missing_key_default_tests {
         // primitive is invoked. The primitive is infallible (it
         // accepts any pre-composed `TokenStream2` at the trailing
         // slot), so an `Err(String)` return from `extractor_for`
-        // pinpoints the arm's own `path.parse()` gate rather than a
-        // hypothetical primitive-side failure. Pins the error
-        // message shape carries the `#[serde(default` prefix so the
-        // downstream compile-error at the derive consumer names the
-        // attribute source, matching the pre-lift error contract.
+        // pinpoints the arm's own `syn::parse_str::<syn::Path>`
+        // gate rather than a hypothetical primitive-side failure.
+        // Pins the error message shape carries the `#[serde(default`
+        // prefix so the downstream compile-error at the derive
+        // consumer names the attribute source.
         //
-        // `proc_macro2::TokenStream::parse` errors on unbalanced
-        // delimiters — an unmatched `(` at the head of the path is
-        // the smallest input that trips the lexer, chosen for its
-        // stability across proc-macro2 versions (a stricter parser
-        // like `syn::Path` would reject more inputs but changes the
-        // arm's own parse gate, which this test intentionally does
-        // not exercise).
+        // Sweep TWO representative unparseables that trip DIFFERENT
+        // parser layers: (a) `"(unbalanced"` — the smallest input
+        // that trips the LEXER (unmatched delimiter — trips even
+        // the pre-tightening `TokenStream2::parse`); (b)
+        // `"foo bar"` — a lexically-valid two-ident sequence that
+        // trips the SYNTACTIC `syn::Path` parser (a path cannot
+        // carry two adjacent idents without a `::` separator). The
+        // second case was silently accepted by the pre-tightening
+        // `TokenStream2::parse` and spliced through to the derive
+        // consumer as broken emit tokens (`foo bar ()`), producing
+        // a rustc error at a synthetic span hard to trace back to
+        // the `#[serde(default = "…")]` attribute — the class of
+        // gate-leak this tightening closes.
         let ty: syn::Type = parse_str("String").unwrap();
-        let err = extractor_for(&ty, "name", &SerdeDefault::Path("(unbalanced".to_string()))
-            .expect_err("SerdeDefault::Path arm must fail on an unparseable path");
-        assert!(
-            err.contains("#[serde(default"),
-            "error must name the attribute source, got: {err}",
-        );
+        for unparseable in ["(unbalanced", "foo bar", "1invalid"] {
+            let err = extractor_for(&ty, "name", &SerdeDefault::Path(unparseable.to_string()))
+                .expect_err("SerdeDefault::Path arm must fail on an unparseable path");
+            assert!(
+                err.contains("#[serde(default"),
+                "error must name the attribute source for {unparseable:?}, got: {err}",
+            );
+            assert!(
+                err.contains(unparseable),
+                "error must name the offending path for {unparseable:?}, got: {err}",
+            );
+        }
+    }
+
+    #[test]
+    fn path_default_arm_accepts_every_workspace_representative_valid_path_shape() {
+        // Positive-path pin — every path shape the workspace's own
+        // `#[serde(default = "…")]` usage carries continues to parse
+        // clean under the tightened `syn::parse_str::<syn::Path>`
+        // gate. Sweep the three shapes observed at the ~200
+        // workspace call sites: (a) BARE IDENT (`default_true`,
+        // `default_ttl`, `default_max_concurrent`, …) — the
+        // dominant shape across `tatara-init/src/config.rs`,
+        // `tatara-core/src/config.rs`, etc.; (b) DOTTED PATH
+        // (`path::to::fn`) — the multi-segment shape callers
+        // use to bind a module-qualified fn; (c) LEADING-COLON
+        // FULLY-QUALIFIED PATH (`::std::default::Default::default`)
+        // — the absolute-qualification shape a `#[serde(default =
+        // "…")]` attribute can bind to route through
+        // `::std::default::Default::default` (matching what the
+        // sibling `SerdeDefault::Trait` arm binds statically).
+        //
+        // A regression that over-tightened the parse (rejecting a
+        // shape workspace consumers already carry) would surface
+        // here rather than as a per-consumer derive failure at
+        // rustc time — catching a "syn::PathSegment vs syn::Path"
+        // hypothetical mis-parse or an accidental
+        // `syn::TypePath`-instead-of-`syn::Path` swap.
+        let ty: syn::Type = parse_str("bool").unwrap();
+        for path_str in [
+            "default_true",
+            "path::to::function",
+            "::std::default::Default::default",
+        ] {
+            extractor_for(&ty, "flag", &SerdeDefault::Path(path_str.to_string()))
+                .unwrap_or_else(|err| {
+                    panic!(
+                        "SerdeDefault::Path arm must accept {path_str:?} (a workspace-representative shape), got err: {err}"
+                    )
+                });
+        }
+    }
+
+    #[test]
+    fn path_default_arm_emits_the_syn_path_to_tokens_stream_at_the_fallback_slot() {
+        // Emission-shape pin — the tightened arm emits the SAME
+        // fallback-slot token stream `<syn::Path as
+        // quote::ToTokens>::to_tokens` produces for the parsed path,
+        // followed by a `()` call. Sweep two shapes: (a) a bare
+        // ident (`default_true`) — a single Ident token followed by
+        // `()`; (b) a dotted path (`path::to::function`) — three
+        // Ident tokens joined by `::` Punct pairs followed by `()`.
+        //
+        // Pre-tightening the fallback slot was `#path_ts()`, with
+        // `#path_ts: TokenStream2` — after `to_string()`
+        // normalization the emitted characters were byte-identical
+        // to `#path()` with `#path: syn::Path` for every well-formed
+        // input, because both spliced the same sequence of Ident +
+        // `::` Punct tokens into the quote. Post-tightening this
+        // equivalence is a load-bearing invariant (not an accident)
+        // — a regression that swapped the `syn::Path` emission for
+        // a stringified re-parse (e.g. `let ts: TokenStream2 =
+        // path.to_token_stream()`) would silently change the
+        // emitted token stream's `Spacing` — this test catches that
+        // at the emission-shape boundary rather than as a
+        // downstream implementor's hard-to-trace regression.
+        let ty: syn::Type = parse_str("bool").unwrap();
+        for path_str in ["default_true", "path::to::function"] {
+            let actual = extractor_for(&ty, "flag", &SerdeDefault::Path(path_str.to_string()))
+                .expect("well-formed path must parse under syn::Path");
+            let path: syn::Path = syn::parse_str(path_str).unwrap();
+            let expected_call = quote! { #path() }.to_string();
+            let body = actual.to_string();
+            assert!(
+                body.contains(&expected_call),
+                "SerdeDefault::Path arm must splice the syn::Path fallback call {expected_call:?} into the emission, got: {body}",
+            );
+        }
     }
 }
 

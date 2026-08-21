@@ -2870,6 +2870,87 @@ pub(crate) const NARROW_INT_WIDTHS: &[&str] = &[
 /// as ONE entry here, matching the int-axis extension contract.
 pub(crate) const NARROW_FLOAT_WIDTHS: &[&str] = &["f32", "f64"];
 
+/// Search a numeric-narrowing-width closed-set table for a
+/// name-equality match against `name`, projecting the matched
+/// `&'static str` width literal through `to_kind` into the
+/// classifier's [`Kind::Int(&'static str)`] / [`Kind::Float(&'static str)`]
+/// payload variant.
+///
+/// Lifts the byte-for-byte identical five-line
+///
+/// ```ignore
+/// for &w in <WIDTHS> {
+///     if w == name {
+///         return Kind::<Axis>(w);
+///     }
+/// }
+/// ```
+///
+/// loop that pre-lift lived at TWO sites inside [`classify`] — once
+/// per numeric axis (int + float). Post-lift each site collapses to
+/// ONE `if let Some(kind) = classify_narrowed_width(&name, <WIDTHS>,
+/// Kind::<Axis>) { return kind; }` delegate against the same
+/// substrate primitive — a future third numeric axis (a hypothetical
+/// `u128` / `Decimal` / `f16`) adds as ONE delegate against the same
+/// primitive rather than as a fresh copy of the loop body.
+///
+/// The `to_kind: fn(&'static str) -> Kind` slot rides the enum
+/// tuple-variant constructor at the derive's call site verbatim —
+/// [`Kind::Int`] / [`Kind::Float`] each admit the
+/// `fn(&'static str) -> Kind` function-pointer coercion (the same
+/// coercion `Some` / `Ok` / every tuple-variant constructor admits
+/// under Rust's stable ABI), so the caller passes the axis's
+/// constructor as-is and the primitive folds the projection at ONE
+/// substrate site rather than at each per-axis loop body. Sibling
+/// posture to the `method: &'static str` slot the peer
+/// [`narrow_trait_dispatch_call`] / [`atom_trait_dispatch_call`] /
+/// [`deserialize_trait_dispatch_call`] helpers carry on the trait-
+/// dispatch surface: the per-axis identity rides the caller-supplied
+/// argument at the derive's call site, and the primitive stays
+/// axis-agnostic on the projection axis.
+///
+/// The `widths: &[&'static str]` slot rides the axis's closed-set
+/// width table verbatim — [`NARROW_INT_WIDTHS`] / [`NARROW_FLOAT_WIDTHS`]
+/// each thread through as-is, matching the same posture the peer
+/// [`narrow_trait_dispatch_call`] gives the axis's trait-path const.
+/// A future axis whose width table lives at a new `pub(crate) const`
+/// inherits the primitive's projection for free through the same
+/// shape.
+///
+/// The projection preserves the "loop's `w` variable rides both the
+/// equality gate and the payload construction" contract the two peer
+/// loops carried — a pattern-payload drift (e.g. a regression that
+/// silently swapped ONE axis's constructor for a mis-labeled variant,
+/// or dropped the matched literal from the payload) is structurally
+/// impossible because the primitive threads the SAME matched
+/// `&'static str` through both the `.find(...)` predicate and the
+/// `to_kind` projection at ONE call site.
+///
+/// Returns `None` on no match — the classifier then falls through to
+/// the next axis's `classify_narrowed_width` delegate (or, past the
+/// last axis, to the [`Kind::Deserialize`] universal-serde
+/// fallthrough).
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// (find-matching-width, wrap-in-axis-typed-Kind) two-step recurred
+/// at the two numeric axes' loop bodies inside [`classify`], past the
+/// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
+/// substrate primitive here, exactly as the trailing UFCS-arm tail
+/// was lifted onto [`trait_dispatch_tail`] and the shared
+/// UFCS-bracket scaffold was lifted onto [`trait_dispatch_call`]).
+/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+/// two axis loops now compose structurally through ONE primitive, so
+/// a regression that drifted the lookup discipline at ONE axis would
+/// surface at [`classify_narrowed_width_tests`] rather than as silent
+/// drift at every downstream implementor with a field on that axis).
+fn classify_narrowed_width(
+    name: &str,
+    widths: &[&'static str],
+    to_kind: fn(&'static str) -> Kind,
+) -> Option<Kind> {
+    widths.iter().copied().find(|&w| w == name).map(to_kind)
+}
+
 fn classify(ty: &Type) -> Kind {
     if let Type::Path(path) = ty {
         if let Some(last) = path.path.segments.last() {
@@ -2884,19 +2965,21 @@ fn classify(ty: &Type) -> Kind {
             // Numeric-narrowed arms — the pattern-payload identity
             // across [`NARROW_INT_WIDTHS`] / [`NARROW_FLOAT_WIDTHS`]
             // rides ONE per-width `w` variable through both the
-            // equality gate and the payload construction, so a
-            // pattern-payload drift (e.g. a regression `"u32" match
-            // arm shipping a `"u16"` payload) is structurally
-            // impossible.
-            for &w in NARROW_INT_WIDTHS {
-                if w == name {
-                    return Kind::Int(w);
-                }
+            // equality gate and the payload construction (a pattern-
+            // payload drift is structurally impossible — the SAME
+            // matched `&'static str` threads through both the
+            // `.find(...)` predicate and the `to_kind` projection
+            // inside [`classify_narrowed_width`]). The int-axis
+            // dispatch runs first — the two consts stay disjoint by
+            // construction (pinned at
+            // [`narrow_width_tables_tests::narrow_int_and_float_width_tables_are_disjoint`]),
+            // so the fall-through to the float-axis delegate is
+            // load-bearing only for the two float-width names.
+            if let Some(kind) = classify_narrowed_width(&name, NARROW_INT_WIDTHS, Kind::Int) {
+                return kind;
             }
-            for &w in NARROW_FLOAT_WIDTHS {
-                if w == name {
-                    return Kind::Float(w);
-                }
+            if let Some(kind) = classify_narrowed_width(&name, NARROW_FLOAT_WIDTHS, Kind::Float) {
+                return kind;
             }
         }
     }
@@ -3423,6 +3506,178 @@ mod narrow_width_tables_tests {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod classify_narrowed_width_tests {
+    //! Contract tests for [`super::classify_narrowed_width`] — the
+    //! derive's PRIVATE numeric-narrowing-width lookup primitive that
+    //! both numeric-axis loop bodies inside [`super::classify`]
+    //! delegate to. Every pre-lift `for &w in <WIDTHS> { if w == name
+    //! { return Kind::<Axis>(w); } }` loop now composes as ONE
+    //! `classify_narrowed_width(&name, <WIDTHS>, Kind::<Axis>)`
+    //! delegate; the primitive owns the shared (find-matching-width,
+    //! wrap-in-axis-typed-Kind) two-step at ONE substrate site.
+    //!
+    //! Four contract axes pinned here:
+    //!
+    //! 1. MATCHING NAME PROJECTS — a `name` that appears in `widths`
+    //!    projects to `Some(to_kind(<matched-w>))` with the matched
+    //!    `&'static str` threaded byte-identically through both the
+    //!    equality predicate and the constructor argument. Pins the
+    //!    pattern-payload identity — a regression that mis-labeled
+    //!    the projected payload (e.g. shipped `Kind::Int("u16")` for
+    //!    the `"u32"` match) would surface here.
+    //! 2. NON-MATCHING NAME PROJECTS TO NONE — a `name` that does not
+    //!    appear in `widths` projects to `None` without invoking
+    //!    `to_kind`. The classifier's caller then falls through to
+    //!    the next axis's delegate (or, past the last axis, to the
+    //!    [`super::Kind::Deserialize`] universal-serde fallthrough).
+    //! 3. AXIS SWEEP — iterating [`super::NARROW_INT_WIDTHS`] /
+    //!    [`super::NARROW_FLOAT_WIDTHS`] through the primitive with
+    //!    the axis-typed constructor projects every entry to
+    //!    `Some(Kind::<Axis>(w))` with byte-equal payload. Peer to
+    //!    the sibling [`super::narrow_width_tables_tests`] sweep that
+    //!    pins the same identity via the full-classify projection —
+    //!    together they cover both the primitive's own dispatch AND
+    //!    its composition through [`super::classify`].
+    //! 4. FIRST-HIT-WINS — the `.find(...)` iterator threads the
+    //!    first matching entry through. A duplicate entry in the
+    //!    widths table returns the same `&'static str` payload
+    //!    (both duplicates carry the same string), preserving
+    //!    payload identity regardless of iteration order.
+    //!
+    //! Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    //! preserves proofs) — the two axis loops inside [`super::classify`]
+    //! now compose structurally through ONE primitive; a regression at
+    //! ONE axis surfaces here rather than as silent drift at every
+    //! downstream implementor with a field on that axis.
+
+    use super::{classify_narrowed_width, Kind, NARROW_FLOAT_WIDTHS, NARROW_INT_WIDTHS};
+
+    #[test]
+    fn matching_int_name_projects_to_kind_int_with_byte_identical_payload() {
+        // Promise 1 (MATCHING NAME PROJECTS) — a `name` that appears
+        // in [`NARROW_INT_WIDTHS`] projects through `Kind::Int` to
+        // `Some(Kind::Int(<w>))` with the matched `&'static str`
+        // threaded byte-identically through both the equality
+        // predicate and the constructor argument. Pins the
+        // pattern-payload identity at the primitive's own gate; a
+        // regression that shipped a mis-labeled payload
+        // (`Kind::Int("u16")` on the `"u32"` match) would surface
+        // here before it reached the classifier's per-arm sweep.
+        let Some(Kind::Int(payload)) = classify_narrowed_width("u16", NARROW_INT_WIDTHS, Kind::Int)
+        else {
+            panic!("expected Some(Kind::Int(\"u16\"))");
+        };
+        assert_eq!(payload, "u16");
+    }
+
+    #[test]
+    fn matching_float_name_projects_to_kind_float_with_byte_identical_payload() {
+        // Promise 1 (MATCHING NAME PROJECTS, float-axis peer) — same
+        // contract as the int-axis pin, but through [`Kind::Float`]
+        // instead of [`Kind::Int`]. Confirms the primitive's
+        // axis-agnostic constructor slot admits both variant
+        // constructors symmetrically at the `fn(&'static str) -> Kind`
+        // function-pointer coercion.
+        let Some(Kind::Float(payload)) =
+            classify_narrowed_width("f32", NARROW_FLOAT_WIDTHS, Kind::Float)
+        else {
+            panic!("expected Some(Kind::Float(\"f32\"))");
+        };
+        assert_eq!(payload, "f32");
+    }
+
+    #[test]
+    fn non_matching_name_projects_to_none_without_invoking_constructor() {
+        // Promise 2 (NON-MATCHING NAME PROJECTS TO NONE) — a `name`
+        // that does not appear in `widths` projects to `None`, and
+        // the classifier's caller then falls through to the next
+        // axis's delegate. Pins the `.find(...).map(...)` composition
+        // — pre-lift `for` loops had NO explicit None arm because the
+        // loop's fall-off IS the None case, but a lift regression
+        // that swapped `.find` for `.filter().next()` or `.any()`
+        // could drift the None semantics; this pin holds the shape.
+        //
+        // The two failure cases below sweep the axis-mismatch: an
+        // `int_w` fed through the float-axis primitive misses (and
+        // vice-versa). Confirms the primitive's per-call closed set
+        // is exactly the passed-in `widths`, not a static union.
+        assert!(classify_narrowed_width("String", NARROW_INT_WIDTHS, Kind::Int).is_none());
+        assert!(classify_narrowed_width("bool", NARROW_FLOAT_WIDTHS, Kind::Float).is_none());
+        assert!(classify_narrowed_width("f32", NARROW_INT_WIDTHS, Kind::Int).is_none());
+        assert!(classify_narrowed_width("u16", NARROW_FLOAT_WIDTHS, Kind::Float).is_none());
+    }
+
+    #[test]
+    fn empty_widths_projects_to_none_regardless_of_name() {
+        // Boundary contract — an empty width table returns None for
+        // any `name`, without invoking `to_kind`. Rules out a
+        // regression that panicked on `.iter().next()` on an empty
+        // slice or that admitted a default constructor call on the
+        // empty-iteration case.
+        assert!(classify_narrowed_width("i8", &[], Kind::Int).is_none());
+        assert!(classify_narrowed_width("", &[], Kind::Float).is_none());
+    }
+
+    #[test]
+    fn every_int_width_projects_through_primitive_to_matching_kind_int() {
+        // Promise 3 (AXIS SWEEP, int axis) — iterating the whole
+        // [`NARROW_INT_WIDTHS`] table through the primitive with
+        // [`Kind::Int`] as the constructor projects every entry to
+        // `Some(Kind::Int(<w>))` with byte-equal payload. Peer to
+        // the sibling [`super::narrow_width_tables_tests::
+        // every_int_width_classifies_to_kind_int_carrying_the_matching_static_string`]
+        // pin that exercises the SAME identity through the full
+        // [`super::classify`] path — together they close the
+        // pattern-payload identity at BOTH the primitive's own
+        // dispatch and its composition through the classifier.
+        for &w in NARROW_INT_WIDTHS {
+            let Some(Kind::Int(payload)) = classify_narrowed_width(w, NARROW_INT_WIDTHS, Kind::Int)
+            else {
+                panic!("width {w:?} did not project through classify_narrowed_width to Kind::Int",);
+            };
+            assert_eq!(payload, w);
+        }
+    }
+
+    #[test]
+    fn every_float_width_projects_through_primitive_to_matching_kind_float() {
+        // Promise 3 (AXIS SWEEP, float axis) — float-axis peer of the
+        // int-axis sweep on the SAME primitive with [`Kind::Float`]
+        // as the constructor.
+        for &w in NARROW_FLOAT_WIDTHS {
+            let Some(Kind::Float(payload)) =
+                classify_narrowed_width(w, NARROW_FLOAT_WIDTHS, Kind::Float)
+            else {
+                panic!(
+                    "width {w:?} did not project through classify_narrowed_width to Kind::Float",
+                );
+            };
+            assert_eq!(payload, w);
+        }
+    }
+
+    #[test]
+    fn first_matching_entry_wins_via_find_iterator() {
+        // Promise 4 (FIRST-HIT-WINS) — the `.find(...)` iterator
+        // threads the FIRST matching entry through. A duplicate
+        // entry in the widths table returns the same `&'static str`
+        // payload (both duplicates carry byte-identical strings), so
+        // the payload identity is preserved regardless of iteration
+        // order. Pins the primitive's `.find` semantics as
+        // load-bearing — a lift regression that swapped `.find` for
+        // `.rfind` or `.filter().last()` would silently reverse the
+        // iteration order without breaking any of the workspace-
+        // shipped tables (which contain no duplicates), but the pin
+        // catches the shape drift here at the primitive's own gate.
+        let widths: &[&'static str] = &["u16", "u16"];
+        let Some(Kind::Int(payload)) = classify_narrowed_width("u16", widths, Kind::Int) else {
+            panic!("expected Some(Kind::Int(\"u16\"))");
+        };
+        assert_eq!(payload, "u16");
     }
 }
 

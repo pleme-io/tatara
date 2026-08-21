@@ -1572,9 +1572,79 @@ fn trait_dispatch_call(
     }
 }
 
+/// The derive's PRIVATE self-type-payload substrate primitive both
+/// [`narrow_trait_dispatch_call`] and [`atom_trait_dispatch_call`]
+/// share for parsing the `rust_ty: &str` closed-set self-type
+/// literal into a `syn::Type`. Sharpened parse: `syn::parse_str::<syn::Type>`
+/// — the syntactic-level type parser — replaces the pre-tightening
+/// `TokenStream2::parse` lexer-level parse both peer helpers
+/// duplicated at their own local sites.
+///
+/// The two workspace-shipped closed sets that flow through this
+/// primitive:
+/// - the ten int widths + two float widths in
+///   [`NARROW_INT_WIDTHS`] / [`NARROW_FLOAT_WIDTHS`] (all single-
+///   segment primitive type names: `u8`, `u16`, `u32`, `u64`,
+///   `usize`, `isize`, `i8`, `i16`, `i32`, `i64`, `f32`, `f64`) —
+///   routed through the numeric-narrowed peer;
+/// - the two atom-axis literals (`"& str"` and `"bool"`) hard-coded
+///   at the four atom-family list-family and four atom-family
+///   scalar-family arms in [`extractor_for`] — routed through the
+///   atom peer.
+///
+/// Every one of the 14 closed-set values above parses byte-
+/// identically under both the lexer-level `TokenStream2::parse` and
+/// the syntactic-level `syn::parse_str::<syn::Type>` — `syn::Type`'s
+/// `ToTokens` impl emits the same token stream the pre-lift
+/// `TokenStream2::parse` produced on equivalent input (single
+/// `Ident` for the primitive-type names; `[Punct('&'), Ident("str")]`
+/// pair for the `& str` reference literal). Every downstream
+/// implementor's UFCS bracket emits byte-identically post-lift.
+///
+/// The two parsers DIVERGE on the class of gate-leak this primitive
+/// closes: lexically-valid but syntactically-invalid self-type
+/// strings (e.g. `"foo bar"` — two adjacent idents with no `::` or
+/// `&` separator; `"1invalid"` — a leading-digit non-ident;
+/// `"as"` — a reserved keyword segment). Pre-tightening the lexer
+/// accepted all three; `quote! { <#narrowed as #trait_path>::#tail }`
+/// then spliced the broken tokens into the derived code as
+/// `<foo bar as ...>::…` / `<1invalid as ...>::…` / `<as as ...>::…`,
+/// producing an invalid-Rust rustc rejection at a synthetic span in
+/// the derive-generated file — hard to trace back to the offending
+/// self-type literal's source. Post-tightening the parse rejects at
+/// the primitive's own `unwrap_or_else` panic with a `syn::Error`-
+/// carried diagnostic that names both the offending self-type
+/// literal and the syn-level parse failure verbatim — matching the
+/// failure locus the peer typed-entry gate [`trait_dispatch_call`]'s
+/// `syn::parse_str::<syn::Path>` sharpen (91d399a) already carries
+/// on the substrate-emission trait-path axis, and the peer
+/// `SerdeDefault::Path`'s `syn::parse_str::<syn::Path>` sharpen
+/// (72f3a19) carries on the operator-facing attribute axis.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry) — the
+/// self-type axis at the derive's two trait-dispatch peers was
+/// previously an untyped `&'static str` that passed a lexer-level
+/// gate; post-lift the payload is validated at a syntactic-level
+/// gate whose Err surfaces at the primitive's own Err boundary with
+/// a spanned diagnostic that names both the offending literal AND
+/// the underlying `syn::Error`. Invalid self types become
+/// UNREPRESENTABLE at the primitive's typed-entry boundary rather
+/// than surfacing as broken emit tokens at every downstream
+/// trait-dispatched arm's implementor. THEORY.md §VI.1 (generation
+/// over composition) — the `rust_ty.parse::<TokenStream2>().unwrap()`
+/// two-step recurred at the numeric-narrowed and atom-family peers'
+/// own emission blocks (well past the PRIME-DIRECTIVE ≥ 2
+/// duplication trigger) and is lifted to ONE substrate primitive
+/// here, exactly as [`trait_dispatch_call`] lifted the UFCS bracket
+/// scaffold and [`wrap_with_missing_key_default`] lifted the
+/// missing-kwarg wrap shape.
+fn parse_self_ty(rust_ty: &str) -> syn::Type {
+    syn::parse_str(rust_ty).unwrap_or_else(|e| panic!("invalid self type {rust_ty:?}: {e}"))
+}
+
 fn narrow_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) -> TokenStream2 {
-    let narrowed: TokenStream2 = rust_ty.parse().unwrap();
-    trait_dispatch_call(narrowed, NARROW_TRAIT_PATH, method, key)
+    let narrowed = parse_self_ty(rust_ty);
+    trait_dispatch_call(quote! { #narrowed }, NARROW_TRAIT_PATH, method, key)
 }
 
 /// The FOUR atom-family list-family extractor arms in
@@ -1739,7 +1809,16 @@ fn atom_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) -> T
     // documentation and for any future test module that wants to
     // enumerate the closed set of trait paths without recomposing the
     // per-axis carve-out here.
-    let atom_ty: TokenStream2 = rust_ty.parse().unwrap();
+    //
+    // The `rust_ty: &str` self-type parse rides the shared
+    // [`parse_self_ty`] primitive — sharpened to
+    // `syn::parse_str::<syn::Type>` — so any lexically-valid but
+    // syntactically-invalid atom self-type literal rejects at the
+    // primitive's Err boundary rather than surfacing as broken emit
+    // tokens at every `Vec<&str>` / `Option<Vec<bool>>` implementor
+    // (matching the peer numeric-narrowed axis's discipline through
+    // the same primitive).
+    let atom_ty = parse_self_ty(rust_ty);
     let tail = trait_dispatch_tail(method, key);
     quote! {
         <#atom_ty as ::tatara_lisp::domain::AtomKwarg<'_>>::#tail
@@ -3988,6 +4067,120 @@ mod classify_tests {
         let ty = parse_ty("Cow<'a>");
         let seg = last_segment(&ty);
         assert_first_generic_type_err(seg, "no type argument found");
+    }
+}
+
+#[cfg(test)]
+mod parse_self_ty_tests {
+    use super::{parse_self_ty, NARROW_FLOAT_WIDTHS, NARROW_INT_WIDTHS};
+
+    // Peer to `trait_dispatch_call_tests` on the substrate-emission
+    // side: both modules pin a `syn::parse_str::<_>` sharpen against
+    // its `TokenStream2::parse` predecessor. This module pins the
+    // `&str -> syn::Type` self-type projection both
+    // `narrow_trait_dispatch_call` and `atom_trait_dispatch_call`
+    // share via [`parse_self_ty`]; the sibling module pins the
+    // `&str -> syn::Path` trait-path projection [`trait_dispatch_call`]
+    // owns for its two workspace-shipped trait_path consts.
+    //
+    // The three promises the primitive owns at the boundary of its
+    // typed-entry gate:
+    //
+    // 1. ACCEPT — every value in the closed set of self-type
+    //    literals the derive's peer trait-dispatch arms hand-write
+    //    (the ten int widths, the two float widths, and the two
+    //    atom-axis literals `"& str"` / `"bool"`) parses at the
+    //    sharpened `syn::parse_str::<syn::Type>` gate. Pinned by the
+    //    three closed-set sweeps below.
+    // 2. REJECT — every syntactic-level ill-formed self-type
+    //    literal (adjacent idents with no separator, reserved
+    //    keyword, leading-digit non-ident) rejects at the primitive's
+    //    own `unwrap_or_else` panic surface. Pinned by the
+    //    should_panic tests below.
+    // 3. NAME BOTH THE LITERAL AND THE SYN ERROR — the primitive's
+    //    panic message names both the offending self-type literal
+    //    (in `{rust_ty:?}` quoted form) and the underlying
+    //    `syn::Error` message verbatim, matching the peer sharpen's
+    //    `unwrap_or_else` panic-message discipline at
+    //    [`trait_dispatch_call`].
+
+    #[test]
+    fn primitive_accepts_every_narrow_int_width_at_the_sharpened_gate() {
+        // Promise 1 (ACCEPT) on the integer axis — sweeps the ten
+        // int widths the derive's `NARROW_INT_WIDTHS` const spans.
+        // A regression that over-tightened the parse (e.g. a
+        // hypothetical `syn::TypePath` swap) would reject one of
+        // these primitives here rather than at the downstream
+        // implementor's compile-time noise.
+        for &w in NARROW_INT_WIDTHS {
+            let _: syn::Type = parse_self_ty(w);
+        }
+    }
+
+    #[test]
+    fn primitive_accepts_every_narrow_float_width_at_the_sharpened_gate() {
+        // Promise 1 (ACCEPT) on the float axis — sweeps the two
+        // float widths the derive's `NARROW_FLOAT_WIDTHS` const
+        // spans.
+        for &w in NARROW_FLOAT_WIDTHS {
+            let _: syn::Type = parse_self_ty(w);
+        }
+    }
+
+    #[test]
+    fn primitive_accepts_the_two_atom_axis_self_type_literals_at_the_sharpened_gate() {
+        // Promise 1 (ACCEPT) on the atom axis — sweeps the two
+        // atom-axis literals hard-coded at the eight atom-family
+        // arms in `extractor_for` (`Kind::{Vec,OptionalVec,,Optional}
+        // {String,Bool}`). A regression that (a) dropped support for
+        // the reference-type shape `"& str"` at
+        // `syn::Type::Reference` parsing or (b) rejected the
+        // primitive-type shape `"bool"` at `syn::Type::Path`
+        // parsing would surface here.
+        for atom in ["& str", "bool"] {
+            let _: syn::Type = parse_self_ty(atom);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid self type")]
+    fn primitive_rejects_two_adjacent_idents_without_a_separator_at_the_sharpened_gate() {
+        // Promise 2 (REJECT) on the adjacent-idents-with-no-separator
+        // class — `"foo bar"` lexes as two idents (accepted by the
+        // pre-lift `TokenStream2::parse` lexer) but fails at
+        // `syn::parse_str::<syn::Type>`'s syntactic-level parse
+        // because a type cannot carry two adjacent idents. Fail-
+        // before-pass-after: the pre-lift lexer accepted this input,
+        // so this test structurally requires the sharpen.
+        let _ = parse_self_ty("foo bar");
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid self type")]
+    fn primitive_rejects_a_reserved_keyword_at_the_sharpened_gate() {
+        // Promise 2 (REJECT) on the reserved-keyword-segment class
+        // — `"as"` lexes as a keyword token (accepted by the pre-
+        // lift lexer) but fails at the syntactic-level parse because
+        // a type-position ident cannot be a reserved keyword.
+        // Closes the second syntactic rejection class the pre-lift
+        // lexer admitted, matching the peer
+        // `trait_dispatch_call_tests::primitive_rejects_a_reserved_keyword_segment_at_the_sharpened_gate`.
+        let _ = parse_self_ty("as");
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid self type \"1invalid\"")]
+    fn primitive_rejects_a_leading_digit_non_ident_at_the_sharpened_gate_and_names_the_literal() {
+        // Promise 2 (REJECT) on the leading-digit-non-ident class
+        // AND Promise 3 (NAME BOTH THE LITERAL AND THE SYN ERROR)
+        // — `"1invalid"` lexes as an int-then-ident pair (accepted
+        // by the pre-lift lexer) but fails at the syntactic-level
+        // parse. The `should_panic(expected = ...)` assertion also
+        // pins that the primitive's panic message names the
+        // offending self-type literal verbatim in `{rust_ty:?}`
+        // quoted form, so a regression that dropped the literal
+        // from the diagnostic message surfaces here.
+        let _ = parse_self_ty("1invalid");
     }
 }
 

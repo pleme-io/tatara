@@ -1225,11 +1225,85 @@ fn has_serde_default(field: &syn::Field) -> bool {
 /// [`extractor_for`] match plus a new `&'static str` mode name
 /// flowed through the same helper — the derive's numeric-narrowing
 /// emission surface stays at ONE substrate primitive.
-fn narrow_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) -> TokenStream2 {
-    let narrowed: TokenStream2 = rust_ty.parse().unwrap();
+/// Shared trailing UFCS-arm shape every trait-dispatch helper on the
+/// derive's emission surface — [`narrow_trait_dispatch_call`] /
+/// [`atom_trait_dispatch_call`] / [`deserialize_trait_dispatch_call`]
+/// — appends after its axis-specific UFCS shell:
+///
+/// ```ignore
+/// quote! { #method(&kw, #key)? }
+/// ```
+///
+/// Owns THREE shared invariants the three peer helpers pre-lift each
+/// restated verbatim:
+///
+/// 1. **Method Ident at `call_site()` span** — the `method` `&'static str`
+///    resolves to a `syn::Ident` at the derive's own call-site span so
+///    the UFCS dispatch is hygienic in the derived code's outer scope
+///    regardless of what the implementor's `use` imports bring in. The
+///    peer `Ident::new(_, Span::call_site())` sites on the derive's
+///    `via_ident` / `unknown_ident` resolvers (line 185) already share
+///    this discipline; the tail lift folds the derive's UFCS-family
+///    resolvers onto ONE `call_site()`-Ident-emitting substrate primitive.
+/// 2. **`(&kw, #key)?` positional-arg shape** — the extracted-kwarg map
+///    borrow (`&kw`) plus the kwarg-name string literal (`#key`) ride
+///    the trait method's two positional arguments in a fixed order; the
+///    kwarg name is a Rust string literal (kebab-cased from the field
+///    ident by [`snake_to_kebab`]) rather than an ident.
+/// 3. **`?`-suffix** — the tail ends with the `?` operator so the
+///    caller-visible expression type is the extracted `T` / `Option<T>`
+///    / `Vec<T>` / `Option<Vec<T>>` shape rather than a `Result`; every
+///    consumer of the UFCS call composes its output directly into a
+///    derived struct-field initializer without a per-arm re-`?`.
+///
+/// Pre-lift these three invariants each lived three times, once per
+/// axis-typed helper (`NarrowNumeric` / `AtomKwarg<'_>` /
+/// `DeserializeKwarg`). Post-lift the tail lives at ONE substrate
+/// primitive; each of the three axis-typed helpers keeps its
+/// trait-specific UFCS shell but interpolates `#tail` at the trailing
+/// dispatch position — the emitted token stream is byte-identical to
+/// the pre-lift hand-rolled shape (the `>>::` closing sequence and the
+/// `(&kw, #key)?` arg pattern both live in the outer per-axis quote
+/// block, so proc_macro2's joint/alone tokenization of the axis-typed
+/// UFCS bracket is preserved unchanged).
+///
+/// The tail's axis-agnosticism is the load-bearing property this lift
+/// buys: a future FOURTH trait axis (a hypothetical `SymbolKwarg`,
+/// `PathKwarg`, or `EnumVariantKwarg`) reuses this tail primitive
+/// rather than restating the three invariants a fourth time. A future
+/// structural upgrade to any of the three invariants (a caller-supplied
+/// diagnostic span at the method ident, a third positional argument
+/// carrying a callsite-derived context frame, a `?`-suppressed variant
+/// that plumbs the axis-typed rejection through a `Result` chain) lands
+/// at ONE substrate primitive here; ALL THREE existing trait-dispatch
+/// helpers pick up the upgrade mechanically with no per-helper hand-edit
+/// — matching the property [`extract_atom`] / [`extract_optional_atom`]
+/// / [`extract_list`] give the atom-family primitives on the
+/// `tatara_lisp::domain` side, and the property the three per-axis
+/// trait-dispatch helpers already give at their own emission surfaces.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// (resolve-method-as-Ident, wrap-in-arg-shape-and-`?`) two-step
+/// recurred across the three axis-typed trait-dispatch helpers (well
+/// past the PRIME-DIRECTIVE ≥2 trigger) and is lifted to one owner
+/// here. THEORY.md §II.1 invariant 5 — composition preserves proofs;
+/// the three axis-typed helpers now compose structurally through ONE
+/// tail primitive, so a regression that drifted any of the three tail
+/// invariants at ONE axis would surface at the [`trait_dispatch_tail_tests`]
+/// module below rather than as silent drift at every downstream
+/// implementor with a field on that axis.
+fn trait_dispatch_tail(method: &'static str, key: &str) -> TokenStream2 {
     let method = Ident::new(method, proc_macro2::Span::call_site());
     quote! {
-        <#narrowed as ::tatara_lisp::domain::NarrowNumeric>::#method(&kw, #key)?
+        #method(&kw, #key)?
+    }
+}
+
+fn narrow_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) -> TokenStream2 {
+    let narrowed: TokenStream2 = rust_ty.parse().unwrap();
+    let tail = trait_dispatch_tail(method, key);
+    quote! {
+        <#narrowed as ::tatara_lisp::domain::NarrowNumeric>::#tail
     }
 }
 
@@ -1366,9 +1440,9 @@ fn narrow_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) ->
 /// list-family emission surface stays at ONE substrate primitive.
 fn atom_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) -> TokenStream2 {
     let atom_ty: TokenStream2 = rust_ty.parse().unwrap();
-    let method = Ident::new(method, proc_macro2::Span::call_site());
+    let tail = trait_dispatch_tail(method, key);
     quote! {
-        <#atom_ty as ::tatara_lisp::domain::AtomKwarg<'_>>::#method(&kw, #key)?
+        <#atom_ty as ::tatara_lisp::domain::AtomKwarg<'_>>::#tail
     }
 }
 
@@ -1478,9 +1552,9 @@ fn deserialize_trait_dispatch_call(
     inner_ty: TokenStream2,
     key: &str,
 ) -> TokenStream2 {
-    let method = Ident::new(method, proc_macro2::Span::call_site());
+    let tail = trait_dispatch_tail(method, key);
     quote! {
-        <#inner_ty as ::tatara_lisp::domain::DeserializeKwarg>::#method(&kw, #key)?
+        <#inner_ty as ::tatara_lisp::domain::DeserializeKwarg>::#tail
     }
 }
 
@@ -4216,6 +4290,297 @@ mod deserialize_trait_dispatch_call_tests {
         assert_eq!(
             actual, expected,
             "helper emission must be token-equivalent to the hand-written optional-vec-deserialize UFCS call",
+        );
+    }
+}
+
+#[cfg(test)]
+mod trait_dispatch_tail_tests {
+    use super::trait_dispatch_tail;
+    use quote::quote;
+
+    // Substrate-primitive peer of the three axis-typed test modules
+    // (`narrow_trait_dispatch_call_tests` / `atom_trait_dispatch_call_tests`
+    // / `deserialize_trait_dispatch_call_tests`). The `(method, key)
+    // -> TokenStream2` helper is the derive's PRIVATE tail scaffold
+    // for the trailing UFCS-arm shape every trait-dispatch helper on
+    // the derive's emission surface appends after its axis-specific
+    // UFCS shell — the emitted trailing tokens are `#method(&kw,
+    // #key)?`, dispatched into the enclosing `<T as
+    // ::tatara_lisp::domain::<Trait>>::` UFCS bracket the three peer
+    // helpers own.
+    //
+    // A regression here silently swaps the trailing arg shape at
+    // every trait-dispatched arm in `extractor_for` (all EIGHT
+    // numeric-narrowed arms via `narrow_trait_dispatch_call`, all
+    // FOUR atom-family scalar arms + all FOUR atom-family list arms
+    // via `atom_trait_dispatch_call`, all FOUR universal-serde-
+    // fallthrough arms via `deserialize_trait_dispatch_call`). The
+    // tests below pin the THREE promises the tail owns at the
+    // boundary of its emission shape:
+    //
+    // 1. METHOD IDENT AT CALL-SITE SPAN — the `method` `&'static
+    //    str` payload rides the emitted tail as an `Ident` at the
+    //    derive's call-site span, NOT as a string literal or a
+    //    `Path` composed by string concatenation. Pinned by the
+    //    method-ident sweep test that walks each of the FOUR
+    //    representative mode-suffixed method names the three peer
+    //    helpers dispatch through.
+    // 2. `(&kw, #key)?` ARG SHAPE — the `key` parameter rides the
+    //    emitted tail's second positional argument as a Rust string
+    //    literal (kebab-cased from the field ident by
+    //    [`super::snake_to_kebab`] at the field-level derive site);
+    //    the `&kw` borrow rides the first positional argument as an
+    //    ident reference to the surrounding scope's kwarg map. Pinned
+    //    by the key-literal + arg-order sweep test.
+    // 3. `?`-SUFFIX — the tail ends with the `?` operator so the
+    //    caller-visible expression type is the extracted `T` /
+    //    `Option<T>` / `Vec<T>` / `Option<Vec<T>>` shape rather than
+    //    a `Result`; every consumer of the UFCS call composes its
+    //    output directly into a derived struct-field initializer
+    //    without a per-arm re-`?`. Pinned by the `?`-suffix test.
+    //
+    // Peer to `narrow_trait_dispatch_call_tests` /
+    // `atom_trait_dispatch_call_tests` /
+    // `deserialize_trait_dispatch_call_tests` on the emission-shape
+    // axis: those three modules pin the axis-typed UFCS shells the
+    // three peer helpers own (leading `::`, `<T as
+    // ...::<Trait>>::` binding, trait-path hygiene), this module
+    // pins the axis-AGNOSTIC tail invariants the substrate primitive
+    // owns. Together the four modules close every trait-dispatched
+    // arm's emission at the derive's `syn::Type -> emitted extractor
+    // call` boundary at the test-module surface.
+    //
+    // Theory anchor: THEORY.md §II.1 invariant 1 (typed entry) — the
+    // tail IS the derive's rust-level typed-entry projection at the
+    // trait-dispatch call boundary; naming its THREE emission
+    // promises as pinned facts here makes future upgrades (a
+    // caller-supplied diagnostic span at the method ident, a `?`-
+    // suppressed variant that plumbs the axis-typed rejection
+    // through a `Result` chain rather than a `?`, an extension of
+    // the two-arg positional shape with a callsite-derived context
+    // frame) fail at the boundary of the shape they change rather
+    // than at downstream implementors' compile-time noise. THEORY.md
+    // §II.1 invariant 5 (composition preserves proofs) — the tail's
+    // axis-agnosticism means a future FOURTH trait axis (a
+    // hypothetical `SymbolKwarg`, `PathKwarg`, or `EnumVariantKwarg`)
+    // reuses this primitive rather than restating the three
+    // invariants a fourth time.
+
+    fn call_string(method: &'static str, key: &str) -> String {
+        trait_dispatch_tail(method, key).to_string()
+    }
+
+    #[test]
+    fn tail_emits_the_method_ident_at_every_representative_mode_across_the_three_axes() {
+        // Promise 1 (METHOD IDENT AT CALL-SITE SPAN) — the `method`
+        // string rides the emitted tail as an `Ident` at the derive's
+        // call-site span. Sweep FOUR representative method names
+        // spanning the three axis-typed helper cohorts (one per
+        // trait's per-mode dispatch family):
+        //
+        //   - `extract_narrowed_kwarg`         — NarrowNumeric (int/float scalar)
+        //   - `extract_optional_narrowed_list_kwarg` — NarrowNumeric (int/float optional-vec)
+        //   - `extract_owned_kwarg`            — AtomKwarg (string/bool scalar)
+        //   - `extract_optional_vec_kwarg`     — DeserializeKwarg (nested Option<Vec<T>>)
+        //
+        // A regression that (a) stringified the method into a Rust
+        // string literal, (b) composed it as a fragmentary `Path`
+        // via string concatenation, or (c) resolved it at a Span
+        // OTHER than `call_site()` (which would break the UFCS
+        // dispatch hygiene in the derived code's outer scope) would
+        // surface per-representative-method here.
+        //
+        // The emitted tail's leading token IS the bare method ident
+        // (no leading `::`, no leading trait-path, no wrapper), so a
+        // regression that dropped or reshaped the ident would surface
+        // as the tail failing to START with the method ident.
+        for method in [
+            "extract_narrowed_kwarg",
+            "extract_optional_narrowed_list_kwarg",
+            "extract_owned_kwarg",
+            "extract_optional_vec_kwarg",
+        ] {
+            let body = call_string(method, "field");
+            assert!(
+                body.starts_with(method),
+                "tail must start with the method ident `{method}`, got: {body}",
+            );
+        }
+    }
+
+    #[test]
+    fn tail_emits_the_kw_borrow_and_key_literal_as_the_two_positional_arguments_in_order() {
+        // Promise 2 (`(&kw, #key)?` ARG SHAPE) — the `key` parameter
+        // rides the tail's SECOND positional argument as a Rust
+        // string literal, and the `&kw` borrow rides the FIRST
+        // positional argument as an ident reference. Sweep three
+        // representative kebab-cased key shapes (single-word,
+        // hyphenated, digit-suffixed) so a regression that (a)
+        // dropped the `&kw` borrow, (b) reordered the args, or (c)
+        // interpolated the key as an ident instead of a string
+        // literal surfaces per-shape.
+        //
+        // The `(& kw , "{key}")` bracketing pins the full positional
+        // arg pattern: the `&` borrow, the `kw` ident, the `,`
+        // separator, and the string-literal key spelling. proc_macro2
+        // formats each of these as separate tokens with intervening
+        // whitespace.
+        for (key, expected_arg) in [
+            ("port", r#"(& kw , "port")"#),
+            ("window-seconds", r#"(& kw , "window-seconds")"#),
+            ("scale-v2", r#"(& kw , "scale-v2")"#),
+        ] {
+            let body = call_string("extract_narrowed_kwarg", key);
+            assert!(
+                body.contains(expected_arg),
+                "tail must carry positional args as `{expected_arg}`, got: {body}",
+            );
+        }
+    }
+
+    #[test]
+    fn tail_emits_the_question_mark_suffix_so_the_expression_projects_to_the_extracted_value() {
+        // Promise 3 (?-SUFFIX) — the tail ends with `?` so the
+        // caller-visible expression type is the extracted value
+        // shape (`T`, `Option<T>`, `Vec<T>`, or `Option<Vec<T>>`
+        // depending on which mode the derive dispatched through).
+        // A regression that dropped the `?` would leave the
+        // derived-code expression as a `Result<T, LispError>` at
+        // every one of the SIXTEEN trait-dispatched arms in
+        // `extractor_for` — every consumer struct field initializer
+        // would fail at the derived-code compile-time with a type
+        // mismatch, but the derive's own emission would still pass
+        // its own compile.
+        let body = call_string("extract_kwarg", "config");
+        assert!(
+            body.trim_end().ends_with('?'),
+            "tail must end with the `?` operator, got: {body}",
+        );
+    }
+
+    #[test]
+    fn tail_is_axis_agnostic_and_carries_no_trait_path() {
+        // Cross-check on the tail's axis-agnosticism — the tail
+        // primitive's emission carries NO trait-path substring
+        // (`NarrowNumeric` / `AtomKwarg` / `DeserializeKwarg`), NO
+        // `tatara_lisp` crate-path segment, NO `<... as ...>` UFCS
+        // bracket — those three shell pieces live at the three
+        // per-axis helpers' outer quote blocks. The tail is JUST the
+        // `#method(&kw, #key)?` trailing arm.
+        //
+        // A regression that leaked axis-typed shell content into the
+        // tail (e.g. accidentally including the `AtomKwarg<'_>>::`
+        // fragment) would break the axis-agnosticism invariant and
+        // surface here, and would ALSO surface as duplicate content
+        // at every peer axis helper's per-axis tests. Pinning the
+        // negative here catches the regression BEFORE the peer tests
+        // fire, closing the axis-agnostic contract at the boundary
+        // of the tail primitive itself rather than downstream.
+        let body = call_string("extract_kwarg", "field");
+        for banned_substring in [
+            "NarrowNumeric",
+            "AtomKwarg",
+            "DeserializeKwarg",
+            "tatara_lisp",
+            "as :",
+            "< ",
+        ] {
+            assert!(
+                !body.contains(banned_substring),
+                "tail must NOT carry axis-typed shell content `{banned_substring}` — that lives at the per-axis UFCS wrapper, not the shared tail; got: {body}",
+            );
+        }
+    }
+
+    #[test]
+    fn tail_emission_is_token_equivalent_to_the_hand_written_method_call_arm() {
+        // Cross-check — the helper's emission at the canonical
+        // `extract_kwarg` arm is TOKEN-EQUIVALENT (byte-identical
+        // modulo whitespace) to a hand-written `quote! {
+        // extract_kwarg(&kw, "field")? }` scaffold. A regression at
+        // any of Promises 1-3 that individually passes the per-
+        // promise pins above but composes into a token stream
+        // distinct from the hand-written form would surface here.
+        let key = "field";
+        let method_ident = syn::Ident::new("extract_kwarg", proc_macro2::Span::call_site());
+        let expected = quote! {
+            #method_ident(&kw, #key)?
+        }
+        .to_string();
+        let actual = call_string("extract_kwarg", key);
+        assert_eq!(
+            actual, expected,
+            "tail emission must be token-equivalent to the hand-written `#method(&kw, #key)?` scaffold",
+        );
+    }
+
+    #[test]
+    fn tail_emission_composes_byte_identically_at_every_axis_typed_wrapper() {
+        // Structural cross-check — the three axis-typed helpers'
+        // emissions each equal `<Self as ::path::<Trait>>::` +
+        // `trait_dispatch_tail(method, key)`. This test asserts
+        // that property at the byte level for one representative
+        // (method, key, self-ty) triple per axis, so a regression
+        // that (a) reintroduced hand-rolled tail-shape code at ONE
+        // axis-typed helper (breaking the substrate-lift claim), or
+        // (b) drifted the trailing tail-shape at ONE axis (leaving
+        // the two peers passing) would surface here rather than as
+        // silent drift at only the affected axis's downstream
+        // consumers.
+        //
+        // The three helpers each own a distinct trait-typed UFCS
+        // shell (`NarrowNumeric` / `AtomKwarg<'_>` /
+        // `DeserializeKwarg`); the SHARED tail rides through
+        // `#tail` interpolation in each. Assembling the expected
+        // full emission from the shared tail here proves the tail
+        // is the ONE substrate primitive the three helpers compose
+        // against.
+        use super::{
+            atom_trait_dispatch_call, deserialize_trait_dispatch_call, narrow_trait_dispatch_call,
+        };
+
+        let tail_narrow = trait_dispatch_tail("extract_narrowed_kwarg", "port").to_string();
+        let narrowed: proc_macro2::TokenStream = "u16".parse().unwrap();
+        let expected_narrow_prefix = quote! {
+            <#narrowed as ::tatara_lisp::domain::NarrowNumeric>::
+        }
+        .to_string();
+        let expected_narrow = format!("{expected_narrow_prefix} {tail_narrow}");
+        let actual_narrow =
+            narrow_trait_dispatch_call("extract_narrowed_kwarg", "u16", "port").to_string();
+        assert_eq!(
+            actual_narrow, expected_narrow,
+            "narrow_trait_dispatch_call must compose as `<Self as ...NarrowNumeric>::` + shared tail",
+        );
+
+        let tail_atom = trait_dispatch_tail("extract_list_kwarg", "tags").to_string();
+        let atom_ty: proc_macro2::TokenStream = "& str".parse().unwrap();
+        let expected_atom_prefix = quote! {
+            <#atom_ty as ::tatara_lisp::domain::AtomKwarg<'_>>::
+        }
+        .to_string();
+        let expected_atom = format!("{expected_atom_prefix} {tail_atom}");
+        let actual_atom =
+            atom_trait_dispatch_call("extract_list_kwarg", "& str", "tags").to_string();
+        assert_eq!(
+            actual_atom, expected_atom,
+            "atom_trait_dispatch_call must compose as `<Self as ...AtomKwarg<'_>>::` + shared tail",
+        );
+
+        let tail_deser = trait_dispatch_tail("extract_kwarg", "config").to_string();
+        let inner: syn::Type = syn::parse_str("Severity").unwrap();
+        let expected_deser_prefix = quote! {
+            <#inner as ::tatara_lisp::domain::DeserializeKwarg>::
+        }
+        .to_string();
+        let expected_deser = format!("{expected_deser_prefix} {tail_deser}");
+        let actual_deser =
+            deserialize_trait_dispatch_call("extract_kwarg", quote! { #inner }, "config")
+                .to_string();
+        assert_eq!(
+            actual_deser, expected_deser,
+            "deserialize_trait_dispatch_call must compose as `<Self as ...DeserializeKwarg>::` + shared tail",
         );
     }
 }

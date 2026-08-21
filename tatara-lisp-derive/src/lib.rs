@@ -2074,27 +2074,115 @@ enum Kind {
     OptionalVecDeserialize(TokenStream2),
 }
 
+/// The closed set of integer widths the derive routes through
+/// `<T as NarrowNumeric>::extract_narrowed_kwarg` at the emit-time
+/// UFCS dispatch — the ten widths [`crate::classify`] projects to
+/// [`Kind::Int(_)`] and every peer `Kind::Vec{,Optional}Int(_)` /
+/// `Kind::OptionalInt(_)` variant inherits through the recursor
+/// arms. Each entry's `&'static str` IS the payload the emitted
+/// TURBOFISH binds at the [`crate::narrow_trait_dispatch_call`]
+/// UFCS `Self` slot, so the classifier's pattern-payload identity
+/// (`"u16"` in the match, `"u16"` in the payload construction) IS
+/// the single-source `w` variable rather than two hand-written
+/// string literals per width.
+///
+/// Pre-lift each numeric arm on [`crate::classify`] spelled its
+/// width TWICE — once as the match pattern (`"u16" => ...`) and
+/// once as the payload (`Kind::Int("u16")`). Ten integer + two
+/// float arms × two spellings = TWENTY-FOUR restated width strings
+/// across the classifier's numeric surface, any pair of which
+/// could drift silently: a regression like
+/// `"u32" => Kind::Int("u16")` compiles and produces WRONG emit
+/// code — the derived struct's `port: u32` field would rejection-
+/// gate against `NumericWidth::U16` bounds rather than
+/// `NumericWidth::U32`, so a value in the u16-exceeding, u32-fitting
+/// range would ship as an authoring-side rejection on the operator's
+/// side rather than parse into the field.
+///
+/// Post-lift the payload IS the matched string — the loop's `w`
+/// variable rides both the equality gate (`w == name`) and the
+/// `Kind::Int(w)` payload construction, so a pattern-payload drift
+/// is structurally impossible: the two spellings collapse to ONE
+/// per-width entry in this const, and the classifier's numeric arm
+/// binds through iteration rather than through hand-restated match
+/// arms. A future substrate extension to an eleventh integer width
+/// (a hypothetical `u128` / `i128` axis, contingent on
+/// [`tatara_lisp::domain::NarrowNumeric`] gaining an impl for the
+/// new width and the reader's [`tatara_lisp::error::NumericWidth`]
+/// gaining the matching variant) lands as ONE const entry here —
+/// the classifier, every peer test module that iterates this const,
+/// and every `#[derive(TataraDomain)]` implementor with a
+/// `Vec<u128>` / `Option<i128>` field picks up the new axis
+/// mechanically with no per-site edit.
+///
+/// The const's exposure at `pub(crate)` scope lets the derive's own
+/// test modules
+/// ([`crate::narrow_trait_dispatch_call_tests`] currently hard-
+/// codes the same ten widths in a per-test loop; a future test
+/// module can iterate this const instead so per-width test
+/// coverage auto-extends when a width lands here).
+///
+/// Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+/// pattern-payload identity across the classifier's numeric arms
+/// IS the derive's rust-level typed-entry projection for narrowed
+/// widths, and lifting it to ONE per-width const makes the
+/// identity load-bearing in the source rather than in twenty-four
+/// hand-restated string literals. THEORY.md §VI.1 (generation over
+/// composition) — the (match-arm, payload) pair recurred at TWELVE
+/// numeric arms in [`crate::classify`] (well past the
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold), and each pair
+/// restated the same width literal twice against a different
+/// hand-written string; lifting the width to ONE per-arm `w`
+/// variable closes the twelve pairs at rustc time. THEORY.md
+/// §V.1 (knowable platform) — an authoring surface that wants to
+/// enumerate the supported narrowing widths (e.g. `tatara-check`'s
+/// diagnostic renderer, an LSP hover hint listing which widths a
+/// hypothetical typo would be closer to, a documentation
+/// generator) now has ONE substrate handle rather than re-deriving
+/// the list from the classifier's match-arm-by-match-arm layout.
+pub(crate) const NARROW_INT_WIDTHS: &[&str] = &[
+    "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "usize", "isize",
+];
+
+/// Float-axis sibling of [`NARROW_INT_WIDTHS`] — the closed set of
+/// float widths the derive routes through
+/// `<T as NarrowNumeric>::extract_narrowed_kwarg` on the
+/// [`Kind::Float(_)`] / peer `Kind::Vec{,Optional}Float(_)` /
+/// `Kind::OptionalFloat(_)` recursor arms. Same pattern-payload
+/// single-source contract the int-width const owns on its
+/// narrowing arm — the loop's `w` variable rides both the
+/// equality gate and the `Kind::Float(w)` payload construction.
+/// A future third float width (a hypothetical `f16` axis) lands
+/// as ONE entry here, matching the int-axis extension contract.
+pub(crate) const NARROW_FLOAT_WIDTHS: &[&str] = &["f32", "f64"];
+
 fn classify(ty: &Type) -> Kind {
     if let Type::Path(path) = ty {
         if let Some(last) = path.path.segments.last() {
-            match last.ident.to_string().as_str() {
+            let name = last.ident.to_string();
+            match name.as_str() {
                 "String" => return Kind::String,
                 "bool" => return Kind::Bool,
-                "i8" => return Kind::Int("i8"),
-                "i16" => return Kind::Int("i16"),
-                "i32" => return Kind::Int("i32"),
-                "i64" => return Kind::Int("i64"),
-                "u8" => return Kind::Int("u8"),
-                "u16" => return Kind::Int("u16"),
-                "u32" => return Kind::Int("u32"),
-                "u64" => return Kind::Int("u64"),
-                "usize" => return Kind::Int("usize"),
-                "isize" => return Kind::Int("isize"),
-                "f64" => return Kind::Float("f64"),
-                "f32" => return Kind::Float("f32"),
                 "Option" => return classify_option(last, ty),
                 "Vec" => return classify_vec(last, ty),
                 _ => {}
+            }
+            // Numeric-narrowed arms — the pattern-payload identity
+            // across [`NARROW_INT_WIDTHS`] / [`NARROW_FLOAT_WIDTHS`]
+            // rides ONE per-width `w` variable through both the
+            // equality gate and the payload construction, so a
+            // pattern-payload drift (e.g. a regression `"u32" match
+            // arm shipping a `"u16"` payload) is structurally
+            // impossible.
+            for &w in NARROW_INT_WIDTHS {
+                if w == name {
+                    return Kind::Int(w);
+                }
+            }
+            for &w in NARROW_FLOAT_WIDTHS {
+                if w == name {
+                    return Kind::Float(w);
+                }
             }
         }
     }
@@ -2244,6 +2332,221 @@ fn first_generic_type(seg: &syn::PathSegment) -> Result<&Type, String> {
         }
     }
     Err("no type argument found".into())
+}
+
+#[cfg(test)]
+mod narrow_width_tables_tests {
+    use super::{classify, Kind, NARROW_FLOAT_WIDTHS, NARROW_INT_WIDTHS};
+    use syn::{parse_str, Type};
+
+    // The `(NARROW_INT_WIDTHS, NARROW_FLOAT_WIDTHS) -> ((&str, Kind::Int(_)) /
+    // (&str, Kind::Float(_)))` projection is the derive's PRIVATE closed
+    // set of numeric widths [`super::classify`] routes through the
+    // narrowed-turbofish extractor helpers. Post-lift the classifier's
+    // pattern-payload identity across the twelve numeric arms rides ONE
+    // per-width `w` variable through both the equality gate and the
+    // payload construction — the two hand-restated string literals per
+    // arm collapse to ONE per-width entry in these consts, and the
+    // classifier binds through iteration rather than through hand-restated
+    // match arms.
+    //
+    // A regression here silently drifts the derive's numeric-narrowing
+    // dispatch surface at every `#[derive(TataraDomain)]` implementor
+    // with a field on the drifted width. The tests below pin the THREE
+    // promises the two consts own at the boundary of their closed-set
+    // contract:
+    //
+    // 1. CLOSED-SET IDENTITY — the two consts carry exactly the ten
+    //    integer widths + two float widths [`super::NarrowNumeric`] has
+    //    impls for in `tatara-lisp/src/domain.rs`, and no others. A
+    //    regression that (a) dropped a width (silently rewiring that
+    //    field to `extract_via_serde`, so a `port: u16` field would
+    //    ship mystery serde substrings on `:port 70000` instead of the
+    //    typed `LispError::KwargOutOfRange { target: U16, .. }`
+    //    diagnostic), (b) added a width the substrate has NO
+    //    `NarrowNumeric` impl for (breaking the derived consumer's own
+    //    compile with a trait-bound-not-satisfied error), or (c)
+    //    reordered the entries in a way that broke a sibling test
+    //    module's per-index sweep — would surface here.
+    // 2. PATTERN-PAYLOAD IDENTITY — every entry `w` in the int-width
+    //    const routes `classify(<w>)` to `Kind::Int(w)` with a
+    //    byte-equal `&'static str` payload. Pre-lift the derive's
+    //    twelve numeric arms hand-restated the width literal TWICE
+    //    (once as match pattern, once as payload construction), so a
+    //    regression like `"u32" => Kind::Int("u16")` compiled fine
+    //    and shipped WRONG emit code (the derived struct's `port:
+    //    u32` field would rejection-gate against `NumericWidth::U16`
+    //    bounds instead of `NumericWidth::U32`). Post-lift the
+    //    loop's `w` variable rides BOTH the equality gate and the
+    //    payload construction, so a pattern-payload drift is
+    //    structurally impossible; this sweep confirms the byte
+    //    identity holds end-to-end from const entry → classifier
+    //    iteration → payload.
+    // 3. DISJOINT AXES — an entry in [`NARROW_INT_WIDTHS`] is NOT in
+    //    [`NARROW_FLOAT_WIDTHS`] and vice-versa. A regression that
+    //    accidentally listed a name on both axes would produce a
+    //    classifier that reached the int-arm's `Kind::Int(_)` payload
+    //    (int arm runs first) but silently shadow the float-arm's
+    //    entry — the disjoint pin catches the drift before it reaches
+    //    the classifier's iteration order.
+    //
+    // Peer to the per-width `matches!(classify(&parse_ty("i8")),
+    // Kind::Int("i8"))` sweep the sibling [`super::classify_tests`]
+    // module carries. Those tests pin the CLASSIFIER's numeric-arm
+    // behavior per-width; this module pins the SUBSTRATE-CONST's
+    // closed-set identity per-const. Together the two closes the
+    // derive's numeric-narrowing dispatch surface at both the source
+    // (the closed-set data) and the projection (the classify function).
+    //
+    // Theory anchor: THEORY.md §II.1 invariant 1 — typed entry; the
+    // (pattern-string, payload-string) identity across the twelve
+    // classifier arms IS the derive's rust-level typed-entry
+    // projection for narrowed widths, and lifting the identity to ONE
+    // per-width const makes the identity load-bearing in the source
+    // rather than in twenty-four hand-restated string literals.
+    // THEORY.md §II.1 invariant 5 — composition preserves proofs; the
+    // future-width extension flow ("adding a width lands as ONE
+    // const entry, classifier + tests + emit code inherit
+    // mechanically") IS the composition-preserving property this
+    // module pins.
+
+    fn parse_ty(s: &str) -> Type {
+        parse_str(s).expect("valid Rust type syntax")
+    }
+
+    #[test]
+    fn narrow_int_widths_carry_the_ten_widths_the_substrate_impls_narrow_numeric_wide_i64_for() {
+        // Promise 1a (CLOSED-SET IDENTITY, int axis) — the const
+        // carries exactly the ten integer widths
+        // `tatara_lisp::domain::impl_narrow_int!` block enumerates:
+        // `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, `u64`,
+        // `usize`, `isize`. A regression that dropped a width from
+        // the const would silently rewire that field's classify
+        // route to the universal-serde fallthrough, and the derived
+        // consumer would ship mystery serde substrings on
+        // narrowing failures.
+        //
+        // The order is stable — the sibling
+        // `super::classify_tests::every_supported_integer_width_...`
+        // test walks the widths in the SAME order this const lists
+        // them, and future test modules that iterate this const
+        // can rely on the ordering being stable across additions
+        // (new widths get appended, existing widths do not move).
+        let expected: &[&str] = &[
+            "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "usize", "isize",
+        ];
+        assert_eq!(
+            NARROW_INT_WIDTHS, expected,
+            "NARROW_INT_WIDTHS drifted from the ten widths tatara_lisp::domain's `impl_narrow_int!` block impls NarrowNumeric<Wide=i64> for",
+        );
+        assert_eq!(
+            NARROW_INT_WIDTHS.len(),
+            10,
+            "NARROW_INT_WIDTHS length drifted — the substrate impls NarrowNumeric<Wide=i64> for exactly ten widths",
+        );
+    }
+
+    #[test]
+    fn narrow_float_widths_carry_the_two_widths_the_substrate_impls_narrow_numeric_wide_f64_for() {
+        // Promise 1b (CLOSED-SET IDENTITY, float axis) — the const
+        // carries exactly the two float widths
+        // `tatara_lisp::domain` impls `NarrowNumeric<Wide=f64>` for
+        // (`f32` and `f64` — the two IEEE-754 widths the reader's
+        // `Sexp::as_float` projection can produce). A regression
+        // that added a hypothetical `f16` to this const without the
+        // substrate first landing a `NarrowNumeric<Wide=f64>` impl
+        // on `f16` would break the derived consumer's own compile
+        // with a trait-bound-not-satisfied error.
+        let expected: &[&str] = &["f32", "f64"];
+        assert_eq!(
+            NARROW_FLOAT_WIDTHS, expected,
+            "NARROW_FLOAT_WIDTHS drifted from the two widths tatara_lisp::domain impls NarrowNumeric<Wide=f64> for",
+        );
+        assert_eq!(
+            NARROW_FLOAT_WIDTHS.len(),
+            2,
+            "NARROW_FLOAT_WIDTHS length drifted — the substrate impls NarrowNumeric<Wide=f64> for exactly two widths",
+        );
+    }
+
+    #[test]
+    fn every_int_width_classifies_to_kind_int_carrying_the_matching_static_string() {
+        // Promise 2a (PATTERN-PAYLOAD IDENTITY, int axis) — iterating
+        // [`NARROW_INT_WIDTHS`] and calling `classify(parse_ty(w))`
+        // returns `Kind::Int(w)` with a payload byte-equal to the
+        // const entry. This closes the "loop's `w` variable rides
+        // both the equality gate and the payload construction"
+        // contract at the classifier's iteration site.
+        //
+        // Pre-lift each of the twelve numeric arms hand-restated its
+        // width literal TWICE — once as the match pattern
+        // (`"u32" => ...`) and once as the payload construction
+        // (`Kind::Int("u32")`). A regression could ship
+        // `"u32" => Kind::Int("u16")` and compile fine, silently
+        // shipping WRONG emit code (every downstream `port: u32`
+        // field would ship `NumericWidth::U16` bounds rejections
+        // rather than `U32`). Post-lift the single-source `w`
+        // variable makes this drift structurally impossible; this
+        // sweep confirms end-to-end that every const entry survives
+        // the classify projection with its byte-value intact.
+        for &w in NARROW_INT_WIDTHS {
+            let ty = parse_ty(w);
+            let kind = classify(&ty);
+            let Kind::Int(payload) = kind else {
+                panic!(
+                    "width {w:?} classified as non-`Kind::Int` variant — pattern-payload identity broken at classify's iteration site",
+                );
+            };
+            assert_eq!(
+                payload, w,
+                "width {w:?} classified with drifted payload {payload:?} — pattern-payload identity broken (loop's `w` did not ride both the equality gate and the payload construction)",
+            );
+        }
+    }
+
+    #[test]
+    fn every_float_width_classifies_to_kind_float_carrying_the_matching_static_string() {
+        // Promise 2b (PATTERN-PAYLOAD IDENTITY, float axis) —
+        // float-axis peer of the int-axis sweep. Same contract,
+        // different axis: iterating [`NARROW_FLOAT_WIDTHS`] and
+        // calling `classify(parse_ty(w))` returns `Kind::Float(w)`
+        // with a payload byte-equal to the const entry.
+        for &w in NARROW_FLOAT_WIDTHS {
+            let ty = parse_ty(w);
+            let kind = classify(&ty);
+            let Kind::Float(payload) = kind else {
+                panic!(
+                    "width {w:?} classified as non-`Kind::Float` variant — pattern-payload identity broken at classify's iteration site",
+                );
+            };
+            assert_eq!(
+                payload, w,
+                "width {w:?} classified with drifted payload {payload:?} — pattern-payload identity broken",
+            );
+        }
+    }
+
+    #[test]
+    fn narrow_int_and_float_width_tables_are_disjoint() {
+        // Promise 3 (DISJOINT AXES) — no entry appears in both
+        // [`NARROW_INT_WIDTHS`] and [`NARROW_FLOAT_WIDTHS`]. The
+        // classifier's iteration order is int-first-then-float, so
+        // an entry accidentally listed on both axes would silently
+        // shadow the float-axis dispatch and route the field to
+        // `Kind::Int(_)` — a downstream `TryFrom<i64>` decode gate
+        // that has no meaningful behavior on a float width. This
+        // disjoint pin catches the drift at the source (the closed-
+        // set data) rather than as a silent classifier-order
+        // dependency at emit time.
+        for &int_w in NARROW_INT_WIDTHS {
+            for &float_w in NARROW_FLOAT_WIDTHS {
+                assert_ne!(
+                    int_w, float_w,
+                    "width {int_w:?} appears in both NARROW_INT_WIDTHS and NARROW_FLOAT_WIDTHS — the two axes must be disjoint (int-axis dispatch runs first and would silently shadow the float-axis entry)",
+                );
+            }
+        }
+    }
 }
 
 #[cfg(test)]

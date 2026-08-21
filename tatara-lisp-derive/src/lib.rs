@@ -1564,8 +1564,19 @@ fn trait_dispatch_call(
     // A hypothetical third trait axis whose trait path does NOT
     // end with `>` inherits the sharpened parse for free through
     // the same primitive.
-    let path: syn::Path = syn::parse_str(trait_path)
-        .unwrap_or_else(|e| panic!("invalid trait path {trait_path:?}: {e}"));
+    //
+    // The `syn::parse_str::<syn::Path>` call routes through
+    // [`parse_syn_str_or_panic`] — the derive's PRIVATE
+    // syntactic-level `&str -> syn::<T>` closed-set-input parse
+    // gate that the peer self-type primitive [`parse_self_ty`]
+    // also composes through. Both substrate-internal parse
+    // callsites (`&str -> syn::Path` here, `&str -> syn::Type`
+    // there) now share ONE sharpened parse boundary that owns
+    // the `syn::Error`-carried panic-message shape at ONE place;
+    // the two per-kind wrappers [`parse_self_ty`] /
+    // [`parse_trait_path`] name the two distinct closed-set
+    // axes the derive dispatches through.
+    let path = parse_trait_path(trait_path);
     let tail = trait_dispatch_tail(method, key);
     quote! {
         <#self_ty as #path>::#tail
@@ -1639,7 +1650,151 @@ fn trait_dispatch_call(
 /// scaffold and [`wrap_with_missing_key_default`] lifted the
 /// missing-kwarg wrap shape.
 fn parse_self_ty(rust_ty: &str) -> syn::Type {
-    syn::parse_str(rust_ty).unwrap_or_else(|e| panic!("invalid self type {rust_ty:?}: {e}"))
+    parse_syn_str_or_panic(rust_ty, "self type")
+}
+
+/// Trait-path axis peer of [`parse_self_ty`] on the derive's
+/// substrate-internal closed-set `&str -> syn::<T>` parse surface.
+/// Routes the [`trait_dispatch_call`] shared UFCS-bracket
+/// primitive's `trait_path: &'static str` slot through the same
+/// [`parse_syn_str_or_panic`] gate the sibling self-type primitive
+/// binds — the pre-lift `let path: syn::Path = syn::parse_str(trait_path)
+/// .unwrap_or_else(|e| panic!("invalid trait path {trait_path:?}: {e}"))`
+/// two-step lived inline at that primitive's only substrate-emission
+/// callsite; post-lift it collapses to a one-line delegate through
+/// this peer wrapper, matching how [`parse_self_ty`] wraps the same
+/// gate on the self-type axis (both wrappers own their own
+/// diagnostic label — `"trait path"` here vs. `"self type"` at the
+/// peer — so a panic diagnostic still names the offending axis
+/// exactly).
+///
+/// The two workspace-shipped trait-path consts
+/// [`NARROW_TRAIT_PATH`] (`::tatara_lisp::domain::NarrowNumeric`)
+/// and [`DESERIALIZE_TRAIT_PATH`] (`::tatara_lisp::domain::DeserializeKwarg`)
+/// both parse byte-identically post-lift — the gate's `syn::Path`
+/// `ToTokens` impl emits the same segment + `::` separator stream
+/// pre- and post-lift, so every downstream trait-dispatched arm
+/// (all EIGHT numeric-narrowed arms through
+/// [`narrow_trait_dispatch_call`], all FOUR universal-serde-
+/// fallthrough arms through [`deserialize_trait_dispatch_call`])
+/// emits byte-identically. The atom-axis [`ATOM_TRAIT_PATH`] does
+/// NOT flow through this primitive — its `AtomKwarg<'_>` payload
+/// ends in `>` and the atom axis's hand-rolled `quote!` block
+/// keeps its own carve-out (documented at [`atom_trait_dispatch_call`]).
+///
+/// A hypothetical FOURTH trait axis whose trait path does NOT end
+/// with `>` (a `SymbolKwarg`, `PathKwarg`, or `EnumVariantKwarg`
+/// for Lisp Sexp forms outside the atom/numeric/serde cohorts)
+/// inherits the sharpened parse for free through this primitive —
+/// matching how [`parse_self_ty`] gives the same "future axis pays
+/// zero at the parse gate" property on the self-type axis.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry — the
+/// substrate-internal trait-path axis is validated at a syntactic-
+/// level gate whose Err surfaces at the primitive's own Err
+/// boundary with a spanned diagnostic that names both the offending
+/// literal AND the underlying `syn::Error`; invalid trait paths
+/// become UNREPRESENTABLE at the primitive's typed-entry boundary
+/// rather than surfacing as broken emit tokens at every downstream
+/// trait-dispatched arm's implementor). THEORY.md §VI.1
+/// (generation over composition — the substrate's `&str -> syn::<T>`
+/// panic-gate now lives at ONE generic primitive
+/// [`parse_syn_str_or_panic`], and the two per-axis wrappers are
+/// one-line delegates through it; a future third axis lands as ONE
+/// new one-line wrapper rather than restating the shared parse
+/// scaffold).
+fn parse_trait_path(trait_path: &str) -> syn::Path {
+    parse_syn_str_or_panic(trait_path, "trait path")
+}
+
+/// The derive's PRIVATE substrate-internal `&str -> syn::<T>`
+/// panic-gate primitive both per-axis wrappers [`parse_self_ty`]
+/// (on the self-type axis) and [`parse_trait_path`] (on the trait-
+/// path axis) compose against. Owns the sharpened
+/// `syn::parse_str::<T>(source).unwrap_or_else(|e|
+/// panic!("invalid {kind_label} {source:?}: {e}"))` two-step both
+/// pre-lift per-axis wrappers restated verbatim in their own
+/// bodies:
+///
+/// ```ignore
+/// syn::parse_str(rust_ty)
+///     .unwrap_or_else(|e| panic!("invalid self type {rust_ty:?}: {e}"))
+/// // and
+/// let path: syn::Path = syn::parse_str(trait_path)
+///     .unwrap_or_else(|e| panic!("invalid trait path {trait_path:?}: {e}"));
+/// ```
+///
+/// Post-lift the four invariants the two peers share — (1)
+/// `syn::parse_str::<T>` as the syntactic-level parser (not the
+/// pre-tightening `TokenStream2::parse` lexer-level gate), (2) the
+/// `unwrap_or_else` panic on Err (matching the substrate-internal
+/// closed-set-input contract — every workspace-shipped input parses
+/// cleanly by construction; a panic here means the substrate itself
+/// drifted, not that an operator authored bad input), (3) the
+/// panic-message shape `"invalid {kind_label} {source:?}: {e}"`
+/// that names both the offending literal AND the underlying
+/// `syn::Error` verbatim, (4) the `{source:?}` quoted-string
+/// interpolation posture — live at ONE substrate primitive here;
+/// each per-axis wrapper is a ONE-LINE delegate that supplies its
+/// own diagnostic label at the trailing slot.
+///
+/// The `T: syn::parse::Parse` bound rides the caller's turbofish —
+/// [`syn::Type`] on the self-type callsite through [`parse_self_ty`],
+/// [`syn::Path`] on the trait-path callsite through
+/// [`parse_trait_path`]. Both syn handles derive their own
+/// `syn::parse::Parse` impl at the syn crate boundary, so the
+/// generic primitive stays axis-agnostic on the output-type axis
+/// and the two per-axis wrappers pick their target type via the
+/// return-type inference at their own `syn::parse_str` delegation.
+///
+/// The `kind_label: &'static str` slot carries the per-axis
+/// diagnostic label — either `"self type"` for the self-type call
+/// or `"trait path"` for the trait-path call. `&'static str`
+/// composes byte-for-byte with the per-axis wrapper's
+/// `#[static]`-lifetime label at emit (no `.to_string()`
+/// allocation on the panic path), matching how the peer
+/// [`trait_dispatch_call`]'s `method: &'static str` /
+/// `trait_path: &'static str` parameters own the same static-
+/// string contract on the emission surface.
+///
+/// The peer operator-facing gate at [`SerdeDefault::Path`]
+/// (`extractor_for`'s `"Path"` arm) does NOT flow through this
+/// primitive — it returns Err via `map_err(|e| format!(...))?`
+/// because the path payload is authored by the operator through
+/// `#[serde(default = "…")]` and must plumb the syn-error through
+/// a Result chain into the derive's `spanned_compile_error`
+/// surface (rather than panicking, which would drop the span and
+/// crash the derive at the offending struct's compile). The two
+/// closed-set-input axes here (self-type + trait-path) stay
+/// substrate-internal on the panic axis; the operator-facing
+/// axis keeps its own Result posture.
+///
+/// Future structural promotion of the substrate-internal parse
+/// (a `syn::Result<T>` variant that plumbs the syn-error to a
+/// substrate-diagnostic sink; a spanned-panic upgrade that
+/// carries a `proc_macro2::Span` at the panic message; a
+/// `#[track_caller]` annotation for a caller-site-carrying panic;
+/// a debug-only closed-set-input coherence check) lands at ONE
+/// primitive here — the two axis wrappers pick up the upgrade
+/// mechanically, with no per-wrapper hand-edit. Same property
+/// [`trait_dispatch_call`] gives the trait-dispatched arms on the
+/// UFCS-bracket axis, [`wrap_with_missing_key_default`] gives the
+/// fallback-carrying arms on the missing-kwarg wrap axis, and
+/// [`emit_compile_error`] gives the compile-error emission arms
+/// on the derive's Err surface.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// the four-invariant sharpened-panic parse scaffold recurred at
+/// the two peer per-axis wrappers, past the PRIME-DIRECTIVE ≥ 2
+/// duplication trigger, and is lifted to ONE substrate primitive
+/// here). THEORY.md §II.1 invariant 5 (composition preserves
+/// proofs — the two axis wrappers now compose structurally
+/// through ONE primitive, so a regression that drifts the parse
+/// discipline at ONE axis would surface at the primitive's own
+/// test pins rather than as silent drift at every downstream
+/// trait-dispatched arm's implementor).
+fn parse_syn_str_or_panic<T: syn::parse::Parse>(source: &str, kind_label: &'static str) -> T {
+    syn::parse_str(source).unwrap_or_else(|e| panic!("invalid {kind_label} {source:?}: {e}"))
 }
 
 fn narrow_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) -> TokenStream2 {
@@ -4181,6 +4336,182 @@ mod parse_self_ty_tests {
         // quoted form, so a regression that dropped the literal
         // from the diagnostic message surfaces here.
         let _ = parse_self_ty("1invalid");
+    }
+}
+
+#[cfg(test)]
+mod parse_syn_str_or_panic_tests {
+    use super::{
+        parse_syn_str_or_panic, parse_trait_path, DESERIALIZE_TRAIT_PATH, NARROW_TRAIT_PATH,
+    };
+
+    // Peer to `parse_self_ty_tests` on the derive's PRIVATE
+    // substrate-internal `&str -> syn::<T>` panic-gate surface. That
+    // module pins the self-type axis's per-kind wrapper; this module
+    // pins the SHARED generic primitive
+    // [`super::parse_syn_str_or_panic`] both per-axis wrappers
+    // ([`super::parse_self_ty`] on the self-type axis,
+    // [`super::parse_trait_path`] on the trait-path axis) compose
+    // against — AND the trait-path axis's per-kind wrapper
+    // [`super::parse_trait_path`] itself.
+    //
+    // Four promises the generic primitive + the trait-path wrapper
+    // own at the boundary of the substrate-internal parse gate:
+    //
+    // 1. GENERIC ACCEPT — the primitive parses any input that
+    //    `syn::parse_str::<T>` accepts for the caller's chosen
+    //    `T: syn::parse::Parse`, so BOTH `syn::Type` and `syn::Path`
+    //    output typings flow through ONE gate. Pinned by the
+    //    per-output-type accept-round-trip sweeps below (both
+    //    `syn::Type` and `syn::Path` outputs are exercised).
+    // 2. LABEL INTERPOLATION — the `kind_label: &'static str` slot
+    //    rides the panic message verbatim as `"invalid {kind_label}
+    //    {source:?}: {e}"`, so a per-axis wrapper's label choice
+    //    (`"self type"` at the self-type wrapper, `"trait path"` at
+    //    the trait-path wrapper) surfaces at the panic diagnostic
+    //    on Err. Pinned by the two `should_panic(expected =
+    //    "invalid <label>")` tests below (one per axis label).
+    // 3. TRAIT-PATH AXIS ACCEPT — the trait-path wrapper's closed
+    //    set (both workspace-shipped consts `NARROW_TRAIT_PATH` and
+    //    `DESERIALIZE_TRAIT_PATH`) parses at the sharpened gate.
+    //    Pinned by the closed-set sweep test below, mirroring how
+    //    `parse_self_ty_tests` pins the closed set of self-type
+    //    literals the peer wrapper handles.
+    // 4. TRAIT-PATH AXIS REJECT + NAME THE LITERAL — every
+    //    syntactically-invalid trait-path literal rejects at the
+    //    wrapper's own panic with the `"invalid trait path"`
+    //    diagnostic prefix AND the offending literal quoted
+    //    verbatim in `{source:?}` form. Pinned by the two
+    //    should_panic tests below (one on adjacent-idents, one on
+    //    leading-digit that also asserts the literal appears in the
+    //    diagnostic).
+    //
+    // A regression that (a) drifted the generic primitive's
+    // panic-message template so the label no longer appeared,
+    // (b) inverted the accept / reject axis (a lexer-only gate
+    // silently sneaking back in), or (c) drifted the trait-path
+    // wrapper's kind_label off `"trait path"` would surface here
+    // rather than as broken emit tokens at every downstream
+    // trait-dispatched arm's implementor.
+
+    #[test]
+    fn generic_primitive_accepts_a_syntactically_valid_syn_type_at_the_sharpened_gate() {
+        // Promise 1 (GENERIC ACCEPT) on the `syn::Type` output — the
+        // primitive's `T` inference at the return-type slot resolves
+        // to `syn::Type` when the caller annotates the binding as
+        // `syn::Type` (matching how the peer `parse_self_ty` wrapper
+        // resolves its return type to `syn::Type` at every one-line
+        // delegate site). A regression that hard-coded the primitive
+        // to `syn::Path` or otherwise dropped the generic bound
+        // would surface here.
+        let _: syn::Type = parse_syn_str_or_panic("u16", "self type");
+    }
+
+    #[test]
+    fn generic_primitive_accepts_a_syntactically_valid_syn_path_at_the_sharpened_gate() {
+        // Promise 1 (GENERIC ACCEPT) on the `syn::Path` output — the
+        // primitive's `T` inference resolves to `syn::Path` when the
+        // caller annotates the binding as `syn::Path` (matching how
+        // the peer `parse_trait_path` wrapper resolves its return
+        // type to `syn::Path` at its one-line delegate site). The
+        // input `"::foo::bar"` is a canonical fully-qualified path
+        // shape the workspace's trait-path consts use.
+        let _: syn::Path = parse_syn_str_or_panic("::foo::bar", "trait path");
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid trait path")]
+    fn generic_primitive_uses_the_kind_label_verbatim_at_the_panic_message() {
+        // Promise 2 (LABEL INTERPOLATION) — the `kind_label` slot
+        // rides the primitive's panic message as `"invalid
+        // {kind_label} ..."`. A regression that (a) dropped the
+        // label from the template, (b) swapped the two axes' labels
+        // (rendering `"invalid self type"` when the trait-path
+        // wrapper called through), or (c) hard-coded a single label
+        // at the primitive would fail the peer self-type-labeled
+        // test below (which asserts on `"invalid self type"`) OR
+        // fail this test (which asserts on `"invalid trait path"`).
+        //
+        // Fail-before-pass-after: the pre-lift `parse_self_ty`
+        // primitive hard-coded the `"self type"` label at its own
+        // body, so a hypothetical bug that hard-coded `"self type"`
+        // at the shared primitive would surface here at the
+        // trait-path axis (`"invalid trait path"` never appears in
+        // a `"self type"`-hard-coded panic message).
+        let _: syn::Path = parse_syn_str_or_panic("foo bar", "trait path");
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid self type")]
+    fn generic_primitive_uses_a_distinct_kind_label_for_the_self_type_axis() {
+        // Peer of the trait-path label test above — the primitive's
+        // panic message uses `"invalid self type"` when the caller
+        // passes `"self type"` at the label slot. The two label
+        // tests together pin that the primitive's panic-message
+        // template threads the label verbatim (not through a
+        // hard-coded per-axis fork).
+        let _: syn::Type = parse_syn_str_or_panic("foo bar", "self type");
+    }
+
+    #[test]
+    fn trait_path_wrapper_accepts_every_workspace_trait_path_const_at_the_sharpened_gate() {
+        // Promise 3 (TRAIT-PATH AXIS ACCEPT) — the two workspace-
+        // shipped trait-path consts both parse cleanly through the
+        // trait-path wrapper's sharpened gate. A regression that
+        // drifted one of the two consts to a syntactically-invalid
+        // path (a typo introducing adjacent idents, a leading-digit
+        // segment, a segment named after a reserved keyword) would
+        // trip this test rather than surfacing as a panic at every
+        // derive consumer's compile.
+        //
+        // Sibling of the closed-set-survival test at
+        // `trait_dispatch_call_tests::every_workspace_trait_path_const_parses_as_syn_path_at_the_sharpened_gate`
+        // — that test exercises the parse at `syn::parse_str::<syn::Path>`
+        // directly; this one exercises the parse through the
+        // `parse_trait_path` wrapper so a regression at the
+        // wrapper's own boundary (e.g. a kind-label typo that
+        // silently swapped the panic-message discipline) still
+        // fails here even if the underlying `syn::parse_str` gate
+        // remained clean.
+        //
+        // The `syn::Path` result is discarded — the test's purpose
+        // is the closed-set survival assertion at the wrapper's own
+        // gate, not the parsed handle itself.
+        for &trait_path in &[NARROW_TRAIT_PATH, DESERIALIZE_TRAIT_PATH] {
+            let _: syn::Path = parse_trait_path(trait_path);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid trait path")]
+    fn trait_path_wrapper_rejects_two_adjacent_idents_without_a_separator_at_the_sharpened_gate() {
+        // Promise 4 (TRAIT-PATH AXIS REJECT) on the adjacent-idents-
+        // with-no-separator class — `"foo bar"` lexes as two idents
+        // (accepted by the pre-lift `TokenStream2::parse` lexer)
+        // but fails at the syntactic-level `syn::parse_str::<syn::Path>`
+        // parse. The wrapper's own panic-message discipline uses
+        // the `"invalid trait path"` prefix, matching how the peer
+        // `parse_self_ty` wrapper uses the `"invalid self type"`
+        // prefix on the sibling axis. Fail-before-pass-after: the
+        // pre-lift lexer accepted this input, so this test
+        // structurally requires the sharpen.
+        let _ = parse_trait_path("foo bar");
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid trait path \"1invalid\"")]
+    fn trait_path_wrapper_rejects_a_leading_digit_and_names_the_literal_verbatim() {
+        // Promise 4 (TRAIT-PATH AXIS REJECT + NAME THE LITERAL) —
+        // `"1invalid"` lexes as an int-then-ident pair (accepted by
+        // the pre-lift lexer) but fails at the syntactic-level
+        // parse. The `should_panic(expected = ...)` assertion also
+        // pins that the wrapper's panic message names the offending
+        // trait-path literal verbatim in `{source:?}` quoted form
+        // — mirroring the peer self-type wrapper's
+        // `primitive_rejects_a_leading_digit_non_ident_at_the_sharpened_gate_and_names_the_literal`
+        // pin. A regression that dropped the literal from the
+        // diagnostic message would surface here.
+        let _ = parse_trait_path("1invalid");
     }
 }
 

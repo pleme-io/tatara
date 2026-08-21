@@ -1391,12 +1391,154 @@ fn trait_dispatch_tail(method: &'static str, key: &str) -> TokenStream2 {
     }
 }
 
-fn narrow_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) -> TokenStream2 {
-    let narrowed: TokenStream2 = rust_ty.parse().unwrap();
+/// Numeric-narrowing axis trait path — the derive's PRIVATE closed-set
+/// identity of the [`tatara_lisp::domain::NarrowNumeric`] trait the
+/// EIGHT numeric-narrowed arms in [`extractor_for`] dispatch through.
+/// Rides the `<Self as #trait_path>::<method>` UFCS bracket at the
+/// substrate primitive [`trait_dispatch_call`], parsed as a
+/// `TokenStream2` at emit time. The `&'static str` form composes byte-
+/// for-byte with the per-axis emission at the shared primitive without
+/// a per-caller `.to_string()` allocation. Sibling of
+/// [`ATOM_TRAIT_PATH`] / [`DESERIALIZE_TRAIT_PATH`] on the derive's
+/// per-axis trait-path axis; the three consts together carry the
+/// closed set of trait paths the derive's UFCS-dispatch surface binds.
+pub(crate) const NARROW_TRAIT_PATH: &str = "::tatara_lisp::domain::NarrowNumeric";
+
+/// Atom-family axis trait path — the derive's PRIVATE closed-set
+/// identity of the [`tatara_lisp::domain::AtomKwarg`] trait the EIGHT
+/// atom-family arms in [`extractor_for`] dispatch through (scalar +
+/// list, string + bool). Carries the elided `<'_>` lifetime slot at
+/// the trait's borrow-`&kw`-lifetime binding — every
+/// `impl<'a> AtomKwarg<'a> for &'a str` /
+/// `impl<'a> AtomKwarg<'a> for bool` resolves the trait `'a` from the
+/// `&kw` borrow at the emission site, so the derived code carries no
+/// lifetime bookkeeping across the emit-time atom-axis dispatch.
+/// Sibling of [`NARROW_TRAIT_PATH`] / [`DESERIALIZE_TRAIT_PATH`].
+///
+/// The `#[allow(dead_code)]` gate reflects the carve-out documented
+/// above — the atom axis's own hand-rolled `quote!` block is the
+/// load-bearing consumer of this trait path, so the const has no
+/// non-test caller. Kept `pub(crate)` alongside its two participating
+/// peer consts as the closed-set enumeration of trait paths the
+/// derive's UFCS-dispatch surface binds; the atom-axis test module
+/// asserts this const's byte-value matches the hand-rolled emission
+/// so a drift between the two sources surfaces at rustc time.
+#[allow(dead_code)]
+pub(crate) const ATOM_TRAIT_PATH: &str = "::tatara_lisp::domain::AtomKwarg<'_>";
+
+/// Universal-serde-fallthrough axis trait path — the derive's PRIVATE
+/// closed-set identity of the
+/// [`tatara_lisp::domain::DeserializeKwarg`] trait the FOUR
+/// universal-serde-fallthrough arms in [`extractor_for`] dispatch
+/// through (scalar + optional-scalar + vec + optional-vec, all
+/// blanket-impl'd for every `T: DeserializeOwned`). Sibling of
+/// [`NARROW_TRAIT_PATH`] / [`ATOM_TRAIT_PATH`].
+pub(crate) const DESERIALIZE_TRAIT_PATH: &str = "::tatara_lisp::domain::DeserializeKwarg";
+
+/// Shared UFCS-bracket-emitting substrate primitive the numeric-
+/// narrowed and universal-serde-fallthrough trait-dispatch helpers on
+/// the derive's emission surface — [`narrow_trait_dispatch_call`] and
+/// [`deserialize_trait_dispatch_call`] — compose against. Owns the
+/// `<#self_ty as #trait_path>::#tail` UFCS-bracket scaffold both peer
+/// helpers pre-lift restated verbatim in their own per-axis quote
+/// block. The third peer [`atom_trait_dispatch_call`] retains its
+/// hand-rolled `quote!` block for a byte-identity carve-out documented
+/// on that helper — the atom axis's elided-lifetime slot
+/// (`AtomKwarg<'_>`) ends its trait path with `>` and the outer
+/// UFCS bracket immediately continues with `>::`, which proc_macro2
+/// joins into a single `>>` TokenTree ONLY when both appear in the
+/// same `quote!` source expression, so threading the atom axis
+/// through this primitive would shift the joining without changing
+/// semantics.
+///
+/// Pre-lift each of the two peer helpers hand-wrote a
+/// `quote! { <#self_ty as ::tatara_lisp::domain::<Trait>>::#tail }`
+/// at its own emission site — two separate quote blocks that
+/// each restated (a) the leading `<` UFCS bracket, (b) the `as`
+/// keyword, (c) the leading `::` fully-qualified trait-path
+/// prefix, (d) the `>::` closing sequence, and (e) the `#tail`
+/// interpolation. Post-lift the five shared invariants live at
+/// ONE substrate primitive here; each axis-typed helper is a
+/// ONE-LINE delegate that binds the axis-typed `Self` type
+/// (either parsed from a `&str` on the numeric-narrowed axis, or
+/// already a cached `TokenStream2` on the universal-serde-
+/// fallthrough axis) and picks the axis-typed trait path from the
+/// closed-set [`NARROW_TRAIT_PATH`] / [`DESERIALIZE_TRAIT_PATH`]
+/// consts. The sibling [`ATOM_TRAIT_PATH`] const stays exposed
+/// at the same `pub(crate)` scope for a future test module or
+/// authoring surface that wants to enumerate the closed set of
+/// trait paths without recomposing the atom-axis carve-out.
+///
+/// The `trait_path` parameter is a `&'static str` — the ONE
+/// per-axis dispatch identity — chosen for the same two reasons
+/// the `method` parameter on [`trait_dispatch_tail`] takes a
+/// `&'static str`: (1) it composes byte-for-byte with the
+/// `#[static]`-lifetime const strings the three peer helpers
+/// resolve at their own emission sites (no `.to_string()`
+/// allocation on the emit path), and (2) the string identity
+/// (two known values participating in the lift — the narrow +
+/// deserialize trait-path consts above) is pinned per-axis at the
+/// two peer helpers' call sites, so a regression that silently
+/// swapped ONE axis's trait path would surface at the sibling
+/// test in [`trait_dispatch_call_tests`] below rather than as
+/// silent drift at every downstream implementor with a field on
+/// that axis.
+///
+/// The `self_ty: TokenStream2` slot rides the UFCS bracket's
+/// `Self` position verbatim — the two peer resolver postures
+/// (parse-from-`&str` on the numeric-narrowed axis vs.
+/// cached-`TokenStream2` on the universal-serde fallthrough axis)
+/// both compose here through the same `TokenStream2` parameter
+/// shape, so the primitive stays axis-agnostic on the `Self`
+/// axis. The peer resolver split lives at the two per-axis
+/// helpers' own one-line delegates rather than at the primitive.
+///
+/// Future structural promotion of the emitted UFCS bracket (a
+/// caller-supplied diagnostic span at the trait-path segment, a
+/// `?`-suppressed variant that plumbs the axis-typed rejection
+/// through a `Result` chain rather than a `?`, an alternative
+/// dispatch shape — a trait-object bracket, a smart-cast wrapper,
+/// or an inherent-impl call) lands at ONE substrate primitive
+/// here — the numeric-narrowed and universal-serde-fallthrough
+/// axes pick up the upgrade mechanically with no per-helper
+/// hand-edit; the atom axis carve-out picks up the upgrade at
+/// its own hand-rolled `quote!` block, and any FOURTH trait axis
+/// whose trait path does NOT end with `>` (a hypothetical
+/// `SymbolKwarg`, `PathKwarg`, or `EnumVariantKwarg` for Lisp
+/// Sexp forms outside the atom/numeric/serde cohorts) lands as
+/// ONE new const + ONE-LINE delegate through this primitive
+/// rather than restating the five UFCS-bracket invariants a
+/// third time.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition;
+/// the five UFCS-bracket invariants recurred at the numeric-
+/// narrowed and universal-serde-fallthrough helpers' quote blocks
+/// (well past the PRIME-DIRECTIVE ≥ 2 trigger) and are lifted to
+/// one owner here, exactly as the trailing tail was lifted onto
+/// [`trait_dispatch_tail`] and the atom / numeric / serde
+/// skeletons were lifted onto their per-axis helpers. THEORY.md
+/// §II.1 invariant 5 — composition preserves proofs; the two
+/// axis-typed helpers now compose structurally through ONE
+/// primitive, so a regression that drifted the UFCS-bracket
+/// shape at ONE axis would surface at
+/// [`trait_dispatch_call_tests`] rather than as silent drift at
+/// every downstream implementor with a field on that axis.
+fn trait_dispatch_call(
+    self_ty: TokenStream2,
+    trait_path: &'static str,
+    method: &'static str,
+    key: &str,
+) -> TokenStream2 {
+    let path: TokenStream2 = trait_path.parse().unwrap();
     let tail = trait_dispatch_tail(method, key);
     quote! {
-        <#narrowed as ::tatara_lisp::domain::NarrowNumeric>::#tail
+        <#self_ty as #path>::#tail
     }
+}
+
+fn narrow_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) -> TokenStream2 {
+    let narrowed: TokenStream2 = rust_ty.parse().unwrap();
+    trait_dispatch_call(narrowed, NARROW_TRAIT_PATH, method, key)
 }
 
 /// The FOUR atom-family list-family extractor arms in
@@ -1531,6 +1673,36 @@ fn narrow_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) ->
 /// flowed through the same helper — the derive's atom-family
 /// list-family emission surface stays at ONE substrate primitive.
 fn atom_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) -> TokenStream2 {
+    // NOTE: this helper stays hand-rolled instead of delegating through
+    // [`trait_dispatch_call`] like its numeric-narrowed and universal-
+    // serde-fallthrough peers. The atom axis's fully-qualified trait
+    // path carries an elided-lifetime slot (`AtomKwarg<'_>`) that ends
+    // with `>`, and the outer UFCS bracket immediately continues with
+    // `>::` — proc_macro2 joins the two adjacent `>` into a single `>>`
+    // TokenTree ONLY when they appear in the same `quote!` source
+    // expression. Threading the trait path through
+    // [`trait_dispatch_call`] via a `&'static str` const forces the
+    // trait-path `>` to tokenize at a boundary distinct from the outer
+    // `>::`, producing `> >` (two Puncts with `Spacing::Alone`) instead
+    // of the joined `>>` the pre-lift shape emitted. Both forms are
+    // byte-different but semantically-equivalent — rustc's lexer treats
+    // `>>` at type-parameter context as two `>` tokens closing the
+    // inner and outer generic parameterizations, so the derived code
+    // compiles identically. The atom-axis test module
+    // [`atom_trait_dispatch_call_tests`] pins the joined `>>` form as
+    // load-bearing (documented in the module's Promise 2 comment as
+    // "the `>>` closing tokens are printed WITHOUT an intervening
+    // space, unlike the `> >` shape a bare-generic parameterization
+    // would emit at proc_macro2's default formatter"), so this helper
+    // keeps its own `quote!` block to preserve that byte-identity
+    // rather than shifting the pin's shape at every downstream
+    // implementor with a `Vec<String>` / `Option<Vec<bool>>` field.
+    // Sibling narrow + deserialize helpers (whose trait paths do NOT
+    // end in `>`) delegate through [`trait_dispatch_call`] cleanly —
+    // ATOM_TRAIT_PATH is retained as the const-form axis identity for
+    // documentation and for any future test module that wants to
+    // enumerate the closed set of trait paths without recomposing the
+    // per-axis carve-out here.
     let atom_ty: TokenStream2 = rust_ty.parse().unwrap();
     let tail = trait_dispatch_tail(method, key);
     quote! {
@@ -1644,10 +1816,7 @@ fn deserialize_trait_dispatch_call(
     inner_ty: TokenStream2,
     key: &str,
 ) -> TokenStream2 {
-    let tail = trait_dispatch_tail(method, key);
-    quote! {
-        <#inner_ty as ::tatara_lisp::domain::DeserializeKwarg>::#tail
-    }
+    trait_dispatch_call(inner_ty, DESERIALIZE_TRAIT_PATH, method, key)
 }
 
 fn extractor_for(ty: &Type, key: &str, default: &SerdeDefault) -> Result<TokenStream2, String> {
@@ -4700,6 +4869,261 @@ mod deserialize_trait_dispatch_call_tests {
         assert_eq!(
             actual, expected,
             "helper emission must be token-equivalent to the hand-written optional-vec-deserialize UFCS call",
+        );
+    }
+}
+
+#[cfg(test)]
+mod trait_dispatch_call_tests {
+    use super::{
+        deserialize_trait_dispatch_call, narrow_trait_dispatch_call, trait_dispatch_call,
+        trait_dispatch_tail, DESERIALIZE_TRAIT_PATH, NARROW_TRAIT_PATH,
+    };
+    use quote::quote;
+
+    // Substrate-primitive peer of `trait_dispatch_tail_tests` below.
+    // The `(self_ty, trait_path, method, key) -> TokenStream2` helper
+    // is the derive's PRIVATE UFCS-bracket-emitting scaffold every
+    // trait-dispatch helper on the derive's emission surface that
+    // doesn't need the atom-axis carve-out (numeric-narrowed +
+    // universal-serde-fallthrough) composes against. The emitted
+    // tokens are `<#self_ty as #trait_path>::#tail`, with `#tail`
+    // itself owned by [`super::trait_dispatch_tail`].
+    //
+    // A regression here silently swaps the UFCS-bracket shape at
+    // every trait-dispatched arm in `extractor_for` that dispatches
+    // through the two participating peer helpers (all EIGHT
+    // numeric-narrowed arms via `narrow_trait_dispatch_call`, all
+    // FOUR universal-serde-fallthrough arms via
+    // `deserialize_trait_dispatch_call`). The tests below pin the
+    // FOUR promises the primitive owns at the boundary of its
+    // emission shape:
+    //
+    // 1. LEADING `<` UFCS BRACKET — the emission starts with the
+    //    `<` UFCS-bracket opener. Pinned by the leading-token test.
+    // 2. `<self_ty> as <trait_path>` COMPOSITION — the `self_ty`
+    //    interpolates at the UFCS `Self` slot before the `as`
+    //    keyword, and the `trait_path` interpolates immediately
+    //    after `as`. Pinned by the sweep test that walks two
+    //    representative (self_ty, trait_path) pairs (one per
+    //    participating axis).
+    // 3. `>::` CLOSING SEQUENCE — the UFCS bracket closes with `>::`
+    //    before the tail's method ident. Pinned by the closing-
+    //    sequence test.
+    // 4. `#tail` INTERPOLATION — the trailing tokens are exactly
+    //    `trait_dispatch_tail(method, key)`, so a regression at any
+    //    of the tail's THREE promises (call-site-span method ident,
+    //    `(&kw, #key)?` arg shape, `?`-suffix) surfaces at the
+    //    peer test module rather than at this one, and this test
+    //    only pins the interpolation seam. Pinned by the
+    //    tail-composition test.
+    //
+    // Peer to `trait_dispatch_tail_tests` on the substrate-primitive
+    // axis: those two modules together close the UFCS-bracket
+    // scaffold + trailing arm shape at ONE test surface. The atom
+    // axis's carve-out (documented on `atom_trait_dispatch_call`)
+    // stays hand-rolled to preserve its `>>` byte-joined form at
+    // the atom-axis test module.
+    //
+    // Theory anchor: THEORY.md §II.1 invariant 1 (typed entry) — the
+    // primitive IS the derive's rust-level typed-entry projection at
+    // the UFCS-bracket boundary; naming its FOUR emission promises
+    // as pinned facts here makes future upgrades (a caller-supplied
+    // diagnostic span at the trait-path segment, a `?`-suppressed
+    // variant, an alternative dispatch shape) fail at the boundary
+    // of the shape they change rather than at downstream implementors'
+    // compile-time noise. THEORY.md §II.1 invariant 5 (composition
+    // preserves proofs) — the two participating axis-typed helpers
+    // now compose structurally through ONE primitive, so a regression
+    // that drifted the UFCS-bracket shape at ONE axis would surface
+    // here rather than as silent drift at every downstream
+    // implementor with a field on that axis.
+
+    #[test]
+    fn primitive_emission_starts_with_the_leading_ufcs_bracket_and_binds_self_and_trait_path_across_axes(
+    ) {
+        // Promise 1 (LEADING `<`) + Promise 2 (`<self_ty> as <trait_path>`) —
+        // the emission begins with `<`, interpolates `self_ty` at the
+        // UFCS `Self` slot, then the `as` keyword, then `trait_path`.
+        // Sweep the TWO participating axes (numeric-narrowed +
+        // universal-serde-fallthrough) so a regression that (a) lost
+        // the leading `<`, (b) reordered `self_ty` and `trait_path`,
+        // or (c) dropped the `as` keyword surfaces per-axis.
+        for (self_ty_src, trait_path, expected_head) in [
+            (
+                "u16",
+                NARROW_TRAIT_PATH,
+                "< u16 as :: tatara_lisp :: domain :: NarrowNumeric",
+            ),
+            (
+                "Severity",
+                DESERIALIZE_TRAIT_PATH,
+                "< Severity as :: tatara_lisp :: domain :: DeserializeKwarg",
+            ),
+        ] {
+            let self_ty: proc_macro2::TokenStream = self_ty_src.parse().unwrap();
+            let body =
+                trait_dispatch_call(self_ty, trait_path, "extract_kwarg", "field").to_string();
+            assert!(
+                body.starts_with(expected_head),
+                "primitive emission must start with `{expected_head}`, got: {body}",
+            );
+        }
+    }
+
+    #[test]
+    fn primitive_emission_closes_the_ufcs_bracket_before_the_tail() {
+        // Promise 3 (`>::` CLOSING SEQUENCE) — the UFCS bracket
+        // closes with `> ::` before the tail's method ident. proc_macro2
+        // formats the closing sequence as two separate tokens when the
+        // trait path is threaded through the primitive from a `&'static
+        // str` const (rather than joined in a single `quote!` source
+        // expression, which would emit `>::`).
+        //
+        // Sweep the two participating axes so the closing-sequence
+        // pin fires per-axis rather than only on one canonical axis;
+        // a regression that dropped the `::` after the closing `>`
+        // would break the UFCS method dispatch at every downstream
+        // trait-dispatched arm.
+        for (self_ty_src, trait_path, method) in [
+            ("u16", NARROW_TRAIT_PATH, "extract_narrowed_kwarg"),
+            ("Severity", DESERIALIZE_TRAIT_PATH, "extract_kwarg"),
+        ] {
+            let self_ty: proc_macro2::TokenStream = self_ty_src.parse().unwrap();
+            let body = trait_dispatch_call(self_ty, trait_path, method, "field").to_string();
+            let expected_close = format!("> :: {method}");
+            assert!(
+                body.contains(&expected_close),
+                "primitive emission must close the UFCS bracket as `{expected_close}`, got: {body}",
+            );
+        }
+    }
+
+    #[test]
+    fn primitive_emission_interpolates_the_shared_tail_verbatim_at_the_trailing_position() {
+        // Promise 4 (`#tail` INTERPOLATION) — the trailing tokens
+        // after the `>::` closing sequence are exactly
+        // `trait_dispatch_tail(method, key).to_string()`. A regression
+        // that (a) drifted the trailing arg shape, (b) dropped the
+        // `?`-suffix, or (c) reshaped the tail's structural composition
+        // would surface at the peer `trait_dispatch_tail_tests` module
+        // (which pins the tail's three promises directly), but a
+        // regression at THIS primitive's interpolation seam
+        // (e.g. accidentally emitting the tail via string concatenation
+        // instead of `#tail` interpolation, so the tail's tokens
+        // arrive with different span/joint metadata) would surface here.
+        //
+        // The primitive's emission MUST END with the same trailing
+        // tokens as `trait_dispatch_tail(method, key)` — assert byte
+        // equality on that tail slice.
+        let self_ty: proc_macro2::TokenStream = "u16".parse().unwrap();
+        let method = "extract_narrowed_kwarg";
+        let key = "port";
+        let tail = trait_dispatch_tail(method, key).to_string();
+        let body = trait_dispatch_call(self_ty, NARROW_TRAIT_PATH, method, key).to_string();
+        assert!(
+            body.ends_with(&tail),
+            "primitive emission must END with the shared tail `{tail}`, got: {body}",
+        );
+    }
+
+    #[test]
+    fn peer_helpers_narrow_and_deserialize_delegate_byte_identically_through_the_primitive() {
+        // Structural pin — post-lift the two participating peer
+        // helpers each equal `trait_dispatch_call(...)` byte-for-byte
+        // at one representative (method, key, self-ty) triple per
+        // axis, so a regression that (a) reintroduced hand-rolled
+        // UFCS-bracket code at ONE participating helper (breaking
+        // the substrate-lift claim), or (b) drifted the trait-path
+        // const at ONE axis (leaving the other passing) surfaces
+        // here rather than as silent drift at only the affected
+        // axis's downstream consumers.
+        //
+        // NOTE: the atom axis's carve-out is intentionally not pinned
+        // here — its hand-rolled `quote!` block preserves the `>>`
+        // byte-joined form at proc_macro2's default formatter, which
+        // this primitive would shift to `> >` if the atom axis were
+        // threaded through here. The atom axis's own byte-identity
+        // pins live at `atom_trait_dispatch_call_tests`.
+        let narrowed: proc_macro2::TokenStream = "u16".parse().unwrap();
+        let expected_narrow = trait_dispatch_call(
+            narrowed,
+            NARROW_TRAIT_PATH,
+            "extract_narrowed_kwarg",
+            "port",
+        )
+        .to_string();
+        let actual_narrow =
+            narrow_trait_dispatch_call("extract_narrowed_kwarg", "u16", "port").to_string();
+        assert_eq!(
+            actual_narrow, expected_narrow,
+            "narrow_trait_dispatch_call must delegate byte-identically through trait_dispatch_call",
+        );
+
+        let inner: syn::Type = syn::parse_str("Severity").unwrap();
+        let expected_deser = trait_dispatch_call(
+            quote! { #inner },
+            DESERIALIZE_TRAIT_PATH,
+            "extract_kwarg",
+            "config",
+        )
+        .to_string();
+        let actual_deser =
+            deserialize_trait_dispatch_call("extract_kwarg", quote! { #inner }, "config")
+                .to_string();
+        assert_eq!(
+            actual_deser, expected_deser,
+            "deserialize_trait_dispatch_call must delegate byte-identically through trait_dispatch_call",
+        );
+    }
+
+    #[test]
+    fn trait_path_consts_carry_the_two_participating_axis_identities_verbatim() {
+        // Closed-set pin — the two participating trait-path consts
+        // carry the exact byte-value of the fully-qualified trait path
+        // the derive's UFCS-bracket dispatch resolves against. A
+        // regression that (a) dropped the leading `::` (breaking path
+        // hygiene in the derived code's outer scope), (b) drifted a
+        // crate-path segment, or (c) drifted a trait ident would
+        // surface per-const here rather than as silent drift at the
+        // downstream implementor's compile.
+        //
+        // Pinned here at the primitive's test module rather than at
+        // the per-axis test modules because the trait path IS the
+        // primitive's per-axis identity — the two peer helpers pass
+        // this const in verbatim, so a per-const drift would surface
+        // at BOTH the axis-typed emission tests AND here; pinning it
+        // at the const source cuts the affected-test blast radius.
+        assert_eq!(
+            NARROW_TRAIT_PATH, "::tatara_lisp::domain::NarrowNumeric",
+            "NARROW_TRAIT_PATH must carry the fully-qualified NarrowNumeric trait path verbatim",
+        );
+        assert_eq!(
+            DESERIALIZE_TRAIT_PATH, "::tatara_lisp::domain::DeserializeKwarg",
+            "DESERIALIZE_TRAIT_PATH must carry the fully-qualified DeserializeKwarg trait path verbatim",
+        );
+    }
+
+    #[test]
+    fn atom_trait_path_const_stays_exposed_for_the_carve_out_axis_documentation() {
+        // Documentation pin — the atom-axis trait path const stays
+        // exposed at `pub(crate)` scope alongside its two participating
+        // peers, even though the atom axis itself is a carve-out
+        // documented on `atom_trait_dispatch_call`. The const's byte
+        // value MUST equal the trait path the atom helper's hand-rolled
+        // `quote!` block emits, so a future refactor that (say) added a
+        // fifth atom axis at the substrate would find the closed set of
+        // atom-family trait paths at ONE place rather than re-deriving
+        // it from the hand-rolled emission.
+        //
+        // A regression here that drifted the const value from the
+        // hand-rolled atom emission would surface at BOTH this pin AND
+        // at the atom-axis test module's byte-identity pins, catching
+        // the drift twice at distinct sites.
+        use super::ATOM_TRAIT_PATH;
+        assert_eq!(
+            ATOM_TRAIT_PATH, "::tatara_lisp::domain::AtomKwarg<'_>",
+            "ATOM_TRAIT_PATH must carry the fully-qualified AtomKwarg<'_> trait path verbatim",
         );
     }
 }

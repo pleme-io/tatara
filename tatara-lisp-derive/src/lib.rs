@@ -22,8 +22,8 @@
 //!         Ok(Self {
 //!             name: extract_string(&kw, "name")?.to_string(),
 //!             query: extract_string(&kw, "query")?.to_string(),
-//!             threshold: extract_float_narrowed::<f64>(&kw, "threshold")?,
-//!             window_seconds: extract_optional_int_narrowed::<i64>(&kw, "window-seconds")?,
+//!             threshold: <f64 as NarrowNumeric>::extract_narrowed_kwarg(&kw, "threshold")?,
+//!             window_seconds: <i64 as NarrowNumeric>::extract_optional_narrowed_kwarg(&kw, "window-seconds")?,
 //!         })
 //!     }
 //! }
@@ -1100,100 +1100,135 @@ fn has_serde_default(field: &syn::Field) -> bool {
     find_named_sub_key(&field.attrs, "serde", "default", |_meta| Ok(())).is_some()
 }
 
-/// The SIX numeric-narrowed extractor arms in [`extractor_for`] —
-/// `Kind::Int(_)`, `Kind::OptionalInt(_)`, `Kind::VecInt(_)`,
-/// `Kind::Float(_)`, `Kind::OptionalFloat(_)`, `Kind::VecFloat(_)`
-/// — each emit the SAME two-primitive composition:
+/// The EIGHT numeric-narrowed extractor arms in [`extractor_for`]
+/// — `Kind::Int(_)`, `Kind::OptionalInt(_)`, `Kind::VecInt(_)`,
+/// `Kind::OptionalVecInt(_)`, `Kind::Float(_)`, `Kind::OptionalFloat(_)`,
+/// `Kind::VecFloat(_)`, `Kind::OptionalVecFloat(_)` — each emit the
+/// SAME two-primitive composition, dispatched through the
+/// [`tatara_lisp::domain::NarrowNumeric`] trait's per-narrow-type
+/// `type Wide` associated-type binding (per-run cb9648d):
 ///
 /// ```ignore
 /// let narrowed: TokenStream2 = rust_ty.parse().unwrap();
 /// quote! {
-///     ::tatara_lisp::domain::<extractor>::<#narrowed>(&kw, #key)?
+///     <#narrowed as ::tatara_lisp::domain::NarrowNumeric>::<method>(&kw, #key)?
 /// }
 /// ```
 ///
-/// where `<extractor>` is one of six axis-mode-suffixed function
-/// names in `tatara_lisp::domain` (`extract_int_narrowed` /
-/// `extract_optional_int_narrowed` / `extract_int_list_narrowed`
-/// on the int axis, and their `float` peers). Pre-lift the six
-/// arms each hand-wrote the `rust_ty.parse().unwrap() → quote! {
-/// ::tatara_lisp::domain::<name>::<#narrowed>(...) }` scaffold
-/// with only the extractor name varying between arms — a duplicated
-/// two-step (parse the payload as a TURBOFISH, wrap it in the
-/// axis-mode-specific extractor call) that recurred at exactly the
-/// PRIME-DIRECTIVE ≥2 threshold (three times over) at ONE derive
-/// call site.
+/// where `<method>` is one of FOUR mode-suffixed trait methods on
+/// [`tatara_lisp::domain::NarrowNumeric`] —
+/// `extract_narrowed_kwarg` (scalar) / `extract_optional_narrowed_kwarg`
+/// (optional scalar) / `extract_narrowed_list_kwarg` (vec) /
+/// `extract_optional_narrowed_list_kwarg` (optional vec). The
+/// axis identity (int vs. float) is NOT carried in the method name
+/// — it lives at ONE per-narrow-type `type Wide = i64|f64`
+/// associated-type binding on the target width's
+/// `impl NarrowNumeric for _` block, and rides the trait dispatch
+/// through `<T as NarrowNumeric>::Wide` at the substrate's four
+/// trait defaults (which compose `(Self::Wide, Self::narrow,
+/// Self::WIDTH)` through the shared `extract_narrowed` /
+/// `extract_optional_narrowed` / `extract_narrowed_list` /
+/// `extract_optional_narrowed_list` substrate primitives).
+///
+/// Pre-lift the eight arms dispatched to eight axis-typed public
+/// wrapper names in `tatara_lisp::domain`
+/// (`extract_int_narrowed` / `extract_optional_int_narrowed` /
+/// `extract_int_list_narrowed` /
+/// `extract_optional_int_list_narrowed` on the int axis, and
+/// their `float` peers). Post-lift the axis identity no longer
+/// names the emitted method — the four method names cover both
+/// axes because `<T as NarrowNumeric>::Wide` picks up the wide
+/// axis mechanically from the target width. The dispatch surface
+/// at the derive's `syn::Type -> emitted extractor call` boundary
+/// halves from eight axis-typed wrapper names to four
+/// mode-suffixed trait methods, and adding a hypothetical third
+/// wide axis (e.g. `u128` / `Decimal`) lands as ZERO new emit
+/// strings — the same four trait methods pick up the new axis
+/// mechanically from the new `impl NarrowNumeric for _ { type
+/// Wide = <NewWide>; ... }` block.
 ///
 /// Post-lift the scaffold lives here at ONE substrate entry: the
 /// helper parses the [`Kind`] payload's width literal (`"u16"`,
 /// `"f32"`, `"usize"`, …) as a `TokenStream2` TURBOFISH, resolves
-/// the extractor `Ident` at the derive's call-site span (matching
-/// the `Ident::new` discipline the peer `via_ident` /
+/// the trait method `Ident` at the derive's call-site span
+/// (matching the `Ident::new` discipline the peer `via_ident` /
 /// `unknown_ident` resolvers on line 185 already use), and emits
-/// the fully-qualified `::tatara_lisp::domain::<extractor>::<T>(
-/// &kw, #key)?` call every numeric-narrowed arm shares. Each of
-/// the eight numeric-narrowed arms (four per axis: scalar / optional-
-/// scalar / vec / optional-vec, both int and float) is now a
-/// ONE-LINE delegate onto this helper.
+/// the fully-qualified `<T as ::tatara_lisp::domain::NarrowNumeric>
+/// ::<method>(&kw, #key)?` call every numeric-narrowed arm shares.
+/// Each of the eight numeric-narrowed arms (four per axis: scalar
+/// / optional-scalar / vec / optional-vec, both int and float) is
+/// now a ONE-LINE delegate onto this helper — with the int-axis
+/// and float-axis arms of each mode collapsing to the SAME method
+/// name (the axis-typed pair `(Kind::Int, Kind::Float)` both emit
+/// `extract_narrowed_kwarg`, `(Kind::OptionalInt,
+/// Kind::OptionalFloat)` both emit `extract_optional_narrowed_kwarg`,
+/// and so on).
 ///
-/// The `extractor` parameter is a `&'static str` — the ONE
-/// per-arm axis-mode identity — chosen for two reasons:
+/// The `method` parameter is a `&'static str` — the ONE per-mode
+/// dispatch identity — chosen for two reasons:
 ///
 /// 1. it composes byte-for-byte with the `#[static]`-lifetime
 ///    `Kind::Int(&'static str)` / `Kind::VecInt(&'static str)` /
 ///    `Kind::OptionalVecInt(&'static str)` / etc. payload's own
-///    `'static` lifetime origin, so the eight call sites don't need
-///    to `.to_string()` anything to feed the helper;
-/// 2. the string identity (eight known values —
-///    `extract_int_narrowed` / `extract_optional_int_narrowed` /
-///    `extract_int_list_narrowed` / `extract_optional_int_list_narrowed` /
-///    `extract_float_narrowed` / `extract_optional_float_narrowed` /
-///    `extract_float_list_narrowed` /
-///    `extract_optional_float_list_narrowed`) is pinned per-arm at
-///    the derive's `extractor_for` call site, so a regression that
-///    silently swapped ONE arm's extractor name would surface at
-///    the sibling test in `narrowed_extractor_call_tests` below
-///    rather than as silent drift at every downstream implementor
-///    with a field of that (axis, mode) shape.
+///    `'static` lifetime origin, so the eight call sites don't
+///    need to `.to_string()` anything to feed the helper;
+/// 2. the string identity (four known values —
+///    `extract_narrowed_kwarg` /
+///    `extract_optional_narrowed_kwarg` /
+///    `extract_narrowed_list_kwarg` /
+///    `extract_optional_narrowed_list_kwarg`) is pinned per-mode
+///    at the derive's `extractor_for` call site, so a regression
+///    that silently swapped ONE arm's method name would surface
+///    at the sibling test in `narrow_trait_dispatch_call_tests`
+///    below rather than as silent drift at every downstream
+///    implementor with a field of that mode shape.
 ///
-/// Future structural promotion of the emitted call (a caller-supplied
-/// diagnostic span, a `?`-suppressed variant that plumbs the
-/// axis-typed rejection through a `Result` chain rather than a `?`,
-/// or an extension of the eight-name set with a new axis or mode)
-/// lands at ONE substrate primitive here — the eight per-Kind arms
-/// and every future new numeric-narrowed arm pick up the upgrade
-/// mechanically, with no per-arm hand-edit. Same property
-/// [`extract_atom`] / [`extract_optional_atom`] / [`extract_list`]
-/// give the atom-family / list-family primitives on the
-/// `tatara_lisp::domain` side.
+/// Future structural promotion of the emitted call (a
+/// caller-supplied diagnostic span, a `?`-suppressed variant that
+/// plumbs the axis-typed rejection through a `Result` chain
+/// rather than a `?`, or an extension of the four-method set with
+/// a new mode) lands at ONE substrate primitive here — the eight
+/// per-Kind arms and every future new numeric-narrowed arm pick
+/// up the upgrade mechanically, with no per-arm hand-edit. Same
+/// property [`extract_atom`] / [`extract_optional_atom`] /
+/// [`extract_list`] give the atom-family / list-family primitives
+/// on the `tatara_lisp::domain` side.
 ///
-/// Non-narrowed peer of [`unqualified_extractor_call`] on the derive's
-/// proc-macro emission surface: both share the same emission skeleton
-/// (resolve extractor `Ident` at call-site span → emit fully-qualified
-/// `::tatara_lisp::domain::<extractor>(&kw, #key)?` call); this helper
-/// additionally bundles a TURBOFISH lift (parse the payload's width
-/// literal as a `TokenStream2`, wrap it in `::<T>`) needed by the
-/// numeric-narrowing axes. Together the two helpers close every
-/// kind-arm emission at the derive's `syn::Type -> emitted extractor
-/// call` boundary through ONE pair of substrate primitives.
+/// Non-narrowed peer of [`unqualified_extractor_call`] on the
+/// derive's proc-macro emission surface: both share the same
+/// emission skeleton (resolve dispatch `Ident` at call-site span
+/// → emit fully-qualified call ending in `(&kw, #key)?`); this
+/// helper additionally bundles a TURBOFISH-typed dispatcher (the
+/// payload's width literal rides the `<T as ...>::<method>` UFCS
+/// prefix so the trait resolution picks up the axis from
+/// `<T as NarrowNumeric>::Wide`), needed by the numeric-narrowing
+/// axes. Together the two helpers close every kind-arm emission
+/// at the derive's `syn::Type -> emitted extractor call` boundary
+/// through ONE pair of substrate primitives.
 ///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition;
-/// the (parse-payload-as-turbofish, wrap-in-axis-mode-extractor-call)
+/// the (parse-payload-as-turbofish, wrap-in-mode-specific-trait-call)
 /// two-step recurred at the eight axis-mode arms (well past the
 /// PRIME-DIRECTIVE ≥2 trigger) and is lifted to one owner here,
 /// exactly as the atom skeleton was lifted on the domain side.
-/// THEORY.md §II.1 invariant 5 — composition preserves proofs; the
-/// eight arms now compose structurally through ONE helper, so a
-/// future third numeric axis or a fifth mode lands as ONE new
-/// one-line delegate at the [`extractor_for`] match plus a new
-/// `&'static str` axis-mode extractor name flowed through the same
-/// helper — the derive's numeric-narrowing emission surface stays
-/// at ONE substrate primitive.
-fn narrowed_extractor_call(extractor: &'static str, rust_ty: &str, key: &str) -> TokenStream2 {
+/// THEORY.md §II.1 invariant 3 — typed exit; the per-narrow-type
+/// narrowing rejection is a typed exit through the trait's
+/// associated `Wide` type + `WIDTH` const, so a caller cannot
+/// accidentally invoke the int-mode arm against a float-axis
+/// narrow width because the trait's `type Wide` binding routes
+/// axis identity at rustc time. THEORY.md §II.1 invariant 5 —
+/// composition preserves proofs; the eight arms now compose
+/// structurally through ONE helper at FOUR method names (not eight),
+/// so a future third wide axis lands as ZERO new emit strings and
+/// a future fifth mode lands as ONE new one-line delegate at the
+/// [`extractor_for`] match plus a new `&'static str` mode name
+/// flowed through the same helper — the derive's numeric-narrowing
+/// emission surface stays at ONE substrate primitive.
+fn narrow_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) -> TokenStream2 {
     let narrowed: TokenStream2 = rust_ty.parse().unwrap();
-    let extractor = Ident::new(extractor, proc_macro2::Span::call_site());
+    let method = Ident::new(method, proc_macro2::Span::call_site());
     quote! {
-        ::tatara_lisp::domain::#extractor::<#narrowed>(&kw, #key)?
+        <#narrowed as ::tatara_lisp::domain::NarrowNumeric>::#method(&kw, #key)?
     }
 }
 
@@ -1223,10 +1258,10 @@ fn narrowed_extractor_call(extractor: &'static str, rust_ty: &str, key: &str) ->
 /// the same match dispatch as its numeric-narrowed peer.
 ///
 /// Post-lift the scaffold lives here at ONE substrate entry as the
-/// non-narrowed peer of [`narrowed_extractor_call`]: the helper
+/// non-narrowed peer of [`narrow_trait_dispatch_call`]: the helper
 /// resolves the extractor `Ident` at the derive's call-site span
 /// (matching the `Ident::new` discipline the peer `via_ident` /
-/// `unknown_ident` resolvers on line 185 and [`narrowed_extractor_call`]
+/// `unknown_ident` resolvers on line 185 and [`narrow_trait_dispatch_call`]
 /// itself already use) and emits the fully-qualified `::tatara_lisp::
 /// domain::<extractor>(&kw, #key)?` call every non-narrowed arm shares.
 /// Each of the ten non-narrowed arms is now a ONE-LINE delegate onto
@@ -1234,11 +1269,11 @@ fn narrowed_extractor_call(extractor: &'static str, rust_ty: &str, key: &str) ->
 /// compose the delegate with a per-axis owned-`String` post-conversion
 /// (`.to_string()` / `.map(::std::string::String::from)`).
 ///
-/// Peer to [`narrowed_extractor_call`] on the numeric-narrowing axis:
+/// Peer to [`narrow_trait_dispatch_call`] on the numeric-narrowing axis:
 /// both traits share the same emission skeleton (resolve extractor
 /// `Ident` at call-site span → emit fully-qualified
 /// `::tatara_lisp::domain::<extractor>(&kw, #key)?` call); the
-/// difference is that `narrowed_extractor_call` also bundles a
+/// difference is that `narrow_trait_dispatch_call` also bundles a
 /// TURBOFISH lift (parse the payload's width literal as a
 /// `TokenStream2`, wrap it in `::<T>`) needed by the numeric-narrowing
 /// axes. Together the two helpers close every kind-arm emission at the
@@ -1263,7 +1298,7 @@ fn narrowed_extractor_call(extractor: &'static str, rust_ty: &str, key: &str) ->
 /// an extension of the ten-name set with a new axis or mode) lands at
 /// ONE substrate primitive here — the ten per-Kind arms and every
 /// future new non-narrowed arm pick up the upgrade mechanically, with
-/// no per-arm hand-edit. Same property [`narrowed_extractor_call`]
+/// no per-arm hand-edit. Same property [`narrow_trait_dispatch_call`]
 /// gives the eight numeric-narrowed arms on the derive side, and
 /// [`extract_atom`] / [`extract_optional_atom`] / [`extract_list`]
 /// give the atom-family / list-family primitives on the
@@ -1274,7 +1309,7 @@ fn narrowed_extractor_call(extractor: &'static str, rust_ty: &str, key: &str) ->
 /// recurred at the ten non-narrowed arms (well past the
 /// PRIME-DIRECTIVE ≥2 trigger) and is lifted to one owner here,
 /// exactly as its numeric-narrowed peer was lifted onto
-/// [`narrowed_extractor_call`]. THEORY.md §II.1 invariant 5 —
+/// [`narrow_trait_dispatch_call`]. THEORY.md §II.1 invariant 5 —
 /// composition preserves proofs; the ten arms now compose structurally
 /// through ONE helper, so a future new atom-family extractor lands as
 /// ONE new one-line delegate at the [`extractor_for`] match plus a
@@ -1352,7 +1387,7 @@ fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2
         // step (parse the payload's width literal as a turbofish,
         // wrap it in the axis-mode-specific extractor call) at eight
         // sites in this match. Post-lift they collapse to one-line
-        // delegates onto [`narrowed_extractor_call`], which owns the
+        // delegates onto [`narrow_trait_dispatch_call`], which owns the
         // shared scaffold at ONE substrate primitive — see its
         // docstring for the load-bearing invariants.
         //
@@ -1378,13 +1413,16 @@ fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2
         // the `vec_u16_field_rejects_per_item_out_of_range_with_
         // typed_width_and_item_path` test in `tatara-lisp/src/
         // domain.rs` for the end-to-end pin.
-        Kind::VecInt(rust_ty) => narrowed_extractor_call("extract_int_list_narrowed", rust_ty, key),
-        Kind::VecFloat(rust_ty) => {
-            narrowed_extractor_call("extract_float_list_narrowed", rust_ty, key)
+        // Both axes (int / float) dispatch to the SAME trait method
+        // `<T as NarrowNumeric>::extract_narrowed_list_kwarg` — the
+        // wide axis rides `<T as NarrowNumeric>::Wide` at the
+        // substrate's trait default, not the derive's emit string.
+        Kind::VecInt(rust_ty) | Kind::VecFloat(rust_ty) => {
+            narrow_trait_dispatch_call("extract_narrowed_list_kwarg", rust_ty, key)
         }
         // Optional-vec numeric-narrowed peers of the required-vec
         // arms directly above — the width payload rides the SAME
-        // `narrowed_extractor_call` helper into the outer-`Option`
+        // `narrow_trait_dispatch_call` helper into the outer-`Option`
         // extractor's turbofish, so a per-item narrowing failure on
         // `Option<Vec<u16>>` / `Option<Vec<f32>>` surfaces with the
         // SAME `NumericWidth::U16` / `NumericWidth::F32` identity its
@@ -1394,19 +1432,29 @@ fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2
         // the derive dispatch surface covers the full Cartesian
         // product across {scalar, optional-scalar, vec, optional-vec}
         // × {String, Bool, Int, Float} for the atom-family axes.
-        Kind::OptionalVecInt(rust_ty) => {
-            narrowed_extractor_call("extract_optional_int_list_narrowed", rust_ty, key)
+        // Optional-vec numeric-narrowed peer of the required-vec
+        // arm above. Both axes collapse onto ONE trait-dispatch call
+        // through `<T as NarrowNumeric>::extract_optional_narrowed_list_kwarg`.
+        Kind::OptionalVecInt(rust_ty) | Kind::OptionalVecFloat(rust_ty) => {
+            narrow_trait_dispatch_call("extract_optional_narrowed_list_kwarg", rust_ty, key)
         }
-        Kind::OptionalVecFloat(rust_ty) => {
-            narrowed_extractor_call("extract_optional_float_list_narrowed", rust_ty, key)
+        // Scalar numeric-narrowed axes — both `Kind::Int(_)` and
+        // `Kind::Float(_)` dispatch to `<T as NarrowNumeric>::
+        // extract_narrowed_kwarg`. Pre-lift each axis routed
+        // through its own `extract_int_narrowed` /
+        // `extract_float_narrowed` axis-typed public wrapper name;
+        // post-lift the axis identity rides `<T as NarrowNumeric>::
+        // Wide` at the substrate's trait default rather than the
+        // derive's emit string, and the two arms collapse to ONE
+        // method-name dispatch.
+        Kind::Int(rust_ty) | Kind::Float(rust_ty) => {
+            narrow_trait_dispatch_call("extract_narrowed_kwarg", rust_ty, key)
         }
-        Kind::Int(rust_ty) => narrowed_extractor_call("extract_int_narrowed", rust_ty, key),
-        Kind::OptionalInt(rust_ty) => {
-            narrowed_extractor_call("extract_optional_int_narrowed", rust_ty, key)
-        }
-        Kind::Float(rust_ty) => narrowed_extractor_call("extract_float_narrowed", rust_ty, key),
-        Kind::OptionalFloat(rust_ty) => {
-            narrowed_extractor_call("extract_optional_float_narrowed", rust_ty, key)
+        // Optional scalar numeric-narrowed peer of the required
+        // scalar arm above. Both axes dispatch to `<T as
+        // NarrowNumeric>::extract_optional_narrowed_kwarg`.
+        Kind::OptionalInt(rust_ty) | Kind::OptionalFloat(rust_ty) => {
+            narrow_trait_dispatch_call("extract_optional_narrowed_kwarg", rust_ty, key)
         }
         Kind::Bool => unqualified_extractor_call("extract_bool", key),
         Kind::OptionalBool => unqualified_extractor_call("extract_optional_bool", key),
@@ -2699,50 +2747,51 @@ mod classify_tests {
 }
 
 #[cfg(test)]
-mod narrowed_extractor_call_tests {
-    use super::narrowed_extractor_call;
+mod narrow_trait_dispatch_call_tests {
+    use super::narrow_trait_dispatch_call;
     use quote::quote;
 
-    // The `(extractor, rust_ty, key) -> TokenStream2` helper is the
+    // The `(method, rust_ty, key) -> TokenStream2` helper is the
     // derive's PRIVATE emission scaffold for the EIGHT numeric-narrowed
     // arms in `extractor_for` (`Kind::Int(_)` / `Kind::OptionalInt(_)`
     // / `Kind::VecInt(_)` / `Kind::OptionalVecInt(_)` /
     // `Kind::Float(_)` / `Kind::OptionalFloat(_)` / `Kind::VecFloat(_)`
-    // / `Kind::OptionalVecFloat(_)`). Each arm is now a one-line
-    // delegate onto this helper; the shared scaffold — parse the
-    // payload's width literal as a TURBOFISH, resolve the extractor
-    // `Ident` at the derive's call-site span, emit the fully-qualified
-    // `::tatara_lisp::domain::<extractor>::<T>(&kw, #key)?` call —
-    // lives at ONE substrate primitive.
+    // / `Kind::OptionalVecFloat(_)`) — collapsed post-lift onto FOUR
+    // per-mode trait methods on `NarrowNumeric` (per-run cb9648d
+    // opened the trait defaults). Each arm is now a one-line delegate
+    // onto this helper; the shared scaffold — parse the payload's
+    // width literal as a TURBOFISH-typed UFCS dispatcher, resolve the
+    // trait method `Ident` at the derive's call-site span, emit the
+    // fully-qualified `<T as ::tatara_lisp::domain::NarrowNumeric>::
+    // <method>(&kw, #key)?` call — lives at ONE substrate primitive.
     //
     // A regression here silently swaps the emitted code at every
     // `#[derive(TataraDomain)]` implementor with a numeric-narrowed
-    // field. The tests below pin the FIVE promises the helper owns at
+    // field. The tests below pin the SIX promises the helper owns at
     // the boundary of its emission shape:
     //
-    // 1. TURBOFISH — the `rust_ty` payload (`"u16"`, `"f32"`, …)
-    //    rides the emitted `::<T>(&kw, #key)?` as a Rust type, NOT as
-    //    a string literal or a cast target. Pinned by the width-per-
-    //    arm sweep test below (any of the ten integer widths and two
-    //    float widths land in the turbofish slot verbatim).
-    // 2. AXIS-MODE EXTRACTOR IDENTITY — the `extractor` `&'static str`
-    //    payload rides the emitted `::tatara_lisp::domain::<extractor>`
-    //    path as an `Ident` at the call-site span, not as a string
-    //    literal or a `Path` composed by string concatenation. Pinned
-    //    by the eight-arm sweep test that walks each of the EIGHT
-    //    axis-mode extractor names the derive knows about
-    //    (`extract_int_narrowed`, `extract_optional_int_narrowed`,
-    //    `extract_int_list_narrowed`,
-    //    `extract_optional_int_list_narrowed`,
-    //    `extract_float_narrowed`, `extract_optional_float_narrowed`,
-    //    `extract_float_list_narrowed`,
-    //    `extract_optional_float_list_narrowed`).
-    // 3. FULLY-QUALIFIED SUBSTRATE PATH — the emission is
-    //    `::tatara_lisp::domain::<extractor>` — leading `::` +
-    //    two-segment path — so the emission is hygienic in the derived
-    //    code's outer scope regardless of what the implementor's crate
-    //    imports (the same discipline every peer non-narrowed arm's
-    //    `::tatara_lisp::domain::extract_*` emission gives).
+    // 1. UFCS TURBOFISH — the `rust_ty` payload (`"u16"`, `"f32"`,
+    //    …) rides the emitted `<T as ...>::<method>(&kw, #key)?` as
+    //    a Rust type, NOT as a string literal or a cast target. Pinned
+    //    by the width-per-arm sweep test below (any of the ten integer
+    //    widths and two float widths land in the UFCS type slot
+    //    verbatim, at both scalar and list modes).
+    // 2. TRAIT METHOD IDENTITY — the `method` `&'static str` payload
+    //    rides the emitted `<T as ...NarrowNumeric>::<method>` path
+    //    as an `Ident` at the call-site span, not as a string literal
+    //    or a `Path` composed by string concatenation. Pinned by the
+    //    four-mode sweep test that walks each of the FOUR mode-suffixed
+    //    trait methods the derive's per-mode dispatch pairs to
+    //    (`extract_narrowed_kwarg`, `extract_optional_narrowed_kwarg`,
+    //    `extract_narrowed_list_kwarg`,
+    //    `extract_optional_narrowed_list_kwarg`).
+    // 3. FULLY-QUALIFIED TRAIT PATH — the emission names the trait as
+    //    `::tatara_lisp::domain::NarrowNumeric` — leading `::` +
+    //    three-segment path — so the UFCS dispatch is hygienic in the
+    //    derived code's outer scope regardless of what the
+    //    implementor's crate imports (the same discipline every peer
+    //    non-narrowed arm's `::tatara_lisp::domain::extract_*`
+    //    emission gives on the non-narrowed path).
     // 4. KEY LITERAL PASS-THROUGH — the `key` parameter rides the
     //    emitted call's second argument as a Rust string literal, so
     //    the emitted call reads the SAME kwarg the derive's per-field
@@ -2753,6 +2802,14 @@ mod narrowed_extractor_call_tests {
     //    `Option<T>` / `Vec<T>` (not a `Result`), matching the shape
     //    every peer `Kind::*` arm's `extract_*(&kw, #key)?` emission
     //    gives. Pinned by the `?`-suffix test.
+    // 6. AXIS IDENTITY LIVES ON `T`, NOT THE METHOD NAME — the
+    //    method name is the SAME string on both the int axis and the
+    //    float axis (there is no `_int_` / `_float_` substring in any
+    //    of the FOUR mode-suffixed methods); the wide axis rides
+    //    `<T as NarrowNumeric>::Wide` at the substrate's trait default,
+    //    so a hypothetical third wide axis (e.g. `u128` / `Decimal`)
+    //    lands as ZERO new emit strings here. Pinned by the sibling
+    //    `both_axes_dispatch_to_the_same_method_name_per_mode` test.
     //
     // Peer to the `classify_tests` module above — that module pins
     // the `(syn::Type -> Kind)` projection (what each field type
@@ -2764,36 +2821,41 @@ mod narrowed_extractor_call_tests {
     // Theory anchor: THEORY.md §II.1 invariant 1 (typed entry) — the
     // helper IS the derive's rust-level typed-entry projection at the
     // numeric field's `syn::Type -> emitted extractor call` boundary;
-    // naming its FIVE emission promises as pinned facts here makes
+    // naming its SIX emission promises as pinned facts here makes
     // future upgrades (a caller-supplied diagnostic span, a `?`-
-    // suppressed variant, a new axis or mode) fail at the boundary of
-    // the shape they change rather than at downstream implementors'
-    // compile-time noise.
+    // suppressed variant, a new mode, or a new wide axis) fail at
+    // the boundary of the shape they change rather than at
+    // downstream implementors' compile-time noise. THEORY.md §II.1
+    // invariant 3 (typed exit) — the axis identity riding the UFCS
+    // type parameter routes through `<T as NarrowNumeric>::Wide` at
+    // rustc time, so the emit-time collapse across axes preserves
+    // the per-narrow-type rejection identity.
 
-    fn call_string(extractor: &'static str, rust_ty: &str, key: &str) -> String {
-        narrowed_extractor_call(extractor, rust_ty, key).to_string()
+    fn call_string(method: &'static str, rust_ty: &str, key: &str) -> String {
+        narrow_trait_dispatch_call(method, rust_ty, key).to_string()
     }
 
     #[test]
-    fn helper_emits_the_two_step_narrowed_extractor_call_at_every_supported_integer_width() {
-        // Promise 1 (TURBOFISH) — the `rust_ty` payload rides the
-        // emitted call as a Rust type. Sweep the ten integer widths
-        // the derive's `Kind::Int(_)` payload spans so a regression
-        // that (a) lost the turbofish, (b) rendered the width as a
-        // string literal, or (c) dropped the width entirely surfaces
+    fn helper_emits_the_ufcs_turbofish_at_every_supported_integer_width() {
+        // Promise 1 (UFCS TURBOFISH) — the `rust_ty` payload rides
+        // the emitted call as a Rust type in the `<T as ...>` UFCS
+        // slot. Sweep the ten integer widths the derive's
+        // `Kind::Int(_)` payload spans so a regression that (a) lost
+        // the type parameter, (b) rendered the width as a string
+        // literal, or (c) dropped the payload entirely surfaces
         // per-width rather than only on one canonical width.
         //
-        // The `<` marker + width + `>` bracketing pins the turbofish
+        // The `< <width> as` bracketing pins the UFCS type-parameter
         // shape; the trailing `(&kw, "port")?` pins the arg + `?`
         // shape.
         for width in [
             "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "usize", "isize",
         ] {
-            let body = call_string("extract_int_narrowed", width, "port");
-            let expected_turbofish = format!(":: < {width} >");
+            let body = call_string("extract_narrowed_kwarg", width, "port");
+            let expected_ufcs_head = format!("< {width} as");
             assert!(
-                body.contains(&expected_turbofish),
-                "width {width} must ride the turbofish `::<{width}>`, got: {body}",
+                body.contains(&expected_ufcs_head),
+                "width {width} must ride the UFCS type slot `<{width} as ...>`, got: {body}",
             );
             assert!(
                 body.ends_with(r#"("port") ?"#) || body.ends_with(r#"(& kw , "port") ?"#),
@@ -2803,78 +2865,82 @@ mod narrowed_extractor_call_tests {
     }
 
     #[test]
-    fn helper_emits_the_two_step_narrowed_extractor_call_at_every_supported_float_width() {
-        // Float-axis peer of the integer sweep — Promise 1
-        // (TURBOFISH) at the two float widths the derive's
-        // `Kind::Float(_)` payload spans. A regression that dropped
-        // `f32` from the payload set would still emit here (the helper
-        // is width-agnostic) but the sibling `classify_tests` pin on
-        // `Kind::Float("f32")` would fail — the two test modules
-        // together close the axis identity at both derive layers.
+    fn helper_emits_the_ufcs_turbofish_at_every_supported_float_width() {
+        // Float-axis peer of the integer sweep — Promise 1 at the
+        // two float widths the derive's `Kind::Float(_)` payload
+        // spans. Both float widths reach the SAME helper as the
+        // integer widths (the axis identity does NOT ride the method
+        // name) — a regression that split the emit path by axis
+        // would surface here (both widths must reach the same
+        // `extract_narrowed_kwarg` method name at the trait dispatch).
         for width in ["f32", "f64"] {
-            let body = call_string("extract_float_narrowed", width, "threshold");
-            let expected_turbofish = format!(":: < {width} >");
+            let body = call_string("extract_narrowed_kwarg", width, "threshold");
+            let expected_ufcs_head = format!("< {width} as");
             assert!(
-                body.contains(&expected_turbofish),
-                "width {width} must ride the turbofish `::<{width}>`, got: {body}",
+                body.contains(&expected_ufcs_head),
+                "width {width} must ride the UFCS type slot `<{width} as ...>`, got: {body}",
             );
         }
     }
 
     #[test]
-    fn helper_emits_the_axis_mode_extractor_ident_at_every_eight_narrowed_arm() {
-        // Promise 2 (AXIS-MODE EXTRACTOR IDENTITY) — the `extractor`
-        // string rides the emitted call as an `Ident` at the derive's
-        // call-site span. Sweep the EIGHT axis-mode extractor names the
-        // derive's numeric-narrowed arms map to, so a regression that
-        // silently swapped ONE arm's name at the `extractor_for`
-        // dispatch site (e.g. an int-list arm accidentally routing
-        // through the float-list extractor) would surface here rather
-        // than as a mystery type-mismatch at every downstream consumer
-        // with a `Vec<u16>` field.
+    fn helper_emits_the_trait_method_ident_at_every_four_narrowed_mode() {
+        // Promise 2 (TRAIT METHOD IDENTITY) — the `method` string
+        // rides the emitted call as an `Ident` at the derive's
+        // call-site span. Sweep the FOUR mode-suffixed trait methods
+        // the derive's numeric-narrowed arms map to, so a regression
+        // that silently swapped ONE arm's method name at the
+        // `extractor_for` dispatch site (e.g. a scalar arm
+        // accidentally routing through the list-mode method) would
+        // surface here rather than as a mystery type-mismatch at
+        // every downstream consumer with a numeric field.
         //
-        // The full path `:: tatara_lisp :: domain :: <extractor>` (the
-        // proc_macro2-formatted spelling of `::tatara_lisp::domain::
-        // <extractor>`) pins the extractor as a load-bearing token in
-        // the emission's path prefix.
-        for extractor in [
-            "extract_int_narrowed",
-            "extract_optional_int_narrowed",
-            "extract_int_list_narrowed",
-            "extract_optional_int_list_narrowed",
-            "extract_float_narrowed",
-            "extract_optional_float_narrowed",
-            "extract_float_list_narrowed",
-            "extract_optional_float_list_narrowed",
+        // Post-lift the FOUR mode names cover BOTH axes (int + float)
+        // — halved from the pre-lift EIGHT axis-typed public wrapper
+        // names — because the wide axis lives at `<T as
+        // NarrowNumeric>::Wide` on the target width's impl block.
+        //
+        // The full UFCS path `< u16 as :: tatara_lisp :: domain ::
+        // NarrowNumeric > :: <method>` (the proc_macro2-formatted
+        // spelling of `<u16 as ::tatara_lisp::domain::NarrowNumeric>
+        // ::<method>`) pins the method as a load-bearing token
+        // trailing the UFCS bracket.
+        for method in [
+            "extract_narrowed_kwarg",
+            "extract_optional_narrowed_kwarg",
+            "extract_narrowed_list_kwarg",
+            "extract_optional_narrowed_list_kwarg",
         ] {
-            let body = call_string(extractor, "u16", "port");
-            let expected_path = format!(":: tatara_lisp :: domain :: {extractor}");
+            let body = call_string(method, "u16", "port");
+            let expected_method_call = format!(":: NarrowNumeric > :: {method}");
             assert!(
-                body.contains(&expected_path),
-                "extractor {extractor} must ride the emitted path as `{expected_path}`, got: {body}",
+                body.contains(&expected_method_call),
+                "method {method} must ride the emitted UFCS dispatch as `{expected_method_call}`, got: {body}",
             );
         }
     }
 
     #[test]
-    fn helper_emits_the_fully_qualified_substrate_path_with_a_leading_double_colon() {
-        // Promise 3 (FULLY-QUALIFIED SUBSTRATE PATH) — the emitted
-        // path starts with `::` so it resolves against the crate root
-        // regardless of what the implementor's `use` imports bring
-        // into scope. A regression that dropped the leading `::` would
-        // silently drift the resolution to whatever `tatara_lisp` the
-        // implementor's scope resolves (a re-export, a local alias, a
-        // stub) rather than the substrate crate.
+    fn helper_emits_the_fully_qualified_trait_path_with_a_leading_double_colon() {
+        // Promise 3 (FULLY-QUALIFIED TRAIT PATH) — the emitted UFCS
+        // trait path starts with `::` so it resolves against the
+        // crate root regardless of what the implementor's `use`
+        // imports bring into scope. A regression that dropped the
+        // leading `::` would silently drift the resolution to
+        // whatever `tatara_lisp` the implementor's scope resolves (a
+        // re-export, a local alias, a stub) rather than the substrate
+        // crate.
         //
-        // Pinned separately from the extractor-identity sweep because
+        // Pinned separately from the method-identity sweep because
         // it's a distinct promise (path hygiene) — a refactor that
-        // (say) resolved the extractor `Ident` correctly but emitted
-        // it as a bare `tatara_lisp::domain::…` would pass the peer
-        // sweep and fail here.
-        let body = call_string("extract_int_narrowed", "i32", "count");
+        // (say) resolved the trait method `Ident` correctly but
+        // emitted the trait path as a bare `NarrowNumeric` (relying
+        // on an implicit re-export) would pass the peer sweep and
+        // fail here.
+        let body = call_string("extract_narrowed_kwarg", "i32", "count");
         assert!(
-            body.starts_with(":: tatara_lisp :: domain ::"),
-            "emission must start with the fully-qualified `::tatara_lisp::domain::…` path, got: {body}",
+            body.contains(":: tatara_lisp :: domain :: NarrowNumeric"),
+            "emission must fully qualify the trait as `::tatara_lisp::domain::NarrowNumeric`, got: {body}",
         );
     }
 
@@ -2893,7 +2959,7 @@ mod narrowed_extractor_call_tests {
             ("window-seconds", "\"window-seconds\""),
             ("scale-v2", "\"scale-v2\""),
         ] {
-            let body = call_string("extract_int_narrowed", "u16", key);
+            let body = call_string("extract_narrowed_kwarg", "u16", key);
             assert!(
                 body.contains(expected_lit),
                 "key {key} must ride the emitted call as string literal {expected_lit}, got: {body}",
@@ -2912,7 +2978,7 @@ mod narrowed_extractor_call_tests {
         // initializer would fail at the derived-code compile-time
         // with a type mismatch, but the derive's own emission would
         // still pass its own compile.
-        let body = call_string("extract_int_narrowed", "u32", "count");
+        let body = call_string("extract_narrowed_kwarg", "u32", "count");
         assert!(
             body.trim_end().ends_with('?'),
             "emission must end with the `?` operator, got: {body}",
@@ -2920,68 +2986,118 @@ mod narrowed_extractor_call_tests {
     }
 
     #[test]
-    fn helper_emission_is_token_equivalent_to_the_pre_lift_scalar_int_narrowed_arm() {
+    fn both_axes_dispatch_to_the_same_method_name_per_mode() {
+        // Promise 6 (AXIS IDENTITY LIVES ON `T`, NOT THE METHOD
+        // NAME) — the four mode-suffixed method names cover BOTH the
+        // int axis (`u16`, `i64`, `usize`, `isize`) and the float
+        // axis (`f32`, `f64`); the wide axis rides `<T as
+        // NarrowNumeric>::Wide` at the substrate's trait default. A
+        // regression that reintroduced an axis-typed split in the
+        // method name (e.g. `extract_int_narrowed_kwarg` /
+        // `extract_float_narrowed_kwarg`) would surface here at the
+        // mode-by-mode cross-check.
+        //
+        // For each of the FOUR modes, walk one canonical int width
+        // (`u16` — the `port 70000` gate the docstring names) and one
+        // canonical float width (`f32` — the `1.0e300` overflow gate
+        // the float-axis test module names) through the SAME method
+        // name; assert the two emissions are byte-identical up to
+        // the width payload's UFCS slot.
+        for method in [
+            "extract_narrowed_kwarg",
+            "extract_optional_narrowed_kwarg",
+            "extract_narrowed_list_kwarg",
+            "extract_optional_narrowed_list_kwarg",
+        ] {
+            let int_body = call_string(method, "u16", "port");
+            let float_body = call_string(method, "f32", "scale");
+            // Both emissions carry the SAME method name and the SAME
+            // trait qualifier; only the width payload and key differ.
+            let expected_trait_tail = format!(":: NarrowNumeric > :: {method}");
+            assert!(
+                int_body.contains(&expected_trait_tail),
+                "int-axis emission must dispatch through `{expected_trait_tail}`, got: {int_body}",
+            );
+            assert!(
+                float_body.contains(&expected_trait_tail),
+                "float-axis emission must dispatch through `{expected_trait_tail}`, got: {float_body}",
+            );
+            // Method-name identity across axes — a hypothetical
+            // regression that split the mode into an int-only /
+            // float-only pair would leave ONE of these two
+            // assertions failing.
+            assert!(
+                !method.contains("int") && !method.contains("float"),
+                "method {method} must NOT carry an axis suffix — the axis lives on `<T as NarrowNumeric>::Wide`",
+            );
+        }
+    }
+
+    #[test]
+    fn helper_emission_is_token_equivalent_to_a_hand_written_scalar_narrow_trait_dispatch() {
         // Cross-check — the helper's emission at the canonical scalar
         // `Kind::Int("u16")` arm is TOKEN-EQUIVALENT (byte-identical
-        // modulo whitespace) to the pre-lift hand-written
-        // `quote! { ::tatara_lisp::domain::extract_int_narrowed
-        // ::<u16>(&kw, "port")? }` scaffold the arm used to inline.
-        // A regression at any of Promises 1-5 that individually
-        // passes the per-promise pins above but composes into a
-        // token stream distinct from the pre-lift emission would
-        // surface here — one final structural pin above the
-        // per-promise arms.
+        // modulo whitespace) to a hand-written `quote! { <u16 as
+        // ::tatara_lisp::domain::NarrowNumeric>::extract_narrowed_kwarg
+        // (&kw, "port")? }` scaffold. A regression at any of Promises
+        // 1-5 that individually passes the per-promise pins above but
+        // composes into a token stream distinct from the hand-written
+        // form would surface here — one final structural pin above
+        // the per-promise arms.
         let key = "port";
         let narrowed: proc_macro2::TokenStream = "u16".parse().unwrap();
         let expected = quote! {
-            ::tatara_lisp::domain::extract_int_narrowed::<#narrowed>(&kw, #key)?
+            <#narrowed as ::tatara_lisp::domain::NarrowNumeric>::extract_narrowed_kwarg(&kw, #key)?
         }
         .to_string();
-        let actual = call_string("extract_int_narrowed", "u16", key);
+        let actual = call_string("extract_narrowed_kwarg", "u16", key);
         assert_eq!(
             actual, expected,
-            "helper emission must be token-equivalent to the pre-lift hand-written scalar-int arm",
+            "helper emission must be token-equivalent to the hand-written scalar-narrow trait dispatch",
         );
     }
 
     #[test]
-    fn helper_emission_is_token_equivalent_to_the_pre_lift_optional_float_narrowed_arm() {
+    fn helper_emission_is_token_equivalent_to_a_hand_written_optional_narrow_trait_dispatch_at_float_axis(
+    ) {
         // Float-axis / optional-mode peer of the scalar-int
         // token-equivalence pin — closes the axis + mode diagonal on
-        // the cross-check. Ensures the pre-lift `Kind::OptionalFloat`
-        // arm's exact emission survives the lift byte-for-byte modulo
-        // whitespace normalization.
+        // the cross-check. Confirms the emission on `f32` at the
+        // optional-scalar mode dispatches through the SAME
+        // `extract_optional_narrowed_kwarg` trait method the int
+        // axis reaches on the peer test above (only the UFCS type
+        // payload changes across axes; the method name does not).
         let key = "threshold";
         let narrowed: proc_macro2::TokenStream = "f32".parse().unwrap();
         let expected = quote! {
-            ::tatara_lisp::domain::extract_optional_float_narrowed::<#narrowed>(&kw, #key)?
+            <#narrowed as ::tatara_lisp::domain::NarrowNumeric>::extract_optional_narrowed_kwarg(&kw, #key)?
         }
         .to_string();
-        let actual = call_string("extract_optional_float_narrowed", "f32", key);
+        let actual = call_string("extract_optional_narrowed_kwarg", "f32", key);
         assert_eq!(
             actual, expected,
-            "helper emission must be token-equivalent to the pre-lift hand-written optional-float arm",
+            "helper emission must be token-equivalent to the hand-written optional-float trait dispatch",
         );
     }
 
     #[test]
-    fn helper_emission_is_token_equivalent_to_the_pre_lift_vec_int_list_narrowed_arm() {
+    fn helper_emission_is_token_equivalent_to_a_hand_written_vec_narrow_trait_dispatch() {
         // List-mode peer of the scalar / optional token-equivalence
-        // pins — closes the mode axis on the cross-check. Ensures the
-        // pre-lift `Kind::VecInt` arm's exact emission survives the
-        // lift byte-for-byte modulo whitespace normalization, with
-        // the list-mode extractor name (`extract_int_list_narrowed`)
-        // in place of the scalar / optional peer's name.
+        // pins — closes the mode axis on the cross-check. Confirms
+        // the emission on `u16` at the vec-mode dispatches through
+        // the `extract_narrowed_list_kwarg` trait method the
+        // list-mode arms both (`Kind::VecInt(_)` and `Kind::VecFloat(_)`)
+        // route through post-lift.
         let key = "ports";
         let narrowed: proc_macro2::TokenStream = "u16".parse().unwrap();
         let expected = quote! {
-            ::tatara_lisp::domain::extract_int_list_narrowed::<#narrowed>(&kw, #key)?
+            <#narrowed as ::tatara_lisp::domain::NarrowNumeric>::extract_narrowed_list_kwarg(&kw, #key)?
         }
         .to_string();
-        let actual = call_string("extract_int_list_narrowed", "u16", key);
+        let actual = call_string("extract_narrowed_list_kwarg", "u16", key);
         assert_eq!(
             actual, expected,
-            "helper emission must be token-equivalent to the pre-lift hand-written vec-int arm",
+            "helper emission must be token-equivalent to the hand-written vec-narrow trait dispatch",
         );
     }
 }
@@ -2991,7 +3107,7 @@ mod unqualified_extractor_call_tests {
     use super::unqualified_extractor_call;
     use quote::quote;
 
-    // Non-narrowed peer of `narrowed_extractor_call_tests` above — the
+    // Non-narrowed peer of `narrow_trait_dispatch_call_tests` above — the
     // `(extractor, key) -> TokenStream2` helper is the derive's PRIVATE
     // emission scaffold for the TEN non-narrowed arms in
     // `extractor_for` (`Kind::VecString` / `Kind::OptionalVecString` /
@@ -3040,7 +3156,7 @@ mod unqualified_extractor_call_tests {
     //    two-segment path — so the emission is hygienic in the derived
     //    code's outer scope regardless of what the implementor's crate
     //    imports (the same discipline every peer numeric-narrowed
-    //    arm's emission gives via [`super::narrowed_extractor_call`]).
+    //    arm's emission gives via [`super::narrow_trait_dispatch_call`]).
     // 3. KEY LITERAL PASS-THROUGH — the `key` parameter rides the
     //    emitted call's second argument as a Rust string literal, so
     //    the emitted call reads the SAME kwarg the derive's per-field
@@ -3049,10 +3165,10 @@ mod unqualified_extractor_call_tests {
     // 4. `?`-SUFFIX — the emission ends with the `?` operator so the
     //    caller-visible expression type is the extracted value (not a
     //    `Result`), matching the shape every peer numeric-narrowed
-    //    arm's `narrowed_extractor_call(...)` emission gives. Pinned
+    //    arm's `narrow_trait_dispatch_call(...)` emission gives. Pinned
     //    by the `?`-suffix test.
     //
-    // Peer to `narrowed_extractor_call_tests` on the numeric-narrowing
+    // Peer to `narrow_trait_dispatch_call_tests` on the numeric-narrowing
     // axis: both modules pin the same skeleton promises (extractor
     // identity, path hygiene, key literal, `?` suffix); the narrowed
     // peer additionally pins the turbofish promise this helper does
@@ -3164,7 +3280,7 @@ mod unqualified_extractor_call_tests {
         // Promise 4 (?-SUFFIX) — the emission ends with `?` so the
         // caller-visible expression type is the extracted value / peer
         // shape, matching every numeric-narrowed arm's
-        // `narrowed_extractor_call(...)` shape. A regression that
+        // `narrow_trait_dispatch_call(...)` shape. A regression that
         // dropped the `?` would leave the derived-code expression as
         // a `Result<T, LispError>` — every consumer struct field
         // initializer would fail at the derived-code compile-time

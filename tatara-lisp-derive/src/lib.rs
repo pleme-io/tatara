@@ -2994,16 +2994,103 @@ fn classify_vec(last: &syn::PathSegment, ty: &Type) -> Kind {
     }
 }
 
-fn first_generic_type(seg: &syn::PathSegment) -> Result<&Type, String> {
+/// Typed rejection carrier for [`first_generic_type`] — the closed
+/// set of syntactically-distinct malformed-outer-wrapper shapes both
+/// [`classify_option`] / [`classify_vec`] route through the
+/// `Kind::(Optional|Vec)Deserialize(quote! { #ty })` fall-through arm
+/// at their `let Ok(inner) = first_generic_type(last) else { ... };`
+/// gate.
+///
+/// Pre-lift the primitive returned `Result<&Type, String>` with two
+/// `&'static str` failure messages (`"expected <T> generic arguments"`
+/// and `"no type argument found"`) that lived as `String` payloads
+/// allocated at every proc-macro invocation on every malformed
+/// `Option<T>` / `Vec<T>` field type — a `.into()`-allocated string
+/// no production consumer ever read. Both production callers pattern-
+/// matched via `let Ok(inner) = ... else { ... };`, dropping the
+/// message; the derive's classify_tests test module was the only
+/// consumer of the message identity, differentiating the two failure
+/// modes by substring-comparing the rendered string.
+///
+/// Post-lift the two failure modes bind structurally at the
+/// primitive's typed-entry Err boundary via [`PartialEq`] + [`Eq`]
+/// on the two-variant enum; the pre-lift wording is preserved
+/// verbatim through the typed [`Display`] projection so any future
+/// consumer (a `spanned_compile_error(&field.ty, err.to_string())`
+/// derive-time rejection that named the offending outer-wrapper
+/// shape at the field's own syn span rather than surfacing as a
+/// `<Option<'a> as DeserializeKwarg>` trait-bound-not-satisfied
+/// error at the derive consumer's rustc pass — the class of
+/// gate-leak matching [`parse_syn_str_or_panic`]'s syntactic-parse
+/// sharpen already closes on the substrate-internal `&str -> syn::<T>`
+/// axis) picks up the pre-lift message string for free via the enum's
+/// Display projection, without threading a String allocation at the
+/// primitive's own Err path.
+///
+/// A hypothetical third malformed mode (an
+/// [`syn::PathArguments::Parenthesized`] arg shape — a
+/// `Fn(T) -> U`-style parenthesized generic on the outer segment —
+/// currently caught by the `AngleBracketed` else-arm as
+/// [`Self::NoAngleBrackets`], and folded there structurally with the
+/// bare-segment case) lands as ONE new variant here, matching the
+/// closed-set-extension property [`NARROW_INT_WIDTHS`] /
+/// [`NARROW_FLOAT_WIDTHS`] / [`ClosedSet`] give the derive's
+/// numeric-narrowing + closed-set-carrier axes.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 3 (typed exit — the
+/// primitive's Err surface is a typed enum whose variant identity
+/// IS the rejection class, not a substring on a String payload;
+/// authoring surfaces bind structurally via `PartialEq` rather than
+/// through `LispError::KwargDeserialize`-shaped substring greps).
+/// THEORY.md §VI.1 (generation over composition — the two `.into()`-
+/// allocated String payloads at the primitive's Err path collapse
+/// to ONE per-variant const-projection through the Display impl,
+/// closing a dead per-callsite allocation axis).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MalformedGenericArg {
+    /// The segment carries NO angle brackets — a bare `Option` /
+    /// `Vec` outer-segment with no `<T>` parameter (a
+    /// syntactically-valid but semantically-incomplete field type
+    /// like `foo: Option` that both syn and rustc admit as a raw
+    /// path; classifiers upstream never reach this arm on a well-
+    /// formed `Option<T>` / `Vec<T>` field because their outer-
+    /// segment arguments always project to
+    /// [`syn::PathArguments::AngleBracketed`]).
+    NoAngleBrackets,
+    /// The segment carries angle brackets but NO
+    /// [`syn::GenericArgument::Type`] inside — the args slot
+    /// carries only lifetimes, const-generics, or associated-type
+    /// bindings (e.g. `Option<'a>` — one lifetime arg, zero type
+    /// args). Well-formed `Option<T>` / `Vec<T>` fields never reach
+    /// this arm because their single type argument always projects
+    /// to [`syn::GenericArgument::Type`] at the outer segment.
+    NoTypeArgument,
+}
+
+impl core::fmt::Display for MalformedGenericArg {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        // The pre-lift Result<&Type, String> shape carried these two
+        // strings verbatim as its Err payloads; the typed-enum shape
+        // preserves them at the Display projection so any future
+        // consumer that wants the pre-lift message identity via
+        // `err.to_string()` gets it structurally.
+        f.write_str(match self {
+            Self::NoAngleBrackets => "expected <T> generic arguments",
+            Self::NoTypeArgument => "no type argument found",
+        })
+    }
+}
+
+fn first_generic_type(seg: &syn::PathSegment) -> Result<&Type, MalformedGenericArg> {
     let syn::PathArguments::AngleBracketed(args) = &seg.arguments else {
-        return Err("expected <T> generic arguments".into());
+        return Err(MalformedGenericArg::NoAngleBrackets);
     };
     for arg in &args.args {
         if let syn::GenericArgument::Type(t) = arg {
             return Ok(t);
         }
     }
-    Err("no type argument found".into())
+    Err(MalformedGenericArg::NoTypeArgument)
 }
 
 #[cfg(test)]
@@ -3372,7 +3459,7 @@ mod snake_to_kebab_tests {
 
 #[cfg(test)]
 mod classify_tests {
-    use super::{classify, first_generic_type, Kind};
+    use super::{classify, first_generic_type, Kind, MalformedGenericArg};
     use syn::{parse_str, Type, TypePath};
 
     // The `(syn::Type -> Kind)` projection is the derive's PRIVATE
@@ -3413,14 +3500,19 @@ mod classify_tests {
         path.segments.last().expect("path has at least one segment")
     }
 
-    fn assert_first_generic_type_err(seg: &syn::PathSegment, expected: &str) {
+    fn assert_first_generic_type_err(seg: &syn::PathSegment, expected: MalformedGenericArg) {
         // `syn::Type` does not implement `Debug` (the `full` feature
         // does not activate `extra-traits`), so `Result::expect_err`
-        // is unavailable on the `Result<&Type, String>` return
-        // shape. Match the `Err` arm structurally and pin the message
-        // verbatim.
+        // is unavailable on the `Result<&Type, MalformedGenericArg>`
+        // return shape. Match the `Err` arm structurally and pin the
+        // variant identity via `PartialEq` — post-lift the pre-lift
+        // substring-comparison against a `&'static str` message
+        // collapses onto ONE typed-enum equality gate, and the two
+        // failure modes bind through the primitive's own typed-entry
+        // Err surface rather than through a `String` message nothing
+        // production reads.
         match first_generic_type(seg) {
-            Err(msg) => assert_eq!(msg, expected),
+            Err(got) => assert_eq!(got, expected),
             Ok(_) => panic!("expected first_generic_type Err({expected:?})"),
         }
     }
@@ -4195,18 +4287,20 @@ mod classify_tests {
     fn first_generic_type_returns_err_when_the_segment_has_no_angle_brackets() {
         // Error path: a bare type name (`String`) carries NO angle
         // brackets, so `first_generic_type` returns
-        // `Err("expected <T> generic arguments".into())`. The recursor
+        // `Err(MalformedGenericArg::NoAngleBrackets)`. The recursor
         // wrappers (`classify_option` / `classify_vec`) then swallow
         // the error via `let Ok(inner) = ... else { return
         // Kind::OptionalDeserialize; }` — the fall-through arm the
         // outer `classify` never reaches for `String` (which matches
-        // the primitive-name switch first). Pin the error identity so
-        // a regression that returned a different error message (or an
-        // `Option::None` shape) would surface at the recursor gate
-        // instead of silently.
+        // the primitive-name switch first). Pin the variant identity
+        // so a regression that (a) returned a different variant, (b)
+        // returned an `Option::None` shape stripping the two-mode
+        // distinction, or (c) collapsed the two `Err` arms structurally
+        // at the primitive would surface at the recursor gate instead
+        // of silently.
         let ty = parse_ty("String");
         let seg = last_segment(&ty);
-        assert_first_generic_type_err(seg, "expected <T> generic arguments");
+        assert_first_generic_type_err(seg, MalformedGenericArg::NoAngleBrackets);
     }
 
     #[test]
@@ -4215,13 +4309,43 @@ mod classify_tests {
         // (`Cow<'a>` — syntactically valid, semantically incomplete)
         // exits the `for arg in &args.args` loop without finding a
         // `syn::GenericArgument::Type`, and falls through to the
-        // `Err("no type argument found".into())` arm. Pin this second
-        // error identity separately from the no-angle-brackets arm so
-        // a refactor that folded the two arms into one message would
-        // surface here.
+        // `Err(MalformedGenericArg::NoTypeArgument)` arm. Pin this
+        // second variant identity separately from the no-angle-brackets
+        // arm so a refactor that folded the two arms into ONE variant
+        // at the primitive's typed-Err boundary would surface here.
         let ty = parse_ty("Cow<'a>");
         let seg = last_segment(&ty);
-        assert_first_generic_type_err(seg, "no type argument found");
+        assert_first_generic_type_err(seg, MalformedGenericArg::NoTypeArgument);
+    }
+
+    #[test]
+    fn malformed_generic_arg_variants_render_the_pre_lift_error_strings() {
+        // The pre-lift `Result<&Type, String>` shape carried
+        // `"expected <T> generic arguments"` and
+        // `"no type argument found"` as its two failure messages,
+        // allocated as `String` payloads at every proc-macro
+        // invocation on a malformed `Option<T>` / `Vec<T>` field
+        // type. Post-lift the two `.into()` allocations collapse to
+        // ONE per-variant const-projection through the typed enum's
+        // [`core::fmt::Display`] impl — the message identity survives
+        // for any future consumer that wants to route the malformed
+        // shape into a `spanned_compile_error(&field.ty,
+        // err.to_string())` derive-time diagnostic (or an authoring-
+        // tool renderer) via `.to_string()`, without the primitive's
+        // own Err path threading a String allocation.
+        //
+        // Pin the two rendered strings verbatim so a regression that
+        // drifted the wording on either variant would surface here
+        // rather than as a silent shift in any future downstream
+        // diagnostic's message.
+        assert_eq!(
+            MalformedGenericArg::NoAngleBrackets.to_string(),
+            "expected <T> generic arguments",
+        );
+        assert_eq!(
+            MalformedGenericArg::NoTypeArgument.to_string(),
+            "no type argument found",
+        );
     }
 }
 

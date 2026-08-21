@@ -2848,15 +2848,26 @@ impl WideNumeric for f64 {
     }
 }
 
-/// The scalar-kwarg narrowing rejection wrapper — `T::narrow(wide)`
-/// gated at `KwargPath::Named(key)`. FOUR sites used to inline this
-/// three-line shape (`T::narrow(wide).ok_or_else(|| range_err(key,
-/// T::WIDTH, NumericLiteral::<Variant>(wide)))`), each spelling its
-/// axis's `NumericLiteral` variant constructor by hand. Post-lift the
-/// four extractors bind through this wrapper; the axis identity
-/// rides the `W` type parameter (dispatched to the correct
-/// `NumericLiteral` variant by `WideNumeric`), and no extractor names
-/// `NumericLiteral::Int` or `NumericLiteral::Float` at all.
+/// `#[cfg(test)]`: the two production narrowing consumers
+/// ([`extract_narrowed`], [`extract_narrowed_list`]) now bind directly
+/// to the KwargPath-parameterized narrowing gate
+/// [`narrow_or_range_mismatch`] one abstraction level up. This wrapper
+/// stays as a test-only pinning point for
+/// `narrow_or_range_mismatch_binds_wrappers_and_the_typed_payload_to_one_substrate_entry`
+/// so a regression that hand-rolled a `T::narrow(wide).ok_or_else(||
+/// range_mismatch(kwarg_form(key), ...))` composition outside
+/// [`narrow_or_range_mismatch`] would still register at that test —
+/// but no production path calls it.
+///
+/// Post-lift the production narrowing surface has ONE named substrate
+/// entry ([`narrow_or_range_mismatch`]), and every axis (scalar, per-
+/// item, slot) rides its [`KwargPath`] parameter, not per-wrapper
+/// sugar — peer to the same sweep [`type_err`] / [`type_err_at`] carry
+/// on the shape-mismatch axis and [`range_err`] / [`range_err_at`]
+/// carry on the range-struct-literal axis (both were demoted to test-
+/// only after their KwargPath-parameterized primitives
+/// [`type_mismatch`] / [`range_mismatch`] became the sole production
+/// entry point).
 ///
 /// One-line delegate to the KwargPath-parameterized
 /// [`narrow_or_range_mismatch`] primitive, composing `kwarg_form(key)`
@@ -2872,6 +2883,7 @@ impl WideNumeric for f64 {
 /// (typed exit — the rejection boundary lives at ONE primitive whose
 /// axis identity is the type-parameter, not a per-site literal
 /// constructor).
+#[cfg(test)]
 fn narrow_or_range_err<W, T>(key: &str, wide: W) -> Result<T>
 where
     W: WideNumeric,
@@ -2919,6 +2931,23 @@ where
 /// fourth path shape) has ONE substrate entry to route through rather
 /// than re-inlining the `T::narrow` composition at its own call site.
 ///
+/// TWO production consumers in this module bind directly to this
+/// primitive (post the `narrow_or_range_err` / `narrow_or_range_err_at`
+/// demotion to `#[cfg(test)]`): [`extract_narrowed`] (composing
+/// `kwarg_form(key)` at the scalar-kwarg path) and
+/// [`extract_narrowed_list`] (composing `kwarg_item_form(key, idx)` at
+/// the per-item path inside [`extract_list`]'s per-element closure).
+/// Every axis (scalar, per-item) now rides the [`KwargPath`] parameter
+/// at the callsite rather than a per-axis sugar wrapper — the same
+/// posture the sibling [`type_mismatch`] primitive already carries on
+/// the shape-mismatch axis and [`range_mismatch`] carries on the range
+/// struct-literal axis. The two `#[cfg(test)]` wrappers
+/// [`narrow_or_range_err`] / [`narrow_or_range_err_at`] remain as
+/// pinning points that guarantee any third `T::narrow` composition
+/// somewhere in the substrate surfaces as a byte-difference at the
+/// `narrow_or_range_mismatch_binds_wrappers_and_the_typed_payload_to_one_substrate_entry`
+/// test rather than as silent drift at every downstream implementor.
+///
 /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
 /// narrowing-gate composition lived at two sites, crossing the ≥2
 /// duplication threshold on the substrate's narrowing surface.
@@ -2954,7 +2983,7 @@ where
     W: WideNumeric,
     T: NarrowNumeric<Wide = W>,
 {
-    narrow_or_range_err(key, <W as WideNumeric>::extract_kwarg(kw, key)?)
+    narrow_or_range_mismatch(kwarg_form(key), <W as WideNumeric>::extract_kwarg(kw, key)?)
 }
 
 /// `Option` sibling of [`extract_narrowed`]. An ABSENT kwarg stays
@@ -3081,6 +3110,14 @@ pub fn extract_optional_float_narrowed<T: NarrowNumeric<Wide = f64>>(
 /// `KwargPath::Item` variant every peer per-item rejection surface
 /// (`type_err_at`, `extract_vec_via_serde`'s per-item bridge) carries.
 ///
+/// `#[cfg(test)]`: same posture as its scalar sibling
+/// [`narrow_or_range_err`] above — the production per-item narrowing
+/// consumer [`extract_narrowed_list`] now binds directly to the
+/// KwargPath-parameterized narrowing gate [`narrow_or_range_mismatch`],
+/// and this wrapper stays only for the pinning test that asserts the
+/// KwargPath-parameterized narrowing primitive
+/// [`narrow_or_range_mismatch`] has one construction site.
+///
 /// One-line delegate to the KwargPath-parameterized
 /// [`narrow_or_range_mismatch`] primitive, composing
 /// `kwarg_item_form(key, idx)` as the failure locus. The `W` type
@@ -3092,6 +3129,7 @@ pub fn extract_optional_float_narrowed<T: NarrowNumeric<Wide = f64>>(
 /// axis; post-lift the only shape delta between the two wrappers is
 /// the [`KwargPath`] argument each hands the shared primitive
 /// (`kwarg_form(key)` vs. `kwarg_item_form(key, idx)`).
+#[cfg(test)]
 fn narrow_or_range_err_at<W, T>(key: &str, idx: usize, wide: W) -> Result<T>
 where
     W: WideNumeric,
@@ -3171,7 +3209,7 @@ where
 {
     extract_list(kw, key, <W as AtomKwarg<'_>>::LIST_SHAPE, |idx, s| {
         let wide = <W as AtomKwarg<'_>>::project_at(key, idx, s)?;
-        narrow_or_range_err_at::<W, T>(key, idx, wide)
+        narrow_or_range_mismatch::<W, T>(kwarg_item_form(key, idx), wide)
     })
 }
 
@@ -4998,6 +5036,118 @@ mod tests {
         let ok_float_named: f32 = narrow_or_range_mismatch::<f64, f32>(kwarg_form("scale"), 1.0)
             .expect("in-range float narrows through the primitive at the scalar path");
         assert!((ok_float_named - 1.0_f32).abs() < f32::EPSILON);
+    }
+
+    /// Pins the "production consumers bind directly to the
+    /// KwargPath-parameterized narrowing primitive" contract that closes
+    /// the peer sweep [`type_err`] / [`type_err_at`] and [`range_err`] /
+    /// [`range_err_at`] already took on the shape-mismatch and range
+    /// struct-literal axes. Pre-sweep the two production narrowing
+    /// consumers ([`extract_narrowed`] and [`extract_narrowed_list`])
+    /// routed through the per-axis sugar wrappers
+    /// [`narrow_or_range_err`] / [`narrow_or_range_err_at`]; post-sweep
+    /// both consumers bind directly to
+    /// [`narrow_or_range_mismatch`], spelling `kwarg_form(key)` and
+    /// `kwarg_item_form(key, idx)` at the callsite themselves.
+    ///
+    /// Pin both production consumers' byte-identity against a direct
+    /// [`narrow_or_range_mismatch`] call at the SAME `(KwargPath, wide,
+    /// W, T)` tuple each end-to-end callsite constructs:
+    ///
+    ///   1. [`extract_narrowed::<i64, u16>`] on `:port 70000` — the
+    ///      scalar-kwarg path. The three typed `LispError::KwargOutOfRange`
+    ///      slots (`form`, `target`, `value`) must match
+    ///      `narrow_or_range_mismatch(kwarg_form("port"), 70_000_i64)`
+    ///      byte-for-byte. A regression that hand-rolled the
+    ///      `T::narrow(wide).ok_or_else(...)` composition outside the
+    ///      primitive at the scalar callsite would surface here as a
+    ///      slot mismatch.
+    ///   2. [`extract_narrowed_list::<f64, f32>`] on
+    ///      `:scales (list 1.0 1.0e300)` — the per-item path inside
+    ///      [`extract_list`]'s closure. The three typed slots must match
+    ///      `narrow_or_range_mismatch(kwarg_item_form("scales", 1),
+    ///      1.0e300_f64)` byte-for-byte. This is the cross-axis peer
+    ///      (float axis, per-item path) so the pin covers BOTH the
+    ///      scalar/per-item KwargPath split AND the int/float wide-axis
+    ///      split at ONE test — the two production consumers close the
+    ///      product of the axes the sweep touches.
+    ///
+    /// A regression that reintroduced a per-axis sugar wrapper at either
+    /// production callsite (or added a THIRD production consumer that
+    /// hand-rolled the `T::narrow` composition) would register at this
+    /// test as a byte-difference between the primitive's output and the
+    /// consumer's end-to-end rejection — the SAME safety net the peer
+    /// tests carry on the shape-mismatch and range struct-literal axes.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the production narrowing surface has ONE substrate entry
+    /// [`narrow_or_range_mismatch`], and every axis rides its
+    /// [`KwargPath`] parameter at the callsite). THEORY.md §II.1
+    /// invariant 5 (composition preserves proofs — a regression that
+    /// hand-rolled the narrowing composition outside the primitive
+    /// surfaces here rather than as silent drift at every downstream
+    /// implementor with a narrowed field on the affected axis).
+    #[test]
+    fn extract_narrowed_and_extract_narrowed_list_bind_directly_to_narrow_or_range_mismatch() {
+        fn parts(err: &LispError) -> (KwargPath, NumericWidth, NumericLiteral) {
+            let LispError::KwargOutOfRange {
+                form,
+                target,
+                value,
+            } = err
+            else {
+                panic!("expected KwargOutOfRange, got {err:?}");
+            };
+            (form.clone(), *target, *value)
+        }
+
+        // (1) `extract_narrowed::<i64, u16>` — scalar-kwarg production
+        //     consumer binds directly to `narrow_or_range_mismatch`
+        //     with `kwarg_form(key)` composed at the callsite.
+        let scalar_args = kwargs_of("(_ :port 70000)");
+        let scalar_kw = parse_kwargs(&scalar_args).unwrap();
+        let via_consumer: Result<u16> = extract_narrowed::<i64, u16>(&scalar_kw, "port");
+        let via_primitive: Result<u16> =
+            narrow_or_range_mismatch::<i64, u16>(kwarg_form("port"), 70_000_i64);
+        let (c_form, c_target, c_value) = parts(via_consumer.as_ref().unwrap_err());
+        let (p_form, p_target, p_value) = parts(via_primitive.as_ref().unwrap_err());
+        assert_eq!(c_form, p_form);
+        assert_eq!(c_target, p_target);
+        assert_eq!(c_value, p_value);
+        assert_eq!(c_form, KwargPath::named("port"));
+        assert_eq!(c_target, NumericWidth::U16);
+        assert_eq!(c_value, NumericLiteral::Int(70_000));
+
+        // (2) `extract_narrowed_list::<f64, f32>` — per-item production
+        //     consumer binds directly to `narrow_or_range_mismatch` via
+        //     `kwarg_item_form(key, idx)` composed inside `extract_list`'s
+        //     per-element closure. `1.0e300` overflows `f32` at idx 1
+        //     inside the list; the scalar `1.0` at idx 0 narrows cleanly.
+        //     Bare-list `(1.0 1.0e300)` syntax matches the sibling
+        //     `extract_narrowed_list_walks_the_per_item_narrowing_gate_at_both_axes`
+        //     test's `(_ :scales (1.0 2.0 1.0e300))` shape — the reader
+        //     tokenizes floats through `Atom::from_lexeme`'s `f64` arm
+        //     inside a bare `(_ _ …)` list without a `list` keyword.
+        let list_args = kwargs_of("(_ :scales (1.0 1.0e300))");
+        let list_kw = parse_kwargs(&list_args).unwrap();
+        let list_via_consumer: Result<Vec<f32>> =
+            extract_narrowed_list::<f64, f32>(&list_kw, "scales");
+        let list_via_primitive: Result<f32> =
+            narrow_or_range_mismatch::<f64, f32>(kwarg_item_form("scales", 1), 1.0e300_f64);
+        let (c_form, c_target, c_value) = parts(list_via_consumer.as_ref().unwrap_err());
+        let (p_form, p_target, p_value) = parts(list_via_primitive.as_ref().unwrap_err());
+        assert_eq!(c_form, p_form);
+        assert_eq!(c_target, p_target);
+        assert_eq!(c_form, KwargPath::item("scales", 1));
+        assert_eq!(c_target, NumericWidth::F32);
+        assert!(
+            matches!(c_value, NumericLiteral::Float(x) if (x - 1.0e300).abs() < f64::EPSILON),
+            "per-item float rejection must ride NumericLiteral::Float verbatim, got {c_value:?}",
+        );
+        assert!(
+            matches!(p_value, NumericLiteral::Float(x) if (x - 1.0e300).abs() < f64::EPSILON),
+            "primitive-side float rejection must match, got {p_value:?}",
+        );
     }
 
     /// The KwargPath-parameterized [`range_mismatch`] primitive is

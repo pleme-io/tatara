@@ -1819,6 +1819,101 @@ fn deserialize_trait_dispatch_call(
     trait_dispatch_call(inner_ty, DESERIALIZE_TRAIT_PATH, method, key)
 }
 
+/// The derive's PRIVATE missing-kwarg short-circuit substrate
+/// primitive the TWO fallback-carrying `SerdeDefault` arms in
+/// [`extractor_for`] — [`SerdeDefault::Trait`] and
+/// [`SerdeDefault::Path`] — compose against. Emits the four-invariant
+/// wrap shape:
+///
+/// ```ignore
+/// if kw.contains_key(#key) { #base } else { #fallback }
+/// ```
+///
+/// Owns the FOUR shared emission invariants both peer arms pre-lift
+/// restated verbatim in their own per-mode `quote!` block: (1) the
+/// leading `if` keyword, (2) the `kw.contains_key(#key)` gate
+/// predicate with the field's kebab-case kwarg key interpolated as a
+/// string literal, (3) the `{ #base }` present-branch that delegates
+/// to the raw extractor when the kwarg is present, (4) the
+/// `else { #fallback }` absent-branch that folds in the mode-typed
+/// serde-default fallback expression.
+///
+/// Pre-lift each of the two arms hand-wrote its own copy of the wrap
+/// shape at ONE derive call site — two separate
+/// `quote! { if kw.contains_key(#key) { #base } else { … } }` blocks
+/// that each restated (a) the outer `if` keyword, (b) the
+/// `kw.contains_key` gate identity, (c) the `#key` interpolation
+/// seam, (d) the `{ #base }` present-branch, and (e) the
+/// `else { … }` absent-branch scaffold. Post-lift the four shared
+/// invariants live at ONE substrate primitive here; each
+/// fallback-carrying arm is a ONE-LINE delegate that constructs its
+/// mode-typed fallback (`::std::default::Default::default()` on the
+/// [`SerdeDefault::Trait`] axis, `#path_ts()` on the
+/// [`SerdeDefault::Path`] axis) and threads it through this
+/// primitive at the trailing `fallback` slot.
+///
+/// The `key: &str` slot rides the field's own kebab-case kwarg
+/// identifier (the same `key` [`extractor_for`] already receives) at
+/// the `kw.contains_key(#key)` gate predicate. `quote`'s built-in
+/// `ToTokens` impl for `str` interpolates the value as a Rust string
+/// literal, matching what `kw.contains_key`'s `&str`-borrowing key
+/// parameter expects — the same interpolation posture the peer
+/// trait-dispatch primitives ([`trait_dispatch_call`] and
+/// [`trait_dispatch_tail`]) already use for their `#key` seams.
+///
+/// The `fallback: TokenStream2` slot rides the absent-branch
+/// expression verbatim — the two peer arms construct their per-mode
+/// fallback expression at the arm's own call site and pass it through
+/// as pre-composed tokens, keeping the primitive axis-agnostic on the
+/// fallback axis (any expression that evaluates to a `T` matching the
+/// base extractor's return type composes here without a per-mode
+/// carve-out at the primitive).
+///
+/// [`SerdeDefault::Absent`] stays a null case that short-circuits the
+/// primitive entirely — a missing kwarg surfaces as a hard
+/// [`crate::error::LispError::MissingKwarg`] rejection at the raw
+/// extractor's typed entry gate, without wrapping the base emission
+/// at all.
+///
+/// Future structural promotion of the emitted wrap (a caller-supplied
+/// diagnostic span at the `if` predicate, a `?`-suppressed variant
+/// that plumbs a fallback rejection through a `Result` chain rather
+/// than binding an infallible expression, an alternative gate
+/// predicate — a `kw.get_typed(#key)` shape gate that picks the
+/// axis-typed rejection through a `Result` chain — or a new fallback
+/// mode) lands at ONE substrate primitive here. Both participating
+/// arms pick up the upgrade mechanically with no per-arm hand-edit,
+/// and any FUTURE third fallback mode (a hypothetical
+/// `SerdeDefault::Lit(value)` for a compile-time-typed default
+/// literal, or a `SerdeDefault::Match(discriminant)` for an
+/// enum-variant-typed default, both matching serde's own
+/// `default = <fn>` extension surface) lands as ONE new fallback
+/// expression + ONE-LINE delegate through this primitive rather than
+/// restating the four-invariant wrap shape a third time.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// four missing-kwarg wrap invariants recurred at the two
+/// fallback-carrying arms of [`extractor_for`] (past the
+/// PRIME-DIRECTIVE ≥ 2 trigger) and are lifted to ONE substrate
+/// primitive here, exactly as [`trait_dispatch_tail`] lifted the
+/// trailing arm shape and [`trait_dispatch_call`] lifted the UFCS
+/// bracket scaffold. THEORY.md §II.1 invariant 5 — composition
+/// preserves proofs; the two participating arms now compose
+/// structurally through ONE primitive, so a regression that drifted
+/// the wrap shape at ONE arm would surface at
+/// [`wrap_with_missing_key_default_tests`] rather than as silent
+/// drift at every downstream implementor with a
+/// `#[serde(default[…])]` field on that arm's mode.
+fn wrap_with_missing_key_default(
+    base: TokenStream2,
+    key: &str,
+    fallback: TokenStream2,
+) -> TokenStream2 {
+    quote! {
+        if kw.contains_key(#key) { #base } else { #fallback }
+    }
+}
+
 fn extractor_for(ty: &Type, key: &str, default: &SerdeDefault) -> Result<TokenStream2, String> {
     let kind = classify(ty);
     let base = match kind {
@@ -2101,18 +2196,26 @@ fn extractor_for(ty: &Type, key: &str, default: &SerdeDefault) -> Result<TokenSt
     // authored dotted path rides through as a fully-qualified callee at
     // the emit site — matching how serde's own deserialize codegen
     // splices the same path into its missing-field branch.
+    //
+    // The two fallback-carrying arms below compose against ONE
+    // substrate primitive [`wrap_with_missing_key_default`] that owns
+    // the shared `if kw.contains_key(#key) { #base } else { #fallback
+    // } }` wrap shape; each arm supplies its mode-typed fallback
+    // expression (`::std::default::Default::default()` on the
+    // `SerdeDefault::Trait` axis, `#path_ts()` on the
+    // `SerdeDefault::Path` axis) as a pre-composed `TokenStream2` at
+    // the trailing slot. The `SerdeDefault::Absent` arm stays a null
+    // case that short-circuits the primitive entirely.
     Ok(match default {
         SerdeDefault::Absent => base,
-        SerdeDefault::Trait => quote! {
-            if kw.contains_key(#key) { #base } else { ::std::default::Default::default() }
-        },
+        SerdeDefault::Trait => {
+            wrap_with_missing_key_default(base, key, quote! { ::std::default::Default::default() })
+        }
         SerdeDefault::Path(path) => {
             let path_ts: TokenStream2 = path
                 .parse()
                 .map_err(|e| format!("invalid #[serde(default = {path:?})] path: {e}"))?;
-            quote! {
-                if kw.contains_key(#key) { #base } else { #path_ts() }
-            }
+            wrap_with_missing_key_default(base, key, quote! { #path_ts() })
         }
     })
 }
@@ -5124,6 +5227,313 @@ mod trait_dispatch_call_tests {
         assert_eq!(
             ATOM_TRAIT_PATH, "::tatara_lisp::domain::AtomKwarg<'_>",
             "ATOM_TRAIT_PATH must carry the fully-qualified AtomKwarg<'_> trait path verbatim",
+        );
+    }
+}
+
+#[cfg(test)]
+mod wrap_with_missing_key_default_tests {
+    use super::{extractor_for, wrap_with_missing_key_default, SerdeDefault};
+    use quote::quote;
+    use syn::parse_str;
+
+    // Substrate-primitive peer of `trait_dispatch_call_tests` and
+    // `trait_dispatch_tail_tests` above. The `(base, key, fallback)
+    // -> TokenStream2` helper is the derive's PRIVATE missing-kwarg
+    // short-circuit scaffold both fallback-carrying `SerdeDefault`
+    // arms of `extractor_for` — `SerdeDefault::Trait` and
+    // `SerdeDefault::Path` — compose against. The emitted tokens are
+    // `if kw.contains_key(#key) { #base } else { #fallback }`, with
+    // the two per-mode fallback expressions
+    // (`::std::default::Default::default()` on the `Trait` axis,
+    // `#path_ts()` on the `Path` axis) constructed at the arm's own
+    // call site and threaded through the trailing `fallback` slot.
+    //
+    // A regression here silently swaps the missing-kwarg wrap shape
+    // at every `#[serde(default)]` / `#[serde(default = "path")]`
+    // consumer field emitted through the two participating arms. The
+    // tests below pin the FOUR promises the primitive owns at the
+    // boundary of its emission shape:
+    //
+    // 1. LEADING `if` KEYWORD — the emission starts with `if`, the
+    //    outermost keyword of the wrap. Pinned by the leading-`if`
+    //    test.
+    // 2. `kw.contains_key(#key)` GATE — the predicate is
+    //    `kw.contains_key` with the key interpolated as a Rust string
+    //    literal (matching what `HashMap<&str, _>::contains_key`
+    //    accepts, and matching the `#key` interpolation posture the
+    //    peer `trait_dispatch_tail` primitive already uses for the
+    //    `(&kw, #key)?` arg list). Pinned by the gate-shape test.
+    // 3. PRESENT-BRANCH `{ #base }` — the token stream inside the
+    //    first arm delegates to the raw extractor `base`. Pinned by
+    //    the branch-ordering test.
+    // 4. ABSENT-BRANCH `else { #fallback }` — the `else` keyword
+    //    separates the two arms, and the fallback expression fills
+    //    the second arm's block. Pinned by the branch-ordering test
+    //    and the fallback-interpolation test.
+    //
+    // Peer to the axis-typed test modules
+    // (`narrow_trait_dispatch_call_tests` /
+    // `atom_trait_dispatch_call_tests` /
+    // `deserialize_trait_dispatch_call_tests`) on the substrate-
+    // primitive axis: each of those pins ONE per-axis trait-dispatch
+    // scaffold; this module pins the ONE per-serde-default wrap
+    // scaffold. Together the four substrate-primitive test modules
+    // close the derive's per-field extractor emission surface at ONE
+    // test surface each — the trait-dispatch UFCS bracket (owned by
+    // `trait_dispatch_call`), the trait-dispatch trailing arm shape
+    // (owned by `trait_dispatch_tail`), the atom-axis carve-out
+    // (owned by `atom_trait_dispatch_call`), and the missing-kwarg
+    // wrap (owned here by `wrap_with_missing_key_default`).
+    //
+    // Two additional tests below pin the ARM-level delegation
+    // contract — that the two fallback-carrying `SerdeDefault` arms
+    // of `extractor_for` produce byte-identical emission to a manual
+    // invocation of the primitive with the same per-mode fallback
+    // expression, catching a regression that reintroduced hand-
+    // rolled `quote! { if kw.contains_key(#key) { #base } else { … }
+    // }` code at either arm (breaking the substrate-lift claim). The
+    // sibling `SerdeDefault::Absent` null case is pinned by a
+    // no-wrap contract test — the absent arm must NOT invoke the
+    // primitive at all, so its emission carries neither the
+    // `contains_key` gate nor an `else` branch.
+    //
+    // Theory anchor: THEORY.md §II.1 invariant 1 (typed entry) — the
+    // primitive IS the derive's rust-level typed-entry projection at
+    // the missing-kwarg wrap boundary; naming its FOUR emission
+    // promises as pinned facts here makes future upgrades (a
+    // caller-supplied diagnostic span at the `if` predicate, a
+    // `?`-suppressed variant that plumbs a fallible fallback through
+    // a `Result` chain, an alternative gate predicate, or a new
+    // fallback mode) fail at the boundary of the shape they change
+    // rather than at downstream implementors' compile-time noise.
+    // THEORY.md §II.1 invariant 5 (composition preserves proofs) —
+    // the two participating fallback-carrying arms now compose
+    // structurally through ONE primitive, so a regression that
+    // drifted the wrap shape at ONE arm would surface here rather
+    // than as silent drift at every downstream implementor with a
+    // `#[serde(default[…])]` field on that arm's mode.
+
+    #[test]
+    fn primitive_emission_starts_with_the_leading_if_keyword_before_the_contains_key_gate() {
+        // Promise 1 (LEADING `if`) — the emission begins with `if`,
+        // the outermost keyword of the wrap. A regression that
+        // dropped the leading `if` (e.g. accidentally emitting a
+        // bare `kw.contains_key(#key) { … } else { … }` expression,
+        // which is syntactically valid inside a larger expression
+        // but produces WRONG semantics at every derived struct-field
+        // initializer) surfaces here rather than as silent drift at
+        // every downstream implementor with a `#[serde(default)]`
+        // field.
+        let base = quote! { EXTRACT_CALL };
+        let fallback = quote! { FALLBACK };
+        let body = wrap_with_missing_key_default(base, "name", fallback).to_string();
+        assert!(
+            body.starts_with("if "),
+            "primitive emission must start with the `if` keyword, got: {body}",
+        );
+    }
+
+    #[test]
+    fn primitive_gate_shape_carries_kw_contains_key_with_the_key_as_a_string_literal() {
+        // Promise 2 (`kw.contains_key(#key)` GATE) — the predicate is
+        // exactly `kw.contains_key(<key>)` with the key interpolated
+        // as a Rust string literal. Sweep a per-axis representative
+        // key ("name" — the string-axis field, "port" — the
+        // numeric-narrowed field) so a regression that (a) drifted
+        // the method name off `contains_key`, (b) dropped the `kw`
+        // receiver, or (c) interpolated the key as a non-literal
+        // expression surfaces per-axis rather than only on one
+        // canonical field.
+        for key in ["name", "port"] {
+            let base = quote! { BASE };
+            let fallback = quote! { FB };
+            let body = wrap_with_missing_key_default(base, key, fallback).to_string();
+            let expected_gate = format!("kw . contains_key (\"{key}\")");
+            assert!(
+                body.contains(&expected_gate),
+                "primitive emission must carry the gate `{expected_gate}` verbatim, got: {body}",
+            );
+        }
+    }
+
+    #[test]
+    fn primitive_branches_place_base_before_the_else_and_fallback_after_the_else() {
+        // Promise 3 (PRESENT-BRANCH `{ #base }`) + Promise 4
+        // (ABSENT-BRANCH `else { #fallback }`) — the base extractor
+        // sits inside the FIRST arm, the fallback expression sits
+        // inside the SECOND arm, with an `else` keyword separating
+        // the two. A regression that (a) swapped the two branches
+        // (fallback in the present arm, base in the absent arm), (b)
+        // dropped the `else` keyword, or (c) collapsed the two arms
+        // into one surfaces here rather than at every downstream
+        // implementor whose emission decodes wrong at runtime.
+        //
+        // Use distinct sentinel token strings so the ordering assert
+        // reads at a glance — a regression that ordered them wrong
+        // would silently return the fallback whenever the kwarg was
+        // present, breaking every non-Absent consumer field.
+        let base = quote! { BASE_TOKEN };
+        let fallback = quote! { FALLBACK_TOKEN };
+        let body = wrap_with_missing_key_default(base, "name", fallback).to_string();
+        let base_idx = body
+            .find("BASE_TOKEN")
+            .expect("present-branch base token must appear in the emission");
+        let else_idx = body
+            .find("else")
+            .expect("`else` keyword must appear between the two branches");
+        let fallback_idx = body
+            .find("FALLBACK_TOKEN")
+            .expect("absent-branch fallback token must appear in the emission");
+        assert!(
+            base_idx < else_idx,
+            "present-branch `base` must appear BEFORE the `else` keyword, got: {body}",
+        );
+        assert!(
+            else_idx < fallback_idx,
+            "absent-branch `fallback` must appear AFTER the `else` keyword, got: {body}",
+        );
+    }
+
+    #[test]
+    fn primitive_interpolates_the_key_exactly_once_at_the_gate_and_not_at_either_branch() {
+        // Cross-cutting pin — the `#key` interpolation seam fires
+        // ONCE at the `contains_key` gate, not at either branch. A
+        // regression that (say) leaked the key into the fallback
+        // expression via a misplaced `#key` interpolation would
+        // silently emit the kwarg key inside an unrelated position
+        // (e.g. inside the `Default::default()` call site) — this
+        // test catches the leak at the primitive rather than at the
+        // downstream implementor's rustc-time noise.
+        let base = quote! { BASE };
+        let fallback = quote! { FB };
+        let body = wrap_with_missing_key_default(base, "port", fallback).to_string();
+        assert_eq!(
+            body.matches("\"port\"").count(),
+            1,
+            "key must interpolate EXACTLY ONCE — inside the `contains_key` gate — got: {body}",
+        );
+    }
+
+    #[test]
+    fn trait_default_arm_delegates_byte_identically_through_the_primitive() {
+        // Arm-level structural pin — the `SerdeDefault::Trait` arm
+        // of `extractor_for` must produce byte-identical emission to
+        // a manual invocation of `wrap_with_missing_key_default`
+        // with the arm's own base extractor and the shared
+        // `::std::default::Default::default()` fallback expression.
+        //
+        // A regression that reintroduced a hand-rolled `quote! { if
+        // kw.contains_key(#key) { #base } else { … } }` block at
+        // this arm (breaking the substrate-lift claim) would surface
+        // here rather than as silent drift at every consumer struct
+        // with a bare `#[serde(default)]` field.
+        let ty: syn::Type = parse_str("String").unwrap();
+        let actual = extractor_for(&ty, "name", &SerdeDefault::Trait)
+            .expect("SerdeDefault::Trait arm must succeed on a String field");
+        let base = extractor_for(&ty, "name", &SerdeDefault::Absent)
+            .expect("SerdeDefault::Absent arm must succeed on a String field");
+        let expected = wrap_with_missing_key_default(
+            base,
+            "name",
+            quote! { ::std::default::Default::default() },
+        );
+        assert_eq!(
+            actual.to_string(),
+            expected.to_string(),
+            "SerdeDefault::Trait arm must delegate byte-identically through wrap_with_missing_key_default",
+        );
+    }
+
+    #[test]
+    fn path_default_arm_delegates_byte_identically_through_the_primitive() {
+        // Arm-level structural pin — the `SerdeDefault::Path` arm of
+        // `extractor_for` must produce byte-identical emission to a
+        // manual invocation of `wrap_with_missing_key_default` with
+        // the arm's own base extractor and the arm's own parsed
+        // `#path_ts()` fallback expression. Sweep a bare-ident path
+        // ("default_true" — the shape tatara-init's config.rs binds
+        // for `reap_zombies`) so the delegate pin fires on the
+        // consumer-representative shape rather than on an artificial
+        // dotted path.
+        //
+        // A regression that reintroduced a hand-rolled `quote! { if
+        // kw.contains_key(#key) { #base } else { #path_ts() } }`
+        // block at this arm (breaking the substrate-lift claim)
+        // would surface here rather than as silent drift at every
+        // consumer struct with a `#[serde(default = "path")]` field.
+        let ty: syn::Type = parse_str("bool").unwrap();
+        let actual = extractor_for(
+            &ty,
+            "reap-zombies",
+            &SerdeDefault::Path("default_true".to_string()),
+        )
+        .expect("SerdeDefault::Path arm must succeed on a bool field");
+        let base = extractor_for(&ty, "reap-zombies", &SerdeDefault::Absent)
+            .expect("SerdeDefault::Absent arm must succeed on a bool field");
+        let path_ts: proc_macro2::TokenStream = "default_true".parse().unwrap();
+        let expected = wrap_with_missing_key_default(base, "reap-zombies", quote! { #path_ts() });
+        assert_eq!(
+            actual.to_string(),
+            expected.to_string(),
+            "SerdeDefault::Path arm must delegate byte-identically through wrap_with_missing_key_default",
+        );
+    }
+
+    #[test]
+    fn absent_default_arm_returns_the_unwrapped_base_extractor_without_invoking_the_primitive() {
+        // Null-case pin — the `SerdeDefault::Absent` arm must NOT
+        // invoke the primitive at all, so its emission carries
+        // neither the `contains_key` gate nor an `else` branch. A
+        // regression that erroneously routed the Absent arm through
+        // the primitive (e.g. with a fallback of
+        // `unreachable!()`-shape tokens) would silently gate every
+        // consumer field on `contains_key`, breaking the hard
+        // `LispError::MissingKwarg` rejection the derive currently
+        // emits for non-defaulted required fields — surfaces here as
+        // an extra `contains_key` / `else` substring in the
+        // emission.
+        let ty: syn::Type = parse_str("String").unwrap();
+        let actual = extractor_for(&ty, "name", &SerdeDefault::Absent)
+            .expect("SerdeDefault::Absent arm must succeed on a String field");
+        let body = actual.to_string();
+        assert!(
+            !body.contains("contains_key"),
+            "SerdeDefault::Absent arm must NOT wrap with the missing-key gate, got: {body}",
+        );
+        assert!(
+            !body.contains("else"),
+            "SerdeDefault::Absent arm must NOT wrap with an else branch, got: {body}",
+        );
+    }
+
+    #[test]
+    fn path_default_arm_rejects_an_unparseable_path_at_the_arms_own_parse_gate_before_the_primitive(
+    ) {
+        // Error-path pin — the `SerdeDefault::Path` arm's own parse
+        // gate rejects an unparseable path string BEFORE the
+        // primitive is invoked. The primitive is infallible (it
+        // accepts any pre-composed `TokenStream2` at the trailing
+        // slot), so an `Err(String)` return from `extractor_for`
+        // pinpoints the arm's own `path.parse()` gate rather than a
+        // hypothetical primitive-side failure. Pins the error
+        // message shape carries the `#[serde(default` prefix so the
+        // downstream compile-error at the derive consumer names the
+        // attribute source, matching the pre-lift error contract.
+        //
+        // `proc_macro2::TokenStream::parse` errors on unbalanced
+        // delimiters — an unmatched `(` at the head of the path is
+        // the smallest input that trips the lexer, chosen for its
+        // stability across proc-macro2 versions (a stricter parser
+        // like `syn::Path` would reject more inputs but changes the
+        // arm's own parse gate, which this test intentionally does
+        // not exercise).
+        let ty: syn::Type = parse_str("String").unwrap();
+        let err = extractor_for(&ty, "name", &SerdeDefault::Path("(unbalanced".to_string()))
+            .expect_err("SerdeDefault::Path arm must fail on an unparseable path");
+        assert!(
+            err.contains("#[serde(default"),
+            "error must name the attribute source, got: {err}",
         );
     }
 }

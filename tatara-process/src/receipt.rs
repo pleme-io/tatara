@@ -299,11 +299,7 @@ impl ReceiptEnvelope {
         let control_hash = control_hash.into();
         let composed_root = compose_root(
             &artifact_hash,
-            if control_hash.is_empty() {
-                None
-            } else {
-                Some(control_hash.as_str())
-            },
+            empty_to_none(&control_hash),
             &intent_hash,
             previous_root,
         );
@@ -377,11 +373,7 @@ impl ReceiptEnvelope {
     pub fn verify_root(&self, expected_previous_root: Option<&str>) -> bool {
         let want = compose_root(
             &self.artifact_hash,
-            if self.control_hash.is_empty() {
-                None
-            } else {
-                Some(self.control_hash.as_str())
-            },
+            self.control_hash_opt(),
             &self.intent_hash,
             expected_previous_root,
         );
@@ -431,16 +423,102 @@ impl ReceiptEnvelope {
     ) -> ProcessAttestation {
         ProcessAttestation::compose(
             self.artifact_hash.clone(),
-            if self.control_hash.is_empty() {
-                None
-            } else {
-                Some(self.control_hash.clone())
-            },
+            self.control_hash_opt().map(str::to_owned),
             self.intent_hash.clone(),
             previous_root.map(String::from),
             generation,
         )
     }
+
+    /// Typed projection of the wire form's `control_hash` field —
+    /// `Some(hash)` when a control step ran, `None` when it did not.
+    ///
+    /// The wire form stamps `control_hash: String` (schema-open,
+    /// serde-friendly), but the substrate's `compose_root` +
+    /// `ProcessAttestation::compose` compositions both take an
+    /// `Option<&str>` / `Option<String>` and thread `None` through the
+    /// exact BLAKE3 bytes pattern an absent-pillar walk emits — an
+    /// empty `control_hash` and an absent-pillar receipt hash to the
+    /// SAME `composed_root`. That "empty means absent" convention
+    /// pre-lift lived at THREE sites inside this impl block —
+    /// [`Self::build`] (constructing the envelope from typed pillars),
+    /// [`Self::verify_root`] (recomposing the root against pillars for
+    /// wire-form verification), and [`Self::to_attestation`] (lowering
+    /// the receipt into a [`ProcessAttestation`] on a Process's
+    /// attestation chain) — each hand-writing the SAME
+    /// `if self.control_hash.is_empty() { None } else {
+    /// Some(self.control_hash.as_str()) }` two-arm conditional. Post-
+    /// lift the convention lives at ONE method here; the three
+    /// consumers each compose a ONE-LINE call:
+    ///   * `verify_root` → `self.control_hash_opt()` directly,
+    ///   * `to_attestation` → `self.control_hash_opt().map(str::to_owned)`
+    ///     for the `Option<String>` shape [`ProcessAttestation::compose`]
+    ///     binds,
+    ///   * `build` (which reads a local `control_hash: String` before
+    ///     the envelope is constructed) → the free-fn peer
+    ///     [`empty_to_none`] on the same borrowed string.
+    ///
+    /// Public because the projection is load-bearing operator-facing
+    /// contract: an authoring surface (an LSP hover, a
+    /// `tatara-check` report, a REPL `:receipt-inspect` command) that
+    /// wants to render "no control step" vs. "control_hash: <hash>"
+    /// binds to this method rather than pattern-matching on
+    /// `self.control_hash.is_empty()` at its own call site — a future
+    /// re-shape of the empty-means-absent convention (a sentinel-
+    /// string variant, an explicit `Option<String>` on the wire form
+    /// once the schema evolves, or a typed
+    /// `ControlStep::{Ran(hash), Skipped}` enum) lands at ONE method
+    /// here rather than at every consumer that inspects the pillar.
+    ///
+    /// Theory anchor: THEORY.md §V.1 — knowable platform; the
+    /// wire-vs-typed projection lives at ONE substrate method so a
+    /// consumer reads the pillar's typed-Option contract from the
+    /// receipt directly, not from three parallel inline conditionals
+    /// scattered across `build` / `verify_root` / `to_attestation`.
+    /// THEORY.md §VI.1 — generation over composition; the
+    /// `is_empty() ? None : Some(&self.control_hash)` two-arm
+    /// projection recurred at THREE inline sites past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication threshold and is lifted to ONE
+    /// owner here. THEORY.md §V.3 — three-pillar attestation; the
+    /// receipt's second pillar (control step) has ONE typed projection
+    /// site the composition primitives ([`compose_root`],
+    /// [`ProcessAttestation::compose`]) both bind against, so the
+    /// pillar's wire-vs-typed identity cannot drift across the three
+    /// consumers.
+    #[must_use]
+    pub fn control_hash_opt(&self) -> Option<&str> {
+        empty_to_none(&self.control_hash)
+    }
+}
+
+/// Project a wire-form pillar string onto its typed `Option<&str>`
+/// contract — `Some(s)` when `s` is non-empty, `None` when `s` is
+/// empty (the substrate's "no such pillar" convention that
+/// [`compose_root`] + [`ProcessAttestation::compose`] both thread as
+/// an absent-pillar walk through the BLAKE3 domain-tagged
+/// composition).
+///
+/// The free-fn peer of [`ReceiptEnvelope::control_hash_opt`] for
+/// call sites that hold a borrowed pillar string BEFORE a
+/// [`ReceiptEnvelope`] is constructed — namely
+/// [`ReceiptEnvelope::build`]'s inline `compose_root` call, which
+/// composes the pillar's typed-Option identity from the local
+/// `control_hash: String` intake before the envelope value exists.
+/// The two peers share ONE projection body (`(!s.is_empty()).
+/// then_some(s)`) so a future re-shape of the empty-means-absent
+/// convention (a sentinel-string variant, an explicit
+/// `Option<String>` on the wire form once the schema evolves)
+/// lands at ONE substrate primitive rather than at both the
+/// inherent method and its pre-construction free-fn peer.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition;
+/// the pre-construction peer of the pillar projection lives at ONE
+/// substrate primitive alongside the post-construction inherent
+/// method, so the two receipt-lifecycle stages (pre-envelope in
+/// [`ReceiptEnvelope::build`], post-envelope in every other
+/// consumer) share ONE typed projection.
+fn empty_to_none(s: &str) -> Option<&str> {
+    (!s.is_empty()).then_some(s)
 }
 
 const DOMAIN_TAG: &[u8] = b"tatara-process/v1alpha1\n";
@@ -741,5 +819,106 @@ generated_at:  2026-05-19T12:00:00Z
             env.verify_shape().is_ok(),
             "open kind must remain a valid receipt"
         );
+    }
+
+    // ── `control_hash_opt` / `empty_to_none` — the wire-form-to-typed
+    //    projection of the second pillar (control step). Pre-lift the
+    //    `is_empty() ? None : Some(&self.control_hash)` two-arm
+    //    conditional lived at THREE inline sites — `build`,
+    //    `verify_root`, `to_attestation` — each hand-writing the SAME
+    //    projection with slightly-different ownership shapes
+    //    (`Option<&str>` for the two composers, `Option<String>` for
+    //    the attestation composer). Post-lift the projection lives at
+    //    ONE inherent method + ONE free-fn peer for the pre-envelope
+    //    call site. The tests below pin the substrate primitive's
+    //    contract at its boundary so a regression at the projection
+    //    surfaces here rather than as a silent `composed_root` drift
+    //    at every consumer that composes the pillar.
+
+    #[test]
+    fn empty_to_none_projects_empty_to_none_and_non_empty_to_some_verbatim() {
+        // The pre-envelope free-fn peer of `control_hash_opt` — used
+        // by `build` before the envelope exists. Pin BOTH arms of the
+        // projection: an empty string projects to `None` (the "no
+        // such pillar" convention that `compose_root` threads through
+        // the absent-pillar BLAKE3 bytes pattern), and any non-empty
+        // string projects to `Some(s)` byte-identical to the input.
+        // A regression that (a) inverted the arms (folding `""` to
+        // `Some("")` and every non-empty into `None`), (b) normalized
+        // the payload (trimming whitespace, lowercasing hex), or (c)
+        // introduced a sentinel-string special case (`"none"`, `"-"`,
+        // etc.) would surface here rather than as a silent
+        // `composed_root` shift at every consumer that composes the
+        // pillar.
+        assert_eq!(super::empty_to_none(""), None);
+        assert_eq!(super::empty_to_none("c"), Some("c"));
+        assert_eq!(super::empty_to_none("cccc"), Some("cccc"));
+        // A whitespace-only string is NOT empty by the pillar's typed
+        // contract — the substrate composes bytes verbatim through
+        // BLAKE3, so a `" "` control hash IS a distinct pillar from
+        // an absent one; the projection must preserve that
+        // distinction.
+        assert_eq!(super::empty_to_none(" "), Some(" "));
+    }
+
+    #[test]
+    fn control_hash_opt_matches_the_free_fn_peer_on_every_receipt() {
+        // Post-envelope inherent method routes through the same
+        // `empty_to_none` free-fn body — pin the equivalence across
+        // both arms so a future regression that split the two
+        // projections (e.g. the inherent method starts trimming, the
+        // free-fn stays byte-verbatim) surfaces here rather than as a
+        // `composed_root` mismatch between `build` (uses the free-fn
+        // peer) and `verify_root` / `to_attestation` (use the
+        // inherent method).
+        let with_control = ReceiptEnvelope::build("test-suite", "i", "a", "cccc", None);
+        assert_eq!(with_control.control_hash_opt(), Some("cccc"));
+        assert_eq!(
+            with_control.control_hash_opt(),
+            super::empty_to_none(&with_control.control_hash),
+        );
+
+        let no_control = ReceiptEnvelope::build("nix-build", "i", "a", "", None);
+        assert_eq!(no_control.control_hash_opt(), None);
+        assert_eq!(
+            no_control.control_hash_opt(),
+            super::empty_to_none(&no_control.control_hash),
+        );
+    }
+
+    #[test]
+    fn control_hash_opt_composes_the_same_root_the_three_consumers_bind() {
+        // End-to-end pin at the receipt-lifecycle boundary — the
+        // three consumers (`build`, `verify_root`, `to_attestation`)
+        // must land on the SAME `composed_root` for a given pillar
+        // tuple regardless of which projection body they route
+        // through. Sweeps BOTH pillar arms (present control + empty
+        // control) so a regression that mis-wired ONE consumer to
+        // the pre-lift inline conditional or that changed the
+        // projection at ONE site surfaces here rather than as a
+        // silent divergence between `verify_root`'s decision and
+        // `to_attestation`'s written `composed_root`.
+        for control in ["", "control-hash-cccc"] {
+            let env = ReceiptEnvelope::build("test-suite", "i", "a", control, None);
+            // `verify_root` composes through the inherent method AND
+            // through the same `compose_root(&artifact, control_opt,
+            // &intent, previous)` skeleton `build` binds — so the
+            // envelope must verify against its own composed root.
+            assert!(
+                env.verify_root(None),
+                "verify_root failed for control={control:?}",
+            );
+            // `to_attestation` composes the same pillar tuple through
+            // `ProcessAttestation::compose`'s `Option<String>` shape;
+            // the attestation's `composed_root` must match the
+            // envelope's `composed_root` byte-for-byte because both
+            // compose the SAME BLAKE3 domain-tagged skeleton over
+            // the SAME typed-Option pillar identity.
+            let att = env.to_attestation(0, None);
+            assert_eq!(
+                att.composed_root, env.composed_root,
+                "attestation root drift for control={control:?}",
+            );
+        }
     }
 }

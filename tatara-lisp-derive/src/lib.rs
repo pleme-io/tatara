@@ -1484,19 +1484,6 @@ fn deserialize_trait_dispatch_call(
     }
 }
 
-/// Walk one level of a generic path type — extract `T` from
-/// `Option<T>` / `Vec<T>` / any other `Wrapper<T>` shape. Returns
-/// `None` for non-path types or path types with no generic
-/// argument. Composes with itself to walk `Option<Vec<T>>` in two
-/// applications.
-fn generic_arg(ty: &Type) -> Option<&Type> {
-    let Type::Path(p) = ty else {
-        return None;
-    };
-    let seg = p.path.segments.last()?;
-    first_generic_type(seg).ok()
-}
-
 fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2, String> {
     let kind = classify(ty);
     let base = match kind {
@@ -1716,22 +1703,39 @@ fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2
         // the three helpers close the derive's full non-atom emission
         // surface: every arm dispatches through ONE trait-per-axis-
         // family primitive.
-        Kind::Deserialize => {
-            // Field type IS `T` — pass through unchanged.
-            deserialize_trait_dispatch_call("extract_kwarg", quote! { #ty }, key)
+        // Post-lift the four `Kind::(Optional?)(Vec?)Deserialize`
+        // arms each dispatch on the CACHED inner-`T` tokens the
+        // classify pass ([`classify_option`] / [`classify_vec`])
+        // already walked out of the outer field type. Pre-lift each
+        // arm carried a `generic_arg(ty).ok_or_else(...)?` re-walk
+        // at this call site — the [`Kind::OptionalVecDeserialize`]
+        // arm carried TWO — restating the exact walk the classifier
+        // had just performed and threading a `.ok_or_else(...)?`
+        // fallible arm for an invariant already established (the
+        // arms are only reachable through the `"Option"` / `"Vec"`
+        // `classify` arm, which only routes there when
+        // `first_generic_type` succeeded). Post-lift the walk lives
+        // at ONE per-axis call site inside the classify pass, the
+        // payload rides `Kind::(Optional?)(Vec?)Deserialize` through
+        // to the extract site, and the four arms here reduce to
+        // one-line delegates through [`deserialize_trait_dispatch_call`]
+        // with the inner tokens threaded through the second
+        // positional argument. Same payload posture the eight
+        // numeric-narrowed arms already take through their
+        // `Kind::Int(&'static str)` / `Kind::VecInt(&'static str)`
+        // / `Kind::OptionalVecInt(&'static str)` payloads and the
+        // [`narrow_trait_dispatch_call`] emission — the classifier
+        // IS the projection from `syn::Type` to the emission-side
+        // type identity, and the [`extractor_for`] match dispatches
+        // on the payload.
+        Kind::Deserialize(inner_ty) => {
+            deserialize_trait_dispatch_call("extract_kwarg", inner_ty, key)
         }
-        Kind::OptionalDeserialize => {
-            // Walk one level: `Option<T>` → `T`.
-            let inner = generic_arg(ty).ok_or_else(|| {
-                "Kind::OptionalDeserialize expected an `Option<T>` field type".to_string()
-            })?;
-            deserialize_trait_dispatch_call("extract_optional_kwarg", quote! { #inner }, key)
+        Kind::OptionalDeserialize(inner_ty) => {
+            deserialize_trait_dispatch_call("extract_optional_kwarg", inner_ty, key)
         }
-        Kind::VecDeserialize => {
-            // Walk one level: `Vec<T>` → `T`.
-            let inner = generic_arg(ty)
-                .ok_or_else(|| "Kind::VecDeserialize expected a `Vec<T>` field type".to_string())?;
-            deserialize_trait_dispatch_call("extract_vec_kwarg", quote! { #inner }, key)
+        Kind::VecDeserialize(inner_ty) => {
+            deserialize_trait_dispatch_call("extract_vec_kwarg", inner_ty, key)
         }
         // `Option<Vec<T>>` on the universal-serde-fallthrough axis —
         // routes through the present-vs-absent bifurcated peer of
@@ -1749,15 +1753,8 @@ fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2
         // `LispError::KwargDeserialize { path: KwargPath::Item { key,
         // idx }, message }` variant its required peer emits through
         // `from_value_with_path` at `KwargPath::item(key, idx)`.
-        Kind::OptionalVecDeserialize => {
-            // Walk two levels: `Option<Vec<T>>` → `Vec<T>` → `T`.
-            let outer_vec = generic_arg(ty).ok_or_else(|| {
-                "Kind::OptionalVecDeserialize expected an `Option<Vec<T>>` field type".to_string()
-            })?;
-            let inner = generic_arg(outer_vec).ok_or_else(|| {
-                "Kind::OptionalVecDeserialize expected an `Option<Vec<T>>` field type".to_string()
-            })?;
-            deserialize_trait_dispatch_call("extract_optional_vec_kwarg", quote! { #inner }, key)
+        Kind::OptionalVecDeserialize(inner_ty) => {
+            deserialize_trait_dispatch_call("extract_optional_vec_kwarg", inner_ty, key)
         }
     };
     // Respect `#[serde(default)]` — wrap extractor with a missing-key short-circuit.
@@ -1927,9 +1924,37 @@ enum Kind {
     /// what changes here, not the scaffold.
     OptionalVecFloat(&'static str),
     /// Fall-through: any type implementing `serde::Deserialize`.
-    Deserialize,
-    OptionalDeserialize,
-    VecDeserialize,
+    ///
+    /// Payload is the CACHED inner-type tokens the emitted UFCS trait
+    /// dispatch (`<T as DeserializeKwarg>::extract_kwarg`) binds at
+    /// its `Self` slot — on `Kind::Deserialize` `T` is the whole
+    /// field type (the fall-through arm of [`classify`] recognizes
+    /// any non-primitive path type); on `Kind::OptionalDeserialize`
+    /// it is the type inside `Option<_>`; on `Kind::VecDeserialize`
+    /// it is the type inside `Vec<_>`; on
+    /// `Kind::OptionalVecDeserialize` it is the type inside
+    /// `Option<Vec<_>>`. The projection to the inner tokens runs
+    /// ONCE at [`classify_option`] / [`classify_vec`], not at each
+    /// [`extractor_for`] call site — pre-lift the derive's four
+    /// `Kind::(Optional?)(Vec?)Deserialize` arms each re-walked the
+    /// outer field type via a `generic_arg(ty)?` extractor-side
+    /// helper (twice for the [`Kind::OptionalVecDeserialize`] arm),
+    /// duplicating the walk `classify` had already performed and
+    /// carrying a `.ok_or_else(...)?` fallible arm at each derive
+    /// call site for an invariant already established at classify
+    /// time (well-formed `Option<T>` / `Vec<T>` / `Option<Vec<T>>`
+    /// path types always have their inner type generic present, else
+    /// they'd not have taken the `"Option"` / `"Vec"` `classify`
+    /// arm). Caching the walk here matches the payload posture the
+    /// numeric-narrowed axes (`Kind::Int(&'static str)` /
+    /// `Kind::VecInt(&'static str)` / `Kind::OptionalVecInt(&'static
+    /// str)` etc.) already take — the classifier IS the projection
+    /// from `syn::Type` to the emission-side type identity, and the
+    /// [`extractor_for`] match dispatches on the payload rather than
+    /// re-walking the type.
+    Deserialize(TokenStream2),
+    OptionalDeserialize(TokenStream2),
+    VecDeserialize(TokenStream2),
     /// `Option<Vec<T>>` where `T` falls through to [`Self::VecDeserialize`]
     /// on the inner axis — a struct, an enum, a nested `Vec<T>`, or any
     /// non-atomic type. Routes through
@@ -1972,7 +1997,7 @@ enum Kind {
     /// field, atomic-inner OR non-atomic-inner, now surfaces per-item
     /// rejections through a [`KwargPath::Item { key, idx }`] path root
     /// rather than a [`KwargPath::Named(key)`] one.
-    OptionalVecDeserialize,
+    OptionalVecDeserialize(TokenStream2),
 }
 
 fn classify(ty: &Type) -> Kind {
@@ -1993,19 +2018,32 @@ fn classify(ty: &Type) -> Kind {
                 "isize" => return Kind::Int("isize"),
                 "f64" => return Kind::Float("f64"),
                 "f32" => return Kind::Float("f32"),
-                "Option" => return classify_option(last),
-                "Vec" => return classify_vec(last),
+                "Option" => return classify_option(last, ty),
+                "Vec" => return classify_vec(last, ty),
                 _ => {}
             }
         }
     }
-    // Anything else: fall through to serde Deserialize.
-    Kind::Deserialize
+    // Anything else: fall through to serde Deserialize. The whole
+    // field type IS the inner `T` on the scalar-mode dispatch —
+    // `<T as DeserializeKwarg>::extract_kwarg` binds `T` at the
+    // UFCS `Self` slot verbatim.
+    Kind::Deserialize(quote! { #ty })
 }
 
-fn classify_option(last: &syn::PathSegment) -> Kind {
+fn classify_option(last: &syn::PathSegment, ty: &Type) -> Kind {
     let Ok(inner) = first_generic_type(last) else {
-        return Kind::OptionalDeserialize;
+        // Malformed `Option` — no type arg present (e.g. a field
+        // typed as bare `Option` or `Option<'a>`, both syntactically
+        // parseable by `syn` but semantically incomplete). The
+        // whole outer type rides through as the cached payload so
+        // the emitted `<Option as DeserializeKwarg>::extract_optional_kwarg`
+        // surface hits rustc's type checker at the derive
+        // consumer's compile with a load-bearing type-mismatch,
+        // not a silent narrowing. Well-formed `Option<T>` never
+        // reaches this arm — `first_generic_type` succeeds on
+        // every valid single-type-arg segment.
+        return Kind::OptionalDeserialize(quote! { #ty });
     };
     match classify(inner) {
         Kind::String => Kind::OptionalString,
@@ -2102,21 +2140,23 @@ fn classify_option(last: &syn::PathSegment) -> Kind {
         // non-atomic-inner) now surfaces per-item rejections through a
         // `KwargPath::Item { key, idx }` path root rather than a
         // `KwargPath::Named(key)` one.
-        Kind::VecDeserialize => Kind::OptionalVecDeserialize,
-        _ => Kind::OptionalDeserialize,
+        Kind::VecDeserialize(inner_ty) => Kind::OptionalVecDeserialize(inner_ty),
+        _ => Kind::OptionalDeserialize(quote! { #inner }),
     }
 }
 
-fn classify_vec(last: &syn::PathSegment) -> Kind {
+fn classify_vec(last: &syn::PathSegment, ty: &Type) -> Kind {
     let Ok(inner) = first_generic_type(last) else {
-        return Kind::VecDeserialize;
+        // Malformed `Vec` — peer to `classify_option`'s malformed
+        // arm above. Well-formed `Vec<T>` never reaches this arm.
+        return Kind::VecDeserialize(quote! { #ty });
     };
     match classify(inner) {
         Kind::String => Kind::VecString,
         Kind::Int(t) => Kind::VecInt(t),
         Kind::Float(t) => Kind::VecFloat(t),
         Kind::Bool => Kind::VecBool,
-        _ => Kind::VecDeserialize,
+        _ => Kind::VecDeserialize(quote! { #inner }),
     }
 }
 
@@ -2501,10 +2541,13 @@ mod classify_tests {
         // authoring surface at every downstream consumer.
         assert!(matches!(
             classify(&parse_ty("MonitorSpec")),
-            Kind::Deserialize
+            Kind::Deserialize(_)
         ));
-        assert!(matches!(classify(&parse_ty("Severity")), Kind::Deserialize));
-        assert!(matches!(classify(&parse_ty("Strng")), Kind::Deserialize));
+        assert!(matches!(
+            classify(&parse_ty("Severity")),
+            Kind::Deserialize(_)
+        ));
+        assert!(matches!(classify(&parse_ty("Strng")), Kind::Deserialize(_)));
     }
 
     #[test]
@@ -2537,11 +2580,11 @@ mod classify_tests {
         // every consumer.
         assert!(matches!(
             classify(&parse_ty("Option<MonitorSpec>")),
-            Kind::OptionalDeserialize
+            Kind::OptionalDeserialize(_)
         ));
         assert!(matches!(
             classify(&parse_ty("Option<Severity>")),
-            Kind::OptionalDeserialize
+            Kind::OptionalDeserialize(_)
         ));
     }
 
@@ -2587,11 +2630,11 @@ mod classify_tests {
         // mystery serde substring shape.
         assert!(matches!(
             classify(&parse_ty("Option<Vec<MonitorSpec>>")),
-            Kind::OptionalVecDeserialize
+            Kind::OptionalVecDeserialize(_)
         ));
         assert!(matches!(
             classify(&parse_ty("Option<Vec<Vec<String>>>")),
-            Kind::OptionalVecDeserialize
+            Kind::OptionalVecDeserialize(_)
         ));
     }
 
@@ -2899,11 +2942,11 @@ mod classify_tests {
         // narrowed arm would fail here.
         assert!(matches!(
             classify(&parse_ty("Vec<MonitorSpec>")),
-            Kind::VecDeserialize
+            Kind::VecDeserialize(_)
         ));
         assert!(matches!(
             classify(&parse_ty("Vec<Vec<String>>")),
-            Kind::VecDeserialize
+            Kind::VecDeserialize(_)
         ));
     }
 
@@ -2944,12 +2987,143 @@ mod classify_tests {
         // contract is that ANY non-primitive shape gets the
         // Deserialize extractor; the extractor's runtime behavior on
         // exotic types is a separate concern the serde bridge owns.
-        assert!(matches!(classify(&parse_ty("&str")), Kind::Deserialize));
-        assert!(matches!(classify(&parse_ty("[u8; 4]")), Kind::Deserialize));
+        assert!(matches!(classify(&parse_ty("&str")), Kind::Deserialize(_)));
+        assert!(matches!(
+            classify(&parse_ty("[u8; 4]")),
+            Kind::Deserialize(_)
+        ));
         assert!(matches!(
             classify(&parse_ty("(String, i64)")),
-            Kind::Deserialize
+            Kind::Deserialize(_)
         ));
+    }
+
+    // ── Payload identity — the four `Kind::(Optional?)(Vec?)Deserialize`
+    //    variants each cache the inner-`T` tokens at classify time so the
+    //    `extractor_for` match dispatches on the payload without re-walking
+    //    the outer field type. Pin the projection per axis-mode so a
+    //    regression that dropped the payload OR cached the wrong wrapper
+    //    level (`Option<T>` instead of `T`, or `Vec<T>` instead of `T`)
+    //    surfaces at ONE test-module boundary in the derive crate rather
+    //    than as a silent type-mismatch at the derived consumer's compile.
+    //    Same shape the numeric-narrowed payload pins on
+    //    `every_supported_integer_width_classifies_as_kind_int_with_the_matching_type_literal`
+    //    give for `Kind::Int(&'static str)`.
+
+    #[test]
+    fn kind_deserialize_scalar_mode_payload_is_the_whole_field_type() {
+        // On the scalar `Kind::Deserialize` arm the whole field
+        // type IS the UFCS `T` — the classifier's fallthrough
+        // (`Kind::Deserialize(quote! { #ty })`) caches the field
+        // tokens verbatim so
+        // `deserialize_trait_dispatch_call("extract_kwarg", inner_ty,
+        // key)` binds `<T as DeserializeKwarg>::extract_kwarg` with
+        // `T = the field type`. Sweep three representative shapes
+        // the fallthrough recognizes — a plain-ident enum, a nested-
+        // struct, and a fully-qualified path — so a regression that
+        // narrowed the payload projection (say, stringified through
+        // `.to_string()` or dropped the leading `::`) surfaces per-
+        // shape here.
+        for (field_src, expected_payload) in [
+            ("Severity", "Severity"),
+            ("MonitorSpec", "MonitorSpec"),
+            (
+                "::my_crate::my_mod::Config",
+                ":: my_crate :: my_mod :: Config",
+            ),
+        ] {
+            let ty = parse_ty(field_src);
+            let Kind::Deserialize(payload) = classify(&ty) else {
+                panic!("classify({field_src}) must project to Kind::Deserialize(_)");
+            };
+            assert_eq!(
+                payload.to_string(),
+                expected_payload,
+                "Kind::Deserialize payload for `{field_src}` must be `{expected_payload}`",
+            );
+        }
+    }
+
+    #[test]
+    fn kind_optional_deserialize_payload_is_the_type_inside_option() {
+        // On the `Option<T>` fallthrough arm the payload is `T`, not
+        // `Option<T>` — the classifier's `classify_option`
+        // fallthrough emits `Kind::OptionalDeserialize(quote! {
+        // #inner })` where `inner` is `first_generic_type(last)`'s
+        // Ok payload. A regression that carried the outer
+        // `Option<T>` through would emit `<Option<T> as
+        // DeserializeKwarg>::extract_optional_kwarg` at the derived
+        // consumer and mismatch the field type as
+        // `Result<Option<Option<T>>>`; pinning the payload as `T`
+        // here catches the drift at the classifier boundary.
+        for (field_src, expected_payload) in [
+            ("Option<Severity>", "Severity"),
+            ("Option<MonitorSpec>", "MonitorSpec"),
+            ("core::option::Option<Severity>", "Severity"),
+        ] {
+            let ty = parse_ty(field_src);
+            let Kind::OptionalDeserialize(payload) = classify(&ty) else {
+                panic!("classify({field_src}) must project to Kind::OptionalDeserialize(_)");
+            };
+            assert_eq!(
+                payload.to_string(),
+                expected_payload,
+                "Kind::OptionalDeserialize payload for `{field_src}` must be `{expected_payload}`",
+            );
+        }
+    }
+
+    #[test]
+    fn kind_vec_deserialize_payload_is_the_type_inside_vec() {
+        // Peer of the `Kind::OptionalDeserialize` pin on the
+        // required-vec axis — `Vec<T>`'s payload is `T`, not
+        // `Vec<T>`. Rules out a fallthrough that carries the outer
+        // wrapper level. Nested `Vec<Vec<String>>` caches the ONE-
+        // level unwrap `Vec<String>` (matching the required-vec
+        // arm's `<T as DeserializeKwarg>::extract_vec_kwarg`
+        // signature that returns `Result<Vec<T>>`).
+        for (field_src, expected_payload) in [
+            ("Vec<MonitorSpec>", "MonitorSpec"),
+            ("Vec<Vec<String>>", "Vec < String >"),
+        ] {
+            let ty = parse_ty(field_src);
+            let Kind::VecDeserialize(payload) = classify(&ty) else {
+                panic!("classify({field_src}) must project to Kind::VecDeserialize(_)");
+            };
+            assert_eq!(
+                payload.to_string(),
+                expected_payload,
+                "Kind::VecDeserialize payload for `{field_src}` must be `{expected_payload}`",
+            );
+        }
+    }
+
+    #[test]
+    fn kind_optional_vec_deserialize_payload_is_the_type_inside_option_vec() {
+        // TWO-level unwrap: `Option<Vec<T>>` → `T`. Pin the two-
+        // step projection so a regression that unwrapped only ONE
+        // level (leaving `Vec<T>` in the payload) surfaces here —
+        // pre-lift the extract-site walk did two `generic_arg(...)?`
+        // hops for exactly this arm; the classifier now performs the
+        // composition via `classify_option`'s
+        // `Kind::VecDeserialize(inner_ty) →
+        // Kind::OptionalVecDeserialize(inner_ty)` arm, which
+        // forwards the required-peer's cached inner tokens through
+        // unchanged.
+        for (field_src, expected_payload) in [
+            ("Option<Vec<MonitorSpec>>", "MonitorSpec"),
+            ("Option<Vec<Vec<String>>>", "Vec < String >"),
+        ] {
+            let ty = parse_ty(field_src);
+            let Kind::OptionalVecDeserialize(payload) = classify(&ty) else {
+                panic!("classify({field_src}) must project to Kind::OptionalVecDeserialize(_)");
+            };
+            assert_eq!(
+                payload.to_string(),
+                expected_payload,
+                "Kind::OptionalVecDeserialize payload for `{field_src}` must be `{expected_payload}`",
+            );
+        }
     }
 
     #[test]
@@ -3772,7 +3946,7 @@ mod atom_trait_dispatch_call_tests {
 
 #[cfg(test)]
 mod deserialize_trait_dispatch_call_tests {
-    use super::{deserialize_trait_dispatch_call, generic_arg};
+    use super::deserialize_trait_dispatch_call;
     use quote::quote;
     use syn::parse_str;
 
@@ -3783,14 +3957,15 @@ mod deserialize_trait_dispatch_call_tests {
     // `extractor_for` (`Kind::Deserialize` /
     // `Kind::OptionalDeserialize` / `Kind::VecDeserialize` /
     // `Kind::OptionalVecDeserialize`). Each arm is now a one-line
-    // delegate onto this helper (modulo a `generic_arg` walk to
-    // extract the inner `T` from `Option<T>` / `Vec<T>` /
-    // `Option<Vec<T>>`); the shared scaffold — thread the inner
-    // `T` verbatim as a UFCS `Self` type, resolve the trait method
-    // `Ident` at the derive's call-site span, emit the fully-
-    // qualified `<T as ::tatara_lisp::domain::DeserializeKwarg>::
-    // <method>(&kw, #key)?` call — lives at ONE substrate
-    // primitive.
+    // delegate onto this helper — post-lift the inner `T` rides
+    // the `Kind` payload the classifier already cached at
+    // [`super::classify_option`] / [`super::classify_vec`], so the
+    // extract site no longer re-walks the outer field type; the
+    // shared scaffold — thread the cached inner `T` verbatim as a
+    // UFCS `Self` type, resolve the trait method `Ident` at the
+    // derive's call-site span, emit the fully-qualified `<T as
+    // ::tatara_lisp::domain::DeserializeKwarg>::<method>(&kw,
+    // #key)?` call — lives at ONE substrate primitive.
     //
     // Post-lift the derive's non-atom emission surface consists of
     // ONE trait-dispatch primitive per axis-family: atom-family
@@ -3877,7 +4052,7 @@ mod deserialize_trait_dispatch_call_tests {
         // Promise 1 (UFCS `Self` TYPE) — the `inner_ty` `TokenStream2`
         // payload rides the emitted `<T as ...>::<method>(&kw, #key)?`
         // as a Rust type verbatim. Sweep four representative shapes
-        // the derive's `generic_arg` walk can produce:
+        // the derive's classifier caches into the `Kind` payload:
         //   - a plain-ident enum (`Severity`)
         //   - a nested-struct (`EscalationStep`)
         //   - a `Vec<T>` inner type (the outer `Kind::VecDeserialize` /
@@ -4042,38 +4217,6 @@ mod deserialize_trait_dispatch_call_tests {
             actual, expected,
             "helper emission must be token-equivalent to the hand-written optional-vec-deserialize UFCS call",
         );
-    }
-
-    // ── generic_arg — inner-type walker used by the derive to unwrap
-    //    `Option<T>` / `Vec<T>` for the UFCS trait dispatch above ─────
-
-    #[test]
-    fn generic_arg_extracts_the_inner_type_for_option_and_vec() {
-        for (outer_src, expected_inner_src) in [
-            ("Option<Severity>", "Severity"),
-            ("Vec<EscalationStep>", "EscalationStep"),
-            ("Option<Vec<Nested>>", "Vec < Nested >"),
-        ] {
-            let outer: syn::Type = parse_str(outer_src).unwrap();
-            let inner = generic_arg(&outer)
-                .unwrap_or_else(|| panic!("generic_arg({outer_src}) must succeed"));
-            let inner_str = quote! { #inner }.to_string();
-            assert_eq!(
-                inner_str, expected_inner_src,
-                "generic_arg({outer_src}) unwrap: expected `{expected_inner_src}`, got `{inner_str}`",
-            );
-        }
-    }
-
-    #[test]
-    fn generic_arg_returns_none_for_path_types_without_generic_args() {
-        // A bare path type like `Severity` has no `<T>` payload,
-        // so `generic_arg` must return `None` — the derive's
-        // `Kind::Deserialize` arm handles this case by threading
-        // the whole field type through unchanged rather than
-        // walking one level in.
-        let bare: syn::Type = parse_str("Severity").unwrap();
-        assert!(generic_arg(&bare).is_none());
     }
 }
 

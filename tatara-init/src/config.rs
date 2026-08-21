@@ -132,14 +132,25 @@ mod tests {
 
     #[test]
     fn empty_definit_parses() {
-        // Note: the tatara-lisp-derive macro currently doesn't honor serde's
-        // per-field `default = "fn"`, so omitted bools come back as `false`.
-        // Callers that care should use `InitConfig::default()` and modify
-        // only what they need, or pass values via the other (typed) API.
+        // The derive honors `#[serde(default = "fn")]` at the missing-
+        // kwarg branch through `SerdeDefault::Path`, so the omitted
+        // `reap-zombies` / `reload-on-sighup` bools call `default_true()`
+        // (their operator-authored initializer) rather than falling
+        // through to `bool::default()` = `false`. Every field with a
+        // per-fn default now surfaces its author-chosen value on the
+        // Lisp side too, matching serde's own semantics byte-for-byte.
         let forms = read(r#"(definit :name "plex-boot")"#).unwrap();
         let c = InitConfig::compile_from_sexp(&forms[0]).unwrap();
         assert_eq!(c.name, "plex-boot");
         assert!(c.services.is_empty());
+        assert!(
+            c.reap_zombies,
+            "reap_zombies must default to true via `default_true`"
+        );
+        assert!(
+            c.reload_on_sighup,
+            "reload_on_sighup must default to true via `default_true`",
+        );
     }
 
     #[test]

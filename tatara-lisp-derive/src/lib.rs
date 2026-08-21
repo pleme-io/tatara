@@ -685,8 +685,8 @@ pub fn derive_tatara_domain(input: TokenStream) -> TokenStream {
     for field in fields {
         let ident = field.ident.as_ref().expect("named field");
         let kebab = snake_to_kebab(&ident.to_string());
-        let has_default = has_serde_default(field);
-        match extractor_for(&field.ty, &kebab, has_default) {
+        let default = serde_default(field);
+        match extractor_for(&field.ty, &kebab, &default) {
             Ok(extract) => field_inits.push(quote! { #ident: #extract }),
             Err(err) => return spanned_compile_error(&field.ty, err),
         }
@@ -1080,24 +1080,116 @@ fn snake_to_kebab(snake: &str) -> String {
     snake.replace('_', "-")
 }
 
-/// Check if the field carries `#[serde(default)]` / `#[serde(default = "…")]`.
-/// We honor serde defaults so missing kwargs fall back to `Default::default()`
-/// — matches the deserialize semantics the field was already authored for.
+/// Typed projection of a field's `#[serde(default[ = "path"])]`
+/// posture — the enum the derive dispatches on when composing the
+/// missing-kwarg fallback expression inside [`extractor_for`].
 ///
-/// Routes through the shared `find_named_sub_key` helper — the same
-/// entry the sibling `extract_keyword` reader uses. The `on_match`
-/// callback is `|_| Ok(())`: we care only whether the `default`
-/// sub-key ident appears anywhere in a `#[serde(...)]` attribute, not
-/// what its optional `= "path"` payload names. The helper closes the
-/// attr-path gate, the sub-key ident match, and the defensive
-/// value-drain across unmatched peers at ONE substrate entry —
-/// rejecting the false positive the pre-lift substring-match
-/// implementation surfaced on `#[serde(rename = "default_val")]` AND
-/// letting `default` appear ANYWHERE in the sub-key list without the
-/// callback stalling at a preceding value-carrying peer's `=`
-/// (pinned as `default_after_other_key_named_value_pair`).
+/// The three variants partition the closed set of authoring shapes
+/// serde honors on a field's `#[serde(default[ = "…"])]` axis, and
+/// dispatch the derive's missing-kwarg branch to the corresponding
+/// initializer expression:
+///
+/// | Variant                | Authored as                        | Missing-kwarg branch                 |
+/// |------------------------|------------------------------------|--------------------------------------|
+/// | [`Self::Absent`]       | (no `#[serde(default)]` attribute) | (no branch; field always required)   |
+/// | [`Self::Trait`]        | `#[serde(default)]`                | `::std::default::Default::default()` |
+/// | [`Self::Path`]         | `#[serde(default = "path")]`       | `path()` — a caller-authored fn      |
+///
+/// Pre-lift the derive collapsed [`Self::Trait`] and [`Self::Path`]
+/// into ONE `has_serde_default(&Field) -> bool` sniffer and emitted
+/// `::std::default::Default::default()` on both, silently dropping the
+/// operator-authored `= "path"` payload — a divergence from serde's
+/// own semantics that tatara-init's config module documents in its
+/// test module as a known workaround (`empty_definit_parses`). Post-
+/// lift the payload rides through the typed [`Self::Path`] variant
+/// into the derive's emitted expression and the workaround dissolves;
+/// every future [`TataraDomain`] author with a `#[serde(default =
+/// "path")]` field inherits the fix mechanically at the derive
+/// boundary rather than as a per-author `.unwrap_or_else(path)` at
+/// the compile_from_args call site.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry) — the
+/// three-way authoring shape becomes a typed enum at the derive's
+/// projection boundary, not a lossy `bool` that drops the
+/// path-payload; the missing-kwarg branch is a typed CONSEQUENCE of
+/// the projection rather than a per-author workaround. THEORY.md
+/// §V.1 (knowable platform) — the derive's missing-kwarg semantics
+/// now match serde's byte-for-byte on the `#[serde(default = "…")]`
+/// axis, so authors reading serde's docs get the semantics the docs
+/// promise without a per-author consultation of the derive's
+/// deviations.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum SerdeDefault {
+    /// No `#[serde(default)]` attribute on the field — a missing
+    /// kwarg surfaces as a hard [`LispError::MissingKwarg`]
+    /// rejection at the derive's typed-entry gate rather than as a
+    /// silent fallback.
+    Absent,
+    /// Bare `#[serde(default)]` — a missing kwarg falls back to
+    /// [`::std::default::Default::default`], matching serde's bare-
+    /// flag semantics.
+    Trait,
+    /// `#[serde(default = "path")]` — a missing kwarg falls back to
+    /// `path()`, matching serde's per-field initializer-fn
+    /// semantics. The `path` slot carries the caller-authored fully-
+    /// qualified path string verbatim.
+    Path(String),
+}
+
+/// Project a field's `#[serde(default[ = "path"])]` attribute posture
+/// into the typed [`SerdeDefault`] variant the derive's missing-kwarg
+/// dispatch branches on.
+///
+/// Routes through the shared [`find_named_sub_key`] helper — the same
+/// entry the sibling [`extract_keyword`] reader uses. The `on_match`
+/// callback captures the `= "path"` payload's optional presence:
+/// `Ok(None)` on the bare-flag `#[serde(default)]` form (`meta.value()`
+/// returns Err), `Ok(Some(path))` on the `#[serde(default = "path")]`
+/// form (payload is a `LitStr`, projected to an owned `String`). The
+/// outer projection then folds the `Option<Option<String>>` return
+/// shape into the typed [`SerdeDefault`] enum:
+///
+/// - `None` (no `default` sub-key found) → [`SerdeDefault::Absent`]
+/// - `Some(None)` (bare flag) → [`SerdeDefault::Trait`]
+/// - `Some(Some(path))` (with payload) → [`SerdeDefault::Path(path)`]
+///
+/// The helper closes the attr-path gate, the sub-key ident match, and
+/// the defensive value-drain across unmatched peers at ONE substrate
+/// entry — matching how [`extract_keyword`] and its sibling
+/// [`has_serde_default`] both compose against the same primitive on
+/// distinct projections.
+fn serde_default(field: &syn::Field) -> SerdeDefault {
+    match find_named_sub_key(&field.attrs, "serde", "default", |meta| {
+        match meta.value() {
+            Ok(value) => parse_lit_str(value).map(Some),
+            Err(_) => Ok(None),
+        }
+    }) {
+        None => SerdeDefault::Absent,
+        Some(None) => SerdeDefault::Trait,
+        Some(Some(path)) => SerdeDefault::Path(path),
+    }
+}
+
+/// Check if the field carries `#[serde(default)]` / `#[serde(default = "…")]`.
+///
+/// One-line delegate to the typed [`serde_default`] projection —
+/// `true` iff the projection returns anything but [`SerdeDefault::Absent`].
+/// Kept as a stable bool-returning surface for the pre-lift test cohort
+/// that only cares about the presence/absence bit; the derive itself
+/// reaches for [`serde_default`] directly to distinguish the
+/// [`SerdeDefault::Trait`] and [`SerdeDefault::Path`] branches at the
+/// missing-kwarg dispatch site inside [`extractor_for`].
+///
+/// The typed [`SerdeDefault`] projection rejects the false positive
+/// the pre-lift substring-match implementation surfaced on
+/// `#[serde(rename = "default_val")]` AND lets `default` appear
+/// ANYWHERE in the sub-key list without the callback stalling at a
+/// preceding value-carrying peer's `=` (pinned as
+/// `default_after_other_key_named_value_pair`).
+#[cfg(test)]
 fn has_serde_default(field: &syn::Field) -> bool {
-    find_named_sub_key(&field.attrs, "serde", "default", |_meta| Ok(())).is_some()
+    !matches!(serde_default(field), SerdeDefault::Absent)
 }
 
 /// The EIGHT numeric-narrowed extractor arms in [`extractor_for`]
@@ -1558,7 +1650,7 @@ fn deserialize_trait_dispatch_call(
     }
 }
 
-fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2, String> {
+fn extractor_for(ty: &Type, key: &str, default: &SerdeDefault) -> Result<TokenStream2, String> {
     let kind = classify(ty);
     let base = match kind {
         // Atom-family scalar-family peers of the atom-family
@@ -1831,13 +1923,28 @@ fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2
             deserialize_trait_dispatch_call("extract_optional_vec_kwarg", inner_ty, key)
         }
     };
-    // Respect `#[serde(default)]` — wrap extractor with a missing-key short-circuit.
-    Ok(if has_default {
-        quote! {
+    // Respect `#[serde(default[ = "path"])]` — wrap extractor with a
+    // missing-key short-circuit dispatched on the typed `SerdeDefault`
+    // projection. The three-way dispatch matches serde's own semantics:
+    // `Absent` requires the kwarg, `Trait` calls `Default::default()`,
+    // `Path("path")` calls the caller-authored `path()` fn. The path
+    // string parses as a `TokenStream2` so a `path::to::fn` operator-
+    // authored dotted path rides through as a fully-qualified callee at
+    // the emit site — matching how serde's own deserialize codegen
+    // splices the same path into its missing-field branch.
+    Ok(match default {
+        SerdeDefault::Absent => base,
+        SerdeDefault::Trait => quote! {
             if kw.contains_key(#key) { #base } else { ::std::default::Default::default() }
+        },
+        SerdeDefault::Path(path) => {
+            let path_ts: TokenStream2 = path
+                .parse()
+                .map_err(|e| format!("invalid #[serde(default = {path:?})] path: {e}"))?;
+            quote! {
+                if kw.contains_key(#key) { #base } else { #path_ts() }
+            }
         }
-    } else {
-        base
     })
 }
 
@@ -5587,6 +5694,174 @@ mod has_serde_default_tests {
             pub name: String
         "#;
         assert!(has_serde_default(&field(raw)));
+    }
+}
+
+#[cfg(test)]
+mod serde_default_tests {
+    use super::{serde_default, SerdeDefault};
+    use syn::{parse::Parser, Field};
+
+    // The `(&syn::Field -> SerdeDefault)` projection is the derive's
+    // PRIVATE typed sniffer for the field's `#[serde(default[ = "path"])]`
+    // posture. Where the sibling `has_serde_default` collapses the
+    // three-way authoring shape into a bool (`Absent` → false, `Trait`
+    // and `Path(_)` both → true), this typed projection preserves
+    // the `Path(_)` payload the derive threads into the missing-kwarg
+    // dispatch branch inside `extractor_for` — the operator-authored
+    // `= "path"` initializer fn.
+    //
+    // Pre-lift the payload was silently dropped: every `#[serde(default
+    // = "path")]` field emitted `::std::default::Default::default()` at
+    // the missing-kwarg branch regardless of the operator-chosen path,
+    // diverging from serde's own semantics (a known workaround
+    // documented in tatara-init/src/config.rs's `empty_definit_parses`
+    // test). Post-lift the payload rides through the typed
+    // `SerdeDefault::Path(path)` variant and `extractor_for` splices
+    // `#path_ts()` into the missing-kwarg branch; the derive's
+    // missing-kwarg semantics now match serde's byte-for-byte.
+    //
+    // A regression at `serde_default` silently swaps the missing-
+    // kwarg branch on every consumer with a `#[serde(default[ = "…"])]`
+    // field: an `Absent → Trait` false-positive regresses a required
+    // field to a silent `Default::default()` slot; a `Trait → Absent`
+    // false-negative regresses a legitimate default to a hard
+    // `LispError::MissingKwarg`; a `Path(_) → Trait` payload-drop
+    // regresses a serde-honoring field to `Default::default()`
+    // (silently dropping the operator-chosen initializer).
+
+    fn field(src: &str) -> Field {
+        Field::parse_named
+            .parse_str(src)
+            .expect("valid named-field syntax")
+    }
+
+    #[test]
+    fn field_with_no_attributes_projects_to_absent() {
+        // Bread-and-butter: a bare `pub name: String` field carries NO
+        // `#[serde(...)]` attribute → the projection returns `Absent`,
+        // and `extractor_for` emits the raw extractor with no missing-
+        // kwarg short-circuit at all (a missing kwarg surfaces as
+        // `LispError::MissingKwarg`).
+        assert_eq!(
+            serde_default(&field("pub name: String")),
+            SerdeDefault::Absent
+        );
+    }
+
+    #[test]
+    fn bare_serde_default_form_projects_to_trait_variant() {
+        // The bare `#[serde(default)]` form — the callback finds a
+        // `default` ident with no `= <expr>` payload; `meta.value()`
+        // returns Err, the callback returns `Ok(None)`, the outer
+        // projection folds to `SerdeDefault::Trait`. `extractor_for`
+        // emits `if kw.contains_key(#key) { #base } else {
+        // ::std::default::Default::default() }`.
+        assert_eq!(
+            serde_default(&field("#[serde(default)] pub name: Vec<String>")),
+            SerdeDefault::Trait,
+        );
+    }
+
+    #[test]
+    fn serde_default_with_string_path_projects_to_path_variant_carrying_the_operator_authored_path()
+    {
+        // The `#[serde(default = "path::to::fn")]` form — the callback
+        // finds a `default` ident followed by `= "path::to::fn"`;
+        // `meta.value()` returns Ok, `parse_lit_str` projects the
+        // LitStr payload to the owned `String` "path::to::fn", the
+        // outer projection folds to `SerdeDefault::Path("path::to::fn")`.
+        // `extractor_for` splices `path::to::fn()` into the missing-
+        // kwarg branch. Pins the path-preservation contract: the
+        // operator-authored initializer path rides through VERBATIM,
+        // not dropped and not silently rewritten.
+        assert_eq!(
+            serde_default(&field(
+                r#"#[serde(default = "path::to::fn")] pub name: String"#
+            )),
+            SerdeDefault::Path("path::to::fn".to_string()),
+        );
+    }
+
+    #[test]
+    fn serde_default_with_bare_ident_path_projects_to_path_variant() {
+        // Common shape: `#[serde(default = "default_true")]` — a bare
+        // ident (not a dotted path). Projects to `Path("default_true")`.
+        // Peer of the tatara-init workaround site: `default_true` is
+        // the exact fn name tatara-init/src/config.rs binds through
+        // this attribute for `reap_zombies`, `reload_on_sighup`, etc.
+        assert_eq!(
+            serde_default(&field(
+                r#"#[serde(default = "default_true")] pub reap: bool"#
+            )),
+            SerdeDefault::Path("default_true".to_string()),
+        );
+    }
+
+    #[test]
+    fn serde_default_path_and_trait_are_distinct_variants_not_collapsed_to_a_boolean() {
+        // Structural cross-check — the two authoring shapes project to
+        // DISTINCT `SerdeDefault` variants (not collapsed to a shared
+        // bool). A regression that collapsed the two into one variant
+        // would drop the path payload; this test surfaces it at the
+        // projection boundary.
+        let bare = serde_default(&field("#[serde(default)] pub x: String"));
+        let with_path = serde_default(&field(r#"#[serde(default = "f")] pub x: String"#));
+        assert_ne!(bare, with_path);
+        assert_eq!(bare, SerdeDefault::Trait);
+        assert_eq!(with_path, SerdeDefault::Path("f".to_string()));
+    }
+
+    #[test]
+    fn default_after_other_key_named_value_pair_projects_to_trait_variant() {
+        // Peer to the sibling `has_serde_default_tests` test — the
+        // `#[serde(rename = "x", default)]` form threads the default
+        // sub-key through the same value-drain discipline the primitive
+        // owns. Pin the typed variant: the `default` sub-key sits AFTER
+        // a value-carrying `rename` peer; the projection returns
+        // `Trait` (not `Absent`), matching the sibling bool sniffer's
+        // contract.
+        assert_eq!(
+            serde_default(&field(
+                r#"#[serde(rename = "x", default)] pub name: String"#
+            )),
+            SerdeDefault::Trait,
+        );
+    }
+
+    #[test]
+    fn default_path_after_other_key_named_value_pair_projects_to_path_variant() {
+        // The path-payload sibling of the test above — pins that the
+        // typed projection carries the payload through even when the
+        // `default = "fn"` sub-key sits AFTER a value-carrying peer.
+        // The value-drain of the preceding `rename = "x"` peer AND the
+        // typed payload capture of the trailing `default = "fn"` peer
+        // both compose against the shared `find_named_sub_key`
+        // primitive at ONE substrate entry.
+        assert_eq!(
+            serde_default(&field(
+                r#"#[serde(rename = "x", default = "fn")] pub name: String"#
+            )),
+            SerdeDefault::Path("fn".to_string()),
+        );
+    }
+
+    #[test]
+    fn rename_value_containing_default_substring_projects_to_absent() {
+        // Sibling of the `has_serde_default_tests` false-positive
+        // guard — pin that the typed projection ALSO correctly rejects
+        // `#[serde(rename = "default_val")]` at `Absent` (not `Trait`).
+        // A regression that broadened the sub-key matcher to a
+        // substring check would surface here as `Trait` (with a
+        // corrupted "trait" branch inheriting the rename's payload) or
+        // even as `Path("default_val")` (leaking the rename value into
+        // the initializer-fn slot).
+        assert_eq!(
+            serde_default(&field(
+                r#"#[serde(rename = "default_val")] pub name: String"#
+            )),
+            SerdeDefault::Absent,
+        );
     }
 }
 

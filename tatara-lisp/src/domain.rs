@@ -1171,6 +1171,23 @@ pub fn missing_kwarg(key: &str) -> LispError {
 /// primitive. This is it. Future runs that thread `pos: Option<usize>`
 /// from `Sexp` spans add ONE field to the variant; every type-mismatch
 /// site inherits positional rendering with no consumer changes.
+///
+/// Post-sweep, THREE production shape-gate consumers in this module
+/// route DIRECTLY through this primitive:
+/// [`extract_atom`] (composing `kwarg_form(key)` at the scalar-kwarg
+/// path), [`extract_list`] (composing `kwarg_form(key)` at the
+/// outer-list-shape path), and [`AtomKwarg::project_at`] (composing
+/// `kwarg_item_form(key, idx)` at the per-item shape gate) — the two
+/// pre-sweep sugar wrappers [`type_err`] / [`type_err_at`] are demoted
+/// to `#[cfg(test)]` pinning points, matching the same posture
+/// [`range_err`] / [`range_err_at`] carry on the numeric-narrowing
+/// axis after the peer [`range_mismatch`] sweep. Public visibility is
+/// retained so hand-written [`TataraDomain`] impls constructing a
+/// [`LispError::TypeMismatch`] with a custom [`KwargPath`]
+/// (`KwargPath::Slot(_)` for a not-yet-keyed kwargs slot, or a future
+/// third path shape) have ONE substrate entry to route through
+/// rather than re-inlining the struct-literal at their own call site
+/// — mirror of the [`range_mismatch`] admission on the numeric axis.
 #[must_use]
 pub fn type_mismatch(
     form: crate::error::KwargPath,
@@ -1184,6 +1201,23 @@ pub fn type_mismatch(
     }
 }
 
+/// `#[cfg(test)]`: the three production shape-gate consumers
+/// ([`extract_atom`], [`extract_list`], [`AtomKwarg::project_at`]) now
+/// bind directly to the KwargPath-parameterized shape gate
+/// [`type_mismatch`] one abstraction level up. This wrapper stays as a
+/// test-only pinning point for
+/// `type_mismatch_binds_wrappers_and_the_typed_payload_to_one_substrate_entry`
+/// so a regression that hand-rolled a [`LispError::TypeMismatch`]
+/// struct-literal outside [`type_mismatch`] would still register at
+/// that test — but no production path calls it. Post-lift the
+/// production shape-mismatch surface has ONE named substrate entry
+/// ([`type_mismatch`]), and every axis (scalar, per-item, slot) rides
+/// its [`KwargPath`] parameter, not per-wrapper sugar — peer to the
+/// same sweep [`range_err`] / [`range_err_at`] carry on the
+/// numeric-narrowing rejection axis (both were demoted to test-only
+/// after [`narrow_or_range_err`] / [`narrow_or_range_err_at`] rebound
+/// directly against [`narrow_or_range_mismatch`]).
+#[cfg(test)]
 fn type_err(key: &str, expected: ExpectedKwargShape, got: &Sexp) -> LispError {
     type_mismatch(kwarg_form(key), expected, got)
 }
@@ -1191,14 +1225,16 @@ fn type_err(key: &str, expected: ExpectedKwargShape, got: &Sexp) -> LispError {
 /// Item-indexed sibling of `type_err` — pairs `kwarg_item_form` with
 /// `type_mismatch` so a per-item failure inside a list-typed kwarg names
 /// `KwargPath::Item { key, idx }` plus the structural `expected`/`got` shape.
-/// Bound through the atom-family per-axis shape gate
-/// [`AtomKwarg::project_at`] (the one owner of the
-/// `Self::project(sexp).ok_or_else(|| type_err_at(key, idx, Self::SHAPE,
-/// sexp))` composition every atom-projection list-family extractor —
-/// `extract_string_list`, `extract_narrowed_list` — routes through).
-/// Future per-item type-mismatch sites bind through [`AtomKwarg::project_at`]
-/// rather than re-inlining the composition; direct calls stay for the
-/// bespoke element-shape paths outside the atom family.
+///
+/// `#[cfg(test)]`: same posture as its scalar sibling [`type_err`]
+/// above — the production per-item shape-gate consumer
+/// [`AtomKwarg::project_at`] now binds directly to
+/// [`type_mismatch`], and this wrapper stays only for the pinning
+/// test that asserts the KwargPath-parameterized struct-literal
+/// primitive [`type_mismatch`] has one construction site — peer to
+/// the same sweep [`range_err_at`] carries on the numeric-narrowing
+/// rejection axis.
+#[cfg(test)]
 fn type_err_at(key: &str, idx: usize, expected: ExpectedKwargShape, got: &Sexp) -> LispError {
     type_mismatch(kwarg_item_form(key, idx), expected, got)
 }
@@ -1383,7 +1419,7 @@ where
     F: FnOnce(&'a Sexp) -> Option<T>,
 {
     let v = required(kw, key)?;
-    project(v).ok_or_else(|| type_err(key, expected, v))
+    project(v).ok_or_else(|| type_mismatch(kwarg_form(key), expected, v))
 }
 
 /// Optional sibling of `extract_atom` — collapses the four byte-identical
@@ -1527,7 +1563,9 @@ where
     let Some(v) = optional(kw, key) else {
         return Ok(Vec::new());
     };
-    let list = v.as_list().ok_or_else(|| type_err(key, list_shape, v))?;
+    let list = v
+        .as_list()
+        .ok_or_else(|| type_mismatch(kwarg_form(key), list_shape, v))?;
     list.iter()
         .enumerate()
         .map(|(idx, e)| item(idx, e))
@@ -1919,7 +1957,8 @@ pub trait AtomKwarg<'a>: Sized {
     /// through ONE trait default into every atom-family per-item
     /// projection site with no per-caller edit.
     fn project_at(key: &str, idx: usize, sexp: &'a Sexp) -> Result<Self> {
-        Self::project(sexp).ok_or_else(|| type_err_at(key, idx, Self::SHAPE, sexp))
+        Self::project(sexp)
+            .ok_or_else(|| type_mismatch(kwarg_item_form(key, idx), Self::SHAPE, sexp))
     }
 
     /// The owned counterpart of [`Self`] used as the element type when
@@ -10958,6 +10997,114 @@ mod tests {
             ),
             "expected outer-shape TypeMismatch at KwargPath::Named(\"tags\"), got {err:?}"
         );
+    }
+
+    /// Sibling of
+    /// `range_mismatch_binds_wrappers_and_the_typed_payload_to_one_substrate_entry`
+    /// on the shape-mismatch axis. Pins the sweep result: the two
+    /// pre-existing sugar wrappers ([`type_err`] on
+    /// `KwargPath::Named`, [`type_err_at`] on `KwargPath::Item`) and
+    /// direct [`type_mismatch`] construction all produce the same
+    /// STRUCTURAL `LispError::TypeMismatch` variant slot-for-slot on
+    /// their axis's [`KwargPath`] shape. Post-sweep the three
+    /// production shape-gate consumers ([`extract_atom`],
+    /// [`extract_list`], [`AtomKwarg::project_at`]) route directly
+    /// through [`type_mismatch`] with the caller-supplied
+    /// [`KwargPath`] rather than the wrapper sugar; this test locks
+    /// the byte-identity between the two forms so a regression that
+    /// hand-rolled a [`LispError::TypeMismatch`] struct-literal
+    /// outside the primitive would surface here rather than as a
+    /// silent shape drift at every downstream shape-gate consumer.
+    ///
+    /// Also pins the `KwargPath::Slot` public-visibility posture the
+    /// primitive admits by design (mirroring the sibling
+    /// [`range_mismatch`] admission on the numeric-narrowing axis)
+    /// so hand-written [`TataraDomain`] impls constructing a
+    /// [`LispError::TypeMismatch`] at a not-yet-keyed positional
+    /// path have the SAME substrate entry the two wrapper-covered
+    /// axes route through.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// the primitive is the ONE substrate entry the three production
+    /// shape-gate consumers now route through, matching the same
+    /// posture the peer [`range_mismatch`] carries after its own
+    /// wrapper sweep. THEORY.md §V.1 — knowable platform; the
+    /// typed `(form, expected, got)` payload rides ONE primitive so a
+    /// future span-carrying promotion of [`KwargPath`] lands at ONE
+    /// site and every consumer inherits mechanically.
+    #[test]
+    fn type_mismatch_binds_wrappers_and_the_typed_payload_to_one_substrate_entry() {
+        // Helper: pattern-match against `LispError::TypeMismatch`
+        // and return the three typed slots by value. `LispError` does
+        // not derive `PartialEq` (the `Sexp` payload in
+        // [`LispError::TypeMismatch`]-family variants precludes it in
+        // general), so the test compares the STRUCTURAL slots rather
+        // than the variants directly.
+        fn parts(err: &LispError) -> (&KwargPath, ExpectedKwargShape, SexpShape) {
+            let LispError::TypeMismatch {
+                form,
+                expected,
+                got,
+            } = err
+            else {
+                panic!("expected TypeMismatch, got {err:?}");
+            };
+            (form, *expected, *got)
+        }
+
+        // (1) `KwargPath::Named` — the scalar-kwarg path
+        //     `type_err("ctx", ...)` composes.
+        let sexp_int = Sexp::int(7);
+        let via_primitive = type_mismatch(kwarg_form("ctx"), ExpectedKwargShape::String, &sexp_int);
+        let via_wrapper = type_err("ctx", ExpectedKwargShape::String, &sexp_int);
+        let (p_form, p_expected, p_got) = parts(&via_primitive);
+        let (w_form, w_expected, w_got) = parts(&via_wrapper);
+        assert_eq!(p_form, w_form);
+        assert_eq!(p_expected, w_expected);
+        assert_eq!(p_got, w_got);
+        assert_eq!(p_form, &KwargPath::named("ctx"));
+        assert_eq!(p_expected, ExpectedKwargShape::String);
+        assert_eq!(p_got, SexpShape::Int);
+
+        // (2) `KwargPath::Item` — the per-item path
+        //     `type_err_at("tags", 1, ...)` composes.
+        let sexp_int2 = Sexp::int(7);
+        let via_primitive_at = type_mismatch(
+            kwarg_item_form("tags", 1),
+            ExpectedKwargShape::String,
+            &sexp_int2,
+        );
+        let via_wrapper_at = type_err_at("tags", 1, ExpectedKwargShape::String, &sexp_int2);
+        let (p_form, p_expected, p_got) = parts(&via_primitive_at);
+        let (w_form, w_expected, w_got) = parts(&via_wrapper_at);
+        assert_eq!(p_form, w_form);
+        assert_eq!(p_expected, w_expected);
+        assert_eq!(p_got, w_got);
+        assert_eq!(p_form, &KwargPath::item("tags", 1));
+
+        // (3) `KwargPath::Slot` — the not-yet-keyed-slot path the
+        //     primitive's public surface admits by design (mirrors
+        //     [`range_mismatch`]'s admission of `kwargs_pos_form`).
+        let sexp_int3 = Sexp::int(0);
+        let via_slot = type_mismatch(kwargs_pos_form(3), ExpectedKwargShape::Keyword, &sexp_int3);
+        let (form, expected, got) = parts(&via_slot);
+        assert_eq!(form, &KwargPath::Slot(3));
+        assert_eq!(expected, ExpectedKwargShape::Keyword);
+        assert_eq!(got, SexpShape::Int);
+
+        // (4) `got` axis — the primitive stores the `SexpShape`
+        //     projection verbatim, no coercion between shape
+        //     variants. A regression that swapped the `got` variant
+        //     (a String value accidentally projected as Int) would
+        //     surface here.
+        let sexp_str = Sexp::string("scalar");
+        let string_via_primitive = type_mismatch(
+            kwarg_form("tags"),
+            ExpectedKwargShape::ListOfStrings,
+            &sexp_str,
+        );
+        let (_, _, got) = parts(&string_via_primitive);
+        assert_eq!(got, SexpShape::String);
     }
 
     #[test]

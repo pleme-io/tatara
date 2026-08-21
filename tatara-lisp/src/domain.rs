@@ -3052,45 +3052,79 @@ where
     optional_from_required(kw, key, extract_narrowed::<W, T>)
 }
 
-/// Required integer kwarg projected into the field's own width —
-/// one-line delegate to `<T as NarrowNumeric>::extract_narrowed_kwarg`,
-/// whose trait default composes `(T::Wide = i64, T)` through
-/// [`extract_narrowed`]. The narrowing replacement for
-/// `extract_int(&kw, key)? as T`. The `T: NarrowNumeric<Wide = i64>`
-/// bound pins the axis identity at rustc time — a caller cannot
-/// accidentally invoke this wrapper against a float-axis narrow width
-/// (which impls `NarrowNumeric<Wide = f64>`).
-pub fn extract_int_narrowed<T: NarrowNumeric<Wide = i64>>(kw: &Kwargs<'_>, key: &str) -> Result<T> {
+/// `#[cfg(test)]`: the derive's `Kind::{Int,Float}` /
+/// `Kind::{OptionalInt,OptionalFloat}` arms no longer route through
+/// these four axis-typed public wrapper names — the two axes now
+/// collapse onto ONE `narrow_trait_dispatch_call("extract_narrowed_
+/// kwarg", …)` / `("extract_optional_narrowed_kwarg", …)` emit in
+/// `tatara-lisp-derive` (see `Kind::Int(_) | Kind::Float(_)` and
+/// `Kind::OptionalInt(_) | Kind::OptionalFloat(_)` at the derive's
+/// `emit_extractor_call` site), which dispatches directly to
+/// `<T as NarrowNumeric>::extract_narrowed_kwarg` /
+/// `_optional_narrowed_kwarg`. Post-sweep the four scalar-narrowed
+/// axis-typed wrappers are dead in production; they stay module-
+/// private + test-only as pinning fixtures for the four sibling
+/// delegation-agreement tests
+/// (`extract_star_narrowed_delegates_agree_with_the_generic_
+/// primitives_at_both_verdicts` and its optional peer
+/// `extract_optional_narrowed_delegates_through_optional_from_
+/// required_across_the_four_verdicts`), so a regression that
+/// re-introduced a fifth axis-typed wrapper somewhere else would
+/// still register at those tests — but no production path calls
+/// them. Peer to the same sweep [`type_err`] / [`type_err_at`]
+/// carried on the shape-mismatch axis (both demoted after
+/// [`type_mismatch`]'s KwargPath parameter absorbed the axis) and
+/// [`narrow_or_range_err`] / [`narrow_or_range_err_at`] carried
+/// on the numeric-narrowing rejection axis (both demoted after
+/// [`narrow_or_range_mismatch`]'s KwargPath parameter absorbed
+/// the per-item vs. scalar axis). The `T: NarrowNumeric<Wide =
+/// i64>` bound pins the axis at rustc time — a caller cannot
+/// accidentally invoke this wrapper against a float-axis narrow
+/// width (which impls `NarrowNumeric<Wide = f64>`).
+#[cfg(test)]
+fn extract_int_narrowed<T: NarrowNumeric<Wide = i64>>(kw: &Kwargs<'_>, key: &str) -> Result<T> {
     <T as NarrowNumeric>::extract_narrowed_kwarg(kw, key)
 }
 
-/// `Option` sibling of [`extract_int_narrowed`] — one-line delegate
-/// to `<T as NarrowNumeric>::extract_optional_narrowed_kwarg`, whose
+/// `#[cfg(test)]`: `Option` sibling of [`extract_int_narrowed`] with
+/// the SAME demotion posture — the derive's
+/// `Kind::OptionalInt(_) | Kind::OptionalFloat(_)` arm dispatches
+/// through `<T as NarrowNumeric>::extract_optional_narrowed_kwarg`,
+/// so this wrapper is dead in production and stays test-only for
+/// the delegation-agreement pin. Delegates through
+/// `<T as NarrowNumeric>::extract_optional_narrowed_kwarg`, whose
 /// trait default composes `(T::Wide = i64, T)` through
 /// [`extract_optional_narrowed`].
-pub fn extract_optional_int_narrowed<T: NarrowNumeric<Wide = i64>>(
+#[cfg(test)]
+fn extract_optional_int_narrowed<T: NarrowNumeric<Wide = i64>>(
     kw: &Kwargs<'_>,
     key: &str,
 ) -> Result<Option<T>> {
     <T as NarrowNumeric>::extract_optional_narrowed_kwarg(kw, key)
 }
 
-/// Float-axis sibling of [`extract_int_narrowed`] — one-line delegate
-/// to `<T as NarrowNumeric>::extract_narrowed_kwarg`, whose trait
-/// default composes `(T::Wide = f64, T)` through [`extract_narrowed`].
-/// The narrowing replacement for `extract_float(&kw, key)? as T`.
-pub fn extract_float_narrowed<T: NarrowNumeric<Wide = f64>>(
-    kw: &Kwargs<'_>,
-    key: &str,
-) -> Result<T> {
+/// `#[cfg(test)]`: Float-axis sibling of [`extract_int_narrowed`] with
+/// the SAME demotion posture — the derive's
+/// `Kind::Int(_) | Kind::Float(_)` arm collapses both axes onto ONE
+/// `<T as NarrowNumeric>::extract_narrowed_kwarg` trait dispatch,
+/// so this wrapper is dead in production and stays test-only for
+/// the delegation-agreement pin. Delegates through
+/// `<T as NarrowNumeric>::extract_narrowed_kwarg`, whose trait
+/// default composes `(T::Wide = f64, T)` through
+/// [`extract_narrowed`].
+#[cfg(test)]
+fn extract_float_narrowed<T: NarrowNumeric<Wide = f64>>(kw: &Kwargs<'_>, key: &str) -> Result<T> {
     <T as NarrowNumeric>::extract_narrowed_kwarg(kw, key)
 }
 
-/// `Option` sibling of [`extract_float_narrowed`] — one-line delegate
-/// to `<T as NarrowNumeric>::extract_optional_narrowed_kwarg`, whose
-/// trait default composes `(T::Wide = f64, T)` through
-/// [`extract_optional_narrowed`].
-pub fn extract_optional_float_narrowed<T: NarrowNumeric<Wide = f64>>(
+/// `#[cfg(test)]`: `Option` sibling of [`extract_float_narrowed`] with
+/// the SAME demotion posture — the derive's
+/// `Kind::OptionalInt(_) | Kind::OptionalFloat(_)` arm collapses
+/// both axes onto ONE `<T as NarrowNumeric>::extract_optional_
+/// narrowed_kwarg` trait dispatch, so this wrapper is dead in
+/// production and stays test-only for the delegation-agreement pin.
+#[cfg(test)]
+fn extract_optional_float_narrowed<T: NarrowNumeric<Wide = f64>>(
     kw: &Kwargs<'_>,
     key: &str,
 ) -> Result<Option<T>> {
@@ -3322,69 +3356,90 @@ where
     optional_from_required(kw, key, extract_narrowed_list::<W, T>)
 }
 
-/// `Vec<T>` integer-list field projected into the item's own width —
-/// one-line delegate to [`extract_narrowed_list`] at the `W = i64`
-/// axis. The list-family peer of [`extract_int_narrowed`] on the
-/// per-item numeric-narrowing path. Absent kwarg returns
-/// `Ok(Vec::new())` (the same posture [`extract_list`] gives every
-/// list-typed kwarg — an absent list is the empty list, never an
-/// error); a present list with a per-item out-of-range value rejects
-/// with `LispError::KwargOutOfRange { form: KwargPath::Item { key,
-/// idx }, .. }`.
-pub fn extract_int_list_narrowed<T: NarrowNumeric<Wide = i64>>(
-    kw: &Kwargs<'_>,
-    key: &str,
-) -> Result<Vec<T>> {
-    <T as NarrowNumeric>::extract_narrowed_list_kwarg(kw, key)
-}
-
-/// Float-axis sibling of [`extract_int_list_narrowed`] — one-line
-/// delegate to [`extract_narrowed_list`] at the `W = f64` axis. The
-/// list-family peer of [`extract_float_narrowed`] on the per-item
-/// numeric-narrowing path. Same absent-list / present-list semantics
-/// as [`extract_int_list_narrowed`]; the rejection shape on a
-/// per-item lossy-to-inf overflow (`1.0e300 → f32`) is
+/// `#[cfg(test)]`: list-family peer of [`extract_int_narrowed`]'s
+/// scalar demotion above — the derive's
+/// `Kind::VecInt(_) | Kind::VecFloat(_)` arm collapses both axes onto
+/// ONE `narrow_trait_dispatch_call("extract_narrowed_list_kwarg", …)`
+/// emit in `tatara-lisp-derive` (see the shared match arm at
+/// `emit_extractor_call`), which dispatches directly to
+/// `<T as NarrowNumeric>::extract_narrowed_list_kwarg`. Post-sweep
+/// the four list-narrowed axis-typed wrappers are dead in
+/// production; they stay module-private + test-only as pinning
+/// fixtures for the two sibling delegation-agreement tests
+/// (`extract_star_list_narrowed_delegates_agree_with_the_generic_
+/// list_primitive` and its optional peer
+/// `extract_star_optional_list_narrowed_delegates_agree_with_the_
+/// generic_primitive`). Absent kwarg returns `Ok(Vec::new())` (the
+/// same posture [`extract_list`] gives every list-typed kwarg — an
+/// absent list is the empty list, never an error); a present list
+/// with a per-item out-of-range value rejects with
 /// `LispError::KwargOutOfRange { form: KwargPath::Item { key, idx },
-/// target: NumericWidth::F32, value: NumericLiteral::Float(1.0e300),
 /// .. }`.
-pub fn extract_float_list_narrowed<T: NarrowNumeric<Wide = f64>>(
+#[cfg(test)]
+fn extract_int_list_narrowed<T: NarrowNumeric<Wide = i64>>(
     kw: &Kwargs<'_>,
     key: &str,
 ) -> Result<Vec<T>> {
     <T as NarrowNumeric>::extract_narrowed_list_kwarg(kw, key)
 }
 
-/// `Option<Vec<T>>` integer-list field projected into the item's own
-/// width — one-line delegate to [`extract_optional_narrowed_list`]
-/// at the `W = i64` axis. The list-family peer of
-/// [`extract_optional_int_narrowed`] on the present-vs-absent
-/// axis, and the numeric-narrowing peer of
-/// [`extract_optional_bool_list`] on the optional-vec atom-family
-/// surface. Absent kwarg returns `Ok(None)`; present empty list
-/// returns `Ok(Some(Vec::new()))`; present list with a per-item
-/// out-of-range value rejects with
+/// `#[cfg(test)]`: Float-axis sibling of [`extract_int_list_narrowed`]
+/// with the SAME demotion posture — the derive's
+/// `Kind::VecInt(_) | Kind::VecFloat(_)` arm collapses both axes onto
+/// ONE `<T as NarrowNumeric>::extract_narrowed_list_kwarg` trait
+/// dispatch, so this wrapper is dead in production and stays test-
+/// only for the list-family delegation-agreement pin. Same absent-
+/// list / present-list semantics as [`extract_int_list_narrowed`];
+/// the rejection shape on a per-item lossy-to-inf overflow
+/// (`1.0e300 → f32`) is `LispError::KwargOutOfRange { form:
+/// KwargPath::Item { key, idx }, target: NumericWidth::F32, value:
+/// NumericLiteral::Float(1.0e300), .. }`.
+#[cfg(test)]
+fn extract_float_list_narrowed<T: NarrowNumeric<Wide = f64>>(
+    kw: &Kwargs<'_>,
+    key: &str,
+) -> Result<Vec<T>> {
+    <T as NarrowNumeric>::extract_narrowed_list_kwarg(kw, key)
+}
+
+/// `#[cfg(test)]`: `Option<Vec<T>>` peer of the two required-list
+/// demotions above — the derive's
+/// `Kind::OptionalVecInt(_) | Kind::OptionalVecFloat(_)` arm
+/// collapses both axes onto ONE `<T as NarrowNumeric>::
+/// extract_optional_narrowed_list_kwarg` trait dispatch, so this
+/// wrapper is dead in production and stays test-only for the
+/// optional-list delegation-agreement pin. Absent kwarg returns
+/// `Ok(None)`; present empty list returns `Ok(Some(Vec::new()))`;
+/// present list with a per-item out-of-range value rejects with
 /// `LispError::KwargOutOfRange { form: KwargPath::Item { key, idx },
 /// target, value }` — the SAME rejection shape the required peer
 /// [`extract_int_list_narrowed`] emits, only wrapped in the
 /// `Option` layer for a present-vs-decoded return path.
-pub fn extract_optional_int_list_narrowed<T: NarrowNumeric<Wide = i64>>(
+#[cfg(test)]
+fn extract_optional_int_list_narrowed<T: NarrowNumeric<Wide = i64>>(
     kw: &Kwargs<'_>,
     key: &str,
 ) -> Result<Option<Vec<T>>> {
     <T as NarrowNumeric>::extract_optional_narrowed_list_kwarg(kw, key)
 }
 
-/// Float-axis sibling of [`extract_optional_int_list_narrowed`] —
-/// one-line delegate to [`extract_optional_narrowed_list`] at the
-/// `W = f64` axis. Same absent / present-empty / present-decoded
-/// semantics as its int-axis peer; the rejection shape on a per-
-/// item lossy-to-inf overflow (`1.0e300 → f32`) is
+/// `#[cfg(test)]`: Float-axis sibling of
+/// [`extract_optional_int_list_narrowed`] with the SAME demotion
+/// posture — the derive's
+/// `Kind::OptionalVecInt(_) | Kind::OptionalVecFloat(_)` arm
+/// collapses both axes onto ONE `<T as NarrowNumeric>::extract_
+/// optional_narrowed_list_kwarg` trait dispatch, so this wrapper is
+/// dead in production and stays test-only for the optional-list
+/// delegation-agreement pin. Same absent / present-empty /
+/// present-decoded semantics as its int-axis peer; the rejection
+/// shape on a per-item lossy-to-inf overflow (`1.0e300 → f32`) is
 /// `LispError::KwargOutOfRange { form: KwargPath::Item { key, idx },
 /// target: NumericWidth::F32, value: NumericLiteral::Float(1.0e300),
 /// .. }` — the SAME rejection shape the required peer
 /// [`extract_float_list_narrowed`] emits, only wrapped in the
 /// `Option` layer.
-pub fn extract_optional_float_list_narrowed<T: NarrowNumeric<Wide = f64>>(
+#[cfg(test)]
+fn extract_optional_float_list_narrowed<T: NarrowNumeric<Wide = f64>>(
     kw: &Kwargs<'_>,
     key: &str,
 ) -> Result<Option<Vec<T>>> {
@@ -6618,6 +6673,21 @@ mod tests {
             extract_narrowed::<f64, f32>(&float_ok_kw, "scale").unwrap(),
         );
         assert!((a - b).abs() < f32::EPSILON);
+        // Optional peer on the float axis — closes the four-wrapper
+        // Cartesian product ({required, optional} × {int, float})
+        // that pre-sweep the test only covered three of four for.
+        // Post-lift no production caller reaches
+        // `extract_optional_float_narrowed`; this pin is the sole
+        // consumer that keeps its delegation identity a testable
+        // invariant.
+        let (opt_a, opt_b) = (
+            extract_optional_float_narrowed::<f32>(&float_ok_kw, "scale").unwrap(),
+            extract_optional_narrowed::<f64, f32>(&float_ok_kw, "scale").unwrap(),
+        );
+        assert!(
+            matches!((opt_a, opt_b), (Some(x), Some(y)) if (x - y).abs() < f32::EPSILON),
+            "optional float-narrowed wrapper and generic must both bind Some(_) to the same narrowed value",
+        );
 
         // Rejecting, int axis — same `KwargOutOfRange { target, value }`
         // pair through either surface.

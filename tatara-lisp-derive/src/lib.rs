@@ -1371,15 +1371,12 @@ fn atom_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) -> T
     }
 }
 
-/// The SIX atom-family scalar and universal-serde extractor arms in
+/// The FOUR universal-serde-fallthrough extractor arms in
 /// [`extractor_for`] that route through a substrate extractor by its
-/// bare name (no turbofish, no numeric-narrowing width) —
-/// `Kind::Bool`, `Kind::OptionalBool`, `Kind::Deserialize`,
-/// `Kind::OptionalDeserialize`, `Kind::VecDeserialize`,
-/// `Kind::OptionalVecDeserialize` — plus the two `Kind::String` /
-/// `Kind::OptionalString` arms that compose it with a per-axis
-/// owned-`String` post-conversion — each emit the SAME
-/// single-primitive composition:
+/// bare name (no turbofish, no numeric-narrowing width, no trait
+/// dispatch) — `Kind::Deserialize`, `Kind::OptionalDeserialize`,
+/// `Kind::VecDeserialize`, `Kind::OptionalVecDeserialize` — each
+/// emit the SAME single-primitive composition:
 ///
 /// ```ignore
 /// quote! {
@@ -1387,15 +1384,24 @@ fn atom_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) -> T
 /// }
 /// ```
 ///
-/// where `<extractor>` is one of six axis-mode-suffixed function names
-/// in `tatara_lisp::domain` (`extract_string` / `extract_optional_string`
-/// / `extract_bool` / `extract_optional_bool` / `extract_via_serde` /
-/// `extract_vec_via_serde` / …). Pre-lift the arms each hand-wrote a
-/// two-line `quote! { ::tatara_lisp::domain::<name>(&kw, #key)? }` at
-/// ONE derive call site — a duplicated one-step (resolve the substrate
+/// where `<extractor>` is one of four universal-serde-fallthrough
+/// function names in `tatara_lisp::domain` (`extract_via_serde` /
+/// `extract_optional_via_serde` / `extract_vec_via_serde` /
+/// `extract_optional_vec_via_serde`). Pre-lift the arms each
+/// hand-wrote a two-line
+/// `quote! { ::tatara_lisp::domain::<name>(&kw, #key)? }` at ONE
+/// derive call site — a duplicated one-step (resolve the substrate
 /// `Ident`, wrap it in the arg-list call) that recurred well past the
 /// PRIME-DIRECTIVE ≥2 threshold at the same match dispatch as its
-/// numeric-narrowed and atom-list-family peers.
+/// numeric-narrowed and atom-family peers. Post the atom-family
+/// scalar-family lift the FOUR atom-family scalar arms
+/// (`Kind::String` / `Kind::OptionalString` / `Kind::Bool` /
+/// `Kind::OptionalBool`) and the FOUR atom-family list-family arms
+/// (`Kind::VecString` / `Kind::OptionalVecString` / `Kind::VecBool` /
+/// `Kind::OptionalVecBool`) no longer route through this helper —
+/// the derive dispatches those eight arms through
+/// [`atom_trait_dispatch_call`] with `T ∈ {&str, bool}` picking the
+/// axis-typed trait impl at rustc time.
 ///
 /// Post-lift the scaffold lives here at ONE substrate entry as the
 /// non-trait-dispatched peer of [`narrow_trait_dispatch_call`] /
@@ -1405,12 +1411,9 @@ fn atom_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) -> T
 /// line 185 and [`narrow_trait_dispatch_call`] /
 /// [`atom_trait_dispatch_call`] themselves already use) and emits the
 /// fully-qualified `::tatara_lisp::domain::<extractor>(&kw, #key)?`
-/// call every non-trait-dispatched arm shares. Each of the six
+/// call every non-trait-dispatched arm shares. Each of the four
 /// non-trait-dispatched arms is now a ONE-LINE delegate onto this
-/// helper; the two `Kind::String` / `Kind::OptionalString` arms
-/// compose the delegate with a per-axis owned-`String`
-/// post-conversion (`.to_string()` /
-/// `.map(::std::string::String::from)`).
+/// helper.
 ///
 /// Peer to [`narrow_trait_dispatch_call`] on the numeric-narrowing axis:
 /// both traits share the same emission skeleton (resolve extractor
@@ -1469,13 +1472,30 @@ fn unqualified_extractor_call(extractor: &'static str, key: &str) -> TokenStream
 fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2, String> {
     let kind = classify(ty);
     let base = match kind {
-        Kind::String => {
-            let call = unqualified_extractor_call("extract_string", key);
-            quote! { #call.to_string() }
-        }
+        // Atom-family scalar-family peers of the atom-family
+        // list-family arms below — both the string axis
+        // (`Kind::String` / `Kind::OptionalString`) and the bool
+        // axis (`Kind::Bool` / `Kind::OptionalBool`, further below)
+        // now dispatch through `<T as AtomKwarg<'_>>::
+        // extract_owned_kwarg` / `extract_optional_owned_kwarg`
+        // with `T ∈ {&str, bool}` picking the axis-typed trait impl
+        // at rustc time. Pre-lift the string-axis arms hand-composed
+        // `extract_string(&kw, key)?.to_string()` /
+        // `extract_optional_string(&kw, key)?.map(String::from)` at
+        // the derive call site — the `.to_string()` /
+        // `.map(String::from)` owning-lift fold restated the
+        // string-axis's `<&'a str>::Owned = String` associated-type
+        // binding once per string-axis field per derive. Post-lift
+        // the fold rides through `<&'a str as AtomKwarg<'_>>::
+        // to_owned_item ≡ String::from` at the substrate's trait
+        // default; the derived struct field type
+        // (`String` / `Option<String>` on the string axis,
+        // `bool` / `Option<bool>` on the bool axis) matches the
+        // trait method's `Self::Owned` / `Option<Self::Owned>`
+        // return without a per-axis wrap in the emit path.
+        Kind::String => atom_trait_dispatch_call("extract_owned_kwarg", "& str", key),
         Kind::OptionalString => {
-            let call = unqualified_extractor_call("extract_optional_string", key);
-            quote! { #call.map(::std::string::String::from) }
+            atom_trait_dispatch_call("extract_optional_owned_kwarg", "& str", key)
         }
         // Atom-family list-family axes — both string (`Kind::VecString`) and
         // bool (`Kind::VecBool`) dispatch through `<T as AtomKwarg<'_>>::
@@ -1614,8 +1634,19 @@ fn extractor_for(ty: &Type, key: &str, has_default: bool) -> Result<TokenStream2
         Kind::OptionalInt(rust_ty) | Kind::OptionalFloat(rust_ty) => {
             narrow_trait_dispatch_call("extract_optional_narrowed_kwarg", rust_ty, key)
         }
-        Kind::Bool => unqualified_extractor_call("extract_bool", key),
-        Kind::OptionalBool => unqualified_extractor_call("extract_optional_bool", key),
+        // Bool-axis peers of the string-axis `Kind::String` /
+        // `Kind::OptionalString` arms above — both atom-family
+        // scalar-family axes now dispatch through
+        // [`atom_trait_dispatch_call`] with `T = bool` picking the
+        // axis-typed trait impl at rustc time. The `<bool>::Owned
+        // = bool` binding is a no-op copy, so the return type
+        // matches `bool` / `Option<bool>` directly — same posture
+        // the string-axis arm gives through its `<&'a str>::Owned
+        // = String` binding, and same posture the bool-axis
+        // list-family arm (`Kind::VecBool` below) gives through
+        // `Vec<Self::Owned> = Vec<bool>`.
+        Kind::Bool => atom_trait_dispatch_call("extract_owned_kwarg", "bool", key),
+        Kind::OptionalBool => atom_trait_dispatch_call("extract_optional_owned_kwarg", "bool", key),
         // `Vec<bool>` routes through the typed bool-list extractor
         // (which decodes each element via the `<bool as AtomKwarg<'_>>::
         // project_at` per-item atom-family shape gate) rather than
@@ -3579,6 +3610,105 @@ mod atom_trait_dispatch_call_tests {
             "helper emission must be token-equivalent to the hand-written optional-vec-bool atom trait dispatch",
         );
     }
+
+    #[test]
+    fn helper_emits_the_two_scalar_family_method_idents_across_both_atom_axes() {
+        // Scalar-family peer of the list-family
+        // `helper_emits_the_trait_method_ident_at_every_two_list_family_mode`
+        // sweep above — after the atom-family scalar-family lift the
+        // helper covers FOUR mode-suffixed trait methods (TWO scalar
+        // + TWO list) across BOTH atom axes (`&str` + `bool`). Sweep
+        // the TWO scalar mode names `extract_owned_kwarg` /
+        // `extract_optional_owned_kwarg` on both axes so a regression
+        // that (a) reintroduced an axis-typed split at the scalar
+        // methods (e.g. `extract_owned_string_kwarg` /
+        // `extract_owned_bool_kwarg`) or (b) silently swapped one
+        // scalar mode name at the `extractor_for` scalar dispatch
+        // site surfaces here rather than as a mystery type-mismatch
+        // at every downstream consumer with a `String` / `bool` /
+        // `Option<String>` / `Option<bool>` field.
+        //
+        // Post the lift the FOUR mode names cover BOTH axes for each
+        // of the TWO families (scalar / list), so the derive's
+        // atom-family emission surface halves from FOUR + FOUR
+        // per-axis-per-mode wrapper names down to TWO + TWO
+        // mode-suffixed trait methods; the axis identity lives on
+        // `<T as AtomKwarg>::Owned` on the target axis's impl block,
+        // never on the emit string.
+        for method in ["extract_owned_kwarg", "extract_optional_owned_kwarg"] {
+            let string_body = call_string(method, "& str", "name");
+            let bool_body = call_string(method, "bool", "enabled");
+            let expected_trait_tail = format!(">> :: {method}");
+            assert!(
+                string_body.contains(&expected_trait_tail),
+                "string-axis scalar emission must dispatch through `...{expected_trait_tail}`, got: {string_body}",
+            );
+            assert!(
+                bool_body.contains(&expected_trait_tail),
+                "bool-axis scalar emission must dispatch through `...{expected_trait_tail}`, got: {bool_body}",
+            );
+            assert!(
+                !method.contains("string") && !method.contains("bool"),
+                "scalar method {method} must NOT carry an axis suffix — the axis lives on `<T as AtomKwarg>::Owned`",
+            );
+        }
+    }
+
+    #[test]
+    fn helper_emission_is_token_equivalent_to_a_hand_written_scalar_string_atom_trait_dispatch() {
+        // Cross-check on the atom-family scalar-family axis — the
+        // helper's emission at the canonical `Kind::String` arm is
+        // TOKEN-EQUIVALENT to a hand-written `quote! { <&str as
+        // ::tatara_lisp::domain::AtomKwarg<'_>>::extract_owned_kwarg
+        // (&kw, "name")? }` scaffold. Pre-lift the arm inlined
+        // `extract_string(&kw, "name")?.to_string()` — the
+        // `.to_string()` fold restated the string-axis's
+        // `<&'a str>::Owned = String` associated-type binding at the
+        // derive call site; post-lift the fold rides through the
+        // trait default at ONE per-axis dispatch site and drops out
+        // of the emit path entirely. Closes the axis + mode diagonal
+        // on the atom-family scalar cross-check — a regression that
+        // affected only the scalar arms would pass the list-family
+        // peer above and fail here.
+        let key = "name";
+        let atom_ty: proc_macro2::TokenStream = "& str".parse().unwrap();
+        let expected = quote! {
+            <#atom_ty as ::tatara_lisp::domain::AtomKwarg<'_>>::extract_owned_kwarg(&kw, #key)?
+        }
+        .to_string();
+        let actual = call_string("extract_owned_kwarg", "& str", key);
+        assert_eq!(
+            actual, expected,
+            "helper emission must be token-equivalent to the hand-written scalar-string atom trait dispatch",
+        );
+    }
+
+    #[test]
+    fn helper_emission_is_token_equivalent_to_a_hand_written_optional_scalar_bool_atom_trait_dispatch(
+    ) {
+        // Bool-axis / optional-scalar-mode peer of the string /
+        // required-scalar token-equivalence pin above — closes the
+        // axis + mode diagonal on the scalar cross-check. Confirms
+        // the emission on `bool` at the optional-scalar mode
+        // dispatches through the SAME `extract_optional_owned_kwarg`
+        // trait method the string axis reaches on the peer sweep,
+        // matching the same posture the list-family peer pair pins.
+        // Pre-lift the arm inlined
+        // `extract_optional_bool(&kw, "enabled")?` — the axis-typed
+        // scalar wrapper name; post-lift the mode-suffixed trait
+        // method covers BOTH axes.
+        let key = "enabled";
+        let atom_ty: proc_macro2::TokenStream = "bool".parse().unwrap();
+        let expected = quote! {
+            <#atom_ty as ::tatara_lisp::domain::AtomKwarg<'_>>::extract_optional_owned_kwarg(&kw, #key)?
+        }
+        .to_string();
+        let actual = call_string("extract_optional_owned_kwarg", "bool", key);
+        assert_eq!(
+            actual, expected,
+            "helper emission must be token-equivalent to the hand-written optional-scalar-bool atom trait dispatch",
+        );
+    }
 }
 
 #[cfg(test)]
@@ -3588,18 +3718,23 @@ mod unqualified_extractor_call_tests {
 
     // Non-narrowed peer of `narrow_trait_dispatch_call_tests` above — the
     // `(extractor, key) -> TokenStream2` helper is the derive's PRIVATE
-    // emission scaffold for the TEN non-narrowed arms in
-    // `extractor_for` (`Kind::VecString` / `Kind::OptionalVecString` /
-    // `Kind::OptionalVecBool` / `Kind::Bool` / `Kind::OptionalBool` /
-    // `Kind::VecBool` / `Kind::Deserialize` /
+    // emission scaffold for the FOUR universal-serde-fallthrough arms
+    // in `extractor_for` (`Kind::Deserialize` /
     // `Kind::OptionalDeserialize` / `Kind::VecDeserialize` /
-    // `Kind::OptionalVecDeserialize`) plus the two `Kind::String` /
-    // `Kind::OptionalString` arms that compose it with a per-axis
-    // owned-`String` post-conversion. Each pure arm is now a one-line
+    // `Kind::OptionalVecDeserialize`). Each such arm is a one-line
     // delegate onto this helper; the shared scaffold — resolve the
     // extractor `Ident` at the derive's call-site span, emit the
     // fully-qualified `::tatara_lisp::domain::<extractor>(&kw, #key)?`
-    // call — lives at ONE substrate primitive.
+    // call — lives at ONE substrate primitive. Post the atom-family
+    // scalar-family lift the FOUR atom-family scalar arms
+    // (`Kind::String` / `Kind::OptionalString` / `Kind::Bool` /
+    // `Kind::OptionalBool`) and the FOUR atom-family list arms
+    // (`Kind::VecString` / `Kind::OptionalVecString` /
+    // `Kind::VecBool` / `Kind::OptionalVecBool`) no longer route
+    // through this helper — the derive dispatches those eight arms
+    // through [`atom_trait_dispatch_call`] with `T ∈ {&str, bool}`
+    // picking the axis-typed trait impl, pinned at the sibling test
+    // module `atom_trait_dispatch_call_tests`.
     //
     // A regression here silently swaps the emitted code at every
     // `#[derive(TataraDomain)]` implementor with an atom-family or
@@ -3674,25 +3809,30 @@ mod unqualified_extractor_call_tests {
     fn helper_emits_the_axis_mode_extractor_ident_at_every_non_narrowed_arm() {
         // Promise 1 (AXIS-MODE EXTRACTOR IDENTITY) — the `extractor`
         // string rides the emitted call as an `Ident` at the derive's
-        // call-site span. Sweep the TWELVE non-narrowed extractor
-        // names the derive threads through this helper (see the
-        // module-level docstring above for the atom-family /
-        // universal-serde arm decomposition), so a regression that
-        // silently swapped ONE arm's name at the `extractor_for`
-        // dispatch site (e.g. a bool-list arm accidentally routing
-        // through the string-list extractor) would surface here
-        // rather than as a mystery type-mismatch at every downstream
-        // consumer with a `Vec<bool>` field.
+        // call-site span. Sweep the FOUR universal-serde-fallthrough
+        // extractor names still threaded through this helper post the
+        // atom-family scalar-family lift (see the module-level
+        // docstring above for the arm decomposition), so a regression
+        // that silently swapped ONE arm's name at the
+        // `extractor_for` dispatch site (e.g. a `Kind::Deserialize`
+        // arm accidentally routing through
+        // `extract_vec_via_serde`) would surface here rather than as
+        // a mystery type-mismatch at every downstream consumer with
+        // a nested-struct field. The atom-family scalar-family arms
+        // (`extract_string` / `extract_optional_string` /
+        // `extract_bool` / `extract_optional_bool`) no longer route
+        // through this helper — the derive's `Kind::String` /
+        // `Kind::OptionalString` / `Kind::Bool` / `Kind::OptionalBool`
+        // arms now dispatch through [`atom_trait_dispatch_call`] with
+        // `T ∈ {&str, bool}` picking the axis-typed trait impl,
+        // pinned at the sibling test module
+        // `atom_trait_dispatch_call_tests`.
         //
         // The full path `:: tatara_lisp :: domain :: <extractor>` (the
         // proc_macro2-formatted spelling of `::tatara_lisp::domain::
         // <extractor>`) pins the extractor as a load-bearing token in
         // the emission's path prefix.
         for extractor in [
-            "extract_string",
-            "extract_optional_string",
-            "extract_bool",
-            "extract_optional_bool",
             "extract_via_serde",
             "extract_optional_via_serde",
             "extract_vec_via_serde",
@@ -3723,7 +3863,7 @@ mod unqualified_extractor_call_tests {
         // it as a bare `tatara_lisp::domain::…` would pass the peer
         // sweep and fail here. Same posture the narrowed peer's test
         // module gives on its Promise 3.
-        let body = call_string("extract_bool", "enabled");
+        let body = call_string("extract_via_serde", "enabled");
         assert!(
             body.starts_with(":: tatara_lisp :: domain ::"),
             "emission must start with the fully-qualified `::tatara_lisp::domain::…` path, got: {body}",
@@ -3746,7 +3886,7 @@ mod unqualified_extractor_call_tests {
             ("window-seconds", "\"window-seconds\""),
             ("scale-v2", "\"scale-v2\""),
         ] {
-            let body = call_string("extract_bool", key);
+            let body = call_string("extract_via_serde", key);
             assert!(
                 body.contains(expected_lit),
                 "key {key} must ride the emitted call as string literal {expected_lit}, got: {body}",
@@ -3766,7 +3906,7 @@ mod unqualified_extractor_call_tests {
         // with a type mismatch, but the derive's own emission would
         // still pass its own compile. Same posture the narrowed peer's
         // test module gives on its Promise 5.
-        let body = call_string("extract_bool", "enabled");
+        let body = call_string("extract_via_serde", "enabled");
         assert!(
             body.trim_end().ends_with('?'),
             "emission must end with the `?` operator, got: {body}",
@@ -3786,7 +3926,7 @@ mod unqualified_extractor_call_tests {
         //
         // The `:: <` two-token prefix (proc_macro2's spelling of a
         // turbofish opener at the extractor's tail) pins the shape.
-        let body = call_string("extract_bool", "enabled");
+        let body = call_string("extract_via_serde", "enabled");
         assert!(
             !body.contains(":: <"),
             "non-narrowed emission must NOT carry a `::<T>` turbofish, got: {body}",
@@ -3794,27 +3934,33 @@ mod unqualified_extractor_call_tests {
     }
 
     #[test]
-    fn helper_emission_is_token_equivalent_to_the_pre_lift_scalar_bool_arm() {
-        // Cross-check — the helper's emission at the canonical scalar
-        // `Kind::Bool` arm is TOKEN-EQUIVALENT (byte-identical modulo
-        // whitespace) to the pre-lift hand-written
-        // `quote! { ::tatara_lisp::domain::extract_bool(&kw,
-        // "enabled")? }` scaffold the arm used to inline. A
+    fn helper_emission_is_token_equivalent_to_the_pre_lift_scalar_deserialize_arm() {
+        // Cross-check — the helper's emission at the canonical
+        // `Kind::Deserialize` arm is TOKEN-EQUIVALENT (byte-identical
+        // modulo whitespace) to the pre-lift hand-written
+        // `quote! { ::tatara_lisp::domain::extract_via_serde(&kw,
+        // "config")? }` scaffold the arm used to inline. A
         // regression at any of Promises 1-4 that individually passes
         // the per-promise pins above but composes into a token stream
         // distinct from the pre-lift emission would surface here —
         // one final structural pin above the per-promise arms. Same
         // posture the narrowed peer's test module gives on its two
         // scalar-int / optional-float token-equivalence pins.
-        let key = "enabled";
+        //
+        // Post the atom-family scalar-family lift the pre-lift
+        // scalar-bool arm no longer routes through this helper (it
+        // now dispatches through [`atom_trait_dispatch_call`] with
+        // `T = bool`), so the anchor moves to a still-routed name
+        // on the universal-serde-fallthrough axis.
+        let key = "config";
         let expected = quote! {
-            ::tatara_lisp::domain::extract_bool(&kw, #key)?
+            ::tatara_lisp::domain::extract_via_serde(&kw, #key)?
         }
         .to_string();
-        let actual = call_string("extract_bool", key);
+        let actual = call_string("extract_via_serde", key);
         assert_eq!(
             actual, expected,
-            "helper emission must be token-equivalent to the pre-lift hand-written scalar-bool arm",
+            "helper emission must be token-equivalent to the pre-lift hand-written scalar-deserialize arm",
         );
     }
 

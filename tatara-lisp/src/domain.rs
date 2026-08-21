@@ -1818,6 +1818,58 @@ pub trait AtomKwarg<'a>: Sized {
         extract_optional_atom(kw, key, Self::SHAPE, Self::project)
     }
 
+    /// Owned-return sibling of [`Self::extract_kwarg`] — same per-axis
+    /// dispatch shape, but the borrow-off-Sexp return type
+    /// [`Self`] is lifted to the owned associated type
+    /// [`Self::Owned`] via [`Self::to_owned_item`] on the extracted
+    /// value. Peer to [`Self::extract_list_kwarg`] on the atom-family
+    /// scalar surface: where the list-family default composes
+    /// `(LIST_SHAPE, project_at, to_owned_item)` over a `Vec` of
+    /// projected items, this scalar-family default composes
+    /// `(SHAPE, project, to_owned_item)` over the single projected
+    /// value.
+    ///
+    /// On the `<&'a str>` axis `Self::Owned = String` so the trait
+    /// dispatch returns `Result<String>` — the owning conversion
+    /// pre-lift lived at each derive call site as
+    /// `extract_string(&kw, key)?.to_string()`; post-lift it rides
+    /// through this ONE per-axis trait dispatch site. On the
+    /// `<bool>` / `<i64>` / `<f64>` axes `Self::Owned = Self` is a
+    /// no-op copy (all `'static`-`Copy`), so the trait dispatch
+    /// returns the same axis value the plain [`Self::extract_kwarg`]
+    /// would — a uniform emit shape across the four atom-family
+    /// scalar axes.
+    ///
+    /// Provided as a trait default composing `(Self::extract_kwarg,
+    /// Self::to_owned_item)` — per-atom impls do not override this;
+    /// a future audit-trail metric labeled by "which axis owned the
+    /// scalar extract" binds mechanically at this ONE dispatch site.
+    fn extract_owned_kwarg(kw: &'a Kwargs<'a>, key: &str) -> Result<Self::Owned> {
+        Self::extract_kwarg(kw, key).map(Self::to_owned_item)
+    }
+
+    /// `Option<Self::Owned>` sibling of [`Self::extract_owned_kwarg`]
+    /// — same per-axis dispatch shape, absent kwarg short-circuits
+    /// to `Ok(None)` via [`Self::extract_optional_kwarg`]; present
+    /// kwarg lifts through [`Self::to_owned_item`] on the extracted
+    /// value. Peer to [`Self::extract_optional_list_kwarg`] on the
+    /// atom-family scalar surface — both `Option`-returning defaults
+    /// compose their required peer with a `.map(...)` over the
+    /// per-axis owning lift, differing only in whether the payload
+    /// is scalar ([`Self::extract_optional_kwarg`]) or vector
+    /// ([`Self::extract_list_kwarg`]).
+    ///
+    /// On the `<&'a str>` axis pre-lift the derive emitted
+    /// `extract_optional_string(&kw, key)?.map(String::from)` — a
+    /// per-arm `.map(String::from)` at every `Option<String>` field
+    /// in every `#[derive(TataraDomain)]` struct. Post-lift the
+    /// `.map(...)` fold rides through this ONE per-axis trait
+    /// dispatch site, dropping the derive's per-arm axis-typed
+    /// closure composition.
+    fn extract_optional_owned_kwarg(kw: &'a Kwargs<'a>, key: &str) -> Result<Option<Self::Owned>> {
+        Self::extract_optional_kwarg(kw, key).map(|opt| opt.map(Self::to_owned_item))
+    }
+
     /// Item-indexed shape gate — the LIST-family per-item peer of
     /// [`Self::extract_kwarg`] on the same `(SHAPE, project)` per-axis
     /// primitive pair. Projects `sexp` via [`Self::project`] and lifts
@@ -5203,6 +5255,164 @@ mod tests {
             &trait_bool_missing,
             LispError::MissingKwarg { .. },
         ));
+    }
+
+    /// The scalar-owned peers `extract_owned_kwarg` /
+    /// `extract_optional_owned_kwarg` on the [`AtomKwarg`] trait —
+    /// per-axis defaults that compose the plain
+    /// `extract_kwarg` / `extract_optional_kwarg` peers with the
+    /// per-axis owning lift [`AtomKwarg::to_owned_item`], so the
+    /// per-axis owned type [`AtomKwarg::Owned`] rides the return
+    /// unchanged from a hand-written composition of the two.
+    ///
+    /// Pin FOUR promises the two defaults own at their emission
+    /// boundary:
+    ///
+    /// (1) OWNED-RETURN at every atom axis — the return type is
+    ///     `Result<Self::Owned>` / `Result<Option<Self::Owned>>`;
+    ///     on the borrow-off-Sexp `<&'a str>` axis the sexp-borrow
+    ///     lifetime is erased through `<&'a str>::to_owned_item ≡
+    ///     String::from`, so the caller receives `String` /
+    ///     `Option<String>` directly (no per-arm `.to_string()` /
+    ///     `.map(String::from)` fold needed). On the
+    ///     `'static`-`Copy` `<bool>` axis the owning lift is a no-op
+    ///     copy (`Owned = Self`), so the return is bit-identical to
+    ///     the plain `extract_kwarg` / `extract_optional_kwarg`
+    ///     verdict.
+    /// (2) TOTAL — on the present-and-shape-match input each owned
+    ///     peer's verdict is byte-identical to the hand-written
+    ///     composition `Self::extract_kwarg(...)?.to_owned_item()`
+    ///     (or the optional peer with an inner `.map(...)`).
+    /// (3) TYPE-MISMATCH — on the present-but-wrong-axis input each
+    ///     owned peer surfaces the SAME `LispError::TypeMismatch {
+    ///     expected: Self::SHAPE, ... }` its non-owned peer emits;
+    ///     the owning lift never runs on a rejection path, so the
+    ///     axis-typed rejection label is preserved unchanged.
+    /// (4) ABSENT — on the absent-kwarg input the required owned
+    ///     peer rejects with `LispError::MissingKwarg` (unchanged
+    ///     from the non-owned peer); the optional owned peer
+    ///     short-circuits to `Ok(None)` (unchanged from
+    ///     `extract_optional_kwarg`'s absent-kwarg branch), so the
+    ///     `.map(Self::to_owned_item)` fold never runs on the
+    ///     absent-kwarg branch and no spurious `Owned` value is
+    ///     minted from nothing.
+    #[test]
+    fn extract_owned_kwarg_defaults_lift_the_extracted_value_through_to_owned_item_per_axis() {
+        // (1) OWNED-RETURN + TOTAL on the string axis — the trait
+        //     dispatch returns `String`, not `&str`, so the derive
+        //     no longer needs a per-arm `.to_string()` fold. Compare
+        //     against the hand-written composition of
+        //     `extract_kwarg` + `to_owned_item` to pin the default's
+        //     byte-equivalence with what the derive would emit.
+        let string_args = kwargs_of("(_ :name \"alice\")");
+        let string_kw = parse_kwargs(&string_args).unwrap();
+        let owned_string: String =
+            <&str as AtomKwarg<'_>>::extract_owned_kwarg(&string_kw, "name").unwrap();
+        assert_eq!(owned_string, "alice");
+        assert_eq!(
+            owned_string,
+            <&str as AtomKwarg<'_>>::to_owned_item(
+                <&str as AtomKwarg<'_>>::extract_kwarg(&string_kw, "name").unwrap(),
+            ),
+        );
+
+        // (1) OWNED-RETURN + TOTAL on the bool axis — the trait
+        //     dispatch returns `bool` (Owned = Self, no-op copy),
+        //     bit-identical to `extract_kwarg`. This is the arm
+        //     where the derive's per-arm `.to_string()` fold was
+        //     absent to begin with; post-lift the derive still
+        //     emits the same `?`-suffixed call, just with a
+        //     mode-suffixed method name that composes uniformly
+        //     across both atom axes.
+        let bool_args = kwargs_of("(_ :enabled #t)");
+        let bool_kw = parse_kwargs(&bool_args).unwrap();
+        let owned_bool: bool =
+            <bool as AtomKwarg<'_>>::extract_owned_kwarg(&bool_kw, "enabled").unwrap();
+        assert!(owned_bool);
+        assert_eq!(
+            owned_bool,
+            <bool as AtomKwarg<'_>>::extract_kwarg(&bool_kw, "enabled").unwrap(),
+        );
+
+        // (1) OWNED-RETURN + TOTAL on the optional peers — same
+        //     `Option<Self::Owned>` per-axis identity, `Some(v)` on
+        //     present + shape-match at both axes.
+        let opt_owned_string: Option<String> =
+            <&str as AtomKwarg<'_>>::extract_optional_owned_kwarg(&string_kw, "name").unwrap();
+        assert_eq!(opt_owned_string, Some(String::from("alice")));
+        let opt_owned_bool: Option<bool> =
+            <bool as AtomKwarg<'_>>::extract_optional_owned_kwarg(&bool_kw, "enabled").unwrap();
+        assert_eq!(opt_owned_bool, Some(true));
+
+        // (3) TYPE-MISMATCH — the owning lift never runs on the
+        //     rejection path, so the axis-typed
+        //     `ExpectedKwargShape` rides the rejection identity
+        //     unchanged from the plain `extract_kwarg` peer's
+        //     verdict. A swapped axis on the owned default would
+        //     surface here as the wrong axis's label.
+        let cross_args = kwargs_of("(_ :name 5 :enabled \"maybe\")");
+        let cross_kw = parse_kwargs(&cross_args).unwrap();
+        let string_mismatch =
+            <&str as AtomKwarg<'_>>::extract_owned_kwarg(&cross_kw, "name").unwrap_err();
+        assert!(
+            matches!(
+                &string_mismatch,
+                LispError::TypeMismatch { expected, .. }
+                    if *expected == ExpectedKwargShape::String,
+            ),
+            "string-axis owned default must reject with String label, got {string_mismatch:?}",
+        );
+        let bool_mismatch =
+            <bool as AtomKwarg<'_>>::extract_owned_kwarg(&cross_kw, "enabled").unwrap_err();
+        assert!(
+            matches!(
+                &bool_mismatch,
+                LispError::TypeMismatch { expected, .. }
+                    if *expected == ExpectedKwargShape::Bool,
+            ),
+            "bool-axis owned default must reject with Bool label, got {bool_mismatch:?}",
+        );
+        // The optional peer preserves the same axis-typed rejection
+        // label on a present-but-wrong-axis input — the
+        // present-vs-absent bifurcation short-circuits only on an
+        // ABSENT kwarg, not on a present-but-wrong-axis one.
+        let string_opt_mismatch =
+            <&str as AtomKwarg<'_>>::extract_optional_owned_kwarg(&cross_kw, "name").unwrap_err();
+        assert!(matches!(
+            &string_opt_mismatch,
+            LispError::TypeMismatch { expected, .. }
+                if *expected == ExpectedKwargShape::String,
+        ));
+        let bool_opt_mismatch =
+            <bool as AtomKwarg<'_>>::extract_optional_owned_kwarg(&cross_kw, "enabled")
+                .unwrap_err();
+        assert!(matches!(
+            &bool_opt_mismatch,
+            LispError::TypeMismatch { expected, .. }
+                if *expected == ExpectedKwargShape::Bool,
+        ));
+
+        // (4) ABSENT — required owned peer rejects with
+        //     `MissingKwarg` on both axes; optional owned peer
+        //     short-circuits to `Ok(None)` on both axes, and the
+        //     `.map(Self::to_owned_item)` fold never runs on the
+        //     absent-kwarg branch.
+        let absent_args = kwargs_of("(_ :other 1)");
+        let absent_kw = parse_kwargs(&absent_args).unwrap();
+        let string_missing =
+            <&str as AtomKwarg<'_>>::extract_owned_kwarg(&absent_kw, "missing").unwrap_err();
+        let bool_missing =
+            <bool as AtomKwarg<'_>>::extract_owned_kwarg(&absent_kw, "missing").unwrap_err();
+        assert!(matches!(&string_missing, LispError::MissingKwarg { .. }));
+        assert!(matches!(&bool_missing, LispError::MissingKwarg { .. }));
+        assert_eq!(
+            <&str as AtomKwarg<'_>>::extract_optional_owned_kwarg(&absent_kw, "missing").unwrap(),
+            None,
+        );
+        assert_eq!(
+            <bool as AtomKwarg<'_>>::extract_optional_owned_kwarg(&absent_kw, "missing").unwrap(),
+            None,
+        );
     }
 
     /// The atom-family per-item shape gate lives on ONE owner —

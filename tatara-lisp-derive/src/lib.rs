@@ -1758,16 +1758,29 @@ fn parse_trait_path(trait_path: &str) -> syn::Path {
 /// string contract on the emission surface.
 ///
 /// The peer operator-facing gate at [`SerdeDefault::Path`]
-/// (`extractor_for`'s `"Path"` arm) does NOT flow through this
-/// primitive — it returns Err via `map_err(|e| format!(...))?`
-/// because the path payload is authored by the operator through
-/// `#[serde(default = "…")]` and must plumb the syn-error through
-/// a Result chain into the derive's `spanned_compile_error`
-/// surface (rather than panicking, which would drop the span and
-/// crash the derive at the offending struct's compile). The two
-/// closed-set-input axes here (self-type + trait-path) stay
-/// substrate-internal on the panic axis; the operator-facing
-/// axis keeps its own Result posture.
+/// (`extractor_for`'s `"Path"` arm) flows through the sibling
+/// [`parse_syn_str_or_err`] on the Result axis rather than through
+/// this primitive on the panic axis. The two peer primitives share
+/// the SAME four-invariant sharpened-parse scaffold (syntactic-level
+/// `syn::parse_str::<T>` parse, `{source:?}`-interpolated
+/// `"invalid {kind_label} {source:?}: {e}"` diagnostic wording,
+/// `T: syn::parse::Parse` bound axis-agnostic at the caller's
+/// turbofish, `&'static str` kind-label composition) but differ on
+/// disposition: this primitive panics on Err (matching the
+/// substrate-internal closed-set-input contract at the self-type +
+/// trait-path axes — every workspace-shipped input parses cleanly by
+/// construction, so a panic here means the substrate itself drifted);
+/// the [`parse_syn_str_or_err`] peer returns Err via a formatted
+/// `String` (matching the operator-authored payload contract at
+/// [`SerdeDefault::Path`] — the syn-error must plumb through a Result
+/// chain into the derive's `spanned_compile_error` surface at
+/// [`derive_tatara_domain`]'s field-init loop rather than crashing the
+/// derive at the offending struct's compile). Together the two peers
+/// close the derive's PRIVATE `&str -> syn::<T>` parse surface across
+/// BOTH the panic + Result axes, so a regression that drifts ONE
+/// axis's diagnostic wording surfaces at that axis's own test pins
+/// rather than as silent drift at every downstream parse site on the
+/// affected axis.
 ///
 /// Future structural promotion of the substrate-internal parse
 /// (a `syn::Result<T>` variant that plumbs the syn-error to a
@@ -1795,6 +1808,69 @@ fn parse_trait_path(trait_path: &str) -> syn::Path {
 /// trait-dispatched arm's implementor).
 fn parse_syn_str_or_panic<T: syn::parse::Parse>(source: &str, kind_label: &'static str) -> T {
     syn::parse_str(source).unwrap_or_else(|e| panic!("invalid {kind_label} {source:?}: {e}"))
+}
+
+/// Operator-facing peer of [`parse_syn_str_or_panic`] on the derive's
+/// PRIVATE `&str -> syn::<T>` parse-gate axis. Returns Err via a
+/// formatted `String` on parse failure rather than panicking, matching
+/// the operator-authored payload contract at [`SerdeDefault::Path`]'s
+/// `#[serde(default = "…")]` attribute — the syn-error must plumb
+/// through a Result chain into the derive's `spanned_compile_error`
+/// surface at [`derive_tatara_domain`]'s field-init loop rather than
+/// crashing the derive at the offending struct's compile.
+///
+/// Owns the SAME four sharpened-parse invariants the panic peer owns:
+/// (1) `syn::parse_str::<T>` as the syntactic-level parser (not the
+/// pre-tightening `TokenStream2::parse` lexer-level gate), (2) an
+/// `unwrap_or_err` diagnostic on Err (the Result axis's peer of the
+/// panic peer's `unwrap_or_else` panic), (3) the diagnostic-message
+/// shape `"invalid {kind_label} {source:?}: {e}"` that names both the
+/// offending literal AND the underlying `syn::Error` verbatim
+/// (byte-identical to the panic peer's `panic!` message), (4) the
+/// `{source:?}` quoted-string interpolation posture — a lexically-
+/// broken payload (`"foo bar"`, `"1invalid"`, `"(unbalanced"`) rides
+/// through the `Debug` projection so the derive's downstream
+/// compile-error carries the offending literal exactly as written by
+/// the operator, with the enclosing double-quotes making the
+/// whitespace / delimiter drift visible in the error surface.
+///
+/// The `T: syn::parse::Parse` bound rides the caller's turbofish —
+/// [`syn::Path`] on the [`SerdeDefault::Path`] callsite through the
+/// `extractor_for` field-init loop's Err surface. A future third
+/// operator-facing axis (a hypothetical `#[tatara(...)]` sub-key
+/// carrying a `syn::Type` / `syn::Expr` payload, or a nested-domain
+/// arm's operator-authored inner type) inherits the sharpened parse
+/// for free — matching the "future axis pays zero" property
+/// [`parse_self_ty`] / [`parse_trait_path`] give on the substrate-
+/// internal panic axis.
+///
+/// The `kind_label: &'static str` slot carries the per-axis diagnostic
+/// label — `"#[serde(default)] path"` on the current sole callsite.
+/// `&'static str` composes byte-for-byte with the caller's
+/// `#[static]`-lifetime label at the error path (no `.to_string()`
+/// allocation on the diagnostic path), matching how the peer
+/// [`parse_syn_str_or_panic`]'s `kind_label` slot owns the same
+/// static-string contract on the substrate-internal panic axis.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 3 (typed exit — the parse
+/// Err surface is the diagnostic-message `String` every downstream
+/// `spanned_compile_error` composition on the derive's Err axis routes
+/// through, byte-identical in shape to the panic peer's `panic!`
+/// message so a shared-diagnostic-format regression at ONE axis
+/// surfaces at that axis's own test pins rather than as silent drift
+/// at every downstream parse site). THEORY.md §VI.1 (generation over
+/// composition — the shared four-invariant parse scaffold now lives at
+/// TWO substrate primitives, one per disposition axis; the pre-lift
+/// inline `syn::parse_str(...).map_err(|e| format!(...))?` two-step at
+/// the sole operator-facing callsite collapses to a ONE-LINE delegate
+/// through this primitive, matching the same collapse
+/// [`parse_syn_str_or_panic`] gave the two substrate-internal callsites
+/// through the panic peer).
+fn parse_syn_str_or_err<T: syn::parse::Parse>(
+    source: &str,
+    kind_label: &'static str,
+) -> Result<T, String> {
+    syn::parse_str(source).map_err(|e| format!("invalid {kind_label} {source:?}: {e}"))
 }
 
 fn narrow_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) -> TokenStream2 {
@@ -2548,8 +2624,27 @@ fn extractor_for(ty: &Type, key: &str, default: &SerdeDefault) -> Result<TokenSt
             // `#[serde(default = "default_true")]` /
             // `#[serde(default = "path::to::fn")]` field emits
             // byte-identically post-lift.
-            let path: syn::Path = syn::parse_str(path)
-                .map_err(|e| format!("invalid #[serde(default = {path:?})] path: {e}"))?;
+            //
+            // The `syn::parse_str::<syn::Path>` call routes through
+            // [`parse_syn_str_or_err`] — the derive's PRIVATE
+            // operator-facing peer of [`parse_syn_str_or_panic`] on
+            // the Result axis. Both peers share the SAME four-
+            // invariant sharpened-parse scaffold (syntactic-level
+            // `syn::parse_str::<T>`, `{source:?}`-interpolated
+            // `"invalid {kind_label} {source:?}: {e}"` diagnostic
+            // wording, `T: syn::parse::Parse` axis-agnostic bound,
+            // `&'static str` label composition); they differ only on
+            // disposition (panic peer for substrate-internal
+            // closed-set-input axes; this Result peer for the
+            // operator-authored `#[serde(default = "…")]` payload
+            // whose syn-error plumbs through into
+            // `spanned_compile_error`). The pre-lift inline
+            // `syn::parse_str(path).map_err(|e| format!(...))?`
+            // two-step collapses to a one-line delegate here,
+            // matching how the two substrate-internal callsites
+            // collapse through [`parse_self_ty`] / [`parse_trait_path`]
+            // on the panic peer.
+            let path: syn::Path = parse_syn_str_or_err(path, "#[serde(default)] path")?;
             wrap_with_missing_key_default(base, key, quote! { #path() })
         }
     })
@@ -5248,6 +5343,216 @@ mod parse_syn_str_or_panic_tests {
         // pin. A regression that dropped the literal from the
         // diagnostic message would surface here.
         let _ = parse_trait_path("1invalid");
+    }
+}
+
+#[cfg(test)]
+mod parse_syn_str_or_err_tests {
+    use super::{parse_syn_str_or_err, parse_syn_str_or_panic};
+
+    // Operator-facing peer of `parse_syn_str_or_panic_tests` on the
+    // derive's PRIVATE substrate-internal `&str -> syn::<T>` parse-gate
+    // surface. That module pins the panic axis's substrate-internal
+    // closed-set-input contract (the two per-axis wrappers
+    // `parse_self_ty` / `parse_trait_path` route the two workspace-
+    // shipped closed sets through it); this module pins the SHARED
+    // four-invariant sharpened-parse scaffold on the Result axis, which
+    // the operator-authored `#[serde(default = "…")]` payload at
+    // [`super::SerdeDefault::Path`] routes through inside
+    // `extractor_for`.
+    //
+    // Four promises the Result peer owns at the boundary of the
+    // operator-facing parse gate — byte-shape-identical to the panic
+    // peer's promises, only the disposition axis differs:
+    //
+    // 1. GENERIC ACCEPT ON Ok — the primitive parses any input that
+    //    `syn::parse_str::<T>` accepts for the caller's chosen
+    //    `T: syn::parse::Parse`, so BOTH `syn::Path` (the current
+    //    sole callsite's turbofish) and `syn::Type` / other syn
+    //    handles flow through ONE gate. A regression that hard-coded
+    //    the primitive to `syn::Path` or otherwise dropped the
+    //    generic bound would surface here.
+    // 2. DIAGNOSTIC-MESSAGE SHAPE — the primitive's Err payload uses
+    //    the SAME `"invalid {kind_label} {source:?}: {e}"` template
+    //    as its panic peer, so a regression that drifted the message
+    //    template on ONE axis surfaces here. Byte-identity between
+    //    the two peers is pinned by cross-comparing the Err payload
+    //    on the Result peer against the panic-message captured off
+    //    the panic peer for the same `(source, kind_label)` pair.
+    // 3. LABEL INTERPOLATION — the `kind_label: &'static str` slot
+    //    rides the Err payload verbatim, so per-callsite label
+    //    choices (`"#[serde(default)] path"` at the sole current
+    //    callsite; hypothetical future `#[tatara(...)]` sub-key
+    //    labels) surface at the diagnostic without a per-axis
+    //    wrapper. Pinned by the two per-label Err-payload sweeps.
+    // 4. SOURCE-DEBUG INTERPOLATION — the offending literal rides
+    //    the Err payload as `{source:?}` (Debug-quoted), so an
+    //    input carrying whitespace / a leading digit / an unbalanced
+    //    delimiter surfaces with the enclosing double-quotes making
+    //    the drift visible in the derive consumer's compile error.
+    //    Pinned by the sweep of three representative unparseables
+    //    (all three matching the `wrap_with_missing_key_default_tests
+    //    ::path_default_arm_rejects_an_unparseable_path_at_the_arms_own_parse_gate_before_the_primitive`
+    //    fixture set so the operator-facing pin at the `extractor_for`
+    //    boundary stays coherent with the primitive-level pin here).
+    //
+    // A regression that (a) drifted the Result peer's Err template so
+    // the label / source no longer appeared, (b) inverted the accept /
+    // reject axis (a lexer-only gate silently sneaking back in), or
+    // (c) drifted the peer's disposition axis (a panic here instead of
+    // an Err — the pre-lift `syn::parse_str(...).map_err(...)` shape
+    // must be preserved so `extractor_for` can plumb the Err into
+    // `spanned_compile_error` at the field's own span) would surface
+    // here rather than as broken emit tokens at every downstream
+    // `#[serde(default = "…")]`-carrying implementor.
+
+    #[test]
+    fn generic_primitive_accepts_a_syntactically_valid_syn_path_on_the_ok_axis() {
+        // Promise 1 (GENERIC ACCEPT ON Ok) on the `syn::Path` output
+        // — the primitive's `T` inference resolves to `syn::Path` when
+        // the caller annotates the binding as `syn::Path` (matching
+        // how the sole current callsite at
+        // `extractor_for`'s `SerdeDefault::Path` arm resolves its
+        // return type to `syn::Path`). Sweep the three workspace-
+        // representative path shapes the operator-facing gate accepts
+        // (bare ident, dotted path, leading-colon fully-qualified
+        // path), matching the fixture set the sibling `wrap_with_missing_key_default_tests
+        // ::path_default_arm_accepts_every_workspace_representative_valid_path_shape`
+        // pins at the `extractor_for` boundary — so the primitive-
+        // level accept and the operator-facing accept stay coherent.
+        for path_str in [
+            "default_true",
+            "path::to::function",
+            "::std::default::Default::default",
+        ] {
+            let parsed: Result<syn::Path, String> =
+                parse_syn_str_or_err(path_str, "#[serde(default)] path");
+            parsed.unwrap_or_else(|err| {
+                panic!(
+                    "Result peer must accept {path_str:?} (a workspace-representative shape), got err: {err}"
+                )
+            });
+        }
+    }
+
+    #[test]
+    fn generic_primitive_accepts_a_syntactically_valid_syn_type_on_the_ok_axis() {
+        // Promise 1 (GENERIC ACCEPT ON Ok) on the `syn::Type` output
+        // — the primitive's generic bound `T: syn::parse::Parse` is
+        // axis-agnostic on the output-type slot, so a future third
+        // operator-facing axis (a hypothetical `#[tatara(...)]` sub-
+        // key carrying a `syn::Type` payload) inherits the sharpened
+        // parse for free at ZERO additional scaffolding through this
+        // primitive — matching the "future axis pays zero" property
+        // `parse_syn_str_or_panic` gives on the panic axis through its
+        // own `T` bound.
+        let parsed: Result<syn::Type, String> = parse_syn_str_or_err("u16", "self type");
+        parsed.expect("Result peer must accept a syntactically valid syn::Type input");
+    }
+
+    #[test]
+    fn err_payload_carries_the_kind_label_verbatim_at_the_diagnostic_prefix() {
+        // Promise 3 (LABEL INTERPOLATION) — the `kind_label` slot
+        // rides the Err payload as the `"invalid {kind_label} …"`
+        // prefix. Pin the sole current callsite's label choice
+        // (`"#[serde(default)] path"`) so a regression that dropped
+        // the label from the template would surface here rather than
+        // as a diagnostic drift at every downstream
+        // `#[serde(default = "…")]`-carrying implementor.
+        let err: String =
+            match parse_syn_str_or_err::<syn::Path>("foo bar", "#[serde(default)] path") {
+                Ok(_) => panic!("Result peer must reject an unparseable syn::Path input"),
+                Err(e) => e,
+            };
+        assert!(
+            err.starts_with("invalid #[serde(default)] path"),
+            "Err payload must start with the label-prefixed diagnostic, got: {err}"
+        );
+    }
+
+    #[test]
+    fn err_payload_carries_the_offending_literal_via_debug_quoted_interpolation() {
+        // Promise 4 (SOURCE-DEBUG INTERPOLATION) — sweep the SAME
+        // three representative unparseables the sibling `wrap_with_missing_key_default_tests
+        // ::path_default_arm_rejects_an_unparseable_path_at_the_arms_own_parse_gate_before_the_primitive`
+        // pin exercises at the `extractor_for` boundary, so the
+        // primitive-level pin and the operator-facing pin stay
+        // coherent: (a) `"(unbalanced"` — trips the LEXER (unmatched
+        // delimiter, rejects even at pre-tightening `TokenStream2::parse`);
+        // (b) `"foo bar"` — a lexically-valid two-ident sequence that
+        // trips the SYNTACTIC `syn::Path` parser (accepted by the
+        // pre-tightening lexer, rejected post-lift); (c) `"1invalid"`
+        // — a leading-digit int-then-ident pair (same class as (b)
+        // on the syntactic axis).
+        //
+        // Every one of the three surfaces with the Debug-quoted
+        // literal (`\"foo bar\"`) inside the Err payload's
+        // `{source:?}` slot, matching how the panic peer surfaces the
+        // literal at `parse_syn_str_or_panic_tests
+        // ::trait_path_wrapper_rejects_a_leading_digit_and_names_the_literal_verbatim`.
+        for unparseable in ["(unbalanced", "foo bar", "1invalid"] {
+            let err: String = match parse_syn_str_or_err::<syn::Path>(
+                unparseable,
+                "#[serde(default)] path",
+            ) {
+                Ok(_) => {
+                    panic!("Result peer must reject an unparseable syn::Path input {unparseable:?}")
+                }
+                Err(e) => e,
+            };
+            let debug_quoted = format!("{unparseable:?}");
+            assert!(
+                err.contains(&debug_quoted),
+                "Err payload must carry the offending literal in Debug-quoted form {debug_quoted:?} for {unparseable:?}, got: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn result_peer_and_panic_peer_share_the_same_diagnostic_shape_byte_for_byte() {
+        // Promise 2 (DIAGNOSTIC-MESSAGE SHAPE) — the Result peer's
+        // Err payload is byte-identical to the panic peer's panic
+        // message for the SAME `(source, kind_label, T)` triple. This
+        // pins the "four-invariant sharpened-parse scaffold" the two
+        // peers share at the boundary of their disposition axis, so a
+        // regression that (a) drifted the template on ONE peer, (b)
+        // reordered the label / source / underlying-error slots, or
+        // (c) swapped the `{source:?}` Debug interpolation for a
+        // `{source}` Display interpolation on ONE peer would surface
+        // here at the byte-identity gate rather than as silent drift
+        // at every downstream diagnostic consumer of the affected
+        // peer.
+        //
+        // Cross-compare on a representative rejection (a lexer-only-
+        // valid `"foo bar"` syntactic-rejection input under the
+        // `"#[serde(default)] path"` label): capture the panic-peer's
+        // panic message via `catch_unwind`, then compare against the
+        // Result-peer's Err payload.
+        let source = "foo bar";
+        let kind_label = "#[serde(default)] path";
+        let err_payload: String = match parse_syn_str_or_err::<syn::Path>(source, kind_label) {
+            Ok(_) => panic!("Result peer must reject an unparseable syn::Path input"),
+            Err(e) => e,
+        };
+        let panic_payload = match std::panic::catch_unwind(|| {
+            let _: syn::Path = parse_syn_str_or_panic(source, kind_label);
+        }) {
+            Ok(()) => panic!("panic peer must panic on an unparseable syn::Path input"),
+            Err(e) => e,
+        };
+        let panic_msg = panic_payload
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| {
+                panic_payload
+                    .downcast_ref::<&str>()
+                    .map(|s| (*s).to_string())
+            })
+            .expect("panic payload must be a String or &str");
+        assert_eq!(
+            err_payload, panic_msg,
+            "Result peer's Err payload must equal panic peer's panic message byte-for-byte at the shared diagnostic scaffold"
+        );
     }
 }
 

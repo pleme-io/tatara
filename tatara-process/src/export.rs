@@ -1617,22 +1617,18 @@ mod tests {
     /// resolver yields `Ambiguous`, exhaustively across every pair in
     /// `ALL × ALL` (excluding the diagonal). A future asymmetry where
     /// one slot would silently shadow another (e.g. an `if-let` chain
-    /// re-introducing first-wins ordering) is caught here.
+    /// re-introducing first-wins ordering) is caught here. Routes
+    /// through the substrate primitive
+    /// [`crate::tagged_union::assert_two_slots_ambiguous`] shared with
+    /// the sibling
+    /// `encapsulation_kind_two_slots_is_ambiguous_across_every_pair`
+    /// / `vector_channel_two_slots_is_ambiguous_across_every_pair`
+    /// / `intent_two_slots_is_ambiguous_across_every_pair` sites — the
+    /// nested-`for a in K::ALL { for b in K::ALL { … } }` sweep lives
+    /// at ONE substrate site.
     #[test]
     fn artifact_source_two_slots_is_ambiguous_across_every_pair() {
-        for a in ArtifactKind::ALL {
-            for b in ArtifactKind::ALL {
-                if a == b {
-                    continue;
-                }
-                let s = two_slot_source(a, b);
-                assert_eq!(
-                    s.variant().unwrap_err(),
-                    ArtifactError::Ambiguous,
-                    "({a:?}, {b:?}) should resolve Ambiguous"
-                );
-            }
-        }
+        crate::tagged_union::assert_two_slots_ambiguous::<ArtifactSource, _>(two_slot_source);
     }
 
     // ── closed-set algebra for ChannelKind (ALL × as_str × Display ×
@@ -1787,22 +1783,18 @@ mod tests {
     /// resolver yields `Ambiguous`, exhaustively across every pair in
     /// `ALL × ALL` (excluding the diagonal). A future asymmetry where
     /// one slot would silently shadow another (e.g. an `if-let` chain
-    /// re-introducing first-wins ordering) is caught here.
+    /// re-introducing first-wins ordering) is caught here. Routes
+    /// through the substrate primitive
+    /// [`crate::tagged_union::assert_two_slots_ambiguous`] shared with
+    /// the sibling
+    /// `encapsulation_kind_two_slots_is_ambiguous_across_every_pair`
+    /// / `artifact_source_two_slots_is_ambiguous_across_every_pair`
+    /// / `intent_two_slots_is_ambiguous_across_every_pair` sites — the
+    /// nested-`for a in K::ALL { for b in K::ALL { … } }` sweep lives
+    /// at ONE substrate site.
     #[test]
     fn vector_channel_two_slots_is_ambiguous_across_every_pair() {
-        for a in ChannelKind::ALL {
-            for b in ChannelKind::ALL {
-                if a == b {
-                    continue;
-                }
-                let c = two_slot_channel(a, b);
-                assert_eq!(
-                    c.variant().unwrap_err(),
-                    ChannelError::Ambiguous,
-                    "({a:?}, {b:?}) should resolve Ambiguous"
-                );
-            }
-        }
+        crate::tagged_union::assert_two_slots_ambiguous::<VectorChannel, _>(two_slot_channel);
     }
 
     /// Construct a `VectorChannel` with exactly the given kind's slot

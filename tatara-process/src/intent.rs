@@ -520,29 +520,21 @@ mod tests {
         assert!(matches!(i.variant().unwrap(), IntentVariant::Nix(_)));
     }
 
+    /// AMBIGUOUS-PATH CONTRACT: when two slots are populated the
+    /// resolver yields `Ambiguous`, exhaustively across every pair in
+    /// `ALL × ALL` (excluding the diagonal). Routes through the
+    /// substrate primitive
+    /// [`crate::tagged_union::assert_two_slots_ambiguous`] shared with
+    /// the sibling
+    /// `encapsulation_kind_two_slots_is_ambiguous_across_every_pair`
+    /// / `artifact_source_two_slots_is_ambiguous_across_every_pair`
+    /// / `vector_channel_two_slots_is_ambiguous_across_every_pair`
+    /// sites. Subsumes the pre-lift hand-authored two-pair probes
+    /// (`nix + flux`, `nix + guest`) with exhaustive `6 × 5 = 30`
+    /// coverage — every off-diagonal pair on `IntentKind` is pinned.
     #[test]
-    fn two_variants_ambiguous() {
-        let i = Intent {
-            nix: Some(NixIntent {
-                flake_ref: "a".into(),
-                attribute: "b".into(),
-                system: None,
-                attic_cache: None,
-                extra_args: vec![],
-                delegate_to_nix_build: false,
-            }),
-            flux: Some(FluxIntent {
-                git_repository: "g".into(),
-                path: "p".into(),
-                git_repository_namespace: None,
-                target_namespace: None,
-                decrypt_sops: true,
-                helm_chart: None,
-                helm_values: None,
-            }),
-            ..Intent::default()
-        };
-        assert_eq!(i.variant().unwrap_err(), IntentError::Ambiguous);
+    fn intent_two_slots_is_ambiguous_across_every_pair() {
+        crate::tagged_union::assert_two_slots_ambiguous::<Intent, _>(two_slot_intent);
     }
 
     #[test]
@@ -570,27 +562,6 @@ mod tests {
             }
             other => panic!("expected Guest, got {other:?}"),
         }
-    }
-
-    #[test]
-    fn guest_plus_nix_is_ambiguous() {
-        let i = Intent {
-            nix: Some(NixIntent {
-                flake_ref: "github:a/b".into(),
-                attribute: "x".into(),
-                system: None,
-                attic_cache: None,
-                extra_args: vec![],
-                delegate_to_nix_build: false,
-            }),
-            guest: Some(GuestIntent {
-                spec: serde_json::json!({"name": "x"}),
-                state_dir: None,
-                allow_remote_build: None,
-            }),
-            ..Intent::default()
-        };
-        assert_eq!(i.variant().unwrap_err(), IntentError::Ambiguous);
     }
 
     #[test]
@@ -811,6 +782,26 @@ mod tests {
                 "canonical_bytes mismatch for {kind:?}"
             );
             assert!(!via_method.is_empty(), "{kind:?} produced empty bytes");
+        }
+    }
+
+    /// Construct an `Intent` with two slots populated — drives the
+    /// pairwise `Ambiguous` sweep through the substrate primitive
+    /// [`crate::tagged_union::assert_two_slots_ambiguous`]. Composes
+    /// the single-slot constructor on top of itself per-field so ONE
+    /// source of truth for per-variant inner payloads is preserved.
+    /// Mirrors `two_slot_source` / `two_slot_channel` / `two_slot_kind`
+    /// in shape across `ProcessSpec`'s tagged-union axis.
+    fn two_slot_intent(a: IntentKind, b: IntentKind) -> Intent {
+        let ia = single_slot_intent(a);
+        let ib = single_slot_intent(b);
+        Intent {
+            nix: ia.nix.or(ib.nix),
+            flux: ia.flux.or(ib.flux),
+            lisp: ia.lisp.or(ib.lisp),
+            container: ia.container.or(ib.container),
+            aplicacao: ia.aplicacao.or(ib.aplicacao),
+            guest: ia.guest.or(ib.guest),
         }
     }
 

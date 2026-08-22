@@ -608,6 +608,78 @@ pub fn assert_kind_list_matches_closed_set<T: TaggedUnion>() {
     );
 }
 
+/// Generic ambiguity testkit — pins that [`TaggedUnion::variant`]
+/// resolves to [`TaggedUnionError::ambiguous`] on EVERY off-diagonal
+/// `(a, b)` pair in [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL)
+/// `× ALL`.
+///
+/// Substrate primitive for the sibling
+/// `_two_slots_is_ambiguous_across_every_pair` tests on `ProcessSpec`
+/// ([`crate::encapsulates::EncapsulationKind`],
+/// [`crate::export::ArtifactSource`], [`crate::export::VectorChannel`])
+/// that pre-lift each restated the same nested-`for a in K::ALL { for
+/// b in K::ALL { if a == b { continue; } … } }` sweep at their own
+/// test bodies — byte-identical projections whose only per-carrier
+/// knobs are the (Kind type + the `two_slot_X(a, b) -> Parent`
+/// two-slot factory) pair. Post-lift each site collapses to ONE
+/// `assert_two_slots_ambiguous::<Xxx, _>(two_slot_X)` invocation.
+///
+/// The `two_slot` closure stays per-site — every one of the three
+/// production sites already owns a `two_slot_kind /
+/// two_slot_source / two_slot_channel` helper that composes two
+/// `single_slot_X`s per-field. The closure IS the "populate both
+/// slots a and b" ground truth for the carrier's field structure;
+/// lifting it into the primitive would collapse per-site field-
+/// composition knowledge that stays deliberately local.
+///
+/// The pair sweep excludes the diagonal (`a == b`) — a single slot
+/// populated is exactly-one, not many, and the round-trip primitive
+/// [`assert_variant_round_trip`] already pins that populated slot's
+/// resolution. This primitive is the peer contract for the Many arm.
+///
+/// A fifth sibling tagged-union parent picks up the ambiguity check
+/// through ONE `impl TaggedUnion for X` block + ONE per-site
+/// `two_slot_X` helper + ONE `assert_two_slots_ambiguous::<X, _>`
+/// call site — no re-authored nested-for sweep at the test surface,
+/// no re-authored `assert_eq!(..., X::Error::Ambiguous, ...)` arm.
+///
+/// The [`crate::lifetime::Lifetime`] site is DELIBERATELY excluded
+/// — `Lifetime` doesn't impl [`TaggedUnion`] (its error carrier has
+/// no `Empty` arm; its `variant()` returns `Ok(Permanent)` on empty
+/// rather than an `Empty` typed error), so the `<T: TaggedUnion>`
+/// bound doesn't reach it. Its per-site ambiguity assertion binds
+/// through the inherent `.variant()` + hand-authored two-slot
+/// probe. Same reasoning as [`resolve_or_err`]'s and
+/// [`assert_variant_round_trip`]'s exclusions.
+#[track_caller]
+pub fn assert_two_slots_ambiguous<T, F>(two_slot: F)
+where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    T::Error: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind, T::Kind) -> T,
+{
+    let expected = T::Error::ambiguous();
+    for a in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        for b in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            if a == b {
+                continue;
+            }
+            let parent = two_slot(a, b);
+            let err = parent.variant().err().unwrap_or_else(|| {
+                panic!("({a:?}, {b:?}) two-slot parent must not resolve to a variant")
+            });
+            assert_eq!(err, expected, "({a:?}, {b:?}) should resolve Ambiguous");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1424,6 +1496,82 @@ mod tests {
             LocalParent::default()
         }
         assert_variant_round_trip::<LocalParent, _>(empty_factory);
+    }
+
+    // -------------------------------------------------------------------
+    // `assert_two_slots_ambiguous` — the ALL×ALL ambiguity sweep as ONE
+    // substrate primitive. Pin the truth table (every off-diagonal pair
+    // resolves to `TaggedUnionError::ambiguous`, diagonal pairs are
+    // skipped, a factory that yields a non-Ambiguous parent fails-loudly
+    // at the caller's site) directly on the sibling-shaped `LocalParent`
+    // scaffold — a regression on either the pair-iteration order or the
+    // expected-carrier composition fails here before any per-parent test
+    // surfaces the drift.
+    // -------------------------------------------------------------------
+
+    /// Every off-diagonal pair across [`LocalKind::ALL`] × `ALL`
+    /// resolves through the substrate primitive to
+    /// [`LocalParentError::Ambiguous`] on the sibling-shaped local
+    /// scaffold. Pins the primitive's Ok arm (no false positives on the
+    /// coherent-impl side) at ONE boundary — a regression that drops
+    /// the diagonal skip, mis-iterates `ClosedSet::ALL`, or composes a
+    /// divergent expected carrier fails here before any per-parent
+    /// inherent test surfaces the drift.
+    #[test]
+    fn assert_two_slots_ambiguous_accepts_coherent_local_impl() {
+        fn two_local(a: LocalKind, b: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            for k in [a, b] {
+                match k {
+                    LocalKind::Alpha => p.alpha = Some(11),
+                    LocalKind::Beta => p.beta = Some(22),
+                    LocalKind::Gamma => p.gamma = Some(33),
+                }
+            }
+            p
+        }
+        assert_two_slots_ambiguous::<LocalParent, _>(two_local);
+    }
+
+    /// A factory that yields a single-slot parent for the FIRST kind
+    /// (ignoring the second) — every off-diagonal pair resolves to
+    /// exactly-one Ok(Variant), NOT Ambiguous — MUST fail-loudly at
+    /// the caller's site through the primitive's "two-slot parent
+    /// must not resolve to a variant" arm. Pin the Ok-side failure
+    /// mode so a regression that mis-routes the substrate primitive's
+    /// resolved-Ok arm past the assertion (silently succeeding on a
+    /// single-slot factory) is caught here.
+    #[test]
+    #[should_panic(expected = "two-slot parent must not resolve to a variant")]
+    fn assert_two_slots_ambiguous_rejects_factory_that_populates_only_one_slot() {
+        fn single_only(a: LocalKind, _: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            match a {
+                LocalKind::Alpha => p.alpha = Some(11),
+                LocalKind::Beta => p.beta = Some(22),
+                LocalKind::Gamma => p.gamma = Some(33),
+            }
+            p
+        }
+        assert_two_slots_ambiguous::<LocalParent, _>(single_only);
+    }
+
+    /// A factory that yields an all-empty parent (so `.variant()`
+    /// resolves to the `Empty` carrier, NOT `Ambiguous`) MUST
+    /// fail-loudly at the caller's site through the primitive's
+    /// `assert_eq!` arm — the composed expected carrier
+    /// [`TaggedUnionError::ambiguous`] mismatches the resolved
+    /// [`TaggedUnionError::empty`] carrier. Pin the Empty-arm failure
+    /// mode so a regression that mis-projects the None arm of
+    /// [`ResolveError`] onto Ambiguous (silently succeeding on an
+    /// empty factory) is caught here.
+    #[test]
+    #[should_panic(expected = "should resolve Ambiguous")]
+    fn assert_two_slots_ambiguous_rejects_factory_that_populates_no_slots() {
+        fn empty_factory(_: LocalKind, _: LocalKind) -> LocalParent {
+            LocalParent::default()
+        }
+        assert_two_slots_ambiguous::<LocalParent, _>(empty_factory);
     }
 
     /// Every one of the five production borrowed-view enums impls

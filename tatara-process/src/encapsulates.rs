@@ -915,22 +915,17 @@ mod tests {
     /// resolver yields `Ambiguous`, exhaustively across every pair in
     /// `ALL × ALL` (excluding the diagonal). A future asymmetry where
     /// one slot would silently shadow another (e.g. an `if-let` chain
-    /// re-introducing first-wins ordering) is caught here.
+    /// re-introducing first-wins ordering) is caught here. Routes
+    /// through the substrate primitive
+    /// [`crate::tagged_union::assert_two_slots_ambiguous`] shared with
+    /// the sibling `artifact_source_two_slots_is_ambiguous_across_every_pair`
+    /// / `vector_channel_two_slots_is_ambiguous_across_every_pair`
+    /// / `intent_two_slots_is_ambiguous_across_every_pair` sites — the
+    /// nested-`for a in K::ALL { for b in K::ALL { … } }` sweep lives
+    /// at ONE substrate site.
     #[test]
     fn encapsulation_kind_two_slots_is_ambiguous_across_every_pair() {
-        for a in EncapsulationTarget::ALL {
-            for b in EncapsulationTarget::ALL {
-                if a == b {
-                    continue;
-                }
-                let k = two_slot_kind(a, b);
-                assert_eq!(
-                    k.variant().unwrap_err(),
-                    EncapsulationKindError::Ambiguous,
-                    "({a:?}, {b:?}) should resolve Ambiguous"
-                );
-            }
-        }
+        crate::tagged_union::assert_two_slots_ambiguous::<EncapsulationKind, _>(two_slot_kind);
     }
 
     // Per-implementor `unknown_X_message_matches_substrate_convention`

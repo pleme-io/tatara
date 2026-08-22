@@ -288,13 +288,11 @@ pub fn evaluate(
 ) -> AutoTerminate {
     // Closed-set projection: ambiguous → no-op; permanent → no-op;
     // ephemeral → fall through to teardown / TTL checks. ONE
-    // `as_ephemeral` gate replaces the previous two-step
-    // match-then-match dance and shares the projection with
-    // `requeue_with_ttl` below.
-    let Ok(variant) = process.spec.lifetime.variant() else {
-        return AutoTerminate::Skip;
-    };
-    let Some(ephemeral) = variant.as_ephemeral() else {
+    // `resolved_ephemeral` gate — the compound `variant().ok() +
+    // as_ephemeral` projection lifted to `impl Lifetime` — replaces
+    // the previous two-step match-then-match dance and shares the
+    // primitive with `requeue_with_ttl` below.
+    let Some(ephemeral) = process.spec.lifetime.resolved_ephemeral() else {
         return AutoTerminate::Skip;
     };
 
@@ -350,12 +348,10 @@ fn is_terminal_or_exit(p: ProcessPhase) -> bool {
 /// `evaluate()` returned `Skip` — picks the smaller of HEARTBEAT and
 /// TTL-remaining so we don't oversleep past expiry.
 pub fn requeue_with_ttl(process: &Process, now: DateTime<Utc>, default: Duration) -> Duration {
-    // Shared `as_ephemeral` projection with [`evaluate`] — the
-    // "give me only the ephemeral case" shape lives at one site.
-    let Ok(variant) = process.spec.lifetime.variant() else {
-        return default;
-    };
-    let Some(e) = variant.as_ephemeral() else {
+    // Shared `resolved_ephemeral` projection with [`evaluate`] — the
+    // "give me only the unambiguous ephemeral case" compound-lift
+    // primitive on `impl Lifetime`.
+    let Some(e) = process.spec.lifetime.resolved_ephemeral() else {
         return default;
     };
     let Some(creation) = process.metadata.creation_timestamp.as_ref() else {

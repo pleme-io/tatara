@@ -149,6 +149,49 @@ impl Lifetime {
     pub fn is_ephemeral(&self) -> bool {
         self.ephemeral.is_some()
     }
+
+    /// Compound projection: `Some(&e)` iff [`Self::variant`] resolves
+    /// unambiguously to `Ephemeral(e)`; `None` for every other outcome
+    /// (empty → `Permanent` default, `Permanent` slot only, or
+    /// [`LifetimeError::Ambiguous`] when BOTH slots are set).
+    ///
+    /// The ambiguous case is deliberately collapsed to `None`: an
+    /// operator-authored spec with both `permanent:` and `ephemeral:`
+    /// populated is a mis-configuration, and every production consumer
+    /// of the pair [`crate::lifetime_clock::evaluate`] +
+    /// [`crate::lifetime_clock::requeue_with_ttl`] previously
+    /// hand-rolled the SAME two-step projection
+    /// (`variant().ok()?.as_ephemeral()`) whose Err-arm and
+    /// Permanent-arm both fell through to the same "no ephemeral
+    /// action" outcome (`AutoTerminate::Skip` / `default` requeue).
+    /// Lifting that chained collapse to ONE substrate primitive puts
+    /// "the ephemeral spec now, iff the resolver picked it" behind a
+    /// single call site and closes the possibility of a per-consumer
+    /// drift where one branch honors ambiguity and the other doesn't.
+    ///
+    /// A future third variant added to `Lifetime` (e.g. `Burst` for
+    /// budget-capped non-TTL lifetimes) reaches this projection
+    /// through the SAME [`Self::variant`] resolver + the SAME
+    /// [`LifetimeVariant::as_ephemeral`] discriminator, so the
+    /// ephemeral-only projection stays intact without a new arm here.
+    ///
+    /// Pinned by
+    /// `resolved_ephemeral_projects_only_the_unambiguous_ephemeral_slot`.
+    pub fn resolved_ephemeral(&self) -> Option<&EphemeralLifetime> {
+        // Pattern-match on the owned `LifetimeVariant` (not
+        // `variant.as_ephemeral()`) so the returned borrow carries the
+        // resolver's `'_self` lifetime through directly instead of the
+        // shorter borrow `as_ephemeral(&self)` synthesizes on the
+        // temporary variant. Symmetric peer discriminator arm
+        // `LifetimeVariant::as_ephemeral` still owns the closed-set
+        // projection for consumers that hold the variant by borrow;
+        // this projection is the compound-lift entry point for
+        // consumers whose call graph starts from `&Lifetime`.
+        match self.variant().ok()? {
+            LifetimeVariant::Ephemeral(e) => Some(e),
+            LifetimeVariant::Permanent(_) => None,
+        }
+    }
 }
 
 const DEFAULT_PERMANENT: PermanentLifetime = PermanentLifetime {};
@@ -714,6 +757,69 @@ mod tests {
         assert_eq!(inner.teardown_policy, TeardownPolicy::OnAttested);
         assert_eq!(inner.max_concurrent, 3);
         assert!(v.as_permanent().is_none());
+    }
+
+    /// `Lifetime::resolved_ephemeral` — the compound-lift primitive that
+    /// composes `variant().ok() + as_ephemeral` — projects to `Some(&e)`
+    /// iff the resolver picks the ephemeral slot unambiguously. All
+    /// three failure modes (empty → permanent default, permanent-only,
+    /// ambiguous) collapse to `None`, matching the pre-lift
+    /// `lifetime_clock::evaluate` + `requeue_with_ttl` "no ephemeral
+    /// action" outcome (`AutoTerminate::Skip` / `default` requeue).
+    ///
+    /// The ambiguous → `None` arm is DELIBERATELY the same outcome as
+    /// permanent-only: an operator-authored spec with both slots
+    /// populated is a mis-configuration, and firing TTL / teardown on
+    /// it would be worse than skipping. Pinning that collapse here
+    /// closes the possibility of a future per-consumer drift where one
+    /// branch honors ambiguity (fires the timed action) and another
+    /// doesn't.
+    ///
+    /// The `Some` arm asserts byte-identity of the projected borrow
+    /// against `self.ephemeral.as_ref().unwrap()` — a mis-wire that
+    /// silently swapped the projection to `self.permanent.as_ref()`
+    /// would surface here as a type mismatch rather than as a runtime
+    /// no-op in production.
+    #[test]
+    fn resolved_ephemeral_projects_only_the_unambiguous_ephemeral_slot() {
+        // 1. Empty (both slots None) — resolves to Permanent default.
+        let l = Lifetime::default();
+        assert!(l.resolved_ephemeral().is_none());
+
+        // 2. Permanent-only.
+        let l = Lifetime {
+            permanent: Some(PermanentLifetime {}),
+            ..Lifetime::default()
+        };
+        assert!(l.resolved_ephemeral().is_none());
+
+        // 3. Ephemeral-only — the ONE arm that projects.
+        let ephemeral = EphemeralLifetime {
+            ttl: "13m".into(),
+            teardown_policy: TeardownPolicy::OnFailed,
+            max_concurrent: 7,
+            exports: vec![],
+        };
+        let l = Lifetime {
+            ephemeral: Some(ephemeral.clone()),
+            ..Lifetime::default()
+        };
+        let e = l.resolved_ephemeral().expect("ephemeral-only must project");
+        assert_eq!(e.ttl, "13m");
+        assert_eq!(e.teardown_policy, TeardownPolicy::OnFailed);
+        assert_eq!(e.max_concurrent, 7);
+        // The borrow points into `self.ephemeral`, not into a temporary.
+        assert!(std::ptr::eq(e, l.ephemeral.as_ref().unwrap()));
+
+        // 4. Ambiguous (both slots set) — collapses to None, NOT to
+        //    the ephemeral inner. Guards against a future refactor
+        //    that silently unwrapped ambiguity to "prefer ephemeral".
+        let l = Lifetime {
+            permanent: Some(PermanentLifetime {}),
+            ephemeral: Some(EphemeralLifetime::default()),
+        };
+        assert_eq!(l.variant().unwrap_err(), LifetimeError::Ambiguous);
+        assert!(l.resolved_ephemeral().is_none());
     }
 
     /// EMPTY-RESOLVES-TO-PERMANENT CONTRACT: the resolver's "no slot

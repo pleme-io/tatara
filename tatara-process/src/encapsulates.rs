@@ -771,19 +771,26 @@ mod tests {
     /// corresponding `Option<…>` slot of `EncapsulationKind`. A future
     /// rename of either the struct field OR the `as_str` arm lands here
     /// at one site, instead of drifting between the typed surface, the
-    /// YAML wire format, and the `EncapsulationKindError::Empty`
-    /// diagnostic. Drives the closed set via `ALL`.
+    /// wire format, and the `EncapsulationKindError::Empty` diagnostic.
+    ///
+    /// Routes through the substrate primitive
+    /// [`crate::tagged_union::assert_single_slot_key_matches_label`],
+    /// which pins the exactly-one-key + name-equality projection
+    /// byte-identically for every `<T: TaggedUnion + Serialize>`
+    /// implementor — the wire-alignment testkit shared with the sibling
+    /// `intent_kind_as_str_matches_intent_field_name` /
+    /// `artifact_kind_as_str_matches_field_name` /
+    /// `channel_kind_as_str_matches_field_name` sites. Pre-lift this
+    /// site restated a weaker YAML-substring check (`yaml.contains(&format!("{key}:"))`)
+    /// which would silently pass on drift where a non-tagged-union
+    /// field was added to `EncapsulationKind`; post-lift the primitive's
+    /// JSON exactly-one form catches that drift too — at ONE substrate
+    /// site.
     #[test]
     fn encapsulation_target_as_str_matches_field_name() {
-        for t in EncapsulationTarget::ALL {
-            let k = single_slot_kind(t);
-            let yaml = serde_yaml::to_string(&k).expect("serialize");
-            let key = t.as_str();
-            assert!(
-                yaml.contains(&format!("{key}:")),
-                "as_str(={key:?}) for {t:?} not present in serialized YAML:\n{yaml}"
-            );
-        }
+        crate::tagged_union::assert_single_slot_key_matches_label::<EncapsulationKind, _>(
+            single_slot_kind,
+        );
     }
 
     /// CANONICAL-NAMES PIN: byte-exact camelCase wire-format pin —

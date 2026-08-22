@@ -624,91 +624,25 @@ mod tests {
     /// any field lands here at one site — and the `Empty` diagnostic
     /// composed from `INTENT_KIND_LIST` stays coherent with the
     /// wire format.
+    ///
+    /// Routes through the substrate primitive
+    /// [`crate::tagged_union::assert_single_slot_key_matches_label`],
+    /// which pins the exactly-one-key + name-equality projection
+    /// byte-identically for every `<T: TaggedUnion + Serialize>`
+    /// implementor — the wire-alignment testkit shared with the sibling
+    /// `encapsulation_target_as_str_matches_field_name` /
+    /// `artifact_kind_as_str_matches_field_name` /
+    /// `channel_kind_as_str_matches_field_name` sites. Pre-lift the
+    /// four bodies each restated the same serialize-and-inspect sweep
+    /// at the test surface (three through a weaker YAML-substring
+    /// check; this site alone through the strong JSON-object exactly-
+    /// one form); post-lift the projection lives at ONE substrate
+    /// primitive and every site binds through a single call — the
+    /// three YAML sites simultaneously upgrade to the strong exactly-
+    /// one form.
     #[test]
     fn intent_kind_as_str_matches_intent_field_name() {
-        for kind in IntentKind::ALL {
-            // Pre-serialize an `Intent` carrying just this kind's
-            // slot populated; the only key in the resulting JSON
-            // object must equal `kind.as_str()`.
-            let i = match kind {
-                IntentKind::Nix => Intent {
-                    nix: Some(NixIntent {
-                        flake_ref: "f".into(),
-                        attribute: "a".into(),
-                        system: None,
-                        attic_cache: None,
-                        extra_args: vec![],
-                        delegate_to_nix_build: false,
-                    }),
-                    ..Intent::default()
-                },
-                IntentKind::Flux => Intent {
-                    flux: Some(FluxIntent {
-                        git_repository: "g".into(),
-                        path: "p".into(),
-                        git_repository_namespace: None,
-                        target_namespace: None,
-                        decrypt_sops: true,
-                        helm_chart: None,
-                        helm_values: None,
-                    }),
-                    ..Intent::default()
-                },
-                IntentKind::Lisp => Intent {
-                    lisp: Some(LispIntent {
-                        source: "()".into(),
-                        reader: "tatara-lisp".into(),
-                        version: "v1".into(),
-                        bindings: BTreeMap::new(),
-                    }),
-                    ..Intent::default()
-                },
-                IntentKind::Container => Intent {
-                    container: Some(ContainerIntent {
-                        image: "x".into(),
-                        replicas: None,
-                        command: vec![],
-                        args: vec![],
-                        env: BTreeMap::new(),
-                        workload_kind: WorkloadKind::default(),
-                    }),
-                    ..Intent::default()
-                },
-                IntentKind::Aplicacao => Intent {
-                    aplicacao: Some(AplicacaoIntent {
-                        chart_ref: "x".into(),
-                        version: "1".into(),
-                        profile: String::new(),
-                        values_overlay: serde_json::Value::Null,
-                        release_name: None,
-                        target_namespace: None,
-                        install_timeout: None,
-                    }),
-                    ..Intent::default()
-                },
-                IntentKind::Guest => Intent {
-                    guest: Some(GuestIntent {
-                        spec: serde_json::json!({"name": "x"}),
-                        state_dir: None,
-                        allow_remote_build: None,
-                    }),
-                    ..Intent::default()
-                },
-            };
-            let v = serde_json::to_value(&i).expect("Intent serializes");
-            let obj = v.as_object().expect("Intent serializes to object");
-            let keys: Vec<&String> = obj.keys().collect();
-            assert_eq!(
-                keys.len(),
-                1,
-                "exactly one slot populated for kind {kind:?}, got {keys:?}"
-            );
-            assert_eq!(
-                keys[0],
-                kind.as_str(),
-                "as_str() must match serde field name for {kind:?}"
-            );
-        }
+        crate::tagged_union::assert_single_slot_key_matches_label::<Intent, _>(single_slot_intent);
     }
 
     /// ROUND-TRIP CONTRACT: `IntentKind::select(intent).map(|v|

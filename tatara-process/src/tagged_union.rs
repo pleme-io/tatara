@@ -680,6 +680,92 @@ where
     }
 }
 
+/// Generic wire-key / kind-label alignment testkit — pins that every
+/// single-slot parent serializes to a JSON object with EXACTLY ONE key
+/// whose name equals `<T::Kind as tatara_closed_set::ClosedSet>::label`
+/// on the populated slot's kind.
+///
+/// Substrate primitive for the four sibling
+/// `X_kind_as_str_matches_field_name` / `intent_kind_as_str_matches_intent_field_name`
+/// tests on `ProcessSpec` ([`crate::intent::Intent`],
+/// [`crate::encapsulates::EncapsulationKind`],
+/// [`crate::export::ArtifactSource`], [`crate::export::VectorChannel`])
+/// that pre-lift each restated the same wire-format sweep at their own
+/// test bodies:
+///
+/// 1. For each `k in K::ALL`, construct a single-slot parent via
+///    the site-local `single_slot_X(k) -> Parent` factory.
+/// 2. Serialize it to the wire format and assert that the emitted
+///    key matches `k.as_str()`.
+///
+/// Post-lift each site's alignment test collapses to ONE
+/// `assert_single_slot_key_matches_label::<T, _>(single_slot_X)`
+/// invocation whose body IS the substrate primitive's own dispatch.
+/// A fifth sibling picks up the alignment check through ONE call site.
+///
+/// The primitive projects through `serde_json::to_value` rather than
+/// `serde_yaml::to_string` for two reasons: (1) the check is
+/// structural (exactly-one-key + name equality), not textual (substring
+/// against a `"{key}:"` YAML fragment), so a future site that gains
+/// non-tagged-union metadata fields is caught HERE at the exactly-one
+/// arm — the YAML-substring check the three encapsulates / export sites
+/// carried pre-lift would silently pass on such drift. (2) serde's
+/// field-rename projection (`rename_all = "camelCase"`) is format-
+/// agnostic, so a JSON check pins the SAME invariant a YAML check
+/// would pin, byte-identically. Every one of the four production
+/// parents already emits exactly one key on a single-slot populate —
+/// their `#[serde(default, skip_serializing_if = "Option::is_none")]`
+/// annotations on every tagged-union slot guarantee it — so upgrading
+/// the three YAML sites to the JSON exactly-one check is a strict
+/// strengthening.
+///
+/// The `single_slot` closure stays per-site — every one of the four
+/// production sites already owns a `single_slot_intent /
+/// single_slot_kind / single_slot_source / single_slot_channel` helper
+/// that constructs a minimally-valid parent with the addressed slot's
+/// inner spec populated; the closure IS the "populate slot k" ground
+/// truth for the carrier's field structure. Reused verbatim from the
+/// [`assert_variant_round_trip`] primitive.
+///
+/// The [`crate::lifetime::Lifetime`] site is DELIBERATELY excluded —
+/// `Lifetime` doesn't impl [`TaggedUnion`] (its `variant()` returns
+/// `Ok(Permanent)` on empty rather than an `Empty` typed error), so
+/// the `<T: TaggedUnion>` bound doesn't reach it. Same reasoning as
+/// [`resolve_or_err`]'s and [`assert_variant_round_trip`]'s and
+/// [`assert_two_slots_ambiguous`]'s exclusions.
+#[track_caller]
+pub fn assert_single_slot_key_matches_label<T, F>(single_slot: F)
+where
+    T: TaggedUnion + serde::Serialize,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+{
+    for k in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(k);
+        let value = serde_json::to_value(&parent)
+            .unwrap_or_else(|e| panic!("single_slot({k:?}) must serialize as JSON: {e}"));
+        let obj = value.as_object().unwrap_or_else(|| {
+            panic!("single_slot({k:?}) must serialize to a JSON object, got {value}")
+        });
+        let keys: Vec<&String> = obj.keys().collect();
+        assert_eq!(
+            keys.len(),
+            1,
+            "single_slot({k:?}) must serialize to exactly one populated field, got keys: {keys:?}",
+        );
+        let expected = <T::Kind as tatara_closed_set::ClosedSet>::label(k);
+        assert_eq!(
+            keys[0].as_str(),
+            expected,
+            "wire-key drift for {k:?}: single_slot's populated field '{}' must equal <T::Kind as ClosedSet>::label ({expected:?})",
+            keys[0],
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -942,10 +1028,21 @@ mod tests {
     /// [`TaggedUnion::variant`] default method can be exercised
     /// directly on a sibling-shaped-but-crate-local parent, isolated
     /// from the four production tagged unions.
-    #[derive(Default)]
+    ///
+    /// Derives [`serde::Serialize`] with `skip_serializing_if =
+    /// "Option::is_none"` on every slot so the wire-format primitive
+    /// [`assert_single_slot_key_matches_label`] can be exercised
+    /// directly against the sibling-shaped scaffold — mirrors the
+    /// `#[serde(default, skip_serializing_if = "Option::is_none")]`
+    /// annotation every one of the four production tagged unions
+    /// carries on its own slots.
+    #[derive(Default, serde::Serialize)]
     struct LocalParent {
+        #[serde(skip_serializing_if = "Option::is_none")]
         alpha: Option<u32>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         beta: Option<u32>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         gamma: Option<u32>,
     }
 
@@ -1056,6 +1153,212 @@ mod tests {
         assert_kind_list_matches_closed_set::<crate::encapsulates::EncapsulationKind>();
         assert_kind_list_matches_closed_set::<crate::export::ArtifactSource>();
         assert_kind_list_matches_closed_set::<crate::export::VectorChannel>();
+    }
+
+    /// Every one of the four production `.variant()` sites on
+    /// `ProcessSpec` binds through the wire-key primitive
+    /// [`assert_single_slot_key_matches_label`] coherently — every
+    /// per-site `single_slot_X(k)` factory serializes to a JSON object
+    /// with EXACTLY ONE key whose name equals `k.label()` (delegating
+    /// to each Kind's inherent `as_str`, matching the parent's serde
+    /// `rename_all = "camelCase"` projection). Sweep every production
+    /// implementor at ONE substrate boundary so a regression that
+    /// drifts a production site's `single_slot_X` factory (populates
+    /// the wrong slot; leaks residual slots between calls) OR the
+    /// parent's field-to-kind alignment (`as_str` returns "receipts"
+    /// but the field is named `receipt`) fails BOTH at the per-crate
+    /// test site AND at this substrate-wide sweep — no per-implementor
+    /// test site can drop the check silently.
+    #[test]
+    fn every_production_tagged_union_binds_through_the_wire_key_testkit_primitive() {
+        assert_single_slot_key_matches_label::<crate::intent::Intent, _>(single_slot_intent_probe);
+        assert_single_slot_key_matches_label::<crate::encapsulates::EncapsulationKind, _>(
+            single_slot_encapsulation_kind_probe,
+        );
+        assert_single_slot_key_matches_label::<crate::export::ArtifactSource, _>(
+            single_slot_artifact_source_probe,
+        );
+        assert_single_slot_key_matches_label::<crate::export::VectorChannel, _>(
+            single_slot_vector_channel_probe,
+        );
+    }
+
+    // Substrate-local single-slot factories — mirror the per-site
+    // `single_slot_X` test helpers each production site owns, so the
+    // substrate-wide sweep above binds through the wire-key primitive
+    // without reaching across the per-crate test-module boundaries the
+    // per-site helpers are scoped to. The primitive only requires that
+    // the addressed slot on the parent is populated; the inner spec's
+    // exact field values are irrelevant to the wire-key check.
+
+    fn single_slot_intent_probe(kind: crate::intent::IntentKind) -> crate::intent::Intent {
+        use crate::intent::{
+            AplicacaoIntent, ContainerIntent, FluxIntent, GuestIntent, Intent, IntentKind,
+            LispIntent, NixIntent, WorkloadKind,
+        };
+        match kind {
+            IntentKind::Nix => Intent {
+                nix: Some(NixIntent {
+                    flake_ref: "f".into(),
+                    attribute: "a".into(),
+                    system: None,
+                    attic_cache: None,
+                    extra_args: vec![],
+                    delegate_to_nix_build: false,
+                }),
+                ..Intent::default()
+            },
+            IntentKind::Flux => Intent {
+                flux: Some(FluxIntent {
+                    git_repository: "g".into(),
+                    path: "p".into(),
+                    git_repository_namespace: None,
+                    target_namespace: None,
+                    decrypt_sops: true,
+                    helm_chart: None,
+                    helm_values: None,
+                }),
+                ..Intent::default()
+            },
+            IntentKind::Lisp => Intent {
+                lisp: Some(LispIntent {
+                    source: "()".into(),
+                    reader: "tatara-lisp".into(),
+                    version: "v1".into(),
+                    bindings: std::collections::BTreeMap::new(),
+                }),
+                ..Intent::default()
+            },
+            IntentKind::Container => Intent {
+                container: Some(ContainerIntent {
+                    image: "x".into(),
+                    replicas: None,
+                    command: vec![],
+                    args: vec![],
+                    env: std::collections::BTreeMap::new(),
+                    workload_kind: WorkloadKind::default(),
+                }),
+                ..Intent::default()
+            },
+            IntentKind::Aplicacao => Intent {
+                aplicacao: Some(AplicacaoIntent {
+                    chart_ref: "x".into(),
+                    version: "1".into(),
+                    profile: String::new(),
+                    values_overlay: serde_json::Value::Null,
+                    release_name: None,
+                    target_namespace: None,
+                    install_timeout: None,
+                }),
+                ..Intent::default()
+            },
+            IntentKind::Guest => Intent {
+                guest: Some(GuestIntent {
+                    spec: serde_json::json!({"name": "x"}),
+                    state_dir: None,
+                    allow_remote_build: None,
+                }),
+                ..Intent::default()
+            },
+        }
+    }
+
+    fn single_slot_encapsulation_kind_probe(
+        target: crate::encapsulates::EncapsulationTarget,
+    ) -> crate::encapsulates::EncapsulationKind {
+        use crate::encapsulates::{
+            BareWorkload, EncapsulationKind, EncapsulationTarget, ExistingHelmRelease,
+            ExistingKustomization,
+        };
+        match target {
+            EncapsulationTarget::ExistingHelmRelease => EncapsulationKind {
+                existing_helm_release: Some(ExistingHelmRelease {
+                    namespace: "ns".into(),
+                    name: "hr".into(),
+                    release_name: "rel".into(),
+                }),
+                ..EncapsulationKind::default()
+            },
+            EncapsulationTarget::ExistingKustomization => EncapsulationKind {
+                existing_kustomization: Some(ExistingKustomization {
+                    namespace: "ns".into(),
+                    name: "ks".into(),
+                }),
+                ..EncapsulationKind::default()
+            },
+            EncapsulationTarget::BareWorkload => {
+                let mut sel = std::collections::BTreeMap::new();
+                sel.insert("app".into(), "x".into());
+                EncapsulationKind {
+                    bare_workload: Some(BareWorkload {
+                        namespace: "ns".into(),
+                        selector: sel,
+                    }),
+                    ..EncapsulationKind::default()
+                }
+            }
+        }
+    }
+
+    fn single_slot_artifact_source_probe(
+        kind: crate::export::ArtifactKind,
+    ) -> crate::export::ArtifactSource {
+        use crate::export::{
+            ArtifactKind, ArtifactSource, ProcessSnapshotSource, ReceiptsSource, ReportFormat,
+            RunMarkerSource, TestReportSource,
+        };
+        match kind {
+            ArtifactKind::Receipts => ArtifactSource {
+                receipts: Some(ReceiptsSource::default()),
+                ..ArtifactSource::default()
+            },
+            ArtifactKind::TestReport => ArtifactSource {
+                test_report: Some(TestReportSource {
+                    configmap: "cm".into(),
+                    key: "k".into(),
+                    format: ReportFormat::Junit,
+                    namespace: None,
+                }),
+                ..ArtifactSource::default()
+            },
+            ArtifactKind::ProcessSnapshot => ArtifactSource {
+                process_snapshot: Some(ProcessSnapshotSource::default()),
+                ..ArtifactSource::default()
+            },
+            ArtifactKind::RunMarker => ArtifactSource {
+                run_marker: Some(RunMarkerSource::default()),
+                ..ArtifactSource::default()
+            },
+        }
+    }
+
+    fn single_slot_vector_channel_probe(
+        kind: crate::export::ChannelKind,
+    ) -> crate::export::VectorChannel {
+        use crate::export::{
+            ChannelKind, HttpEventChannel, NatsSubjectChannel, StdoutChannel, VectorChannel,
+        };
+        match kind {
+            ChannelKind::HttpEvent => VectorChannel {
+                http_event: Some(HttpEventChannel {
+                    endpoint: None,
+                    signal_type: "x".into(),
+                }),
+                ..VectorChannel::default()
+            },
+            ChannelKind::NatsSubject => VectorChannel {
+                nats_subject: Some(NatsSubjectChannel {
+                    subject: "s".into(),
+                    stream: "S".into(),
+                    url: None,
+                }),
+                ..VectorChannel::default()
+            },
+            ChannelKind::Stdout => VectorChannel {
+                stdout: Some(StdoutChannel::default()),
+                ..VectorChannel::default()
+            },
+        }
     }
 
     /// The trait's `KIND_LIST` associated const IS the same
@@ -1275,9 +1578,19 @@ mod tests {
     /// Local sibling-shaped parent for the macro-emitted-impls test —
     /// distinct from [`LocalParent`] so the macro's emitted impls
     /// don't collide with the hand-rolled trait impls above.
-    #[derive(Default)]
+    ///
+    /// Derives [`serde::Serialize`] with `skip_serializing_if =
+    /// "Option::is_none"` on every slot so the wire-format primitive
+    /// [`assert_single_slot_key_matches_label`] can be exercised
+    /// through the macro-emitted `TaggedUnion` impl path — pins the
+    /// substrate-wide guarantee that a fifth sibling landing through
+    /// [`declare_tagged_union_impls!`] picks up the wire-alignment
+    /// check for free.
+    #[derive(Default, serde::Serialize)]
     struct MacroLocalParent {
+        #[serde(skip_serializing_if = "Option::is_none")]
         foo: Option<u32>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         bar: Option<u32>,
     }
 
@@ -1572,6 +1885,136 @@ mod tests {
             LocalParent::default()
         }
         assert_two_slots_ambiguous::<LocalParent, _>(empty_factory);
+    }
+
+    // -------------------------------------------------------------------
+    // `assert_single_slot_key_matches_label` — the wire-key / kind-label
+    // alignment sweep as ONE substrate primitive. Pin the truth table
+    // (every populated slot serializes to exactly one JSON key whose
+    // name equals the addressing kind's ClosedSet label; a factory that
+    // populates the wrong slot / no slot / multiple slots fails-loudly
+    // at the caller's site) directly on the sibling-shaped `LocalParent`
+    // scaffold — a regression on either the exactly-one arm or the
+    // name-equality arm fails here before any per-parent inherent test
+    // surfaces the drift.
+    // -------------------------------------------------------------------
+
+    /// Every kind across [`LocalKind::ALL`] serializes through the
+    /// substrate primitive to a JSON object with EXACTLY ONE key whose
+    /// name equals `<LocalKind as ClosedSet>::label` on the addressed
+    /// kind. Pins the primitive's Ok arm (no false positives on the
+    /// coherent-impl side) at ONE boundary — a regression that inspects
+    /// the wrong serde value (e.g. `to_string` instead of `to_value`),
+    /// counts fields off-by-one, or projects the wrong `ClosedSet`
+    /// method (`labels_joined` instead of `label`) fails here before any
+    /// per-parent inherent test surfaces the drift.
+    #[test]
+    fn assert_single_slot_key_matches_label_accepts_coherent_local_impl() {
+        fn make_local(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            }
+        }
+        assert_single_slot_key_matches_label::<LocalParent, _>(make_local);
+    }
+
+    /// A factory that returns a single-slot parent for the WRONG kind
+    /// (populates `beta` regardless of what kind is asked for) MUST
+    /// fail-loudly at the caller's site through the primitive's
+    /// name-equality arm — the emitted key does not match the addressed
+    /// kind's label. Pins the drift-detection failure mode so a
+    /// regression that drops the `assert_eq!(keys[0], label)` arm
+    /// (silently succeeding on any-key-at-all) is caught here. The
+    /// caller's site is the `#[should_panic]` boundary through the
+    /// primitive's `#[track_caller]` compound-lift.
+    #[test]
+    #[should_panic(expected = "wire-key drift")]
+    fn assert_single_slot_key_matches_label_rejects_factory_that_populates_wrong_slot() {
+        fn always_beta(_: LocalKind) -> LocalParent {
+            LocalParent {
+                beta: Some(22),
+                ..Default::default()
+            }
+        }
+        assert_single_slot_key_matches_label::<LocalParent, _>(always_beta);
+    }
+
+    /// A factory that returns an all-empty parent (so serializing
+    /// yields ZERO keys, not exactly-one) MUST fail-loudly at the
+    /// caller's site through the primitive's exactly-one arm. Pins the
+    /// zero-key failure mode so a regression that projects
+    /// `obj.keys().count() >= 1` (rather than `== 1`) is caught here.
+    #[test]
+    #[should_panic(expected = "exactly one populated field")]
+    fn assert_single_slot_key_matches_label_rejects_factory_that_populates_no_slots() {
+        fn empty_factory(_: LocalKind) -> LocalParent {
+            LocalParent::default()
+        }
+        assert_single_slot_key_matches_label::<LocalParent, _>(empty_factory);
+    }
+
+    /// A factory that returns a parent with TWO populated slots (so
+    /// serializing yields two keys, not exactly-one) MUST fail-loudly
+    /// at the caller's site through the primitive's exactly-one arm.
+    /// Pins the many-keys failure mode so a regression that projects
+    /// `obj.keys().count() <= 1` (rather than `== 1`) is caught here.
+    /// Cross-pins the substrate promise that a single-slot factory
+    /// truly populates ONE slot — a future factory bug that leaks
+    /// residual populated slots between calls (e.g. via shared mutable
+    /// state) is caught HERE at the primitive boundary.
+    #[test]
+    #[should_panic(expected = "exactly one populated field")]
+    fn assert_single_slot_key_matches_label_rejects_factory_that_populates_two_slots() {
+        fn two_slot_factory(_: LocalKind) -> LocalParent {
+            LocalParent {
+                alpha: Some(1),
+                beta: Some(2),
+                gamma: None,
+            }
+        }
+        assert_single_slot_key_matches_label::<LocalParent, _>(two_slot_factory);
+    }
+
+    /// The macro-emitted [`MacroLocalParent`] scaffold impls
+    /// [`TaggedUnion`] through the [`declare_tagged_union_impls!`]
+    /// three-block macro AND additionally derives `serde::Serialize` +
+    /// `#[serde(skip_serializing_if = "Option::is_none")]` on every
+    /// slot — so the wire-key primitive dispatches on the MACRO-emitted
+    /// impl path byte-identically with the hand-rolled [`LocalParent`]
+    /// path above. Pins the substrate-wide guarantee that a fifth
+    /// sibling landing through the macro picks up the wire-alignment
+    /// check for free, without a hand-rolled `TaggedUnion` block, so
+    /// long as its serde derives match the substrate-wide
+    /// `skip_serializing_if = "Option::is_none"` shape every production
+    /// site already carries. A regression that mis-routes the
+    /// primitive's serialize call through the WRONG entry point (e.g.
+    /// calling a bespoke `to_json` that bypasses serde) is caught here.
+    #[test]
+    fn assert_single_slot_key_matches_label_accepts_macro_emitted_impl() {
+        fn make_macro_local(k: MacroLocalKind) -> MacroLocalParent {
+            match k {
+                MacroLocalKind::Foo => MacroLocalParent {
+                    foo: Some(7),
+                    bar: None,
+                },
+                MacroLocalKind::Bar => MacroLocalParent {
+                    foo: None,
+                    bar: Some(8),
+                },
+            }
+        }
+        assert_single_slot_key_matches_label::<MacroLocalParent, _>(make_macro_local);
     }
 
     /// Every one of the five production borrowed-view enums impls

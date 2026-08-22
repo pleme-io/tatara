@@ -1492,21 +1492,25 @@ mod tests {
     /// diagnostic. The mapping is the table the serde derive produces
     /// against the struct field declarations above; reading the YAML
     /// output pins it without re-deriving by hand.
+    ///
+    /// Routes through the substrate primitive
+    /// [`crate::tagged_union::assert_single_slot_key_matches_label`],
+    /// which pins the exactly-one-key + name-equality projection
+    /// byte-identically for every `<T: TaggedUnion + Serialize>`
+    /// implementor — the wire-alignment testkit shared with the sibling
+    /// `intent_kind_as_str_matches_intent_field_name` /
+    /// `encapsulation_target_as_str_matches_field_name` /
+    /// `channel_kind_as_str_matches_field_name` sites. Pre-lift this
+    /// site restated a weaker YAML-substring check (`yaml.contains(&format!("{key}:"))`)
+    /// which would silently pass on drift where a non-tagged-union
+    /// field was added to `ArtifactSource`; post-lift the primitive's
+    /// JSON exactly-one form catches that drift too — at ONE substrate
+    /// site.
     #[test]
     fn artifact_kind_as_str_matches_field_name() {
-        // Round-trip a populated source through serde_yaml and confirm
-        // the emitted key name agrees with `ArtifactKind::as_str()` for
-        // each variant. Drives the closed set via `ALL` so a fifth
-        // variant lands here automatically once construction is added.
-        for kind in ArtifactKind::ALL {
-            let s = single_slot_source(kind);
-            let yaml = serde_yaml::to_string(&s).expect("serialize");
-            let key = kind.as_str();
-            assert!(
-                yaml.contains(&format!("{key}:")),
-                "as_str(={key:?}) for {kind:?} not present in serialized YAML:\n{yaml}"
-            );
-        }
+        crate::tagged_union::assert_single_slot_key_matches_label::<ArtifactSource, _>(
+            single_slot_source,
+        );
     }
 
     /// CANONICAL-NAMES PIN: byte-exact camelCase wire-format pin —
@@ -1658,17 +1662,25 @@ mod tests {
     /// here at one site, instead of drifting between the typed
     /// surface, the YAML wire format, and the `ChannelError::Empty`
     /// diagnostic.
+    ///
+    /// Routes through the substrate primitive
+    /// [`crate::tagged_union::assert_single_slot_key_matches_label`],
+    /// which pins the exactly-one-key + name-equality projection
+    /// byte-identically for every `<T: TaggedUnion + Serialize>`
+    /// implementor — the wire-alignment testkit shared with the sibling
+    /// `intent_kind_as_str_matches_intent_field_name` /
+    /// `encapsulation_target_as_str_matches_field_name` /
+    /// `artifact_kind_as_str_matches_field_name` sites. Pre-lift this
+    /// site restated a weaker YAML-substring check (`yaml.contains(&format!("{key}:"))`)
+    /// which would silently pass on drift where a non-tagged-union
+    /// field was added to `VectorChannel`; post-lift the primitive's
+    /// JSON exactly-one form catches that drift too — at ONE substrate
+    /// site.
     #[test]
     fn channel_kind_as_str_matches_field_name() {
-        for kind in ChannelKind::ALL {
-            let c = single_slot_channel(kind);
-            let yaml = serde_yaml::to_string(&c).expect("serialize");
-            let key = kind.as_str();
-            assert!(
-                yaml.contains(&format!("{key}:")),
-                "as_str(={key:?}) for {kind:?} not present in serialized YAML:\n{yaml}"
-            );
-        }
+        crate::tagged_union::assert_single_slot_key_matches_label::<VectorChannel, _>(
+            single_slot_channel,
+        );
     }
 
     /// CANONICAL-NAMES PIN: byte-exact camelCase wire-format pin —

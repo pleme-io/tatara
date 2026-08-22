@@ -37166,6 +37166,132 @@ impl Expander {
         Ok(out)
     }
 
+    /// Route `forms` through [`expand_program`](Self::expand_program), then
+    /// hand the owned post-expansion `Vec<Sexp>` to `on_expanded` — the
+    /// substrate primitive every from-forms consumer that walks the
+    /// POST-EXPANSION slice through the substrate's `iter_*_calls_to_any`
+    /// projections routes through. Owns the shared two-step composition
+    /// `let expanded = self.expand_program(forms)?; on_expanded(expanded)`
+    /// each from-forms slice-walking consumer previously spelled inline
+    /// verbatim.
+    ///
+    /// Pre-lift TWO sibling `impl Expander` methods each hand-wrote the
+    /// same scaffold in its own body, differing only in which slice-side
+    /// classifier walk received the post-expansion `&[Sexp]`:
+    ///
+    ///   * [`Self::expand_and_collect_calls_to_any`] →
+    ///     [`crate::ast::iter_calls_to_any`] (bare-kwargs × typed-decoded
+    ///     classifier)
+    ///   * [`Self::expand_and_collect_named_calls_to_any`] →
+    ///     [`crate::ast::iter_named_calls_to_any`] (named NAME-then-kwargs
+    ///     × typed-decoded classifier)
+    ///
+    /// Post-lift each of those two siblings is a ONE-LINE delegate that
+    /// captures ONLY the per-site slice walk (a call to
+    /// `iter_calls_to_any(&expanded, decode).map(...).collect()` or its
+    /// named peer) at the callback slot. The `let expanded =
+    /// self.expand_program(forms)?; …` two-step composition — including
+    /// the `?`-based ordering that ensures an `expand_program` error
+    /// (`defmacro`-NAME-not-a-symbol, `OptionalParamMalformed`,
+    /// `RestParamMissingName`, et al.) short-circuits BEFORE the
+    /// slice-side walk runs and BEFORE `iter_*_calls_to_any` binds its
+    /// `decode`/`project` closures against the post-expansion borrow —
+    /// lives at ONE substrate primitive here.
+    ///
+    /// Peer of [`Self::with_source_forms`] on the substrate's Expander
+    /// pipeline — `with_source_forms` owns the `read(src)? + on_forms`
+    /// scaffold on the source→forms axis (every from-source consumer's
+    /// entry gate), and `with_expanded_forms` owns the
+    /// `expand_program(forms)? + on_expanded` scaffold on the
+    /// forms→expanded axis (every from-forms slice-walking consumer's
+    /// entry gate). Together the two primitives name the two composition
+    /// points every from-source classifier consumer stacks against — the
+    /// from-source posture routes through `with_source_forms` with a
+    /// `Self::expand_and_collect_*_calls_to_any` sibling threaded through
+    /// the callback slot, and THAT sibling routes through
+    /// `with_expanded_forms` with its per-axis slice walk threaded through
+    /// this primitive's `on_expanded` slot. A regression that drifts ONE
+    /// consumer's expand-then-walk pipeline shape from the other cannot
+    /// reach the substrate's runtime — both consumers compose through the
+    /// SAME `expand_program(forms)? + on_expanded(expanded)` body.
+    ///
+    /// `X` is the from-expanded consumer's own return payload — the
+    /// primitive stays payload-agnostic on this axis, so the two
+    /// production consumers (whose return types are `Vec<R>` for both the
+    /// bare-kwargs and named classifier variants, with `R` supplied per-
+    /// call) both compose through the same primitive without a per-payload
+    /// carve-out. Same posture the sibling [`Self::with_source_forms`]
+    /// primitive carries on the source→forms axis and
+    /// [`crate::compile::split_name_slot`] carries on the named-form gate
+    /// axis.
+    ///
+    /// The `on_expanded` slot takes an OWNED `Vec<Sexp>` rather than a
+    /// borrowed `&[Sexp]` for the SAME reason the sibling
+    /// [`Self::with_source_forms`] takes an owned `Vec<Sexp>` in its
+    /// `on_forms` slot: it keeps the callback's borrow of the post-
+    /// expansion slice bound to a concrete `let expanded = …; &expanded`
+    /// binding inside the callback body rather than to the primitive's
+    /// caller-facing HRTB. Consumers that thread a per-call generic
+    /// classifier `D: FnMut(&str) -> Option<T>` into the slice-side
+    /// `iter_*_calls_to_any` projection can carry `D`'s implicit borrow
+    /// lifetime through the closure's own frame without proving `D` outlives
+    /// a HRTB-quantified `for<'r> FnOnce(&'r [Sexp])` closure input — a
+    /// bound the generic-classifier consumers cannot satisfy without a
+    /// spurious `'static` widening.
+    ///
+    /// `on_expanded` is `FnOnce(Vec<Sexp>) -> Result<X>` — the primitive
+    /// invokes the callback exactly once on the expansion-success branch
+    /// and never on the expansion-error branch. `FnOnce` (rather than
+    /// `FnMut`) matches the primitive's own single-invocation contract,
+    /// same posture the sibling [`Self::with_source_forms`] carries on the
+    /// source→forms axis.
+    ///
+    /// Future structural promotion of the from-forms posture (a caller-
+    /// supplied diagnostic label for the expand step so
+    /// `format_diagnostic(..., Some(label))` fires with the operator-
+    /// supplied context; a `#[track_caller]` annotation so a downstream
+    /// expander-error surfaces the caller-site span through the primitive;
+    /// a debug-only structured-audit hook that records every from-forms
+    /// slice-walk dispatch with the length of `forms` for telemetry; a
+    /// future third slice-side walk axis — e.g. a `iter_*_calls_to_any`
+    /// peer that decodes head-symbol AND arity pre-gate) lands at ONE
+    /// substrate primitive here — both production consumers pick up the
+    /// upgrade mechanically with no per-consumer hand-edit. Pre-lift the
+    /// same upgrade would have required editing TWO `let expanded = …;
+    /// crate::ast::iter_*_calls_to_any(&expanded, …)` bodies in lockstep,
+    /// and a future third slice-side classifier consumer would have made
+    /// the recur worse.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+    /// two-step `expand + delegate` scaffold recurred at TWO from-forms
+    /// slice-walking consumers on the `Expander` surface (past the ≥ 2
+    /// PRIME-DIRECTIVE duplication trigger) and is lifted to ONE
+    /// substrate primitive here, exactly as its from-source peer
+    /// [`Self::with_source_forms`] lifted the `read + delegate` scaffold
+    /// at its five from-source consumers. THEORY.md §II.1 invariant 2
+    /// (free middle) — the expand-then-dispatch composition lives at ONE
+    /// substrate primitive; a regression that drifts ONE consumer's
+    /// `?`-ordering or expander-error propagation from the other becomes
+    /// structurally impossible because there is no per-consumer scaffold
+    /// to drift.
+    ///
+    /// Frontier inspiration: MLIR's `PassManager::run(Op op)` — the
+    /// canonical "expand the IR through the registered lowering passes,
+    /// then hand the expanded form to a caller-supplied downstream
+    /// consumer" primitive that every MLIR classifier pass composes
+    /// through. Translated through pleme-io primitives here as ONE
+    /// `with_expanded_forms` primitive over the shared `(forms,
+    /// on_expanded)` pair, with each consumer supplying its axis-typed
+    /// slice-walk callback to the primitive's `on_expanded` slot.
+    pub(crate) fn with_expanded_forms<X>(
+        &mut self,
+        forms: Vec<Sexp>,
+        on_expanded: impl FnOnce(Vec<Sexp>) -> Result<X>,
+    ) -> Result<X> {
+        let expanded = self.expand_program(forms)?;
+        on_expanded(expanded)
+    }
+
     /// Read `src` into top-level forms via [`crate::reader::read`], then
     /// invoke `on_forms` with `&mut self` and the reader's `Vec<Sexp>` —
     /// the substrate primitive every from-source posture on the `Expander`
@@ -37659,10 +37785,20 @@ impl Expander {
         D: FnMut(&str) -> Option<T>,
         F: FnMut(T, &[Sexp]) -> Result<R>,
     {
-        let expanded = self.expand_program(forms)?;
-        crate::ast::iter_calls_to_any(&expanded, decode)
-            .map(|(decoded, args)| project(decoded, args))
-            .collect()
+        // Delegate to the substrate primitive
+        // [`Self::with_expanded_forms`] with the bare-kwargs slice-side
+        // typed-decoded classifier walk [`crate::ast::iter_calls_to_any`]
+        // threaded through the `on_expanded` callback slot. The `move`
+        // capture ferries `decode` + `project` verbatim across the
+        // primitive boundary into the slice walk, whose per-form yielded
+        // `(T, &[Sexp])` pair is consumed by the caller-supplied
+        // projection and collected eagerly into a `Result<Vec<R>>`
+        // before the primitive's owned `Vec<Sexp>` binding is dropped.
+        self.with_expanded_forms(forms, move |expanded| {
+            crate::ast::iter_calls_to_any(&expanded, decode)
+                .map(|(decoded, args)| project(decoded, args))
+                .collect()
+        })
     }
 
     /// Read a source string into top-level forms via [`crate::reader::read`],
@@ -38068,13 +38204,28 @@ impl Expander {
         // drifts a future debug-mode logger, span-aware borrow walker,
         // or fused-iterator invariant from one row to the other becomes
         // structurally impossible at the slice boundary.
-        let expanded = self.expand_program(forms)?;
-        crate::ast::iter_named_calls_to_any(&expanded, decode)
-            .map(|maybe_triple| {
-                let (decoded, name, spec_args) = maybe_triple?;
-                project(decoded, name, spec_args)
-            })
-            .collect()
+        //
+        // Post-lift the `let expanded = self.expand_program(forms)?; …`
+        // two-step scaffold routes through the substrate primitive
+        // [`Self::with_expanded_forms`] — the SAME primitive the peer
+        // bare-kwargs classifier consumer [`Self::expand_and_collect_calls_to_any`]
+        // routes through, so both from-forms slice-walking rows of the
+        // `Expander` surface share ONE composition point on the
+        // forms→expanded axis (peer to how [`Self::with_source_forms`]
+        // owns the source→forms axis for the five from-source consumers).
+        // The `move` capture ferries `decode` + `project` verbatim across
+        // the primitive boundary into the named slice walk, whose per-
+        // form yielded `Result<(T, &str, &[Sexp])>` triple is unwrapped
+        // and consumed by the caller-supplied projection before the
+        // primitive's owned `Vec<Sexp>` binding is dropped.
+        self.with_expanded_forms(forms, move |expanded| {
+            crate::ast::iter_named_calls_to_any(&expanded, decode)
+                .map(|maybe_triple| {
+                    let (decoded, name, spec_args) = maybe_triple?;
+                    project(decoded, name, spec_args)
+                })
+                .collect()
+        })
     }
 
     /// Read a source string into top-level forms via [`crate::reader::read`],
@@ -40259,8 +40410,8 @@ mod with_source_forms_tests {
         // silently swallowed the error or re-wrapped it as a reader
         // error surfaces here.
         let mut exp = Expander::new();
-        let result: Result<()> = exp
-            .with_source_forms("(foo)", |_exp, _forms| Err(LispError::Missing("witness")));
+        let result: Result<()> =
+            exp.with_source_forms("(foo)", |_exp, _forms| Err(LispError::Missing("witness")));
         assert!(
             matches!(result, Err(LispError::Missing(s)) if s == "witness"),
             "on_forms Err payload must ride through the primitive verbatim, got: {result:?}",
@@ -40335,6 +40486,269 @@ mod with_source_forms_tests {
         assert!(
             matches!(via_peer, Err(LispError::UnmatchedOpenParen { .. })),
             "peer must surface reader error through the primitive, got: {via_peer:?}",
+        );
+    }
+}
+
+#[cfg(test)]
+mod with_expanded_forms_tests {
+    //! Contract + delegation pins for [`Expander::with_expanded_forms`] —
+    //! the substrate primitive every from-forms slice-walking consumer on
+    //! the `Expander` surface routes through. The primitive owns the
+    //! shared `let expanded = self.expand_program(forms)?;
+    //! on_expanded(expanded)` two-step composition; the two sibling
+    //! from-forms slice-walking consumers
+    //! ([`Expander::expand_and_collect_calls_to_any`] on the bare-kwargs
+    //! axis and [`Expander::expand_and_collect_named_calls_to_any`] on the
+    //! named NAME-then-kwargs axis) each collapse to a one-line delegate
+    //! capturing only their per-site slice-walk (a
+    //! `crate::ast::iter_*_calls_to_any(&expanded, decode).map(...).collect()`
+    //! composition) at the callback slot.
+    //!
+    //! The tests pin the primitive's independent contract (invocation
+    //! discipline, expander-error short-circuit, payload propagation,
+    //! `&mut self` threading through the underlying `expand_program`
+    //! `defmacro` absorption) AND per-consumer delegation-agreement at
+    //! the primitive-to-peer boundary — a regression that inlined a
+    //! divergent `let expanded = …` scaffold at ONE peer would surface
+    //! at that peer's own delegation pin rather than as silent drift at
+    //! every downstream from-forms slice-walking dispatcher.
+    use super::*;
+    use crate::error::LispError;
+    use crate::reader::read;
+    use std::cell::Cell;
+
+    #[test]
+    fn primitive_on_valid_forms_invokes_on_expanded_once_with_expander_output() {
+        // Promise 1 (MATCHING SUCCESS): the primitive invokes the
+        // `on_expanded` callback exactly once on the expand-success
+        // branch, passing the owned post-expansion `Vec<Sexp>` verbatim.
+        // A `Cell<u32>` counter binds the invocation count so a
+        // regression that (say) called `on_expanded` twice or skipped it
+        // on the success branch surfaces here at the primitive's own
+        // boundary rather than as silent drift at the two peer callers.
+        let mut exp = Expander::new();
+        let forms = read("(foo) (bar)").unwrap();
+        let count = Cell::new(0u32);
+        let observed_len = Cell::new(0usize);
+        let result: Result<()> = exp.with_expanded_forms(forms, |expanded| {
+            count.set(count.get() + 1);
+            observed_len.set(expanded.len());
+            Ok(())
+        });
+        assert!(result.is_ok(), "expand-success branch must return Ok");
+        assert_eq!(
+            count.get(),
+            1,
+            "on_expanded must fire exactly once on success",
+        );
+        assert_eq!(
+            observed_len.get(),
+            2,
+            "on_expanded must receive expand_program's Vec<Sexp> verbatim (2 top-level forms)",
+        );
+    }
+
+    #[test]
+    fn primitive_on_expander_error_short_circuits_before_on_expanded() {
+        // Promise 2 (EXPANDER ERROR): the primitive's
+        // `expand_program(forms)?` gate fires BEFORE `on_expanded` runs
+        // — an `expand_program` error (here a `defmacro`-NAME-not-a-
+        // symbol rejection, which surfaces as a typed
+        // `LispError::DefmacroNonSymbolName` variant from
+        // `macro_def_from`) short-circuits at the primitive boundary,
+        // propagating the typed variant unchanged and leaving
+        // `on_expanded` uninvoked. Load-bearing for every from-forms
+        // slice-walking consumer, since a regression that fired
+        // `on_expanded` on a rejected expansion would silently walk the
+        // classifier over PRE-expansion forms — leaking macro-call
+        // syntax past the expander's own gate.
+        let mut exp = Expander::new();
+        let forms = read("(defmacro 42 (x) `,x)").unwrap();
+        let count = Cell::new(0u32);
+        let result: Result<()> = exp.with_expanded_forms(forms, |_expanded| {
+            count.set(count.get() + 1);
+            Ok(())
+        });
+        assert!(
+            matches!(result, Err(LispError::DefmacroNonSymbolName { .. })),
+            "expander-error branch must short-circuit with typed variant, got: {result:?}",
+        );
+        assert_eq!(
+            count.get(),
+            0,
+            "on_expanded must NOT fire on the expander-error branch",
+        );
+    }
+
+    #[test]
+    fn primitive_propagates_on_expanded_ok_payload_verbatim() {
+        // Promise 3 (OK PROPAGATION): a successful `on_expanded` return
+        // rides through the primitive unchanged — the primitive is
+        // payload-agnostic on the `X` axis, so any type the from-forms
+        // consumer produces is threaded verbatim. Pin against an owned
+        // `String` payload since neither of the two production consumers
+        // uses one, keeping this test independent of the payload-shape
+        // conventions of the two sibling from-forms slice-walking
+        // consumers (both `Vec<R>`).
+        let mut exp = Expander::new();
+        let forms = read("(foo)").unwrap();
+        let result = exp.with_expanded_forms(forms, |_expanded| Ok("witness".to_string()));
+        assert_eq!(result.unwrap(), "witness");
+    }
+
+    #[test]
+    fn primitive_propagates_on_expanded_err_payload_verbatim() {
+        // Promise 4 (ERR PROPAGATION): an `on_expanded`-returned error
+        // rides through the primitive's `Result<X>` return unchanged —
+        // the primitive does not intercept, re-wrap, or promote
+        // `on_expanded` errors. Pin against the closed-set structural
+        // `LispError::Missing` variant so a regression that (say)
+        // silently swallowed the error or re-wrapped it as an
+        // expander error surfaces here.
+        let mut exp = Expander::new();
+        let forms = read("(foo)").unwrap();
+        let result: Result<()> =
+            exp.with_expanded_forms(forms, |_expanded| Err(LispError::Missing("witness")));
+        assert!(
+            matches!(result, Err(LispError::Missing(s)) if s == "witness"),
+            "on_expanded Err payload must ride through the primitive verbatim, got: {result:?}",
+        );
+    }
+
+    #[test]
+    fn primitive_threads_mut_self_reference_through_expand_program_for_defmacro_absorption() {
+        // Promise 5 (MUT SELF): the primitive threads the caller's own
+        // `&mut self` borrow through `expand_program` verbatim —
+        // `defmacro`-registration side-effects fire on the caller's own
+        // `Expander` (not on an intermediary clone). A regression that
+        // introduced an intermediary clone or borrow scope would fail
+        // here: the outer expander would carry NO macros after the
+        // primitive returned.
+        let mut exp = Expander::new();
+        assert_eq!(exp.len(), 0, "fresh expander must start with zero macros");
+        let forms = read("(defmacro id (x) `,x)").unwrap();
+        let expanded_len = exp
+            .with_expanded_forms(forms, |expanded| Ok(expanded.len()))
+            .expect("defmacro absorption must succeed");
+        assert_eq!(
+            expanded_len, 0,
+            "defmacro-only source yields zero top-level forms after absorption",
+        );
+        assert_eq!(
+            exp.len(),
+            1,
+            "primitive must thread &mut self so defmacro registers on the caller's Expander",
+        );
+    }
+
+    #[test]
+    fn expand_and_collect_calls_to_any_delegates_through_the_primitive_on_valid_forms() {
+        // Delegation pin (bare-kwargs classifier consumer): the primitive
+        // and the peer `Self::expand_and_collect_calls_to_any` produce
+        // byte-identical outputs on the same forms. Pre-lift the peer
+        // inlined `let expanded = self.expand_program(forms)?;
+        // iter_calls_to_any(&expanded, decode).map(...).collect()`; post-
+        // lift the peer is a one-line delegate that hands the slice-side
+        // classifier walk to the primitive's `on_expanded` callback slot.
+        // A regression that inlined a divergent scaffold at the peer body
+        // surfaces at this delegation pin rather than as silent drift at
+        // every peer caller.
+        let src = "(defmacro id (x) `,x) (foo 1) (id (bar 2))";
+        let mut via_peer_exp = Expander::new();
+        let via_peer: Vec<usize> = via_peer_exp
+            .expand_and_collect_calls_to_any(
+                read(src).unwrap(),
+                |h| (h == "foo" || h == "bar").then_some(()),
+                |(), args| Ok(args.len()),
+            )
+            .expect("peer must yield Vec<usize>");
+        let mut via_primitive_exp = Expander::new();
+        let via_primitive: Result<Vec<usize>> =
+            via_primitive_exp.with_expanded_forms(read(src).unwrap(), |expanded| {
+                crate::ast::iter_calls_to_any(&expanded, |h| {
+                    (h == "foo" || h == "bar").then_some(())
+                })
+                .map(|((), args)| Ok(args.len()))
+                .collect()
+            });
+        assert_eq!(
+            via_primitive.expect("primitive must yield Vec<usize>"),
+            via_peer,
+            "primitive and peer must produce byte-identical projections over the bare-kwargs axis",
+        );
+    }
+
+    #[test]
+    fn expand_and_collect_calls_to_any_delegates_expander_error_through_the_primitive() {
+        // Delegation pin (expander-error propagation): the bare-kwargs
+        // peer's expander-error short-circuit fires through the
+        // primitive's `expand_program(forms)?` gate rather than through a
+        // duplicate inline gate at the peer body. A regression that
+        // inlined a divergent expander-error handling at the peer
+        // surfaces here.
+        let src = "(defmacro 42 (x) `,x)";
+        let mut peer_exp = Expander::new();
+        let via_peer = peer_exp.expand_and_collect_calls_to_any(
+            read(src).unwrap(),
+            |_h| Some(()),
+            |(), _args| Ok(()),
+        );
+        let mut prim_exp = Expander::new();
+        let via_primitive: Result<Vec<()>> =
+            prim_exp.with_expanded_forms(read(src).unwrap(), |expanded| {
+                crate::ast::iter_calls_to_any(&expanded, |_h| Some(()))
+                    .map(|((), _args)| Ok(()))
+                    .collect()
+            });
+        assert!(
+            matches!(via_primitive, Err(LispError::DefmacroNonSymbolName { .. })),
+            "primitive must surface expander error, got: {via_primitive:?}",
+        );
+        assert!(
+            matches!(via_peer, Err(LispError::DefmacroNonSymbolName { .. })),
+            "peer must surface expander error through the primitive, got: {via_peer:?}",
+        );
+    }
+
+    #[test]
+    fn expand_and_collect_named_calls_to_any_delegates_through_the_primitive_on_valid_forms() {
+        // Delegation pin (named NAME-then-kwargs classifier consumer):
+        // the primitive and the peer
+        // `Self::expand_and_collect_named_calls_to_any` produce byte-
+        // identical outputs on the same forms. Pre-lift the peer inlined
+        // `let expanded = self.expand_program(forms)?;
+        // iter_named_calls_to_any(&expanded, decode).map(...).collect()`;
+        // post-lift the peer is a one-line delegate that hands the
+        // named slice-side classifier walk to the primitive's
+        // `on_expanded` callback slot. A regression that inlined a
+        // divergent scaffold at the peer body surfaces at this
+        // delegation pin.
+        let src = "(defmonitor liveness :query \"up\") (defmonitor readiness :query \"ready\")";
+        let mut via_peer_exp = Expander::new();
+        let via_peer: Vec<String> = via_peer_exp
+            .expand_and_collect_named_calls_to_any(
+                read(src).unwrap(),
+                |h| (h == "defmonitor").then_some((("mon",), "defmonitor")),
+                |(_,), name, _args| Ok(name.to_string()),
+            )
+            .expect("peer must yield Vec<String>");
+        let mut via_primitive_exp = Expander::new();
+        let via_primitive: Result<Vec<String>> =
+            via_primitive_exp.with_expanded_forms(read(src).unwrap(), |expanded| {
+                crate::ast::iter_named_calls_to_any(&expanded, |h| {
+                    (h == "defmonitor").then_some((("mon",), "defmonitor"))
+                })
+                .map(|maybe_triple| {
+                    let ((_,), name, _args) = maybe_triple?;
+                    Ok(name.to_string())
+                })
+                .collect()
+            });
+        assert_eq!(
+            via_primitive.expect("primitive must yield Vec<String>"),
+            via_peer,
+            "primitive and peer must produce byte-identical projections over the named axis",
         );
     }
 }

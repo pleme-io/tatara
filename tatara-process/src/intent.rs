@@ -185,19 +185,27 @@ pub(crate) const INTENT_KIND_LIST: &str = "nix/flux/lisp/container/aplicacao/gue
 
 impl Intent {
     /// Resolve to exactly one variant. Errors on zero or many.
-    /// Sweeps over `IntentKind::ALL` so a 7th variant added with an
-    /// `ALL` entry is structurally honored at this site — no
-    /// parallel `is_some()` count array, no if-let-else chain, no
-    /// `unreachable!()`. The Empty diagnostic carries the closed-set
-    /// list via `INTENT_KIND_LIST`; the sibling error-mapping arms
-    /// share ONE substrate primitive
-    /// ([`crate::tagged_union::resolve_or_err`]) with every other
-    /// `Xxx::variant()` site on `ProcessSpec`.
+    ///
+    /// One-line inherent forwarder that delegates the sweep body to
+    /// the substrate primitive [`crate::tagged_union::TaggedUnion::variant`]
+    /// — every one of the four production `.variant()` sites on
+    /// `ProcessSpec` (Intent, EncapsulationKind, ArtifactSource,
+    /// VectorChannel) dispatches through this ONE default body so
+    /// the resolve-sweep pattern lives at ONE substrate site. The
+    /// inherent surface stays load-bearing so consumer callsites
+    /// like `intent.variant()` don't need `use TaggedUnion`.
     pub fn variant(&self) -> Result<IntentVariant<'_>, IntentError> {
-        crate::tagged_union::resolve_or_err(
-            IntentKind::ALL.into_iter().map(|k| k.select(self)),
-            INTENT_KIND_LIST,
-        )
+        <Self as crate::tagged_union::TaggedUnion>::variant(self)
+    }
+}
+
+impl crate::tagged_union::VariantSelector<Intent> for IntentKind {
+    type Variant<'a> = IntentVariant<'a>;
+    fn select<'a>(self, parent: &'a Intent) -> Option<IntentVariant<'a>>
+    where
+        Self: 'a,
+    {
+        IntentKind::select(self, parent)
     }
 }
 

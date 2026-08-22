@@ -239,19 +239,25 @@ pub(crate) const ENCAPSULATION_TARGET_LIST: &str =
 impl EncapsulationKind {
     /// Resolve to exactly one variant. Errors on zero or many.
     ///
-    /// Sweeps over [`EncapsulationTarget::ALL`] so a fourth variant added
-    /// with an `ALL` entry is structurally honored at this site — no
-    /// parallel `is_some()` count, no per-variant if-let chain, no
-    /// `unreachable!()`. The Empty diagnostic carries the closed-set
-    /// list via `ENCAPSULATION_TARGET_LIST`; the sibling error-mapping
-    /// arms share ONE substrate primitive
-    /// ([`crate::tagged_union::resolve_or_err`]) with every other
-    /// `Xxx::variant()` site on `ProcessSpec`.
+    /// One-line inherent forwarder that delegates the sweep body to
+    /// the substrate primitive [`crate::tagged_union::TaggedUnion::variant`]
+    /// — same delegation shape as [`crate::intent::Intent::variant`],
+    /// [`crate::export::ArtifactSource::variant`], and
+    /// [`crate::export::VectorChannel::variant`]. The inherent surface
+    /// stays load-bearing so consumer callsites like `k.variant()`
+    /// don't need `use TaggedUnion`.
     pub fn variant(&self) -> Result<EncapsulationKindVariant<'_>, EncapsulationKindError> {
-        crate::tagged_union::resolve_or_err(
-            EncapsulationTarget::ALL.into_iter().map(|t| t.select(self)),
-            ENCAPSULATION_TARGET_LIST,
-        )
+        <Self as crate::tagged_union::TaggedUnion>::variant(self)
+    }
+}
+
+impl crate::tagged_union::VariantSelector<EncapsulationKind> for EncapsulationTarget {
+    type Variant<'a> = EncapsulationKindVariant<'a>;
+    fn select<'a>(self, parent: &'a EncapsulationKind) -> Option<EncapsulationKindVariant<'a>>
+    where
+        Self: 'a,
+    {
+        EncapsulationTarget::select(self, parent)
     }
 }
 

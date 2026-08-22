@@ -242,19 +242,25 @@ pub(crate) const ARTIFACT_KIND_LIST: &str = "receipts/testReport/processSnapshot
 
 impl ArtifactSource {
     /// Resolve to exactly one variant. Errors on zero or many.
-    /// Sweeps over `ArtifactKind::ALL` so a fifth variant added with an
-    /// `ALL` entry is structurally honored at this site — no parallel
-    /// `is_some()` count, no per-variant if-let chain, no
-    /// `unreachable!()`. The Empty diagnostic carries the closed-set
-    /// list via `ARTIFACT_KIND_LIST`; the sibling error-mapping arms
-    /// share ONE substrate primitive
-    /// ([`crate::tagged_union::resolve_or_err`]) with every other
-    /// `Xxx::variant()` site on `ProcessSpec`.
+    ///
+    /// One-line inherent forwarder that delegates the sweep body to
+    /// the substrate primitive [`crate::tagged_union::TaggedUnion::variant`]
+    /// — same delegation shape as the three sibling `.variant()` sites
+    /// on `ProcessSpec`. The inherent surface stays load-bearing so
+    /// consumer callsites like `s.variant()` don't need
+    /// `use TaggedUnion`.
     pub fn variant(&self) -> Result<ArtifactVariant<'_>, ArtifactError> {
-        crate::tagged_union::resolve_or_err(
-            ArtifactKind::ALL.into_iter().map(|k| k.select(self)),
-            ARTIFACT_KIND_LIST,
-        )
+        <Self as crate::tagged_union::TaggedUnion>::variant(self)
+    }
+}
+
+impl crate::tagged_union::VariantSelector<ArtifactSource> for ArtifactKind {
+    type Variant<'a> = ArtifactVariant<'a>;
+    fn select<'a>(self, parent: &'a ArtifactSource) -> Option<ArtifactVariant<'a>>
+    where
+        Self: 'a,
+    {
+        ArtifactKind::select(self, parent)
     }
 }
 
@@ -665,19 +671,25 @@ pub(crate) const CHANNEL_KIND_LIST: &str = "httpEvent/natsSubject/stdout";
 
 impl VectorChannel {
     /// Resolve to exactly one channel variant. Errors on zero or many.
-    /// Sweeps over `ChannelKind::ALL` so a fourth variant added with an
-    /// `ALL` entry is structurally honored at this site — no parallel
-    /// `is_some()` count, no per-variant if-let chain, no
-    /// `unreachable!()`. The Empty diagnostic carries the closed-set
-    /// list via `CHANNEL_KIND_LIST`; the sibling error-mapping arms
-    /// share ONE substrate primitive
-    /// ([`crate::tagged_union::resolve_or_err`]) with every other
-    /// `Xxx::variant()` site on `ProcessSpec`.
+    ///
+    /// One-line inherent forwarder that delegates the sweep body to
+    /// the substrate primitive [`crate::tagged_union::TaggedUnion::variant`]
+    /// — same delegation shape as the three sibling `.variant()` sites
+    /// on `ProcessSpec`. The inherent surface stays load-bearing so
+    /// consumer callsites like `c.variant()` don't need
+    /// `use TaggedUnion`.
     pub fn variant(&self) -> Result<ChannelVariant<'_>, ChannelError> {
-        crate::tagged_union::resolve_or_err(
-            ChannelKind::ALL.into_iter().map(|k| k.select(self)),
-            CHANNEL_KIND_LIST,
-        )
+        <Self as crate::tagged_union::TaggedUnion>::variant(self)
+    }
+}
+
+impl crate::tagged_union::VariantSelector<VectorChannel> for ChannelKind {
+    type Variant<'a> = ChannelVariant<'a>;
+    fn select<'a>(self, parent: &'a VectorChannel) -> Option<ChannelVariant<'a>>
+    where
+        Self: 'a,
+    {
+        ChannelKind::select(self, parent)
     }
 }
 

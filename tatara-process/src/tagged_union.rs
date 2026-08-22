@@ -189,8 +189,53 @@ macro_rules! declare_tagged_union_error {
     };
 }
 
+/// Project the borrowed-view of a tagged-union variant addressed by
+/// this closed-set discriminator.
+///
+/// Companion trait to [`TaggedUnion`] — binds a `Kind` closed-set to
+/// the parent `P` it discriminates AND to the borrowed-view
+/// [`Self::Variant<'a>`] the resolver hands out. Every one of the
+/// four production `.variant()` sites on `ProcessSpec`
+/// ([`crate::intent::Intent`], [`crate::encapsulates::EncapsulationKind`],
+/// [`crate::export::ArtifactSource`], [`crate::export::VectorChannel`])
+/// pre-lift restated the same
+/// `Self::Kind::ALL.into_iter().map(|k| k.select(self))` sweep body
+/// verbatim at its inherent `.variant()`. Post-lift the trait binds
+/// `(k.select(self), Variant<'a>)` onto ONE typed contract per Kind
+/// so [`TaggedUnion::variant`]'s default body can dispatch the sweep
+/// generically — the four sibling inherent bodies collapse to
+/// one-line delegations and a fifth sibling picks up the sweep for
+/// free through ONE `impl VariantSelector` block.
+///
+/// The GAT `Variant<'a>` carries the parent's lifetime so a borrowed
+/// view projected from `&'a P` composes typed with the resolver's
+/// short-circuit — every projection stays a compile-time refinement,
+/// no `Box<dyn ...>` erasure.
+pub trait VariantSelector<P: ?Sized>: Copy + 'static {
+    /// The borrowed-view enum returned by the parent's inherent
+    /// `.variant()` method — one arm per closed-set variant, each
+    /// arm carrying a `&'a` reference into the parent's populated
+    /// slot. Bound generically here so [`TaggedUnion::variant`]'s
+    /// default body can name the return type without restating it
+    /// per parent.
+    type Variant<'a>
+    where
+        P: 'a,
+        Self: 'a;
+
+    /// Project a `&'a P` borrow into the optional typed variant view
+    /// for `self` (the addressed discriminator). Returns `None` iff
+    /// the matching slot on `P` is `None`. Composes the closed-set
+    /// sweep [`TaggedUnion::variant`] loops over.
+    fn select<'a>(self, parent: &'a P) -> Option<Self::Variant<'a>>
+    where
+        Self: 'a;
+}
+
 /// Declarative surface that names the (Kind, Error, KIND_LIST) triple
-/// a tagged-union `.variant()` site publishes to the substrate.
+/// a tagged-union `.variant()` site publishes to the substrate — and
+/// provides the sweep body as ONE default method every implementor
+/// picks up for free.
 ///
 /// Every one of the four production `.variant()` sites on `ProcessSpec`
 /// ([`crate::intent::Intent`], [`crate::encapsulates::EncapsulationKind`],
@@ -207,10 +252,17 @@ macro_rules! declare_tagged_union_error {
 /// generic code binds to `<T: TaggedUnion>` instead of restating the
 /// per-parent quadruple of associated names.
 ///
-/// The trait is DECLARATIVE — no default `variant()` method, no
-/// callsite disruption. Existing `pub fn variant()` inherent methods
-/// on each parent stay load-bearing; the trait's role is naming the
-/// family so testkit primitives + generic consumers can bind to it.
+/// The [`Self::variant`] default method is the substrate primitive
+/// every inherent `.variant()` on the four production sites delegates
+/// to — one-line inherent forwarders preserve the load-bearing
+/// calling convention (so no downstream callsite needs
+/// `use crate::tagged_union::TaggedUnion` to reach `.variant()`) while
+/// the resolve-sweep body lives at ONE substrate site. Adding a fifth
+/// sibling means ONE `impl TaggedUnion` block + ONE
+/// `impl VariantSelector<Self>` block on the sibling `Kind` + ONE
+/// one-line inherent forwarder — no re-authored 5-line
+/// `resolve_or_err(K::ALL.into_iter().map(|k| k.select(self)),
+/// KIND_LIST)` sweep body.
 ///
 /// The `Kind` type is bound to [`tatara_closed_set::ClosedSet`] so
 /// generic testkit primitives (starting with
@@ -218,7 +270,9 @@ macro_rules! declare_tagged_union_error {
 /// `<Self::Kind as ClosedSet>::labels_joined("/")` against
 /// [`Self::KIND_LIST`] byte-identically across every implementor —
 /// the diagnostic-stability invariant every sibling pre-lift pinned
-/// through a hand-rolled per-site test body.
+/// through a hand-rolled per-site test body. It is additionally
+/// bound to [`VariantSelector<Self>`] so [`Self::variant`]'s default
+/// body reaches `k.select(self)` generically.
 ///
 /// The [`crate::lifetime::Lifetime`] site is DELIBERATELY not routed
 /// through this trait — its `variant()` returns `Ok(Permanent)` on
@@ -230,8 +284,11 @@ pub trait TaggedUnion: Sized {
     /// Bound to [`tatara_closed_set::ClosedSet`] so the generic
     /// diagnostic-stability testkit ([`assert_kind_list_matches_closed_set`])
     /// can project `<Self::Kind as ClosedSet>::labels_joined("/")`
-    /// against [`Self::KIND_LIST`] byte-identically.
-    type Kind: tatara_closed_set::ClosedSet;
+    /// against [`Self::KIND_LIST`] byte-identically. Additionally
+    /// bound to [`VariantSelector<Self>`] so [`Self::variant`]'s
+    /// default body can dispatch `k.select(self)` at each
+    /// [`ClosedSet::ALL`] entry generically.
+    type Kind: tatara_closed_set::ClosedSet + VariantSelector<Self>;
 
     /// The typed error carrier returned by the parent's inherent
     /// `.variant()` method — projects onto the shared
@@ -247,6 +304,33 @@ pub trait TaggedUnion: Sized {
     /// to `Self::Kind` without updating this constant (or a renamed
     /// variant) fails-loudly at the testkit boundary.
     const KIND_LIST: &'static str;
+
+    /// Sweep over every [`Self::Kind`] discriminator in
+    /// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) order,
+    /// projecting each into the parent's borrowed variant view via
+    /// [`VariantSelector::select`], and resolve to exactly one populated
+    /// variant through [`resolve_or_err`]. Errors on zero (with
+    /// [`Self::KIND_LIST`] carried on the [`TaggedUnionError::empty`]
+    /// arm) or many.
+    ///
+    /// The substrate primitive every one of the four production
+    /// `.variant()` sites on `ProcessSpec` dispatches through — the
+    /// per-parent inherent `.variant()` is a one-line delegation to
+    /// this default so the calling convention (`intent.variant()`,
+    /// `channel.variant()`, ...) stays load-bearing at the callsite
+    /// without every consumer picking up `use TaggedUnion`.
+    ///
+    /// Adding a fifth sibling picks up this body for free — no
+    /// re-authored `resolve_or_err(...)` sweep at the impl block.
+    fn variant(&self) -> Result<<Self::Kind as VariantSelector<Self>>::Variant<'_>, Self::Error> {
+        resolve_or_err(
+            <Self::Kind as tatara_closed_set::ClosedSet>::ALL
+                .iter()
+                .copied()
+                .map(|k| k.select(self)),
+            Self::KIND_LIST,
+        )
+    }
 }
 
 /// Generic diagnostic-stability testkit — pins that [`TaggedUnion::KIND_LIST`]
@@ -539,8 +623,41 @@ mod tests {
 
     /// Local parent type — impls [`TaggedUnion`] with a `KIND_LIST`
     /// literal that matches the canonical `<LocalKind as
-    /// ClosedSet>::labels_joined("/")` projection.
-    struct LocalParent;
+    /// ClosedSet>::labels_joined("/")` projection. Carries three
+    /// `Option<u32>` slots so the substrate-primitive
+    /// [`TaggedUnion::variant`] default method can be exercised
+    /// directly on a sibling-shaped-but-crate-local parent, isolated
+    /// from the four production tagged unions.
+    #[derive(Default)]
+    struct LocalParent {
+        alpha: Option<u32>,
+        beta: Option<u32>,
+        gamma: Option<u32>,
+    }
+
+    /// Borrowed-view of a populated slot on [`LocalParent`] — the
+    /// return type of [`LocalKind::select`] and the substrate-primitive
+    /// [`TaggedUnion::variant`] default on `LocalParent`.
+    #[derive(Debug, PartialEq)]
+    enum LocalVariant<'a> {
+        Alpha(&'a u32),
+        Beta(&'a u32),
+        Gamma(&'a u32),
+    }
+
+    impl VariantSelector<LocalParent> for LocalKind {
+        type Variant<'a> = LocalVariant<'a>;
+        fn select<'a>(self, parent: &'a LocalParent) -> Option<LocalVariant<'a>>
+        where
+            Self: 'a,
+        {
+            match self {
+                Self::Alpha => parent.alpha.as_ref().map(LocalVariant::Alpha),
+                Self::Beta => parent.beta.as_ref().map(LocalVariant::Beta),
+                Self::Gamma => parent.gamma.as_ref().map(LocalVariant::Gamma),
+            }
+        }
+    }
 
     crate::declare_tagged_union_error! {
         pub(super) LocalParentError,
@@ -575,6 +692,20 @@ mod tests {
     #[should_panic(expected = "TaggedUnion KIND_LIST drift")]
     fn assert_kind_list_matches_closed_set_rejects_drifted_impl() {
         struct Drifted;
+        // The `TaggedUnion` trait bounds `Kind: VariantSelector<Self>`;
+        // the drift test only exercises `assert_kind_list_matches_closed_set`
+        // (which reaches the (Kind, KIND_LIST) pair, not the sweep body),
+        // so a payload-free `Variant<'a> = ()` + always-`None` `select`
+        // satisfies the bound without wiring a real projection.
+        impl VariantSelector<Drifted> for LocalKind {
+            type Variant<'a> = ();
+            fn select<'a>(self, _: &'a Drifted) -> Option<()>
+            where
+                Self: 'a,
+            {
+                None
+            }
+        }
         impl TaggedUnion for Drifted {
             type Kind = LocalKind;
             type Error = LocalParentError;
@@ -624,5 +755,186 @@ mod tests {
             <crate::export::VectorChannel as TaggedUnion>::KIND_LIST,
             crate::export::CHANNEL_KIND_LIST,
         ));
+    }
+
+    // -------------------------------------------------------------------
+    // `TaggedUnion::variant` default method — substrate primitive every
+    // production `.variant()` inherent method delegates to. Pin the
+    // four-outcome truth table (Empty on all-none, Ambiguous on many,
+    // Ok on exactly-one at every position) directly on the sibling-
+    // shaped local parent + local kind + local variant scaffold, so a
+    // regression on the default body's short-circuit or
+    // ClosedSet::ALL iteration shape fails here — before any per-parent
+    // inherent test surfaces the drift.
+    // -------------------------------------------------------------------
+
+    /// Every populated position across [`LocalKind::ALL`] resolves to
+    /// its own [`LocalVariant`] arm through the default body's
+    /// `resolve_or_err(<Kind as ClosedSet>::ALL.iter().copied()
+    /// .map(|k| k.select(self)), KIND_LIST)` sweep. Pin every position
+    /// so a regression that drifts the iteration order (or drops the
+    /// `.iter().copied()` bridge to owned-`Copy` Kinds) fails at ONE
+    /// substrate boundary rather than at four per-parent inherent test
+    /// sites.
+    #[test]
+    fn tagged_union_default_variant_resolves_each_populated_slot() {
+        let mut p = LocalParent {
+            alpha: Some(11),
+            ..Default::default()
+        };
+        assert_eq!(
+            <LocalParent as TaggedUnion>::variant(&p).unwrap(),
+            LocalVariant::Alpha(&11)
+        );
+        p = LocalParent {
+            beta: Some(22),
+            ..Default::default()
+        };
+        assert_eq!(
+            <LocalParent as TaggedUnion>::variant(&p).unwrap(),
+            LocalVariant::Beta(&22)
+        );
+        p = LocalParent {
+            gamma: Some(33),
+            ..Default::default()
+        };
+        assert_eq!(
+            <LocalParent as TaggedUnion>::variant(&p).unwrap(),
+            LocalVariant::Gamma(&33)
+        );
+    }
+
+    /// A [`LocalParent`] with no populated slot resolves through the
+    /// default body to a [`TaggedUnionError::empty`] carrier whose
+    /// payload IS the trait's [`TaggedUnion::KIND_LIST`] constant —
+    /// pin identity via [`std::ptr::eq`] so a regression that
+    /// composes a fresh `&'static str` at the empty arm (instead of
+    /// carrying the trait's constant verbatim) is caught here. This
+    /// is the substrate-wide guarantee the four production sites'
+    /// operator diagnostics depend on: a rename at
+    /// `<Parent as TaggedUnion>::KIND_LIST` reaches the error surface
+    /// intact through ONE `&'static str` handoff.
+    #[test]
+    fn tagged_union_default_variant_empty_carries_kind_list_by_pointer() {
+        let empty = LocalParent::default();
+        let err = <LocalParent as TaggedUnion>::variant(&empty).unwrap_err();
+        match err {
+            LocalParentError::Empty(list) => {
+                assert!(
+                    std::ptr::eq(list, <LocalParent as TaggedUnion>::KIND_LIST),
+                    "TaggedUnion::variant default must carry KIND_LIST by pointer, not by re-composition",
+                );
+            }
+            LocalParentError::Ambiguous => {
+                panic!("expected Empty carrier, got Ambiguous");
+            }
+        }
+    }
+
+    /// A [`LocalParent`] with two populated slots resolves through
+    /// the default body to a [`TaggedUnionError::ambiguous`] carrier —
+    /// pin the Many arm at the substrate boundary so a regression
+    /// that drops the short-circuit (or misroutes the Many arm to
+    /// Empty) is caught here.
+    #[test]
+    fn tagged_union_default_variant_ambiguous_on_multiple_populated_slots() {
+        let p = LocalParent {
+            alpha: Some(1),
+            beta: Some(2),
+            gamma: None,
+        };
+        assert_eq!(
+            <LocalParent as TaggedUnion>::variant(&p).unwrap_err(),
+            LocalParentError::Ambiguous
+        );
+    }
+
+    /// Every one of the four production `.variant()` inherent methods
+    /// dispatches through the trait's default body byte-identically —
+    /// pin the delegation shape (inherent forwarder → trait default)
+    /// on a probe per parent so a regression that copies the pre-lift
+    /// hand-rolled `resolve_or_err(...)` body back into the inherent
+    /// method (instead of the `<Self as TaggedUnion>::variant(self)`
+    /// one-line delegation) reaches this substrate boundary before it
+    /// reaches any operator diagnostic.
+    #[test]
+    fn every_production_inherent_variant_dispatches_through_trait_default() {
+        use crate::encapsulates::{EncapsulationKind, EncapsulationKindError};
+        use crate::export::{ArtifactError, ArtifactSource, ChannelError, VectorChannel};
+        use crate::intent::{Intent, IntentError};
+
+        // Intent: default of all-None resolves to Empty via the delegation.
+        let i = Intent::default();
+        match (i.variant(), <Intent as TaggedUnion>::variant(&i)) {
+            (Err(IntentError::Empty(a)), Err(IntentError::Empty(b))) => assert!(
+                std::ptr::eq(a, b),
+                "Intent inherent and trait dispatch must return the same &'static str",
+            ),
+            (a, b) => panic!("Intent inherent/trait mismatch: inherent={a:?}, trait={b:?}"),
+        }
+
+        // EncapsulationKind: same Empty projection through both dispatch paths.
+        let k = EncapsulationKind::default();
+        match (k.variant(), <EncapsulationKind as TaggedUnion>::variant(&k)) {
+            (Err(EncapsulationKindError::Empty(a)), Err(EncapsulationKindError::Empty(b))) => {
+                assert!(
+                std::ptr::eq(a, b),
+                "EncapsulationKind inherent and trait dispatch must return the same &'static str",
+            )
+            }
+            (a, b) => {
+                panic!("EncapsulationKind inherent/trait mismatch: inherent={a:?}, trait={b:?}")
+            }
+        }
+
+        // ArtifactSource: same Empty projection through both dispatch paths.
+        let s = ArtifactSource::default();
+        match (s.variant(), <ArtifactSource as TaggedUnion>::variant(&s)) {
+            (Err(ArtifactError::Empty(a)), Err(ArtifactError::Empty(b))) => assert!(
+                std::ptr::eq(a, b),
+                "ArtifactSource inherent and trait dispatch must return the same &'static str",
+            ),
+            (a, b) => panic!("ArtifactSource inherent/trait mismatch: inherent={a:?}, trait={b:?}"),
+        }
+
+        // VectorChannel: same Empty projection through both dispatch paths.
+        let c = VectorChannel::default();
+        match (c.variant(), <VectorChannel as TaggedUnion>::variant(&c)) {
+            (Err(ChannelError::Empty(a)), Err(ChannelError::Empty(b))) => assert!(
+                std::ptr::eq(a, b),
+                "VectorChannel inherent and trait dispatch must return the same &'static str",
+            ),
+            (a, b) => panic!("VectorChannel inherent/trait mismatch: inherent={a:?}, trait={b:?}"),
+        }
+    }
+
+    /// The trait's default body sweeps `<Kind as ClosedSet>::ALL` in
+    /// declaration order — pin the iteration order against the
+    /// production `Kind::ALL` inherent const on every implementor so
+    /// a regression on `DeriveClosedSet`'s ALL-projection (or a
+    /// silent reorder of the enum's variant declarations that drifts
+    /// only ONE of the two arrays) fails at ONE substrate boundary.
+    #[test]
+    fn every_production_kind_closedset_all_matches_inherent_all() {
+        use crate::encapsulates::EncapsulationTarget;
+        use crate::export::{ArtifactKind, ChannelKind};
+        use crate::intent::IntentKind;
+
+        assert_eq!(
+            <IntentKind as tatara_closed_set::ClosedSet>::ALL,
+            IntentKind::ALL.as_slice(),
+        );
+        assert_eq!(
+            <EncapsulationTarget as tatara_closed_set::ClosedSet>::ALL,
+            EncapsulationTarget::ALL.as_slice(),
+        );
+        assert_eq!(
+            <ArtifactKind as tatara_closed_set::ClosedSet>::ALL,
+            ArtifactKind::ALL.as_slice(),
+        );
+        assert_eq!(
+            <ChannelKind as tatara_closed_set::ClosedSet>::ALL,
+            ChannelKind::ALL.as_slice(),
+        );
     }
 }

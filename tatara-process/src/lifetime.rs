@@ -43,7 +43,10 @@ impl LifetimeVariant<'_> {
     /// `LifetimeKind` discriminator. Pairs with `LifetimeKind::select`
     /// so `LifetimeKind::select(lifetime).map(|v| v.kind())` round-trips
     /// the closed set on the populated side; pinned by
-    /// `lifetime_kind_round_trips_through_variant_kind`.
+    /// `lifetime_kind_round_trips_through_variant_kind` locally + the
+    /// substrate trait [`crate::tagged_union::VariantKind`] shared with
+    /// every sibling borrowed-view enum. The impl below delegates to
+    /// this body as the ground-truth arm-to-Kind mapping.
     pub fn kind(&self) -> LifetimeKind {
         match self {
             Self::Permanent(_) => LifetimeKind::Permanent,
@@ -70,6 +73,12 @@ impl LifetimeVariant<'_> {
             Self::Permanent(p) => Some(p),
             Self::Ephemeral(_) => None,
         }
+    }
+}
+
+impl crate::tagged_union::VariantKind<LifetimeKind> for LifetimeVariant<'_> {
+    fn variant_kind(&self) -> LifetimeKind {
+        self.kind()
     }
 }
 

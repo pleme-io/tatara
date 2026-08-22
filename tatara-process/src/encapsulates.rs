@@ -113,6 +113,20 @@ impl EncapsulationKindVariant<'_> {
     }
 }
 
+/// `EncapsulationKindVariant`'s [`crate::tagged_union::VariantKind`] impl
+/// delegates to the inherent [`Self::target`] — the substrate trait names
+/// the reverse projection uniformly across every borrowed-view enum on
+/// `ProcessSpec`'s tagged-union axis, while the inherent method's
+/// domain-specific name (`.target()`, matching `EncapsulationTarget`) stays
+/// load-bearing at every consumer site. The one-line delegation IS the
+/// only per-site restatement; the ground-truth arm-to-Kind mapping lives
+/// at the inherent method above.
+impl crate::tagged_union::VariantKind<EncapsulationTarget> for EncapsulationKindVariant<'_> {
+    fn variant_kind(&self) -> EncapsulationTarget {
+        self.target()
+    }
+}
+
 /// Closed-set discriminator over `EncapsulationKind`'s three tagged-union
 /// slots. Single source of truth that drives `EncapsulationKind::variant`'s
 /// ambiguity + emptiness resolver, the `EncapsulationKindError::Empty`
@@ -839,18 +853,20 @@ mod tests {
     /// `Self::ExistingHelmRelease => kind.existing_kustomization
     /// .as_ref()...`) fails loudly here. Also pins that the resolver
     /// lands on the same target.
+    ///
+    /// Routes through the substrate primitive
+    /// [`crate::tagged_union::assert_variant_round_trip`] shared with
+    /// the sibling `intent_kind_round_trips_through_variant_kind` /
+    /// `artifact_kind_round_trips_through_variant_kind` /
+    /// `channel_kind_round_trips_through_variant_kind` sites — the
+    /// projection lives at ONE substrate primitive and every site
+    /// binds through a single call. The `target()` inherent method
+    /// (semantic-specific to `EncapsulationTarget`) stays load-bearing
+    /// on the callsite convention while the trait projection carries
+    /// the round-trip check uniformly.
     #[test]
     fn encapsulation_target_round_trips_through_variant_target() {
-        for t in EncapsulationTarget::ALL {
-            let k = single_slot_kind(t);
-            let v = t.select(&k).expect("populated slot must select");
-            assert_eq!(v.target(), t, "round-trip failed for {t:?}");
-            assert_eq!(
-                k.variant().expect("exactly-one variant").target(),
-                t,
-                "variant() resolver disagreed on {t:?}"
-            );
-        }
+        crate::tagged_union::assert_variant_round_trip::<EncapsulationKind, _>(single_slot_kind);
     }
 
     /// SELECT-EMPTY CONTRACT: an unpopulated slot returns `None` from

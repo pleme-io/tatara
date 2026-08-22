@@ -304,15 +304,25 @@ macro_rules! declare_tagged_union_impls {
 /// The GAT `Variant<'a>` carries the parent's lifetime so a borrowed
 /// view projected from `&'a P` composes typed with the resolver's
 /// short-circuit — every projection stays a compile-time refinement,
-/// no `Box<dyn ...>` erasure.
+/// no `Box<dyn ...>` erasure. The GAT is additionally bound to
+/// [`VariantKind<Self>`] so every implementor's borrowed view knows
+/// its addressing Kind — the reverse projection of [`Self::select`]
+/// closed at compile-time so a fifth sibling that adds `impl
+/// VariantSelector` without opening the peer `impl VariantKind` fails
+/// at the trait bound, not later at a per-consumer round-trip test.
 pub trait VariantSelector<P: ?Sized>: Copy + 'static {
     /// The borrowed-view enum returned by the parent's inherent
     /// `.variant()` method — one arm per closed-set variant, each
     /// arm carrying a `&'a` reference into the parent's populated
     /// slot. Bound generically here so [`TaggedUnion::variant`]'s
     /// default body can name the return type without restating it
-    /// per parent.
-    type Variant<'a>
+    /// per parent. Additionally bound to [`VariantKind<Self>`] so
+    /// the reverse projection `Variant<'a> → Self` is closed at the
+    /// trait boundary — every implementor's borrowed view knows its
+    /// addressing Kind through ONE typed contract, and the substrate
+    /// testkit [`assert_variant_round_trip`] composes `select`
+    /// (forward) with `variant_kind` (reverse) generically.
+    type Variant<'a>: VariantKind<Self>
     where
         P: 'a,
         Self: 'a;
@@ -324,6 +334,144 @@ pub trait VariantSelector<P: ?Sized>: Copy + 'static {
     fn select<'a>(self, parent: &'a P) -> Option<Self::Variant<'a>>
     where
         Self: 'a;
+}
+
+/// Reverse projection — every borrowed-variant view enum knows its
+/// closed-set `K` discriminator.
+///
+/// Dual of [`VariantSelector<P>::select`] on the addressed Kind:
+/// where the selector projects a parent borrow forward into an
+/// optional Variant, this trait projects a populated Variant back
+/// into the Kind that addresses it. Together they compose the
+/// round-trip contract every tagged-union `.variant()` site pins
+/// via the substrate testkit [`assert_variant_round_trip`]:
+/// `k.select(&parent).map(|v| v.variant_kind()) == Some(k)` on the
+/// populated side, and `parent.variant().unwrap().variant_kind() == k`
+/// through the [`TaggedUnion::variant`] resolver's default body.
+///
+/// Every borrowed-view enum on `ProcessSpec`'s tagged-union axis
+/// ([`crate::intent::IntentVariant<'_>`],
+/// [`crate::lifetime::LifetimeVariant<'_>`],
+/// [`crate::encapsulates::EncapsulationKindVariant<'_>`],
+/// [`crate::export::ArtifactVariant<'_>`],
+/// [`crate::export::ChannelVariant<'_>`]) pre-lift restated the same
+/// `match self { Self::A(_) => K::A, Self::B(_) => K::B, ... }`
+/// per-arm mapping at its own inherent method (named `.kind()` on
+/// four of five sites; `.target()` on
+/// [`crate::encapsulates::EncapsulationKindVariant`] where the
+/// discriminator's semantic role is a target of encapsulation, not
+/// a kind of parent). The reverse-projection body must stay
+/// per-implementor — it names the ground-truth arm-to-Kind mapping
+/// only the site knows — but the CONTRACT lives at ONE typed
+/// surface so:
+///
+/// * Every downstream generic consumer binds through
+///   `<T::Variant<'_> as VariantKind<T::Kind>>::variant_kind(&v)`
+///   instead of a per-parent inherent-method restatement.
+/// * [`VariantSelector<P>::Variant<'a>`] bounds this trait — a
+///   fifth sibling that adds `impl VariantSelector<P> for XKind`
+///   without the peer `impl VariantKind<XKind> for XVariant<'_>`
+///   fails at the associated-type bound, so the reverse projection
+///   is closed at compile-time across every implementor.
+/// * The generic testkit [`assert_variant_round_trip`] composes
+///   `select` (forward) with `variant_kind` (reverse) at ONE
+///   substrate site — the four sibling
+///   `_kind_round_trips_through_variant_kind` /
+///   `_target_round_trips_through_variant_target` test bodies
+///   collapse to one-line invocations.
+///
+/// The trait method is named [`Self::variant_kind`] rather than
+/// `kind` to avoid shadowing the inherent `.kind()` (or
+/// `.target()`) methods each borrowed-view enum already publishes.
+/// Every impl body is a one-line delegation to the site's inherent
+/// method — the substrate stays the projection, not the mapping.
+pub trait VariantKind<K: Copy + 'static> {
+    /// Project a borrowed-variant view back into its addressing
+    /// closed-set `K` discriminator. Round-trips the closed set on
+    /// the populated side against [`VariantSelector::select`] — a
+    /// value returned by `k.select(&parent).unwrap()` must satisfy
+    /// `variant_kind() == k`, and a value returned by
+    /// `parent.variant().unwrap()` must satisfy `variant_kind() ==
+    /// k` for the populated slot's `k`.
+    fn variant_kind(&self) -> K;
+}
+
+/// Generic round-trip testkit — pins that
+/// [`VariantSelector::select`] (forward projection) and
+/// [`VariantKind::variant_kind`] (reverse projection) compose the
+/// closed set in both directions on the populated side.
+///
+/// Substrate primitive for the four sibling
+/// `_kind_round_trips_through_variant_kind` /
+/// `_target_round_trips_through_variant_target` tests on
+/// `ProcessSpec` ([`crate::intent::Intent`],
+/// [`crate::encapsulates::EncapsulationKind`],
+/// [`crate::export::ArtifactSource`],
+/// [`crate::export::VectorChannel`]) that pre-lift each restated the
+/// same two-arm round-trip probe at their own test bodies:
+///
+/// 1. For each `k in K::ALL`, construct a parent with only slot `k`
+///    populated (via a site-local `single_slot_X(k) -> Parent`
+///    helper).
+/// 2. Assert that `k.select(&parent).unwrap().variant_kind() == k`
+///    (the forward-then-reverse round-trip).
+/// 3. Assert that `parent.variant().unwrap().variant_kind() == k`
+///    (the resolver-then-reverse round-trip).
+///
+/// Post-lift each site's round-trip test collapses to ONE
+/// `assert_variant_round_trip::<T, _>(single_slot_X)` invocation
+/// whose body is the substrate primitive's own dispatch. A fifth
+/// sibling picks up the round-trip check through ONE call site.
+///
+/// The `make_parent` closure stays per-site — every one of the four
+/// production sites already owns a
+/// `single_slot_intent(k) / single_slot_source(k) /
+/// single_slot_channel(k) / single_slot_kind(t)` helper that
+/// constructs a minimally-valid parent with the addressed slot's
+/// inner spec populated; the closure IS the round-trip's ground
+/// truth for "populate slot k", and lifting it into the primitive
+/// would collapse the per-site construction knowledge that stays
+/// deliberately local.
+///
+/// The [`crate::lifetime::Lifetime`] site is DELIBERATELY excluded
+/// — `Lifetime` doesn't impl [`TaggedUnion`] (its `variant()` returns
+/// `Ok(Permanent)` on empty, not an `Empty` typed error), so the
+/// `<T: TaggedUnion>` bound doesn't reach it. Its per-site
+/// round-trip test binds through [`VariantKind`] directly on
+/// [`crate::lifetime::LifetimeVariant`] instead.
+#[track_caller]
+pub fn assert_variant_round_trip<T, F>(make_parent: F)
+where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+{
+    for k in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = make_parent(k);
+        let selected = k.select(&parent).unwrap_or_else(|| {
+            panic!("VariantSelector::select must return Some for populated slot {k:?}")
+        });
+        assert_eq!(
+            <<T::Kind as VariantSelector<T>>::Variant<'_> as VariantKind<T::Kind>>::variant_kind(
+                &selected,
+            ),
+            k,
+            "select→variant_kind round-trip failed for {k:?}",
+        );
+        let resolved = parent.variant().ok().unwrap_or_else(|| {
+            panic!("TaggedUnion::variant must resolve exactly-one populated for {k:?}")
+        });
+        assert_eq!(
+            <<T::Kind as VariantSelector<T>>::Variant<'_> as VariantKind<T::Kind>>::variant_kind(
+                &resolved,
+            ),
+            k,
+            "variant()→variant_kind resolver disagreed on {k:?}",
+        );
+    }
 }
 
 /// Declarative surface that names the (Kind, Error, KIND_LIST) triple
@@ -753,6 +901,16 @@ mod tests {
         }
     }
 
+    impl VariantKind<LocalKind> for LocalVariant<'_> {
+        fn variant_kind(&self) -> LocalKind {
+            match self {
+                Self::Alpha(_) => LocalKind::Alpha,
+                Self::Beta(_) => LocalKind::Beta,
+                Self::Gamma(_) => LocalKind::Gamma,
+            }
+        }
+    }
+
     crate::declare_tagged_union_error! {
         pub(super) LocalParentError,
         empty = "local carrier has no variant set (one of {0} required)",
@@ -786,14 +944,16 @@ mod tests {
     #[should_panic(expected = "TaggedUnion KIND_LIST drift")]
     fn assert_kind_list_matches_closed_set_rejects_drifted_impl() {
         struct Drifted;
-        // The `TaggedUnion` trait bounds `Kind: VariantSelector<Self>`;
-        // the drift test only exercises `assert_kind_list_matches_closed_set`
-        // (which reaches the (Kind, KIND_LIST) pair, not the sweep body),
-        // so a payload-free `Variant<'a> = ()` + always-`None` `select`
-        // satisfies the bound without wiring a real projection.
+        // The `TaggedUnion` trait bounds `Kind: VariantSelector<Self>`
+        // with `Variant<'a>: VariantKind<Self>`; the drift test only
+        // exercises `assert_kind_list_matches_closed_set` (which reaches
+        // the (Kind, KIND_LIST) pair, not the sweep body), so reusing
+        // the sibling `LocalVariant<'a>` (with its already-load-bearing
+        // `impl VariantKind<LocalKind>`) + always-`None` `select`
+        // satisfies both bounds without wiring a real projection.
         impl VariantSelector<Drifted> for LocalKind {
-            type Variant<'a> = ();
-            fn select<'a>(self, _: &'a Drifted) -> Option<()>
+            type Variant<'a> = LocalVariant<'a>;
+            fn select<'a>(self, _: &'a Drifted) -> Option<LocalVariant<'a>>
             where
                 Self: 'a,
             {
@@ -1057,6 +1217,15 @@ mod tests {
         Bar(&'a u32),
     }
 
+    impl VariantKind<MacroLocalKind> for MacroLocalVariant<'_> {
+        fn variant_kind(&self) -> MacroLocalKind {
+            match self {
+                Self::Foo(_) => MacroLocalKind::Foo,
+                Self::Bar(_) => MacroLocalKind::Bar,
+            }
+        }
+    }
+
     crate::declare_tagged_union_error! {
         pub(super) MacroLocalError,
         empty = "macro-local parent has no variant set (one of {0} required)",
@@ -1196,5 +1365,114 @@ mod tests {
             <ChannelKind as tatara_closed_set::ClosedSet>::ALL,
             ChannelKind::ALL.as_slice(),
         );
+    }
+
+    // -------------------------------------------------------------------
+    // `VariantKind<K>` trait — reverse projection from a borrowed-variant
+    // view back into its addressing Kind, and `assert_variant_round_trip`
+    // as the substrate testkit primitive that composes it with
+    // `VariantSelector::select` on the populated side. Pin the four-arm
+    // truth table (every position round-trips through select→variant_kind
+    // AND through variant()→variant_kind) directly on the sibling-shaped
+    // local scaffold, so a regression on either projection or on the
+    // resolver default body fails here — before any per-parent inherent
+    // test surfaces the drift.
+    // -------------------------------------------------------------------
+
+    /// Every populated position across [`LocalKind::ALL`] round-trips
+    /// through both `select→variant_kind` AND `variant()→variant_kind`
+    /// on the sibling-shaped local scaffold. Pins the substrate
+    /// primitive's four-arm truth table at ONE boundary — a regression
+    /// on either projection direction (or on the resolver default
+    /// short-circuit / iteration order) fails here before any per-parent
+    /// inherent test surfaces the drift.
+    #[test]
+    fn assert_variant_round_trip_accepts_coherent_local_impl() {
+        fn make_local(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            }
+        }
+        assert_variant_round_trip::<LocalParent, _>(make_local);
+    }
+
+    /// The testkit primitive is a `#[track_caller]` compound-lift: a
+    /// factory that fails to populate the addressed slot fails at the
+    /// caller's site with a labeled panic message, not silently. Pin
+    /// the failing case with a deliberately empty parent factory so a
+    /// regression that drops the "select must return Some" check
+    /// fails-loudly here — the missing-slot arm is the substrate
+    /// primitive's first failure mode.
+    #[test]
+    #[should_panic(expected = "VariantSelector::select must return Some for populated slot")]
+    fn assert_variant_round_trip_rejects_factory_that_leaves_slot_empty() {
+        // Factory that returns an all-empty parent regardless of k —
+        // every `k.select(&parent)` returns None, so the primitive
+        // panics at the "must return Some" arm.
+        fn empty_factory(_: LocalKind) -> LocalParent {
+            LocalParent::default()
+        }
+        assert_variant_round_trip::<LocalParent, _>(empty_factory);
+    }
+
+    /// Every one of the five production borrowed-view enums impls
+    /// [`VariantKind`] byte-identically with its inherent `.kind()`
+    /// (or `.target()` on `EncapsulationKindVariant`) — pin the
+    /// delegation shape at ONE substrate boundary so a regression that
+    /// inlines a divergent match body into the trait impl (rather than
+    /// the one-line delegation) is caught here. `Lifetime`'s
+    /// borrowed-view is included even though `Lifetime` isn't a
+    /// [`TaggedUnion`] impl — the reverse projection applies uniformly.
+    #[test]
+    fn every_production_variant_kind_impl_matches_inherent_projection() {
+        use crate::encapsulates::{EncapsulationKindVariant, ExistingHelmRelease};
+        use crate::export::{ArtifactVariant, ChannelVariant, HttpEventChannel, ReceiptsSource};
+        use crate::intent::{IntentVariant, NixIntent};
+        use crate::lifetime::{LifetimeVariant, PermanentLifetime};
+
+        let nix = NixIntent {
+            flake_ref: "github:a/b".into(),
+            attribute: "x".into(),
+            system: None,
+            attic_cache: None,
+            extra_args: vec![],
+            delegate_to_nix_build: false,
+        };
+        let iv = IntentVariant::Nix(&nix);
+        assert_eq!(iv.kind(), iv.variant_kind());
+
+        let perm = PermanentLifetime::default();
+        let lv = LifetimeVariant::Permanent(&perm);
+        assert_eq!(lv.kind(), lv.variant_kind());
+
+        let hr = ExistingHelmRelease {
+            namespace: "ns".into(),
+            name: "n".into(),
+            release_name: "r".into(),
+        };
+        let ev = EncapsulationKindVariant::ExistingHelmRelease(&hr);
+        assert_eq!(ev.target(), ev.variant_kind());
+
+        let rs = ReceiptsSource {};
+        let av = ArtifactVariant::Receipts(&rs);
+        assert_eq!(av.kind(), av.variant_kind());
+
+        let ch = HttpEventChannel {
+            endpoint: None,
+            signal_type: "s".into(),
+        };
+        let cv = ChannelVariant::HttpEvent(&ch);
+        assert_eq!(cv.kind(), cv.variant_kind());
     }
 }

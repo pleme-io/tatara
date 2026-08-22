@@ -149,6 +149,12 @@ impl ArtifactVariant<'_> {
     }
 }
 
+impl crate::tagged_union::VariantKind<ArtifactKind> for ArtifactVariant<'_> {
+    fn variant_kind(&self) -> ArtifactKind {
+        self.kind()
+    }
+}
+
 /// Closed-set discriminator over `ArtifactSource`'s four tagged-union
 /// slots. Single source of truth that drives `ArtifactSource::variant`'s
 /// ambiguity + emptiness resolver, the `ArtifactError::Empty` message,
@@ -553,6 +559,12 @@ impl ChannelVariant<'_> {
             Self::NatsSubject(_) => ChannelKind::NatsSubject,
             Self::Stdout(_) => ChannelKind::Stdout,
         }
+    }
+}
+
+impl crate::tagged_union::VariantKind<ChannelKind> for ChannelVariant<'_> {
+    fn variant_kind(&self) -> ChannelKind {
+        self.kind()
     }
 }
 
@@ -1556,19 +1568,17 @@ mod tests {
     /// kind via `ArtifactVariant::kind`. A regression that misroutes a
     /// select arm (e.g. `Self::Receipts => source.test_report.as_ref()
     /// ...`) fails loudly here.
+    ///
+    /// Routes through the substrate primitive
+    /// [`crate::tagged_union::assert_variant_round_trip`] shared with
+    /// the sibling `intent_kind_round_trips_through_variant_kind` /
+    /// `channel_kind_round_trips_through_variant_kind` /
+    /// `encapsulation_target_round_trips_through_variant_target`
+    /// sites — the projection lives at ONE substrate primitive and
+    /// every site binds through a single call.
     #[test]
     fn artifact_kind_round_trips_through_variant_kind() {
-        for kind in ArtifactKind::ALL {
-            let s = single_slot_source(kind);
-            let v = kind.select(&s).expect("populated slot must select");
-            assert_eq!(v.kind(), kind, "round-trip failed for {kind:?}");
-            // And the resolver lands on the same variant.
-            assert_eq!(
-                s.variant().expect("exactly-one variant").kind(),
-                kind,
-                "variant() resolver disagreed on {kind:?}"
-            );
-        }
+        crate::tagged_union::assert_variant_round_trip::<ArtifactSource, _>(single_slot_source);
     }
 
     /// SELECT-EMPTY CONTRACT: an unpopulated slot returns `None` from
@@ -1729,19 +1739,17 @@ mod tests {
     /// kind via `ChannelVariant::kind`. A regression that misroutes a
     /// select arm (e.g. `Self::HttpEvent => channel.nats_subject ...`)
     /// fails loudly here.
+    ///
+    /// Routes through the substrate primitive
+    /// [`crate::tagged_union::assert_variant_round_trip`] shared with
+    /// the sibling `intent_kind_round_trips_through_variant_kind` /
+    /// `artifact_kind_round_trips_through_variant_kind` /
+    /// `encapsulation_target_round_trips_through_variant_target`
+    /// sites — the projection lives at ONE substrate primitive and
+    /// every site binds through a single call.
     #[test]
     fn channel_kind_round_trips_through_variant_kind() {
-        for kind in ChannelKind::ALL {
-            let c = single_slot_channel(kind);
-            let v = kind.select(&c).expect("populated slot must select");
-            assert_eq!(v.kind(), kind, "round-trip failed for {kind:?}");
-            // And the resolver lands on the same variant.
-            assert_eq!(
-                c.variant().expect("exactly-one variant").kind(),
-                kind,
-                "variant() resolver disagreed on {kind:?}"
-            );
-        }
+        crate::tagged_union::assert_variant_round_trip::<VectorChannel, _>(single_slot_channel);
     }
 
     /// SELECT-EMPTY CONTRACT: an unpopulated slot returns `None` from

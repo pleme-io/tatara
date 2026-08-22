@@ -53,7 +53,14 @@ impl IntentVariant<'_> {
     /// Reverse projection — every borrowed variant knows its
     /// `IntentKind` discriminator. Pairs with `IntentKind::select`
     /// so `IntentKind::select(intent).map(|v| v.kind())` round-trips
-    /// the closed set; pinned by `intent_kind_round_trips_through_variant_kind`.
+    /// the closed set; pinned by the substrate testkit
+    /// [`crate::tagged_union::assert_variant_round_trip`] shared
+    /// across every `<T: TaggedUnion>` implementor. The inherent
+    /// method stays load-bearing (the `.kind()` calling convention
+    /// pre-dates the trait lift; no consumer needs `use
+    /// crate::tagged_union::VariantKind` to reach the reverse
+    /// projection) while the trait impl below delegates to this body
+    /// as the ground-truth arm-to-Kind mapping.
     pub fn kind(&self) -> IntentKind {
         match self {
             Self::Nix(_) => IntentKind::Nix,
@@ -81,6 +88,12 @@ impl IntentVariant<'_> {
             Self::Aplicacao(a) => serde_json::to_vec(a).unwrap_or_default(),
             Self::Guest(g) => serde_json::to_vec(g).unwrap_or_default(),
         }
+    }
+}
+
+impl crate::tagged_union::VariantKind<IntentKind> for IntentVariant<'_> {
+    fn variant_kind(&self) -> IntentKind {
+        self.kind()
     }
 }
 
@@ -732,19 +745,23 @@ mod tests {
     /// projection composes the closed set in both directions — a
     /// regression that misroutes a select arm (e.g. `Self::Nix =>
     /// intent.flux.as_ref()...`) fails loudly here.
+    ///
+    /// Routes through the substrate primitive
+    /// [`crate::tagged_union::assert_variant_round_trip`], which
+    /// composes [`crate::tagged_union::VariantSelector::select`]
+    /// (forward) with [`crate::tagged_union::VariantKind::variant_kind`]
+    /// (reverse) byte-identically for every `<T: TaggedUnion>`
+    /// implementor — the round-trip testkit shared with the sibling
+    /// `artifact_kind_round_trips_through_variant_kind` /
+    /// `channel_kind_round_trips_through_variant_kind` /
+    /// `encapsulation_target_round_trips_through_variant_target`
+    /// sites. Pre-lift the four bodies each restated the same
+    /// two-arm round-trip probe at the test surface; post-lift the
+    /// projection lives at ONE substrate primitive and every site
+    /// binds through a single call.
     #[test]
     fn intent_kind_round_trips_through_variant_kind() {
-        for kind in IntentKind::ALL {
-            let i = single_slot_intent(kind);
-            let v = kind.select(&i).expect("populated slot must select");
-            assert_eq!(v.kind(), kind, "round-trip failed for {kind:?}");
-            // And the resolver lands on the same variant.
-            assert_eq!(
-                i.variant().expect("exactly-one variant").kind(),
-                kind,
-                "variant() resolver disagreed on {kind:?}"
-            );
-        }
+        crate::tagged_union::assert_variant_round_trip::<Intent, _>(single_slot_intent);
     }
 
     /// EMPTY-DIAGNOSTIC CONTRACT: the closed-set kind list embedded

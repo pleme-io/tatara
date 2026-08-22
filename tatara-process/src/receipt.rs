@@ -227,6 +227,17 @@ impl From<ReceiptKind> for &'static str {
     }
 }
 
+/// One entry in the [`ReceiptEnvelope::REQUIRED_PILLARS`] closed-set
+/// table — the pair (diagnostic field name, wire-form accessor) that
+/// composes ONE required-pillar rejection through the shared
+/// [`require_nonempty`] peer. The alias gives the tuple a nameable
+/// type so downstream consumers (`tatara-check` receipt-inspector, an
+/// LSP hover on the const, per-pillar dashboard columns) bind to
+/// "one pillar's descriptor" as a first-class handle rather than
+/// re-typing the underlying `(&'static str, fn(&ReceiptEnvelope) ->
+/// &str)` tuple at every consumer.
+pub type RequiredPillar = (&'static str, fn(&ReceiptEnvelope) -> &str);
+
 /// Typed receipt envelope. Any Job in pleme-io that wants its result to
 /// chain into a Process's `status.attestation` writes one of these.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -344,8 +355,74 @@ impl ReceiptEnvelope {
         }
     }
 
+    /// Closed-set table of pillars that MUST be non-empty on every
+    /// well-formed receipt — the wire-form's structural invariant
+    /// [`Self::verify_shape`] enforces. Pre-lift the three checks
+    /// lived as three byte-identical `if self.<pillar>.is_empty() {
+    /// return Err(ReceiptError::MissingField("<pillar>")); }` two-arm
+    /// conditionals inline in `verify_shape` — one per pillar name,
+    /// each hand-writing the SAME (field-name, accessor, rejection)
+    /// triple with the pillar name repeated at BOTH the accessor
+    /// (`self.composed_root`) AND the diagnostic literal
+    /// (`"composed_root"`). Post-lift the three (field-name,
+    /// accessor) pairs live at ONE closed-set table here;
+    /// `verify_shape` composes ONE per-entry iteration that
+    /// dispatches through the shared [`require_nonempty`] free-fn
+    /// peer of [`empty_to_none`].
+    ///
+    /// Each entry is a [`RequiredPillar`] tuple whose named type gives
+    /// downstream consumers (a `tatara-check` receipt-inspector, an
+    /// LSP hover, a per-pillar dashboard column) a nameable handle
+    /// for "one pillar's (diagnostic-name, wire-form-accessor)
+    /// pairing" rather than an unnamed function-pointer tuple
+    /// re-typed at every consumer.
+    ///
+    /// The `control_hash` field is DELIBERATELY NOT in this table:
+    /// the substrate's second pillar carries an "empty means absent"
+    /// convention that [`Self::control_hash_opt`] + [`empty_to_none`]
+    /// project as a typed `Option::None`, so its emptiness is a
+    /// semantic bit rather than a validation failure. The pair
+    /// (`REQUIRED_PILLARS` — must be non-empty; `control_hash_opt` —
+    /// may be empty) is the substrate's typed answer to which
+    /// pillars are load-bearing vs. schema-optional. A future
+    /// re-shape that promotes a fourth required pillar (e.g. a
+    /// mandatory `signer_hash` on a signed-receipt schema variant)
+    /// lands as ONE new entry in this table + rustc's `[…; N]`
+    /// arity constant on the type binding the extension in lockstep
+    /// so a partial addition that forgets the diagnostic surface
+    /// becomes a compile error rather than a runtime drift.
+    ///
+    /// Sibling closed-set tables across the crate:
+    /// [`ReceiptKind::ALL`],
+    /// [`crate::export::ReportFormat::ALL`],
+    /// [`crate::phase::ProcessPhase::ALL`],
+    /// [`crate::boundary::ConditionKind::ALL`],
+    /// [`crate::intent::IntentKind::ALL`].
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// the three inline pillar-emptiness checks recurred at THREE
+    /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold
+    /// and are lifted to ONE closed-set table + ONE shared rejection
+    /// peer. THEORY.md §V.1 — knowable platform; the enumeration of
+    /// required-pillar field names lives at ONE surface a
+    /// documentation surface, an LSP hover, or a `tatara-check`
+    /// receipt-inspector binds to for enumerating the receipt's
+    /// structural invariants. THEORY.md §V.3 — three-pillar
+    /// attestation; the (mandatory, may-be-absent) split of the
+    /// three-pillar-plus-composed-root wire form is a typed
+    /// substrate contract, not a per-consumer discipline.
+    pub const REQUIRED_PILLARS: [RequiredPillar; 3] = [
+        ("composed_root", |e| e.composed_root.as_str()),
+        ("intent_hash", |e| e.intent_hash.as_str()),
+        ("artifact_hash", |e| e.artifact_hash.as_str()),
+    ];
+
     /// Verify the schema-level invariants: correct version + non-empty
     /// kind + non-empty pillar hashes (length-only, not BLAKE3-recompute).
+    /// The three required-pillar rejections dispatch through
+    /// [`Self::REQUIRED_PILLARS`] + [`require_nonempty`] so a future
+    /// fourth required pillar lands at ONE table entry rather than
+    /// as a fourth inline `if …is_empty() { return Err(…); }` copy.
     pub fn verify_shape(&self) -> Result<(), ReceiptError> {
         if self.version != RECEIPT_VERSION {
             return Err(ReceiptError::WrongVersion(self.version.clone()));
@@ -353,17 +430,12 @@ impl ReceiptEnvelope {
         if self.kind.is_empty() {
             return Err(ReceiptError::EmptyKind);
         }
-        if self.composed_root.is_empty() {
-            return Err(ReceiptError::MissingField("composed_root"));
-        }
-        if self.intent_hash.is_empty() {
-            return Err(ReceiptError::MissingField("intent_hash"));
-        }
-        if self.artifact_hash.is_empty() {
-            return Err(ReceiptError::MissingField("artifact_hash"));
+        for (field, accessor) in Self::REQUIRED_PILLARS {
+            require_nonempty(field, accessor(self))?;
         }
         // control_hash MAY be empty when there is no control step;
-        // the BLAKE3 compose treats empty as "absent" via Option.
+        // the BLAKE3 compose treats empty as "absent" via Option —
+        // see `Self::control_hash_opt` + `empty_to_none`.
         Ok(())
     }
 
@@ -519,6 +591,54 @@ impl ReceiptEnvelope {
 /// consumer) share ONE typed projection.
 fn empty_to_none(s: &str) -> Option<&str> {
     (!s.is_empty()).then_some(s)
+}
+
+/// Reject a required pillar whose wire form is empty with a typed
+/// [`ReceiptError::MissingField`] carrying `field` — the diagnostic
+/// literal the operator sees. Free-fn peer of [`empty_to_none`] on
+/// the same wire-form-emptiness axis, and rejection sibling of the
+/// [`ReceiptEnvelope::REQUIRED_PILLARS`] closed-set table
+/// [`ReceiptEnvelope::verify_shape`] dispatches through.
+///
+/// The two peers on the emptiness axis carry two different typed
+/// projections of the SAME wire-form bit:
+///   * [`empty_to_none`] — the "empty means absent" convention for
+///     the second pillar (control step); the substrate composes
+///     `Option::None` through `compose_root` so an empty
+///     `control_hash` and an absent-pillar receipt hash to the SAME
+///     `composed_root`.
+///   * [`require_nonempty`] — the "empty is a validation failure"
+///     convention for the three required pillars; the substrate
+///     rejects the receipt with a typed [`ReceiptError::MissingField`]
+///     carrying the offending field name so the operator's diagnostic
+///     surface (a reconciler event, a CLI stderr, a `tatara-check`
+///     receipt-inspect report) names the pillar directly.
+///
+/// The two peers are DELIBERATELY named as (`empty_to_none`,
+/// `require_nonempty`) rather than as a single overloaded projection
+/// so the two typed conventions (absence-as-Option vs.
+/// absence-as-Err) surface at the substrate's exported vocabulary
+/// as two distinct primitives — a per-caller misroute (composing
+/// `require_nonempty` on `control_hash` and getting a false
+/// `MissingField`, or composing `empty_to_none` on `intent_hash`
+/// and threading `None` through `compose_root` past a wire that
+/// should have rejected) is a name-typo, not a silent semantic
+/// swap.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition;
+/// the "empty is a required-pillar failure" three-line inline
+/// conditional recurred at THREE sites past the ★★ PRIME-DIRECTIVE
+/// ≥ 2 duplication threshold and is lifted to ONE substrate primitive
+/// composed through the [`ReceiptEnvelope::REQUIRED_PILLARS`] table.
+/// THEORY.md §V.1 — knowable platform; the two emptiness projections
+/// live at ONE typed vocabulary the receipt-inspection surfaces (LSP
+/// hover, `tatara-check` report, REPL) bind to for reading the
+/// receipt's structural contract from the substrate directly.
+fn require_nonempty(field: &'static str, value: &str) -> Result<(), ReceiptError> {
+    if value.is_empty() {
+        return Err(ReceiptError::MissingField(field));
+    }
+    Ok(())
 }
 
 const DOMAIN_TAG: &[u8] = b"tatara-process/v1alpha1\n";
@@ -918,6 +1038,146 @@ generated_at:  2026-05-19T12:00:00Z
             assert_eq!(
                 att.composed_root, env.composed_root,
                 "attestation root drift for control={control:?}",
+            );
+        }
+    }
+
+    // ── `REQUIRED_PILLARS` / `require_nonempty` — the closed-set
+    //    table + shared rejection peer that `verify_shape` composes
+    //    the three required-pillar emptiness checks through. Pre-lift
+    //    the three `if self.<pillar>.is_empty() { return Err(
+    //    ReceiptError::MissingField("<pillar>")); }` two-arm
+    //    conditionals lived inline in `verify_shape` — one per pillar
+    //    name, each hand-writing the SAME (field-name, accessor,
+    //    rejection) triple. Post-lift the three (field-name,
+    //    accessor) pairs live at ONE `REQUIRED_PILLARS` const, and
+    //    the rejection body lives at ONE `require_nonempty` peer. The
+    //    tests below pin the substrate primitives' contract at their
+    //    boundary so a regression at the projection surfaces here
+    //    rather than as a silent shift in the receipt's structural
+    //    validation semantics.
+
+    #[test]
+    fn require_nonempty_rejects_empty_with_the_named_field_and_passes_non_empty_verbatim() {
+        // The shared rejection peer of `empty_to_none` — used by
+        // `verify_shape` through the `REQUIRED_PILLARS` sweep. Pin
+        // BOTH arms of the projection: an empty value rejects with
+        // `ReceiptError::MissingField(field)` carrying the literal
+        // `field` byte-identically (so a rename at the table entry
+        // reaches the operator's diagnostic surface — the reconciler
+        // event, the CLI stderr, the `tatara-check` receipt-inspect
+        // report), and any non-empty value passes with `Ok(())`
+        // (regardless of the payload's shape — a whitespace-only `" "`
+        // is NOT empty by the pillar's typed contract). A regression
+        // that (a) mis-named the field on the rejection (leaking a
+        // caller-controlled `&str` in place of the `&'static` diagnostic
+        // literal), (b) rejected non-empty values (folding `" "` or
+        // some other sentinel into `MissingField`), or (c) accepted
+        // the empty payload silently would surface here rather than
+        // as a silent semantic shift in `verify_shape`'s rejection
+        // vocabulary.
+        assert_eq!(
+            super::require_nonempty("composed_root", ""),
+            Err(ReceiptError::MissingField("composed_root")),
+        );
+        assert_eq!(
+            super::require_nonempty("intent_hash", ""),
+            Err(ReceiptError::MissingField("intent_hash")),
+        );
+        assert_eq!(super::require_nonempty("composed_root", "aaaa"), Ok(()));
+        // Whitespace-only strings pass the rejection gate — the
+        // substrate composes bytes verbatim through BLAKE3 so `" "`
+        // IS a distinct pillar from an absent one; the rejection
+        // must preserve that distinction.
+        assert_eq!(super::require_nonempty("intent_hash", " "), Ok(()));
+    }
+
+    #[test]
+    fn required_pillars_table_is_pairwise_distinct_and_enumerates_the_three_names() {
+        // The closed-set table `verify_shape` dispatches through.
+        // Pin: (a) the arity is exactly THREE (rustc's `[…; 3]`
+        // constant on the type binds this at compile time; the pin
+        // here checks the runtime enumeration matches so a future
+        // arity bump surfaces as a coordinated update rather than a
+        // silent drift), (b) each entry's field name is a
+        // pillar-unique string (a duplicate entry — the same pillar
+        // listed twice — would evaluate the same rejection twice at
+        // ONE run, hiding a distinct pillar's absence behind the
+        // duplicate's success), (c) the three names match the
+        // byte-exact wire literals the reconciler tests + operator
+        // diagnostics have already published (`"composed_root"`,
+        // `"intent_hash"`, `"artifact_hash"`) — renaming any of them
+        // is a wire-diagnostic change, not a typed-internal refactor.
+        let names: Vec<&'static str> = ReceiptEnvelope::REQUIRED_PILLARS
+            .iter()
+            .map(|(name, _)| *name)
+            .collect();
+        assert_eq!(names, vec!["composed_root", "intent_hash", "artifact_hash"]);
+
+        // Pairwise-distinct check — the table's arity is small
+        // enough for a hand-authored O(n^2) sweep, and a duplicate
+        // would defeat the whole point of the enumeration.
+        for i in 0..names.len() {
+            for j in (i + 1)..names.len() {
+                assert_ne!(
+                    names[i], names[j],
+                    "REQUIRED_PILLARS[{i}] and [{j}] share field name {}",
+                    names[i],
+                );
+            }
+        }
+
+        // control_hash is DELIBERATELY not in the table (it carries
+        // the "empty means absent" semantic bit — see
+        // `control_hash_opt` + `empty_to_none`). Pin the exclusion so
+        // a future well-meaning addition that promotes control_hash
+        // to a required pillar surfaces here as a contract change
+        // rather than as a silent rejection of receipts the
+        // substrate's own compose_root treats as valid absent-pillar
+        // walks.
+        assert!(
+            !names.contains(&"control_hash"),
+            "control_hash must not be in REQUIRED_PILLARS — its emptiness \
+             is the substrate's absent-pillar convention",
+        );
+    }
+
+    #[test]
+    fn verify_shape_rejects_each_required_pillar_when_emptied_with_the_typed_field_name() {
+        // End-to-end pin at the `verify_shape` boundary — each entry
+        // in `REQUIRED_PILLARS` must surface a
+        // `ReceiptError::MissingField(field)` carrying the entry's
+        // OWN name when its accessor's value is empty. Sweeps the
+        // table so a future fourth required pillar picks up the
+        // rejection through the SAME per-entry iteration + the SAME
+        // shared `require_nonempty` peer, and a mis-wired accessor
+        // (an entry naming "intent_hash" whose accessor reads
+        // `self.artifact_hash`) surfaces here as a mismatched typed
+        // rejection rather than as a silent semantic drift at
+        // production.
+        for (field, accessor) in ReceiptEnvelope::REQUIRED_PILLARS {
+            let mut env = ReceiptEnvelope::build("test-suite", "i", "a", "c", None);
+            // Empty ONLY the pillar under test by zeroing the field
+            // through the wire-form struct's own mutable access
+            // (which the `#[serde(deny_unknown_fields)]` wire shape
+            // doesn't restrict at the Rust level).
+            match field {
+                "composed_root" => env.composed_root.clear(),
+                "intent_hash" => env.intent_hash.clear(),
+                "artifact_hash" => env.artifact_hash.clear(),
+                other => panic!("unknown REQUIRED_PILLARS entry {other}"),
+            }
+            assert!(
+                accessor(&env).is_empty(),
+                "accessor for {field} did not read the emptied field",
+            );
+            let err = env
+                .verify_shape()
+                .expect_err("verify_shape must reject empty required pillar");
+            assert_eq!(
+                err,
+                ReceiptError::MissingField(field),
+                "verify_shape returned {err:?} — expected MissingField({field:?})",
             );
         }
     }

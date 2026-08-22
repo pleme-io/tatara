@@ -228,12 +228,10 @@ impl ArtifactKind {
 // — while the trait method `label` gives generic consumers a STABLE
 // name across the workspace-wide closed-set implementors.
 
-#[derive(Clone, Copy, Debug, thiserror::Error, PartialEq, Eq)]
-pub enum ArtifactError {
-    #[error("artifact source has no variant set (one of {0} required)")]
-    Empty(&'static str),
-    #[error("artifact source has multiple variants set; exactly one required")]
-    Ambiguous,
+crate::declare_tagged_union_error! {
+    pub ArtifactError,
+    empty = "artifact source has no variant set (one of {0} required)",
+    ambiguous = "artifact source has multiple variants set; exactly one required",
 }
 
 /// Slash-joined list of every `ArtifactKind::as_str()` — composed once
@@ -241,15 +239,6 @@ pub enum ArtifactError {
 /// closed-set summary without per-variant string drift. Mirrors
 /// [`crate::intent::INTENT_KIND_LIST`] in shape.
 const ARTIFACT_KIND_LIST: &str = "receipts/testReport/processSnapshot/runMarker";
-
-impl crate::tagged_union::TaggedUnionError for ArtifactError {
-    fn empty(kinds: &'static str) -> Self {
-        ArtifactError::Empty(kinds)
-    }
-    fn ambiguous() -> Self {
-        ArtifactError::Ambiguous
-    }
-}
 
 impl ArtifactSource {
     /// Resolve to exactly one variant. Errors on zero or many.
@@ -656,12 +645,10 @@ impl fmt::Display for ChannelKind {
 // [`crate::boundary::UnknownConditionKind`],
 // [`crate::phase::UnknownPhase`].
 
-#[derive(Clone, Copy, Debug, thiserror::Error, PartialEq, Eq)]
-pub enum ChannelError {
-    #[error("vector channel has no variant set (one of {0} required)")]
-    Empty(&'static str),
-    #[error("vector channel has multiple variants set; exactly one required")]
-    Ambiguous,
+crate::declare_tagged_union_error! {
+    pub ChannelError,
+    empty = "vector channel has no variant set (one of {0} required)",
+    ambiguous = "vector channel has multiple variants set; exactly one required",
 }
 
 /// Slash-joined list of every `ChannelKind::as_str()` — composed once
@@ -669,15 +656,6 @@ pub enum ChannelError {
 /// closed-set summary without per-variant string drift. Mirrors
 /// [`ARTIFACT_KIND_LIST`] in shape.
 const CHANNEL_KIND_LIST: &str = "httpEvent/natsSubject/stdout";
-
-impl crate::tagged_union::TaggedUnionError for ChannelError {
-    fn empty(kinds: &'static str) -> Self {
-        ChannelError::Empty(kinds)
-    }
-    fn ambiguous() -> Self {
-        ChannelError::Ambiguous
-    }
-}
 
 impl VectorChannel {
     /// Resolve to exactly one channel variant. Errors on zero or many.

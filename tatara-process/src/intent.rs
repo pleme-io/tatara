@@ -148,12 +148,10 @@ impl IntentKind {
     }
 }
 
-#[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
-pub enum IntentError {
-    #[error("intent has no variant set (one of {0} required)")]
-    Empty(&'static str),
-    #[error("intent has multiple variants set; exactly one required")]
-    Ambiguous,
+crate::declare_tagged_union_error! {
+    pub IntentError,
+    empty = "intent has no variant set (one of {0} required)",
+    ambiguous = "intent has multiple variants set; exactly one required",
 }
 
 /// Slash-joined list of every `IntentKind::as_str()` — composed once
@@ -184,15 +182,6 @@ const INTENT_KIND_LIST: &str = "nix/flux/lisp/container/aplicacao/guest";
 // Symmetric to [`crate::intent::WorkloadKind`] (the workload-axis
 // sibling on the same `ProcessSpec` slice) and every other
 // `#[derive(DeriveClosedSet)]` implementor across the crate.
-
-impl crate::tagged_union::TaggedUnionError for IntentError {
-    fn empty(kinds: &'static str) -> Self {
-        IntentError::Empty(kinds)
-    }
-    fn ambiguous() -> Self {
-        IntentError::Ambiguous
-    }
-}
 
 impl Intent {
     /// Resolve to exactly one variant. Errors on zero or many.

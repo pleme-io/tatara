@@ -105,6 +105,90 @@ pub fn resolve_or_err<V, E: TaggedUnionError>(
     })
 }
 
+/// Declare a sibling error carrier for a tagged-union `.variant()`
+/// site — the enum + [`TaggedUnionError`] impl in ONE authoring
+/// surface.
+///
+/// Every one of the four production `.variant()` sites on
+/// `ProcessSpec` ([`crate::intent::Intent`],
+/// [`crate::encapsulates::EncapsulationKind`],
+/// [`crate::export::ArtifactSource`],
+/// [`crate::export::VectorChannel`]) pre-lift restated the same
+/// four-piece authoring shape by hand:
+///
+/// 1. `#[derive(Clone, Copy, Debug, thiserror::Error, PartialEq,
+///    Eq)]` on the carrier — byte-identical across all four.
+/// 2. A two-variant enum body (`Empty(&'static str)`, `Ambiguous`)
+///    — structurally identical.
+/// 3. Two `#[error(...)]` messages whose only per-carrier knob is a
+///    noun-prefix (`"intent"`, `"encapsulation kind"`, ...) — every
+///    other byte of the (`"has no variant set (one of {0}
+///    required)"`, `"has multiple variants set; exactly one
+///    required"`) tails was verbatim.
+/// 4. A six-line `impl TaggedUnionError` whose two constructor
+///    bodies re-projected `Self::Empty(kinds)` / `Self::Ambiguous`
+///    onto each carrier's own typed variants.
+///
+/// The macro collapses (1) + (2) + (4) onto ONE call and takes the
+/// two per-carrier operator-facing diagnostic literals as named
+/// arguments so (3) stays visible at the callsite without re-authoring
+/// the shared derive set or trait impl. A fifth sibling carrier
+/// lands as ONE `declare_tagged_union_error!` invocation — no
+/// re-authored `#[derive(...)]`, no re-authored two-variant enum
+/// body, no re-authored `impl TaggedUnionError` block.
+///
+/// Emitted derives include `Copy` — the `Empty` arm carries only
+/// a `&'static str` and the `Ambiguous` arm is payload-free, so
+/// the carrier is always `Copy` regardless of caller.
+///
+/// # Example
+///
+/// ```ignore
+/// declare_tagged_union_error! {
+///     pub IntentError,
+///     empty = "intent has no variant set (one of {0} required)",
+///     ambiguous = "intent has multiple variants set; exactly one required",
+/// }
+/// ```
+///
+/// Expands to the enum + [`TaggedUnionError`] impl for
+/// `IntentError`; the `Empty` arm carries the caller's closed-set
+/// kind-list literal.
+#[macro_export]
+macro_rules! declare_tagged_union_error {
+    (
+        $(#[$attr:meta])*
+        $vis:vis $name:ident,
+        empty = $empty:literal,
+        ambiguous = $ambiguous:literal $(,)?
+    ) => {
+        $(#[$attr])*
+        #[derive(
+            ::std::clone::Clone,
+            ::std::marker::Copy,
+            ::std::fmt::Debug,
+            ::thiserror::Error,
+            ::std::cmp::PartialEq,
+            ::std::cmp::Eq,
+        )]
+        $vis enum $name {
+            #[error($empty)]
+            Empty(&'static str),
+            #[error($ambiguous)]
+            Ambiguous,
+        }
+
+        impl $crate::tagged_union::TaggedUnionError for $name {
+            fn empty(kinds: &'static str) -> Self {
+                Self::Empty(kinds)
+            }
+            fn ambiguous() -> Self {
+                Self::Ambiguous
+            }
+        }
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -263,5 +347,68 @@ mod tests {
         });
         let _ = resolve_or_err::<i32, E>(candidates, "irrelevant");
         assert_eq!(visited, 2);
+    }
+
+    // -------------------------------------------------------------------
+    // `declare_tagged_union_error!` macro-emitted carrier — pins the
+    // shape a fifth sibling would land through the macro instead of
+    // hand-rolling the enum + `impl TaggedUnionError` block.
+    // -------------------------------------------------------------------
+
+    crate::declare_tagged_union_error! {
+        pub(super) MacroEmittedError,
+        empty = "test carrier has no variant set (one of {0} required)",
+        ambiguous = "test carrier has multiple variants set; exactly one required",
+    }
+
+    /// The macro-emitted carrier's [`TaggedUnionError`] impl dispatches
+    /// the same four-outcome truth table [`resolve_or_err`] pins for a
+    /// hand-rolled carrier — pins that swapping a hand-rolled carrier
+    /// for a macro-emitted one preserves the compound-lift's projection
+    /// byte-identically.
+    #[test]
+    fn macro_emitted_carrier_projects_through_resolve_or_err() {
+        const KINDS: &str = "one/two/three";
+
+        assert_eq!(
+            resolve_or_err::<V, MacroEmittedError>([Some(V::A), None, None], KINDS).unwrap(),
+            V::A
+        );
+        assert_eq!(
+            resolve_or_err::<V, MacroEmittedError>([None, None, None], KINDS).unwrap_err(),
+            MacroEmittedError::Empty(KINDS)
+        );
+        assert_eq!(
+            resolve_or_err::<V, MacroEmittedError>([Some(V::A), Some(V::B), None], KINDS)
+                .unwrap_err(),
+            MacroEmittedError::Ambiguous
+        );
+    }
+
+    /// The macro-emitted carrier's `#[error(...)]` messages render the
+    /// two operator-facing diagnostic strings the caller handed the
+    /// macro, verbatim — a rename at the caller's literal reaches the
+    /// operator diagnostic surface intact.
+    #[test]
+    fn macro_emitted_carrier_display_renders_caller_literals_verbatim() {
+        assert_eq!(
+            MacroEmittedError::Empty("alpha/beta").to_string(),
+            "test carrier has no variant set (one of alpha/beta required)",
+        );
+        assert_eq!(
+            MacroEmittedError::Ambiguous.to_string(),
+            "test carrier has multiple variants set; exactly one required",
+        );
+    }
+
+    /// The macro-emitted carrier is `Copy` — a substrate-wide promise
+    /// pinned by the macro's `#[derive(..., Copy, ...)]` header so a
+    /// consumer treating the carrier as a value type (memcpy-cheap
+    /// return, `.copied()` on an `Option<&E>`) stays valid across every
+    /// carrier the macro emits.
+    #[test]
+    fn macro_emitted_carrier_is_copy() {
+        fn assert_copy<T: Copy>() {}
+        assert_copy::<MacroEmittedError>();
     }
 }

@@ -221,12 +221,10 @@ impl EncapsulationTarget {
 // [`crate::export::UnknownChannelKind`], and
 // [`crate::lifetime::UnknownTeardownPolicy`].
 
-#[derive(Clone, Copy, Debug, thiserror::Error, PartialEq, Eq)]
-pub enum EncapsulationKindError {
-    #[error("encapsulation kind has no variant set (one of {0} required)")]
-    Empty(&'static str),
-    #[error("encapsulation kind has multiple variants set; exactly one required")]
-    Ambiguous,
+crate::declare_tagged_union_error! {
+    pub EncapsulationKindError,
+    empty = "encapsulation kind has no variant set (one of {0} required)",
+    ambiguous = "encapsulation kind has multiple variants set; exactly one required",
 }
 
 /// Slash-joined list of every `EncapsulationTarget::as_str()` — composed
@@ -236,15 +234,6 @@ pub enum EncapsulationKindError {
 /// [`crate::export::ARTIFACT_KIND_LIST`] in shape; pinned by
 /// `encapsulation_kind_error_empty_lists_every_target_in_canonical_order`.
 const ENCAPSULATION_TARGET_LIST: &str = "existingHelmRelease/existingKustomization/bareWorkload";
-
-impl crate::tagged_union::TaggedUnionError for EncapsulationKindError {
-    fn empty(kinds: &'static str) -> Self {
-        EncapsulationKindError::Empty(kinds)
-    }
-    fn ambiguous() -> Self {
-        EncapsulationKindError::Ambiguous
-    }
-}
 
 impl EncapsulationKind {
     /// Resolve to exactly one variant. Errors on zero or many.

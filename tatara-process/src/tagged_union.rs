@@ -1034,6 +1034,145 @@ where
     assert_label_matches_serde_serialization::<T>();
 }
 
+/// TAGGED-UNION CONVENTION PANEL testkit — pins the FULL four-axis
+/// tagged-union parent convention (KIND_LIST diagnostic-stability,
+/// variant round-trip on the single-slot side, ALL×ALL two-slot
+/// ambiguity, wire-key alignment on the single-slot side) at ONE
+/// substrate call site per parent.
+///
+/// Parent-side compound-lift, sibling to
+/// [`assert_closed_set_convention_panel`] on the child's
+/// [`tatara_closed_set::ClosedSet`] axis. Composes
+/// [`assert_kind_list_matches_closed_set`] (no fixture) +
+/// [`assert_variant_round_trip`] (`single_slot`) +
+/// [`assert_two_slots_ambiguous`] (`two_slot`) +
+/// [`assert_single_slot_key_matches_label`] (`single_slot`).
+///
+/// Every one of the four production `.variant()` parents on
+/// `ProcessSpec` ([`crate::intent::Intent`],
+/// [`crate::encapsulates::EncapsulationKind`],
+/// [`crate::export::ArtifactSource`],
+/// [`crate::export::VectorChannel`]) publishes the four-axis
+/// convention through the shared substrate-wide attribute-set:
+/// `#[derive(DeriveClosedSet)]` on the addressing `Kind`,
+/// `declare_tagged_union_impls!` for the resolver+selector+trait
+/// triple, `#[serde(rename_all = "camelCase")]` +
+/// `#[serde(default, skip_serializing_if = "Option::is_none")]` on
+/// every tagged-union slot. Pre-lift each production site
+/// hand-authored FOUR sibling per-axis tests (`X_kind_round_trips_through_variant_kind`
+/// / `X_kind_list_matches_ClosedSet_labels` /
+/// `X_two_slots_are_ambiguous` /
+/// `X_kind_as_str_matches_field_name`) that each restated the
+/// SAME `crate::tagged_union::assert_<axis>::<T, _>(fixture)`
+/// invocation with only the axis name + fixture arity varying
+/// between siblings. Post-lift each site's four per-axis sibling
+/// tests can collapse to ONE
+/// `assert_tagged_union_convention_panel::<T, _, _>(
+/// single_slot_X, two_slot_X)` invocation whose body IS the
+/// four-axis composition dispatched through the substrate
+/// primitive here.
+///
+/// The two closures stay per-site — every one of the four
+/// production parents already owns a `single_slot_X(k) -> Parent`
+/// / `two_slot_X(a, b) -> Parent` pair, and the substrate-local
+/// `{single,two}_slot_*_probe` peers (siblings to the wire-key
+/// sweep's substrate-local probes) let the substrate-wide sweep
+/// below bind through the compound without reaching across the
+/// per-crate test-module boundaries. Lifting the two closures
+/// into the primitive would collapse the per-site construction
+/// knowledge that stays deliberately local — the closure IS the
+/// "populate slot k" / "populate the (a, b) pair" ground truth
+/// for the parent's field structure.
+///
+/// Bounds are the strict union of the four sub-assertions' bounds:
+/// [`assert_kind_list_matches_closed_set`] requires
+/// `T: TaggedUnion`; [`assert_variant_round_trip`] requires
+/// `T: TaggedUnion` + `T::Kind: PartialEq + Debug`
+/// + `F: Fn(T::Kind) -> T`; [`assert_two_slots_ambiguous`] requires
+/// `T: TaggedUnion` + `T::Kind: PartialEq + Debug`
+/// + `T::Error: PartialEq + Debug` + `F: Fn(T::Kind, T::Kind) -> T`;
+/// [`assert_single_slot_key_matches_label`] requires
+/// `T: TaggedUnion + Serialize` + `T::Kind: PartialEq + Debug`
+/// + `F: Fn(T::Kind) -> T`. The union
+/// `T: TaggedUnion + Serialize` + `T::Kind: PartialEq + Debug`
+/// + `T::Error: PartialEq + Debug` + `F1: Fn(T::Kind) -> T`
+/// + `F2: Fn(T::Kind, T::Kind) -> T` is what every one of the four
+/// production parents already satisfies through the shared
+/// substrate-wide impls — any implementor that fails the compound's
+/// bounds would ALSO fail the individual sub-assertions' bounds,
+/// so the compound doesn't shrink the reachable set of
+/// implementors relative to hand-authoring the four sibling calls.
+/// The `single_slot` closure is dispatched to
+/// [`assert_variant_round_trip`] by reference so the compound can
+/// re-dispatch it to [`assert_single_slot_key_matches_label`] by
+/// value on the final call — a caller passes ONE `Fn(T::Kind) -> T`
+/// factory (not `FnOnce`) at the two axes that need it.
+///
+/// `#[track_caller]` on both the compound and each sub-primitive,
+/// so a sub-assertion panic surfaces at the compound's caller site
+/// with the failing axis's exact panic-message substring
+/// (e.g. "TaggedUnion KIND_LIST drift", "select→variant_kind
+/// round-trip failed", "should resolve Ambiguous", "wire-key
+/// drift"). The four sub-assertions stay independently callable —
+/// a future parent that publishes only three of the four axes (a
+/// wire-format-less runtime parent, e.g., or an
+/// ambiguity-less parent whose `.variant()` short-circuits on
+/// the first populated slot) still binds through the sibling
+/// primitives individually.
+///
+/// A future FIFTH parent-side projection (e.g. a
+/// `two_slots_have_stable_diagnostic` axis if the ambiguity error
+/// gains a per-parent operator-facing message, or a
+/// `variant_kind_stays_stable_across_generation` axis if the
+/// resolver's iteration order becomes load-bearing) lands as ONE
+/// new `assert_<axis>::<T, _>(...)` substrate primitive + ONE new
+/// line inside this compound's body. Every one of the four
+/// production parents picks up the fifth-axis alignment check
+/// mechanically at their sole
+/// `assert_tagged_union_convention_panel::<T, _, _>(single_slot,
+/// two_slot)` call site — no per-parent test-site authoring, no
+/// per-crate test-site drop pathway where 3 sibling call sites
+/// carry the check and the 4th forgets. The exact promise the
+/// child-side [`assert_closed_set_convention_panel`] compound's
+/// docstring named on the child axis, extended here to the parent
+/// axis: a workspace-wide panel with byte-identical calling shapes
+/// (`assert_<compound>::<T, _, _>(single_slot, two_slot)`) that
+/// composes as freely as its sub-primitives.
+///
+/// The [`crate::lifetime::Lifetime`] site is DELIBERATELY excluded
+/// through the `T: TaggedUnion` bound — `Lifetime`'s `variant()`
+/// returns `Ok(Permanent)` on empty rather than an `Empty` typed
+/// error, so its projection shape diverges from the four
+/// Empty-projecting parents. Same reasoning as [`resolve_or_err`]'s
+/// / [`assert_variant_round_trip`]'s / [`assert_two_slots_ambiguous`]'s
+/// / [`assert_single_slot_key_matches_label`]'s exclusions.
+///
+/// Theory anchor: THEORY.md §V.1 (knowable platform) — the
+/// four-axis parent-side tagged-union convention becomes ONE typed
+/// theorem provable generically over any
+/// `T: TaggedUnion + Serialize` bound rather than FOUR
+/// hand-authored per-parent tests held coherent by test-module
+/// convention. THEORY.md §II.1 invariant 5 (composition preserves
+/// proofs) — the four sub-assertions compose structurally through
+/// ONE primitive here, so a regression at ONE axis surfaces at the
+/// sub-assertion's own panic message rather than as silent drift
+/// at every parent that might otherwise forget to include the
+/// axis in its per-site author-time enumeration.
+#[track_caller]
+pub fn assert_tagged_union_convention_panel<T, F1, F2>(single_slot: F1, two_slot: F2)
+where
+    T: TaggedUnion + serde::Serialize,
+    T::Kind: PartialEq + std::fmt::Debug,
+    T::Error: PartialEq + std::fmt::Debug,
+    F1: Fn(T::Kind) -> T,
+    F2: Fn(T::Kind, T::Kind) -> T,
+{
+    assert_kind_list_matches_closed_set::<T>();
+    assert_variant_round_trip::<T, _>(&single_slot);
+    assert_two_slots_ambiguous::<T, _>(two_slot);
+    assert_single_slot_key_matches_label::<T, _>(single_slot);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1448,6 +1587,109 @@ mod tests {
         );
         assert_single_slot_key_matches_label::<crate::export::VectorChannel, _>(
             single_slot_vector_channel_probe,
+        );
+    }
+
+    /// The parent-side four-axis compound-lift dispatches Ok on a
+    /// coherent implementor — the [`LocalParent`] scaffold publishes
+    /// every axis (`TaggedUnion` via
+    /// [`crate::declare_tagged_union_error`]-emitted `LocalParentError`
+    /// + Serialize via `#[derive(serde::Serialize)]` +
+    /// `LocalKind: PartialEq + Debug` +
+    /// `LocalParentError: PartialEq + Debug`), matching the
+    /// substrate-wide four-axis convention every one of the four
+    /// production parents carries. The Ok arm is the "no drift"
+    /// outcome; a divergence at ANY sub-assertion's composition
+    /// inside the compound (accidentally dropped, silently reordered,
+    /// or short-circuited) surfaces at the sub-primitive's own
+    /// panic message (each sub-primitive is `#[track_caller]`), and
+    /// the per-axis failing arms are pinned by the sibling
+    /// `#[should_panic]` probes already at the per-axis primitive
+    /// layer (`assert_kind_list_matches_closed_set_rejects_drifted_impl`,
+    /// `assert_variant_round_trip_rejects_factory_that_leaves_slot_empty`,
+    /// `assert_two_slots_ambiguous_rejects_factory_that_populates_only_one_slot`,
+    /// `assert_single_slot_key_matches_label_rejects_factory_that_populates_wrong_slot`).
+    /// Re-authoring per-axis drift probes at the compound layer
+    /// would restate the SAME four axis-typed contracts through a
+    /// compound wrapper without adding a new gate.
+    #[test]
+    fn assert_tagged_union_convention_panel_accepts_coherent_local_impl() {
+        fn single_slot(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            }
+        }
+        fn two_slot(a: LocalKind, b: LocalKind) -> LocalParent {
+            let mut p = LocalParent::default();
+            for k in [a, b] {
+                match k {
+                    LocalKind::Alpha => p.alpha = Some(11),
+                    LocalKind::Beta => p.beta = Some(22),
+                    LocalKind::Gamma => p.gamma = Some(33),
+                }
+            }
+            p
+        }
+        assert_tagged_union_convention_panel::<LocalParent, _, _>(single_slot, two_slot);
+    }
+
+    /// Every one of the four production `.variant()` parents on
+    /// `ProcessSpec` binds through the four-axis convention-panel
+    /// primitive [`assert_tagged_union_convention_panel`] coherently.
+    /// Sweep every production parent at ONE substrate boundary so a
+    /// regression that (a) drops ANY of the four sub-assertions from
+    /// the compound's body, (b) reorders them in a way that skips
+    /// one on Ok, (c) silently binds the compound against a
+    /// hollowed-out sub-assertion body, or (d) drifts a substrate-
+    /// local `{single,two}_slot_*_probe` fixture (populates the
+    /// wrong slot; leaks residual slots between calls; the `.or()`
+    /// composition drops a slot on the two-slot side) fails BOTH at
+    /// the per-crate test site AND at this substrate-wide sweep.
+    ///
+    /// Pinned in lock-step with the sibling
+    /// `every_production_tagged_union_binds_through_the_testkit_primitive`
+    /// (KIND_LIST axis) and
+    /// `every_production_tagged_union_binds_through_the_wire_key_testkit_primitive`
+    /// (wire-key axis) sweeps — every parent enumerated below is a
+    /// member of BOTH sibling sweeps (their bounds are strict
+    /// subsets of the compound's `T: TaggedUnion + Serialize` +
+    /// `T::Kind: PartialEq + Debug` + `T::Error: PartialEq + Debug`
+    /// bound), and every parent additionally publishes both a
+    /// substrate-local `single_slot_*_probe` and a
+    /// substrate-local `two_slot_*_probe` peer above. Post-sweep the
+    /// substrate-wide four-axis parent-side convention-panel
+    /// discipline is a property of the workspace, not a per-file
+    /// convention — even before any per-site test-body sweep
+    /// collapses the four per-parent sibling tests into ONE compound
+    /// call each.
+    #[test]
+    fn every_production_tagged_union_binds_through_the_convention_panel_testkit_primitive() {
+        assert_tagged_union_convention_panel::<crate::intent::Intent, _, _>(
+            single_slot_intent_probe,
+            two_slot_intent_probe,
+        );
+        assert_tagged_union_convention_panel::<crate::encapsulates::EncapsulationKind, _, _>(
+            single_slot_encapsulation_kind_probe,
+            two_slot_encapsulation_kind_probe,
+        );
+        assert_tagged_union_convention_panel::<crate::export::ArtifactSource, _, _>(
+            single_slot_artifact_source_probe,
+            two_slot_artifact_source_probe,
+        );
+        assert_tagged_union_convention_panel::<crate::export::VectorChannel, _, _>(
+            single_slot_vector_channel_probe,
+            two_slot_vector_channel_probe,
         );
     }
 
@@ -1973,6 +2215,72 @@ mod tests {
                 stdout: Some(StdoutChannel::default()),
                 ..VectorChannel::default()
             },
+        }
+    }
+
+    // Substrate-local two-slot factories — peers to the sibling
+    // `single_slot_*_probe` block above. Each composes
+    // `single_slot_*_probe(a)` with `single_slot_*_probe(b)`
+    // through per-field `Option::or` on the parent's tagged-union
+    // slots, matching the shape every per-site `two_slot_X(a, b)`
+    // helper across the four production parents already carries.
+    // The ambiguity-primitive only requires that BOTH addressed
+    // slots on the parent are populated; the inner spec's exact
+    // field values are irrelevant to the two-slot ambiguity check.
+
+    fn two_slot_intent_probe(
+        a: crate::intent::IntentKind,
+        b: crate::intent::IntentKind,
+    ) -> crate::intent::Intent {
+        let ia = single_slot_intent_probe(a);
+        let ib = single_slot_intent_probe(b);
+        crate::intent::Intent {
+            nix: ia.nix.or(ib.nix),
+            flux: ia.flux.or(ib.flux),
+            lisp: ia.lisp.or(ib.lisp),
+            container: ia.container.or(ib.container),
+            aplicacao: ia.aplicacao.or(ib.aplicacao),
+            guest: ia.guest.or(ib.guest),
+        }
+    }
+
+    fn two_slot_encapsulation_kind_probe(
+        a: crate::encapsulates::EncapsulationTarget,
+        b: crate::encapsulates::EncapsulationTarget,
+    ) -> crate::encapsulates::EncapsulationKind {
+        let ka = single_slot_encapsulation_kind_probe(a);
+        let kb = single_slot_encapsulation_kind_probe(b);
+        crate::encapsulates::EncapsulationKind {
+            existing_helm_release: ka.existing_helm_release.or(kb.existing_helm_release),
+            existing_kustomization: ka.existing_kustomization.or(kb.existing_kustomization),
+            bare_workload: ka.bare_workload.or(kb.bare_workload),
+        }
+    }
+
+    fn two_slot_artifact_source_probe(
+        a: crate::export::ArtifactKind,
+        b: crate::export::ArtifactKind,
+    ) -> crate::export::ArtifactSource {
+        let sa = single_slot_artifact_source_probe(a);
+        let sb = single_slot_artifact_source_probe(b);
+        crate::export::ArtifactSource {
+            receipts: sa.receipts.or(sb.receipts),
+            test_report: sa.test_report.or(sb.test_report),
+            process_snapshot: sa.process_snapshot.or(sb.process_snapshot),
+            run_marker: sa.run_marker.or(sb.run_marker),
+        }
+    }
+
+    fn two_slot_vector_channel_probe(
+        a: crate::export::ChannelKind,
+        b: crate::export::ChannelKind,
+    ) -> crate::export::VectorChannel {
+        let ca = single_slot_vector_channel_probe(a);
+        let cb = single_slot_vector_channel_probe(b);
+        crate::export::VectorChannel {
+            http_event: ca.http_event.or(cb.http_event),
+            nats_subject: ca.nats_subject.or(cb.nats_subject),
+            stdout: ca.stdout.or(cb.stdout),
         }
     }
 

@@ -1707,6 +1707,100 @@ fn parse_trait_path(trait_path: &str) -> syn::Path {
     parse_syn_str_or_panic(trait_path, "trait path")
 }
 
+/// The derive's PRIVATE `&str -> syn::<T>` parse-gate diagnostic
+/// wording — the SHARED `"invalid {kind_label} {source:?}: {e}"`
+/// format string both disposition peers [`parse_syn_str_or_panic`]
+/// (panic axis) and [`parse_syn_str_or_err`] (Result axis) route
+/// their Err payload through. Owns the four wording invariants both
+/// peers restated verbatim in their own bodies pre-lift: (1) the
+/// literal prefix `"invalid "` naming the failure class; (2) the
+/// per-axis `kind_label: &'static str` slot interpolated verbatim as
+/// the noun phrase; (3) the `{source:?}` Debug-quoted interpolation
+/// posture — a lexically-broken payload (`"foo bar"`, `"1invalid"`,
+/// `"(unbalanced"`) rides through the `Debug` projection so the
+/// enclosing double-quotes make whitespace / delimiter drift visible
+/// in the diagnostic; (4) the trailing `": {e}"` interpolation
+/// pairing that appends the underlying `syn::Error` via its Display
+/// impl. Post-lift the four wording invariants live at ONE substrate
+/// primitive; each disposition peer is a ONE-LINE delegate that
+/// applies its own dispatch (`panic!("{msg}")` on the panic axis,
+/// `Err(msg)` on the Result axis) to the shared string.
+///
+/// Pre-lift the two peers spelled the format string byte-identically
+/// in their own `panic!(...)` / `format!(...)` bodies. The byte-
+/// identity contract lived only in the sibling test
+/// `parse_syn_str_or_err_tests
+/// ::result_peer_and_panic_peer_share_the_same_diagnostic_shape_byte_for_byte`,
+/// which cross-compared the two peers' Err payloads on a
+/// representative rejection input. Post-lift the byte-identity flows
+/// through the substrate primitive STRUCTURALLY — both peers compose
+/// against ONE format-string owner — rather than being pinned at ONE
+/// representative test case. A regression that drifted the wording
+/// (a reordering of the label / source / underlying-error slots, a
+/// swap of `{source:?}` Debug interpolation for `{source}` Display
+/// interpolation, a drift on the literal `"invalid "` prefix or the
+/// `": "` separator) now lands at BOTH peers together rather than at
+/// one peer with the sibling still shipping the pre-lift wording.
+///
+/// The `source: &str` slot rides the Debug-quoted interpolation
+/// (`{source:?}`) rather than Display-quoted (`{source}`) — matches
+/// the four-invariant pre-lift shape so a lexically-broken payload
+/// carries visible whitespace / delimiters in the diagnostic. The
+/// `kind_label: &'static str` slot carries the per-axis diagnostic
+/// noun phrase — `"self type"` at the self-type substrate-internal
+/// wrapper, `"trait path"` at the trait-path substrate-internal
+/// wrapper, `"#[serde(default)] path"` at the operator-facing Result
+/// callsite. The `e: &syn::Error` slot rides the Display projection
+/// (`{e}`) at the trailing position — matches the pre-lift shape
+/// where each peer's closure received `e` by value and interpolated
+/// it via `{e}`; passing `&syn::Error` here avoids consuming the
+/// error on the primitive's side so the peer's closure can still own
+/// it for downstream chaining if a future disposition axis
+/// (a `syn::Result<T>` variant, a spanned-diagnostic sink) needs it.
+///
+/// A future third disposition axis (a `syn::Result<T>` variant that
+/// plumbs the syn-error to a substrate-diagnostic sink; a spanned-
+/// panic upgrade that carries a `proc_macro2::Span` at the panic
+/// message; a `#[track_caller]` annotation for a caller-site-carrying
+/// panic; a debug-only closed-set-input coherence check) inherits the
+/// diagnostic wording for free through this primitive rather than
+/// restating the format string a third time. Same "future axis pays
+/// zero at the wording gate" property [`trait_dispatch_call`] gives
+/// the UFCS-bracket axis on the emission surface,
+/// [`wrap_with_missing_key_default`] gives the fallback-carrying arms
+/// on the missing-kwarg wrap axis, and [`trait_dispatch_tail`] gives
+/// the trailing tail on the emission surface.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// four-invariant diagnostic-wording scaffold recurred at the two peer
+/// disposition-axis wrappers, past the PRIME-DIRECTIVE ≥ 2
+/// duplication trigger, and is lifted to ONE substrate primitive
+/// here). THEORY.md §II.1 invariant 3 (typed exit — the shared
+/// diagnostic-message shape is a typed CONSEQUENCE of the three
+/// `(kind_label, source, e)` inputs, not a per-peer format-string
+/// choice baked into each callsite; a caller cannot invoke a peer
+/// with the wrong wording because the wording ORIGINATES at one
+/// substrate primitive rather than being restated per-peer).
+/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+/// two disposition peers now compose structurally through ONE
+/// primitive, so a regression that drifts the diagnostic wording at
+/// ONE peer becomes impossible: both peers route through the SAME
+/// format string, so the drift lands at BOTH peers together and the
+/// primitive's own test pins catch it).
+///
+/// Frontier inspiration: MLIR's `mlir::emitError(Location, StringRef)`
+/// diagnostic emission primitive, where the (location, message-shape)
+/// pair owns diagnostic wording at ONE gate on the pass surface, and
+/// every pass' rejection composes against the shared primitive rather
+/// than restating the format string per-callsite. Translated through
+/// pleme-io primitives here as ONE `format!` composition owner over
+/// the shared `(kind_label, source, e)` triple, with each disposition
+/// peer applying its own dispatch (panic vs. Err) to the resulting
+/// string.
+fn format_syn_parse_error(kind_label: &'static str, source: &str, e: &syn::Error) -> String {
+    format!("invalid {kind_label} {source:?}: {e}")
+}
+
 /// The derive's PRIVATE substrate-internal `&str -> syn::<T>`
 /// panic-gate primitive both per-axis wrappers [`parse_self_ty`]
 /// (on the self-type axis) and [`parse_trait_path`] (on the trait-
@@ -1807,7 +1901,24 @@ fn parse_trait_path(trait_path: &str) -> syn::Path {
 /// test pins rather than as silent drift at every downstream
 /// trait-dispatched arm's implementor).
 fn parse_syn_str_or_panic<T: syn::parse::Parse>(source: &str, kind_label: &'static str) -> T {
-    syn::parse_str(source).unwrap_or_else(|e| panic!("invalid {kind_label} {source:?}: {e}"))
+    // Delegates the diagnostic wording to [`format_syn_parse_error`]
+    // so the byte-identical `"invalid {kind_label} {source:?}: {e}"`
+    // string the sibling Result peer [`parse_syn_str_or_err`] also
+    // composes against lives at ONE substrate primitive. The `panic!`
+    // wrap here is the disposition arm — the panic peer's contract
+    // is to crash the derive at the substrate itself on Err (matching
+    // the substrate-internal closed-set-input contract at the self-
+    // type + trait-path axes — every workspace-shipped input parses
+    // cleanly by construction). A `String` payload rides through the
+    // `panic!("{}", msg)` dispatch (same posture as the pre-lift
+    // `panic!("invalid {kind_label} {source:?}: {e}")` inline
+    // formatting, which produces a `String` payload via `format_args!`
+    // interpolation), so the sibling test
+    // `parse_syn_str_or_panic_tests::generic_primitive_uses_the_kind_label_verbatim_at_the_panic_message`
+    // catches the `String` payload through `catch_unwind` the same
+    // way it did pre-lift.
+    syn::parse_str(source)
+        .unwrap_or_else(|e| panic!("{}", format_syn_parse_error(kind_label, source, &e)))
 }
 
 /// Operator-facing peer of [`parse_syn_str_or_panic`] on the derive's
@@ -1870,7 +1981,17 @@ fn parse_syn_str_or_err<T: syn::parse::Parse>(
     source: &str,
     kind_label: &'static str,
 ) -> Result<T, String> {
-    syn::parse_str(source).map_err(|e| format!("invalid {kind_label} {source:?}: {e}"))
+    // Delegates the diagnostic wording to [`format_syn_parse_error`]
+    // so the byte-identical `"invalid {kind_label} {source:?}: {e}"`
+    // string the sibling panic peer [`parse_syn_str_or_panic`] also
+    // composes against lives at ONE substrate primitive. The `Err`
+    // wrap here is the disposition arm — the Result peer's contract
+    // is to plumb the syn-error through the derive's Err chain into
+    // `spanned_compile_error` at the offending field's syn span so the
+    // operator-authored `#[serde(default = "…")]` payload rejects at
+    // the operator's own source position rather than crashing the
+    // derive.
+    syn::parse_str(source).map_err(|e| format_syn_parse_error(kind_label, source, &e))
 }
 
 fn narrow_trait_dispatch_call(method: &'static str, rust_ty: &str, key: &str) -> TokenStream2 {
@@ -5167,6 +5288,216 @@ mod parse_self_ty_tests {
         // quoted form, so a regression that dropped the literal
         // from the diagnostic message surfaces here.
         let _ = parse_self_ty("1invalid");
+    }
+}
+
+#[cfg(test)]
+mod format_syn_parse_error_tests {
+    use super::{format_syn_parse_error, parse_syn_str_or_err, parse_syn_str_or_panic};
+
+    // The `(kind_label, source, &syn::Error) -> String` primitive owns
+    // the SHARED `"invalid {kind_label} {source:?}: {e}"` format
+    // string both disposition peers (`parse_syn_str_or_panic` on the
+    // panic axis, `parse_syn_str_or_err` on the Result axis) compose
+    // their Err payload against. Pre-lift each peer spelled the
+    // format string byte-identically in its own `panic!(...)` /
+    // `format!(...)` body, and the byte-identity contract lived only
+    // in the sibling test
+    // `parse_syn_str_or_err_tests
+    // ::result_peer_and_panic_peer_share_the_same_diagnostic_shape_byte_for_byte`,
+    // which cross-compared the two peers on ONE representative input.
+    // Post-lift the byte-identity flows through the substrate
+    // primitive STRUCTURALLY — both peers dispatch through ONE
+    // format-string owner.
+    //
+    // Four promises the primitive owns at the boundary of its
+    // wording gate:
+    //
+    // 1. LITERAL PREFIX — the message starts with the literal
+    //    `"invalid "` prefix so an operator-facing diagnostic
+    //    consumer (`spanned_compile_error` for the Result peer's
+    //    routing at `SerdeDefault::Path`; a `should_panic(expected =
+    //    "invalid …")` gate for the panic peer's routing at the
+    //    substrate-internal `parse_self_ty` / `parse_trait_path`
+    //    wrappers) can pattern-match the class prefix without a per-
+    //    axis fork. Pinned by the prefix test below.
+    // 2. LABEL INTERPOLATION — the `kind_label: &'static str` slot
+    //    rides the message verbatim as the noun phrase after the
+    //    prefix. A regression that dropped the label or hard-coded
+    //    a per-axis wording would surface at the label-per-axis
+    //    sweep test below.
+    // 3. `{source:?}` DEBUG INTERPOLATION — the offending literal
+    //    rides via `Debug`-quoted interpolation so an input carrying
+    //    whitespace / a leading digit / an unbalanced delimiter
+    //    surfaces with the enclosing double-quotes making the drift
+    //    visible in the diagnostic. A regression that swapped the
+    //    posture for `{source}` Display interpolation would drop the
+    //    quotes and be caught by the debug-quotes test below.
+    // 4. TRAILING SYN-ERROR — the message ends with `": "` +
+    //    the underlying `syn::Error`'s Display projection, matching
+    //    the pre-lift shape both peers restated. Pinned by the sweep
+    //    that composes a synthesized `syn::Error` and asserts its
+    //    Display projection appears at the message tail.
+    //
+    // Peer to `parse_syn_str_or_panic_tests` (which pins the panic
+    // peer's disposition contract) and `parse_syn_str_or_err_tests`
+    // (which pins the Result peer's disposition contract) — those
+    // two modules exercise the primitive INDIRECTLY through their
+    // wrapper's `panic!` / `Err` dispatch; this module exercises the
+    // primitive DIRECTLY so a regression that drifted the wording
+    // shape at ONE substrate site (rather than at ONE peer) surfaces
+    // here at the primitive's own test boundary.
+
+    fn synthesize_syn_error(unparseable: &str) -> syn::Error {
+        syn::parse_str::<syn::Path>(unparseable)
+            .err()
+            .expect("fixture must produce a syn::Error")
+    }
+
+    #[test]
+    fn primitive_starts_with_the_invalid_prefix() {
+        // Promise 1 (LITERAL PREFIX). Fail-before-pass-after: a
+        // regression that dropped the `"invalid "` prefix (or drifted
+        // the wording to e.g. `"unparseable {kind_label}: {e}"`) would
+        // fail this assertion at the primitive's own test boundary
+        // rather than at the two peer modules' `should_panic(expected
+        // = "invalid …")` gates (which would fail as a cascade with
+        // less-specific attribution).
+        let e = synthesize_syn_error("foo bar");
+        let msg = format_syn_parse_error("self type", "foo bar", &e);
+        assert!(
+            msg.starts_with("invalid "),
+            "primitive must start with the `invalid` literal prefix, got: {msg}",
+        );
+    }
+
+    #[test]
+    fn primitive_interpolates_the_kind_label_verbatim_after_the_prefix() {
+        // Promise 2 (LABEL INTERPOLATION) — the label rides verbatim
+        // as the noun phrase after the literal prefix. Sweep the
+        // three workspace-representative labels the substrate binds
+        // through (the two substrate-internal panic-axis labels the
+        // `parse_self_ty` / `parse_trait_path` wrappers pass, and
+        // the sole operator-facing Result-axis label the
+        // `SerdeDefault::Path` arm passes) so a regression that
+        // (a) dropped the label from the wording, (b) hard-coded a
+        // single label at the primitive, or (c) swapped the position
+        // of label and source in the wording shape would surface
+        // per-label rather than only on one canonical label.
+        let e = synthesize_syn_error("foo bar");
+        for label in ["self type", "trait path", "#[serde(default)] path"] {
+            let msg = format_syn_parse_error(label, "foo bar", &e);
+            let expected_prefix = format!("invalid {label} ");
+            assert!(
+                msg.starts_with(&expected_prefix),
+                "label {label:?} must ride verbatim after the prefix, got: {msg}",
+            );
+        }
+    }
+
+    #[test]
+    fn primitive_interpolates_the_source_via_debug_quoted_form() {
+        // Promise 3 (`{source:?}` DEBUG INTERPOLATION) — the offending
+        // literal rides through `Debug`-quoted interpolation, NOT
+        // Display-quoted. Sweep the three representative unparseables
+        // the sibling `parse_syn_str_or_err_tests
+        // ::err_payload_carries_the_offending_literal_via_debug_quoted_interpolation`
+        // pin exercises at the Result-peer boundary, so the primitive-
+        // level pin and the operator-facing pin stay coherent. A
+        // regression that (a) swapped to `{source}` Display
+        // interpolation (dropping the quotes) or (b) reordered the
+        // source out of the wording would surface here on all three
+        // representative shapes.
+        for unparseable in ["(unbalanced", "foo bar", "1invalid"] {
+            let e = synthesize_syn_error(unparseable);
+            let msg = format_syn_parse_error("self type", unparseable, &e);
+            let debug_quoted = format!("{unparseable:?}");
+            assert!(
+                msg.contains(&debug_quoted),
+                "source {unparseable:?} must ride via Debug-quoted form {debug_quoted:?}, got: {msg}",
+            );
+        }
+    }
+
+    #[test]
+    fn primitive_appends_the_syn_error_display_at_the_message_tail() {
+        // Promise 4 (TRAILING SYN-ERROR) — the underlying `syn::Error`
+        // rides via its Display projection at the trailing position,
+        // separated from the source by `": "`. A regression that
+        // dropped the error (silently swallowing the diagnostic
+        // detail) or reordered it before the source would surface
+        // here.
+        let e = synthesize_syn_error("foo bar");
+        let e_display = format!("{e}");
+        let msg = format_syn_parse_error("self type", "foo bar", &e);
+        let expected_tail = format!(": {e_display}");
+        assert!(
+            msg.ends_with(&expected_tail),
+            "underlying syn::Error must ride via Display at the trailing `: <error>` position, got: {msg}",
+        );
+    }
+
+    #[test]
+    fn panic_peer_dispatches_the_primitive_verbatim_at_its_panic_message() {
+        // Delegation pin — the panic peer's message payload is
+        // byte-identical to the primitive's return value for the SAME
+        // `(kind_label, source, e)` triple. Fail-before-pass-after:
+        // a regression that inlined a divergent format string at the
+        // panic peer's body (rather than routing through the primitive)
+        // would fail this test at the primitive-to-peer boundary,
+        // BEFORE the sibling test
+        // `parse_syn_str_or_err_tests
+        // ::result_peer_and_panic_peer_share_the_same_diagnostic_shape_byte_for_byte`
+        // catches the same drift indirectly (that test cross-compares
+        // the two peers; this test compares ONE peer against the
+        // shared primitive).
+        let source = "foo bar";
+        let kind_label = "trait path";
+        let e = synthesize_syn_error(source);
+        let expected = format_syn_parse_error(kind_label, source, &e);
+        let panic_payload = match std::panic::catch_unwind(|| {
+            let _: syn::Path = parse_syn_str_or_panic(source, kind_label);
+        }) {
+            Ok(()) => panic!("panic peer must panic on an unparseable syn::Path input"),
+            Err(payload) => payload,
+        };
+        let actual = panic_payload
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| {
+                panic_payload
+                    .downcast_ref::<&str>()
+                    .map(|s| (*s).to_string())
+            })
+            .expect("panic payload must be a String or &str");
+        assert_eq!(
+            actual, expected,
+            "panic peer must route its message payload through the shared primitive verbatim",
+        );
+    }
+
+    #[test]
+    fn result_peer_dispatches_the_primitive_verbatim_at_its_err_payload() {
+        // Delegation pin — the Result peer's Err payload is byte-
+        // identical to the primitive's return value for the SAME
+        // `(kind_label, source, e)` triple. Peer to the panic-delegation
+        // pin above; together they close the primitive-to-peer
+        // boundary on BOTH disposition axes so a regression that
+        // drifted ONE peer's wiring surfaces at THAT peer's own
+        // delegation test rather than at the cross-peer byte-identity
+        // pin.
+        let source = "foo bar";
+        let kind_label = "#[serde(default)] path";
+        let e = synthesize_syn_error(source);
+        let expected = format_syn_parse_error(kind_label, source, &e);
+        let actual = match parse_syn_str_or_err::<syn::Path>(source, kind_label) {
+            Ok(_) => panic!("Result peer must reject an unparseable syn::Path input"),
+            Err(payload) => payload,
+        };
+        assert_eq!(
+            actual, expected,
+            "Result peer must route its Err payload through the shared primitive verbatim",
+        );
     }
 }
 

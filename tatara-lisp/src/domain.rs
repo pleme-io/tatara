@@ -3772,187 +3772,97 @@ fn from_value_with_path<T: DeserializeOwned>(sexp: &Sexp, path: KwargPath) -> Re
     })
 }
 
-/// Required field — feeds the kwarg's canonical-JSON projection to
-/// `serde_json::from_value::<T>` via `from_value_with_path` with a
-/// `KwargPath::Named(key)` path slot. Errors carry `:key` so authoring
-/// tools can point at the offending kwarg.
-pub fn extract_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) -> Result<T> {
-    from_value_with_path(required(kw, key)?, KwargPath::named(key))
+/// `#[cfg(test)]`: the derive's `Kind::Deserialize` arm no longer
+/// routes through this axis-typed public wrapper name — the arm
+/// emits `deserialize_trait_dispatch_call("extract_kwarg", …)` in
+/// `tatara-lisp-derive`, which dispatches directly to
+/// `<T as DeserializeKwarg>::extract_kwarg`. Post-sweep the four
+/// universal-serde-fallthrough free-fn wrappers
+/// ([`extract_via_serde`] / [`extract_optional_via_serde`] /
+/// [`extract_vec_via_serde`] / [`extract_optional_vec_via_serde`])
+/// are dead in production; they stay module-private + test-only
+/// as pinning fixtures for the four sibling delegation-agreement
+/// tests
+/// (`deserialize_kwarg_extract_kwarg_default_matches_extract_via_
+/// serde_byte_identically`,
+/// `deserialize_kwarg_extract_optional_kwarg_default_forwards_
+/// rejection_and_absent_arms`,
+/// `deserialize_kwarg_extract_vec_kwarg_default_collects_and_
+/// indexes_failing_item`,
+/// `deserialize_kwarg_extract_optional_vec_kwarg_default_
+/// preserves_present_vs_absent`), so a regression that re-
+/// introduced a fifth axis-typed free-fn wrapper somewhere else
+/// would still register at those tests — but no production path
+/// calls them. Peer to the same sweep [`extract_string`] /
+/// [`extract_bool`] carried on the atom-family scalar surface
+/// (all demoted after `<T as AtomKwarg<'_>>::extract_owned_kwarg`
+/// absorbed the axis dispatch through `Self::Owned`) and
+/// [`extract_int_narrowed`] / [`extract_float_narrowed`] on the
+/// numeric-narrowing extraction axis.
+///
+/// Body stays a single `<T as DeserializeKwarg>::extract_kwarg(kw,
+/// key)` trait-dispatch delegate, so the demotion is
+/// visibility-only.
+#[cfg(test)]
+fn extract_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) -> Result<T> {
+    <T as DeserializeKwarg>::extract_kwarg(kw, key)
 }
 
-/// `Option<T>` sibling of [`extract_via_serde`] — the SCALAR peer of
-/// [`extract_optional_vec_via_serde`] on the universal-serde-
-/// fallthrough axis, and the present-vs-absent bifurcated peer of
-/// [`extract_via_serde`] on the same scalar-serde-bridge axis.
-/// Absent kwarg → `Ok(None)`; a present kwarg flows through
-/// [`extract_via_serde`] (the required peer) and wraps the decoded
-/// value in `Some(_)` on success. A present-but-non-decodable kwarg
-/// (`:level 5` for an enum `Severity`) rejects with the SAME
-/// [`LispError::KwargDeserialize { path: KwargPath::Named(key), .. }`]
-/// variant the required peer emits through [`from_value_with_path`]
-/// at [`KwargPath::named(key)`] — the two peers on the scalar-serde
-/// axis share ONE rejection vocabulary, byte-identical modulo the
-/// `Ok`-side `Some(_)` wrap.
-///
-/// Delegates to [`optional_from_required`] with
-/// [`extract_via_serde::<T>`] as its required extractor. The scalar
-/// universal-serde peer of the just-lifted list-family
-/// [`extract_optional_vec_via_serde`] and the scalar-family
-/// counterpart of the atom-family list peers
-/// ([`extract_optional_string_list`] /
-/// [`extract_optional_bool_list`] /
-/// [`extract_optional_narrowed_list`]) — all five now route their
-/// present-vs-absent bifurcation through the SAME
-/// [`optional_from_required`] substrate primitive.
-///
-/// Pre-lift this extractor spelled the two-arm bifurcation inline
-/// (`let Some(sexp) = optional(kw, key) else { return Ok(None); };
-/// from_value_with_path(sexp, KwargPath::named(key)).map(Some)`) —
-/// the LAST inline present-vs-absent bifurcation on the extract_
-/// optional_ scalar family whose T is owned (not lifetime-bound to
-/// `kw`, which pre-lift blocked delegation through
-/// [`optional_from_required`]'s erased-lifetime `F` bound and kept
-/// the inline shape at [`extract_optional_atom`] as a design
-/// invariant of the primitive). Post-lift the substrate primitive's
-/// `F` bound rides an explicit `'a` lifetime (`for<'a> F: FnOnce
-/// (&'a Kwargs<'a>, &str) -> Result<T>` at the call site, coerced
-/// from every fn-item consumer's HRTB signature; specific `'a` for
-/// the borrowed-`T` closure caller) so the atom-family scalar peer
-/// [`extract_optional_atom`] delegates through the SAME primitive
-/// too — the substrate now owns the bifurcation at ONE named site
-/// across every axis of the extract_optional_ family with no inline
-/// exceptions; a future diagnostic promotion on the present-vs-
-/// absent gate (a probe, a metric, a span) lands at ONE owner and
-/// flows to the scalar peer here without a per-caller edit.
-///
-/// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry — a
-/// scalar `Option<T>` serde-decode failure IS a typed-entry gate
-/// the present-vs-absent bifurcation lifts through the primitive).
-/// THEORY.md §VI.1 (generation over composition — the present-vs-
-/// absent + delegate-to-required posture now recurs at SEVEN peer
-/// sites all routing through the SAME [`optional_from_required`]
-/// substrate primitive; the three-times-rule trigger keeps holding
-/// as the scalar-narrowed peer [`extract_optional_narrowed`] and the
-/// atom-family scalar peer [`extract_optional_atom`] land as the
-/// sixth and seventh consumers). THEORY.md §V.1 (knowable platform
-/// — the rejection on `Option<T>` now surfaces the same pattern-
-/// matchable [`LispError::KwargDeserialize { path: KwargPath::Named
-/// (key), .. }`] variant its required peer emits, so a future
-/// span-carrying promotion of [`KwargPath::Named`] binds
-/// mechanically for the scalar peer too).
-pub fn extract_optional_via_serde<T: DeserializeOwned>(
+/// `#[cfg(test)]`: `Option` sibling of [`extract_via_serde`] with
+/// the same `#[cfg(test)]`-plus-pinning-fixture posture. The
+/// derive's `Kind::OptionalDeserialize` arm emits
+/// `deserialize_trait_dispatch_call("extract_optional_kwarg", …)`
+/// directly; this wrapper is test-only. Delegates through
+/// `<T as DeserializeKwarg>::extract_optional_kwarg`, whose trait
+/// default composes the present-vs-absent bifurcation through
+/// [`optional_from_required`] with `Self::extract_kwarg` as the
+/// required-peer delegate.
+#[cfg(test)]
+fn extract_optional_via_serde<T: DeserializeOwned>(
     kw: &Kwargs<'_>,
     key: &str,
 ) -> Result<Option<T>> {
-    optional_from_required(kw, key, extract_via_serde::<T>)
+    <T as DeserializeKwarg>::extract_optional_kwarg(kw, key)
 }
 
-/// `Vec<T>` field — empty vec if the kwarg is absent; otherwise the kwarg
-/// must be a `Sexp::List` and each item flows through `from_value_with_path`
-/// with a `KwargPath::Item { key, idx }` path slot, naming both the outer
-/// kwarg AND the failing item index in any per-item rejection.
-pub fn extract_vec_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) -> Result<Vec<T>> {
-    extract_list(kw, key, ExpectedKwargShape::List, |idx, item| {
-        from_value_with_path(item, KwargPath::item(key, idx))
-    })
+/// `#[cfg(test)]`: list-family peer of [`extract_via_serde`]'s
+/// demotion — the derive's `Kind::VecDeserialize` arm emits
+/// `deserialize_trait_dispatch_call("extract_vec_kwarg", …)`, so
+/// this wrapper is dead in production and stays test-only for the
+/// delegation-agreement pin. Delegates through
+/// `<T as DeserializeKwarg>::extract_vec_kwarg`, whose trait
+/// default composes [`extract_list`] over
+/// [`ExpectedKwargShape::List`] with a
+/// [`from_value_with_path`]-per-item closure at
+/// [`KwargPath::item(key, idx)`].
+#[cfg(test)]
+fn extract_vec_via_serde<T: DeserializeOwned>(kw: &Kwargs<'_>, key: &str) -> Result<Vec<T>> {
+    <T as DeserializeKwarg>::extract_vec_kwarg(kw, key)
 }
 
-/// `Option<Vec<T>>` sibling of [`extract_vec_via_serde`] — the
-/// present-vs-absent bifurcated peer of the required-vec serde bridge
-/// on the universal-serde-fallthrough list-family surface.
-/// Distinguishes an ABSENT kwarg (`Ok(None)`) from a PRESENT empty
-/// list (`Ok(Some(Vec::new()))`) — the required peer's posture
-/// collapses both cases to `Ok(Vec::new())`, which fits `Vec<T>`
-/// fields (where "no items" and "no kwarg" are semantically the same)
-/// but loses the present-vs-absent distinction an `Option<Vec<T>>`
-/// field needs (where `None` and `Some(vec![])` are DISTINCT operator
-/// intents — "the operator did not name this kwarg" vs. "the operator
-/// explicitly bound the kwarg to an empty list").
-///
-/// A present-but-non-list kwarg (`:steps "scalar"`) rejects with the
-/// SAME typed [`LispError::TypeMismatch`] variant the required peer
-/// [`extract_vec_via_serde`] emits (`expected list, got string`) via
-/// the shared [`extract_list`] outer-shape gate; a per-item serde
-/// decode failure inside a present list (`:steps ((:notify-ref "ok")
-/// (:notify-ref 7))`) rejects with the SAME structural
-/// [`LispError::KwargDeserialize { path: KwargPath::Item { key, idx },
-/// message }`] variant its per-item peer emits through
-/// [`from_value_with_path`] at [`KwargPath::item(key, idx)`]. The
-/// two peers ([`extract_vec_via_serde`] and this one) delegate to the
-/// SAME per-item bridge — only the outer present-vs-absent axis's
-/// return shape differs (`Vec<T>` vs. `Option<Vec<T>>`).
-///
-/// Sibling posture to the four atom-family optional-vec peers
-/// ([`extract_optional_string_list`] / [`extract_optional_bool_list`] /
-/// [`extract_optional_narrowed_list`] on the string / bool / numeric
-/// axes) on the universal-serde-fallthrough axis: all five share the
-/// present-vs-absent bifurcation the [`optional_from_required`]
-/// substrate primitive owns, and each delegates its present-branch
-/// per-item decode to its own axis-typed required peer. The differences
-/// are that this extractor rides the universal serde bridge's per-item
-/// [`from_value_with_path`] decode rather than an atom-family
-/// [`AtomKwarg::project_at`] shape gate or a numeric-narrowing
-/// [`NarrowNumeric::narrow`] projection, so a per-item shape/decode
-/// mismatch surfaces as a pattern-matchable
-/// [`LispError::KwargDeserialize { path: KwargPath::Item { key, idx },
-/// .. }`] variant — the SAME rejection shape its required peer emits,
-/// where the atom-family peers surface the typed
-/// [`LispError::TypeMismatch { form: KwargPath::Item { key, idx },
-/// .. }`] variant of the axis-typed shape gate.
-///
-/// Pre-lift the derive routed `Option<Vec<Nested>>` (any non-atomic
-/// inner type — a struct, an enum, a nested `Vec<T>`) through the
-/// universal `extract_optional_via_serde::<Vec<Nested>>` bridge —
-/// [`classify_option`] in [`tatara_lisp_derive`] had no arm for
-/// `Kind::VecDeserialize` and fell through to
-/// `Kind::OptionalDeserialize`, matching the pre-lift posture that
-/// [`Vec<bool>`] / [`Vec<u16>`] / [`Option<Vec<String>>`] /
-/// [`Option<Vec<u16>>`] / etc. shared before their per-axis routes
-/// landed. So a per-item shape mismatch inside `Option<Vec<Nested>>`
-/// surfaced as a serde-substring
-/// `LispError::KwargDeserialize { path: KwargPath::Named(key),
-/// message: "invalid type: ..., expected ..., at path .1" }`
-/// diagnostic keyed off the substring inside the message rather than
-/// as the typed
-/// `LispError::KwargDeserialize { path: KwargPath::Item { key, idx },
-/// .. }` its required peer [`extract_vec_via_serde`] already emits
-/// through the per-item bridge — the SAME class of gate-leak the
-/// recent per-axis [`extract_bool_list`] / [`extract_narrowed_list`] /
-/// [`extract_optional_bool_list`] / [`extract_optional_narrowed_list`]
-/// closures already closed on the atom-family surface. Post-lift the
-/// two `Option<Vec<T>>` / `Vec<T>` peers on the universal-serde
-/// fallthrough axis share ONE rejection vocabulary, closing the LAST
-/// atom-family × mode Cartesian-product hole in the derive's typed-
-/// entry surface for `Option<Vec<T>>`-shaped fields — every
-/// `Option<Vec<T>>` field now surfaces per-item rejections through a
-/// [`KwargPath::Item { key, idx }`] path root rather than a
-/// [`KwargPath::Named(key)`] one.
-///
-/// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry — a
-/// per-item shape failure on an `Option<Vec<Nested>>` kwarg IS a
-/// typed-entry gate the optional-nested-vec surface used to leak past
-/// through the universal serde bridge). THEORY.md §VI.1 (generation
-/// over composition — the present-vs-absent + delegate-to-required
-/// posture now recurs at SEVEN peer sites (four list-family —
-/// [`extract_optional_string_list`] / [`extract_optional_bool_list`] /
-/// [`extract_optional_narrowed_list`] / this — plus three scalar-
-/// family — [`extract_optional_via_serde`] on the universal-serde
-/// axis, [`extract_optional_narrowed`] on the numeric-narrowed axis,
-/// and [`extract_optional_atom`] on the atom-shape axis), all
-/// routing through the SAME [`optional_from_required`] substrate
-/// primitive). THEORY.md
-/// §V.1 (knowable platform — the per-item rejection on
-/// `Option<Vec<T>>` now surfaces the same pattern-matchable
-/// [`LispError::KwargDeserialize { path: KwargPath::Item { .. }, ..
-/// }`] variant every authoring surface (LSP, `tatara-check`, REPL)
-/// already binds to for the required peer, so a future span-carrying
-/// promotion of [`KwargPath::Item`] binds mechanically for
-/// `Option<Vec<T>>` fields too).
-pub fn extract_optional_vec_via_serde<T: DeserializeOwned>(
+/// `#[cfg(test)]`: `Option<Vec<T>>` sibling of
+/// [`extract_vec_via_serde`] with the same
+/// `#[cfg(test)]`-plus-pinning-fixture posture. The derive's
+/// `Kind::OptionalVecDeserialize` arm emits
+/// `deserialize_trait_dispatch_call("extract_optional_vec_kwarg",
+/// …)` directly; this wrapper is test-only for the
+/// `deserialize_kwarg_extract_optional_vec_kwarg_default_
+/// preserves_present_vs_absent` delegation-agreement pin.
+/// Delegates through
+/// `<T as DeserializeKwarg>::extract_optional_vec_kwarg`, whose
+/// trait default composes the present-vs-absent bifurcation
+/// through [`optional_from_required`] with
+/// `Self::extract_vec_kwarg` as the required-peer delegate, so
+/// an ABSENT kwarg short-circuits to `Ok(None)` and a PRESENT
+/// list dispatches through the same per-item
+/// [`from_value_with_path`] bridge the required peer uses at
+/// [`KwargPath::item(key, idx)`].
+#[cfg(test)]
+fn extract_optional_vec_via_serde<T: DeserializeOwned>(
     kw: &Kwargs<'_>,
     key: &str,
 ) -> Result<Option<Vec<T>>> {
-    optional_from_required(kw, key, extract_vec_via_serde::<T>)
+    <T as DeserializeKwarg>::extract_optional_vec_kwarg(kw, key)
 }
 
 /// Universal-serde-fallthrough peer of the atom-family [`AtomKwarg`]
@@ -3964,25 +3874,44 @@ pub fn extract_optional_vec_via_serde<T: DeserializeOwned>(
 ///
 /// The four trait defaults ([`Self::extract_kwarg`] /
 /// [`Self::extract_optional_kwarg`] / [`Self::extract_vec_kwarg`] /
-/// [`Self::extract_optional_vec_kwarg`]) delegate to the four
-/// [`extract_via_serde`] / [`extract_optional_via_serde`] /
-/// [`extract_vec_via_serde`] / [`extract_optional_vec_via_serde`]
-/// free functions at the substrate — the ONE
-/// [`from_value_with_path`] + [`optional_from_required`] +
-/// [`extract_list`] composition every serde-Deserialize kwarg field
-/// already funnels through, exposed here through a `Self`-bound
-/// trait so the derive macro's `Kind::(Optional?)(Vec?)Deserialize`
-/// emission surface dispatches through the SAME
+/// [`Self::extract_optional_vec_kwarg`]) inline the substrate's
+/// serde bridge — the ONE [`from_value_with_path`] +
+/// [`optional_from_required`] + [`extract_list`] composition every
+/// serde-Deserialize kwarg field already funnels through — and
+/// dispatch inter-mode composition through
+/// [`Self::extract_kwarg`] / [`Self::extract_vec_kwarg`] so a
+/// hypothetical Self-specific override on the required-peer axis
+/// flows through both the scalar and list-family optional peers
+/// mechanically. The derive macro's
+/// `Kind::(Optional?)(Vec?)Deserialize` emission surface
+/// dispatches through the SAME
 /// `<T as ::tatara_lisp::domain::DeserializeKwarg>::<method>(&kw,
 /// #key)?` UFCS shape its atom-family and numeric-narrowed peers
 /// already use ([`AtomKwarg`] and [`NarrowNumeric`] on those axes).
 ///
 /// A blanket impl for every `T: DeserializeOwned` binds the trait
-/// mechanically — the same closed set the four free-function peers
-/// already gate against — so a hand-written `TataraDomain` impl AND
-/// the derive share ONE trait-dispatch surface at the universal-
-/// serde-fallthrough axis with no axis-typed impl per field-type at
-/// downstream consumer sites.
+/// mechanically — the same closed set the four pre-sweep free-
+/// function peers gated against — so a hand-written `TataraDomain`
+/// impl AND the derive share ONE trait-dispatch surface at the
+/// universal-serde-fallthrough axis with no axis-typed impl per
+/// field-type at downstream consumer sites.
+///
+/// Post-sweep the trait defaults are the SOLE production entry
+/// point per mode on the universal-serde-fallthrough axis; the
+/// four sibling `extract_*_via_serde` free-fn wrappers pre-sweep
+/// held the substrate bodies and the trait defaults delegated to
+/// them by name, and post-sweep the delegation direction inverts:
+/// the trait defaults own the bodies and the four free-fn wrappers
+/// stay module-private + `#[cfg(test)]` as pinning fixtures whose
+/// bodies are one-line `<T as DeserializeKwarg>::<method>`
+/// delegates — the same posture the atom-family scalar-and-list
+/// axes carried after
+/// `<T as AtomKwarg<'_>>::extract_(optional_)?(list_)?(owned_)?
+/// kwarg` absorbed the axis dispatch through `Self::Owned` +
+/// `Self::project`, and the numeric-narrowing axes carried after
+/// `<T as NarrowNumeric>::extract_(optional_)?(narrowed_)?
+/// (list_)?kwarg` absorbed the axis dispatch through
+/// `Self::Wide` + `Self::narrow`.
 ///
 /// Post-lift the derive's non-narrowed emission surface consists of
 /// ONE trait dispatch primitive per axis-family:
@@ -4014,62 +3943,76 @@ pub fn extract_optional_vec_via_serde<T: DeserializeOwned>(
 /// [`from_value_with_path`] flows through the trait defaults into
 /// every consumer without per-consumer edits).
 pub trait DeserializeKwarg: DeserializeOwned {
-    /// Required scalar kwarg — the trait-dispatched peer of
-    /// [`extract_via_serde`]. Composes the substrate's serde
-    /// bridge through [`from_value_with_path`] at
-    /// [`KwargPath::named(key)`] — same posture the four
-    /// atom-family peers give through [`AtomKwarg::extract_kwarg`].
+    /// Required scalar kwarg — composes the substrate's serde
+    /// bridge inline through [`required`] → [`from_value_with_path`]
+    /// at [`KwargPath::named(key)`], same posture the four
+    /// atom-family peers give through [`AtomKwarg::extract_kwarg`]
+    /// (which composes [`extract_atom`] inline over `Self::SHAPE` +
+    /// `Self::project`). Post-sweep the SOLE production entry point
+    /// per axis-family mode across the universal-serde-fallthrough
+    /// axis — the four `extract_*_via_serde` free-fn peers demoted
+    /// to `#[cfg(test)]` pinning fixtures that delegate here.
     fn extract_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Self> {
-        extract_via_serde(kw, key)
+        from_value_with_path(required(kw, key)?, KwargPath::named(key))
     }
 
-    /// `Option<Self>` sibling of [`Self::extract_kwarg`] — the
-    /// trait-dispatched peer of [`extract_optional_via_serde`].
-    /// Absent kwarg short-circuits to `Ok(None)` through the
-    /// shared [`optional_from_required`] present-vs-absent
-    /// bifurcation primitive; present kwarg flows through
-    /// [`Self::extract_kwarg`] and wraps the decoded value in
-    /// `Some(_)`.
+    /// `Option<Self>` sibling of [`Self::extract_kwarg`] — absent
+    /// kwarg short-circuits to `Ok(None)` through the shared
+    /// [`optional_from_required`] present-vs-absent bifurcation
+    /// primitive; present kwarg flows through [`Self::extract_kwarg`]
+    /// (as the delegate the primitive dispatches to) and wraps the
+    /// decoded value in `Some(_)` on success. A regression that
+    /// silently added a `Self::extract_kwarg` override on some
+    /// downstream `Self` would still take effect here through the
+    /// `Self::extract_kwarg` dispatch — the two peers stay in
+    /// lock-step by construction rather than by hand-rolled
+    /// delegation through a free-fn name that could not see the
+    /// override.
     fn extract_optional_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Option<Self>> {
-        extract_optional_via_serde(kw, key)
+        optional_from_required(kw, key, Self::extract_kwarg)
     }
 
-    /// `Vec<Self>` sibling — the trait-dispatched peer of
-    /// [`extract_vec_via_serde`]. Absent kwarg → `Ok(Vec::new())`;
-    /// present-but-non-list kwarg rejects with the axis-typed
-    /// [`LispError::TypeMismatch`] variant the shared
-    /// [`extract_list`] outer-shape gate emits; per-item decode
-    /// failure inside a present list rejects with the SAME
-    /// [`LispError::KwargDeserialize { path: KwargPath::Item {
-    /// key, idx }, .. }`] variant [`from_value_with_path`] emits
-    /// at [`KwargPath::item(key, idx)`].
+    /// `Vec<Self>` sibling — reads a present kwarg as a
+    /// [`Sexp::List`] via the shared [`extract_list`] outer-shape
+    /// gate labeled [`ExpectedKwargShape::List`], and each item
+    /// flows through [`from_value_with_path`] at
+    /// [`KwargPath::item(key, idx)`]. Absent kwarg →
+    /// `Ok(Vec::new())`; present-but-non-list kwarg rejects with
+    /// the axis-typed [`LispError::TypeMismatch`] variant the
+    /// outer-shape gate emits; per-item decode failure rejects
+    /// with the SAME [`LispError::KwargDeserialize { path:
+    /// KwargPath::Item { key, idx }, .. }`] variant
+    /// [`from_value_with_path`] emits at
+    /// [`KwargPath::item(key, idx)`].
     fn extract_vec_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Vec<Self>> {
-        extract_vec_via_serde(kw, key)
+        extract_list(kw, key, ExpectedKwargShape::List, |idx, item| {
+            from_value_with_path(item, KwargPath::item(key, idx))
+        })
     }
 
-    /// `Option<Vec<Self>>` sibling — the trait-dispatched peer of
-    /// [`extract_optional_vec_via_serde`]. Distinguishes an
-    /// ABSENT kwarg (`Ok(None)`) from a PRESENT empty list
-    /// (`Ok(Some(Vec::new()))`) — the present-vs-absent
-    /// bifurcation the shared [`optional_from_required`]
-    /// primitive owns. Peer to
-    /// [`AtomKwarg::extract_optional_list_kwarg`] on the
-    /// atom-family list-family surface — both trait defaults
-    /// route their present-vs-absent bifurcation through the SAME
+    /// `Option<Vec<Self>>` sibling — distinguishes an ABSENT kwarg
+    /// (`Ok(None)`) from a PRESENT empty list (`Ok(Some(Vec::new()))`)
+    /// via the shared [`optional_from_required`] present-vs-absent
+    /// bifurcation primitive, and dispatches its present-arm through
+    /// [`Self::extract_vec_kwarg`] as the required peer. Peer to
+    /// [`AtomKwarg::extract_optional_list_kwarg`] on the atom-family
+    /// list-family surface — both trait defaults route their
+    /// present-vs-absent bifurcation through the SAME
     /// [`optional_from_required`] substrate primitive, differing
     /// only in which required-peer they compose
     /// ([`Self::extract_vec_kwarg`] vs.
     /// [`AtomKwarg::extract_list_kwarg`]).
     fn extract_optional_vec_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Option<Vec<Self>>> {
-        extract_optional_vec_via_serde(kw, key)
+        optional_from_required(kw, key, Self::extract_vec_kwarg)
     }
 }
 
 /// Blanket impl — every `T: DeserializeOwned` picks up the four
 /// [`DeserializeKwarg`] trait defaults mechanically. The same
-/// closed set the four free-function peers ([`extract_via_serde`] /
-/// [`extract_optional_via_serde`] / [`extract_vec_via_serde`] /
-/// [`extract_optional_vec_via_serde`]) already gate against;
+/// closed set the pre-sweep free-function peers
+/// ([`extract_via_serde`] / [`extract_optional_via_serde`] /
+/// [`extract_vec_via_serde`] / [`extract_optional_vec_via_serde`],
+/// now demoted to `#[cfg(test)]` pinning fixtures) gated against;
 /// downstream consumer sites (hand-written `TataraDomain` impls,
 /// the derive's per-field emission) reach the four defaults
 /// through UFCS without an axis-typed impl per field-type.

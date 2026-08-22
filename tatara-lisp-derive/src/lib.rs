@@ -3192,6 +3192,122 @@ pub(crate) const NARROW_INT_WIDTHS: &[&str] = &[
 /// as ONE entry here, matching the int-axis extension contract.
 pub(crate) const NARROW_FLOAT_WIDTHS: &[&str] = &["f32", "f64"];
 
+/// The derive's PRIVATE closed-set table pairing every numeric-
+/// narrowing width table with its axis-typed [`Kind`] tuple-variant
+/// constructor — the axis-agnostic composition owner both the
+/// int-axis `(NARROW_INT_WIDTHS, Kind::Int)` and the float-axis
+/// `(NARROW_FLOAT_WIDTHS, Kind::Float)` cells bind to at a single
+/// dispatch site inside [`classify`].
+///
+/// Pre-lift each axis had its OWN `if let Some(kind) =
+/// classify_narrowed_width(&name, <WIDTHS>, Kind::<Axis>) { return
+/// kind; }` short-circuit hand-authored inline at [`classify`],
+/// producing TWO byte-for-byte identical blocks that differed only
+/// in the pair of `(<WIDTHS>, Kind::<Axis>)` arguments each
+/// threaded through the SAME [`classify_narrowed_width`] primitive.
+/// The two blocks stood past the PRIME-DIRECTIVE ≥ 2 duplication
+/// threshold — a regression that added a third numeric axis (a
+/// hypothetical `u128` / `Decimal` / `f16`) would have to add a
+/// THIRD hand-authored `if let` block at exactly the right point in
+/// the classifier's fall-through ordering, restating the shared
+/// `classify_narrowed_width(&name, <NEW_WIDTHS>, Kind::<NewAxis>)`
+/// dispatch shape for the third time. Post-lift the (widths,
+/// constructor) pair for every numeric axis lives at ONE entry in
+/// this const, and [`classify`]'s numeric arm iterates the const
+/// once, so a future third axis lands as ONE tuple entry here — no
+/// new `if let` block at the classifier, no new hand-authored
+/// dispatch shape at any consumer site.
+///
+/// The tuple's slot ordering is (widths, constructor):
+///   - `.0: &'static [&'static str]` — the axis's closed-set width
+///     table verbatim ([`NARROW_INT_WIDTHS`] on the int cell,
+///     [`NARROW_FLOAT_WIDTHS`] on the float cell). The `&'static`
+///     inner-borrow pins the width literals as substrate-lifetime
+///     `&'static str`s the classifier threads through
+///     [`classify_narrowed_width`]'s `widths: &[&'static str]`
+///     parameter without a re-borrow at the iteration site.
+///   - `.1: fn(&'static str) -> Kind` — the axis-typed [`Kind`]
+///     tuple-variant constructor as a function pointer, admitting
+///     the `Kind::Int` / `Kind::Float` coercion Rust's stable ABI
+///     already gives every tuple-variant constructor. The
+///     `&'static str` argument slot binds the SAME matched width
+///     literal [`classify_narrowed_width`] surfaces from the
+///     widths slice, so a pattern-payload drift is structurally
+///     impossible: the constructor and the widths table live in
+///     the SAME tuple entry, and swapping ONE slot without the
+///     other would fail to compile at rustc time (the
+///     `NARROW_AXES` initializer's type gate rejects a
+///     `(NARROW_INT_WIDTHS, Kind::Float)` mis-pairing at the const
+///     boundary because both slots share the same tuple entry).
+///
+/// The classifier's axis iteration order is int-first-then-float,
+/// preserved verbatim by the tuple ordering in this const —
+/// [`classify`]'s `for &(widths, to_kind) in NARROW_AXES` loop
+/// processes the entries in declaration order, so the int-axis
+/// dispatch still runs first. The axes stay disjoint by
+/// construction (pinned at
+/// [`narrow_width_tables_tests::narrow_int_and_float_width_tables_are_disjoint`]),
+/// so the iteration order is load-bearing only for the two
+/// float-width names — but the ordering is preserved regardless
+/// so a future partial-overlap axis (a hypothetical decimal-typed
+/// axis whose widths overlap with int names via aliasing) would
+/// still route through the int arm first, matching the pre-lift
+/// classifier's fall-through semantics.
+///
+/// A future third axis lands as ONE tuple entry appended here — no
+/// per-axis `if let` block at the classifier, no per-axis
+/// dispatch-shape restatement, no per-axis fall-through-ordering
+/// bookkeeping. The extension contract:
+///
+/// 1. Add a `pub(crate) const NARROW_<AXIS>_WIDTHS: &[&str] = &[…]`
+///    constant per the [`NARROW_INT_WIDTHS`] / [`NARROW_FLOAT_WIDTHS`]
+///    pattern (its closed-set identity per
+///    `tatara_lisp::domain::NarrowNumeric<Wide = ...>` impls).
+/// 2. Add a matching `Kind::<Axis>(&'static str)` variant to
+///    [`Kind`] (its per-variant `narrow_trait_dispatch_call`
+///    emission — the emit-side dispatch inherits mechanically
+///    through the existing `Kind::Int(rust_ty) | Kind::Float(rust_ty)`
+///    or-pattern collapsing at [`extractor_for`]).
+/// 3. Append `(NARROW_<AXIS>_WIDTHS, Kind::<Axis>)` as a new tuple
+///    entry to this const. The classifier picks the axis up
+///    mechanically through the iteration.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// the two `if let` short-circuits inside [`classify`] recurred
+/// past the PRIME-DIRECTIVE ≥ 2 duplication threshold; lifting the
+/// (widths, constructor) pair to ONE closed-set table closes them
+/// at rustc time). THEORY.md §II.1 invariant 1 (typed entry — the
+/// (widths, constructor) pairing is a typed-entry gate at the
+/// const boundary; a mis-pairing regression rejects at the const
+/// initializer's type-gate rather than as silent drift at every
+/// downstream implementor with a field on the mis-paired axis).
+/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+/// two axis-loops now compose structurally through ONE iteration
+/// site, so a regression that drifts the axis fall-through order
+/// at ONE cell surfaces at
+/// [`narrow_axes_tests::narrow_axes_carries_the_two_axis_entries_in_int_first_order`]
+/// rather than as silent drift at the derive-consumer's field-
+/// classify path).
+/// The (widths, [`Kind`] tuple-variant constructor) pair one
+/// numeric-narrowing axis contributes to [`NARROW_AXES`]. The tuple
+/// alias factors the shape out of [`NARROW_AXES`]'s const
+/// initializer so `clippy::type_complexity` binds to ONE named
+/// alias rather than to the const's spelled-out tuple type.
+///
+/// The two slots preserve the pre-lift argument order the peer
+/// primitive [`classify_narrowed_width`] takes on its `(widths,
+/// to_kind)` slots — a caller iterating [`NARROW_AXES`] threads
+/// the tuple's two slots straight through the primitive at the
+/// matching parameter positions, so a regression that swapped the
+/// slot ordering would fail at the primitive's argument-type gate
+/// rather than as silent drift at every downstream implementor.
+pub(crate) type NarrowAxis = (&'static [&'static str], fn(&'static str) -> Kind);
+
+pub(crate) const NARROW_AXES: &[NarrowAxis] = &[
+    (NARROW_INT_WIDTHS, Kind::Int),
+    (NARROW_FLOAT_WIDTHS, Kind::Float),
+];
+
 /// Search a numeric-narrowing-width closed-set table for a
 /// name-equality match against `name`, projecting the matched
 /// `&'static str` width literal through `to_kind` into the
@@ -3284,24 +3400,37 @@ fn classify(ty: &Type) -> Kind {
                 "Vec" => return classify_vec(last, ty),
                 _ => {}
             }
-            // Numeric-narrowed arms — the pattern-payload identity
-            // across [`NARROW_INT_WIDTHS`] / [`NARROW_FLOAT_WIDTHS`]
-            // rides ONE per-width `w` variable through both the
-            // equality gate and the payload construction (a pattern-
-            // payload drift is structurally impossible — the SAME
-            // matched `&'static str` threads through both the
-            // `.find(...)` predicate and the `to_kind` projection
-            // inside [`classify_narrowed_width`]). The int-axis
-            // dispatch runs first — the two consts stay disjoint by
-            // construction (pinned at
+            // Numeric-narrowed arms — the (widths, constructor)
+            // pair for every numeric-narrowing axis lives at ONE
+            // entry in [`NARROW_AXES`], and the classifier iterates
+            // the const once. Pre-lift each axis had its own
+            // hand-authored `if let Some(kind) = classify_narrowed_width(
+            // &name, <WIDTHS>, Kind::<Axis>) { return kind; }`
+            // short-circuit at this call site — two byte-for-byte
+            // identical blocks past the PRIME-DIRECTIVE ≥ 2
+            // duplication threshold. Post-lift the pair rides ONE
+            // tuple entry per axis, and a future third axis extends
+            // [`NARROW_AXES`] by ONE tuple entry rather than by a
+            // third hand-authored `if let` block here.
+            //
+            // The pattern-payload identity contract from
+            // [`classify_narrowed_width`] is preserved verbatim
+            // through the primitive's `.find(...).map(to_kind)`
+            // composition — the SAME matched `&'static str` threads
+            // through both the widths equality gate and the
+            // constructor argument at ONE call site.
+            //
+            // The int-axis dispatch still runs first — the
+            // [`NARROW_AXES`] declaration order pins the
+            // classifier's axis fall-through ordering, and the two
+            // consts stay disjoint by construction (pinned at
             // [`narrow_width_tables_tests::narrow_int_and_float_width_tables_are_disjoint`]),
             // so the fall-through to the float-axis delegate is
             // load-bearing only for the two float-width names.
-            if let Some(kind) = classify_narrowed_width(&name, NARROW_INT_WIDTHS, Kind::Int) {
-                return kind;
-            }
-            if let Some(kind) = classify_narrowed_width(&name, NARROW_FLOAT_WIDTHS, Kind::Float) {
-                return kind;
+            for &(widths, to_kind) in NARROW_AXES {
+                if let Some(kind) = classify_narrowed_width(&name, widths, to_kind) {
+                    return kind;
+                }
             }
         }
     }
@@ -3826,6 +3955,245 @@ mod narrow_width_tables_tests {
                     int_w, float_w,
                     "width {int_w:?} appears in both NARROW_INT_WIDTHS and NARROW_FLOAT_WIDTHS — the two axes must be disjoint (int-axis dispatch runs first and would silently shadow the float-axis entry)",
                 );
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod narrow_axes_tests {
+    //! Contract tests for [`super::NARROW_AXES`] — the derive's
+    //! PRIVATE closed-set table pairing every numeric-narrowing width
+    //! table with its axis-typed [`super::Kind`] tuple-variant
+    //! constructor, iterated ONCE at [`super::classify`]'s numeric
+    //! arm. Pre-lift each axis had its own hand-authored `if let
+    //! Some(kind) = classify_narrowed_width(&name, <WIDTHS>,
+    //! Kind::<Axis>) { return kind; }` short-circuit at [`super::classify`]
+    //! — two byte-for-byte identical blocks past the PRIME-DIRECTIVE
+    //! ≥ 2 duplication threshold. Post-lift the (widths,
+    //! constructor) pair per axis lives at ONE tuple entry in this
+    //! const, and the classifier iterates the const once.
+    //!
+    //! Four contract axes pinned here:
+    //!
+    //! 1. ORDERED PAIR — [`super::NARROW_AXES`] carries exactly two
+    //!    tuple entries in int-first-then-float declaration order,
+    //!    threading the SAME [`super::NARROW_INT_WIDTHS`] /
+    //!    [`super::NARROW_FLOAT_WIDTHS`] slice pointers and the SAME
+    //!    [`super::Kind::Int`] / [`super::Kind::Float`] constructor
+    //!    identities the pre-lift `if let` blocks bound.
+    //! 2. IDENTITY WITH AXIS CONSTS — the widths slot of each
+    //!    [`super::NARROW_AXES`] tuple entry IS the axis's per-cell
+    //!    [`super::NARROW_INT_WIDTHS`] / [`super::NARROW_FLOAT_WIDTHS`]
+    //!    const (byte-equal `&'static str` slices, not a separate
+    //!    copy of the widths). A regression that drifted ONE cell's
+    //!    widths from its axis const would surface here before it
+    //!    reached the classifier's iteration.
+    //! 3. AXIS SWEEP THROUGH NARROW_AXES — iterating
+    //!    [`super::NARROW_AXES`] and calling [`super::classify_narrowed_width`]
+    //!    against each entry's (widths, constructor) pair projects
+    //!    every entry's every width to the matching typed [`super::Kind`]
+    //!    variant with a byte-equal `&'static str` payload. Peer to
+    //!    the sibling per-axis [`super::narrow_width_tables_tests`]
+    //!    sweeps — this test binds the SAME identity through the
+    //!    UNIFIED iteration path the classifier post-lift takes.
+    //! 4. CLASSIFIER END-TO-END IDENTITY — iterating
+    //!    [`super::NARROW_AXES`] and calling [`super::classify`] on
+    //!    each width still projects every entry to the axis-typed
+    //!    [`super::Kind`] variant — the end-to-end pin that the
+    //!    (widths, constructor) tuple ordering + [`super::classify`]'s
+    //!    iteration + [`super::classify_narrowed_width`]'s primitive
+    //!    dispatch compose byte-identically to the pre-lift two-
+    //!    `if let`-block classifier body.
+    //!
+    //! Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    //! preserves proofs) — the two axis-loops inside
+    //! [`super::classify`] now compose structurally through ONE
+    //! iteration site; a regression that drifts the axis
+    //! fall-through order OR the (widths, constructor) pairing at
+    //! ONE cell surfaces here rather than as silent drift at every
+    //! downstream implementor with a field on the drifted axis.
+    //! THEORY.md §VI.1 (generation over composition) — the
+    //! future-axis extension flow ("adding a numeric-narrowing axis
+    //! lands as ONE tuple entry in [`super::NARROW_AXES`],
+    //! classifier + tests inherit mechanically") IS the composition-
+    //! preserving property this module pins.
+
+    use super::{
+        classify, classify_narrowed_width, Kind, NARROW_AXES, NARROW_FLOAT_WIDTHS,
+        NARROW_INT_WIDTHS,
+    };
+    use syn::{parse_str, Type};
+
+    fn parse_ty(s: &str) -> Type {
+        parse_str(s).expect("valid Rust type syntax")
+    }
+
+    #[test]
+    fn narrow_axes_carries_the_two_axis_entries_in_int_first_order() {
+        // Promise 1 (ORDERED PAIR) — [`NARROW_AXES`] carries exactly
+        // two tuple entries in int-first-then-float declaration
+        // order, matching the classifier's pre-lift axis
+        // fall-through ordering (int-axis short-circuit first, then
+        // float-axis short-circuit). The pre-lift two `if let`
+        // blocks pinned the ordering implicitly through source-code
+        // position; post-lift the ordering rides the
+        // [`NARROW_AXES`] declaration order and this pin makes it
+        // load-bearing in the source rather than in the classifier's
+        // iteration semantics.
+        assert_eq!(
+            NARROW_AXES.len(),
+            2,
+            "NARROW_AXES cardinality drifted — the substrate ships exactly two numeric-narrowing axes (int + float)",
+        );
+        // Widths slots pin to the axis consts.
+        assert!(
+            core::ptr::eq(NARROW_AXES[0].0.as_ptr(), NARROW_INT_WIDTHS.as_ptr()),
+            "NARROW_AXES[0] widths slot is not NARROW_INT_WIDTHS — the int-axis cell drifted from the source-of-truth const",
+        );
+        assert!(
+            core::ptr::eq(NARROW_AXES[1].0.as_ptr(), NARROW_FLOAT_WIDTHS.as_ptr()),
+            "NARROW_AXES[1] widths slot is not NARROW_FLOAT_WIDTHS — the float-axis cell drifted from the source-of-truth const",
+        );
+        // Constructor slots pin to the axis-typed Kind variant
+        // constructors — invoke each on a probe string and confirm
+        // the returned variant carries the axis identity.
+        let int_ctor = NARROW_AXES[0].1;
+        let float_ctor = NARROW_AXES[1].1;
+        let Kind::Int(int_payload) = int_ctor("probe-int") else {
+            panic!("NARROW_AXES[0] constructor did not project to Kind::Int — the int-axis constructor drifted");
+        };
+        assert_eq!(int_payload, "probe-int");
+        let Kind::Float(float_payload) = float_ctor("probe-float") else {
+            panic!("NARROW_AXES[1] constructor did not project to Kind::Float — the float-axis constructor drifted");
+        };
+        assert_eq!(float_payload, "probe-float");
+    }
+
+    #[test]
+    fn narrow_axes_widths_slots_carry_byte_identical_axis_const_contents() {
+        // Promise 2 (IDENTITY WITH AXIS CONSTS) — a byte-equal
+        // sweep of each NARROW_AXES tuple entry's widths slot
+        // against its per-axis const. Together with the pointer-
+        // equality pin in the ordered-pair test above (which pins
+        // slice-identity), this test pins content-identity too — so
+        // a regression that swapped a widths slot for a fresh
+        // `&[…]` literal with the same contents would still pass
+        // this test but fail the pointer-equality pin, and a
+        // regression that swapped a widths slot for a fresh literal
+        // with DIFFERENT contents would fail here.
+        assert_eq!(
+            NARROW_AXES[0].0, NARROW_INT_WIDTHS,
+            "NARROW_AXES[0] widths slot contents drifted from NARROW_INT_WIDTHS",
+        );
+        assert_eq!(
+            NARROW_AXES[1].0, NARROW_FLOAT_WIDTHS,
+            "NARROW_AXES[1] widths slot contents drifted from NARROW_FLOAT_WIDTHS",
+        );
+    }
+
+    #[test]
+    fn every_narrow_axes_width_projects_through_the_primitive_to_the_matching_kind_variant() {
+        // Promise 3 (AXIS SWEEP THROUGH NARROW_AXES) — iterating
+        // [`NARROW_AXES`] and running each entry's (widths,
+        // constructor) pair through [`classify_narrowed_width`]
+        // projects every width to the axis-typed [`Kind`] variant
+        // with a byte-equal payload. This sweep binds the SAME
+        // identity the per-axis sibling sweeps in
+        // [`super::narrow_width_tables_tests`] bind, but through
+        // the UNIFIED iteration path [`classify`] now takes post-
+        // lift.
+        //
+        // Pre-lift a per-axis sweep only covered its OWN axis's
+        // primitive dispatch; a regression on the composed
+        // classifier's iteration (e.g. a lift that dropped the
+        // float-axis dispatch entirely by mis-typing the loop's
+        // `.iter()` termination) would slip past the per-axis
+        // sweeps because they bind to the primitive directly, not
+        // through the unified iteration. This sweep composes the
+        // (NARROW_AXES iteration + classify_narrowed_width
+        // dispatch) chain end-to-end, catching a drift at either
+        // layer.
+        for &(widths, to_kind) in NARROW_AXES {
+            for &w in widths {
+                let projected = classify_narrowed_width(w, widths, to_kind);
+                let kind = projected.unwrap_or_else(|| {
+                    panic!(
+                        "width {w:?} did not project through classify_narrowed_width against its own NARROW_AXES entry — the (widths, constructor) pair drifted",
+                    )
+                });
+                match kind {
+                    Kind::Int(payload) | Kind::Float(payload) => {
+                        assert_eq!(
+                            payload, w,
+                            "width {w:?} projected through NARROW_AXES with drifted payload {payload:?}",
+                        );
+                    }
+                    _ => panic!(
+                        "width {w:?} projected through NARROW_AXES to a non-numeric-narrowed Kind variant — the axis's constructor slot drifted from Kind::Int / Kind::Float",
+                    ),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn every_narrow_axes_width_classifies_end_to_end_to_the_matching_kind_variant() {
+        // Promise 4 (CLASSIFIER END-TO-END IDENTITY) — iterating
+        // [`NARROW_AXES`] and calling [`classify`] on each width
+        // projects to the axis-typed [`Kind`] variant with a byte-
+        // equal payload. End-to-end pin that the composed
+        // (NARROW_AXES iteration + classify_narrowed_width dispatch
+        // + tuple-variant construction) chain matches the pre-lift
+        // two-`if let`-block classifier body byte-for-byte.
+        //
+        // The int-axis entry's classifier dispatch has to run FIRST
+        // (declaration order in [`NARROW_AXES`]); a regression that
+        // silently reversed the tuple ordering would still pass the
+        // per-axis pin above (each axis matches its own widths
+        // regardless of order) but a hypothetical partial-overlap
+        // axis (a decimal-typed axis whose widths overlap with int
+        // names via aliasing) would be routed to the wrong cell.
+        // The int/float axes are disjoint by construction (pinned
+        // at [`super::narrow_width_tables_tests::
+        // narrow_int_and_float_width_tables_are_disjoint`]) so
+        // ordering is not load-bearing for the two axes shipped
+        // today, but this pin holds the SEMANTICS at the end-to-end
+        // boundary regardless.
+        for &(widths, to_kind) in NARROW_AXES {
+            // Determine the axis identity from the constructor by
+            // probing with a sentinel string, since we can't compare
+            // fn pointers structurally across every stable Rust
+            // codegen path.
+            let probe = to_kind("probe");
+            let axis_is_int = matches!(probe, Kind::Int(_));
+            let axis_is_float = matches!(probe, Kind::Float(_));
+            assert!(
+                axis_is_int ^ axis_is_float,
+                "NARROW_AXES entry's constructor projected to neither Kind::Int nor Kind::Float — axis identity drifted",
+            );
+            for &w in widths {
+                let kind = classify(&parse_ty(w));
+                match (axis_is_int, kind) {
+                    (true, Kind::Int(payload)) => {
+                        assert_eq!(
+                            payload, w,
+                            "int-axis width {w:?} classified end-to-end with drifted payload {payload:?}",
+                        );
+                    }
+                    (false, Kind::Float(payload)) => {
+                        assert_eq!(
+                            payload, w,
+                            "float-axis width {w:?} classified end-to-end with drifted payload {payload:?}",
+                        );
+                    }
+                    (true, _) => panic!(
+                        "int-axis width {w:?} classified end-to-end to a non-Kind::Int variant — the classifier's numeric arm drifted from the NARROW_AXES iteration",
+                    ),
+                    (false, _) => panic!(
+                        "float-axis width {w:?} classified end-to-end to a non-Kind::Float variant — the classifier's numeric arm drifted from the NARROW_AXES iteration",
+                    ),
+                }
             }
         }
     }

@@ -185,19 +185,30 @@ const INTENT_KIND_LIST: &str = "nix/flux/lisp/container/aplicacao/guest";
 // sibling on the same `ProcessSpec` slice) and every other
 // `#[derive(DeriveClosedSet)]` implementor across the crate.
 
+impl crate::tagged_union::TaggedUnionError for IntentError {
+    fn empty(kinds: &'static str) -> Self {
+        IntentError::Empty(kinds)
+    }
+    fn ambiguous() -> Self {
+        IntentError::Ambiguous
+    }
+}
+
 impl Intent {
     /// Resolve to exactly one variant. Errors on zero or many.
     /// Sweeps over `IntentKind::ALL` so a 7th variant added with an
     /// `ALL` entry is structurally honored at this site — no
     /// parallel `is_some()` count array, no if-let-else chain, no
     /// `unreachable!()`. The Empty diagnostic carries the closed-set
-    /// list via `INTENT_KIND_LIST`.
+    /// list via `INTENT_KIND_LIST`; the sibling error-mapping arms
+    /// share ONE substrate primitive
+    /// ([`crate::tagged_union::resolve_or_err`]) with every other
+    /// `Xxx::variant()` site on `ProcessSpec`.
     pub fn variant(&self) -> Result<IntentVariant<'_>, IntentError> {
-        use crate::tagged_union::{resolve, ResolveError};
-        resolve(IntentKind::ALL.into_iter().map(|k| k.select(self))).map_err(|e| match e {
-            ResolveError::None => IntentError::Empty(INTENT_KIND_LIST),
-            ResolveError::Many => IntentError::Ambiguous,
-        })
+        crate::tagged_union::resolve_or_err(
+            IntentKind::ALL.into_iter().map(|k| k.select(self)),
+            INTENT_KIND_LIST,
+        )
     }
 }
 

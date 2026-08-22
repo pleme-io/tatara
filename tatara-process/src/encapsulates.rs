@@ -237,6 +237,15 @@ pub enum EncapsulationKindError {
 /// `encapsulation_kind_error_empty_lists_every_target_in_canonical_order`.
 const ENCAPSULATION_TARGET_LIST: &str = "existingHelmRelease/existingKustomization/bareWorkload";
 
+impl crate::tagged_union::TaggedUnionError for EncapsulationKindError {
+    fn empty(kinds: &'static str) -> Self {
+        EncapsulationKindError::Empty(kinds)
+    }
+    fn ambiguous() -> Self {
+        EncapsulationKindError::Ambiguous
+    }
+}
+
 impl EncapsulationKind {
     /// Resolve to exactly one variant. Errors on zero or many.
     ///
@@ -244,13 +253,15 @@ impl EncapsulationKind {
     /// with an `ALL` entry is structurally honored at this site — no
     /// parallel `is_some()` count, no per-variant if-let chain, no
     /// `unreachable!()`. The Empty diagnostic carries the closed-set
-    /// list via `ENCAPSULATION_TARGET_LIST`.
+    /// list via `ENCAPSULATION_TARGET_LIST`; the sibling error-mapping
+    /// arms share ONE substrate primitive
+    /// ([`crate::tagged_union::resolve_or_err`]) with every other
+    /// `Xxx::variant()` site on `ProcessSpec`.
     pub fn variant(&self) -> Result<EncapsulationKindVariant<'_>, EncapsulationKindError> {
-        use crate::tagged_union::{resolve, ResolveError};
-        resolve(EncapsulationTarget::ALL.into_iter().map(|t| t.select(self))).map_err(|e| match e {
-            ResolveError::None => EncapsulationKindError::Empty(ENCAPSULATION_TARGET_LIST),
-            ResolveError::Many => EncapsulationKindError::Ambiguous,
-        })
+        crate::tagged_union::resolve_or_err(
+            EncapsulationTarget::ALL.into_iter().map(|t| t.select(self)),
+            ENCAPSULATION_TARGET_LIST,
+        )
     }
 }
 

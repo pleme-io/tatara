@@ -52,6 +52,59 @@ pub fn resolve<V>(candidates: impl IntoIterator<Item = Option<V>>) -> Result<V, 
     found.ok_or(ResolveError::None)
 }
 
+/// Sibling error carriers on tagged-union `.variant()` sites all
+/// project the two [`ResolveError`] arms onto the SAME closed-set
+/// diagnostic shape — `Empty(&'static str)` for "no variant set"
+/// (carrying the closed-set kind list so the operator diagnostic
+/// names every candidate) and a payload-free `Ambiguous` for
+/// "multiple variants set". This trait names that shared shape as
+/// ONE typed contract; [`resolve_or_err`] then composes [`resolve`]
+/// with the trait so each per-carrier `.map_err(|e| match e { ... })`
+/// site collapses to a one-line typed dispatch.
+///
+/// Impls live at each error carrier's own module so the (diagnostic
+/// message, closed-set list) pair stays owned by the carrier that
+/// publishes it — the trait is the projection, not the message.
+pub trait TaggedUnionError: Sized {
+    /// Construct the "no variant set" arm with the closed-set kind
+    /// list slash-joined into the diagnostic payload.
+    fn empty(kinds: &'static str) -> Self;
+    /// Construct the "multiple variants set" arm.
+    fn ambiguous() -> Self;
+}
+
+/// Resolve at most one populated variant, mapping the two
+/// [`ResolveError`] arms onto the caller's typed carrier via
+/// [`TaggedUnionError`]. The compound-lift primitive: sweep +
+/// short-circuit + typed-error dispatch as ONE call.
+///
+/// Substrate primitive for the four sibling `Xxx::variant()` sites
+/// on `ProcessSpec` (`Intent::variant`,
+/// `EncapsulationKind::variant`, `ArtifactSource::variant`,
+/// `VectorChannel::variant`) that previously restated the SAME
+/// `.map_err(|e| match e { None => Empty(LIST), Many => Ambiguous })`
+/// two-arm dispatch at each call site — every one of them a
+/// byte-identical restatement of the (empty→list, many→ambiguous)
+/// projection whose payload identity is strictly the carrier's own
+/// diagnostic. A fifth sibling error carrier picks up the projection
+/// through ONE `impl TaggedUnionError` block + ONE `resolve_or_err`
+/// call site.
+///
+/// The [`Lifetime::variant`](crate::lifetime::Lifetime::variant)
+/// site is DELIBERATELY not routed through this primitive — its
+/// `ResolveError::None` arm resolves to a `Permanent` default
+/// variant, not to an `Empty` typed error, so the projection shape
+/// diverges at the None arm.
+pub fn resolve_or_err<V, E: TaggedUnionError>(
+    candidates: impl IntoIterator<Item = Option<V>>,
+    kinds: &'static str,
+) -> Result<V, E> {
+    resolve(candidates).map_err(|e| match e {
+        ResolveError::None => E::empty(kinds),
+        ResolveError::Many => E::ambiguous(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -132,5 +185,83 @@ mod tests {
         let x = 7u32;
         let r = resolve([Some(View::X(&x)), None]).unwrap();
         assert_eq!(r, View::X(&7));
+    }
+
+    /// Local sibling-shaped carrier used to pin the trait +
+    /// [`resolve_or_err`] dispatch without depending on the
+    /// crate's real error types.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum E {
+        Empty(&'static str),
+        Ambiguous,
+    }
+
+    impl TaggedUnionError for E {
+        fn empty(kinds: &'static str) -> Self {
+            E::Empty(kinds)
+        }
+        fn ambiguous() -> Self {
+            E::Ambiguous
+        }
+    }
+
+    /// Four-outcome truth table at the compound-lift boundary.
+    /// Pins that the two failure arms of [`resolve`] project onto
+    /// the trait's two typed constructors byte-identically, and
+    /// that the Ok arm falls through untouched.
+    #[test]
+    fn resolve_or_err_dispatches_each_arm_through_the_trait() {
+        const KINDS: &str = "a/b/c";
+
+        assert_eq!(
+            resolve_or_err::<V, E>([Some(V::A), None, None], KINDS).unwrap(),
+            V::A
+        );
+        assert_eq!(
+            resolve_or_err::<V, E>([None, Some(V::B), None], KINDS).unwrap(),
+            V::B
+        );
+
+        assert_eq!(
+            resolve_or_err::<V, E>([None, None, None], KINDS).unwrap_err(),
+            E::Empty(KINDS)
+        );
+
+        assert_eq!(
+            resolve_or_err::<V, E>([Some(V::A), Some(V::B), None], KINDS).unwrap_err(),
+            E::Ambiguous
+        );
+    }
+
+    /// The trait's Empty arm carries the &'static str the caller
+    /// hands `resolve_or_err`, verbatim — a rename at the caller's
+    /// `KINDS` constant reaches the diagnostic surface intact.
+    #[test]
+    fn resolve_or_err_empty_carries_the_caller_kinds_verbatim() {
+        const KINDS_ALPHA: &str = "alpha/beta";
+        const KINDS_GAMMA: &str = "gamma/delta/epsilon";
+
+        assert_eq!(
+            resolve_or_err::<V, E>([None, None], KINDS_ALPHA).unwrap_err(),
+            E::Empty(KINDS_ALPHA)
+        );
+        assert_eq!(
+            resolve_or_err::<V, E>([None, None, None], KINDS_GAMMA).unwrap_err(),
+            E::Empty(KINDS_GAMMA)
+        );
+    }
+
+    /// The compound-lift preserves [`resolve`]'s short-circuit at
+    /// the Many arm — a third-and-later candidate is not
+    /// inspected once the second populated entry is seen.
+    #[test]
+    fn resolve_or_err_short_circuits_on_many() {
+        let mut visited = 0usize;
+        let candidates = (0..4).map(|i| {
+            visited += 1;
+            Some(i)
+        });
+        let _ = resolve_or_err::<i32, E>(candidates, "irrelevant");
+        assert_eq!(visited, 2);
     }
 }

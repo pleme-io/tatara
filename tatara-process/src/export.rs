@@ -242,19 +242,30 @@ pub enum ArtifactError {
 /// [`crate::intent::INTENT_KIND_LIST`] in shape.
 const ARTIFACT_KIND_LIST: &str = "receipts/testReport/processSnapshot/runMarker";
 
+impl crate::tagged_union::TaggedUnionError for ArtifactError {
+    fn empty(kinds: &'static str) -> Self {
+        ArtifactError::Empty(kinds)
+    }
+    fn ambiguous() -> Self {
+        ArtifactError::Ambiguous
+    }
+}
+
 impl ArtifactSource {
     /// Resolve to exactly one variant. Errors on zero or many.
     /// Sweeps over `ArtifactKind::ALL` so a fifth variant added with an
     /// `ALL` entry is structurally honored at this site — no parallel
     /// `is_some()` count, no per-variant if-let chain, no
     /// `unreachable!()`. The Empty diagnostic carries the closed-set
-    /// list via `ARTIFACT_KIND_LIST`.
+    /// list via `ARTIFACT_KIND_LIST`; the sibling error-mapping arms
+    /// share ONE substrate primitive
+    /// ([`crate::tagged_union::resolve_or_err`]) with every other
+    /// `Xxx::variant()` site on `ProcessSpec`.
     pub fn variant(&self) -> Result<ArtifactVariant<'_>, ArtifactError> {
-        use crate::tagged_union::{resolve, ResolveError};
-        resolve(ArtifactKind::ALL.into_iter().map(|k| k.select(self))).map_err(|e| match e {
-            ResolveError::None => ArtifactError::Empty(ARTIFACT_KIND_LIST),
-            ResolveError::Many => ArtifactError::Ambiguous,
-        })
+        crate::tagged_union::resolve_or_err(
+            ArtifactKind::ALL.into_iter().map(|k| k.select(self)),
+            ARTIFACT_KIND_LIST,
+        )
     }
 }
 
@@ -659,19 +670,30 @@ pub enum ChannelError {
 /// [`ARTIFACT_KIND_LIST`] in shape.
 const CHANNEL_KIND_LIST: &str = "httpEvent/natsSubject/stdout";
 
+impl crate::tagged_union::TaggedUnionError for ChannelError {
+    fn empty(kinds: &'static str) -> Self {
+        ChannelError::Empty(kinds)
+    }
+    fn ambiguous() -> Self {
+        ChannelError::Ambiguous
+    }
+}
+
 impl VectorChannel {
     /// Resolve to exactly one channel variant. Errors on zero or many.
     /// Sweeps over `ChannelKind::ALL` so a fourth variant added with an
     /// `ALL` entry is structurally honored at this site — no parallel
     /// `is_some()` count, no per-variant if-let chain, no
     /// `unreachable!()`. The Empty diagnostic carries the closed-set
-    /// list via `CHANNEL_KIND_LIST`.
+    /// list via `CHANNEL_KIND_LIST`; the sibling error-mapping arms
+    /// share ONE substrate primitive
+    /// ([`crate::tagged_union::resolve_or_err`]) with every other
+    /// `Xxx::variant()` site on `ProcessSpec`.
     pub fn variant(&self) -> Result<ChannelVariant<'_>, ChannelError> {
-        use crate::tagged_union::{resolve, ResolveError};
-        resolve(ChannelKind::ALL.into_iter().map(|k| k.select(self))).map_err(|e| match e {
-            ResolveError::None => ChannelError::Empty(CHANNEL_KIND_LIST),
-            ResolveError::Many => ChannelError::Ambiguous,
-        })
+        crate::tagged_union::resolve_or_err(
+            ChannelKind::ALL.into_iter().map(|k| k.select(self)),
+            CHANNEL_KIND_LIST,
+        )
     }
 }
 

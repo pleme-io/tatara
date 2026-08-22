@@ -169,8 +169,12 @@ impl Expander {
     /// (`expand_program → iter_calls_to → map → collect`) fires
     /// afterwards exactly as it does for direct from-forms callers.
     pub fn expand_source_to_typed<T: TataraDomain>(&mut self, src: &str) -> Result<Vec<T>> {
-        let forms = crate::reader::read(src)?;
-        self.expand_to_typed::<T>(forms)
+        // Delegate to the substrate primitive
+        // [`Self::with_source_forms`] with the typed constant-`T::KEYWORD`
+        // from-forms consumer [`Self::expand_to_typed::<T>`] threaded
+        // through the callback slot; the turbofish `::<T>` at the
+        // closure body pins the type parameter binding.
+        self.with_source_forms(src, |exp, forms| exp.expand_to_typed::<T>(forms))
     }
 
     /// Read + macroexpand + project every `(T::KEYWORD NAME :k v …)` form
@@ -190,8 +194,12 @@ impl Expander {
         &mut self,
         src: &str,
     ) -> Result<Vec<NamedDefinition<T>>> {
-        let forms = crate::reader::read(src)?;
-        self.expand_to_named::<T>(forms)
+        // Delegate to the substrate primitive
+        // [`Self::with_source_forms`] with the named constant-`T::KEYWORD`
+        // from-forms consumer [`Self::expand_to_named::<T>`] threaded
+        // through the callback slot; the turbofish `::<T>` at the
+        // closure body pins the type parameter binding.
+        self.with_source_forms(src, |exp, forms| exp.expand_to_named::<T>(forms))
     }
 }
 

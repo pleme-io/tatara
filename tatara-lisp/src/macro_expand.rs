@@ -37166,6 +37166,117 @@ impl Expander {
         Ok(out)
     }
 
+    /// Read `src` into top-level forms via [`crate::reader::read`], then
+    /// invoke `on_forms` with `&mut self` and the reader's `Vec<Sexp>` —
+    /// the substrate primitive every from-source posture on the `Expander`
+    /// surface routes through. Owns the shared two-step composition
+    /// `let forms = crate::reader::read(src)?; <from_forms>(self, forms)`
+    /// each from-source consumer previously spelled inline verbatim.
+    ///
+    /// Pre-lift five sibling `impl Expander` methods each hand-wrote the
+    /// same scaffold in its own body, differing only in which from-forms
+    /// method received the reader output:
+    ///
+    ///   * [`Self::expand_source_program`] → [`Self::expand_program`]
+    ///     (untyped yield-all-forms)
+    ///   * [`Self::expand_source_and_collect_calls_to_any`] →
+    ///     [`Self::expand_and_collect_calls_to_any`] (bare-kwargs ×
+    ///     typed-decoded classifier)
+    ///   * [`Self::expand_source_and_collect_named_calls_to_any`] →
+    ///     [`Self::expand_and_collect_named_calls_to_any`] (named
+    ///     NAME-then-kwargs × typed-decoded classifier)
+    ///   * [`Self::expand_source_to_typed`] → [`Self::expand_to_typed`]
+    ///     (bare-kwargs × constant-`T::KEYWORD`)
+    ///   * [`Self::expand_source_to_named`] → [`Self::expand_to_named`]
+    ///     (named NAME-then-kwargs × constant-`T::KEYWORD`)
+    ///
+    /// Post-lift each of those five siblings is a ONE-LINE delegate that
+    /// captures ONLY the per-site payload (a fn-item like
+    /// `Self::expand_program`, a turbofish typed method like
+    /// `exp.expand_to_typed::<T>(forms)`, or a decode/project closure
+    /// forwarded through `move`) at the callback slot. The
+    /// `let forms = read(src)?; …` two-step composition — including the
+    /// `?`-based ordering that ensures a reader error (lexer / parser /
+    /// unbalanced-paren / unterminated-string) short-circuits BEFORE any
+    /// from-forms consumer runs — lives at ONE substrate primitive here.
+    ///
+    /// Owns the TWO shared invariants each sibling restated verbatim in
+    /// its own body pre-lift: (1) the `crate::reader::read(src)?` gate
+    /// that surfaces reader failures at the from-source boundary before
+    /// the from-forms consumer touches `self` (no `&mut self` state
+    /// mutation on a rejected source, no partial `defmacro` absorption
+    /// against half-parsed forms), and (2) the `on_forms(self, forms)`
+    /// dispatch that threads BOTH the `&mut Expander` handle AND the
+    /// owned `Vec<Sexp>` into the from-forms consumer with the
+    /// consumer's own signature-typed `Result<X>` return riding through
+    /// unchanged.
+    ///
+    /// `X` is the from-forms consumer's own return payload — the
+    /// primitive stays payload-agnostic on this axis, so the five
+    /// production consumers (whose return types range across `Vec<Sexp>`,
+    /// `Vec<T>`, `Vec<NamedDefinition<T>>`, and `Vec<R>` for the two
+    /// classifier-typed payloads) all compose through the same primitive
+    /// without a per-payload carve-out. Same posture the sibling
+    /// [`crate::compile::split_name_slot`] primitive carries on the
+    /// `&[Sexp]` algebra (payload-agnostic on the borrow lifetime axis)
+    /// and [`wrap_with_missing_key_default`](crate::domain) carries on
+    /// the missing-kwarg wrap axis.
+    ///
+    /// `on_forms` is `FnOnce(&mut Self, Vec<Sexp>) -> Result<X>` — the
+    /// primitive invokes the callback exactly once on the read-success
+    /// branch and never on the reader-error branch. `FnOnce` (rather
+    /// than `FnMut`) matches the primitive's own single-invocation
+    /// contract; a caller whose from-forms binding needs to be called
+    /// multiple times (a hypothetical batch-read consumer) composes at
+    /// the caller boundary rather than by relaxing this primitive's
+    /// bound. The `&mut Self` slot rides the caller's own `&mut self`
+    /// borrow verbatim, so `defmacro`-registration side-effects inside
+    /// the from-forms consumer land on the caller's `Expander` exactly
+    /// as they do at the pre-lift inline sites — the primitive adds no
+    /// intermediary clone or scope.
+    ///
+    /// Future structural promotion of the from-source posture (a
+    /// caller-supplied diagnostic label for the reader step so
+    /// `format_diagnostic(src, &err, Some(label))` fires with the
+    /// operator-supplied path; a `#[track_caller]` annotation so a
+    /// downstream reader-error surfaces the caller-site span through
+    /// the primitive; a debug-only structured-audit hook that records
+    /// every from-source dispatch with the byte-length of `src` for
+    /// telemetry) lands at ONE substrate primitive here — all five
+    /// production consumers pick up the upgrade mechanically with no
+    /// per-consumer hand-edit. Pre-lift the same upgrade would have
+    /// required editing FIVE `let forms = read(src)?;` bodies in
+    /// lockstep, and a future sixth from-source consumer would have
+    /// made the recur worse.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// the two-step `read + delegate` scaffold recurred at FIVE
+    /// from-source consumers on the `Expander` surface (well past the
+    /// PRIME-DIRECTIVE ≥ 2 duplication trigger) and is lifted to ONE
+    /// substrate primitive here. THEORY.md §II.1 invariant 2 (free
+    /// middle) — the reader-then-dispatch composition lives at ONE
+    /// substrate primitive; a regression that drifts ONE consumer's
+    /// `?`-ordering or reader-error propagation from the others
+    /// becomes structurally impossible because there is no per-consumer
+    /// scaffold to drift.
+    ///
+    /// Frontier inspiration: Racket's `call-with-input-string` — the
+    /// canonical "read the source once, then hand a reader-produced
+    /// value to a caller-supplied continuation" primitive that every
+    /// from-source Racket evaluator composes through. Translated
+    /// through pleme-io primitives here as ONE `with_source_forms`
+    /// primitive over the shared `(src, on_forms)` pair, with each
+    /// consumer supplying its axis-typed from-forms callback to the
+    /// primitive's `on_forms` slot.
+    pub(crate) fn with_source_forms<X>(
+        &mut self,
+        src: &str,
+        on_forms: impl FnOnce(&mut Self, Vec<Sexp>) -> Result<X>,
+    ) -> Result<X> {
+        let forms = crate::reader::read(src)?;
+        on_forms(self, forms)
+    }
+
     /// Read a source string into top-level forms via [`crate::reader::read`],
     /// then route the forms through [`expand_program`](Self::expand_program) —
     /// the from-source posture of the yield-all-forms-after-expansion primitive,
@@ -37250,8 +37361,14 @@ impl Expander {
     /// "expand this buffer" command, an LSP's "show me the expanded
     /// program" handler) binds to.
     pub fn expand_source_program(&mut self, src: &str) -> Result<Vec<Sexp>> {
-        let forms = crate::reader::read(src)?;
-        self.expand_program(forms)
+        // Delegate to the substrate primitive
+        // [`Self::with_source_forms`] with the untyped from-forms
+        // consumer [`Self::expand_program`] threaded through the
+        // callback slot. The primitive owns the shared
+        // `read(src)? + <from_forms>(self, forms)` two-step scaffold
+        // this sibling method and its FOUR peer from-source consumers
+        // all previously spelled inline.
+        self.with_source_forms(src, Self::expand_program)
     }
 
     /// Compose the expander's program-level expansion with the substrate's
@@ -37774,8 +37891,15 @@ impl Expander {
         D: FnMut(&str) -> Option<T>,
         F: FnMut(T, &[Sexp]) -> Result<R>,
     {
-        let forms = crate::reader::read(src)?;
-        self.expand_and_collect_calls_to_any(forms, decode, project)
+        // Delegate to the substrate primitive
+        // [`Self::with_source_forms`] with the typed-decoded classifier
+        // from-forms consumer [`Self::expand_and_collect_calls_to_any`]
+        // threaded through the callback slot; the `move` capture ferries
+        // `decode` + `project` verbatim across the primitive boundary
+        // into the from-forms consumer.
+        self.with_source_forms(src, move |exp, forms| {
+            exp.expand_and_collect_calls_to_any(forms, decode, project)
+        })
     }
 
     /// Compose the expander's program-level expansion with the substrate's
@@ -37997,8 +38121,16 @@ impl Expander {
         D: FnMut(&str) -> Option<(T, &'static str)>,
         F: FnMut(T, &str, &[Sexp]) -> Result<R>,
     {
-        let forms = crate::reader::read(src)?;
-        self.expand_and_collect_named_calls_to_any(forms, decode, project)
+        // Delegate to the substrate primitive
+        // [`Self::with_source_forms`] with the named typed-decoded
+        // classifier from-forms consumer
+        // [`Self::expand_and_collect_named_calls_to_any`] threaded
+        // through the callback slot; the `move` capture ferries
+        // `decode` + `project` verbatim across the primitive boundary
+        // into the from-forms consumer.
+        self.with_source_forms(src, move |exp, forms| {
+            exp.expand_and_collect_named_calls_to_any(forms, decode, project)
+        })
     }
 
     /// Macroexpand a pre-parsed program through `self` and project every
@@ -40025,6 +40157,186 @@ fn defmacro_non_list_params(head: MacroDefHead, got: &Sexp) -> LispError {
 /// diagnostic side of the substitute walker.
 fn bound_names(bindings: &HashMap<String, Sexp>) -> Vec<&str> {
     bindings.keys().map(String::as_str).collect()
+}
+
+#[cfg(test)]
+mod with_source_forms_tests {
+    //! Contract + delegation pins for [`Expander::with_source_forms`] — the
+    //! substrate primitive every from-source posture on the `Expander`
+    //! surface routes through. The primitive owns the shared
+    //! `let forms = read(src)?; on_forms(self, forms)` two-step
+    //! composition; the five sibling from-source consumers each collapse
+    //! to a one-line delegate capturing only their per-site payload
+    //! (a fn-item, a turbofish typed method, or a decode/project closure)
+    //! at the callback slot.
+    //!
+    //! The tests pin the primitive's independent contract (invocation
+    //! discipline, reader-error short-circuit, payload propagation,
+    //! `&mut self` threading) AND per-consumer delegation-agreement at
+    //! the primitive-to-peer boundary — a regression that inlined a
+    //! divergent `let forms = …` scaffold at ONE peer would surface at
+    //! that peer's own delegation pin rather than as silent drift at
+    //! every downstream from-source dispatcher.
+    use super::*;
+    use crate::error::LispError;
+    use std::cell::Cell;
+
+    #[test]
+    fn primitive_on_valid_source_invokes_on_forms_once_with_reader_output() {
+        // Promise 1 (MATCHING SUCCESS): the primitive invokes the
+        // `on_forms` callback exactly once on the read-success branch,
+        // passing the reader's `Vec<Sexp>` output verbatim. A `Cell<u32>`
+        // counter binds the invocation count so a regression that (say)
+        // called `on_forms` twice or skipped it entirely on the success
+        // branch surfaces here at the primitive's own boundary rather
+        // than as silent drift at the five peer callers.
+        let mut exp = Expander::new();
+        let count = Cell::new(0u32);
+        let observed_len = Cell::new(0usize);
+        let result: Result<()> = exp.with_source_forms("(foo) (bar)", |_exp, forms| {
+            count.set(count.get() + 1);
+            observed_len.set(forms.len());
+            Ok(())
+        });
+        assert!(result.is_ok(), "read-success branch must return Ok");
+        assert_eq!(count.get(), 1, "on_forms must fire exactly once on success");
+        assert_eq!(
+            observed_len.get(),
+            2,
+            "on_forms must receive the reader's Vec<Sexp> verbatim (2 top-level forms)",
+        );
+    }
+
+    #[test]
+    fn primitive_on_reader_error_short_circuits_before_on_forms() {
+        // Promise 2 (READER ERROR): the primitive's `read(src)?` gate
+        // fires BEFORE `on_forms` runs — a reader error (here an
+        // unmatched opening paren `(a b`) short-circuits at the primitive
+        // boundary, propagating the typed `LispError::UnmatchedOpenParen`
+        // variant unchanged and leaving `on_forms` uninvoked. Load-bearing
+        // for every from-source consumer, since a regression that fired
+        // `on_forms` on a rejected source would silently mutate `&mut self`
+        // state (partial `defmacro` absorption against half-parsed forms)
+        // before the caller sees the reader error.
+        let mut exp = Expander::new();
+        let count = Cell::new(0u32);
+        let result: Result<()> = exp.with_source_forms("(a b", |_exp, _forms| {
+            count.set(count.get() + 1);
+            Ok(())
+        });
+        assert!(
+            matches!(result, Err(LispError::UnmatchedOpenParen { .. })),
+            "reader-error branch must short-circuit with typed variant, got: {result:?}",
+        );
+        assert_eq!(
+            count.get(),
+            0,
+            "on_forms must NOT fire on the reader-error branch",
+        );
+    }
+
+    #[test]
+    fn primitive_propagates_on_forms_ok_payload_verbatim() {
+        // Promise 3 (OK PROPAGATION): a successful `on_forms` return
+        // rides through the primitive unchanged — the primitive is
+        // payload-agnostic on the `X` axis, so any type the from-forms
+        // consumer produces is threaded verbatim. Pin against an owned
+        // `String` payload since none of the production consumers use
+        // one, keeping this test independent of the payload-shape
+        // conventions of the five sibling from-source consumers.
+        let mut exp = Expander::new();
+        let result = exp.with_source_forms("(foo)", |_exp, _forms| Ok("witness".to_string()));
+        assert_eq!(result.unwrap(), "witness");
+    }
+
+    #[test]
+    fn primitive_propagates_on_forms_err_payload_verbatim() {
+        // Promise 4 (ERR PROPAGATION): an `on_forms`-returned error
+        // rides through the primitive's `Result<X>` return unchanged —
+        // the primitive does not intercept, re-wrap, or promote
+        // `on_forms` errors. Pin against the closed-set structural
+        // `LispError::Missing` variant so a regression that (say)
+        // silently swallowed the error or re-wrapped it as a reader
+        // error surfaces here.
+        let mut exp = Expander::new();
+        let result: Result<()> = exp
+            .with_source_forms("(foo)", |_exp, _forms| Err(LispError::Missing("witness")));
+        assert!(
+            matches!(result, Err(LispError::Missing(s)) if s == "witness"),
+            "on_forms Err payload must ride through the primitive verbatim, got: {result:?}",
+        );
+    }
+
+    #[test]
+    fn primitive_threads_mut_self_reference_into_on_forms_for_defmacro_absorption() {
+        // Promise 5 (MUT SELF): the primitive threads the caller's own
+        // `&mut self` borrow into `on_forms` verbatim — mutations
+        // performed by the callback (here a `defmacro` registration
+        // via `expand_program`) land on the caller's `Expander` exactly
+        // as they do at the pre-lift inline sites. A regression that
+        // introduced an intermediary clone or borrow scope would fail
+        // here: the outer expander would carry NO macros after the
+        // primitive returned.
+        let mut exp = Expander::new();
+        assert_eq!(exp.len(), 0, "fresh expander must start with zero macros");
+        let _forms = exp
+            .with_source_forms("(defmacro id (x) `,x)", Expander::expand_program)
+            .expect("defmacro absorption must succeed");
+        assert_eq!(
+            exp.len(),
+            1,
+            "primitive must thread &mut self so defmacro registers on the caller's Expander",
+        );
+    }
+
+    #[test]
+    fn expand_source_program_delegates_through_the_primitive_on_valid_source() {
+        // Delegation pin (untyped yield-all-forms consumer): the primitive
+        // and the peer `Self::expand_source_program` produce byte-identical
+        // outputs on the same source. Pre-lift the peer inlined
+        // `read(src)? + expand_program(forms)`; post-lift the peer is a
+        // one-line delegate that hands `Self::expand_program` to the
+        // primitive's callback slot. A regression that inlined a divergent
+        // scaffold at the peer body surfaces at this delegation pin rather
+        // than as silent drift at every peer caller.
+        let src = "(defmacro id (x) `,x) (id 42)";
+        let via_primitive = Expander::new()
+            .with_source_forms(src, Expander::expand_program)
+            .expect("primitive must yield Vec<Sexp>");
+        let via_peer = Expander::new()
+            .expand_source_program(src)
+            .expect("peer must yield Vec<Sexp>");
+        assert_eq!(
+            via_primitive.len(),
+            via_peer.len(),
+            "primitive and peer must agree on output length",
+        );
+        assert_eq!(
+            via_primitive[0], via_peer[0],
+            "primitive and peer must produce byte-identical top-level forms",
+        );
+    }
+
+    #[test]
+    fn expand_source_program_delegates_reader_error_through_the_primitive() {
+        // Delegation pin (reader-error propagation): the peer's reader-
+        // error short-circuit fires through the primitive's `read(src)?`
+        // gate rather than through a duplicate inline gate at the peer
+        // body. A regression that inlined a divergent reader-error
+        // handling at the peer surfaces here.
+        let src = "(a b";
+        let via_primitive: Result<Vec<Sexp>> =
+            Expander::new().with_source_forms(src, Expander::expand_program);
+        let via_peer = Expander::new().expand_source_program(src);
+        assert!(
+            matches!(via_primitive, Err(LispError::UnmatchedOpenParen { .. })),
+            "primitive must surface reader error, got: {via_primitive:?}",
+        );
+        assert!(
+            matches!(via_peer, Err(LispError::UnmatchedOpenParen { .. })),
+            "peer must surface reader error through the primitive, got: {via_peer:?}",
+        );
+    }
 }
 
 #[cfg(test)]

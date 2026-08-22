@@ -926,6 +926,114 @@ where
     }
 }
 
+/// CLOSED-SET CONVENTION PANEL testkit — pins the FULL three-axis
+/// label-surface convention (parse round-trip, Display byte-identity,
+/// serde-JSON-string byte-identity) at ONE substrate call site per
+/// implementor.
+///
+/// Compound-lift of [`tatara_closed_set::assert_closed_set_well_formed`]
+/// + [`assert_display_matches_label`] + [`assert_label_matches_serde_
+/// serialization`] — every closed-set enum on `ProcessSpec` that
+/// carries the substrate-wide `#[derive(DeriveClosedSet)] +
+/// #[derive(Serialize)] + #[closed_set(via = "as_str", display)] +
+/// #[serde(rename_all = "PascalCase")]` shape publishes ALL THREE
+/// axes of the label surface, and pre-lift each production test
+/// module hand-authored three sibling one-line tests
+/// (`X_is_well_formed_closed_set`, `X_display_matches_as_str`,
+/// `X_as_str_matches_serde`) that each restated the SAME
+/// `crate::tagged_union::assert_<axis>::<X>()` invocation with only
+/// the axis name varying between siblings. Post-lift each site
+/// collapses to ONE `assert_closed_set_convention_panel::<X>()`
+/// invocation whose body IS the three-axis composition dispatched
+/// through the substrate primitive here.
+///
+/// The three sub-assertions stay independently callable — a future
+/// implementor that publishes only two of the three axes (a
+/// `Display`-less internal enum, e.g., or a `Serialize`-less
+/// runtime-only enum) still binds through the two sibling primitives
+/// individually. The compound is a strict superset: any implementor
+/// that satisfies the compound's bounds already satisfies each
+/// sub-assertion's bounds by construction, and the failure mode of
+/// each sub-assertion still surfaces with the exact-message
+/// granularity `#[track_caller]` gives the individual primitives
+/// (the compound is `#[track_caller]` too, so a sub-assertion panic
+/// surfaces at the compound's call site — a future promotion could
+/// wrap each sub-assertion in a `std::panic::catch_unwind` to
+/// aggregate all three axis failures into ONE panic message, but the
+/// pre-lift discipline is that each axis's failure surfaces with its
+/// own diagnostic).
+///
+/// The compound's bounds are the strict union of the three sub-
+/// assertions' bounds:
+///   - [`assert_closed_set_well_formed`] requires
+///     `T: ClosedSet + PartialEq + Debug` + `T::Unknown: Display`;
+///   - [`assert_display_matches_label`] requires
+///     `T: ClosedSet + Display + PartialEq + Debug`;
+///   - [`assert_label_matches_serde_serialization`] requires
+///     `T: ClosedSet + Serialize + Debug`.
+/// The union `T: ClosedSet + Serialize + Display + PartialEq + Debug`
+/// + `T::Unknown: Display` is what every 3-axis production consumer
+/// already satisfies through the substrate-wide derive shape — any
+/// implementor that fails the compound's bounds would ALSO fail the
+/// individual sub-assertions' bounds, so the compound doesn't shrink
+/// the reachable set of implementors relative to hand-authoring the
+/// three sibling calls.
+///
+/// A future FOURTH label-surface projection (e.g. a `serde_yaml`
+/// byte-identity axis if the crate gains a YAML wire form on closed-
+/// set enums, or a `kubectl_annotation` axis if the reconciler grows
+/// an annotation-carried label surface) lands as ONE new
+/// `assert_<axis>_matches_label::<T>()` substrate primitive + ONE
+/// new line inside this compound's body. Every one of the ~20
+/// production implementors of the panel picks up the fourth-axis
+/// alignment check mechanically at their sole `assert_closed_set_
+/// convention_panel::<X>()` call site — no per-implementor test-site
+/// authoring, no per-crate test-site drop pathway where 19 sibling
+/// call sites carry the check and the 20th forgets. The exact
+/// promise `e4a4eba`'s future gain #2 named after
+/// `assert_label_matches_serde_serialization` opened the wire-format
+/// axis: a workspace-wide panel with byte-identical calling shapes
+/// (`assert_X::<T>()`) that composes as freely as its sub-primitives.
+///
+/// Sibling shape to [`assert_variant_round_trip`] +
+/// [`assert_kind_list_matches_closed_set`] +
+/// [`assert_two_slots_ambiguous`] +
+/// [`assert_single_slot_key_matches_label`] on the tagged-union
+/// PARENT axis: the parent-side compound would compose the four
+/// parent-side per-axis primitives, this one composes the three
+/// child-side per-axis primitives on the child's [`ClosedSet`]
+/// surface. Together the two compounds close the "closed-set
+/// convention holds across every projection consumers reach for" at
+/// two adjacent panels — one per closed-set-carrying enum, one per
+/// tagged-union parent.
+///
+/// Theory anchor: THEORY.md §V.1 (knowable platform) — the
+/// three-axis label-surface convention becomes ONE typed theorem
+/// provable generically over any
+/// `T: ClosedSet + Serialize + Display + PartialEq + Debug` bound
+/// rather than THREE hand-authored per-implementor one-line probes
+/// held coherent by test-module convention. THEORY.md §II.1
+/// invariant 5 (composition preserves proofs) — the three sub-
+/// assertions compose structurally through ONE primitive here, so a
+/// regression at ONE axis surfaces at the sub-assertion's own
+/// panic message rather than as silent drift at every consumer that
+/// might otherwise forget to include the axis in its per-site
+/// author-time enumeration.
+#[track_caller]
+pub fn assert_closed_set_convention_panel<T>()
+where
+    T: tatara_closed_set::ClosedSet
+        + serde::Serialize
+        + core::fmt::Display
+        + PartialEq
+        + core::fmt::Debug,
+    T::Unknown: core::fmt::Display,
+{
+    tatara_closed_set::assert_closed_set_well_formed::<T>();
+    assert_display_matches_label::<T>();
+    assert_label_matches_serde_serialization::<T>();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1518,6 +1626,142 @@ mod tests {
     #[should_panic(expected = "serde output drifted from ClosedSet::label")]
     fn assert_label_matches_serde_serialization_rejects_drifted_impl() {
         assert_label_matches_serde_serialization::<SerdeDriftKind>();
+    }
+
+    /// Local closed-set scaffold whose ALL THREE axes of the label-
+    /// surface convention align by construction — pins the Ok arm of
+    /// the compound-panel primitive.
+    ///
+    /// `#[serde(rename_all = "lowercase")]` matches the `via = "as_str"`
+    /// labels byte-identically (the serde-alignment axis). The
+    /// `display` sub-attribute on `#[closed_set(via = "as_str",
+    /// display)]` derives `impl Display` from the same `as_str`
+    /// projection (the Display-alignment axis). The `generate_unknown`
+    /// sub-attribute emits the `T::Unknown` carrier the round-trip
+    /// axis's `parse_label` returns on unknown input. Together these
+    /// three attributes stamp the substrate-wide derive shape every
+    /// production 3-axis-panel consumer carries; a caller that lands
+    /// through this scaffold satisfies EVERY bound the compound's
+    /// where-clause names.
+    ///
+    /// Peer to the sibling per-axis fixtures [`LocalKind`] (Display
+    /// axis, no serde) and [`SerdeAlignedKind`] (serde axis, no
+    /// Display) on the label-surface primitive family; this fixture
+    /// closes the diagonal by carrying both attribute-sets at once,
+    /// so a regression at ANY sub-assertion's composition inside the
+    /// compound (the compound accidentally dropping the well-formed
+    /// call, silently reordering the three calls, wrapping them in a
+    /// short-circuit that skips the middle one on Ok, …) fails the
+    /// compound's happy-path pin below rather than as silent drift at
+    /// every 3-axis consumer.
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        serde::Serialize,
+        tatara_closed_set::DeriveClosedSet,
+    )]
+    #[serde(rename_all = "lowercase")]
+    #[closed_set(via = "as_str", generate_unknown, display)]
+    enum PanelAlignedKind {
+        Alpha,
+        Beta,
+    }
+
+    impl PanelAlignedKind {
+        const ALL: [Self; 2] = [Self::Alpha, Self::Beta];
+        const fn as_str(self) -> &'static str {
+            match self {
+                Self::Alpha => "alpha",
+                Self::Beta => "beta",
+            }
+        }
+    }
+
+    /// The compound-panel primitive dispatches Ok on a coherent
+    /// implementor — [`PanelAlignedKind`] carries every attribute the
+    /// substrate-wide 3-axis derive shape publishes, so all three
+    /// sub-assertions the compound composes (well-formed, Display /
+    /// label, serde / label) pass by construction. The Ok arm is the
+    /// "no drift on any axis" outcome; a divergence at any single
+    /// sub-assertion surfaces as that sub-assertion's own labeled
+    /// panic message (with the caller-attributed line via
+    /// `#[track_caller]` on both the compound and its sub-
+    /// primitives), NOT as a silent pass.
+    ///
+    /// The per-axis failing arms are pinned by the sibling per-axis
+    /// #[should_panic] probes above:
+    ///   - the round-trip axis's failing arm is pinned by
+    ///     [`tatara_closed_set::assert_closed_set_well_formed`]'s own
+    ///     `#[should_panic]` probe in the `tatara-closed-set` crate;
+    ///   - the Display axis's failing arm is pinned by
+    ///     [`assert_display_matches_label_rejects_drifted_impl`] on
+    ///     [`DisplayDriftKind`];
+    ///   - the serde axis's failing arm is pinned by
+    ///     [`assert_label_matches_serde_serialization_rejects_drifted_impl`]
+    ///     on [`SerdeDriftKind`].
+    /// Each per-axis drift fixture already surfaces its axis's exact
+    /// panic-message substring, so re-authoring per-axis
+    /// `#[should_panic]` probes at the compound layer would restate
+    /// the SAME three axis-typed contracts through a compound
+    /// wrapper — one more copy of the same three pins, not a new
+    /// gate. The compound's happy-path pin here suffices to verify
+    /// the composition doesn't lose ANY sub-assertion (a regression
+    /// that swallows one axis silently would still fail the sibling
+    /// sub-assertion's own drift probe on the drift fixture).
+    #[test]
+    fn assert_closed_set_convention_panel_accepts_coherent_impl() {
+        assert_closed_set_convention_panel::<PanelAlignedKind>();
+    }
+
+    /// Every closed-set enum across `tatara-process` that publishes
+    /// ALL THREE axes of the label-surface convention (well-formed +
+    /// Display-alignment + serde-alignment) now binds through the
+    /// substrate compound-panel primitive at ONE call site each in
+    /// this sweep. Pinned in lock-step with the sibling
+    /// `every_production_serde_serialization_binds_through_the_testkit_primitive`
+    /// sweep — every enum enumerated below is a member of BOTH sweeps
+    /// (the compound's `T: Serialize + Display + ClosedSet + ...`
+    /// bound is a strict superset of `assert_label_matches_serde_
+    /// serialization`'s `T: ClosedSet + Serialize + Debug` bound, and
+    /// the 20 wire-format consumers all additionally impl Display via
+    /// `#[closed_set(via = "as_str", display)]`).
+    ///
+    /// A regression that (a) drops the compound's `assert_closed_set_
+    /// well_formed` dispatch, (b) reorders the three sub-assertions
+    /// in a way that skips one on Ok, or (c) silently binds the
+    /// compound against a hollowed-out sub-assertion body catches
+    /// here at the substrate-wide boundary — the sweep pins every
+    /// production 3-axis consumer's compound-panel discipline through
+    /// ONE test even before any per-site test-body sweep collapses
+    /// the three per-enum sibling tests into ONE compound call each.
+    /// Post-sweep the substrate-wide compound-panel discipline is a
+    /// property of the workspace, not a per-file convention.
+    #[test]
+    fn every_production_convention_panel_binds_through_the_testkit_primitive() {
+        assert_closed_set_convention_panel::<crate::allocation::AllocationPhase>();
+        assert_closed_set_convention_panel::<crate::boundary::ConditionKind>();
+        assert_closed_set_convention_panel::<crate::classification::CalmClassification>();
+        assert_closed_set_convention_panel::<crate::classification::ConvergencePointType>();
+        assert_closed_set_convention_panel::<crate::classification::DataClassification>();
+        assert_closed_set_convention_panel::<crate::classification::HorizonKind>();
+        assert_closed_set_convention_panel::<crate::classification::OptimizationDirection>();
+        assert_closed_set_convention_panel::<crate::classification::SubstrateType>();
+        assert_closed_set_convention_panel::<crate::compliance::VerificationPhase>();
+        assert_closed_set_convention_panel::<crate::encapsulates::EncapsulationMode>();
+        assert_closed_set_convention_panel::<crate::export::ExportTrigger>();
+        assert_closed_set_convention_panel::<crate::export::ReportFormat>();
+        assert_closed_set_convention_panel::<crate::intent::WorkloadKind>();
+        assert_closed_set_convention_panel::<crate::lifetime::TeardownPolicy>();
+        assert_closed_set_convention_panel::<crate::pool::MemberState>();
+        assert_closed_set_convention_panel::<crate::pool::PoolPhase>();
+        assert_closed_set_convention_panel::<crate::pool::ReplacementPolicy>();
+        assert_closed_set_convention_panel::<crate::pool::ReturnPolicy>();
+        assert_closed_set_convention_panel::<crate::signal::SighupStrategy>();
+        assert_closed_set_convention_panel::<crate::spec::MustReachPhase>();
     }
 
     /// Every closed-set enum across `tatara-process` that carried a

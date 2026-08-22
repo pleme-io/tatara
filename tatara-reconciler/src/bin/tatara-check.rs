@@ -301,42 +301,23 @@ fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
     let label = format!("Lisp compiles: {rel}");
 
     let kw = parse_kwargs(&args[1..]);
-    let min_defs = kw
-        .iter()
-        .find_map(|(k, v)| {
-            if k == "min-definitions" {
-                v.as_int()
-            } else {
-                None
-            }
-        })
+    let min_defs = find_kw(&kw, "min-definitions")
+        .and_then(Sexp::as_int)
         .unwrap_or(1) as usize;
-    let requires: Vec<String> = kw
-        .iter()
-        .find_map(|(k, v)| {
-            if k == "requires" {
-                v.as_list().map(|xs| {
-                    xs.iter()
-                        .filter_map(|s| s.as_symbol().map(String::from))
-                        .collect()
-                })
-            } else {
-                None
-            }
+    let requires: Vec<String> = find_kw(&kw, "requires")
+        .and_then(Sexp::as_list)
+        .map(|xs| {
+            xs.iter()
+                .filter_map(|s| s.as_symbol().map(String::from))
+                .collect()
         })
         .unwrap_or_default();
     // Optional `:domain <name>` — selects which typed surface to compile.
     // Default `point` (ProcessSpec via `(defpoint …)`). New: `ephemeral`
     // (EphemeralSpec via `(defephemeral …)`).
-    let domain = kw
-        .iter()
-        .find_map(|(k, v)| {
-            if k == "domain" {
-                v.as_symbol().or_else(|| v.as_string()).map(String::from)
-            } else {
-                None
-            }
-        })
+    let domain = find_kw(&kw, "domain")
+        .and_then(|v| v.as_symbol().or_else(|| v.as_string()))
+        .map(String::from)
         .unwrap_or_else(|| "point".into());
 
     let src = match fs::read_to_string(&path) {
@@ -349,10 +330,7 @@ fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
             let defs = match tatara_process::compile_source(&src) {
                 Ok(d) => d,
                 Err(e) => {
-                    return report.fail(
-                        label,
-                        tatara_lisp::format_diagnostic(&src, &e, Some(rel)),
-                    );
+                    return report.fail(label, tatara_lisp::format_diagnostic(&src, &e, Some(rel)));
                 }
             };
             if defs.len() < min_defs {
@@ -389,10 +367,7 @@ fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
             let defs = match tatara_process::ephemeral::compile_ephemeral_source(&src) {
                 Ok(d) => d,
                 Err(e) => {
-                    return report.fail(
-                        label,
-                        tatara_lisp::format_diagnostic(&src, &e, Some(rel)),
-                    );
+                    return report.fail(label, tatara_lisp::format_diagnostic(&src, &e, Some(rel)));
                 }
             };
             if defs.len() < min_defs {
@@ -453,18 +428,12 @@ fn check_file_contains(args: &[Sexp], root: &Path, report: &mut Report) {
     let label = format!("File contains: {rel}");
 
     let kw = parse_kwargs(&args[1..]);
-    let strings: Vec<String> = kw
-        .iter()
-        .find_map(|(k, v)| {
-            if k == "strings" {
-                v.as_list().map(|xs| {
-                    xs.iter()
-                        .filter_map(|s| s.as_string().map(String::from))
-                        .collect()
-                })
-            } else {
-                None
-            }
+    let strings: Vec<String> = find_kw(&kw, "strings")
+        .and_then(Sexp::as_list)
+        .map(|xs| {
+            xs.iter()
+                .filter_map(|s| s.as_string().map(String::from))
+                .collect()
         })
         .unwrap_or_default();
     if strings.is_empty() {
@@ -513,10 +482,108 @@ fn parse_kwargs(rest: &[Sexp]) -> Vec<(String, Sexp)> {
     out
 }
 
+/// First-match lookup on the [`parse_kwargs`]-produced kwargs slice.
+///
+/// Collapses the four sibling `kw.iter().find_map(|(k, v)| if k == NAME
+/// { <extract v> } else { None })` sites (three in
+/// [`check_lisp_compiles`], one in [`check_file_contains`]) onto ONE
+/// name-equality gate — the (equality check, first-match short-circuit)
+/// discipline binds at ONE site on the parsed-kwargs algebra, and each
+/// caller composes its own projection (`Sexp::as_int`, `Sexp::as_list`,
+/// `Sexp::as_symbol`.or_else, etc.) onto the returned `Option<&Sexp>`
+/// through `and_then`. The extractor closure in the pre-lift shape used
+/// `find_map` — the outer combinator kept scanning if the extractor
+/// returned `None`. Post-lift the primitive short-circuits on the first
+/// name match regardless of what the caller's downstream projection
+/// yields, matching how `parse_kwargs` already collapses duplicate names
+/// silently (first pair wins) at the collection boundary.
+///
+/// A future new `(<check> ... :NEW-KW value)` slot the check executors
+/// want to read lands as ONE `find_kw(&kw, "new-kw").and_then(Sexp::as_<T>)`
+/// delegate rather than as a fresh copy of the pre-lift four-line
+/// `find_map` shape at yet another `check_*` body.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition. The
+/// (name-equality gate, `Option<&Sexp>` return) pair is a substrate
+/// primitive on the parsed-kwargs slice; callers compose their per-slot
+/// projection through the shared `Option` type rather than restating the
+/// gate at each callsite.
+fn find_kw<'a>(kw: &'a [(String, Sexp)], name: &str) -> Option<&'a Sexp> {
+    kw.iter().find_map(|(k, v)| (k == name).then_some(v))
+}
+
 fn normalize(s: &str) -> String {
     s.lines()
         .map(str::trim_end)
         .filter(|l| !l.is_empty())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{find_kw, parse_kwargs};
+    use tatara_lisp::{read, Sexp};
+
+    // Re-parse a `(list …)` source through the reader and hand its
+    // interior slice to `parse_kwargs`, so every test exercises the
+    // same tokenizer + Sexp-shape pipeline the `check_*` executors do
+    // rather than constructing `Sexp` values by hand at each test.
+    fn kwargs_from(src: &str) -> Vec<(String, Sexp)> {
+        let forms = read(src).expect("test source must parse");
+        let outer = forms[0].as_list().expect("wrap source in a list");
+        // Skip the head symbol; kwargs live in the tail.
+        parse_kwargs(&outer[1..])
+    }
+
+    #[test]
+    fn find_kw_returns_the_value_when_the_name_is_present() {
+        // Pin the happy path: the name matches, the extractor sees the
+        // borrowed `&Sexp` value, and the caller's downstream projection
+        // (`Sexp::as_int`) yields the wrapped payload. Fail-before-pass-
+        // after: `find_kw` does not exist on the pre-lift binary — this
+        // test does not compile before the lift.
+        let kw = kwargs_from("(check :min-definitions 3)");
+        assert_eq!(
+            find_kw(&kw, "min-definitions").and_then(Sexp::as_int),
+            Some(3),
+        );
+    }
+
+    #[test]
+    fn find_kw_returns_none_when_the_name_is_absent() {
+        // Pin the miss path: an unknown name yields `None`, and the
+        // caller's `.unwrap_or_default()` / `.unwrap_or(<default>)` chain
+        // fills in the caller's typed default. Together with the happy-
+        // path pin, this closes the two-cell (present, absent) matrix at
+        // the substrate primitive's return-shape boundary.
+        let kw = kwargs_from("(check :min-definitions 3)");
+        assert!(find_kw(&kw, "missing-key").is_none());
+    }
+
+    #[test]
+    fn find_kw_returns_the_first_matching_value_when_the_name_repeats() {
+        // Pin the first-match short-circuit: on a duplicate name (which
+        // `parse_kwargs` silently keeps at the first pair), `find_kw`
+        // returns the first pair's value, not the last. A regression
+        // that swapped `find_map` for a `filter` + `last` (silently
+        // reordering the two duplicates) would fail here.
+        let kw = kwargs_from("(check :min-definitions 3 :min-definitions 9)");
+        assert_eq!(
+            find_kw(&kw, "min-definitions").and_then(Sexp::as_int),
+            Some(3),
+        );
+    }
+
+    #[test]
+    fn find_kw_returns_none_on_empty_kwargs() {
+        // Boundary pin: an empty `parse_kwargs` output (a check called
+        // with no `:key value` tail — `(file-contains "path")` before the
+        // caller composes the extractor's `.unwrap_or_default()`)
+        // returns `None` for every lookup. A regression that panicked
+        // on the empty slice (e.g. an unchecked `kw[0].0 == name`) would
+        // fail here.
+        let kw: Vec<(String, Sexp)> = Vec::new();
+        assert!(find_kw(&kw, "any-name").is_none());
+    }
 }

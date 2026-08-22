@@ -2286,31 +2286,69 @@ impl<'a> AtomKwarg<'a> for f64 {
     }
 }
 
-/// Required string kwarg — one-line delegate to `<&'a str as
-/// AtomKwarg<'a>>::extract_kwarg`, whose default composes
-/// `(<&'a str>::SHAPE, <&'a str>::project)` through [`extract_atom`].
-pub fn extract_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<&'a str> {
+/// `#[cfg(test)]`: the derive's `Kind::{String,OptionalString,Bool,
+/// OptionalBool}` arms no longer route through these axis-typed public
+/// wrapper names — the four arms collapse onto ONE
+/// `atom_trait_dispatch_call("extract_owned_kwarg", …)` /
+/// `("extract_optional_owned_kwarg", …)` emit in `tatara-lisp-derive`
+/// (see `Kind::String` / `Kind::OptionalString` / `Kind::Bool` /
+/// `Kind::OptionalBool` at the derive's `extractor_for` site), which
+/// dispatches directly to `<T as AtomKwarg<'_>>::extract_owned_kwarg`
+/// / `_optional_owned_kwarg`. Post-sweep the eight scalar atom-family
+/// axis-typed wrappers are dead in production; they stay module-
+/// private + test-only as pinning fixtures for the delegation-
+/// agreement tests
+/// (`extract_int_and_extract_float_delegate_to_the_wide_numeric_
+/// trait_dispatch`,
+/// `extract_string_and_extract_bool_delegate_to_the_atom_kwarg_
+/// trait_dispatch`), so a regression that re-introduced a fifth
+/// axis-typed wrapper somewhere else would still register at those
+/// tests — but no production path calls them. Peer to the same sweep
+/// [`extract_int_narrowed`] / [`extract_float_narrowed`] carried on
+/// the numeric-narrowing extraction axis (both demoted after
+/// [`NarrowNumeric::extract_narrowed_kwarg`] absorbed the axis
+/// dispatch through `<T as NarrowNumeric>::Wide`).
+///
+/// Body stays a single `<&'a str as AtomKwarg<'a>>::extract_kwarg(kw,
+/// key)` trait-dispatch delegate, so the demotion is visibility-only.
+#[cfg(test)]
+fn extract_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<&'a str> {
     <&'a str as AtomKwarg<'a>>::extract_kwarg(kw, key)
 }
 
-/// `Option` sibling of [`extract_string`] — one-line delegate to
-/// `<&'a str as AtomKwarg<'a>>::extract_optional_kwarg`.
-pub fn extract_optional_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Option<&'a str>> {
+/// `#[cfg(test)]`: `Option` sibling of [`extract_string`] with the
+/// same `#[cfg(test)]`-plus-pinning-fixture posture. The derive's
+/// `Kind::OptionalString` arm emits
+/// `atom_trait_dispatch_call("extract_optional_owned_kwarg", "& str",
+/// key)` directly; this wrapper is test-only.
+#[cfg(test)]
+fn extract_optional_string<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Option<&'a str>> {
     <&'a str as AtomKwarg<'a>>::extract_optional_kwarg(kw, key)
 }
 
-/// Required `Vec<String>` list-typed kwarg — one-line delegate to
-/// `<&'a str as AtomKwarg<'a>>::extract_list_kwarg`, whose default
-/// composes `(<&'a str>::LIST_SHAPE, <&'a str>::project_at,
-/// <&'a str>::to_owned_item)` through [`extract_list`]. Pre-lift the
-/// composition lived inline as
-/// `extract_list(kw, key, <&str>::LIST_SHAPE, |idx, s| <&str>::
-/// project_at(key, idx, s).map(String::from))`; post-lift the
-/// `.map(String::from)` borrow-to-owned lift rides through
-/// `<&'a str as AtomKwarg<'a>>::to_owned_item` at ONE per-axis trait
-/// dispatch site, shared with every future list-family caller on the
-/// string axis through the trait default.
-pub fn extract_string_list<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Vec<String>> {
+/// `#[cfg(test)]`: the derive's `Kind::{VecString,VecBool,
+/// OptionalVecString,OptionalVecBool}` arms no longer route through
+/// these axis-typed public wrapper names — the four arms collapse
+/// onto ONE `atom_trait_dispatch_call("extract_list_kwarg", …)` /
+/// `("extract_optional_list_kwarg", …)` emit in `tatara-lisp-derive`
+/// (see `Kind::VecString` / `Kind::VecBool` / `Kind::OptionalVecString`
+/// / `Kind::OptionalVecBool` at the derive's `extractor_for` site),
+/// which dispatches directly to `<T as AtomKwarg<'_>>::
+/// extract_list_kwarg` / `_optional_list_kwarg`. Post-sweep the four
+/// atom-family list-family axis-typed wrappers are dead in production;
+/// they stay module-private + test-only as pinning fixtures for the
+/// `atom_family_list_extractors_delegate_to_the_atom_kwarg_trait_
+/// dispatch` sibling ring. Peer to the same sweep
+/// [`extract_int_list_narrowed`] / [`extract_float_list_narrowed`]
+/// carried on the numeric-narrowing list-extraction axis (both
+/// demoted after `<T as NarrowNumeric>::extract_narrowed_list_kwarg`
+/// absorbed the axis dispatch through `<T as NarrowNumeric>::Wide`).
+///
+/// Body stays a single `<&'a str as AtomKwarg<'a>>::extract_list_
+/// kwarg(kw, key)` trait-dispatch delegate, so the demotion is
+/// visibility-only.
+#[cfg(test)]
+fn extract_string_list<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Vec<String>> {
     <&'a str as AtomKwarg<'a>>::extract_list_kwarg(kw, key)
 }
 
@@ -2383,42 +2421,52 @@ pub fn extract_string_list<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Vec<Stri
 /// surfaces the same pattern-matchable
 /// [`LispError::TypeMismatch`] variant every authoring surface (LSP,
 /// `tatara-check`, REPL) already binds to for the required peer).
-pub fn extract_optional_string_list<'a>(
-    kw: &'a Kwargs<'a>,
-    key: &str,
-) -> Result<Option<Vec<String>>> {
+#[cfg(test)]
+fn extract_optional_string_list<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Option<Vec<String>>> {
     <&'a str as AtomKwarg<'a>>::extract_optional_list_kwarg(kw, key)
 }
 
-/// Required integer kwarg — one-line delegate to `<i64 as
-/// WideNumeric>::extract_kwarg`, whose default composes
-/// `(<i64>::SHAPE, <i64>::as_wide)` through [`extract_atom`]. The
-/// axis identity rides the `<i64>` type parameter through ONE trait
-/// dispatch; a regression that silently swapped the axis (an
-/// int-axis extractor accidentally routing through
-/// `ExpectedKwargShape::Number` / `Sexp::as_float`) cannot survive
-/// the trait dispatch — the associated const's type + the impl's
-/// return type both pin the axis at rustc time.
-pub fn extract_int(kw: &Kwargs<'_>, key: &str) -> Result<i64> {
+/// `#[cfg(test)]`: the wide-integer axis peer of the atom-family
+/// [`extract_string`] / [`extract_bool`] wrappers, on the same
+/// `#[cfg(test)]`-plus-pinning-fixture posture. The derive doesn't
+/// call this — an `i64` field routes through the narrowing pipeline
+/// (`<i64 as NarrowNumeric>::extract_narrowed_kwarg` via
+/// `narrow_trait_dispatch_call("extract_narrowed_kwarg", "i64", key)`
+/// in `tatara-lisp-derive`'s `Kind::Int(_) | Kind::Float(_)` arm),
+/// which handles the identity-width case with a total impl. Post-
+/// sweep this wrapper is dead in production; it stays test-only as a
+/// pinning fixture for
+/// `extract_int_and_extract_float_delegate_to_the_wide_numeric_
+/// trait_dispatch`.
+#[cfg(test)]
+fn extract_int(kw: &Kwargs<'_>, key: &str) -> Result<i64> {
     <i64 as WideNumeric>::extract_kwarg(kw, key)
 }
 
-/// `Option` sibling of [`extract_int`] — one-line delegate to
-/// `<i64 as WideNumeric>::extract_optional_kwarg`.
-pub fn extract_optional_int(kw: &Kwargs<'_>, key: &str) -> Result<Option<i64>> {
+/// `#[cfg(test)]`: `Option` sibling of [`extract_int`] with the same
+/// posture. The derive's `Kind::OptionalInt(_) | Kind::OptionalFloat(_)`
+/// arm emits `narrow_trait_dispatch_call("extract_optional_narrowed_
+/// kwarg", …)` directly; this wrapper is test-only.
+#[cfg(test)]
+fn extract_optional_int(kw: &Kwargs<'_>, key: &str) -> Result<Option<i64>> {
     <i64 as WideNumeric>::extract_optional_kwarg(kw, key)
 }
 
-/// Float-axis sibling of [`extract_int`] — one-line delegate to
-/// `<f64 as WideNumeric>::extract_kwarg`, whose default composes
-/// `(<f64>::SHAPE, <f64>::as_wide)` through [`extract_atom`].
-pub fn extract_float(kw: &Kwargs<'_>, key: &str) -> Result<f64> {
+/// `#[cfg(test)]`: float-axis sibling of [`extract_int`] with the
+/// same posture. The derive routes an `f64` field through the
+/// narrowing pipeline (`<f64 as NarrowNumeric>::extract_narrowed_
+/// kwarg`) — this wrapper is test-only.
+#[cfg(test)]
+fn extract_float(kw: &Kwargs<'_>, key: &str) -> Result<f64> {
     <f64 as WideNumeric>::extract_kwarg(kw, key)
 }
 
-/// `Option` sibling of [`extract_float`] — one-line delegate to
-/// `<f64 as WideNumeric>::extract_optional_kwarg`.
-pub fn extract_optional_float(kw: &Kwargs<'_>, key: &str) -> Result<Option<f64>> {
+/// `#[cfg(test)]`: `Option` sibling of [`extract_float`] with the
+/// same posture. The derive's `Kind::OptionalFloat(_)` arm emits
+/// `narrow_trait_dispatch_call("extract_optional_narrowed_kwarg", …)`
+/// directly; this wrapper is test-only.
+#[cfg(test)]
+fn extract_optional_float(kw: &Kwargs<'_>, key: &str) -> Result<Option<f64>> {
     <f64 as WideNumeric>::extract_optional_kwarg(kw, key)
 }
 
@@ -3446,16 +3494,25 @@ fn extract_optional_float_list_narrowed<T: NarrowNumeric<Wide = f64>>(
     <T as NarrowNumeric>::extract_optional_narrowed_list_kwarg(kw, key)
 }
 
-/// Required bool kwarg — one-line delegate to `<bool as
-/// AtomKwarg<'_>>::extract_kwarg`, whose default composes
-/// `(<bool>::SHAPE, <bool>::project)` through [`extract_atom`].
-pub fn extract_bool(kw: &Kwargs<'_>, key: &str) -> Result<bool> {
+/// `#[cfg(test)]`: bool-axis peer of [`extract_string`] on the same
+/// `#[cfg(test)]`-plus-pinning-fixture posture. The derive's
+/// `Kind::Bool` arm emits `atom_trait_dispatch_call("extract_owned_
+/// kwarg", "bool", key)` directly — see the derive's `extractor_for`
+/// site. Post-sweep this wrapper is dead in production; it stays
+/// test-only as a pinning fixture for
+/// `extract_string_and_extract_bool_delegate_to_the_atom_kwarg_
+/// trait_dispatch`.
+#[cfg(test)]
+fn extract_bool(kw: &Kwargs<'_>, key: &str) -> Result<bool> {
     <bool as AtomKwarg<'_>>::extract_kwarg(kw, key)
 }
 
-/// `Option` sibling of [`extract_bool`] — one-line delegate to
-/// `<bool as AtomKwarg<'_>>::extract_optional_kwarg`.
-pub fn extract_optional_bool(kw: &Kwargs<'_>, key: &str) -> Result<Option<bool>> {
+/// `#[cfg(test)]`: `Option` sibling of [`extract_bool`] with the same
+/// posture. The derive's `Kind::OptionalBool` arm emits
+/// `atom_trait_dispatch_call("extract_optional_owned_kwarg", "bool",
+/// key)` directly; this wrapper is test-only.
+#[cfg(test)]
+fn extract_optional_bool(kw: &Kwargs<'_>, key: &str) -> Result<Option<bool>> {
     <bool as AtomKwarg<'_>>::extract_optional_kwarg(kw, key)
 }
 
@@ -3527,7 +3584,8 @@ pub fn extract_optional_bool(kw: &Kwargs<'_>, key: &str) -> Result<Option<bool>>
 /// the same pattern-matchable [`LispError::TypeMismatch`] variant
 /// every authoring surface (LSP, `tatara-check`, REPL) already binds
 /// to for the scalar peer).
-pub fn extract_bool_list<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Vec<bool>> {
+#[cfg(test)]
+fn extract_bool_list<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Vec<bool>> {
     <bool as AtomKwarg<'a>>::extract_list_kwarg(kw, key)
 }
 
@@ -3605,7 +3663,8 @@ pub fn extract_bool_list<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Vec<bool>>
 /// pattern-matchable [`LispError::TypeMismatch`] variant every
 /// authoring surface (LSP, `tatara-check`, REPL) already binds to
 /// for the required peer).
-pub fn extract_optional_bool_list<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Option<Vec<bool>>> {
+#[cfg(test)]
+fn extract_optional_bool_list<'a>(kw: &'a Kwargs<'a>, key: &str) -> Result<Option<Vec<bool>>> {
     <bool as AtomKwarg<'a>>::extract_optional_list_kwarg(kw, key)
 }
 

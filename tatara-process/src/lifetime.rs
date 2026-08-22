@@ -92,8 +92,21 @@ impl crate::tagged_union::VariantKind<LifetimeKind> for LifetimeVariant<'_> {
 ///
 /// Sibling closed-set lift to [`crate::intent::IntentKind`] on the
 /// same `ProcessSpec` axis. Same shape, smaller closed set, same
-/// compounding pattern.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// compounding pattern. Adopts `#[derive(DeriveClosedSet)]` +
+/// `#[closed_set(via = "as_str", generate_unknown, display)]` so
+/// [`tatara_closed_set::ClosedSet`], [`std::fmt::Display`],
+/// [`std::str::FromStr`], and the [`UnknownLifetimeKind`] carrier
+/// all emerge from ONE derive on the substrate-wide shape every
+/// sibling closed-set discriminator across the crate publishes —
+/// no hand-rolled `impl` blocks, no drift-risk between the four
+/// projections. The parent `Lifetime` doesn't impl
+/// [`crate::tagged_union::TaggedUnion`] (empty resolves to
+/// `Permanent(&DEFAULT_PERMANENT)`, not to an error), so the
+/// `TaggedUnion`-bound substrate primitives don't reach it; the
+/// closed-set-bound peer
+/// [`crate::tagged_union::assert_wire_key_matches_label`] does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, tatara_closed_set::DeriveClosedSet)]
+#[closed_set(via = "as_str", generate_unknown, display)]
 pub enum LifetimeKind {
     Permanent,
     Ephemeral,
@@ -667,48 +680,62 @@ mod tests {
         assert!(!lt.has_applicable_exports(ProcessPhase::Failed));
     }
 
-    /// `ALL` is the source of truth for the resolver sweep — pin its
-    /// closure so a variant added without an `ALL` entry fails here
-    /// (via the uniqueness check) before drifting `variant()`.
+    /// Structural well-formedness of [`LifetimeKind`] as a
+    /// [`tatara_closed_set::ClosedSet`] implementor — the workspace-
+    /// wide testkit that pins ALL structural invariants (`ALL` is
+    /// non-empty, every variant round-trips through `label ↔
+    /// parse_label`, labels are pairwise distinct, `""` is outside
+    /// the closed set, the [`UnknownLifetimeKind`] carrier's Display
+    /// renders the substrate-wide `"unknown lifetime kind: <input>"`
+    /// shape, `labels()` equals the natural `ALL × label` projection)
+    /// at ONE call site. Subsumes the hand-derived
+    /// `lifetime_kind_all_is_unique_and_complete` sweep the pre-derive
+    /// site published — clauses (1)+(3) of the testkit fold uniqueness
+    /// + non-emptiness into the substrate primitive's own body.
     #[test]
-    fn lifetime_kind_all_is_unique_and_complete() {
-        let mut seen = std::collections::HashSet::new();
-        for kind in LifetimeKind::ALL {
-            assert!(seen.insert(kind), "duplicate variant in ALL: {kind:?}");
-        }
-        assert_eq!(seen.len(), LifetimeKind::ALL.len());
+    fn lifetime_kind_is_well_formed_closed_set() {
+        tatara_closed_set::assert_closed_set_well_formed::<LifetimeKind>();
+    }
+
+    /// The Display impl IS `as_str` — pinning this lets future callers
+    /// reach for either projection without drift. Symmetric to every
+    /// sibling `X_display_matches_as_str` invariant across
+    /// `tatara-process`; routes through the substrate primitive
+    /// [`crate::tagged_union::assert_display_matches_label`] shared
+    /// with all 29+ production Display-alignment sites. The auto-
+    /// derived `Display` body from `#[closed_set(via = "as_str",
+    /// display)]` emits the substrate-wide `f.write_str(Self::as_str
+    /// (*self))` shape — a regression that regresses `as_str` (or a
+    /// future hand-rolled Display block that drifts from `as_str`)
+    /// surfaces here at the substrate-wide alignment probe.
+    #[test]
+    fn lifetime_kind_display_matches_as_str() {
+        crate::tagged_union::assert_display_matches_label::<LifetimeKind>();
     }
 
     /// CANONICAL-KEY CONTRACT: each variant's `as_str()` matches the
     /// camelCase serde field name on `Lifetime`. A future rename of
-    /// any field lands here at one site.
+    /// any field lands here at one site — and the wire-key alignment
+    /// stays coherent with the operator-facing serde shape.
+    ///
+    /// Routes through the substrate primitive
+    /// [`crate::tagged_union::assert_wire_key_matches_label`] — the
+    /// bound-relaxed peer of `assert_single_slot_key_matches_label`
+    /// that drops the `T: TaggedUnion` requirement so `Lifetime`
+    /// (whose empty variant resolves to `Permanent(&DEFAULT_PERMANENT)`
+    /// rather than to a [`crate::tagged_union::TaggedUnionError::empty`]
+    /// carrier) still binds through ONE substrate wire-key alignment
+    /// site. Pre-lift the body restated the same serialize +
+    /// exactly-one-key + name-equality sweep at this test surface
+    /// verbatim; post-lift the projection lives at ONE substrate
+    /// primitive and this site binds through a single call — the
+    /// same mechanical shape the four sibling TaggedUnion parents
+    /// carry via the trait-projected [`crate::tagged_union::assert_single_slot_key_matches_label`].
     #[test]
     fn lifetime_kind_as_str_matches_lifetime_field_name() {
-        for kind in LifetimeKind::ALL {
-            let l = match kind {
-                LifetimeKind::Permanent => Lifetime {
-                    permanent: Some(PermanentLifetime {}),
-                    ..Lifetime::default()
-                },
-                LifetimeKind::Ephemeral => Lifetime {
-                    ephemeral: Some(EphemeralLifetime::default()),
-                    ..Lifetime::default()
-                },
-            };
-            let v = serde_json::to_value(&l).expect("Lifetime serializes");
-            let obj = v.as_object().expect("Lifetime serializes to object");
-            let keys: Vec<&String> = obj.keys().collect();
-            assert_eq!(
-                keys.len(),
-                1,
-                "exactly one slot populated for kind {kind:?}, got {keys:?}"
-            );
-            assert_eq!(
-                keys[0],
-                kind.as_str(),
-                "as_str() must match serde field name for {kind:?}"
-            );
-        }
+        crate::tagged_union::assert_wire_key_matches_label::<Lifetime, LifetimeKind, _>(
+            single_slot_lifetime,
+        );
     }
 
     /// ROUND-TRIP CONTRACT: `LifetimeKind::select(lifetime).map(|v|

@@ -727,12 +727,19 @@ where
 /// truth for the carrier's field structure. Reused verbatim from the
 /// [`assert_variant_round_trip`] primitive.
 ///
-/// The [`crate::lifetime::Lifetime`] site is DELIBERATELY excluded —
-/// `Lifetime` doesn't impl [`TaggedUnion`] (its `variant()` returns
-/// `Ok(Permanent)` on empty rather than an `Empty` typed error), so
-/// the `<T: TaggedUnion>` bound doesn't reach it. Same reasoning as
-/// [`resolve_or_err`]'s and [`assert_variant_round_trip`]'s and
-/// [`assert_two_slots_ambiguous`]'s exclusions.
+/// The [`crate::lifetime::Lifetime`] site is DELIBERATELY excluded
+/// from THIS trait-projected surface — `Lifetime` doesn't impl
+/// [`TaggedUnion`] (its `variant()` returns `Ok(Permanent)` on empty
+/// rather than an `Empty` typed error), so the `<T: TaggedUnion>`
+/// bound doesn't reach it. The bound-relaxed peer
+/// [`assert_wire_key_matches_label`] carries the SAME sweep body
+/// under `<T: Serialize>` + `<K: ClosedSet>` alone — Lifetime binds
+/// through it directly and this trait-projected surface becomes a
+/// one-line delegation whose only load-bearing purpose is to name
+/// the TaggedUnion parent's `T::Kind` associated type at the call
+/// site (existing `assert_single_slot_key_matches_label::<T, _>(f)`
+/// callers stay unchanged; the peer inflects the same body onto
+/// non-TaggedUnion parents).
 #[track_caller]
 pub fn assert_single_slot_key_matches_label<T, F>(single_slot: F)
 where
@@ -740,10 +747,50 @@ where
     T::Kind: PartialEq + std::fmt::Debug,
     F: Fn(T::Kind) -> T,
 {
-    for k in <T::Kind as tatara_closed_set::ClosedSet>::ALL
-        .iter()
-        .copied()
-    {
+    assert_wire_key_matches_label::<T, T::Kind, F>(single_slot);
+}
+
+/// Bound-relaxed peer of [`assert_single_slot_key_matches_label`] —
+/// the SAME wire-key alignment sweep, but on any `(K, T)` pair where
+/// `K: ClosedSet` addresses `T: Serialize` through a caller-supplied
+/// `single_slot: Fn(K) -> T` factory. Drops the `T: TaggedUnion`
+/// bound the sibling primitive carries so parents whose empty
+/// resolution shape diverges from the tagged-union convention (the
+/// canonical example: [`crate::lifetime::Lifetime`], whose empty
+/// resolves to `Permanent(&DEFAULT_PERMANENT)` rather than to an
+/// [`TaggedUnionError::empty`] carrier) still bind through ONE
+/// substrate wire-key alignment site.
+///
+/// The two primitives share ONE sweep body; the trait-projected
+/// [`assert_single_slot_key_matches_label`] is now a one-line
+/// delegation to this bound-relaxed peer, so every drift-arm the
+/// sibling `#[should_panic]` probe pins on the delegating surface
+/// mechanically pins here too. The compounding gain: a fifth parent
+/// whose closed-set kind K doesn't ride the TaggedUnion trait (a
+/// future variant surface with a default-arm on empty; a wire-only
+/// enum whose parent is a wrapper struct that never publishes a
+/// resolver; a K-addressed `HashMap<K, Payload>` where the payload
+/// isn't a tagged-union variant carrier at all) picks up wire-key
+/// alignment through ONE call site — no re-authored serialize +
+/// exactly-one-key + name-equality body at the test surface, no
+/// per-parent drift risk where the trait-projected surface catches
+/// it and the bespoke surface forgets.
+///
+/// The primitive binds `<K: ClosedSet + PartialEq + Debug>` (the
+/// strict union of the sweep body's projection + the panic-message
+/// substrate-wide shape) — every production `ClosedSet` implementor
+/// across the crate carries `Debug + PartialEq` through the
+/// substrate-wide `#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash,
+/// DeriveClosedSet)]` shape, so no site pays a bound-widening cost
+/// to bind through this peer.
+#[track_caller]
+pub fn assert_wire_key_matches_label<T, K, F>(single_slot: F)
+where
+    T: serde::Serialize,
+    K: tatara_closed_set::ClosedSet + PartialEq + std::fmt::Debug,
+    F: Fn(K) -> T,
+{
+    for k in <K as tatara_closed_set::ClosedSet>::ALL.iter().copied() {
         let parent = single_slot(k);
         let value = serde_json::to_value(&parent)
             .unwrap_or_else(|e| panic!("single_slot({k:?}) must serialize as JSON: {e}"));
@@ -756,11 +803,11 @@ where
             1,
             "single_slot({k:?}) must serialize to exactly one populated field, got keys: {keys:?}",
         );
-        let expected = <T::Kind as tatara_closed_set::ClosedSet>::label(k);
+        let expected = <K as tatara_closed_set::ClosedSet>::label(k);
         assert_eq!(
             keys[0].as_str(),
             expected,
-            "wire-key drift for {k:?}: single_slot's populated field '{}' must equal <T::Kind as ClosedSet>::label ({expected:?})",
+            "wire-key drift for {k:?}: single_slot's populated field '{}' must equal <K as ClosedSet>::label ({expected:?})",
             keys[0],
         );
     }
@@ -1778,6 +1825,7 @@ mod tests {
         assert_display_matches_label::<crate::export::ReportPayloadShape>();
         assert_display_matches_label::<crate::intent::IntentKind>();
         assert_display_matches_label::<crate::intent::WorkloadKind>();
+        assert_display_matches_label::<crate::lifetime::LifetimeKind>();
         assert_display_matches_label::<crate::lifetime::TeardownPolicy>();
         assert_display_matches_label::<crate::lifetime_clock::AutoTerminateKind>();
         assert_display_matches_label::<crate::lifetime_clock::TerminateReasonKind>();
@@ -2938,6 +2986,139 @@ mod tests {
             }
         }
         assert_single_slot_key_matches_label::<MacroLocalParent, _>(make_macro_local);
+    }
+
+    // -------------------------------------------------------------------
+    // `assert_wire_key_matches_label` — bound-relaxed peer of the
+    // `assert_single_slot_key_matches_label` primitive. Pin the truth
+    // table (every populated slot serializes to exactly one JSON key
+    // whose name equals the addressing kind's ClosedSet label; a
+    // factory that populates the wrong slot / no slot / multiple slots
+    // fails-loudly at the caller's site) on a NON-TaggedUnion parent
+    // scaffold — the delegation-only path from the trait-projected
+    // primitive would silently pass this test if the bound-relaxed
+    // primitive's body regressed, so the direct-dispatch probes here
+    // pin the bound-relaxed pathway independently.
+    // -------------------------------------------------------------------
+
+    /// Local parent that carries the wire-format shape (`Option<T>`
+    /// slots + `#[serde(skip_serializing_if = "Option::is_none")]`
+    /// annotations) but DELIBERATELY does NOT impl [`TaggedUnion`] —
+    /// pins the bound-relaxed sweep on the exact shape [`crate::lifetime::Lifetime`]
+    /// carries in production (empty resolves to a default variant,
+    /// not to a typed error, so the trait's `T::Error` bound doesn't
+    /// hold and the trait-projected surface excludes it).
+    #[derive(Default, serde::Serialize)]
+    struct BareParent {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        alpha: Option<u32>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        beta: Option<u32>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        gamma: Option<u32>,
+    }
+
+    /// The bound-relaxed primitive dispatches Ok on a coherent
+    /// non-TaggedUnion impl — pin the happy path directly on the
+    /// [`BareParent`] scaffold so a regression that gates the sweep
+    /// body on the `T: TaggedUnion` bound (accidentally re-adding it,
+    /// or projecting through `T::Kind` instead of the caller-supplied
+    /// `K` generic) fails HERE at the primitive-independent boundary
+    /// rather than at the [`crate::lifetime::Lifetime`] production
+    /// site alone. The Ok arm is the "no drift" outcome; a divergence
+    /// surfaces as a labeled assertion failure at the caller site
+    /// (this test's own line) via the primitive's `#[track_caller]`.
+    #[test]
+    fn assert_wire_key_matches_label_accepts_coherent_bare_parent_impl() {
+        fn make_bare(k: LocalKind) -> BareParent {
+            match k {
+                LocalKind::Alpha => BareParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => BareParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => BareParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            }
+        }
+        assert_wire_key_matches_label::<BareParent, LocalKind, _>(make_bare);
+    }
+
+    /// A factory that returns a bare-parent for the WRONG kind
+    /// (populates `beta` regardless of what kind is asked for) MUST
+    /// fail-loudly at the caller's site through the bound-relaxed
+    /// primitive's name-equality arm — the emitted key does not match
+    /// the addressed kind's label. Pins the drift-detection failure
+    /// mode on the non-TaggedUnion pathway so a regression that drops
+    /// the `assert_eq!(keys[0], label)` arm (silently succeeding on
+    /// any-key-at-all) is caught here — mechanical peer of the
+    /// sibling `assert_single_slot_key_matches_label_rejects_factory_that_populates_wrong_slot`
+    /// on the TaggedUnion pathway.
+    #[test]
+    #[should_panic(expected = "wire-key drift")]
+    fn assert_wire_key_matches_label_rejects_factory_that_populates_wrong_slot() {
+        fn always_beta(_: LocalKind) -> BareParent {
+            BareParent {
+                beta: Some(22),
+                ..Default::default()
+            }
+        }
+        assert_wire_key_matches_label::<BareParent, LocalKind, _>(always_beta);
+    }
+
+    /// A factory that returns an all-empty bare-parent (so serializing
+    /// yields ZERO keys, not exactly-one) MUST fail-loudly at the
+    /// caller's site through the bound-relaxed primitive's
+    /// exactly-one arm. Pins the zero-key failure mode on the
+    /// non-TaggedUnion pathway.
+    #[test]
+    #[should_panic(expected = "exactly one populated field")]
+    fn assert_wire_key_matches_label_rejects_factory_that_populates_no_slots() {
+        fn empty_factory(_: LocalKind) -> BareParent {
+            BareParent::default()
+        }
+        assert_wire_key_matches_label::<BareParent, LocalKind, _>(empty_factory);
+    }
+
+    /// The trait-projected [`assert_single_slot_key_matches_label`]
+    /// is a one-line delegation to the bound-relaxed
+    /// [`assert_wire_key_matches_label`] peer — pin the delegation
+    /// shape at ONE boundary so a regression that inlines a
+    /// divergent sweep body into the trait-projected surface (rather
+    /// than the one-line dispatch) is caught here. Ok on a coherent
+    /// impl means BOTH primitives dispatch through the SAME body on
+    /// the same fixture — [`LocalParent`] impls [`TaggedUnion`], so
+    /// both the trait-projected surface and the bound-relaxed peer
+    /// reach it, and a divergence between the two dispatches would
+    /// surface here as one succeeding + the other failing.
+    #[test]
+    fn assert_single_slot_key_matches_label_delegates_to_wire_key_matches_label() {
+        fn make_local(k: LocalKind) -> LocalParent {
+            match k {
+                LocalKind::Alpha => LocalParent {
+                    alpha: Some(11),
+                    ..Default::default()
+                },
+                LocalKind::Beta => LocalParent {
+                    beta: Some(22),
+                    ..Default::default()
+                },
+                LocalKind::Gamma => LocalParent {
+                    gamma: Some(33),
+                    ..Default::default()
+                },
+            }
+        }
+        // Both surfaces reach the same body — dispatched here through
+        // BOTH entry points so a divergence between them fails one
+        // arm while the other passes.
+        assert_single_slot_key_matches_label::<LocalParent, _>(make_local);
+        assert_wire_key_matches_label::<LocalParent, LocalKind, _>(make_local);
     }
 
     /// Every one of the five production borrowed-view enums impls

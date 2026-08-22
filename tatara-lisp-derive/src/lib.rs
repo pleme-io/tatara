@@ -544,28 +544,134 @@ fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<Clos
     })
 }
 
+/// The derive's PRIVATE `parse_nested_meta`-callback sub-key match-
+/// and-apply substrate primitive both [`try_lit_str_sub_key`] and
+/// [`try_bool_flag_sub_key`] compose against. Owns the four shared
+/// dispatch invariants both peers pre-lift restated verbatim in their
+/// own bodies:
+/// (1) the leading `if meta.path.is_ident(key)` ident-equality gate
+///     that pins the sub-key routing decision;
+/// (2) the `apply(meta)?` payload-side effect the callback threads
+///     through on the matching branch (the string-valued peer's
+///     `*slot = Some(read_meta_lit_str(meta)?)` write on the
+///     [`try_lit_str_sub_key`] axis; the bare-flag peer's
+///     `*flag = true` flip on the [`try_bool_flag_sub_key`] axis);
+/// (3) the `Ok(true)` matched-bit return on the taken branch — the
+///     load-bearing signal the outer `||` dispatch chain in
+///     [`parse_closed_set_attrs`] reads to short-circuit the
+///     subsequent peer arms once a sub-key matches;
+/// (4) the `Ok(false)` non-matched-bit return on the else branch —
+///     symmetrically load-bearing so the outer `||` chain moves onto
+///     the next peer arm without touching the current arm's slot.
+///
+/// Pre-lift each peer hand-wrote the same three-line
+/// `if meta.path.is_ident(key) { <apply>; Ok(true) } else { Ok(false) }`
+/// body — two copies of the SAME scaffold whose only per-peer
+/// difference sat at the `<apply>` payload slot (`*slot = Some(
+/// read_meta_lit_str(meta)?)` on the string-valued axis vs.
+/// `*flag = true` on the bare-flag axis). Post-lift the scaffold
+/// lives at ONE substrate primitive here; each peer collapses to a
+/// ONE-LINE delegate whose closure body captures ONLY the axis-typed
+/// slot mutation. Same three-times-rule discipline the sibling lifts
+/// [`format_syn_parse_error`] gives the derive's `&str -> syn::<T>`
+/// parse peers, [`trait_dispatch_call`] gives the numeric-narrowed +
+/// universal-serde UFCS-bracket peers, and
+/// [`wrap_with_missing_key_default`] gives the `SerdeDefault::Trait`
+/// / `SerdeDefault::Path` fallback-wrap peers.
+///
+/// The `apply` parameter is an `impl FnOnce(&syn::meta::ParseNestedMeta<'_>)
+/// -> syn::Result<()>` — the SINGLE per-axis payload-effect the
+/// callback threads through on the matching branch. `FnOnce` fits both
+/// peers exactly:
+/// - the string-valued peer's closure moves the `slot` mutable borrow
+///   once and reads the `= <LitStr>` payload once via
+///   [`read_meta_lit_str`];
+/// - the bare-flag peer's closure moves the `flag` mutable borrow
+///   once and writes `true` once.
+///
+/// A `FnMut` bound would over-relax the contract (neither peer needs
+/// to invoke `apply` more than once); an `Fn` bound would over-
+/// constrain the mutable-borrow capture. `FnOnce` is the exact bound
+/// the shared invariant carries. The `-> syn::Result<()>` return
+/// shape rides through the primitive's own `?` so a payload-side
+/// syn-error (the string-valued peer's `LitStr::parse` failure on a
+/// `#[myattr(key = 42)]` non-LitStr payload; a future bare-flag peer's
+/// hypothetical `syn::Error::new_spanned(&meta.path, "unexpected `= …`
+/// payload on bare-flag key")` sharpening on a stray `= <value>`
+/// payload after a bare-flag ident) surfaces at the primitive's own
+/// Err boundary before the `Ok(true)` matched-bit return.
+///
+/// The `Ok(bool)` outer return shape lets callers chain multiple
+/// (sub-key, apply) pairs via short-circuit `||` — the SAME dispatch
+/// discipline [`parse_closed_set_attrs`]'s five-arm chain already
+/// carries; the `?` unwraps the inner `syn::Result<bool>` to the
+/// matched bit, and the `||` operator's laziness preserves the
+/// historic first-match-wins ordering without touching the trailing
+/// slots (a non-matching arm's `apply` closure is never invoked, so
+/// its slot mutation is never staged).
+///
+/// A future third payload-shape axis (a hypothetical `Path`-valued
+/// sub-key that reads a `= <Path>` payload as a `syn::Path` for a
+/// lifted `#[closed_set(via_fn = path::to::fn)]` axis; an operator-
+/// authored `= <LitInt>` payload for a numeric sub-key; a callback-
+/// authored `#[tatara(...)]` sub-key shape that reads a nested meta-
+/// list of its own) inherits the primitive's dispatch scaffold for
+/// free through a ONE-LINE delegate whose closure body binds only
+/// the axis-typed payload-parse + slot-mutation. Same "future axis
+/// pays zero at the dispatch scaffold" property the sibling lifts
+/// [`format_syn_parse_error`] / [`trait_dispatch_call`] /
+/// [`wrap_with_missing_key_default`] give on their own recurring
+/// scaffolds.
+///
+/// Theory grounding: THEORY.md §VI.1 — generation over composition.
+/// The three-line dispatch scaffold recurred at TWO peers on the
+/// derive's `parse_nested_meta`-callback surface, past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold, and is lifted to ONE
+/// substrate primitive here — exactly as the two-line UFCS-bracket
+/// scaffold was lifted onto [`trait_dispatch_call`] and the two-line
+/// diagnostic-wording scaffold was lifted onto
+/// [`format_syn_parse_error`]. THEORY.md §II.1 invariant 5
+/// (composition preserves proofs) — the two peers now compose
+/// structurally through ONE primitive, so a regression that drifted
+/// the dispatch discipline at ONE peer would surface at the
+/// primitive's own test pins (or at either peer's delegation pin)
+/// rather than as silent drift at every outer `||` dispatch chain
+/// consumer.
+fn on_matching_sub_key(
+    meta: &syn::meta::ParseNestedMeta<'_>,
+    key: &str,
+    apply: impl FnOnce(&syn::meta::ParseNestedMeta<'_>) -> syn::Result<()>,
+) -> syn::Result<bool> {
+    if meta.path.is_ident(key) {
+        apply(meta)?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
 /// `parse_nested_meta` callback primitive: if `meta`'s sub-key path is
 /// `key`, read its `= <LitStr>` payload as an owned `String`, write
 /// `Some(<value>)` to `slot`, and return `Ok(true)`; otherwise leave
 /// `slot` untouched and return `Ok(false)`.
 ///
-/// Lifts the byte-for-byte identical three-line
+/// Post-lift a ONE-LINE delegate through [`on_matching_sub_key`] — the
+/// substrate primitive both this string-valued arm AND the sibling
+/// bare-flag arm compose against. The peer-specific payload effect
+/// (`*slot = Some(read_meta_lit_str(meta)?)`) lives at this arm's own
+/// closure body; the four shared dispatch invariants (ident-equality
+/// gate, `apply(meta)?` payload threading, `Ok(true)` matched-bit
+/// return, `Ok(false)` non-matched-bit return) all live at the shared
+/// primitive. Pre-lift each peer hand-wrote a byte-identical three-
+/// line `if meta.path.is_ident(key) { <apply>; Ok(true) } else {
+/// Ok(false) }` body; post-lift the scaffold flows through ONE owner.
 ///
-/// ```ignore
-/// } else if meta.path.is_ident("<key>") {
-///     <slot> = Some(read_meta_lit_str(&meta)?);
-///     Ok(())
-/// }
-/// ```
-///
-/// arm that pre-lift lived at THREE sites inside
-/// [`parse_closed_set_attrs`] (the `via`, `unknown`, and `set_label`
-/// string-valued sub-keys). Post-lift each site composes onto ONE `||`
-/// term of the dispatch chain — a future single-keyed string-valued
-/// sub-key extension (a `#[closed_set(alias = "…")]` peer, a lifted
-/// `keyword` axis pulled up from `#[tatara(…)]`, an operator-authored
-/// `prefix = "…"` axis) adds as ONE `||` term against the same
-/// substrate rather than as a fresh copy of the arm.
+/// Composes onto ONE `||` term of the [`parse_closed_set_attrs`]
+/// dispatch chain — a future single-keyed string-valued sub-key
+/// extension (a `#[closed_set(alias = "…")]` peer, a lifted `keyword`
+/// axis pulled up from `#[tatara(…)]`, an operator-authored `prefix
+/// = "…"` axis) adds as ONE `||` term against the same primitive
+/// rather than as a fresh copy of the arm.
 ///
 /// The `Ok(bool)` return shape lets callers chain arms via short-
 /// circuit `||`: `try_lit_str_sub_key(&meta, "via", &mut via)? || ...`.
@@ -577,9 +683,16 @@ fn parse_closed_set_attrs(attrs: &[Attribute], name: &Ident) -> syn::Result<Clos
 /// the string-valued arm (this primitive) takes an
 /// `&mut Option<String>` slot and reads a `= <LitStr>` payload; the
 /// bare-flag arm (the sibling) takes an `&mut bool` slot and reads no
-/// payload. The `parse_lit_str` / `read_meta_lit_str` pair a few file-
-/// sections up carries the same primitive / meta-level wrapper motif —
-/// the derive crate's convention for two-shape sub-key primitives.
+/// payload. Both peers now share the SAME [`on_matching_sub_key`]
+/// dispatch scaffold, so a diagnostic upgrade at the shared
+/// gate-and-return primitive (e.g. threading a `syn::Error::new_spanned`
+/// sharpening at the else-branch to surface a per-key "unknown sub-key"
+/// diagnostic before the outer chain falls through to
+/// `parse_closed_set_attrs`'s catch-all) flows through both peers
+/// mechanically at ONE substrate site rather than at each peer's own
+/// body. The `parse_lit_str` / `read_meta_lit_str` pair a few file-
+/// sections up carries the same primitive / meta-level wrapper motif
+/// — the derive crate's convention for two-shape sub-key primitives.
 ///
 /// Theory grounding: THEORY.md §VI.1 — generation over composition.
 /// The three-times-rule signal fires at three sites of the string-
@@ -593,34 +706,29 @@ fn try_lit_str_sub_key(
     key: &str,
     slot: &mut Option<String>,
 ) -> syn::Result<bool> {
-    if meta.path.is_ident(key) {
-        *slot = Some(read_meta_lit_str(meta)?);
-        Ok(true)
-    } else {
-        Ok(false)
-    }
+    on_matching_sub_key(meta, key, |m| {
+        *slot = Some(read_meta_lit_str(m)?);
+        Ok(())
+    })
 }
 
 /// `parse_nested_meta` callback primitive: if `meta`'s sub-key path is
 /// `key`, flip `flag` to `true` and return `Ok(true)`; otherwise leave
 /// `flag` untouched and return `Ok(false)`.
 ///
-/// Lifts the byte-for-byte identical three-line
+/// Post-lift a ONE-LINE delegate through [`on_matching_sub_key`] — the
+/// substrate primitive both this bare-flag arm AND the sibling
+/// string-valued arm compose against. The peer-specific payload effect
+/// (`*flag = true`) lives at this arm's own closure body; the four
+/// shared dispatch invariants (ident-equality gate, `apply(meta)?`
+/// payload threading, `Ok(true)` matched-bit return, `Ok(false)` non-
+/// matched-bit return) all live at the shared primitive.
 ///
-/// ```ignore
-/// } else if meta.path.is_ident("<key>") {
-///     <flag> = true;
-///     Ok(())
-/// }
-/// ```
-///
-/// arm that pre-lift lived at TWO sites inside
-/// [`parse_closed_set_attrs`] (the `no_from_str` and `display` bare-
-/// flag sub-keys). Post-lift each site composes onto ONE `||` term of
-/// the dispatch chain — a future single-keyed bare-flag sub-key
-/// extension (a `#[closed_set(no_debug)]` peer, a `no_partial_eq`
-/// axis, a `no_hash` axis) adds as ONE `||` term against the same
-/// substrate rather than as a fresh copy of the arm.
+/// Composes onto ONE `||` term of the [`parse_closed_set_attrs`]
+/// dispatch chain — a future single-keyed bare-flag sub-key extension
+/// (a `#[closed_set(no_debug)]` peer, a `no_partial_eq` axis, a
+/// `no_hash` axis) adds as ONE `||` term against the same primitive
+/// rather than as a fresh copy of the arm.
 ///
 /// Returns `syn::Result<bool>` — not `bool` — to homogenize the return
 /// shape with the sibling [`try_lit_str_sub_key`] so callers chain
@@ -650,12 +758,10 @@ fn try_bool_flag_sub_key(
     key: &str,
     flag: &mut bool,
 ) -> syn::Result<bool> {
-    if meta.path.is_ident(key) {
+    on_matching_sub_key(meta, key, |_| {
         *flag = true;
-        Ok(true)
-    } else {
-        Ok(false)
-    }
+        Ok(())
+    })
 }
 
 #[proc_macro_derive(TataraDomain, attributes(tatara))]
@@ -9238,6 +9344,288 @@ mod parse_closed_set_attrs_tests {
         )
         .expect("unknown override parses OK");
         assert_eq!(cfg.unknown, "MyBespoke");
+    }
+}
+
+#[cfg(test)]
+mod on_matching_sub_key_tests {
+    //! Contract tests for the [`on_matching_sub_key`] substrate
+    //! primitive — the derive's PRIVATE `parse_nested_meta`-callback
+    //! sub-key dispatch scaffold both [`try_lit_str_sub_key`] and
+    //! [`try_bool_flag_sub_key`] compose against post-lift.
+    //!
+    //! The sibling `try_sub_key_tests` module below closes each peer's
+    //! peer-specific payload effect via the axis-typed slot mutation.
+    //! This module pins the primitive's OWN generic contract at its
+    //! natural corners:
+    //!
+    //!   1. MATCHING IDENT + Ok apply → `apply` invoked exactly once,
+    //!      matched-bit `Ok(true)` returned;
+    //!   2. NON-MATCHING IDENT → `apply` NEVER invoked, non-matched-bit
+    //!      `Ok(false)` returned;
+    //!   3. MATCHING IDENT + Err apply → the `?` propagates the
+    //!      payload-side syn-error at the primitive's own Err boundary
+    //!      BEFORE the `Ok(true)` matched-bit return, so an outer `||`
+    //!      dispatch chain's `?` short-circuits at THIS peer rather than
+    //!      passing through to the next peer;
+    //!   4. DELEGATION on the string-valued axis — the peer
+    //!      [`try_lit_str_sub_key`] dispatches through this primitive
+    //!      verbatim on the ident-equality gate + return-bit;
+    //!   5. DELEGATION on the bare-flag axis — the peer
+    //!      [`try_bool_flag_sub_key`] dispatches through this primitive
+    //!      verbatim on the ident-equality gate + return-bit;
+    //!   6. CLOSURE-EFFECT ATOMICITY — a `MATCHING IDENT + Err apply`
+    //!      run that mutated a slot BEFORE returning Err surfaces the
+    //!      partial mutation at the primitive's Err path (Rust's `?`
+    //!      returns after the mutation has staged), pinning the
+    //!      apply-then-`?` ordering the peer bodies rely on: the string-
+    //!      valued peer routes `read_meta_lit_str(m)?` INSIDE the
+    //!      `Some(...)` wrap so the parse-failure fires BEFORE the
+    //!      slot write, keeping the pre-existing slot value untouched
+    //!      on a payload-parse failure. This pin closes the mode ordering
+    //!      at the primitive's own boundary rather than at each peer's.
+    //!
+    //! A regression to any of the six axes surfaces AT ONE test-module
+    //! boundary here rather than as silent drift at every downstream
+    //! sub-key peer that composes through the primitive.
+
+    use super::{on_matching_sub_key, try_bool_flag_sub_key, try_lit_str_sub_key};
+    use std::cell::Cell;
+    use syn::parse::Parser;
+    use syn::{Attribute, Meta};
+
+    fn nested_meta_list(attr_src: &str) -> syn::MetaList {
+        // Same nested-meta walk driver the sibling `try_sub_key_tests`
+        // module uses — extract the SINGLE `Meta::List` payload from an
+        // input `#[<attr_ident>(<sub_key> [= <value>] ...)]` source and
+        // hand it to `parse_nested_meta` for the callback exercise.
+        let attrs: Vec<Attribute> = Attribute::parse_outer
+            .parse_str(attr_src)
+            .expect("valid attribute syntax");
+        let Meta::List(list) = attrs
+            .into_iter()
+            .next()
+            .expect("attribute list is non-empty")
+            .meta
+        else {
+            panic!("expected Meta::List (#[<attr>(...)]) shape");
+        };
+        list
+    }
+
+    #[test]
+    fn primitive_on_matching_ident_invokes_apply_once_and_returns_matched_bit() {
+        // Promise 1 (MATCHING IDENT + Ok apply): the primitive fires
+        // `apply(meta)` EXACTLY ONCE on the matching branch and returns
+        // `Ok(true)`. A `Cell<u32>` counter binds the apply-invocation
+        // count so a regression that (say) called `apply` twice or
+        // skipped it entirely on the matching branch surfaces here
+        // rather than as silent drift at the peer callers.
+        let list = nested_meta_list(r#"#[myattr(mykey = "hello")]"#);
+        let apply_count: Cell<u32> = Cell::new(0);
+        let mut matched: Option<bool> = None;
+        list.parse_nested_meta(|meta| {
+            matched = Some(on_matching_sub_key(&meta, "mykey", |_| {
+                apply_count.set(apply_count.get() + 1);
+                Ok(())
+            })?);
+            // Drain the `= <value>` payload so the outer walk can
+            // complete on the matching-arm test (the primitive's own
+            // dispatch does not read `meta.value()`, and unconsumed
+            // stream tokens stall the walk at the `=`).
+            if let Ok(value) = meta.value() {
+                let _: syn::Result<syn::Expr> = value.parse();
+            }
+            Ok(())
+        })
+        .expect("meta walk completes");
+        assert_eq!(matched, Some(true));
+        assert_eq!(
+            apply_count.get(),
+            1,
+            "apply must fire EXACTLY once on the matching branch, got {} invocations",
+            apply_count.get(),
+        );
+    }
+
+    #[test]
+    fn primitive_on_non_matching_ident_skips_apply_and_returns_non_matched_bit() {
+        // Promise 2 (NON-MATCHING IDENT): the primitive returns
+        // `Ok(false)` on the else-branch and DOES NOT invoke `apply`.
+        // Load-bearing for the outer `||` dispatch chain — a
+        // regression that eagerly invoked `apply` on the else-branch
+        // would silently fire every non-matching arm's side effect
+        // (writing every slot on every meta walk); the counter pin
+        // catches that drift at the primitive's own boundary.
+        let list = nested_meta_list(r#"#[myattr(other = "x")]"#);
+        let apply_count: Cell<u32> = Cell::new(0);
+        let mut matched: Option<bool> = None;
+        list.parse_nested_meta(|meta| {
+            matched = Some(on_matching_sub_key(&meta, "mykey", |_| {
+                apply_count.set(apply_count.get() + 1);
+                Ok(())
+            })?);
+            // The `parse_nested_meta` walk stalls at the `=` of a
+            // value-carrying peer without an explicit drain — mirror
+            // the peer `try_sub_key_tests` module's defensive value-
+            // drain discipline so the outer walk can complete on the
+            // non-matching-ident test.
+            if !matched.expect("callback ran") {
+                if let Ok(value) = meta.value() {
+                    let _: syn::Result<syn::Expr> = value.parse();
+                }
+            }
+            Ok(())
+        })
+        .expect("meta walk completes");
+        assert_eq!(matched, Some(false));
+        assert_eq!(
+            apply_count.get(),
+            0,
+            "apply must NEVER fire on the else-branch, got {} invocations",
+            apply_count.get(),
+        );
+    }
+
+    #[test]
+    fn primitive_on_matching_ident_with_err_apply_propagates_at_primitive_boundary() {
+        // Promise 3 (MATCHING IDENT + Err apply): the primitive's `?`
+        // propagates the payload-side syn-error at its own Err boundary
+        // BEFORE returning `Ok(true)`. Load-bearing for the outer `||`
+        // dispatch chain's `?` cadence — a regression that swallowed
+        // the payload Err and still returned `Ok(true)` would silently
+        // short-circuit the dispatch chain past a failing arm, keeping
+        // the outer error path from surfacing. The diagnostic wording
+        // rides through verbatim via the closure's returned
+        // `syn::Error` — the primitive itself does not construct a
+        // syn-error.
+        let list = nested_meta_list("#[myattr(mykey)]");
+        let err = list
+            .parse_nested_meta(|meta| {
+                on_matching_sub_key(&meta, "mykey", |m| {
+                    Err(syn::Error::new_spanned(
+                        &m.path,
+                        "payload-side rejection surfaces at the primitive's Err path",
+                    ))
+                })
+                .map(|_| ())
+            })
+            .expect_err("payload-side Err must surface at the primitive's own boundary");
+        assert!(
+            err.to_string()
+                .contains("payload-side rejection surfaces at the primitive's Err path"),
+            "primitive must propagate the closure's syn-error verbatim, got {err:?}",
+        );
+    }
+
+    #[test]
+    fn string_valued_peer_delegates_through_the_primitive_on_matching_ident() {
+        // Promise 4 (DELEGATION on the string-valued axis): the peer
+        // [`try_lit_str_sub_key`] dispatches through the primitive
+        // verbatim on the ident-equality gate + return-bit. Two runs
+        // — one against the primitive with a payload-shape-parity
+        // closure body, one against the peer wrapper — MUST agree on
+        // both the return-bit AND the observable slot mutation.
+        // A regression that inlined a divergent gate at the peer body
+        // (e.g. an `!` inversion, an alternate `meta.path.get_ident()
+        // .map_or(false, |i| i == key)` re-spelling) surfaces at THIS
+        // peer's own delegation pin rather than at the outer
+        // `parse_closed_set_attrs`'s integration test.
+        let list = nested_meta_list(r#"#[myattr(mykey = "peer-scoped")]"#);
+        let mut peer_slot: Option<String> = None;
+        let mut peer_matched: Option<bool> = None;
+        list.parse_nested_meta(|meta| {
+            peer_matched = Some(try_lit_str_sub_key(&meta, "mykey", &mut peer_slot)?);
+            Ok(())
+        })
+        .expect("peer walk completes");
+
+        let list = nested_meta_list(r#"#[myattr(mykey = "peer-scoped")]"#);
+        let mut primitive_slot: Option<String> = None;
+        let mut primitive_matched: Option<bool> = None;
+        list.parse_nested_meta(|meta| {
+            primitive_matched = Some(on_matching_sub_key(&meta, "mykey", |m| {
+                primitive_slot = Some(super::read_meta_lit_str(m)?);
+                Ok(())
+            })?);
+            Ok(())
+        })
+        .expect("primitive walk completes");
+
+        assert_eq!(peer_matched, primitive_matched);
+        assert_eq!(peer_slot, primitive_slot);
+        assert_eq!(peer_slot, Some("peer-scoped".to_string()));
+    }
+
+    #[test]
+    fn bare_flag_peer_delegates_through_the_primitive_on_matching_ident() {
+        // Promise 5 (DELEGATION on the bare-flag axis): peer of
+        // Promise 4 on the bare-flag axis. The two delegation pins
+        // close the primitive-to-peer boundary on BOTH payload-shape
+        // axes so a regression that drifted ONE peer's wiring
+        // surfaces at THAT peer's own delegation test rather than at
+        // the outer integration test.
+        let list = nested_meta_list("#[myattr(myflag)]");
+        let mut peer_flag: bool = false;
+        let mut peer_matched: Option<bool> = None;
+        list.parse_nested_meta(|meta| {
+            peer_matched = Some(try_bool_flag_sub_key(&meta, "myflag", &mut peer_flag)?);
+            Ok(())
+        })
+        .expect("peer walk completes");
+
+        let list = nested_meta_list("#[myattr(myflag)]");
+        let mut primitive_flag: bool = false;
+        let mut primitive_matched: Option<bool> = None;
+        list.parse_nested_meta(|meta| {
+            primitive_matched = Some(on_matching_sub_key(&meta, "myflag", |_| {
+                primitive_flag = true;
+                Ok(())
+            })?);
+            Ok(())
+        })
+        .expect("primitive walk completes");
+
+        assert_eq!(peer_matched, primitive_matched);
+        assert_eq!(peer_flag, primitive_flag);
+        assert!(peer_flag);
+    }
+
+    #[test]
+    fn primitive_apply_then_return_ordering_matches_string_peer_on_malformed_payload() {
+        // Promise 6 (CLOSURE-EFFECT ATOMICITY): the primitive invokes
+        // `apply(meta)?` BEFORE the `Ok(true)` matched-bit return.
+        // Pin the peer's payload-parse-then-slot-write ordering
+        // through the primitive at its own boundary: given a
+        // `#[myattr(mykey = 42)]` shape (matching ident, non-LitStr
+        // payload), the string-valued peer's closure body composes
+        // `*slot = Some(read_meta_lit_str(m)?)` — the `?` unwrap
+        // fires the LitStr parse-error INSIDE the `Some(…)` wrap, so
+        // the slot's pre-existing value survives on payload rejection
+        // (the substrate primitive that this test module owns simply
+        // reflects that: any Err from `apply` propagates through the
+        // primitive's `?` without touching the return-bit).
+        // A regression that reordered the primitive's dispatch to
+        // return `Ok(true)` BEFORE running `apply` — or that
+        // swallowed `apply`'s Err and returned `Ok(true)` — surfaces
+        // here on the string-valued peer's known-shape failure.
+        let list = nested_meta_list("#[myattr(mykey = 42)]");
+        let mut peer_slot: Option<String> = Some("preexisting".to_string());
+        let err = list
+            .parse_nested_meta(|meta| {
+                try_lit_str_sub_key(&meta, "mykey", &mut peer_slot).map(|_| ())
+            })
+            .expect_err("non-LitStr payload must surface a syn::Error through the primitive");
+        assert!(
+            err.to_string().contains("expected string literal")
+                || err.to_string().contains("LitStr"),
+            "diagnostic must surface the LitStr shape gate through the primitive, got {err:?}",
+        );
+        assert_eq!(
+            peer_slot,
+            Some("preexisting".to_string()),
+            "peer's pre-existing slot value MUST survive the primitive's Err propagation",
+        );
     }
 }
 

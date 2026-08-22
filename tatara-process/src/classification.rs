@@ -1323,9 +1323,7 @@ mod tests {
     /// Display inherits the canonical wire-format string automatically.
     #[test]
     fn data_classification_display_matches_as_str() {
-        for class in DataClassification::ALL {
-            assert_eq!(class.to_string(), class.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<DataClassification>();
     }
 
     /// `FromStr` rejects strings that aren't in the canonical
@@ -1574,9 +1572,7 @@ mod tests {
     /// reach for either projection without drift.
     #[test]
     fn convergence_point_type_display_matches_as_str() {
-        for t in ConvergencePointType::ALL {
-            assert_eq!(t.to_string(), t.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<ConvergencePointType>();
     }
 
     /// `FromStr` rejects strings outside the canonical projection —
@@ -1832,9 +1828,7 @@ mod tests {
     /// automatically.
     #[test]
     fn substrate_type_display_matches_as_str() {
-        for t in SubstrateType::ALL {
-            assert_eq!(t.to_string(), t.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<SubstrateType>();
     }
 
     /// `FromStr` rejects strings outside the canonical projection —
@@ -2016,9 +2010,7 @@ mod tests {
     /// automatically.
     #[test]
     fn calm_classification_display_matches_as_str() {
-        for c in CalmClassification::ALL {
-            assert_eq!(c.to_string(), c.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<CalmClassification>();
     }
 
     /// `FromStr` rejects strings outside the canonical projection —
@@ -2179,9 +2171,7 @@ mod tests {
     /// automatically.
     #[test]
     fn optimization_direction_display_matches_as_str() {
-        for d in OptimizationDirection::ALL {
-            assert_eq!(d.to_string(), d.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<OptimizationDirection>();
     }
 
     /// `FromStr` rejects strings outside the canonical projection —
@@ -2429,9 +2419,7 @@ mod tests {
     /// string automatically.
     #[test]
     fn horizon_kind_display_matches_as_str() {
-        for k in HorizonKind::ALL {
-            assert_eq!(k.to_string(), k.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<HorizonKind>();
     }
 
     /// `FromStr` rejects strings outside the canonical projection —

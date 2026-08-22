@@ -1849,9 +1849,7 @@ mod tests {
         // names (e.g. `format!("{self:?}")`) drifts from the canonical
         // wire form and breaks every consumer that reads the Display
         // form as a wire string.
-        for kind in SelectStrategyKind::ALL {
-            assert_eq!(kind.to_string(), kind.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<SelectStrategyKind>();
     }
 
     #[test]

@@ -315,9 +315,7 @@ mod tests {
     /// reach for either projection without drift.
     #[test]
     fn sighup_strategy_display_matches_as_str() {
-        for strat in SighupStrategy::ALL {
-            assert_eq!(strat.to_string(), strat.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<SighupStrategy>();
     }
 
     /// `FromStr` rejects strings outside the canonical projection

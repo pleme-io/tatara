@@ -1022,9 +1022,7 @@ mod tests {
     /// variant string.
     #[test]
     fn replacement_policy_display_matches_as_str() {
-        for policy in ReplacementPolicy::ALL {
-            assert_eq!(policy.to_string(), policy.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<ReplacementPolicy>();
     }
 
     /// `FromStr` rejects strings that aren't in the canonical
@@ -1177,9 +1175,7 @@ mod tests {
     /// `ReplacementPolicy` discipline.
     #[test]
     fn return_policy_display_matches_as_str() {
-        for policy in ReturnPolicy::ALL {
-            assert_eq!(policy.to_string(), policy.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<ReturnPolicy>();
     }
 
     /// `FromStr` rejects strings that aren't in the canonical
@@ -1317,9 +1313,7 @@ mod tests {
     /// inherits the canonical wire-format string automatically.
     #[test]
     fn member_state_display_matches_as_str() {
-        for state in MemberState::ALL {
-            assert_eq!(state.to_string(), state.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<MemberState>();
     }
 
     /// `FromStr` rejects strings that aren't in the canonical
@@ -1461,9 +1455,7 @@ mod tests {
     /// inherits the canonical wire-format string automatically.
     #[test]
     fn pool_phase_display_matches_as_str() {
-        for phase in PoolPhase::ALL {
-            assert_eq!(phase.to_string(), phase.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<PoolPhase>();
     }
 
     /// `FromStr` rejects strings that aren't in the canonical

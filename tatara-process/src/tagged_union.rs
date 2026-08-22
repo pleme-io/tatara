@@ -766,6 +766,83 @@ where
     }
 }
 
+/// Generic Display / [`ClosedSet::label`](tatara_closed_set::ClosedSet::label)
+/// alignment testkit — pins that [`core::fmt::Display`] renders each variant
+/// BYTE-IDENTICALLY to the trait-visible `ClosedSet::label` projection for
+/// every implementor.
+///
+/// Substrate primitive for the 29 sibling
+/// `X_display_matches_as_str` tests across `tatara-process`
+/// (`AllocationPhase`, `IntentKind`, `WorkloadKind`, `EncapsulationMode`,
+/// `EncapsulationTarget`, `ConditionKind`, `TerminateReasonKind`,
+/// `AutoTerminateKind`, `SighupStrategy`, `ReplacementPolicy`,
+/// `ReturnPolicy`, `MemberState`, `PoolPhase`, `VerificationPhase`,
+/// `SelectStrategyKind`, `MustReachPhase`, `ExportTrigger`,
+/// `ReportFormat`, `ReportPayloadShape`, `ArtifactKind`, `ChannelKind`,
+/// `DataClassification`, `ConvergencePointType`, `Arity`,
+/// `SubstrateType`, `CalmClassification`, `OptimizationDirection`,
+/// `HorizonKind`, `TeardownPolicy`) that pre-lift each restated the
+/// same
+/// ```text
+/// for v in K::ALL {
+///     assert_eq!(v.to_string(), v.as_str());
+/// }
+/// ```
+/// two-line probe verbatim at their own test bodies — byte-identical
+/// projections whose only per-carrier knob is the closed-set type name.
+/// Post-lift each site collapses to ONE
+/// `assert_display_matches_label::<X>()` invocation whose body IS the
+/// substrate primitive's own dispatch.
+///
+/// The primitive projects through the STABLE trait-visible name
+/// [`ClosedSet::label`](tatara_closed_set::ClosedSet::label) rather
+/// than the inherent `.as_str()` each site publishes locally. Every
+/// production implementor here derives its `label` body from `as_str`
+/// via `#[closed_set(via = "as_str", display)]` (the substrate-wide
+/// derive shape), so the two are byte-identical by construction; the
+/// primitive's projection through `label` therefore pins the SAME
+/// invariant the pre-lift bodies pinned while binding to the
+/// stable trait-visible surface. A future implementor whose inherent
+/// canonical projection is named something other than `as_str` (e.g.
+/// `.keyword()`, `.spelling()`) but still routes through
+/// `#[closed_set(via = "...", display)]` picks up the alignment check
+/// through ONE `assert_display_matches_label::<X>()` invocation with
+/// no inherent-name coupling at the test site.
+///
+/// A fifth (or thirtieth, or hundredth) implementor picks up the
+/// Display-alignment check through ONE
+/// `#[derive(tatara_closed_set::DeriveClosedSet)]` + `display`
+/// attribute + ONE `assert_display_matches_label::<X>()` call site —
+/// no re-authored two-line
+/// `for v in K::ALL { assert_eq!(v.to_string(), v.as_str()) }` body
+/// at the test surface, no per-site drift risk where 28 sibling
+/// tests carry the assertion and the 29th forgets.
+///
+/// Sibling shape to [`assert_kind_list_matches_closed_set`] on the
+/// (`T::KIND_LIST` slash-join, `Display` byte-identity) axis: both
+/// project the closed-set's label surface onto ONE typed contract
+/// and pin it against a per-implementor rendering; the former for
+/// the tagged-union parent's [`TaggedUnion::KIND_LIST`] `&'static str`,
+/// this one for the enum's `Display` byte stream. Together they close
+/// the "label surface must round-trip verbatim" invariant every
+/// closed-set-carrying implementor across the crate publishes.
+#[track_caller]
+pub fn assert_display_matches_label<T>()
+where
+    T: tatara_closed_set::ClosedSet + core::fmt::Display + PartialEq + core::fmt::Debug,
+{
+    let type_name = core::any::type_name::<T>();
+    for &v in <T as tatara_closed_set::ClosedSet>::ALL {
+        let rendered = v.to_string();
+        let expected = <T as tatara_closed_set::ClosedSet>::label(v);
+        assert_eq!(
+            rendered.as_str(),
+            expected,
+            "{type_name}: Display drifted from ClosedSet::label for {v:?} — expected {expected:?}, got {rendered:?}",
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1003,7 +1080,7 @@ mod tests {
     /// so `<Self as ClosedSet>::labels_joined("/")` reaches the same
     /// substrate composition the four production sites bind through.
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, tatara_closed_set::DeriveClosedSet)]
-    #[closed_set(via = "as_str", generate_unknown)]
+    #[closed_set(via = "as_str", generate_unknown, display)]
     enum LocalKind {
         Alpha,
         Beta,
@@ -1181,6 +1258,113 @@ mod tests {
         assert_single_slot_key_matches_label::<crate::export::VectorChannel, _>(
             single_slot_vector_channel_probe,
         );
+    }
+
+    /// The Display / label alignment primitive dispatches Ok on a
+    /// coherent implementor — the [`LocalKind`] scaffold derives
+    /// `Display` from `label` via `#[closed_set(via = "as_str",
+    /// display)]`, matching the substrate-wide derive shape every
+    /// production implementor across the crate carries. The Ok arm
+    /// is the "no drift" outcome; a divergence surfaces as a labeled
+    /// assertion failure at the caller site (this test's own line).
+    #[test]
+    fn assert_display_matches_label_accepts_coherent_impl() {
+        assert_display_matches_label::<LocalKind>();
+    }
+
+    /// A local closed-set scaffold whose `Display` deliberately
+    /// diverges from `label` — pins the failing arm of the primitive.
+    /// The `#[closed_set(via = "as_str")]` attribute WITHOUT `display`
+    /// leaves the `Display` impl uncovered by the derive, and the
+    /// hand-authored `impl Display` below emits a suffixed rendering
+    /// that no `label` projection returns. A regression that drops
+    /// the alignment assertion inside
+    /// [`assert_display_matches_label`] fails-loudly at this
+    /// `#[should_panic]` probe before it can silently thread through
+    /// the 29 production `X_display_matches_as_str` sites.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, tatara_closed_set::DeriveClosedSet)]
+    #[closed_set(via = "as_str", generate_unknown)]
+    enum DisplayDriftKind {
+        Alpha,
+        Beta,
+    }
+
+    impl DisplayDriftKind {
+        const ALL: [Self; 2] = [Self::Alpha, Self::Beta];
+        const fn as_str(self) -> &'static str {
+            match self {
+                Self::Alpha => "alpha",
+                Self::Beta => "beta",
+            }
+        }
+    }
+
+    impl std::fmt::Display for DisplayDriftKind {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            // Deliberate drift — Display suffixes the label with a
+            // marker no `label` projection returns.
+            write!(f, "{}!", self.as_str())
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Display drifted from ClosedSet::label")]
+    fn assert_display_matches_label_rejects_drifted_impl() {
+        assert_display_matches_label::<DisplayDriftKind>();
+    }
+
+    /// Every closed-set enum across `tatara-process` that carried a
+    /// hand-rolled `X_display_matches_as_str` test pre-lift now binds
+    /// through the substrate primitive at ONE call site each.  This
+    /// substrate-wide sweep pins every production Display-alignment
+    /// consumer at ONE boundary so a per-crate test-site drop cannot
+    /// silently disable the check — the sweep here catches the drift
+    /// even when the per-site test body is removed. Mirrors the
+    /// `every_production_tagged_union_binds_through_the_testkit_primitive`
+    /// and `every_production_tagged_union_binds_through_the_wire_key_testkit_primitive`
+    /// sibling sweeps on the (`KIND_LIST` slash-join, wire-key)
+    /// axes; this one closes the (`Display` byte-identity) axis.
+    #[test]
+    fn every_production_display_impl_binds_through_the_testkit_primitive() {
+        assert_display_matches_label::<crate::allocation::AllocationPhase>();
+        assert_display_matches_label::<crate::boundary::ConditionKind>();
+        // `Arity` DELIBERATELY excluded — it exposes an inherent
+        // `pub const ALL` + `as_str` + hand-authored
+        // `impl fmt::Display` triad rather than a `ClosedSet` derive,
+        // so the `T: ClosedSet` bound doesn't reach it. Sibling
+        // exclusion posture to `ReportPayloadShape` below.
+        assert_display_matches_label::<crate::classification::CalmClassification>();
+        assert_display_matches_label::<crate::classification::ConvergencePointType>();
+        assert_display_matches_label::<crate::classification::DataClassification>();
+        assert_display_matches_label::<crate::classification::HorizonKind>();
+        assert_display_matches_label::<crate::classification::OptimizationDirection>();
+        assert_display_matches_label::<crate::classification::SubstrateType>();
+        assert_display_matches_label::<crate::compliance::VerificationPhase>();
+        assert_display_matches_label::<crate::encapsulates::EncapsulationMode>();
+        assert_display_matches_label::<crate::encapsulates::EncapsulationTarget>();
+        assert_display_matches_label::<crate::export::ArtifactKind>();
+        assert_display_matches_label::<crate::export::ChannelKind>();
+        assert_display_matches_label::<crate::export::ExportTrigger>();
+        assert_display_matches_label::<crate::export::ReportFormat>();
+        // `ReportPayloadShape` DELIBERATELY excluded — it exposes an
+        // inherent `pub const ALL` + `as_str` + hand-authored
+        // `impl fmt::Display` triad rather than a `ClosedSet` derive,
+        // so the `T: ClosedSet` bound doesn't reach it. Its per-site
+        // `report_payload_shape_display_matches_as_str` test stays
+        // pre-lift-shaped until the type migrates to the substrate-wide
+        // `#[derive(DeriveClosedSet)]` shape.
+        assert_display_matches_label::<crate::intent::IntentKind>();
+        assert_display_matches_label::<crate::intent::WorkloadKind>();
+        assert_display_matches_label::<crate::lifetime::TeardownPolicy>();
+        assert_display_matches_label::<crate::lifetime_clock::AutoTerminateKind>();
+        assert_display_matches_label::<crate::lifetime_clock::TerminateReasonKind>();
+        assert_display_matches_label::<crate::matrix::SelectStrategyKind>();
+        assert_display_matches_label::<crate::pool::MemberState>();
+        assert_display_matches_label::<crate::pool::PoolPhase>();
+        assert_display_matches_label::<crate::pool::ReplacementPolicy>();
+        assert_display_matches_label::<crate::pool::ReturnPolicy>();
+        assert_display_matches_label::<crate::signal::SighupStrategy>();
+        assert_display_matches_label::<crate::spec::MustReachPhase>();
     }
 
     // Substrate-local single-slot factories — mirror the per-site

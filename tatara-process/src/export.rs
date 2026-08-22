@@ -1006,9 +1006,7 @@ mod tests {
     /// but not the other.
     #[test]
     fn export_trigger_display_matches_as_str() {
-        for trigger in ExportTrigger::ALL {
-            assert_eq!(trigger.to_string(), trigger.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<ExportTrigger>();
     }
 
     /// `FromStr` rejects strings that aren't in the canonical
@@ -1187,9 +1185,7 @@ mod tests {
     /// reach for either projection without drift.
     #[test]
     fn report_format_display_matches_as_str() {
-        for format in ReportFormat::ALL {
-            assert_eq!(format.to_string(), format.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<ReportFormat>();
     }
 
     /// `FromStr` rejects strings that aren't in the canonical
@@ -1532,9 +1528,7 @@ mod tests {
     /// but not the other.
     #[test]
     fn artifact_kind_display_matches_as_str() {
-        for kind in ArtifactKind::ALL {
-            assert_eq!(kind.to_string(), kind.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<ArtifactKind>();
     }
 
     /// `FromStr` rejects strings that aren't in the canonical
@@ -1698,9 +1692,7 @@ mod tests {
     /// reach for either projection without drift.
     #[test]
     fn channel_kind_display_matches_as_str() {
-        for kind in ChannelKind::ALL {
-            assert_eq!(kind.to_string(), kind.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<ChannelKind>();
     }
 
     /// `FromStr` rejects strings that aren't in the canonical

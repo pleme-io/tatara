@@ -252,9 +252,7 @@ mod tests {
     /// the other.
     #[test]
     fn must_reach_phase_display_matches_as_str() {
-        for kind in MustReachPhase::ALL {
-            assert_eq!(kind.to_string(), kind.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<MustReachPhase>();
     }
 
     /// `FromStr` rejects strings that aren't in the canonical

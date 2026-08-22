@@ -542,9 +542,7 @@ mod tests {
     /// but not the other.
     #[test]
     fn mode_display_matches_as_str() {
-        for mode in EncapsulationMode::ALL {
-            assert_eq!(mode.to_string(), mode.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<EncapsulationMode>();
     }
 
     /// `FromStr` rejects strings that aren't in the canonical
@@ -817,9 +815,7 @@ mod tests {
     /// the other.
     #[test]
     fn encapsulation_target_display_matches_as_str() {
-        for t in EncapsulationTarget::ALL {
-            assert_eq!(t.to_string(), t.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<EncapsulationTarget>();
     }
 
     /// `FromStr` rejects strings that aren't in the canonical projection

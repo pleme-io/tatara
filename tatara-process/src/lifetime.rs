@@ -514,9 +514,7 @@ mod tests {
     /// reach for either projection without drift.
     #[test]
     fn teardown_policy_display_matches_as_str() {
-        for policy in TeardownPolicy::ALL {
-            assert_eq!(policy.to_string(), policy.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<TeardownPolicy>();
     }
 
     /// `FromStr` rejects strings that aren't in the canonical

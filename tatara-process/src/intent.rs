@@ -612,11 +612,21 @@ mod tests {
     /// reviewer accidentally re-introduces an inline match in Display,
     /// this test would fail the moment a variant rename touches one
     /// site but not the other.
+    ///
+    /// Routes through the substrate primitive
+    /// [`crate::tagged_union::assert_display_matches_label`], which
+    /// composes `<T as ClosedSet>::label` against `T::to_string`
+    /// byte-identically for every `<T: ClosedSet + Display>`
+    /// implementor — the Display-alignment testkit shared with every
+    /// sibling `X_display_matches_as_str` site across the crate.
+    /// Pre-lift the 27 bodies each restated the same
+    /// `for k in K::ALL { assert_eq!(k.to_string(), k.as_str()) }`
+    /// two-line probe at the test surface; post-lift the projection
+    /// lives at ONE substrate primitive and every site binds through
+    /// a single call.
     #[test]
     fn intent_kind_display_matches_as_str() {
-        for kind in IntentKind::ALL {
-            assert_eq!(kind.to_string(), kind.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<IntentKind>();
     }
 
     /// CANONICAL-KEY CONTRACT: each variant's `as_str()` matches the
@@ -860,9 +870,7 @@ mod tests {
     /// but not the other.
     #[test]
     fn workload_kind_display_matches_as_str() {
-        for kind in WorkloadKind::ALL {
-            assert_eq!(kind.to_string(), kind.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<WorkloadKind>();
     }
 
     /// `FromStr` rejects strings that aren't in the canonical

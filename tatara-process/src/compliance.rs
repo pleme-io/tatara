@@ -253,9 +253,7 @@ mod tests {
     /// reach for either projection without drift.
     #[test]
     fn verification_phase_display_matches_as_str() {
-        for phase in VerificationPhase::ALL {
-            assert_eq!(phase.to_string(), phase.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<VerificationPhase>();
     }
 
     /// `FromStr` rejects domain-specific non-canonical inputs and

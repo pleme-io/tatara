@@ -670,9 +670,7 @@ mod tests {
     /// for either projection without drift.
     #[test]
     fn terminate_reason_kind_display_matches_as_str() {
-        for kind in TerminateReasonKind::ALL {
-            assert_eq!(kind.to_string(), kind.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<TerminateReasonKind>();
     }
 
     /// Every kind's `as_str` is in canonical PascalCase. The first
@@ -878,9 +876,7 @@ mod tests {
     /// for either projection without drift.
     #[test]
     fn auto_terminate_kind_display_matches_as_str() {
-        for kind in AutoTerminateKind::ALL {
-            assert_eq!(kind.to_string(), kind.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<AutoTerminateKind>();
     }
 
     /// `FromStr` rejects strings outside the canonical projection

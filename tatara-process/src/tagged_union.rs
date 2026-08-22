@@ -189,6 +189,100 @@ macro_rules! declare_tagged_union_error {
     };
 }
 
+/// Declare the three-block impl stanza a tagged-union parent type
+/// publishes to the substrate — inherent `.variant()` forwarder +
+/// [`VariantSelector<Parent>`] impl on the sibling `Kind` +
+/// [`TaggedUnion`] impl on the parent — in ONE authoring surface.
+///
+/// Every one of the four production `.variant()` sites on
+/// `ProcessSpec` ([`crate::intent::Intent`],
+/// [`crate::encapsulates::EncapsulationKind`],
+/// [`crate::export::ArtifactSource`],
+/// [`crate::export::VectorChannel`]) pre-lift restated the same three
+/// impl blocks by hand:
+///
+/// 1. `impl $parent { pub fn variant(&self) -> Result<$variant<'_>, $err> { ... } }`
+///    — a one-line delegation to the [`TaggedUnion::variant`] default
+///    body, plus 5 lines of rustdoc cross-referencing the other three
+///    sibling `.variant()` sites verbatim.
+/// 2. `impl VariantSelector<$parent> for $kind { type Variant<'a> = $variant<'a>; fn select(...) { <$kind>::select(self, parent) } }`
+///    — 6 lines whose only per-site knobs are (`$parent`, `$kind`,
+///    `$variant`); the trait method body a straight delegation to the
+///    inherent `<$kind>::select`.
+/// 3. `impl TaggedUnion for $parent { type Kind = $kind; type Error = $err; const KIND_LIST = $kind_list; }`
+///    — 3 associated-item assignments whose only per-site knobs are
+///    the (`$kind`, `$err`, `$kind_list`) tuple.
+///
+/// The macro takes the (`$parent`, `$kind`, `$variant`, `$err`,
+/// `$kind_list`) five-tuple as named arguments and emits all three
+/// blocks. A fifth sibling tagged-union parent picks up all three
+/// impls through ONE macro call — no re-authored inherent
+/// `.variant()` forwarder, no re-authored `impl VariantSelector`
+/// block, no re-authored `impl TaggedUnion` block.
+///
+/// The emitted inherent `.variant()`'s rustdoc is canonical (names
+/// the substrate primitive, not the exact set of sibling sites) so
+/// a fifth sibling doesn't drift the cross-ref count against reality
+/// merely by existing.
+///
+/// # Example
+///
+/// ```ignore
+/// declare_tagged_union_impls! {
+///     parent = Intent,
+///     kind = IntentKind,
+///     variant = IntentVariant,
+///     error = IntentError,
+///     kind_list = INTENT_KIND_LIST,
+/// }
+/// ```
+///
+/// Expands to the inherent `Intent::variant`, the
+/// `VariantSelector<Intent>` impl on `IntentKind`, and the
+/// `TaggedUnion` impl on `Intent`.
+#[macro_export]
+macro_rules! declare_tagged_union_impls {
+    (
+        parent = $parent:ty,
+        kind = $kind:ty,
+        variant = $variant:ident,
+        error = $err:ty,
+        kind_list = $kind_list:expr $(,)?
+    ) => {
+        impl $parent {
+            /// Resolve to exactly one variant. Errors on zero or many.
+            ///
+            /// One-line inherent forwarder that delegates the sweep
+            /// body to the substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::variant`] — every
+            /// production `.variant()` site on `ProcessSpec` dispatches
+            /// through this ONE default body so the resolve-sweep
+            /// pattern lives at ONE substrate site. The inherent surface
+            /// stays load-bearing so consumer callsites don't need
+            /// `use TaggedUnion`.
+            pub fn variant(&self) -> ::std::result::Result<$variant<'_>, $err> {
+                <Self as $crate::tagged_union::TaggedUnion>::variant(self)
+            }
+        }
+
+        impl $crate::tagged_union::VariantSelector<$parent> for $kind {
+            type Variant<'a> = $variant<'a>;
+            fn select<'a>(self, parent: &'a $parent) -> ::std::option::Option<$variant<'a>>
+            where
+                Self: 'a,
+            {
+                <$kind>::select(self, parent)
+            }
+        }
+
+        impl $crate::tagged_union::TaggedUnion for $parent {
+            type Kind = $kind;
+            type Error = $err;
+            const KIND_LIST: &'static str = $kind_list;
+        }
+    };
+}
+
 /// Project the borrowed-view of a tagged-union variant addressed by
 /// this closed-set discriminator.
 ///
@@ -905,6 +999,172 @@ mod tests {
                 "VectorChannel inherent and trait dispatch must return the same &'static str",
             ),
             (a, b) => panic!("VectorChannel inherent/trait mismatch: inherent={a:?}, trait={b:?}"),
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // `declare_tagged_union_impls!` macro — the three-block impl stanza
+    // (inherent `.variant()` forwarder + `VariantSelector<Parent>` on
+    // the Kind + `TaggedUnion` on the parent) as ONE authoring surface.
+    // Pin the macro's shape against a sibling-shaped local family so a
+    // regression on any of the three emitted blocks fails here before
+    // it reaches the four production sites.
+    // -------------------------------------------------------------------
+
+    /// Local sibling-shaped Kind for the macro-emitted-impls test — a
+    /// dedicated closed set so this test can't share substrate with the
+    /// hand-rolled [`LocalKind`] block above. Uses
+    /// [`tatara_closed_set::DeriveClosedSet`] so the macro's
+    /// `TaggedUnion` bound (`Kind: ClosedSet + VariantSelector<Self>`)
+    /// is satisfied through the derive.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, tatara_closed_set::DeriveClosedSet)]
+    #[closed_set(via = "as_str", generate_unknown)]
+    enum MacroLocalKind {
+        Foo,
+        Bar,
+    }
+
+    impl MacroLocalKind {
+        const ALL: [Self; 2] = [Self::Foo, Self::Bar];
+        const fn as_str(self) -> &'static str {
+            match self {
+                Self::Foo => "foo",
+                Self::Bar => "bar",
+            }
+        }
+        fn select<'a>(self, parent: &'a MacroLocalParent) -> Option<MacroLocalVariant<'a>> {
+            match self {
+                Self::Foo => parent.foo.as_ref().map(MacroLocalVariant::Foo),
+                Self::Bar => parent.bar.as_ref().map(MacroLocalVariant::Bar),
+            }
+        }
+    }
+
+    /// Local sibling-shaped parent for the macro-emitted-impls test —
+    /// distinct from [`LocalParent`] so the macro's emitted impls
+    /// don't collide with the hand-rolled trait impls above.
+    #[derive(Default)]
+    struct MacroLocalParent {
+        foo: Option<u32>,
+        bar: Option<u32>,
+    }
+
+    /// Borrowed-view of a populated slot on [`MacroLocalParent`] — the
+    /// return type of the macro-emitted inherent `.variant()`.
+    #[derive(Debug, PartialEq)]
+    enum MacroLocalVariant<'a> {
+        Foo(&'a u32),
+        Bar(&'a u32),
+    }
+
+    crate::declare_tagged_union_error! {
+        pub(super) MacroLocalError,
+        empty = "macro-local parent has no variant set (one of {0} required)",
+        ambiguous = "macro-local parent has multiple variants set; exactly one required",
+    }
+
+    /// Slash-joined kind list — literal peer of
+    /// [`crate::intent::INTENT_KIND_LIST`] etc. that the macro's
+    /// `KIND_LIST` associated const borrows verbatim.
+    const MACRO_LOCAL_KIND_LIST: &str = "foo/bar";
+
+    // ONE macro call emits: inherent `MacroLocalParent::variant`,
+    // `impl VariantSelector<MacroLocalParent> for MacroLocalKind`, and
+    // `impl TaggedUnion for MacroLocalParent`. The four production
+    // sites bind through this exact same call shape.
+    crate::declare_tagged_union_impls! {
+        parent = MacroLocalParent,
+        kind = MacroLocalKind,
+        variant = MacroLocalVariant,
+        error = MacroLocalError,
+        kind_list = MACRO_LOCAL_KIND_LIST,
+    }
+
+    /// The macro-emitted `impl TaggedUnion` binds the (Kind, Error,
+    /// KIND_LIST) triple exactly as a hand-rolled block would — pin
+    /// the diagnostic-stability testkit primitive through the macro's
+    /// output so a regression on any of the three associated items
+    /// (say the macro pulling `KIND_LIST` from the wrong argument
+    /// slot) fails here.
+    #[test]
+    fn macro_emitted_tagged_union_impl_binds_kind_list_coherently() {
+        assert_kind_list_matches_closed_set::<MacroLocalParent>();
+        assert!(std::ptr::eq(
+            <MacroLocalParent as TaggedUnion>::KIND_LIST,
+            MACRO_LOCAL_KIND_LIST,
+        ));
+    }
+
+    /// The macro-emitted inherent `.variant()` forwarder dispatches
+    /// through the trait default body — every populated slot resolves
+    /// to its own [`MacroLocalVariant`] arm, all-none resolves to
+    /// [`TaggedUnionError::empty`] carrying the trait's `KIND_LIST`
+    /// by pointer, two-populated resolves to
+    /// [`TaggedUnionError::ambiguous`]. The four production sites
+    /// exercise the same four-outcome truth table through the same
+    /// macro-emitted delegation shape.
+    #[test]
+    fn macro_emitted_inherent_variant_dispatches_the_four_outcome_truth_table() {
+        // Foo populated.
+        let p = MacroLocalParent {
+            foo: Some(11),
+            bar: None,
+        };
+        assert_eq!(p.variant().unwrap(), MacroLocalVariant::Foo(&11));
+
+        // Bar populated.
+        let p = MacroLocalParent {
+            foo: None,
+            bar: Some(22),
+        };
+        assert_eq!(p.variant().unwrap(), MacroLocalVariant::Bar(&22));
+
+        // All none — Empty arm carries the trait's KIND_LIST value.
+        // The by-pointer preservation across the trait default body is
+        // pinned substrate-wide by
+        // `tagged_union_default_variant_empty_carries_kind_list_by_pointer`
+        // on the sibling hand-rolled `LocalParent`; this test only pins
+        // that the macro-emitted `KIND_LIST = MACRO_LOCAL_KIND_LIST`
+        // assignment reaches the operator diagnostic value-identically.
+        let p = MacroLocalParent::default();
+        match p.variant().unwrap_err() {
+            MacroLocalError::Empty(list) => assert_eq!(list, MACRO_LOCAL_KIND_LIST),
+            MacroLocalError::Ambiguous => panic!("expected Empty, got Ambiguous"),
+        }
+
+        // Two populated — Ambiguous.
+        let p = MacroLocalParent {
+            foo: Some(1),
+            bar: Some(2),
+        };
+        assert_eq!(p.variant().unwrap_err(), MacroLocalError::Ambiguous);
+    }
+
+    /// The macro-emitted `VariantSelector` impl's `select` body
+    /// delegates to the Kind's inherent `<Kind>::select(self, parent)`
+    /// — pin the delegation via `std::ptr::eq` on the returned
+    /// borrowed view so a regression that inlines a divergent select
+    /// body (rather than reaching the inherent method) is caught here.
+    #[test]
+    fn macro_emitted_variant_selector_delegates_to_inherent_select() {
+        let p = MacroLocalParent {
+            foo: Some(7),
+            bar: None,
+        };
+        // Trait-dispatched select projects through the macro-emitted body.
+        let via_trait =
+            <MacroLocalKind as VariantSelector<MacroLocalParent>>::select(MacroLocalKind::Foo, &p)
+                .unwrap();
+        // Inherent select projects through the direct impl.
+        let via_inherent = MacroLocalKind::Foo.select(&p).unwrap();
+        match (via_trait, via_inherent) {
+            (MacroLocalVariant::Foo(a), MacroLocalVariant::Foo(b)) => {
+                assert!(
+                    std::ptr::eq(a, b),
+                    "macro-emitted VariantSelector::select must delegate to <Kind>::select — same borrow, not a copy",
+                );
+            }
+            _ => panic!("expected Foo arm on both dispatch paths"),
         }
     }
 

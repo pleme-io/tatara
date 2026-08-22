@@ -240,34 +240,12 @@ crate::declare_tagged_union_error! {
 /// [`crate::intent::INTENT_KIND_LIST`] in shape.
 pub(crate) const ARTIFACT_KIND_LIST: &str = "receipts/testReport/processSnapshot/runMarker";
 
-impl ArtifactSource {
-    /// Resolve to exactly one variant. Errors on zero or many.
-    ///
-    /// One-line inherent forwarder that delegates the sweep body to
-    /// the substrate primitive [`crate::tagged_union::TaggedUnion::variant`]
-    /// — same delegation shape as the three sibling `.variant()` sites
-    /// on `ProcessSpec`. The inherent surface stays load-bearing so
-    /// consumer callsites like `s.variant()` don't need
-    /// `use TaggedUnion`.
-    pub fn variant(&self) -> Result<ArtifactVariant<'_>, ArtifactError> {
-        <Self as crate::tagged_union::TaggedUnion>::variant(self)
-    }
-}
-
-impl crate::tagged_union::VariantSelector<ArtifactSource> for ArtifactKind {
-    type Variant<'a> = ArtifactVariant<'a>;
-    fn select<'a>(self, parent: &'a ArtifactSource) -> Option<ArtifactVariant<'a>>
-    where
-        Self: 'a,
-    {
-        ArtifactKind::select(self, parent)
-    }
-}
-
-impl crate::tagged_union::TaggedUnion for ArtifactSource {
-    type Kind = ArtifactKind;
-    type Error = ArtifactError;
-    const KIND_LIST: &'static str = ARTIFACT_KIND_LIST;
+crate::declare_tagged_union_impls! {
+    parent = ArtifactSource,
+    kind = ArtifactKind,
+    variant = ArtifactVariant,
+    error = ArtifactError,
+    kind_list = ARTIFACT_KIND_LIST,
 }
 
 /// Receipts source — no fields. The worker reads every
@@ -669,34 +647,12 @@ crate::declare_tagged_union_error! {
 /// [`ARTIFACT_KIND_LIST`] in shape.
 pub(crate) const CHANNEL_KIND_LIST: &str = "httpEvent/natsSubject/stdout";
 
-impl VectorChannel {
-    /// Resolve to exactly one channel variant. Errors on zero or many.
-    ///
-    /// One-line inherent forwarder that delegates the sweep body to
-    /// the substrate primitive [`crate::tagged_union::TaggedUnion::variant`]
-    /// — same delegation shape as the three sibling `.variant()` sites
-    /// on `ProcessSpec`. The inherent surface stays load-bearing so
-    /// consumer callsites like `c.variant()` don't need
-    /// `use TaggedUnion`.
-    pub fn variant(&self) -> Result<ChannelVariant<'_>, ChannelError> {
-        <Self as crate::tagged_union::TaggedUnion>::variant(self)
-    }
-}
-
-impl crate::tagged_union::VariantSelector<VectorChannel> for ChannelKind {
-    type Variant<'a> = ChannelVariant<'a>;
-    fn select<'a>(self, parent: &'a VectorChannel) -> Option<ChannelVariant<'a>>
-    where
-        Self: 'a,
-    {
-        ChannelKind::select(self, parent)
-    }
-}
-
-impl crate::tagged_union::TaggedUnion for VectorChannel {
-    type Kind = ChannelKind;
-    type Error = ChannelError;
-    const KIND_LIST: &'static str = CHANNEL_KIND_LIST;
+crate::declare_tagged_union_impls! {
+    parent = VectorChannel,
+    kind = ChannelKind,
+    variant = ChannelVariant,
+    error = ChannelError,
+    kind_list = CHANNEL_KIND_LIST,
 }
 
 /// HTTP POST channel — Vector `http_server` source.

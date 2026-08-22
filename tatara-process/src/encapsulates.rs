@@ -236,35 +236,12 @@ crate::declare_tagged_union_error! {
 pub(crate) const ENCAPSULATION_TARGET_LIST: &str =
     "existingHelmRelease/existingKustomization/bareWorkload";
 
-impl EncapsulationKind {
-    /// Resolve to exactly one variant. Errors on zero or many.
-    ///
-    /// One-line inherent forwarder that delegates the sweep body to
-    /// the substrate primitive [`crate::tagged_union::TaggedUnion::variant`]
-    /// — same delegation shape as [`crate::intent::Intent::variant`],
-    /// [`crate::export::ArtifactSource::variant`], and
-    /// [`crate::export::VectorChannel::variant`]. The inherent surface
-    /// stays load-bearing so consumer callsites like `k.variant()`
-    /// don't need `use TaggedUnion`.
-    pub fn variant(&self) -> Result<EncapsulationKindVariant<'_>, EncapsulationKindError> {
-        <Self as crate::tagged_union::TaggedUnion>::variant(self)
-    }
-}
-
-impl crate::tagged_union::VariantSelector<EncapsulationKind> for EncapsulationTarget {
-    type Variant<'a> = EncapsulationKindVariant<'a>;
-    fn select<'a>(self, parent: &'a EncapsulationKind) -> Option<EncapsulationKindVariant<'a>>
-    where
-        Self: 'a,
-    {
-        EncapsulationTarget::select(self, parent)
-    }
-}
-
-impl crate::tagged_union::TaggedUnion for EncapsulationKind {
-    type Kind = EncapsulationTarget;
-    type Error = EncapsulationKindError;
-    const KIND_LIST: &'static str = ENCAPSULATION_TARGET_LIST;
+crate::declare_tagged_union_impls! {
+    parent = EncapsulationKind,
+    kind = EncapsulationTarget,
+    variant = EncapsulationKindVariant,
+    error = EncapsulationKindError,
+    kind_list = ENCAPSULATION_TARGET_LIST,
 }
 
 /// Pointer to an existing FluxCD HelmRelease the Process wraps.

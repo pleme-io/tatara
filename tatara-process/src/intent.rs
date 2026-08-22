@@ -183,36 +183,12 @@ pub(crate) const INTENT_KIND_LIST: &str = "nix/flux/lisp/container/aplicacao/gue
 // sibling on the same `ProcessSpec` slice) and every other
 // `#[derive(DeriveClosedSet)]` implementor across the crate.
 
-impl Intent {
-    /// Resolve to exactly one variant. Errors on zero or many.
-    ///
-    /// One-line inherent forwarder that delegates the sweep body to
-    /// the substrate primitive [`crate::tagged_union::TaggedUnion::variant`]
-    /// — every one of the four production `.variant()` sites on
-    /// `ProcessSpec` (Intent, EncapsulationKind, ArtifactSource,
-    /// VectorChannel) dispatches through this ONE default body so
-    /// the resolve-sweep pattern lives at ONE substrate site. The
-    /// inherent surface stays load-bearing so consumer callsites
-    /// like `intent.variant()` don't need `use TaggedUnion`.
-    pub fn variant(&self) -> Result<IntentVariant<'_>, IntentError> {
-        <Self as crate::tagged_union::TaggedUnion>::variant(self)
-    }
-}
-
-impl crate::tagged_union::VariantSelector<Intent> for IntentKind {
-    type Variant<'a> = IntentVariant<'a>;
-    fn select<'a>(self, parent: &'a Intent) -> Option<IntentVariant<'a>>
-    where
-        Self: 'a,
-    {
-        IntentKind::select(self, parent)
-    }
-}
-
-impl crate::tagged_union::TaggedUnion for Intent {
-    type Kind = IntentKind;
-    type Error = IntentError;
-    const KIND_LIST: &'static str = INTENT_KIND_LIST;
+crate::declare_tagged_union_impls! {
+    parent = Intent,
+    kind = IntentKind,
+    variant = IntentVariant,
+    error = IntentError,
+    kind_list = INTENT_KIND_LIST,
 }
 
 /// Nix-sourced intent — tatara-engine's nix_eval driver produces resources.

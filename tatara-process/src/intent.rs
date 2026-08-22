@@ -162,7 +162,7 @@ crate::declare_tagged_union_error! {
 /// regression that drifts this `&'static str` constant from the
 /// `IntentKind::ALL × as_str` composition fails-loudly at the test
 /// site without per-variant inline materialization.
-const INTENT_KIND_LIST: &str = "nix/flux/lisp/container/aplicacao/guest";
+pub(crate) const INTENT_KIND_LIST: &str = "nix/flux/lisp/container/aplicacao/guest";
 
 // `impl FromStr for IntentKind` +
 // `impl tatara_lisp::ClosedSet for IntentKind` +
@@ -199,6 +199,12 @@ impl Intent {
             INTENT_KIND_LIST,
         )
     }
+}
+
+impl crate::tagged_union::TaggedUnion for Intent {
+    type Kind = IntentKind;
+    type Error = IntentError;
+    const KIND_LIST: &'static str = INTENT_KIND_LIST;
 }
 
 /// Nix-sourced intent — tatara-engine's nix_eval driver produces resources.
@@ -763,23 +769,22 @@ mod tests {
     /// updating `INTENT_KIND_LIST` (or a renamed variant) shows up
     /// here as a mismatch.
     ///
-    /// Routes through [`tatara_lisp::ClosedSet::labels_joined`] —
-    /// the canonical generative origin the `INTENT_KIND_LIST`
-    /// `&'static str` constant is pinned against. Symmetric to the
-    /// sibling `artifact_error_empty_lists_every_kind_in_canonical_order`
+    /// Routes through the substrate primitive
+    /// [`crate::tagged_union::assert_kind_list_matches_closed_set`],
+    /// which composes `<T::Kind as ClosedSet>::labels_joined("/")`
+    /// against `<T as TaggedUnion>::KIND_LIST` byte-identically for
+    /// every implementor — the diagnostic-stability testkit shared
+    /// with the sibling `artifact_error_empty_lists_every_kind_in_canonical_order`
     /// / `channel_error_empty_lists_every_kind_in_canonical_order`
     /// / `encapsulation_kind_error_empty_lists_every_target_in_canonical_order`
-    /// invariants — every closed-set enum's `INTENT_KIND_LIST`-shaped
-    /// production constant now pins against ONE trait method that
-    /// composes `Self::ALL` + `Self::label` + the slash separator,
-    /// rather than re-deriving the `ALL.iter().map(as_str).collect()
-    /// .join("/")` triple inline at the test site.
+    /// sites. Pre-lift the four bodies each restated the same
+    /// two-argument `assert_eq!(<XxxKind as ClosedSet>::labels_joined("/"),
+    /// XXX_KIND_LIST)` comparison at the test surface; post-lift
+    /// the projection lives at ONE substrate primitive and every
+    /// site binds through a single call.
     #[test]
     fn intent_error_empty_lists_every_kind_in_canonical_order() {
-        assert_eq!(
-            <IntentKind as tatara_closed_set::ClosedSet>::labels_joined("/"),
-            INTENT_KIND_LIST,
-        );
+        crate::tagged_union::assert_kind_list_matches_closed_set::<Intent>();
     }
 
     /// CANONICAL-BYTES CONTRACT: every populated variant yields the

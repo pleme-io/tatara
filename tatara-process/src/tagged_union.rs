@@ -189,6 +189,99 @@ macro_rules! declare_tagged_union_error {
     };
 }
 
+/// Declarative surface that names the (Kind, Error, KIND_LIST) triple
+/// a tagged-union `.variant()` site publishes to the substrate.
+///
+/// Every one of the four production `.variant()` sites on `ProcessSpec`
+/// ([`crate::intent::Intent`], [`crate::encapsulates::EncapsulationKind`],
+/// [`crate::export::ArtifactSource`], [`crate::export::VectorChannel`])
+/// exposes the SAME three-piece surface: a closed-set discriminator
+/// [`Self::Kind`], a typed [`Self::Error`] carrier that projects onto
+/// the shared [`TaggedUnionError`] contract, and a slash-joined
+/// operator diagnostic literal [`Self::KIND_LIST`]. Pre-lift the
+/// triple lived on each parent type as independent inherent items —
+/// the (Kind, Error) types cross-referenced only by module-doc prose,
+/// the `KIND_LIST` `&'static str` maintained separately at each site
+/// alongside the inherent `.variant()` body. Post-lift the trait
+/// binds the three onto ONE typed contract per parent so downstream
+/// generic code binds to `<T: TaggedUnion>` instead of restating the
+/// per-parent quadruple of associated names.
+///
+/// The trait is DECLARATIVE — no default `variant()` method, no
+/// callsite disruption. Existing `pub fn variant()` inherent methods
+/// on each parent stay load-bearing; the trait's role is naming the
+/// family so testkit primitives + generic consumers can bind to it.
+///
+/// The `Kind` type is bound to [`tatara_closed_set::ClosedSet`] so
+/// generic testkit primitives (starting with
+/// [`assert_kind_list_matches_closed_set`]) can compose
+/// `<Self::Kind as ClosedSet>::labels_joined("/")` against
+/// [`Self::KIND_LIST`] byte-identically across every implementor —
+/// the diagnostic-stability invariant every sibling pre-lift pinned
+/// through a hand-rolled per-site test body.
+///
+/// The [`crate::lifetime::Lifetime`] site is DELIBERATELY not routed
+/// through this trait — its `variant()` returns `Ok(Permanent)` on
+/// empty rather than an `Empty` typed error, so its projection shape
+/// diverges from the four Empty-projecting siblings. Same reasoning
+/// as [`resolve_or_err`]'s explicit exclusion of `Lifetime`.
+pub trait TaggedUnion: Sized {
+    /// The closed-set discriminator over this tagged-union's variants.
+    /// Bound to [`tatara_closed_set::ClosedSet`] so the generic
+    /// diagnostic-stability testkit ([`assert_kind_list_matches_closed_set`])
+    /// can project `<Self::Kind as ClosedSet>::labels_joined("/")`
+    /// against [`Self::KIND_LIST`] byte-identically.
+    type Kind: tatara_closed_set::ClosedSet;
+
+    /// The typed error carrier returned by the parent's inherent
+    /// `.variant()` method — projects onto the shared
+    /// [`TaggedUnionError`] contract so [`resolve_or_err`]'s two-arm
+    /// dispatch reaches every implementor uniformly.
+    type Error: TaggedUnionError;
+
+    /// Slash-joined operator diagnostic literal — the payload of
+    /// [`TaggedUnionError::empty`] when no slot is populated on this
+    /// tagged union. Pinned against
+    /// `<Self::Kind as tatara_closed_set::ClosedSet>::labels_joined("/")`
+    /// by [`assert_kind_list_matches_closed_set`] so a variant added
+    /// to `Self::Kind` without updating this constant (or a renamed
+    /// variant) fails-loudly at the testkit boundary.
+    const KIND_LIST: &'static str;
+}
+
+/// Generic diagnostic-stability testkit — pins that [`TaggedUnion::KIND_LIST`]
+/// matches `<T::Kind as tatara_closed_set::ClosedSet>::labels_joined("/")`
+/// byte-identically for every implementor.
+///
+/// Substrate primitive for the four sibling
+/// `_error_empty_lists_every_kind_in_canonical_order` tests on
+/// `ProcessSpec` ([`crate::intent::Intent`],
+/// [`crate::encapsulates::EncapsulationKind`],
+/// [`crate::export::ArtifactSource`], [`crate::export::VectorChannel`])
+/// that pre-lift each restated the same
+/// `assert_eq!(<XxxKind as ClosedSet>::labels_joined("/"),
+/// XXX_KIND_LIST)` two-argument comparison at their own test bodies —
+/// byte-identical projections whose only per-carrier knobs (the Kind
+/// type + the KIND_LIST constant) are the two associated items the
+/// [`TaggedUnion`] trait names. Post-lift each site collapses to ONE
+/// `assert_kind_list_matches_closed_set::<Xxx>()` invocation whose
+/// body is the substrate primitive's own dispatch.
+///
+/// A fifth sibling tagged-union parent picks up the diagnostic-
+/// stability check through ONE `impl TaggedUnion for X` block + ONE
+/// `assert_kind_list_matches_closed_set::<X>()` call site — no
+/// re-authored `<XKind as ClosedSet>::labels_joined("/")` composition
+/// at the test site, no re-authored per-site `assert_eq!` pair.
+#[track_caller]
+pub fn assert_kind_list_matches_closed_set<T: TaggedUnion>() {
+    let derived = <T::Kind as tatara_closed_set::ClosedSet>::labels_joined("/");
+    assert_eq!(
+        derived,
+        T::KIND_LIST,
+        "TaggedUnion KIND_LIST drift — must equal <T::Kind as ClosedSet>::labels_joined(\"/\")",
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -410,5 +503,126 @@ mod tests {
     fn macro_emitted_carrier_is_copy() {
         fn assert_copy<T: Copy>() {}
         assert_copy::<MacroEmittedError>();
+    }
+
+    // -------------------------------------------------------------------
+    // `TaggedUnion` trait — declarative surface pinning the
+    // (Kind, Error, KIND_LIST) triple. `assert_kind_list_matches_closed_set`
+    // is the generic diagnostic-stability testkit primitive shared by
+    // every implementor's `_error_empty_lists_every_kind_in_canonical_order`
+    // site.
+    // -------------------------------------------------------------------
+
+    /// Local sibling-shaped Kind enum used to pin the trait's
+    /// diagnostic-stability primitive without depending on the crate's
+    /// four production tagged unions. Uses [`tatara_closed_set::DeriveClosedSet`]
+    /// so `<Self as ClosedSet>::labels_joined("/")` reaches the same
+    /// substrate composition the four production sites bind through.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, tatara_closed_set::DeriveClosedSet)]
+    #[closed_set(via = "as_str", generate_unknown)]
+    enum LocalKind {
+        Alpha,
+        Beta,
+        Gamma,
+    }
+
+    impl LocalKind {
+        const ALL: [Self; 3] = [Self::Alpha, Self::Beta, Self::Gamma];
+        const fn as_str(self) -> &'static str {
+            match self {
+                Self::Alpha => "alpha",
+                Self::Beta => "beta",
+                Self::Gamma => "gamma",
+            }
+        }
+    }
+
+    /// Local parent type — impls [`TaggedUnion`] with a `KIND_LIST`
+    /// literal that matches the canonical `<LocalKind as
+    /// ClosedSet>::labels_joined("/")` projection.
+    struct LocalParent;
+
+    crate::declare_tagged_union_error! {
+        pub(super) LocalParentError,
+        empty = "local carrier has no variant set (one of {0} required)",
+        ambiguous = "local carrier has multiple variants set; exactly one required",
+    }
+
+    impl TaggedUnion for LocalParent {
+        type Kind = LocalKind;
+        type Error = LocalParentError;
+        const KIND_LIST: &'static str = "alpha/beta/gamma";
+    }
+
+    /// The testkit primitive resolves the canonical join of every
+    /// `LocalKind` variant's label against the trait's `KIND_LIST`
+    /// constant byte-identically — the four production sites bind
+    /// through this exact dispatch. The Ok arm is the "no drift"
+    /// outcome; a divergence surfaces as a labeled assertion failure.
+    #[test]
+    fn assert_kind_list_matches_closed_set_accepts_coherent_impl() {
+        assert_kind_list_matches_closed_set::<LocalParent>();
+    }
+
+    /// The testkit primitive is a `#[track_caller]` compound-lift:
+    /// a drift between `<T::Kind as ClosedSet>::labels_joined("/")`
+    /// and `T::KIND_LIST` fails the assertion at the caller's site,
+    /// not inside the primitive body. Pin the failing case with a
+    /// local parent whose `KIND_LIST` is deliberately mis-authored
+    /// (a variant reorder), so a regression that drops the drift
+    /// detection fails-loudly here.
+    #[test]
+    #[should_panic(expected = "TaggedUnion KIND_LIST drift")]
+    fn assert_kind_list_matches_closed_set_rejects_drifted_impl() {
+        struct Drifted;
+        impl TaggedUnion for Drifted {
+            type Kind = LocalKind;
+            type Error = LocalParentError;
+            // Deliberate drift — canonical join is "alpha/beta/gamma".
+            const KIND_LIST: &'static str = "beta/alpha/gamma";
+        }
+        assert_kind_list_matches_closed_set::<Drifted>();
+    }
+
+    /// Every one of the four production `.variant()` sites on
+    /// `ProcessSpec` impls [`TaggedUnion`] with `KIND_LIST` reaching
+    /// the substrate primitive `assert_kind_list_matches_closed_set`
+    /// coherently. Sweep every production implementor at ONE
+    /// substrate boundary so a regression that drifts a production
+    /// site's `KIND_LIST` (or renames a `Kind` variant without
+    /// updating the constant) fails BOTH at the per-crate test site
+    /// AND at this substrate-wide sweep — no per-implementor test
+    /// site can drop the check silently.
+    #[test]
+    fn every_production_tagged_union_binds_through_the_testkit_primitive() {
+        assert_kind_list_matches_closed_set::<crate::intent::Intent>();
+        assert_kind_list_matches_closed_set::<crate::encapsulates::EncapsulationKind>();
+        assert_kind_list_matches_closed_set::<crate::export::ArtifactSource>();
+        assert_kind_list_matches_closed_set::<crate::export::VectorChannel>();
+    }
+
+    /// The trait's `KIND_LIST` associated const IS the same
+    /// `&'static str` the inherent `_LIST` constant publishes at
+    /// each production site — pin identity via `std::ptr::eq` so a
+    /// future silent copy (e.g. `const KIND_LIST: &'static str =
+    /// "...literal...";` at the impl block) is caught here.
+    #[test]
+    fn production_tagged_union_kind_list_borrows_the_inherent_constant() {
+        assert!(std::ptr::eq(
+            <crate::intent::Intent as TaggedUnion>::KIND_LIST,
+            crate::intent::INTENT_KIND_LIST,
+        ));
+        assert!(std::ptr::eq(
+            <crate::encapsulates::EncapsulationKind as TaggedUnion>::KIND_LIST,
+            crate::encapsulates::ENCAPSULATION_TARGET_LIST,
+        ));
+        assert!(std::ptr::eq(
+            <crate::export::ArtifactSource as TaggedUnion>::KIND_LIST,
+            crate::export::ARTIFACT_KIND_LIST,
+        ));
+        assert!(std::ptr::eq(
+            <crate::export::VectorChannel as TaggedUnion>::KIND_LIST,
+            crate::export::CHANNEL_KIND_LIST,
+        ));
     }
 }

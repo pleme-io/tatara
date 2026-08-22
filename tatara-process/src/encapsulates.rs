@@ -233,7 +233,8 @@ crate::declare_tagged_union_error! {
 /// Mirrors [`crate::intent::INTENT_KIND_LIST`] /
 /// [`crate::export::ARTIFACT_KIND_LIST`] in shape; pinned by
 /// `encapsulation_kind_error_empty_lists_every_target_in_canonical_order`.
-const ENCAPSULATION_TARGET_LIST: &str = "existingHelmRelease/existingKustomization/bareWorkload";
+pub(crate) const ENCAPSULATION_TARGET_LIST: &str =
+    "existingHelmRelease/existingKustomization/bareWorkload";
 
 impl EncapsulationKind {
     /// Resolve to exactly one variant. Errors on zero or many.
@@ -252,6 +253,12 @@ impl EncapsulationKind {
             ENCAPSULATION_TARGET_LIST,
         )
     }
+}
+
+impl crate::tagged_union::TaggedUnion for EncapsulationKind {
+    type Kind = EncapsulationTarget;
+    type Error = EncapsulationKindError;
+    const KIND_LIST: &'static str = ENCAPSULATION_TARGET_LIST;
 }
 
 /// Pointer to an existing FluxCD HelmRelease the Process wraps.
@@ -651,10 +658,7 @@ mod tests {
         match back.kind.variant().unwrap() {
             EncapsulationKindVariant::BareWorkload(b) => {
                 assert_eq!(b.selector.len(), 2);
-                assert_eq!(
-                    b.selector.get("app").map(String::as_str),
-                    Some("demo-app")
-                );
+                assert_eq!(b.selector.get("app").map(String::as_str), Some("demo-app"));
             }
             other => panic!("expected BareWorkload, got {other:?}"),
         }
@@ -886,15 +890,20 @@ mod tests {
     /// in `EncapsulationKindError::Empty` echoes the canonical join of
     /// every `EncapsulationTarget::as_str()` projection. A variant
     /// added without updating `ENCAPSULATION_TARGET_LIST` (or a renamed
-    /// variant) shows up here as a mismatch. Mirrors
-    /// `artifact_error_empty_lists_every_kind_in_canonical_order` —
-    /// routes through [`tatara_lisp::ClosedSet::labels_joined`].
+    /// variant) shows up here as a mismatch. Routes through the
+    /// substrate primitive
+    /// [`crate::tagged_union::assert_kind_list_matches_closed_set`]
+    /// shared with the sibling `intent_error_empty_lists_every_kind_in_canonical_order`
+    /// / `artifact_error_empty_lists_every_kind_in_canonical_order`
+    /// / `channel_error_empty_lists_every_kind_in_canonical_order`
+    /// sites — the projection lives at ONE substrate primitive and
+    /// every site binds through a single call. The paired assertion
+    /// that the diagnostic reaches operator-facing output verbatim
+    /// stays local because the empty-arm construction differs per
+    /// carrier.
     #[test]
     fn encapsulation_kind_error_empty_lists_every_target_in_canonical_order() {
-        assert_eq!(
-            <EncapsulationTarget as tatara_closed_set::ClosedSet>::labels_joined("/"),
-            ENCAPSULATION_TARGET_LIST,
-        );
+        crate::tagged_union::assert_kind_list_matches_closed_set::<EncapsulationKind>();
         // And the diagnostic carries that exact list.
         let err = EncapsulationKind::default().variant().unwrap_err();
         assert_eq!(

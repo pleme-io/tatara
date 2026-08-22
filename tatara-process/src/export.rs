@@ -238,7 +238,7 @@ crate::declare_tagged_union_error! {
 /// at compile time so `ArtifactError::Empty`'s diagnostic carries the
 /// closed-set summary without per-variant string drift. Mirrors
 /// [`crate::intent::INTENT_KIND_LIST`] in shape.
-const ARTIFACT_KIND_LIST: &str = "receipts/testReport/processSnapshot/runMarker";
+pub(crate) const ARTIFACT_KIND_LIST: &str = "receipts/testReport/processSnapshot/runMarker";
 
 impl ArtifactSource {
     /// Resolve to exactly one variant. Errors on zero or many.
@@ -256,6 +256,12 @@ impl ArtifactSource {
             ARTIFACT_KIND_LIST,
         )
     }
+}
+
+impl crate::tagged_union::TaggedUnion for ArtifactSource {
+    type Kind = ArtifactKind;
+    type Error = ArtifactError;
+    const KIND_LIST: &'static str = ARTIFACT_KIND_LIST;
 }
 
 /// Receipts source — no fields. The worker reads every
@@ -655,7 +661,7 @@ crate::declare_tagged_union_error! {
 /// at compile time so `ChannelError::Empty`'s diagnostic carries the
 /// closed-set summary without per-variant string drift. Mirrors
 /// [`ARTIFACT_KIND_LIST`] in shape.
-const CHANNEL_KIND_LIST: &str = "httpEvent/natsSubject/stdout";
+pub(crate) const CHANNEL_KIND_LIST: &str = "httpEvent/natsSubject/stdout";
 
 impl VectorChannel {
     /// Resolve to exactly one channel variant. Errors on zero or many.
@@ -673,6 +679,12 @@ impl VectorChannel {
             CHANNEL_KIND_LIST,
         )
     }
+}
+
+impl crate::tagged_union::TaggedUnion for VectorChannel {
+    type Kind = ChannelKind;
+    type Error = ChannelError;
+    const KIND_LIST: &'static str = CHANNEL_KIND_LIST;
 }
 
 /// HTTP POST channel — Vector `http_server` source.
@@ -1610,15 +1622,17 @@ mod tests {
     /// in `ArtifactError::Empty` echoes the canonical join of every
     /// `ArtifactKind::as_str()` projection. A variant added without
     /// updating `ARTIFACT_KIND_LIST` (or a renamed variant) shows up
-    /// here as a mismatch. Mirrors
-    /// `intent_error_empty_lists_every_kind_in_canonical_order` —
-    /// routes through [`tatara_lisp::ClosedSet::labels_joined`].
+    /// here as a mismatch. Routes through the substrate primitive
+    /// [`crate::tagged_union::assert_kind_list_matches_closed_set`]
+    /// shared with the sibling
+    /// `intent_error_empty_lists_every_kind_in_canonical_order`
+    /// / `channel_error_empty_lists_every_kind_in_canonical_order`
+    /// / `encapsulation_kind_error_empty_lists_every_target_in_canonical_order`
+    /// sites — the projection lives at ONE substrate primitive and
+    /// every site binds through a single call.
     #[test]
     fn artifact_error_empty_lists_every_kind_in_canonical_order() {
-        assert_eq!(
-            <ArtifactKind as tatara_closed_set::ClosedSet>::labels_joined("/"),
-            ARTIFACT_KIND_LIST,
-        );
+        crate::tagged_union::assert_kind_list_matches_closed_set::<ArtifactSource>();
     }
 
     /// AMBIGUOUS-PATH CONTRACT: when two slots are populated the
@@ -1781,15 +1795,16 @@ mod tests {
     /// in `ChannelError::Empty` echoes the canonical join of every
     /// `ChannelKind::as_str()` projection. A variant added without
     /// updating `CHANNEL_KIND_LIST` (or a renamed variant) shows up
-    /// here as a mismatch. Mirrors
-    /// `artifact_error_empty_lists_every_kind_in_canonical_order` —
-    /// routes through [`tatara_lisp::ClosedSet::labels_joined`].
+    /// here as a mismatch. Routes through the substrate primitive
+    /// [`crate::tagged_union::assert_kind_list_matches_closed_set`]
+    /// shared with the sibling `intent_error_empty_lists_every_kind_in_canonical_order`
+    /// / `artifact_error_empty_lists_every_kind_in_canonical_order`
+    /// / `encapsulation_kind_error_empty_lists_every_target_in_canonical_order`
+    /// sites — the projection lives at ONE substrate primitive and
+    /// every site binds through a single call.
     #[test]
     fn channel_error_empty_lists_every_kind_in_canonical_order() {
-        assert_eq!(
-            <ChannelKind as tatara_closed_set::ClosedSet>::labels_joined("/"),
-            CHANNEL_KIND_LIST,
-        );
+        crate::tagged_union::assert_kind_list_matches_closed_set::<VectorChannel>();
     }
 
     /// AMBIGUOUS-PATH CONTRACT: when two slots are populated the

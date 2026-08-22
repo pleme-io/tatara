@@ -1328,11 +1328,7 @@ mod tests {
     fn every_production_display_impl_binds_through_the_testkit_primitive() {
         assert_display_matches_label::<crate::allocation::AllocationPhase>();
         assert_display_matches_label::<crate::boundary::ConditionKind>();
-        // `Arity` DELIBERATELY excluded — it exposes an inherent
-        // `pub const ALL` + `as_str` + hand-authored
-        // `impl fmt::Display` triad rather than a `ClosedSet` derive,
-        // so the `T: ClosedSet` bound doesn't reach it. Sibling
-        // exclusion posture to `ReportPayloadShape` below.
+        assert_display_matches_label::<crate::classification::Arity>();
         assert_display_matches_label::<crate::classification::CalmClassification>();
         assert_display_matches_label::<crate::classification::ConvergencePointType>();
         assert_display_matches_label::<crate::classification::DataClassification>();
@@ -1346,13 +1342,7 @@ mod tests {
         assert_display_matches_label::<crate::export::ChannelKind>();
         assert_display_matches_label::<crate::export::ExportTrigger>();
         assert_display_matches_label::<crate::export::ReportFormat>();
-        // `ReportPayloadShape` DELIBERATELY excluded — it exposes an
-        // inherent `pub const ALL` + `as_str` + hand-authored
-        // `impl fmt::Display` triad rather than a `ClosedSet` derive,
-        // so the `T: ClosedSet` bound doesn't reach it. Its per-site
-        // `report_payload_shape_display_matches_as_str` test stays
-        // pre-lift-shaped until the type migrates to the substrate-wide
-        // `#[derive(DeriveClosedSet)]` shape.
+        assert_display_matches_label::<crate::export::ReportPayloadShape>();
         assert_display_matches_label::<crate::intent::IntentKind>();
         assert_display_matches_label::<crate::intent::WorkloadKind>();
         assert_display_matches_label::<crate::lifetime::TeardownPolicy>();

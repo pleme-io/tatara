@@ -356,7 +356,8 @@ pub enum ReportFormat {
 /// [`crate::signal::ProcessSignal::ALL`],
 /// [`crate::boundary::ConditionKind::ALL`],
 /// [`crate::lifetime::TeardownPolicy::ALL`]).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, tatara_closed_set::DeriveClosedSet)]
+#[closed_set(via = "as_str", display, generate_unknown = "report payload shape")]
 pub enum ReportPayloadShape {
     /// Newline-delimited JSON — split on `\n`, parse each non-empty
     /// line as JSON, embed under `payload.<payload_field>` (=
@@ -432,11 +433,27 @@ impl ReportPayloadShape {
     }
 }
 
-impl fmt::Display for ReportPayloadShape {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
+// `impl fmt::Display for ReportPayloadShape` +
+// `impl std::str::FromStr for ReportPayloadShape` +
+// `impl tatara_lisp::ClosedSet for ReportPayloadShape` +
+// `pub struct UnknownReportPayloadShape(pub String)` are all generated
+// by `#[derive(tatara_closed_set::DeriveClosedSet)]` +
+// `#[closed_set(via = "as_str", display, generate_unknown = "report
+// payload shape")]` on the enum declaration above. The explicit label
+// preserves the natural spelling "report payload shape" against the
+// auto-projection `pascal_to_spaced_lowercase("ReportPayloadShape")`.
+// The inherent `as_str` projection stays load-bearing — the canonical
+// `"NdJsonLines" | "OpaqueBytes"` string every worker-facing reason
+// projection reads; `via = "as_str"` binds `ClosedSet::label` to the
+// same projection so the substrate-wide
+// `assert_display_matches_label` / `assert_closed_set_well_formed`
+// primitives dispatch through the same byte-identical shape every other
+// closed-set implementor across the crate publishes. Aligns
+// `ReportPayloadShape` with the substrate-wide
+// `#[derive(DeriveClosedSet)]` idiom that every sibling closed-set enum
+// on this `ExportSpec` axis (`ReportFormat`, `ArtifactKind`,
+// `ChannelKind`, `ExportTrigger`) already carries — the last hand-rolled
+// `impl fmt::Display` on the axis is closed at ONE substrate site.
 
 impl ReportFormat {
     /// The closed set of report formats — single source of truth that
@@ -1305,12 +1322,16 @@ mod tests {
     /// DISPLAY-IS-AS_STR: the Display impl IS `as_str` — pinning
     /// this lets callers reach for either projection without drift.
     /// Sibling to `report_format_display_matches_as_str` and
-    /// `export_trigger_display_matches_as_str`.
+    /// `export_trigger_display_matches_as_str`. Routed through the
+    /// substrate-wide [`crate::tagged_union::assert_display_matches_label`]
+    /// primitive so the sweep body lives at ONE substrate site rather
+    /// than restated per-implementor. Also exercised through the
+    /// substrate-wide `every_production_display_impl_binds_through_the_testkit_primitive`
+    /// sweep so a per-crate test-site drop cannot silently disable the
+    /// check.
     #[test]
     fn report_payload_shape_display_matches_as_str() {
-        for shape in ReportPayloadShape::ALL {
-            assert_eq!(shape.to_string(), shape.as_str());
-        }
+        crate::tagged_union::assert_display_matches_label::<ReportPayloadShape>();
     }
 
     /// EMBED-FIELD UNIQUENESS: no two shapes write into the same

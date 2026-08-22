@@ -843,6 +843,89 @@ where
     }
 }
 
+/// CANONICAL-KEY CONTRACT testkit — pins that each variant's serde
+/// serialization (as a JSON string value, unquoted) matches its
+/// canonical [`ClosedSet::label`](tatara_closed_set::ClosedSet::label)
+/// projection BYTE-IDENTICALLY for every implementor.
+///
+/// Substrate primitive for the 20 sibling
+/// `X_as_str_matches_serde` tests across `tatara-process`
+/// (`TeardownPolicy`, `EncapsulationMode`, `ConditionKind`,
+/// `SighupStrategy`, `ReplacementPolicy`, `ReturnPolicy`, `MemberState`,
+/// `PoolPhase`, `VerificationPhase`, `MustReachPhase`, `WorkloadKind`,
+/// `ExportTrigger`, `ReportFormat`, `DataClassification`,
+/// `ConvergencePointType`, `SubstrateType`, `CalmClassification`,
+/// `OptimizationDirection`, `HorizonKind`, `AllocationPhase`) that
+/// pre-lift each restated the same
+/// ```text
+/// for v in K::ALL {
+///     let serialized = serde_json::to_string(&v).expect("serialize");
+///     let unquoted = serialized
+///         .trim_start_matches('"')
+///         .trim_end_matches('"')
+///         .to_string();
+///     assert_eq!(unquoted, v.as_str(), "as_str drift for {v:?}: ...");
+/// }
+/// ```
+/// four-line probe verbatim at their own test bodies — byte-identical
+/// projections whose only per-carrier knob is the closed-set type name.
+/// Post-lift each site collapses to ONE
+/// `assert_label_matches_serde_serialization::<X>()` invocation whose
+/// body IS the substrate primitive's own dispatch.
+///
+/// The primitive projects through the STABLE trait-visible name
+/// [`ClosedSet::label`](tatara_closed_set::ClosedSet::label) rather
+/// than the inherent `.as_str()` each site publishes locally. Every
+/// production implementor here derives its `label` body from `as_str`
+/// via `#[closed_set(via = "as_str", display)]` + `#[serde(rename_all
+/// = "PascalCase")]` (the substrate-wide derive shape), so the two are
+/// byte-identical by construction; the primitive's projection through
+/// `label` therefore pins the SAME invariant the pre-lift bodies
+/// pinned while binding to the stable trait-visible surface. A future
+/// implementor whose canonical inherent projection is named something
+/// other than `as_str` (e.g. `.keyword()`, `.spelling()`) but still
+/// routes through `#[closed_set(via = "...")]` picks up the wire-format
+/// alignment check through ONE call with no inherent-name coupling at
+/// the test site.
+///
+/// A twenty-first (or hundredth) implementor picks up the alignment
+/// check through ONE `#[derive(tatara_closed_set::DeriveClosedSet)]` +
+/// `#[derive(serde::Serialize)]` + `#[serde(rename_all = "...")]`
+/// attribute + ONE `assert_label_matches_serde_serialization::<X>()`
+/// call site — no re-authored four-line probe body at the test surface,
+/// no per-site drift risk where 19 sibling tests carry the assertion
+/// and the 20th forgets, no `serde_json::to_string`+`trim_matches`+
+/// `assert_eq!` composition re-derived per implementor.
+///
+/// Sibling shape to [`assert_display_matches_label`] on the
+/// (Display byte-identity, serde-wire-format byte-identity) axis: both
+/// project the closed-set's label surface onto ONE typed contract and
+/// pin it against a per-implementor rendering; the former for the
+/// enum's [`Display`](core::fmt::Display) byte stream, this one for
+/// the serde JSON-string wire format. Together they close the "label
+/// surface renders verbatim across every projection consumers reach
+/// for" invariant every closed-set-carrying implementor across the
+/// crate publishes.
+#[track_caller]
+pub fn assert_label_matches_serde_serialization<T>()
+where
+    T: tatara_closed_set::ClosedSet + serde::Serialize + core::fmt::Debug,
+{
+    let type_name = core::any::type_name::<T>();
+    for &v in <T as tatara_closed_set::ClosedSet>::ALL {
+        let serialized = serde_json::to_string(&v).unwrap_or_else(|e| {
+            panic!("{type_name}: closed-set variant {v:?} must serialize: {e}")
+        });
+        let unquoted = serialized.trim_start_matches('"').trim_end_matches('"');
+        let expected = <T as tatara_closed_set::ClosedSet>::label(v);
+        assert_eq!(
+            unquoted,
+            expected,
+            "{type_name}: serde output drifted from ClosedSet::label for {v:?} — expected {expected:?}, got {unquoted:?} (full serialization {serialized:?})",
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1355,6 +1438,120 @@ mod tests {
         assert_display_matches_label::<crate::pool::ReturnPolicy>();
         assert_display_matches_label::<crate::signal::SighupStrategy>();
         assert_display_matches_label::<crate::spec::MustReachPhase>();
+    }
+
+    /// Local closed-set scaffold whose serde `rename_all = "lowercase"`
+    /// projection matches its `via = "as_str"` label byte-identically —
+    /// pins the Ok arm of the wire-format primitive. Every production
+    /// implementor across the crate carries the substrate-wide
+    /// `#[closed_set(via = "as_str")]` + `#[serde(rename_all = ...)]`
+    /// pair whose alignment this scaffold pins on the sibling-shaped
+    /// local surface.
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        serde::Serialize,
+        tatara_closed_set::DeriveClosedSet,
+    )]
+    #[serde(rename_all = "lowercase")]
+    #[closed_set(via = "as_str", generate_unknown)]
+    enum SerdeAlignedKind {
+        Alpha,
+        Beta,
+    }
+
+    impl SerdeAlignedKind {
+        const ALL: [Self; 2] = [Self::Alpha, Self::Beta];
+        const fn as_str(self) -> &'static str {
+            match self {
+                Self::Alpha => "alpha",
+                Self::Beta => "beta",
+            }
+        }
+    }
+
+    #[test]
+    fn assert_label_matches_serde_serialization_accepts_coherent_impl() {
+        assert_label_matches_serde_serialization::<SerdeAlignedKind>();
+    }
+
+    /// A local closed-set scaffold whose serde output deliberately
+    /// diverges from `label` — pins the failing arm of the wire-format
+    /// primitive. The `#[serde(rename_all = "UPPERCASE")]` projection
+    /// emits uppercase JSON strings while the `via = "as_str"` label
+    /// stays lowercase. A regression that drops the alignment assertion
+    /// inside [`assert_label_matches_serde_serialization`] fails-loudly
+    /// at this `#[should_panic]` probe before it can silently thread
+    /// through the 20 production `X_as_str_matches_serde` sites.
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        serde::Serialize,
+        tatara_closed_set::DeriveClosedSet,
+    )]
+    #[serde(rename_all = "UPPERCASE")]
+    #[closed_set(via = "as_str", generate_unknown)]
+    enum SerdeDriftKind {
+        Alpha,
+        Beta,
+    }
+
+    impl SerdeDriftKind {
+        const ALL: [Self; 2] = [Self::Alpha, Self::Beta];
+        const fn as_str(self) -> &'static str {
+            match self {
+                Self::Alpha => "alpha",
+                Self::Beta => "beta",
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "serde output drifted from ClosedSet::label")]
+    fn assert_label_matches_serde_serialization_rejects_drifted_impl() {
+        assert_label_matches_serde_serialization::<SerdeDriftKind>();
+    }
+
+    /// Every closed-set enum across `tatara-process` that carried a
+    /// hand-rolled `X_as_str_matches_serde` test pre-lift now binds
+    /// through the substrate primitive at ONE call site each. This
+    /// substrate-wide sweep pins every production wire-format alignment
+    /// consumer at ONE boundary so a per-crate test-site drop cannot
+    /// silently disable the check — the sweep here catches the drift
+    /// even when the per-site test body is removed. Mirrors the sibling
+    /// `every_production_display_impl_binds_through_the_testkit_primitive`
+    /// sweep on the (Display byte-identity) axis; this one closes the
+    /// (serde JSON-string byte-identity) axis.
+    #[test]
+    fn every_production_serde_serialization_binds_through_the_testkit_primitive() {
+        assert_label_matches_serde_serialization::<crate::allocation::AllocationPhase>();
+        assert_label_matches_serde_serialization::<crate::boundary::ConditionKind>();
+        assert_label_matches_serde_serialization::<crate::classification::CalmClassification>();
+        assert_label_matches_serde_serialization::<crate::classification::ConvergencePointType>();
+        assert_label_matches_serde_serialization::<crate::classification::DataClassification>();
+        assert_label_matches_serde_serialization::<crate::classification::HorizonKind>();
+        assert_label_matches_serde_serialization::<crate::classification::OptimizationDirection>();
+        assert_label_matches_serde_serialization::<crate::classification::SubstrateType>();
+        assert_label_matches_serde_serialization::<crate::compliance::VerificationPhase>();
+        assert_label_matches_serde_serialization::<crate::encapsulates::EncapsulationMode>();
+        assert_label_matches_serde_serialization::<crate::export::ExportTrigger>();
+        assert_label_matches_serde_serialization::<crate::export::ReportFormat>();
+        assert_label_matches_serde_serialization::<crate::intent::WorkloadKind>();
+        assert_label_matches_serde_serialization::<crate::lifetime::TeardownPolicy>();
+        assert_label_matches_serde_serialization::<crate::pool::MemberState>();
+        assert_label_matches_serde_serialization::<crate::pool::PoolPhase>();
+        assert_label_matches_serde_serialization::<crate::pool::ReplacementPolicy>();
+        assert_label_matches_serde_serialization::<crate::pool::ReturnPolicy>();
+        assert_label_matches_serde_serialization::<crate::signal::SighupStrategy>();
+        assert_label_matches_serde_serialization::<crate::spec::MustReachPhase>();
     }
 
     // Substrate-local single-slot factories — mirror the per-site

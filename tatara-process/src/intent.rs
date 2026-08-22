@@ -848,19 +848,7 @@ mod tests {
     /// the YAML wire format the reconciler / operator both read.
     #[test]
     fn workload_kind_as_str_matches_serde() {
-        for kind in WorkloadKind::ALL {
-            let serialized = serde_json::to_string(&kind).expect("serialize");
-            let unquoted = serialized
-                .trim_start_matches('"')
-                .trim_end_matches('"')
-                .to_string();
-            assert_eq!(
-                unquoted,
-                kind.as_str(),
-                "as_str drift for {kind:?}: as_str={} serde={unquoted}",
-                kind.as_str()
-            );
-        }
+        crate::tagged_union::assert_label_matches_serde_serialization::<WorkloadKind>();
     }
 
     /// The Display impl IS `as_str` — pinning this lets future callers

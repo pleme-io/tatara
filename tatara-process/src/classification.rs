@@ -1313,19 +1313,7 @@ mod tests {
     /// `spec.classification.dataClassification`.
     #[test]
     fn data_classification_as_str_matches_serde() {
-        for class in DataClassification::ALL {
-            let serialized = serde_json::to_string(&class).expect("serialize");
-            let unquoted = serialized
-                .trim_start_matches('"')
-                .trim_end_matches('"')
-                .to_string();
-            assert_eq!(
-                unquoted,
-                class.as_str(),
-                "as_str drift for {class:?}: as_str={} serde={unquoted}",
-                class.as_str()
-            );
-        }
+        crate::tagged_union::assert_label_matches_serde_serialization::<DataClassification>();
     }
 
     /// The Display impl IS `as_str` — pinning this lets future callers
@@ -1564,19 +1552,7 @@ mod tests {
     /// `spec.classification.pointType`.
     #[test]
     fn convergence_point_type_as_str_matches_serde() {
-        for t in ConvergencePointType::ALL {
-            let serialized = serde_json::to_string(&t).expect("serialize");
-            let unquoted = serialized
-                .trim_start_matches('"')
-                .trim_end_matches('"')
-                .to_string();
-            assert_eq!(
-                unquoted,
-                t.as_str(),
-                "as_str drift for {t:?}: as_str={} serde={unquoted}",
-                t.as_str()
-            );
-        }
+        crate::tagged_union::assert_label_matches_serde_serialization::<ConvergencePointType>();
     }
 
     /// The Display impl IS `as_str` — pinning this lets future callers
@@ -1821,19 +1797,7 @@ mod tests {
     /// `spec.classification.substrate`.
     #[test]
     fn substrate_type_as_str_matches_serde() {
-        for t in SubstrateType::ALL {
-            let serialized = serde_json::to_string(&t).expect("serialize");
-            let unquoted = serialized
-                .trim_start_matches('"')
-                .trim_end_matches('"')
-                .to_string();
-            assert_eq!(
-                unquoted,
-                t.as_str(),
-                "as_str drift for {t:?}: as_str={} serde={unquoted}",
-                t.as_str()
-            );
-        }
+        crate::tagged_union::assert_label_matches_serde_serialization::<SubstrateType>();
     }
 
     /// The Display impl IS `as_str` — pinning this lets future
@@ -2003,19 +1967,7 @@ mod tests {
     /// `spec.classification.calm`.
     #[test]
     fn calm_classification_as_str_matches_serde() {
-        for c in CalmClassification::ALL {
-            let serialized = serde_json::to_string(&c).expect("serialize");
-            let unquoted = serialized
-                .trim_start_matches('"')
-                .trim_end_matches('"')
-                .to_string();
-            assert_eq!(
-                unquoted,
-                c.as_str(),
-                "as_str drift for {c:?}: as_str={} serde={unquoted}",
-                c.as_str()
-            );
-        }
+        crate::tagged_union::assert_label_matches_serde_serialization::<CalmClassification>();
     }
 
     /// The Display impl IS `as_str` — pinning this lets future
@@ -2164,19 +2116,7 @@ mod tests {
     /// `spec.classification.horizon.direction`.
     #[test]
     fn optimization_direction_as_str_matches_serde() {
-        for d in OptimizationDirection::ALL {
-            let serialized = serde_json::to_string(&d).expect("serialize");
-            let unquoted = serialized
-                .trim_start_matches('"')
-                .trim_end_matches('"')
-                .to_string();
-            assert_eq!(
-                unquoted,
-                d.as_str(),
-                "as_str drift for {d:?}: as_str={} serde={unquoted}",
-                d.as_str()
-            );
-        }
+        crate::tagged_union::assert_label_matches_serde_serialization::<OptimizationDirection>();
     }
 
     /// The Display impl IS `as_str` — pinning this lets future
@@ -2412,19 +2352,7 @@ mod tests {
     /// `spec.classification.horizon.kind`.
     #[test]
     fn horizon_kind_as_str_matches_serde() {
-        for k in HorizonKind::ALL {
-            let serialized = serde_json::to_string(&k).expect("serialize");
-            let unquoted = serialized
-                .trim_start_matches('"')
-                .trim_end_matches('"')
-                .to_string();
-            assert_eq!(
-                unquoted,
-                k.as_str(),
-                "as_str drift for {k:?}: as_str={} serde={unquoted}",
-                k.as_str()
-            );
-        }
+        crate::tagged_union::assert_label_matches_serde_serialization::<HorizonKind>();
     }
 
     /// The Display impl IS `as_str` — pinning this lets future

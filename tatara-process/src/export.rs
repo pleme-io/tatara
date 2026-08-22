@@ -1000,20 +1000,7 @@ mod tests {
     /// the reconciler / operator both read.
     #[test]
     fn export_trigger_as_str_matches_serde() {
-        for trigger in ExportTrigger::ALL {
-            let serialized = serde_json::to_string(&trigger).expect("serialize");
-            // serde_json wraps strings in quotes; strip them for compare.
-            let unquoted = serialized
-                .trim_start_matches('"')
-                .trim_end_matches('"')
-                .to_string();
-            assert_eq!(
-                unquoted,
-                trigger.as_str(),
-                "as_str drift for {trigger:?}: as_str={} serde={unquoted}",
-                trigger.as_str()
-            );
-        }
+        crate::tagged_union::assert_label_matches_serde_serialization::<ExportTrigger>();
     }
 
     /// The Display impl IS `as_str` — pinning this lets future callers
@@ -1183,19 +1170,7 @@ mod tests {
     /// the reconciler / operator both read.
     #[test]
     fn report_format_as_str_matches_serde() {
-        for format in ReportFormat::ALL {
-            let serialized = serde_json::to_string(&format).expect("serialize");
-            let unquoted = serialized
-                .trim_start_matches('"')
-                .trim_end_matches('"')
-                .to_string();
-            assert_eq!(
-                unquoted,
-                format.as_str(),
-                "as_str drift for {format:?}: as_str={} serde={unquoted}",
-                format.as_str()
-            );
-        }
+        crate::tagged_union::assert_label_matches_serde_serialization::<ReportFormat>();
     }
 
     /// The Display impl IS `as_str` — pinning this lets future callers

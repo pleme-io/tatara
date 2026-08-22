@@ -213,17 +213,7 @@ mod tests {
     /// an `as_str` arm typo) lands here at one site.
     #[test]
     fn must_reach_phase_as_str_matches_serde() {
-        for kind in MustReachPhase::ALL {
-            let serialized = serde_json::to_string(&kind)
-                .expect("MustReachPhase serializes")
-                .trim_matches('"')
-                .to_string();
-            assert_eq!(
-                kind.as_str(),
-                serialized,
-                "as_str() must match serde output for {kind:?}",
-            );
-        }
+        crate::tagged_union::assert_label_matches_serde_serialization::<MustReachPhase>();
     }
 
     /// CROSS-CRATE CANONICAL-KEY CONTRACT: `MustReachPhase::as_str()`

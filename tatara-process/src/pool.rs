@@ -1000,19 +1000,7 @@ mod tests {
     /// YAML wire format.
     #[test]
     fn replacement_policy_as_str_matches_serde() {
-        for policy in ReplacementPolicy::ALL {
-            let serialized = serde_json::to_string(&policy).expect("serialize");
-            let unquoted = serialized
-                .trim_start_matches('"')
-                .trim_end_matches('"')
-                .to_string();
-            assert_eq!(
-                unquoted,
-                policy.as_str(),
-                "as_str drift for {policy:?}: as_str={} serde={unquoted}",
-                policy.as_str()
-            );
-        }
+        crate::tagged_union::assert_label_matches_serde_serialization::<ReplacementPolicy>();
     }
 
     /// The Display impl IS `as_str` — pinning this lets future callers
@@ -1155,19 +1143,7 @@ mod tests {
     /// YAML wire format.
     #[test]
     fn return_policy_as_str_matches_serde() {
-        for policy in ReturnPolicy::ALL {
-            let serialized = serde_json::to_string(&policy).expect("serialize");
-            let unquoted = serialized
-                .trim_start_matches('"')
-                .trim_end_matches('"')
-                .to_string();
-            assert_eq!(
-                unquoted,
-                policy.as_str(),
-                "as_str drift for {policy:?}: as_str={} serde={unquoted}",
-                policy.as_str()
-            );
-        }
+        crate::tagged_union::assert_label_matches_serde_serialization::<ReturnPolicy>();
     }
 
     /// The Display impl IS `as_str` — pinning this lets future callers
@@ -1292,19 +1268,7 @@ mod tests {
     /// `status.members[].state`.
     #[test]
     fn member_state_as_str_matches_serde() {
-        for state in MemberState::ALL {
-            let serialized = serde_json::to_string(&state).expect("serialize");
-            let unquoted = serialized
-                .trim_start_matches('"')
-                .trim_end_matches('"')
-                .to_string();
-            assert_eq!(
-                unquoted,
-                state.as_str(),
-                "as_str drift for {state:?}: as_str={} serde={unquoted}",
-                state.as_str()
-            );
-        }
+        crate::tagged_union::assert_label_matches_serde_serialization::<MemberState>();
     }
 
     /// The Display impl IS `as_str` — pinning this lets future callers
@@ -1434,19 +1398,7 @@ mod tests {
     /// wire format the pool reconciler stamps on `status.phase`.
     #[test]
     fn pool_phase_as_str_matches_serde() {
-        for phase in PoolPhase::ALL {
-            let serialized = serde_json::to_string(&phase).expect("serialize");
-            let unquoted = serialized
-                .trim_start_matches('"')
-                .trim_end_matches('"')
-                .to_string();
-            assert_eq!(
-                unquoted,
-                phase.as_str(),
-                "as_str drift for {phase:?}: as_str={} serde={unquoted}",
-                phase.as_str()
-            );
-        }
+        crate::tagged_union::assert_label_matches_serde_serialization::<PoolPhase>();
     }
 
     /// The Display impl IS `as_str` — pinning this lets future callers

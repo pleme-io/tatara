@@ -520,19 +520,7 @@ mod tests {
     /// the reconciler / operator both read.
     #[test]
     fn mode_as_str_matches_serde() {
-        for mode in EncapsulationMode::ALL {
-            let serialized = serde_json::to_string(&mode).expect("serialize");
-            let unquoted = serialized
-                .trim_start_matches('"')
-                .trim_end_matches('"')
-                .to_string();
-            assert_eq!(
-                unquoted,
-                mode.as_str(),
-                "as_str drift for {mode:?}: as_str={} serde={unquoted}",
-                mode.as_str()
-            );
-        }
+        crate::tagged_union::assert_label_matches_serde_serialization::<EncapsulationMode>();
     }
 
     /// The Display impl IS `as_str` — pinning this lets future callers

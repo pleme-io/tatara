@@ -496,17 +496,7 @@ mod tests {
     /// surface here, not in operator-facing reason strings.
     #[test]
     fn teardown_policy_as_str_matches_serde() {
-        for policy in TeardownPolicy::ALL {
-            let serialized = serde_json::to_string(&policy)
-                .expect("TeardownPolicy serializes")
-                .trim_matches('"')
-                .to_string();
-            assert_eq!(
-                policy.as_str(),
-                serialized,
-                "as_str() must match serde output for {policy:?}",
-            );
-        }
+        crate::tagged_union::assert_label_matches_serde_serialization::<TeardownPolicy>();
     }
 
     /// The Display impl IS `as_str` — pinning this lets future

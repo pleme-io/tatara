@@ -234,19 +234,7 @@ mod tests {
     /// category error.
     #[test]
     fn verification_phase_as_str_matches_serde() {
-        for phase in VerificationPhase::ALL {
-            let serialized = serde_json::to_string(&phase).expect("serialize");
-            let unquoted = serialized
-                .trim_start_matches('"')
-                .trim_end_matches('"')
-                .to_string();
-            assert_eq!(
-                unquoted,
-                phase.as_str(),
-                "as_str drift for {phase:?}: as_str={} serde={unquoted}",
-                phase.as_str()
-            );
-        }
+        crate::tagged_union::assert_label_matches_serde_serialization::<VerificationPhase>();
     }
 
     /// The Display impl IS `as_str` — pinning this lets future callers

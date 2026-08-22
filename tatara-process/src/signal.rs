@@ -298,17 +298,7 @@ mod tests {
     /// surface.
     #[test]
     fn sighup_strategy_as_str_matches_serde() {
-        for strat in SighupStrategy::ALL {
-            let serialized = serde_json::to_string(&strat)
-                .expect("SighupStrategy serializes")
-                .trim_matches('"')
-                .to_string();
-            assert_eq!(
-                strat.as_str(),
-                serialized,
-                "as_str() must match serde output for {strat:?}",
-            );
-        }
+        crate::tagged_union::assert_label_matches_serde_serialization::<SighupStrategy>();
     }
 
     /// The Display impl IS `as_str` — pinning this lets future callers

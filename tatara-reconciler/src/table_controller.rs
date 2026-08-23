@@ -95,7 +95,7 @@ pub async fn reconcile(
     }
 
     // (4) Read current claims registry — singleton ProcessTable.
-    let table_api: Api<ProcessTable> = Api::all(kube.clone());
+    let table_api = ctx.process_table_api();
     let current_table = table_api.get(&ctx.config.process_table_name).await.ok();
     let current_claims = current_table
         .as_ref()

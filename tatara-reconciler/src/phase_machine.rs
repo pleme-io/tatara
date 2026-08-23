@@ -102,7 +102,7 @@ pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
             .and_then(|s| s.identity.clone())
             .unwrap_or_else(|| derive_identity(&p.spec, p.spec.identity.name_override.as_deref()));
 
-        let pt_api: Api<ProcessTable> = Api::all(ctx.kube.clone());
+        let pt_api = ctx.process_table_api();
         let pt = patch::ensure_process_table(&pt_api, &ctx.config.process_table_name)
             .await
             .map_err(|e| anyhow!("ensure ProcessTable: {e}"))?;
@@ -506,8 +506,7 @@ async fn process_holds_any_claim(ctx: &Context, p: &Process) -> bool {
         return false;
     }
     let process_ref = format!("{ns}/{name}");
-    let table_api: kube::Api<tatara_process::prelude::ProcessTable> =
-        kube::Api::all(ctx.kube.clone());
+    let table_api = ctx.process_table_api();
     let table = match table_api.get(&ctx.config.process_table_name).await {
         Ok(t) => t,
         Err(_) => return false,

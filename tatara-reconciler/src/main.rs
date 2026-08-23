@@ -130,7 +130,7 @@ async fn main() -> Result<()> {
         });
 
     // ── ProcessTable controller ───────────────────────────────────────
-    let tables: Api<ProcessTable> = Api::all(kube.clone());
+    let tables = ctx.process_table_api();
     let table_ctl = Controller::new(tables, watcher::Config::default())
         .run(
             table_controller::reconcile,

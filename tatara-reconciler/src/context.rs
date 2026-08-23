@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use kube::{Api, Client};
 
-use tatara_process::prelude::Process;
+use tatara_process::prelude::{Process, ProcessTable};
 
 #[derive(Clone)]
 pub struct Context {
@@ -36,6 +36,34 @@ impl Context {
     /// evaluators + controller pass `ns: &str` slices unchanged.
     pub fn process_api(&self, ns: &str) -> Api<Process> {
         Api::namespaced(self.kube.clone(), ns)
+    }
+
+    /// Cluster-scoped `Api<ProcessTable>` bound to this context's client —
+    /// the peer substrate primitive alongside [`Context::process_api`]
+    /// closing the `Api::all(self.kube.clone())` shape every ProcessTable
+    /// consumer on this crate rides through.
+    ///
+    /// `ProcessTable` is a cluster-scoped singleton (see the
+    /// `#[kube(kind = "ProcessTable", plural = "processtables",
+    /// shortname = "pt")]` attribute on `ProcessTableSpec` in
+    /// `tatara-process/src/table.rs`); every construction site pre-lift
+    /// authored `let table_api: Api<ProcessTable> =
+    /// Api::all(<client>.clone())` verbatim, restating both the typed
+    /// collection binding and the `.clone()` incantation. Post-lift each
+    /// site delegates through ONE substrate method — a future change
+    /// that layers a per-request tracing span, a default
+    /// `PatchParams` builder, a namespace-scoped RBAC gate, or per-request
+    /// metrics counters onto every ProcessTable request lands at ONE
+    /// substrate method here rather than being restated at every
+    /// consumer.
+    ///
+    /// Unlike [`Context::process_api`], no namespace slot is exposed:
+    /// the ProcessTable is a cluster-scoped resource (`Api::all`), not
+    /// a namespaced one, so the primitive's signature encodes that
+    /// invariant structurally — a caller cannot accidentally pass a
+    /// namespace and get a broken `Api::namespaced` back.
+    pub fn process_table_api(&self) -> Api<ProcessTable> {
+        Api::all(self.kube.clone())
     }
 }
 
@@ -207,5 +235,108 @@ mod tests {
         assert!(via_borrowed
             .resource_url()
             .contains("/namespaces/borrowed-ns/"));
+    }
+
+    // ─── Context::process_table_api substrate pins ─────────────────────
+    //
+    // The `Api::all(<client>.clone())` incantation was hand-authored at
+    // 4 ProcessTable construction sites (`main.rs`, `phase_machine.rs`
+    // × 2, `table_controller.rs`) before `process_table_api` closed it.
+    // These pins bind the primitive at fail-before-pass-after
+    // granularity so a regression that drifts the resource-kind, the
+    // scope (`Api::all` → `Api::namespaced`), or the reused client-slot
+    // surfaces here rather than as silent operator-facing drift at
+    // every downstream ProcessTable consumer.
+
+    #[tokio::test]
+    async fn process_table_api_is_cluster_scoped() {
+        // ProcessTable is a cluster-scoped singleton (see the
+        // `#[kube(kind = "ProcessTable", plural = "processtables",
+        // shortname = "pt")]` attribute on `ProcessTableSpec` in
+        // `tatara-process/src/table.rs`). Every downstream `.get(...)`
+        // / `.patch(...)` call composes against a cluster-scoped url
+        // — the resource path must NOT carry a `/namespaces/<ns>/`
+        // slot. A regression that swapped `Api::all` for
+        // `Api::namespaced` at the primitive's site surfaces here
+        // rather than as a runtime "resource not found" spiral on
+        // every ProcessTable consumer.
+        let api = ctx().process_table_api();
+        let url = api.resource_url();
+        assert!(
+            !url.contains("/namespaces/"),
+            "cluster-scoped ProcessTable Api must NOT carry a namespace slot; got {url}"
+        );
+    }
+
+    #[tokio::test]
+    async fn process_table_api_binds_the_process_table_kind() {
+        // The typed `Api<ProcessTable>` return type pins the resource
+        // kind at rustc time; this pin adds the runtime witness — the
+        // emitted REST path targets the
+        // `tatara.pleme.io/v1alpha1/processtables` collection matching
+        // the `#[kube(group = "tatara.pleme.io", version = "v1alpha1",
+        // plural = "processtables")]` attribute on `ProcessTableSpec`.
+        // A regression that changed the group, version, or plural on
+        // the CRD without rippling through consumers surfaces here.
+        let api = ctx().process_table_api();
+        let url = api.resource_url();
+        assert!(
+            url.starts_with("/apis/tatara.pleme.io/v1alpha1/"),
+            "Api resource url must be scoped to the tatara.pleme.io/v1alpha1 group; got {url}"
+        );
+        assert!(
+            url.ends_with("/processtables"),
+            "Api resource url must terminate at the `processtables` collection; got {url}"
+        );
+    }
+
+    #[tokio::test]
+    async fn process_table_api_rides_through_the_context_client_slot() {
+        // Every pre-lift callsite chose `<client>.clone()` off the same
+        // context (either `ctx.kube.clone()` in phase_machine or
+        // `kube.clone()` in table_controller/main.rs, where `kube ===
+        // ctx.kube`). Post-lift the primitive continues to source its
+        // client from `self.kube.clone()` rather than manufacturing a
+        // new one; this pin catches a regression that swapped the
+        // client-slot at the primitive's own site. The witness: two
+        // separately-built Apis on the SAME context resolve to the
+        // SAME cluster-scoped url — no per-call url divergence, no
+        // hidden namespace binding.
+        let c = ctx();
+        let a = c.process_table_api();
+        let b = c.process_table_api();
+        assert_eq!(
+            a.resource_url(),
+            b.resource_url(),
+            "cluster-scoped Api built twice off the same context must resolve to the same url"
+        );
+    }
+
+    #[tokio::test]
+    async fn process_api_and_process_table_api_bind_distinct_collections() {
+        // The two peer primitives share the client-slot + the
+        // `tatara.pleme.io/v1alpha1` group but must resolve to
+        // DISTINCT collections — `/processes` (namespaced) vs
+        // `/processtables` (cluster-scoped). A regression that
+        // conflated the two typed returns (e.g. a copy-paste that
+        // pointed `process_table_api` at `Process` instead of
+        // `ProcessTable`) would collapse both urls onto the same
+        // collection and silently misroute every ProcessTable
+        // consumer to the Process endpoint.
+        let c = ctx();
+        let processes = c.process_api("default").resource_url().to_string();
+        let table = c.process_table_api().resource_url().to_string();
+        assert!(
+            processes.ends_with("/processes"),
+            "process_api → /processes; got {processes}"
+        );
+        assert!(
+            table.ends_with("/processtables"),
+            "process_table_api → /processtables; got {table}"
+        );
+        assert_ne!(
+            processes, table,
+            "the two peer primitives must resolve to distinct collections"
+        );
     }
 }

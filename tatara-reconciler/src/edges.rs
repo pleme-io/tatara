@@ -24,7 +24,6 @@
 use anyhow::Result;
 use serde_json::{json, Value};
 
-use tatara_process::annotations;
 use tatara_process::routing::{RoutingBackend, RoutingHostname};
 
 /// Per-render context the edges share. The reconciler builds this
@@ -129,18 +128,31 @@ impl Edge for IngressEdge {
 
         let owner_refs = build_owner_refs(ctx);
 
+        // Seed the labels map through the shared substrate primitive
+        // owning the 2-slot `{MANAGED_BY, PROCESS}` ownership tag on
+        // the labels axis (peer to `ownership_annotations` used above
+        // for the annotations axis); then extend with app +
+        // routing-form labels. Post-lift the labels ownership pair
+        // reads `FIELD_MANAGER` rather than the hand-coded
+        // `"tatara-reconciler"` literal, closing the same drift-risk
+        // sweep the annotations-axis primitive already closed.
+        let mut labels_map = crate::ssapply::ownership_labels(ctx.process_ref);
+        labels_map.insert(
+            "tatara.pleme.io/app".to_string(),
+            Value::String(ctx.hostname.app.clone()),
+        );
+        labels_map.insert(
+            "tatara.pleme.io/routing-form".to_string(),
+            Value::String(if ctx.is_stable { "stable" } else { "instance" }.to_string()),
+        );
+
         let ingress = json!({
             "apiVersion": "networking.k8s.io/v1",
             "kind": "Ingress",
             "metadata": {
                 "name": Self::name(ctx),
                 "namespace": ctx.process_namespace,
-                "labels": {
-                    annotations::MANAGED_BY: "tatara-reconciler",
-                    annotations::PROCESS: ctx.process_ref,
-                    "tatara.pleme.io/app": ctx.hostname.app,
-                    "tatara.pleme.io/routing-form": if ctx.is_stable { "stable" } else { "instance" },
-                },
+                "labels": Value::Object(labels_map),
                 "annotations": Value::Object(annotations_map),
                 "ownerReferences": owner_refs,
             },
@@ -223,18 +235,27 @@ impl Edge for DnsEndpointEdge {
             Some(t) => t.clone(),
             None => return Ok(None),
         };
+        // Peer to the IngressEdge labels seed above and to the
+        // annotations-axis feed on the next line: the labels ownership
+        // pair rides through the shared substrate primitive so both
+        // axes on this resource are held in lockstep by construction.
+        let mut labels_map = crate::ssapply::ownership_labels(ctx.process_ref);
+        labels_map.insert(
+            "tatara.pleme.io/app".to_string(),
+            Value::String(ctx.hostname.app.clone()),
+        );
+        labels_map.insert(
+            "tatara.pleme.io/routing-form".to_string(),
+            Value::String(if ctx.is_stable { "stable" } else { "instance" }.to_string()),
+        );
+
         let endpoint = json!({
             "apiVersion": "externaldns.k8s.io/v1alpha1",
             "kind": "DNSEndpoint",
             "metadata": {
                 "name": Self::name(ctx),
                 "namespace": ctx.process_namespace,
-                "labels": {
-                    annotations::MANAGED_BY: "tatara-reconciler",
-                    annotations::PROCESS: ctx.process_ref,
-                    "tatara.pleme.io/app": ctx.hostname.app,
-                    "tatara.pleme.io/routing-form": if ctx.is_stable { "stable" } else { "instance" },
-                },
+                "labels": Value::Object(labels_map),
                 "annotations": crate::ssapply::ownership_annotations(ctx.process_ref),
                 "ownerReferences": build_owner_refs(ctx),
             },
@@ -339,10 +360,7 @@ mod tests {
         );
         // OwnerRef points at the Process.
         assert_eq!(r["metadata"]["ownerReferences"][0]["kind"], "Process");
-        assert_eq!(
-            r["metadata"]["ownerReferences"][0]["name"],
-            "demo-prod"
-        );
+        assert_eq!(r["metadata"]["ownerReferences"][0]["name"], "demo-prod");
         // TLS issuer defaulted.
         assert_eq!(
             r["metadata"]["annotations"]["cert-manager.io/cluster-issuer"],
@@ -359,16 +377,13 @@ mod tests {
     fn ingress_stable_form_uses_stable_name() {
         let h = api_hostname();
         let b = api_backend();
-        let c = ctx(
-            &h,
-            &b,
-            "api.pleme-dev.use1.quero.lol",
-            "demo-prod",
-            true,
-        );
+        let c = ctx(&h, &b, "api.pleme-dev.use1.quero.lol", "demo-prod", true);
         let r = IngressEdge.render(&c).unwrap().unwrap();
         assert_eq!(r["metadata"]["name"], "demo-prod-api-stable");
-        assert_eq!(r["spec"]["rules"][0]["host"], "api.pleme-dev.use1.quero.lol");
+        assert_eq!(
+            r["spec"]["rules"][0]["host"],
+            "api.pleme-dev.use1.quero.lol"
+        );
         assert_eq!(
             r["metadata"]["annotations"]["tatara.pleme.io/routing-form"],
             "stable"
@@ -419,10 +434,7 @@ mod tests {
         let r = edge.render(&c).unwrap().unwrap();
         assert_eq!(r["apiVersion"], "externaldns.k8s.io/v1alpha1");
         assert_eq!(r["kind"], "DNSEndpoint");
-        assert_eq!(
-            r["metadata"]["name"],
-            "demo-prod-api-demo-prod-dns"
-        );
+        assert_eq!(r["metadata"]["name"], "demo-prod-api-demo-prod-dns");
         assert_eq!(
             r["spec"]["endpoints"][0]["dnsName"],
             "api.demo-prod.pleme-dev.use1.quero.lol"

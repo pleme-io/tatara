@@ -6,7 +6,9 @@ use serde_json::{json, Value};
 
 use tatara_process::annotations;
 use tatara_process::export::ExportSpec;
-use tatara_process::hostname::{ephemeral_id_from_spec, fmt_fqdn, fmt_fqdn_stable, resolve_ephemeral_id};
+use tatara_process::hostname::{
+    ephemeral_id_from_spec, fmt_fqdn, fmt_fqdn_stable, resolve_ephemeral_id,
+};
 use tatara_process::intent::{
     AplicacaoIntent, FluxIntent, Intent, IntentVariant, LispIntent, NixIntent,
 };
@@ -338,14 +340,15 @@ pub fn artifact_hash(bytes: &[u8]) -> String {
 /// which HRs are adopting which pre-existing releases.
 fn mark_resources_as_adopting(resources: Vec<Value>, process: &Process) -> Vec<Value> {
     use tatara_process::encapsulates::{EncapsulationKindVariant, ExistingHelmRelease};
-    let adoption_ref: Option<&ExistingHelmRelease> = process
-        .spec
-        .encapsulates
-        .as_ref()
-        .and_then(|e| match e.kind.variant().ok() {
-            Some(EncapsulationKindVariant::ExistingHelmRelease(h)) => Some(h),
-            _ => None,
-        });
+    let adoption_ref: Option<&ExistingHelmRelease> =
+        process
+            .spec
+            .encapsulates
+            .as_ref()
+            .and_then(|e| match e.kind.variant().ok() {
+                Some(EncapsulationKindVariant::ExistingHelmRelease(h)) => Some(h),
+                _ => None,
+            });
     resources
         .into_iter()
         .map(|mut r| {
@@ -611,18 +614,38 @@ fn one_export_job(
         }));
     }
 
+    // Seed the outer Job's labels map through the shared substrate
+    // primitive owning the 2-slot `{MANAGED_BY, PROCESS}` ownership
+    // tag on the labels axis (peer to how render_flux /
+    // render_aplicacao seed the annotations axis via
+    // `ownership_annotations`); then extend with export-specific
+    // ROLE + EXPORT_INDEX labels. Post-lift the MANAGED_BY slot
+    // reads `FIELD_MANAGER` rather than the hand-coded
+    // `"tatara-reconciler"` literal.
+    //
+    // Deliberately NOT lifted: the pod template's inner
+    // `spec.template.metadata.labels` below is a 3-slot
+    // `{PROCESS, ROLE, EXPORT_INDEX}` shape (no MANAGED_BY) because
+    // pod-template labels feed the Job's pod-selector wiring, not
+    // reconciler ownership discovery — see `ownership_labels` doc
+    // for the peer-shape note.
+    let mut job_labels = crate::ssapply::ownership_labels(process_ref);
+    job_labels.insert(
+        annotations::ROLE.to_string(),
+        Value::String("export".to_string()),
+    );
+    job_labels.insert(
+        annotations::EXPORT_INDEX.to_string(),
+        Value::String(index.to_string()),
+    );
+
     Ok(json!({
         "apiVersion": "batch/v1",
         "kind": "Job",
         "metadata": {
             "name": job_name,
             "namespace": ns,
-            "labels": {
-                annotations::MANAGED_BY: "tatara-reconciler",
-                annotations::PROCESS: process_ref,
-                annotations::ROLE: "export",
-                annotations::EXPORT_INDEX: index.to_string(),
-            },
+            "labels": Value::Object(job_labels),
             "ownerReferences": owner_refs,
         },
         "spec": {
@@ -697,28 +720,13 @@ mod aplicacao_tests {
         );
         assert_eq!(resources[0]["spec"]["ref"]["tag"], "0.5.5");
         // HelmRelease references the OCIRepository via chartRef.
-        assert_eq!(
-            resources[1]["spec"]["chartRef"]["kind"],
-            "OCIRepository"
-        );
-        assert_eq!(
-            resources[1]["spec"]["chartRef"]["name"],
-            "ephemeral-demo"
-        );
+        assert_eq!(resources[1]["spec"]["chartRef"]["kind"], "OCIRepository");
+        assert_eq!(resources[1]["spec"]["chartRef"]["name"], "ephemeral-demo");
         // releaseName + targetNamespace honored.
-        assert_eq!(
-            resources[1]["spec"]["releaseName"],
-            "demo-app-consolidated"
-        );
-        assert_eq!(
-            resources[1]["spec"]["targetNamespace"],
-            "demo-test"
-        );
+        assert_eq!(resources[1]["spec"]["releaseName"], "demo-app-consolidated");
+        assert_eq!(resources[1]["spec"]["targetNamespace"], "demo-test");
         // profile injected into values (typed switch for the chart).
-        assert_eq!(
-            resources[1]["spec"]["values"]["profile"],
-            "all-in-one"
-        );
+        assert_eq!(resources[1]["spec"]["values"]["profile"], "all-in-one");
         // Values overlay carried through untouched.
         assert_eq!(
             resources[1]["spec"]["values"]["cluster"]["name"],
@@ -736,7 +744,10 @@ mod aplicacao_tests {
         a.target_namespace = None;
         a.release_name = None;
         let (resources, _) = render_aplicacao("test-proc", "my-ns", &a);
-        let hr = resources.iter().find(|r| r["kind"] == "HelmRelease").unwrap();
+        let hr = resources
+            .iter()
+            .find(|r| r["kind"] == "HelmRelease")
+            .unwrap();
         assert_eq!(hr["spec"]["targetNamespace"], "my-ns");
         assert_eq!(hr["spec"]["releaseName"], "test-proc");
     }
@@ -746,7 +757,10 @@ mod aplicacao_tests {
         let mut a = demo_intent();
         a.install_timeout = None;
         let (resources, _) = render_aplicacao("p", "ns", &a);
-        let hr = resources.iter().find(|r| r["kind"] == "HelmRelease").unwrap();
+        let hr = resources
+            .iter()
+            .find(|r| r["kind"] == "HelmRelease")
+            .unwrap();
         assert_eq!(hr["spec"]["install"]["timeout"], "25m");
         assert_eq!(hr["spec"]["install"]["remediation"]["retries"], 3);
     }
@@ -785,7 +799,10 @@ mod aplicacao_tests {
         let (resources, _) = render_aplicacao("ephemeral-demo", "demo-test", &a);
         for r in &resources {
             let anns = &r["metadata"]["annotations"];
-            assert_eq!(anns[tatara_process::annotations::MANAGED_BY], "tatara-reconciler");
+            assert_eq!(
+                anns[tatara_process::annotations::MANAGED_BY],
+                "tatara-reconciler"
+            );
             assert_eq!(
                 anns[tatara_process::annotations::PROCESS],
                 "demo-test/ephemeral-demo"
@@ -856,9 +873,7 @@ mod aplicacao_tests {
 mod export_job_tests {
     use super::*;
     use tatara_process::attestation::ProcessAttestation;
-    use tatara_process::classification::{
-        Classification, ConvergencePointType, SubstrateType,
-    };
+    use tatara_process::classification::{Classification, ConvergencePointType, SubstrateType};
     use tatara_process::crd::{ProcessSpec, ProcessStatus};
     use tatara_process::export::{
         ArtifactSource, ExportSpec, ExportTrigger, HttpEventChannel, NatsSubjectChannel,
@@ -1032,11 +1047,17 @@ mod export_job_tests {
         assert!(spec_arg.source.receipts.is_some());
 
         // Downward-API stamps for the worker.
-        let i_ns = args.iter().position(|a| *a == "--process-namespace").unwrap();
+        let i_ns = args
+            .iter()
+            .position(|a| *a == "--process-namespace")
+            .unwrap();
         assert_eq!(args[i_ns + 1], "demo-test");
         let i_n = args.iter().position(|a| *a == "--process-name").unwrap();
         assert_eq!(args[i_n + 1], "r1");
-        let i_rcm = args.iter().position(|a| *a == "--receipt-configmap").unwrap();
+        let i_rcm = args
+            .iter()
+            .position(|a| *a == "--receipt-configmap")
+            .unwrap();
         assert_eq!(args[i_rcm + 1], "r1-export-0-receipt");
     }
 
@@ -1046,8 +1067,7 @@ mod export_job_tests {
         let p_with_root = process_with(vec![spec_receipts_attested()], true);
 
         let j_no = render_export_jobs(&p_no_root, ProcessPhase::Attested, "img", "sa").unwrap();
-        let j_with =
-            render_export_jobs(&p_with_root, ProcessPhase::Attested, "img", "sa").unwrap();
+        let j_with = render_export_jobs(&p_with_root, ProcessPhase::Attested, "img", "sa").unwrap();
 
         let args_no = j_no[0]["spec"]["template"]["spec"]["containers"][0]["args"]
             .as_array()
@@ -1081,7 +1101,10 @@ mod export_job_tests {
             jobs[0]["spec"]["template"]["spec"]["serviceAccountName"],
             "custom-sa"
         );
-        assert_eq!(jobs[0]["spec"]["template"]["spec"]["restartPolicy"], "Never");
+        assert_eq!(
+            jobs[0]["spec"]["template"]["spec"]["restartPolicy"],
+            "Never"
+        );
         assert_eq!(jobs[0]["spec"]["backoffLimit"], 1);
         assert_eq!(jobs[0]["spec"]["ttlSecondsAfterFinished"], 3600);
     }
@@ -1094,7 +1117,10 @@ mod export_job_tests {
 
     #[test]
     fn export_receipt_configmap_name_is_deterministic() {
-        assert_eq!(export_receipt_configmap_name("r1", 0), "r1-export-0-receipt");
+        assert_eq!(
+            export_receipt_configmap_name("r1", 0),
+            "r1-export-0-receipt"
+        );
     }
 }
 
@@ -1102,9 +1128,7 @@ mod export_job_tests {
 mod routing_tests {
     use super::*;
     use std::collections::BTreeMap;
-    use tatara_process::classification::{
-        Classification, ConvergencePointType, SubstrateType,
-    };
+    use tatara_process::classification::{Classification, ConvergencePointType, SubstrateType};
     use tatara_process::crd::ProcessSpec;
     use tatara_process::routing::{RoutingBackend, RoutingHostname, RoutingSpec};
 

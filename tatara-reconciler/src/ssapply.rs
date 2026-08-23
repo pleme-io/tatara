@@ -87,6 +87,89 @@ pub fn ownership_annotations(process_ref: &str) -> serde_json::Map<String, Value
 }
 
 /// Substrate-primitive builder for the standard tatara-reconciler
+/// **ownership label pair** — the 2-slot
+/// `{MANAGED_BY: FIELD_MANAGER, PROCESS: process_ref}` object shape
+/// every emitted resource in [`crate::render`] and every routing edge
+/// in [`crate::edges`] marks its `metadata.labels` block with. Sibling
+/// on the `labels` axis to [`ownership_annotations`] on the
+/// `annotations` axis; both carry the SAME 2-key ownership pair so
+/// operators grepping resources by either axis (label selectors from
+/// `kubectl get -l tatara.pleme.io/process=…`, annotation lookups from
+/// the reconciler's own drift detector) land at the identical key
+/// pair — the `assert_ownership_pair_matches_annotations` pin binds
+/// the invariant at compile-adjacent test granularity.
+///
+/// Pre-lift the 2-slot label shape was hand-authored at THREE sites
+/// past the PRIME-DIRECTIVE ≥ 2 duplication threshold:
+/// * [`crate::edges::IngressEdge`] — the Ingress `metadata.labels`
+///   block, literal `annotations::MANAGED_BY: "tatara-reconciler",
+///   annotations::PROCESS: ctx.process_ref` inside a `json!({...})`
+///   before the routing-form + app extension.
+/// * [`crate::edges::DnsEndpointEdge`] — the DNSEndpoint
+///   `metadata.labels` block, same 2-key literal (already delegating
+///   through [`ownership_annotations`] on the annotations axis).
+/// * [`crate::render::one_export_job`] — the export Job
+///   `metadata.labels` block, same 2-key literal before the ROLE +
+///   EXPORT_INDEX extension.
+///
+/// The three literal sites additionally hand-coded the
+/// `"tatara-reconciler"` string on the `MANAGED_BY` slot, so they
+/// bypassed [`FIELD_MANAGER`] and would drift silently if the field
+/// manager string is ever renamed. Post-lift every one of these
+/// sites reads the const, so the invariant "MANAGED_BY ==
+/// FIELD_MANAGER across every emitted resource's labels axis" holds
+/// by construction, matching the invariant the annotations-axis
+/// primitive already enforced.
+///
+/// **Peer sites intentionally NOT collapsed:** the export Job's pod
+/// template `metadata.labels` at [`crate::render::one_export_job`]
+/// carries only `{PROCESS, ROLE, EXPORT_INDEX}` — no `MANAGED_BY` —
+/// because pod-template labels feed the Job's pod-selector wiring,
+/// not reconciler ownership discovery, and adding `MANAGED_BY` there
+/// would inflate the selector unnecessarily. That site is a
+/// deliberately different shape, not a lift candidate.
+///
+/// Returns a [`serde_json::Map`] rather than a [`Value`] so callers
+/// can either drop it under a `"labels"` key with `Value::Object(map)`
+/// inside a `json!` macro, or `extend` it with additional keys
+/// (see [`crate::edges::IngressEdge`] / [`crate::edges::DnsEndpointEdge`]
+/// which append `app` + `routing-form` labels to the same map, or
+/// [`crate::render::one_export_job`] which appends `role` +
+/// `export-index` labels).
+///
+/// A future addition (e.g. a `VERSION` slot naming the reconciler
+/// build, a `LEASE_ID` slot for multi-instance leadership, a
+/// `RECONCILE_GENERATION` counter for stall detection) lands at this
+/// ONE substrate primitive and every downstream emit site inherits
+/// the upgrade mechanically — no per-site hand-edit at edges.rs or
+/// render.rs. And because the sibling annotations primitive carries
+/// the same 2-slot shape, a future `VERSION`/`LEASE_ID` slot added
+/// to both primitives keeps the labels-axis and annotations-axis
+/// ownership tags in lockstep by construction.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// the 2-slot labels shape recurred at three hand-authored sites
+/// past the PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted
+/// to ONE owner here). THEORY.md §II.1 invariant 5 (composition
+/// preserves proofs — a regression that drifted the label key or
+/// the field manager string at ONE site surfaces at
+/// [`tests::ownership_labels_produces_field_manager_and_process_ref`]
+/// / [`tests::ownership_labels_pair_matches_annotations_pair`]
+/// rather than as silent drift at every downstream emit site).
+pub fn ownership_labels(process_ref: &str) -> serde_json::Map<String, Value> {
+    let mut m = serde_json::Map::new();
+    m.insert(
+        annotations::MANAGED_BY.to_string(),
+        Value::String(FIELD_MANAGER.to_string()),
+    );
+    m.insert(
+        annotations::PROCESS.to_string(),
+        Value::String(process_ref.to_string()),
+    );
+    m
+}
+
+/// Substrate-primitive builder for the standard tatara-reconciler
 /// **namespace-qualified process reference** — the `<ns>/<name>`
 /// string every consumer that grepped, keyed, or annotated a
 /// Process by "which cluster location owns it" composed by hand.
@@ -591,6 +674,115 @@ mod tests {
         let anns = &resource["metadata"]["annotations"];
         assert_eq!(anns[annotations::MANAGED_BY], FIELD_MANAGER);
         assert_eq!(anns[annotations::PROCESS], "demo-ns/demo-app");
+    }
+
+    // ─── ownership_labels substrate pins ────────────────────────────────
+    //
+    // The 2-slot `{MANAGED_BY: FIELD_MANAGER, PROCESS: process_ref}`
+    // labels shape recurred at three hand-authored sites
+    // (edges::IngressEdge, edges::DnsEndpointEdge, render::one_export_job)
+    // before this primitive existed, each hand-coding the
+    // `"tatara-reconciler"` literal on the MANAGED_BY slot in addition
+    // to the shape. These pins mirror the sibling annotations-axis
+    // pins immediately above so a regression on either axis surfaces
+    // at fail-before-pass-after granularity, and additionally cross-
+    // check that the two axes carry the IDENTICAL 2-key pair — the
+    // invariant every operator relies on when the same resource is
+    // grepped via either axis.
+
+    #[test]
+    fn ownership_labels_produces_field_manager_and_process_ref() {
+        let m = ownership_labels("demo-ns/demo-app");
+        // Exactly two keys — no accidental extras (a regression that
+        // seeded the pod-selector-only ROLE/EXPORT_INDEX keys into
+        // the primitive would fail here rather than pollute every
+        // edges/render callsite's labels block).
+        assert_eq!(m.len(), 2);
+        // MANAGED_BY reads FIELD_MANAGER, NOT the literal
+        // `"tatara-reconciler"` string the pre-lift sites hard-coded.
+        // A future rename of FIELD_MANAGER now propagates through
+        // this primitive to every downstream emit site by
+        // construction; a regression that re-hard-coded the literal
+        // fails this assertion.
+        assert_eq!(
+            m.get(annotations::MANAGED_BY).and_then(Value::as_str),
+            Some(FIELD_MANAGER),
+            "MANAGED_BY slot must carry FIELD_MANAGER, not a hand-authored literal"
+        );
+        assert_eq!(
+            m.get(annotations::PROCESS).and_then(Value::as_str),
+            Some("demo-ns/demo-app"),
+            "PROCESS slot must ride the caller-supplied process_ref verbatim"
+        );
+    }
+
+    #[test]
+    fn ownership_labels_rides_arbitrary_process_ref_shapes() {
+        // Peer to `ownership_annotations_rides_arbitrary_process_ref_shapes`:
+        // the primitive treats the input as opaque, so any
+        // caller-composed reference shape (`<ns>/<name>`,
+        // `<ns>/<name>@<gen>`, bare `<name>`, empty) rides through
+        // unchanged into the labels axis with no interpretation.
+        for input in [
+            "flux-system/observability-stack",
+            "just-a-name",
+            "",
+            "ns/name@42",
+            "with spaces and / slashes",
+        ] {
+            let m = ownership_labels(input);
+            assert_eq!(
+                m.get(annotations::PROCESS).and_then(Value::as_str),
+                Some(input),
+                "PROCESS slot must ride {input:?} verbatim"
+            );
+        }
+    }
+
+    #[test]
+    fn ownership_labels_interpolates_cleanly_through_json_macro() {
+        // The three shipped sites interpolate the primitive under a
+        // `"labels"` key inside a `json!({...})` block via
+        // `Value::Object(map)`. Pin the interop shape so a regression
+        // that swapped the return type from `Map` to a `Value` variant
+        // that stops interpolating as an object surfaces here rather
+        // than as a broken `metadata.labels` on every emitted Ingress
+        // / DNSEndpoint / export Job.
+        let m = ownership_labels("demo/ephemeral-demo");
+        let wrapped = json!({
+            "metadata": {
+                "name": "ephemeral-demo",
+                "namespace": "demo",
+                "labels": Value::Object(m.clone()),
+            },
+        });
+        let labels = &wrapped["metadata"]["labels"];
+        assert!(labels.is_object(), "labels must land as a JSON object");
+        assert_eq!(labels[annotations::MANAGED_BY], FIELD_MANAGER);
+        assert_eq!(labels[annotations::PROCESS], "demo/ephemeral-demo");
+        assert_eq!(serde_json::Value::Object(m), *labels);
+    }
+
+    #[test]
+    fn ownership_labels_pair_matches_annotations_pair() {
+        // Cross-axis coherence: labels and annotations carry the SAME
+        // 2-key ownership pair, byte-identical, for the same
+        // `process_ref`. Operators grep resources by either axis
+        // (`kubectl get -l tatara.pleme.io/process=…` on the labels
+        // axis, annotation lookups on the annotations axis) and land
+        // at the identical key pair. A future addition to one
+        // primitive that isn't mirrored to the other (e.g. a
+        // labels-only `VERSION` slot) would drift the two axes and
+        // fail this pin — surfacing the desync at fail-before-pass-
+        // after granularity rather than as a silent operator-facing
+        // discrepancy between what `-l` selects and what the
+        // annotations reader sees.
+        let labels_map = ownership_labels("demo-ns/demo-app");
+        let annotations_map = ownership_annotations("demo-ns/demo-app");
+        assert_eq!(
+            labels_map, annotations_map,
+            "ownership_labels and ownership_annotations must return byte-identical maps",
+        );
     }
 
     // ─── qualified_process_ref substrate pins ───────────────────────────

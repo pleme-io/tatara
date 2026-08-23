@@ -15,6 +15,77 @@ use tatara_process::prelude::Process;
 /// Field manager string we use for all SSA writes.
 pub const FIELD_MANAGER: &str = "tatara-reconciler";
 
+/// Substrate-primitive builder for the standard tatara-reconciler
+/// **ownership tag** — the 2-slot
+/// `{MANAGED_BY: FIELD_MANAGER, PROCESS: process_ref}`
+/// object shape every emitted resource in [`crate::render`] and every
+/// routing edge in [`crate::edges`] marks itself with. Every K8s
+/// resource this reconciler owns carries this pair so operators (and
+/// external tooling — dashboards, GC sweeps, drift detectors) can
+/// grep for "resources this reconciler manages" on ONE well-known key
+/// pair rather than probing each resource's owner references.
+///
+/// Pre-lift the 2-slot shape was hand-authored at FIVE sites past the
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold:
+/// * [`crate::render`] × 3 — Kustomization / OCIRepository /
+///   HelmRelease metadata annotations, each literal
+///   `json!({ MANAGED_BY: "tatara-reconciler",
+///   PROCESS: format!("{ns}/{name}") })` inline.
+/// * [`crate::edges::DnsEndpointEdge`] — the DNSEndpoint annotations
+///   block, same 2-key literal.
+/// * [`crate::edges::IngressEdge`] — the Ingress annotations map,
+///   started as two `serde_json::Map::insert(...)` calls seeding the
+///   same 2-slot pair before adding routing / TLS annotations.
+///
+/// PLUS the workspace's own [`inject_annotations`] gate re-authored
+/// the same pair at its own local site as
+/// `annot.insert(MANAGED_BY, FIELD_MANAGER); annot.insert(PROCESS,
+/// format!("{ns}/{name}"));`, so the SSA-time re-injection now
+/// delegates through the same primitive as the render-time authoring.
+///
+/// The literal render + edges sites additionally hand-coded the
+/// `"tatara-reconciler"` string on the `MANAGED_BY` slot, so they
+/// bypassed [`FIELD_MANAGER`] and would drift silently if the field
+/// manager string is ever renamed. Post-lift every one of these sites
+/// reads the const, so the invariant "MANAGED_BY == FIELD_MANAGER
+/// across every emitted resource" holds by construction.
+///
+/// Returns a [`serde_json::Map`] rather than a [`Value`] so callers
+/// can either drop it under an `"annotations"` / `"labels"` key with
+/// `Value::Object(map)` inside a `json!` macro, or `extend` it with
+/// additional keys (see [`crate::edges::IngressEdge`] which appends
+/// routing-form + backend + cert-manager annotations to the same
+/// map, or [`inject_annotations`] which appends PID + CONTENT_HASH
+/// + GENERATION + ATTESTATION_ROOT).
+///
+/// A future addition (e.g. a `VERSION` slot naming the reconciler
+/// build, a `LEASE_ID` slot for multi-instance leadership, a
+/// `RECONCILE_GENERATION` counter for stall detection) lands at this
+/// ONE substrate primitive and every downstream emit site inherits
+/// the upgrade mechanically — no per-site hand-edit at render.rs,
+/// edges.rs, or inject_annotations.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// 2-slot shape recurred at five hand-authored sites well past the
+/// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
+/// owner here). THEORY.md §II.1 invariant 5 (composition preserves
+/// proofs — a regression that drifted the annotation key or the
+/// field manager string at ONE site surfaces at
+/// [`tests::ownership_annotations_produces_field_manager_and_process_ref`]
+/// rather than as silent drift at every downstream emit site).
+pub fn ownership_annotations(process_ref: &str) -> serde_json::Map<String, Value> {
+    let mut m = serde_json::Map::new();
+    m.insert(
+        annotations::MANAGED_BY.to_string(),
+        Value::String(FIELD_MANAGER.to_string()),
+    );
+    m.insert(
+        annotations::PROCESS.to_string(),
+        Value::String(process_ref.to_string()),
+    );
+    m
+}
+
 /// Resolve an `ApiResource` for `apiVersion/kind`. Hand-maintains plurals
 /// for resources we emit or consume — good enough for v0; future move to
 /// `kube::discovery` lands when we want to handle arbitrary CRDs.
@@ -202,14 +273,14 @@ fn inject_annotations(resource: &mut Value, process: &Process) -> Result<()> {
 
     let ns = process.metadata.namespace.as_deref().unwrap_or("default");
     let name = process.metadata.name.as_deref().unwrap_or("unnamed");
-    annot.insert(
-        annotations::MANAGED_BY.to_string(),
-        Value::String(FIELD_MANAGER.to_string()),
-    );
-    annot.insert(
-        annotations::PROCESS.to_string(),
-        Value::String(format!("{ns}/{name}")),
-    );
+    // Seed the standard 2-slot ownership tag through the shared
+    // substrate primitive so the SSA-time re-injection uses the exact
+    // same key pair + FIELD_MANAGER value the render-time authoring
+    // sites do — a rename of FIELD_MANAGER, or a new mandatory tag
+    // added to `ownership_annotations`, propagates here mechanically.
+    for (k, v) in ownership_annotations(&format!("{ns}/{name}")) {
+        annot.insert(k, v);
+    }
 
     if let Some(status) = &process.status {
         if let Some(pid) = &status.pid {
@@ -308,5 +379,143 @@ mod tests {
         let refs = obj["metadata"]["ownerReferences"].as_array().unwrap();
         assert_eq!(refs.len(), 1);
         assert_eq!(refs[0]["kind"], "Process");
+    }
+
+    // ─── ownership_annotations substrate pins ───────────────────────────
+    //
+    // The 2-slot `{MANAGED_BY: FIELD_MANAGER, PROCESS: process_ref}`
+    // shape recurred at five hand-authored sites (three in
+    // `render.rs` + two in `edges.rs`) before this primitive existed,
+    // each hand-coding the `"tatara-reconciler"` literal on the
+    // MANAGED_BY slot in addition to the shape. These pins bind the
+    // primitive at fail-before-pass-after granularity so a regression
+    // that drifted a key, swapped the MANAGED_BY value back to a
+    // literal, or reordered the slots surfaces here rather than as
+    // silent drift at every emitted resource's ownership tag.
+
+    #[test]
+    fn ownership_annotations_produces_field_manager_and_process_ref() {
+        let m = ownership_annotations("demo-ns/demo-app");
+        // Exactly two keys — no accidental extras (a regression that
+        // seeded PID / CONTENT_HASH into the primitive would fail
+        // here rather than pollute every render/edges callsite).
+        assert_eq!(m.len(), 2);
+        // MANAGED_BY reads FIELD_MANAGER, NOT the literal
+        // `"tatara-reconciler"` string the pre-lift sites hard-coded.
+        // A future rename of FIELD_MANAGER now propagates through
+        // this primitive to every downstream emit site by
+        // construction; a regression that re-hard-coded the literal
+        // fails this assertion.
+        assert_eq!(
+            m.get(annotations::MANAGED_BY).and_then(Value::as_str),
+            Some(FIELD_MANAGER),
+            "MANAGED_BY slot must carry FIELD_MANAGER, not a hand-authored literal"
+        );
+        assert_eq!(
+            m.get(annotations::PROCESS).and_then(Value::as_str),
+            Some("demo-ns/demo-app"),
+            "PROCESS slot must ride the caller-supplied process_ref verbatim"
+        );
+    }
+
+    #[test]
+    fn ownership_annotations_rides_arbitrary_process_ref_shapes() {
+        // The reconciler shapes `process_ref` as `<ns>/<name>` at the
+        // render.rs sites (via `format!("{ns}/{name}")`) and passes
+        // pre-composed `ctx.process_ref` at the edges.rs sites. The
+        // primitive treats the input as opaque — a caller-composed
+        // reference (e.g. a future `<ns>/<name>@<generation>` shape
+        // for multi-generation attestation grepping) rides through
+        // unchanged, and the empty-string edge case (unnamed process
+        // pre-metadata) does not panic.
+        for input in [
+            "flux-system/observability-stack",
+            "just-a-name",
+            "",
+            "ns/name@42",
+            "with spaces and / slashes",
+        ] {
+            let m = ownership_annotations(input);
+            assert_eq!(
+                m.get(annotations::PROCESS).and_then(Value::as_str),
+                Some(input),
+                "PROCESS slot must ride {input:?} verbatim"
+            );
+        }
+    }
+
+    #[test]
+    fn ownership_annotations_interpolates_cleanly_through_json_macro() {
+        // The three render.rs sites interpolate the primitive under an
+        // `"annotations"` key inside a `json!({...})` block. Pin the
+        // interop shape so a regression that swapped the return type
+        // from `Map` to a `Value` variant that stops interpolating
+        // as an object (e.g. `Value::Array`) surfaces here rather
+        // than as a broken `metadata.annotations` on every emitted
+        // Kustomization / OCIRepository / HelmRelease.
+        let m = ownership_annotations("demo/ephemeral-demo");
+        let wrapped = json!({
+            "metadata": {
+                "name": "ephemeral-demo",
+                "namespace": "demo",
+                "annotations": m.clone(),
+            },
+        });
+        let anns = &wrapped["metadata"]["annotations"];
+        assert!(anns.is_object(), "annotations must land as a JSON object");
+        assert_eq!(anns[annotations::MANAGED_BY], FIELD_MANAGER);
+        assert_eq!(anns[annotations::PROCESS], "demo/ephemeral-demo");
+        // And the raw Map serialisation is byte-identical to the
+        // interpolated form — no reshaping happens through the
+        // macro boundary.
+        assert_eq!(serde_json::Value::Object(m), *anns);
+    }
+
+    #[test]
+    fn inject_annotations_delegates_through_ownership_primitive() {
+        // `inject_annotations` seeds its annotation carrier through
+        // `ownership_annotations` before extending with PID /
+        // CONTENT_HASH / GENERATION / ATTESTATION_ROOT. Pin that the
+        // SSA-time re-injection produces the SAME 2-slot ownership
+        // pair the render-time authoring does — pre-existing
+        // operator-facing keys don't change wording under the lift.
+        //
+        // Construct a Process via serde_json so the test doesn't need
+        // to reproduce the full ProcessSpec builder scaffold from
+        // `claim.rs`'s `empty_process` helper. Only metadata.name +
+        // metadata.namespace matter for `inject_annotations`'s
+        // seed-time behavior; `status` is `None` so no
+        // PID / CONTENT_HASH keys land and only the seed keys are
+        // asserted.
+        let process: Process = serde_json::from_value(json!({
+            "apiVersion": "tatara.pleme.io/v1alpha1",
+            "kind": "Process",
+            "metadata": { "name": "demo-app", "namespace": "demo-ns" },
+            "spec": {
+                "identity": {},
+                "classification": {
+                    "pointType": "Gate",
+                    "substrate": "Compute",
+                },
+                "intent": { "flux": {
+                    "path": "./",
+                    "gitRepository": "flux-system",
+                }},
+                "boundary": {},
+                "compliance": {},
+                "signals": {},
+                "lifetime": { "permanent": {} },
+                "suspended": false,
+            },
+        }))
+        .expect("Process deserialises from fixture JSON");
+        let mut resource = json!({
+            "apiVersion": "v1", "kind": "ConfigMap",
+            "metadata": { "name": "x" },
+        });
+        inject_annotations(&mut resource, &process).unwrap();
+        let anns = &resource["metadata"]["annotations"];
+        assert_eq!(anns[annotations::MANAGED_BY], FIELD_MANAGER);
+        assert_eq!(anns[annotations::PROCESS], "demo-ns/demo-app");
     }
 }

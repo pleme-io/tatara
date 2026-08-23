@@ -99,15 +99,10 @@ impl Edge for IngressEdge {
     }
 
     fn render(&self, ctx: &EdgeContext<'_>) -> Result<Option<Value>> {
-        let mut annotations_map = serde_json::Map::new();
-        annotations_map.insert(
-            annotations::MANAGED_BY.to_string(),
-            Value::String("tatara-reconciler".into()),
-        );
-        annotations_map.insert(
-            annotations::PROCESS.to_string(),
-            Value::String(ctx.process_ref.to_string()),
-        );
+        // Seed the annotations map through the shared substrate primitive
+        // owning the 2-slot `{MANAGED_BY, PROCESS}` ownership tag; then
+        // extend with routing-form + backend + cert-manager annotations.
+        let mut annotations_map = crate::ssapply::ownership_annotations(ctx.process_ref);
         if ctx.is_stable {
             annotations_map.insert(
                 "tatara.pleme.io/routing-form".to_string(),
@@ -240,10 +235,7 @@ impl Edge for DnsEndpointEdge {
                     "tatara.pleme.io/app": ctx.hostname.app,
                     "tatara.pleme.io/routing-form": if ctx.is_stable { "stable" } else { "instance" },
                 },
-                "annotations": {
-                    annotations::MANAGED_BY: "tatara-reconciler",
-                    annotations::PROCESS: ctx.process_ref,
-                },
+                "annotations": crate::ssapply::ownership_annotations(ctx.process_ref),
                 "ownerReferences": build_owner_refs(ctx),
             },
             "spec": {

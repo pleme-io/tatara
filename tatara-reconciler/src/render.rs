@@ -142,10 +142,7 @@ fn render_flux(name: &str, ns: &str, f: &FluxIntent) -> (Vec<Value>, Vec<u8>) {
         "metadata": {
             "name": name,
             "namespace": ns,
-            "annotations": {
-                annotations::MANAGED_BY: "tatara-reconciler",
-                annotations::PROCESS: format!("{ns}/{name}"),
-            },
+            "annotations": crate::ssapply::ownership_annotations(&format!("{ns}/{name}")),
         },
         "spec": Value::Object(spec),
     });
@@ -197,10 +194,7 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
             "metadata": {
                 "name": name,
                 "namespace": ns,
-                "annotations": {
-                    annotations::MANAGED_BY: "tatara-reconciler",
-                    annotations::PROCESS: format!("{ns}/{name}"),
-                },
+                "annotations": crate::ssapply::ownership_annotations(&format!("{ns}/{name}")),
             },
             "spec": {
                 "interval": "5m",
@@ -266,10 +260,7 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
         "metadata": {
             "name": name,
             "namespace": ns,
-            "annotations": {
-                annotations::MANAGED_BY: "tatara-reconciler",
-                annotations::PROCESS: format!("{ns}/{name}"),
-            },
+            "annotations": crate::ssapply::ownership_annotations(&format!("{ns}/{name}")),
         },
         "spec": Value::Object(hr_spec),
     });

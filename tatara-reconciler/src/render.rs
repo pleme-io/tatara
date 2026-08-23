@@ -30,16 +30,17 @@ pub struct RenderOutput {
 /// Render an `Intent` into FluxCD resources owned by `process`.
 pub fn render(process: &Process, intent: &Intent) -> Result<RenderOutput> {
     let variant = intent.variant()?;
-    let owner_name = process
-        .metadata
-        .name
-        .clone()
-        .unwrap_or_else(|| "unnamed".into());
-    let owner_ns = process
-        .metadata
-        .namespace
-        .clone()
-        .unwrap_or_else(|| "default".into());
+    // Owner-metadata seed threaded through every per-Intent render
+    // arm below. The `(ns, name)` pair rides through the substrate
+    // `Process::coordinates_or_defaults` primitive so the same
+    // workspace-wide fallback strings ("default" / "unnamed") that
+    // the SSA-time re-injection (ssapply::inject_annotations),
+    // claim-arbiter row builder (table_controller::reconcile), the
+    // sibling routing renderer (render_routing), and the boundary-
+    // evaluator default-namespace resolver all substitute land here
+    // too — a rename of either fallback (or a future normalization
+    // sweep) reaches this seed through ONE primitive.
+    let (owner_ns, owner_name) = process.coordinates_or_defaults();
 
     // R12 — Encapsulation mode dispatch.
     //
@@ -75,9 +76,9 @@ pub fn render(process: &Process, intent: &Intent) -> Result<RenderOutput> {
         (vec![], variant.canonical_bytes())
     } else {
         match variant {
-            IntentVariant::Flux(f) => render_flux(&owner_name, &owner_ns, f),
-            IntentVariant::Nix(n) => render_nix(&owner_name, &owner_ns, n),
-            IntentVariant::Lisp(l) => render_lisp(&owner_name, &owner_ns, l)?,
+            IntentVariant::Flux(f) => render_flux(owner_name, owner_ns, f),
+            IntentVariant::Nix(n) => render_nix(owner_name, owner_ns, n),
+            IntentVariant::Lisp(l) => render_lisp(owner_name, owner_ns, l)?,
             IntentVariant::Container(_) => (vec![], vec![]),
             // Guest intents (HVF / VZ / WASM) are owned by tatara-hospedeiro —
             // the reconciler emits no K8s resources for them. Intent bytes
@@ -90,7 +91,7 @@ pub fn render(process: &Process, intent: &Intent) -> Result<RenderOutput> {
                 // match the pre-existing release, helm-controller does
                 // the rest. R12 adds an adoption annotation so the
                 // operator can see at-a-glance which HRs are adopting.
-                let (resources, bytes) = render_aplicacao(&owner_name, &owner_ns, a);
+                let (resources, bytes) = render_aplicacao(owner_name, owner_ns, a);
                 let resources = if mode.preserves_release_name() {
                     mark_resources_as_adopting(resources, process)
                 } else {
@@ -399,18 +400,18 @@ pub fn render_routing(
     domain: &str,
     dns_lb_target: Option<&str>,
 ) -> Result<Vec<Value>> {
-    let process_name = process
-        .metadata
-        .name
-        .as_deref()
-        .unwrap_or("unnamed");
-    let process_namespace = process
-        .metadata
-        .namespace
-        .as_deref()
-        .unwrap_or("default");
+    // Route the two-slot metadata pull through the substrate primitive
+    // on `Process` — the pre-lift hand-authored fallback pair now
+    // shares ONE owner with the render-time authoring seed (render),
+    // the SSA-time re-injection (ssapply::inject_annotations), the
+    // claim-arbiter row builder (table_controller::reconcile), and
+    // the boundary-evaluator default-namespace resolver. The
+    // `<ns>/<name>` composition below then rides through the
+    // paired-composer substrate `qualified_process_ref` so the shape
+    // convention is owned at ONE site too.
+    let (process_namespace, process_name) = process.coordinates_or_defaults();
     let process_uid = process.metadata.uid.as_deref().unwrap_or("");
-    let process_ref = format!("{process_namespace}/{process_name}");
+    let process_ref = crate::ssapply::qualified_process_ref(process_namespace, process_name);
 
     // Content-hash form of ephemeral_id — derived once per Process,
     // reused across every hostname on this Process.

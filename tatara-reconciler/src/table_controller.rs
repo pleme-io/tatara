@@ -70,11 +70,15 @@ pub async fn reconcile(
             .as_ref()
             .map(|t| t.0)
             .unwrap_or_else(Utc::now);
-        let process_ref = format!(
-            "{}/{}",
-            p.metadata.namespace.as_deref().unwrap_or("default"),
-            p.metadata.name.as_deref().unwrap_or("unnamed"),
-        );
+        // Two-slot metadata pull → `<ns>/<name>` claim-row key. The
+        // `(ns, name)` pair rides through `Process::
+        // coordinates_or_defaults` (workspace-wide fallback owner)
+        // and then through `qualified_process_ref` (workspace-wide
+        // `<ns>/<name>` shape owner) so a rename of either fallback
+        // string or of the reference separator lands at ONE site
+        // rather than at every claim-arbiter row builder.
+        let (ns, name) = p.coordinates_or_defaults();
+        let process_ref = crate::ssapply::qualified_process_ref(ns, name);
         for hostname in &routing.hostnames {
             let cluster = hostname.cluster.as_deref().unwrap_or(cfg_cluster);
             let key = format!("{cluster}/{}", hostname.app);

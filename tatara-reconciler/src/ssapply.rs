@@ -338,8 +338,15 @@ fn inject_annotations(resource: &mut Value, process: &Process) -> Result<()> {
         .as_object_mut()
         .ok_or_else(|| anyhow!("annotations is not an object"))?;
 
-    let ns = process.metadata.namespace.as_deref().unwrap_or("default");
-    let name = process.metadata.name.as_deref().unwrap_or("unnamed");
+    // Route the two-slot metadata pull through the substrate primitive
+    // on `Process` — the pre-lift hand-authored `.metadata.namespace
+    // .as_deref().unwrap_or("default")` +
+    // `.metadata.name.as_deref().unwrap_or("unnamed")` incantations
+    // now share ONE fallback owner with the render owner-metadata
+    // seed (render::render), claim-arbiter row builder
+    // (table_controller::reconcile), and boundary-evaluator default-
+    // namespace resolver (boundary::evaluate / check_depends_on).
+    let (ns, name) = process.coordinates_or_defaults();
     // Seed the standard 2-slot ownership tag through the shared
     // substrate primitive so the SSA-time re-injection uses the exact
     // same key pair + FIELD_MANAGER value the render-time authoring

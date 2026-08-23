@@ -161,7 +161,7 @@ pub async fn evaluate(
     process: &Process,
     condition: &Condition,
 ) -> Result<Satisfaction> {
-    let default_ns = process.metadata.namespace.as_deref().unwrap_or("default");
+    let default_ns = process.namespace_or_default();
     match condition.kind {
         ConditionKind::ProcessPhase => {
             evaluate_process_phase(client, default_ns, &condition.params).await
@@ -725,7 +725,7 @@ pub struct UnmetDependency {
 /// Check every `spec.dependsOn` entry against live cluster state.
 /// Returns the list of unmet dependencies (empty = proceed).
 pub async fn check_depends_on(client: Client, process: &Process) -> Result<Vec<UnmetDependency>> {
-    let default_ns = process.metadata.namespace.as_deref().unwrap_or("default");
+    let default_ns = process.namespace_or_default();
     let mut unmet = Vec::new();
 
     for dep in &process.spec.depends_on {

@@ -243,28 +243,8 @@ async fn evaluate_job_attested(
         Err(unk) => return Ok(unk),
     };
     let ns = parsed.namespace.as_deref().unwrap_or(default_ns);
-    let job_status = fetch_job_status(client.clone(), ns, &parsed.name).await?;
-    let job_status = match job_status {
-        JobLookup::Found(s) => s,
-        JobLookup::Missing => {
-            return Ok(Satisfaction::Unsatisfied(format!(
-                "Job {ns}/{} not found",
-                parsed.name
-            )))
-        }
-    };
-
-    if job_status.failed > 0 {
-        return Ok(Satisfaction::Unsatisfied(format!(
-            "Job {ns}/{} failed (status.failed={})",
-            parsed.name, job_status.failed
-        )));
-    }
-    if job_status.succeeded < 1 {
-        return Ok(Satisfaction::Unsatisfied(format!(
-            "Job {ns}/{} still running (succeeded={}, active={})",
-            parsed.name, job_status.succeeded, job_status.active
-        )));
+    if let Err(unsat) = require_succeeded_job(client.clone(), ns, &parsed.name, "Job").await? {
+        return Ok(unsat);
     }
 
     if !parsed.expect_receipt {
@@ -340,25 +320,10 @@ async fn evaluate_closed_loop_auth(
         .unwrap_or_else(|| format!("{job_name}-receipt"));
 
     // 1. The probe Job must have succeeded.
-    let job_status = fetch_job_status(client.clone(), ns, &job_name).await?;
-    let job_status = match job_status {
-        JobLookup::Found(s) => s,
-        JobLookup::Missing => {
-            return Ok(Satisfaction::Unsatisfied(format!(
-                "closed-loop probe Job {ns}/{job_name} not found"
-            )))
-        }
-    };
-    if job_status.failed > 0 {
-        return Ok(Satisfaction::Unsatisfied(format!(
-            "closed-loop probe Job {ns}/{job_name} failed (status.failed={})",
-            job_status.failed
-        )));
-    }
-    if job_status.succeeded < 1 {
-        return Ok(Satisfaction::Unsatisfied(format!(
-            "closed-loop probe Job {ns}/{job_name} still running"
-        )));
+    if let Err(unsat) =
+        require_succeeded_job(client.clone(), ns, &job_name, "closed-loop probe Job").await?
+    {
+        return Ok(unsat);
     }
 
     // 2. The receipt ConfigMap must exist and parse.
@@ -373,17 +338,110 @@ async fn evaluate_closed_loop_auth(
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum JobLookup {
     Missing,
     Found(JobStatusView),
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Eq)]
 struct JobStatusView {
     succeeded: i64,
     failed: i64,
     active: i64,
+}
+
+/// Pure projection of a fetched Job's status into an operator-facing
+/// [`Satisfaction`] diagnostic keyed on the caller's `label`.
+///
+/// Pre-lift the TWO postcondition evaluators
+/// ([`evaluate_job_attested`] on the `JobAttested` axis and
+/// [`evaluate_closed_loop_auth`] on the `ClosedLoopAuth` axis) each
+/// hand-authored the same three-invariant scaffold at their own local
+/// site: (1) [`JobLookup::Missing`] projects to
+/// `Satisfaction::Unsatisfied("<label> {ns}/{name} not found")`,
+/// (2) `status.failed > 0` projects to
+/// `Satisfaction::Unsatisfied("<label> {ns}/{name} failed
+/// (status.failed={n})")`, (3) `status.succeeded < 1` projects to
+/// `Satisfaction::Unsatisfied("<label> {ns}/{name} still running
+/// (succeeded={s}, active={a})")`. TWO byte-for-byte identical
+/// `let job_status = match fetch_job_status(...) { … }; if
+/// job_status.failed > 0 { … } if job_status.succeeded < 1 { … }`
+/// blocks past the PRIME-DIRECTIVE ≥ 2 duplication threshold,
+/// differing only in the label prefix (`"Job"` vs `"closed-loop
+/// probe Job"`) each threaded through the SAME scaffold.
+///
+/// Post-lift the three shared invariants live at ONE substrate
+/// primitive here (the pure projection) plus one async peer
+/// [`require_succeeded_job`] that owns the fetch. A regression
+/// that drifted the diagnostic wording (a swapped counter phrase,
+/// a missing label prefix, a promoted variant on the
+/// [`Satisfaction`] axis) at ONE evaluator surfaces at
+/// [`classify_job_status_tests`] rather than as silent
+/// operator-facing drift across the two postcondition evaluators.
+///
+/// The lift also **strictly widens** the closed-loop path's "still
+/// running" diagnostic: pre-lift it read
+/// `"closed-loop probe Job {ns}/{name} still running"` (no
+/// counters); post-lift it inherits the JobAttested path's
+/// counter-carrying tail `(succeeded={s}, active={a})`, matching the
+/// axis where operators grep for those counters. Both callsites now
+/// route through the same primitive, so a future counter axis
+/// (e.g. `startTime`, `completionTime`, `active` breakdown) lands at
+/// ONE substrate primitive and every downstream evaluator picks up
+/// the upgrade mechanically.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// three-invariant scaffold recurred at two Job-based evaluators
+/// past the PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted
+/// to ONE owner here). THEORY.md §II.1 invariant 5 (composition
+/// preserves proofs — the two evaluators now compose structurally
+/// through ONE primitive; a regression that drifted the wording at
+/// ONE axis surfaces at [`classify_job_status_tests`] rather than as
+/// silent drift at every future postcondition evaluator with a
+/// Job-shaped substrate).
+fn classify_job_status(
+    label: &str,
+    ns: &str,
+    name: &str,
+    lookup: JobLookup,
+) -> Result<JobStatusView, Satisfaction> {
+    match lookup {
+        JobLookup::Missing => Err(Satisfaction::Unsatisfied(format!(
+            "{label} {ns}/{name} not found"
+        ))),
+        JobLookup::Found(status) => {
+            if status.failed > 0 {
+                Err(Satisfaction::Unsatisfied(format!(
+                    "{label} {ns}/{name} failed (status.failed={})",
+                    status.failed
+                )))
+            } else if status.succeeded < 1 {
+                Err(Satisfaction::Unsatisfied(format!(
+                    "{label} {ns}/{name} still running (succeeded={}, active={})",
+                    status.succeeded, status.active
+                )))
+            } else {
+                Ok(status)
+            }
+        }
+    }
+}
+
+/// Async wrapper: fetch a Job's status and project the three-invariant
+/// scaffold through [`classify_job_status`]. Returns
+/// `Ok(Ok(JobStatusView))` when the Job has succeeded (status.succeeded
+/// ≥ 1 && status.failed == 0), `Ok(Err(Satisfaction::Unsatisfied(...)))`
+/// on the Missing / failed / running short-circuits, and propagates
+/// fetch-time errors as the outer `Err`.
+async fn require_succeeded_job(
+    client: Client,
+    ns: &str,
+    name: &str,
+    label: &str,
+) -> Result<Result<JobStatusView, Satisfaction>> {
+    let lookup = fetch_job_status(client, ns, name).await?;
+    Ok(classify_job_status(label, ns, name, lookup))
 }
 
 async fn fetch_job_status(client: Client, ns: &str, name: &str) -> Result<JobLookup> {
@@ -963,6 +1021,203 @@ mod parse_condition_params_tests {
         assert!(
             tail.contains("string"),
             "serde error tail must name the expected type verbatim; got {tail:?}"
+        );
+    }
+}
+
+/// Substrate-primitive tests for [`classify_job_status`] — the pure
+/// (label, ns, name, JobLookup) → Result<JobStatusView, Satisfaction>
+/// projection every Job-based postcondition evaluator on this file
+/// dispatches through via [`require_succeeded_job`].
+///
+/// The pre-lift shape lived at TWO sites across
+/// [`evaluate_job_attested`] and [`evaluate_closed_loop_auth`], each
+/// hand-authoring the three-invariant scaffold (Missing / failed > 0
+/// / succeeded < 1) verbatim at its own local site — differing only
+/// in the label prefix each site threaded into the diagnostic. Post-
+/// lift the three shared invariants live at ONE substrate primitive,
+/// and this module pins the four contract axes (Missing, Failed,
+/// Running, Succeeded) plus the label-riding, Satisfaction-variant,
+/// and priority-ordering axes at fail-before-pass-after granularity.
+///
+/// Sibling of the [`parse_condition_params_tests`] module above (on
+/// the shape-gate axis) and the `tests` module (on the
+/// [`Satisfaction`] / [`phase_rank`] / [`parse_receipt_payload`]
+/// axes) — kept as its own module so a regression at the primitive's
+/// projection axis surfaces distinctly from the per-kind evaluator or
+/// the shape gate.
+#[cfg(test)]
+mod classify_job_status_tests {
+    use super::{classify_job_status, JobLookup, JobStatusView, Satisfaction};
+
+    fn view(succeeded: i64, failed: i64, active: i64) -> JobStatusView {
+        JobStatusView {
+            succeeded,
+            failed,
+            active,
+        }
+    }
+
+    // ── Contract axis 1: Succeeded projects to Ok(JobStatusView) ─────
+    //
+    // A Job with `status.succeeded ≥ 1 && status.failed == 0` returns
+    // the fetched view verbatim so downstream evaluators (receipt
+    // verification, ...) can continue with structural access to the
+    // counter axes.
+
+    #[test]
+    fn succeeded_job_projects_to_ok_with_status_view() {
+        let result = classify_job_status(
+            "Job",
+            "flux-system",
+            "my-job",
+            JobLookup::Found(view(1, 0, 0)),
+        );
+        let status = result.expect("succeeded Job must project to Ok(JobStatusView)");
+        assert_eq!(status, view(1, 0, 0));
+    }
+
+    #[test]
+    fn multi_succeeded_job_still_projects_to_ok() {
+        // A completions=N Job may have succeeded > 1; the gate is
+        // `succeeded >= 1`, so higher counts remain Ok.
+        let result = classify_job_status(
+            "Job",
+            "default",
+            "batch-job",
+            JobLookup::Found(view(5, 0, 0)),
+        );
+        assert!(
+            result.is_ok(),
+            "succeeded > 1 must remain Ok, got {result:?}"
+        );
+    }
+
+    // ── Contract axis 2: Missing projects to Unsatisfied verbatim ────
+    //
+    // Pins the exact diagnostic wording operators grep for; a
+    // regression that reshaped the "not found" phrase surfaces here
+    // rather than as silent operator-facing drift.
+
+    #[test]
+    fn missing_job_projects_to_unsatisfied_with_label_prefix() {
+        let result = classify_job_status("Job", "flux-system", "my-job", JobLookup::Missing);
+        let err = result.expect_err("Missing lookup must project to Err(Satisfaction)");
+        assert!(
+            matches!(err, Satisfaction::Unsatisfied(_)),
+            "Missing must project to Satisfaction::Unsatisfied variant"
+        );
+        let Satisfaction::Unsatisfied(msg) = err else {
+            unreachable!()
+        };
+        assert_eq!(msg, "Job flux-system/my-job not found");
+    }
+
+    // ── Contract axis 3: Failed projects to Unsatisfied verbatim ─────
+    //
+    // Pins the (status.failed={n}) counter tail — operators grep for
+    // both the label prefix and the counter to alert on stuck Jobs.
+
+    #[test]
+    fn failed_job_projects_to_unsatisfied_with_counter_tail() {
+        let result =
+            classify_job_status("Job", "default", "my-job", JobLookup::Found(view(0, 3, 0)));
+        let err = result.expect_err("failed > 0 must project to Err(Satisfaction)");
+        let Satisfaction::Unsatisfied(msg) = err else {
+            panic!("expected Satisfaction::Unsatisfied");
+        };
+        assert_eq!(msg, "Job default/my-job failed (status.failed=3)");
+    }
+
+    // ── Contract axis 4: Running projects to Unsatisfied verbatim ────
+    //
+    // Post-lift the closed-loop path also carries the `(succeeded={s},
+    // active={a})` counter tail — pins that the more informative
+    // wording rides through unconditionally, so a future evaluator on
+    // the same primitive picks up the counters mechanically.
+
+    #[test]
+    fn running_job_projects_to_unsatisfied_with_counter_tail() {
+        let result =
+            classify_job_status("Job", "default", "my-job", JobLookup::Found(view(0, 0, 2)));
+        let err = result.expect_err("succeeded < 1 must project to Err(Satisfaction)");
+        let Satisfaction::Unsatisfied(msg) = err else {
+            panic!("expected Satisfaction::Unsatisfied");
+        };
+        assert_eq!(
+            msg,
+            "Job default/my-job still running (succeeded=0, active=2)"
+        );
+    }
+
+    // ── Contract axis 5: label prefix rides through both callsites ───
+    //
+    // Pins that both workspace-shipped labels (`"Job"` for
+    // JobAttested, `"closed-loop probe Job"` for ClosedLoopAuth) ride
+    // through the same primitive verbatim; a regression that
+    // hardcoded a specific label at the primitive would surface at
+    // both sub-axes here.
+
+    #[test]
+    fn label_prefixes_all_three_unsatisfied_projections_across_shipped_labels() {
+        for label in ["Job", "closed-loop probe Job"] {
+            // Missing
+            let err = classify_job_status(label, "ns", "job", JobLookup::Missing)
+                .expect_err("Missing must Err");
+            let Satisfaction::Unsatisfied(msg) = err else {
+                panic!("expected Unsatisfied for Missing at label={label:?}");
+            };
+            assert!(
+                msg.starts_with(&format!("{label} ns/job")),
+                "Missing diagnostic must start with '{label} ns/job'; got {msg:?}"
+            );
+
+            // Failed
+            let err = classify_job_status(label, "ns", "job", JobLookup::Found(view(0, 1, 0)))
+                .expect_err("failed > 0 must Err");
+            let Satisfaction::Unsatisfied(msg) = err else {
+                panic!("expected Unsatisfied for Failed at label={label:?}");
+            };
+            assert!(
+                msg.starts_with(&format!("{label} ns/job failed")),
+                "Failed diagnostic must start with '{label} ns/job failed'; got {msg:?}"
+            );
+
+            // Running
+            let err = classify_job_status(label, "ns", "job", JobLookup::Found(view(0, 0, 1)))
+                .expect_err("succeeded < 1 must Err");
+            let Satisfaction::Unsatisfied(msg) = err else {
+                panic!("expected Unsatisfied for Running at label={label:?}");
+            };
+            assert!(
+                msg.starts_with(&format!("{label} ns/job still running")),
+                "Running diagnostic must start with '{label} ns/job still running'; got {msg:?}"
+            );
+        }
+    }
+
+    // ── Contract axis 6: Failed takes priority over Running ──────────
+    //
+    // A Job with both `failed > 0` and `succeeded < 1` (partial
+    // failure, some parallel pods failed but none succeeded yet)
+    // must diagnose as Failed (the terminal condition), not Running
+    // (the transient one). Pins the branch order at the primitive.
+
+    #[test]
+    fn failed_takes_priority_over_running_when_both_hold() {
+        let result =
+            classify_job_status("Job", "default", "my-job", JobLookup::Found(view(0, 1, 0)));
+        let err = result.expect_err("failed > 0 must Err even when succeeded < 1");
+        let Satisfaction::Unsatisfied(msg) = err else {
+            panic!("expected Satisfaction::Unsatisfied");
+        };
+        assert!(
+            msg.contains("failed"),
+            "Failed must take branch priority over Running; got {msg:?}"
+        );
+        assert!(
+            !msg.contains("still running"),
+            "Failed branch must not fall through to Running wording; got {msg:?}"
         );
     }
 }

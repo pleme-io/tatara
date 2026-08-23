@@ -24,7 +24,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::Utc;
-use kube::api::{Api, ListParams, Patch, PatchParams};
+use kube::api::{ListParams, Patch, PatchParams};
 use kube::runtime::controller::Action;
 use serde_json::json;
 use tracing::{info, warn};
@@ -39,14 +39,9 @@ pub async fn reconcile(
     _table: Arc<ProcessTable>,
     ctx: Arc<Context>,
 ) -> Result<Action, kube::Error> {
-    let kube = ctx.kube.clone();
-
     // (1) List every Process cluster-wide.
-    let process_api: Api<Process> = Api::all(kube.clone());
-    let processes = process_api
-        .list(&ListParams::default())
-        .await?
-        .items;
+    let process_api = ctx.processes_all_api();
+    let processes = process_api.list(&ListParams::default()).await?.items;
 
     // (2) + (3) Filter + group: build candidates per (cluster, app).
     // The (cluster, app) key uses the reconciler-config cluster as

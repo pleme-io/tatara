@@ -756,7 +756,7 @@ pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
 
     if let Some(pid) = &my_pid {
         // Enumerate Processes cluster-wide and find direct children.
-        let all: Api<Process> = Api::all(ctx.kube.clone());
+        let all = ctx.processes_all_api();
         let list = all
             .list(&kube::api::ListParams::default())
             .await

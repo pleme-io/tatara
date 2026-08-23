@@ -65,6 +65,36 @@ impl Context {
     pub fn process_table_api(&self) -> Api<ProcessTable> {
         Api::all(self.kube.clone())
     }
+
+    /// Cluster-scoped `Api<Process>` bound to this context's client —
+    /// the third peer substrate primitive alongside
+    /// [`Context::process_api`] (namespaced `Api<Process>`) and
+    /// [`Context::process_table_api`] (cluster-scoped
+    /// `Api<ProcessTable>`), closing the `Api::all(self.kube.clone())`
+    /// shape every cluster-wide Process consumer on this crate rides
+    /// through.
+    ///
+    /// Where [`Context::process_api`] binds to a specific namespace
+    /// for per-Process handler traffic, `processes_all_api` returns a
+    /// cluster-wide handle for consumers that need to enumerate
+    /// Processes across every namespace — the reap-children walker
+    /// (`phase_machine::handle_exiting`) filtering by
+    /// `spec.identity.parent`, the claim-arbiter enumerate
+    /// (`table_controller::reconcile`) grouping by
+    /// `${cluster}/${app}`, and the top-level `Controller::new(...)`
+    /// wiring in `main.rs` when `--watch-namespace` is empty.
+    ///
+    /// The primitive's signature encodes the "no namespace slot"
+    /// invariant structurally: a caller cannot accidentally pass a
+    /// namespace and get a `Api::namespaced` binding that silently
+    /// misroutes every list/patch call. Post-lift a future change
+    /// that layers per-request tracing spans, a cluster-wide watch
+    /// filter, a client-side QPS limiter, or a fixture-backed client
+    /// for CI/smoke-tests onto every cluster-wide Process read lands
+    /// at ONE substrate method here.
+    pub fn processes_all_api(&self) -> Api<Process> {
+        Api::all(self.kube.clone())
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -337,6 +367,140 @@ mod tests {
         assert_ne!(
             processes, table,
             "the two peer primitives must resolve to distinct collections"
+        );
+    }
+
+    // ─── Context::processes_all_api substrate pins ─────────────────────
+    //
+    // The `Api::all(<client>.clone())` incantation for `Api<Process>`
+    // was hand-authored at 3 cluster-wide Process consumer sites
+    // (`phase_machine.rs` reap-children walker, `table_controller.rs`
+    // claim-arbiter enumerate, `main.rs` top-level watch selector's
+    // `--watch-namespace=""` branch) before `processes_all_api` closed
+    // it. These pins bind the primitive at fail-before-pass-after
+    // granularity so a regression that drifts the resource-kind, the
+    // scope (`Api::all` → `Api::namespaced`), or the reused client-slot
+    // surfaces here rather than as silent operator-facing drift.
+
+    #[tokio::test]
+    async fn processes_all_api_is_cluster_scoped() {
+        // Every cluster-wide Process consumer composes against a
+        // cluster-scoped url — the resource path must NOT carry a
+        // `/namespaces/<ns>/` slot. A regression that swapped
+        // `Api::all` for `Api::namespaced` at the primitive's site
+        // would silently misroute every cluster-wide enumerate
+        // (reap-children, claim-arbiter, top-level watch) at runtime.
+        let api = ctx().processes_all_api();
+        let url = api.resource_url();
+        assert!(
+            !url.contains("/namespaces/"),
+            "cluster-scoped Api<Process> must NOT carry a namespace slot; got {url}"
+        );
+    }
+
+    #[tokio::test]
+    async fn processes_all_api_binds_the_process_kind() {
+        // The typed `Api<Process>` return type pins the resource kind
+        // at rustc time; this pin adds the runtime witness — the
+        // emitted REST path targets the
+        // `tatara.pleme.io/v1alpha1/processes` collection matching
+        // the `#[kube(group = "tatara.pleme.io", version =
+        // "v1alpha1", plural = "processes")]` attribute on
+        // `ProcessSpec`. A regression that changed the group,
+        // version, or plural on the CRD without rippling through
+        // consumers surfaces here.
+        let api = ctx().processes_all_api();
+        let url = api.resource_url();
+        assert!(
+            url.starts_with("/apis/tatara.pleme.io/v1alpha1/"),
+            "Api resource url must be scoped to the tatara.pleme.io/v1alpha1 group; got {url}"
+        );
+        assert!(
+            url.ends_with("/processes"),
+            "Api resource url must terminate at the `processes` collection; got {url}"
+        );
+    }
+
+    #[tokio::test]
+    async fn processes_all_api_rides_through_the_context_client_slot() {
+        // Every pre-lift callsite chose `<client>.clone()` off the
+        // same context (either `ctx.kube.clone()` in phase_machine or
+        // `kube.clone()` in table_controller/main.rs, where `kube ===
+        // ctx.kube`). Post-lift the primitive continues to source its
+        // client from `self.kube.clone()`; this pin catches a
+        // regression that swapped the client-slot at the primitive's
+        // own site. The witness: two separately-built Apis on the
+        // SAME context resolve to the SAME cluster-scoped url — no
+        // per-call url divergence, no hidden namespace binding.
+        let c = ctx();
+        let a = c.processes_all_api();
+        let b = c.processes_all_api();
+        assert_eq!(
+            a.resource_url(),
+            b.resource_url(),
+            "cluster-scoped Api built twice off the same context must resolve to the same url"
+        );
+    }
+
+    #[tokio::test]
+    async fn processes_all_api_is_scope_peer_of_process_api_over_the_same_collection() {
+        // The two Process-bound primitives share the typed collection
+        // (`/processes`) but differ ONLY on the scope axis:
+        // `processes_all_api` is cluster-scoped (no namespace slot),
+        // `process_api(&ns)` is namespaced (carries the namespace).
+        // A regression that swapped the scope at either primitive's
+        // site (`Api::all` ↔ `Api::namespaced`) would collapse the
+        // two axes onto the same shape and silently redirect either
+        // the per-handler patch traffic or the cluster-wide
+        // enumerate traffic to the wrong scope. The pin: both urls
+        // end at `/processes`; only `process_api`'s carries a
+        // `/namespaces/<ns>/` slot.
+        let c = ctx();
+        let all_url = c.processes_all_api().resource_url().to_string();
+        let ns_url = c.process_api("scoped-ns").resource_url().to_string();
+        assert!(
+            all_url.ends_with("/processes"),
+            "processes_all_api → /processes; got {all_url}"
+        );
+        assert!(
+            ns_url.ends_with("/processes"),
+            "process_api → /processes; got {ns_url}"
+        );
+        assert!(
+            !all_url.contains("/namespaces/"),
+            "processes_all_api must NOT carry a namespace slot; got {all_url}"
+        );
+        assert!(
+            ns_url.contains("/namespaces/scoped-ns/"),
+            "process_api must carry the caller's namespace slot; got {ns_url}"
+        );
+    }
+
+    #[tokio::test]
+    async fn processes_all_api_and_process_table_api_bind_distinct_collections() {
+        // Both cluster-scoped peers share the client-slot + scope
+        // (`Api::all`) + the `tatara.pleme.io/v1alpha1` group but must
+        // resolve to DISTINCT collections — `/processes` vs
+        // `/processtables`. A regression that conflated the two typed
+        // returns (e.g. a copy-paste that pointed
+        // `processes_all_api` at `ProcessTable` instead of `Process`)
+        // would collapse both urls onto the same collection and
+        // silently misroute every cluster-wide Process consumer to
+        // the ProcessTable endpoint.
+        let c = ctx();
+        let processes = c.processes_all_api().resource_url().to_string();
+        let table = c.process_table_api().resource_url().to_string();
+        assert!(
+            processes.ends_with("/processes"),
+            "processes_all_api → /processes; got {processes}"
+        );
+        assert!(
+            table.ends_with("/processtables"),
+            "process_table_api → /processtables; got {table}"
+        );
+        assert_ne!(
+            processes, table,
+            "the two cluster-scoped peer primitives must resolve to distinct collections"
         );
     }
 }

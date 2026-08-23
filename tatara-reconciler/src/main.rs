@@ -116,9 +116,9 @@ async fn main() -> Result<()> {
 
     // ── Process controller ────────────────────────────────────────────
     let processes: Api<Process> = if cli.watch_namespace.is_empty() {
-        Api::all(kube.clone())
+        ctx.processes_all_api()
     } else {
-        Api::namespaced(kube.clone(), &cli.watch_namespace)
+        ctx.process_api(&cli.watch_namespace)
     };
     let proc_ctl = Controller::new(processes, watcher::Config::default())
         .run(controller::reconcile, controller::error_policy, ctx.clone())

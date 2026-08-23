@@ -254,17 +254,14 @@ async fn evaluate_job_attested(
         .receipt_config_map
         .clone()
         .unwrap_or_else(|| format!("{}-receipt", parsed.name));
-    match verify_receipt_cm(client, ns, &cm_name, None).await? {
-        ReceiptVerdict::Ok(_) => Ok(Satisfaction::Satisfied),
-        ReceiptVerdict::Missing => Ok(Satisfaction::Unsatisfied(format!(
-            "Job {ns}/{} succeeded but receipt ConfigMap {ns}/{cm_name} missing",
-            parsed.name
-        ))),
-        ReceiptVerdict::Malformed(why) => Ok(Satisfaction::Unsatisfied(format!(
-            "Job {ns}/{} receipt malformed: {why}",
-            parsed.name
-        ))),
-    }
+    let verdict = verify_receipt_cm(client, ns, &cm_name, None).await?;
+    Ok(classify_receipt_verdict(
+        "Job",
+        ns,
+        &parsed.name,
+        &cm_name,
+        verdict,
+    ))
 }
 
 /// `ClosedLoopAuth` params — the typed shape is in `tatara-process`'s
@@ -327,15 +324,14 @@ async fn evaluate_closed_loop_auth(
     }
 
     // 2. The receipt ConfigMap must exist and parse.
-    match verify_receipt_cm(client, ns, &cm_name, parsed.expected_root.as_deref()).await? {
-        ReceiptVerdict::Ok(_root) => Ok(Satisfaction::Satisfied),
-        ReceiptVerdict::Missing => Ok(Satisfaction::Unsatisfied(format!(
-            "closed-loop receipt ConfigMap {ns}/{cm_name} missing"
-        ))),
-        ReceiptVerdict::Malformed(why) => Ok(Satisfaction::Unsatisfied(format!(
-            "closed-loop receipt malformed: {why}"
-        ))),
-    }
+    let verdict = verify_receipt_cm(client, ns, &cm_name, parsed.expected_root.as_deref()).await?;
+    Ok(classify_receipt_verdict(
+        "closed-loop probe Job",
+        ns,
+        &job_name,
+        &cm_name,
+        verdict,
+    ))
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -442,6 +438,92 @@ async fn require_succeeded_job(
 ) -> Result<Result<JobStatusView, Satisfaction>> {
     let lookup = fetch_job_status(client, ns, name).await?;
     Ok(classify_job_status(label, ns, name, lookup))
+}
+
+/// Pure projection of a fetched receipt-ConfigMap [`ReceiptVerdict`]
+/// into an operator-facing [`Satisfaction`] diagnostic keyed on the
+/// caller's `label` + Job `(ns, name)` + ConfigMap `cm_name`.
+///
+/// Pre-lift the TWO postcondition evaluators
+/// ([`evaluate_job_attested`] on the `JobAttested` axis and
+/// [`evaluate_closed_loop_auth`] on the `ClosedLoopAuth` axis) each
+/// hand-authored the same three-invariant scaffold at their own local
+/// site: (1) [`ReceiptVerdict::Ok`] projects to
+/// `Satisfaction::Satisfied`; (2) [`ReceiptVerdict::Missing`] projects
+/// to `Satisfaction::Unsatisfied("<label> {ns}/{name} receipt
+/// ConfigMap {ns}/{cm_name} missing")`; (3)
+/// [`ReceiptVerdict::Malformed(why)`] projects to
+/// `Satisfaction::Unsatisfied("<label> {ns}/{name} receipt malformed:
+/// {why}")`. TWO byte-for-byte identical `match verify_receipt_cm(...)
+/// .await? { … }` blocks past the PRIME-DIRECTIVE ≥ 2 duplication
+/// threshold, differing only in the label prefix (`"Job"` vs
+/// `"closed-loop probe Job"`) each threaded through the SAME scaffold.
+///
+/// Post-lift the three shared invariants live at ONE substrate
+/// primitive here (the pure projection). Both callsites route through
+/// the same primitive with a locally-owned `label: &str`; the async
+/// fetch stays at each callsite so caller-owned bindings (`parsed.name`
+/// on the JobAttested axis, the derived `job_name` on the closed-loop
+/// axis, and the `expected_root` slot only the closed-loop callsite
+/// threads through `verify_receipt_cm`) don't need to be plumbed into
+/// the primitive's signature. A regression that drifted the diagnostic
+/// wording (a swapped counter phrase, a missing label prefix, a
+/// promoted variant on the [`Satisfaction`] axis) at ONE evaluator
+/// surfaces at [`classify_receipt_verdict_tests`] rather than as
+/// silent operator-facing drift across the two postcondition
+/// evaluators.
+///
+/// The lift also **strictly widens** the closed-loop path's Missing +
+/// Malformed diagnostics: pre-lift they read
+/// `"closed-loop receipt ConfigMap {ns}/{cm_name} missing"` /
+/// `"closed-loop receipt malformed: {why}"` (no Job `{ns}/{name}`);
+/// post-lift they inherit the JobAttested path's `{label} {ns}/{name}
+/// receipt …` shape, matching the sibling [`classify_job_status`]
+/// primitive's convention (label + ns + name at the diagnostic head).
+/// Operators grepping for the closed-loop Job's name now see it on
+/// this axis too.
+///
+/// Sibling to the earlier lifts on this file:
+/// - [`parse_condition_params`] (b7209c3) shape-gates the params
+///   carrier at every ConditionKind evaluator on the axis of "params
+///   invalid: {e}" projection.
+/// - [`classify_job_status`] (4eb542d) status-gates the Job at every
+///   Job-based evaluator on the axis of Missing/Failed/Running
+///   projection.
+/// - This primitive verdict-gates the receipt at every Job-based
+///   evaluator on the axis of Ok/Missing/Malformed projection.
+///
+/// Each new Job-based postcondition evaluator (kenshi-runner
+/// JobAttested creation per P3, per-membro contract receipts, any Job
+/// whose completion produces a receipt) lands as ONE new callsite
+/// through the SAME three primitives, not another hand-authored
+/// three-invariant scaffold trio.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// three-invariant scaffold recurred at two Job-based evaluators past
+/// the PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
+/// owner here). THEORY.md §II.1 invariant 5 (composition preserves
+/// proofs — the two evaluators now compose structurally through ONE
+/// primitive; a regression that drifted the wording at ONE axis
+/// surfaces at [`classify_receipt_verdict_tests`] rather than as
+/// silent drift at every future postcondition evaluator with a
+/// receipt-shaped substrate).
+fn classify_receipt_verdict(
+    label: &str,
+    ns: &str,
+    name: &str,
+    cm_name: &str,
+    verdict: ReceiptVerdict,
+) -> Satisfaction {
+    match verdict {
+        ReceiptVerdict::Ok(_) => Satisfaction::Satisfied,
+        ReceiptVerdict::Missing => Satisfaction::Unsatisfied(format!(
+            "{label} {ns}/{name} receipt ConfigMap {ns}/{cm_name} missing"
+        )),
+        ReceiptVerdict::Malformed(why) => {
+            Satisfaction::Unsatisfied(format!("{label} {ns}/{name} receipt malformed: {why}"))
+        }
+    }
 }
 
 async fn fetch_job_status(client: Client, ns: &str, name: &str) -> Result<JobLookup> {
@@ -1218,6 +1300,276 @@ mod classify_job_status_tests {
         assert!(
             !msg.contains("still running"),
             "Failed branch must not fall through to Running wording; got {msg:?}"
+        );
+    }
+}
+
+/// Substrate-primitive tests for [`classify_receipt_verdict`] — the
+/// pure (label, ns, name, cm_name, ReceiptVerdict) → Satisfaction
+/// projection every Job-based postcondition evaluator on this file
+/// dispatches through after [`verify_receipt_cm`] resolves.
+///
+/// The pre-lift shape lived at TWO sites across
+/// [`evaluate_job_attested`] and [`evaluate_closed_loop_auth`], each
+/// hand-authoring the three-invariant scaffold (Ok / Missing /
+/// Malformed) verbatim at its own local site — differing only in the
+/// label prefix each site threaded into the diagnostic. Post-lift the
+/// three shared invariants live at ONE substrate primitive, and this
+/// module pins the three contract axes (Ok, Missing, Malformed) plus
+/// the label-riding, name-riding, cm-name-riding, and
+/// Satisfaction-variant axes at fail-before-pass-after granularity.
+///
+/// Sibling of the [`classify_job_status_tests`] module above (on the
+/// Job-status projection axis) and the [`parse_condition_params_tests`]
+/// module (on the params-shape-gate axis) — kept as its own module so
+/// a regression at the primitive's receipt-verdict projection axis
+/// surfaces distinctly from the per-kind evaluator, the shape gate,
+/// or the Job-status gate.
+#[cfg(test)]
+mod classify_receipt_verdict_tests {
+    use super::{classify_receipt_verdict, ReceiptVerdict, Satisfaction};
+
+    // ── Contract axis 1: Ok verdict projects to Satisfied ────────────
+    //
+    // A parsed receipt whose composed_root matches (or whose caller
+    // asked only for shape verification) projects to
+    // `Satisfaction::Satisfied` verbatim, dropping the Ok payload's
+    // composed_root string — the outer evaluator does not thread that
+    // root through the boundary result (it is chained into the
+    // Process attestation separately).
+
+    #[test]
+    fn ok_verdict_projects_to_satisfied() {
+        let result = classify_receipt_verdict(
+            "Job",
+            "flux-system",
+            "my-job",
+            "my-job-receipt",
+            ReceiptVerdict::Ok("composed_root_string".into()),
+        );
+        assert_eq!(result, Satisfaction::Satisfied);
+    }
+
+    #[test]
+    fn ok_verdict_with_empty_root_still_projects_to_satisfied() {
+        // The primitive does not gate on Ok payload contents; a
+        // hypothetical zero-length composed_root still Satisfies —
+        // shape has been verified upstream by ReceiptEnvelope's parser.
+        let result = classify_receipt_verdict(
+            "closed-loop probe Job",
+            "default",
+            "probe-job",
+            "probe-job-receipt",
+            ReceiptVerdict::Ok(String::new()),
+        );
+        assert_eq!(result, Satisfaction::Satisfied);
+    }
+
+    // ── Contract axis 2: Missing projects to Unsatisfied verbatim ────
+    //
+    // Pins the exact diagnostic wording operators grep for; a
+    // regression that reshaped the "receipt ConfigMap … missing"
+    // phrase surfaces here rather than as silent operator-facing
+    // drift.
+
+    #[test]
+    fn missing_verdict_projects_to_unsatisfied_with_label_and_names() {
+        let result = classify_receipt_verdict(
+            "Job",
+            "flux-system",
+            "my-job",
+            "my-job-receipt",
+            ReceiptVerdict::Missing,
+        );
+        let Satisfaction::Unsatisfied(msg) = result else {
+            panic!("Missing must project to Satisfaction::Unsatisfied");
+        };
+        assert_eq!(
+            msg,
+            "Job flux-system/my-job receipt ConfigMap flux-system/my-job-receipt missing"
+        );
+    }
+
+    // ── Contract axis 3: Malformed projects to Unsatisfied verbatim ──
+    //
+    // Pins the `receipt malformed: {why}` tail — operators grep for
+    // both the label prefix and the malformed cause to alert on
+    // ConfigMaps whose payload parses as JSON but fails the typed
+    // ReceiptEnvelope shape gate.
+
+    #[test]
+    fn malformed_verdict_projects_to_unsatisfied_with_why_tail() {
+        let result = classify_receipt_verdict(
+            "Job",
+            "default",
+            "my-job",
+            "my-job-receipt",
+            ReceiptVerdict::Malformed("missing 'intent_hash' string field".into()),
+        );
+        let Satisfaction::Unsatisfied(msg) = result else {
+            panic!("Malformed must project to Satisfaction::Unsatisfied");
+        };
+        assert_eq!(
+            msg,
+            "Job default/my-job receipt malformed: missing 'intent_hash' string field"
+        );
+    }
+
+    // ── Contract axis 4: label prefix rides through both callsites ───
+    //
+    // Pins that both workspace-shipped labels (`"Job"` for
+    // JobAttested, `"closed-loop probe Job"` for ClosedLoopAuth) ride
+    // through the same primitive verbatim; a regression that
+    // hardcoded a specific label at the primitive would surface at
+    // both sub-axes here. Mirrors the sibling label-riding pinning
+    // on [`classify_job_status`].
+
+    #[test]
+    fn label_prefixes_both_unsatisfied_projections_across_shipped_labels() {
+        for label in ["Job", "closed-loop probe Job"] {
+            let result = classify_receipt_verdict(
+                label,
+                "ns",
+                "job",
+                "job-receipt",
+                ReceiptVerdict::Missing,
+            );
+            let Satisfaction::Unsatisfied(msg) = result else {
+                panic!("expected Unsatisfied for Missing at label={label:?}");
+            };
+            assert!(
+                msg.starts_with(&format!("{label} ns/job receipt ConfigMap")),
+                "Missing diagnostic must start with '{label} ns/job receipt ConfigMap'; \
+                 got {msg:?}"
+            );
+
+            let result = classify_receipt_verdict(
+                label,
+                "ns",
+                "job",
+                "job-receipt",
+                ReceiptVerdict::Malformed("why".into()),
+            );
+            let Satisfaction::Unsatisfied(msg) = result else {
+                panic!("expected Unsatisfied for Malformed at label={label:?}");
+            };
+            assert!(
+                msg.starts_with(&format!("{label} ns/job receipt malformed:")),
+                "Malformed diagnostic must start with '{label} ns/job receipt malformed:'; \
+                 got {msg:?}"
+            );
+        }
+    }
+
+    // ── Contract axis 5: label is the only prefix source ─────────────
+    //
+    // A regression that hardcoded a specific label (e.g. by copy-
+    // pasting "Job" as a literal instead of interpolating
+    // `{label}`) would surface here — the axis-typed prefix
+    // "AxisXYZ" is guaranteed absent from the substrate's own trait
+    // paths.
+
+    #[test]
+    fn label_is_the_only_prefix_source_no_hardcoded_leaks() {
+        let result = classify_receipt_verdict(
+            "AxisXYZ",
+            "ns",
+            "job",
+            "job-receipt",
+            ReceiptVerdict::Missing,
+        );
+        let Satisfaction::Unsatisfied(msg) = result else {
+            panic!("expected Satisfaction::Unsatisfied");
+        };
+        assert!(
+            msg.starts_with("AxisXYZ ns/job receipt ConfigMap "),
+            "label must interpolate through the Missing diagnostic; got {msg:?}"
+        );
+
+        let result = classify_receipt_verdict(
+            "AxisXYZ",
+            "ns",
+            "job",
+            "job-receipt",
+            ReceiptVerdict::Malformed("why".into()),
+        );
+        let Satisfaction::Unsatisfied(msg) = result else {
+            panic!("expected Satisfaction::Unsatisfied");
+        };
+        assert!(
+            msg.starts_with("AxisXYZ ns/job receipt malformed: "),
+            "label must interpolate through the Malformed diagnostic; got {msg:?}"
+        );
+    }
+
+    // ── Contract axis 6: Malformed `why` rides through verbatim ──────
+    //
+    // Pins that the primitive does not drop or reshape the underlying
+    // ReceiptError-derived cause — the tail after "malformed: "
+    // matches the caller's payload byte-for-byte, so dashboards /
+    // alerts grepping for specific ReceiptError projections
+    // (`invalid JSON:`, `missing 'intent_hash'`, `version !=
+    // tatara-receipt/v1`, `composed_root mismatch`) keep working.
+
+    #[test]
+    fn malformed_why_projects_through_the_diagnostic_tail_verbatim() {
+        for why in [
+            "invalid JSON: expected value at line 1 column 1",
+            "missing 'artifact_hash' string field",
+            "version != tatara-receipt/v1 (got Some(\"tatara-receipt/v2\"))",
+            "composed_root mismatch (got aaa, want bbb)",
+            "",
+        ] {
+            let result = classify_receipt_verdict(
+                "Job",
+                "ns",
+                "job",
+                "cm",
+                ReceiptVerdict::Malformed(why.into()),
+            );
+            let Satisfaction::Unsatisfied(msg) = result else {
+                panic!("expected Satisfaction::Unsatisfied for why={why:?}");
+            };
+            let tail = msg
+                .strip_prefix("Job ns/job receipt malformed: ")
+                .expect("primitive must emit the 'receipt malformed: ' prefix verbatim");
+            assert_eq!(
+                tail, why,
+                "Malformed `why` must ride through the diagnostic tail verbatim"
+            );
+        }
+    }
+
+    // ── Contract axis 7: cm_name rides through the Missing tail ──────
+    //
+    // Pins that the primitive threads the caller-owned `cm_name`
+    // through the Missing diagnostic's ConfigMap slot — a regression
+    // that hardcoded `<name>-receipt` at the primitive (short-
+    // circuiting the caller's override on the `receiptConfigMap`
+    // params slot) would surface here on both callsites, since both
+    // JobAttested and ClosedLoopAuth honor a caller-supplied
+    // ConfigMap-name override.
+
+    #[test]
+    fn cm_name_rides_through_missing_diagnostic() {
+        let result = classify_receipt_verdict(
+            "Job",
+            "ns",
+            "job",
+            "operator-supplied-cm-name",
+            ReceiptVerdict::Missing,
+        );
+        let Satisfaction::Unsatisfied(msg) = result else {
+            panic!("expected Satisfaction::Unsatisfied");
+        };
+        assert!(
+            msg.contains("ConfigMap ns/operator-supplied-cm-name missing"),
+            "cm_name must ride through the ConfigMap slot verbatim; got {msg:?}"
+        );
+        assert!(
+            !msg.contains("job-receipt"),
+            "primitive must not hardcode <name>-receipt when caller supplied a cm_name; \
+             got {msg:?}"
         );
     }
 }

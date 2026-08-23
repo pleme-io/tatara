@@ -2,7 +2,7 @@
 //! strip, apply effect to phase.
 
 use anyhow::{anyhow, Result};
-use kube::api::{Api, Patch, PatchParams};
+use kube::api::{Patch, PatchParams};
 use serde_json::json;
 use std::str::FromStr;
 use tracing::warn;
@@ -84,7 +84,7 @@ pub async fn ingest(process: &Process, ctx: &Context) -> Result<Option<ProcessSi
         .ok_or_else(|| anyhow!("Process has no metadata.name"))?;
 
     // Always strip — JSON merge patch interprets `null` as "remove key".
-    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
+    let api = ctx.process_api(&ns);
     let strip = json!({
         "metadata": {
             "annotations": { SIGNAL_ANNOTATION: serde_json::Value::Null }
@@ -120,7 +120,7 @@ pub async fn consume_effect(process: &Process, ctx: &Context, effect: SignalEffe
         .name
         .clone()
         .ok_or_else(|| anyhow!("Process has no metadata.name"))?;
-    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
+    let api = ctx.process_api(&ns);
 
     match effect {
         SignalEffect::Noop => Ok(()),

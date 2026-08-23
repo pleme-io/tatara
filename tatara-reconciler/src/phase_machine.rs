@@ -42,7 +42,7 @@ pub async fn handle_pending(p: &Process, ctx: &Context) -> Result<Action> {
     let (ns, name) = namespace_and_name(p)?;
     let identity = derive_identity(&p.spec, p.spec.identity.name_override.as_deref());
 
-    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
+    let api = ctx.process_api(&ns);
     patch::ensure_finalizer(&api, &name, p, tatara_process::PROCESS_FINALIZER)
         .await
         .map_err(|e| anyhow!("install finalizer: {e}"))?;
@@ -67,7 +67,7 @@ pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
     // 2. Allocate PID from `ProcessTable.nextSequence` (idempotent if already set).
     // 3. Advance to Execing.
     let (ns, name) = namespace_and_name(p)?;
-    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
+    let api = ctx.process_api(&ns);
 
     // 1. Dependency gate.
     let unmet = boundary::check_depends_on(ctx.kube.clone(), p)
@@ -168,7 +168,7 @@ pub async fn handle_execing(p: &Process, ctx: &Context) -> Result<Action> {
     if !preconditions.is_empty() {
         let checked = evaluate_conditions(ctx.kube.clone(), p, preconditions).await?;
         let all_pass = checked.iter().all(|c| c.satisfied);
-        let api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
+        let api = ctx.process_api(&ns);
         let body = json!({
             "boundary": { "preconditions": checked },
             "message": if all_pass {
@@ -240,7 +240,7 @@ pub async fn handle_execing(p: &Process, ctx: &Context) -> Result<Action> {
         0
     };
 
-    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
+    let api = ctx.process_api(&ns);
     let body = json!({
         "phase": ProcessPhase::Running,
         "phaseSince": chrono::Utc::now(),
@@ -321,7 +321,7 @@ pub async fn handle_running(p: &Process, ctx: &Context) -> Result<Action> {
     }
 
     // Always patch updated per-ref state so users see live progress.
-    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
+    let api = ctx.process_api(&ns);
     patch::patch_process_status(&api, &name, json!({ "fluxResources": updated }))
         .await
         .map_err(|e| anyhow!("patch fluxResources: {e}"))?;
@@ -336,7 +336,7 @@ pub async fn handle_running(p: &Process, ctx: &Context) -> Result<Action> {
     if !postconditions.is_empty() {
         let checked = evaluate_conditions(ctx.kube.clone(), p, postconditions).await?;
         let all_pass = checked.iter().all(|c| c.satisfied);
-        let api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
+        let api = ctx.process_api(&ns);
         patch::patch_process_status(
             &api,
             &name,
@@ -438,7 +438,7 @@ pub async fn handle_attested(p: &Process, ctx: &Context) -> Result<Action> {
     }
 
     if drift {
-        let api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
+        let api = ctx.process_api(&ns);
         patch::patch_process_status(
             &api,
             &name,
@@ -474,7 +474,7 @@ async fn advance_to_attested(
     let composed_root = next.composed_root.clone();
     let generation = next.generation;
 
-    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), ns);
+    let api = ctx.process_api(ns);
     let body = json!({
         "phase": ProcessPhase::Attested,
         "phaseSince": chrono::Utc::now(),
@@ -563,7 +563,7 @@ fn flux_ref_from_json(res: &Value) -> Result<FluxResourceRef> {
 pub async fn handle_reconverging(p: &Process, ctx: &Context) -> Result<Action> {
     // SIGHUP or drift detected — flip back to Execing.
     let (ns, name) = namespace_and_name(p)?;
-    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
+    let api = ctx.process_api(&ns);
     patch::patch_process_status(
         &api,
         &name,
@@ -730,7 +730,7 @@ async fn advance_out_of_releasing(
         ProcessPhase::Failed => ProcessPhase::Zombie,
         _ => ProcessPhase::Exiting,
     };
-    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), ns);
+    let api = ctx.process_api(ns);
     patch::patch_process_status(
         &api,
         name,
@@ -775,7 +775,7 @@ pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
                 if child.metadata.deletion_timestamp.is_some() {
                     continue;
                 }
-                let child_api: Api<Process> = Api::namespaced(ctx.kube.clone(), cns);
+                let child_api = ctx.process_api(cns);
                 let _ = child_api
                     .delete(cname, &kube::api::DeleteParams::default())
                     .await;
@@ -791,7 +791,7 @@ pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
     }
 
     // No children (or no pid — never forked). Advance to Zombie.
-    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
+    let api = ctx.process_api(&ns);
     patch::patch_process_status(&api, &name, patch::phase_status(ProcessPhase::Zombie, None))
         .await
         .map_err(|e| anyhow!("patch (exiting→zombie): {e}"))?;
@@ -805,7 +805,7 @@ pub async fn handle_failed(p: &Process, ctx: &Context) -> Result<Action> {
     // and Never-teardown ephemeral Processes go straight to Zombie so the
     // operator can inspect the failure.
     let (ns, name) = namespace_and_name(p)?;
-    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
+    let api = ctx.process_api(&ns);
 
     if let AutoTerminate::Now { reason } =
         lifetime_clock::evaluate(p, ProcessPhase::Failed, chrono::Utc::now())
@@ -870,7 +870,7 @@ async fn transition_to_releasing(
     name: &str,
     reason: &str,
 ) -> Result<Action> {
-    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), ns);
+    let api = ctx.process_api(ns);
 
     // 1. Stamp the released-from annotation — derived from the
     //    *current* phase, which is the gate we're leaving.
@@ -940,7 +940,7 @@ async fn transition_to_exiting(
     name: &str,
     reason: &str,
 ) -> Result<Action> {
-    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), ns);
+    let api = ctx.process_api(ns);
     patch::patch_process_status(
         &api,
         name,
@@ -961,7 +961,7 @@ pub async fn handle_zombie(p: &Process, ctx: &Context) -> Result<Action> {
     // Final post-exit pass — advance to Reaped; the ProcessTable controller
     // may force-reap earlier on zombie_timeout_seconds overflow (future).
     let (ns, name) = namespace_and_name(p)?;
-    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
+    let api = ctx.process_api(&ns);
     patch::patch_process_status(&api, &name, patch::phase_status(ProcessPhase::Reaped, None))
         .await
         .map_err(|e| anyhow!("patch (zombie→reaped): {e}"))?;
@@ -972,7 +972,7 @@ pub async fn handle_zombie(p: &Process, ctx: &Context) -> Result<Action> {
 pub async fn handle_reaped(p: &Process, ctx: &Context) -> Result<Action> {
     // Release the finalizer — K8s GC removes the Process object + owned Flux CRs.
     let (ns, name) = namespace_and_name(p)?;
-    let api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
+    let api = ctx.process_api(&ns);
     patch::remove_finalizer(&api, &name, p, tatara_process::PROCESS_FINALIZER)
         .await
         .map_err(|e| anyhow!("release finalizer: {e}"))?;

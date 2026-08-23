@@ -81,6 +81,28 @@ pub fn phase_status(phase: ProcessPhase, identity: Option<&Identity>) -> Value {
     v
 }
 
+/// Status patch builder — phase + phaseSince + operator-visible `message`.
+///
+/// The `phase + phaseSince + message` shape recurred at nine hand-authored
+/// callsites (four `handle_*` transitions in `phase_machine.rs`, both
+/// message-carrying `SignalEffect` arms in `signals.rs`, and the top-level
+/// deletion-preempt in `controller.rs`) before this primitive existed;
+/// each site inlined `json!({ "phase": ..., "phaseSince": Utc::now(),
+/// "message": ... })` verbatim. Post-lift the three-slot shape lives at
+/// ONE substrate primitive — a future field addition (`by:` for the
+/// signal source, `transitionCount:` for a diagnostic counter,
+/// structured message envelope) lands here and every downstream
+/// transition inherits it mechanically. `impl Into<String>` accepts
+/// both `&'static str` literal reasons and `format!(...)`-owned strings
+/// without widening the signature.
+pub fn phase_status_msg(phase: ProcessPhase, message: impl Into<String>) -> Value {
+    json!({
+        "phase": phase,
+        "phaseSince": Utc::now(),
+        "message": message.into(),
+    })
+}
+
 // ─── finalizer helpers ────────────────────────────────────────────────
 
 /// Pure — compute the finalizer list after adding `target`.
@@ -170,5 +192,93 @@ mod tests {
     fn remove_finalizer_idempotent_when_absent() {
         let existing = vec!["other.io/x".to_string()];
         assert!(remove_finalizer_from(&existing, "tatara.pleme.io/process-finalizer").is_none());
+    }
+
+    // ─── phase_status / phase_status_msg substrate pins ────────────────────
+    //
+    // The three-slot `phase + phaseSince + message` shape recurred at nine
+    // hand-authored callsites before `phase_status_msg` closed it. These
+    // pins bind the primitive at fail-before-pass-after granularity so a
+    // regression that dropped a slot, renamed a key, or reshaped a value
+    // surfaces here rather than as silent operator-facing drift at every
+    // downstream transition.
+
+    #[test]
+    fn phase_status_msg_composes_the_three_slots() {
+        let v = phase_status_msg(ProcessPhase::Execing, "dependencies satisfied");
+        let obj = v.as_object().expect("object");
+        // All three slots present, no extras.
+        assert_eq!(obj.len(), 3);
+        assert_eq!(
+            obj.get("phase").and_then(Value::as_str),
+            Some("Execing"),
+            "phase key present and serialises as the discriminant string"
+        );
+        assert_eq!(
+            obj.get("message").and_then(Value::as_str),
+            Some("dependencies satisfied"),
+            "message key present and rides through verbatim"
+        );
+        assert!(
+            obj.get("phaseSince")
+                .and_then(Value::as_str)
+                .is_some_and(|s| chrono::DateTime::parse_from_rfc3339(s).is_ok()),
+            "phaseSince key present and is a valid RFC-3339 timestamp"
+        );
+    }
+
+    #[test]
+    fn phase_status_msg_accepts_static_str_and_owned_string() {
+        // &'static str literal — the shape at every non-format! site
+        // (e.g. controller.rs "deletion requested",
+        // phase_machine.rs "dependencies satisfied").
+        let a = phase_status_msg(ProcessPhase::Exiting, "deletion requested");
+        assert_eq!(
+            a.get("message").and_then(Value::as_str),
+            Some("deletion requested")
+        );
+        // Owned String — the shape at every format!(...) site
+        // (e.g. phase_machine.rs `format!("releasing → {next} — {reason}")`).
+        let owned: String = format!("releasing → {} — {}", ProcessPhase::Zombie, "TTL expired");
+        let b = phase_status_msg(ProcessPhase::Releasing, owned);
+        assert_eq!(
+            b.get("message").and_then(Value::as_str),
+            Some("releasing → Zombie — TTL expired")
+        );
+    }
+
+    #[test]
+    fn phase_status_msg_stamps_phase_since_at_call_time() {
+        let before = Utc::now();
+        let v = phase_status_msg(ProcessPhase::Reconverging, "drift");
+        let after = Utc::now();
+        let stamped = v
+            .get("phaseSince")
+            .and_then(Value::as_str)
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .expect("phaseSince is an RFC-3339 timestamp");
+        let stamped_utc = stamped.with_timezone(&chrono::Utc);
+        assert!(
+            (before..=after).contains(&stamped_utc),
+            "phaseSince ({stamped_utc}) must land in [{before}, {after}] — the primitive stamps at call time"
+        );
+    }
+
+    #[test]
+    fn phase_status_bare_differs_from_phase_status_msg_only_by_message_key() {
+        // The five bare `handle_*` transitions (reconverging→execing,
+        // exiting→zombie, failed→zombie, zombie→reaped, signal
+        // transition) collapse onto `phase_status(phase, None)` — same
+        // primitive, no `message` key. This pin catches a regression
+        // where the bare variant accidentally acquired a `message` slot
+        // (or the msg variant accidentally dropped it).
+        let bare = phase_status(ProcessPhase::Zombie, None);
+        let msg = phase_status_msg(ProcessPhase::Zombie, "irrelevant");
+        assert_eq!(bare.as_object().unwrap().len(), 2);
+        assert_eq!(msg.as_object().unwrap().len(), 3);
+        assert!(bare.get("message").is_none());
+        assert!(msg.get("message").is_some());
+        // Both agree on the phase discriminant they were built with.
+        assert_eq!(bare.get("phase"), msg.get("phase"));
     }
 }

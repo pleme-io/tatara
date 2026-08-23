@@ -125,25 +125,20 @@ pub async fn consume_effect(process: &Process, ctx: &Context, effect: SignalEffe
     match effect {
         SignalEffect::Noop => Ok(()),
         SignalEffect::TransitionTo(phase) => {
-            let body = json!({
-                "phase": phase,
-                "phaseSince": chrono::Utc::now(),
-            });
-            patch::patch_process_status(&api, &name, body)
+            patch::patch_process_status(&api, &name, patch::phase_status(phase, None))
                 .await
                 .map_err(|e| anyhow!("transition via signal: {e}"))?;
             Ok(())
         }
         SignalEffect::ForceAttest => {
             // Flip back to Running — re-verify + re-attest without changing spec.
-            let body = json!({
-                "phase": ProcessPhase::Running,
-                "phaseSince": chrono::Utc::now(),
-                "message": "forced re-attestation (SIGUSR1)",
-            });
-            patch::patch_process_status(&api, &name, body)
-                .await
-                .map_err(|e| anyhow!("force attest: {e}"))?;
+            patch::patch_process_status(
+                &api,
+                &name,
+                patch::phase_status_msg(ProcessPhase::Running, "forced re-attestation (SIGUSR1)"),
+            )
+            .await
+            .map_err(|e| anyhow!("force attest: {e}"))?;
             Ok(())
         }
         SignalEffect::Suspend => {
@@ -168,14 +163,16 @@ pub async fn consume_effect(process: &Process, ctx: &Context, effect: SignalEffe
         }
         SignalEffect::Remediate => {
             // Trigger reconverge with a note; real remediation hooks (kensa) land later.
-            let body = json!({
-                "phase": ProcessPhase::Reconverging,
-                "phaseSince": chrono::Utc::now(),
-                "message": "remediate requested (SIGUSR2)",
-            });
-            patch::patch_process_status(&api, &name, body)
-                .await
-                .map_err(|e| anyhow!("remediate: {e}"))?;
+            patch::patch_process_status(
+                &api,
+                &name,
+                patch::phase_status_msg(
+                    ProcessPhase::Reconverging,
+                    "remediate requested (SIGUSR2)",
+                ),
+            )
+            .await
+            .map_err(|e| anyhow!("remediate: {e}"))?;
             Ok(())
         }
     }

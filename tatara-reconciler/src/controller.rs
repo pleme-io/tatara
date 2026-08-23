@@ -11,7 +11,6 @@ use std::time::Duration;
 
 use kube::api::Api;
 use kube::runtime::controller::Action;
-use serde_json::json;
 use tracing::{info, warn};
 
 use tatara_process::prelude::*;
@@ -34,11 +33,7 @@ pub async fn reconcile(process: Arc<Process>, ctx: Arc<Context>) -> Result<Actio
     // 1. Deletion preempts everything — force Exiting if still alive.
     if process.metadata.deletion_timestamp.is_some() && current_phase.is_alive() {
         let api: Api<Process> = Api::namespaced(ctx.kube.clone(), ns);
-        let body = json!({
-            "phase": ProcessPhase::Exiting,
-            "phaseSince": chrono::Utc::now(),
-            "message": "deletion requested",
-        });
+        let body = patch::phase_status_msg(ProcessPhase::Exiting, "deletion requested");
         if let Err(e) = patch::patch_process_status(&api, name, body).await {
             warn!(namespace = ns, name, error = %e, "force-Exiting patch failed; requeuing");
         } else {

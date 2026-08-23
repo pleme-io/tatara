@@ -55,6 +55,85 @@ impl Satisfaction {
     }
 }
 
+/// Deserialize the axis-typed params carrier `T` from a boundary
+/// condition's `params: serde_json::Value`, projecting a serde-level
+/// rejection into the operator-facing
+/// [`Satisfaction::Unknown("<kind_label> params invalid: {e}")`]
+/// diagnostic every kind-typed evaluator on this file pre-lift restated
+/// verbatim at its own site.
+///
+/// Pre-lift the FOUR kind-typed evaluators
+/// ([`evaluate_process_phase`] on the `ProcessPhase` axis,
+/// [`evaluate_flux_ready`] on the `Kustomization` / `HelmRelease` axes,
+/// [`evaluate_job_attested`] on the `JobAttested` axis,
+/// [`evaluate_closed_loop_auth`] on the `ClosedLoopAuth` axis) each
+/// hand-authored the same three-invariant scaffold at their own local
+/// site: (1) clone the `Value`, (2) call `serde_json::from_value::<T>`
+/// with the carrier's turbofish, (3) on Err wrap the syn-error into
+/// `Satisfaction::Unknown` with a `"<kind_label> params invalid: {e}"`
+/// prefix. FOUR byte-for-byte identical `let parsed: <T> = match
+/// serde_json::from_value(params.clone()) { … }` blocks past the
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold, differing only in the
+/// axis-typed carrier `T` and the `&str` kind label each threaded
+/// through the SAME scaffold.
+///
+/// Post-lift the three shared invariants live at ONE substrate primitive
+/// here; each evaluator threads its axis-typed carrier through the
+/// turbofish and its kind label through the `&str` slot, and the Err
+/// arm rides through `parse_condition_params(...).map_err(|s| ...)?`
+/// at each callsite's own `Result<Satisfaction>` early-return path. A
+/// regression that drifted the diagnostic wording (a swapped `params
+/// invalid` phrase, a missing kind-label prefix, a promoted variant on
+/// the `Satisfaction` axis) at ONE evaluator surfaces at the sibling
+/// test [`parse_condition_params_tests`] rather than as silent
+/// operator-facing drift across the four kind-typed evaluators.
+///
+/// The `kind_label` parameter is a `&str` (not `&'static str`) because
+/// [`evaluate_flux_ready`] threads its `kind: &str` parameter (whose
+/// call sites pass `"Kustomization"` / `"HelmRelease"` — both statically
+/// known but locally borrowed through the outer fn signature) through
+/// this slot. Every other callsite passes a bare `&'static str` literal
+/// (`"ProcessPhase"`, `"JobAttested"`, `"ClosedLoopAuth"`); the `&str`
+/// bound admits both. A future ConditionKind whose evaluator wants to
+/// tag its diagnostic with a dynamic axis (a hypothetical
+/// `PromQL(query_label)` variant that names the failing query in the
+/// diagnostic) lands as ONE new callsite through the SAME primitive
+/// with a locally-borrowed `&str`, no widening of the primitive's
+/// signature.
+///
+/// The `T: serde::de::DeserializeOwned` bound rides the caller's
+/// turbofish, matching how the substrate's own trait-dispatch primitive
+/// [`tatara_lisp::domain::DeserializeKwarg`] binds its axis-agnostic
+/// `T: DeserializeOwned` slot. All four workspace-shipped params
+/// carriers (`ProcessPhaseParams` / `NamedResourceParams` /
+/// `JobAttestedParams` / `ClosedLoopAuthParams`) are `#[derive(Deserialize)]`
+/// with owned `String` slots, so `DeserializeOwned` holds mechanically.
+///
+/// Future structural promotion of the emitted diagnostic (a caller-
+/// supplied span, a `note = "help: …"` chain, an `expected: <shape>`
+/// hint drawn from the carrier's `serde` schema, a structured
+/// `Satisfaction::Unknown { kind, source }` promotion) lands at ONE
+/// substrate primitive here — all four kind-typed evaluators and every
+/// future new ConditionKind evaluator pick up the upgrade mechanically,
+/// with no per-evaluator hand-edit.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// three-invariant scaffold recurred at four kind-typed evaluators
+/// well past the PRIME-DIRECTIVE ≥ 2 duplication trigger, and is
+/// lifted to ONE owner here). THEORY.md §II.1 invariant 5 (composition
+/// preserves proofs — the four axis-typed evaluators now compose
+/// structurally through ONE primitive; a regression that drifted the
+/// wording or the Satisfaction variant at ONE axis surfaces at
+/// [`parse_condition_params_tests`] rather than as silent drift at
+/// every downstream evaluator with a params carrier on that axis).
+fn parse_condition_params<T: serde::de::DeserializeOwned>(
+    kind_label: &str,
+    params: &Value,
+) -> Result<T, Satisfaction> {
+    serde_json::from_value(params.clone())
+        .map_err(|e| Satisfaction::Unknown(format!("{kind_label} params invalid: {e}")))
+}
+
 // ── typed params per kind ────────────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -159,13 +238,9 @@ async fn evaluate_job_attested(
     params: &Value,
     _process: &Process,
 ) -> Result<Satisfaction> {
-    let parsed: JobAttestedParams = match serde_json::from_value(params.clone()) {
+    let parsed: JobAttestedParams = match parse_condition_params("JobAttested", params) {
         Ok(p) => p,
-        Err(e) => {
-            return Ok(Satisfaction::Unknown(format!(
-                "JobAttested params invalid: {e}"
-            )))
-        }
+        Err(unk) => return Ok(unk),
     };
     let ns = parsed.namespace.as_deref().unwrap_or(default_ns);
     let job_status = fetch_job_status(client.clone(), ns, &parsed.name).await?;
@@ -245,13 +320,9 @@ async fn evaluate_closed_loop_auth(
     params: &Value,
     process: &Process,
 ) -> Result<Satisfaction> {
-    let parsed: ClosedLoopAuthParams = match serde_json::from_value(params.clone()) {
+    let parsed: ClosedLoopAuthParams = match parse_condition_params("ClosedLoopAuth", params) {
         Ok(p) => p,
-        Err(e) => {
-            return Ok(Satisfaction::Unknown(format!(
-                "ClosedLoopAuth params invalid: {e}"
-            )))
-        }
+        Err(unk) => return Ok(unk),
     };
     let ns = parsed.namespace.as_deref().unwrap_or(default_ns);
     let process_name = process
@@ -410,13 +481,9 @@ async fn evaluate_process_phase(
     default_ns: &str,
     params: &Value,
 ) -> Result<Satisfaction> {
-    let parsed: ProcessPhaseParams = match serde_json::from_value(params.clone()) {
+    let parsed: ProcessPhaseParams = match parse_condition_params("ProcessPhase", params) {
         Ok(p) => p,
-        Err(e) => {
-            return Ok(Satisfaction::Unknown(format!(
-                "ProcessPhase params invalid: {e}"
-            )))
-        }
+        Err(unk) => return Ok(unk),
     };
     let ns = parsed.namespace.as_deref().unwrap_or(default_ns);
     let api: Api<Process> = Api::namespaced(client, ns);
@@ -455,9 +522,9 @@ async fn evaluate_flux_ready(
     api_version: &str,
     kind: &str,
 ) -> Result<Satisfaction> {
-    let parsed: NamedResourceParams = match serde_json::from_value(params.clone()) {
+    let parsed: NamedResourceParams = match parse_condition_params(kind, params) {
         Ok(p) => p,
-        Err(e) => return Ok(Satisfaction::Unknown(format!("{kind} params invalid: {e}"))),
+        Err(unk) => return Ok(unk),
     };
     let ns = parsed.namespace.as_deref().unwrap_or(default_ns);
     let obj = ssapply::fetch(client, ns, api_version, kind, &parsed.name)
@@ -714,5 +781,188 @@ mod tests {
             Some("why")
         );
         assert_eq!(Satisfaction::Satisfied.message(), None);
+    }
+}
+
+/// Substrate-primitive tests for [`parse_condition_params`] — the
+/// shared `serde_json::from_value → Satisfaction::Unknown` axis every
+/// kind-typed evaluator on this file dispatches through.
+///
+/// The pre-lift shape lived at FOUR sites across
+/// [`evaluate_process_phase`] / [`evaluate_flux_ready`] /
+/// [`evaluate_job_attested`] / [`evaluate_closed_loop_auth`], each
+/// hand-authoring the (clone Value, from_value::<T>, wrap Err in
+/// `Satisfaction::Unknown("<kind> params invalid: {e}")`) three-step
+/// verbatim at its own local site. Post-lift the three shared invariants
+/// live at ONE substrate primitive, and this module pins the four
+/// contract axes at fail-before-pass-after granularity.
+///
+/// Sibling of the `tests` module above (on the [`Satisfaction`] /
+/// [`phase_rank`] / [`parse_receipt_payload`] axes) — kept as its own
+/// module so a regression at the substrate primitive's axis surfaces
+/// distinctly from the per-kind evaluator or the receipt parser.
+#[cfg(test)]
+mod parse_condition_params_tests {
+    use super::{parse_condition_params, JobAttestedParams, NamedResourceParams, Satisfaction};
+    use serde_json::json;
+
+    // ── Contract axis 1: successful deserialization returns Ok(T) ────
+    //
+    // The typed carrier's fields project structurally from the JSON;
+    // the primitive is the identity path on the happy branch (a
+    // wrapper only around the Err branch's Satisfaction promotion).
+
+    #[test]
+    fn valid_named_resource_params_deserialize_to_typed_carrier() {
+        let params = json!({ "name": "my-kustomization", "namespace": "flux-system" });
+        let parsed: NamedResourceParams = parse_condition_params("Kustomization", &params)
+            .expect("valid params deserialize to typed carrier");
+        assert_eq!(parsed.name, "my-kustomization");
+        assert_eq!(parsed.namespace.as_deref(), Some("flux-system"));
+    }
+
+    #[test]
+    fn valid_named_resource_params_with_missing_optional_namespace_deserialize() {
+        // `NamedResourceParams::namespace` is `#[serde(default)] Option<String>`
+        // — an absent field projects to `None` without rejecting.
+        let params = json!({ "name": "only-name-required" });
+        let parsed: NamedResourceParams = parse_condition_params("Kustomization", &params)
+            .expect("valid params deserialize with optional field absent");
+        assert_eq!(parsed.name, "only-name-required");
+        assert_eq!(parsed.namespace, None);
+    }
+
+    #[test]
+    fn valid_job_attested_params_deserialize_camelcase_fields() {
+        // `JobAttestedParams` uses `#[serde(rename_all = "camelCase")]`,
+        // so the JSON key `expectReceipt` deserializes into the Rust
+        // field `expect_receipt`. Pinning this axis catches a regression
+        // that swapped the primitive's `serde_json::from_value` for a
+        // shape gate that lost the rename attribute (e.g. by round-
+        // tripping through `serde_json::to_value` at the wrong axis).
+        let params = json!({
+            "name": "my-job",
+            "namespace": "default",
+            "expectReceipt": true,
+            "receiptConfigMap": "my-cm",
+        });
+        let parsed: JobAttestedParams = parse_condition_params("JobAttested", &params)
+            .expect("valid camelCase params deserialize into snake_case fields");
+        assert_eq!(parsed.name, "my-job");
+        assert!(parsed.expect_receipt);
+        assert_eq!(parsed.receipt_config_map.as_deref(), Some("my-cm"));
+    }
+
+    // ── Contract axis 2: Err returns Satisfaction::Unknown (not
+    // Unsatisfied or Satisfied) — pins the primitive's typed-projection
+    // discipline so a future consumer that pattern-matches on the
+    // Satisfaction variant binds structurally.
+
+    #[test]
+    fn invalid_params_project_to_satisfaction_unknown_variant() {
+        // `NamedResourceParams::name` is a required `String`; passing
+        // an integer produces a serde-level type-mismatch. `.err()`
+        // projects `Result<T, E>` to `Option<E>` without requiring
+        // `Debug` on the carrier `T`, then `.expect(...)` fires the
+        // fail-branch message iff the primitive silently returned Ok.
+        let params = json!({ "name": 42 });
+        let err = parse_condition_params::<NamedResourceParams>("Kustomization", &params)
+            .err()
+            .expect("integer-typed name field must reject at serde gate");
+        assert!(
+            matches!(err, Satisfaction::Unknown(_)),
+            "invalid params must project to Satisfaction::Unknown"
+        );
+    }
+
+    #[test]
+    fn absent_required_field_projects_to_satisfaction_unknown() {
+        // `NamedResourceParams::name` is required (no serde default);
+        // an empty object rejects at the serde-level missing-field gate.
+        let params = json!({});
+        let err = parse_condition_params::<NamedResourceParams>("Kustomization", &params)
+            .err()
+            .expect("missing required field must reject at serde gate");
+        assert!(
+            matches!(err, Satisfaction::Unknown(_)),
+            "missing required field must project to Satisfaction::Unknown"
+        );
+    }
+
+    // ── Contract axis 3: kind_label rides through as the diagnostic
+    // prefix verbatim, ahead of " params invalid: " and the serde-
+    // error tail. Pins the four workspace-shipped kind labels
+    // ("ProcessPhase", "Kustomization" / "HelmRelease" via
+    // evaluate_flux_ready's dynamic `kind` slot, "JobAttested",
+    // "ClosedLoopAuth") so a regression that drifted the prefix
+    // wording at ONE site fails here.
+
+    #[test]
+    fn kind_label_prefixes_the_unknown_diagnostic_across_all_shipped_axes() {
+        for kind_label in [
+            "ProcessPhase",
+            "Kustomization",
+            "HelmRelease",
+            "JobAttested",
+            "ClosedLoopAuth",
+        ] {
+            let params = json!({});
+            let err = parse_condition_params::<NamedResourceParams>(kind_label, &params)
+                .err()
+                .expect("missing-field params must reject at serde gate");
+            let Satisfaction::Unknown(msg) = err else {
+                panic!("expected Satisfaction::Unknown for {kind_label}");
+            };
+            assert!(
+                msg.starts_with(&format!("{kind_label} params invalid: ")),
+                "kind label {kind_label:?} must prefix the diagnostic verbatim; \
+                 got message {msg:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn kind_label_is_the_only_prefix_source_no_hardcoded_label_leaks() {
+        // A regression that hardcoded a specific label in the
+        // primitive (e.g. by copy-pasting "ProcessPhase params invalid"
+        // as a literal instead of interpolating `{kind_label}`) would
+        // surface here — the axis-typed prefix "AxisXYZ" is guaranteed
+        // absent from the substrate's own trait paths.
+        let params = json!({});
+        let err = parse_condition_params::<NamedResourceParams>("AxisXYZ", &params)
+            .err()
+            .expect("missing-field params must reject at serde gate");
+        let Satisfaction::Unknown(msg) = err else {
+            panic!("expected Satisfaction::Unknown");
+        };
+        assert!(
+            msg.starts_with("AxisXYZ params invalid: "),
+            "kind label must interpolate through, got {msg:?}"
+        );
+    }
+
+    // ── Contract axis 4: serde error's Display projection rides
+    // through the trailing tail of the diagnostic. Pins that the
+    // primitive does not drop or reshape the underlying serde error.
+
+    #[test]
+    fn serde_error_display_projects_through_the_diagnostic_tail() {
+        let params = json!({ "name": 42 });
+        let err = parse_condition_params::<NamedResourceParams>("Kustomization", &params)
+            .err()
+            .expect("integer-typed name field must reject at serde gate");
+        let Satisfaction::Unknown(msg) = err else {
+            panic!("expected Satisfaction::Unknown");
+        };
+        // serde_json's Display for an integer-vs-string mismatch names
+        // the expected type ("string"); the substring is load-bearing
+        // for operator grep-based diagnostics.
+        let tail = msg
+            .strip_prefix("Kustomization params invalid: ")
+            .expect("primitive must emit the '<kind> params invalid: ' prefix verbatim");
+        assert!(
+            tail.contains("string"),
+            "serde error tail must name the expected type verbatim; got {tail:?}"
+        );
     }
 }

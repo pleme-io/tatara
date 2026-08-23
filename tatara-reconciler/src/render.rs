@@ -495,9 +495,19 @@ pub fn export_job_name(process_name: &str, index: usize) -> String {
 }
 
 /// Canonical receipt ConfigMap name for an export Job.
-/// Shape: `<process-name>-export-<index>-receipt`.
+///
+/// Shape: `<process-name>-export-<index>-receipt`, composed as
+/// `<export_job_name(process_name, index)>` ++
+/// [`tatara_process::receipt::RECEIPT_CM_SUFFIX`] via
+/// [`tatara_process::receipt::default_receipt_config_map_name`] so
+/// the export-worker's default-derivation site shares ONE substrate
+/// primitive with the reconciler's `JobAttested` +
+/// `ClosedLoopAuth` default-derivation sites in
+/// [`crate::boundary`]. A future rename of the `-receipt` suffix
+/// lands at the ONE const on the substrate; this composer picks it
+/// up mechanically.
 pub fn export_receipt_configmap_name(process_name: &str, index: usize) -> String {
-    format!("{process_name}-export-{index}-receipt")
+    tatara_process::receipt::default_receipt_config_map_name(&export_job_name(process_name, index))
 }
 
 /// Render one `batch/v1` Job per ExportSpec that fires for the
@@ -1121,6 +1131,33 @@ mod export_job_tests {
             export_receipt_configmap_name("r1", 0),
             "r1-export-0-receipt"
         );
+    }
+
+    #[test]
+    fn export_receipt_configmap_name_composes_through_substrate_primitive() {
+        // Path-uniformity pin: the export-worker's receipt-CM composer
+        // must compose through the substrate's ONE default-derivation
+        // owner (`tatara_process::receipt::default_receipt_config_map_name`
+        // + the `RECEIPT_CM_SUFFIX` const) rather than re-inline the
+        // `-receipt` suffix at this crate. A regression that
+        // re-inlined the shape as `format!("{name}-export-{i}-receipt")`
+        // would silently drift the moment the substrate's suffix
+        // changed (e.g. to `-attest` or `.receipt`), because this
+        // crate's byte would no longer route through the const. The
+        // pin re-reads both the Job-name composer (`export_job_name`)
+        // AND the substrate composer at test time, so the equality
+        // holds iff both live paths are the current implementation.
+        for (process_name, index) in [("r1", 0usize), ("attest", 5), ("svc-abc-def", 12)] {
+            let via_composer = export_receipt_configmap_name(process_name, index);
+            let via_substrate = tatara_process::receipt::default_receipt_config_map_name(
+                &export_job_name(process_name, index),
+            );
+            assert_eq!(
+                via_composer, via_substrate,
+                "export_receipt_configmap_name({process_name:?}, {index}) drifted from \
+                 <export_job_name>++substrate::default_receipt_config_map_name composition"
+            );
+        }
     }
 }
 

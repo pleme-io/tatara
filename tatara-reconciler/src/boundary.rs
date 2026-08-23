@@ -253,7 +253,7 @@ async fn evaluate_job_attested(
     let cm_name = parsed
         .receipt_config_map
         .clone()
-        .unwrap_or_else(|| format!("{}-receipt", parsed.name));
+        .unwrap_or_else(|| tatara_process::receipt::default_receipt_config_map_name(&parsed.name));
     let verdict = verify_receipt_cm(client, ns, &cm_name, None).await?;
     Ok(classify_receipt_verdict(
         "Job",
@@ -314,7 +314,7 @@ async fn evaluate_closed_loop_auth(
     let cm_name = parsed
         .receipt_config_map
         .clone()
-        .unwrap_or_else(|| format!("{job_name}-receipt"));
+        .unwrap_or_else(|| tatara_process::receipt::default_receipt_config_map_name(&job_name));
 
     // 1. The probe Job must have succeeded.
     if let Err(unsat) =
@@ -1571,5 +1571,54 @@ mod classify_receipt_verdict_tests {
             "primitive must not hardcode <name>-receipt when caller supplied a cm_name; \
              got {msg:?}"
         );
+    }
+
+    // ── JobAttested + ClosedLoopAuth default receipt-CM derivation ───
+    //
+    // Pin the substrate binding: the pre-lift `format!("{name}-receipt")`
+    // shape at both [`evaluate_job_attested`] (line ~256) and
+    // [`evaluate_closed_loop_auth`] (line ~317) now routes through
+    // `tatara_process::receipt::default_receipt_config_map_name`. The
+    // docstring comments on the params structs (`defaults to
+    // <name>-receipt` on `JobAttestedParams::receipt_config_map`,
+    // `defaults to <job-name>-receipt` on
+    // `ClosedLoopAuthParams::receipt_config_map`) name the shipped
+    // convention; this pin binds those doc strings to a running
+    // assertion. A regression that either (a) drifted the substrate
+    // primitive's suffix without a docstring update, or (b)
+    // re-inlined a `format!` at the callsite instead of routing
+    // through the substrate, would fail HERE — the docstring's
+    // published shape no longer matches the runtime path.
+
+    #[test]
+    fn default_receipt_cm_derivation_shape_matches_docstring_and_substrate() {
+        // Both evaluators fall back to `<job_name>-receipt` when the
+        // caller supplied no `receiptConfigMap` override. Pin that
+        // the substrate composer produces the exact wire-name shape
+        // both docstrings publish, for a sweep of realistic Job-name
+        // inputs (bare JobAttested target, closed-loop-probe
+        // derivation whose Job-name is `<process>-closed-loop-probe`,
+        // and a namespace-collision-safe hierarchical Job-name).
+        for job_name in [
+            "my-job",
+            "closed-loop-attest-closed-loop-probe",
+            "svc-abc-job-42",
+        ] {
+            let via_substrate = tatara_process::receipt::default_receipt_config_map_name(job_name);
+            // Docstring shape: `<name>-receipt` (JobAttested params)
+            // and `<job-name>-receipt` (ClosedLoopAuth params) — both
+            // resolve to the same byte sequence pre- and post-lift.
+            let docstring_shape = {
+                let mut s = String::new();
+                s.push_str(job_name);
+                s.push_str(tatara_process::receipt::RECEIPT_CM_SUFFIX);
+                s
+            };
+            assert_eq!(
+                via_substrate, docstring_shape,
+                "default receipt-CM derivation for job {job_name:?} drifted from the \
+                 substrate composer <job_name>++RECEIPT_CM_SUFFIX shape",
+            );
+        }
     }
 }

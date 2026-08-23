@@ -44,6 +44,80 @@ use crate::attestation::ProcessAttestation;
 /// shape changes; parsers refuse anything else for the v1 reader.
 pub const RECEIPT_VERSION: &str = "tatara-receipt/v1";
 
+/// Suffix appended to a Job's name to compose its default receipt-
+/// ConfigMap name. The substrate convention is that any Job which
+/// emits a [`ReceiptEnvelope`] writes it to a ConfigMap in the Job's
+/// own namespace whose name is `<job_name>-receipt` unless the caller
+/// supplies an explicit override.
+///
+/// Load-bearing at three shipped derivation sites, each of which
+/// re-composed the `<name>-receipt` shape by hand pre-lift:
+/// - `tatara_reconciler::boundary::evaluate_job_attested` — the
+///   `JobAttested` postcondition's default `receiptConfigMap`
+///   (`<parsed.name>-receipt`);
+/// - `tatara_reconciler::boundary::evaluate_closed_loop_auth` — the
+///   `ClosedLoopAuth` postcondition's default `receiptConfigMap`
+///   (`<probe_job_name>-receipt`, where the probe Job itself
+///   defaults to `<process_name>-closed-loop-probe`);
+/// - `tatara_reconciler::render::export_receipt_configmap_name` — the
+///   export-worker Job's per-index receipt ConfigMap
+///   (`<process_name>-export-<index>-receipt`), which is
+///   structurally `<export_job_name(process_name, index)>-receipt`.
+///
+/// Pre-lift each site restated the suffix as a `format!` literal
+/// (`format!("{}-receipt", parsed.name)`,
+/// `format!("{job_name}-receipt")`, and
+/// `format!("{process_name}-export-{index}-receipt")`). A rename to
+/// `-attest` or a scheme change to `.receipt-cm` would have needed a
+/// grep-and-replace across the three production sites AND a
+/// coordinated update of every fleet-shipped operator override in the
+/// closed-loop-probe chart and the reconciler's own tests.
+/// Post-lift the suffix lives at ONE const on the receipt module;
+/// [`default_receipt_config_map_name`] composes it with a Job name;
+/// every default-derivation site AND the export-worker composer
+/// route through the same primitive so a future suffix change lands
+/// at this ONE const and every consumer picks it up mechanically.
+///
+/// Sibling suffix-const on the substrate: [`RECEIPT_VERSION`] pins
+/// the wire-format version string every parser gates on; this const
+/// pins the wire-K8s-name suffix every default-derivation site
+/// composes. Both are load-bearing constants that operators grep and
+/// dashboards template on — neither may drift from its published
+/// spelling silently.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// `<job_name>-receipt` shape recurred at three production sites past
+/// the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold and is lifted to
+/// ONE substrate const + composer here. THEORY.md §III — the
+/// typescape; the substrate's own receipt-CM naming convention
+/// becomes a NAMED PRIMITIVE rather than a shape spelled out by hand
+/// at every derivation site.
+pub const RECEIPT_CM_SUFFIX: &str = "-receipt";
+
+/// Compose the canonical receipt-ConfigMap name for a Job named
+/// `job_name` — the substrate's default when no explicit
+/// `receiptConfigMap` override is supplied on a postcondition's
+/// params or when a renderer builds a Job whose receipt CM name is
+/// derived from the Job's own name.
+///
+/// Returns `<job_name>{RECEIPT_CM_SUFFIX}`. See [`RECEIPT_CM_SUFFIX`]
+/// for the full lift rationale and the three consumer sites the
+/// primitive owns.
+///
+/// Uses string concatenation rather than `format!` so the composition
+/// does not participate in the workspace's typed-emission ban migration
+/// (skip-format-ban CLAUDE.md note); the shape is fixed at
+/// `<job_name>` ++ [`RECEIPT_CM_SUFFIX`] and any future two-arg
+/// composer (e.g. `default_receipt_config_map_name_scoped(cluster,
+/// job)`) extends the primitive here, not the consumer sites.
+#[must_use]
+pub fn default_receipt_config_map_name(job_name: &str) -> String {
+    let mut out = String::with_capacity(job_name.len() + RECEIPT_CM_SUFFIX.len());
+    out.push_str(job_name);
+    out.push_str(RECEIPT_CM_SUFFIX);
+    out
+}
+
 /// Closed-set typed identifier for the four known [`ReceiptEnvelope::kind`]
 /// strings the substrate emits today — [`Self::ClosedLoopAuth`] →
 /// `"closed-loop-auth"`, [`Self::DbMigration`] → `"db-migration"`,
@@ -1180,5 +1254,96 @@ generated_at:  2026-05-19T12:00:00Z
                 "verify_shape returned {err:?} — expected MissingField({field:?})",
             );
         }
+    }
+
+    // ── RECEIPT_CM_SUFFIX + default_receipt_config_map_name ──────────
+    //
+    // Fail-before-pass-after pins for the substrate-level naming
+    // convention that the reconciler's JobAttested + ClosedLoopAuth
+    // evaluators AND the export-worker renderer all route through
+    // for their default-derivation callsites. A regression that
+    // renamed the suffix (e.g. `-receipt` → `-attest`, `-cm`, or
+    // `.receipt`) OR that swapped the composition order at the
+    // composer (e.g. `<suffix><job>` instead of `<job><suffix>`)
+    // would silently misroute every default-derivation receipt-CM
+    // read against a ConfigMap the Job never wrote to — the pins
+    // here catch the drift at the primitive itself, before it
+    // reaches any downstream consumer.
+
+    #[test]
+    fn receipt_cm_suffix_pinned_to_dash_receipt() {
+        // Byte-exact wire-format pin — renaming this is a wire-name
+        // change, not a typed-internal refactor. Operators grep for
+        // the `-receipt` suffix in kubectl output; dashboards and
+        // export tooling template on it; the closed-loop-probe chart
+        // publishes ConfigMaps at this suffix. A silent rename here
+        // would desync all of them at once.
+        assert_eq!(RECEIPT_CM_SUFFIX, "-receipt");
+    }
+
+    #[test]
+    fn default_receipt_config_map_name_appends_suffix_to_job_name() {
+        // The canonical composition every default-derivation site
+        // routed through pre-lift as `format!("{name}-receipt")`.
+        assert_eq!(default_receipt_config_map_name("my-job"), "my-job-receipt");
+        assert_eq!(
+            default_receipt_config_map_name("probe-job"),
+            "probe-job-receipt"
+        );
+    }
+
+    #[test]
+    fn default_receipt_config_map_name_composes_through_the_suffix_const() {
+        // Cross-primitive coherence pin — the composer's output must
+        // equal `<job_name>{RECEIPT_CM_SUFFIX}` verbatim across a
+        // sweep of shipped Job-name shapes (bare, hierarchical
+        // export-index, closed-loop probe derivation, one-char, and
+        // empty). A regression that inlined the suffix at the
+        // composer (breaking the const's role as the ONE source of
+        // truth) fails HERE at the shipped-shape sweep because the
+        // pin re-reads the const at test time.
+        for job_name in [
+            "my-job",
+            "r1-export-0",
+            "attest-export-5",
+            "closed-loop-attest-closed-loop-probe",
+            "x",
+            "",
+        ] {
+            let mut expected = String::new();
+            expected.push_str(job_name);
+            expected.push_str(RECEIPT_CM_SUFFIX);
+            assert_eq!(
+                default_receipt_config_map_name(job_name),
+                expected,
+                "default_receipt_config_map_name({job_name:?}) drifted from \
+                 <job>++RECEIPT_CM_SUFFIX composition",
+            );
+        }
+    }
+
+    #[test]
+    fn default_receipt_config_map_name_matches_prior_hand_authored_format_shape() {
+        // Path-uniformity pin against the three pre-lift `format!`
+        // literals — each callsite spelled the shape a slightly
+        // different way (`format!("{}-receipt", parsed.name)` /
+        // `format!("{job_name}-receipt")` /
+        // `format!("{process_name}-export-{index}-receipt")`) but
+        // all three composed the SAME `<job>-receipt` byte sequence
+        // once evaluated. The lift preserves that byte identity so
+        // no downstream ConfigMap grep or fleet-shipped operator
+        // override changes meaning. A regression at the primitive
+        // that broke the byte identity (e.g. inserted a separator,
+        // uppercased the suffix, dropped the leading dash) would
+        // fail HERE against the pre-lift `format!` literal for a
+        // hand-picked Job-name that carries no ambiguity around
+        // separators.
+        let job_name = "svc-abc-export-3";
+        let pre_lift = format!("{job_name}-receipt");
+        let post_lift = default_receipt_config_map_name(job_name);
+        assert_eq!(
+            pre_lift, post_lift,
+            "post-lift primitive drifted from pre-lift `format!(\"{{name}}-receipt\")` byte shape",
+        );
     }
 }

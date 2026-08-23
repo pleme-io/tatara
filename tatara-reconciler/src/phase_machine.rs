@@ -505,7 +505,7 @@ async fn process_holds_any_claim(ctx: &Context, p: &Process) -> bool {
     if name.is_empty() {
         return false;
     }
-    let process_ref = format!("{ns}/{name}");
+    let process_ref = crate::ssapply::qualified_process_ref(ns, name);
     let table_api = ctx.process_table_api();
     let table = match table_api.get(&ctx.config.process_table_name).await {
         Ok(t) => t,
@@ -640,7 +640,7 @@ pub async fn handle_releasing(p: &Process, ctx: &Context) -> Result<Action> {
     let selector = format!(
         "{}={},{}=export",
         tatara_process::annotations::PROCESS,
-        format!("{ns}/{name}"),
+        crate::ssapply::qualified_process_ref(&ns, &name),
         tatara_process::annotations::ROLE,
     );
     let lp = kube::api::ListParams::default().labels(&selector);

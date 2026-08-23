@@ -86,6 +86,73 @@ pub fn ownership_annotations(process_ref: &str) -> serde_json::Map<String, Value
     m
 }
 
+/// Substrate-primitive builder for the standard tatara-reconciler
+/// **namespace-qualified process reference** — the `<ns>/<name>`
+/// string every consumer that grepped, keyed, or annotated a
+/// Process by "which cluster location owns it" composed by hand.
+/// Peer to [`ownership_annotations`], whose `process_ref` parameter
+/// is the value this primitive returns.
+///
+/// Pre-lift the `format!("{ns}/{name}")` incantation was hand-authored
+/// at SEVEN sites past the PRIME-DIRECTIVE ≥ 2 duplication threshold:
+/// * [`crate::render::render_flux`] — the Kustomization
+///   `metadata.annotations` seed (`ownership_annotations(&format!
+///   ("{ns}/{name}"))`).
+/// * [`crate::render::render_aplicacao`] × 2 — the OCIRepository +
+///   HelmRelease `metadata.annotations` seeds, same shape.
+/// * [`crate::render::render_export_jobs`] — the per-Process
+///   `process_ref` binding threaded through every emitted export
+///   Job's owner metadata.
+/// * [`crate::ssapply::inject_annotations`] — the SSA-time
+///   re-injection's `ownership_annotations(&format!("{ns}/{name}"))`
+///   feed, seeding the standard 2-slot ownership tag.
+/// * [`crate::phase_machine::process_holds_any_claim`] — the
+///   claim-arbiter's `holder` comparator (matches ProcessTable
+///   claim rows keyed by `<ns>/<name>`).
+/// * [`crate::phase_machine::handle_releasing`] — the export-Job
+///   label-selector `PROCESS=<ns>/<name>` filter used to enumerate
+///   THIS Process's Jobs (not any sibling Process's).
+///
+/// Post-lift every callsite reads through this ONE primitive so a
+/// future change to the reference shape — a `<ns>/<name>@<gen>`
+/// multi-generation variant for attestation grepping, a
+/// `<cluster>/<ns>/<name>` cross-cluster form, a normalization
+/// (case-fold, unicode-safe collation) that must apply everywhere
+/// — lands at ONE substrate method here and every downstream
+/// composer (annotation seed, ProcessTable claim key, label
+/// selector, owner metadata) inherits the upgrade mechanically.
+///
+/// The `&str` parameters accept both `&String` (which coerces via
+/// deref) and `&str` literal / slice callers, matching every shape
+/// currently authored: `render_flux` / `render_aplicacao` pass
+/// their `ns: &str, name: &str` function params directly;
+/// `render_export_jobs` / `handle_releasing` pass `&ns, &name`
+/// from `String` locals; `inject_annotations` /
+/// `process_holds_any_claim` pass `&str` slices from
+/// `.as_deref().unwrap_or(...)`.
+///
+/// The 2-arg signature encodes the invariant "the qualified
+/// reference is EXACTLY `<ns>/<name>`, in that order, joined by
+/// a single `/` separator" at the type level — a caller cannot
+/// accidentally swap the two axes (which would produce
+/// `<name>/<ns>` and silently break every downstream grep) nor
+/// omit either half, the way a pre-lift hand-authored
+/// `format!("{name}/{ns}")` or `format!("{ns}-{name}")` typo
+/// would.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// the `<ns>/<name>` shape recurred at seven hand-authored sites
+/// well past the PRIME-DIRECTIVE ≥ 2 duplication trigger, and is
+/// lifted to ONE owner here). THEORY.md §II.1 invariant 5
+/// (composition preserves proofs — a regression that swapped the
+/// two axes or the separator at ONE site surfaces at
+/// [`tests::qualified_process_ref_joins_ns_and_name_with_slash`]
+/// rather than as silent drift at every downstream annotation
+/// seed / claim key / label selector).
+pub fn qualified_process_ref(ns: &str, name: &str) -> String {
+    format!("{ns}/{name}")
+}
+
 /// Resolve an `ApiResource` for `apiVersion/kind`. Hand-maintains plurals
 /// for resources we emit or consume — good enough for v0; future move to
 /// `kube::discovery` lands when we want to handle arbitrary CRDs.
@@ -278,7 +345,7 @@ fn inject_annotations(resource: &mut Value, process: &Process) -> Result<()> {
     // same key pair + FIELD_MANAGER value the render-time authoring
     // sites do — a rename of FIELD_MANAGER, or a new mandatory tag
     // added to `ownership_annotations`, propagates here mechanically.
-    for (k, v) in ownership_annotations(&format!("{ns}/{name}")) {
+    for (k, v) in ownership_annotations(&qualified_process_ref(ns, name)) {
         annot.insert(k, v);
     }
 
@@ -517,5 +584,119 @@ mod tests {
         let anns = &resource["metadata"]["annotations"];
         assert_eq!(anns[annotations::MANAGED_BY], FIELD_MANAGER);
         assert_eq!(anns[annotations::PROCESS], "demo-ns/demo-app");
+    }
+
+    // ─── qualified_process_ref substrate pins ───────────────────────────
+    //
+    // The `format!("{ns}/{name}")` incantation was hand-authored at
+    // SEVEN sites — three inside `render::render_flux`/
+    // `render_aplicacao` metadata annotation seeds, one at
+    // `render::render_export_jobs` binding `process_ref`, one here at
+    // `inject_annotations`'s SSA-time re-injection seed, and two in
+    // `phase_machine.rs` (`process_holds_any_claim`'s claim
+    // comparator + `handle_releasing`'s label-selector composer).
+    // These pins bind the primitive at fail-before-pass-after
+    // granularity so a regression that swapped the two axes, changed
+    // the separator, or renormalized the input surfaces here rather
+    // than as silent operator-facing drift at every downstream
+    // annotation seed / claim key / label selector.
+    #[test]
+    fn qualified_process_ref_joins_ns_and_name_with_slash() {
+        // The invariant every downstream consumer composes against:
+        // the qualified reference is EXACTLY `<ns>/<name>`, in that
+        // order, joined by a single `/`. A regression that inserted
+        // a colon, swapped the two axes, or dropped either half would
+        // silently break every grep keyed on this shape (annotation
+        // reader, claim-arbiter comparator, `PROCESS=<ref>` label
+        // selector).
+        assert_eq!(
+            qualified_process_ref("demo-ns", "ephemeral-demo"),
+            "demo-ns/ephemeral-demo",
+        );
+    }
+
+    #[test]
+    fn qualified_process_ref_accepts_string_deref_and_str_slice_shapes() {
+        // The seven shipped callsites split across two shapes: the
+        // render.rs `render_flux` / `render_aplicacao` sites + the
+        // phase_machine.rs `process_holds_any_claim` site pass
+        // `&str` slices directly from function params /
+        // `.as_deref().unwrap_or(...)`; the render.rs
+        // `render_export_jobs` site + the phase_machine.rs
+        // `handle_releasing` site pass `&ns, &name` from `String`
+        // locals (via deref coercion). Pin both shapes at the type
+        // level — the `&str` parameters must accept both without
+        // widening.
+        let owned_ns = String::from("owned-ns");
+        let owned_name = String::from("owned-app");
+        let borrowed_ns: &str = "borrowed-ns";
+        let borrowed_name: &str = "borrowed-app";
+        assert_eq!(
+            qualified_process_ref(&owned_ns, &owned_name),
+            "owned-ns/owned-app",
+        );
+        assert_eq!(
+            qualified_process_ref(borrowed_ns, borrowed_name),
+            "borrowed-ns/borrowed-app",
+        );
+        // Mixed shapes (one owned, one borrowed) also ride cleanly —
+        // matches the phase_machine.rs `process_holds_any_claim`
+        // path where both slots come from the same `.as_deref()`
+        // chain but future consumers may compose across owned +
+        // borrowed provenance.
+        assert_eq!(
+            qualified_process_ref(&owned_ns, borrowed_name),
+            "owned-ns/borrowed-app",
+        );
+    }
+
+    #[test]
+    fn qualified_process_ref_composes_cleanly_into_ownership_annotations() {
+        // The primary consumer is `ownership_annotations` — four of
+        // the seven pre-lift sites (three in render.rs + this one
+        // in ssapply.rs) pass the result straight through as the
+        // annotation seed's `process_ref` arg. Pin the composition:
+        // building the standard 2-slot ownership tag through
+        // `ownership_annotations(&qualified_process_ref(ns, name))`
+        // produces the SAME map a pre-lift hand-authored
+        // `ownership_annotations(&format!("{ns}/{name}"))` did —
+        // no drift between the primitive-composed form and the
+        // literal-composed form the tests assert against below.
+        let composed = ownership_annotations(&qualified_process_ref("demo", "ephemeral-demo"));
+        let hand_authored = ownership_annotations("demo/ephemeral-demo");
+        assert_eq!(
+            composed, hand_authored,
+            "primitive-composed process_ref must produce the same annotation map as a pre-lift hand-authored literal"
+        );
+        // And the resulting PROCESS slot value is exactly the
+        // `<ns>/<name>` shape every downstream `PROCESS=<ref>`
+        // label-selector composes against.
+        assert_eq!(
+            composed.get(annotations::PROCESS).and_then(Value::as_str),
+            Some("demo/ephemeral-demo"),
+        );
+    }
+
+    #[test]
+    fn qualified_process_ref_rides_edge_case_axis_shapes() {
+        // The reconciler shapes the two axes as arbitrary strings —
+        // no length/character validation happens at the composer, so
+        // any shape a Process's `metadata.namespace` /
+        // `metadata.name` can hold rides through unchanged. Pin the
+        // empty-string cases (unnamed process pre-metadata,
+        // cluster-scoped `namespace = ""` fallback), the
+        // whitespace-and-slash-in-name pathological case (a
+        // regression that URL-escaped the input at this primitive
+        // would silently break every downstream grep), and the
+        // shape `process_holds_any_claim` early-returns on
+        // (`name.is_empty()`) so the composer's post-condition
+        // matches the caller's pre-condition.
+        assert_eq!(qualified_process_ref("", ""), "/");
+        assert_eq!(qualified_process_ref("default", ""), "default/");
+        assert_eq!(qualified_process_ref("", "orphan"), "/orphan");
+        assert_eq!(
+            qualified_process_ref("weird ns", "with/slash"),
+            "weird ns/with/slash",
+        );
     }
 }

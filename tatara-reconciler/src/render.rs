@@ -142,7 +142,7 @@ fn render_flux(name: &str, ns: &str, f: &FluxIntent) -> (Vec<Value>, Vec<u8>) {
         "metadata": {
             "name": name,
             "namespace": ns,
-            "annotations": crate::ssapply::ownership_annotations(&format!("{ns}/{name}")),
+            "annotations": crate::ssapply::ownership_annotations(&crate::ssapply::qualified_process_ref(ns, name)),
         },
         "spec": Value::Object(spec),
     });
@@ -194,7 +194,7 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
             "metadata": {
                 "name": name,
                 "namespace": ns,
-                "annotations": crate::ssapply::ownership_annotations(&format!("{ns}/{name}")),
+                "annotations": crate::ssapply::ownership_annotations(&crate::ssapply::qualified_process_ref(ns, name)),
             },
             "spec": {
                 "interval": "5m",
@@ -260,7 +260,7 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
         "metadata": {
             "name": name,
             "namespace": ns,
-            "annotations": crate::ssapply::ownership_annotations(&format!("{ns}/{name}")),
+            "annotations": crate::ssapply::ownership_annotations(&crate::ssapply::qualified_process_ref(ns, name)),
         },
         "spec": Value::Object(hr_spec),
     });
@@ -540,7 +540,7 @@ pub fn render_export_jobs(
         .as_deref()
         .unwrap_or("unnamed")
         .to_string();
-    let process_ref = format!("{ns}/{name}");
+    let process_ref = crate::ssapply::qualified_process_ref(&ns, &name);
     let uid = process.metadata.uid.as_deref().unwrap_or("");
     let previous_root = process
         .status

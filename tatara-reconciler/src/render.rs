@@ -638,14 +638,7 @@ fn one_export_job(
 
     let mut owner_refs = vec![];
     if !uid.is_empty() {
-        owner_refs.push(json!({
-            "apiVersion": format!("{}/{}", tatara_process::GROUP, tatara_process::VERSION),
-            "kind": "Process",
-            "name": name,
-            "uid": uid,
-            "controller": true,
-            "blockOwnerDeletion": true,
-        }));
+        owner_refs.push(tatara_process::owner_reference_json(name, uid));
     }
 
     // Seed the outer Job's labels map through the shared substrate

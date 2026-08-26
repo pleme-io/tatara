@@ -278,14 +278,10 @@ fn build_owner_refs(ctx: &EdgeContext<'_>) -> Vec<Value> {
     if ctx.process_uid.is_empty() {
         return vec![];
     }
-    vec![json!({
-        "apiVersion": format!("{}/{}", tatara_process::GROUP, tatara_process::VERSION),
-        "kind": "Process",
-        "name": ctx.process_name,
-        "uid": ctx.process_uid,
-        "controller": true,
-        "blockOwnerDeletion": true,
-    })]
+    vec![tatara_process::owner_reference_json(
+        ctx.process_name,
+        ctx.process_uid,
+    )]
 }
 
 #[cfg(test)]

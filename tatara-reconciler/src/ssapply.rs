@@ -514,14 +514,7 @@ fn build_owner_reference(p: &Process) -> Result<Value> {
         .uid
         .clone()
         .ok_or_else(|| anyhow!("process missing metadata.uid"))?;
-    Ok(json!({
-        "apiVersion": "tatara.pleme.io/v1alpha1",
-        "kind": "Process",
-        "name": name,
-        "uid": uid,
-        "controller": true,
-        "blockOwnerDeletion": true,
-    }))
+    Ok(tatara_process::owner_reference_json(&name, &uid))
 }
 
 fn inject_owner_reference(resource: &mut Value, owner_ref: Value) -> Result<()> {

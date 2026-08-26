@@ -112,6 +112,57 @@ pub mod prelude {
 pub const GROUP: &str = "tatara.pleme.io";
 /// CRD version for this module.
 pub const VERSION: &str = "v1alpha1";
+/// Kind spelling of the tatara Process CRD as it appears in a K8s
+/// [`OwnerReference.kind`][ownref] field. Peer to [`GROUP`] +
+/// [`VERSION`] — centralizes the ONE literal every SSA-time
+/// re-injection helper pre-lift restated by hand across
+/// `tatara-reconciler` (`render.rs`, `edges.rs`, `ssapply.rs`).
+///
+/// [ownref]: https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/
+pub const PROCESS_KIND: &str = "Process";
+
+/// Canonical `<GROUP>/<VERSION>` as an owned `String` — the ONE
+/// K8s `apiVersion` shape every tatara CRD stamps. Composed from
+/// [`GROUP`] + [`VERSION`] so a bump of either constant lands here
+/// exactly once; pre-lift, two `tatara-reconciler` sites hand-wrote
+/// `format!("{}/{}", tatara_process::GROUP, tatara_process::VERSION)`
+/// while a third inlined the literal `"tatara.pleme.io/v1alpha1"`,
+/// opening a silent drift path if `VERSION` ever advances past
+/// `v1alpha1`.
+pub fn api_version() -> String {
+    format!("{GROUP}/{VERSION}")
+}
+
+/// Build a Kubernetes [`OwnerReference`][ownref] JSON blob pointing
+/// at a Process (`kind = `[`PROCESS_KIND`], `apiVersion = `
+/// [`api_version`]) with `controller: true` +
+/// `blockOwnerDeletion: true` — the exact 6-slot shape every SSA
+/// re-injection site pre-lift restated three times across
+/// `tatara-reconciler` (`render.rs::owner_refs` for export-Job
+/// owners, `edges.rs::build_owner_refs` for Ingress + DNSEndpoint
+/// owners, `ssapply.rs::build_owner_reference` for the injected
+/// owner-ref stamped on every applied `DynamicObject`). Callers
+/// with a live `Process` value read `metadata.{name,uid}` and pass
+/// them through as `&str`.
+///
+/// The 6-slot shape is fixed (`controller` + `blockOwnerDeletion`
+/// both `true`); a Process-owned resource that wants a non-
+/// controller reference doesn't belong on this owner and can build
+/// its own `json!` inline — this primitive is the composer for the
+/// canonical "Process controls this resource, cascade-delete on
+/// GC" shape, not a general OwnerReference builder.
+///
+/// [ownref]: https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/
+pub fn owner_reference_json(name: &str, uid: &str) -> serde_json::Value {
+    serde_json::json!({
+        "apiVersion": api_version(),
+        "kind": PROCESS_KIND,
+        "name": name,
+        "uid": uid,
+        "controller": true,
+        "blockOwnerDeletion": true,
+    })
+}
 
 /// Annotation keys the reconciler reads/writes on owned FluxCD resources.
 pub mod annotations {
@@ -159,6 +210,129 @@ pub mod schema_helpers {
             "x-kubernetes-preserve-unknown-fields": true
         }))
         .expect("static JSON literal parses as Schema")
+    }
+}
+
+#[cfg(test)]
+mod owner_reference_tests {
+    //! Pin the `owner_reference_json` composer at fail-before-pass-
+    //! after granularity. Every shape a pre-lift caller hand-authored
+    //! is re-asserted here so a regression that inlined any of the
+    //! six slots at a call site (breaking the primitive's role as
+    //! the ONE source of truth) fails HERE at the composer's shipped-
+    //! shape pin rather than as silent drift between the pre-lift
+    //! `render.rs` / `edges.rs` / `ssapply.rs` sites (which pre-lift
+    //! already carried TWO different `apiVersion` spellings — a
+    //! composed `format!("{}/{}", GROUP, VERSION)` at two sites and
+    //! the frozen literal `"tatara.pleme.io/v1alpha1"` at the third).
+    use super::{api_version, owner_reference_json, GROUP, PROCESS_KIND, VERSION};
+    use serde_json::json;
+
+    #[test]
+    fn api_version_composes_group_and_version() {
+        // Any bump of GROUP or VERSION lands at ONE composer.
+        assert_eq!(api_version(), format!("{GROUP}/{VERSION}"));
+    }
+
+    #[test]
+    fn api_version_byte_matches_wire_form_pre_lift() {
+        // Byte-identity pin: the frozen wire-form literal
+        // `"tatara.pleme.io/v1alpha1"` that `ssapply.rs::
+        // build_owner_reference` hand-wrote pre-lift must equal the
+        // composed shape now sourced through the ONE owner. A
+        // future VERSION bump that missed this test would land as
+        // an operator-visible reference-mismatch after apply.
+        assert_eq!(api_version(), "tatara.pleme.io/v1alpha1");
+    }
+
+    #[test]
+    fn process_kind_is_process_literal() {
+        // Symbol-vs-string pin: any consumer that hand-wrote `"Process"`
+        // pre-lift routes through this const post-lift.
+        assert_eq!(PROCESS_KIND, "Process");
+    }
+
+    #[test]
+    fn owner_reference_json_has_all_six_slots_present() {
+        let v = owner_reference_json("my-process", "abc-uid");
+        let obj = v.as_object().expect("owner reference is a JSON object");
+        for k in [
+            "apiVersion",
+            "kind",
+            "name",
+            "uid",
+            "controller",
+            "blockOwnerDeletion",
+        ] {
+            assert!(obj.contains_key(k), "missing owner-reference slot: {k}");
+        }
+        assert_eq!(obj.len(), 6, "owner reference must have exactly 6 slots");
+    }
+
+    #[test]
+    fn owner_reference_json_apiversion_routes_through_api_version_owner() {
+        let v = owner_reference_json("x", "y");
+        assert_eq!(v["apiVersion"], api_version());
+    }
+
+    #[test]
+    fn owner_reference_json_kind_routes_through_process_kind_const() {
+        let v = owner_reference_json("x", "y");
+        assert_eq!(v["kind"], PROCESS_KIND);
+    }
+
+    #[test]
+    fn owner_reference_json_stamps_supplied_name_and_uid() {
+        let v = owner_reference_json("some-name", "some-uid");
+        assert_eq!(v["name"], "some-name");
+        assert_eq!(v["uid"], "some-uid");
+    }
+
+    #[test]
+    fn owner_reference_json_controller_and_block_owner_deletion_are_true() {
+        // These are structural — a Process-owned resource always
+        // has a controlling reference that cascade-deletes with
+        // the owner. A regression that flipped either boolean
+        // would silently detach every emitted resource.
+        let v = owner_reference_json("x", "y");
+        assert_eq!(v["controller"], true);
+        assert_eq!(v["blockOwnerDeletion"], true);
+    }
+
+    #[test]
+    fn owner_reference_json_matches_hand_authored_shape_pre_lift() {
+        // Byte-shape pin against the exact `json!({…})` incantation
+        // every pre-lift call site restated. A regression that
+        // reordered a slot, dropped one, or added a seventh here
+        // surfaces at THIS pin rather than as a subtle SSA-apply
+        // failure downstream when the K8s API server rejects the
+        // OwnerReference on schema mismatch.
+        let via_owner = owner_reference_json("p", "u");
+        let hand_authored = json!({
+            "apiVersion": "tatara.pleme.io/v1alpha1",
+            "kind": "Process",
+            "name": "p",
+            "uid": "u",
+            "controller": true,
+            "blockOwnerDeletion": true,
+        });
+        assert_eq!(via_owner, hand_authored);
+    }
+
+    #[test]
+    fn owner_reference_json_preserves_empty_name_and_uid_bytewise() {
+        // The primitive does not guard against empty inputs — its
+        // callers pre-lift did the empty-check upstream
+        // (`render.rs` guards `!uid.is_empty()`,
+        // `edges.rs::build_owner_refs` returns `vec![]` on empty
+        // uid, `ssapply.rs::build_owner_reference` unwraps a
+        // required `metadata.uid` via anyhow). The primitive owns
+        // shape composition, not admission control; a downstream
+        // rename that wants strict input validation lands as a
+        // peer, not a change to the composer's contract.
+        let v = owner_reference_json("", "");
+        assert_eq!(v["name"], "");
+        assert_eq!(v["uid"], "");
     }
 }
 

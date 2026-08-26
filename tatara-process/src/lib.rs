@@ -101,6 +101,7 @@ pub mod prelude {
     };
     pub use crate::status::{
         BoundaryStatus, CheckedCondition, ComplianceStatus, FluxResourceRef, ProcessCondition,
+        RenderedResourceCoords,
     };
     pub use crate::table::{
         ClaimRecord, ProcessEntry, ProcessTable, ProcessTableSpec, ProcessTableStatus,

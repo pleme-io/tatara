@@ -10,7 +10,7 @@ use kube::{Api, Client};
 use serde_json::{json, Value};
 
 use tatara_process::annotations;
-use tatara_process::prelude::Process;
+use tatara_process::prelude::{Process, RenderedResourceCoords};
 
 /// Field manager string we use for all SSA writes.
 pub const FIELD_MANAGER: &str = "tatara-reconciler";
@@ -419,6 +419,16 @@ fn plural_of(kind: &str) -> Result<&'static str> {
 
 /// Server-side apply a JSON resource, injecting owner reference + standard
 /// tatara annotations derived from the Process.
+///
+/// The 3-slot (apiVersion, kind, metadata.name) coordinate extraction
+/// delegates to [`RenderedResourceCoords::from_json`] — the substrate
+/// primitive that owns the shared `.get(K).and_then(|v| v.as_str())
+/// .ok_or_else(|| anyhow!("rendered resource missing X"))?
+/// .to_string()` walk. The `namespace` argument stays caller-
+/// supplied (the reconciler resolved the target namespace upstream
+/// via `resolve_target_namespace`); the primitive's own
+/// `namespace_or_default` slot is unused here because the caller
+/// already committed to a resolved target.
 pub async fn apply_owned(
     client: Client,
     process: &Process,
@@ -428,31 +438,15 @@ pub async fn apply_owned(
     inject_owner_reference(&mut resource, build_owner_reference(process)?)?;
     inject_annotations(&mut resource, process)?;
 
-    let api_version = resource
-        .get("apiVersion")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow!("resource missing apiVersion"))?
-        .to_string();
-    let kind = resource
-        .get("kind")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow!("resource missing kind"))?
-        .to_string();
-    let name = resource
-        .get("metadata")
-        .and_then(|m| m.get("name"))
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow!("resource missing metadata.name"))?
-        .to_string();
-
-    let ar = api_resource(&api_version, &kind)?;
+    let coords = RenderedResourceCoords::from_json(&resource)?;
+    let ar = api_resource(&coords.api_version, &coords.kind)?;
     let obj: DynamicObject = serde_json::from_value(resource)?;
     let api: Api<DynamicObject> = Api::namespaced_with(client, namespace, &ar);
 
     let pp = PatchParams::apply(FIELD_MANAGER).force();
-    api.patch(&name, &pp, &Patch::Apply(&obj))
+    api.patch(&coords.name, &pp, &Patch::Apply(&obj))
         .await
-        .map_err(|e| anyhow!("ssapply {kind}/{name}: {e}"))?;
+        .map_err(|e| anyhow!("ssapply {}/{}: {e}", coords.kind, coords.name))?;
     Ok(())
 }
 

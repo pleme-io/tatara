@@ -519,33 +519,19 @@ fn compute_intent_hash(intent: &tatara_process::intent::Intent) -> String {
 }
 
 /// Build a `FluxResourceRef` from the emitted JSON — post-apply initial state.
+///
+/// Delegates the 4-slot coordinate extraction to
+/// [`RenderedResourceCoords::from_json`] — the substrate primitive
+/// that owns the shared `.get(K).and_then(|v| v.as_str()).ok_or_else(
+/// || anyhow!("rendered resource missing X"))?.to_string()` walk
+/// (see also [`crate::ssapply::apply_owned`], the sibling consumer).
 fn flux_ref_from_json(res: &Value) -> Result<FluxResourceRef> {
-    let api_version = res
-        .get("apiVersion")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow!("rendered resource missing apiVersion"))?
-        .to_string();
-    let kind = res
-        .get("kind")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow!("rendered resource missing kind"))?
-        .to_string();
-    let name = res
-        .get("metadata")
-        .and_then(|m| m.get("name"))
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow!("rendered resource missing metadata.name"))?
-        .to_string();
-    let namespace = res
-        .get("metadata")
-        .and_then(|m| m.get("namespace"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("default")
-        .to_string();
+    let coords = RenderedResourceCoords::from_json(res)?;
+    let namespace = coords.namespace_or_default().to_string();
     Ok(FluxResourceRef {
-        api_version,
-        kind,
-        name,
+        api_version: coords.api_version,
+        kind: coords.kind,
+        name: coords.name,
         namespace,
         ready: false,
         message: Some("applied; awaiting reconciliation".into()),

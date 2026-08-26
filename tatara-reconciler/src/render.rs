@@ -145,7 +145,7 @@ fn render_flux(name: &str, ns: &str, f: &FluxIntent) -> (Vec<Value>, Vec<u8>) {
         "metadata": {
             "name": name,
             "namespace": ns,
-            "annotations": crate::ssapply::ownership_annotations(&crate::ssapply::qualified_process_ref(ns, name)),
+            "annotations": crate::ssapply::ownership_annotations_by_coord(ns, name),
         },
         "spec": Value::Object(spec),
     });
@@ -197,7 +197,7 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
             "metadata": {
                 "name": name,
                 "namespace": ns,
-                "annotations": crate::ssapply::ownership_annotations(&crate::ssapply::qualified_process_ref(ns, name)),
+                "annotations": crate::ssapply::ownership_annotations_by_coord(ns, name),
             },
             "spec": {
                 // Flux `OCIRepository.spec.interval` — pre-lift this
@@ -287,7 +287,7 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
         "metadata": {
             "name": name,
             "namespace": ns,
-            "annotations": crate::ssapply::ownership_annotations(&crate::ssapply::qualified_process_ref(ns, name)),
+            "annotations": crate::ssapply::ownership_annotations_by_coord(ns, name),
         },
         "spec": Value::Object(hr_spec),
     });

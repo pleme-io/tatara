@@ -170,6 +170,68 @@ pub fn ownership_labels(process_ref: &str) -> serde_json::Map<String, Value> {
 }
 
 /// Substrate-primitive builder for the standard tatara-reconciler
+/// **ownership annotations by (namespace, name) coordinates** — the
+/// pre-composed shape [`ownership_annotations`] +
+/// [`qualified_process_ref`] compose into at every callsite whose
+/// input is a bare `(ns, name)` pair rather than a pre-computed
+/// `process_ref`. Peer to [`ownership_annotations`]: the direct
+/// primitive fits every callsite that already threads
+/// `ctx.process_ref` (all three [`crate::edges`] sites, the
+/// `render::one_export_job` label seed via a local
+/// `process_ref` binding), and this composed primitive fits every
+/// callsite whose input is the raw `(ns, name)` pair the enclosing
+/// render / SSA function received from [`Process::coordinates_or_defaults`](tatara_process::prelude::Process::coordinates_or_defaults)
+/// or from its own `name: &str, ns: &str` parameters.
+///
+/// Pre-lift the double composition
+/// `ownership_annotations(&qualified_process_ref(ns, name))` was
+/// hand-authored at FOUR sites past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication threshold, each restating the same nested call chain:
+/// * [`crate::render::render_flux`] — the Kustomization
+///   `metadata.annotations` seed.
+/// * [`crate::render::render_aplicacao`] × 2 — the OCIRepository +
+///   HelmRelease `metadata.annotations` seeds, same shape.
+/// * [`crate::ssapply::inject_annotations`] — the SSA-time
+///   re-injection seed inside this module, feeding the standard
+///   2-slot ownership tag through
+///   `ownership_annotations(&qualified_process_ref(ns, name))` before
+///   extending with PID / CONTENT_HASH / GENERATION /
+///   ATTESTATION_ROOT.
+///
+/// Post-lift every one of these callsites reads through this ONE
+/// primitive so a future change to the composition order (e.g. a
+/// normalization step inserted between `qualified_process_ref` and
+/// `ownership_annotations`, a per-coordinate override of one axis
+/// only, a cross-cluster prefix rewrite that must happen BEFORE the
+/// annotation map is seeded but AFTER the ref is composed) lands at
+/// ONE substrate function here and every downstream emit site
+/// inherits the upgrade mechanically — no per-site hand-edit at
+/// `render_flux` / `render_aplicacao` × 2 / `inject_annotations`.
+///
+/// A caller with a pre-computed `process_ref` (e.g. the
+/// [`crate::edges`] sites threading `ctx.process_ref`) still routes
+/// through [`ownership_annotations`] directly — the two primitives
+/// partition the input space by whether the caller has already
+/// composed the ref. Cross-primitive coherence between the direct
+/// and composed forms is pinned by
+/// [`tests::ownership_annotations_by_coord_matches_hand_authored_double_call`]
+/// so a regression that drifted the composition would surface here
+/// rather than as silent operator-facing drift across the four
+/// callsites.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// the double-nested composition recurred at four hand-authored
+/// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and
+/// is lifted to ONE owner here). THEORY.md §II.1 invariant 5
+/// (composition preserves proofs — the pins bind the composed
+/// primitive to the direct-primitive-of-composed-ref composition
+/// byte-identically, so a regression in either half surfaces at
+/// `tests::ownership_annotations_by_coord_*`).
+pub fn ownership_annotations_by_coord(ns: &str, name: &str) -> serde_json::Map<String, Value> {
+    ownership_annotations(&qualified_process_ref(ns, name))
+}
+
+/// Substrate-primitive builder for the standard tatara-reconciler
 /// **namespace-qualified process reference** — the `<ns>/<name>`
 /// string every consumer that grepped, keyed, or annotated a
 /// Process by "which cluster location owns it" composed by hand.
@@ -512,11 +574,15 @@ fn inject_annotations(resource: &mut Value, process: &Process) -> Result<()> {
     // namespace resolver (boundary::evaluate / check_depends_on).
     let (ns, name) = process.coordinates_or_defaults();
     // Seed the standard 2-slot ownership tag through the shared
-    // substrate primitive so the SSA-time re-injection uses the exact
-    // same key pair + FIELD_MANAGER value the render-time authoring
-    // sites do — a rename of FIELD_MANAGER, or a new mandatory tag
-    // added to `ownership_annotations`, propagates here mechanically.
-    for (k, v) in ownership_annotations(&qualified_process_ref(ns, name)) {
+    // (ns, name) → annotations composer so the SSA-time re-injection
+    // uses the exact same key pair + FIELD_MANAGER value the
+    // render-time authoring sites do (three render.rs sites now
+    // peer through this same composed primitive) — a rename of
+    // FIELD_MANAGER, a new mandatory tag added to
+    // `ownership_annotations`, or a normalization inserted between
+    // `qualified_process_ref` and `ownership_annotations` propagates
+    // here mechanically.
+    for (k, v) in ownership_annotations_by_coord(ns, name) {
         annot.insert(k, v);
     }
 
@@ -842,6 +908,97 @@ mod tests {
         assert_eq!(labels[annotations::MANAGED_BY], FIELD_MANAGER);
         assert_eq!(labels[annotations::PROCESS], "demo/ephemeral-demo");
         assert_eq!(serde_json::Value::Object(m), *labels);
+    }
+
+    // ─── ownership_annotations_by_coord substrate pins ──────────────────
+    //
+    // The composed `ownership_annotations(&qualified_process_ref(ns,
+    // name))` shape was hand-authored at FOUR sites past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold — three render.rs
+    // sites (Kustomization, OCIRepository, HelmRelease
+    // `metadata.annotations` seeds) plus the `inject_annotations`
+    // SSA-time re-injection here. These pins bind the composed
+    // primitive at fail-before-pass-after granularity so a regression
+    // that drifted the composition order, re-inlined the nested call
+    // chain at one site, or desynced the composed primitive from the
+    // direct-primitive-of-composed-ref shape surfaces here rather
+    // than as silent operator-facing drift across the four callsites.
+
+    #[test]
+    fn ownership_annotations_by_coord_composes_qualified_ref_into_ownership_map() {
+        // Happy path: `(ns, name)` composes into the standard 2-slot
+        // ownership tag whose PROCESS slot carries the qualified
+        // reference `<ns>/<name>` verbatim. Regression that dropped
+        // one axis, swapped the two, or short-circuited to a bare
+        // name would surface here rather than at every downstream
+        // emit site.
+        let m = ownership_annotations_by_coord("demo-ns", "ephemeral-demo");
+        assert_eq!(m.len(), 2);
+        assert_eq!(
+            m.get(annotations::MANAGED_BY).and_then(Value::as_str),
+            Some(FIELD_MANAGER),
+        );
+        assert_eq!(
+            m.get(annotations::PROCESS).and_then(Value::as_str),
+            Some("demo-ns/ephemeral-demo"),
+        );
+    }
+
+    #[test]
+    fn ownership_annotations_by_coord_matches_hand_authored_double_call() {
+        // Byte-identical parity with the pre-lift
+        // `ownership_annotations(&qualified_process_ref(ns, name))`
+        // incantation across a sweep of shapes every callsite
+        // plausibly encounters: canonical `<ns>/<name>` shapes, the
+        // empty-string cluster-scoped edge case (unnamed process
+        // pre-metadata), and the pathological whitespace-embedded
+        // pair `qualified_process_ref_rides_edge_case_axis_shapes`
+        // already pins on the sibling primitive. A regression that
+        // inserted a normalization step at the composed primitive
+        // that the direct-primitive-of-composed-ref chain does NOT
+        // apply — or vice versa — surfaces here rather than as
+        // silent drift between the two callsite postures the
+        // reconciler ships today.
+        for (ns, name) in [
+            ("flux-system", "observability-stack"),
+            ("demo-ns", "ephemeral-demo"),
+            ("", ""),
+            ("default", ""),
+            ("", "orphan"),
+            ("weird ns", "with/slash"),
+        ] {
+            let composed = ownership_annotations_by_coord(ns, name);
+            let hand_authored = ownership_annotations(&qualified_process_ref(ns, name));
+            assert_eq!(
+                composed, hand_authored,
+                "composed primitive must be byte-identical to the pre-lift double-call chain on {ns:?}/{name:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ownership_annotations_by_coord_agrees_with_direct_primitive_on_precomposed_ref() {
+        // Cross-primitive coherence: the composed
+        // `ownership_annotations_by_coord(ns, name)` and the direct
+        // `ownership_annotations(process_ref)` split the input space
+        // by whether the caller has already composed the ref. Pin
+        // that a caller with either posture — the render.rs /
+        // `inject_annotations` sites that lift through
+        // `ownership_annotations_by_coord`, or the [`crate::edges`]
+        // sites that thread `ctx.process_ref` directly through
+        // `ownership_annotations` — lands at the SAME 2-slot
+        // ownership map when the coordinates alias. A future
+        // divergence between the two callsite postures (e.g. a
+        // normalization applied only to the composed path) surfaces
+        // here rather than as silent operator-facing drift between
+        // the render/SSA-emitted metadata and the edges-emitted
+        // metadata for what is, structurally, the same Process.
+        let composed = ownership_annotations_by_coord("demo-ns", "demo-app");
+        let direct = ownership_annotations("demo-ns/demo-app");
+        assert_eq!(
+            composed, direct,
+            "composed and direct primitives must agree on the same underlying process_ref",
+        );
     }
 
     #[test]

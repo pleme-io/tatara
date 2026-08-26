@@ -2208,7 +2208,7 @@ impl<'a> AtomKwarg<'a> for i64 {
     /// Wide-int-axis override of the [`AtomKwarg::LIST_SHAPE`] trait
     /// default — the element-typed refinement
     /// [`ExpectedKwargShape::ListOfInts`] that
-    /// [`extract_narrowed_list::<i64, T>`] emits at its outer-shape
+    /// [`extract_narrowed_list::<T>`] emits at its outer-shape
     /// gate through the per-axis trait dispatch (reached from the
     /// generic list extractor via the
     /// `W: WideNumeric: for<'a> AtomKwarg<'a>` supertrait bound).
@@ -2246,7 +2246,7 @@ impl<'a> AtomKwarg<'a> for f64 {
     /// Wide-float-axis override of the [`AtomKwarg::LIST_SHAPE`]
     /// trait default — the element-typed refinement
     /// [`ExpectedKwargShape::ListOfNumbers`] that
-    /// [`extract_narrowed_list::<f64, T>`] emits at its outer-shape
+    /// [`extract_narrowed_list::<T>`] emits at its outer-shape
     /// gate through the per-axis trait dispatch. The `"numbers"`
     /// (not `"floats"`) naming mirrors the scalar-axis
     /// [`Self::SHAPE = Number`] posture: the per-item gate
@@ -2604,7 +2604,7 @@ pub trait NarrowNumeric: Sized + Copy {
     /// binds at ONE substrate primitive and flows to every narrow-
     /// width impl mechanically through the trait default).
     fn extract_narrowed_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Self> {
-        extract_narrowed::<Self::Wide, Self>(kw, key)
+        extract_narrowed::<Self>(kw, key)
     }
 
     /// The `Option` sibling of [`Self::extract_narrowed_kwarg`] — the
@@ -2623,7 +2623,7 @@ pub trait NarrowNumeric: Sized + Copy {
     /// defaults route through [`optional_from_required`] with their
     /// respective required peer in the required-slot.
     fn extract_optional_narrowed_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Option<Self>> {
-        extract_optional_narrowed::<Self::Wide, Self>(kw, key)
+        extract_optional_narrowed::<Self>(kw, key)
     }
 
     /// Required list-narrowed kwarg extractor — the trait-dispatch
@@ -2644,10 +2644,10 @@ pub trait NarrowNumeric: Sized + Copy {
     /// per_item_projection)` triple through
     /// [`extract_list`]'s outer skeleton), only the per-item
     /// projection differs (`Self::to_owned_item` on the atom-family
-    /// side vs. `narrow_or_range_err_at::<Self::Wide, Self>` on the
+    /// side vs. `narrow_or_range_err_at::<Self>` on the
     /// narrowing-family side).
     fn extract_narrowed_list_kwarg(kw: &Kwargs<'_>, key: &str) -> Result<Vec<Self>> {
-        extract_narrowed_list::<Self::Wide, Self>(kw, key)
+        extract_narrowed_list::<Self>(kw, key)
     }
 
     /// The `Option<Vec<Self>>` sibling of
@@ -2672,7 +2672,7 @@ pub trait NarrowNumeric: Sized + Copy {
         kw: &Kwargs<'_>,
         key: &str,
     ) -> Result<Option<Vec<Self>>> {
-        extract_optional_narrowed_list::<Self::Wide, Self>(kw, key)
+        extract_optional_narrowed_list::<Self>(kw, key)
     }
 }
 
@@ -2932,11 +2932,7 @@ impl WideNumeric for f64 {
 /// axis identity is the type-parameter, not a per-site literal
 /// constructor).
 #[cfg(test)]
-fn narrow_or_range_err<W, T>(key: &str, wide: W) -> Result<T>
-where
-    W: WideNumeric,
-    T: NarrowNumeric<Wide = W>,
-{
+fn narrow_or_range_err<T: NarrowNumeric>(key: &str, wide: T::Wide) -> Result<T> {
     narrow_or_range_mismatch(kwarg_form(key), wide)
 }
 
@@ -3003,18 +2999,14 @@ where
 /// lives at ONE primitive whose axis identity is the type parameter and
 /// whose failure locus is the [`KwargPath`] argument, not a per-site
 /// path-builder choice baked into the gate.
-pub fn narrow_or_range_mismatch<W, T>(form: KwargPath, wide: W) -> Result<T>
-where
-    W: WideNumeric,
-    T: NarrowNumeric<Wide = W>,
-{
+pub fn narrow_or_range_mismatch<T: NarrowNumeric>(form: KwargPath, wide: T::Wide) -> Result<T> {
     T::narrow(wide).ok_or_else(|| range_mismatch(form, T::WIDTH, wide.as_literal()))
 }
 
 /// The GENERIC narrowing kwarg extractor — the axis identity rides
-/// the `W: WideNumeric` type parameter, so `extract_narrowed::<i64, T>`
+/// the `W: WideNumeric` type parameter, so `extract_narrowed::<T>`
 /// dispatches through [`WideNumeric::extract_kwarg`] to [`extract_int`]
-/// and `extract_narrowed::<f64, T>` dispatches to [`extract_float`],
+/// and `extract_narrowed::<T>` dispatches to [`extract_float`],
 /// both threaded through the SAME [`narrow_or_range_err`] rejection
 /// primitive. Pre-lift the FOUR public `extract_*_narrowed` extractors
 /// each spelled `extract_int` / `extract_optional_int` / `extract_
@@ -3026,12 +3018,11 @@ where
 /// that axis) plus ONE `impl NarrowNumeric<NewWide> for <NewNarrow>`
 /// per new narrow width; the two generic primitives bind mechanically
 /// with no new public wrapper.
-pub fn extract_narrowed<W, T>(kw: &Kwargs<'_>, key: &str) -> Result<T>
-where
-    W: WideNumeric,
-    T: NarrowNumeric<Wide = W>,
-{
-    narrow_or_range_mismatch(kwarg_form(key), <W as WideNumeric>::extract_kwarg(kw, key)?)
+pub fn extract_narrowed<T: NarrowNumeric>(kw: &Kwargs<'_>, key: &str) -> Result<T> {
+    narrow_or_range_mismatch(
+        kwarg_form(key),
+        <T::Wide as WideNumeric>::extract_kwarg(kw, key)?,
+    )
 }
 
 /// `Option` sibling of [`extract_narrowed`]. An ABSENT kwarg stays
@@ -3092,12 +3083,11 @@ where
 /// metric jointly labeled by "which optional peer fired" and "was the
 /// kwarg present" covers the scalar-narrowed peer without a per-peer
 /// bifurcation re-implementation).
-pub fn extract_optional_narrowed<W, T>(kw: &Kwargs<'_>, key: &str) -> Result<Option<T>>
-where
-    W: WideNumeric,
-    T: NarrowNumeric<Wide = W>,
-{
-    optional_from_required(kw, key, extract_narrowed::<W, T>)
+pub fn extract_optional_narrowed<T: NarrowNumeric>(
+    kw: &Kwargs<'_>,
+    key: &str,
+) -> Result<Option<T>> {
+    optional_from_required(kw, key, extract_narrowed::<T>)
 }
 
 /// `#[cfg(test)]`: the derive's `Kind::{Int,Float}` /
@@ -3212,22 +3202,18 @@ fn extract_optional_float_narrowed<T: NarrowNumeric<Wide = f64>>(
 /// the [`KwargPath`] argument each hands the shared primitive
 /// (`kwarg_form(key)` vs. `kwarg_item_form(key, idx)`).
 #[cfg(test)]
-fn narrow_or_range_err_at<W, T>(key: &str, idx: usize, wide: W) -> Result<T>
-where
-    W: WideNumeric,
-    T: NarrowNumeric<Wide = W>,
-{
+fn narrow_or_range_err_at<T: NarrowNumeric>(key: &str, idx: usize, wide: T::Wide) -> Result<T> {
     narrow_or_range_mismatch(kwarg_item_form(key, idx), wide)
 }
 
 /// The GENERIC narrowing list-kwarg extractor — the list-family peer of
 /// [`extract_narrowed`] on the per-item path a `Vec<T>` numeric-narrowed
 /// kwarg walks. The axis identity rides the `W: WideNumeric` type
-/// parameter, so `extract_narrowed_list::<i64, T>` dispatches through
+/// parameter, so `extract_narrowed_list::<T>` dispatches through
 /// the atom-family per-item shape gate [`AtomKwarg::project_at`]
 /// (composing `<i64>::SHAPE = Int` + `<i64>::project = Sexp::as_int`)
 /// plus [`NarrowNumeric::narrow`] (`TryFrom<i64>::try_from`) and
-/// `extract_narrowed_list::<f64, T>` dispatches through
+/// `extract_narrowed_list::<T>` dispatches through
 /// [`AtomKwarg::project_at`] (composing `<f64>::SHAPE = Number` +
 /// `<f64>::project = Sexp::as_float`) plus its `T::narrow` peer,
 /// both threaded through the SAME [`extract_list`] outer-shape
@@ -3284,14 +3270,10 @@ where
 /// authoring surface (LSP, `tatara-check`, REPL) already binds to for
 /// the scalar peer, so `NumericWidth::U16` histogram bucketing over
 /// per-item failures binds mechanically).
-pub fn extract_narrowed_list<W, T>(kw: &Kwargs<'_>, key: &str) -> Result<Vec<T>>
-where
-    W: WideNumeric,
-    T: NarrowNumeric<Wide = W>,
-{
-    extract_list(kw, key, <W as AtomKwarg<'_>>::LIST_SHAPE, |idx, s| {
-        let wide = <W as AtomKwarg<'_>>::project_at(key, idx, s)?;
-        narrow_or_range_mismatch::<W, T>(kwarg_item_form(key, idx), wide)
+pub fn extract_narrowed_list<T: NarrowNumeric>(kw: &Kwargs<'_>, key: &str) -> Result<Vec<T>> {
+    extract_list(kw, key, <T::Wide as AtomKwarg<'_>>::LIST_SHAPE, |idx, s| {
+        let wide = <T::Wide as AtomKwarg<'_>>::project_at(key, idx, s)?;
+        narrow_or_range_mismatch::<T>(kwarg_item_form(key, idx), wide)
     })
 }
 
@@ -3396,12 +3378,11 @@ where
 /// required peer, so `NumericWidth::U16` histogram bucketing over
 /// per-item failures binds mechanically for `Option<Vec<T>>` fields
 /// too).
-pub fn extract_optional_narrowed_list<W, T>(kw: &Kwargs<'_>, key: &str) -> Result<Option<Vec<T>>>
-where
-    W: WideNumeric,
-    T: NarrowNumeric<Wide = W>,
-{
-    optional_from_required(kw, key, extract_narrowed_list::<W, T>)
+pub fn extract_optional_narrowed_list<T: NarrowNumeric>(
+    kw: &Kwargs<'_>,
+    key: &str,
+) -> Result<Option<Vec<T>>> {
+    optional_from_required(kw, key, extract_narrowed_list::<T>)
 }
 
 /// `#[cfg(test)]`: list-family peer of [`extract_int_narrowed`]'s
@@ -4913,14 +4894,14 @@ mod tests {
     /// `port 70000` case on the int column reaches `narrow_or_range_
     /// err::<i64, u16>` with the two identities the LispError variant
     /// carries; the `scale 1.0e300` case on the float column reaches
-    /// `narrow_or_range_err::<f64, f32>` with the peer identities on
+    /// `narrow_or_range_err::<f32>` with the peer identities on
     /// the peer axis. Pre-lift the two rejections lived at DIFFERENT
     /// per-site literal-constructor spellings; post-lift they share
     /// ONE primitive whose axis identity rides the type parameter.
     #[test]
     fn narrow_or_range_err_lifts_the_wide_literal_wrap_out_of_the_four_extractors() {
-        let int_err: LispError = narrow_or_range_err::<i64, u16>("port", 70_000)
-            .expect_err("70000 is out of range for u16");
+        let int_err: LispError =
+            narrow_or_range_err::<u16>("port", 70_000).expect_err("70000 is out of range for u16");
         let LispError::KwargOutOfRange {
             form,
             target,
@@ -4934,7 +4915,7 @@ mod tests {
         assert_eq!(*value, NumericLiteral::Int(70_000));
 
         let float_err: LispError =
-            narrow_or_range_err::<f64, f32>("scale", 1.0e300).expect_err("1.0e300 overflows f32");
+            narrow_or_range_err::<f32>("scale", 1.0e300).expect_err("1.0e300 overflows f32");
         let LispError::KwargOutOfRange { target, value, .. } = &float_err else {
             panic!("expected KwargOutOfRange, got {float_err:?}");
         };
@@ -4948,10 +4929,10 @@ mod tests {
         // rejected valid input would be worse than the truncation it
         // replaced.
         let ok_int: u16 =
-            narrow_or_range_err::<i64, u16>("port", 8080).expect("in-range int narrows through");
+            narrow_or_range_err::<u16>("port", 8080).expect("in-range int narrows through");
         assert_eq!(ok_int, 8080);
         let ok_float: f32 =
-            narrow_or_range_err::<f64, f32>("scale", 1.0).expect("in-range float narrows through");
+            narrow_or_range_err::<f32>("scale", 1.0).expect("in-range float narrows through");
         assert!((ok_float - 1.0_f32).abs() < f32::EPSILON);
     }
 
@@ -5030,8 +5011,8 @@ mod tests {
 
         // (1) `KwargPath::Named` — scalar-kwarg wrapper delegates.
         let via_primitive: Result<u16> =
-            narrow_or_range_mismatch::<i64, u16>(kwarg_form("port"), 70_000);
-        let via_wrapper: Result<u16> = narrow_or_range_err::<i64, u16>("port", 70_000);
+            narrow_or_range_mismatch::<u16>(kwarg_form("port"), 70_000);
+        let via_wrapper: Result<u16> = narrow_or_range_err::<u16>("port", 70_000);
         let (p_form, p_target, p_value) = parts(via_primitive.as_ref().unwrap_err());
         let (w_form, w_target, w_value) = parts(via_wrapper.as_ref().unwrap_err());
         assert_eq!(p_form, w_form);
@@ -5043,8 +5024,8 @@ mod tests {
 
         // (2) `KwargPath::Item` — per-item wrapper delegates.
         let via_primitive_at: Result<u16> =
-            narrow_or_range_mismatch::<i64, u16>(kwarg_item_form("ports", 1), 70_000);
-        let via_wrapper_at: Result<u16> = narrow_or_range_err_at::<i64, u16>("ports", 1, 70_000);
+            narrow_or_range_mismatch::<u16>(kwarg_item_form("ports", 1), 70_000);
+        let via_wrapper_at: Result<u16> = narrow_or_range_err_at::<u16>("ports", 1, 70_000);
         let (p_form, p_target, p_value) = parts(via_primitive_at.as_ref().unwrap_err());
         let (w_form, w_target, w_value) = parts(via_wrapper_at.as_ref().unwrap_err());
         assert_eq!(p_form, w_form);
@@ -5055,8 +5036,7 @@ mod tests {
         // (3) `KwargPath::Slot` — the not-yet-keyed-slot path the two
         //     wrappers do not thread today, admitted by the primitive's
         //     public surface (mirrors `range_mismatch` / `type_mismatch`).
-        let via_slot: Result<u16> =
-            narrow_or_range_mismatch::<i64, u16>(kwargs_pos_form(2), 70_000);
+        let via_slot: Result<u16> = narrow_or_range_mismatch::<u16>(kwargs_pos_form(2), 70_000);
         let (form, target, value) = parts(via_slot.as_ref().unwrap_err());
         assert_eq!(form, &KwargPath::Slot(2));
         assert_eq!(target, NumericWidth::U16);
@@ -5065,8 +5045,8 @@ mod tests {
         // (4) Wide-axis coherence — the float axis rides
         //     `NumericLiteral::Float` verbatim, no coercion to `Int`.
         let float_via_primitive: Result<f32> =
-            narrow_or_range_mismatch::<f64, f32>(kwarg_form("scale"), 1.0e300);
-        let float_via_wrapper: Result<f32> = narrow_or_range_err::<f64, f32>("scale", 1.0e300);
+            narrow_or_range_mismatch::<f32>(kwarg_form("scale"), 1.0e300);
+        let float_via_wrapper: Result<f32> = narrow_or_range_err::<f32>("scale", 1.0e300);
         let (p_form, p_target, p_value) = parts(float_via_primitive.as_ref().unwrap_err());
         let (w_form, w_target, w_value) = parts(float_via_wrapper.as_ref().unwrap_err());
         assert_eq!(p_form, w_form);
@@ -5083,14 +5063,13 @@ mod tests {
 
         // (5) In-range totality holds through the primitive on both
         //     axes and both path shapes.
-        let ok_int_named: u16 = narrow_or_range_mismatch::<i64, u16>(kwarg_form("port"), 8080)
+        let ok_int_named: u16 = narrow_or_range_mismatch::<u16>(kwarg_form("port"), 8080)
             .expect("in-range int narrows through the primitive at the scalar path");
         assert_eq!(ok_int_named, 8080);
-        let ok_int_item: u16 =
-            narrow_or_range_mismatch::<i64, u16>(kwarg_item_form("ports", 0), 8080)
-                .expect("in-range int narrows through the primitive at the per-item path");
+        let ok_int_item: u16 = narrow_or_range_mismatch::<u16>(kwarg_item_form("ports", 0), 8080)
+            .expect("in-range int narrows through the primitive at the per-item path");
         assert_eq!(ok_int_item, 8080);
-        let ok_float_named: f32 = narrow_or_range_mismatch::<f64, f32>(kwarg_form("scale"), 1.0)
+        let ok_float_named: f32 = narrow_or_range_mismatch::<f32>(kwarg_form("scale"), 1.0)
             .expect("in-range float narrows through the primitive at the scalar path");
         assert!((ok_float_named - 1.0_f32).abs() < f32::EPSILON);
     }
@@ -5111,7 +5090,7 @@ mod tests {
     /// [`narrow_or_range_mismatch`] call at the SAME `(KwargPath, wide,
     /// W, T)` tuple each end-to-end callsite constructs:
     ///
-    ///   1. [`extract_narrowed::<i64, u16>`] on `:port 70000` — the
+    ///   1. [`extract_narrowed::<u16>`] on `:port 70000` — the
     ///      scalar-kwarg path. The three typed `LispError::KwargOutOfRange`
     ///      slots (`form`, `target`, `value`) must match
     ///      `narrow_or_range_mismatch(kwarg_form("port"), 70_000_i64)`
@@ -5119,7 +5098,7 @@ mod tests {
     ///      `T::narrow(wide).ok_or_else(...)` composition outside the
     ///      primitive at the scalar callsite would surface here as a
     ///      slot mismatch.
-    ///   2. [`extract_narrowed_list::<f64, f32>`] on
+    ///   2. [`extract_narrowed_list::<f32>`] on
     ///      `:scales (list 1.0 1.0e300)` — the per-item path inside
     ///      [`extract_list`]'s closure. The three typed slots must match
     ///      `narrow_or_range_mismatch(kwarg_item_form("scales", 1),
@@ -5158,14 +5137,14 @@ mod tests {
             (form.clone(), *target, *value)
         }
 
-        // (1) `extract_narrowed::<i64, u16>` — scalar-kwarg production
+        // (1) `extract_narrowed::<u16>` — scalar-kwarg production
         //     consumer binds directly to `narrow_or_range_mismatch`
         //     with `kwarg_form(key)` composed at the callsite.
         let scalar_args = kwargs_of("(_ :port 70000)");
         let scalar_kw = parse_kwargs(&scalar_args).unwrap();
-        let via_consumer: Result<u16> = extract_narrowed::<i64, u16>(&scalar_kw, "port");
+        let via_consumer: Result<u16> = extract_narrowed::<u16>(&scalar_kw, "port");
         let via_primitive: Result<u16> =
-            narrow_or_range_mismatch::<i64, u16>(kwarg_form("port"), 70_000_i64);
+            narrow_or_range_mismatch::<u16>(kwarg_form("port"), 70_000_i64);
         let (c_form, c_target, c_value) = parts(via_consumer.as_ref().unwrap_err());
         let (p_form, p_target, p_value) = parts(via_primitive.as_ref().unwrap_err());
         assert_eq!(c_form, p_form);
@@ -5175,7 +5154,7 @@ mod tests {
         assert_eq!(c_target, NumericWidth::U16);
         assert_eq!(c_value, NumericLiteral::Int(70_000));
 
-        // (2) `extract_narrowed_list::<f64, f32>` — per-item production
+        // (2) `extract_narrowed_list::<f32>` — per-item production
         //     consumer binds directly to `narrow_or_range_mismatch` via
         //     `kwarg_item_form(key, idx)` composed inside `extract_list`'s
         //     per-element closure. `1.0e300` overflows `f32` at idx 1
@@ -5187,10 +5166,9 @@ mod tests {
         //     inside a bare `(_ _ …)` list without a `list` keyword.
         let list_args = kwargs_of("(_ :scales (1.0 1.0e300))");
         let list_kw = parse_kwargs(&list_args).unwrap();
-        let list_via_consumer: Result<Vec<f32>> =
-            extract_narrowed_list::<f64, f32>(&list_kw, "scales");
+        let list_via_consumer: Result<Vec<f32>> = extract_narrowed_list::<f32>(&list_kw, "scales");
         let list_via_primitive: Result<f32> =
-            narrow_or_range_mismatch::<f64, f32>(kwarg_item_form("scales", 1), 1.0e300_f64);
+            narrow_or_range_mismatch::<f32>(kwarg_item_form("scales", 1), 1.0e300_f64);
         let (c_form, c_target, c_value) = parts(list_via_consumer.as_ref().unwrap_err());
         let (p_form, p_target, p_value) = parts(list_via_primitive.as_ref().unwrap_err());
         assert_eq!(c_form, p_form);
@@ -5992,7 +5970,7 @@ mod tests {
         //     pins the SHAPE-err arm alone.
         let bad_shape_args = kwargs_of(r#"(_ :ports (80 "nope"))"#);
         let bad_shape_kw = parse_kwargs(&bad_shape_args).unwrap();
-        let narrowed_err = extract_narrowed_list::<i64, u16>(&bad_shape_kw, "ports").unwrap_err();
+        let narrowed_err = extract_narrowed_list::<u16>(&bad_shape_kw, "ports").unwrap_err();
         let numeric_direct_err = <i64 as AtomKwarg<'_>>::project_at(
             "ports",
             1,
@@ -6138,7 +6116,7 @@ mod tests {
         //     rather than at each narrow-width instantiation.
         let numeric_args = kwargs_of("(_ :ports 80)");
         let numeric_kw = parse_kwargs(&numeric_args).unwrap();
-        let numeric_err = extract_narrowed_list::<i64, u16>(&numeric_kw, "ports").unwrap_err();
+        let numeric_err = extract_narrowed_list::<u16>(&numeric_kw, "ports").unwrap_err();
         match numeric_err {
             LispError::TypeMismatch { form, expected, .. } => {
                 assert_eq!(form, KwargPath::named("ports"));
@@ -6163,7 +6141,7 @@ mod tests {
         //     here as a per-axis label drift.
         let float_args = kwargs_of("(_ :scales 1.0)");
         let float_kw = parse_kwargs(&float_args).unwrap();
-        let float_err = extract_narrowed_list::<f64, f32>(&float_kw, "scales").unwrap_err();
+        let float_err = extract_narrowed_list::<f32>(&float_kw, "scales").unwrap_err();
         match float_err {
             LispError::TypeMismatch { form, expected, .. } => {
                 assert_eq!(form, KwargPath::named("scales"));
@@ -6559,11 +6537,11 @@ mod tests {
     /// `extract_optional_int` / `extract_float` /
     /// `extract_optional_float`); post-lift the axis identity rides
     /// the `W: WideNumeric` type parameter and the four extractors
-    /// resolve to `extract_narrowed::<i64, _>` /
-    /// `extract_optional_narrowed::<i64, _>` / their `<f64, _>`
+    /// resolve to `extract_narrowed::<_>` /
+    /// `extract_optional_narrowed::<_>` / their `<f64, _>`
     /// peers. Pin the two-axis closed-set coverage at the generic
     /// primitive: the canonical `port 70000 → u16` case reaches
-    /// `extract_narrowed::<i64, u16>` with the typed
+    /// `extract_narrowed::<u16>` with the typed
     /// `NumericWidth::U16` / `NumericLiteral::Int(70_000)` pair
     /// carried on `LispError::KwargOutOfRange`, and the peer
     /// `scale 1.0e300 → f32` case reaches `extract_narrowed::<f64,
@@ -6580,21 +6558,18 @@ mod tests {
         // TOTAL, int axis.
         let int_ok_args = kwargs_of("(_ :port 8080)");
         let int_ok_kw = parse_kwargs(&int_ok_args).unwrap();
+        assert_eq!(extract_narrowed::<u16>(&int_ok_kw, "port").unwrap(), 8080);
         assert_eq!(
-            extract_narrowed::<i64, u16>(&int_ok_kw, "port").unwrap(),
-            8080
-        );
-        assert_eq!(
-            extract_optional_narrowed::<i64, u16>(&int_ok_kw, "port").unwrap(),
+            extract_optional_narrowed::<u16>(&int_ok_kw, "port").unwrap(),
             Some(8080),
         );
 
         // TOTAL, float axis.
         let float_ok_args = kwargs_of("(_ :scale 1.0)");
         let float_ok_kw = parse_kwargs(&float_ok_args).unwrap();
-        let ok_f32 = extract_narrowed::<f64, f32>(&float_ok_kw, "scale").unwrap();
+        let ok_f32 = extract_narrowed::<f32>(&float_ok_kw, "scale").unwrap();
         assert!((ok_f32 - 1.0_f32).abs() < f32::EPSILON);
-        let ok_optional_f32 = extract_optional_narrowed::<f64, f32>(&float_ok_kw, "scale").unwrap();
+        let ok_optional_f32 = extract_optional_narrowed::<f32>(&float_ok_kw, "scale").unwrap();
         assert!(
             matches!(ok_optional_f32, Some(x) if (x - 1.0_f32).abs() < f32::EPSILON),
             "optional float axis round-trips the wide value unchanged",
@@ -6604,7 +6579,7 @@ mod tests {
         let int_bad_args = kwargs_of("(_ :port 70000)");
         let int_bad_kw = parse_kwargs(&int_bad_args).unwrap();
         let int_err =
-            extract_narrowed::<i64, u16>(&int_bad_kw, "port").expect_err("70000 overflows u16");
+            extract_narrowed::<u16>(&int_bad_kw, "port").expect_err("70000 overflows u16");
         let LispError::KwargOutOfRange { target, value, .. } = &int_err else {
             panic!("expected KwargOutOfRange, got {int_err:?}");
         };
@@ -6614,8 +6589,8 @@ mod tests {
         // RANGE-ERR, float axis — the peer `scale 1.0e300 → f32` case.
         let float_bad_args = kwargs_of("(_ :scale 1.0e300)");
         let float_bad_kw = parse_kwargs(&float_bad_args).unwrap();
-        let float_err = extract_narrowed::<f64, f32>(&float_bad_kw, "scale")
-            .expect_err("1.0e300 overflows f32");
+        let float_err =
+            extract_narrowed::<f32>(&float_bad_kw, "scale").expect_err("1.0e300 overflows f32");
         let LispError::KwargOutOfRange { target, value, .. } = &float_err else {
             panic!("expected KwargOutOfRange, got {float_err:?}");
         };
@@ -6629,11 +6604,11 @@ mod tests {
         let absent_args = kwargs_of("(_ :other 1)");
         let absent_kw = parse_kwargs(&absent_args).unwrap();
         assert_eq!(
-            extract_optional_narrowed::<i64, u16>(&absent_kw, "missing").unwrap(),
+            extract_optional_narrowed::<u16>(&absent_kw, "missing").unwrap(),
             None,
         );
         assert_eq!(
-            extract_optional_narrowed::<f64, f32>(&absent_kw, "missing").unwrap(),
+            extract_optional_narrowed::<f32>(&absent_kw, "missing").unwrap(),
             None,
         );
     }
@@ -6644,12 +6619,12 @@ mod tests {
     /// at the operator-visible level: for every input a
     /// caller-shaped `extract_int_narrowed::<T>` / peer accepts or
     /// rejects, the corresponding generic call
-    /// `extract_narrowed::<i64, T>` / peer must produce the same
+    /// `extract_narrowed::<T>` / peer must produce the same
     /// verdict, and vice versa. Sweep the four extractor / generic
     /// pairs over both a total input and a rejecting input to lock
     /// the delegation shape — a regression that silently swapped a
     /// delegate's axis parameter (`extract_int_narrowed` accidentally
-    /// binding to `extract_narrowed::<f64, T>`) would fail to compile
+    /// binding to `extract_narrowed::<T>`) would fail to compile
     /// AT the delegate site (the `NarrowNumeric<i64>` bound wouldn't
     /// resolve against `<f64, T: NarrowNumeric<f64>>`) AND, if that
     /// somehow compiled, would surface here as a diverging verdict.
@@ -6660,11 +6635,11 @@ mod tests {
         let int_ok_kw = parse_kwargs(&int_ok_args).unwrap();
         assert_eq!(
             extract_int_narrowed::<u16>(&int_ok_kw, "port").unwrap(),
-            extract_narrowed::<i64, u16>(&int_ok_kw, "port").unwrap(),
+            extract_narrowed::<u16>(&int_ok_kw, "port").unwrap(),
         );
         assert_eq!(
             extract_optional_int_narrowed::<u16>(&int_ok_kw, "port").unwrap(),
-            extract_optional_narrowed::<i64, u16>(&int_ok_kw, "port").unwrap(),
+            extract_optional_narrowed::<u16>(&int_ok_kw, "port").unwrap(),
         );
 
         // Total, float axis.
@@ -6672,7 +6647,7 @@ mod tests {
         let float_ok_kw = parse_kwargs(&float_ok_args).unwrap();
         let (a, b) = (
             extract_float_narrowed::<f32>(&float_ok_kw, "scale").unwrap(),
-            extract_narrowed::<f64, f32>(&float_ok_kw, "scale").unwrap(),
+            extract_narrowed::<f32>(&float_ok_kw, "scale").unwrap(),
         );
         assert!((a - b).abs() < f32::EPSILON);
         // Optional peer on the float axis — closes the four-wrapper
@@ -6684,7 +6659,7 @@ mod tests {
         // invariant.
         let (opt_a, opt_b) = (
             extract_optional_float_narrowed::<f32>(&float_ok_kw, "scale").unwrap(),
-            extract_optional_narrowed::<f64, f32>(&float_ok_kw, "scale").unwrap(),
+            extract_optional_narrowed::<f32>(&float_ok_kw, "scale").unwrap(),
         );
         assert!(
             matches!((opt_a, opt_b), (Some(x), Some(y)) if (x - y).abs() < f32::EPSILON),
@@ -6696,7 +6671,7 @@ mod tests {
         let int_bad_args = kwargs_of("(_ :port 70000)");
         let int_bad_kw = parse_kwargs(&int_bad_args).unwrap();
         let via_wrapper = extract_int_narrowed::<u16>(&int_bad_kw, "port").unwrap_err();
-        let via_generic = extract_narrowed::<i64, u16>(&int_bad_kw, "port").unwrap_err();
+        let via_generic = extract_narrowed::<u16>(&int_bad_kw, "port").unwrap_err();
         match (&via_wrapper, &via_generic) {
             (
                 LispError::KwargOutOfRange {
@@ -6722,7 +6697,7 @@ mod tests {
         let float_bad_args = kwargs_of("(_ :scale 1.0e300)");
         let float_bad_kw = parse_kwargs(&float_bad_args).unwrap();
         let via_wrapper = extract_float_narrowed::<f32>(&float_bad_kw, "scale").unwrap_err();
-        let via_generic = extract_narrowed::<f64, f32>(&float_bad_kw, "scale").unwrap_err();
+        let via_generic = extract_narrowed::<f32>(&float_bad_kw, "scale").unwrap_err();
         match (&via_wrapper, &via_generic) {
             (
                 LispError::KwargOutOfRange {
@@ -6794,7 +6769,7 @@ mod tests {
     ///     `ExpectedKwargShape` label + item-indexed `KwargPath`.
     /// (5) Per-item narrowing-gate identity — a present list with a
     ///     per-item out-of-range value routes through
-    ///     `narrow_or_range_err_at::<Self::Wide, Self>` and rejects
+    ///     `narrow_or_range_err_at::<Self>` and rejects
     ///     with the typed `LispError::KwargOutOfRange { form: Item {
     ///     key, idx }, target: Self::WIDTH, value: … }` variant.
     /// (6) Free-fn wrappers reduce to one-line trait-dispatch
@@ -6952,7 +6927,7 @@ mod tests {
 
         // (5) Per-item narrowing-gate identity — a present list with
         //     a per-item out-of-range value routes through
-        //     `narrow_or_range_err_at::<Self::Wide, Self>` and rejects
+        //     `narrow_or_range_err_at::<Self>` and rejects
         //     with the typed `KwargOutOfRange { form: Item { key, idx },
         //     target: Self::WIDTH, value }` variant.
         let range_int = kwargs_of("(_ :ports (80 70000))");
@@ -7099,18 +7074,18 @@ mod tests {
         let absent_args = kwargs_of("(_ :other 1)");
         let absent_kw = parse_kwargs(&absent_args).unwrap();
         assert_eq!(
-            extract_optional_narrowed::<i64, u16>(&absent_kw, "missing").unwrap(),
-            optional_from_required(&absent_kw, "missing", extract_narrowed::<i64, u16>).unwrap(),
+            extract_optional_narrowed::<u16>(&absent_kw, "missing").unwrap(),
+            optional_from_required(&absent_kw, "missing", extract_narrowed::<u16>).unwrap(),
         );
         assert_eq!(
-            extract_optional_narrowed::<i64, u16>(&absent_kw, "missing").unwrap(),
+            extract_optional_narrowed::<u16>(&absent_kw, "missing").unwrap(),
             None,
         );
 
         // (1) ABSENT, float axis — peer identity on the peer axis.
         assert_eq!(
-            extract_optional_narrowed::<f64, f32>(&absent_kw, "missing").unwrap(),
-            optional_from_required(&absent_kw, "missing", extract_narrowed::<f64, f32>).unwrap(),
+            extract_optional_narrowed::<f32>(&absent_kw, "missing").unwrap(),
+            optional_from_required(&absent_kw, "missing", extract_narrowed::<f32>).unwrap(),
         );
 
         // (2) PRESENT, in range, int axis — both paths return
@@ -7118,11 +7093,11 @@ mod tests {
         let int_ok_args = kwargs_of("(_ :port 8080)");
         let int_ok_kw = parse_kwargs(&int_ok_args).unwrap();
         assert_eq!(
-            extract_optional_narrowed::<i64, u16>(&int_ok_kw, "port").unwrap(),
-            optional_from_required(&int_ok_kw, "port", extract_narrowed::<i64, u16>).unwrap(),
+            extract_optional_narrowed::<u16>(&int_ok_kw, "port").unwrap(),
+            optional_from_required(&int_ok_kw, "port", extract_narrowed::<u16>).unwrap(),
         );
         assert_eq!(
-            extract_optional_narrowed::<i64, u16>(&int_ok_kw, "port").unwrap(),
+            extract_optional_narrowed::<u16>(&int_ok_kw, "port").unwrap(),
             Some(8080_u16),
         );
 
@@ -7130,9 +7105,9 @@ mod tests {
         //     peer axis.
         let float_ok_args = kwargs_of("(_ :scale 1.0)");
         let float_ok_kw = parse_kwargs(&float_ok_args).unwrap();
-        let via_wrapper = extract_optional_narrowed::<f64, f32>(&float_ok_kw, "scale").unwrap();
+        let via_wrapper = extract_optional_narrowed::<f32>(&float_ok_kw, "scale").unwrap();
         let via_primitive =
-            optional_from_required(&float_ok_kw, "scale", extract_narrowed::<f64, f32>).unwrap();
+            optional_from_required(&float_ok_kw, "scale", extract_narrowed::<f32>).unwrap();
         match (via_wrapper, via_primitive) {
             (Some(a), Some(b)) => assert!((a - b).abs() < f32::EPSILON),
             other => panic!("both must be Some(f32), got {other:?}"),
@@ -7144,11 +7119,10 @@ mod tests {
         //     `KwargPath::Named` form.
         let int_shape_args = kwargs_of(r#"(_ :port "hello")"#);
         let int_shape_kw = parse_kwargs(&int_shape_args).unwrap();
-        let via_wrapper = extract_optional_narrowed::<i64, u16>(&int_shape_kw, "port")
+        let via_wrapper = extract_optional_narrowed::<u16>(&int_shape_kw, "port")
             .expect_err("string is not an int");
-        let via_primitive =
-            optional_from_required(&int_shape_kw, "port", extract_narrowed::<i64, u16>)
-                .expect_err("string is not an int");
+        let via_primitive = optional_from_required(&int_shape_kw, "port", extract_narrowed::<u16>)
+            .expect_err("string is not an int");
         match (&via_wrapper, &via_primitive) {
             (
                 LispError::TypeMismatch {
@@ -7178,10 +7152,10 @@ mod tests {
         //     emits).
         let float_shape_args = kwargs_of(r#"(_ :scale "hello")"#);
         let float_shape_kw = parse_kwargs(&float_shape_args).unwrap();
-        let via_wrapper = extract_optional_narrowed::<f64, f32>(&float_shape_kw, "scale")
+        let via_wrapper = extract_optional_narrowed::<f32>(&float_shape_kw, "scale")
             .expect_err("string is not a float");
         let via_primitive =
-            optional_from_required(&float_shape_kw, "scale", extract_narrowed::<f64, f32>)
+            optional_from_required(&float_shape_kw, "scale", extract_narrowed::<f32>)
                 .expect_err("string is not a float");
         match (&via_wrapper, &via_primitive) {
             (
@@ -7211,11 +7185,10 @@ mod tests {
         //     value.
         let int_range_args = kwargs_of("(_ :port 70000)");
         let int_range_kw = parse_kwargs(&int_range_args).unwrap();
-        let via_wrapper = extract_optional_narrowed::<i64, u16>(&int_range_kw, "port")
+        let via_wrapper = extract_optional_narrowed::<u16>(&int_range_kw, "port")
             .expect_err("70000 overflows u16");
-        let via_primitive =
-            optional_from_required(&int_range_kw, "port", extract_narrowed::<i64, u16>)
-                .expect_err("70000 overflows u16");
+        let via_primitive = optional_from_required(&int_range_kw, "port", extract_narrowed::<u16>)
+            .expect_err("70000 overflows u16");
         match (&via_wrapper, &via_primitive) {
             (
                 LispError::KwargOutOfRange {
@@ -7241,10 +7214,10 @@ mod tests {
         //     the peer axis. `1.0e300 → f32` overflows to infinity.
         let float_range_args = kwargs_of("(_ :scale 1.0e300)");
         let float_range_kw = parse_kwargs(&float_range_args).unwrap();
-        let via_wrapper = extract_optional_narrowed::<f64, f32>(&float_range_kw, "scale")
+        let via_wrapper = extract_optional_narrowed::<f32>(&float_range_kw, "scale")
             .expect_err("1.0e300 overflows f32");
         let via_primitive =
-            optional_from_required(&float_range_kw, "scale", extract_narrowed::<f64, f32>)
+            optional_from_required(&float_range_kw, "scale", extract_narrowed::<f32>)
                 .expect_err("1.0e300 overflows f32");
         match (&via_wrapper, &via_primitive) {
             (
@@ -7304,14 +7277,14 @@ mod tests {
         let int_ok_args = kwargs_of("(_ :ports (80 443 8080))");
         let int_ok_kw = parse_kwargs(&int_ok_args).unwrap();
         assert_eq!(
-            extract_narrowed_list::<i64, u16>(&int_ok_kw, "ports").unwrap(),
+            extract_narrowed_list::<u16>(&int_ok_kw, "ports").unwrap(),
             vec![80u16, 443, 8080],
         );
 
         // (1) TOTAL, float axis — `Vec<f32>` from a list of floats.
         let float_ok_args = kwargs_of("(_ :scales (1.0 2.5))");
         let float_ok_kw = parse_kwargs(&float_ok_args).unwrap();
-        let scales = extract_narrowed_list::<f64, f32>(&float_ok_kw, "scales").unwrap();
+        let scales = extract_narrowed_list::<f32>(&float_ok_kw, "scales").unwrap();
         assert_eq!(scales.len(), 2);
         assert!((scales[0] - 1.0_f32).abs() < f32::EPSILON);
         assert!((scales[1] - 2.5_f32).abs() < f32::EPSILON);
@@ -7323,7 +7296,7 @@ mod tests {
         //     the item-index axis.
         let int_bad_args = kwargs_of("(_ :ports (80 70000))");
         let int_bad_kw = parse_kwargs(&int_bad_args).unwrap();
-        let int_err = extract_narrowed_list::<i64, u16>(&int_bad_kw, "ports")
+        let int_err = extract_narrowed_list::<u16>(&int_bad_kw, "ports")
             .expect_err("second item overflows u16");
         let LispError::KwargOutOfRange {
             form,
@@ -7344,7 +7317,7 @@ mod tests {
         //     overflows f32.
         let float_bad_args = kwargs_of("(_ :scales (1.0 2.0 1.0e300))");
         let float_bad_kw = parse_kwargs(&float_bad_args).unwrap();
-        let float_err = extract_narrowed_list::<f64, f32>(&float_bad_kw, "scales")
+        let float_err = extract_narrowed_list::<f32>(&float_bad_kw, "scales")
             .expect_err("third item overflows f32");
         let LispError::KwargOutOfRange {
             form,
@@ -7369,7 +7342,7 @@ mod tests {
         //     through, the item path names the failing element.
         let int_shape_args = kwargs_of(r#"(_ :ports (80 "not-int"))"#);
         let int_shape_kw = parse_kwargs(&int_shape_args).unwrap();
-        let shape_err = extract_narrowed_list::<i64, u16>(&int_shape_kw, "ports")
+        let shape_err = extract_narrowed_list::<u16>(&int_shape_kw, "ports")
             .expect_err("second item is not an int atom");
         let LispError::TypeMismatch { form, expected, .. } = &shape_err else {
             panic!("expected TypeMismatch, got {shape_err:?}");
@@ -7387,7 +7360,7 @@ mod tests {
         // (3) PER-ITEM SHAPE-ERR, float axis — the peer `Number` label.
         let float_shape_args = kwargs_of(r#"(_ :scales (1.0 "not-num"))"#);
         let float_shape_kw = parse_kwargs(&float_shape_args).unwrap();
-        let float_shape_err = extract_narrowed_list::<f64, f32>(&float_shape_kw, "scales")
+        let float_shape_err = extract_narrowed_list::<f32>(&float_shape_kw, "scales")
             .expect_err("second item is not a numeric atom");
         let LispError::TypeMismatch { form, expected, .. } = &float_shape_err else {
             panic!("expected TypeMismatch, got {float_shape_err:?}");
@@ -7407,11 +7380,11 @@ mod tests {
         let absent_args = kwargs_of("(_ :other 1)");
         let absent_kw = parse_kwargs(&absent_args).unwrap();
         assert_eq!(
-            extract_narrowed_list::<i64, u16>(&absent_kw, "missing").unwrap(),
+            extract_narrowed_list::<u16>(&absent_kw, "missing").unwrap(),
             Vec::<u16>::new(),
         );
         assert_eq!(
-            extract_narrowed_list::<f64, f32>(&absent_kw, "missing").unwrap(),
+            extract_narrowed_list::<f32>(&absent_kw, "missing").unwrap(),
             Vec::<f32>::new(),
         );
     }
@@ -7431,14 +7404,14 @@ mod tests {
         let int_ok_kw = parse_kwargs(&int_ok_args).unwrap();
         assert_eq!(
             extract_int_list_narrowed::<u16>(&int_ok_kw, "ports").unwrap(),
-            extract_narrowed_list::<i64, u16>(&int_ok_kw, "ports").unwrap(),
+            extract_narrowed_list::<u16>(&int_ok_kw, "ports").unwrap(),
         );
 
         // Total, float axis — element-wise equality on the round-tripped Vec.
         let float_ok_args = kwargs_of("(_ :scales (1.0 2.5))");
         let float_ok_kw = parse_kwargs(&float_ok_args).unwrap();
         let via_wrapper = extract_float_list_narrowed::<f32>(&float_ok_kw, "scales").unwrap();
-        let via_generic = extract_narrowed_list::<f64, f32>(&float_ok_kw, "scales").unwrap();
+        let via_generic = extract_narrowed_list::<f32>(&float_ok_kw, "scales").unwrap();
         assert_eq!(via_wrapper.len(), via_generic.len());
         for (a, b) in via_wrapper.iter().zip(via_generic.iter()) {
             assert!((a - b).abs() < f32::EPSILON);
@@ -7449,7 +7422,7 @@ mod tests {
         let int_bad_args = kwargs_of("(_ :ports (80 70000))");
         let int_bad_kw = parse_kwargs(&int_bad_args).unwrap();
         let via_wrapper = extract_int_list_narrowed::<u16>(&int_bad_kw, "ports").unwrap_err();
-        let via_generic = extract_narrowed_list::<i64, u16>(&int_bad_kw, "ports").unwrap_err();
+        let via_generic = extract_narrowed_list::<u16>(&int_bad_kw, "ports").unwrap_err();
         match (&via_wrapper, &via_generic) {
             (
                 LispError::KwargOutOfRange {
@@ -7494,7 +7467,7 @@ mod tests {
         let absent_kw = parse_kwargs(&absent_args).unwrap();
         assert_eq!(
             extract_optional_int_list_narrowed::<u16>(&absent_kw, "ports").unwrap(),
-            extract_optional_narrowed_list::<i64, u16>(&absent_kw, "ports").unwrap(),
+            extract_optional_narrowed_list::<u16>(&absent_kw, "ports").unwrap(),
         );
         assert_eq!(
             extract_optional_int_list_narrowed::<u16>(&absent_kw, "ports").unwrap(),
@@ -7508,7 +7481,7 @@ mod tests {
         let empty_kw = parse_kwargs(&empty_args).unwrap();
         assert_eq!(
             extract_optional_float_list_narrowed::<f32>(&empty_kw, "scales").unwrap(),
-            extract_optional_narrowed_list::<f64, f32>(&empty_kw, "scales").unwrap(),
+            extract_optional_narrowed_list::<f32>(&empty_kw, "scales").unwrap(),
         );
         assert_eq!(
             extract_optional_float_list_narrowed::<f32>(&empty_kw, "scales").unwrap(),
@@ -7521,7 +7494,7 @@ mod tests {
         let int_ok_kw = parse_kwargs(&int_ok_args).unwrap();
         assert_eq!(
             extract_optional_int_list_narrowed::<u16>(&int_ok_kw, "ports").unwrap(),
-            extract_optional_narrowed_list::<i64, u16>(&int_ok_kw, "ports").unwrap(),
+            extract_optional_narrowed_list::<u16>(&int_ok_kw, "ports").unwrap(),
         );
 
         // Rejecting, int axis — same `KwargOutOfRange { form, target,
@@ -7530,8 +7503,7 @@ mod tests {
         let int_bad_kw = parse_kwargs(&int_bad_args).unwrap();
         let via_wrapper =
             extract_optional_int_list_narrowed::<u16>(&int_bad_kw, "ports").unwrap_err();
-        let via_generic =
-            extract_optional_narrowed_list::<i64, u16>(&int_bad_kw, "ports").unwrap_err();
+        let via_generic = extract_optional_narrowed_list::<u16>(&int_bad_kw, "ports").unwrap_err();
         match (&via_wrapper, &via_generic) {
             (
                 LispError::KwargOutOfRange {

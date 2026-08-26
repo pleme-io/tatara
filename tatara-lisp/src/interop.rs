@@ -139,7 +139,20 @@ mod iac_forge_impl {
             // future drift surfaces at the typed-algebra layer rather
             // than at every downstream consumer.
             for kind in AtomKind::ALL {
-                let atom = sample_atom(kind);
+                // Per-kind sample atom routes through the typed closed-set
+                // primitive [`AtomKind::canonical_sample`] — the single
+                // substrate site the sibling `ast.rs` sweep also delegates
+                // to. Pre-lift the same six-arm mapping lived at a local
+                // `fn sample_atom(kind: AtomKind)` helper here AND inline
+                // inside `ast.rs`'s
+                // `sexp_shape_method_routes_atom_arm_through_atom_kind_sexp_shape_projection`
+                // sweep. Post-lift the mapping binds at ONE typed primitive
+                // on the [`AtomKind`] algebra so a future seventh atomic
+                // kind (e.g. `Char` for `#\x` reader syntax, `Bigint` for
+                // arbitrary-precision integers) extends [`AtomKind::ALL`]
+                // AND the primitive in lockstep rather than at two
+                // independent per-site match blocks.
+                let atom = kind.canonical_sample();
                 let via_impl: SExpr = (&Sexp::Atom(atom.clone())).into();
                 let via_projection = atom.to_iac_forge_sexpr();
                 assert_eq!(
@@ -147,22 +160,6 @@ mod iac_forge_impl {
                     "From<&Sexp> for SExpr Atom arm drifted from \
                      Atom::to_iac_forge_sexpr for variant {kind:?}"
                 );
-            }
-        }
-
-        /// Canonical per-variant atomic sample mirroring the shape
-        /// `atom_display_round_trips_through_reader_preserving_typed_identity`
-        /// in `ast.rs` uses — one representative payload for each
-        /// `AtomKind` variant so the boundary tests above can sweep
-        /// the closed set without re-deriving sample literals.
-        fn sample_atom(kind: AtomKind) -> Atom {
-            match kind {
-                AtomKind::Symbol => Atom::Symbol("name".into()),
-                AtomKind::Keyword => Atom::Keyword("parent".into()),
-                AtomKind::Str => Atom::Str("body".into()),
-                AtomKind::Int => Atom::Int(42),
-                AtomKind::Float => Atom::Float(1.5),
-                AtomKind::Bool => Atom::Bool(true),
             }
         }
 

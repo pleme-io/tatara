@@ -11669,6 +11669,77 @@ impl AtomKind {
             Self::Bool => Self::BOOL_SHAPE,
         }
     }
+
+    /// The canonical [`Atom`] sample for this variant — one representative
+    /// payload per [`AtomKind`] arm, materialized on demand so a
+    /// closed-set-sweep test walking [`Self::ALL`] can bind the (kind,
+    /// atom) pairing at ONE primitive on the algebra rather than
+    /// re-deriving a six-arm `match` per test site.
+    ///
+    /// Pre-lift the same six-arm mapping recurred at TWO byte-identical
+    /// sites (past the PRIME-DIRECTIVE ≥ 2 duplication trigger): the
+    /// `#[cfg(test)] fn sample_atom(kind: AtomKind)` helper in
+    /// [`crate::interop`]'s iac-forge test module, and the inline
+    /// `match kind { ... }` inside
+    /// `sexp_shape_method_routes_atom_arm_through_atom_kind_sexp_shape_projection`
+    /// in this file's own tests module. Both sweep `AtomKind::ALL` and
+    /// wanted a per-variant sample atom to drive their pin. Post-lift
+    /// the mapping lives at ONE typed primitive on the closed-set
+    /// [`AtomKind`] algebra — every future sweep test that needs a
+    /// per-kind sample binds through this method, and adding a
+    /// hypothetical seventh atomic kind (e.g. `Char` for `#\x` reader
+    /// syntax, `Bigint` for arbitrary-precision integers) extends
+    /// [`Self::ALL`] AND this match arm in lockstep with rustc
+    /// exhaustiveness catching any drift.
+    ///
+    /// The samples themselves are the substrate's canonical per-role
+    /// vocabulary (`"name"` for the operator-position symbol,
+    /// `"parent"` for the substrate-canonical kwarg keyword, `"body"`
+    /// for the load-bearing string payload, `42` / `1.5` / `true` for
+    /// the primitives) that the two pre-lift sites already spelled
+    /// byte-for-byte identically. Adding a new sweep test consumer
+    /// binds to this method without introducing a THIRD parallel
+    /// vocabulary the pre-lift discipline had no gate against.
+    ///
+    /// Gated `#[cfg(test)]` because the samples are load-bearing only
+    /// for the crate's own test surface — production code that needs
+    /// a representative atom binds through the domain-specific
+    /// constructor family (`Sexp::symbol` / `Sexp::keyword` /
+    /// `Sexp::int` / …) or through the reader on a canonical source
+    /// string. Scoped `pub(crate)` so both the `ast.rs` and
+    /// `interop.rs` test modules reach the primitive without
+    /// exposing the test-fixture vocabulary through the crate's
+    /// public API.
+    ///
+    /// Sibling posture to [`Self::label`] + [`Self::LABELS`] and
+    /// [`Self::hash_discriminator`] + [`Self::HASH_DISCRIMINATORS`]
+    /// on the closed-set per-role projection axis: each pair carries
+    /// the (per-variant value, family-wide array) shape on its own
+    /// axis (canonical `&'static str` for the diagnostic vocabulary;
+    /// canonical `u8` for the cache-key byte; canonical [`Atom`] for
+    /// the test-fixture payload). This method opens the per-variant
+    /// half of the fixture axis; a future `Self::SAMPLES: [Atom; 6]`
+    /// paired-array can land at zero cost once a third test-sweep
+    /// consumer materializes.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 — generation over composition;
+    /// the two byte-identical sample mappings compose against ONE
+    /// substrate primitive here rather than being restated per-site.
+    /// THEORY.md §III — the typescape; the (kind, canonical sample
+    /// atom) pairing binds at ONE typed method on the closed-set
+    /// algebra rather than at a zero-primitive-on-this-axis-plus-two-
+    /// inline-copies scattering across the crate.
+    #[cfg(test)]
+    pub(crate) fn canonical_sample(self) -> Atom {
+        match self {
+            Self::Symbol => Atom::Symbol("name".into()),
+            Self::Keyword => Atom::Keyword("parent".into()),
+            Self::Str => Atom::Str("body".into()),
+            Self::Int => Atom::Int(42),
+            Self::Float => Atom::Float(1.5),
+            Self::Bool => Atom::Bool(true),
+        }
+    }
 }
 
 // `impl fmt::Display for AtomKind` + `impl std::str::FromStr for AtomKind`
@@ -25348,6 +25419,72 @@ mod tests {
     }
 
     #[test]
+    fn atom_kind_canonical_sample_round_trips_kind_for_every_variant() {
+        // CANONICAL-SAMPLE ROUND-TRIP PIN: sweep every AtomKind variant
+        // through `AtomKind::canonical_sample` and pin that the returned
+        // `Atom`'s `.kind()` projects back to the SAME variant. This is
+        // the load-bearing invariant every closed-set-sweep test consumer
+        // of the primitive depends on — the sample atom of kind `k` must
+        // itself decode to kind `k`. A regression that drifts ONE arm
+        // (e.g. swaps `AtomKind::Int → Atom::Float(1.5)`, or drops the
+        // `Str → Atom::Str(...)` binding for a `Symbol` fallback) would
+        // silently corrupt every consumer's sweep — this pin catches the
+        // drift at the exact offending variant. Sibling posture to
+        // `atom_kind_projects_each_atom_variant_to_typed_marker` (the
+        // inverse direction — `Atom → AtomKind` via `.kind()`) and
+        // `atom_kind_labels_align_with_all_by_index` (the labels axis's
+        // ALL-alignment sweep). Together the three tests pin the
+        // closed-set (variant, sample atom, decoded kind) triangle on
+        // the AtomKind algebra.
+        for kind in AtomKind::ALL {
+            let sample = kind.canonical_sample();
+            assert_eq!(
+                sample.kind(),
+                kind,
+                "AtomKind::{kind:?}.canonical_sample() returned an Atom \
+                 whose .kind() drifts from the source variant — the \
+                 (variant, sample atom) pairing must round-trip through \
+                 Atom::kind for every closed-set consumer that sweeps \
+                 AtomKind::ALL"
+            );
+        }
+    }
+
+    #[test]
+    fn atom_kind_canonical_sample_pins_substrate_wide_vocabulary_bytes() {
+        // FIXTURE-VOCABULARY PIN: the six per-variant sample payloads
+        // (`"name"` / `"parent"` / `"body"` for the three string-shaped
+        // arms, `42` / `1.5` / `true` for the three primitive arms) are
+        // the substrate's canonical test-fixture vocabulary that pre-
+        // lift lived at TWO byte-identical sites (the `interop.rs`
+        // iac-forge test module's local `sample_atom` helper and this
+        // file's own inline `match kind {…}` inside
+        // `sexp_shape_method_routes_atom_arm_through_atom_kind_sexp_shape_projection`).
+        // Post-lift both consumers delegate through
+        // `AtomKind::canonical_sample`; this pin anchors the six
+        // canonical bytes AT the primitive so a future accidental
+        // rename (e.g. `"parent" → "kw"`, dropping the operator-
+        // canonical kwarg-key vocabulary the pre-lift discipline
+        // pinned by convention) surfaces at ONE test site rather than
+        // through drift at both consumer sweeps together. Fail-before-
+        // pass-after: this per-variant literal assertion is
+        // contradicted by any drift at the substrate primitive, and
+        // ratified by the current shipping bytes.
+        assert_eq!(
+            AtomKind::Symbol.canonical_sample(),
+            Atom::Symbol("name".into()),
+        );
+        assert_eq!(
+            AtomKind::Keyword.canonical_sample(),
+            Atom::Keyword("parent".into()),
+        );
+        assert_eq!(AtomKind::Str.canonical_sample(), Atom::Str("body".into()),);
+        assert_eq!(AtomKind::Int.canonical_sample(), Atom::Int(42));
+        assert_eq!(AtomKind::Float.canonical_sample(), Atom::Float(1.5));
+        assert_eq!(AtomKind::Bool.canonical_sample(), Atom::Bool(true));
+    }
+
+    #[test]
     fn atom_label_projects_each_variant_to_canonical_diagnostic_label() {
         // PER-ARM CONTRACT: pin the outer-`Atom` `Self::label`
         // projection produces the SIX canonical `&'static str` labels
@@ -27071,14 +27208,14 @@ mod tests {
         // `sexp_shape_method_routes_quote_family_arms_through_quote_form_sexp_shape_projection`
         // for the quote-family axis.
         for kind in AtomKind::ALL {
-            let atom = match kind {
-                AtomKind::Symbol => Atom::Symbol("name".into()),
-                AtomKind::Keyword => Atom::Keyword("parent".into()),
-                AtomKind::Str => Atom::Str("body".into()),
-                AtomKind::Int => Atom::Int(42),
-                AtomKind::Float => Atom::Float(1.5),
-                AtomKind::Bool => Atom::Bool(true),
-            };
+            // Per-kind sample atom routes through the typed closed-set
+            // primitive `AtomKind::canonical_sample` — the single
+            // substrate site the sibling `interop.rs` iac-forge test
+            // sweep also delegates to. A regression that drifts the
+            // fixture vocabulary between the two sweeps is structurally
+            // impossible: both consumers thread through the same method
+            // on the algebra.
+            let atom = kind.canonical_sample();
             let via_outer = Sexp::Atom(atom.clone()).shape();
             let via_composed = atom.kind().sexp_shape();
             assert_eq!(

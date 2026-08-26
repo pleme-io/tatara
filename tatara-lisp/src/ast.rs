@@ -10330,13 +10330,104 @@ impl Atom {
     /// standing in for Racket's numeric tower.
     #[must_use]
     pub fn from_json_number(n: &serde_json::Number) -> Self {
-        if let Some(i) = n.as_i64() {
-            Self::Int(i)
-        } else if let Some(f) = n.as_f64() {
-            Self::Float(f)
-        } else {
-            Self::Int(0)
+        Self::classify_numeric_int_then_float(|| n.as_i64(), || n.as_f64()).unwrap_or(Self::Int(0))
+    }
+
+    /// Numeric-taxonomy bifurcation on the closed-set [`Atom`] algebra —
+    /// the ONE typed owner of the "prefer [`Self::Int`] over
+    /// [`Self::Float`] on the shared numeric axis" discipline every
+    /// source-form numeric decoder on the substrate binds. Lifts the
+    /// two-branch int-then-float cascade that lived inline at BOTH
+    /// numeric decoders on this algebra past the ★★ PRIME-DIRECTIVE
+    /// ≥ 2 duplication threshold: [`Self::from_json_number`] (pre-lift
+    /// `if let Some(i) = n.as_i64() { … } else if let Some(f) =
+    /// n.as_f64() { … } else { Self::Int(0) }`) and [`Self::from_lexeme`]
+    /// (pre-lift `if let Ok(n) = s.parse::<i64>() { … } if let Ok(n) =
+    /// s.parse::<f64>() { … }` before the [`Self::Symbol`] fallthrough).
+    /// Each pre-lift site restated the (try-int-first, fall-back-to-
+    /// float) sequencing byte-identically; post-lift the sequencing
+    /// lives at ONE algebra-level owner and both callers delegate.
+    ///
+    /// Ordering contract (load-bearing across every consumer of the
+    /// [`Atom`] algebra): [`Self::Int`] is tried BEFORE [`Self::Float`].
+    /// This is what keeps a bare `"1"` classifying as [`Self::Int`]`(1)`
+    /// at [`Self::from_lexeme`] (NOT [`Self::Float`]`(1.0)`) and what
+    /// keeps an i64-boundary `serde_json::Number` (`i64::MAX`,
+    /// `i64::MIN`) sinking to [`Self::Int`] at [`Self::from_json_number`]
+    /// (NOT round-tripped through `f64`'s 53-bit mantissa via a
+    /// pre-empted float-first arm). The ordering is the typed-entry
+    /// dual of `fmt_float`'s `.0`-suffix discipline on the typed-exit
+    /// side — together the two projections form the round-trip identity
+    /// `Atom::from_lexeme(a.to_string()) == a` for both [`Self::Int`]
+    /// and [`Self::Float`] payloads pinned by
+    /// `atom_from_lexeme_round_trips_with_atom_display_for_every_non_str_variant`.
+    /// A regression that swapped the arms in ONE consumer alone (a
+    /// pre-lift hazard when the ordering lived inline at two sites)
+    /// can no longer surface — the ordering lives at ONE primitive.
+    ///
+    /// Returns `None` iff BOTH decoders return `None` — the caller
+    /// supplies its own typed floor, distinct per surface:
+    ///   * [`Self::from_lexeme`] falls through to
+    ///     [`Self::Symbol`]`(s.to_owned())` — the closed-set default
+    ///     arm the reader has shipped with from inception (the bare
+    ///     lexeme lands on the [`Self::Symbol`] axis when it doesn't
+    ///     classify as bool / keyword / numeric).
+    ///   * [`Self::from_json_number`] falls through to
+    ///     [`Self::Int`]`(0)` — the typed floor for the
+    ///     structural-impossibility residual (every
+    ///     `serde_json::Number` today is i64-fitting, u64-fitting
+    ///     projected through f64, or f64-fitting; the residual arm
+    ///     stays explicit so a future `serde_json` extension does
+    ///     NOT silently misroute through an unreachable-panic).
+    ///
+    /// Short-circuiting is a static contract: when `try_int` returns
+    /// `Some`, `try_float` is NEVER invoked. This is a load-bearing
+    /// posture at [`Self::from_lexeme`] where `try_float` (`s.parse::
+    /// <f64>()`) would successfully re-parse a bare int lexeme
+    /// (`"1"` parses as `1.0`), silently sinking to [`Self::Float`] if
+    /// `try_int` had been invoked speculatively as an inspection
+    /// pass. Pinned at
+    /// `atom_classify_numeric_int_then_float_short_circuits_float_on_int_success`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 2 — free middle; both
+    /// numeric decoders (typed-entry from JSON `Number`, typed-entry
+    /// from bare reader lexeme) now route through ONE typed algebra
+    /// projection rather than through two byte-identical inline
+    /// cascades. THEORY.md §VI.1 — generation over composition; the
+    /// (try-int, try-float, else) three-arm cascade lived inline at
+    /// TWO sites on the [`Atom`] algebra past the PRIME-DIRECTIVE
+    /// ≥ 2 duplication trigger, and is lifted to ONE owner here.
+    /// THEORY.md §V.1 — knowable platform; a future third numeric
+    /// decoder (e.g. a [`Self::from_yaml_scalar`] that decodes YAML
+    /// tagged numeric scalars, a [`Self::from_toml_datetime`] that
+    /// decodes TOML numeric fragments, a [`Self::from_cli_argv_slot`]
+    /// that decodes CLI numeric flag values) plugs onto ONE primitive
+    /// without re-deriving the ordering discipline.
+    ///
+    /// Frontier inspiration: MLIR's `mlir::AsmParser::parseInteger`
+    /// / `parseFloat` cascade dispatches through ONE typed inner
+    /// primitive per numeric-axis discipline so every parser body's
+    /// int-first-then-float ordering lives at ONE implementation
+    /// site; `classify_numeric_int_then_float` is the substrate's
+    /// unstructured-Rust peer on the [`Atom`] algebra for the shared
+    /// numeric-axis bifurcation. Racket's `string->number` runs an
+    /// integer probe before a float probe on the closed-set numeric
+    /// tower — the substrate's `classify_numeric_int_then_float`
+    /// pins the same discipline through the closed-set
+    /// ([`Self::Int`] / [`Self::Float`]) subtaxonomy on the
+    /// [`Atom`] algebra.
+    #[must_use]
+    pub fn classify_numeric_int_then_float(
+        try_int: impl FnOnce() -> Option<i64>,
+        try_float: impl FnOnce() -> Option<f64>,
+    ) -> Option<Self> {
+        if let Some(n) = try_int() {
+            return Some(Self::Int(n));
         }
+        if let Some(n) = try_float() {
+            return Some(Self::Float(n));
+        }
+        None
     }
 
     /// Project the atomic payload to its canonical
@@ -10528,11 +10619,22 @@ impl Atom {
         if let Some(rest) = s.strip_prefix(Self::KEYWORD_MARKER) {
             return Self::Keyword(rest.to_owned());
         }
-        if let Ok(n) = s.parse::<i64>() {
-            return Self::Int(n);
-        }
-        if let Ok(n) = s.parse::<f64>() {
-            return Self::Float(n);
+        // Numeric bifurcation routes through the shared
+        // [`Self::classify_numeric_int_then_float`] primitive on the
+        // [`Atom`] algebra — the ONE owner of the "prefer Int over
+        // Float on the shared numeric axis" discipline that keeps
+        // `"1"` classifying as `Atom::Int(1)` (not
+        // `Atom::Float(1.0)`) and that the sibling JSON-numeric
+        // decoder [`Self::from_json_number`] shares. Pre-lift the
+        // int-then-float sequencing lived inline here AND at
+        // [`Self::from_json_number`] as two byte-identical cascades;
+        // post-lift the sequencing binds at ONE algebra-level
+        // primitive.
+        if let Some(v) = Self::classify_numeric_int_then_float(
+            || s.parse::<i64>().ok(),
+            || s.parse::<f64>().ok(),
+        ) {
+            return v;
         }
         Self::Symbol(s.to_owned())
     }
@@ -26384,6 +26486,203 @@ mod tests {
                 Atom::from_json_number(&n),
                 atom_before,
                 "Atom::Float({f}) round-trip through to_json + from_json_number drifted",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_classify_numeric_int_then_float_prefers_int_on_double_success() {
+        // ORDERING PIN (primitive-owner direct): pin the load-bearing
+        // "prefer Int over Float on the shared numeric axis" discipline
+        // at the [`Atom::classify_numeric_int_then_float`] primitive
+        // directly. Both consumers ([`Atom::from_json_number`] +
+        // [`Atom::from_lexeme`]) bind their int-first-then-float
+        // sequencing through this ONE owner; a regression that swaps
+        // the primitive's two `if let` arms would silently sink every
+        // downstream integer-valued numeric source (a bare `"1"`
+        // lexeme, an i64-backed JSON `Number`, and every future
+        // numeric decoder that plugs onto the same primitive) into
+        // the `Atom::Float` track. Pinned by supplying both decoders
+        // as `Some(_)` returners so the int arm's short-circuit MUST
+        // fire; the pin fails on `Atom::Float` at the assertion.
+        //
+        // Sibling-shape peer to `atom_from_lexeme_prefers_int_over_float_for_integer_lexeme`
+        // (which pins the ordering at the [`Atom::from_lexeme`]
+        // caller boundary) and `atom_from_json_number_int_arm_projects_i64_backed_numbers_to_atom_int`
+        // (which pins it at the [`Atom::from_json_number`] caller
+        // boundary). Both caller-boundary pins now compose against
+        // THIS primitive-boundary pin — a regression that drifts the
+        // ordering surfaces here at the algebra layer first (one
+        // failure, one owner), rather than as a cascade of failures
+        // at every consumer.
+        let out = Atom::classify_numeric_int_then_float(|| Some(7), || Some(3.5));
+        assert_eq!(
+            out,
+            Some(Atom::Int(7)),
+            "classify_numeric_int_then_float drifted the int-then-float ordering",
+        );
+    }
+
+    #[test]
+    fn atom_classify_numeric_int_then_float_falls_back_to_float_when_int_none() {
+        // FALLBACK-ARM PIN: when the int decoder returns `None` the
+        // float decoder fires and its `Some(f)` result projects to
+        // [`Atom::Float`]`(f)`. Guards against a regression that
+        // stripped the float arm entirely (returning `None` before
+        // trying `try_float`) — such a regression would corrupt every
+        // non-integer numeric decode at both callers ([`Atom::from_lexeme`]
+        // would sink `"1.5"` to [`Atom::Symbol`]`("1.5")`;
+        // [`Atom::from_json_number`] would sink `1.5` to the typed
+        // floor [`Atom::Int`]`(0)`). The `Some(2.5f64)` sample is a
+        // non-integer-valued float to guarantee the caller-side
+        // `serde_json::Number::as_i64` inverse does not disambiguate
+        // by silently sinking to the int arm — the fallback semantics
+        // are exercised at the primitive boundary independent of any
+        // caller-side coincidence.
+        let out = Atom::classify_numeric_int_then_float(|| None, || Some(2.5));
+        assert_eq!(
+            out,
+            Some(Atom::Float(2.5)),
+            "classify_numeric_int_then_float dropped the float-fallback arm",
+        );
+    }
+
+    #[test]
+    fn atom_classify_numeric_int_then_float_returns_none_on_double_none() {
+        // RESIDUAL-ARM PIN: when BOTH decoders return `None` the
+        // primitive returns `None`. Guards the caller-supplied
+        // typed-floor contract: neither the [`Atom::from_lexeme`]
+        // Symbol fallthrough nor the [`Atom::from_json_number`]
+        // typed floor [`Atom::Int`]`(0)` can trigger unless the
+        // primitive threads the double-`None` through as `None` to
+        // the caller. A regression that projected the double-`None`
+        // to `Some(Atom::Int(0))` inside the primitive would collapse
+        // BOTH caller residuals into the same [`Atom::Int`]`(0)`
+        // floor — sinking every non-numeric bare lexeme (e.g.
+        // `"foo"`) at [`Atom::from_lexeme`] to [`Atom::Int`]`(0)`
+        // instead of [`Atom::Symbol`]`("foo")`, corrupting every
+        // downstream defpoint / defmonitor / defnotify Lisp source
+        // silently.
+        let out = Atom::classify_numeric_int_then_float(|| None, || None);
+        assert_eq!(
+            out, None,
+            "classify_numeric_int_then_float leaked the double-None residual to Some",
+        );
+    }
+
+    #[test]
+    fn atom_classify_numeric_int_then_float_short_circuits_float_on_int_success() {
+        // SHORT-CIRCUIT PIN: when `try_int` returns `Some` the
+        // primitive MUST NOT invoke `try_float`. Pinned via a
+        // mutating counter observed through interior mutability
+        // (`Cell<u32>` so the shared closure state stays observable
+        // without a `&mut` capture). Load-bearing at
+        // [`Atom::from_lexeme`]: `s.parse::<f64>()` will
+        // *successfully* re-parse a bare int lexeme (`"1"` parses as
+        // `1.0` per f64 grammar), so if the primitive invoked
+        // `try_float` speculatively as an inspection pass BEFORE
+        // returning the int arm's result, the substrate would silently
+        // do redundant f64 work on every int lexeme and become
+        // observationally coupled to the float decoder's side effects
+        // (e.g. a future `try_float` that logs a warning on integer
+        // sources). Guards the `FnOnce` contract of the primitive's
+        // signature at behavior level; rustc's `FnOnce` bound alone
+        // does NOT prevent an internal implementation that eagerly
+        // invokes both closures before picking the int result.
+        use std::cell::Cell;
+        let float_call_count = Cell::new(0u32);
+        let out = Atom::classify_numeric_int_then_float(
+            || Some(42),
+            || {
+                float_call_count.set(float_call_count.get() + 1);
+                Some(99.0)
+            },
+        );
+        assert_eq!(out, Some(Atom::Int(42)));
+        assert_eq!(
+            float_call_count.get(),
+            0,
+            "classify_numeric_int_then_float invoked try_float after try_int succeeded — short-circuit contract broken",
+        );
+    }
+
+    #[test]
+    fn atom_from_json_number_routes_through_classify_numeric_int_then_float() {
+        // LIFTED-BOUNDARY CONTRACT ([`Atom::from_json_number`] axis):
+        // pin that the outer decoder's result agrees byte-identically
+        // with a hand-rolled call to the shared primitive across every
+        // structural axis of the `serde_json::Number` closed-set
+        // (i64-backed, f64-backed, i64-boundary, non-integer-valued
+        // f64 subset). Catches a future drift where the outer
+        // [`Atom::from_json_number`] arm re-inlines the int-then-float
+        // cascade instead of delegating to
+        // [`Atom::classify_numeric_int_then_float`] — the drift
+        // surfaces HERE at the algebra-layer parity pin rather than
+        // silently at a downstream JSON round-trip's numeric variant
+        // (which would show as a serde re-serialization drift, not
+        // a decoder drift). Cross-sibling parity peer to the
+        // reader-lexeme routing pin below.
+        let cases: Vec<serde_json::Number> = [0i64, 1, -1, 42, -7, i64::MAX, i64::MIN]
+            .into_iter()
+            .map(Into::into)
+            .chain(
+                [1.5f64, -2.5, 0.1, -0.1, 1.234_567_890_123]
+                    .into_iter()
+                    .filter_map(serde_json::Number::from_f64),
+            )
+            .collect();
+        for n in cases {
+            let via_lifted = Atom::from_json_number(&n);
+            let via_primitive = Atom::classify_numeric_int_then_float(|| n.as_i64(), || n.as_f64())
+                .unwrap_or(Atom::Int(0));
+            assert_eq!(
+                via_lifted, via_primitive,
+                "Atom::from_json_number drifted from classify_numeric_int_then_float for {n}",
+            );
+        }
+    }
+
+    #[test]
+    fn atom_from_lexeme_routes_through_classify_numeric_int_then_float() {
+        // LIFTED-BOUNDARY CONTRACT ([`Atom::from_lexeme`] axis): pin
+        // that the outer decoder's result on every numeric-parseable
+        // lexeme (i64-parseable + f64-parseable subset) agrees
+        // byte-identically with a hand-rolled call to the shared
+        // primitive using the SAME parse-Option-adapter closures the
+        // caller supplies (`s.parse::<i64>().ok()` /
+        // `s.parse::<f64>().ok()`). Catches a future drift where the
+        // outer [`Atom::from_lexeme`] arm re-inlines the int-then-
+        // float cascade (a pre-lift shape) instead of delegating to
+        // [`Atom::classify_numeric_int_then_float`] — the drift
+        // surfaces HERE at the algebra-layer parity pin rather than
+        // silently as a Display→read round-trip regression at a
+        // representative int lexeme. The non-numeric-parseable
+        // fallthrough (`"foo"` → [`Atom::Symbol`]) is pinned
+        // separately at `atom_from_lexeme_routes_unknown_lexeme_to_symbol_default`;
+        // THIS pin covers the numeric-classification subset the
+        // primitive owns.
+        for s in ["0", "1", "-1", "42", "-100", "9223372036854775807"] {
+            let via_lifted = Atom::from_lexeme(s);
+            let via_primitive = Atom::classify_numeric_int_then_float(
+                || s.parse::<i64>().ok(),
+                || s.parse::<f64>().ok(),
+            )
+            .expect("int-parseable lexeme must classify through the primitive");
+            assert_eq!(
+                via_lifted, via_primitive,
+                "Atom::from_lexeme drifted from classify_numeric_int_then_float for int lexeme {s:?}",
+            );
+        }
+        for s in ["1.0", "1.5", "-2.5", "1e3", "0.1", "-0.1"] {
+            let via_lifted = Atom::from_lexeme(s);
+            let via_primitive = Atom::classify_numeric_int_then_float(
+                || s.parse::<i64>().ok(),
+                || s.parse::<f64>().ok(),
+            )
+            .expect("float-parseable lexeme must classify through the primitive");
+            assert_eq!(
+                via_lifted, via_primitive,
+                "Atom::from_lexeme drifted from classify_numeric_int_then_float for float lexeme {s:?}",
             );
         }
     }

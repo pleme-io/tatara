@@ -636,10 +636,16 @@ fn one_export_job(
         args.push(Value::from(prev.to_string()));
     }
 
-    let mut owner_refs = vec![];
-    if !uid.is_empty() {
-        owner_refs.push(tatara_process::owner_reference_json(name, uid));
-    }
+    // Route the export Job's owner-refs seed through the shared
+    // substrate composer that owns the empty-uid gate + the shared
+    // `owner_reference_json` scalar entry shape. Peer to
+    // `edges::build_owner_refs` on the same substrate primitive so a
+    // future change to the owner-refs axis — a second entry pointing
+    // at a controlling ProcessTable row, a stale-uid warning
+    // annotation, a normalization step on the uid — lands at ONE
+    // owner in tatara-process and every emit site inherits the
+    // upgrade mechanically.
+    let owner_refs = tatara_process::owner_references_json(name, uid);
 
     // Seed the outer Job's labels map through the shared substrate
     // primitive owning the 2-slot `{MANAGED_BY, PROCESS}` ownership

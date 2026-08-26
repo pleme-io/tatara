@@ -395,14 +395,20 @@ impl Edge for DnsEndpointEdge {
 
 // ─── Shared helpers ────────────────────────────────────────────────
 
+/// Compose the routing-edge `metadata.ownerReferences` slot for the
+/// enclosing [`EdgeContext`]. Delegates to the shared substrate
+/// composer [`tatara_process::owner_references_json`] which owns the
+/// empty-uid gate + the [`tatara_process::owner_reference_json`]
+/// scalar entry shape. Sibling on the routing-edge axis to
+/// [`routing_edge_labels`] + [`routing_edge_resource_name`] + the
+/// annotations-axis seeds [`crate::ssapply::ownership_annotations`] +
+/// [`crate::ssapply::ownership_labels`] — every routing edge's four
+/// metadata slots (`labels`, `annotations`, `name`, `ownerReferences`)
+/// now compose through a single owner primitive apiece, so a change
+/// to any one shape lands at ONE substrate function rather than at
+/// every `Edge` impl.
 fn build_owner_refs(ctx: &EdgeContext<'_>) -> Vec<Value> {
-    if ctx.process_uid.is_empty() {
-        return vec![];
-    }
-    vec![tatara_process::owner_reference_json(
-        ctx.process_name,
-        ctx.process_uid,
-    )]
+    tatara_process::owner_references_json(ctx.process_name, ctx.process_uid)
 }
 
 #[cfg(test)]

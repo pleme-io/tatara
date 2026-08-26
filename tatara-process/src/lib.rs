@@ -164,6 +164,68 @@ pub fn owner_reference_json(name: &str, uid: &str) -> serde_json::Value {
     })
 }
 
+/// Substrate-primitive builder for a Process-owned resource's
+/// **`metadata.ownerReferences` array** — the empty-uid-gated,
+/// single-entry `Vec<Value>` every emit site that lacks a fully
+/// materialized [`crate::prelude::Process`] (i.e. every site that
+/// works from a bare `(name, uid)` pair rather than routing through
+/// [`ssapply::build_owner_reference`](../tatara_reconciler/ssapply/fn.build_owner_reference.html)'s
+/// anyhow-guarded unwrap) hand-composed by wrapping
+/// [`owner_reference_json`] in a `Vec::new()` + `is_empty` gate on
+/// the `uid` slot.
+///
+/// The `uid.is_empty()` gate encodes the invariant every caller
+/// already enforced: a Process pre-metadata (fixtured in tests, or
+/// caught mid-Forking before the API server has stamped a `uid`) has
+/// no admissible owner reference to point at, so the emit site
+/// stamps `metadata.ownerReferences: []` rather than an
+/// owner-referenceless resource pointing at a placeholder uid the K8s
+/// GC would silently ignore. Post-lift the gate lives at ONE
+/// primitive so a regression that inlined an owner reference for
+/// an empty uid — which the API server accepts and quietly detaches
+/// from cascade-delete — surfaces at THIS primitive's pin rather
+/// than as an operator-visible ownerless resource after apply.
+///
+/// Pre-lift the 3-line `let mut owner_refs = vec![]; if
+/// !uid.is_empty() { owner_refs.push(owner_reference_json(name,
+/// uid)); }` incantation was hand-authored at TWO sites past the
+/// ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold in
+/// `tatara-reconciler`, each restating the same gated composition:
+/// * `edges::build_owner_refs` — the shared owner-refs builder both
+///   `IngressEdge` + `DnsEndpointEdge` route through, sourcing
+///   `(process_name, process_uid)` from the [`crate::edges::EdgeContext`].
+/// * `render::one_export_job` — the export Job's owner-refs seed,
+///   sourcing `(name, uid)` from the [`crate::prelude::Process`]
+///   `render_export_jobs` threaded in.
+///
+/// Post-lift both callsites read `owner_references_json(name, uid)`.
+/// A future addition — e.g. a second owner-reference slot naming a
+/// controlling ProcessTable entry, a policy that stamps a stale-uid
+/// warning annotation before returning empty, or a normalization
+/// that strips a cluster-prefix off the uid — lands at ONE
+/// substrate function here and every emit site inherits the upgrade
+/// mechanically. The [`ssapply::build_owner_reference`] path (which
+/// works from a materialized [`crate::prelude::Process`] and errors
+/// on absent `metadata.uid`) is a peer, not a lift candidate: its
+/// contract is "the K8s API server assigned a uid, so refuse to
+/// SSA-apply resources whose owner cannot be materialized", while
+/// this primitive's contract is "the caller has an optional-uid
+/// posture; emit `[]` when the uid is absent". The two shapes
+/// partition the input space at the "is the enclosing scope
+/// obligated to produce a materialized Process reference" axis.
+///
+/// The 2-arg `(&str, &str)` signature accepts both the
+/// `EdgeContext`-sourced `(&str, &str)` slice shape and the
+/// `render_export_jobs`-owned `(name: &str, uid: &str)` local shape
+/// without widening — matches every current callsite.
+pub fn owner_references_json(name: &str, uid: &str) -> Vec<serde_json::Value> {
+    if uid.is_empty() {
+        vec![]
+    } else {
+        vec![owner_reference_json(name, uid)]
+    }
+}
+
 /// Annotation keys the reconciler reads/writes on owned FluxCD resources.
 pub mod annotations {
     pub const MANAGED_BY: &str = "tatara.pleme.io/managed-by";
@@ -239,7 +301,9 @@ mod owner_reference_tests {
     //! already carried TWO different `apiVersion` spellings — a
     //! composed `format!("{}/{}", GROUP, VERSION)` at two sites and
     //! the frozen literal `"tatara.pleme.io/v1alpha1"` at the third).
-    use super::{api_version, owner_reference_json, GROUP, PROCESS_KIND, VERSION};
+    use super::{
+        api_version, owner_reference_json, owner_references_json, GROUP, PROCESS_KIND, VERSION,
+    };
     use serde_json::json;
 
     #[test]
@@ -336,17 +400,168 @@ mod owner_reference_tests {
     #[test]
     fn owner_reference_json_preserves_empty_name_and_uid_bytewise() {
         // The primitive does not guard against empty inputs — its
-        // callers pre-lift did the empty-check upstream
-        // (`render.rs` guards `!uid.is_empty()`,
-        // `edges.rs::build_owner_refs` returns `vec![]` on empty
-        // uid, `ssapply.rs::build_owner_reference` unwraps a
-        // required `metadata.uid` via anyhow). The primitive owns
+        // callers pre-lift did the empty-check upstream (both the
+        // `edges.rs::build_owner_refs` and `render.rs::one_export_job`
+        // sites gated on `!uid.is_empty()` before calling this composer,
+        // and both now route through `owner_references_json` below;
+        // `ssapply.rs::build_owner_reference` unwraps a required
+        // `metadata.uid` via anyhow). The scalar composer owns
         // shape composition, not admission control; a downstream
         // rename that wants strict input validation lands as a
         // peer, not a change to the composer's contract.
         let v = owner_reference_json("", "");
         assert_eq!(v["name"], "");
         assert_eq!(v["uid"], "");
+    }
+
+    // ─── owner_references_json substrate pins ────────────────────────
+    //
+    // The 3-line `let mut owner_refs = vec![]; if !uid.is_empty()
+    // { owner_refs.push(owner_reference_json(name, uid)); }` gate was
+    // hand-authored at TWO sites in `tatara-reconciler`
+    // (`edges::build_owner_refs` + `render::one_export_job`) before
+    // this primitive existed, each restating the same optional-uid
+    // posture that emits `[]` when the caller lacks a K8s-assigned
+    // uid to point owners at. These pins bind the primitive at
+    // fail-before-pass-after granularity so a regression that
+    // inlined an owner reference for an empty uid — silently
+    // detaching the resource from cascade-delete — surfaces HERE
+    // rather than as an operator-visible ownerless resource after
+    // apply, and a regression that added an owner reference of the
+    // wrong SHAPE (a peer of `owner_reference_json` that swapped a
+    // slot) surfaces via the composed-shape pin below rather than
+    // as silent drift at every downstream emit site.
+
+    #[test]
+    fn owner_references_json_emits_single_entry_when_uid_present() {
+        // The primary shape: a caller with a materialized uid gets
+        // exactly one owner reference back — the pre-lift 3-line
+        // `vec![]` + `push` gate collapses to this ONE call, and
+        // the returned array is a direct-drop `ownerReferences`
+        // slot value at every callsite.
+        let refs = owner_references_json("demo-app", "abc-uid");
+        assert_eq!(refs.len(), 1);
+        assert_eq!(refs[0]["kind"], PROCESS_KIND);
+        assert_eq!(refs[0]["name"], "demo-app");
+        assert_eq!(refs[0]["uid"], "abc-uid");
+        // controller + blockOwnerDeletion routed through the scalar
+        // composer — a regression that hand-composed the vec entry
+        // rather than delegating would flip one of these booleans.
+        assert_eq!(refs[0]["controller"], true);
+        assert_eq!(refs[0]["blockOwnerDeletion"], true);
+    }
+
+    #[test]
+    fn owner_references_json_emits_empty_when_uid_empty() {
+        // The load-bearing gate — a pre-metadata Process (fixtured in
+        // tests, or caught mid-Forking) has no admissible owner
+        // reference to point at. Post-lift the gate lives at ONE
+        // primitive so every emit site stamps `[]` uniformly rather
+        // than one site accidentally emitting a placeholder-uid
+        // owner reference the K8s GC would quietly detach from
+        // cascade-delete.
+        let refs = owner_references_json("demo-app", "");
+        assert!(
+            refs.is_empty(),
+            "empty uid must produce zero owner references, not a placeholder-uid entry"
+        );
+    }
+
+    #[test]
+    fn owner_references_json_gates_on_uid_not_name() {
+        // The gate axis is `uid`, not `name` — a Process with a
+        // non-empty name but no uid still emits `[]` (the pre-metadata
+        // shape), while a Process with a non-empty uid emits ONE
+        // entry even when the name slot is empty (matching the
+        // scalar composer's admission-control-free contract). Pin
+        // both cross-diagonal combinations so a regression that
+        // swapped the gate axis surfaces HERE rather than at every
+        // downstream owner-refs consumer.
+        assert!(
+            owner_references_json("has-name", "").is_empty(),
+            "empty uid gates to []; name presence is irrelevant"
+        );
+        let refs = owner_references_json("", "has-uid");
+        assert_eq!(
+            refs.len(),
+            1,
+            "empty name but present uid still emits one entry (name is not the gate)"
+        );
+        assert_eq!(refs[0]["name"], "");
+        assert_eq!(refs[0]["uid"], "has-uid");
+    }
+
+    #[test]
+    fn owner_references_json_matches_hand_authored_pre_lift_bytewise() {
+        // Byte-identical parity with the exact pre-lift 3-line
+        // `let mut owner_refs = vec![]; if !uid.is_empty() {
+        // owner_refs.push(owner_reference_json(name, uid)); }` gate
+        // across the two axis combinations every callsite plausibly
+        // encounters. A regression that reordered the two branches,
+        // dropped the gate, or reshaped the vec composition surfaces
+        // HERE rather than at every downstream `ownerReferences`
+        // slot pinned across `edges.rs` + `render.rs` tests.
+        for (name, uid) in [
+            ("demo-app", "uid-abc"),
+            ("demo-app", ""),
+            ("", "uid-abc"),
+            ("", ""),
+        ] {
+            let via_primitive = owner_references_json(name, uid);
+
+            // The pre-lift 3-line block, byte-for-byte.
+            let mut hand_authored: Vec<serde_json::Value> = vec![];
+            if !uid.is_empty() {
+                hand_authored.push(owner_reference_json(name, uid));
+            }
+
+            assert_eq!(
+                via_primitive, hand_authored,
+                "owner_references_json must be byte-identical to the pre-lift 3-line gate on ({name:?}, {uid:?})"
+            );
+        }
+    }
+
+    #[test]
+    fn owner_references_json_interpolates_cleanly_as_owner_refs_slot() {
+        // Both callsites drop the returned vec directly under a
+        // `"ownerReferences"` key inside a `json!({...})` block. Pin
+        // the interop shape: a JSON-macro-wrapped Value carries the
+        // primitive's output as a JSON array with the exact 6-slot
+        // entries at each index. A regression that returned a
+        // non-array (e.g. a single Value on the one-entry path,
+        // requiring per-site vec-wrapping) surfaces HERE rather than
+        // as a broken `metadata.ownerReferences` slot on every
+        // emitted Ingress / DNSEndpoint / export Job.
+        let refs = owner_references_json("demo-app", "abc-uid");
+        let wrapped = json!({
+            "metadata": {
+                "name": "resource",
+                "ownerReferences": refs,
+            },
+        });
+        let owner_refs = &wrapped["metadata"]["ownerReferences"];
+        assert!(
+            owner_refs.is_array(),
+            "ownerReferences must land as a JSON array"
+        );
+        assert_eq!(owner_refs.as_array().unwrap().len(), 1);
+        assert_eq!(owner_refs[0]["kind"], PROCESS_KIND);
+
+        // And the empty-uid path lands as an EMPTY array, not a
+        // missing key or a null — matches the K8s API server's
+        // expectation that the slot is either an array of entries
+        // or absent, never a null.
+        let empty_refs = owner_references_json("demo-app", "");
+        let wrapped_empty = json!({
+            "metadata": {
+                "name": "resource",
+                "ownerReferences": empty_refs,
+            },
+        });
+        let owner_refs_empty = &wrapped_empty["metadata"]["ownerReferences"];
+        assert!(owner_refs_empty.is_array());
+        assert!(owner_refs_empty.as_array().unwrap().is_empty());
     }
 }
 

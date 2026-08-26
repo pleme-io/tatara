@@ -122,21 +122,15 @@ pub fn load_and_watch<F>(
 where
     F: Fn(&EphemeralDefaults) + Send + Sync + 'static,
 {
-    shikumi::ConfigStore::load_and_watch(
-        path,
-        "TATARA_RECONCILER_EPHEMERAL",
-        on_reload,
-    )
-    .map_err(|e| LoadError::Shikumi(e.to_string()))
+    shikumi::ConfigStore::load_and_watch(path, "TATARA_RECONCILER_EPHEMERAL", on_reload)
+        .map_err(|e| LoadError::Shikumi(e.to_string()))
 }
 
 /// One-shot load (no watching) — useful for tests and short-lived CLIs.
 pub fn load(path: &Path) -> std::result::Result<Arc<EphemeralDefaults>, LoadError> {
-    let store = shikumi::ConfigStore::<EphemeralDefaults>::load(
-        path,
-        "TATARA_RECONCILER_EPHEMERAL",
-    )
-    .map_err(|e| LoadError::Shikumi(e.to_string()))?;
+    let store =
+        shikumi::ConfigStore::<EphemeralDefaults>::load(path, "TATARA_RECONCILER_EPHEMERAL")
+            .map_err(|e| LoadError::Shikumi(e.to_string()))?;
     Ok(store.get().clone())
 }
 
@@ -162,8 +156,7 @@ mod tests {
             max_concurrent_per_cluster: 8,
             registry: "ghcr.io/example/charts".into(),
             root_ca_name: "homelab-root".into(),
-            default_chart_ref:
-                "oci://ghcr.io/pleme-io/charts/lareira-demo-app".into(),
+            default_chart_ref: "oci://ghcr.io/pleme-io/charts/lareira-demo-app".into(),
             emit_oci_repository: false,
         };
         let yaml = serde_yaml::to_string(&d).unwrap();

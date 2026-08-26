@@ -111,15 +111,9 @@ fn ephemeral_lisp_form_round_trips_through_full_pipeline() {
     assert_eq!(hr["spec"]["chartRef"]["name"], oci["metadata"]["name"]);
 
     // Profile injected into values.
-    assert_eq!(
-        hr["spec"]["values"]["profile"],
-        "all-in-one"
-    );
+    assert_eq!(hr["spec"]["values"]["profile"], "all-in-one");
     // values_overlay carried through untouched (deeply).
-    assert_eq!(
-        hr["spec"]["values"]["cluster"]["name"],
-        "ephemeral-test-01"
-    );
+    assert_eq!(hr["spec"]["values"]["cluster"]["name"], "ephemeral-test-01");
     assert_eq!(
         hr["spec"]["values"]["data"]["mysql"]["persistence"]["enabled"],
         false

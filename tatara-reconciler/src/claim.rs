@@ -30,8 +30,7 @@ use tatara_process::table::ClaimRecord;
 /// Reconverging/Releasing/Exiting/Failed/Zombie/Reaped) is
 /// disqualified: traffic must not be routed to a Process that isn't
 /// answering yet or is on the way out.
-pub const LIVE_PHASES_FOR_CLAIM: &[ProcessPhase] =
-    &[ProcessPhase::Running, ProcessPhase::Attested];
+pub const LIVE_PHASES_FOR_CLAIM: &[ProcessPhase] = &[ProcessPhase::Running, ProcessPhase::Attested];
 
 /// One arbitration outcome for a single `(cluster, app)` key.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -163,9 +162,7 @@ fn best_candidate<'a, 'b>(live: &'b [&'a Candidate<'a>]) -> &'a Candidate<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tatara_process::classification::{
-        Classification, ConvergencePointType, SubstrateType,
-    };
+    use tatara_process::classification::{Classification, ConvergencePointType, SubstrateType};
     use tatara_process::crd::{ProcessSpec, ProcessStatus};
 
     fn candidate<'a>(

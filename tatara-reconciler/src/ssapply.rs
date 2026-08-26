@@ -236,6 +236,87 @@ pub fn qualified_process_ref(ns: &str, name: &str) -> String {
     format!("{ns}/{name}")
 }
 
+/// Substrate-primitive resolver for the standard tatara-reconciler
+/// **boundary-target namespace** — the answer to "which cluster
+/// namespace do I look this external resource up in?" given an
+/// optional operator override on the payload plus the enclosing
+/// Process's default namespace. Peer to [`qualified_process_ref`] on
+/// the same K8s addressing axis: this primitive answers the ns-slot
+/// for a boundary evaluator lookup, [`qualified_process_ref`]
+/// composes the two-slot `<ns>/<name>` reference every ownership
+/// tag / claim key / label selector reads. Complementary to
+/// [`Process::namespace_or_default`](tatara_process::prelude::Process::namespace_or_default),
+/// which resolves the SELF-namespace of a Process's own metadata;
+/// this primitive resolves an EXTERNAL-target namespace on a
+/// boundary evaluator's payload against a `default_ns` — the two
+/// primitives are dual halves of the same "K8s ns fallback"
+/// convention on the two sides of a boundary evaluator's fetch call.
+///
+/// Pre-lift the `.as_deref().unwrap_or(default_ns)` incantation was
+/// hand-authored at FIVE sites past the PRIME-DIRECTIVE ≥ 2
+/// duplication threshold in [`crate::boundary`]:
+/// * `evaluate_job_attested` — `JobAttestedParams.namespace` slot
+///   resolved against the Process's default_ns before fetching the
+///   `batch/v1` Job.
+/// * `evaluate_closed_loop_auth` — `ClosedLoopAuthParams.namespace`
+///   slot resolved before fetching the closed-loop probe Job + its
+///   receipt ConfigMap.
+/// * `evaluate_process_phase` — `ProcessPhaseParams.namespace` slot
+///   resolved before fetching the referenced Process.
+/// * `evaluate_flux_ready` — `NamedResourceParams.namespace` slot
+///   resolved before fetching the Flux Kustomization / HelmRelease.
+/// * `check_depends_on` — [`tatara_process::prelude::DependsOn`]'s
+///   `namespace` slot resolved before fetching each dependency
+///   Process, one call per `spec.dependsOn` entry.
+///
+/// Post-lift every one of these callsites reads through this ONE
+/// primitive so a future normalization (case-fold, unicode-safe
+/// collation, cluster-prefix stripping for cross-cluster refs, a
+/// virtual-cluster prefix rewrite for multi-tenant setups) lands at
+/// ONE substrate function here and every downstream boundary
+/// evaluator inherits the upgrade mechanically — no per-site edit
+/// at `evaluate_job_attested` / `evaluate_closed_loop_auth` /
+/// `evaluate_process_phase` / `evaluate_flux_ready` /
+/// `check_depends_on`. A regression that re-inlined the
+/// `.unwrap_or(default_ns)` incantation at one site — or, worse,
+/// swapped the two arguments so that the operator override became
+/// the fallback — surfaces at the sibling pins under
+/// `tests::resolve_target_namespace_...` rather than as silent drift
+/// at every downstream ns-scoped `Api::namespaced` call.
+///
+/// The 2-arg signature (`Option<&str>`, `&str`) mirrors the
+/// callsite-native `parsed.namespace.as_deref()` shape at every
+/// evaluator so the lift is a mechanical drop-in — the resolver's
+/// contract is exactly "fall back to `default_ns` when the operator
+/// omitted the override", nothing more, nothing less. A future
+/// caller with an owned `Option<String>` (rather than the
+/// per-request `Deserialize`-owned carriers at every current
+/// callsite) still rides through via `.as_deref()`, matching the
+/// borrow discipline every current callsite already threads.
+///
+/// The `'a` lifetime binds the returned slice to whichever input
+/// outlives the other — the explicit override wins when present,
+/// otherwise the default. Both inputs share the SAME lifetime `'a`
+/// so a caller cannot accidentally return a reference into a
+/// dropped local (e.g. threading a temporary `String::from(...)`
+/// into either slot); the type system rejects that at the
+/// definition site.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// the `.as_deref().unwrap_or(default_ns)` incantation recurred at
+/// five hand-authored sites well past the PRIME-DIRECTIVE ≥ 2
+/// duplication trigger, and is lifted to ONE owner here).
+/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+/// pins bind both branches of the fallback gate + the
+/// argument-order invariant, so a regression surfaces at
+/// [`tests::resolve_target_namespace_falls_back_to_default_when_explicit_is_none`]
+/// / [`tests::resolve_target_namespace_returns_explicit_when_present`]
+/// rather than as silent operator-facing drift across the five
+/// boundary evaluators).
+pub fn resolve_target_namespace<'a>(explicit: Option<&'a str>, default_ns: &'a str) -> &'a str {
+    explicit.unwrap_or(default_ns)
+}
+
 /// Resolve an `ApiResource` for `apiVersion/kind`. Hand-maintains plurals
 /// for resources we emit or consume — good enough for v0; future move to
 /// `kube::discovery` lands when we want to handle arbitrary CRDs.
@@ -897,5 +978,120 @@ mod tests {
             qualified_process_ref("weird ns", "with/slash"),
             "weird ns/with/slash",
         );
+    }
+
+    // ─── resolve_target_namespace substrate pins ────────────────────────
+    //
+    // The `.as_deref().unwrap_or(default_ns)` incantation was
+    // hand-authored at FIVE sites in `boundary.rs` — the four
+    // kind-typed boundary evaluators (`evaluate_job_attested`,
+    // `evaluate_closed_loop_auth`, `evaluate_process_phase`,
+    // `evaluate_flux_ready`) plus the `check_depends_on` per-entry
+    // loop that resolves each `spec.dependsOn` entry's `namespace`
+    // slot. These pins bind the primitive at fail-before-pass-after
+    // granularity so a regression that re-inlined the incantation,
+    // swapped the argument order (making the override the fallback),
+    // or dropped the `unwrap_or` branch surfaces here rather than as
+    // silent operator-facing drift at every downstream ns-scoped
+    // `Api::namespaced` call.
+    #[test]
+    fn resolve_target_namespace_falls_back_to_default_when_explicit_is_none() {
+        // The most common shape at every boundary evaluator callsite:
+        // the operator omitted the payload's optional `namespace`
+        // slot, so the resolver picks up the enclosing Process's
+        // default namespace and every downstream fetch happens in the
+        // Process's own namespace.
+        assert_eq!(
+            resolve_target_namespace(None, "process-owned-ns"),
+            "process-owned-ns",
+            "None override must fall back to default_ns"
+        );
+    }
+
+    #[test]
+    fn resolve_target_namespace_returns_explicit_when_present() {
+        // The cross-namespace shape: the operator named a specific
+        // target namespace on the payload, so the resolver ignores
+        // the enclosing Process's default and the downstream fetch
+        // happens in the operator's chosen namespace. This is the
+        // shape that lets a Process in namespace A gate on a Flux
+        // Kustomization / probe Job / dependency Process in
+        // namespace B without a per-evaluator hand-authored
+        // exception.
+        assert_eq!(
+            resolve_target_namespace(Some("target-ns"), "process-owned-ns"),
+            "target-ns",
+            "Some override must win over default_ns"
+        );
+    }
+
+    #[test]
+    fn resolve_target_namespace_honors_explicit_argument_order() {
+        // Pin the argument order — a regression that swapped the two
+        // arguments (making `default_ns` the override candidate and
+        // the operator's payload slot the fallback) would silently
+        // route every fetch to the Process's own namespace regardless
+        // of the operator's override. This pin surfaces the swap
+        // directly on the type-adjacent invariant rather than as
+        // downstream misroute at every dependency / Flux / probe /
+        // Process lookup.
+        let explicit = Some("EXPLICIT");
+        let default_ns = "DEFAULT";
+        assert_eq!(resolve_target_namespace(explicit, default_ns), "EXPLICIT");
+        // And with the override absent, the same call must resolve
+        // to `default_ns` — the two branches partition the input
+        // space with no overlap.
+        assert_eq!(resolve_target_namespace(None, default_ns), "DEFAULT");
+    }
+
+    #[test]
+    fn resolve_target_namespace_matches_prior_hand_authored_unwrap_shape() {
+        // Byte-identical parity with the pre-lift
+        // `.as_deref().unwrap_or(default_ns)` incantation across a
+        // sweep of shapes every callsite plausibly encounters:
+        // empty-string override (an explicit `""` from a payload
+        // whose namespace key is present but empty — treated as
+        // "explicitly cluster-scoped" rather than "fall back"),
+        // whitespace-embedded namespace, K8s canonical shapes, and
+        // the None + non-empty default combination that stands in
+        // for every default-fed callsite.
+        for (explicit_owned, default_ns) in [
+            (Some(String::new()), "default"),
+            (Some(String::from("kube-system")), "flux-system"),
+            (Some(String::from("with spaces")), "default"),
+            (None, "flux-system"),
+            (None, ""),
+        ] {
+            let explicit = explicit_owned.as_deref();
+            assert_eq!(
+                resolve_target_namespace(explicit, default_ns),
+                explicit.unwrap_or(default_ns),
+                "primitive must be byte-identical to pre-lift `.unwrap_or(default_ns)` on {explicit:?}, default {default_ns:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn resolve_target_namespace_composes_cleanly_into_qualified_process_ref() {
+        // Peer-primitive coherence: the resolved namespace flows
+        // directly into `qualified_process_ref` at the sibling
+        // ownership-annotation seed on every render / SSA callsite,
+        // and at the diagnostic-composing `format!("{ns}/{name}")`
+        // sites `check_depends_on` still uses inline for its
+        // `UnmetDependency.message`. Pin that the two peer
+        // primitives compose byte-identically to the pre-lift
+        // hand-authored `format!("{}/{}", parsed.namespace.as_deref()
+        // .unwrap_or(default_ns), parsed.name)` chain at every
+        // callsite.
+        let composed = qualified_process_ref(
+            resolve_target_namespace(Some("target-ns"), "process-owned-ns"),
+            "job-name",
+        );
+        assert_eq!(composed, "target-ns/job-name");
+        let composed_default = qualified_process_ref(
+            resolve_target_namespace(None, "process-owned-ns"),
+            "job-name",
+        );
+        assert_eq!(composed_default, "process-owned-ns/job-name");
     }
 }

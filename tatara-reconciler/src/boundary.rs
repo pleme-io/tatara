@@ -242,7 +242,7 @@ async fn evaluate_job_attested(
         Ok(p) => p,
         Err(unk) => return Ok(unk),
     };
-    let ns = parsed.namespace.as_deref().unwrap_or(default_ns);
+    let ns = ssapply::resolve_target_namespace(parsed.namespace.as_deref(), default_ns);
     if let Err(unsat) = require_succeeded_job(client.clone(), ns, &parsed.name, "Job").await? {
         return Ok(unsat);
     }
@@ -301,7 +301,7 @@ async fn evaluate_closed_loop_auth(
         Ok(p) => p,
         Err(unk) => return Ok(unk),
     };
-    let ns = parsed.namespace.as_deref().unwrap_or(default_ns);
+    let ns = ssapply::resolve_target_namespace(parsed.namespace.as_deref(), default_ns);
     let process_name = process
         .metadata
         .name
@@ -625,7 +625,7 @@ async fn evaluate_process_phase(
         Ok(p) => p,
         Err(unk) => return Ok(unk),
     };
-    let ns = parsed.namespace.as_deref().unwrap_or(default_ns);
+    let ns = ssapply::resolve_target_namespace(parsed.namespace.as_deref(), default_ns);
     let api: Api<Process> = Api::namespaced(client, ns);
     let target = match api
         .get_opt(&parsed.process_ref)
@@ -666,7 +666,7 @@ async fn evaluate_flux_ready(
         Ok(p) => p,
         Err(unk) => return Ok(unk),
     };
-    let ns = parsed.namespace.as_deref().unwrap_or(default_ns);
+    let ns = ssapply::resolve_target_namespace(parsed.namespace.as_deref(), default_ns);
     let obj = ssapply::fetch(client, ns, api_version, kind, &parsed.name)
         .await
         .map_err(|e| anyhow!("fetch {kind} {ns}/{}: {e}", parsed.name))?;
@@ -729,7 +729,7 @@ pub async fn check_depends_on(client: Client, process: &Process) -> Result<Vec<U
     let mut unmet = Vec::new();
 
     for dep in &process.spec.depends_on {
-        let ns = dep.namespace.as_deref().unwrap_or(default_ns);
+        let ns = ssapply::resolve_target_namespace(dep.namespace.as_deref(), default_ns);
         let required: ProcessPhase = dep.must_reach.into();
         let api: Api<Process> = Api::namespaced(client.clone(), ns);
         match api.get_opt(&dep.name).await {

@@ -326,6 +326,106 @@ pub struct AplicacaoIntent {
     pub install_timeout: Option<String>,
 }
 
+/// Workspace-wide default for the `timeout` slot on a Flux
+/// `HelmRelease.spec.{install,upgrade}` block, applied when the
+/// operator did not populate [`AplicacaoIntent::install_timeout`].
+/// Load-bearing on the reconciler's Helm-driven RENDER surface —
+/// [`AplicacaoIntent::helm_lifecycle_policy`] substitutes this exact
+/// string, and the reconciler's `render_aplicacao` byte-installs
+/// the resulting policy into both install AND upgrade slots.
+pub const HELM_LIFECYCLE_DEFAULT_TIMEOUT: &str = "25m";
+
+/// Workspace-wide default for the `remediation.retries` slot on a
+/// Flux `HelmRelease.spec.{install,upgrade}` block. Constant across
+/// both slots today; a future two-slot split (e.g. distinct retry
+/// budgets for a first install vs a rolling upgrade) lands as two
+/// consts here + a two-slot [`HelmLifecyclePolicy`] shape, not at
+/// the render callsite.
+pub const HELM_LIFECYCLE_DEFAULT_RETRIES: u8 = 3;
+
+/// Typed shape of one Flux `HelmRelease.spec.{install,upgrade}` slot
+/// — the substrate's projection of the "how long may Helm take, and
+/// how many retries after a failed run" contract every Helm-driven
+/// Process publishes on both slots. Pre-lift the reconciler's
+/// `render_aplicacao` hand-authored the shape via TWO adjacent
+/// identical `json!({"timeout": …, "remediation": {"retries": …}})`
+/// blocks past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold
+/// — one for install, one for upgrade, each restating the same
+/// three-slot literal with the same `Option::unwrap_or_else` fallback
+/// on the timeout. Post-lift the shape lives at ONE named typed
+/// struct here whose serde projection matches Flux HelmRelease v2's
+/// `install` / `upgrade` block schema byte-identically, and the
+/// reconciler composes both slots off ONE
+/// [`AplicacaoIntent::helm_lifecycle_policy`] call.
+///
+/// A future addition — a `wait: bool` slot, a `crds:
+/// CreateReplace` slot, a `disableOpenAPIValidation: bool` slot,
+/// a two-slot split that lets install carry a longer timeout than
+/// upgrade — lands at ONE struct here and every downstream
+/// consumer (the render surface, snapshot tests, an operator-
+/// facing dashboard column, a future validating webhook) inherits
+/// the upgrade mechanically.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct HelmLifecyclePolicy {
+    /// Chart-controller timeout (`humantime` duration). Set from
+    /// [`AplicacaoIntent::install_timeout`] when present; otherwise
+    /// [`HELM_LIFECYCLE_DEFAULT_TIMEOUT`].
+    pub timeout: String,
+    /// Retry budget for the slot.
+    pub remediation: HelmRemediationPolicy,
+}
+
+/// Typed shape of one `HelmLifecyclePolicy::remediation` slot.
+/// A named struct rather than an inline `{retries: u8}` map so
+/// downstream consumers can talk about "one Helm remediation
+/// policy" as a nameable handle rather than an unnamed nested
+/// object.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct HelmRemediationPolicy {
+    /// Number of times Flux's helm-controller retries a failed
+    /// install / upgrade before surfacing the failure to the parent
+    /// Process's boundary evaluator.
+    pub retries: u8,
+}
+
+impl HelmLifecyclePolicy {
+    /// The workspace-wide default policy — used when the operator
+    /// omitted [`AplicacaoIntent::install_timeout`]. Named projection
+    /// of the two `HELM_LIFECYCLE_DEFAULT_*` consts so a future
+    /// consumer wanting "the substrate's fresh-out-of-the-box Helm
+    /// lifecycle policy" pulls the pair through ONE call rather than
+    /// composing the struct by hand at every callsite.
+    pub fn workspace_default() -> Self {
+        Self {
+            timeout: HELM_LIFECYCLE_DEFAULT_TIMEOUT.to_string(),
+            remediation: HelmRemediationPolicy {
+                retries: HELM_LIFECYCLE_DEFAULT_RETRIES,
+            },
+        }
+    }
+}
+
+impl AplicacaoIntent {
+    /// Derive the Flux `HelmRelease.spec.{install,upgrade}` policy
+    /// this intent publishes on BOTH slots. Pre-lift the reconciler's
+    /// `render_aplicacao` restated the shape by hand via two adjacent
+    /// identical `json!` blocks (install and upgrade); post-lift both
+    /// slots ride through this ONE composer. A future two-slot split
+    /// (distinct install vs upgrade policies) lands as a two-method
+    /// pair here, not at the render callsite.
+    pub fn helm_lifecycle_policy(&self) -> HelmLifecyclePolicy {
+        HelmLifecyclePolicy {
+            timeout: self
+                .install_timeout
+                .clone()
+                .unwrap_or_else(|| HELM_LIFECYCLE_DEFAULT_TIMEOUT.to_string()),
+            remediation: HelmRemediationPolicy {
+                retries: HELM_LIFECYCLE_DEFAULT_RETRIES,
+            },
+        }
+    }
+}
+
 /// Container intent — direct Deployment/StatefulSet/etc, no Helm.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -938,5 +1038,123 @@ mod tests {
             ..Intent::default()
         };
         assert_eq!(i.variant().unwrap_err(), IntentError::Ambiguous);
+    }
+
+    // ── Helm lifecycle policy — install / upgrade slot substrate ────
+
+    fn helm_intent(install_timeout: Option<&str>) -> AplicacaoIntent {
+        AplicacaoIntent {
+            chart_ref: "oci://ghcr.io/pleme-io/charts/lareira-demo-app".into(),
+            version: "0.5.5".into(),
+            profile: String::new(),
+            values_overlay: serde_json::Value::Null,
+            release_name: None,
+            target_namespace: None,
+            install_timeout: install_timeout.map(str::to_string),
+        }
+    }
+
+    /// The workspace-wide default timeout const is pinned to `25m`.
+    /// A regression that renamed it to any other duration would
+    /// silently misroute every Helm-driven Process's default retry
+    /// budget, so pin the byte-exact spelling here rather than at
+    /// every consumer's own callsite.
+    #[test]
+    fn helm_lifecycle_default_timeout_is_pinned_to_25m() {
+        assert_eq!(HELM_LIFECYCLE_DEFAULT_TIMEOUT, "25m");
+    }
+
+    /// The workspace-wide default retries const is pinned to `3`.
+    /// Peer to the `_timeout` pin; same rationale.
+    #[test]
+    fn helm_lifecycle_default_retries_is_pinned_to_three() {
+        assert_eq!(HELM_LIFECYCLE_DEFAULT_RETRIES, 3);
+    }
+
+    /// Fallback branch of the primitive: an intent that omitted
+    /// `install_timeout` picks up the workspace-wide default
+    /// (`25m` + retries `3`). Pin binds the "no override" shape
+    /// every render / snapshot / dashboard consumer sees today.
+    #[test]
+    fn helm_lifecycle_policy_defaults_when_install_timeout_is_none() {
+        let policy = helm_intent(None).helm_lifecycle_policy();
+        assert_eq!(policy.timeout, HELM_LIFECYCLE_DEFAULT_TIMEOUT);
+        assert_eq!(policy.remediation.retries, HELM_LIFECYCLE_DEFAULT_RETRIES);
+    }
+
+    /// Override branch of the primitive: when the operator populated
+    /// `install_timeout`, the primitive substitutes that string
+    /// verbatim (no normalization, no trimming) — the reconciler
+    /// hands the exact `humantime` shape to Flux, and any parse
+    /// error surfaces from the chart-controller, not from here.
+    #[test]
+    fn helm_lifecycle_policy_uses_install_timeout_when_present() {
+        for shape in ["10m", "1h30m", "5s", "25m", "0s"] {
+            let policy = helm_intent(Some(shape)).helm_lifecycle_policy();
+            assert_eq!(
+                policy.timeout, shape,
+                "override shape {shape} not substituted verbatim"
+            );
+            // Retries stay at the workspace default regardless of timeout.
+            assert_eq!(policy.remediation.retries, HELM_LIFECYCLE_DEFAULT_RETRIES);
+        }
+    }
+
+    /// Coherence axis: the retries slot is invariant across every
+    /// timeout shape the operator might publish — a regression that
+    /// coupled the two slots (e.g. "when timeout is short, retry
+    /// more") surfaces here rather than at every consumer.
+    #[test]
+    fn helm_lifecycle_policy_retries_are_invariant_across_timeout_shapes() {
+        let seen: std::collections::BTreeSet<u8> = [None, Some("1m"), Some("25m"), Some("2h")]
+            .into_iter()
+            .map(|t| helm_intent(t).helm_lifecycle_policy().remediation.retries)
+            .collect();
+        assert_eq!(
+            seen.len(),
+            1,
+            "retries should be constant across timeout shapes"
+        );
+        assert_eq!(
+            seen.into_iter().next(),
+            Some(HELM_LIFECYCLE_DEFAULT_RETRIES)
+        );
+    }
+
+    /// Wire-shape pin: the serde projection matches Flux
+    /// `HelmRelease.spec.{install,upgrade}` v2 byte-identically —
+    /// `{"timeout": <string>, "remediation": {"retries": <int>}}`
+    /// with no extra keys, no field renames, no camelCase surprises.
+    /// A regression that added a slot to `HelmLifecyclePolicy` or
+    /// renamed one would fail here rather than as a Flux CR
+    /// rejection at every deployment.
+    #[test]
+    fn helm_lifecycle_policy_serializes_to_flux_hr_v2_install_upgrade_shape() {
+        let policy = helm_intent(Some("10m")).helm_lifecycle_policy();
+        let json = serde_json::to_value(&policy).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "timeout": "10m",
+                "remediation": { "retries": 3 },
+            }),
+        );
+    }
+
+    /// Coherence axis: `HelmLifecyclePolicy::workspace_default()`
+    /// composes byte-identically to the intent-derived policy of an
+    /// intent with `install_timeout: None` — the two paths to the
+    /// substrate default (via the `Aplicacao` intent's own resolver
+    /// vs the standalone workspace-default constructor) yield the
+    /// same shape. Binds the "workspace_default IS the fallback"
+    /// invariant so a future divergence (e.g. workspace_default
+    /// changes but the intent resolver's inline fallback does not)
+    /// surfaces here rather than as a silent drift at every render
+    /// callsite.
+    #[test]
+    fn helm_lifecycle_policy_workspace_default_matches_intent_fallback_branch() {
+        let default_policy = HelmLifecyclePolicy::workspace_default();
+        let intent_policy = helm_intent(None).helm_lifecycle_policy();
+        assert_eq!(default_policy, intent_policy);
     }
 }

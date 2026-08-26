@@ -243,18 +243,23 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
             hr_spec.insert(k.clone(), v.clone());
         }
     }
-    let install = json!({
-        "timeout": a.install_timeout.clone().unwrap_or_else(|| "25m".into()),
-        "remediation": { "retries": 3 },
-    });
-    hr_spec.insert("install".into(), install);
-    hr_spec.insert(
-        "upgrade".into(),
-        json!({
-            "timeout": a.install_timeout.clone().unwrap_or_else(|| "25m".into()),
-            "remediation": { "retries": 3 },
-        }),
-    );
+    // Flux `HelmRelease.spec.{install,upgrade}` — both slots carry
+    // BYTE-IDENTICAL policies today, derived off the enclosing
+    // `AplicacaoIntent` via the substrate primitive
+    // `AplicacaoIntent::helm_lifecycle_policy`. Pre-lift this was
+    // two adjacent hand-authored `json!({"timeout": …,
+    // "remediation": {"retries": 3}})` blocks past the ★★ PRIME-
+    // DIRECTIVE ≥ 2 duplication threshold; post-lift both slots
+    // ride through ONE typed composer on the owning intent, and
+    // a future two-slot split (distinct install vs upgrade
+    // policies, a `wait: bool` slot, a `disableOpenAPIValidation`
+    // slot) lands at the primitive's shape, not at this callsite.
+    // Pinned byte-identical here by
+    // `helmrelease_install_and_upgrade_carry_byte_identical_lifecycle_policy`.
+    let lifecycle = serde_json::to_value(a.helm_lifecycle_policy())
+        .expect("HelmLifecyclePolicy → Value never fails: plain (String, u8) struct");
+    hr_spec.insert("install".into(), lifecycle.clone());
+    hr_spec.insert("upgrade".into(), lifecycle);
     hr_spec.insert("values".into(), Value::Object(values));
 
     let helm_release = json!({
@@ -773,6 +778,48 @@ mod aplicacao_tests {
             .unwrap();
         assert_eq!(hr["spec"]["install"]["timeout"], "25m");
         assert_eq!(hr["spec"]["install"]["remediation"]["retries"], 3);
+    }
+
+    /// Substrate-primitive pin: `HelmRelease.spec.install` and
+    /// `HelmRelease.spec.upgrade` carry byte-identical policies AND
+    /// match `serde_json::to_value(a.helm_lifecycle_policy())`
+    /// verbatim. Pre-lift the reconciler hand-authored TWO adjacent
+    /// identical `json!` blocks past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold — a regression that drifted one slot's
+    /// timeout / retries away from the other, or that stopped
+    /// routing through
+    /// [`tatara_process::prelude::AplicacaoIntent::helm_lifecycle_policy`],
+    /// would surface here rather than as an operator-observed slot
+    /// asymmetry at every deployment. Sweeps both the fallback branch
+    /// (`install_timeout: None` → `25m`) and the override branch
+    /// (`install_timeout: Some("10m")`) so the pin binds both
+    /// arms of the resolver at ONE test.
+    #[test]
+    fn helmrelease_install_and_upgrade_carry_byte_identical_lifecycle_policy() {
+        for override_timeout in [None, Some("10m"), Some("1h30m")] {
+            let mut a = demo_intent();
+            a.install_timeout = override_timeout.map(str::to_string);
+            let (resources, _) = render_aplicacao("p", "ns", &a);
+            let hr = resources
+                .iter()
+                .find(|r| r["kind"] == "HelmRelease")
+                .unwrap();
+            let install = &hr["spec"]["install"];
+            let upgrade = &hr["spec"]["upgrade"];
+            assert_eq!(
+                install, upgrade,
+                "install/upgrade should carry identical policy"
+            );
+            let expected = serde_json::to_value(a.helm_lifecycle_policy()).unwrap();
+            assert_eq!(
+                install, &expected,
+                "install slot should route through helm_lifecycle_policy verbatim",
+            );
+            assert_eq!(
+                upgrade, &expected,
+                "upgrade slot should route through helm_lifecycle_policy verbatim",
+            );
+        }
     }
 
     #[test]

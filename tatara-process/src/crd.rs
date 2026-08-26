@@ -194,6 +194,51 @@ impl Process {
     pub fn coordinates_or_defaults(&self) -> (&str, &str) {
         (self.namespace_or_default(), self.name_or_placeholder())
     }
+
+    /// `(namespace, name)` coordinates as owned `String`s, with the
+    /// namespace half fallback-defaulted to [`Self::DEFAULT_NAMESPACE`]
+    /// but the name half REQUIRED — an [`anyhow::Error`] is returned
+    /// when `metadata.name` is absent, because "unnamed" is a display
+    /// placeholder, not a valid K8s API path segment. Fed straight into
+    /// kube-rs API calls (`Api::patch`, `Api::delete`, `Api::get`) that
+    /// take owned `String` arguments; the [`Self::DEFAULT_NAMESPACE`]
+    /// fallback matches what K8s itself substitutes on namespaced
+    /// resource writes with no explicit namespace, so the surface is
+    /// safe against a `Process` whose `metadata.namespace` slot is
+    /// absent (test fixture, dynamic API response pre-defaulting) but
+    /// refuses to guess a name.
+    ///
+    /// Peer to [`Self::coordinates_or_defaults`] on the (return-form ×
+    /// name gate) axis pair:
+    /// * borrow + name-defaulted → `coordinates_or_defaults` (display,
+    ///   annotation writers, ownership-tag composers — every consumer
+    ///   whose downstream drops `"unnamed"` in place of a missing name
+    ///   without an operator-visible failure);
+    /// * owned + name-required → this method (kube-rs API calls —
+    ///   every consumer whose downstream must NOT silently substitute
+    ///   a placeholder for the API call target, because the caller is
+    ///   about to `patch`/`delete`/`get` at `metadata.name`).
+    ///
+    /// The error wording is pinned by
+    /// [`tests::owned_coordinates_or_err_error_message_matches_pre_lift_reconciler_wording`]
+    /// to match the exact spelling every pre-lift `tatara-reconciler`
+    /// helper produced (`"Process has no metadata.name"`) so log-line
+    /// / test greps that anchored on that wording keep matching post-
+    /// lift, and no operator-visible message drift lands as a side
+    /// effect of the substrate move.
+    pub fn owned_coordinates_or_err(&self) -> anyhow::Result<(String, String)> {
+        let ns = self
+            .metadata
+            .namespace
+            .clone()
+            .unwrap_or_else(|| Self::DEFAULT_NAMESPACE.into());
+        let name = self
+            .metadata
+            .name
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("Process has no metadata.name"))?;
+        Ok((ns, name))
+    }
 }
 
 /// Process status — every field optional until the reconciler writes it.
@@ -422,6 +467,175 @@ mod tests {
             q.coordinates_or_defaults(),
             (Process::DEFAULT_NAMESPACE, "api")
         );
+    }
+
+    // ─── Process::owned_coordinates_or_err substrate pins ──────────────
+    //
+    // Pins the owned + name-required peer of the coordinate-primitive
+    // family on the (return-form × name gate) axis pair. Fail-before-
+    // pass-after granularity: a regression that flipped the namespace
+    // fallback string, dropped the `Option::clone` unwrap, changed the
+    // return-tuple axis order, or altered the "Process has no
+    // metadata.name" error wording surfaces here rather than as silent
+    // drift at every pre-lift caller (10 sites in
+    // `tatara-reconciler::phase_machine` + 2 sites in
+    // `tatara-reconciler::signals` pre-lift).
+
+    #[test]
+    fn owned_coordinates_or_err_returns_owned_strings_when_both_slots_present() {
+        // Happy path — both slots populated, method returns owned
+        // Strings in (namespace, name) axis order.
+        let mut p = Process::new("api-gateway", empty_spec());
+        p.metadata.namespace = Some("prod-app".into());
+        let (ns, name) = p.owned_coordinates_or_err().unwrap();
+        assert_eq!(ns, "prod-app");
+        assert_eq!(name, "api-gateway");
+        // Ownership pin: type inference above binds ns/name as
+        // owned Strings — a regression that returned &str would
+        // fail to compile at the following .push() call. This
+        // holds the "owned" half of the primitive's contract.
+        let mut owned_ns = ns;
+        owned_ns.push_str("-mutated");
+        assert_eq!(owned_ns, "prod-app-mutated");
+    }
+
+    #[test]
+    fn owned_coordinates_or_err_falls_back_on_namespace_but_returns_owned_name() {
+        // Namespace absent → DEFAULT_NAMESPACE. Name present → owned.
+        let p = Process::new("api", empty_spec());
+        // Process::new leaves metadata.namespace = None by default.
+        let (ns, name) = p.owned_coordinates_or_err().unwrap();
+        assert_eq!(ns, Process::DEFAULT_NAMESPACE);
+        assert_eq!(name, "api");
+    }
+
+    #[test]
+    fn owned_coordinates_or_err_errors_when_metadata_name_absent_regardless_of_namespace() {
+        // Name absent → Err, REGARDLESS of whether the namespace is
+        // populated. The name gate is strictly on `metadata.name` and
+        // does NOT fall back to `Self::UNNAMED_PLACEHOLDER` (that
+        // fallback is on the peer `coordinates_or_defaults`, which
+        // exists precisely for consumers that can tolerate a
+        // display placeholder).
+        for ns_slot in [None, Some("prod".to_string())] {
+            let mut p = Process::new("scratch", empty_spec());
+            p.metadata.name = None;
+            p.metadata.namespace = ns_slot.clone();
+            let err = p.owned_coordinates_or_err().unwrap_err();
+            assert!(
+                err.to_string().contains("metadata.name"),
+                "err on missing name (ns={ns_slot:?}) should mention metadata.name; got {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn owned_coordinates_or_err_error_message_matches_pre_lift_reconciler_wording() {
+        // Load-bearing wording pin — every pre-lift `tatara-reconciler`
+        // helper (`phase_machine::namespace_and_name`,
+        // `signals::ingest`, `signals::consume_effect`) errored with
+        // EXACTLY this wording. Post-lift the substrate owner produces
+        // the same wording so log-line / test greps that anchored on
+        // it keep matching, and no operator-visible message drift
+        // lands as a side effect of the substrate move.
+        let mut p = Process::new("scratch", empty_spec());
+        p.metadata.name = None;
+        let err = p.owned_coordinates_or_err().unwrap_err();
+        assert_eq!(err.to_string(), "Process has no metadata.name");
+    }
+
+    #[test]
+    fn owned_coordinates_or_err_namespace_fallback_matches_default_namespace_const() {
+        // Byte-identity pin between the owned form's namespace
+        // fallback and the workspace-wide `DEFAULT_NAMESPACE` const.
+        // A regression that spelled this fallback as any other
+        // string ("kube-system", "", "default-ns") would silently
+        // misroute every downstream namespaced-Api call on a
+        // Process without a metadata.namespace — surfaces here
+        // rather than at every kube-rs API caller.
+        let mut p = Process::new("api", empty_spec());
+        p.metadata.namespace = None;
+        let (ns, _) = p.owned_coordinates_or_err().unwrap();
+        assert_eq!(ns, Process::DEFAULT_NAMESPACE);
+    }
+
+    #[test]
+    fn owned_coordinates_or_err_matches_pre_lift_reconciler_helper_shape() {
+        // Byte-identical parity pin between the owned + name-required
+        // primitive here and the pre-lift `tatara-reconciler` helper
+        // shape — the exact 2-slot unwrap chain each pre-lift caller
+        // spelled by hand:
+        //
+        //   let ns = p.metadata.namespace.clone().unwrap_or_else(|| "default".into());
+        //   let name = p.metadata.name.clone().ok_or_else(|| anyhow!(...))?;
+        //   Ok((ns, name))
+        //
+        // Sweeps every corner every callsite plausibly encounters
+        // (both slots present, namespace absent, name absent, both
+        // absent). A regression that inserted a normalization step
+        // at the primitive that the pre-lift chain does NOT apply —
+        // or vice versa — surfaces here rather than as silent drift
+        // between the 12 pre-lift consumer callsites and the ONE
+        // substrate owner they now route through.
+        fn pre_lift(p: &Process) -> anyhow::Result<(String, String)> {
+            let ns = p
+                .metadata
+                .namespace
+                .clone()
+                .unwrap_or_else(|| "default".into());
+            let name = p
+                .metadata
+                .name
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("Process has no metadata.name"))?;
+            Ok((ns, name))
+        }
+        // Both present.
+        let mut p = Process::new("api", empty_spec());
+        p.metadata.namespace = Some("prod".into());
+        assert_eq!(p.owned_coordinates_or_err().unwrap(), pre_lift(&p).unwrap());
+        // Namespace absent.
+        let p = Process::new("api", empty_spec());
+        assert_eq!(p.owned_coordinates_or_err().unwrap(), pre_lift(&p).unwrap());
+        // Name absent → both variants error with the same wording.
+        let mut p = Process::new("api", empty_spec());
+        p.metadata.name = None;
+        p.metadata.namespace = Some("prod".into());
+        assert_eq!(
+            p.owned_coordinates_or_err().unwrap_err().to_string(),
+            pre_lift(&p).unwrap_err().to_string(),
+        );
+        // Both absent → still errors on the name gate.
+        let mut p = Process::new("api", empty_spec());
+        p.metadata.name = None;
+        p.metadata.namespace = None;
+        assert_eq!(
+            p.owned_coordinates_or_err().unwrap_err().to_string(),
+            pre_lift(&p).unwrap_err().to_string(),
+        );
+    }
+
+    #[test]
+    fn owned_coordinates_or_err_axis_order_matches_coordinates_or_defaults() {
+        // Cross-primitive coherence pin between the owned + name-
+        // required form and the borrow + name-defaulted peer:
+        // (namespace, name) axis order is IDENTICAL across both
+        // return-forms. A regression that swapped the tuple slots on
+        // only ONE of the two primitives would silently misroute
+        // every consumer that picked between the two forms based on
+        // its callsite's ownership needs. The pin re-reads both
+        // primitives at test time so the equality holds iff both
+        // live paths are the current implementation.
+        let mut p = Process::new("app", empty_spec());
+        p.metadata.namespace = Some("infra".into());
+        let (borrow_ns, borrow_name) = p.coordinates_or_defaults();
+        let (owned_ns, owned_name) = p.owned_coordinates_or_err().unwrap();
+        assert_eq!(owned_ns, borrow_ns);
+        assert_eq!(owned_name, borrow_name);
+        // Explicit slot labels — pins the (namespace, name) axis
+        // order as opposed to (name, namespace).
+        assert_eq!(owned_ns, "infra"); // NOT "app"
+        assert_eq!(owned_name, "app"); // NOT "infra"
     }
 
     #[test]

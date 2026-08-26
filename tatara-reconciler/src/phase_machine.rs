@@ -39,7 +39,7 @@ const TICK_RETRY: u64 = 1;
 pub async fn handle_pending(p: &Process, ctx: &Context) -> Result<Action> {
     // DECLARE — canonicalize the spec, compute content hash, attach Identity,
     //           install the tatara finalizer, advance to Forking.
-    let (ns, name) = namespace_and_name(p)?;
+    let (ns, name) = p.owned_coordinates_or_err()?;
     let identity = derive_identity(&p.spec, p.spec.identity.name_override.as_deref());
 
     let api = ctx.process_api(&ns);
@@ -66,7 +66,7 @@ pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
     // 1. Check `dependsOn` — stay in Forking if any dep unmet.
     // 2. Allocate PID from `ProcessTable.nextSequence` (idempotent if already set).
     // 3. Advance to Execing.
-    let (ns, name) = namespace_and_name(p)?;
+    let (ns, name) = p.owned_coordinates_or_err()?;
     let api = ctx.process_api(&ns);
 
     // 1. Dependency gate.
@@ -144,24 +144,18 @@ pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
     Ok(Action::requeue(Duration::from_secs(TICK_RETRY)))
 }
 
-fn namespace_and_name(p: &Process) -> Result<(String, String)> {
-    let ns = p
-        .metadata
-        .namespace
-        .clone()
-        .unwrap_or_else(|| "default".into());
-    let name = p
-        .metadata
-        .name
-        .clone()
-        .ok_or_else(|| anyhow!("Process has no metadata.name"))?;
-    Ok((ns, name))
-}
+// The prior private `namespace_and_name(p)` helper lifted to the
+// substrate as `Process::owned_coordinates_or_err(&self)` — see the
+// method's doc for the owned + name-required peer of the coordinate-
+// primitive family. Post-lift the 10 callsites in this module and the
+// 2 in `crate::signals` route through ONE substrate owner (previously
+// the private helper served phase_machine.rs only; signals.rs
+// restated the same 2-slot unwrap chain by hand).
 
 pub async fn handle_execing(p: &Process, ctx: &Context) -> Result<Action> {
     // 1. PROVE — evaluate `boundary.preconditions`; stay in Execing if unmet.
     // 2. RENDER — dispatch on intent variant; emit owned FluxCD CRs; advance to Running.
-    let (ns, name) = namespace_and_name(p)?;
+    let (ns, name) = p.owned_coordinates_or_err()?;
 
     // 1. Preconditions gate.
     let preconditions = &p.spec.boundary.preconditions;
@@ -263,7 +257,7 @@ pub async fn handle_execing(p: &Process, ctx: &Context) -> Result<Action> {
 pub async fn handle_running(p: &Process, ctx: &Context) -> Result<Action> {
     // VERIFY — poll each owned Flux CR for Ready; update per-ref status;
     //          advance to Attested when all are Ready.
-    let (ns, name) = namespace_and_name(p)?;
+    let (ns, name) = p.owned_coordinates_or_err()?;
 
     // Ephemeral TTL clock — if the lifetime is :ephemeral and TTL has
     // elapsed, force-transition to Exiting regardless of postcondition
@@ -396,7 +390,7 @@ pub async fn handle_attested(p: &Process, ctx: &Context) -> Result<Action> {
     // ATTEST heartbeat — re-check Flux resources; if any drift to NotReady,
     // transition to Reconverging. Ephemeral lifetimes with a teardown
     // policy that includes Attested skip the heartbeat and SIGTERM now.
-    let (ns, name) = namespace_and_name(p)?;
+    let (ns, name) = p.owned_coordinates_or_err()?;
 
     if let AutoTerminate::Now { reason } =
         lifetime_clock::evaluate(p, ProcessPhase::Attested, chrono::Utc::now())
@@ -561,7 +555,7 @@ fn flux_ref_from_json(res: &Value) -> Result<FluxResourceRef> {
 
 pub async fn handle_reconverging(p: &Process, ctx: &Context) -> Result<Action> {
     // SIGHUP or drift detected — flip back to Execing.
-    let (ns, name) = namespace_and_name(p)?;
+    let (ns, name) = p.owned_coordinates_or_err()?;
     let api = ctx.process_api(&ns);
     patch::patch_process_status(
         &api,
@@ -591,7 +585,7 @@ pub async fn handle_reconverging(p: &Process, ctx: &Context) -> Result<Action> {
 /// defaults to `Attested` for forward-compat with older Processes
 /// that may pre-date the annotation contract.
 pub async fn handle_releasing(p: &Process, ctx: &Context) -> Result<Action> {
-    let (ns, name) = namespace_and_name(p)?;
+    let (ns, name) = p.owned_coordinates_or_err()?;
 
     // 1. Recover the gate we came through from the annotation.
     let gate = released_from_annotation(p);
@@ -751,7 +745,7 @@ async fn advance_out_of_releasing(
 pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
     // Cascade terminate: delete child Processes first, then move to Zombie.
     // Owner references on owned Flux CRs cause K8s to GC them once we're gone.
-    let (ns, name) = namespace_and_name(p)?;
+    let (ns, name) = p.owned_coordinates_or_err()?;
     let my_pid = p.status.as_ref().and_then(|s| s.pid.clone());
 
     if let Some(pid) = &my_pid {
@@ -803,7 +797,7 @@ pub async fn handle_failed(p: &Process, ctx: &Context) -> Result<Action> {
     // through Exiting (children drain) before reaching Zombie; permanent
     // and Never-teardown ephemeral Processes go straight to Zombie so the
     // operator can inspect the failure.
-    let (ns, name) = namespace_and_name(p)?;
+    let (ns, name) = p.owned_coordinates_or_err()?;
     let api = ctx.process_api(&ns);
 
     if let AutoTerminate::Now { reason } =
@@ -959,7 +953,7 @@ async fn transition_to_exiting(
 pub async fn handle_zombie(p: &Process, ctx: &Context) -> Result<Action> {
     // Final post-exit pass — advance to Reaped; the ProcessTable controller
     // may force-reap earlier on zombie_timeout_seconds overflow (future).
-    let (ns, name) = namespace_and_name(p)?;
+    let (ns, name) = p.owned_coordinates_or_err()?;
     let api = ctx.process_api(&ns);
     patch::patch_process_status(&api, &name, patch::phase_status(ProcessPhase::Reaped, None))
         .await
@@ -970,7 +964,7 @@ pub async fn handle_zombie(p: &Process, ctx: &Context) -> Result<Action> {
 
 pub async fn handle_reaped(p: &Process, ctx: &Context) -> Result<Action> {
     // Release the finalizer — K8s GC removes the Process object + owned Flux CRs.
-    let (ns, name) = namespace_and_name(p)?;
+    let (ns, name) = p.owned_coordinates_or_err()?;
     let api = ctx.process_api(&ns);
     patch::remove_finalizer(&api, &name, p, tatara_process::PROCESS_FINALIZER)
         .await

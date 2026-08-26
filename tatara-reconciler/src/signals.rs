@@ -72,16 +72,17 @@ pub async fn ingest(process: &Process, ctx: &Context) -> Result<Option<ProcessSi
         return Ok(None);
     };
 
-    let ns = process
-        .metadata
-        .namespace
-        .clone()
-        .unwrap_or_else(|| "default".into());
-    let name = process
-        .metadata
-        .name
-        .clone()
-        .ok_or_else(|| anyhow!("Process has no metadata.name"))?;
+    // Owned coordinates via the substrate primitive — pre-lift this
+    // was a hand-authored 2-slot unwrap chain, one of two adjacent
+    // identical restatements in this file (peer at
+    // `consume_effect`), and shared its shape with 10 more
+    // restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold in `crate::phase_machine`. Post-lift all 12 sites
+    // route through ONE substrate owner
+    // [`Process::owned_coordinates_or_err`]; the error wording
+    // ("Process has no metadata.name") is preserved verbatim by the
+    // substrate so log-line greps that anchored on it keep matching.
+    let (ns, name) = process.owned_coordinates_or_err()?;
 
     // Always strip — JSON merge patch interprets `null` as "remove key".
     let api = ctx.process_api(&ns);
@@ -110,16 +111,14 @@ pub async fn ingest(process: &Process, ctx: &Context) -> Result<Option<ProcessSi
 
 /// Apply a `SignalEffect` by patching the Process.
 pub async fn consume_effect(process: &Process, ctx: &Context, effect: SignalEffect) -> Result<()> {
-    let ns = process
-        .metadata
-        .namespace
-        .clone()
-        .unwrap_or_else(|| "default".into());
-    let name = process
-        .metadata
-        .name
-        .clone()
-        .ok_or_else(|| anyhow!("Process has no metadata.name"))?;
+    // Owned coordinates via the substrate primitive — sibling site
+    // to the `ingest` restatement above; both routed through
+    // [`Process::owned_coordinates_or_err`] post-lift so a future
+    // normalization (case-fold, cross-cluster prefix, a rename of
+    // the "default" fallback, an alternate error wording) reaches
+    // both signal handlers plus the 10 `crate::phase_machine`
+    // callers through ONE substrate owner.
+    let (ns, name) = process.owned_coordinates_or_err()?;
     let api = ctx.process_api(&ns);
 
     match effect {

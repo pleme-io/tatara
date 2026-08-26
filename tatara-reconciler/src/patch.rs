@@ -70,12 +70,61 @@ pub async fn ensure_process_table(
     api.create(&PostParams::default(), &pt).await
 }
 
-/// Common status patch builder — phase + phaseSince, optionally identity.
-pub fn phase_status(phase: ProcessPhase, identity: Option<&Identity>) -> Value {
-    let mut v = json!({
+/// The two-slot `{"phase": <phase>, "phaseSince": <now>}` byte-shape
+/// every phase-transition status-patch builder in this module needs.
+///
+/// The three sibling primitives ([`phase_status`], [`phase_status_msg`],
+/// [`phase_status_with`]) each attach a distinct third slot (`identity`
+/// / `message` / a caller-named extra), but every one starts from the
+/// SAME two-slot base. Pre-lift the base shape was open-coded verbatim
+/// at all THREE sibling entries past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication threshold — each restating `json!({ "phase": phase,
+/// "phaseSince": Utc::now() })` byte-for-byte. Post-lift the base lives
+/// at ONE owner and the three siblings delegate through it, so a future
+/// promotion of the base shape (a `by:` field naming the signal source,
+/// a `transitionCount:` diagnostic counter, a shared `at:` alias for
+/// `phaseSince`, a promotion of `Utc::now()` to an injectable
+/// `time_source` for deterministic tests) lands at ONE substrate
+/// function and all THREE sibling patch-builders inherit the upgrade
+/// mechanically.
+///
+/// The `Utc::now()` call is load-bearing at THIS site — every sibling
+/// stamps the transition at CALL time, not at the transition-decision
+/// time upstream, so a caller who cannot afford a wall-clock read at
+/// the emit boundary must add a distinct sibling with an explicit
+/// timestamp parameter rather than route through this base.
+///
+/// The primitive is `pub(super)` — the three sibling patch-builders in
+/// this module are its only intended consumers; a downstream caller
+/// that needs the base two-slot shape composes it through one of the
+/// three sibling entries rather than reaching directly for the base
+/// (which would bypass the third-slot discipline the siblings enforce
+/// by construction).
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// two-slot phase+phaseSince base shape recurred at all THREE sibling
+/// patch-builders past the PRIME-DIRECTIVE ≥ 2 trigger, and is lifted
+/// to ONE substrate primitive here). THEORY.md §II.1 invariant 5
+/// (composition preserves proofs — post-lift the "base shape at
+/// phase_status == base shape at phase_status_msg == base shape at
+/// phase_status_with" invariant holds by construction rather than by
+/// three open-coded copies staying in sync; a regression that drifted
+/// the base-slot naming or the timestamp posture at ONLY one sibling
+/// surfaces at the primitive's tests rather than as operator-visible
+/// wrong-phase / wrong-timestamp patches after apply).
+pub(super) fn phase_status_base(phase: ProcessPhase) -> Value {
+    json!({
         "phase": phase,
         "phaseSince": Utc::now(),
-    });
+    })
+}
+
+/// Common status patch builder — phase + phaseSince, optionally identity.
+///
+/// Composes the shared two-slot base through [`phase_status_base`] and
+/// attaches an optional `identity` third slot.
+pub fn phase_status(phase: ProcessPhase, identity: Option<&Identity>) -> Value {
+    let mut v = phase_status_base(phase);
     if let Some(id) = identity {
         v["identity"] = serde_json::to_value(id).unwrap_or(Value::Null);
     }
@@ -97,11 +146,9 @@ pub fn phase_status(phase: ProcessPhase, identity: Option<&Identity>) -> Value {
 /// both `&'static str` literal reasons and `format!(...)`-owned strings
 /// without widening the signature.
 pub fn phase_status_msg(phase: ProcessPhase, message: impl Into<String>) -> Value {
-    json!({
-        "phase": phase,
-        "phaseSince": Utc::now(),
-        "message": message.into(),
-    })
+    let mut v = phase_status_base(phase);
+    v["message"] = Value::String(message.into());
+    v
 }
 
 /// Status patch builder — phase + phaseSince + one extra sibling key/value
@@ -138,10 +185,7 @@ pub fn phase_status_with<T: Serialize>(phase: ProcessPhase, key: &'static str, v
         key != "phase" && key != "phaseSince",
         "phase_status_with: extra key `{key}` collides with a base slot",
     );
-    let mut v = json!({
-        "phase": phase,
-        "phaseSince": Utc::now(),
-    });
+    let mut v = phase_status_base(phase);
     v[key] = serde_json::to_value(value).unwrap_or(Value::Null);
     v
 }
@@ -273,6 +317,167 @@ mod tests {
     fn remove_finalizer_idempotent_when_absent() {
         let existing = vec!["other.io/x".to_string()];
         assert!(remove_finalizer_from(&existing, "tatara.pleme.io/process-finalizer").is_none());
+    }
+
+    // ─── phase_status_base substrate pins ─────────────────────────────────
+    //
+    // The two-slot `{"phase": ..., "phaseSince": Utc::now()}` base shape
+    // was open-coded verbatim at all THREE sibling patch-builders
+    // (`phase_status`, `phase_status_msg`, `phase_status_with`) before
+    // `phase_status_base` closed it. These pins bind the base at
+    // fail-before-pass-after granularity so a regression that drifted a
+    // slot key, reshaped the timestamp posture, dropped the base's
+    // Utc::now() stamping to a stale constant, or leaked a sibling slot
+    // into the base surfaces HERE rather than as operator-visible drift
+    // across all three sibling patch-builders simultaneously.
+
+    #[test]
+    fn phase_status_base_composes_the_two_slots() {
+        // The primary shape asserted end-to-end: exactly ONE `phase`
+        // slot + ONE `phaseSince` slot, no third-slot leaks. A
+        // regression that pulled ONE sibling's third slot (`identity` /
+        // `message` / a caller-named extra) into the base would double-
+        // stamp that slot at every sibling and surface here.
+        let v = phase_status_base(ProcessPhase::Running);
+        let obj = v.as_object().expect("object");
+        assert_eq!(
+            obj.len(),
+            2,
+            "base owns exactly two slots — no third-slot leaks"
+        );
+        assert_eq!(
+            obj.get("phase").and_then(Value::as_str),
+            Some("Running"),
+            "phase key present and serialises as the discriminant string",
+        );
+        assert!(
+            obj.get("phaseSince")
+                .and_then(Value::as_str)
+                .is_some_and(|s| chrono::DateTime::parse_from_rfc3339(s).is_ok()),
+            "phaseSince key present and is a valid RFC-3339 timestamp",
+        );
+        // The sibling third-slot keys must NOT leak into the base — a
+        // regression that hoisted one of the sibling extras into the
+        // base would double-stamp at every sibling caller.
+        for leaked in ["identity", "message", "fluxResources", "attestation"] {
+            assert!(
+                obj.get(leaked).is_none(),
+                "base must not carry sibling third-slot key `{leaked}` — that discipline lives at the sibling entry",
+            );
+        }
+    }
+
+    #[test]
+    fn phase_status_base_stamps_phase_since_at_call_time() {
+        // A regression that hoisted the `Utc::now()` to a stale
+        // constant (e.g. cached at module load) or moved it upstream
+        // to a caller argument would surface here at every wall-clock
+        // bracket. Pins the base's own stamping discipline
+        // independently of the three siblings (whose own tests already
+        // pin their delegates).
+        let before = Utc::now();
+        let v = phase_status_base(ProcessPhase::Attested);
+        let after = Utc::now();
+        let stamped = v
+            .get("phaseSince")
+            .and_then(Value::as_str)
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .expect("phaseSince is an RFC-3339 timestamp");
+        let stamped_utc = stamped.with_timezone(&chrono::Utc);
+        assert!(
+            (before..=after).contains(&stamped_utc),
+            "phaseSince ({stamped_utc}) must land in [{before}, {after}] — the base stamps at call time",
+        );
+    }
+
+    #[test]
+    fn phase_status_base_matches_hand_authored_pre_lift_bytewise() {
+        // Byte-identical parity with the pre-lift `json!({ "phase":
+        // <phase>, "phaseSince": Utc::now() })` block that ALL THREE
+        // sibling patch-builders restated verbatim, swept across five
+        // representative ProcessPhase discriminants so a regression
+        // that broke ONE phase's serialisation (e.g. an enum re-tagging
+        // that swapped the discriminant projection) surfaces per-phase.
+        //
+        // Both blocks build a fresh Utc::now() so the two `phaseSince`
+        // stamps CAN differ by the wall-clock delta between calls;
+        // drop that slot before comparing.
+        for phase in [
+            ProcessPhase::Pending,
+            ProcessPhase::Execing,
+            ProcessPhase::Running,
+            ProcessPhase::Attested,
+            ProcessPhase::Failed,
+        ] {
+            let mut composed = phase_status_base(phase);
+            let mut hand_authored = json!({
+                "phase": phase,
+                "phaseSince": Utc::now(),
+            });
+            composed
+                .as_object_mut()
+                .expect("object")
+                .remove("phaseSince");
+            hand_authored
+                .as_object_mut()
+                .expect("object")
+                .remove("phaseSince");
+            assert_eq!(
+                composed, hand_authored,
+                "base must be byte-identical to the pre-lift json! block for phase `{phase}`",
+            );
+        }
+    }
+
+    #[test]
+    fn phase_status_base_is_shared_owner_of_all_three_siblings() {
+        // Cross-sibling parity — every sibling patch-builder
+        // (`phase_status`, `phase_status_msg`, `phase_status_with`)
+        // MUST carry the base's two slots verbatim (modulo the
+        // wall-clock delta between the two `phaseSince` stamps). A
+        // regression that stopped routing ONE sibling through the base
+        // (open-coding it again at the sibling) would drift that
+        // sibling's base-slot naming or timestamp posture — this pin
+        // catches it by asserting all three siblings' base slots are
+        // structurally identical to the base primitive's own output.
+        //
+        // Sibling posture to the pre-lift-byte-identity peers on each
+        // sibling above: those pin each sibling against a HAND-AUTHORED
+        // pre-lift json! block; this pin closes the OTHER direction —
+        // each sibling's emission carries the SAME base primitive's
+        // slots, so drift at any sibling's delegation surfaces here.
+        let base = phase_status_base(ProcessPhase::Running);
+        let bare = phase_status(ProcessPhase::Running, None);
+        let msg = phase_status_msg(ProcessPhase::Running, "reason");
+        let extra = phase_status_with(ProcessPhase::Running, "extraKey", serde_json::json!(1));
+        // All four carry the same phase discriminant under the same
+        // `phase` slot.
+        for (name, v) in [
+            ("base", &base),
+            ("bare", &bare),
+            ("msg", &msg),
+            ("extra", &extra),
+        ] {
+            assert_eq!(
+                v.get("phase").and_then(Value::as_str),
+                Some("Running"),
+                "{name} must carry the shared `phase` slot with the same discriminant",
+            );
+            assert!(
+                v.get("phaseSince")
+                    .and_then(Value::as_str)
+                    .is_some_and(|s| chrono::DateTime::parse_from_rfc3339(s).is_ok()),
+                "{name} must carry the shared `phaseSince` slot as an RFC-3339 timestamp",
+            );
+        }
+        // Slot-count guard: the base has 2, bare has 2 (no identity),
+        // msg has 3 (with message), extra has 3 (with the caller-named
+        // key). A regression that leaked an extra slot into the base
+        // would inflate every sibling's slot count in lockstep.
+        assert_eq!(base.as_object().unwrap().len(), 2);
+        assert_eq!(bare.as_object().unwrap().len(), 2);
+        assert_eq!(msg.as_object().unwrap().len(), 3);
+        assert_eq!(extra.as_object().unwrap().len(), 3);
     }
 
     // ─── phase_status / phase_status_msg substrate pins ────────────────────

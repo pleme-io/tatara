@@ -549,15 +549,76 @@ fn build_owner_reference(p: &Process) -> Result<Value> {
     Ok(tatara_process::owner_reference_json(&name, &uid))
 }
 
-fn inject_owner_reference(resource: &mut Value, owner_ref: Value) -> Result<()> {
-    let metadata = resource
+/// Shared `resource → &mut resource.metadata` walk — the ONE substrate
+/// primitive owning the three-line get-or-create-and-type-check chain
+/// every SSA-time mutation of a rendered K8s resource's `metadata`
+/// block needs.
+///
+/// Pre-lift the walk was open-coded at TWO adjacent private helpers in
+/// this module past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold:
+/// * [`inject_owner_reference`] — seeds `metadata.ownerReferences`
+///   before pushing the reconciler's `Process` owner reference.
+/// * [`inject_annotations`] — seeds `metadata.annotations` before
+///   inserting the standard 2-slot ownership tag +
+///   PID / CONTENT_HASH / GENERATION / ATTESTATION_ROOT.
+///
+/// Both restated the same three-step chain verbatim: (a) `.as_object_mut()
+/// .ok_or_else(|| anyhow!("resource is not an object"))?` on the root
+/// (bare `Value` → `serde_json::Map` guard), (b) `.entry("metadata")
+/// .or_insert_with(|| Value::Object(Default::default()))` for the
+/// get-or-create step (a rendered resource without `metadata` is legal
+/// and gets seeded rather than errored — matches how kubectl treats
+/// bare pod manifests), (c) `.as_object_mut().ok_or_else(|| anyhow!(
+/// "metadata is not an object"))?` on the intermediate `Value`
+/// (metadata slot mistyped as an array / string surfaces as an error
+/// rather than a silent `.as_object_mut() → None → skip` no-op).
+///
+/// Private to the module: no external consumer of `ssapply` writes
+/// into `metadata` directly — the two callers threading through this
+/// owner do so as part of the `apply_owned` prepare-and-SSA cascade,
+/// and every other `metadata`-mutating shape in the reconciler goes
+/// through a typed builder ([`crate::render`] emits fresh `json!({
+/// "metadata": {...} })` blocks; [`crate::patch::finalizers_metadata_patch`]
+/// builds a merge-patch body around a `metadata.finalizers` slot; the
+/// `render.rs:379` encapsulation-annotation helper uses a
+/// best-effort `.get_mut("metadata")` walk that silently no-ops on a
+/// missing block, matching its "attach only if present" contract —
+/// a different byte-shape not a lift candidate).
+///
+/// A future addition (a `metadata.labels` sibling seed, a
+/// `metadata.finalizers` sibling seed, a normalization step inserted
+/// between the root-guard and the metadata-slot get-or-create, an
+/// error-envelope carrying the resource coordinates for observability)
+/// lands at this ONE substrate function and both downstream `inject_*`
+/// helpers inherit the upgrade mechanically — no per-site hand-edit at
+/// `inject_owner_reference` / `inject_annotations`.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// three-step `resource → &mut metadata` walk recurred at two adjacent
+/// hand-authored sites past the PRIME-DIRECTIVE ≥ 2 duplication
+/// trigger, and is lifted to ONE owner here). THEORY.md §II.1
+/// invariant 5 (composition preserves proofs — a regression that
+/// drifted the error message wording, silently swallowed a mistyped
+/// metadata slot, or reshaped the get-or-create default surfaces at
+/// [`tests::metadata_object_mut_seeds_metadata_when_absent`] /
+/// [`tests::metadata_object_mut_errors_on_non_object_resource`] /
+/// [`tests::metadata_object_mut_errors_on_non_object_metadata`]
+/// rather than as silent drift across both downstream `inject_*`
+/// callsites simultaneously).
+fn metadata_object_mut(resource: &mut Value) -> Result<&mut serde_json::Map<String, Value>> {
+    let root = resource
         .as_object_mut()
-        .ok_or_else(|| anyhow!("resource is not an object"))?
+        .ok_or_else(|| anyhow!("resource is not an object"))?;
+    let metadata = root
         .entry("metadata")
         .or_insert_with(|| Value::Object(Default::default()));
-    let md = metadata
+    metadata
         .as_object_mut()
-        .ok_or_else(|| anyhow!("metadata is not an object"))?;
+        .ok_or_else(|| anyhow!("metadata is not an object"))
+}
+
+fn inject_owner_reference(resource: &mut Value, owner_ref: Value) -> Result<()> {
+    let md = metadata_object_mut(resource)?;
     let refs = md
         .entry("ownerReferences")
         .or_insert_with(|| Value::Array(vec![]));
@@ -568,14 +629,7 @@ fn inject_owner_reference(resource: &mut Value, owner_ref: Value) -> Result<()> 
 }
 
 fn inject_annotations(resource: &mut Value, process: &Process) -> Result<()> {
-    let metadata = resource
-        .as_object_mut()
-        .ok_or_else(|| anyhow!("resource is not an object"))?
-        .entry("metadata")
-        .or_insert_with(|| Value::Object(Default::default()));
-    let md = metadata
-        .as_object_mut()
-        .ok_or_else(|| anyhow!("metadata is not an object"))?;
+    let md = metadata_object_mut(resource)?;
     let annot = md
         .entry("annotations")
         .or_insert_with(|| Value::Object(Default::default()));
@@ -702,6 +756,136 @@ mod tests {
         let refs = obj["metadata"]["ownerReferences"].as_array().unwrap();
         assert_eq!(refs.len(), 1);
         assert_eq!(refs[0]["kind"], "Process");
+    }
+
+    // ─── metadata_object_mut substrate pins ─────────────────────────────
+    //
+    // The three-step `resource → &mut metadata` walk recurred at two
+    // adjacent private helpers (`inject_owner_reference`,
+    // `inject_annotations`) at the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold before this primitive existed. Both now delegate
+    // through the shared owner. These pins bind the primitive at
+    // fail-before-pass-after granularity so a regression that drifted
+    // the get-or-create default, silently swallowed a mistyped
+    // metadata slot, or reworded an error surfaces HERE rather than
+    // as silent drift at both downstream `inject_*` callsites.
+
+    #[test]
+    fn metadata_object_mut_returns_existing_metadata_object() {
+        // Happy path: a resource with an existing `metadata` block
+        // yields a mutable reference to that same block — a caller's
+        // subsequent `.insert(...)` writes through to the resource's
+        // metadata verbatim rather than into a fresh sibling map.
+        let mut resource = json!({
+            "apiVersion": "v1", "kind": "ConfigMap",
+            "metadata": { "name": "x" },
+        });
+        let md = metadata_object_mut(&mut resource).expect("existing object metadata");
+        md.insert(
+            "namespace".to_string(),
+            Value::String("demo-ns".to_string()),
+        );
+        assert_eq!(resource["metadata"]["name"], "x");
+        assert_eq!(resource["metadata"]["namespace"], "demo-ns");
+    }
+
+    #[test]
+    fn metadata_object_mut_seeds_metadata_when_absent() {
+        // A rendered resource without a `metadata` block is legal
+        // (bare pod manifests). The primitive get-or-creates rather
+        // than errors — mirroring how `kubectl apply` treats a
+        // metadata-less bare pod. A subsequent caller-side `.insert`
+        // must persist through to the resource.
+        let mut resource = json!({ "apiVersion": "v1", "kind": "ConfigMap" });
+        let md = metadata_object_mut(&mut resource).expect("seeded metadata is an object");
+        assert!(md.is_empty(), "freshly seeded metadata is an empty map");
+        md.insert("name".to_string(), Value::String("x".to_string()));
+        assert_eq!(resource["metadata"]["name"], "x");
+    }
+
+    #[test]
+    fn metadata_object_mut_errors_on_non_object_resource() {
+        // The root Value must be a JSON object — the reconciler's
+        // render surfaces emit `json!({ ... })` blocks so this
+        // holds by construction upstream, but a regression that
+        // handed the primitive a bare array / string / number
+        // surfaces the error at the primitive rather than as a
+        // silent `.as_object_mut() → None → skip` no-op at the
+        // downstream callsite. Sweep the three non-object primitive
+        // shapes a caller might plausibly hand through.
+        for mut bad in [
+            json!([{"kind": "not an object"}]),
+            json!("just a string"),
+            json!(42),
+        ] {
+            let err = metadata_object_mut(&mut bad).expect_err("non-object root must error");
+            assert!(
+                err.to_string().contains("resource is not an object"),
+                "error message must name the resource axis for grep-ability, got {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn metadata_object_mut_errors_on_non_object_metadata() {
+        // Pre-existing `metadata` slot mistyped as an array / string
+        // (common author mistake: `metadata: [ name: x ]` YAML that
+        // parses as a list) surfaces as an error rather than as a
+        // silent skip that would drop the caller's write. Sweep the
+        // three non-object shapes a mistyped metadata slot might
+        // plausibly carry.
+        for bad in [json!([]), json!("oops"), json!(7)] {
+            let mut resource = json!({ "apiVersion": "v1", "kind": "ConfigMap", "metadata": bad });
+            let err =
+                metadata_object_mut(&mut resource).expect_err("non-object metadata must error");
+            assert!(
+                err.to_string().contains("metadata is not an object"),
+                "error message must name the metadata axis for grep-ability, got {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn metadata_object_mut_shares_body_across_inject_owner_and_inject_annotations() {
+        // Sibling to the delegation pins on `ownership_*`: prove that
+        // both `inject_*` helpers now route through the same
+        // primitive by exercising a metadata-less resource through
+        // BOTH helpers and confirming each produces its expected
+        // downstream slot without either silently dropping the
+        // metadata seed. Pre-lift each helper open-coded its own
+        // walk; a regression that re-open-coded one of the two —
+        // silently un-lifting the shared owner — would show up
+        // here as one helper failing to produce its slot on a
+        // metadata-less resource.
+        let mut a = json!({ "apiVersion": "v1", "kind": "ConfigMap" });
+        inject_owner_reference(&mut a, json!({ "kind": "Process", "name": "p" })).unwrap();
+        assert!(
+            a["metadata"]["ownerReferences"].is_array(),
+            "inject_owner_reference must seed metadata on a metadata-less resource"
+        );
+
+        let process: Process = serde_json::from_value(json!({
+            "apiVersion": "tatara.pleme.io/v1alpha1",
+            "kind": "Process",
+            "metadata": { "name": "demo-app", "namespace": "demo-ns" },
+            "spec": {
+                "identity": {},
+                "classification": { "pointType": "Gate", "substrate": "Compute" },
+                "intent": { "flux": { "path": "./", "gitRepository": "flux-system" } },
+                "boundary": {},
+                "compliance": {},
+                "signals": {},
+                "lifetime": { "permanent": {} },
+                "suspended": false,
+            },
+        }))
+        .expect("Process deserialises from fixture JSON");
+        let mut b = json!({ "apiVersion": "v1", "kind": "ConfigMap" });
+        inject_annotations(&mut b, &process).unwrap();
+        assert!(
+            b["metadata"]["annotations"].is_object(),
+            "inject_annotations must seed metadata on a metadata-less resource"
+        );
     }
 
     // ─── ownership_kv_pair shared-owner pins ────────────────────────────

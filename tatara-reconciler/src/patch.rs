@@ -125,38 +125,76 @@ pub fn remove_finalizer_from(existing: &[String], target: &str) -> Option<Vec<St
     Some(existing.iter().filter(|f| *f != target).cloned().collect())
 }
 
+/// Build the `metadata.finalizers` merge-patch body around a computed list.
+///
+/// Owns the two-slot `{"metadata": {"finalizers": [...]}}` byte-shape every
+/// finalizer-write callsite needs. Before this primitive existed, the shape
+/// was open-coded at two adjacent async wrappers (`ensure_finalizer` +
+/// `remove_finalizer`) past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger;
+/// post-lift the shape lives at ONE owner and both wrappers ride through
+/// [`apply_finalizer_transform`]. A future field addition (a sibling
+/// `metadata.annotations` slot naming the write reason, a preconditioned
+/// patch keyed on the caller-observed resourceVersion, a structured
+/// finalizer-envelope replacing the flat string list) lands here.
+pub(super) fn finalizers_metadata_patch(new: &[String]) -> Value {
+    json!({ "metadata": { "finalizers": new } })
+}
+
+/// Shared async delegator — reads existing finalizers, runs the pure
+/// `transform`, and (if the transform produced a new list) merge-patches it
+/// through [`finalizers_metadata_patch`].
+///
+/// Owns the byte-shape both `ensure_finalizer` + `remove_finalizer` share:
+/// (a) `p.metadata.finalizers.clone().unwrap_or_default()` on the read
+/// side, (b) `Ok(false)` early-return when the transform is a no-op, (c)
+/// build the metadata patch through the shared primitive, (d) `api.patch`
+/// with `PatchParams::default()` + `Patch::Merge`, (e) `Ok(true)` on
+/// success. The two axis-typed public wrappers stay `pub` — their names
+/// encode intent at the callsite (`ensure` vs `remove`) — but their bodies
+/// are one line each: delegate through here with the axis-appropriate pure
+/// computer (`add_finalizer` / `remove_finalizer_from`).
+async fn apply_finalizer_transform<F>(
+    api: &Api<Process>,
+    name: &str,
+    p: &Process,
+    target: &str,
+    transform: F,
+) -> Result<bool, KubeError>
+where
+    F: FnOnce(&[String], &str) -> Option<Vec<String>>,
+{
+    let existing = p.metadata.finalizers.clone().unwrap_or_default();
+    let Some(new) = transform(&existing, target) else {
+        return Ok(false);
+    };
+    let patch = finalizers_metadata_patch(&new);
+    api.patch(name, &PatchParams::default(), &Patch::Merge(&patch))
+        .await?;
+    Ok(true)
+}
+
 /// Add the tatara finalizer to a Process if not already present.
+///
+/// Delegates through the shared [`apply_finalizer_transform`] owner.
 pub async fn ensure_finalizer(
     api: &Api<Process>,
     name: &str,
     p: &Process,
     target: &str,
 ) -> Result<bool, KubeError> {
-    let existing = p.metadata.finalizers.clone().unwrap_or_default();
-    let Some(new) = add_finalizer(&existing, target) else {
-        return Ok(false);
-    };
-    let patch = json!({ "metadata": { "finalizers": new } });
-    api.patch(name, &PatchParams::default(), &Patch::Merge(&patch))
-        .await?;
-    Ok(true)
+    apply_finalizer_transform(api, name, p, target, add_finalizer).await
 }
 
 /// Remove the tatara finalizer from a Process if present — allows K8s GC to proceed.
+///
+/// Delegates through the shared [`apply_finalizer_transform`] owner.
 pub async fn remove_finalizer(
     api: &Api<Process>,
     name: &str,
     p: &Process,
     target: &str,
 ) -> Result<bool, KubeError> {
-    let existing = p.metadata.finalizers.clone().unwrap_or_default();
-    let Some(new) = remove_finalizer_from(&existing, target) else {
-        return Ok(false);
-    };
-    let patch = json!({ "metadata": { "finalizers": new } });
-    api.patch(name, &PatchParams::default(), &Patch::Merge(&patch))
-        .await?;
-    Ok(true)
+    apply_finalizer_transform(api, name, p, target, remove_finalizer_from).await
 }
 
 #[cfg(test)]
@@ -261,6 +299,110 @@ mod tests {
         assert!(
             (before..=after).contains(&stamped_utc),
             "phaseSince ({stamped_utc}) must land in [{before}, {after}] — the primitive stamps at call time"
+        );
+    }
+
+    // ─── finalizers_metadata_patch substrate pins ─────────────────────────
+    //
+    // The `json!({ "metadata": { "finalizers": <list> } })` shape was open-
+    // coded at two adjacent async wrappers (`ensure_finalizer` +
+    // `remove_finalizer`) at the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold before the primitive existed. Both wrappers now route
+    // through `apply_finalizer_transform`, whose patch-body slot is
+    // `finalizers_metadata_patch`. These pins bind the shape at
+    // fail-before-pass-after granularity so a regression that renamed a
+    // key, added a sibling slot, or reshaped the finalizer list surfaces
+    // HERE rather than as silent operator-visible drift across both
+    // wrappers simultaneously.
+
+    #[test]
+    fn finalizers_metadata_patch_wraps_list_in_two_slot_metadata_body() {
+        let list = vec![
+            "tatara.pleme.io/process-finalizer".to_string(),
+            "other.io/finalizer".to_string(),
+        ];
+        let v = finalizers_metadata_patch(&list);
+        let obj = v.as_object().expect("root is object");
+        // ONE top-level slot: `metadata` — no `spec`/`status` sibling leaks.
+        assert_eq!(obj.len(), 1);
+        let metadata = obj.get("metadata").and_then(Value::as_object).expect(
+            "root.metadata present as object; a regression that renamed the slot surfaces here",
+        );
+        // ONE metadata slot: `finalizers` — no sibling annotations/labels
+        // leak that would silently overwrite unrelated metadata on merge.
+        assert_eq!(metadata.len(), 1);
+        let finalizers = metadata
+            .get("finalizers")
+            .and_then(Value::as_array)
+            .expect("metadata.finalizers is an array (K8s expects list, never null/object)");
+        assert_eq!(finalizers.len(), 2);
+        assert_eq!(
+            finalizers[0].as_str(),
+            Some("tatara.pleme.io/process-finalizer")
+        );
+        assert_eq!(finalizers[1].as_str(), Some("other.io/finalizer"));
+    }
+
+    #[test]
+    fn finalizers_metadata_patch_empty_list_emits_empty_array_not_null() {
+        // The remove-last-finalizer path lands here — K8s reads an empty
+        // array as "no finalizers, GC may proceed"; a regression that
+        // emitted `null` instead would silently keep the finalizer in
+        // place (merge-patch treats `null` as delete-the-key rather than
+        // set-empty-list) and the process would never reap.
+        let v = finalizers_metadata_patch(&[]);
+        let arr = v
+            .pointer("/metadata/finalizers")
+            .and_then(Value::as_array)
+            .expect("empty-list path still emits an array");
+        assert!(arr.is_empty());
+        assert!(!v.pointer("/metadata/finalizers").is_none_or(Value::is_null));
+    }
+
+    #[test]
+    fn finalizers_metadata_patch_matches_hand_authored_pre_lift_bytewise() {
+        // Byte-identical parity with the pre-lift `json!({ "metadata": {
+        // "finalizers": new } })` block that both `ensure_finalizer` +
+        // `remove_finalizer` restated verbatim. Pinned across the three
+        // representative paths: empty-list (remove-last), single-entry
+        // (add-first / remove-with-siblings), multi-entry (add-with-
+        // siblings / remove-middle). A regression that reshaped the
+        // primitive's output would diverge from the pre-lift block HERE
+        // rather than at every downstream K8s round-trip.
+        for new in [
+            Vec::<String>::new(),
+            vec!["tatara.pleme.io/process-finalizer".to_string()],
+            vec![
+                "a".to_string(),
+                "tatara.pleme.io/process-finalizer".to_string(),
+                "b".to_string(),
+            ],
+        ] {
+            let composed = finalizers_metadata_patch(&new);
+            let hand_authored = json!({ "metadata": { "finalizers": new } });
+            assert_eq!(
+                composed, hand_authored,
+                "primitive must be byte-identical to the pre-lift json! block for list {new:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn finalizers_metadata_patch_preserves_slice_order() {
+        // K8s merges finalizers as an ordered list on the wire; a
+        // regression that reordered (e.g. sorted for determinism) would
+        // stomp caller-intended insertion order and could reorder deletion
+        // dependency: this pins the slice-in, slice-out invariant.
+        let list = vec!["z".to_string(), "a".to_string(), "m".to_string()];
+        let arr = finalizers_metadata_patch(&list)
+            .pointer("/metadata/finalizers")
+            .cloned()
+            .and_then(|v| v.as_array().cloned())
+            .expect("array present");
+        assert_eq!(
+            arr.iter().filter_map(Value::as_str).collect::<Vec<_>>(),
+            vec!["z", "a", "m"],
+            "order must ride through the primitive verbatim"
         );
     }
 

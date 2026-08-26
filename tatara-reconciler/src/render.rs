@@ -200,7 +200,16 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
                 "annotations": crate::ssapply::ownership_annotations(&crate::ssapply::qualified_process_ref(ns, name)),
             },
             "spec": {
-                "interval": "5m",
+                // Flux `OCIRepository.spec.interval` — pre-lift this
+                // was a hand-authored `"5m"` string literal past the
+                // ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold, one
+                // of two adjacent identical Flux-interval sites in
+                // this function. Post-lift both slots ride through
+                // the ONE typed
+                // `AplicacaoIntent::flux_reconcile_interval` composer
+                // on the owning intent; a future divergence lands at
+                // the primitive's shape, not at this callsite.
+                "interval": a.flux_reconcile_interval(),
                 "url": oci.registry_url,
                 "ref": { "tag": a.version },
             },
@@ -235,7 +244,17 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
     };
 
     let mut hr_spec = serde_json::Map::new();
-    hr_spec.insert("interval".into(), Value::String("5m".into()));
+    // Flux `HelmRelease.spec.interval` — sibling slot to the
+    // `OCIRepository.spec.interval` above; pre-lift both were hand-
+    // authored `"5m"` string literals past the ★★ PRIME-DIRECTIVE
+    // ≥ 2 duplication threshold. Post-lift both route through the
+    // ONE typed `AplicacaoIntent::flux_reconcile_interval` composer.
+    // Byte-identity of the two slots is pinned by
+    // `ocirepository_and_helmrelease_carry_byte_identical_flux_reconcile_interval`.
+    hr_spec.insert(
+        "interval".into(),
+        Value::String(a.flux_reconcile_interval()),
+    );
     hr_spec.insert("releaseName".into(), Value::String(release_name.clone()));
     hr_spec.insert("targetNamespace".into(), Value::String(target_ns));
     if let Some(chart_obj) = chart_block.as_object() {
@@ -818,6 +837,54 @@ mod aplicacao_tests {
             assert_eq!(
                 upgrade, &expected,
                 "upgrade slot should route through helm_lifecycle_policy verbatim",
+            );
+        }
+    }
+
+    /// Substrate-primitive pin at the CONSUMER surface:
+    /// `OCIRepository.spec.interval` (source-controller cadence) and
+    /// `HelmRelease.spec.interval` (helm-controller cadence) carry
+    /// BYTE-IDENTICAL values AND both match
+    /// `a.flux_reconcile_interval()` verbatim. Pre-lift the reconciler
+    /// hand-authored TWO adjacent `"5m"` string literals past the
+    /// ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold — a regression
+    /// that drifted one slot's cadence away from the other, or that
+    /// stopped routing through
+    /// [`tatara_process::prelude::AplicacaoIntent::flux_reconcile_interval`],
+    /// would surface here rather than as an operator-observed
+    /// per-slot cadence asymmetry at every deployment. Sweeps the
+    /// existing `install_timeout` axis so the pin binds the
+    /// "reconcile interval is invariant across timeout shapes"
+    /// coherence at the consumer, sibling to the same-axis pin at
+    /// [`tatara_process::intent::tests::flux_reconcile_interval_is_invariant_across_install_timeout_shapes`].
+    #[test]
+    fn ocirepository_and_helmrelease_carry_byte_identical_flux_reconcile_interval() {
+        for override_timeout in [None, Some("10m"), Some("1h30m")] {
+            let mut a = demo_intent();
+            a.install_timeout = override_timeout.map(str::to_string);
+            let (resources, _) = render_aplicacao("p", "ns", &a);
+            let oci = resources
+                .iter()
+                .find(|r| r["kind"] == "OCIRepository")
+                .expect("OCIRepository emitted for oci:// chart_ref");
+            let hr = resources
+                .iter()
+                .find(|r| r["kind"] == "HelmRelease")
+                .expect("HelmRelease emitted for oci:// chart_ref");
+            let oci_interval = &oci["spec"]["interval"];
+            let hr_interval = &hr["spec"]["interval"];
+            assert_eq!(
+                oci_interval, hr_interval,
+                "OCIRepository / HelmRelease should carry identical Flux reconcile interval"
+            );
+            let expected = serde_json::Value::String(a.flux_reconcile_interval());
+            assert_eq!(
+                oci_interval, &expected,
+                "OCIRepository.spec.interval should route through flux_reconcile_interval verbatim",
+            );
+            assert_eq!(
+                hr_interval, &expected,
+                "HelmRelease.spec.interval should route through flux_reconcile_interval verbatim",
             );
         }
     }

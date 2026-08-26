@@ -69,8 +69,8 @@ pub mod prelude {
     pub use crate::intent::{
         AplicacaoIntent, ContainerIntent, FluxIntent, GuestIntent, HelmLifecyclePolicy,
         HelmRemediationPolicy, Intent, IntentError, IntentKind, IntentVariant, LispIntent,
-        NixIntent, UnknownWorkloadKind, WorkloadKind, HELM_LIFECYCLE_DEFAULT_RETRIES,
-        HELM_LIFECYCLE_DEFAULT_TIMEOUT,
+        NixIntent, UnknownWorkloadKind, WorkloadKind, FLUX_HELM_DEFAULT_INTERVAL,
+        HELM_LIFECYCLE_DEFAULT_RETRIES, HELM_LIFECYCLE_DEFAULT_TIMEOUT,
     };
     pub use crate::lifetime::{
         EphemeralLifetime, Lifetime, LifetimeError, LifetimeKind, LifetimeVariant,

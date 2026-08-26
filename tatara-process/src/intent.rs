@@ -343,6 +343,31 @@ pub const HELM_LIFECYCLE_DEFAULT_TIMEOUT: &str = "25m";
 /// the render callsite.
 pub const HELM_LIFECYCLE_DEFAULT_RETRIES: u8 = 3;
 
+/// Workspace-wide default for the reconcile-loop cadence on both Flux
+/// resources a Helm-driven `AplicacaoIntent` publishes today: the
+/// `OCIRepository.spec.interval` on the source side (how often the
+/// source-controller re-pulls the chart from OCI) and the
+/// `HelmRelease.spec.interval` on the release side (how often the
+/// helm-controller re-reconciles the release against the chart).
+/// The fleet convention ties both cadences to the same `5m` string
+/// today, so the substrate exposes ONE named const rather than two
+/// literals sprayed across `render_aplicacao`.
+///
+/// Peer to [`HELM_LIFECYCLE_DEFAULT_TIMEOUT`] on the same
+/// AplicacaoIntent-facing "workspace-wide Flux default" axis. A
+/// future per-slot divergence (`SOURCE_INTERVAL` vs `RELEASE_INTERVAL`
+/// as two consts, or a two-slot method returning a
+/// `FluxReconcileIntervals { source, release }` shape) lands here,
+/// NOT at the two render callsites.
+///
+/// Load-bearing wire-format string: the byte-exact `5m` shape is
+/// what the Flux source- and helm-controllers parse via `humantime`;
+/// a regression that renamed it to any other duration would silently
+/// throttle or hammer every Helm-driven Process's reconciliation
+/// loop. Pinned at
+/// [`tests::flux_helm_default_interval_is_pinned_to_5m`].
+pub const FLUX_HELM_DEFAULT_INTERVAL: &str = "5m";
+
 /// Typed shape of one Flux `HelmRelease.spec.{install,upgrade}` slot
 /// — the substrate's projection of the "how long may Helm take, and
 /// how many retries after a failed run" contract every Helm-driven
@@ -423,6 +448,25 @@ impl AplicacaoIntent {
                 retries: HELM_LIFECYCLE_DEFAULT_RETRIES,
             },
         }
+    }
+
+    /// Derive the Flux reconcile-loop cadence this intent publishes on
+    /// BOTH `OCIRepository.spec.interval` (source-controller poll) and
+    /// `HelmRelease.spec.interval` (helm-controller re-reconcile).
+    /// Pre-lift the reconciler's `render_aplicacao` restated the value
+    /// via two adjacent hand-authored `"5m"` string literals past the
+    /// ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold; post-lift both
+    /// slots ride through this ONE composer. A future divergence
+    /// (distinct per-slot cadences, a per-intent override field, a
+    /// two-slot method returning a `FluxReconcileIntervals` shape)
+    /// lands at ONE method here, not at the render callsites.
+    ///
+    /// Sibling composer to [`Self::helm_lifecycle_policy`]: both
+    /// return the substrate-default shape a Helm-driven Process
+    /// publishes on the Flux resources `render_aplicacao` emits,
+    /// keyed off the same `AplicacaoIntent`.
+    pub fn flux_reconcile_interval(&self) -> String {
+        FLUX_HELM_DEFAULT_INTERVAL.to_string()
     }
 }
 
@@ -1156,5 +1200,56 @@ mod tests {
         let default_policy = HelmLifecyclePolicy::workspace_default();
         let intent_policy = helm_intent(None).helm_lifecycle_policy();
         assert_eq!(default_policy, intent_policy);
+    }
+
+    // ── Flux reconcile interval — OCIRepository + HelmRelease shared ─
+
+    /// The workspace-wide default Flux reconcile-interval const is
+    /// pinned to `5m`. A regression that renamed it would silently
+    /// throttle or hammer every Helm-driven Process's OCIRepository
+    /// pull cadence AND its HelmRelease reconcile cadence, so pin
+    /// the byte-exact spelling here rather than at the two render
+    /// callsites the primitive owns.
+    #[test]
+    fn flux_helm_default_interval_is_pinned_to_5m() {
+        assert_eq!(FLUX_HELM_DEFAULT_INTERVAL, "5m");
+    }
+
+    /// The intent-side composer returns the workspace-wide default
+    /// verbatim today. A regression that hand-authored some other
+    /// string here (or that stopped routing through the const)
+    /// would surface at this pin.
+    #[test]
+    fn flux_reconcile_interval_returns_workspace_default() {
+        assert_eq!(
+            helm_intent(None).flux_reconcile_interval(),
+            FLUX_HELM_DEFAULT_INTERVAL,
+        );
+    }
+
+    /// Coherence axis: the reconcile interval is invariant across
+    /// every `install_timeout` shape the operator publishes today.
+    /// Pre-lift the two slots were siblings hand-authored with the
+    /// same `"5m"` value regardless of any other AplicacaoIntent
+    /// shape; post-lift the same invariance holds through the
+    /// composer. A future coupling (e.g. "when timeout is short,
+    /// reconcile more often") lands at the composer's shape, not
+    /// silently at any render callsite.
+    #[test]
+    fn flux_reconcile_interval_is_invariant_across_install_timeout_shapes() {
+        let seen: std::collections::BTreeSet<String> =
+            [None, Some("10m"), Some("1h30m"), Some("25m"), Some("2h")]
+                .into_iter()
+                .map(|t| helm_intent(t).flux_reconcile_interval())
+                .collect();
+        assert_eq!(
+            seen.len(),
+            1,
+            "reconcile interval should be constant across install_timeout shapes"
+        );
+        assert_eq!(
+            seen.into_iter().next().as_deref(),
+            Some(FLUX_HELM_DEFAULT_INTERVAL),
+        );
     }
 }

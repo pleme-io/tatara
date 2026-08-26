@@ -15,6 +15,42 @@ use tatara_process::prelude::{Process, RenderedResourceCoords};
 /// Field manager string we use for all SSA writes.
 pub const FIELD_MANAGER: &str = "tatara-reconciler";
 
+/// Shared 2-slot `{MANAGED_BY: FIELD_MANAGER, PROCESS: process_ref}`
+/// map — the ONE substrate primitive owning the byte-shape both
+/// [`ownership_annotations`] and [`ownership_labels`] return.
+///
+/// Pre-lift the 2-slot body was open-coded twice: once at
+/// `ownership_annotations` (annotations axis), once at
+/// `ownership_labels` (labels axis), each restating the same
+/// `serde_json::Map::new() + MANAGED_BY insert + PROCESS insert`
+/// scaffold verbatim. The two axis-typed public primitives now
+/// delegate to this ONE owner so the invariant "labels-axis and
+/// annotations-axis ownership tags are byte-identical" holds by
+/// construction, not by a cross-axis pin.
+///
+/// Private to the module: callers keep threading through the
+/// axis-typed [`ownership_annotations`] / [`ownership_labels`]
+/// primitives because their names encode "am I seeding an
+/// annotations block or a labels block" at the callsite — a
+/// grep-visible intent axis this internal helper deliberately
+/// erases. If the two axes ever diverge (e.g. a labels-only
+/// `VERSION` slot, or an annotations-only `LEASE_ID`), the
+/// diverging axis extends this base map at its public wrapper;
+/// the shared invariants (FIELD_MANAGER on MANAGED_BY, opaque
+/// pass-through on PROCESS) stay owned here.
+fn ownership_kv_pair(process_ref: &str) -> serde_json::Map<String, Value> {
+    let mut m = serde_json::Map::new();
+    m.insert(
+        annotations::MANAGED_BY.to_string(),
+        Value::String(FIELD_MANAGER.to_string()),
+    );
+    m.insert(
+        annotations::PROCESS.to_string(),
+        Value::String(process_ref.to_string()),
+    );
+    m
+}
+
 /// Substrate-primitive builder for the standard tatara-reconciler
 /// **ownership tag** — the 2-slot
 /// `{MANAGED_BY: FIELD_MANAGER, PROCESS: process_ref}`
@@ -65,6 +101,13 @@ pub const FIELD_MANAGER: &str = "tatara-reconciler";
 /// the upgrade mechanically — no per-site hand-edit at render.rs,
 /// edges.rs, or inject_annotations.
 ///
+/// Delegates to the shared [`ownership_kv_pair`] owner so the
+/// annotations-axis body is byte-identical to the labels-axis body
+/// by construction — the pre-existing cross-axis coherence pin
+/// [`tests::ownership_labels_pair_matches_annotations_pair`] now
+/// holds by construction rather than by two open-coded copies
+/// staying in sync.
+///
 /// Theory anchor: THEORY.md §VI.1 (generation over composition — the
 /// 2-slot shape recurred at five hand-authored sites well past the
 /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
@@ -74,16 +117,7 @@ pub const FIELD_MANAGER: &str = "tatara-reconciler";
 /// [`tests::ownership_annotations_produces_field_manager_and_process_ref`]
 /// rather than as silent drift at every downstream emit site).
 pub fn ownership_annotations(process_ref: &str) -> serde_json::Map<String, Value> {
-    let mut m = serde_json::Map::new();
-    m.insert(
-        annotations::MANAGED_BY.to_string(),
-        Value::String(FIELD_MANAGER.to_string()),
-    );
-    m.insert(
-        annotations::PROCESS.to_string(),
-        Value::String(process_ref.to_string()),
-    );
-    m
+    ownership_kv_pair(process_ref)
 }
 
 /// Substrate-primitive builder for the standard tatara-reconciler
@@ -147,6 +181,13 @@ pub fn ownership_annotations(process_ref: &str) -> serde_json::Map<String, Value
 /// to both primitives keeps the labels-axis and annotations-axis
 /// ownership tags in lockstep by construction.
 ///
+/// Delegates to the shared [`ownership_kv_pair`] owner so the
+/// labels-axis body is byte-identical to the annotations-axis body
+/// by construction — the pre-existing cross-axis coherence pin
+/// [`tests::ownership_labels_pair_matches_annotations_pair`] now
+/// holds by construction rather than by two open-coded copies
+/// staying in sync.
+///
 /// Theory anchor: THEORY.md §VI.1 (generation over composition —
 /// the 2-slot labels shape recurred at three hand-authored sites
 /// past the PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted
@@ -157,16 +198,7 @@ pub fn ownership_annotations(process_ref: &str) -> serde_json::Map<String, Value
 /// / [`tests::ownership_labels_pair_matches_annotations_pair`]
 /// rather than as silent drift at every downstream emit site).
 pub fn ownership_labels(process_ref: &str) -> serde_json::Map<String, Value> {
-    let mut m = serde_json::Map::new();
-    m.insert(
-        annotations::MANAGED_BY.to_string(),
-        Value::String(FIELD_MANAGER.to_string()),
-    );
-    m.insert(
-        annotations::PROCESS.to_string(),
-        Value::String(process_ref.to_string()),
-    );
-    m
+    ownership_kv_pair(process_ref)
 }
 
 /// Substrate-primitive builder for the standard tatara-reconciler
@@ -670,6 +702,116 @@ mod tests {
         let refs = obj["metadata"]["ownerReferences"].as_array().unwrap();
         assert_eq!(refs.len(), 1);
         assert_eq!(refs[0]["kind"], "Process");
+    }
+
+    // ─── ownership_kv_pair shared-owner pins ────────────────────────────
+    //
+    // The two axis-typed public primitives — `ownership_annotations`
+    // (annotations axis) and `ownership_labels` (labels axis) — now
+    // delegate to the private shared owner `ownership_kv_pair` rather
+    // than open-code the 2-slot map body twice. These pins bind the
+    // delegation at fail-before-pass-after granularity so a regression
+    // that re-open-coded the body at one of the two public wrappers
+    // (silently un-lifting the shared owner and re-introducing the
+    // possibility of one axis drifting from the other) surfaces here
+    // rather than as a subtle divergence between the two axes at every
+    // downstream emit site.
+
+    #[test]
+    fn ownership_kv_pair_produces_2_slot_map_with_field_manager() {
+        // Pin the shared owner's shipped shape directly — a regression
+        // that added a third slot, dropped one, or hard-coded the
+        // MANAGED_BY value back to a literal surfaces HERE rather
+        // than as silent drift at both axis-typed public wrappers
+        // simultaneously.
+        let m = ownership_kv_pair("demo-ns/demo-app");
+        assert_eq!(m.len(), 2);
+        assert_eq!(
+            m.get(annotations::MANAGED_BY).and_then(Value::as_str),
+            Some(FIELD_MANAGER),
+            "MANAGED_BY slot must carry FIELD_MANAGER"
+        );
+        assert_eq!(
+            m.get(annotations::PROCESS).and_then(Value::as_str),
+            Some("demo-ns/demo-app"),
+            "PROCESS slot must ride the caller-supplied process_ref verbatim"
+        );
+    }
+
+    #[test]
+    fn ownership_annotations_delegates_through_shared_kv_pair() {
+        // Pin the delegation: the annotations-axis public wrapper
+        // returns byte-identically what the shared owner returns.
+        // A regression that re-open-coded the body at
+        // `ownership_annotations` (e.g. seeded a third slot inline
+        // before the return, restoring the pre-lift duplication)
+        // surfaces HERE rather than as a labels/annotations divergence
+        // downstream.
+        for input in [
+            "flux-system/observability-stack",
+            "just-a-name",
+            "",
+            "ns/name@42",
+            "with spaces and / slashes",
+        ] {
+            assert_eq!(
+                ownership_annotations(input),
+                ownership_kv_pair(input),
+                "ownership_annotations must delegate to ownership_kv_pair verbatim for {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ownership_labels_delegates_through_shared_kv_pair() {
+        // Peer to the annotations-axis delegation pin: the labels-axis
+        // public wrapper returns byte-identically what the shared
+        // owner returns. Ensures the two public wrappers can never
+        // drift under the shared-owner design because both wrappers
+        // are proven to route through the same body.
+        for input in [
+            "flux-system/observability-stack",
+            "just-a-name",
+            "",
+            "ns/name@42",
+            "with spaces and / slashes",
+        ] {
+            assert_eq!(
+                ownership_labels(input),
+                ownership_kv_pair(input),
+                "ownership_labels must delegate to ownership_kv_pair verbatim for {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ownership_annotations_and_labels_share_body_by_construction() {
+        // Sharper than the pre-existing single-input
+        // `ownership_labels_pair_matches_annotations_pair` pin: sweep
+        // a range of `process_ref` shapes and prove the two public
+        // wrappers produce byte-identical maps on every one. Post-lift
+        // the invariant "labels-axis body == annotations-axis body"
+        // holds by CONSTRUCTION (both delegate to
+        // `ownership_kv_pair`), not by two open-coded copies staying
+        // in sync — the pre-existing pin still holds, and this
+        // extended sweep confirms the construction across the full
+        // input-shape sweep that
+        // `ownership_annotations_rides_arbitrary_process_ref_shapes`
+        // + `ownership_labels_rides_arbitrary_process_ref_shapes`
+        // already cover on their respective single axes.
+        for input in [
+            "flux-system/observability-stack",
+            "just-a-name",
+            "",
+            "ns/name@42",
+            "with spaces and / slashes",
+        ] {
+            assert_eq!(
+                ownership_annotations(input),
+                ownership_labels(input),
+                "labels and annotations axes must produce byte-identical maps for {input:?}"
+            );
+        }
     }
 
     // ─── ownership_annotations substrate pins ───────────────────────────

@@ -72,6 +72,76 @@ pub trait Edge {
     fn render(&self, ctx: &EdgeContext<'_>) -> Result<Option<Value>>;
 }
 
+// ─── Shared edge composers ─────────────────────────────────────────
+
+/// Substrate-primitive builder for the standard tatara-reconciler
+/// **routing-edge `metadata.labels` map** — the 4-slot
+/// `{MANAGED_BY, PROCESS, APP, ROUTING_FORM}` shape every emitted
+/// routing edge (Ingress + DNSEndpoint) stamps on itself so operator
+/// kubectl-side selectors (`kubectl get -l tatara.pleme.io/app=api,
+/// tatara.pleme.io/routing-form=stable`) reach every edge for a
+/// given `(app, form)` pair in ONE query regardless of edge kind.
+/// Seeds the two-slot ownership pair through the shared substrate
+/// primitive [`crate::ssapply::ownership_labels`] then extends with
+/// the two routing-axis labels ([`annotations::APP`] +
+/// [`annotations::ROUTING_FORM`]) that specialize the ownership
+/// tag to a routing edge.
+///
+/// Pre-lift the 5-line label-map composition was hand-authored at
+/// TWO sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold,
+/// each restating the same seed + APP-insert + ROUTING_FORM-insert
+/// (with the `RoutingForm::from_is_stable(ctx.is_stable).as_str()`
+/// call composed inline three levels deep):
+/// * [`IngressEdge::render`] — the Ingress `metadata.labels` seed
+///   before the `json!({...})` metadata composition.
+/// * [`DnsEndpointEdge::render`] — the DNSEndpoint `metadata.labels`
+///   seed before the `json!({...})` metadata composition, byte-
+///   identical to the Ingress version.
+///
+/// Post-lift both edges route through this ONE composer so a future
+/// edge kind (a Gateway API `HTTPRoute`, a `NetworkPolicy` edge, a
+/// Cloudflare API CR) sourcing the same label pair inherits the
+/// upgrade mechanically — no per-site hand-edit at the new render
+/// impl. The composer takes the whole [`EdgeContext`] rather than
+/// unpacked `(process_ref, app, form)` args because the trait's
+/// input IS the context, so every current + future [`Edge`] impl has
+/// exactly that shape in hand at the render site.
+///
+/// A future addition (e.g. a `HOSTNAME` slot naming the resolved
+/// FQDN, an `EDGE_KIND` slot letting selectors slice by
+/// Ingress-vs-DNSEndpoint on the same label axis, a `PRIORITY` slot
+/// carrying [`RoutingSpec::priority`][tatara_process::routing::RoutingSpec::priority]
+/// through to the labels axis for claim-arbitration greps) lands at
+/// this ONE substrate function and every edge kind inherits the
+/// upgrade mechanically.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// the 4-slot routing-edge labels shape recurred at two hand-
+/// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// trigger, and is lifted to ONE owner here). THEORY.md §II.1
+/// invariant 5 (composition preserves proofs — the pins in
+/// [`tests::routing_edge_labels_*`] bind the composed primitive to
+/// the pre-lift hand-authored shape byte-identically, so a
+/// regression that drifted the seed order, the APP slot value, or
+/// the ROUTING_FORM `as_str` byte-shape surfaces here rather than
+/// at every downstream edge kind).
+pub(crate) fn routing_edge_labels(ctx: &EdgeContext<'_>) -> serde_json::Map<String, Value> {
+    let mut labels = crate::ssapply::ownership_labels(ctx.process_ref);
+    labels.insert(
+        annotations::APP.to_string(),
+        Value::String(ctx.hostname.app.clone()),
+    );
+    labels.insert(
+        annotations::ROUTING_FORM.to_string(),
+        Value::String(
+            RoutingForm::from_is_stable(ctx.is_stable)
+                .as_str()
+                .to_string(),
+        ),
+    );
+    labels
+}
+
 // ─── IngressEdge ───────────────────────────────────────────────────
 
 /// Emit a `networking.k8s.io/v1` Ingress matching the FQDN, backed
@@ -130,27 +200,15 @@ impl Edge for IngressEdge {
 
         let owner_refs = build_owner_refs(ctx);
 
-        // Seed the labels map through the shared substrate primitive
-        // owning the 2-slot `{MANAGED_BY, PROCESS}` ownership tag on
-        // the labels axis (peer to `ownership_annotations` used above
-        // for the annotations axis); then extend with app +
-        // routing-form labels. Post-lift the labels ownership pair
-        // reads `FIELD_MANAGER` rather than the hand-coded
-        // `"tatara-reconciler"` literal, closing the same drift-risk
-        // sweep the annotations-axis primitive already closed.
-        let mut labels_map = crate::ssapply::ownership_labels(ctx.process_ref);
-        labels_map.insert(
-            annotations::APP.to_string(),
-            Value::String(ctx.hostname.app.clone()),
-        );
-        labels_map.insert(
-            annotations::ROUTING_FORM.to_string(),
-            Value::String(
-                RoutingForm::from_is_stable(ctx.is_stable)
-                    .as_str()
-                    .to_string(),
-            ),
-        );
+        // Seed the routing-edge labels map through the shared
+        // substrate composer that owns the 4-slot
+        // `{MANAGED_BY, PROCESS, APP, ROUTING_FORM}` shape every
+        // routing edge stamps — see [`routing_edge_labels`] for the
+        // pre-lift call-site inventory + the label-selector
+        // invariants a future edge kind (Gateway API HTTPRoute,
+        // NetworkPolicy edge, Cloudflare API CR) automatically
+        // inherits by routing through the same composer.
+        let labels_map = routing_edge_labels(ctx);
 
         let ingress = json!({
             "apiVersion": "networking.k8s.io/v1",
@@ -241,23 +299,13 @@ impl Edge for DnsEndpointEdge {
             Some(t) => t.clone(),
             None => return Ok(None),
         };
-        // Peer to the IngressEdge labels seed above and to the
-        // annotations-axis feed on the next line: the labels ownership
-        // pair rides through the shared substrate primitive so both
-        // axes on this resource are held in lockstep by construction.
-        let mut labels_map = crate::ssapply::ownership_labels(ctx.process_ref);
-        labels_map.insert(
-            annotations::APP.to_string(),
-            Value::String(ctx.hostname.app.clone()),
-        );
-        labels_map.insert(
-            annotations::ROUTING_FORM.to_string(),
-            Value::String(
-                RoutingForm::from_is_stable(ctx.is_stable)
-                    .as_str()
-                    .to_string(),
-            ),
-        );
+        // Peer to the IngressEdge labels seed above: both edges
+        // route through [`routing_edge_labels`] so the 4-slot
+        // `{MANAGED_BY, PROCESS, APP, ROUTING_FORM}` shape stays in
+        // lockstep by construction, and the annotations-axis feed
+        // on the next line rides through [`crate::ssapply::
+        // ownership_annotations`] on its own sibling primitive.
+        let labels_map = routing_edge_labels(ctx);
 
         let endpoint = json!({
             "apiVersion": "externaldns.k8s.io/v1alpha1",
@@ -491,5 +539,164 @@ mod tests {
         assert_eq!(edges.len(), 2);
         assert_eq!(edges[0].kind(), "Ingress");
         assert_eq!(edges[1].kind(), "DNSEndpoint");
+    }
+
+    // ─── routing_edge_labels substrate pins ───────────────────────
+    //
+    // The pre-lift 5-line label-map composition was hand-authored at
+    // TWO sites (`IngressEdge::render` + `DnsEndpointEdge::render`),
+    // each restating the same ownership-seed + APP-insert +
+    // ROUTING_FORM-insert. Every byte the pre-lift block produced
+    // is pinned here so a regression that inlined any of the four
+    // slots at a call site (breaking the primitive's role as the
+    // ONE source of truth for the routing-edge labels shape) fails
+    // HERE at the composer's shipped-shape pin rather than as
+    // silent drift across the two edge kinds.
+
+    #[test]
+    fn routing_edge_labels_seeds_ownership_pair_bytewise() {
+        // The composer starts from the ownership-labels seed —
+        // pin the byte-shape so a regression that dropped the
+        // seed call (open-coding the 4-slot literal) surfaces
+        // HERE, not as silent detachment from the sibling
+        // annotations-axis ownership tag.
+        let h = api_hostname();
+        let b = api_backend();
+        let c = ctx(&h, &b, "host", "demo-prod", false);
+        let labels = routing_edge_labels(&c);
+        let seed = crate::ssapply::ownership_labels(c.process_ref);
+        for (k, v) in &seed {
+            assert_eq!(
+                labels.get(k),
+                Some(v),
+                "routing_edge_labels must include the ownership seed for key {k}"
+            );
+        }
+    }
+
+    #[test]
+    fn routing_edge_labels_stamps_app_slot_from_hostname() {
+        // The APP slot value comes from `ctx.hostname.app` verbatim
+        // — pin against a distinctive value so a regression that
+        // swapped it for `ctx.process_name` or `ctx.fqdn` surfaces
+        // HERE.
+        let h = RoutingHostname {
+            app: "gateway".into(),
+            instance: Some("demo-prod".into()),
+            cluster: None,
+        };
+        let b = api_backend();
+        let c = ctx(&h, &b, "host", "demo-prod", false);
+        let labels = routing_edge_labels(&c);
+        assert_eq!(
+            labels.get(annotations::APP),
+            Some(&Value::String("gateway".to_string())),
+        );
+    }
+
+    #[test]
+    fn routing_edge_labels_stamps_routing_form_via_is_stable() {
+        // The ROUTING_FORM slot rides through
+        // `RoutingForm::from_is_stable(ctx.is_stable).as_str()` —
+        // pin both bool paths so a regression that flipped the
+        // is_stable branch surfaces HERE rather than as an
+        // operator-visible selector-mismatch after apply.
+        let h = api_hostname();
+        let b = api_backend();
+        for (is_stable, expected) in [(true, RoutingForm::Stable), (false, RoutingForm::Instance)] {
+            let c = ctx(&h, &b, "host", "demo-prod", is_stable);
+            let labels = routing_edge_labels(&c);
+            assert_eq!(
+                labels.get(annotations::ROUTING_FORM),
+                Some(&Value::String(expected.as_str().to_string())),
+                "routing_edge_labels must stamp ROUTING_FORM via RoutingForm::from_is_stable({is_stable})",
+            );
+        }
+    }
+
+    #[test]
+    fn routing_edge_labels_carries_all_four_slots() {
+        // The 4-slot pin — a regression that added a fifth key or
+        // dropped one of the four here would silently reshape
+        // every emitted routing edge's labels axis. Post-lift the
+        // 4-slot shape is fixed at ONE composer; any future addition
+        // (HOSTNAME, EDGE_KIND, PRIORITY, ...) lands here + this
+        // pin adjusts once.
+        let h = api_hostname();
+        let b = api_backend();
+        let c = ctx(&h, &b, "host", "demo-prod", true);
+        let labels = routing_edge_labels(&c);
+        assert_eq!(labels.len(), 4);
+        for k in [
+            tatara_process::annotations::MANAGED_BY,
+            tatara_process::annotations::PROCESS,
+            annotations::APP,
+            annotations::ROUTING_FORM,
+        ] {
+            assert!(
+                labels.contains_key(k),
+                "routing_edge_labels must contain slot: {k}"
+            );
+        }
+    }
+
+    #[test]
+    fn routing_edge_labels_matches_hand_authored_pre_lift_bytewise() {
+        // The exact 5-line hand-authored composition every pre-lift
+        // callsite restated. A regression that reordered a slot,
+        // dropped one, or added a fifth here surfaces at THIS pin
+        // rather than as a subtle apply-time selector drift when
+        // an operator's `kubectl get -l` misses the emitted edge.
+        let h = api_hostname();
+        let b = api_backend();
+        for is_stable in [true, false] {
+            let c = ctx(&h, &b, "host", "demo-prod", is_stable);
+            let via_composer = routing_edge_labels(&c);
+
+            // The pre-lift 5-line block, byte-for-byte.
+            let mut hand_authored = crate::ssapply::ownership_labels(c.process_ref);
+            hand_authored.insert(
+                annotations::APP.to_string(),
+                Value::String(c.hostname.app.clone()),
+            );
+            hand_authored.insert(
+                annotations::ROUTING_FORM.to_string(),
+                Value::String(
+                    RoutingForm::from_is_stable(c.is_stable)
+                        .as_str()
+                        .to_string(),
+                ),
+            );
+
+            assert_eq!(via_composer, hand_authored);
+        }
+    }
+
+    #[test]
+    fn ingress_and_dns_endpoint_labels_stay_in_lockstep() {
+        // Cross-edge coherence pin: both edge kinds route through
+        // `routing_edge_labels`, so their emitted `metadata.labels`
+        // maps must be byte-identical for the same context. A
+        // regression that reshaped one caller in isolation surfaces
+        // HERE, not as silent divergence between the Ingress and
+        // DNSEndpoint label axes an operator's selector would
+        // silently miss on one edge kind but not the other.
+        let h = api_hostname();
+        let b = api_backend();
+        for is_stable in [true, false] {
+            let c = ctx(&h, &b, "host", "demo-prod", is_stable);
+            let ingress = IngressEdge.render(&c).unwrap().unwrap();
+            let dns = DnsEndpointEdge {
+                ingress_lb_target: Some("lb.example.com".into()),
+                ttl_seconds: 60,
+            }
+            .render(&c)
+            .unwrap()
+            .unwrap();
+            assert_eq!(
+                ingress["metadata"]["labels"], dns["metadata"]["labels"],
+                "routing edges must carry byte-identical labels (is_stable={is_stable})",
+            );
+        }
     }
 }

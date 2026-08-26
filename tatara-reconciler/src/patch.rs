@@ -9,6 +9,7 @@
 use chrono::Utc;
 use kube::api::{Api, Patch, PatchParams, PostParams};
 use kube::Error as KubeError;
+use serde::Serialize;
 use serde_json::{json, Value};
 
 use tatara_process::phase::ProcessPhase;
@@ -101,6 +102,48 @@ pub fn phase_status_msg(phase: ProcessPhase, message: impl Into<String>) -> Valu
         "phaseSince": Utc::now(),
         "message": message.into(),
     })
+}
+
+/// Status patch builder — phase + phaseSince + one extra sibling key/value
+/// pair.
+///
+/// The `phase + phaseSince + <extra_key>: <extra_val>` shape recurred at
+/// two hand-authored callsites in `phase_machine.rs` (Running-entry
+/// attaching `"fluxResources": refs`, Attested-entry attaching
+/// `"attestation": next`) at the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// threshold before this primitive existed; each site inlined `json!({
+/// "phase": ..., "phaseSince": Utc::now(), <key>: <val> })` verbatim.
+/// Post-lift both callsites collapse to one line each and a future
+/// addition to the base shape (a `by:` field for the signal source, a
+/// `transitionCount:` diagnostic counter, a structured message
+/// envelope, a shared `at:` alias for `phaseSince`) lands at ONE
+/// substrate function and both callsites inherit the upgrade
+/// mechanically.
+///
+/// The extra key is `&'static str` — accepts only compile-time
+/// literals, which is how both current callsites use it
+/// (`"fluxResources"`, `"attestation"`). A `debug_assert!` catches a
+/// regression where the extra key collides with one of the base slots
+/// (`"phase"` / `"phaseSince"`), which would silently overwrite the
+/// base slot on merge and corrupt the status patch shape.
+///
+/// The extra value is `impl Serialize` — accepts owned or borrowed
+/// values of any serde-serialisable type without widening the
+/// signature (both current callsites pass borrowed references:
+/// `&Vec<FluxResourceRef>` and `&ProcessAttestation`). A serialisation
+/// failure resolves to `Value::Null`, matching the existing
+/// `phase_status(phase, identity)` primitive's posture.
+pub fn phase_status_with<T: Serialize>(phase: ProcessPhase, key: &'static str, value: T) -> Value {
+    debug_assert!(
+        key != "phase" && key != "phaseSince",
+        "phase_status_with: extra key `{key}` collides with a base slot",
+    );
+    let mut v = json!({
+        "phase": phase,
+        "phaseSince": Utc::now(),
+    });
+    v[key] = serde_json::to_value(value).unwrap_or(Value::Null);
+    v
 }
 
 // ─── finalizer helpers ────────────────────────────────────────────────
@@ -422,5 +465,174 @@ mod tests {
         assert!(msg.get("message").is_some());
         // Both agree on the phase discriminant they were built with.
         assert_eq!(bare.get("phase"), msg.get("phase"));
+    }
+
+    // ─── phase_status_with substrate pins ─────────────────────────────────
+    //
+    // The three-slot `phase + phaseSince + <extra_key>: <extra_val>` shape
+    // recurred at two hand-authored callsites (Running-entry attaching
+    // `fluxResources`, Attested-entry attaching `attestation`) at the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold before `phase_status_with`
+    // closed it. These pins bind the primitive at fail-before-pass-after
+    // granularity so a regression that dropped a slot, renamed a key,
+    // reshaped the extra value, or silently overwrote a base slot surfaces
+    // HERE rather than as operator-visible drift at every downstream
+    // transition.
+
+    #[test]
+    fn phase_status_with_composes_the_three_slots() {
+        // The primary shape asserted end-to-end: exactly ONE `phase` slot
+        // + ONE `phaseSince` slot + ONE caller-named extra slot, no
+        // sibling leaks (a `spec`/`status`/`message` leak that would
+        // silently overwrite unrelated status keys on merge surfaces
+        // here).
+        let v = phase_status_with(
+            ProcessPhase::Running,
+            "fluxResources",
+            serde_json::json!([]),
+        );
+        let obj = v.as_object().expect("object");
+        assert_eq!(obj.len(), 3);
+        assert_eq!(
+            obj.get("phase").and_then(Value::as_str),
+            Some("Running"),
+            "phase key present and serialises as the discriminant string"
+        );
+        assert!(
+            obj.get("phaseSince")
+                .and_then(Value::as_str)
+                .is_some_and(|s| chrono::DateTime::parse_from_rfc3339(s).is_ok()),
+            "phaseSince key present and is a valid RFC-3339 timestamp"
+        );
+        assert!(
+            obj.get("fluxResources").and_then(Value::as_array).is_some(),
+            "extra key present under its caller-named slot",
+        );
+    }
+
+    #[test]
+    fn phase_status_with_stamps_phase_since_at_call_time() {
+        let before = Utc::now();
+        let v = phase_status_with(ProcessPhase::Attested, "attestation", serde_json::json!({}));
+        let after = Utc::now();
+        let stamped = v
+            .get("phaseSince")
+            .and_then(Value::as_str)
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .expect("phaseSince is an RFC-3339 timestamp");
+        let stamped_utc = stamped.with_timezone(&chrono::Utc);
+        assert!(
+            (before..=after).contains(&stamped_utc),
+            "phaseSince ({stamped_utc}) must land in [{before}, {after}] — the primitive stamps at call time"
+        );
+    }
+
+    #[test]
+    fn phase_status_with_matches_hand_authored_pre_lift_bytewise() {
+        // Byte-identical parity with the pre-lift `json!({ "phase": ...,
+        // "phaseSince": Utc::now(), <key>: <val> })` block that both
+        // callsites restated verbatim, swept across the two representative
+        // axes: (a) key=`"fluxResources"`, value=Vec<obj> (Running-entry
+        // shape), (b) key=`"attestation"`, value=obj (Attested-entry
+        // shape). A regression that reshaped the primitive would diverge
+        // from the pre-lift block HERE rather than at every downstream
+        // K8s round-trip.
+        //
+        // Both blocks build a fresh Utc::now() so the two `phaseSince`
+        // stamps CAN differ by the wall-clock delta between calls; drop
+        // that slot before comparing.
+        for (key, value) in [
+            (
+                "fluxResources",
+                serde_json::json!([
+                    {"kind": "Kustomization", "name": "a", "namespace": "ns"},
+                    {"kind": "HelmRelease",   "name": "b", "namespace": "ns"},
+                ]),
+            ),
+            (
+                "attestation",
+                serde_json::json!({
+                    "generation": 1,
+                    "composed_root": "deadbeef",
+                }),
+            ),
+        ] {
+            let mut composed = phase_status_with(ProcessPhase::Running, key, value.clone());
+            let mut hand_authored = json!({
+                "phase": ProcessPhase::Running,
+                "phaseSince": Utc::now(),
+                key: value,
+            });
+            composed
+                .as_object_mut()
+                .expect("object")
+                .remove("phaseSince");
+            hand_authored
+                .as_object_mut()
+                .expect("object")
+                .remove("phaseSince");
+            assert_eq!(
+                composed, hand_authored,
+                "primitive must be byte-identical to the pre-lift json! block for key `{key}`"
+            );
+        }
+    }
+
+    #[test]
+    fn phase_status_with_serialises_borrowed_typed_values() {
+        // Both current callsites pass BORROWED references
+        // (`&Vec<FluxResourceRef>`, `&ProcessAttestation`) — the primitive's
+        // `T: Serialize` bound must accept them without a widening
+        // signature. Pinned against a `&Vec<i32>` (structurally a Vec of
+        // Serialize) and a `&BTreeMap<String, String>` (structurally an
+        // object of Serialize) — both representative of the shapes the
+        // production callsites feed.
+        use std::collections::BTreeMap;
+
+        let refs: Vec<i32> = vec![1, 2, 3];
+        let vec_val = phase_status_with(ProcessPhase::Running, "list", &refs);
+        assert_eq!(
+            vec_val.get("list").and_then(Value::as_array).map(Vec::len),
+            Some(3),
+            "borrowed &Vec<Serialize> rides through as an array of length 3"
+        );
+
+        let mut map: BTreeMap<String, String> = BTreeMap::new();
+        map.insert("k".to_string(), "v".to_string());
+        let map_val = phase_status_with(ProcessPhase::Attested, "obj", &map);
+        assert_eq!(
+            map_val.pointer("/obj/k").and_then(Value::as_str),
+            Some("v"),
+            "borrowed &BTreeMap<String, String> rides through as a nested object"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "collides with a base slot")]
+    fn phase_status_with_debug_asserts_on_phase_slot_collision() {
+        // A regression that passed `key = "phase"` would silently
+        // overwrite the base `phase` slot with the extra value on
+        // insert-order-loss and the operator would see the wrong phase on
+        // the wire; the debug_assert catches it at the primitive.
+        let _ = phase_status_with(
+            ProcessPhase::Running,
+            "phase",
+            serde_json::json!("Attested"),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "collides with a base slot")]
+    fn phase_status_with_debug_asserts_on_phase_since_slot_collision() {
+        // Peer pin on the `phaseSince` axis — a regression that passed
+        // `key = "phaseSince"` would silently overwrite the base
+        // timestamp with the extra value and the operator would see the
+        // wrong phase-transition instant on the wire; the debug_assert
+        // catches it at the primitive.
+        let _ = phase_status_with(
+            ProcessPhase::Attested,
+            "phaseSince",
+            serde_json::json!("1970-01-01T00:00:00Z"),
+        );
     }
 }

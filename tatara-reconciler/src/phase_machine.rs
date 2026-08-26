@@ -235,14 +235,13 @@ pub async fn handle_execing(p: &Process, ctx: &Context) -> Result<Action> {
     };
 
     let api = ctx.process_api(&ns);
-    let body = json!({
-        "phase": ProcessPhase::Running,
-        "phaseSince": chrono::Utc::now(),
-        "fluxResources": refs,
-    });
-    patch::patch_process_status(&api, &name, body)
-        .await
-        .map_err(|e| anyhow!("patch status (execing→running): {e}"))?;
+    patch::patch_process_status(
+        &api,
+        &name,
+        patch::phase_status_with(ProcessPhase::Running, "fluxResources", &refs),
+    )
+    .await
+    .map_err(|e| anyhow!("patch status (execing→running): {e}"))?;
 
     info!(
         namespace = %ns,
@@ -469,14 +468,13 @@ async fn advance_to_attested(
     let generation = next.generation;
 
     let api = ctx.process_api(ns);
-    let body = json!({
-        "phase": ProcessPhase::Attested,
-        "phaseSince": chrono::Utc::now(),
-        "attestation": next,
-    });
-    patch::patch_process_status(&api, name, body)
-        .await
-        .map_err(|e| anyhow!("patch attestation: {e}"))?;
+    patch::patch_process_status(
+        &api,
+        name,
+        patch::phase_status_with(ProcessPhase::Attested, "attestation", &next),
+    )
+    .await
+    .map_err(|e| anyhow!("patch attestation: {e}"))?;
 
     info!(
         namespace = %ns,

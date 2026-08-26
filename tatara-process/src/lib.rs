@@ -94,7 +94,7 @@ pub mod prelude {
         default_receipt_config_map_name, ReceiptEnvelope, ReceiptError, ReceiptKind,
         RECEIPT_CM_SUFFIX, RECEIPT_VERSION,
     };
-    pub use crate::routing::{RoutingBackend, RoutingHostname, RoutingSpec};
+    pub use crate::routing::{RoutingBackend, RoutingForm, RoutingHostname, RoutingSpec};
     pub use crate::signal::{ProcessSignal, SighupStrategy, UnknownSighupStrategy};
     pub use crate::spec::{
         DependsOn, IdentitySpec, MustReachPhase, SignalPolicy, UnknownMustReachPhase,
@@ -187,6 +187,20 @@ pub mod annotations {
     /// receipt ConfigMap so the reconciler can correlate them
     /// without re-parsing the spec JSON.
     pub const EXPORT_INDEX: &str = "tatara.pleme.io/export-index";
+    /// Label / annotation key stamping which
+    /// `RoutingSpec.hostnames` entry a routing edge (Ingress /
+    /// DNSEndpoint) belongs to. Value is the entry's `app` slot;
+    /// a `label`-selector on this key slices every emitted edge
+    /// for a given `app` regardless of hostname form. Peer to
+    /// [`ROUTING_FORM`] on the routing-axis pair.
+    pub const APP: &str = "tatara.pleme.io/app";
+    /// Label / annotation key stamping the routing form
+    /// (`"stable"` | `"instance"`) on every emitted routing edge.
+    /// Value is a [`crate::routing::RoutingForm`] wire-form string;
+    /// consumers filtering the two forms compare to
+    /// [`RoutingForm::as_str`][crate::routing::RoutingForm::as_str],
+    /// never to a bare literal.
+    pub const ROUTING_FORM: &str = "tatara.pleme.io/routing-form";
 }
 
 /// Standard finalizer for the Process reconciler.

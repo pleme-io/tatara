@@ -24,7 +24,8 @@
 use anyhow::Result;
 use serde_json::{json, Value};
 
-use tatara_process::routing::{RoutingBackend, RoutingHostname};
+use tatara_process::annotations;
+use tatara_process::routing::{RoutingBackend, RoutingForm, RoutingHostname};
 
 /// Per-render context the edges share. The reconciler builds this
 /// once at the start of `render_routing` so each edge sees the same
@@ -101,18 +102,19 @@ impl Edge for IngressEdge {
         // Seed the annotations map through the shared substrate primitive
         // owning the 2-slot `{MANAGED_BY, PROCESS}` ownership tag; then
         // extend with routing-form + backend + cert-manager annotations.
+        // The routing-form axis rides through ONE typed composer
+        // (`RoutingForm::from_is_stable` + `as_str`) so the two pre-lift
+        // branches collapse to a single insert whose value is decided by
+        // the enum, not by an inline ternary restated per site.
         let mut annotations_map = crate::ssapply::ownership_annotations(ctx.process_ref);
-        if ctx.is_stable {
-            annotations_map.insert(
-                "tatara.pleme.io/routing-form".to_string(),
-                Value::String("stable".into()),
-            );
-        } else {
-            annotations_map.insert(
-                "tatara.pleme.io/routing-form".to_string(),
-                Value::String("instance".into()),
-            );
-        }
+        annotations_map.insert(
+            annotations::ROUTING_FORM.to_string(),
+            Value::String(
+                RoutingForm::from_is_stable(ctx.is_stable)
+                    .as_str()
+                    .to_string(),
+            ),
+        );
         for (k, v) in &ctx.backend.ingress_annotations {
             annotations_map.insert(k.clone(), Value::String(v.clone()));
         }
@@ -138,12 +140,16 @@ impl Edge for IngressEdge {
         // sweep the annotations-axis primitive already closed.
         let mut labels_map = crate::ssapply::ownership_labels(ctx.process_ref);
         labels_map.insert(
-            "tatara.pleme.io/app".to_string(),
+            annotations::APP.to_string(),
             Value::String(ctx.hostname.app.clone()),
         );
         labels_map.insert(
-            "tatara.pleme.io/routing-form".to_string(),
-            Value::String(if ctx.is_stable { "stable" } else { "instance" }.to_string()),
+            annotations::ROUTING_FORM.to_string(),
+            Value::String(
+                RoutingForm::from_is_stable(ctx.is_stable)
+                    .as_str()
+                    .to_string(),
+            ),
         );
 
         let ingress = json!({
@@ -241,12 +247,16 @@ impl Edge for DnsEndpointEdge {
         // axes on this resource are held in lockstep by construction.
         let mut labels_map = crate::ssapply::ownership_labels(ctx.process_ref);
         labels_map.insert(
-            "tatara.pleme.io/app".to_string(),
+            annotations::APP.to_string(),
             Value::String(ctx.hostname.app.clone()),
         );
         labels_map.insert(
-            "tatara.pleme.io/routing-form".to_string(),
-            Value::String(if ctx.is_stable { "stable" } else { "instance" }.to_string()),
+            annotations::ROUTING_FORM.to_string(),
+            Value::String(
+                RoutingForm::from_is_stable(ctx.is_stable)
+                    .as_str()
+                    .to_string(),
+            ),
         );
 
         let endpoint = json!({
@@ -364,8 +374,8 @@ mod tests {
         );
         // routing-form annotation present.
         assert_eq!(
-            r["metadata"]["annotations"]["tatara.pleme.io/routing-form"],
-            "instance"
+            r["metadata"]["annotations"][annotations::ROUTING_FORM],
+            RoutingForm::Instance.as_str()
         );
     }
 
@@ -381,8 +391,8 @@ mod tests {
             "api.pleme-dev.use1.quero.lol"
         );
         assert_eq!(
-            r["metadata"]["annotations"]["tatara.pleme.io/routing-form"],
-            "stable"
+            r["metadata"]["annotations"][annotations::ROUTING_FORM],
+            RoutingForm::Stable.as_str()
         );
     }
 

@@ -150,6 +150,67 @@ impl RoutingHostname {
     }
 }
 
+/// Wire-form value stamped at
+/// [`tatara_process::annotations::ROUTING_FORM`][
+/// crate::annotations::ROUTING_FORM] on every routing edge
+/// (Ingress + DNSEndpoint) — both the `annotations` axis and the
+/// `labels` axis carry it. Distinguishes the two FQDN shapes
+/// [`RoutingSpec`] emits: the per-instance form
+/// (`${app}.${eph_id}.${cluster}.${loc}.${domain}`) and the
+/// stable-claim form (`${app}.${cluster}.${loc}.${domain}`,
+/// emitted iff `stable_name_claim` is set and this Process
+/// currently holds the ProcessTable claim for `(cluster, app)`).
+///
+/// The pre-lift reconciler restated the same
+/// `if ctx.is_stable { "stable" } else { "instance" }` ternary at
+/// three call sites (an Ingress annotation, an Ingress label, a
+/// DNSEndpoint label) plus two byte-literal comparison sites in
+/// render tests. This typed enum turns that stringly-typed
+/// disjunction into a two-variant type with a single wire
+/// encoding, so a future edge kind (a Gateway API `HTTPRoute`, a
+/// `NetworkPolicy` edge) sourcing the axis through
+/// [`RoutingForm::from_is_stable`] + [`RoutingForm::as_str`]
+/// cannot drift from the two existing edges' spellings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RoutingForm {
+    /// Emitted iff `RoutingSpec.stable_name_claim = true` AND
+    /// this Process currently holds the ProcessTable claim for
+    /// `(cluster, app)`. FQDN drops the `${eph_id}` segment.
+    Stable,
+    /// Emitted for every declared hostname entry (default). FQDN
+    /// carries the `${eph_id}` segment resolved by
+    /// [`crate::hostname::resolve_ephemeral_id`].
+    Instance,
+}
+
+impl RoutingForm {
+    /// Wire-form byte-shape stamped into the
+    /// [`ROUTING_FORM`][crate::annotations::ROUTING_FORM]
+    /// annotation / label. The reconciler's stable-form filter
+    /// checks byte-identity against these two strings — a rename
+    /// here is a wire-form break every operator's kubectl-side
+    /// selector notices.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            RoutingForm::Stable => "stable",
+            RoutingForm::Instance => "instance",
+        }
+    }
+
+    /// Route the reconciler's `EdgeContext::is_stable` bool
+    /// through ONE composer so every downstream axis (the
+    /// stable-form suffix in edge resource names + the
+    /// [`ROUTING_FORM`][crate::annotations::ROUTING_FORM] value
+    /// on labels + annotations) shares the same source of truth.
+    pub const fn from_is_stable(is_stable: bool) -> Self {
+        if is_stable {
+            RoutingForm::Stable
+        } else {
+            RoutingForm::Instance
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -296,10 +357,7 @@ mod tests {
         assert_eq!(d.name, "demo-edges");
         assert_eq!(d.spec.hostnames.len(), 2);
         assert_eq!(d.spec.hostnames[0].app, "api");
-        assert_eq!(
-            d.spec.hostnames[0].instance.as_deref(),
-            Some("demo-prod")
-        );
+        assert_eq!(d.spec.hostnames[0].instance.as_deref(), Some("demo-prod"));
         assert_eq!(d.spec.backend.service, "demo-app-gateway");
         assert_eq!(d.spec.backend.port, 8000);
         assert!(d.spec.stable_name_claim);
@@ -323,6 +381,70 @@ mod tests {
         assert_eq!(d.spec.hostnames[0].instance, None);
         assert!(!d.spec.stable_name_claim); // default false
         assert_eq!(d.spec.priority, 0); // default 0
+    }
+
+    // ─── RoutingForm substrate pins ───────────────────────────────
+    //
+    // The pre-lift `tatara-reconciler::edges` sites hand-wrote
+    // three `if ctx.is_stable { "stable" } else { "instance" }`
+    // ternaries at every axis (Ingress annotation, Ingress label,
+    // DNSEndpoint label) plus two byte-literal reads in render
+    // tests. Every byte the ternary + literals produced is pinned
+    // here so a rename of a `RoutingForm::as_str` arm surfaces at
+    // THIS composer's shipped-shape pin rather than as silent
+    // drift between the pre-lift edge sites (which pre-lift had
+    // already grown five copies of the same two-literal set).
+
+    #[test]
+    fn routing_form_as_str_matches_wire_form_pre_lift() {
+        // Byte-identity pin: the pre-lift ternary at
+        // `edges.rs::IngressEdge::render`,
+        // `edges.rs::DnsEndpointEdge::render` restated these two
+        // literals verbatim. A rename here is an
+        // operator-visible selector-mismatch after apply.
+        assert_eq!(RoutingForm::Stable.as_str(), "stable");
+        assert_eq!(RoutingForm::Instance.as_str(), "instance");
+    }
+
+    #[test]
+    fn routing_form_from_is_stable_routes_true_and_false() {
+        // Boolean → enum decision pinned here rather than restated
+        // as an inline ternary at every callsite.
+        assert_eq!(RoutingForm::from_is_stable(true), RoutingForm::Stable);
+        assert_eq!(RoutingForm::from_is_stable(false), RoutingForm::Instance);
+    }
+
+    #[test]
+    fn routing_form_round_trip_via_bool() {
+        // The decision the reconciler's `EdgeContext::is_stable`
+        // bool encodes is a two-variant disjunction; round-trip
+        // both bool values through the enum to prove the composer
+        // preserves the axis in both directions.
+        for is_stable in [true, false] {
+            let form = RoutingForm::from_is_stable(is_stable);
+            let expected = if is_stable { "stable" } else { "instance" };
+            assert_eq!(form.as_str(), expected);
+        }
+    }
+
+    #[test]
+    fn routing_form_annotation_key_is_prefixed_process_ns() {
+        // Byte-shape pin against the pre-lift string literal
+        // `edges.rs` restated four times (two annotation branches
+        // + two label sites). A rename that missed one of the
+        // pre-lift sites would silently split the axis across two
+        // K8s label keys — the const now closes that drift path.
+        assert_eq!(
+            crate::annotations::ROUTING_FORM,
+            "tatara.pleme.io/routing-form"
+        );
+    }
+
+    #[test]
+    fn routing_app_annotation_key_is_prefixed_process_ns() {
+        // Peer to `ROUTING_FORM`: pre-lift restated at the two
+        // `edges.rs` label sites (Ingress + DNSEndpoint).
+        assert_eq!(crate::annotations::APP, "tatara.pleme.io/app");
     }
 
     #[test]
@@ -355,10 +477,7 @@ mod tests {
         assert!(yaml.contains("tlsIssuer: letsencrypt-prod"));
         assert!(yaml.contains("rate-limit"));
         let back: RoutingSpec = serde_yaml::from_str(&yaml).unwrap();
-        assert_eq!(
-            back.backend.tls_issuer.as_deref(),
-            Some("letsencrypt-prod")
-        );
+        assert_eq!(back.backend.tls_issuer.as_deref(), Some("letsencrypt-prod"));
         assert_eq!(back.backend.ingress_annotations.len(), 2);
     }
 }

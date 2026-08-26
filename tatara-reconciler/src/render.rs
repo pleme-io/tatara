@@ -1380,8 +1380,10 @@ mod routing_tests {
         let stable_count = with
             .iter()
             .filter(|v| {
-                v["metadata"]["annotations"]["tatara.pleme.io/routing-form"] == "stable"
-                    || v["metadata"]["labels"]["tatara.pleme.io/routing-form"] == "stable"
+                v["metadata"]["annotations"][annotations::ROUTING_FORM]
+                    == tatara_process::routing::RoutingForm::Stable.as_str()
+                    || v["metadata"]["labels"][annotations::ROUTING_FORM]
+                        == tatara_process::routing::RoutingForm::Stable.as_str()
             })
             .count();
         assert_eq!(stable_count, 4); // 2 hostnames × 2 edges in stable form

@@ -139,14 +139,20 @@ fn render_flux(name: &str, ns: &str, f: &FluxIntent) -> (Vec<Value>, Vec<u8>) {
         );
     }
 
+    // 3-slot Flux-owned resource metadata shape routes through the
+    // shared substrate composer [`crate::ssapply::owned_flux_metadata`]
+    // — pre-lift this Kustomization site was ONE of THREE hand-authored
+    // `{name, namespace, annotations: ownership_annotations_by_coord(ns,
+    // name)}` blocks past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // trigger (Kustomization here + OCIRepository + HelmRelease in
+    // `render_aplicacao`). Post-lift the 3-slot shape lives at ONE
+    // owner; a future upgrade (labels axis, finalizers slot,
+    // generateName / resourceVersion precondition slots) lands at the
+    // primitive and every Flux emit site inherits mechanically.
     let kustomization = json!({
         "apiVersion": "kustomize.toolkit.fluxcd.io/v1",
         "kind": "Kustomization",
-        "metadata": {
-            "name": name,
-            "namespace": ns,
-            "annotations": crate::ssapply::ownership_annotations_by_coord(ns, name),
-        },
+        "metadata": crate::ssapply::owned_flux_metadata(ns, name),
         "spec": Value::Object(spec),
     });
 
@@ -191,14 +197,16 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
     // Anything else is treated as `<repo-name>/<chart-name>` against a
     // pre-existing HelmRepository (operator pre-creates the repo).
     let (mut resources, chart_block) = if let Some(oci) = parse_oci_ref(&a.chart_ref) {
+        // 3-slot Flux-owned resource metadata shape routes through the
+        // shared substrate composer [`crate::ssapply::owned_flux_metadata`]
+        // — sibling to the Kustomization site in `render_flux` and the
+        // HelmRelease site below; the three pre-lift hand-authored
+        // `{name, namespace, annotations: ownership_annotations_by_coord(
+        // ns, name)}` blocks now compose at ONE owner.
         let oci_repo = json!({
             "apiVersion": "source.toolkit.fluxcd.io/v1beta2",
             "kind": "OCIRepository",
-            "metadata": {
-                "name": name,
-                "namespace": ns,
-                "annotations": crate::ssapply::ownership_annotations_by_coord(ns, name),
-            },
+            "metadata": crate::ssapply::owned_flux_metadata(ns, name),
             "spec": {
                 // Flux `OCIRepository.spec.interval` — pre-lift this
                 // was a hand-authored `"5m"` string literal past the
@@ -281,14 +289,16 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
     hr_spec.insert("upgrade".into(), lifecycle);
     hr_spec.insert("values".into(), Value::Object(values));
 
+    // 3-slot Flux-owned resource metadata shape routes through the
+    // shared substrate composer [`crate::ssapply::owned_flux_metadata`]
+    // — sibling to the OCIRepository site above and the Kustomization
+    // site in `render_flux`; the three pre-lift hand-authored `{name,
+    // namespace, annotations: ownership_annotations_by_coord(ns,
+    // name)}` blocks now compose at ONE owner.
     let helm_release = json!({
         "apiVersion": "helm.toolkit.fluxcd.io/v2",
         "kind": "HelmRelease",
-        "metadata": {
-            "name": name,
-            "namespace": ns,
-            "annotations": crate::ssapply::ownership_annotations_by_coord(ns, name),
-        },
+        "metadata": crate::ssapply::owned_flux_metadata(ns, name),
         "spec": Value::Object(hr_spec),
     });
     resources.push(helm_release);

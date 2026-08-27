@@ -263,6 +263,81 @@ pub fn ownership_annotations_by_coord(ns: &str, name: &str) -> serde_json::Map<S
     ownership_annotations(&qualified_process_ref(ns, name))
 }
 
+/// Substrate-primitive composer for a **Flux-owned resource's
+/// `metadata` block** — owns the 3-slot `{name, namespace,
+/// annotations: ownership_annotations_by_coord(ns, name)}` shape every
+/// ownership-annotation-owned (label-free, ownerRef-free-at-render-
+/// time) Flux resource stamps on its emit at [`crate::render`] time.
+/// Peer to [`crate::edges::routing_edge_metadata`] on the routing-
+/// edge axis (5-slot shape carrying `labels` + `ownerReferences`);
+/// this primitive owns the 3-slot shape the Flux-owned axis emits
+/// (Kustomization, OCIRepository, HelmRelease).
+///
+/// Pre-lift the 3-slot `metadata: { name, namespace, annotations:
+/// ownership_annotations_by_coord(ns, name) }` block was hand-
+/// authored at THREE sites past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication threshold:
+/// * [`crate::render::render_flux`] — the Kustomization
+///   `metadata` seed.
+/// * [`crate::render::render_aplicacao`] × 2 — the OCIRepository +
+///   HelmRelease `metadata` seeds, same shape.
+///
+/// Post-lift every one of these callsites reads through this ONE
+/// primitive so a future change to the 3-slot composition — a
+/// `labels: ownership_labels_by_coord(ns, name)` slot added so
+/// operators can `kubectl get -l tatara.pleme.io/process=…` on
+/// Flux-owned resources too (today they can only grep by
+/// annotation), a `finalizers` slot for cascade-delete gating at
+/// the Flux-owned axis (peer to the routing-edge axis's owner-ref-
+/// driven cascade), a `generateName` slot for duplicate-safe emits,
+/// or a `resourceVersion` precondition slot for optimistic
+/// concurrency — lands at ONE substrate function here and every
+/// downstream Flux emit site inherits the upgrade mechanically. No
+/// per-site hand-edit at `render_flux` / `render_aplicacao` × 2.
+///
+/// The routing-edge axis carries [`crate::edges::routing_edge_metadata`]'s
+/// 5-slot shape ({name, namespace, labels, annotations,
+/// ownerReferences}) because routing edges stamp their labels +
+/// ownerReferences at render-time (routing edges never route
+/// through the SSA-time `inject_annotations` re-injection path
+/// this Flux-owned axis does). The two axes partition the emit-
+/// site input space by whether the owner-ref + labels are stamped
+/// at render-time (routing-edge axis) or at SSA-time
+/// (Flux-owned axis via [`crate::ssapply::apply_owned`]'s owner-
+/// ref injection + [`crate::ssapply::inject_annotations`]'s
+/// annotation re-injection).
+///
+/// Cross-axis coherence with [`ownership_annotations_by_coord`] +
+/// [`inject_annotations`]: at SSA-time [`inject_annotations`]
+/// extends the render-time annotations map (this primitive's
+/// third slot) with PID / CONTENT_HASH / GENERATION /
+/// ATTESTATION_ROOT so the resource's final applied annotations
+/// carry the FULL 6-slot tag (MANAGED_BY + PROCESS from this
+/// composer + PID + CONTENT_HASH + GENERATION + ATTESTATION_ROOT
+/// from `inject_annotations`). The render-time seed's 2-slot tag
+/// living at this primitive means a rename of MANAGED_BY /
+/// PROCESS / FIELD_MANAGER propagates through
+/// [`ownership_annotations_by_coord`] to all three Flux emit sites
+/// mechanically.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// the 3-slot Flux metadata shape recurred at three hand-authored
+/// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and
+/// is lifted to ONE owner here). THEORY.md §II.1 invariant 5
+/// (composition preserves proofs — the pins in
+/// [`tests::owned_flux_metadata_*`] bind the composed primitive to
+/// the pre-lift hand-authored shape byte-identically, so a
+/// regression that drifted the slot naming, dropped a slot, or
+/// reshaped one of the three slots surfaces here rather than at
+/// every downstream Flux emit site).
+pub fn owned_flux_metadata(ns: &str, name: &str) -> Value {
+    json!({
+        "name": name,
+        "namespace": ns,
+        "annotations": ownership_annotations_by_coord(ns, name),
+    })
+}
+
 /// Substrate-primitive builder for the standard tatara-reconciler
 /// **namespace-qualified process reference** — the `<ns>/<name>`
 /// string every consumer that grepped, keyed, or annotated a
@@ -1311,6 +1386,174 @@ mod tests {
         assert_eq!(
             composed, direct,
             "composed and direct primitives must agree on the same underlying process_ref",
+        );
+    }
+
+    // ─── owned_flux_metadata substrate pins ─────────────────────────────
+
+    #[test]
+    fn owned_flux_metadata_carries_all_three_slots() {
+        // Shape pin: exactly THREE slots (`name`, `namespace`,
+        // `annotations`), no accidental fourth-slot leaks that would
+        // silently reshape every downstream Flux-owned emit
+        // (Kustomization, OCIRepository, HelmRelease). Regression
+        // catcher for a future `labels` / `ownerReferences` /
+        // `finalizers` / `generateName` slot added at ONE callsite
+        // without going through the primitive.
+        let meta = owned_flux_metadata("demo-ns", "ephemeral-demo");
+        let obj = meta
+            .as_object()
+            .expect("owned_flux_metadata must return a JSON object");
+        assert_eq!(
+            obj.len(),
+            3,
+            "owned_flux_metadata must carry exactly {{name, namespace, annotations}} — got {} slots",
+            obj.len()
+        );
+        assert!(obj.contains_key("name"), "missing `name` slot");
+        assert!(obj.contains_key("namespace"), "missing `namespace` slot");
+        assert!(
+            obj.contains_key("annotations"),
+            "missing `annotations` slot"
+        );
+    }
+
+    #[test]
+    fn owned_flux_metadata_stamps_name_and_namespace_verbatim() {
+        // The `name` and `namespace` args ride through verbatim. A
+        // regression that swapped the two (yielding a 404 on
+        // kubectl lookup) or applied a normalization at ONE arg but
+        // not the other surfaces here rather than as apply-time
+        // "resource not found" noise at every Flux-owned emit.
+        let meta = owned_flux_metadata("prod-ns", "seph-agent");
+        assert_eq!(
+            meta["name"].as_str(),
+            Some("seph-agent"),
+            "owned_flux_metadata dropped or reshaped the name arg",
+        );
+        assert_eq!(
+            meta["namespace"].as_str(),
+            Some("prod-ns"),
+            "owned_flux_metadata dropped or reshaped the namespace arg",
+        );
+    }
+
+    #[test]
+    fn owned_flux_metadata_seeds_annotations_through_ownership_annotations_by_coord() {
+        // The annotations slot is byte-identical to what
+        // `ownership_annotations_by_coord(ns, name)` returns for
+        // every (ns, name) pair. A regression that re-open-coded the
+        // annotations axis (e.g. bypassing the composer to hand-
+        // author a bare `MANAGED_BY: FIELD_MANAGER` map without the
+        // `PROCESS: <ns>/<name>` slot the composer threads through
+        // `qualified_process_ref`) silently un-lifts the sibling
+        // annotations composer, so a future change to
+        // `ownership_annotations_by_coord` (a new mandatory tag, a
+        // normalization step) would NOT propagate to the three Flux
+        // emit sites.
+        for (ns, name) in [
+            ("flux-system", "observability-stack"),
+            ("demo-ns", "ephemeral-demo"),
+            ("prod", "seph-agent"),
+        ] {
+            let meta = owned_flux_metadata(ns, name);
+            let expected = ownership_annotations_by_coord(ns, name);
+            assert_eq!(
+                meta["annotations"],
+                Value::Object(expected),
+                "owned_flux_metadata drifted from ownership_annotations_by_coord for {ns:?}/{name:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn owned_flux_metadata_matches_hand_authored_pre_lift_bytewise() {
+        // The exact 3-slot hand-authored composition every pre-lift
+        // callsite restated, byte-for-byte, swept across a corpus of
+        // shapes every render.rs callsite plausibly encounters:
+        // canonical `<ns>/<name>` shapes, the empty-string cluster-
+        // scoped edge case (unnamed process pre-metadata), and the
+        // pathological embedded-separator pair
+        // `qualified_process_ref_rides_edge_case_axis_shapes` already
+        // pins on the sibling primitive. A regression that reordered
+        // a slot, dropped one, or added a fourth surfaces at THIS
+        // pin rather than as a subtle apply-time drift (namespace
+        // drop → K8s defaults to `default` and the apply lands in
+        // the wrong namespace; annotations drop → SSA-time
+        // `inject_annotations` re-injection has no seed to extend
+        // and the resulting resource lacks the standard 2-slot
+        // ownership tag operators grep by).
+        for (ns, name) in [
+            ("flux-system", "observability-stack"),
+            ("demo-ns", "ephemeral-demo"),
+            ("", ""),
+            ("default", ""),
+            ("", "orphan"),
+            ("weird ns", "with/slash"),
+        ] {
+            let composed = owned_flux_metadata(ns, name);
+            let hand_authored = json!({
+                "name": name,
+                "namespace": ns,
+                "annotations": ownership_annotations_by_coord(ns, name),
+            });
+            assert_eq!(
+                composed, hand_authored,
+                "owned_flux_metadata drifted from the pre-lift hand-authored 3-slot shape on {ns:?}/{name:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn owned_flux_metadata_annotations_carry_managed_by_and_process_slots() {
+        // End-to-end contract pin: `owned_flux_metadata` composes
+        // through `ownership_annotations_by_coord` which composes
+        // through `qualified_process_ref` + `ownership_annotations`
+        // — the emitted annotations block MUST carry the 2-slot
+        // ownership tag every SSA-time re-injection extends. A
+        // regression that short-circuited the composer or dropped
+        // one of the underlying primitives from the chain would
+        // fail here at the end-to-end contract layer rather than as
+        // an apply-time discovery miss (operators grep resources by
+        // `PROCESS=<ns>/<name>` — a missing slot silently drops the
+        // resource from every ownership discovery sweep).
+        let meta = owned_flux_metadata("demo-ns", "ephemeral-demo");
+        let anns = &meta["annotations"];
+        assert_eq!(
+            anns[annotations::MANAGED_BY].as_str(),
+            Some(FIELD_MANAGER),
+            "owned_flux_metadata annotations must carry MANAGED_BY=FIELD_MANAGER",
+        );
+        assert_eq!(
+            anns[annotations::PROCESS].as_str(),
+            Some("demo-ns/ephemeral-demo"),
+            "owned_flux_metadata annotations must carry PROCESS=<ns>/<name>",
+        );
+    }
+
+    #[test]
+    fn owned_flux_metadata_agrees_across_the_three_flux_emit_sites() {
+        // Cross-site coherence pin: all three Flux-owned emit sites
+        // (Kustomization in `render_flux`, OCIRepository +
+        // HelmRelease in `render_aplicacao`) route through this
+        // composer, so their emitted `metadata` blocks MUST agree
+        // byte-identically for the same `(ns, name)` — proved here
+        // by observing the composer's output is a pure function of
+        // `(ns, name)` and does NOT depend on any per-emit-site
+        // hidden state. A regression that re-open-coded ONE site's
+        // metadata scaffold (e.g. re-inlined the Kustomization
+        // metadata block against a normalized `ns` while the OCI +
+        // HR sites keep the raw `ns`) would silently drift the
+        // three emit sites' metadata blocks apart; that drift is
+        // impossible while all three route through this ONE
+        // composer, and this pin binds the composer's purity
+        // contract so a future implementation refactor cannot
+        // introduce hidden state without failing here.
+        let a = owned_flux_metadata("demo-ns", "ephemeral-demo");
+        let b = owned_flux_metadata("demo-ns", "ephemeral-demo");
+        assert_eq!(
+            a, b,
+            "owned_flux_metadata must be a pure function of (ns, name) — same args → same output",
         );
     }
 

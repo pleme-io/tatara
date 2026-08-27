@@ -639,19 +639,16 @@ pub fn render_export_jobs(
         Some(e) => e,
         None => return Ok(vec![]),
     };
-    let ns = process
-        .metadata
-        .namespace
-        .as_deref()
-        .unwrap_or("default")
-        .to_string();
-    let name = process
-        .metadata
-        .name
-        .as_deref()
-        .unwrap_or("unnamed")
-        .to_string();
-    let process_ref = crate::ssapply::qualified_process_ref(&ns, &name);
+    // Owner-metadata seed on the same borrow + name-defaulted axis
+    // corner every render arm and the render_routing coord seed
+    // pulls from — the pre-lift hand-authored 2-slot fallback pair
+    // (`"default"` / `"unnamed"`) now shares ONE substrate owner via
+    // `Process::coordinates_or_defaults`, sibling to the render()
+    // dispatch seed above and the render_routing seed below. A
+    // future normalization sweep at the substrate reaches this seed
+    // through the ONE primitive.
+    let (ns, name) = process.coordinates_or_defaults();
+    let process_ref = crate::ssapply::qualified_process_ref(ns, name);
     let uid = process.metadata.uid.as_deref().unwrap_or("");
     let previous_root = process
         .status
@@ -665,8 +662,8 @@ pub fn render_export_jobs(
             continue;
         }
         out.push(one_export_job(
-            &ns,
-            &name,
+            ns,
+            name,
             &process_ref,
             uid,
             previous_root.as_deref(),

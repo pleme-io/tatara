@@ -239,6 +239,52 @@ impl Process {
             .ok_or_else(|| anyhow::anyhow!("Process has no metadata.name"))?;
         Ok((ns, name))
     }
+
+    /// `(namespace, name)` coordinates in the BORROW + NAME-REQUIRED
+    /// corner of the primitive family — namespace half falls back to
+    /// [`Self::DEFAULT_NAMESPACE`], but the name half is REQUIRED
+    /// (`None` on a `Process` whose `metadata.name` is absent, so the
+    /// caller stops with an `else { continue; }` / `else { return
+    /// …; }` guard rather than proceeding with the empty-string
+    /// sentinel every pre-lift consumer had to spell inline).
+    ///
+    /// Peer to [`Self::coordinates_or_defaults`] +
+    /// [`Self::owned_coordinates_or_err`] on the (return-form ×
+    /// name-gate) axis pair — closes the corner the family previously
+    /// left open:
+    ///
+    /// * borrow + name-defaulted → [`Self::coordinates_or_defaults`]
+    ///   (annotation writers, render owner-metadata seed — consumers
+    ///   whose downstream tolerates the `"unnamed"` display placeholder
+    ///   without operator-visible failure);
+    /// * borrow + name-required → **this method** (claim-arbiter
+    ///   probes, child-Process delete-fan-out — consumers that need a
+    ///   real API-path leaf and cleanly SKIP the row when the name is
+    ///   absent rather than issuing a K8s call with an empty-string
+    ///   name argument);
+    /// * owned + name-required → [`Self::owned_coordinates_or_err`]
+    ///   (kube-rs API-path calls — consumers whose downstream requires
+    ///   owned `String` arguments and rejects the missing-name corner
+    ///   with a load-bearing error message).
+    ///
+    /// The primitive family's `None`-on-missing-name semantics
+    /// intentionally differs from [`Self::owned_coordinates_or_err`]'s
+    /// error-on-missing-name semantics: the caller sites for this form
+    /// (child-Process fan-out, claim-arbiter row probes) are non-fatal
+    /// SKIPS rather than reportable failures — an `Option::None` at
+    /// the primitive lets the caller thread that "skip" through a
+    /// let-else without stringifying / logging an anyhow chain per
+    /// missing-name occurrence.
+    ///
+    /// The namespace fallback matches [`Self::coordinates_or_defaults`]
+    /// (via [`Self::namespace_or_default`]), so a consumer that
+    /// switches between the two borrow-form primitives based on its
+    /// name-gate need never sees a different namespace-fallback string
+    /// as a side effect.
+    pub fn coordinates_or_none(&self) -> Option<(&str, &str)> {
+        let name = self.metadata.name.as_deref()?;
+        Some((self.namespace_or_default(), name))
+    }
 }
 
 /// Process status — every field optional until the reconciler writes it.
@@ -636,6 +682,194 @@ mod tests {
         // order as opposed to (name, namespace).
         assert_eq!(owned_ns, "infra"); // NOT "app"
         assert_eq!(owned_name, "app"); // NOT "infra"
+    }
+
+    // ─── Process::coordinates_or_none substrate pins ──────────────────
+    //
+    // Pins the borrow + name-required peer of the coordinate-primitive
+    // family on the (return-form × name-gate) axis pair. Closes the
+    // corner previously left open (borrow + name-required) so the
+    // three consumer shapes (child-Process delete-fan-out at
+    // `phase_machine::handle_exiting`, claim-arbiter probe at
+    // `phase_machine::process_holds_any_claim`, any future non-fatal
+    // skip site) route through ONE primitive rather than three hand-
+    // authored empty-string / `unwrap_or_default()` sentinel chains.
+    // Fail-before-pass-after granularity: a regression that flipped
+    // the namespace fallback, swapped the return-tuple axis order,
+    // returned an owned form, or promoted a missing name to an error
+    // rather than `None` surfaces here rather than as silent drift at
+    // every borrow + name-required consumer.
+
+    #[test]
+    fn coordinates_or_none_returns_slices_when_both_slots_present() {
+        // Happy path — both slots populated, method returns borrowed
+        // (&str, &str) in (namespace, name) axis order wrapped in
+        // `Some`.
+        let mut p = Process::new("api-gateway", empty_spec());
+        p.metadata.namespace = Some("prod-app".into());
+        let (ns, name) = p.coordinates_or_none().expect("Some when name set");
+        assert_eq!(ns, "prod-app");
+        assert_eq!(name, "api-gateway");
+    }
+
+    #[test]
+    fn coordinates_or_none_falls_back_on_namespace_but_returns_name_slice() {
+        // Namespace absent → DEFAULT_NAMESPACE (shared with the peer
+        // `coordinates_or_defaults` + `namespace_or_default`). Name
+        // present → the metadata slice, wrapped in `Some`.
+        let mut p = Process::new("api", empty_spec());
+        p.metadata.namespace = None;
+        let (ns, name) = p.coordinates_or_none().expect("Some when name set");
+        assert_eq!(ns, Process::DEFAULT_NAMESPACE);
+        assert_eq!(name, "api");
+    }
+
+    #[test]
+    fn coordinates_or_none_returns_none_when_metadata_name_absent_regardless_of_namespace() {
+        // Name absent → `None`, REGARDLESS of whether the namespace
+        // slot is populated. The name gate is strictly on
+        // `metadata.name` and does NOT fall back to
+        // `Self::UNNAMED_PLACEHOLDER` (that fallback is on the peer
+        // `coordinates_or_defaults`, which exists precisely for
+        // consumers that tolerate a display placeholder). Peer to
+        // `owned_coordinates_or_err_errors_when_metadata_name_absent_regardless_of_namespace`
+        // on the sibling primitive; a regression that widened THIS
+        // form to substitute the placeholder while leaving the owned
+        // form strict would silently drift the two borrow-form
+        // primitives out of the coherence the family carries.
+        for ns_slot in [None, Some("prod".to_string())] {
+            let mut p = Process::new("scratch", empty_spec());
+            p.metadata.name = None;
+            p.metadata.namespace = ns_slot.clone();
+            assert!(
+                p.coordinates_or_none().is_none(),
+                "coordinates_or_none must be None on missing name (ns={ns_slot:?})",
+            );
+        }
+    }
+
+    #[test]
+    fn coordinates_or_none_namespace_fallback_matches_default_namespace_const() {
+        // Byte-identity pin between the borrow + name-required form's
+        // namespace fallback and the workspace-wide `DEFAULT_NAMESPACE`
+        // const. Sibling to
+        // `owned_coordinates_or_err_namespace_fallback_matches_default_namespace_const`
+        // on the peer primitive — the two forms MUST substitute the
+        // same fallback string, else a consumer that switches between
+        // them based on its ownership need silently observes a
+        // different namespace-fallback shape as a side effect.
+        let mut p = Process::new("api", empty_spec());
+        p.metadata.namespace = None;
+        let (ns, _) = p.coordinates_or_none().unwrap();
+        assert_eq!(ns, Process::DEFAULT_NAMESPACE);
+    }
+
+    #[test]
+    fn coordinates_or_none_axis_order_matches_coordinates_or_defaults_when_name_present() {
+        // Cross-primitive coherence pin between the two borrow-form
+        // primitives: when the name is present, the (namespace, name)
+        // return-tuple axis order is IDENTICAL across the two forms,
+        // and the returned slices are the SAME `&str` view onto the
+        // same metadata slots. A regression that swapped the tuple
+        // slots on ONE form would silently misroute every consumer
+        // that picked between the two forms based on its name-gate
+        // need. The pin re-reads both primitives at test time so the
+        // equality holds iff both live paths are the current
+        // implementation.
+        let mut p = Process::new("app", empty_spec());
+        p.metadata.namespace = Some("infra".into());
+        let (defaulted_ns, defaulted_name) = p.coordinates_or_defaults();
+        let (required_ns, required_name) = p.coordinates_or_none().unwrap();
+        assert_eq!(defaulted_ns, required_ns);
+        assert_eq!(defaulted_name, required_name);
+        // Explicit slot labels — pins the (namespace, name) axis order
+        // as opposed to (name, namespace).
+        assert_eq!(required_ns, "infra"); // NOT "app"
+        assert_eq!(required_name, "app"); // NOT "infra"
+    }
+
+    #[test]
+    fn coordinates_or_none_axis_pair_diverges_from_coordinates_or_defaults_on_missing_name() {
+        // Divergence pin between the two borrow-form primitives when
+        // the name gate fires: `coordinates_or_defaults` substitutes
+        // the display placeholder AND still returns a tuple;
+        // `coordinates_or_none` returns `None`. A regression that
+        // collapsed the two behaviors (either by dropping the gate
+        // from the required form or by adding a `None` corner to the
+        // defaulted form) would blur the axis pair's whole reason to
+        // exist as two peer primitives.
+        let mut p = Process::new("scratch", empty_spec());
+        p.metadata.name = None;
+        p.metadata.namespace = Some("prod".into());
+        // Defaulted form: substitutes placeholder, no gate.
+        assert_eq!(
+            p.coordinates_or_defaults(),
+            ("prod", Process::UNNAMED_PLACEHOLDER)
+        );
+        // Required form: gate fires, `None`.
+        assert!(p.coordinates_or_none().is_none());
+    }
+
+    #[test]
+    fn coordinates_or_none_matches_pre_lift_reconciler_helper_shape() {
+        // Byte-identical parity pin between the borrow + name-required
+        // primitive here and the pre-lift `tatara-reconciler` helper
+        // shapes — the exact 2-slot unwrap + gate chains each pre-lift
+        // caller spelled by hand (`phase_machine::process_holds_any_claim`
+        // spelled it as `unwrap_or("")` + `is_empty` early-return;
+        // `phase_machine::handle_exiting`'s child-fan-out spelled it
+        // as `unwrap_or_default()` + implicit no-op delete on the
+        // empty API-path). Sweeps every corner every callsite plausibly
+        // encounters (both slots present, namespace absent, name
+        // absent + ns present, both absent). A regression that
+        // inserted a normalization step at the primitive the pre-lift
+        // chain does NOT apply — or vice versa — surfaces here rather
+        // than as silent drift between the pre-lift consumer sites
+        // and the ONE substrate owner they now route through.
+        fn pre_lift_holds_any_claim(p: &Process) -> Option<(&str, &str)> {
+            let ns = p.metadata.namespace.as_deref().unwrap_or("default");
+            let name = p.metadata.name.as_deref().unwrap_or("");
+            if name.is_empty() {
+                return None;
+            }
+            Some((ns, name))
+        }
+        // Both present.
+        let mut p = Process::new("api", empty_spec());
+        p.metadata.namespace = Some("prod".into());
+        assert_eq!(p.coordinates_or_none(), pre_lift_holds_any_claim(&p));
+        // Namespace absent.
+        let p = Process::new("api", empty_spec());
+        assert_eq!(p.coordinates_or_none(), pre_lift_holds_any_claim(&p));
+        // Name absent → both variants return `None` regardless of ns.
+        let mut p = Process::new("api", empty_spec());
+        p.metadata.name = None;
+        p.metadata.namespace = Some("prod".into());
+        assert_eq!(p.coordinates_or_none(), pre_lift_holds_any_claim(&p));
+        // Both absent → still `None` on the name gate.
+        let mut p = Process::new("api", empty_spec());
+        p.metadata.name = None;
+        p.metadata.namespace = None;
+        assert_eq!(p.coordinates_or_none(), pre_lift_holds_any_claim(&p));
+    }
+
+    #[test]
+    fn coordinates_or_none_axis_order_matches_owned_coordinates_or_err_on_happy_path() {
+        // Cross-primitive coherence pin at the sibling corner: when
+        // BOTH slots are present, the borrow + name-required form
+        // (this method) and the owned + name-required peer
+        // (`owned_coordinates_or_err`) return the SAME `(ns, name)`
+        // pair — the axis order is IDENTICAL and neither primitive
+        // silently applies a normalization the other omits. A
+        // regression that skewed one form's normalization would
+        // surface here rather than as silent drift between the two
+        // name-required corners of the primitive family.
+        let mut p = Process::new("app", empty_spec());
+        p.metadata.namespace = Some("infra".into());
+        let (borrow_ns, borrow_name) = p.coordinates_or_none().unwrap();
+        let (owned_ns, owned_name) = p.owned_coordinates_or_err().unwrap();
+        assert_eq!(borrow_ns, owned_ns.as_str());
+        assert_eq!(borrow_name, owned_name.as_str());
     }
 
     #[test]

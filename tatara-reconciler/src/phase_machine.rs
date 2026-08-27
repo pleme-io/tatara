@@ -492,11 +492,22 @@ async fn advance_to_attested(
 /// API error) default to `false` — the claim arbiter will catch up
 /// next ProcessTable reconcile.
 async fn process_holds_any_claim(ctx: &Context, p: &Process) -> bool {
-    let ns = p.metadata.namespace.as_deref().unwrap_or("default");
-    let name = p.metadata.name.as_deref().unwrap_or("");
-    if name.is_empty() {
+    // Borrow + name-required corner of the substrate coordinate-
+    // primitive family — pre-lift this was a hand-authored
+    // `.metadata.namespace.as_deref().unwrap_or("default")` +
+    // `.metadata.name.as_deref().unwrap_or("")` + `is_empty` early-
+    // return chain past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold, sibling to the child-fan-out chain in
+    // `handle_exiting` below (which spelled the name gate as
+    // `unwrap_or_default()` + a silent empty-name `child_api.delete("")`
+    // no-op). Post-lift both sites route through the ONE
+    // `Process::coordinates_or_none` primitive — the name gate lands
+    // at ONE substrate owner and a future normalization (case-fold,
+    // unicode-safe collation, cross-cluster prefix) reaches every
+    // borrow + name-required consumer through it.
+    let Some((ns, name)) = p.coordinates_or_none() else {
         return false;
-    }
+    };
     let process_ref = crate::ssapply::qualified_process_ref(ns, name);
     let table_api = ctx.process_table_api();
     let table = match table_api.get(&ctx.config.process_table_name).await {
@@ -746,12 +757,22 @@ pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
             .collect();
         if !children.is_empty() {
             for child in &children {
-                let cns = child.metadata.namespace.as_deref().unwrap_or("default");
-                let cname = child.metadata.name.as_deref().unwrap_or_default();
-                // Skip ones already being deleted.
+                // Skip ones already being deleted or missing a name —
+                // the name gate rides through the ONE substrate
+                // `Process::coordinates_or_none` primitive, sibling
+                // to the same-corner `process_holds_any_claim` call
+                // above. Pre-lift this site spelled the gate as
+                // `.metadata.name.as_deref().unwrap_or_default()`
+                // followed by an implicit no-op `child_api.delete("")`
+                // that silently 4xx'd against the K8s API and
+                // discarded the error; post-lift the `None` corner
+                // is a cleaner explicit `continue`.
                 if child.metadata.deletion_timestamp.is_some() {
                     continue;
                 }
+                let Some((cns, cname)) = child.coordinates_or_none() else {
+                    continue;
+                };
                 let child_api = ctx.process_api(cns);
                 let _ = child_api
                     .delete(cname, &kube::api::DeleteParams::default())

@@ -449,6 +449,89 @@ impl Process {
     pub fn observed_pid(&self) -> Option<&str> {
         self.status.as_ref().and_then(|s| s.pid.as_deref())
     }
+
+    /// The borrow-form status-projection primitive on the
+    /// attestation-chain axis: returns the last
+    /// [`ProcessAttestation`] the reconciler persisted at
+    /// `status.attestation`, with the missing-`status` corner AND the
+    /// empty-slot corner BOTH collapsed to `None` — the ONE-liner
+    /// collapse of the paired `self.status.as_ref().and_then(|s|
+    /// s.attestation.as_ref())` incantation every consumer restated
+    /// by hand pre-lift.
+    ///
+    /// Pre-lift the 3-line `.status.as_ref().and_then(|s| s
+    /// .attestation.as_ref())` chain was hand-authored at TWO sites
+    /// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold in
+    /// `tatara-reconciler`:
+    /// * `phase_machine::advance_to_attested` — the ATTEST composer
+    ///   that chains `prior.next(pillars)` when a prior attestation
+    ///   is persisted and seeds with `ProcessAttestation::initial`
+    ///   otherwise.
+    /// * `render::render_export_jobs` — the ephemeral-export Job
+    ///   builder that pulls the prior `composed_root` off the last
+    ///   persisted attestation and threads it into every rendered
+    ///   Job's `previousRoot` env var, so the export receipt chains
+    ///   into the Process's BLAKE3 attestation tree at the correct
+    ///   generation boundary.
+    ///
+    /// Both sites walked the SAME 3-line chain — the borrow-form
+    /// `Option<&ProcessAttestation>` shape both consumers wanted
+    /// already — even though neither site ever mutated the
+    /// attestation nor kept it alive past the enclosing async fn.
+    /// Post-lift both callers borrow the attestation directly from
+    /// `self.status`; the pre-lift 3-line chain shrinks to a single
+    /// method call at both sites, and both consumers' subsequent
+    /// downstream calls (`ProcessAttestation::next` for the ATTEST
+    /// composer, `.composed_root.clone()` for the export Job builder)
+    /// do not touch the borrowed `p: &Process`, so the borrow
+    /// lifetime holds.
+    ///
+    /// Return-form axis: `Option<&ProcessAttestation>` mirrors the
+    /// existing borrow-first discipline every pre-lift consumer
+    /// already re-borrowed through `.as_ref()`, and the shape of the
+    /// peer [`Self::observed_pid`] projection extends mechanically
+    /// to the whole-attestation-record projection here. The missing-
+    /// `status` corner AND the populated-status-with-`attestation
+    /// =None` corner BOTH collapse to `None` so `.is_some()` / `if
+    /// let Some(_)` / `.map(...)` behave identically on a `Process`
+    /// whose status is `None` and on one whose status carries an
+    /// unpopulated `attestation` slot — matching what the pre-lift
+    /// `.and_then(...)` chain produced.
+    ///
+    /// A future normalization step (a per-slot canonicalization pass
+    /// that rejects a persisted attestation whose `composed_root`
+    /// fails `verify`, a generation-filter that returns `None` for
+    /// an attestation stamped with a stale `metadata.generation`, a
+    /// staleness gate that drops an attestation whose `attested_at`
+    /// predates a reconcile deadline) lands at ONE substrate method
+    /// here and both downstream consumers pick up the upgrade
+    /// mechanically — no per-callsite hand-edit at
+    /// `advance_to_attested` / `render_export_jobs`.
+    ///
+    /// Sibling to the peer [`Self::observed_pid`] +
+    /// [`Self::observed_flux_resources`] borrow-first primitives on
+    /// the PID + flux-resources axes; all three methods compose the
+    /// same missing-`status` fallback + borrow-form return-shape
+    /// skeleton on distinct `ProcessStatus` slots. Future status
+    /// projections (`observed_parent` on the parent-pointer axis,
+    /// `observed_message` on the human-readable-status axis) land
+    /// as peer methods on this same axis.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition
+    /// — the 3-line status-projection chain recurred at two hand-
+    /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    /// trigger, and is lifted to ONE owner here). THEORY.md §II.1
+    /// invariant 5 (composition preserves proofs — the pins bind
+    /// the missing-`status` corner + the empty-slot corner + the
+    /// borrow-form `&ProcessAttestation` lifetime + the byte-
+    /// identical parity with the pre-lift 3-line chain, so a
+    /// regression that drifted any surface at
+    /// `tests::observed_attestation_*` rather than as silent
+    /// operator-facing skew between the ATTEST composer and the
+    /// ephemeral-export receipt chain on the SAME `Process`).
+    pub fn observed_attestation(&self) -> Option<&ProcessAttestation> {
+        self.status.as_ref().and_then(|s| s.attestation.as_ref())
+    }
 }
 
 /// Process status — every field optional until the reconciler writes it.
@@ -1473,5 +1556,231 @@ mod tests {
             let p = process_with_pid(Some(pid));
             assert_eq!(p.observed_pid(), Some(pid));
         }
+    }
+
+    // ─── Process::observed_attestation substrate pins ─────────────────
+    //
+    // Pins the borrow-form status-projection primitive on the
+    // attestation-chain axis that owns the 3-line
+    // `.status.as_ref().and_then(|s| s.attestation.as_ref())` chain
+    // the two hand-authored `tatara-reconciler` sites
+    // (`phase_machine::advance_to_attested` ATTEST composer +
+    // `render::render_export_jobs` export-Job builder) restated by
+    // hand pre-lift. Peer to the sibling `observed_pid_*` +
+    // `observed_flux_resources_*` pin families; all three compose
+    // the missing-`status` fallback + borrow-form return-shape
+    // skeleton on distinct `ProcessStatus` slots. Fail-before-pass-
+    // after granularity: `observed_attestation` did not exist
+    // pre-lift, so any test invoking it fails to compile pre-lift
+    // and passes post-lift.
+
+    fn sample_attestation(artifact: &str, intent: &str) -> ProcessAttestation {
+        // Distinct pillar strings so a regression that swapped the
+        // artifact / intent pillars silently surfaces as an
+        // equality failure at the composed-root parity pin.
+        ProcessAttestation::initial(artifact.to_string(), None, intent.to_string())
+    }
+
+    fn process_with_attestation(attestation: Option<ProcessAttestation>) -> Process {
+        let mut p = Process::new("api-gateway", empty_spec());
+        p.metadata.namespace = Some("prod".into());
+        let mut status = ProcessStatus::default();
+        status.attestation = attestation;
+        p.status = Some(status);
+        p
+    }
+
+    #[test]
+    fn observed_attestation_returns_none_when_status_is_none() {
+        // Missing-`status` corner pin: the primitive collapses the
+        // no-status case to `None` so downstream `.is_some()` /
+        // `if let Some(_)` / `.map(...)` behave identically on a
+        // `Process` whose status field is `None` and on one whose
+        // status carries an unpopulated `attestation` slot.
+        // Matches the pre-lift `.and_then(...)` chain's `None`
+        // byte-identically at every reconciler consumer's
+        // downstream shape.
+        let mut p = Process::new("api", empty_spec());
+        p.status = None;
+        assert!(p.observed_attestation().is_none());
+    }
+
+    #[test]
+    fn observed_attestation_returns_none_when_attestation_slot_is_none() {
+        // Empty-slot-under-populated-status corner pin: the
+        // primitive returns `None`, matching the missing-`status`
+        // corner byte-identically. A regression that treated the
+        // two corners differently (a `None`-vs-`Some(_)` signal
+        // that downstream consumers could grep on) would silently
+        // promote an internal representation detail (whether the
+        // reconciler has ever written a status subresource) into
+        // observable behavior at the ATTEST composer's
+        // seed-vs-chain branch.
+        let p = process_with_attestation(None);
+        assert!(p.observed_attestation().is_none());
+    }
+
+    #[test]
+    fn observed_attestation_returns_borrow_when_slot_is_populated() {
+        // Happy-path pin: with a populated `status.attestation`
+        // slot, the primitive returns a borrowed
+        // `&ProcessAttestation` whose fields match the persisted
+        // record. A regression that filtered / reshaped /
+        // canonicalized the record would surface here rather than
+        // as silent skew at the downstream `prior.next(pillars)`
+        // chain composer + the ephemeral-export receipt's
+        // `previous_root` linker.
+        let att = sample_attestation("art-1", "int-1");
+        let composed_root = att.composed_root.clone();
+        let p = process_with_attestation(Some(att));
+        let observed = p.observed_attestation().expect("populated slot");
+        assert_eq!(observed.artifact_hash, "art-1");
+        assert_eq!(observed.intent_hash, "int-1");
+        assert_eq!(observed.composed_root, composed_root);
+        assert_eq!(observed.generation, 0);
+        assert!(observed.previous_root.is_none());
+    }
+
+    #[test]
+    fn observed_attestation_is_a_zero_copy_borrow_projection() {
+        // Borrow-discipline pin: the returned reference points at
+        // the persisted `ProcessAttestation` in place — NOT a fresh
+        // allocation or a clone. A regression that switched the
+        // projection to an owned `ProcessAttestation` (via
+        // `.clone()`) would defeat the zero-copy contract the
+        // lift's primary strict-widening delivers (the pre-lift
+        // 3-line chain returned a borrow, but the export-Job
+        // builder then cloned `composed_root` off it; the post-
+        // lift primitive preserves the borrow all the way to the
+        // consumer's own cloning choice). Peer to the sibling
+        // `observed_pid_is_a_zero_copy_borrow_projection` +
+        // `observed_flux_resources_is_a_zero_copy_borrow_projection`
+        // pins on the PID + flux-resources borrow-projection axes.
+        let att = sample_attestation("art-1", "int-1");
+        let p = process_with_attestation(Some(att));
+        let observed = p.observed_attestation().expect("populated slot") as *const _;
+        let persisted = p.status.as_ref().unwrap().attestation.as_ref().unwrap() as *const _;
+        assert!(std::ptr::eq(observed, persisted));
+    }
+
+    #[test]
+    fn observed_attestation_is_a_pure_projection() {
+        // Purity pin: calling the projection twice on the same
+        // `Process` returns byte-identical borrows (same pointer).
+        // A regression that introduced state — a lazy-cached
+        // reference materialized on first call, a normalization
+        // step that ran once and cached — would surface here
+        // rather than as silent drift between the ATTEST composer
+        // and the ephemeral-export receipt chain on the SAME
+        // `Process` within one reconcile pass.
+        let att = sample_attestation("art-1", "int-1");
+        let p = process_with_attestation(Some(att));
+        let a = p.observed_attestation().expect("populated slot") as *const _;
+        let b = p.observed_attestation().expect("populated slot") as *const _;
+        assert!(std::ptr::eq(a, b));
+    }
+
+    #[test]
+    fn observed_attestation_matches_pre_lift_reconciler_chain_shape() {
+        // Byte-identical parity pin between the borrow-form
+        // primitive here and the pre-lift `tatara-reconciler`
+        // 3-line chain shape. Sweeps every corner every callsite
+        // plausibly encounters (missing status, empty attestation
+        // slot, populated attestation slot). A regression that
+        // inserted a normalization step at the primitive the pre-
+        // lift chain does NOT apply — or vice versa — surfaces
+        // here rather than as silent drift between the pre-lift
+        // consumer sites and the ONE substrate owner they now
+        // route through. Peer to
+        // `observed_pid_matches_pre_lift_reconciler_chain_shape` +
+        // `observed_flux_resources_matches_pre_lift_reconciler_chain_shape`
+        // on the PID + flux-resources axes.
+        // `ProcessAttestation` does not derive `PartialEq` — the
+        // parity check walks the `composed_root` field (the
+        // byte-string every downstream consumer keys off) so a
+        // regression that reshaped the record without touching
+        // the composed-root observation surfaces here through
+        // the receipt-chain projection.
+        fn pre_lift(p: &Process) -> Option<String> {
+            p.status
+                .as_ref()
+                .and_then(|s| s.attestation.as_ref())
+                .map(|a| a.composed_root.clone())
+        }
+        // Missing status.
+        let mut p = Process::new("api", empty_spec());
+        p.status = None;
+        assert_eq!(
+            p.observed_attestation().map(|a| a.composed_root.clone()),
+            pre_lift(&p)
+        );
+        // Populated status, empty attestation slot.
+        let p = process_with_attestation(None);
+        assert_eq!(
+            p.observed_attestation().map(|a| a.composed_root.clone()),
+            pre_lift(&p)
+        );
+        // Populated status, populated attestation slot.
+        let p = process_with_attestation(Some(sample_attestation("art-1", "int-1")));
+        assert_eq!(
+            p.observed_attestation().map(|a| a.composed_root.clone()),
+            pre_lift(&p)
+        );
+    }
+
+    #[test]
+    fn observed_attestation_missing_status_and_empty_slot_collapse_to_the_same_option_shape() {
+        // Cross-corner coherence pin: the missing-`status` corner
+        // and the populated-empty-slot corner return `Option`s
+        // whose `.is_none()` observations are IDENTICAL. A
+        // regression that promoted the missing-`status` corner to
+        // returning a typed error (via a signature change to
+        // `Result<_, _>`) — or that widened the empty-slot corner
+        // to a synthetic `Some(default_attestation)` — would
+        // surface here rather than as silent operator-facing
+        // divergence between a never-status-written Process and
+        // an attestation-emptied Process on the ATTEST composer's
+        // seed-vs-chain branch.
+        let mut p_no_status = Process::new("api", empty_spec());
+        p_no_status.status = None;
+        let p_empty_slot = process_with_attestation(None);
+        assert_eq!(
+            p_no_status.observed_attestation().is_none(),
+            p_empty_slot.observed_attestation().is_none()
+        );
+        assert_eq!(
+            p_no_status.observed_attestation().is_some(),
+            p_empty_slot.observed_attestation().is_some()
+        );
+    }
+
+    #[test]
+    fn observed_attestation_preserves_chain_generation_field() {
+        // Generation-preservation pin: a chained attestation
+        // (`prior.next(...)` at generation N ≥ 1 with a
+        // `previous_root` linked to `prior.composed_root`) reaches
+        // the caller with its `generation` counter + `previous_root`
+        // link byte-identical to the persisted record. The pre-lift
+        // ATTEST composer discriminated exactly on this borrow's
+        // `Some(prior)` vs `None` arm; a regression that dropped
+        // the chain's `generation` counter (say, by folding
+        // `next(...)` into a fresh `initial(...)` on every
+        // reconcile pass) would silently reset every chain and
+        // orphan every downstream `previous_root` link, but that
+        // drift is invisible to a Process CRD reader who only
+        // observes the LATEST composed_root.
+        let prior = sample_attestation("art-0", "int-0");
+        let chained = prior.next("art-1".to_string(), None, "int-1".to_string());
+        let expected_generation = chained.generation;
+        let expected_previous = chained.previous_root.clone();
+        let p = process_with_attestation(Some(chained));
+        let observed = p.observed_attestation().expect("populated slot");
+        assert_eq!(observed.generation, expected_generation);
+        assert_eq!(observed.generation, 1);
+        assert_eq!(observed.previous_root, expected_previous);
+        assert_eq!(
+            observed.previous_root.as_deref(),
+            Some(prior.composed_root.as_str())
+        );
     }
 }

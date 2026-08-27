@@ -651,10 +651,19 @@ pub fn render_export_jobs(
     let (ns, name) = process.coordinates_or_defaults();
     let process_ref = crate::ssapply::qualified_process_ref(ns, name);
     let uid = process.metadata.uid.as_deref().unwrap_or("");
+    // Borrow-form status-projection corner of the substrate
+    // observed-* primitive family — pre-lift this was a hand-authored
+    // `.status.as_ref().and_then(|s| s.attestation.as_ref())` chain
+    // past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold, sibling
+    // to the `phase_machine::advance_to_attested` ATTEST composer
+    // that walks the same 3-line chain to seed the next attestation
+    // off the prior one. Post-lift both sites route through the ONE
+    // `Process::observed_attestation` primitive; the export receipt
+    // chain's `previousRoot` link now shares the ATTEST composer's
+    // borrow discipline so a future normalization at the primitive
+    // reaches both consumers mechanically.
     let previous_root = process
-        .status
-        .as_ref()
-        .and_then(|s| s.attestation.as_ref())
+        .observed_attestation()
         .map(|a| a.composed_root.clone());
 
     let mut out = Vec::new();

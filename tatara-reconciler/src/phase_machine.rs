@@ -456,7 +456,19 @@ async fn advance_to_attested(
     let intent_hash = compute_intent_hash(&p.spec.intent);
     let control_hash: Option<String> = None; // compliance eval lands next
 
-    let next = match p.status.as_ref().and_then(|s| s.attestation.as_ref()) {
+    // Borrow-form status-projection corner of the substrate
+    // observed-* primitive family — pre-lift this was a hand-authored
+    // `.status.as_ref().and_then(|s| s.attestation.as_ref())` chain
+    // past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold, sibling
+    // to the `render::render_export_jobs` export-Job builder that
+    // walks the same 3-line chain to read the prior `composed_root`.
+    // Post-lift both sites route through the ONE
+    // `Process::observed_attestation` primitive — the missing-
+    // `status` / empty-`attestation` gates land at ONE substrate
+    // owner and a future normalization (verify-on-read, generation
+    // filter, staleness gate) reaches both the ATTEST composer and
+    // the export-Job builder through it.
+    let next = match p.observed_attestation() {
         Some(prior) => prior.next(artifact_hash, control_hash, intent_hash),
         None => ProcessAttestation::initial(artifact_hash, control_hash, intent_hash),
     };

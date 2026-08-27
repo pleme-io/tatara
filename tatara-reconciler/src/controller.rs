@@ -21,11 +21,7 @@ use crate::{patch, phase_machine, signals};
 pub async fn reconcile(process: Arc<Process>, ctx: Arc<Context>) -> Result<Action, kube::Error> {
     let name = process.metadata.name.as_deref().unwrap_or("<unnamed>");
     let ns = process.metadata.namespace.as_deref().unwrap_or("default");
-    let current_phase = process
-        .status
-        .as_ref()
-        .map(|s| s.phase)
-        .unwrap_or(ProcessPhase::Pending);
+    let current_phase = process.observed_phase().unwrap_or(ProcessPhase::Pending);
 
     info!(namespace = ns, name, phase = %current_phase, "reconcile");
 

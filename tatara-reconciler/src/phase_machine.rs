@@ -936,11 +936,7 @@ async fn p_current_phase_str(api: &Api<Process>, name: &str) -> Result<String> {
         .get_status(name)
         .await
         .map_err(|e| anyhow!("get status (released-from): {e}"))?;
-    let phase = p
-        .status
-        .as_ref()
-        .map(|s| s.phase)
-        .unwrap_or(ProcessPhase::Attested);
+    let phase = p.observed_phase().unwrap_or(ProcessPhase::Attested);
     Ok(match phase {
         ProcessPhase::Failed => "Failed".to_string(),
         _ => "Attested".to_string(),

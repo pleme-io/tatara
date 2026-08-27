@@ -532,6 +532,99 @@ impl Process {
     pub fn observed_attestation(&self) -> Option<&ProcessAttestation> {
         self.status.as_ref().and_then(|s| s.attestation.as_ref())
     }
+
+    /// The copy-form status-projection primitive on the phase axis:
+    /// returns the [`ProcessPhase`] the reconciler currently persists
+    /// at `status.phase`, wrapped in an `Option` so the missing-
+    /// `status` corner collapses to `None` — the ONE-liner collapse
+    /// of the paired `self.status.as_ref().map(|s| s.phase)`
+    /// incantation every consumer restated by hand pre-lift.
+    ///
+    /// Peer to the borrow-form projections
+    /// [`Self::observed_pid`] (PID axis, `Option<&str>`),
+    /// [`Self::observed_flux_resources`] (flux-resources axis,
+    /// `&[FluxResourceRef]`), and [`Self::observed_attestation`]
+    /// (attestation-chain axis, `Option<&ProcessAttestation>`); this
+    /// method opens the copy-form peer for `ProcessPhase` — a
+    /// `Copy` scalar with a `Default` impl (`Pending`), so the
+    /// return is `Option<ProcessPhase>` rather than
+    /// `Option<&ProcessPhase>` (borrow would give the caller
+    /// nothing over the copy for a 1-byte enum) and neither the
+    /// missing-`status` corner nor a "empty slot" corner is
+    /// meaningful — the underlying slot is a bare `ProcessPhase`,
+    /// not `Option<ProcessPhase>`, so the primitive returns `None`
+    /// iff `status: None`.
+    ///
+    /// Pre-lift the 3-line `.status.as_ref().map(|s| s.phase)`
+    /// chain was hand-authored at FIVE sites past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication threshold in
+    /// `tatara-reconciler`:
+    /// * `controller::reconcile` — the top-level dispatcher's
+    ///   `current_phase` seed that feeds the deletion-preempt +
+    ///   signal-ingestion gates + the per-phase handler dispatch.
+    ///   Pre-lift `.unwrap_or(ProcessPhase::Pending)`.
+    /// * `boundary::evaluate_process_phase` — the boundary
+    ///   evaluator's `ProcessPhase` condition (a peer-Process
+    ///   `phase`-reached postcondition). Pre-lift
+    ///   `.unwrap_or(ProcessPhase::Pending)`.
+    /// * `boundary::check_depends_on` — the `depends_on`
+    ///   pre-condition audit that stashes the observed phase into
+    ///   the `UnmetDependency::actual: Option<ProcessPhase>` slot
+    ///   (keeps the `Option` form). Pre-lift the raw
+    ///   `.map(|s| s.phase)` shape.
+    /// * `phase_machine::p_current_phase_str` — the released-from
+    ///   annotation composer that emits `"Attested"` for every
+    ///   non-`Failed` phase (SIGSTOP/SIGCONT release gate).
+    ///   Pre-lift `.unwrap_or(ProcessPhase::Attested)` — the ONE
+    ///   site whose default is not `Pending`; the primitive
+    ///   returns the raw `Option` so the caller's `.unwrap_or`
+    ///   default choice stays local rather than baked in.
+    /// * `table_controller::stable_name_group_key` — the routing-
+    ///   groupby seed that pairs the phase with the PID + creation
+    ///   timestamp when partitioning Processes claiming the same
+    ///   stable name. Pre-lift `.unwrap_or(ProcessPhase::Pending)`.
+    ///
+    /// All FIVE sites walked the SAME 3-line `.status.as_ref()
+    /// .map(|s| s.phase)` chain — three closed with `unwrap_or
+    /// (ProcessPhase::Pending)` (the `Default`), one closed with
+    /// `unwrap_or(ProcessPhase::Attested)`, one kept the raw
+    /// `Option<ProcessPhase>` — so the ONE substrate accessor
+    /// returns the raw `Option<ProcessPhase>` and each consumer
+    /// keeps its `.unwrap_or(...)` default choice at its own site.
+    ///
+    /// A future normalization step (a generation-filter that
+    /// returns `None` for a phase stamped with a stale
+    /// `metadata.generation`, a staleness gate that drops a phase
+    /// whose observing `phase_since` predates a reconcile
+    /// deadline, a canonicalization pass that maps a phase that
+    /// no longer belongs to the CRD's closed set to `None`) lands
+    /// at ONE substrate method here and all five consumers pick
+    /// up the upgrade mechanically — no per-callsite hand-edit at
+    /// `reconcile` / `evaluate_process_phase` / `check_depends_on`
+    /// / `p_current_phase_str` / `stable_name_group_key`.
+    ///
+    /// Future status projections (`observed_parent` on the
+    /// parent-pointer axis, `observed_message` on the human-
+    /// readable-status axis, `observed_children` on the child
+    /// fan-out axis, `observed_exit_code` on the terminal-exit
+    /// axis) land as peer methods on this same axis.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over
+    /// composition — the 3-line status-projection chain recurred
+    /// at FIVE hand-authored sites past the ★★ PRIME-DIRECTIVE
+    /// ≥ 2 duplication trigger, and is lifted to ONE owner here).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs
+    /// — the pins bind the missing-`status` corner + the
+    /// per-variant enum round-trip + the byte-identical parity
+    /// with the pre-lift 3-line chain, so a regression that
+    /// drifted any surface at `tests::observed_phase_*` rather
+    /// than as silent operator-facing skew between the
+    /// controller's dispatch seed and the boundary evaluator's
+    /// depends-on audit on the SAME `Process` within one
+    /// reconcile pass).
+    pub fn observed_phase(&self) -> Option<ProcessPhase> {
+        self.status.as_ref().map(|s| s.phase)
+    }
 }
 
 /// Process status — every field optional until the reconciler writes it.
@@ -1782,5 +1875,212 @@ mod tests {
             observed.previous_root.as_deref(),
             Some(prior.composed_root.as_str())
         );
+    }
+
+    // ─── Process::observed_phase substrate pins ───────────────────────
+    //
+    // The copy-form status-projection primitive on the phase axis.
+    // Collapses the paired 3-line `.status.as_ref().map(|s| s.phase)`
+    // chain every consumer in `tatara-reconciler` restated by hand
+    // pre-lift at FIVE sites. Peer to the borrow-form
+    // `observed_pid_*` + `observed_flux_resources_*` +
+    // `observed_attestation_*` pin families; all four compose the
+    // same missing-`status` fallback skeleton on distinct
+    // `ProcessStatus` slots, with the phase-axis form returning
+    // `Option<ProcessPhase>` (copy of a `Copy` scalar) rather than
+    // `Option<&T>` (borrow) because the underlying slot is a bare
+    // `ProcessPhase` — no allocation to borrow past, and the enum
+    // is one byte on the wire. Each pin fails-before-pass-after
+    // granularity: `observed_phase` did not exist pre-lift, so any
+    // test invoking it fails to compile pre-lift and passes
+    // post-lift.
+
+    fn process_with_phase(phase: Option<ProcessPhase>) -> Process {
+        let mut p = Process::new("api-gateway", empty_spec());
+        p.metadata.namespace = Some("prod".into());
+        if let Some(ph) = phase {
+            let mut status = ProcessStatus::default();
+            status.phase = ph;
+            p.status = Some(status);
+        }
+        p
+    }
+
+    #[test]
+    fn observed_phase_returns_none_when_status_is_none() {
+        // Missing-`status` corner pin: the primitive collapses the
+        // no-status case to `None` so downstream `.unwrap_or(...)`
+        // at every reconciler consumer chooses the default
+        // deliberately (`Pending` for the top-level dispatch seed
+        // + boundary evaluator + routing groupby; `Attested` for
+        // the released-from annotation composer). Matches the
+        // pre-lift `.map(|s| s.phase)` chain's `None`
+        // byte-identically at every consumer's downstream shape.
+        let mut p = Process::new("api", empty_spec());
+        p.status = None;
+        assert!(p.observed_phase().is_none());
+    }
+
+    #[test]
+    fn observed_phase_returns_some_default_when_status_is_populated_with_default_phase() {
+        // Populated-status corner pin: the primitive returns
+        // `Some(ProcessPhase::default())` — a `ProcessStatus`
+        // constructed via `default()` carries `phase: Pending`
+        // because the phase field is a bare `ProcessPhase` (not
+        // `Option<ProcessPhase>`), so there is NO "empty slot"
+        // corner peer to the borrow-form projections' empty-slot
+        // pins. A regression that reshaped the return type to
+        // filter out `Pending` (treating it as "unset") would
+        // surface here and silently break the top-level
+        // dispatcher's Pending → Forking transition on a Process
+        // freshly written by the reconciler.
+        let p = process_with_phase(Some(ProcessPhase::default()));
+        assert_eq!(p.observed_phase(), Some(ProcessPhase::Pending));
+        assert_eq!(p.observed_phase(), Some(ProcessPhase::default()));
+    }
+
+    #[test]
+    fn observed_phase_returns_persisted_phase_when_status_is_populated() {
+        // Happy-path pin: with a populated `status.phase` slot,
+        // the primitive returns the persisted `ProcessPhase`.
+        // A regression that filtered / reshaped / canonicalized
+        // the phase would surface here rather than as silent
+        // skew at the top-level dispatcher's phase handler
+        // dispatch on the SAME Process.
+        let p = process_with_phase(Some(ProcessPhase::Running));
+        assert_eq!(p.observed_phase(), Some(ProcessPhase::Running));
+    }
+
+    #[test]
+    fn observed_phase_is_a_pure_projection() {
+        // Purity pin: two consecutive calls return byte-identical
+        // `Option<ProcessPhase>` values (no lazy materialization,
+        // no interior mutation of `self`). Peer to the sibling
+        // `observed_pid_is_a_pure_projection` +
+        // `observed_flux_resources_is_a_pure_projection` +
+        // `observed_attestation_is_a_pure_projection` pins; all
+        // four bind the pure-projection discipline on the ONE
+        // substrate accessor per status slot.
+        let p = process_with_phase(Some(ProcessPhase::Attested));
+        let a = p.observed_phase();
+        let b = p.observed_phase();
+        assert_eq!(a, b);
+        assert_eq!(a, Some(ProcessPhase::Attested));
+    }
+
+    #[test]
+    fn observed_phase_matches_pre_lift_reconciler_chain_shape() {
+        // Parity pin: sweeps the two corners every pre-lift
+        // consumer plausibly encountered (missing status,
+        // populated status with a particular phase) and compares
+        // the substrate call against a hand-authored pre-lift
+        // chain byte-identically. A regression that reshaped ANY
+        // of the two corners would surface here rather than as
+        // silent operator-facing skew between the top-level
+        // dispatcher and any of the four other reconciler
+        // consumers on the SAME `Process`.
+        fn pre_lift(p: &Process) -> Option<ProcessPhase> {
+            p.status.as_ref().map(|s| s.phase)
+        }
+        let mut p = Process::new("api", empty_spec());
+        p.status = None;
+        assert_eq!(p.observed_phase(), pre_lift(&p));
+        let p = process_with_phase(Some(ProcessPhase::Running));
+        assert_eq!(p.observed_phase(), pre_lift(&p));
+        let p = process_with_phase(Some(ProcessPhase::Attested));
+        assert_eq!(p.observed_phase(), pre_lift(&p));
+        let p = process_with_phase(Some(ProcessPhase::Failed));
+        assert_eq!(p.observed_phase(), pre_lift(&p));
+    }
+
+    #[test]
+    fn observed_phase_default_unwrap_matches_pre_lift_pending_default() {
+        // Callsite-shape pin: three of the FIVE pre-lift consumers
+        // (`controller::reconcile`, `boundary::evaluate_process_phase`,
+        // `table_controller::stable_name_group_key`) closed the
+        // 3-line chain with `.unwrap_or(ProcessPhase::Pending)`
+        // (identical to `.unwrap_or_default()`). This pin binds
+        // that call-site shape: `observed_phase().unwrap_or
+        // (Pending)` returns `Pending` on missing status and the
+        // persisted phase otherwise. A regression that swapped
+        // the `None` sentinel's downstream default would surface
+        // here rather than as silent skew at three of the five
+        // consumer sites.
+        let mut p = Process::new("api", empty_spec());
+        p.status = None;
+        assert_eq!(
+            p.observed_phase().unwrap_or(ProcessPhase::Pending),
+            ProcessPhase::Pending
+        );
+        let p = process_with_phase(Some(ProcessPhase::Running));
+        assert_eq!(
+            p.observed_phase().unwrap_or(ProcessPhase::Pending),
+            ProcessPhase::Running
+        );
+    }
+
+    #[test]
+    fn observed_phase_attested_unwrap_matches_pre_lift_released_from_default() {
+        // Callsite-shape pin: the ONE pre-lift consumer
+        // (`phase_machine::p_current_phase_str` — the
+        // released-from annotation composer) closed the 3-line
+        // chain with `.unwrap_or(ProcessPhase::Attested)` rather
+        // than the `Default` (`Pending`). This pin binds that
+        // call-site shape: `observed_phase().unwrap_or(Attested)`
+        // returns `Attested` on missing status and the persisted
+        // phase otherwise. A regression that folded the
+        // `Attested`-default consumer into the `Pending`-default
+        // majority would break the SIGSTOP/SIGCONT release gate's
+        // "which annotation label to emit" branch — the pin binds
+        // the primitive at the raw `Option<ProcessPhase>` form so
+        // this default choice stays local at the callsite.
+        let mut p = Process::new("api", empty_spec());
+        p.status = None;
+        assert_eq!(
+            p.observed_phase().unwrap_or(ProcessPhase::Attested),
+            ProcessPhase::Attested
+        );
+        let p = process_with_phase(Some(ProcessPhase::Failed));
+        assert_eq!(
+            p.observed_phase().unwrap_or(ProcessPhase::Attested),
+            ProcessPhase::Failed
+        );
+    }
+
+    #[test]
+    fn observed_phase_preserves_every_process_phase_variant() {
+        // Round-trip pin: every `ProcessPhase` variant round-
+        // trips through the primitive unchanged. Peer to the
+        // sibling `observed_pid_preserves_hierarchical_pid_format`
+        // pin's dotted-segment sweep; this pin sweeps the closed
+        // set of `ProcessPhase` variants directly so a
+        // canonicalization pass that dropped or reshaped one
+        // (e.g. folded `Reconverging` back into `Execing`, or
+        // remapped `Zombie` to `Reaped`) surfaces here rather
+        // than as silent skew at the SIGSTOP/SIGCONT release
+        // gate's phase-name annotation branch. Covers every
+        // variant the `ProcessPhase::DeriveClosedSet` enumerates
+        // so a future variant addition surfaces via the closed-
+        // set macro rather than at a silent partial sweep.
+        for phase in [
+            ProcessPhase::Pending,
+            ProcessPhase::Forking,
+            ProcessPhase::Execing,
+            ProcessPhase::Running,
+            ProcessPhase::Attested,
+            ProcessPhase::Reconverging,
+            ProcessPhase::Releasing,
+            ProcessPhase::Exiting,
+            ProcessPhase::Failed,
+            ProcessPhase::Zombie,
+            ProcessPhase::Reaped,
+        ] {
+            let p = process_with_phase(Some(phase));
+            assert_eq!(
+                p.observed_phase(),
+                Some(phase),
+                "phase variant {phase:?} did not round-trip"
+            );
+        }
     }
 }

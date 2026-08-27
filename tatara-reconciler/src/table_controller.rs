@@ -54,11 +54,7 @@ pub async fn reconcile(
             Some(r) if r.stable_name_claim => r,
             _ => continue,
         };
-        let phase = p
-            .status
-            .as_ref()
-            .map(|s| s.phase)
-            .unwrap_or(ProcessPhase::Pending);
+        let phase = p.observed_phase().unwrap_or(ProcessPhase::Pending);
         let pid = p
             .status
             .as_ref()

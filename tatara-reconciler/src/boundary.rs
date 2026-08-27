@@ -959,11 +959,7 @@ async fn evaluate_process_phase(
             )))
         }
     };
-    let actual = target
-        .status
-        .as_ref()
-        .map(|s| s.phase)
-        .unwrap_or(ProcessPhase::Pending);
+    let actual = target.observed_phase().unwrap_or(ProcessPhase::Pending);
     if phase_reached(actual, parsed.phase) {
         Ok(Satisfaction::Satisfied)
     } else {
@@ -1072,7 +1068,7 @@ pub async fn check_depends_on(client: Client, process: &Process) -> Result<Vec<U
         let api: Api<Process> = Api::namespaced(client.clone(), ns);
         match api.get_opt(&dep.name).await {
             Ok(Some(target)) => {
-                let actual = target.status.as_ref().map(|s| s.phase);
+                let actual = target.observed_phase();
                 let actual_phase = actual.unwrap_or(ProcessPhase::Pending);
                 if !phase_reached(actual_phase, required) {
                     unmet.push(UnmetDependency {

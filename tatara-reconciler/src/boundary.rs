@@ -24,6 +24,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use tatara_process::boundary::{Condition, ConditionKind};
+use tatara_process::flux_resource::FluxResource;
 use tatara_process::phase::ProcessPhase;
 use tatara_process::prelude::Process;
 #[cfg(test)]
@@ -167,22 +168,34 @@ pub async fn evaluate(
             evaluate_process_phase(client, default_ns, &condition.params).await
         }
         ConditionKind::KustomizationHealthy => {
+            // Flux `(apiVersion, kind)` pairing rides through the
+            // shared substrate closed set
+            // [`tatara_process::flux_resource::FluxResource`] — pre-lift
+            // this site hand-authored both slots byte-identically to
+            // `render::render_flux`'s emit site past the ★★
+            // PRIME-DIRECTIVE ≥ 2 duplication threshold. Post-lift a
+            // Flux apiVersion bump or a kind rename lands at ONE
+            // per-axis owner on the closed set, not at every emit or
+            // fetch site.
             evaluate_flux_ready(
                 client,
                 default_ns,
                 &condition.params,
-                "kustomize.toolkit.fluxcd.io/v1",
-                "Kustomization",
+                FluxResource::Kustomization.api_version(),
+                FluxResource::Kustomization.kind(),
             )
             .await
         }
         ConditionKind::HelmReleaseReleased => {
+            // Sibling to the KustomizationHealthy arm above — routes
+            // through the same [`FluxResource`] closed set so a rename
+            // of the HelmRelease apiVersion / kind lands at ONE arm.
             evaluate_flux_ready(
                 client,
                 default_ns,
                 &condition.params,
-                "helm.toolkit.fluxcd.io/v2",
-                "HelmRelease",
+                FluxResource::HelmRelease.api_version(),
+                FluxResource::HelmRelease.kind(),
             )
             .await
         }
@@ -921,6 +934,39 @@ mod tests {
             Some("why")
         );
         assert_eq!(Satisfaction::Satisfied.message(), None);
+    }
+
+    /// Substrate-primitive pin at the CONSUMER surface: the two
+    /// [`FluxResource`] variants this evaluator reaches at the wire
+    /// (Kustomization / HelmRelease — the OCIRepository variant is
+    /// referenced by [`crate::render::render_aplicacao`], not by the
+    /// boundary evaluator) carry the canonical wire-form
+    /// `(apiVersion, kind)` pair the sibling `render::render_flux` +
+    /// `render::render_aplicacao` emit sites now stamp through the
+    /// SAME closed-set arm. A regression that drifted either arm's
+    /// literal at the fetch OR emit site would silently mis-route
+    /// SSA-fetch against SSA-apply — surfaces here + at the sibling
+    /// `render_flux_emits_flux_resource_owned_kustomization_api_version_and_kind`
+    /// + `render_aplicacao_emits_flux_resource_owned_api_version_and_kind_pairs`
+    /// pins rather than as an operator-visible 404 at every deploy.
+    #[test]
+    fn flux_ready_evaluator_reaches_flux_resource_owned_kustomization_and_helm_release_pairs() {
+        // Kustomization axis — pinned wire-form pair the
+        // ConditionKind::KustomizationHealthy arm now reads from
+        // the substrate closed set.
+        assert_eq!(
+            FluxResource::Kustomization.api_version(),
+            "kustomize.toolkit.fluxcd.io/v1"
+        );
+        assert_eq!(FluxResource::Kustomization.kind(), "Kustomization");
+        // HelmRelease axis — pinned wire-form pair the
+        // ConditionKind::HelmReleaseReleased arm now reads from
+        // the substrate closed set.
+        assert_eq!(
+            FluxResource::HelmRelease.api_version(),
+            "helm.toolkit.fluxcd.io/v2"
+        );
+        assert_eq!(FluxResource::HelmRelease.kind(), "HelmRelease");
     }
 }
 

@@ -6,6 +6,7 @@ use serde_json::{json, Value};
 
 use tatara_process::annotations;
 use tatara_process::export::ExportSpec;
+use tatara_process::flux_resource::FluxResource;
 use tatara_process::hostname::{
     ephemeral_id_from_spec, fmt_fqdn, fmt_fqdn_stable, resolve_ephemeral_id,
 };
@@ -149,9 +150,15 @@ fn render_flux(name: &str, ns: &str, f: &FluxIntent) -> (Vec<Value>, Vec<u8>) {
     // owner; a future upgrade (labels axis, finalizers slot,
     // generateName / resourceVersion precondition slots) lands at the
     // primitive and every Flux emit site inherits mechanically.
+    // Flux `(apiVersion, kind)` pairing rides through the shared
+    // substrate closed set [`FluxResource::Kustomization`]. Pre-lift
+    // both slots were inline `&'static str` literals restated byte-
+    // identically at the sibling `boundary::evaluate` fetch site past
+    // the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold; post-lift
+    // both consumers read the pair from ONE per-axis owner.
     let kustomization = json!({
-        "apiVersion": "kustomize.toolkit.fluxcd.io/v1",
-        "kind": "Kustomization",
+        "apiVersion": FluxResource::Kustomization.api_version(),
+        "kind": FluxResource::Kustomization.kind(),
         "metadata": crate::ssapply::owned_flux_metadata(ns, name),
         "spec": Value::Object(spec),
     });
@@ -204,8 +211,8 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
         // `{name, namespace, annotations: ownership_annotations_by_coord(
         // ns, name)}` blocks now compose at ONE owner.
         let oci_repo = json!({
-            "apiVersion": "source.toolkit.fluxcd.io/v1beta2",
-            "kind": "OCIRepository",
+            "apiVersion": FluxResource::OCIRepository.api_version(),
+            "kind": FluxResource::OCIRepository.kind(),
             "metadata": crate::ssapply::owned_flux_metadata(ns, name),
             "spec": {
                 // Flux `OCIRepository.spec.interval` — pre-lift this
@@ -222,10 +229,16 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
                 "ref": { "tag": a.version },
             },
         });
-        // HelmRelease v2 `chartRef` pointer.
+        // HelmRelease v2 `chartRef` pointer. The `kind` slot rides
+        // through the same [`FluxResource::OCIRepository`] closed-set
+        // owner as the sibling `oci_repo` emit above — a regression
+        // that renamed the OCIRepository kind at ONE of the two
+        // sites (kind emit vs chartRef.kind reference) would silently
+        // break the helm-controller's chart-ref resolution against
+        // the source-controller's emitted OCIRepository.
         let chart_block = json!({
             "chartRef": {
-                "kind": "OCIRepository",
+                "kind": FluxResource::OCIRepository.kind(),
                 "name": name,
                 "namespace": ns,
             },
@@ -295,9 +308,15 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
     // site in `render_flux`; the three pre-lift hand-authored `{name,
     // namespace, annotations: ownership_annotations_by_coord(ns,
     // name)}` blocks now compose at ONE owner.
+    // Flux `(apiVersion, kind)` pairing rides through the shared
+    // substrate closed set [`FluxResource::HelmRelease`]. Pre-lift both
+    // slots were inline `&'static str` literals restated byte-
+    // identically at the sibling `boundary::evaluate` fetch site past
+    // the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold; post-lift
+    // both consumers read the pair from ONE per-axis owner.
     let helm_release = json!({
-        "apiVersion": "helm.toolkit.fluxcd.io/v2",
-        "kind": "HelmRelease",
+        "apiVersion": FluxResource::HelmRelease.api_version(),
+        "kind": FluxResource::HelmRelease.kind(),
         "metadata": crate::ssapply::owned_flux_metadata(ns, name),
         "spec": Value::Object(hr_spec),
     });
@@ -999,6 +1018,76 @@ mod aplicacao_tests {
             split_repo_chart("loose-chart-name"),
             ("default".into(), "loose-chart-name".into())
         );
+    }
+
+    /// Substrate-primitive pin at the CONSUMER surface: the OCIRepository
+    /// + HelmRelease resources `render_aplicacao` emits carry
+    /// `apiVersion` + `kind` slots byte-identical to the
+    /// [`FluxResource`] closed-set owner. Pre-lift both slots were
+    /// hand-authored inline `&'static str` literals at three
+    /// production sites in this file (Kustomization in
+    /// `render_flux`, OCIRepository + HelmRelease in
+    /// `render_aplicacao`) past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold — a regression that dropped one arm
+    /// from routing through the closed set (or drifted the
+    /// literal at ONE emit site relative to the sibling
+    /// `boundary::evaluate_flux_ready` fetch site) would silently
+    /// mis-route SSA-apply vs SSA-fetch against the K8s API
+    /// server. Post-lift the pair binds at ONE per-axis owner.
+    #[test]
+    fn render_aplicacao_emits_flux_resource_owned_api_version_and_kind_pairs() {
+        let (resources, _) = render_aplicacao("p", "ns", &demo_intent());
+        let oci = resources
+            .iter()
+            .find(|r| r["kind"] == FluxResource::OCIRepository.kind())
+            .expect("OCIRepository emitted for oci:// chart_ref");
+        assert_eq!(oci["apiVersion"], FluxResource::OCIRepository.api_version());
+        assert_eq!(oci["kind"], FluxResource::OCIRepository.kind());
+        let hr = resources
+            .iter()
+            .find(|r| r["kind"] == FluxResource::HelmRelease.kind())
+            .expect("HelmRelease emitted for oci:// chart_ref");
+        assert_eq!(hr["apiVersion"], FluxResource::HelmRelease.api_version());
+        assert_eq!(hr["kind"], FluxResource::HelmRelease.kind());
+        // The sibling chartRef pointer on the HelmRelease also
+        // routes through the same OCIRepository closed-set arm — a
+        // regression that renamed either the emit-site kind or the
+        // reference-site kind (breaking the helm-controller's
+        // chart-ref resolution against the source-controller's
+        // emitted OCIRepository) surfaces at THIS pin.
+        assert_eq!(
+            hr["spec"]["chartRef"]["kind"],
+            FluxResource::OCIRepository.kind()
+        );
+    }
+
+    /// Cross-site coherence pin at the CONSUMER surface: the
+    /// Kustomization `render_flux` emits carries `apiVersion` +
+    /// `kind` slots byte-identical to the [`FluxResource`] closed-
+    /// set owner AND matches the pair the sibling
+    /// `boundary::evaluate_flux_ready` fetch site now reads from
+    /// the same closed-set arm. Pre-lift both callers restated the
+    /// (apiVersion, kind) pair inline; post-lift both bind at ONE
+    /// per-axis owner and any Flux apiVersion bump lands at ONE
+    /// arm on the substrate.
+    #[test]
+    fn render_flux_emits_flux_resource_owned_kustomization_api_version_and_kind() {
+        let flux = tatara_process::intent::FluxIntent {
+            git_repository: "flux-system".into(),
+            path: "./apps/observability".into(),
+            git_repository_namespace: None,
+            target_namespace: None,
+            decrypt_sops: true,
+            helm_chart: None,
+            helm_values: None,
+        };
+        let (resources, _) = render_flux("obs", "flux-system", &flux);
+        assert_eq!(resources.len(), 1);
+        assert_eq!(
+            resources[0]["apiVersion"],
+            FluxResource::Kustomization.api_version()
+        );
+        assert_eq!(resources[0]["kind"], FluxResource::Kustomization.kind());
     }
 }
 

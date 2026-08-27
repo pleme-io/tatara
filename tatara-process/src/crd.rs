@@ -457,6 +457,99 @@ impl Process {
         self.spec.identity.parent.as_deref()
     }
 
+    /// Borrow-form spec-projection primitive on the declared
+    /// name-override axis: returns the human name the author declared
+    /// at `spec.identity.name_override` (used verbatim instead of the
+    /// content-hash-derived name in [`derive_identity`]), with the
+    /// empty-slot corner collapsed to `None` — the ONE-liner collapse
+    /// of the paired `self.spec.identity.name_override.as_deref()`
+    /// incantation every consumer restated by hand pre-lift.
+    ///
+    /// Pre-lift the `.spec.identity.name_override.as_deref()` chain
+    /// was hand-authored at TWO sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold in `tatara-reconciler::phase_machine`,
+    /// both feeding the second positional argument of
+    /// [`derive_identity`]:
+    /// * `handle_pending` — the DECLARE composer that computes the
+    ///   Process's [`Identity`] on entry to the state machine (before
+    ///   `patch::phase_status` writes it into `status.identity`).
+    /// * `handle_forking` — the ALLOCATE-PID composer that recomputes
+    ///   the same [`Identity`] on a rehydration path (status may
+    ///   already carry an identity from a prior reconcile, in which
+    ///   case the `.and_then(|s| s.identity.clone())` short-circuit
+    ///   takes it; otherwise this `.unwrap_or_else` branch fires and
+    ///   recomputes the identity fresh from the spec) so `pid::
+    ///   allocate_pid` sees the SAME [`Identity`] the DECLARE phase
+    ///   produced.
+    ///
+    /// Both sites walked the SAME `.as_deref()` chain and both wanted
+    /// the `Option<&str>` form the primitive returns — as the second
+    /// positional argument to `derive_identity(&self.spec, …)`, which
+    /// internally trims + filters empty strings + dispatches on
+    /// `Some(non_empty)` (verbatim name, `name_override: true`) vs
+    /// `None | Some(empty | whitespace)` (content-hash-derived name,
+    /// `name_override: false`). The primitive itself preserves the
+    /// raw slot byte-identically (the trim happens IN
+    /// `derive_identity`, not at the borrow site), so the two live
+    /// paths compose through the SAME borrow-form skeleton.
+    ///
+    /// Return-form axis: `Option<&str>` mirrors the borrow-first
+    /// discipline of every peer primitive on the metadata / status /
+    /// spec-identity slot family ([`Self::namespace_or_default`],
+    /// [`Self::name_or_placeholder`], [`Self::observed_pid`],
+    /// [`Self::annotation`], [`Self::declared_parent_pid`]). The
+    /// empty-slot corner (`spec.identity.name_override = None`,
+    /// matching a Process authored WITHOUT the human-name-override
+    /// escape hatch — the default; `derive_identity` then computes
+    /// the name from the content hash) collapses to `None` so
+    /// `.is_some()` / `if let Some(_)` / `.map(...)` behave
+    /// identically on the two Process shapes an operator can author.
+    ///
+    /// Peer to [`Self::declared_parent_pid`] on the (parent × name-
+    /// override) sub-axis of the declared-identity axis: both
+    /// primitives project a `Option<String>` slot on `IdentitySpec`
+    /// through the SAME borrow-form skeleton, so a future
+    /// `declared_identity` composite that returns both halves
+    /// together (e.g. as a `(Option<&str>, Option<&str>)` tuple or a
+    /// borrow-form `DeclaredIdentityView<'_>` newtype) lands as ONE
+    /// method that COMPOSES the two peer primitives, not as three
+    /// hand-authored `.as_deref()` chains restated at each callsite.
+    ///
+    /// A future normalization step (a per-slot canonicalization pass
+    /// that rejects malformed names, a case-fold lookup against a
+    /// table of renamed identities, an alias-table lookup that maps
+    /// a legacy name-override to its current spelling, a whitespace-
+    /// trim lift OUT of `derive_identity` INTO the primitive so both
+    /// consumers see the trimmed form) lands at ONE substrate method
+    /// here and both downstream consumers pick up the upgrade
+    /// mechanically — no per-callsite hand-edit at `handle_pending` /
+    /// `handle_forking`.
+    ///
+    /// Sibling to the peer spec-identity projection
+    /// [`Self::declared_parent_pid`] on the declared-identity axis;
+    /// this method opens the borrow-form peer on the name-override
+    /// sub-axis of the same closed set (`IdentitySpec { parent,
+    /// name_override }`). Future identity projections (a paired
+    /// `declared_identity` composite that returns both halves
+    /// together) land as peer methods on this same axis.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `.spec.identity.name_override.as_deref()` chain recurred
+    /// at two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger, and is lifted to ONE owner here).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// the pins bind the empty-slot corner + the borrow-form `&str`
+    /// lifetime + the byte-identical parity with the pre-lift
+    /// `.as_deref()` chain + the invariance under
+    /// [`derive_identity`]'s internal trim/filter step, so a
+    /// regression that drifted any surface at
+    /// `tests::declared_name_override_*` rather than as silent
+    /// operator-facing skew between the DECLARE composer and the
+    /// ALLOCATE-PID rehydration branch on the SAME Process spec).
+    pub fn declared_name_override(&self) -> Option<&str> {
+        self.spec.identity.name_override.as_deref()
+    }
+
     /// Borrowed slice of the FluxCD resources this Process's status
     /// currently persists at `status.flux_resources`, with the
     /// missing-`status` corner collapsed to an empty slice — the ONE-
@@ -1765,6 +1858,190 @@ mod tests {
         // holds on the other side of the axis pair.
         let sibling = process_with_declared_parent(Some("seph.2"));
         assert_ne!(sibling.declared_parent_pid(), Some(parent_pid));
+    }
+
+    // ─── Process::declared_name_override substrate pins ──────────────
+    //
+    // Pins the borrow-form spec-projection primitive on the declared
+    // name-override sub-axis of the declared-identity axis that owns
+    // the `.spec.identity.name_override.as_deref()` chain the two
+    // hand-authored `tatara-reconciler::phase_machine` sites
+    // (`handle_pending` DECLARE composer + `handle_forking` ALLOCATE-
+    // PID rehydration branch) restated by hand pre-lift. Peer to the
+    // sibling `declared_parent_pid_*` pin family on the (parent ×
+    // name-override) sub-axis pair; both compose the same borrow-form
+    // `Option<&str>` return-shape skeleton on distinct slots
+    // (`spec.identity.name_override` vs `spec.identity.parent`).
+    // Fail-before-pass-after granularity: `declared_name_override`
+    // did not exist pre-lift, so any test invoking it fails to
+    // compile pre-lift and passes post-lift.
+    fn process_with_declared_name_override(name_override: Option<&str>) -> Process {
+        let mut spec = empty_spec();
+        spec.identity.name_override = name_override.map(str::to_string);
+        Process::new("some-proc", spec)
+    }
+
+    #[test]
+    fn declared_name_override_returns_none_when_slot_is_none() {
+        // Empty-slot corner pin: the primitive collapses the no-
+        // override case to `None`, matching the pre-lift `.as_deref()`
+        // chain's `None` byte-identically at both reconciler consumer
+        // sites. Semantically corresponds to a Process authored
+        // WITHOUT the human-name-override escape hatch — the default;
+        // `derive_identity` then computes the name from the content
+        // hash and stamps `name_override: false` on the resulting
+        // [`Identity`].
+        let p = process_with_declared_name_override(None);
+        assert!(p.declared_name_override().is_none());
+    }
+
+    #[test]
+    fn declared_name_override_returns_borrowed_str_when_slot_is_populated() {
+        // Happy-path pin: with a populated `spec.identity
+        // .name_override` slot, the primitive returns a borrowed
+        // `&str` whose contents match the persisted `String`. A
+        // regression that filtered / reshaped / canonicalized the
+        // string at the primitive (as opposed to inside
+        // `derive_identity`, where the trim/empty-filter lives today)
+        // would surface here rather than as silent skew between the
+        // DECLARE composer and the ALLOCATE-PID rehydration branch on
+        // the SAME Process spec.
+        let p = process_with_declared_name_override(Some("observability-stack"));
+        assert_eq!(p.declared_name_override(), Some("observability-stack"));
+    }
+
+    #[test]
+    fn declared_name_override_is_a_zero_copy_borrow_projection() {
+        // Borrow-discipline pin: the returned `&str` borrows the
+        // persisted `String`'s underlying byte buffer in place —
+        // NOT a fresh allocation or a clone. Peer to the sibling
+        // `declared_parent_pid_is_a_zero_copy_borrow_projection` pin
+        // on the other side of the (parent × name-override) sub-axis
+        // pair; the borrow discipline holds structurally on BOTH
+        // sub-axes so a future `declared_identity` composite that
+        // returns both halves together can compose them without
+        // dropping into an owning form.
+        let p = process_with_declared_name_override(Some("observability-stack"));
+        let borrowed = p.declared_name_override().expect("populated slot");
+        let persisted = p.spec.identity.name_override.as_ref().unwrap();
+        assert!(std::ptr::eq(borrowed.as_ptr(), persisted.as_ptr()));
+    }
+
+    #[test]
+    fn declared_name_override_is_a_pure_projection() {
+        // Purity pin: calling the projection twice on the same
+        // `Process` returns byte-identical `&str`s (same pointer,
+        // same length). A regression that introduced state — a
+        // lazy-cached slice materialized on first call, a
+        // normalization step that ran once and cached — would
+        // surface here rather than as silent drift between the
+        // DECLARE composer and the ALLOCATE-PID rehydration branch
+        // within one reconcile pass.
+        let p = process_with_declared_name_override(Some("gateway-primary"));
+        let a = p.declared_name_override().expect("populated slot");
+        let b = p.declared_name_override().expect("populated slot");
+        assert!(std::ptr::eq(a.as_ptr(), b.as_ptr()));
+        assert_eq!(a.len(), b.len());
+    }
+
+    #[test]
+    fn declared_name_override_matches_pre_lift_reconciler_chain_shape() {
+        // Byte-identical parity pin between the borrow-form primitive
+        // here and the pre-lift `tatara-reconciler::phase_machine`
+        // `.spec.identity.name_override.as_deref()` chain shape.
+        // Sweeps every corner every callsite plausibly encounters
+        // (empty slot, populated with a bare name, populated with a
+        // whitespace-containing name that `derive_identity`'s
+        // internal trim would collapse, populated with an explicitly
+        // empty string that `derive_identity`'s internal
+        // `!s.is_empty()` filter would reject). A regression that
+        // inserted a normalization step at the primitive the pre-
+        // lift chain does NOT apply — or vice versa — surfaces here
+        // rather than as silent drift between the pre-lift consumer
+        // sites and the ONE substrate owner they now route through.
+        // Peer to
+        // `declared_parent_pid_matches_pre_lift_reconciler_chain_shape`
+        // on the sibling sub-axis's borrow-form primitive.
+        fn pre_lift(p: &Process) -> Option<&str> {
+            p.spec.identity.name_override.as_deref()
+        }
+        // Empty slot.
+        let p = process_with_declared_name_override(None);
+        assert_eq!(p.declared_name_override(), pre_lift(&p));
+        // Populated with a bare name.
+        let p = process_with_declared_name_override(Some("observability-stack"));
+        assert_eq!(p.declared_name_override(), pre_lift(&p));
+        // Populated with a whitespace-containing name.
+        let p = process_with_declared_name_override(Some("  observability-stack  "));
+        assert_eq!(p.declared_name_override(), pre_lift(&p));
+        // Populated with an explicitly empty string. Distinct from
+        // the missing-slot `None` corner both at the primitive here
+        // and at the pre-lift chain (the trim/filter that collapses
+        // these two into the same `false`-branched
+        // `Identity { name_override: false, .. }` lives INSIDE
+        // `derive_identity`, NOT at the borrow site) — the primitive
+        // MUST preserve the distinction so a future lift of the trim/
+        // filter OUT of `derive_identity` INTO the primitive is a
+        // conscious substrate change, not a silent one.
+        let p = process_with_declared_name_override(Some(""));
+        assert_eq!(p.declared_name_override(), pre_lift(&p));
+    }
+
+    #[test]
+    fn declared_name_override_preserves_raw_slot_verbatim() {
+        // Invariance-under-`derive_identity`-normalization pin: the
+        // primitive returns the slot's raw byte contents verbatim —
+        // no trim, no empty-string filter, no case fold, no
+        // normalization of any kind. `derive_identity` internally
+        // applies `.map(str::trim).filter(|s| !s.is_empty())` before
+        // dispatching on `Some(non_empty)` vs `None | Some(empty |
+        // whitespace)`, but that transform lives IN `derive_identity`,
+        // NOT at the borrow site. A regression that pulled the trim/
+        // filter forward INTO the primitive would silently collapse
+        // three currently-distinct corners at the borrow site (bare
+        // populated → `Some(name)`; whitespace-only → `Some("   ")`;
+        // empty → `Some("")`) into two (bare → `Some(name)`; the
+        // other two → `None`). That collapse might be an intentional
+        // substrate change some future run wants to make; if so, it
+        // lands as a conscious edit here (with this pin updated in
+        // the same commit) rather than as silent behavior drift.
+        for value in ["bare", "  padded  ", "\ttabs\t", "   ", ""] {
+            let p = process_with_declared_name_override(Some(value));
+            assert_eq!(
+                p.declared_name_override(),
+                Some(value),
+                "declared_name_override must preserve raw slot verbatim for value {value:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn declared_name_override_composes_with_derive_identity_call_shape() {
+        // Cross-primitive coherence pin against the [`derive_identity`]
+        // consumer: the two live `tatara-reconciler::phase_machine`
+        // callsites feed `p.declared_name_override()` as the second
+        // positional argument to `derive_identity(&p.spec, …)`. This
+        // pin exercises that exact call shape at test time so a
+        // regression that skewed the primitive's return-form (return-
+        // shape, borrow discipline, empty-slot collapse) surfaces
+        // here as a shape mismatch at the [`derive_identity`] call
+        // site rather than as silent operator-facing skew between the
+        // DECLARE composer and the ALLOCATE-PID rehydration branch.
+        // Populated with a bare non-empty name: `derive_identity`
+        // dispatches on `Some(non_empty)` and stamps
+        // `name_override: true` on the resulting [`Identity`], with
+        // the resulting `.name` equal to the raw slot value.
+        let p = process_with_declared_name_override(Some("gateway-primary"));
+        let id = crate::identity::derive_identity(&p.spec, p.declared_name_override());
+        assert!(id.name_override);
+        assert_eq!(id.name, "gateway-primary");
+        // Empty slot: `derive_identity` dispatches on `None` and
+        // stamps `name_override: false` on the resulting [`Identity`],
+        // with the resulting `.name` derived from the content hash
+        // (NOT equal to any operator-authored slot value).
+        let p = process_with_declared_name_override(None);
+        let id = crate::identity::derive_identity(&p.spec, p.declared_name_override());
+        assert!(!id.name_override);
     }
 
     // ─── Process::observed_flux_resources substrate pins ───────────────

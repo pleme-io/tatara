@@ -40,7 +40,19 @@ pub async fn handle_pending(p: &Process, ctx: &Context) -> Result<Action> {
     // DECLARE — canonicalize the spec, compute content hash, attach Identity,
     //           install the tatara finalizer, advance to Forking.
     let (ns, name) = p.owned_coordinates_or_err()?;
-    let identity = derive_identity(&p.spec, p.spec.identity.name_override.as_deref());
+    // Declared name-override rides through the ONE substrate
+    // `Process::declared_name_override` primitive, sibling to the
+    // same-shape `handle_forking` rehydration branch that reads the
+    // same slot through the same primitive. Pre-lift this site
+    // spelled the projection as `p.spec.identity.name_override
+    // .as_deref()` — a hand-authored `.as_deref()` chain repeated
+    // at both sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold; post-lift the pair collapses onto ONE owner in
+    // `tatara-process::crd`. The trim/empty-filter that dispatches
+    // between the `name_override: true` (verbatim) and `false`
+    // (content-hash) branches lives INSIDE `derive_identity`, NOT
+    // at the borrow site.
+    let identity = derive_identity(&p.spec, p.declared_name_override());
 
     let api = ctx.process_api(&ns);
     patch::ensure_finalizer(&api, &name, p, tatara_process::PROCESS_FINALIZER)
@@ -109,7 +121,7 @@ pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
             .status
             .as_ref()
             .and_then(|s| s.identity.clone())
-            .unwrap_or_else(|| derive_identity(&p.spec, p.spec.identity.name_override.as_deref()));
+            .unwrap_or_else(|| derive_identity(&p.spec, p.declared_name_override()));
 
         let pt_api = ctx.process_table_api();
         let pt = patch::ensure_process_table(&pt_api, &ctx.config.process_table_name)

@@ -13,6 +13,7 @@ use tatara_process::hostname::{
 use tatara_process::intent::{
     AplicacaoIntent, FluxIntent, Intent, IntentVariant, LispIntent, NixIntent,
 };
+use tatara_process::k8s_builtin_resource::K8sBuiltinResource;
 use tatara_process::k8s_object_ref::K8sObjectRef;
 use tatara_process::phase::ProcessPhase;
 use tatara_process::prelude::Process;
@@ -742,43 +743,61 @@ fn one_export_job(
         Value::String(index.to_string()),
     );
 
-    Ok(json!({
-        "apiVersion": "batch/v1",
-        "kind": "Job",
-        "metadata": {
-            "name": job_name,
-            "namespace": ns,
-            "labels": Value::Object(job_labels),
-            "ownerReferences": owner_refs,
-        },
-        "spec": {
-            "backoffLimit": 1,
-            "ttlSecondsAfterFinished": 3600,
-            "template": {
-                "metadata": {
-                    "labels": {
-                        annotations::PROCESS: process_ref,
-                        annotations::ROLE: "export",
-                        annotations::EXPORT_INDEX: index.to_string(),
+    // Route the export Job's `(apiVersion, kind)` pair through the
+    // typed [`K8sBuiltinResource::Job`] closed-set owner's
+    // `.wire_identity().resource_json(json!({...}))` composer —
+    // sibling to how `render::render_flux` / `render::render_aplicacao`
+    // route the Flux resources' pair through
+    // [`FluxResource::X.wire_identity()`] and how
+    // `edges::IngressEdge::render` / `DnsEndpointEdge::render` route
+    // the routing edges' pair through
+    // [`RoutingEdgeResource::X.wire_identity()`]. Pre-lift this emit
+    // site hand-authored `"apiVersion": "batch/v1"` +
+    // `"kind": "Job"` as two adjacent string literals past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold that peered the
+    // `boundary::fetch_job_status` fetch site through the SAME wire-
+    // form pair; post-lift both sites name the variant ONCE via the
+    // closed-set owner, and the pair binds structurally at
+    // [`tatara_process::K8sWireIdentity`] so a copy-paste that
+    // swapped ONE mention of the variant across the two slots would
+    // no longer compile.
+    Ok(K8sBuiltinResource::Job
+        .wire_identity()
+        .resource_json(json!({
+            "metadata": {
+                "name": job_name,
+                "namespace": ns,
+                "labels": Value::Object(job_labels),
+                "ownerReferences": owner_refs,
+            },
+            "spec": {
+                "backoffLimit": 1,
+                "ttlSecondsAfterFinished": 3600,
+                "template": {
+                    "metadata": {
+                        "labels": {
+                            annotations::PROCESS: process_ref,
+                            annotations::ROLE: "export",
+                            annotations::EXPORT_INDEX: index.to_string(),
+                        },
+                    },
+                    "spec": {
+                        "restartPolicy": "Never",
+                        "serviceAccountName": service_account,
+                        "containers": [{
+                            "name": "worker",
+                            "image": image,
+                            "imagePullPolicy": "IfNotPresent",
+                            "args": args,
+                            "resources": {
+                                "requests": { "cpu": "10m", "memory": "32Mi" },
+                                "limits":   { "cpu": "200m", "memory": "128Mi" },
+                            },
+                        }],
                     },
                 },
-                "spec": {
-                    "restartPolicy": "Never",
-                    "serviceAccountName": service_account,
-                    "containers": [{
-                        "name": "worker",
-                        "image": image,
-                        "imagePullPolicy": "IfNotPresent",
-                        "args": args,
-                        "resources": {
-                            "requests": { "cpu": "10m", "memory": "32Mi" },
-                            "limits":   { "cpu": "200m", "memory": "128Mi" },
-                        },
-                    }],
-                },
             },
-        },
-    }))
+        })))
 }
 
 /// Compute the `intent_hash` pillar from canonical intent bytes.
@@ -1384,6 +1403,52 @@ mod export_job_tests {
             export_receipt_configmap_name("r1", 0),
             "r1-export-0-receipt"
         );
+    }
+
+    /// Substrate-primitive pin at the CONSUMER surface: the export
+    /// Job `render::one_export_job` emits carries `apiVersion` +
+    /// `kind` slots byte-identical to the
+    /// [`K8sBuiltinResource::Job`] closed-set owner. Pre-lift both
+    /// slots were hand-authored inline `&'static str` literals
+    /// (`"batch/v1"` + `"Job"`) at this emit site past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication threshold that peered the
+    /// `boundary::fetch_job_status` fetch site through the SAME
+    /// wire-form pair — a regression that dropped this arm from
+    /// routing through the closed set (or drifted either literal at
+    /// ONE emit site relative to the peer fetch site) would silently
+    /// mis-route SSA-apply vs SSA-fetch against the K8s API server.
+    /// Post-lift the pair binds at ONE per-axis owner.
+    ///
+    /// Sibling to the peer pins
+    /// `render_flux_emits_flux_resource_owned_kustomization_api_version_and_kind`
+    /// and
+    /// `render_aplicacao_emits_flux_resource_owned_api_version_and_kind_pairs`
+    /// on the Flux-controller axis.
+    #[test]
+    fn render_export_jobs_emits_k8s_builtin_owned_job_api_version_and_kind() {
+        let p = process_with(vec![spec_receipts_attested()], false);
+        let jobs = render_export_jobs(
+            &p,
+            ProcessPhase::Attested,
+            "ghcr.io/pleme-io/tatara-export-worker:0.2.0",
+            "tatara-export-worker",
+        )
+        .expect("render_export_jobs");
+        assert_eq!(jobs.len(), 1);
+        // The emit site now names the variant ONCE via
+        // `.wire_identity().resource_json(json!({...}))`; both slots
+        // MUST match the closed-set owner's projection verbatim so a
+        // regression that dropped this arm from the substrate's typed
+        // path fails HERE rather than as a wire-time 404 at the K8s
+        // API server.
+        assert_eq!(jobs[0]["apiVersion"], K8sBuiltinResource::Job.api_version());
+        assert_eq!(jobs[0]["kind"], K8sBuiltinResource::Job.kind());
+        // Byte-identity pin: the exact `batch/v1` + `Job` literals
+        // every pre-lift callsite hand-authored — operators and
+        // dashboards keyed on the string form see identical wire
+        // shapes post-lift.
+        assert_eq!(jobs[0]["apiVersion"], "batch/v1");
+        assert_eq!(jobs[0]["kind"], "Job");
     }
 
     #[test]

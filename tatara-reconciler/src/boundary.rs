@@ -25,6 +25,7 @@ use serde_json::Value;
 
 use tatara_process::boundary::{Condition, ConditionKind};
 use tatara_process::flux_resource::FluxResource;
+use tatara_process::k8s_builtin_resource::K8sBuiltinResource;
 use tatara_process::phase::ProcessPhase;
 use tatara_process::prelude::Process;
 #[cfg(test)]
@@ -744,9 +745,26 @@ fn classify_receipt_verdict(
 }
 
 async fn fetch_job_status(client: Client, ns: &str, name: &str) -> Result<JobLookup> {
-    let obj = ssapply::fetch(client, ns, "batch/v1", "Job", name)
-        .await
-        .map_err(|e| anyhow!("fetch Job {ns}/{name}: {e}"))?;
+    // The `(apiVersion, kind)` pair for the `batch/v1::Job` fetch
+    // rides through the typed [`K8sBuiltinResource::Job`] closed-set
+    // owner — pre-lift both slots were hand-authored `"batch/v1"` +
+    // `"Job"` string literals past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold in `tatara-reconciler` (this fetch site
+    // + the emit site at `render::one_export_job`). Post-lift both
+    // sites read the pair from the SAME closed-set variant, and a
+    // regression that drifted either slot at one site (a
+    // `batch/v1beta1` bump at the fetch alone, a `job` lowercased at
+    // the emit alone) would fail-loudly at the closed set's byte-
+    // shape pins rather than as an operator-visible 404 at wire time.
+    let obj = ssapply::fetch(
+        client,
+        ns,
+        K8sBuiltinResource::Job.api_version(),
+        K8sBuiltinResource::Job.kind(),
+        name,
+    )
+    .await
+    .map_err(|e| anyhow!("fetch Job {ns}/{name}: {e}"))?;
     let Some(obj) = obj else {
         return Ok(JobLookup::Missing);
     };
@@ -781,9 +799,22 @@ async fn verify_receipt_cm(
     name: &str,
     expected_root: Option<&str>,
 ) -> Result<ReceiptVerdict> {
-    let obj = ssapply::fetch(client, ns, "v1", "ConfigMap", name)
-        .await
-        .map_err(|e| anyhow!("fetch ConfigMap {ns}/{name}: {e}"))?;
+    // The `(apiVersion, kind)` pair for the `v1::ConfigMap` receipt
+    // fetch rides through the typed [`K8sBuiltinResource::ConfigMap`]
+    // closed-set owner — sibling to the `Job` fetch above. Every
+    // future receipt-fetch consumer (kenshi-runner's P3 lift, per-
+    // membro contract receipts, any Job whose completion produces a
+    // receipt) inherits the wire-form pair through the SAME closed-
+    // set variant with no per-callsite literal.
+    let obj = ssapply::fetch(
+        client,
+        ns,
+        K8sBuiltinResource::ConfigMap.api_version(),
+        K8sBuiltinResource::ConfigMap.kind(),
+        name,
+    )
+    .await
+    .map_err(|e| anyhow!("fetch ConfigMap {ns}/{name}: {e}"))?;
     let Some(obj) = obj else {
         return Ok(ReceiptVerdict::Missing);
     };

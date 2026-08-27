@@ -16,6 +16,7 @@ use tatara_process::intent::{
 use tatara_process::phase::ProcessPhase;
 use tatara_process::prelude::Process;
 use tatara_process::routing::RoutingSpec;
+use tatara_process::routing_edge_resource::RoutingEdgeResource;
 
 use crate::edges::{DnsEndpointEdge, Edge, EdgeContext, IngressEdge};
 
@@ -1449,8 +1450,8 @@ mod routing_tests {
         // 2 hostnames × 2 edges = 4 resources.
         assert_eq!(out.len(), 4);
         let kinds: Vec<_> = out.iter().map(|v| v["kind"].as_str().unwrap()).collect();
-        assert!(kinds.contains(&"Ingress"));
-        assert!(kinds.contains(&"DNSEndpoint"));
+        assert!(kinds.contains(&RoutingEdgeResource::Ingress.kind()));
+        assert!(kinds.contains(&RoutingEdgeResource::DnsEndpoint.kind()));
     }
 
     #[test]
@@ -1502,7 +1503,7 @@ mod routing_tests {
         // 2 hostnames × 1 edge (Ingress only — DNSEndpoint skipped) = 2.
         assert_eq!(out.len(), 2);
         for v in &out {
-            assert_eq!(v["kind"], "Ingress");
+            assert_eq!(v["kind"], RoutingEdgeResource::Ingress.kind());
         }
     }
 

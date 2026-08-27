@@ -25,6 +25,7 @@ pub mod phase;
 pub mod pool;
 pub mod receipt;
 pub mod routing;
+pub mod routing_edge_resource;
 pub mod signal;
 pub mod spec;
 pub mod status;
@@ -97,6 +98,7 @@ pub mod prelude {
         RECEIPT_CM_SUFFIX, RECEIPT_VERSION,
     };
     pub use crate::routing::{RoutingBackend, RoutingForm, RoutingHostname, RoutingSpec};
+    pub use crate::routing_edge_resource::RoutingEdgeResource;
     pub use crate::signal::{ProcessSignal, SighupStrategy, UnknownSighupStrategy};
     pub use crate::spec::{
         DependsOn, IdentitySpec, MustReachPhase, SignalPolicy, UnknownMustReachPhase,

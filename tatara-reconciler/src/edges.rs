@@ -26,6 +26,7 @@ use serde_json::{json, Value};
 
 use tatara_process::annotations;
 use tatara_process::routing::{RoutingBackend, RoutingForm, RoutingHostname};
+use tatara_process::routing_edge_resource::RoutingEdgeResource;
 
 /// Per-render context the edges share. The reconciler builds this
 /// once at the start of `render_routing` so each edge sees the same
@@ -295,7 +296,7 @@ impl IngressEdge {
 
 impl Edge for IngressEdge {
     fn kind(&self) -> &'static str {
-        "Ingress"
+        RoutingEdgeResource::Ingress.kind()
     }
 
     fn render(&self, ctx: &EdgeContext<'_>) -> Result<Option<Value>> {
@@ -337,8 +338,8 @@ impl Edge for IngressEdge {
         // Cloudflare API CR) automatically inherits by routing through
         // the same composer.
         let ingress = json!({
-            "apiVersion": "networking.k8s.io/v1",
-            "kind": "Ingress",
+            "apiVersion": RoutingEdgeResource::Ingress.api_version(),
+            "kind": RoutingEdgeResource::Ingress.kind(),
             "metadata": routing_edge_metadata(ctx, Self::name(ctx), annotations_map),
             "spec": {
                 "ingressClassName": "nginx",
@@ -411,7 +412,7 @@ impl DnsEndpointEdge {
 
 impl Edge for DnsEndpointEdge {
     fn kind(&self) -> &'static str {
-        "DNSEndpoint"
+        RoutingEdgeResource::DnsEndpoint.kind()
     }
 
     fn render(&self, ctx: &EdgeContext<'_>) -> Result<Option<Value>> {
@@ -429,8 +430,8 @@ impl Edge for DnsEndpointEdge {
         // reads only the `spec.endpoints` block, not the
         // annotations).
         let endpoint = json!({
-            "apiVersion": "externaldns.k8s.io/v1alpha1",
-            "kind": "DNSEndpoint",
+            "apiVersion": RoutingEdgeResource::DnsEndpoint.api_version(),
+            "kind": RoutingEdgeResource::DnsEndpoint.kind(),
             "metadata": routing_edge_metadata(
                 ctx,
                 Self::name(ctx),
@@ -521,8 +522,8 @@ mod tests {
             false,
         );
         let r = IngressEdge.render(&c).unwrap().unwrap();
-        assert_eq!(r["apiVersion"], "networking.k8s.io/v1");
-        assert_eq!(r["kind"], "Ingress");
+        assert_eq!(r["apiVersion"], RoutingEdgeResource::Ingress.api_version());
+        assert_eq!(r["kind"], RoutingEdgeResource::Ingress.kind());
         assert_eq!(r["metadata"]["name"], "demo-prod-api-demo-prod");
         assert_eq!(r["metadata"]["namespace"], "demo-ns");
         assert_eq!(
@@ -611,8 +612,11 @@ mod tests {
             ttl_seconds: 30,
         };
         let r = edge.render(&c).unwrap().unwrap();
-        assert_eq!(r["apiVersion"], "externaldns.k8s.io/v1alpha1");
-        assert_eq!(r["kind"], "DNSEndpoint");
+        assert_eq!(
+            r["apiVersion"],
+            RoutingEdgeResource::DnsEndpoint.api_version()
+        );
+        assert_eq!(r["kind"], RoutingEdgeResource::DnsEndpoint.kind());
         assert_eq!(r["metadata"]["name"], "demo-prod-api-demo-prod-dns");
         assert_eq!(
             r["spec"]["endpoints"][0]["dnsName"],
@@ -662,8 +666,45 @@ mod tests {
             }),
         ];
         assert_eq!(edges.len(), 2);
-        assert_eq!(edges[0].kind(), "Ingress");
-        assert_eq!(edges[1].kind(), "DNSEndpoint");
+        assert_eq!(edges[0].kind(), RoutingEdgeResource::Ingress.kind());
+        assert_eq!(edges[1].kind(), RoutingEdgeResource::DnsEndpoint.kind());
+    }
+
+    /// COHERENCE PIN: the `Edge::kind()` trait method return, the
+    /// emitted JSON `kind` slot, and the emitted JSON `apiVersion`
+    /// slot MUST all agree with the closed-set variant's typed
+    /// projections. A regression that renamed the K8s Kind at one
+    /// site but not the sibling `apiVersion` group-version bump (or
+    /// vice versa) — a `HTTPRoute` migration that reached the trait
+    /// method but not the emitter, or that bumped `networking.k8s.io/v1`
+    /// to `v1beta2` at the JSON slot but left the trait return byte-
+    /// stale — surfaces HERE at the three-way agreement pin rather
+    /// than as silent trait-vs-emit skew at the reconciler wire.
+    #[test]
+    fn edge_kind_matches_closed_set_and_emitted_json() {
+        // Ingress path — the emitted JSON's (apiVersion, kind) pair
+        // and the trait's `kind()` return all reach through
+        // `RoutingEdgeResource::Ingress`.
+        let h = api_hostname();
+        let b = api_backend();
+        let c = ctx(&h, &b, "host.example.com", "demo-prod", false);
+        let r = IngressEdge.render(&c).unwrap().unwrap();
+        assert_eq!(r["apiVersion"], RoutingEdgeResource::Ingress.api_version());
+        assert_eq!(r["kind"], RoutingEdgeResource::Ingress.kind());
+        assert_eq!(IngressEdge.kind(), RoutingEdgeResource::Ingress.kind());
+
+        // DNSEndpoint path — same three-way agreement.
+        let edge = DnsEndpointEdge {
+            ingress_lb_target: Some("lb.example.com".into()),
+            ttl_seconds: 60,
+        };
+        let r = edge.render(&c).unwrap().unwrap();
+        assert_eq!(
+            r["apiVersion"],
+            RoutingEdgeResource::DnsEndpoint.api_version()
+        );
+        assert_eq!(r["kind"], RoutingEdgeResource::DnsEndpoint.kind());
+        assert_eq!(edge.kind(), RoutingEdgeResource::DnsEndpoint.kind());
     }
 
     // ─── routing_edge_labels substrate pins ───────────────────────

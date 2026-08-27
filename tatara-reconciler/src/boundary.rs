@@ -747,24 +747,24 @@ fn classify_receipt_verdict(
 async fn fetch_job_status(client: Client, ns: &str, name: &str) -> Result<JobLookup> {
     // The `(apiVersion, kind)` pair for the `batch/v1::Job` fetch
     // rides through the typed [`K8sBuiltinResource::Job`] closed-set
-    // owner — pre-lift both slots were hand-authored `"batch/v1"` +
-    // `"Job"` string literals past the ★★ PRIME-DIRECTIVE ≥ 2
-    // duplication threshold in `tatara-reconciler` (this fetch site
-    // + the emit site at `render::one_export_job`). Post-lift both
-    // sites read the pair from the SAME closed-set variant, and a
-    // regression that drifted either slot at one site (a
-    // `batch/v1beta1` bump at the fetch alone, a `job` lowercased at
-    // the emit alone) would fail-loudly at the closed set's byte-
-    // shape pins rather than as an operator-visible 404 at wire time.
-    let obj = ssapply::fetch(
-        client,
-        ns,
-        K8sBuiltinResource::Job.api_version(),
-        K8sBuiltinResource::Job.kind(),
-        name,
-    )
-    .await
-    .map_err(|e| anyhow!("fetch Job {ns}/{name}: {e}"))?;
+    // owner projected onto [`tatara_process::K8sWireIdentity`] via
+    // `.wire_identity()` — pre-lift both slots were hand-authored
+    // adjacent `&str` arguments (`Job.api_version(), Job.kind()`) at
+    // ONE of THREE fetch sites in `tatara-reconciler::boundary` past
+    // the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold that threaded
+    // the two-slot pair off a typed closed-set variant into the raw
+    // `ssapply::fetch(av: &str, kind: &str)` signature (this Job
+    // fetch + the sibling `verify_receipt_cm` ConfigMap fetch +
+    // `evaluate_flux_ready`'s Flux fetch). Post-lift each site names
+    // the variant ONCE via `.wire_identity()` and the pair rides
+    // through the shared substrate composer
+    // [`ssapply::fetch_by_identity`]; the pair binds structurally at
+    // the typed [`tatara_process::K8sWireIdentity`] so a copy-paste
+    // that swapped the two adjacent arguments (or paired one
+    // variant's apiVersion with another's kind) is unrepresentable.
+    let obj = ssapply::fetch_by_identity(client, ns, K8sBuiltinResource::Job.wire_identity(), name)
+        .await
+        .map_err(|e| anyhow!("fetch Job {ns}/{name}: {e}"))?;
     let Some(obj) = obj else {
         return Ok(JobLookup::Missing);
     };
@@ -801,16 +801,21 @@ async fn verify_receipt_cm(
 ) -> Result<ReceiptVerdict> {
     // The `(apiVersion, kind)` pair for the `v1::ConfigMap` receipt
     // fetch rides through the typed [`K8sBuiltinResource::ConfigMap`]
-    // closed-set owner — sibling to the `Job` fetch above. Every
-    // future receipt-fetch consumer (kenshi-runner's P3 lift, per-
-    // membro contract receipts, any Job whose completion produces a
-    // receipt) inherits the wire-form pair through the SAME closed-
-    // set variant with no per-callsite literal.
-    let obj = ssapply::fetch(
+    // closed-set owner projected onto
+    // [`tatara_process::K8sWireIdentity`] via `.wire_identity()` —
+    // sibling to the `Job` fetch above; both rides through the shared
+    // substrate composer [`ssapply::fetch_by_identity`], so the two
+    // adjacent `&str` arguments the raw `ssapply::fetch` accepts no
+    // longer appear at either callsite. Every future receipt-fetch
+    // consumer (kenshi-runner's P3 lift, per-membro contract receipts,
+    // any Job whose completion produces a receipt) inherits the wire-
+    // form pair through the SAME closed-set variant with no per-
+    // callsite literal AND with no two-slot skew possible at the
+    // callee's signature.
+    let obj = ssapply::fetch_by_identity(
         client,
         ns,
-        K8sBuiltinResource::ConfigMap.api_version(),
-        K8sBuiltinResource::ConfigMap.kind(),
+        K8sBuiltinResource::ConfigMap.wire_identity(),
         name,
     )
     .await
@@ -910,20 +915,26 @@ async fn evaluate_flux_ready(
     resource: FluxResource,
 ) -> Result<Satisfaction> {
     // The `(apiVersion, kind)` pair rides through the typed
-    // [`FluxResource`] slot — the callee derives both slots from
-    // the SAME closed-set variant, so a caller can no longer pass
-    // a mismatched `(&str, &str)` pair. Pre-lift the two slots were
-    // separate `&str` parameters and each dispatch arm at [`evaluate`]
-    // hand-authored a `(FluxResource::X.api_version(), FluxResource::
-    // X.kind())` pair; post-lift the callee owns both projections.
-    let api_version = resource.api_version();
+    // [`FluxResource`] slot projected onto
+    // [`tatara_process::K8sWireIdentity`] via `.wire_identity()` —
+    // sibling to the two `K8sBuiltinResource::X.wire_identity()`
+    // fetches above; all three fetch sites now route through the
+    // shared substrate composer [`ssapply::fetch_by_identity`], so
+    // the raw two-adjacent-`&str` `ssapply::fetch` signature no
+    // longer appears at any of them. The callee derives both slots
+    // from the SAME closed-set variant, so a caller can no longer
+    // pass a mismatched `(&str, &str)` pair. Pre-lift the two slots
+    // were separate `&str` parameters and each dispatch arm at
+    // [`evaluate`] hand-authored a `(FluxResource::X.api_version(),
+    // FluxResource::X.kind())` pair; post-lift the callee owns both
+    // projections through the identity pair.
     let kind = resource.kind();
     let parsed: NamedResourceParams = match parse_condition_params(kind, params) {
         Ok(p) => p,
         Err(unk) => return Ok(unk),
     };
     let ns = ssapply::resolve_target_namespace(parsed.namespace.as_deref(), default_ns);
-    let obj = ssapply::fetch(client, ns, api_version, kind, &parsed.name)
+    let obj = ssapply::fetch_by_identity(client, ns, resource.wire_identity(), &parsed.name)
         .await
         .map_err(|e| anyhow!("fetch {kind} {ns}/{}: {e}", parsed.name))?;
     match obj {

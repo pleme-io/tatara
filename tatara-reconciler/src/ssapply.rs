@@ -10,6 +10,7 @@ use kube::{Api, Client};
 use serde_json::{json, Value};
 
 use tatara_process::annotations;
+use tatara_process::k8s_wire_identity::K8sWireIdentity;
 use tatara_process::prelude::{Process, RenderedResourceCoords};
 
 /// Field manager string we use for all SSA writes.
@@ -516,6 +517,17 @@ fn plural_of(kind: &str) -> Result<&'static str> {
         "Kustomization" => Ok("kustomizations"),
         // Flux helm-controller
         "HelmRelease" => Ok("helmreleases"),
+        // K8s builtin (batch/v1) — Job's plural is required by the
+        // `boundary::fetch_job_status` fetch site of the typed
+        // [`tatara_process::K8sBuiltinResource::Job`] closed set;
+        // pre-lift this arm was absent and every Job fetch through
+        // the raw two-`&str` `ssapply::fetch` signature would have
+        // failed at `api_resource` with `unknown plural for kind
+        // "Job"` at wire time — a latent bug surfaced by the typed
+        // cross-path parity pin
+        // [`tests::api_resource_of_matches_raw_api_resource_across_every_k8s_builtin_variant`]
+        // rather than by any pre-existing runtime probe.
+        "Job" => Ok("jobs"),
         // Core kinds we might emit later
         "ConfigMap" => Ok("configmaps"),
         "Secret" => Ok("secrets"),
@@ -566,6 +578,90 @@ pub async fn fetch(
     name: &str,
 ) -> Result<Option<DynamicObject>> {
     let ar = api_resource(api_version, kind)?;
+    let api: Api<DynamicObject> = Api::namespaced_with(client, namespace, &ar);
+    Ok(api.get_opt(name).await?)
+}
+
+/// Compose the `kube::api::ApiResource` from a typed
+/// [`K8sWireIdentity`] pair — the ONE substrate primitive owning the
+/// (identity → ApiResource) mapping every fetch-by-closed-set-variant
+/// site composes against. Peer projection to [`api_resource`] on the
+/// raw `(&str, &str)` axis; the typed variant gates the two slots so a
+/// caller cannot swap them across the call — a copy-paste that
+/// inverted `api_version` and `kind` in a raw
+/// `api_resource(kind, api_version)` inversion would silently 404 at
+/// wire time, while the same inversion at the identity's construction
+/// is blocked structurally by
+/// [`K8sWireIdentity::new`]'s positional pin.
+pub fn api_resource_of(identity: K8sWireIdentity) -> Result<ApiResource> {
+    api_resource(identity.api_version, identity.kind)
+}
+
+/// Fetch a DynamicObject by its typed K8s wire-form identity + name +
+/// namespace. Returns `None` on 404.
+///
+/// Peer to [`fetch`] on the raw `(api_version: &str, kind: &str)`
+/// axis; the typed [`K8sWireIdentity`] argument owns the
+/// `(apiVersion, kind)` pair as ONE composite slot so a caller cannot
+/// invert the two adjacent `&str` slots. Pre-lift the raw `fetch`
+/// signature was called at THREE production sites past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold in `tatara-reconciler`,
+/// each threading a `.api_version(), .kind()` pair off a typed closed-
+/// set variant into the two adjacent `&str` slots:
+///
+/// * `boundary::fetch_job_status` — split
+///   [`tatara_process::k8s_builtin_resource::K8sBuiltinResource::Job`]
+///   into `Job.api_version(), Job.kind()`.
+/// * `boundary::verify_receipt_cm` — split
+///   [`tatara_process::k8s_builtin_resource::K8sBuiltinResource::ConfigMap`]
+///   into `ConfigMap.api_version(), ConfigMap.kind()`.
+/// * `boundary::evaluate_flux_ready` — split
+///   [`tatara_process::flux_resource::FluxResource`] into
+///   `resource.api_version(), resource.kind()`.
+///
+/// At every pre-lift site the two projections read from the SAME
+/// closed-set variant, but the signature admitted arbitrary
+/// `(&str, &str)` pairs at the call: a copy-paste that swapped the two
+/// slots (`Job.kind(), Job.api_version()`) or paired one variant's
+/// apiVersion with another's kind (`Job.api_version(),
+/// ConfigMap.kind()`) would silently 404 at wire time and diagnose as
+/// a broken CRD rather than as slot skew at the call. Post-lift each
+/// caller names the variant ONCE via `.wire_identity()`; the pair
+/// binds structurally at [`K8sWireIdentity`] so an inversion at any
+/// callsite is unrepresentable.
+///
+/// Extension: every future consumer that fetches a K8s resource whose
+/// wire-form identity lives on one of the three sibling closed sets
+/// ([`tatara_process::flux_resource::FluxResource`],
+/// [`tatara_process::routing_edge_resource::RoutingEdgeResource`],
+/// [`tatara_process::k8s_builtin_resource::K8sBuiltinResource`])
+/// inherits the typed slot mechanically through the same
+/// `.wire_identity()` projection — no per-callsite `(api_version,
+/// kind)` pair. The primary compounding beneficiary is the P3 kenshi-
+/// runner lift (documented in CLAUDE.md's Ephemeral story deferred
+/// milestones) — kenshi-runner's per-suite Job + receipt ConfigMap
+/// fetches ride through the SAME `K8sBuiltinResource::{Job,ConfigMap}`
+/// variants that `boundary::fetch_job_status` +
+/// `boundary::verify_receipt_cm` already name.
+///
+/// Theory grounding: THEORY.md §II.1 invariant 5 (composition
+/// preserves proofs — the two-slot `(apiVersion, kind)` pair now binds
+/// structurally at the typed identity, so a hypothetical slot-inversion
+/// regression that got past `.wire_identity()`'s per-variant coherence
+/// pin would fail-loudly at the identity's positional pin
+/// [`tatara_process::k8s_wire_identity::tests::new_pairs_api_version_and_kind_by_position`]
+/// rather than as a silent wire-time 404 at every fetch consumer).
+/// THEORY.md §VI.1 (generation over composition — the raw two-slot
+/// fetch signature was called at three hand-authored sites past the
+/// ≥ 2 duplication trigger, each threading the pair off a closed-set
+/// variant; post-lift the pair rides through ONE typed argument).
+pub async fn fetch_by_identity(
+    client: Client,
+    namespace: &str,
+    identity: K8sWireIdentity,
+    name: &str,
+) -> Result<Option<DynamicObject>> {
+    let ar = api_resource_of(identity)?;
     let api: Api<DynamicObject> = Api::namespaced_with(client, namespace, &ar);
     Ok(api.get_opt(name).await?)
 }
@@ -784,6 +880,139 @@ mod tests {
         assert_eq!(ar.group, "");
         assert_eq!(ar.version, "v1");
         assert_eq!(ar.plural, "configmaps");
+    }
+
+    // ─── fetch_by_identity / api_resource_of substrate pins ────────
+    //
+    // The typed [`K8sWireIdentity`] pair now gates every fetch of a
+    // closed-set-variant K8s resource. Pre-lift the raw two-adjacent-
+    // `&str` `fetch(av, kind, ...)` signature was called at THREE
+    // hand-authored sites in `tatara-reconciler::boundary` past the
+    // ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold; post-lift each
+    // site names the variant ONCE via `.wire_identity()` and rides
+    // through `fetch_by_identity`. These pins bind the primitive at
+    // fail-before-pass-after granularity so a regression that skewed
+    // the identity's slots against the composed ApiResource, dropped
+    // an axis in the composer, or diverged the identity-gated
+    // projection from the raw two-`&str` composer surfaces HERE
+    // rather than as an operator-visible wire-form skew at every
+    // downstream fetch site.
+
+    #[test]
+    fn api_resource_of_composes_group_and_version_from_a_flux_identity() {
+        // Typed identity → same `(group, version, plural)` triple as
+        // the raw two-`&str` `api_resource` call for the SAME variant.
+        // A regression that dropped a slot, swapped the two axes at
+        // the composer, or drifted the identity's projection away
+        // from the raw path would surface here rather than as an
+        // operator-visible SSA-fetch skew at every closed-set-
+        // variant-gated fetch site.
+        use tatara_process::flux_resource::FluxResource;
+        let ar = api_resource_of(FluxResource::Kustomization.wire_identity()).unwrap();
+        assert_eq!(ar.group, "kustomize.toolkit.fluxcd.io");
+        assert_eq!(ar.version, "v1");
+        assert_eq!(ar.plural, "kustomizations");
+        assert_eq!(ar.kind, "Kustomization");
+        assert_eq!(ar.api_version, "kustomize.toolkit.fluxcd.io/v1");
+    }
+
+    #[test]
+    fn api_resource_of_handles_core_v1_via_a_k8s_builtin_identity() {
+        // Core/v1 has no group prefix — the identity carries the bare
+        // `v1` on its `api_version` slot; the composer must decode
+        // that as `(group: "", version: "v1")` identically to the raw
+        // `api_resource("v1", ...)` path. A regression that special-
+        // cased one path but not the other would surface here.
+        use tatara_process::k8s_builtin_resource::K8sBuiltinResource;
+        let ar = api_resource_of(K8sBuiltinResource::ConfigMap.wire_identity()).unwrap();
+        assert_eq!(ar.group, "");
+        assert_eq!(ar.version, "v1");
+        assert_eq!(ar.plural, "configmaps");
+        assert_eq!(ar.kind, "ConfigMap");
+        assert_eq!(ar.api_version, "v1");
+    }
+
+    #[test]
+    fn api_resource_of_matches_raw_api_resource_across_every_flux_resource_variant() {
+        // Cross-path coherence pin: for EVERY variant on the
+        // [`FluxResource`] closed set, `api_resource_of(v.wire_identity())`
+        // returns the SAME `(group, version, api_version, kind,
+        // plural)` triple as `api_resource(v.api_version(),
+        // v.kind())`. A regression that diverged the identity-gated
+        // path from the raw path at ONE arm (a stale-cached
+        // ApiResource on the identity side, a normalization step on
+        // one side only) would surface here rather than as a silent
+        // SSA-fetch skew at every Flux-fetching consumer.
+        use tatara_process::flux_resource::FluxResource;
+        for v in FluxResource::ALL {
+            let id_ar = api_resource_of(v.wire_identity()).unwrap();
+            let raw_ar = api_resource(v.api_version(), v.kind()).unwrap();
+            assert_eq!(id_ar.group, raw_ar.group, "group skew at {v:?}");
+            assert_eq!(id_ar.version, raw_ar.version, "version skew at {v:?}");
+            assert_eq!(
+                id_ar.api_version, raw_ar.api_version,
+                "api_version skew at {v:?}"
+            );
+            assert_eq!(id_ar.kind, raw_ar.kind, "kind skew at {v:?}");
+            assert_eq!(id_ar.plural, raw_ar.plural, "plural skew at {v:?}");
+        }
+    }
+
+    #[test]
+    fn api_resource_of_matches_raw_api_resource_across_every_k8s_builtin_variant() {
+        // Cross-path + cross-substrate coherence pin: peer to the
+        // FluxResource pin above but on the K8s-builtin closed set.
+        // Every consumer that fetches a K8s-builtin resource
+        // (`boundary::fetch_job_status`, `boundary::verify_receipt_cm`,
+        // any future kenshi-runner / per-membro receipt fetcher)
+        // routes through the SAME identity-gated composer, so the
+        // triple parity binds the invariant "closed-set-gated fetch
+        // is byte-identical to the raw two-`&str` fetch" for both
+        // axes.
+        use tatara_process::k8s_builtin_resource::K8sBuiltinResource;
+        for v in K8sBuiltinResource::ALL {
+            let id_ar = api_resource_of(v.wire_identity()).unwrap();
+            let raw_ar = api_resource(v.api_version(), v.kind()).unwrap();
+            assert_eq!(id_ar.group, raw_ar.group, "group skew at {v:?}");
+            assert_eq!(id_ar.version, raw_ar.version, "version skew at {v:?}");
+            assert_eq!(
+                id_ar.api_version, raw_ar.api_version,
+                "api_version skew at {v:?}"
+            );
+            assert_eq!(id_ar.kind, raw_ar.kind, "kind skew at {v:?}");
+            assert_eq!(id_ar.plural, raw_ar.plural, "plural skew at {v:?}");
+        }
+    }
+
+    #[test]
+    fn api_resource_of_propagates_error_when_the_identity_names_an_unknown_kind() {
+        // A caller that constructs a raw identity with an unregistered
+        // kind (`plural_of` returns Err) sees the same error as the
+        // raw two-`&str` path. Pins the "identity-gated composer is a
+        // pure delegation, no error-swallowing" invariant.
+        let bogus = K8sWireIdentity::new("bogus.io/v1", "Nonsense");
+        assert!(api_resource_of(bogus).is_err());
+        assert!(api_resource("bogus.io/v1", "Nonsense").is_err());
+    }
+
+    #[test]
+    fn api_resource_of_binds_positional_slots_symmetrically_with_raw_composer() {
+        // Positional-slot coherence pin: an identity whose two slots
+        // are set through [`K8sWireIdentity::new`] positional
+        // constructor binds identically to the raw
+        // `api_resource(av, kind)` positional path — verified by
+        // asserting the composed ApiResource's `(kind, api_version)`
+        // pair reads back the SAME two slots the identity constructor
+        // received. A regression that swapped the identity's slot
+        // reads inside `api_resource_of` (reading `kind` in place of
+        // `api_version` or vice versa) would fail-loudly here rather
+        // than as a silent SSA-fetch skew at every consumer.
+        let id = K8sWireIdentity::new("helm.toolkit.fluxcd.io/v2", "HelmRelease");
+        let ar = api_resource_of(id).unwrap();
+        assert_eq!(ar.api_version, "helm.toolkit.fluxcd.io/v2");
+        assert_eq!(ar.kind, "HelmRelease");
+        assert_eq!(ar.group, "helm.toolkit.fluxcd.io");
+        assert_eq!(ar.version, "v2");
     }
 
     #[test]

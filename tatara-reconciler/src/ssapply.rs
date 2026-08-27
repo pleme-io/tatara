@@ -1035,26 +1035,33 @@ fn inject_annotations(resource: &mut Value, process: &Process) -> Result<()> {
         annot.insert(k, v);
     }
 
-    if let Some(status) = &process.status {
-        if let Some(pid) = &status.pid {
-            annot.insert(annotations::PID.to_string(), Value::String(pid.clone()));
-        }
-        if let Some(id) = &status.identity {
-            annot.insert(
-                annotations::CONTENT_HASH.to_string(),
-                Value::String(id.content_hash.clone()),
-            );
-        }
-        if let Some(a) = &status.attestation {
-            annot.insert(
-                annotations::GENERATION.to_string(),
-                Value::String(a.generation.to_string()),
-            );
-            annot.insert(
-                annotations::ATTESTATION_ROOT.to_string(),
-                Value::String(a.composed_root.clone()),
-            );
-        }
+    // Substrate observed-* primitive family (pid + identity +
+    // attestation) drops the outer `if let Some(status) =
+    // &process.status { … }` destructure that used to nest THREE
+    // sibling `.status.<slot>` checks — each per-axis primitive now
+    // owns the missing-`status` corner on its own, so the composer
+    // reads as one call per axis with no shared destructure. Peer
+    // to the ONE-owner routing in `phase_machine::handle_forking`
+    // (which reads the identity through the same primitive to seed
+    // the FORK-time `derive_identity` fallback).
+    if let Some(pid) = process.observed_pid() {
+        annot.insert(annotations::PID.to_string(), Value::String(pid.to_string()));
+    }
+    if let Some(id) = process.observed_identity() {
+        annot.insert(
+            annotations::CONTENT_HASH.to_string(),
+            Value::String(id.content_hash.clone()),
+        );
+    }
+    if let Some(a) = process.observed_attestation() {
+        annot.insert(
+            annotations::GENERATION.to_string(),
+            Value::String(a.generation.to_string()),
+        );
+        annot.insert(
+            annotations::ATTESTATION_ROOT.to_string(),
+            Value::String(a.composed_root.clone()),
+        );
     }
     Ok(())
 }

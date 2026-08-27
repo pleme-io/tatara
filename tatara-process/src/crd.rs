@@ -894,6 +894,106 @@ impl Process {
         self.status.as_ref().and_then(|s| s.attestation.as_ref())
     }
 
+    /// The borrow-form status-projection primitive on the resolved-
+    /// identity axis: returns the [`Identity`] the reconciler
+    /// currently persists at `status.identity` (name + content hash +
+    /// override flag), with the missing-`status` corner AND the
+    /// empty-slot corner BOTH collapsed to `None` — the ONE-liner
+    /// collapse of the paired `self.status.as_ref().and_then(|s|
+    /// s.identity.as_ref())` incantation every consumer restated by
+    /// hand pre-lift.
+    ///
+    /// Pre-lift the paired `.status.as_ref().and_then(|s|
+    /// s.identity.<clone|as_ref>())` chain was hand-authored at TWO
+    /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold
+    /// in `tatara-reconciler`:
+    /// * `phase_machine::handle_forking` — the FORK-time identity
+    ///   seed that reuses the reconciler-persisted `Identity` if
+    ///   present and falls back to a fresh `derive_identity(&spec,
+    ///   name_override)` otherwise. Pre-lift the site cloned the
+    ///   whole `Identity` off the borrow before threading it through
+    ///   `.unwrap_or_else(...)` even though the fallback path
+    ///   allocates its own owned `Identity` — the pre-lift clone
+    ///   allocated a fresh `Identity` on the happy path just so the
+    ///   `Option`'s shape matched the fallback's `Identity` return
+    ///   type.
+    /// * `ssapply::inject_annotations` — the SSA-time annotation
+    ///   composer that stamps the content-hash annotation onto every
+    ///   owned resource. Pre-lift the site nested the identity
+    ///   borrow-form check inside a manual `if let Some(status) =
+    ///   &process.status { … }` guard alongside sibling `status.pid`
+    ///   and `status.attestation` accesses — three siblings the peer
+    ///   primitives [`Self::observed_pid`] and
+    ///   [`Self::observed_attestation`] already own, so the outer
+    ///   status guard was the last hand-authored `.status.as_ref()`
+    ///   destructure at this composer.
+    ///
+    /// Both sites walked the SAME 3-line chain (one via `.clone()`,
+    /// one via `.as_ref()`) — the borrow-form
+    /// `Option<&Identity>` shape both consumers wanted already, even
+    /// though the FORK-time seed then had to `.clone()` off the
+    /// borrow to compose with the owned-`Identity` fallback. Post-
+    /// lift the seed calls `.observed_identity().cloned()` at the
+    /// exact composition point where the owned value is required
+    /// (the empty-borrow corner clones nothing, since
+    /// `Option::cloned` on `None` is `None`), and the SSA-time
+    /// consumer drops the outer status guard entirely — the
+    /// three-sibling primitive family (pid + identity + attestation)
+    /// now peers through `observed_pid` +
+    /// `observed_identity` + `observed_attestation` at ONE call each
+    /// with no shared status destructure between them.
+    ///
+    /// Return-form axis: `Option<&Identity>` mirrors the
+    /// existing borrow-first discipline every pre-lift consumer
+    /// already re-borrowed through `.as_ref()` / re-cloned through
+    /// `.clone()`, and the shape of the peer
+    /// [`Self::observed_attestation`] projection extends
+    /// mechanically to the whole-`Identity`-record projection here.
+    /// The missing-`status` corner AND the populated-status-with-
+    /// `identity=None` corner BOTH collapse to `None` so
+    /// `.is_some()` / `if let Some(_)` / `.map(...)` behave
+    /// identically on a `Process` whose status is `None` and on one
+    /// whose status carries an unpopulated `identity` slot —
+    /// matching what the pre-lift `.and_then(...)` chain produced.
+    ///
+    /// A future normalization step (a per-slot canonicalization
+    /// pass that rejects an `Identity` whose `content_hash` fails
+    /// re-derivation against the current spec, a generation-filter
+    /// that returns `None` for an identity stamped with a stale
+    /// `metadata.generation`, a staleness gate that drops an
+    /// identity whose observing `phase_since` predates a reconcile
+    /// deadline) lands at ONE substrate method here and both
+    /// downstream consumers pick up the upgrade mechanically — no
+    /// per-callsite hand-edit at `handle_forking` /
+    /// `inject_annotations`.
+    ///
+    /// Sibling to the peer [`Self::observed_pid`] +
+    /// [`Self::observed_attestation`] +
+    /// [`Self::observed_flux_resources`] borrow-first primitives on
+    /// the PID + attestation-chain + flux-resources axes; all four
+    /// methods compose the same missing-`status` fallback +
+    /// borrow-form return-shape skeleton on distinct `ProcessStatus`
+    /// slots. Future status projections (`observed_parent` on the
+    /// parent-pointer axis, `observed_message` on the human-
+    /// readable-status axis) land as peer methods on this same
+    /// axis.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition
+    /// — the 3-line status-projection chain recurred at two hand-
+    /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    /// trigger, and is lifted to ONE owner here). THEORY.md §II.1
+    /// invariant 5 (composition preserves proofs — the pins bind
+    /// the missing-`status` corner + the empty-slot corner + the
+    /// borrow-form `&Identity` lifetime + the byte-identical parity
+    /// with the pre-lift 3-line chain, so a regression that drifted
+    /// any surface at `tests::observed_identity_*` rather than as
+    /// silent operator-facing skew between the FORK-time identity
+    /// seed and the SSA-time content-hash annotation stamp on the
+    /// SAME `Process`).
+    pub fn observed_identity(&self) -> Option<&Identity> {
+        self.status.as_ref().and_then(|s| s.identity.as_ref())
+    }
+
     /// The copy-form status-projection primitive on the phase axis:
     /// returns the [`ProcessPhase`] the reconciler currently persists
     /// at `status.phase`, wrapped in an `Option` so the missing-
@@ -2937,6 +3037,236 @@ mod tests {
             observed.previous_root.as_deref(),
             Some(prior.composed_root.as_str())
         );
+    }
+
+    // ─── Process::observed_identity substrate pins ────────────────────
+    //
+    // The borrow-form status-projection primitive on the resolved-
+    // identity axis. Collapses the paired 3-line `.status.as_ref()
+    // .and_then(|s| s.identity.<clone|as_ref>())` chain every
+    // consumer in `tatara-reconciler` restated by hand pre-lift at
+    // TWO sites (`phase_machine::handle_forking` seed +
+    // `ssapply::inject_annotations` content-hash annotation
+    // composer). Peer to the sibling `observed_pid_*` +
+    // `observed_attestation_*` + `observed_flux_resources_*` pin
+    // families; all four compose the same missing-`status` fallback
+    // + borrow-form return-shape skeleton on distinct
+    // `ProcessStatus` slots. Each pin fails-before-pass-after
+    // granularity: `observed_identity` did not exist pre-lift, so
+    // any test invoking it fails to compile pre-lift and passes
+    // post-lift.
+
+    fn sample_identity(name: &str) -> Identity {
+        // Distinct name + content_hash + override flag so a
+        // regression that reshaped one slot surfaces at the
+        // populated-slot pin's field-equality check without
+        // aliasing the sibling slots.
+        Identity {
+            name: name.to_string(),
+            content_hash: "a".repeat(26),
+            name_override: true,
+        }
+    }
+
+    fn process_with_identity(identity: Option<Identity>) -> Process {
+        let mut p = Process::new("api-gateway", empty_spec());
+        p.metadata.namespace = Some("prod".into());
+        let mut status = ProcessStatus::default();
+        status.identity = identity;
+        p.status = Some(status);
+        p
+    }
+
+    #[test]
+    fn observed_identity_returns_none_when_status_is_none() {
+        // Missing-`status` corner pin: the primitive collapses the
+        // no-status case to `None` so downstream `.is_some()` /
+        // `if let Some(_)` / `.cloned().unwrap_or_else(...)` behave
+        // identically on a `Process` whose status field is `None`
+        // and on one whose status carries an unpopulated `identity`
+        // slot. Matches the pre-lift `.and_then(...)` chain's `None`
+        // byte-identically at every reconciler consumer's
+        // downstream shape.
+        let mut p = Process::new("api", empty_spec());
+        p.status = None;
+        assert!(p.observed_identity().is_none());
+    }
+
+    #[test]
+    fn observed_identity_returns_none_when_identity_slot_is_none() {
+        // Empty-slot-under-populated-status corner pin: the
+        // primitive returns `None`, matching the missing-`status`
+        // corner byte-identically. A regression that treated the
+        // two corners differently (a `None`-vs-`Some(_)` signal
+        // that downstream consumers could grep on) would silently
+        // promote an internal representation detail (whether the
+        // reconciler has ever written a status subresource) into
+        // observable behavior at the FORK-time `derive_identity`
+        // fallback branch.
+        let p = process_with_identity(None);
+        assert!(p.observed_identity().is_none());
+    }
+
+    #[test]
+    fn observed_identity_returns_borrow_when_slot_is_populated() {
+        // Happy-path pin: with a populated `status.identity` slot,
+        // the primitive returns a borrowed `&Identity` whose fields
+        // match the persisted record. A regression that filtered /
+        // reshaped / canonicalized the record would surface here
+        // rather than as silent skew at the FORK-time seed's
+        // `.cloned().unwrap_or_else(derive_identity)` composition
+        // + the SSA-time content-hash annotation stamp on the SAME
+        // Process.
+        let id = sample_identity("seph");
+        let expected = id.clone();
+        let p = process_with_identity(Some(id));
+        let observed = p.observed_identity().expect("populated slot");
+        assert_eq!(observed, &expected);
+        assert_eq!(observed.name, "seph");
+        assert_eq!(observed.content_hash, "a".repeat(26));
+        assert!(observed.name_override);
+    }
+
+    #[test]
+    fn observed_identity_is_a_zero_copy_borrow_projection() {
+        // Borrow-discipline pin: the returned reference points at
+        // the persisted `Identity` in place — NOT a fresh
+        // allocation or a clone. A regression that switched the
+        // projection to an owned `Identity` (via `.clone()`) would
+        // defeat the zero-copy contract the lift's primary strict-
+        // widening delivers (the SSA-time consumer never clones the
+        // whole `Identity`, only the `content_hash` field it stamps
+        // onto the annotation map, so the borrow-form return
+        // shape's happy-path allocation count is exactly ZERO).
+        // Peer to the sibling
+        // `observed_attestation_is_a_zero_copy_borrow_projection`
+        // + `observed_pid_is_a_zero_copy_borrow_projection` +
+        // `observed_flux_resources_is_a_zero_copy_borrow_projection`
+        // pins on the attestation-chain + PID + flux-resources
+        // borrow-projection axes.
+        let id = sample_identity("seph");
+        let p = process_with_identity(Some(id));
+        let observed = p.observed_identity().expect("populated slot") as *const _;
+        let persisted = p.status.as_ref().unwrap().identity.as_ref().unwrap() as *const _;
+        assert!(std::ptr::eq(observed, persisted));
+    }
+
+    #[test]
+    fn observed_identity_is_a_pure_projection() {
+        // Purity pin: calling the projection twice on the same
+        // `Process` returns byte-identical borrows (same pointer).
+        // A regression that introduced state — a lazy-cached
+        // reference materialized on first call, a normalization
+        // step that ran once and cached — would surface here
+        // rather than as silent drift between the FORK-time
+        // identity seed and the SSA-time content-hash annotation
+        // stamp on the SAME `Process` within one reconcile pass.
+        let p = process_with_identity(Some(sample_identity("seph")));
+        let a = p.observed_identity().expect("populated slot") as *const _;
+        let b = p.observed_identity().expect("populated slot") as *const _;
+        assert!(std::ptr::eq(a, b));
+    }
+
+    #[test]
+    fn observed_identity_matches_pre_lift_reconciler_chain_shape() {
+        // Byte-identical parity pin between the borrow-form
+        // primitive here and the pre-lift `tatara-reconciler`
+        // 3-line chain shape. Sweeps every corner every callsite
+        // plausibly encounters (missing status, empty identity
+        // slot, populated identity slot). A regression that
+        // inserted a normalization step at the primitive the pre-
+        // lift chain does NOT apply — or vice versa — surfaces
+        // here rather than as silent drift between the pre-lift
+        // consumer sites and the ONE substrate owner they now
+        // route through. Peer to
+        // `observed_attestation_matches_pre_lift_reconciler_chain_shape`
+        // + `observed_pid_matches_pre_lift_reconciler_chain_shape`
+        // + `observed_flux_resources_matches_pre_lift_reconciler_chain_shape`
+        // on the attestation-chain + PID + flux-resources axes.
+        fn pre_lift(p: &Process) -> Option<Identity> {
+            p.status.as_ref().and_then(|s| s.identity.clone())
+        }
+        // Missing status.
+        let mut p = Process::new("api", empty_spec());
+        p.status = None;
+        assert_eq!(p.observed_identity().cloned(), pre_lift(&p));
+        // Populated status, empty identity slot.
+        let p = process_with_identity(None);
+        assert_eq!(p.observed_identity().cloned(), pre_lift(&p));
+        // Populated status, populated identity slot.
+        let p = process_with_identity(Some(sample_identity("seph")));
+        assert_eq!(p.observed_identity().cloned(), pre_lift(&p));
+    }
+
+    #[test]
+    fn observed_identity_missing_status_and_empty_slot_collapse_to_the_same_option_shape() {
+        // Cross-corner coherence pin: the missing-`status` corner
+        // and the populated-empty-slot corner return `Option`s
+        // whose `.is_none()` observations are IDENTICAL. A
+        // regression that promoted the missing-`status` corner to
+        // returning a typed error (via a signature change to
+        // `Result<_, _>`) — or that widened the empty-slot corner
+        // to a synthetic `Some(derive_identity(default_spec))` —
+        // would surface here rather than as silent operator-facing
+        // divergence between a never-status-written Process and an
+        // identity-cleared Process on the FORK-time seed branch.
+        let mut p_no_status = Process::new("api", empty_spec());
+        p_no_status.status = None;
+        let p_empty_slot = process_with_identity(None);
+        assert_eq!(
+            p_no_status.observed_identity().is_none(),
+            p_empty_slot.observed_identity().is_none()
+        );
+        assert_eq!(
+            p_no_status.observed_identity().is_some(),
+            p_empty_slot.observed_identity().is_some()
+        );
+    }
+
+    #[test]
+    fn observed_identity_cloned_composes_with_derive_identity_fallback() {
+        // Cross-primitive composition pin: the borrow-form
+        // primitive threaded through `.cloned().unwrap_or_else(||
+        // derive_identity(...))` reproduces the pre-lift FORK-time
+        // seed's owned-`Identity` shape at every corner. Binds the
+        // exact composition the `phase_machine::handle_forking`
+        // consumer performs: on the populated-slot corner the
+        // reconciler-persisted `Identity` is returned verbatim (the
+        // fallback never fires), and on both empty corners
+        // (missing-status + empty-slot) the fallback fires
+        // producing a fresh `derive_identity(&spec,
+        // name_override)`. A regression that (a) swapped the
+        // fallback direction, (b) made `.cloned()` re-derive
+        // instead of clone, or (c) made the empty-slot corner
+        // return a synthetic `Some(default_identity)` collides
+        // with the fallback surfaces here rather than as silent
+        // FORK-time PID allocator skew.
+        let spec = empty_spec();
+        let fallback_expected = crate::identity::derive_identity(&spec, None);
+        // Populated-slot corner: the seed returns the persisted
+        // identity, NOT the derive fallback.
+        let persisted = sample_identity("seph");
+        let p = process_with_identity(Some(persisted.clone()));
+        let seed = p.observed_identity().cloned().unwrap_or_else(|| {
+            crate::identity::derive_identity(&p.spec, p.declared_name_override())
+        });
+        assert_eq!(seed, persisted);
+        assert_ne!(seed, fallback_expected);
+        // Empty-slot corner: the seed fires the derive fallback.
+        let p = process_with_identity(None);
+        let seed = p.observed_identity().cloned().unwrap_or_else(|| {
+            crate::identity::derive_identity(&p.spec, p.declared_name_override())
+        });
+        assert_eq!(seed, fallback_expected);
+        // Missing-status corner: the seed fires the derive
+        // fallback, byte-identical to the empty-slot corner.
+        let mut p = Process::new("api-gateway", empty_spec());
+        p.metadata.namespace = Some("prod".into());
+        p.status = None;
+        let seed = p.observed_identity().cloned().unwrap_or_else(|| {
+            crate::identity::derive_identity(&p.spec, p.declared_name_override())
+        });
+        assert_eq!(seed, fallback_expected);
     }
 
     // ─── Process::observed_phase substrate pins ───────────────────────

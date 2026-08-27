@@ -117,10 +117,25 @@ pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
     //    the clone at the source.
     let already_allocated = p.observed_pid().is_some();
     if !already_allocated {
+        // Borrow-form status-projection corner of the substrate
+        // observed-* primitive family — pre-lift this was a hand-
+        // authored `.status.as_ref().and_then(|s| s.identity.clone())`
+        // chain past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+        // threshold, sibling to the `ssapply::inject_annotations`
+        // content-hash annotation composer that walked the same
+        // 3-line chain. Post-lift both sites route through the ONE
+        // `Process::observed_identity` primitive; the FORK-time
+        // seed clones off the borrow only at the composition point
+        // where the owned-`Identity` fallback requires it (empty-
+        // borrow corner: `Option::cloned` on `None` is `None`, so
+        // the fallback fires without spending an intermediate
+        // allocation). A future normalization (a content-hash
+        // re-derivation gate, a stale-identity annotation, a
+        // canonicalization pass rejecting a malformed name)
+        // reaches this seed through the ONE primitive.
         let identity = p
-            .status
-            .as_ref()
-            .and_then(|s| s.identity.clone())
+            .observed_identity()
+            .cloned()
             .unwrap_or_else(|| derive_identity(&p.spec, p.declared_name_override()));
 
         let pt_api = ctx.process_table_api();

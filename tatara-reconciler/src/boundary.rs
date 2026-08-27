@@ -287,18 +287,18 @@ mod job_evaluator_label_tests {
 /// test [`parse_condition_params_tests`] rather than as silent
 /// operator-facing drift across the four kind-typed evaluators.
 ///
-/// The `kind_label` parameter is a `&str` (not `&'static str`) because
-/// [`evaluate_flux_ready`] threads its `kind: &str` parameter (whose
-/// call sites pass `"Kustomization"` / `"HelmRelease"` — both statically
-/// known but locally borrowed through the outer fn signature) through
-/// this slot. Every other callsite passes a bare `&'static str` literal
-/// (`"ProcessPhase"`, `"JobAttested"`, `"ClosedLoopAuth"`); the `&str`
-/// bound admits both. A future ConditionKind whose evaluator wants to
-/// tag its diagnostic with a dynamic axis (a hypothetical
-/// `PromQL(query_label)` variant that names the failing query in the
-/// diagnostic) lands as ONE new callsite through the SAME primitive
-/// with a locally-borrowed `&str`, no widening of the primitive's
-/// signature.
+/// The `kind_label` parameter is a `&str` (not `&'static str`) so a
+/// future ConditionKind whose evaluator wants to tag its diagnostic
+/// with a dynamic axis (a hypothetical `PromQL(query_label)` variant
+/// that names the failing query in the diagnostic) lands as ONE new
+/// callsite through the SAME primitive with a locally-borrowed
+/// `&str`, no widening of the primitive's signature. Every current
+/// callsite passes a bare `&'static str` literal — either a hard-
+/// coded kind name (`"ProcessPhase"`, `"JobAttested"`,
+/// `"ClosedLoopAuth"`) or the [`FluxResource::kind`] projection
+/// ([`evaluate_flux_ready`] takes a typed [`FluxResource`] and
+/// derives its `&'static str` kind for this slot); the `&str` bound
+/// admits both.
 ///
 /// The `T: serde::de::DeserializeOwned` bound rides the caller's
 /// turbofish, matching how the substrate's own trait-dispatch primitive
@@ -365,37 +365,31 @@ pub async fn evaluate(
         ConditionKind::ProcessPhase => {
             evaluate_process_phase(client, default_ns, &condition.params).await
         }
-        ConditionKind::KustomizationHealthy => {
-            // Flux `(apiVersion, kind)` pairing rides through the
-            // shared substrate closed set
-            // [`tatara_process::flux_resource::FluxResource`] — pre-lift
-            // this site hand-authored both slots byte-identically to
-            // `render::render_flux`'s emit site past the ★★
-            // PRIME-DIRECTIVE ≥ 2 duplication threshold. Post-lift a
-            // Flux apiVersion bump or a kind rename lands at ONE
-            // per-axis owner on the closed set, not at every emit or
-            // fetch site.
-            evaluate_flux_ready(
-                client,
-                default_ns,
-                &condition.params,
-                FluxResource::Kustomization.api_version(),
-                FluxResource::Kustomization.kind(),
-            )
-            .await
-        }
-        ConditionKind::HelmReleaseReleased => {
-            // Sibling to the KustomizationHealthy arm above — routes
-            // through the same [`FluxResource`] closed set so a rename
-            // of the HelmRelease apiVersion / kind lands at ONE arm.
-            evaluate_flux_ready(
-                client,
-                default_ns,
-                &condition.params,
-                FluxResource::HelmRelease.api_version(),
-                FluxResource::HelmRelease.kind(),
-            )
-            .await
+        ConditionKind::KustomizationHealthy | ConditionKind::HelmReleaseReleased => {
+            // The (ConditionKind → FluxResource) mapping rides through
+            // the typed projection [`ConditionKind::flux_resource`] —
+            // pre-lift the two arms each hand-authored a `(FluxResource
+            // ::X.api_version(), FluxResource::X.kind())` pair as the
+            // two `&str` slots the pre-lift `evaluate_flux_ready(...,
+            // api_version: &str, kind: &str)` signature required, and
+            // the callee's signature admitted arbitrary `&str` pairs
+            // (a caller could invert the two slots or pair one kind's
+            // apiVersion with another's kind, and the K8s API server
+            // would silently 404 at SSA-fetch time). Post-lift the
+            // callee accepts a typed [`FluxResource`] slot (invalid
+            // pairings become unrepresentable), the mapping lives at
+            // ONE typed projection on [`ConditionKind::flux_resource`],
+            // and the two dispatch arms collapse onto ONE OR-pattern
+            // that reads the FluxResource variant from `.flux_resource()`.
+            // A new ConditionKind variant that fetches a fourth Flux
+            // resource (a hypothetical `BucketSynced` against a Flux
+            // `Bucket` source) extends the OR-pattern by ONE arm + adds
+            // ONE `flux_resource` arm + ONE `FluxResource` variant.
+            let resource = condition
+                .kind
+                .flux_resource()
+                .expect("OR-pattern above covers exactly the flux-fetching kinds");
+            evaluate_flux_ready(client, default_ns, &condition.params, resource).await
         }
         // Stub evaluators — `ConditionKind::stub_message` owns each
         // operator-facing string in `tatara-process::boundary`, so the
@@ -882,9 +876,17 @@ async fn evaluate_flux_ready(
     client: Client,
     default_ns: &str,
     params: &Value,
-    api_version: &str,
-    kind: &str,
+    resource: FluxResource,
 ) -> Result<Satisfaction> {
+    // The `(apiVersion, kind)` pair rides through the typed
+    // [`FluxResource`] slot — the callee derives both slots from
+    // the SAME closed-set variant, so a caller can no longer pass
+    // a mismatched `(&str, &str)` pair. Pre-lift the two slots were
+    // separate `&str` parameters and each dispatch arm at [`evaluate`]
+    // hand-authored a `(FluxResource::X.api_version(), FluxResource::
+    // X.kind())` pair; post-lift the callee owns both projections.
+    let api_version = resource.api_version();
+    let kind = resource.kind();
     let parsed: NamedResourceParams = match parse_condition_params(kind, params) {
         Ok(p) => p,
         Err(unk) => return Ok(unk),

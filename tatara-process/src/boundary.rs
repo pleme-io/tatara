@@ -3,6 +3,8 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::flux_resource::FluxResource;
+
 /// Boundary specification — preconditions gate Running,
 /// postconditions gate Running → Attested.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
@@ -170,6 +172,60 @@ impl ConditionKind {
     pub const fn is_stub(self) -> bool {
         self.stub_message().is_some()
     }
+
+    /// The [`FluxResource`] variant this condition kind fetches from
+    /// the K8s API server, or `None` for non-Flux-fetching kinds — the
+    /// typed projection owning the (ConditionKind → FluxResource)
+    /// association every reconciler `evaluate` dispatch arm and every
+    /// future coherence check binds through.
+    ///
+    /// Pre-lift the association was open-coded at TWO adjacent
+    /// `evaluate` arms in `tatara-reconciler::boundary::evaluate` past
+    /// the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold — each arm
+    /// hand-authored a `(FluxResource::X.api_version(),
+    /// FluxResource::X.kind())` pair as the two `&str` slots the
+    /// pre-lift `evaluate_flux_ready(api_version: &str, kind: &str)`
+    /// signature required. Post-lift the mapping lives at ONE typed
+    /// projection here, the callee accepts a typed
+    /// [`FluxResource`] slot (invalid `(apiVersion, kind)` pairings
+    /// like Kustomization's apiVersion paired with HelmRelease's kind
+    /// become unrepresentable), and the two `evaluate` arms collapse
+    /// onto ONE `KustomizationHealthy | HelmReleaseReleased` OR-arm
+    /// that reads the FluxResource variant from `.flux_resource()`.
+    ///
+    /// A future ConditionKind that fetches a fourth Flux resource
+    /// variant (a hypothetical `BucketSynced` kind against a Flux
+    /// `Bucket` source) lands as ONE new arm here + ONE new variant
+    /// on [`FluxResource`] + ONE OR-pattern extension at the
+    /// reconciler dispatch — no hand-authored `(apiVersion, kind)`
+    /// pair at the callsite, no widening of the callee's signature.
+    ///
+    /// The three current non-Flux-fetching arms return `None`:
+    /// - `ProcessPhase` fetches a tatara `Process` (through its own
+    ///   [`crate::api_version`] + [`crate::PROCESS_KIND`] pair, not
+    ///   a Flux `(apiVersion, kind)`).
+    /// - `JobAttested` / `ClosedLoopAuth` fetch a `batch/v1::Job` +
+    ///   an optional receipt `v1::ConfigMap`, both K8s built-ins
+    ///   (not Flux resources).
+    /// - `PromQL` / `Cel` / `NixEval` are stub evaluators
+    ///   ([`Self::is_stub`]) — no cluster fetch at all.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the (ConditionKind → FluxResource)
+    /// association lives at ONE typed algebra projection here, not
+    /// at every reconciler dispatch arm).
+    pub const fn flux_resource(self) -> Option<FluxResource> {
+        match self {
+            Self::KustomizationHealthy => Some(FluxResource::Kustomization),
+            Self::HelmReleaseReleased => Some(FluxResource::HelmRelease),
+            Self::ProcessPhase
+            | Self::PromQL
+            | Self::Cel
+            | Self::NixEval
+            | Self::JobAttested
+            | Self::ClosedLoopAuth => None,
+        }
+    }
 }
 
 // `impl fmt::Display for ConditionKind` + `impl FromStr for
@@ -328,5 +384,87 @@ mod tests {
             ConditionKind::NixEval.stub_message(),
             Some("NixEval evaluator not yet implemented"),
         );
+    }
+
+    // ── (ConditionKind → FluxResource) typed projection contracts ────
+
+    /// The two Flux-fetching kinds project to their canonical
+    /// [`FluxResource`] variants. A future ConditionKind rename or
+    /// FluxResource variant rename that skewed the projection at ONE
+    /// arm surfaces here.
+    #[test]
+    fn kustomization_healthy_projects_to_flux_resource_kustomization() {
+        assert_eq!(
+            ConditionKind::KustomizationHealthy.flux_resource(),
+            Some(FluxResource::Kustomization),
+        );
+    }
+
+    #[test]
+    fn helm_release_released_projects_to_flux_resource_helm_release() {
+        assert_eq!(
+            ConditionKind::HelmReleaseReleased.flux_resource(),
+            Some(FluxResource::HelmRelease),
+        );
+    }
+
+    /// The six non-Flux-fetching kinds project to `None`. Sweeps
+    /// `ConditionKind::ALL` filtering by `flux_resource().is_none()`
+    /// so a new variant added without a `flux_resource` arm surfaces
+    /// at rustc's non-exhaustive-match gate BEFORE this test even
+    /// runs; a new variant added with a hand-coded `Some(...)` arm
+    /// that shouldn't fetch Flux surfaces here.
+    #[test]
+    fn non_flux_fetching_kinds_project_to_none() {
+        use ConditionKind::*;
+        let non_flux: Vec<_> = ConditionKind::ALL
+            .iter()
+            .copied()
+            .filter(|k| k.flux_resource().is_none())
+            .collect();
+        assert_eq!(
+            non_flux,
+            vec![
+                ProcessPhase,
+                PromQL,
+                Cel,
+                NixEval,
+                JobAttested,
+                ClosedLoopAuth
+            ],
+        );
+    }
+
+    /// Every variant of [`ConditionKind`] whose `flux_resource()` is
+    /// `Some` uniquely names its FluxResource variant (no two
+    /// ConditionKind arms may fetch the SAME FluxResource — that
+    /// would signal a redundant closed-set entry). Peers the
+    /// `every_variants_api_version_and_kind_are_distinct_across_the_closed_set`
+    /// pin on the sibling [`FluxResource`] closed set.
+    #[test]
+    fn flux_resource_projection_is_injective_on_the_some_arms() {
+        let mut seen = std::collections::HashSet::new();
+        for k in ConditionKind::ALL {
+            if let Some(fr) = k.flux_resource() {
+                assert!(
+                    seen.insert(fr),
+                    "duplicate FluxResource projection at {k:?}: {fr:?}",
+                );
+            }
+        }
+    }
+
+    /// `flux_resource` is `const fn` — the projection is reachable
+    /// at compile time. A regression that dropped the `const`
+    /// qualifier would fail-loudly here rather than as a wrong-slot
+    /// runtime dispatch at every consumer callsite.
+    #[test]
+    fn flux_resource_projection_is_const_fn_reachable() {
+        const K: Option<FluxResource> = ConditionKind::KustomizationHealthy.flux_resource();
+        const H: Option<FluxResource> = ConditionKind::HelmReleaseReleased.flux_resource();
+        const P: Option<FluxResource> = ConditionKind::ProcessPhase.flux_resource();
+        assert_eq!(K, Some(FluxResource::Kustomization));
+        assert_eq!(H, Some(FluxResource::HelmRelease));
+        assert_eq!(P, None);
     }
 }

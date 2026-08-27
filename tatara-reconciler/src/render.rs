@@ -13,6 +13,7 @@ use tatara_process::hostname::{
 use tatara_process::intent::{
     AplicacaoIntent, FluxIntent, Intent, IntentVariant, LispIntent, NixIntent,
 };
+use tatara_process::k8s_object_ref::K8sObjectRef;
 use tatara_process::phase::ProcessPhase;
 use tatara_process::prelude::Process;
 use tatara_process::routing::RoutingSpec;
@@ -121,15 +122,28 @@ fn render_flux(name: &str, ns: &str, f: &FluxIntent) -> (Vec<Value>, Vec<u8>) {
     spec.insert("interval".into(), Value::String("1m".into()));
     spec.insert("path".into(), Value::String(f.path.clone()));
     spec.insert("prune".into(), Value::Bool(true));
+    // 3-slot `{kind, name, namespace}` cross-resource reference at
+    // Kustomization.spec.sourceRef → GitRepository. Pre-lift this was
+    // ONE of THREE hand-authored `json!({kind, name, namespace})`
+    // blocks in this file past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold (this GitRepository sourceRef + the
+    // OCIRepository chartRef + the HelmRepository sourceRef in
+    // `render_aplicacao`). Post-lift the 3-slot shape lives at ONE
+    // typed composer [`tatara_process::K8sObjectRef::as_json`] and a
+    // regression that drifted any one slot (or added a stray
+    // `apiVersion` slot the K8s cross-reference form deliberately
+    // excludes) would surface at the composer's byte-shape pins
+    // rather than as silent wire-form skew at every emit site.
     spec.insert(
         "sourceRef".into(),
-        json!({
-            "kind": "GitRepository",
-            "name": f.git_repository,
-            "namespace": f.git_repository_namespace
+        K8sObjectRef::new(
+            "GitRepository",
+            f.git_repository.clone(),
+            f.git_repository_namespace
                 .clone()
                 .unwrap_or_else(|| "flux-system".into()),
-        }),
+        )
+        .as_json(),
     );
     if let Some(tn) = &f.target_namespace {
         spec.insert("targetNamespace".into(), Value::String(tn.clone()));
@@ -238,35 +252,51 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
                     "ref": { "tag": a.version },
                 },
             }));
-        // HelmRelease v2 `chartRef` pointer. The `kind` slot rides
-        // through the same [`FluxResource::OCIRepository`] closed-set
-        // owner as the sibling `oci_repo` emit above — a regression
+        // HelmRelease v2 `chartRef` pointer. Sibling to the
+        // GitRepository `sourceRef` in `render_flux` and the
+        // HelmRepository `sourceRef` below — all three 3-slot
+        // `{kind, name, namespace}` cross-resource references now
+        // route through the ONE typed composer
+        // [`tatara_process::K8sObjectRef::as_json`]. The `kind` slot
+        // additionally rides through the sibling
+        // [`FluxResource::OCIRepository`] closed-set owner's
+        // `.wire_identity().object_ref(...)` chain, so a regression
         // that renamed the OCIRepository kind at ONE of the two
-        // sites (kind emit vs chartRef.kind reference) would silently
-        // break the helm-controller's chart-ref resolution against
-        // the source-controller's emitted OCIRepository.
+        // sites (kind emit vs chartRef.kind reference) would fail-
+        // loudly at the closed-set's coherence pins rather than
+        // silently break the helm-controller's chart-ref resolution
+        // against the source-controller's emitted OCIRepository.
         let chart_block = json!({
-            "chartRef": {
-                "kind": FluxResource::OCIRepository.kind(),
-                "name": name,
-                "namespace": ns,
-            },
+            "chartRef": FluxResource::OCIRepository
+                .wire_identity()
+                .object_ref(name, ns)
+                .as_json(),
         });
         (vec![oci_repo], chart_block)
     } else {
         // HelmRepository-style — operator must have created a HelmRepository
         // named `<chart_ref-split-prefix>` in flux-system or the Process namespace.
         let (repo, chart) = split_repo_chart(&a.chart_ref);
+        // 3-slot `{kind, name, namespace}` cross-resource reference at
+        // HelmRelease.spec.chart.spec.sourceRef → HelmRepository.
+        // Sibling to the GitRepository `sourceRef` in `render_flux`
+        // and the OCIRepository `chartRef` above — all three route
+        // through the ONE typed composer
+        // [`tatara_process::K8sObjectRef::as_json`]. A regression
+        // that dropped any slot or drifted the `"flux-system"`
+        // namespace convention would surface at the composer's byte-
+        // shape pins.
         let chart_block = json!({
             "chart": {
                 "spec": {
                     "chart": chart,
                     "version": a.version,
-                    "sourceRef": {
-                        "kind": "HelmRepository",
-                        "name": repo,
-                        "namespace": "flux-system",
-                    },
+                    "sourceRef": K8sObjectRef::new(
+                        "HelmRepository",
+                        repo,
+                        "flux-system",
+                    )
+                    .as_json(),
                 },
             },
         });

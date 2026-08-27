@@ -1541,6 +1541,95 @@ pub(crate) const ATOM_TRAIT_PATH: &str = "::tatara_lisp::domain::AtomKwarg<'_>";
 /// [`NARROW_TRAIT_PATH`] / [`ATOM_TRAIT_PATH`].
 pub(crate) const DESERIALIZE_TRAIT_PATH: &str = "::tatara_lisp::domain::DeserializeKwarg";
 
+/// Atom-family string-axis `Self`-type source literal — the derive's
+/// PRIVATE closed-set identity of the `&str` axis every atom-family
+/// arm in [`extractor_for`] with a string-axis field
+/// (`Kind::{String, OptionalString, VecString, OptionalVecString}`)
+/// dispatches through via [`atom_trait_dispatch_call`]. Rides the
+/// `<#self_ty as ::tatara_lisp::domain::AtomKwarg<'_>>::<method>(&kw, #key)?`
+/// UFCS bracket's `Self` slot, parsed as a `syn::Type` at emit time
+/// via [`parse_self_ty`].
+///
+/// Pre-lift the four-character byte-sequence `"& str"` was hand-
+/// authored at FOUR sites in [`extractor_for`] — once per string-
+/// axis extraction mode: scalar (`Kind::String`), optional-scalar
+/// (`Kind::OptionalString`), vec (`Kind::VecString`), and
+/// optional-vec (`Kind::OptionalVecString`) — past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold. Post-lift the four
+/// sites delegate through this const so the string-axis identity
+/// binds at ONE substrate owner rather than at four inline `&str`
+/// slot literals. A regression that silently swapped ONE arm's
+/// string-axis literal (dropped the leading `&`, misspelled `str`,
+/// re-wrote `"&str"` without the intervening space that matches
+/// proc_macro2's tokenization discipline the peer
+/// [`atom_trait_dispatch_call_tests`] Promise 1 sweep asserts) can
+/// no longer surface at one site alone — every string-axis arm
+/// reads the SAME bytes from the same owner.
+///
+/// The four-character source spelling `"& str"` (space-separated `&`
+/// and `str`, NOT `"&str"`) matches the proc_macro2 tokenization
+/// the [`parse_self_ty`] shape gate expects — a lexically-
+/// equivalent but byte-different spelling would produce an identical
+/// `syn::Type` post-parse but a byte-different emission at the
+/// downstream `<#atom_ty as ...>::...` splice, because
+/// [`atom_trait_dispatch_call`]'s hand-rolled `quote!` block round-
+/// trips the tokenized `TokenStream2` into the derived-code output
+/// preserving proc_macro2's between-token spacing verbatim. The
+/// atom-axis test module (in particular the two token-equivalence
+/// pins `helper_emission_is_token_equivalent_to_a_hand_written_
+/// vec_string_atom_trait_dispatch` and
+/// `helper_emission_is_token_equivalent_to_a_hand_written_scalar_
+/// string_atom_trait_dispatch`) locks the byte-level round-trip
+/// through the const so any silent respelling surfaces at those
+/// assertions.
+///
+/// Sibling of [`ATOM_BOOL_SELF_TY`] on the bool axis; the two
+/// consts together carry the closed set of atom-axis `Self`-type
+/// source literals [`atom_trait_dispatch_call`] receives in
+/// production. A hypothetical third atom axis (e.g. `Symbol` with
+/// `Owned = SymbolBuf`) lands as ONE new const alongside these
+/// two, ONE new [`Kind`] variant, and ONE new
+/// `impl AtomKwarg<'_> for _` block on the substrate — without a
+/// per-arm inline `&str` literal at the derive dispatch site.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition;
+/// the four inline byte-identical `"& str"` slot literals across
+/// [`extractor_for`]'s four string-axis arms collapse onto ONE
+/// closed-set owner. THEORY.md §II.1 invariant 2 — free middle;
+/// the (string-axis, atom-Self-type-source-literal) pairing binds
+/// at ONE `pub(crate) const` on the derive-internal namespace so
+/// every string-axis atom-family arm inherits the identity through
+/// delegation rather than restating it inline. Sibling posture to
+/// [`NARROW_TRAIT_PATH`] / [`DESERIALIZE_TRAIT_PATH`] on the
+/// per-axis trait-path axis — where those consts own the axis-typed
+/// trait path a per-axis helper dispatches through, this const
+/// owns the axis-typed `Self` source literal the atom-axis helper
+/// receives.
+pub(crate) const ATOM_STRING_SELF_TY: &str = "& str";
+
+/// Atom-family bool-axis `Self`-type source literal — the derive's
+/// PRIVATE closed-set identity of the `bool` axis every atom-family
+/// arm in [`extractor_for`] with a bool-axis field
+/// (`Kind::{Bool, OptionalBool, VecBool, OptionalVecBool}`)
+/// dispatches through via [`atom_trait_dispatch_call`]. Sibling of
+/// [`ATOM_STRING_SELF_TY`] on the string axis — see that const's
+/// docstring for the lift posture, the substrate-primitive parse
+/// discipline, the closed-set enumeration, and the theory anchor.
+///
+/// The four-character source spelling `"bool"` matches the
+/// proc_macro2 tokenization the [`parse_self_ty`] shape gate
+/// expects — the primitive-type shape lands at `syn::Type::Path`
+/// with a single-segment path, and the downstream `<#atom_ty as
+/// ...>::...` splice preserves the segment verbatim through
+/// [`atom_trait_dispatch_call`]'s hand-rolled `quote!` block. The
+/// atom-axis test module's token-equivalence pins
+/// (`helper_emission_is_token_equivalent_to_a_hand_written_
+/// optional_vec_bool_atom_trait_dispatch` and
+/// `helper_emission_is_token_equivalent_to_a_hand_written_optional_
+/// scalar_bool_atom_trait_dispatch`) lock the byte-level round-trip
+/// through the const.
+pub(crate) const ATOM_BOOL_SELF_TY: &str = "bool";
+
 /// Shared UFCS-bracket-emitting substrate primitive the numeric-
 /// narrowed and universal-serde-fallthrough trait-dispatch helpers on
 /// the derive's emission surface — [`narrow_trait_dispatch_call`] and
@@ -2553,9 +2642,9 @@ fn extractor_for(ty: &Type, key: &str, default: &SerdeDefault) -> Result<TokenSt
         // `bool` / `Option<bool>` on the bool axis) matches the
         // trait method's `Self::Owned` / `Option<Self::Owned>`
         // return without a per-axis wrap in the emit path.
-        Kind::String => atom_trait_dispatch_call("extract_owned_kwarg", "& str", key),
+        Kind::String => atom_trait_dispatch_call("extract_owned_kwarg", ATOM_STRING_SELF_TY, key),
         Kind::OptionalString => {
-            atom_trait_dispatch_call("extract_optional_owned_kwarg", "& str", key)
+            atom_trait_dispatch_call("extract_optional_owned_kwarg", ATOM_STRING_SELF_TY, key)
         }
         // Atom-family list-family axes — both string (`Kind::VecString`) and
         // bool (`Kind::VecBool`) dispatch through `<T as AtomKwarg<'_>>::
@@ -2568,7 +2657,7 @@ fn extractor_for(ty: &Type, key: &str, default: &SerdeDefault) -> Result<TokenSt
         // the shared [`atom_trait_dispatch_call`] helper. The derived struct
         // field type (`Vec<String>` / `Vec<bool>`) matches the trait method's
         // `Vec<Self::Owned>` return without a per-axis wrap in the emit path.
-        Kind::VecString => atom_trait_dispatch_call("extract_list_kwarg", "& str", key),
+        Kind::VecString => atom_trait_dispatch_call("extract_list_kwarg", ATOM_STRING_SELF_TY, key),
         // `Option<Vec<String>>` routes through the typed
         // optional-string-list extractor (which delegates its per-item
         // decode to the same `<&str as AtomKwarg<'_>>::project_at`
@@ -2592,7 +2681,7 @@ fn extractor_for(ty: &Type, key: &str, default: &SerdeDefault) -> Result<TokenSt
         // [`Self::OptionalString`] / [`Self::OptionalBool`] on the
         // optional-scalar axis.
         Kind::OptionalVecString => {
-            atom_trait_dispatch_call("extract_optional_list_kwarg", "& str", key)
+            atom_trait_dispatch_call("extract_optional_list_kwarg", ATOM_STRING_SELF_TY, key)
         }
         // `Option<Vec<bool>>` routes through the typed
         // optional-bool-list extractor (which delegates its per-item
@@ -2616,7 +2705,7 @@ fn extractor_for(ty: &Type, key: &str, default: &SerdeDefault) -> Result<TokenSt
         // [`Self::VecBool`] on the required-vec-bool axis and to
         // [`Self::OptionalVecString`] on the optional-vec-string axis.
         Kind::OptionalVecBool => {
-            atom_trait_dispatch_call("extract_optional_list_kwarg", "bool", key)
+            atom_trait_dispatch_call("extract_optional_list_kwarg", ATOM_BOOL_SELF_TY, key)
         }
         // ── The six numeric-narrowed arms: NARROWED, never `as`-cast ──
         //
@@ -2705,8 +2794,10 @@ fn extractor_for(ty: &Type, key: &str, default: &SerdeDefault) -> Result<TokenSt
         // = String` binding, and same posture the bool-axis
         // list-family arm (`Kind::VecBool` below) gives through
         // `Vec<Self::Owned> = Vec<bool>`.
-        Kind::Bool => atom_trait_dispatch_call("extract_owned_kwarg", "bool", key),
-        Kind::OptionalBool => atom_trait_dispatch_call("extract_optional_owned_kwarg", "bool", key),
+        Kind::Bool => atom_trait_dispatch_call("extract_owned_kwarg", ATOM_BOOL_SELF_TY, key),
+        Kind::OptionalBool => {
+            atom_trait_dispatch_call("extract_optional_owned_kwarg", ATOM_BOOL_SELF_TY, key)
+        }
         // `Vec<bool>` routes through the typed bool-list extractor
         // (which decodes each element via the `<bool as AtomKwarg<'_>>::
         // project_at` per-item atom-family shape gate) rather than
@@ -2731,7 +2822,7 @@ fn extractor_for(ty: &Type, key: &str, default: &SerdeDefault) -> Result<TokenSt
         // matches `Vec<bool>` directly without a per-axis wrap in the
         // emit path (same posture the string-axis arm gives through its
         // `Self::Owned = String` binding).
-        Kind::VecBool => atom_trait_dispatch_call("extract_list_kwarg", "bool", key),
+        Kind::VecBool => atom_trait_dispatch_call("extract_list_kwarg", ATOM_BOOL_SELF_TY, key),
         // Fall-through: anything with `serde::Deserialize` works via
         // the sexp_to_json bridge. Unlocks enums, nested structs,
         // Vec<Struct>. Post-lift the four arms below dispatch through
@@ -7126,6 +7217,105 @@ mod atom_trait_dispatch_call_tests {
             actual, expected,
             "helper emission must be token-equivalent to the hand-written optional-scalar-bool atom trait dispatch",
         );
+    }
+
+    // ── ATOM_STRING_SELF_TY / ATOM_BOOL_SELF_TY closed-set pins ──────
+    //
+    // The two atom-axis `Self`-type source literals are lifted onto
+    // the sibling `pub(crate) const` pair alongside `NARROW_TRAIT_PATH`
+    // / `DESERIALIZE_TRAIT_PATH` / `ATOM_TRAIT_PATH`. Pre-lift the
+    // four-character byte-sequences `"& str"` and `"bool"` were hand-
+    // authored at EIGHT production sites in `extractor_for` — four per
+    // axis: scalar / optional-scalar / vec / optional-vec — past the
+    // ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold. Post-lift the
+    // eight sites delegate through the two consts so the atom-axis
+    // identity binds at ONE substrate owner per axis rather than at
+    // four inline `&str` slot literals per axis.
+    //
+    // The pins below assert (a) the two consts carry the exact byte
+    // value of the pre-lift inline literals, (b) each const round-trips
+    // through `atom_trait_dispatch_call` byte-identically to the same
+    // helper invoked with the hand-written literal, at every atom-
+    // family method the derive dispatches through — so a regression
+    // that silently drifted ONE const's byte-sequence surfaces at
+    // BOTH pins rather than as invisible per-arm drift at the eight
+    // production sites. Sibling posture to
+    // `trait_path_consts_carry_the_two_participating_axis_identities_verbatim`
+    // in `trait_dispatch_call_tests` (on the per-axis trait-path
+    // consts) — that pin locks the two trait-path bytes; these two
+    // pins lock the two atom-axis `Self`-type bytes.
+
+    #[test]
+    fn atom_self_ty_consts_carry_the_two_participating_axis_identities_verbatim() {
+        // Byte-value pin — the two atom-axis `Self`-type source
+        // literals equal the exact byte-sequences the pre-lift inline
+        // production sites hand-authored: `"& str"` (space-separated
+        // `&` and `str`, matching proc_macro2's tokenization discipline
+        // the atom-axis test module's Promise 1 sweep asserts) and
+        // `"bool"` (the primitive-type single-segment path shape). A
+        // regression that (a) dropped the leading `&` from
+        // `ATOM_STRING_SELF_TY`, (b) removed the space between `&` and
+        // `str` (breaking proc_macro2 emit-time round-trip through the
+        // atom-axis helper's hand-rolled `quote!` block), or (c)
+        // drifted `ATOM_BOOL_SELF_TY` to a different primitive spelling
+        // surfaces here rather than as silent per-arm drift at the
+        // eight production dispatch sites.
+        use super::{ATOM_BOOL_SELF_TY, ATOM_STRING_SELF_TY};
+        assert_eq!(
+            ATOM_STRING_SELF_TY, "& str",
+            "ATOM_STRING_SELF_TY must carry the space-separated `& str` \
+             source literal proc_macro2's tokenization round-trips through \
+             atom_trait_dispatch_call verbatim",
+        );
+        assert_eq!(
+            ATOM_BOOL_SELF_TY, "bool",
+            "ATOM_BOOL_SELF_TY must carry the primitive-type `bool` source \
+             literal proc_macro2's tokenization round-trips through \
+             atom_trait_dispatch_call verbatim",
+        );
+    }
+
+    #[test]
+    fn atom_self_ty_consts_round_trip_through_atom_trait_dispatch_call_byte_identically() {
+        // Round-trip pin — for each of the FOUR atom-family method
+        // names the derive dispatches through (`extract_owned_kwarg`,
+        // `extract_optional_owned_kwarg`, `extract_list_kwarg`,
+        // `extract_optional_list_kwarg`), the const-fed emission at
+        // BOTH axes is byte-identical to the hand-literal-fed
+        // emission. Pins the const → helper composition end-to-end:
+        // a regression that (a) silently swapped a const's byte-
+        // sequence to a spelling that parses to the SAME `syn::Type`
+        // (e.g. `"&str"` without the intervening space) but emits a
+        // byte-different `TokenStream2` at the atom-axis helper's
+        // hand-rolled `quote!` splice would surface here.
+        //
+        // Fail-before-pass-after: pre-lift the consts did not exist,
+        // so a `use super::{ATOM_BOOL_SELF_TY, ATOM_STRING_SELF_TY}`
+        // reference from this test would refuse to compile. The
+        // sweep across the four methods × two axes closes the atom-
+        // axis Self-type dispatch surface at ONE test module rather
+        // than restating the const's byte-identity at every per-arm
+        // pin.
+        use super::{ATOM_BOOL_SELF_TY, ATOM_STRING_SELF_TY};
+        for method in [
+            "extract_owned_kwarg",
+            "extract_optional_owned_kwarg",
+            "extract_list_kwarg",
+            "extract_optional_list_kwarg",
+        ] {
+            for (const_bytes, hand_literal) in
+                [(ATOM_STRING_SELF_TY, "& str"), (ATOM_BOOL_SELF_TY, "bool")]
+            {
+                let via_const = call_string(method, const_bytes, "field");
+                let via_literal = call_string(method, hand_literal, "field");
+                assert_eq!(
+                    via_const, via_literal,
+                    "atom-axis Self-type const {const_bytes:?} must round-trip through \
+                     atom_trait_dispatch_call byte-identically to the hand-authored \
+                     literal at method {method}",
+                );
+            }
+        }
     }
 }
 

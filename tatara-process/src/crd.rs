@@ -364,6 +364,99 @@ impl Process {
             .map(String::as_str)
     }
 
+    /// Borrow-form spec-projection primitive on the declared parent-PID
+    /// axis: returns the hierarchical PID path (e.g. `"seph.1"`) the
+    /// author declared at `spec.identity.parent`, with the empty-slot
+    /// corner collapsed to `None` — the ONE-liner collapse of the
+    /// paired `self.spec.identity.parent.as_deref()` incantation every
+    /// consumer restated by hand pre-lift.
+    ///
+    /// Pre-lift the `.spec.identity.parent.as_deref()` chain was hand-
+    /// authored at TWO sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold in `tatara-reconciler::phase_machine`:
+    /// * `handle_forking` — the ALLOCATE-PID composer that threads the
+    ///   declared parent PID into [`pid::allocate_pid`] and also into
+    ///   the status patch payload (`{ "pid": new_pid, "parent":
+    ///   parent_pid }`), so the reconciler-observed
+    ///   [`ProcessStatus::parent`] slot mirrors the author-declared
+    ///   [`IdentitySpec::parent`] at fork time. The `info!` tracing
+    ///   span also reads the same slice as the `parent` field on the
+    ///   PID-assigned log line.
+    /// * `handle_exiting` — the SIGTERM cascade's child-fan-out filter
+    ///   that enumerates every Process cluster-wide and picks children
+    ///   whose `spec.identity.parent` equals this Process's currently-
+    ///   observed PID (`.filter(|c| c.spec.identity.parent.as_deref()
+    ///   == Some(pid))`). The filter runs per candidate child, so the
+    ///   borrow-form projection avoids allocating one `String` clone
+    ///   per non-matching row in the cluster-wide list.
+    ///
+    /// Both sites walked the SAME `.as_deref()` chain and both wanted
+    /// the `Option<&str>` form the primitive returns — the
+    /// `handle_forking` site to feed positionally into
+    /// `pid::allocate_pid(&identity, parent_pid, next_seq)` and the
+    /// tracing span's `parent = ?parent_pid` debug print + the JSON
+    /// payload's `"parent": parent_pid` slot; the `handle_exiting`
+    /// filter to compare directly against `Some(pid)` where `pid:
+    /// &str` came off the borrow-form peer [`Self::observed_pid`].
+    ///
+    /// Return-form axis: `Option<&str>` mirrors the borrow-first
+    /// discipline of every peer primitive on the metadata / status
+    /// slot family ([`Self::namespace_or_default`],
+    /// [`Self::name_or_placeholder`], [`Self::observed_pid`],
+    /// [`Self::annotation`]). The empty-slot corner
+    /// (`spec.identity.parent = None`, matching `init` / PID 1 with
+    /// no parent) collapses to `None` so `.is_some()` / `if let
+    /// Some(_)` / `.map(...)` behave identically on a `Process`
+    /// authored at cluster init (PID 1, parent absent) and on any
+    /// PID-N child (parent present) — matching the pre-lift
+    /// `.as_deref()` chain's `None` byte-identically.
+    ///
+    /// Peer to [`Self::observed_pid`] on the (spec-declared ×
+    /// status-observed) axis pair: `observed_pid` returns the PID
+    /// path this Process currently OWNS (the reconciler-persisted
+    /// child position in the hierarchy), while `declared_parent_pid`
+    /// returns the PID path this Process's parent OWNS (the author-
+    /// declared upstream position). The SIGTERM cascade at
+    /// `handle_exiting` composes both: it reads its own
+    /// [`Self::observed_pid`] and matches each candidate child's
+    /// [`Self::declared_parent_pid`] against that value — the child-
+    /// fan-out relation IS the spec-declared × status-observed axis
+    /// pair collapsed to a single comparator, both sides routed
+    /// through the same borrow-form skeleton.
+    ///
+    /// A future normalization step (a per-slot canonicalization pass
+    /// that rejects malformed hierarchical PIDs, a case-fold lookup
+    /// against a table of renamed identities, a cross-cluster prefix
+    /// stripper, an alias-table lookup that maps a legacy PID to its
+    /// current spelling) lands at ONE substrate method here and both
+    /// downstream consumers pick up the upgrade mechanically — no
+    /// per-callsite hand-edit at `handle_forking` / `handle_exiting`.
+    ///
+    /// Sibling to the peer metadata-projection primitives
+    /// ([`Self::namespace_or_default`], [`Self::name_or_placeholder`],
+    /// [`Self::coordinates_or_defaults`], [`Self::coordinates_or_none`],
+    /// [`Self::owned_coordinates_or_err`], [`Self::annotation`]) on the
+    /// metadata axis; this method opens the borrow-form peer on the
+    /// declared-identity axis. Future identity projections
+    /// (`declared_name_override` on the `spec.identity.name_override`
+    /// axis, a paired `declared_identity` composite that returns both
+    /// halves) land as peer methods on this same axis.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `.spec.identity.parent.as_deref()` chain recurred at two
+    /// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    /// trigger, and is lifted to ONE owner here). THEORY.md §II.1
+    /// invariant 5 (composition preserves proofs — the pins bind the
+    /// empty-slot corner + the borrow-form `&str` lifetime + the
+    /// byte-identical parity with the pre-lift `.as_deref()` chain,
+    /// so a regression that drifted any surface at
+    /// `tests::declared_parent_pid_*` rather than as silent operator-
+    /// facing skew between the ALLOCATE-PID composer and the SIGTERM
+    /// cascade's child-fan-out filter on the SAME parent-child pair).
+    pub fn declared_parent_pid(&self) -> Option<&str> {
+        self.spec.identity.parent.as_deref()
+    }
+
     /// Borrowed slice of the FluxCD resources this Process's status
     /// currently persists at `status.flux_resources`, with the
     /// missing-`status` corner collapsed to an empty slice — the ONE-
@@ -1504,6 +1597,174 @@ mod tests {
             true
         );
         assert_eq!(p.annotation("tatara.pleme.io/pool") == Some("other"), false);
+    }
+
+    // ─── Process::declared_parent_pid substrate pins ─────────────────
+    //
+    // Pins the borrow-form spec-projection primitive on the declared
+    // parent-PID axis that owns the `.spec.identity.parent.as_deref()`
+    // chain the two hand-authored `tatara-reconciler::phase_machine`
+    // sites (`handle_forking` ALLOCATE-PID composer + `handle_exiting`
+    // SIGTERM-cascade child-fan-out filter) restated by hand pre-lift.
+    // Peer to the sibling `observed_pid_*` pin family on the (spec-
+    // declared × status-observed) axis pair; both compose the same
+    // borrow-form `Option<&str>` return-shape skeleton on distinct
+    // slots (`spec.identity.parent` vs. `status.pid`). Fail-before-
+    // pass-after granularity: `declared_parent_pid` did not exist
+    // pre-lift, so any test invoking it fails to compile pre-lift and
+    // passes post-lift.
+    fn process_with_declared_parent(parent: Option<&str>) -> Process {
+        let mut spec = empty_spec();
+        spec.identity.parent = parent.map(str::to_string);
+        Process::new("child-proc", spec)
+    }
+
+    #[test]
+    fn declared_parent_pid_returns_none_when_slot_is_none() {
+        // Empty-slot corner pin: the primitive collapses the no-
+        // parent case to `None`, matching the pre-lift `.as_deref()`
+        // chain's `None` byte-identically at both reconciler consumer
+        // sites. Semantically corresponds to a Process authored at
+        // cluster init (PID 1) with no upstream parent — the
+        // ALLOCATE-PID composer feeds `None` into `pid::allocate_pid`
+        // to signal "no prefix", and the SIGTERM cascade's filter
+        // never matches such a Process because a child's declared
+        // parent can never equal `Some(pid)` when the slot is `None`.
+        let p = process_with_declared_parent(None);
+        assert!(p.declared_parent_pid().is_none());
+    }
+
+    #[test]
+    fn declared_parent_pid_returns_borrowed_str_when_slot_is_populated() {
+        // Happy-path pin: with a populated `spec.identity.parent`
+        // slot, the primitive returns a borrowed `&str` whose
+        // contents match the persisted `String`. A regression that
+        // filtered / reshaped / canonicalized the string would
+        // surface here rather than as silent skew at the child-fan-
+        // out filter's `.declared_parent_pid() == Some(pid)`
+        // equality check on the SAME parent-child pair.
+        let p = process_with_declared_parent(Some("seph.1"));
+        assert_eq!(p.declared_parent_pid(), Some("seph.1"));
+    }
+
+    #[test]
+    fn declared_parent_pid_is_a_zero_copy_borrow_projection() {
+        // Borrow-discipline pin: the returned `&str` borrows the
+        // persisted `String`'s underlying byte buffer in place —
+        // NOT a fresh allocation or a clone. A regression that
+        // switched the projection to an owned `String` (via
+        // `.clone()` or `.to_owned()`) would defeat the zero-copy
+        // contract the lift's primary strict-widening delivers.
+        // The `handle_exiting` cascade filter runs per candidate
+        // child across the cluster-wide Process list; a per-row
+        // `String::clone` would allocate one heap block per non-
+        // matching row, so the borrow-form primitive is load-
+        // bearing for large clusters. Peer to the sibling
+        // `observed_pid_is_a_zero_copy_borrow_projection` pin on
+        // the status-observed side of the axis pair.
+        let p = process_with_declared_parent(Some("seph.1"));
+        let borrowed = p.declared_parent_pid().expect("populated slot");
+        let persisted = p.spec.identity.parent.as_ref().unwrap();
+        assert!(std::ptr::eq(borrowed.as_ptr(), persisted.as_ptr()));
+    }
+
+    #[test]
+    fn declared_parent_pid_is_a_pure_projection() {
+        // Purity pin: calling the projection twice on the same
+        // `Process` returns byte-identical `&str`s (same pointer,
+        // same length). A regression that introduced state — a
+        // lazy-cached slice materialized on first call, a
+        // normalization step that ran once and cached — would
+        // surface here rather than as silent drift between the
+        // ALLOCATE-PID composer and the SIGTERM cascade's child-
+        // fan-out filter within one reconcile pass.
+        let p = process_with_declared_parent(Some("seph.1.3"));
+        let a = p.declared_parent_pid().expect("populated slot");
+        let b = p.declared_parent_pid().expect("populated slot");
+        assert!(std::ptr::eq(a.as_ptr(), b.as_ptr()));
+        assert_eq!(a.len(), b.len());
+    }
+
+    #[test]
+    fn declared_parent_pid_matches_pre_lift_reconciler_chain_shape() {
+        // Byte-identical parity pin between the borrow-form primitive
+        // here and the pre-lift `tatara-reconciler::phase_machine`
+        // `.spec.identity.parent.as_deref()` chain shape. Sweeps
+        // every corner every callsite plausibly encounters (empty
+        // slot, populated with a hierarchical PID). A regression
+        // that inserted a normalization step at the primitive the
+        // pre-lift chain does NOT apply — or vice versa — surfaces
+        // here rather than as silent drift between the pre-lift
+        // consumer sites and the ONE substrate owner they now route
+        // through. Peer to
+        // `observed_pid_matches_pre_lift_reconciler_chain_shape` on
+        // the sibling axis's borrow-form primitive.
+        fn pre_lift(p: &Process) -> Option<&str> {
+            p.spec.identity.parent.as_deref()
+        }
+        // Empty slot.
+        let p = process_with_declared_parent(None);
+        assert_eq!(p.declared_parent_pid(), pre_lift(&p));
+        // Populated with a hierarchical PID.
+        let p = process_with_declared_parent(Some("seph.1"));
+        assert_eq!(p.declared_parent_pid(), pre_lift(&p));
+        // Populated with a deeper hierarchical PID.
+        let p = process_with_declared_parent(Some("seph.1.7.42"));
+        assert_eq!(p.declared_parent_pid(), pre_lift(&p));
+    }
+
+    #[test]
+    fn declared_parent_pid_preserves_hierarchical_pid_format() {
+        // Format-preservation pin: the hierarchical PID path
+        // (dotted-segment form `seph.1.7`, matching the ported
+        // `convergence-controller/src/identity.rs` scheme) reaches
+        // the caller with segments and separators byte-identical
+        // to the persisted `String`. A regression that inserted a
+        // canonicalization pass (a segment-count validator, a
+        // separator swap `.` → `/`, a leading/trailing whitespace
+        // trim) would silently misroute the SIGTERM cascade's
+        // `declared_parent_pid() == Some(pid)` comparator against
+        // children whose `parent` field was authored in the ported
+        // scheme's exact form — the SAME children the observed_pid
+        // primitive is pinned to match on the other side of the
+        // axis pair.
+        for parent in ["seph", "seph.1", "seph.1.7", "seph.1.7.42"] {
+            let p = process_with_declared_parent(Some(parent));
+            assert_eq!(p.declared_parent_pid(), Some(parent));
+        }
+    }
+
+    #[test]
+    fn declared_parent_pid_composes_with_observed_pid_for_child_fanout_filter() {
+        // Cross-axis coherence pin against the sibling
+        // [`Self::observed_pid`] on the (spec-declared × status-
+        // observed) axis pair: a child's `.declared_parent_pid()`
+        // and its parent's `.observed_pid()` compose through the
+        // SAME borrow-form `Option<&str>` skeleton so the
+        // `handle_exiting` cascade filter's equality gate holds
+        // structurally. A regression that skewed EITHER primitive's
+        // return-form (return-shape, borrow discipline, empty-slot
+        // collapse) would silently misroute every SIGTERM cascade
+        // on the parent-child pair. This pin re-reads both primitives
+        // at test time so the composition holds iff both live paths
+        // are the current implementation.
+        // Parent Process: has an observed PID.
+        let mut parent = Process::new("parent-proc", empty_spec());
+        parent.status = Some(ProcessStatus {
+            pid: Some("seph.1".to_string()),
+            ..Default::default()
+        });
+        // Child Process: declared parent matches parent's observed PID.
+        let child = process_with_declared_parent(Some("seph.1"));
+        // The `handle_exiting` filter's equality gate:
+        // `child.declared_parent_pid() == Some(parent.observed_pid()?)`.
+        let parent_pid = parent.observed_pid().expect("parent has PID");
+        assert_eq!(child.declared_parent_pid(), Some(parent_pid));
+        // Sibling Process with an unrelated declared parent must NOT
+        // match the same parent — pins that the filter's SKIP branch
+        // holds on the other side of the axis pair.
+        let sibling = process_with_declared_parent(Some("seph.2"));
+        assert_ne!(sibling.declared_parent_pid(), Some(parent_pid));
     }
 
     // ─── Process::observed_flux_resources substrate pins ───────────────

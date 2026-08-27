@@ -116,7 +116,16 @@ pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
             .await
             .map_err(|e| anyhow!("ensure ProcessTable: {e}"))?;
         let next_seq = pt.spec.next_sequence;
-        let parent_pid = p.spec.identity.parent.as_deref();
+        // Declared parent PID rides through the ONE substrate
+        // `Process::declared_parent_pid` primitive, sibling to the
+        // same-shape `handle_exiting` child-fan-out filter that reads
+        // each candidate child's declared parent through the same
+        // primitive. Pre-lift this site spelled the projection as
+        // `p.spec.identity.parent.as_deref()` — a hand-authored
+        // `.as_deref()` chain repeated at both sites past the ★★
+        // PRIME-DIRECTIVE ≥ 2 duplication threshold; post-lift the
+        // pair collapses onto ONE owner in `tatara-process::crd`.
+        let parent_pid = p.declared_parent_pid();
         let new_pid = pid::allocate_pid(&identity, parent_pid, next_seq);
 
         patch::patch_process_table_spec(
@@ -774,10 +783,22 @@ pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
             .list(&kube::api::ListParams::default())
             .await
             .map_err(|e| anyhow!("list processes: {e}"))?;
+        // Each candidate child's declared parent-PID rides through the
+        // ONE substrate `Process::declared_parent_pid` primitive,
+        // sibling to the same-shape `handle_forking` ALLOCATE-PID
+        // composer that reads its own declared parent through the same
+        // primitive. Pre-lift this filter spelled the projection as
+        // `.spec.identity.parent.as_deref() == Some(pid)` — a hand-
+        // authored `.as_deref()` chain repeated at both sites past
+        // the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold; post-lift
+        // the pair collapses onto ONE owner in `tatara-process::crd`.
+        // The filter runs per candidate child across the cluster-wide
+        // Process list; the borrow-form primitive avoids allocating
+        // one `String` clone per non-matching row.
         let children: Vec<_> = list
             .items
             .into_iter()
-            .filter(|c| c.spec.identity.parent.as_deref() == Some(pid))
+            .filter(|c| c.declared_parent_pid() == Some(pid))
             .collect();
         if !children.is_empty() {
             for child in &children {

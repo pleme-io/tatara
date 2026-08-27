@@ -365,6 +365,90 @@ impl Process {
             .map(|s| s.flux_resources.as_slice())
             .unwrap_or(&[])
     }
+
+    /// The borrow-form status-projection primitive on the PID axis:
+    /// returns the hierarchical PID path (e.g. `"seph.1.7"`) the
+    /// reconciler currently persists at `status.pid`, with BOTH the
+    /// missing-`status` corner AND the empty-slot corner collapsed
+    /// to `None` — the ONE-liner collapse of the paired
+    /// `self.status.as_ref().and_then(|s| s.pid.clone())` incantation
+    /// every consumer restated by hand pre-lift.
+    ///
+    /// Pre-lift the 3-line `.status.as_ref().and_then(|s| s.pid
+    /// .clone())` chain was hand-authored at TWO sites past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication threshold in
+    /// `tatara-reconciler::phase_machine`:
+    /// * `handle_forking` — the ALLOCATE-PID gate that short-
+    ///   circuits the PID allocator when the reconciler already
+    ///   assigned a PID on a prior reconcile pass (pre-lift the
+    ///   chain composed with `.is_some()` and threw the clone away
+    ///   without ever reading the string).
+    /// * `handle_exiting` — the SIGTERM cascade that enumerates
+    ///   child Processes and terminates them by matching each
+    ///   child's `spec.identity.parent` against the PID this Process
+    ///   currently owns (pre-lift the chain bound an owned
+    ///   `Option<String>` and threaded `pid.as_str()` into the
+    ///   downstream `.as_deref() == Some(...)` comparator).
+    ///
+    /// Both sites walked the SAME 3-line chain — clone the `String`
+    /// eagerly, then either drop it (the `handle_forking` gate) or
+    /// re-borrow it through `.as_str()` (the `handle_exiting`
+    /// comparator) — even though neither site ever mutates the PID
+    /// nor keeps it alive past the enclosing async fn. Post-lift
+    /// both callers borrow the PID directly from `self.status`; the
+    /// pre-lift `.clone()` at both sites disappears because the
+    /// `&str` lives for the borrow of `&self`, and both call sites'
+    /// subsequent downstream calls (the K8s API list/patch, the
+    /// child-Process comparator) do not touch the borrowed
+    /// `p: &Process`, so the borrow lifetime holds.
+    ///
+    /// Return-form axis: `Option<&str>` mirrors the existing
+    /// borrow-first discipline every pre-lift consumer already
+    /// re-borrowed through `.as_str()` before use, and the shape of
+    /// [`Self::coordinates_or_none`]'s `Option<(&str, &str)>`
+    /// projection extends mechanically to the single-slot
+    /// projection here. The missing-`status` corner AND the
+    /// populated-status-with-`pid=None` corner BOTH collapse to
+    /// `None` so `.is_some()` / `if let Some(_)` / `.map(...)`
+    /// behave identically on a `Process` whose status is `None`
+    /// and on one whose status carries an unpopulated `pid` slot —
+    /// matching what the pre-lift `.and_then(...)` chain produced.
+    ///
+    /// A future normalization step (a per-slot canonicalization
+    /// pass that rejects malformed hierarchical PIDs, a
+    /// generation-filter that returns `None` for a PID stamped
+    /// with a stale `metadata.generation`, a staleness gate that
+    /// drops a PID whose observing `phase_since` predates a
+    /// reconcile deadline) lands at ONE substrate method here and
+    /// both downstream consumers pick up the upgrade mechanically
+    /// — no per-callsite hand-edit at `handle_forking` /
+    /// `handle_exiting`.
+    ///
+    /// Sibling to the peer [`Self::observed_flux_resources`]
+    /// borrow-first primitive on the flux-resources axis; both
+    /// methods compose the same missing-`status` fallback +
+    /// borrow-form return-shape skeleton on distinct
+    /// `ProcessStatus` slots. Future status projections
+    /// (`observed_parent` on the parent-pointer axis,
+    /// `observed_message` on the human-readable-status axis,
+    /// `observed_attestation` on the attestation-chain axis) land
+    /// as peer methods on this same axis.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over
+    /// composition — the 3-line status-projection chain recurred
+    /// at two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger, and is lifted to ONE owner here).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// the pins bind the missing-`status` corner + the empty-slot
+    /// corner + the borrow-form `&str` lifetime + the
+    /// byte-identical parity with the pre-lift 3-line chain, so a
+    /// regression that drifted any surface at
+    /// `tests::observed_pid_*` rather than as silent operator-
+    /// facing skew between the ALLOCATE-PID gate and the SIGTERM
+    /// cascade on the SAME `Process`).
+    pub fn observed_pid(&self) -> Option<&str> {
+        self.status.as_ref().and_then(|s| s.pid.as_deref())
+    }
 }
 
 /// Process status — every field optional until the reconciler writes it.
@@ -1215,5 +1299,179 @@ mod tests {
         assert_eq!(observed[0].name, "z-last");
         assert_eq!(observed[1].name, "a-first");
         assert_eq!(observed[2].name, "m-middle");
+    }
+
+    // ─── Process::observed_pid substrate pins ─────────────────────────
+    //
+    // Pins the borrow-form status-projection primitive on the PID axis
+    // that owns the 3-line `.status.as_ref().and_then(|s| s.pid.clone())`
+    // chain the two hand-authored `tatara-reconciler::phase_machine`
+    // sites (`handle_forking` ALLOCATE-PID gate + `handle_exiting`
+    // SIGTERM cascade) restated by hand pre-lift. Peer to the sibling
+    // `observed_flux_resources_*` pin family on the flux-resources
+    // axis; both compose the missing-`status` fallback + borrow-form
+    // return-shape skeleton on distinct `ProcessStatus` slots. Fail-
+    // before-pass-after granularity: `observed_pid` did not exist
+    // pre-lift, so any test invoking it fails to compile pre-lift and
+    // passes post-lift.
+
+    fn process_with_pid(pid: Option<&str>) -> Process {
+        let mut p = Process::new("api-gateway", empty_spec());
+        p.metadata.namespace = Some("prod".into());
+        let mut status = ProcessStatus::default();
+        status.pid = pid.map(str::to_string);
+        p.status = Some(status);
+        p
+    }
+
+    #[test]
+    fn observed_pid_returns_none_when_status_is_none() {
+        // Missing-`status` corner pin: the primitive collapses the
+        // no-status case to `None` so downstream `.is_some()` /
+        // `if let Some(_)` / `.map(...)` behave identically on a
+        // `Process` whose status field is `None` and on one whose
+        // status carries an unpopulated `pid` slot. Matches the
+        // pre-lift `.and_then(...)` chain's `None` byte-identically
+        // at every reconciler consumer's downstream shape.
+        let mut p = Process::new("api", empty_spec());
+        p.status = None;
+        assert!(p.observed_pid().is_none());
+    }
+
+    #[test]
+    fn observed_pid_returns_none_when_pid_slot_is_none() {
+        // Empty-slot-under-populated-status corner pin: the
+        // primitive returns `None`, matching the missing-`status`
+        // corner byte-identically. A regression that treated the
+        // two corners differently (a `None`-vs-`Some("")` signal
+        // that downstream consumers could grep on) would silently
+        // promote an internal representation detail (whether the
+        // reconciler has ever written a status subresource) into
+        // observable behavior at the ALLOCATE-PID gate.
+        let p = process_with_pid(None);
+        assert!(p.observed_pid().is_none());
+    }
+
+    #[test]
+    fn observed_pid_returns_borrowed_str_when_pid_slot_is_populated() {
+        // Happy-path pin: with a populated `status.pid` slot, the
+        // primitive returns a borrowed `&str` whose contents match
+        // the persisted `String`. A regression that filtered /
+        // reshaped / canonicalized the string would surface here
+        // rather than as silent skew at the downstream cascade
+        // comparator's `.as_deref() == Some(...)` equality check.
+        let p = process_with_pid(Some("seph.1.7"));
+        assert_eq!(p.observed_pid(), Some("seph.1.7"));
+    }
+
+    #[test]
+    fn observed_pid_is_a_zero_copy_borrow_projection() {
+        // Borrow-discipline pin: the returned `&str` borrows the
+        // persisted `String`'s underlying byte buffer in place —
+        // NOT a fresh allocation or a clone. A regression that
+        // switched the projection to an owned `String` (via
+        // `.clone()` or `.to_owned()`) would defeat the zero-copy
+        // contract the lift's primary strict-widening delivers
+        // (the pre-lift 3-line chain eagerly cloned the `String`
+        // per reconcile pass at BOTH call sites even though the
+        // ALLOCATE-PID gate immediately dropped the clone and the
+        // SIGTERM cascade only re-borrowed it via `.as_str()`; the
+        // post-lift primitive borrows). Peer to the sibling
+        // `observed_flux_resources_is_a_zero_copy_borrow_projection`
+        // pin on the flux-resources borrow-projection axis.
+        let p = process_with_pid(Some("seph.1.7"));
+        let observed = p.observed_pid().expect("populated slot");
+        let persisted = p.status.as_ref().unwrap().pid.as_ref().unwrap();
+        assert!(std::ptr::eq(observed.as_ptr(), persisted.as_ptr()));
+    }
+
+    #[test]
+    fn observed_pid_is_a_pure_projection() {
+        // Purity pin: calling the projection twice on the same
+        // `Process` returns byte-identical `&str`s (same pointer,
+        // same length). A regression that introduced state — a
+        // lazy-cached slice materialized on first call, a
+        // normalization step that ran once and cached — would
+        // surface here rather than as silent drift between the
+        // ALLOCATE-PID gate and the SIGTERM cascade on the SAME
+        // `Process` within one reconcile pass.
+        let p = process_with_pid(Some("seph.1.7"));
+        let a = p.observed_pid().expect("populated slot");
+        let b = p.observed_pid().expect("populated slot");
+        assert!(std::ptr::eq(a.as_ptr(), b.as_ptr()));
+        assert_eq!(a.len(), b.len());
+    }
+
+    #[test]
+    fn observed_pid_matches_pre_lift_reconciler_chain_shape() {
+        // Byte-identical parity pin between the borrow-form
+        // primitive here and the pre-lift `tatara-reconciler
+        // ::phase_machine` 3-line chain shape. Sweeps every corner
+        // every callsite plausibly encounters (missing status,
+        // empty pid slot, populated pid slot). A regression that
+        // inserted a normalization step at the primitive the pre-
+        // lift chain does NOT apply — or vice versa — surfaces
+        // here rather than as silent drift between the pre-lift
+        // consumer sites and the ONE substrate owner they now
+        // route through. Peer to
+        // `observed_flux_resources_matches_pre_lift_reconciler_chain_shape`
+        // on the flux-resources axis's borrow-form primitive.
+        fn pre_lift(p: &Process) -> Option<String> {
+            p.status.as_ref().and_then(|s| s.pid.clone())
+        }
+        // Missing status.
+        let mut p = Process::new("api", empty_spec());
+        p.status = None;
+        assert_eq!(p.observed_pid().map(str::to_string), pre_lift(&p));
+        // Populated status, empty pid slot.
+        let p = process_with_pid(None);
+        assert_eq!(p.observed_pid().map(str::to_string), pre_lift(&p));
+        // Populated status, populated pid slot.
+        let p = process_with_pid(Some("seph.1.7"));
+        assert_eq!(p.observed_pid().map(str::to_string), pre_lift(&p));
+    }
+
+    #[test]
+    fn observed_pid_missing_status_and_empty_slot_collapse_to_the_same_option_shape() {
+        // Cross-corner coherence pin: the missing-`status` corner
+        // and the populated-empty-slot corner return `Option`s whose
+        // `.is_none()` observations are IDENTICAL. A regression
+        // that promoted the missing-`status` corner to returning a
+        // typed error (via a signature change to `Result<_, _>`) —
+        // or that widened the empty-slot corner to a synthetic
+        // `Some("")` — would surface here rather than as silent
+        // operator-facing divergence between a never-status-
+        // written Process and a status-emptied Process on the
+        // ALLOCATE-PID gate.
+        let mut p_no_status = Process::new("api", empty_spec());
+        p_no_status.status = None;
+        let p_empty_slot = process_with_pid(None);
+        assert_eq!(
+            p_no_status.observed_pid().is_none(),
+            p_empty_slot.observed_pid().is_none()
+        );
+        assert_eq!(
+            p_no_status.observed_pid().is_some(),
+            p_empty_slot.observed_pid().is_some()
+        );
+    }
+
+    #[test]
+    fn observed_pid_preserves_hierarchical_pid_format() {
+        // Format-preservation pin: the hierarchical PID path
+        // (dotted-segment form `seph.1.7`, matching the ported
+        // `convergence-controller/src/identity.rs` scheme) reaches
+        // the caller with segments and separators byte-identical
+        // to the persisted `String`. A regression that inserted a
+        // canonicalization pass (a segment-count validator, a
+        // separator swap `.` → `/`, a leading/trailing whitespace
+        // trim) would silently misroute the SIGTERM cascade's
+        // `spec.identity.parent == Some(pid)` comparator against
+        // children whose `parent` field was authored in the ported
+        // scheme's exact form.
+        for pid in ["seph", "seph.1", "seph.1.7", "seph.1.7.42"] {
+            let p = process_with_pid(Some(pid));
+            assert_eq!(p.observed_pid(), Some(pid));
+        }
     }
 }

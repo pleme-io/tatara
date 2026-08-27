@@ -93,8 +93,17 @@ pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
         return Ok(Action::requeue(Duration::from_secs(HEARTBEAT)));
     }
 
-    // 2. Allocate PID if we don't already have one.
-    let already_allocated = p.status.as_ref().and_then(|s| s.pid.clone()).is_some();
+    // 2. Allocate PID if we don't already have one. The presence
+    //    gate rides through the ONE substrate `Process::observed_pid`
+    //    primitive, sibling to the same-corner `observed_flux_resources`
+    //    call the VERIFY / ATTEST consumers dispatch through. Pre-lift
+    //    this site spelled the gate as `.status.as_ref().and_then(|s|
+    //    s.pid.clone()).is_some()` — a full `String` clone allocated
+    //    and immediately dropped every reconcile pass through
+    //    `handle_forking` even when the ALLOCATE-PID branch never
+    //    reads the string; post-lift the borrow-form primitive drops
+    //    the clone at the source.
+    let already_allocated = p.observed_pid().is_some();
     if !already_allocated {
         let identity = p
             .status
@@ -729,9 +738,18 @@ pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
     // Cascade terminate: delete child Processes first, then move to Zombie.
     // Owner references on owned Flux CRs cause K8s to GC them once we're gone.
     let (ns, name) = p.owned_coordinates_or_err()?;
-    let my_pid = p.status.as_ref().and_then(|s| s.pid.clone());
+    // SIGTERM cascade comparator seed: read the PID this Process
+    // currently owns through the ONE substrate `Process::observed_pid`
+    // primitive, peer to the sibling `handle_forking` ALLOCATE-PID
+    // gate that routes through the same primitive. Pre-lift this
+    // site spelled the projection as `.status.as_ref().and_then(|s|
+    // s.pid.clone())` — an owned `Option<String>` immediately
+    // re-borrowed through `.as_str()` before the comparator; post-
+    // lift the borrow-form primitive yields the `&str` the
+    // comparator wants directly.
+    let my_pid = p.observed_pid();
 
-    if let Some(pid) = &my_pid {
+    if let Some(pid) = my_pid {
         // Enumerate Processes cluster-wide and find direct children.
         let all = ctx.processes_all_api();
         let list = all
@@ -741,7 +759,7 @@ pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
         let children: Vec<_> = list
             .items
             .into_iter()
-            .filter(|c| c.spec.identity.parent.as_deref() == Some(pid.as_str()))
+            .filter(|c| c.spec.identity.parent.as_deref() == Some(pid))
             .collect();
         if !children.is_empty() {
             for child in &children {

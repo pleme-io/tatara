@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 
 use tatara_process::annotations;
 use tatara_process::k8s_wire_identity::K8sWireIdentity;
-use tatara_process::prelude::{Process, RenderedResourceCoords};
+use tatara_process::prelude::{FluxResourceRef, Process, RenderedResourceCoords};
 
 /// Field manager string we use for all SSA writes.
 pub const FIELD_MANAGER: &str = "tatara-reconciler";
@@ -664,6 +664,109 @@ pub async fn fetch_by_identity(
     let ar = api_resource_of(identity)?;
     let api: Api<DynamicObject> = Api::namespaced_with(client, namespace, &ar);
     Ok(api.get_opt(name).await?)
+}
+
+/// Standardized diagnostic label prefix for every
+/// [`FluxResourceRef`]-gated fetch — the pure `format!("fetch {}/{}", ...)`
+/// helper the [`fetch_flux_ref`] composer wraps its raw-fetch error
+/// with.
+///
+/// Pre-lift the `.map_err(|e| anyhow!("fetch {}/{}: {e}", r.kind,
+/// r.name))?` incantation was hand-authored verbatim at TWO
+/// `tatara-reconciler::phase_machine` sites past the ★★ PRIME-DIRECTIVE
+/// ≥ 2 duplication threshold alongside the 5-slot fetch splat. The
+/// composer that lifts the splat also lifts the diagnostic wording so
+/// a rename of the label (a switch to
+/// `"fetch flux <kind>/<namespace>/<name>"` for cluster-tagged
+/// observability, a case-fold on the kind slot, a truncation for
+/// long-name refs) lands at ONE substrate function here.
+///
+/// Private to the module: no external consumer names the diagnostic
+/// label directly — the wording is consumed EXCLUSIVELY through the
+/// [`fetch_flux_ref`] composer's error path, and the pin at
+/// [`tests::flux_ref_fetch_error_context_names_kind_and_name`] binds
+/// the "`fetch <kind>/<name>`" wording invariant so a regression that
+/// drifted the wording surfaces at fail-before-pass-after granularity
+/// rather than as operator-visible log skew across the two consumers.
+///
+/// Uses `r.fetch_coords()`'s `(kind, name)` tuple slots (positions 2
+/// and 3) so a swap between the two axes at the [`FluxResourceRef`]
+/// projection surfaces symmetrically at the diagnostic label — the
+/// pin fails-loudly rather than surfacing as a silent "`fetch
+/// <name>/<kind>: ...`" reversal at every operator-facing log line.
+fn flux_ref_fetch_error_context(r: &FluxResourceRef) -> String {
+    let (_, _, kind, name) = r.fetch_coords();
+    format!("fetch {kind}/{name}")
+}
+
+/// Fetch a Flux resource by its persisted
+/// [`FluxResourceRef`] — the substrate composer that owns the
+/// (`FluxResourceRef` → `DynamicObject`) path every Flux drift /
+/// readiness probe composes against. Peer to [`fetch_by_identity`] on
+/// the closed-set-variant-gated axis; the two composers partition the
+/// Flux-fetch input space by whether the caller starts from a static
+/// closed-set variant (emit-time, `.wire_identity()`-gated,
+/// `K8sWireIdentity`) or a persisted `ProcessStatus.flux_resources`
+/// slice (fetch-time, `FluxResourceRef`-gated, owned `String` payload).
+///
+/// The 4-slot `(namespace, api_version, kind, name)` fetch tuple
+/// binds at [`FluxResourceRef::fetch_coords`]'s typed projection so a
+/// caller cannot skew any two adjacent `&str` slots at the raw
+/// [`fetch`] call — the `String` fields on `FluxResourceRef` are
+/// mechanically indistinguishable at the type level, and the tuple's
+/// positional pin
+/// [`tatara_process::status::tests::flux_resource_ref_fetch_coords_binds_slots_by_position`]
+/// is the fail-loud gate against a slot-inversion regression.
+///
+/// The `.map_err(|e| anyhow!("fetch {}/{}: {e}", r.kind, r.name))?`
+/// diagnostic wording is owned by [`flux_ref_fetch_error_context`] —
+/// its own pin binds the "`fetch <kind>/<name>`" invariant so a
+/// downstream rename of the label surfaces at fail-before-pass-after
+/// granularity rather than at every operator-facing log line.
+///
+/// Pre-lift the 5-slot splat + wrap incantation was hand-authored
+/// verbatim at TWO sites in `tatara-reconciler::phase_machine` past
+/// the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold:
+/// * `handle_running` — the VERIFY-phase per-ref readiness probe
+///   that populates the updated `FluxResourceRef` slice with
+///   `ready` + `message` + `last_check`.
+/// * `handle_attested` — the ATTEST-heartbeat drift detector that
+///   short-circuits on the first non-Ready ref.
+///
+/// Both sites splatted `client, &r.namespace, &r.api_version,
+/// &r.kind, &r.name` in THAT order into raw [`fetch`] and wrapped the
+/// error with the same `"fetch {kind}/{name}"` prefix. Post-lift each
+/// site names the ref ONCE and rides through this ONE composer.
+///
+/// Extension: every future consumer that reaches for a persisted
+/// [`FluxResourceRef`] (a kenshi-runner probe walking the emitted
+/// FluxCD test-fixture chart's `ProcessStatus.flux_resources`, a
+/// per-membro contract's mirror-audit sweep, a stall-detector that
+/// re-probes a slow drift-hold on a heartbeat cadence, a fleet-wide
+/// audit tool that grovels through every Process's persisted Flux
+/// refs on a nightly cron) inherits the composer mechanically — no
+/// per-callsite 5-slot splat, no risk of a copy-paste that swapped
+/// the two adjacent `&str` slots the raw `ssapply::fetch` still
+/// accepts on its untyped axis for non-`FluxResourceRef` fetches
+/// (`RenderedResourceCoords`-driven `phase_machine` fetches, the
+/// direct closed-set-variant `boundary` fetches now on
+/// [`fetch_by_identity`]).
+///
+/// Theory grounding: THEORY.md §II.1 invariant 5 (composition
+/// preserves proofs — the 4-slot fetch tuple + the diagnostic label
+/// bind structurally through [`FluxResourceRef::fetch_coords`] +
+/// [`flux_ref_fetch_error_context`], so a regression that drifted the
+/// slot order or the wording at ONE site would fail-loudly at the two
+/// sibling pins rather than as silent operator-facing wire-form skew
+/// at every downstream Flux fetch consumer). THEORY.md §VI.1
+/// (generation over composition — the 5-slot splat + wrap
+/// incantation recurred at two hand-authored sites past the ≥ 2
+/// duplication trigger, and is lifted to ONE composer here).
+pub async fn fetch_flux_ref(client: Client, r: &FluxResourceRef) -> Result<Option<DynamicObject>> {
+    let (namespace, api_version, kind, name) = r.fetch_coords();
+    fetch(client, namespace, api_version, kind, name)
+        .await
+        .map_err(|e| anyhow!("{}: {e}", flux_ref_fetch_error_context(r)))
 }
 
 /// Parsed readiness state of a resource's `status.conditions[type=Ready]`.
@@ -2009,6 +2112,165 @@ mod tests {
                 resolve_target_namespace(explicit, default_ns),
                 explicit.unwrap_or(default_ns),
                 "primitive must be byte-identical to pre-lift `.unwrap_or(default_ns)` on {explicit:?}, default {default_ns:?}"
+            );
+        }
+    }
+
+    // ─── flux_ref_fetch_error_context / fetch_flux_ref substrate pins ──
+    //
+    // The 5-slot `ssapply::fetch(client, &r.namespace, &r.api_version,
+    // &r.kind, &r.name).map_err(|e| anyhow!("fetch {}/{}: {e}",
+    // r.kind, r.name))?` splat + wrap recurred at TWO hand-authored
+    // sites in `tatara-reconciler::phase_machine` (`handle_running`,
+    // `handle_attested`) past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // trigger. Post-lift each site names the ref ONCE and rides
+    // through [`fetch_flux_ref`]; the diagnostic wording lives at the
+    // pure helper [`flux_ref_fetch_error_context`]. These pins bind
+    // the wording invariant + the (kind, name) slot order at
+    // fail-before-pass-after granularity so a regression that
+    // reversed the two axes in the label (`"fetch <name>/<kind>"`) or
+    // reworded the prefix surfaces HERE rather than as silent
+    // operator-facing log skew across the two consumers.
+
+    fn sample_flux_ref_for_diag() -> FluxResourceRef {
+        // Distinct kind + name so a swap between the two axes at the
+        // diagnostic-context helper surfaces as an equality failure
+        // rather than as identity coincidence.
+        FluxResourceRef {
+            api_version: "helm.toolkit.fluxcd.io/v2".to_string(),
+            kind: "HelmRelease".to_string(),
+            name: "observability-stack".to_string(),
+            namespace: "flux-system".to_string(),
+            ready: false,
+            message: None,
+            last_check: None,
+        }
+    }
+
+    #[test]
+    fn flux_ref_fetch_error_context_names_kind_and_name() {
+        // Wording pin: the diagnostic prefix reads exactly
+        // `"fetch <kind>/<name>"`. A regression that reversed the two
+        // axes (`"fetch <name>/<kind>"`), reworded the prefix
+        // (`"fetching ..."`), or dropped the slash separator would
+        // surface here rather than as silent operator-facing log skew
+        // at every downstream Flux fetch consumer.
+        let r = sample_flux_ref_for_diag();
+        assert_eq!(
+            flux_ref_fetch_error_context(&r),
+            "fetch HelmRelease/observability-stack"
+        );
+    }
+
+    #[test]
+    fn flux_ref_fetch_error_context_reads_kind_and_name_slots_only() {
+        // Slot-coverage pin: the diagnostic label reads ONLY the
+        // `kind` and `name` slots of the ref — a caller varying the
+        // `namespace` / `api_version` / status slots (ready / message
+        // / last_check) leaves the label byte-identical. Pins the
+        // composer's contract: the label discriminates between refs
+        // by (kind, name), not by any of the other five slots.
+        let base = sample_flux_ref_for_diag();
+        let expected = flux_ref_fetch_error_context(&base);
+        let variants = [
+            FluxResourceRef {
+                namespace: "some-other-ns".to_string(),
+                ..base.clone()
+            },
+            FluxResourceRef {
+                api_version: "helm.toolkit.fluxcd.io/v9".to_string(),
+                ..base.clone()
+            },
+            FluxResourceRef {
+                ready: true,
+                ..base.clone()
+            },
+            FluxResourceRef {
+                message: Some("some drift".to_string()),
+                ..base.clone()
+            },
+        ];
+        for v in variants {
+            assert_eq!(
+                flux_ref_fetch_error_context(&v),
+                expected,
+                "the (kind, name) axes gate the label; every other slot must be transparent"
+            );
+        }
+    }
+
+    #[test]
+    fn flux_ref_fetch_error_context_swap_between_kind_and_name_diverges() {
+        // Slot-inversion pin: a ref with (kind, name) swapped
+        // produces a distinct label — the symmetric pair
+        // (`sample.kind`, `sample.name`) reads back as (name, kind)
+        // through the raw `.fetch_coords()` projection and would
+        // fail-loudly at the assertion if a regression reversed the
+        // two axes inside the helper. A drop of either axis (leaving
+        // a `"fetch <name>"` or `"fetch <kind>"` label) would fail
+        // both assertions.
+        let normal = sample_flux_ref_for_diag();
+        let swapped = FluxResourceRef {
+            kind: normal.name.clone(),
+            name: normal.kind.clone(),
+            ..normal.clone()
+        };
+        assert_ne!(
+            flux_ref_fetch_error_context(&normal),
+            flux_ref_fetch_error_context(&swapped),
+            "swapping (kind, name) must diverge the label"
+        );
+        assert_eq!(
+            flux_ref_fetch_error_context(&swapped),
+            "fetch observability-stack/HelmRelease",
+            "the swapped ref must emit the swapped label byte-identically"
+        );
+    }
+
+    #[test]
+    fn flux_ref_fetch_error_context_matches_pre_lift_hand_authored_wording() {
+        // Cross-substrate coherence pin: the composed diagnostic
+        // wording must be byte-identical to the pre-lift hand-authored
+        // `format!("fetch {}/{}", r.kind, r.name)` incantation at
+        // BOTH `phase_machine::handle_running` and
+        // `phase_machine::handle_attested`. Sweeps a handful of ref
+        // shapes so a regression that special-cased one variant
+        // (e.g. a `Kustomization`-only path via `if r.kind ==
+        // "Kustomization" ...`) would surface here.
+        let cases = [
+            (
+                "kustomize.toolkit.fluxcd.io/v1",
+                "Kustomization",
+                "observability-stack",
+                "flux-system",
+            ),
+            (
+                "helm.toolkit.fluxcd.io/v2",
+                "HelmRelease",
+                "prometheus-op",
+                "monitoring",
+            ),
+            (
+                "source.toolkit.fluxcd.io/v1beta2",
+                "OCIRepository",
+                "chart-source",
+                "flux-system",
+            ),
+        ];
+        for (av, kind, name, ns) in cases {
+            let r = FluxResourceRef {
+                api_version: av.to_string(),
+                kind: kind.to_string(),
+                name: name.to_string(),
+                namespace: ns.to_string(),
+                ready: false,
+                message: None,
+                last_check: None,
+            };
+            assert_eq!(
+                flux_ref_fetch_error_context(&r),
+                format!("fetch {}/{}", r.kind, r.name),
+                "post-lift context must equal pre-lift `format!(\"fetch {{kind}}/{{name}}\")` at every callsite shape"
             );
         }
     }

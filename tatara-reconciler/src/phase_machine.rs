@@ -281,15 +281,7 @@ pub async fn handle_running(p: &Process, ctx: &Context) -> Result<Action> {
     let mut updated: Vec<FluxResourceRef> = Vec::with_capacity(refs.len());
     let mut all_ready = true;
     for r in &refs {
-        let obj = ssapply::fetch(
-            ctx.kube.clone(),
-            &r.namespace,
-            &r.api_version,
-            &r.kind,
-            &r.name,
-        )
-        .await
-        .map_err(|e| anyhow!("fetch {}/{}: {e}", r.kind, r.name))?;
+        let obj = ssapply::fetch_flux_ref(ctx.kube.clone(), r).await?;
 
         let (ready, message) = match obj.as_ref().map(ssapply::ready_condition) {
             Some(ssapply::ReadyState::Ready) => (true, None),
@@ -412,15 +404,7 @@ pub async fn handle_attested(p: &Process, ctx: &Context) -> Result<Action> {
 
     let mut drift = false;
     for r in &refs {
-        let obj = ssapply::fetch(
-            ctx.kube.clone(),
-            &r.namespace,
-            &r.api_version,
-            &r.kind,
-            &r.name,
-        )
-        .await
-        .map_err(|e| anyhow!("fetch {}/{}: {e}", r.kind, r.name))?;
+        let obj = ssapply::fetch_flux_ref(ctx.kube.clone(), r).await?;
         if !matches!(
             obj.as_ref().map(ssapply::ready_condition),
             Some(ssapply::ReadyState::Ready)

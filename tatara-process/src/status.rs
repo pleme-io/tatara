@@ -70,6 +70,77 @@ pub struct FluxResourceRef {
     pub last_check: Option<DateTime<Utc>>,
 }
 
+impl FluxResourceRef {
+    /// Pure typed projection of the four fetch coordinates
+    /// `(namespace, api_version, kind, name)` every consumer that
+    /// dispatches this persisted reference through kube-rs's dynamic-
+    /// object surface splats by hand pre-lift. The 4-tuple binds the
+    /// slot order at ONE typed accessor so a copy-paste at any downstream
+    /// consumer cannot swap two adjacent `&str` slots in the fetch call.
+    ///
+    /// Peer projection to
+    /// [`crate::k8s_wire_identity::K8sWireIdentity`] on the static-
+    /// identity axis: [`K8sWireIdentity`] carries a
+    /// `(&'static str, &'static str)` closed-set variant's pair for
+    /// emit-time (RENDER phase) composition; this method carries the
+    /// full `(ns, apiVersion, kind, name)` 4-slot borrow for fetch-time
+    /// (VERIFY / ATTEST-heartbeat) composition where the ref's payload
+    /// comes back off the persisted `ProcessStatus.flux_resources`
+    /// slice with owned `String`s rather than static literals. The two
+    /// primitives partition the fetch axis by whether the caller starts
+    /// from a closed-set variant (emit-time) or a persisted status
+    /// slice (fetch-time).
+    ///
+    /// Pre-lift the 5-slot `ssapply::fetch(client, &r.namespace,
+    /// &r.api_version, &r.kind, &r.name)` splat was hand-authored at
+    /// TWO sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold
+    /// in `tatara-reconciler::phase_machine`:
+    /// * `handle_running` — the VERIFY-phase per-ref readiness probe
+    ///   that populates the updated `FluxResourceRef` slice with
+    ///   `ready` + `message` + `last_check`.
+    /// * `handle_attested` — the ATTEST-heartbeat drift detector that
+    ///   short-circuits on the first non-Ready ref.
+    ///
+    /// Both sites splatted the SAME four `&r.X` field borrows in the
+    /// SAME order into raw `ssapply::fetch`. A copy-paste that swapped
+    /// two adjacent `&str` slots (`&r.api_version` and `&r.kind` are
+    /// both strings that look interchangeable to a mechanical
+    /// substitution) would silently 404 at wire time and diagnose as a
+    /// broken CRD rather than as slot skew at the callsite. Post-lift
+    /// each site names the ref ONCE and unpacks it through this ONE
+    /// projection; the slot order binds structurally at the tuple
+    /// return so a caller cannot desync one axis.
+    ///
+    /// A future addition (a case-fold normalization on the group, a
+    /// virtual-cluster prefix rewrite for multi-tenancy, a
+    /// `generateName` fallback on the name slot, a cluster-cache
+    /// short-circuit inserted between the projection and the fetch
+    /// call) lands at this ONE method and every downstream fetch
+    /// consumer inherits the upgrade mechanically — no per-site edit
+    /// at `handle_running` / `handle_attested` / any future kenshi-
+    /// runner / mirror-audit / drift-probe consumer that grows a third
+    /// consumer.
+    ///
+    /// Return-order pin lives at
+    /// [`tests::flux_resource_ref_fetch_coords_binds_slots_by_position`]
+    /// so a regression that swapped `namespace` and `api_version`
+    /// (both `String`, same type) inside the tuple constructor fails-
+    /// loudly here rather than as a silent wire-time 404 at every
+    /// downstream fetch consumer.
+    ///
+    /// Theory grounding: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the 4-tuple slot order binds at ONE typed
+    /// projection so a regression across the two fields of the same
+    /// `String` type fails at the projection's positional pin rather
+    /// than at every downstream fetch consumer). THEORY.md §VI.1
+    /// (generation over composition — the 5-slot splat recurred at
+    /// two hand-authored sites past the ≥ 2 duplication trigger, and
+    /// is lifted to ONE typed borrow-projection here).
+    pub fn fetch_coords(&self) -> (&str, &str, &str, &str) {
+        (&self.namespace, &self.api_version, &self.kind, &self.name)
+    }
+}
+
 /// Identifying coordinates of a rendered K8s resource — the
 /// `(apiVersion, kind, metadata.name, metadata.namespace)` 4-tuple
 /// every consumer that walks a rendered `serde_json::Value` resource
@@ -366,6 +437,110 @@ mod tests {
         };
         assert_eq!(c.namespace_or_default(), Process::DEFAULT_NAMESPACE);
         assert_eq!(c.namespace_or_default(), "default");
+    }
+
+    // ─── FluxResourceRef::fetch_coords substrate pins ─────────────
+    //
+    // The 4-slot `(&namespace, &api_version, &kind, &name)` borrow
+    // projection lifts the pre-existing 5-slot `ssapply::fetch(client,
+    // &r.namespace, &r.api_version, &r.kind, &r.name)` splat that
+    // recurred at TWO hand-authored sites in
+    // `tatara-reconciler::phase_machine` (`handle_running`,
+    // `handle_attested`) past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // trigger. These pins bind the slot order at fail-before-pass-
+    // after granularity so a regression that swapped `namespace` and
+    // `api_version` (both `String`, mechanically interchangeable to
+    // a bad refactor) surfaces HERE rather than as a silent wire-time
+    // 404 at every downstream Flux fetch consumer.
+
+    fn sample_flux_ref() -> FluxResourceRef {
+        // Slot values are deliberately distinct so a swap between any
+        // two adjacent tuple positions surfaces as an equality
+        // failure at the assertion site — a slot-inversion regression
+        // cannot masquerade as identity by accident.
+        FluxResourceRef {
+            api_version: "kustomize.toolkit.fluxcd.io/v1".to_string(),
+            kind: "Kustomization".to_string(),
+            name: "observability-stack".to_string(),
+            namespace: "flux-system".to_string(),
+            ready: true,
+            message: None,
+            last_check: None,
+        }
+    }
+
+    #[test]
+    fn flux_resource_ref_fetch_coords_binds_slots_by_position() {
+        // Positional pin: the 4-tuple return binds
+        // `(namespace, api_version, kind, name)` in THAT order,
+        // matching the raw `ssapply::fetch(client, ns, av, kind,
+        // name)` positional signature every pre-lift callsite splatted
+        // into. A regression that swapped ANY pair of adjacent slots
+        // (all four axes are `String` and mechanically
+        // indistinguishable at the type level) would surface here
+        // rather than as an operator-visible wire-form 404 at every
+        // downstream fetch consumer.
+        let r = sample_flux_ref();
+        let (ns, av, kind, name) = r.fetch_coords();
+        assert_eq!(ns, "flux-system", "position 0 must be namespace");
+        assert_eq!(
+            av, "kustomize.toolkit.fluxcd.io/v1",
+            "position 1 must be api_version"
+        );
+        assert_eq!(kind, "Kustomization", "position 2 must be kind");
+        assert_eq!(name, "observability-stack", "position 3 must be name");
+    }
+
+    #[test]
+    fn flux_resource_ref_fetch_coords_returns_borrows_of_owned_slots() {
+        // Borrow-discipline pin: the 4-tuple returns `&str` borrows
+        // of the enclosing `FluxResourceRef`'s owned `String` slots —
+        // NOT a fresh allocation or a clone. A regression that
+        // switched the projection to owned strings (via `.clone()` or
+        // `format!`) would defeat the zero-copy contract and would
+        // surface here via pointer-identity comparison.
+        let r = sample_flux_ref();
+        let (ns, av, kind, name) = r.fetch_coords();
+        assert!(std::ptr::eq(ns.as_ptr(), r.namespace.as_ptr()));
+        assert!(std::ptr::eq(av.as_ptr(), r.api_version.as_ptr()));
+        assert!(std::ptr::eq(kind.as_ptr(), r.kind.as_ptr()));
+        assert!(std::ptr::eq(name.as_ptr(), r.name.as_ptr()));
+    }
+
+    #[test]
+    fn flux_resource_ref_fetch_coords_is_a_pure_borrow_projection() {
+        // Purity pin: calling the projection twice on the same ref
+        // returns byte-identical slices (same pointer, same length).
+        // A regression that introduced state — a lazy-cached slot
+        // computed on first call, a normalization step that ran once
+        // and cached — would surface here rather than as silent drift
+        // between the VERIFY-phase and ATTEST-heartbeat consumers on
+        // the SAME ref within one reconcile pass.
+        let r = sample_flux_ref();
+        let a = r.fetch_coords();
+        let b = r.fetch_coords();
+        assert!(std::ptr::eq(a.0.as_ptr(), b.0.as_ptr()));
+        assert!(std::ptr::eq(a.1.as_ptr(), b.1.as_ptr()));
+        assert!(std::ptr::eq(a.2.as_ptr(), b.2.as_ptr()));
+        assert!(std::ptr::eq(a.3.as_ptr(), b.3.as_ptr()));
+    }
+
+    #[test]
+    fn flux_resource_ref_fetch_coords_ignores_status_slots() {
+        // Coverage pin: the projection exposes ONLY the four API-path
+        // slots the fetch call requires; the ref's status slots
+        // (`ready`, `message`, `last_check`) are deliberately absent
+        // from the tuple. The fetch signature admits four `&str`
+        // slots, and the projection carries EXACTLY those four — no
+        // silent widening that would surface as an arity mismatch at
+        // every downstream `fetch(...)` call.
+        let r = sample_flux_ref();
+        let coords = r.fetch_coords();
+        assert_eq!(
+            std::mem::size_of_val(&coords),
+            std::mem::size_of::<(&str, &str, &str, &str)>(),
+            "the 4-tuple width must match the raw fetch signature's four `&str` slots"
+        );
     }
 
     #[test]

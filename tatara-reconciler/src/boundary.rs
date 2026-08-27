@@ -56,6 +56,204 @@ impl Satisfaction {
     }
 }
 
+/// Closed set of diagnostic label prefixes used by Job-based boundary
+/// evaluators on this file — the substrate primitive that owns the
+/// per-evaluator diagnostic label every `require_succeeded_job` +
+/// `classify_receipt_verdict` callsite pair threads through.
+///
+/// Pre-lift the label was hand-authored at FOUR production sites past
+/// the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold, split across two
+/// evaluators:
+///
+/// * [`evaluate_job_attested`] — two adjacent sites:
+///     * `require_succeeded_job(..., "Job")` (the fetch-and-classify
+///       call before the optional receipt branch).
+///     * `classify_receipt_verdict("Job", ...)` (the receipt-verdict
+///       projection inside the optional receipt branch).
+/// * [`evaluate_closed_loop_auth`] — two adjacent sites:
+///     * `require_succeeded_job(..., "closed-loop probe Job")`.
+///     * `classify_receipt_verdict("closed-loop probe Job", ...)`.
+///
+/// Each evaluator threads the SAME label through its two adjacent
+/// call sites — a rename that reached the `require_succeeded_job` site
+/// but not the `classify_receipt_verdict` site (or vice versa) would
+/// silently bifurcate the diagnostic prefix operators grep for across
+/// the Job's missing/failed/running vs receipt/malformed axes without
+/// tripping any test. Post-lift both axes bind at ONE per-variant
+/// owner, and rustc enforces every consumer reads the label from the
+/// SAME variant.
+///
+/// Enumerable via [`Self::ALL`] so the sibling label-sweep tests
+/// (`classify_job_status_tests::label_prefixes_all_three_unsatisfied_projections_across_shipped_labels`
+/// and
+/// `classify_receipt_verdict_tests::label_prefixes_both_unsatisfied_projections_across_shipped_labels`)
+/// walk every variant without a hand-maintained `["Job", "closed-loop
+/// probe Job"]` sweep on the caller side — a future third variant
+/// added here extends both sweeps mechanically through the same
+/// `ALL` binding, matching the peer sweep-enumerable seed on
+/// [`FluxResource::ALL`].
+///
+/// Extension: kenshi-runner's P3 lift (see repo `CLAUDE.md`, "P3 —
+/// kenshi-runner library lift") will land its per-suite Job under a
+/// dedicated variant here, and the same three primitives
+/// ([`require_succeeded_job`], [`classify_job_status`], and
+/// [`classify_receipt_verdict`]) will pick up the new label
+/// mechanically through the SAME closed-set arm. Every future Job-
+/// based postcondition evaluator (per-membro contract receipts, any
+/// Job whose completion produces a receipt) lands as ONE variant +
+/// ONE `as_str` arm + ONE `ALL` entry, all three exhaustively enforced
+/// by rustc's match coverage.
+///
+/// Sibling to the [`tatara_process::flux_resource::FluxResource`]
+/// closed set on the K8s `(apiVersion, kind)` wire-form axis — both
+/// project a closed set of variant → canonical string identity slots
+/// through a `const fn` per-axis method dispatch. Where `FluxResource`
+/// owns the wire-form identity of K8s resources tatara emits or
+/// consumes, `JobEvaluatorLabel` owns the diagnostic-prefix identity
+/// of the Job-based sub-axes tatara's boundary evaluator verifies.
+///
+/// Theory grounding: THEORY.md §VI.1 (generation over composition —
+/// the label recurred at four hand-authored production sites past the
+/// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
+/// closed-set owner per variant here). THEORY.md §II.1 invariant 5
+/// (composition preserves proofs — the per-variant mappings live at
+/// ONE typed algebra projection; a regression that drifted the label
+/// at ONE adjacent callsite would fail-loudly at this module's byte-
+/// shape pins rather than as silent operator-visible prefix skew
+/// across the Job-status vs receipt-verdict axes).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum JobEvaluatorLabel {
+    /// The `ConditionKind::JobAttested` axis — a bare `batch/v1` Job
+    /// whose success + optional receipt operators verify. Diagnostic
+    /// prefix: `"Job"`.
+    JobAttested,
+    /// The `ConditionKind::ClosedLoopAuth` axis — the closed-loop
+    /// probe Job that verifies a system's bundled issuer authenticates
+    /// its own bundled consumer + writes a `tatara-receipt/v1`
+    /// envelope. Diagnostic prefix: `"closed-loop probe Job"`.
+    ClosedLoopProbe,
+}
+
+impl JobEvaluatorLabel {
+    /// The closed set of Job-evaluator label variants this substrate
+    /// binds. Enumerable so the sibling label-sweep tests (and any
+    /// future coherence check) can walk every variant without a hand-
+    /// maintained list on the caller side.
+    ///
+    /// `#[allow(dead_code)]` gates the not-yet-referenced production
+    /// use: today `ALL` is consumed only by the sibling `#[cfg(test)]`
+    /// sweeps, but a future production coherence check (per the P3
+    /// kenshi-runner lift's per-suite Job registration path, or a
+    /// registry-time sweep across every workspace-shipped label) will
+    /// bind through the same `ALL` iterator. Peer to the sibling
+    /// substrate primitive [`FluxResource::ALL`] on the K8s wire-form
+    /// axis in `tatara-process`.
+    #[allow(dead_code)]
+    const ALL: [Self; 2] = [Self::JobAttested, Self::ClosedLoopProbe];
+
+    /// Diagnostic label prefix stamped at the head of every operator-
+    /// facing `Satisfaction::Unsatisfied("<label> {ns}/{name} …")`
+    /// diagnostic on this evaluator's Job-based sub-axes.
+    ///
+    /// * `JobAttested`     → `"Job"`
+    /// * `ClosedLoopProbe` → `"closed-loop probe Job"`
+    ///
+    /// `const fn` so the closed-set arm reduces to a `&'static str`
+    /// slot at every callsite with no runtime overhead. A regression
+    /// that drifted either arm's byte shape would silently split the
+    /// diagnostic prefix operators grep for at the JobAttested vs
+    /// ClosedLoopAuth evaluator — post-lift both arms bind here and
+    /// the sibling per-variant tests below pin every arm's byte shape.
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::JobAttested => "Job",
+            Self::ClosedLoopProbe => "closed-loop probe Job",
+        }
+    }
+}
+
+#[cfg(test)]
+mod job_evaluator_label_tests {
+    use super::*;
+
+    #[test]
+    fn all_enumerates_every_variant_exactly_once() {
+        // A future 3rd variant added without an `ALL` entry (or a
+        // duplicate entry that skewed the sweep) surfaces here.
+        assert_eq!(JobEvaluatorLabel::ALL.len(), 2);
+        let mut seen = std::collections::HashSet::new();
+        for v in JobEvaluatorLabel::ALL {
+            assert!(seen.insert(v), "duplicate variant in ALL: {v:?}");
+        }
+    }
+
+    #[test]
+    fn job_attested_label_is_bare_job() {
+        // Byte-identity pin: the exact prefix operators grep for
+        // across the ConditionKind::JobAttested arm's Missing / Failed
+        // / Running / receipt-Missing / receipt-Malformed diagnostics.
+        // A drift here silently splits dashboards keyed on the "Job "
+        // prefix — before the lift the primitives could be renamed on
+        // one adjacent callsite (e.g. `require_succeeded_job(..., "Job")`)
+        // and not the other (e.g. `classify_receipt_verdict("Job", ...)`)
+        // in the same evaluator body without a single test failing.
+        assert_eq!(JobEvaluatorLabel::JobAttested.as_str(), "Job");
+    }
+
+    #[test]
+    fn closed_loop_probe_label_is_closed_loop_probe_job() {
+        // Byte-identity pin: the exact prefix stamped on the
+        // ConditionKind::ClosedLoopAuth arm's diagnostics — sibling of
+        // the pin above.
+        assert_eq!(
+            JobEvaluatorLabel::ClosedLoopProbe.as_str(),
+            "closed-loop probe Job"
+        );
+    }
+
+    #[test]
+    fn every_variants_as_str_is_distinct_across_the_closed_set() {
+        // Cross-variant coherence pin: no two variants may share a
+        // diagnostic prefix. A future extension that added a variant
+        // duplicating an existing label (e.g. a `KenshiSuite` variant
+        // that reused the `"Job"` prefix in a copy-paste) would surface
+        // here rather than as silent operator-visible cross-axis
+        // ambiguity in dashboards keyed on the prefix.
+        let mut labels = std::collections::HashSet::new();
+        for v in JobEvaluatorLabel::ALL {
+            assert!(
+                labels.insert(v.as_str()),
+                "duplicate as_str at {v:?}: {}",
+                v.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn as_str_is_const_fn_reachable() {
+        // Compile-time reachability pin: every variant's projection is
+        // `const fn`, so a caller can bind it into a `const` slot. A
+        // regression that dropped the `const` qualifier would fail-
+        // loudly here rather than as a wrong-slot runtime dispatch at
+        // every callsite.
+        const JOB: &str = JobEvaluatorLabel::JobAttested.as_str();
+        const CLOSED_LOOP: &str = JobEvaluatorLabel::ClosedLoopProbe.as_str();
+        assert_eq!(JOB, "Job");
+        assert_eq!(CLOSED_LOOP, "closed-loop probe Job");
+    }
+
+    #[test]
+    fn as_str_is_a_pure_function_of_the_variant() {
+        // Purity pin: calling `as_str` repeatedly on the same variant
+        // returns byte-identical `&'static str`s. Guards against an
+        // implementation that lazily materialized an interned key per-
+        // call and hashed against runtime state.
+        for v in JobEvaluatorLabel::ALL {
+            assert_eq!(v.as_str(), v.as_str());
+        }
+    }
+}
+
 /// Deserialize the axis-typed params carrier `T` from a boundary
 /// condition's `params: serde_json::Value`, projecting a serde-level
 /// rejection into the operator-facing
@@ -256,7 +454,14 @@ async fn evaluate_job_attested(
         Err(unk) => return Ok(unk),
     };
     let ns = ssapply::resolve_target_namespace(parsed.namespace.as_deref(), default_ns);
-    if let Err(unsat) = require_succeeded_job(client.clone(), ns, &parsed.name, "Job").await? {
+    if let Err(unsat) = require_succeeded_job(
+        client.clone(),
+        ns,
+        &parsed.name,
+        JobEvaluatorLabel::JobAttested.as_str(),
+    )
+    .await?
+    {
         return Ok(unsat);
     }
 
@@ -269,7 +474,7 @@ async fn evaluate_job_attested(
         .unwrap_or_else(|| tatara_process::receipt::default_receipt_config_map_name(&parsed.name));
     let verdict = verify_receipt_cm(client, ns, &cm_name, None).await?;
     Ok(classify_receipt_verdict(
-        "Job",
+        JobEvaluatorLabel::JobAttested.as_str(),
         ns,
         &parsed.name,
         &cm_name,
@@ -330,8 +535,13 @@ async fn evaluate_closed_loop_auth(
         .unwrap_or_else(|| tatara_process::receipt::default_receipt_config_map_name(&job_name));
 
     // 1. The probe Job must have succeeded.
-    if let Err(unsat) =
-        require_succeeded_job(client.clone(), ns, &job_name, "closed-loop probe Job").await?
+    if let Err(unsat) = require_succeeded_job(
+        client.clone(),
+        ns,
+        &job_name,
+        JobEvaluatorLabel::ClosedLoopProbe.as_str(),
+    )
+    .await?
     {
         return Ok(unsat);
     }
@@ -339,7 +549,7 @@ async fn evaluate_closed_loop_auth(
     // 2. The receipt ConfigMap must exist and parse.
     let verdict = verify_receipt_cm(client, ns, &cm_name, parsed.expected_root.as_deref()).await?;
     Ok(classify_receipt_verdict(
-        "closed-loop probe Job",
+        JobEvaluatorLabel::ClosedLoopProbe.as_str(),
         ns,
         &job_name,
         &cm_name,
@@ -1176,7 +1386,7 @@ mod parse_condition_params_tests {
 /// the shape gate.
 #[cfg(test)]
 mod classify_job_status_tests {
-    use super::{classify_job_status, JobLookup, JobStatusView, Satisfaction};
+    use super::{classify_job_status, JobEvaluatorLabel, JobLookup, JobStatusView, Satisfaction};
 
     fn view(succeeded: i64, failed: i64, active: i64) -> JobStatusView {
         JobStatusView {
@@ -1288,7 +1498,13 @@ mod classify_job_status_tests {
 
     #[test]
     fn label_prefixes_all_three_unsatisfied_projections_across_shipped_labels() {
-        for label in ["Job", "closed-loop probe Job"] {
+        // Sweep every variant of the substrate closed set
+        // [`JobEvaluatorLabel::ALL`] so a future third variant added
+        // there (per the P3 kenshi-runner lift or any future Job-based
+        // postcondition evaluator) automatically extends this pin
+        // without a hand-edit here.
+        for variant in JobEvaluatorLabel::ALL {
+            let label = variant.as_str();
             // Missing
             let err = classify_job_status(label, "ns", "job", JobLookup::Missing)
                 .expect_err("Missing must Err");
@@ -1373,7 +1589,7 @@ mod classify_job_status_tests {
 /// or the Job-status gate.
 #[cfg(test)]
 mod classify_receipt_verdict_tests {
-    use super::{classify_receipt_verdict, ReceiptVerdict, Satisfaction};
+    use super::{classify_receipt_verdict, JobEvaluatorLabel, ReceiptVerdict, Satisfaction};
 
     // ── Contract axis 1: Ok verdict projects to Satisfied ────────────
     //
@@ -1472,7 +1688,13 @@ mod classify_receipt_verdict_tests {
 
     #[test]
     fn label_prefixes_both_unsatisfied_projections_across_shipped_labels() {
-        for label in ["Job", "closed-loop probe Job"] {
+        // Mirrors the sibling sweep on [`classify_job_status_tests`]:
+        // iterate every variant of the substrate closed set
+        // [`JobEvaluatorLabel::ALL`] so a future third variant added
+        // there extends both pins mechanically through the same
+        // `ALL` binding.
+        for variant in JobEvaluatorLabel::ALL {
+            let label = variant.as_str();
             let result = classify_receipt_verdict(
                 label,
                 "ns",

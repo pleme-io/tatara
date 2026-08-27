@@ -699,15 +699,21 @@ pub async fn handle_releasing(p: &Process, ctx: &Context) -> Result<Action> {
 /// `Attested` when absent (forward-compat: pre-annotation Processes
 /// in Releasing are treated as Attested-routed).
 fn released_from_annotation(p: &Process) -> ProcessPhase {
-    let v = p
-        .metadata
-        .annotations
-        .as_ref()
-        .and_then(|m| m.get(tatara_process::annotations::RELEASED_FROM))
-        .cloned()
-        .unwrap_or_default();
-    match v.as_str() {
-        "Failed" => ProcessPhase::Failed,
+    // Annotation lookup via the substrate primitive — pre-lift this
+    // was a hand-authored 3-line `.metadata.annotations.as_ref()
+    // .and_then(|m| m.get(RELEASED_FROM)).cloned().unwrap_or_default()`
+    // chain, one of THREE workspace-wide restatements past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold (peers at
+    // `signals::ingest` and `tatara-pool-reconciler::controller_pool::
+    // process_belongs_to_pool`). Post-lift the three lookups route
+    // through ONE substrate owner [`Process::annotation`]; this
+    // callsite matches directly on the returned `Option<&str>`
+    // (`Some("Failed")` → `Failed`, everything else including the
+    // pre-lift bare `""` fallback → `Attested`), preserving the
+    // pre-lift dispatch behavior byte-for-byte across both corners
+    // (annotation present with unexpected value, annotation absent).
+    match p.annotation(tatara_process::annotations::RELEASED_FROM) {
+        Some("Failed") => ProcessPhase::Failed,
         _ => ProcessPhase::Attested,
     }
 }

@@ -19,9 +19,7 @@ use crate::ReconcilerError;
 
 use tatara_process::ephemeral::EphemeralSpec;
 use tatara_process::lifetime::{Lifetime, PermanentLifetime};
-use tatara_process::pool::{
-    EphemeralPool, MemberState, PoolMember, PoolPhase, PoolStatus,
-};
+use tatara_process::pool::{EphemeralPool, MemberState, PoolMember, PoolPhase, PoolStatus};
 use tatara_process::prelude::{Process, ProcessSpec};
 
 use crate::context::PoolContext;
@@ -112,8 +110,7 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
             actions = actions.len(),
             "pool desired-count loop"
         );
-        apply_convergence_actions(&pool, &process_api, &ns, &name, &members, actions)
-            .await?;
+        apply_convergence_actions(&pool, &process_api, &ns, &name, &members, actions).await?;
 
         // Update status from the same observations + skip the
         // legacy decision step.
@@ -154,11 +151,7 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
     match decision {
         PoolDecision::NoOp => {}
         PoolDecision::Spawn { count } => {
-            let pool_uid = pool
-                .metadata
-                .uid
-                .clone()
-                .unwrap_or_else(|| name.clone());
+            let pool_uid = pool.metadata.uid.clone().unwrap_or_else(|| name.clone());
             let occupied_names: std::collections::HashSet<_> =
                 members.iter().map(|m| m.process_name.clone()).collect();
             let mut spawned = 0u32;
@@ -386,12 +379,18 @@ async fn apply_convergence_actions(
 }
 
 fn process_belongs_to_pool(p: &Process, pool_name: &str) -> bool {
-    p.metadata
-        .annotations
-        .as_ref()
-        .and_then(|a| a.get(ANNOTATION_POOL))
-        .map(String::as_str)
-        == Some(pool_name)
+    // Annotation lookup via the substrate primitive — pre-lift this
+    // was a hand-authored 3-line `.metadata.annotations.as_ref()
+    // .and_then(|a| a.get(ANNOTATION_POOL)).map(String::as_str)`
+    // chain, one of THREE workspace-wide restatements past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold (peers at
+    // `tatara-reconciler::signals::ingest` and
+    // `tatara-reconciler::phase_machine::released_from_annotation`).
+    // Post-lift the three lookups route through ONE substrate owner
+    // [`tatara_process::prelude::Process::annotation`]; this callsite
+    // composes its `== Some(pool_name)` equality tail at its own site,
+    // preserving the pre-lift membership-gate semantics byte-for-byte.
+    p.annotation(ANNOTATION_POOL) == Some(pool_name)
 }
 
 fn process_to_member_state(p: &Process) -> MemberState {
@@ -436,15 +435,16 @@ fn build_member_process(
 
     // Owner reference so K8s cascade-deletes members on Pool deletion.
     if let (Some(uid), Some(name)) = (pool.metadata.uid.as_ref(), pool.metadata.name.as_ref()) {
-        proc.metadata.owner_references =
-            Some(vec![k8s_openapi::apimachinery::pkg::apis::meta::v1::OwnerReference {
+        proc.metadata.owner_references = Some(vec![
+            k8s_openapi::apimachinery::pkg::apis::meta::v1::OwnerReference {
                 api_version: "tatara.pleme.io/v1alpha1".into(),
                 kind: "EphemeralPool".into(),
                 name: name.clone(),
                 uid: uid.clone(),
                 controller: Some(true),
                 block_owner_deletion: Some(true),
-            }]);
+            },
+        ]);
     }
 
     let _ = POOL_FINALIZER;

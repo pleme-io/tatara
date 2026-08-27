@@ -62,12 +62,19 @@ pub const SIGNAL_ANNOTATION: &str = annotations::SIGNAL;
 /// so a typo in `kubectl annotate` doesn't wedge the reconcile loop forever.
 /// Returns `Ok(Some(signal))` on valid parse, `Ok(None)` otherwise.
 pub async fn ingest(process: &Process, ctx: &Context) -> Result<Option<ProcessSignal>> {
-    let raw = process
-        .metadata
-        .annotations
-        .as_ref()
-        .and_then(|a| a.get(SIGNAL_ANNOTATION))
-        .cloned();
+    // Annotation lookup via the substrate primitive — pre-lift this
+    // was a hand-authored 3-line `.metadata.annotations.as_ref()
+    // .and_then(|a| a.get(SIGNAL_ANNOTATION)).cloned()` chain, one of
+    // THREE workspace-wide restatements past the ★★ PRIME-DIRECTIVE
+    // ≥ 2 duplication threshold (peers at
+    // `phase_machine::released_from_annotation` and
+    // `tatara-pool-reconciler::controller_pool::process_belongs_to_pool`).
+    // Post-lift the three lookups route through ONE substrate owner
+    // [`Process::annotation`]; this callsite reapplies its owned
+    // `.map(str::to_string)` tail at its own site so the downstream
+    // `ProcessSignal::from_str` parse consumes the same owned
+    // `String` it did pre-lift.
+    let raw = process.annotation(SIGNAL_ANNOTATION).map(str::to_string);
     let Some(raw) = raw else {
         return Ok(None);
     };

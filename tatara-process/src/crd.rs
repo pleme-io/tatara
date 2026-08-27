@@ -286,6 +286,84 @@ impl Process {
         Some((self.namespace_or_default(), name))
     }
 
+    /// Borrowed lookup of ONE key in `metadata.annotations`, with
+    /// BOTH the missing-`annotations` corner AND the missing-key
+    /// corner collapsed to `None` — the ONE-liner collapse of the
+    /// paired `self.metadata.annotations.as_ref().and_then(|m|
+    /// m.get(key)).map(String::as_str)` incantation every consumer
+    /// restated by hand pre-lift.
+    ///
+    /// Pre-lift the 3-line `.metadata.annotations.as_ref().and_then
+    /// (|m| m.get(KEY))` chain (in three tail variants — `.cloned()`,
+    /// `.cloned().unwrap_or_default()`, `.map(String::as_str)`) was
+    /// hand-authored at THREE sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold across the workspace:
+    /// * `tatara-reconciler::signals::ingest` — SIGNAL annotation
+    ///   lookup (pre-lift `.cloned()` for owned parsing).
+    /// * `tatara-reconciler::phase_machine::released_from_annotation`
+    ///   — RELEASED_FROM annotation lookup (pre-lift `.cloned()
+    ///   .unwrap_or_default()` for `match v.as_str()`).
+    /// * `tatara-pool-reconciler::controller_pool::process_belongs_to_pool`
+    ///   — POOL annotation lookup (pre-lift `.map(String::as_str)`
+    ///   for `== Some(pool_name)`).
+    ///
+    /// All THREE sites walked the SAME 3-line chain — read the
+    /// annotations map, gate on presence, index by key — differing
+    /// only in the tail that shaped the result. Post-lift each
+    /// caller routes through the ONE substrate primitive here and
+    /// applies its own tail at its own site (`.map(str::to_string)`
+    /// / bare match / `==`).
+    ///
+    /// Return-form axis: `Option<&str>` mirrors the existing borrow-
+    /// first discipline of the peer metadata primitives
+    /// [`Self::namespace_or_default`], [`Self::name_or_placeholder`],
+    /// [`Self::coordinates_or_none`]. The two corners the chain
+    /// swallowed pre-lift (missing `metadata.annotations` map,
+    /// missing key inside the map) BOTH collapse to `None` so
+    /// `.is_some()` / `if let Some(_)` / `Option::map` behave
+    /// identically on a `Process` whose annotations block is `None`
+    /// and on one whose annotations block is populated but omits the
+    /// key — matching what the pre-lift `.and_then(...)` chain
+    /// produced.
+    ///
+    /// A future normalization step (a key-canonicalization pass,
+    /// a case-fold lookup, a per-key alias table for renamed
+    /// annotations across API versions, a per-namespace override
+    /// substrate) lands at ONE substrate method here and all three
+    /// downstream consumers pick up the upgrade mechanically — no
+    /// per-callsite hand-edit at `ingest` / `released_from_annotation`
+    /// / `process_belongs_to_pool`.
+    ///
+    /// Sibling to the peer metadata primitives
+    /// ([`Self::namespace_or_default`], [`Self::name_or_placeholder`],
+    /// [`Self::coordinates_or_defaults`], [`Self::coordinates_or_none`],
+    /// [`Self::owned_coordinates_or_err`]) on the metadata axis;
+    /// this method opens the borrow-form peer on the ANNOTATION
+    /// axis. Future annotation projections (a paired
+    /// `label(&str) -> Option<&str>` on `metadata.labels`, a
+    /// `has_annotation(&str) -> bool` boolean gate for presence-
+    /// only consumers) land as peer methods on this same axis.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition
+    /// — the 3-line annotation-lookup chain recurred at three
+    /// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger, and is lifted to ONE owner here).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// the pins bind the missing-`annotations` corner + the
+    /// missing-key corner + the borrow-form `&str` lifetime + the
+    /// byte-identical parity with the pre-lift 3-line chain, so a
+    /// regression that drifted any surface at
+    /// `tests::annotation_*` rather than as silent operator-facing
+    /// skew between the SIGNAL / RELEASED_FROM / POOL annotation
+    /// readers).
+    pub fn annotation(&self, key: &str) -> Option<&str> {
+        self.metadata
+            .annotations
+            .as_ref()
+            .and_then(|m| m.get(key))
+            .map(String::as_str)
+    }
+
     /// Borrowed slice of the FluxCD resources this Process's status
     /// currently persists at `status.flux_resources`, with the
     /// missing-`status` corner collapsed to an empty slice — the ONE-
@@ -1232,6 +1310,200 @@ mod tests {
         let (ns, name) = p.coordinates_or_defaults();
         assert_eq!(ns, "infra"); // NOT "app"
         assert_eq!(name, "app"); // NOT "infra"
+    }
+
+    // ─── Process::annotation substrate pins ────────────────────────────
+    //
+    // Pins the borrow-form annotation-lookup primitive that owns the
+    // 3-line `.metadata.annotations.as_ref().and_then(|m| m.get(KEY))`
+    // chain three hand-authored sites restated by hand pre-lift:
+    // `tatara-reconciler::signals::ingest` (SIGNAL),
+    // `tatara-reconciler::phase_machine::released_from_annotation`
+    // (RELEASED_FROM), and
+    // `tatara-pool-reconciler::controller_pool::process_belongs_to_pool`
+    // (POOL). Fail-before-pass-after granularity: a regression that
+    // widened the missing-`annotations` corner (returning `Some("")`
+    // instead of `None`), promoted a missing key to an error, dropped
+    // the borrow-form return, or changed the two swallowed corners'
+    // shared collapse to `None` surfaces here rather than as silent
+    // drift at the three consumer sites.
+    fn process_with_annotation(key: &str, value: &str) -> Process {
+        let mut p = Process::new("some-proc", empty_spec());
+        let mut anns = std::collections::BTreeMap::new();
+        anns.insert(key.to_string(), value.to_string());
+        p.metadata.annotations = Some(anns);
+        p
+    }
+
+    #[test]
+    fn annotation_returns_none_when_metadata_annotations_is_none() {
+        // Missing-`annotations` corner: a Process with no annotations
+        // block at all returns `None` for every key. Peer to
+        // `observed_flux_resources_returns_empty_slice_when_status_is_none`
+        // on the status-projection axis; both primitives collapse the
+        // outer `Option` corner rather than requiring each consumer
+        // to spell the guard by hand.
+        let mut p = Process::new("scratch", empty_spec());
+        p.metadata.annotations = None;
+        assert!(p.annotation("tatara.pleme.io/signal").is_none());
+        assert!(p.annotation("tatara.pleme.io/pool").is_none());
+        assert!(p.annotation("").is_none());
+    }
+
+    #[test]
+    fn annotation_returns_none_when_key_absent_from_populated_map() {
+        // Missing-key corner: annotations block populated with OTHER
+        // keys returns `None` for the queried key. Symmetric with the
+        // missing-`annotations` corner — both corners collapse to the
+        // same `None`, matching the pre-lift `.and_then(...)`
+        // behavior every consumer relied on.
+        let p = process_with_annotation("tatara.pleme.io/other", "value");
+        assert!(p.annotation("tatara.pleme.io/signal").is_none());
+        assert!(p.annotation("").is_none());
+    }
+
+    #[test]
+    fn annotation_returns_borrowed_slice_when_key_present() {
+        // Happy path: annotations block populated + key present →
+        // `Some(&str)` borrowed from the underlying `String` in the
+        // map. A regression that returned an owned `String` (defeating
+        // the primitive's role as a zero-copy projection) would
+        // surface at the lifetime of the returned reference — the
+        // `&str` outlives the borrow of `&p` here.
+        let p = process_with_annotation("tatara.pleme.io/signal", "SIGHUP");
+        assert_eq!(p.annotation("tatara.pleme.io/signal"), Some("SIGHUP"));
+    }
+
+    #[test]
+    fn annotation_returns_borrowed_empty_string_slice_when_value_is_empty() {
+        // Edge corner between the missing-key `None` and the present-
+        // key `Some("")` — a Process whose annotation is EXPLICITLY
+        // set to an empty string returns `Some("")`, NOT `None`. A
+        // regression that normalized the empty-string value to `None`
+        // (a plausible "defensive" simplification) would silently
+        // reshape the corner every callsite pre-lift kept distinct via
+        // `.cloned().unwrap_or_default()` (which collapses BOTH to
+        // `""`) or `.map(String::as_str)` (which keeps them distinct
+        // as `None` vs `Some("")`).
+        let p = process_with_annotation("tatara.pleme.io/signal", "");
+        assert_eq!(p.annotation("tatara.pleme.io/signal"), Some(""));
+    }
+
+    #[test]
+    fn annotation_is_a_pure_projection() {
+        // Purity pin — repeated calls return equal results and the
+        // primitive does not mutate `self`. Peer to
+        // `observed_flux_resources_is_a_pure_projection` on the
+        // status-projection axis.
+        let p = process_with_annotation("tatara.pleme.io/released-from", "Attested");
+        let a = p.annotation("tatara.pleme.io/released-from");
+        let b = p.annotation("tatara.pleme.io/released-from");
+        assert_eq!(a, b);
+        assert_eq!(a, Some("Attested"));
+    }
+
+    #[test]
+    fn annotation_matches_pre_lift_reconciler_chain_shape() {
+        // Byte-identical parity pin between the borrow-form primitive
+        // here and the pre-lift `tatara-reconciler` / `tatara-pool-
+        // reconciler` chain shape — the exact 3-line
+        // `.metadata.annotations.as_ref().and_then(|m| m.get(KEY))
+        // .map(String::as_str)` incantation each pre-lift caller
+        // spelled by hand (three variants of tail collapsed onto ONE
+        // borrow-form primitive here; each caller reapplies its own
+        // tail at its own site). Sweeps every corner (missing
+        // annotations map, missing key, present key with value,
+        // present key with empty value) so a regression that inserted
+        // a normalization at the primitive the pre-lift chain does
+        // NOT apply — or vice versa — surfaces here rather than as
+        // silent drift between the ONE substrate owner and the three
+        // consumer sites.
+        fn pre_lift<'a>(p: &'a Process, key: &str) -> Option<&'a str> {
+            p.metadata
+                .annotations
+                .as_ref()
+                .and_then(|m| m.get(key))
+                .map(String::as_str)
+        }
+        // Missing annotations map.
+        let mut p = Process::new("x", empty_spec());
+        p.metadata.annotations = None;
+        assert_eq!(p.annotation("k"), pre_lift(&p, "k"));
+        // Missing key in populated map.
+        let p = process_with_annotation("other", "v");
+        assert_eq!(p.annotation("k"), pre_lift(&p, "k"));
+        // Present key with non-empty value.
+        let p = process_with_annotation("k", "v");
+        assert_eq!(p.annotation("k"), pre_lift(&p, "k"));
+        // Present key with explicitly-empty value — the corner
+        // `.cloned().unwrap_or_default()` collapses to `""` post-tail
+        // but the primitive-level shape stays `Some("")`.
+        let p = process_with_annotation("k", "");
+        assert_eq!(p.annotation("k"), pre_lift(&p, "k"));
+    }
+
+    #[test]
+    fn annotation_composes_owned_tail_matching_pre_lift_signals_ingest() {
+        // Pins the exact tail shape `tatara-reconciler::signals::
+        // ingest` composed pre-lift: an `Option<String>` for the
+        // downstream `let Some(raw) = raw else { ... }` guard.
+        // Post-lift the callsite composes `.map(str::to_string)` at
+        // its own site; this test pins the composition matches the
+        // pre-lift `.cloned()` tail byte-for-byte on both corners the
+        // consumer's downstream distinguishes (annotation present →
+        // `Some(String)`; absent → `None`).
+        let p = process_with_annotation("tatara.pleme.io/signal", "SIGUSR1");
+        assert_eq!(
+            p.annotation("tatara.pleme.io/signal").map(str::to_string),
+            Some("SIGUSR1".to_string())
+        );
+        let mut q = Process::new("y", empty_spec());
+        q.metadata.annotations = None;
+        assert_eq!(
+            q.annotation("tatara.pleme.io/signal").map(str::to_string),
+            None
+        );
+    }
+
+    #[test]
+    fn annotation_composes_default_tail_matching_pre_lift_released_from() {
+        // Pins the exact tail shape
+        // `tatara-reconciler::phase_machine::released_from_annotation`
+        // composed pre-lift: a bare `String` via `.cloned()
+        // .unwrap_or_default()` for the downstream
+        // `match v.as_str()` dispatch. Post-lift the callsite matches
+        // directly on `Option<&str>` (Some("Failed") vs _); this test
+        // pins that the borrow-form primitive plus the `.unwrap_or("")`
+        // fallback reproduces the pre-lift bare-string shape on both
+        // corners.
+        let p = process_with_annotation("tatara.pleme.io/released-from", "Failed");
+        assert_eq!(
+            p.annotation("tatara.pleme.io/released-from").unwrap_or(""),
+            "Failed"
+        );
+        let mut q = Process::new("y", empty_spec());
+        q.metadata.annotations = None;
+        assert_eq!(
+            q.annotation("tatara.pleme.io/released-from").unwrap_or(""),
+            ""
+        );
+    }
+
+    #[test]
+    fn annotation_composes_borrow_equality_tail_matching_pre_lift_pool() {
+        // Pins the exact tail shape `tatara-pool-reconciler::
+        // controller_pool::process_belongs_to_pool` composed pre-lift:
+        // an `Option<&str>` compared with `== Some(pool_name)` for the
+        // membership gate. Post-lift the callsite composes
+        // `p.annotation(POOL) == Some(pool_name)` verbatim; this test
+        // pins that the borrow-form primitive returns exactly the
+        // shape the equality gate expects.
+        let p = process_with_annotation("tatara.pleme.io/pool", "demo-pool");
+        assert_eq!(
+            p.annotation("tatara.pleme.io/pool") == Some("demo-pool"),
+            true
+        );
+        assert_eq!(p.annotation("tatara.pleme.io/pool") == Some("other"), false);
     }
 
     // ─── Process::observed_flux_resources substrate pins ───────────────

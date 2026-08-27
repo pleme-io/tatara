@@ -661,9 +661,111 @@ pub async fn fetch_by_identity(
     identity: K8sWireIdentity,
     name: &str,
 ) -> Result<Option<DynamicObject>> {
-    let ar = api_resource_of(identity)?;
-    let api: Api<DynamicObject> = Api::namespaced_with(client, namespace, &ar);
-    Ok(api.get_opt(name).await?)
+    // Delegate to the raw two-`&str` [`fetch`] path so the identity-
+    // gated composer AND the raw path share ONE implementation body —
+    // a regression that specialized one path (a stale-cached
+    // `ApiResource`, a normalization step on one side only) is
+    // unrepresentable. Error wrapping rides through
+    // [`fetch_by_identity_error_context`] so the diagnostic wording
+    // sits at ONE substrate helper alongside the peer
+    // [`flux_ref_fetch_error_context`] — pre-lift each of the three
+    // callsites in `tatara-reconciler::boundary` hand-authored the
+    // `.map_err(|e| anyhow!("fetch <Kind-literal> {ns}/{name}: {e}"))?`
+    // wrap verbatim, restating `identity.kind` as a bare `&str`
+    // literal at each site (`"Job"`, `"ConfigMap"`, `"{kind}"`).
+    // Post-lift the label rides through `identity.kind` and the
+    // `<ns>/<name>` half rides through [`qualified_process_ref`]; a
+    // copy-paste that changed the fetched closed-set variant without
+    // also updating the label is unrepresentable because the two
+    // mentions of the variant collapse into ONE at the callsite.
+    fetch(client, namespace, identity.api_version, identity.kind, name)
+        .await
+        .map_err(|e| {
+            anyhow!(
+                "{}: {e}",
+                fetch_by_identity_error_context(identity, namespace, name)
+            )
+        })
+}
+
+/// Standardized diagnostic label prefix for every
+/// [`K8sWireIdentity`]-gated fetch — the pure helper the
+/// [`fetch_by_identity`] composer wraps its raw-fetch error with.
+///
+/// Pre-lift the `.map_err(|e| anyhow!("fetch <kind-literal> {ns}/{name}:
+/// {e}"))?` incantation was hand-authored verbatim at THREE
+/// `tatara-reconciler::boundary` sites past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication threshold, each restating the closed-set variant's
+/// [`K8sWireIdentity::kind`] slot as a bare `&str` literal at the
+/// `anyhow!` site alongside the same variant's `.wire_identity()` at
+/// the `fetch_by_identity` call:
+///
+/// * [`crate::boundary::fetch_job_status`] — `"fetch Job {ns}/{name}"`
+///   alongside [`K8sBuiltinResource::Job.wire_identity()`].
+/// * [`crate::boundary::verify_receipt_cm`] — `"fetch ConfigMap
+///   {ns}/{name}"` alongside
+///   [`K8sBuiltinResource::ConfigMap.wire_identity()`].
+/// * [`crate::boundary::evaluate_flux_ready`] — `"fetch {kind}
+///   {ns}/{name}"` (where `kind = resource.kind()`) alongside
+///   [`FluxResource::X.wire_identity()`].
+///
+/// Every pre-lift site mentioned the variant TWICE (once at the
+/// fetch's `.wire_identity()`, once at the label's `&str` literal),
+/// leaving a silent-drift trap: a copy-paste that changed the fetched
+/// variant without updating the label (or vice versa) would produce
+/// an operator-facing error whose label named a resource the fetch
+/// never touched — a wire-form 404 diagnosed by kubectl-side grep as
+/// a stale sibling. Post-lift the label rides through `identity.kind`
+/// so the label + fetch pair collapse into ONE mention of the
+/// variant.
+///
+/// The `<ns>/<name>` half of the label rides through the already-
+/// opened [`qualified_process_ref`] substrate primitive — sibling to
+/// the seven other consumers ([`crate::render::render_flux`],
+/// [`crate::render::render_aplicacao`] × 2,
+/// [`crate::render::render_export_jobs`], [`inject_annotations`],
+/// [`crate::phase_machine::process_holds_any_claim`],
+/// [`crate::phase_machine::handle_releasing`]) so a future
+/// normalization (case-fold, unicode-safe collation, a
+/// `<cluster>/<ns>/<name>` cross-cluster form) reaches BOTH the
+/// annotation seed shape AND the diagnostic label shape through
+/// ONE owner.
+///
+/// Peer to [`flux_ref_fetch_error_context`] on the diagnostic-wording
+/// axis; the two composers partition the fetch-error wording space
+/// by whether the caller reaches the raw fetch through a closed-set
+/// variant (identity-gated) or a persisted status slice
+/// ([`FluxResourceRef`]-gated). A future rename of either wording
+/// (a switch to `"fetch <apiVersion> <kind> <ns>/<name>"` for
+/// group-tagged observability, a case-fold on the kind slot, a
+/// truncation for long-name refs) lands at ONE substrate function
+/// per axis.
+///
+/// Private to the module (module-scope `fn`): no external consumer
+/// names the diagnostic wording directly — the wording is consumed
+/// EXCLUSIVELY through the [`fetch_by_identity`] composer's error
+/// path, and the pins at
+/// [`tests::fetch_by_identity_error_context_names_kind_and_ns_slash_name`]
+/// bind the "`fetch <kind> <ns>/<name>`" wording invariant so a
+/// regression that drifted the wording surfaces at fail-before-pass-
+/// after granularity rather than as operator-visible log skew across
+/// the three downstream consumers.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+/// proofs — the label's `kind` half + the `<ns>/<name>` half bind
+/// structurally through `identity.kind` + `qualified_process_ref`, so
+/// a regression that reworded either surfaces at the sibling pins
+/// rather than as silent operator-facing log skew at every downstream
+/// fetch consumer). THEORY.md §VI.1 (generation over composition —
+/// the `.map_err(|e| anyhow!(...))?` incantation recurred at three
+/// hand-authored sites past the PRIME-DIRECTIVE ≥ 2 duplication
+/// trigger, and is lifted to ONE composer here).
+fn fetch_by_identity_error_context(identity: K8sWireIdentity, ns: &str, name: &str) -> String {
+    format!(
+        "fetch {} {}",
+        identity.kind,
+        qualified_process_ref(ns, name)
+    )
 }
 
 /// Standardized diagnostic label prefix for every
@@ -2271,6 +2373,161 @@ mod tests {
                 flux_ref_fetch_error_context(&r),
                 format!("fetch {}/{}", r.kind, r.name),
                 "post-lift context must equal pre-lift `format!(\"fetch {{kind}}/{{name}}\")` at every callsite shape"
+            );
+        }
+    }
+
+    // ─── fetch_by_identity_error_context substrate pins ──────────────
+    //
+    // The `.map_err(|e| anyhow!("fetch <kind-literal> {ns}/{name}:
+    // {e}"))?` incantation recurred at THREE hand-authored sites in
+    // `tatara-reconciler::boundary` past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication trigger — `fetch_job_status`, `verify_receipt_cm`,
+    // `evaluate_flux_ready` — each restating the closed-set variant's
+    // `.wire_identity().kind` slot as a bare `&str` literal alongside
+    // the same variant's `.wire_identity()` at the fetch call. Post-
+    // lift the label rides through `identity.kind` inside the shared
+    // helper here, and the `<ns>/<name>` half rides through the
+    // sibling substrate primitive [`qualified_process_ref`]. These
+    // pins bind the wording invariant + the (kind, ns/name) slot
+    // partition at fail-before-pass-after granularity so a regression
+    // that dropped the kind slot, swapped the ns/name axes, or
+    // reworded the prefix surfaces HERE rather than as silent
+    // operator-facing log skew across the three consumers.
+
+    #[test]
+    fn fetch_by_identity_error_context_names_kind_and_ns_slash_name() {
+        // Wording pin: the diagnostic prefix reads exactly
+        // `"fetch <kind> <ns>/<name>"`. A regression that reversed the
+        // two ns/name axes (`"fetch <kind> <name>/<ns>"`), reworded
+        // the prefix (`"fetching ..."`), dropped the space separator
+        // between the kind and the ns/name pair, or dropped the slash
+        // separator between ns and name would surface here rather
+        // than as silent operator-facing log skew at every downstream
+        // identity-gated fetch consumer.
+        let identity = K8sWireIdentity::new("batch/v1", "Job");
+        assert_eq!(
+            fetch_by_identity_error_context(identity, "default", "my-job"),
+            "fetch Job default/my-job"
+        );
+    }
+
+    #[test]
+    fn fetch_by_identity_error_context_rides_through_qualified_process_ref() {
+        // Substrate-composition pin: the `<ns>/<name>` half of the
+        // label is BYTE-IDENTICAL to the sibling substrate primitive
+        // [`qualified_process_ref`]. A future normalization at
+        // `qualified_process_ref` (case-fold, unicode-safe collation,
+        // a `<cluster>/<ns>/<name>` cross-cluster form) reaches this
+        // diagnostic label mechanically — a regression that inlined
+        // the `format!("{ns}/{name}")` shape here (bypassing the
+        // shared owner) would surface at this equality check rather
+        // than as a silent diagnostic vs annotation drift the operator
+        // sees only when grepping across log lines and annotations.
+        let identity = K8sWireIdentity::new("v1", "ConfigMap");
+        let ns = "monitoring";
+        let name = "prom-op-receipt";
+        let composed = fetch_by_identity_error_context(identity, ns, name);
+        let ref_ = qualified_process_ref(ns, name);
+        assert!(
+            composed.ends_with(&ref_),
+            "the `<ns>/<name>` tail of the label ({composed:?}) must equal the substrate \
+             primitive `qualified_process_ref` output ({ref_:?}) byte-identically"
+        );
+        assert_eq!(composed, format!("fetch {} {ref_}", identity.kind));
+    }
+
+    #[test]
+    fn fetch_by_identity_error_context_reads_kind_slot_only_from_identity() {
+        // Slot-coverage pin: the label reads ONLY the `kind` slot of
+        // the identity — a caller varying the `api_version` slot
+        // leaves the label byte-identical. Pins the composer's
+        // contract: the label discriminates identities by `kind` (the
+        // operator-facing dispatch key), not by `api_version` (the
+        // K8s wire-form group/version pair the operator does not
+        // grep for). A regression that surfaced the `api_version`
+        // slot alongside the `kind` (a switch to `"fetch <apiVersion>
+        // <kind> <ns>/<name>"`) would fail this pin and the wording
+        // pin above simultaneously.
+        let base = K8sWireIdentity::new("batch/v1", "Job");
+        let expected = fetch_by_identity_error_context(base, "ns", "n");
+        let av_variant = K8sWireIdentity::new("batch/v9alpha42", "Job");
+        assert_eq!(
+            fetch_by_identity_error_context(av_variant, "ns", "n"),
+            expected,
+            "the `kind` axis gates the label; the `api_version` slot must be transparent"
+        );
+    }
+
+    #[test]
+    fn fetch_by_identity_error_context_swap_between_kind_variants_diverges() {
+        // Slot-inversion pin: a copy-paste that changed the closed-
+        // set variant at the identity but forgot to update the label
+        // was the exact silent-drift trap the three pre-lift hand-
+        // authored callsites were vulnerable to. Post-lift the label
+        // derives from `identity.kind`, so changing the variant
+        // mechanically changes the label — the two-mention trap is
+        // unrepresentable. Pin that swapping between two
+        // K8sBuiltinResource variants at the identity produces a
+        // distinct label byte-identically.
+        use tatara_process::k8s_builtin_resource::K8sBuiltinResource;
+        let job_id = K8sBuiltinResource::Job.wire_identity();
+        let cm_id = K8sBuiltinResource::ConfigMap.wire_identity();
+        let job_label = fetch_by_identity_error_context(job_id, "ns", "n");
+        let cm_label = fetch_by_identity_error_context(cm_id, "ns", "n");
+        assert_ne!(
+            job_label, cm_label,
+            "swapping the closed-set variant must diverge the label"
+        );
+        assert_eq!(job_label, "fetch Job ns/n");
+        assert_eq!(cm_label, "fetch ConfigMap ns/n");
+    }
+
+    #[test]
+    fn fetch_by_identity_error_context_matches_pre_lift_hand_authored_wording() {
+        // Cross-substrate coherence pin: the composed diagnostic
+        // wording must be byte-identical to the pre-lift hand-
+        // authored `format!("fetch {kind} {ns}/{name}")` incantation
+        // at ALL THREE `tatara-reconciler::boundary` callsite shapes:
+        // `fetch_job_status` (`K8sBuiltinResource::Job`),
+        // `verify_receipt_cm` (`K8sBuiltinResource::ConfigMap`),
+        // `evaluate_flux_ready` (`FluxResource::{Kustomization,
+        // HelmRelease, OCIRepository}`). Sweeps a handful of
+        // (identity, ns, name) triples so a regression that special-
+        // cased one closed set (e.g. hard-wired `"Job"` at the label
+        // slot instead of reading `identity.kind`) would surface
+        // here.
+        use tatara_process::flux_resource::FluxResource;
+        use tatara_process::k8s_builtin_resource::K8sBuiltinResource;
+        let cases: &[(K8sWireIdentity, &str, &str)] = &[
+            (K8sBuiltinResource::Job.wire_identity(), "default", "my-job"),
+            (
+                K8sBuiltinResource::ConfigMap.wire_identity(),
+                "monitoring",
+                "receipt-cm",
+            ),
+            (
+                FluxResource::Kustomization.wire_identity(),
+                "flux-system",
+                "observability-stack",
+            ),
+            (
+                FluxResource::HelmRelease.wire_identity(),
+                "monitoring",
+                "prometheus-op",
+            ),
+            (
+                FluxResource::OCIRepository.wire_identity(),
+                "flux-system",
+                "chart-source",
+            ),
+        ];
+        for (identity, ns, name) in cases {
+            assert_eq!(
+                fetch_by_identity_error_context(*identity, ns, name),
+                format!("fetch {} {ns}/{name}", identity.kind),
+                "post-lift wording must equal pre-lift `format!(\"fetch {{kind}} {{ns}}/{{name}}\")` \
+                 at every callsite shape"
             );
         }
     }

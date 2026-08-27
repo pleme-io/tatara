@@ -762,9 +762,19 @@ async fn fetch_job_status(client: Client, ns: &str, name: &str) -> Result<JobLoo
     // the typed [`tatara_process::K8sWireIdentity`] so a copy-paste
     // that swapped the two adjacent arguments (or paired one
     // variant's apiVersion with another's kind) is unrepresentable.
+    // `fetch_by_identity` wraps its own error with the standardized
+    // `"fetch {identity.kind} {ns}/{name}: {e}"` prefix via the
+    // substrate helper `ssapply::fetch_by_identity_error_context` —
+    // pre-lift this callsite hand-authored the `.map_err(|e|
+    // anyhow!("fetch Job {ns}/{name}: {e}"))?` wrap verbatim,
+    // restating `"Job"` as a bare `&str` literal alongside the same
+    // variant's `.wire_identity()` at the fetch call. Post-lift the
+    // label rides through `identity.kind` so the two mentions of
+    // `K8sBuiltinResource::Job` collapse into ONE at this site — a
+    // copy-paste that swapped the fetched variant without also
+    // updating the label is unrepresentable.
     let obj = ssapply::fetch_by_identity(client, ns, K8sBuiltinResource::Job.wire_identity(), name)
-        .await
-        .map_err(|e| anyhow!("fetch Job {ns}/{name}: {e}"))?;
+        .await?;
     let Some(obj) = obj else {
         return Ok(JobLookup::Missing);
     };
@@ -812,14 +822,20 @@ async fn verify_receipt_cm(
     // form pair through the SAME closed-set variant with no per-
     // callsite literal AND with no two-slot skew possible at the
     // callee's signature.
+    // Sibling to the Job fetch above; `fetch_by_identity` now wraps
+    // its own error via the substrate `fetch_by_identity_error_context`
+    // helper. The pre-lift `.map_err(|e| anyhow!("fetch ConfigMap
+    // {ns}/{name}: {e}"))?` wrap that restated `"ConfigMap"` as a
+    // bare literal alongside the same variant's `.wire_identity()`
+    // now collapses onto ONE mention of `K8sBuiltinResource::ConfigMap`
+    // — the two-mention drift trap is unrepresentable.
     let obj = ssapply::fetch_by_identity(
         client,
         ns,
         K8sBuiltinResource::ConfigMap.wire_identity(),
         name,
     )
-    .await
-    .map_err(|e| anyhow!("fetch ConfigMap {ns}/{name}: {e}"))?;
+    .await?;
     let Some(obj) = obj else {
         return Ok(ReceiptVerdict::Missing);
     };
@@ -934,9 +950,17 @@ async fn evaluate_flux_ready(
         Err(unk) => return Ok(unk),
     };
     let ns = ssapply::resolve_target_namespace(parsed.namespace.as_deref(), default_ns);
-    let obj = ssapply::fetch_by_identity(client, ns, resource.wire_identity(), &parsed.name)
-        .await
-        .map_err(|e| anyhow!("fetch {kind} {ns}/{}: {e}", parsed.name))?;
+    // Sibling to the two `K8sBuiltinResource::X`-gated boundary
+    // fetches above; every closed-set-variant-gated fetch in this
+    // module now rides through the ONE substrate composer + wraps
+    // its error through the ONE substrate helper. Pre-lift the
+    // `.map_err(|e| anyhow!("fetch {kind} {ns}/{}: {e}", parsed.name))?`
+    // wrap read the `kind` slot off `resource.kind()`, restating the
+    // same closed-set variant's `.wire_identity()` twice at the call.
+    // Post-lift `identity.kind` inside `fetch_by_identity` drives the
+    // label so `resource.wire_identity()` names the variant ONCE.
+    let obj =
+        ssapply::fetch_by_identity(client, ns, resource.wire_identity(), &parsed.name).await?;
     match obj {
         None => Ok(Satisfaction::Unsatisfied(format!(
             "{kind} {}/{} not found",

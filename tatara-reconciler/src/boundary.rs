@@ -334,6 +334,65 @@ fn parse_condition_params<T: serde::de::DeserializeOwned>(
         .map_err(|e| Satisfaction::Unknown(format!("{kind_label} params invalid: {e}")))
 }
 
+/// Parse a boundary condition's `params: &Value` into an axis-typed
+/// carrier `T` OR short-circuit the enclosing evaluator with
+/// `Ok(Satisfaction::Unknown(...))`.
+///
+/// Pre-lift the FOUR kind-typed evaluators
+/// ([`evaluate_process_phase`] on the `ProcessPhase` axis,
+/// [`evaluate_flux_ready`] on the `Kustomization` / `HelmRelease` axes,
+/// [`evaluate_job_attested`] on the `JobAttested` axis,
+/// [`evaluate_closed_loop_auth`] on the `ClosedLoopAuth` axis) each
+/// hand-authored the same four-line `match parse_condition_params(...)
+/// { Ok(p) => p, Err(unk) => return Ok(unk) }` short-circuit scaffold
+/// verbatim at its own local site, differing only in the axis-typed
+/// carrier's annotation on the `let` binding and the `&str` kind label
+/// threaded through the SAME scaffold. FOUR byte-for-byte identical
+/// short-circuit blocks past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// threshold, sitting on top of the ONE substrate primitive
+/// [`parse_condition_params`].
+///
+/// Post-lift each callsite reads as ONE line naming the axis-typed
+/// carrier once (as the `let` annotation) and the kind label once (as
+/// the `$label` slot). The macro binds the "short-circuit
+/// `Ok(Satisfaction::Unknown)` on Err" discipline at ONE substrate
+/// owner — a future promotion of the short-circuit shape (a
+/// `Satisfaction::Unknown` upgrade to a structured `Unknown { kind,
+/// source }` variant, a caller-supplied span, a `note = "help: …"`
+/// chain, an `expected: <shape>` hint drawn from the carrier's serde
+/// schema) lands here rather than at four hand-authored callsites,
+/// and every future new ConditionKind evaluator picks up the
+/// short-circuit path mechanically. Every current kind-typed
+/// evaluator returns `Result<Satisfaction>` = `anyhow::Result<Satisfaction>`,
+/// so the `return Ok(unk)` binds structurally — a hypothetical
+/// evaluator with a different return type is a compile-time error
+/// here rather than a runtime type-mismatch at the enclosing function.
+///
+/// Sibling to the [`parse_condition_params`] primitive on the
+/// serde-projection axis — the primitive owns the (params → `Result<T,
+/// Satisfaction>`) projection; this macro owns the (`Result<T,
+/// Satisfaction>` → early-return-or-continue) control flow. Together
+/// they partition the "parse-and-short-circuit" scaffold every
+/// kind-typed evaluator on this file dispatches through.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// four-line short-circuit scaffold recurred at four kind-typed
+/// evaluators past the PRIME-DIRECTIVE ≥ 2 duplication trigger, and
+/// is lifted to ONE substrate macro here). THEORY.md §II.1
+/// invariant 5 (composition preserves proofs — post-lift the
+/// "parse-or-short-circuit" scaffold binds structurally through ONE
+/// macro; a regression that drifted the short-circuit posture at ONE
+/// evaluator surfaces at the macro's tests rather than as silent
+/// operator-visible drift across the four evaluators).
+macro_rules! parse_params_or_return_unknown {
+    ($label:expr, $params:expr) => {
+        match $crate::boundary::parse_condition_params($label, $params) {
+            Ok(p) => p,
+            Err(unk) => return Ok(unk),
+        }
+    };
+}
+
 // ── typed params per kind ────────────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -444,10 +503,7 @@ async fn evaluate_job_attested(
     params: &Value,
     _process: &Process,
 ) -> Result<Satisfaction> {
-    let parsed: JobAttestedParams = match parse_condition_params("JobAttested", params) {
-        Ok(p) => p,
-        Err(unk) => return Ok(unk),
-    };
+    let parsed: JobAttestedParams = parse_params_or_return_unknown!("JobAttested", params);
     let ns = ssapply::resolve_target_namespace(parsed.namespace.as_deref(), default_ns);
     if let Err(unsat) = require_succeeded_job(
         client.clone(),
@@ -510,10 +566,7 @@ async fn evaluate_closed_loop_auth(
     params: &Value,
     process: &Process,
 ) -> Result<Satisfaction> {
-    let parsed: ClosedLoopAuthParams = match parse_condition_params("ClosedLoopAuth", params) {
-        Ok(p) => p,
-        Err(unk) => return Ok(unk),
-    };
+    let parsed: ClosedLoopAuthParams = parse_params_or_return_unknown!("ClosedLoopAuth", params);
     let ns = ssapply::resolve_target_namespace(parsed.namespace.as_deref(), default_ns);
     let process_name = process
         .metadata
@@ -890,10 +943,7 @@ async fn evaluate_process_phase(
     default_ns: &str,
     params: &Value,
 ) -> Result<Satisfaction> {
-    let parsed: ProcessPhaseParams = match parse_condition_params("ProcessPhase", params) {
-        Ok(p) => p,
-        Err(unk) => return Ok(unk),
-    };
+    let parsed: ProcessPhaseParams = parse_params_or_return_unknown!("ProcessPhase", params);
     let ns = ssapply::resolve_target_namespace(parsed.namespace.as_deref(), default_ns);
     let api: Api<Process> = Api::namespaced(client, ns);
     let target = match api
@@ -945,10 +995,7 @@ async fn evaluate_flux_ready(
     // FluxResource::X.kind())` pair; post-lift the callee owns both
     // projections through the identity pair.
     let kind = resource.kind();
-    let parsed: NamedResourceParams = match parse_condition_params(kind, params) {
-        Ok(p) => p,
-        Err(unk) => return Ok(unk),
-    };
+    let parsed: NamedResourceParams = parse_params_or_return_unknown!(kind, params);
     let ns = ssapply::resolve_target_namespace(parsed.namespace.as_deref(), default_ns);
     // Sibling to the two `K8sBuiltinResource::X`-gated boundary
     // fetches above; every closed-set-variant-gated fetch in this
@@ -1427,6 +1474,168 @@ mod parse_condition_params_tests {
         assert!(
             tail.contains("string"),
             "serde error tail must name the expected type verbatim; got {tail:?}"
+        );
+    }
+}
+
+/// Substrate-primitive tests for the [`parse_params_or_return_unknown`]
+/// macro — the shared "parse-or-short-circuit" control-flow scaffold
+/// every kind-typed evaluator on this file dispatches through.
+///
+/// The pre-lift shape (the four-line `match parse_condition_params(...)
+/// { Ok(p) => p, Err(unk) => return Ok(unk) }` block) lived at FOUR
+/// callsites across [`evaluate_process_phase`] / [`evaluate_flux_ready`]
+/// / [`evaluate_job_attested`] / [`evaluate_closed_loop_auth`],
+/// differing only in the axis-typed carrier annotation and the
+/// `&str` kind label each site threaded through. Post-lift the
+/// short-circuit shape lives at ONE substrate macro, and this module
+/// pins the four contract axes at fail-before-pass-after granularity:
+///
+/// 1. **Happy path** — Ok(parsed) yields the value, no early return
+///    triggered; the enclosing function reaches its post-macro body.
+/// 2. **Short-circuit path** — Err(Satisfaction) triggers `return
+///    Ok(...)` at the macro site; the enclosing function returns
+///    `Ok(Satisfaction::Unknown)` byte-identical to the pre-lift
+///    diagnostic.
+/// 3. **Return-type inference** — the macro's `return Ok(unk)` binds
+///    structurally against the enclosing function's
+///    `Result<Satisfaction, _>`; a caller with an incompatible
+///    return type is a compile-time error at expansion.
+/// 4. **Cross-substrate parity** — the wording emitted through the
+///    macro is byte-identical to the wording the pre-lift hand-authored
+///    scaffold would have emitted at each of the four production
+///    callsites (routes through the SAME [`parse_condition_params`]
+///    primitive, so this axis is a pin against a hypothetical future
+///    macro rewrite that diverged the two paths).
+///
+/// Sibling of the [`parse_condition_params_tests`] module above (on
+/// the substrate primitive's own axis) — kept as its own module so a
+/// regression at the macro's control-flow scaffold surfaces distinctly
+/// from a regression at the underlying `serde_json::from_value` gate.
+#[cfg(test)]
+mod parse_params_or_return_unknown_tests {
+    use super::{NamedResourceParams, Satisfaction};
+    use anyhow::Result;
+    use serde_json::{json, Value};
+
+    /// Standalone stand-in for the four production evaluators — matches
+    /// their `async fn -> Result<Satisfaction>` shape byte-for-byte so
+    /// the macro's `return Ok(unk)` binds through the same return-type
+    /// slot the four production evaluators expose. Kept `fn` (not
+    /// `async fn`) so the tests don't need a runtime; the macro
+    /// expansion is orthogonal to `.await`.
+    fn stand_in_evaluator(kind_label: &str, params: &Value) -> Result<Satisfaction> {
+        let _parsed: NamedResourceParams = parse_params_or_return_unknown!(kind_label, params);
+        // Post-macro reachable only on the happy path — the macro's
+        // `return Ok(...)` short-circuits before this point on Err.
+        Ok(Satisfaction::Satisfied)
+    }
+
+    #[test]
+    fn macro_yields_typed_carrier_on_ok_and_reaches_post_macro_body() {
+        // Contract axis 1 (happy path) — a well-shaped params object
+        // deserializes into `NamedResourceParams`, the macro binds the
+        // typed carrier at the caller's `let` slot, and control flow
+        // continues past the macro to the enclosing function's
+        // `Ok(Satisfaction::Satisfied)` tail. A regression that made
+        // the macro `return Ok(...)` unconditionally would surface here
+        // as `Satisfaction::Unknown` instead of `Satisfaction::Satisfied`.
+        let params = json!({ "name": "my-kustomization", "namespace": "flux-system" });
+        let result = stand_in_evaluator("Kustomization", &params)
+            .expect("happy-path evaluator must return Ok");
+        assert_eq!(
+            result,
+            Satisfaction::Satisfied,
+            "post-macro body must be reached on Ok(parsed)"
+        );
+    }
+
+    #[test]
+    fn macro_short_circuits_with_ok_unknown_on_err_from_primitive() {
+        // Contract axis 2 (short-circuit path) — an invalid params
+        // object (missing required `name` field) drives the primitive
+        // to `Err(Satisfaction::Unknown(...))`; the macro's `return
+        // Ok(unk)` must land the outer function on Ok(Unknown) rather
+        // than reaching the post-macro tail. A regression that dropped
+        // the `return` keyword would surface here as `Satisfaction::
+        // Satisfied` instead of `Satisfaction::Unknown`. A regression
+        // that changed `Ok(unk)` to `Err(...)` would surface as an
+        // outer `.expect("must return Ok")` panic.
+        let params = json!({});
+        let result = stand_in_evaluator("Kustomization", &params)
+            .expect("short-circuit must land as outer Ok, not outer Err");
+        match result {
+            Satisfaction::Unknown(msg) => assert!(
+                msg.starts_with("Kustomization params invalid: "),
+                "short-circuit must carry the primitive's diagnostic verbatim; got {msg:?}",
+            ),
+            other => panic!("short-circuit must yield Satisfaction::Unknown, got {other:?}",),
+        }
+    }
+
+    #[test]
+    fn macro_short_circuit_wording_is_byte_identical_across_kind_labels() {
+        // Contract axis 4 (cross-substrate parity) — sweep the four
+        // workspace-shipped kind labels the four production evaluators
+        // thread through the macro. Each label rides through as the
+        // diagnostic prefix verbatim, matching the pre-lift hand-
+        // authored scaffold's wording. A regression that hardcoded a
+        // specific label (e.g. by dropping the `$label:expr` slot from
+        // the macro) or reshaped the diagnostic prefix at ONE label
+        // surfaces here per-label.
+        for kind_label in [
+            "ProcessPhase",
+            "Kustomization",
+            "HelmRelease",
+            "JobAttested",
+            "ClosedLoopAuth",
+        ] {
+            let params = json!({});
+            let result = stand_in_evaluator(kind_label, &params)
+                .expect("short-circuit must land as outer Ok");
+            let Satisfaction::Unknown(msg) = result else {
+                panic!("expected Satisfaction::Unknown for {kind_label}");
+            };
+            assert!(
+                msg.starts_with(&format!("{kind_label} params invalid: ")),
+                "kind label {kind_label:?} must ride through the macro verbatim; \
+                 got message {msg:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn macro_short_circuit_matches_hand_authored_pre_lift_bytewise() {
+        // Contract axis 4 (cross-substrate parity, direct pin) — the
+        // exact `match parse_condition_params(...) { Ok(p) => p,
+        // Err(unk) => return Ok(unk) }` shape the four production
+        // callsites hand-authored pre-lift is re-executed here and
+        // compared byte-identically against the macro's short-circuit
+        // result. A regression that drifted the diagnostic wording
+        // (a swapped `params invalid` phrase, a missing kind-label
+        // prefix, a promoted variant on the `Satisfaction` axis) at
+        // the macro would surface as a byte-mismatch here rather than
+        // as silent operator-facing drift across the four evaluators.
+        //
+        // Both blocks route through the SAME [`parse_condition_params`]
+        // primitive, so this pin catches a hypothetical future macro
+        // rewrite that stopped delegating to the primitive.
+        fn hand_authored_scaffold(kind_label: &str, params: &Value) -> Result<Satisfaction> {
+            let _parsed: NamedResourceParams =
+                match super::parse_condition_params(kind_label, params) {
+                    Ok(p) => p,
+                    Err(unk) => return Ok(unk),
+                };
+            Ok(Satisfaction::Satisfied)
+        }
+        let params = json!({});
+        let via_macro =
+            stand_in_evaluator("Kustomization", &params).expect("macro path must return Ok");
+        let via_hand = hand_authored_scaffold("Kustomization", &params)
+            .expect("hand-authored path must return Ok");
+        assert_eq!(
+            via_macro, via_hand,
+            "macro short-circuit must be byte-identical to hand-authored pre-lift scaffold",
         );
     }
 }

@@ -267,11 +267,15 @@ pub async fn handle_running(p: &Process, ctx: &Context) -> Result<Action> {
         return transition_to_exiting(ctx, &ns, &name, &reason.to_string()).await;
     }
 
-    let refs = p
-        .status
-        .as_ref()
-        .map(|s| s.flux_resources.clone())
-        .unwrap_or_default();
+    // The 5-line `.status.as_ref().map(|s| s.flux_resources.clone())
+    // .unwrap_or_default()` chain rides through the typed status-
+    // projection primitive [`Process::observed_flux_resources`] —
+    // sibling to `handle_attested`'s ATTEST-heartbeat consumer of
+    // the same slice. Post-lift both consumers borrow the same
+    // slice through ONE substrate method; the pre-lift `.clone()`
+    // disappears because the enclosing async fn does not mutate
+    // `p` past this line.
+    let refs = p.observed_flux_resources();
 
     if refs.is_empty() {
         // Nothing was rendered — trivially proceed.
@@ -280,7 +284,7 @@ pub async fn handle_running(p: &Process, ctx: &Context) -> Result<Action> {
 
     let mut updated: Vec<FluxResourceRef> = Vec::with_capacity(refs.len());
     let mut all_ready = true;
-    for r in &refs {
+    for r in refs {
         let obj = ssapply::fetch_flux_ref(ctx.kube.clone(), r).await?;
 
         let (ready, message) = match obj.as_ref().map(ssapply::ready_condition) {
@@ -396,14 +400,14 @@ pub async fn handle_attested(p: &Process, ctx: &Context) -> Result<Action> {
         return transition_to_exiting(ctx, &ns, &name, &rendered).await;
     }
 
-    let refs = p
-        .status
-        .as_ref()
-        .map(|s| s.flux_resources.clone())
-        .unwrap_or_default();
+    // Sibling to `handle_running`'s VERIFY-phase consumer; both ride
+    // through the ONE substrate primitive [`Process::observed_flux_resources`]
+    // so a future normalization (a per-ref staleness gate, an
+    // owner-generation filter) reaches both callers mechanically.
+    let refs = p.observed_flux_resources();
 
     let mut drift = false;
-    for r in &refs {
+    for r in refs {
         let obj = ssapply::fetch_flux_ref(ctx.kube.clone(), r).await?;
         if !matches!(
             obj.as_ref().map(ssapply::ready_condition),

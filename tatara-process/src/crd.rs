@@ -285,6 +285,86 @@ impl Process {
         let name = self.metadata.name.as_deref()?;
         Some((self.namespace_or_default(), name))
     }
+
+    /// Borrowed slice of the FluxCD resources this Process's status
+    /// currently persists at `status.flux_resources`, with the
+    /// missing-`status` corner collapsed to an empty slice — the ONE-
+    /// line collapse of the paired `self.status.as_ref().map(|s|
+    /// s.flux_resources.clone()).unwrap_or_default()` incantation
+    /// every VERIFY-phase / ATTEST-heartbeat consumer restated by hand
+    /// pre-lift.
+    ///
+    /// Pre-lift the 5-line `.status.as_ref().map(|s| s.flux_resources
+    /// .clone()).unwrap_or_default()` chain was hand-authored at TWO
+    /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold in
+    /// `tatara-reconciler::phase_machine`:
+    /// * `handle_running` — the VERIFY-phase per-ref readiness probe
+    ///   seed that walks every ref through
+    ///   [`crate::status::FluxResourceRef::fetch_coords`] via
+    ///   `ssapply::fetch_flux_ref` and rebuilds an updated
+    ///   `Vec<FluxResourceRef>` with `ready` + `message` + `last_check`
+    ///   observed at reconcile time.
+    /// * `handle_attested` — the ATTEST-heartbeat drift detector that
+    ///   short-circuits on the first non-Ready ref via
+    ///   `ssapply::fetch_flux_ref` + `ssapply::ready_condition`.
+    ///
+    /// Both sites walked the SAME 5-line chain — clone the vector
+    /// eagerly for the length of the reconcile pass, then iterate it
+    /// by reference — even though neither site ever mutates the vector
+    /// nor keeps it alive past the enclosing async fn. Post-lift both
+    /// callers borrow the slice directly from `self.status`; the two
+    /// pre-lift `.clone()` calls disappear because the slice lives for
+    /// the borrow of `&self`, and both call sites' subsequent
+    /// downstream calls (`ssapply::fetch_flux_ref` / the
+    /// `patch::patch_process_status` write) do not touch the borrowed
+    /// `p: &Process`, so the borrow lifetime holds.
+    ///
+    /// Return-form axis: `&[FluxResourceRef]` mirrors the existing
+    /// borrow-first discipline every pre-lift consumer already
+    /// iterated by reference (`for r in &refs`), and the shape of
+    /// [`crate::status::FluxResourceRef::fetch_coords`]'s per-ref
+    /// borrow projection extends mechanically to the slice-level
+    /// projection here. The missing-`status` corner collapses to the
+    /// empty slice `&[]` so `.is_empty()` / `.len()` / iteration all
+    /// behave identically on a `Process` whose status is `None` and
+    /// on one whose status carries an empty `flux_resources` slot —
+    /// matching what the pre-lift `.unwrap_or_default()` produced
+    /// (an empty `Vec`).
+    ///
+    /// A future normalization step (a per-ref canonicalization pass
+    /// that skips duplicated refs, an owner-filter that returns only
+    /// refs stamped with the CURRENT `metadata.generation`, a
+    /// staleness gate that drops refs whose `last_check` predates a
+    /// reconcile deadline) lands at ONE substrate method here and
+    /// both downstream consumers pick up the upgrade mechanically —
+    /// no per-callsite hand-edit at `handle_running` /
+    /// `handle_attested`.
+    ///
+    /// Sibling to the [`Self::coordinates_or_none`] borrow-first
+    /// primitive on the metadata axis; this method opens the
+    /// analogous borrow-first primitive on the status-projection
+    /// axis. Future status projections (`observed_attestation` on
+    /// the attestation-chain axis, `observed_pid` on the PID axis,
+    /// `observed_children` on the child-fan-out axis) land as peer
+    /// methods on this same axis.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the 5-line status-projection chain recurred at two hand-
+    /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    /// trigger, and is lifted to ONE owner here). THEORY.md §II.1
+    /// invariant 5 (composition preserves proofs — the pins bind the
+    /// missing-`status` corner + the slice-lifetime borrow discipline
+    /// + the byte-identical parity with the pre-lift 5-line chain, so
+    /// a regression that drifted any of the three surfaces at
+    /// `tests::observed_flux_resources_*` rather than as silent
+    /// operator-facing skew between the VERIFY-phase and ATTEST-
+    /// heartbeat consumers).
+    pub fn observed_flux_resources(&self) -> &[FluxResourceRef] {
+        self.status
+            .as_ref()
+            .map(|s| s.flux_resources.as_slice())
+            .unwrap_or(&[])
+    }
 }
 
 /// Process status — every field optional until the reconciler writes it.
@@ -892,5 +972,248 @@ mod tests {
         let (ns, name) = p.coordinates_or_defaults();
         assert_eq!(ns, "infra"); // NOT "app"
         assert_eq!(name, "app"); // NOT "infra"
+    }
+
+    // ─── Process::observed_flux_resources substrate pins ───────────────
+    //
+    // Pins the borrow-form status-projection primitive that owns the
+    // 5-line `.status.as_ref().map(|s| s.flux_resources.clone())
+    // .unwrap_or_default()` chain the two hand-authored
+    // `tatara-reconciler::phase_machine` sites (`handle_running` +
+    // `handle_attested`) restated by hand pre-lift. Fail-before-pass-
+    // after granularity: a regression that widened the missing-`status`
+    // corner, dropped the slot, or drifted the borrow discipline
+    // surfaces here rather than as silent operator-facing skew between
+    // the VERIFY-phase readiness probe and the ATTEST-heartbeat drift
+    // detector.
+
+    fn sample_flux_ref(name: &str) -> FluxResourceRef {
+        // Distinct slot values so a swap between adjacent tuple
+        // positions surfaces as an equality failure at the assertion
+        // site — a slot-inversion regression cannot masquerade as
+        // identity by accident. Peer to the sibling
+        // `tatara_process::status::tests::sample_flux_ref` discipline
+        // on the fetch-coords axis.
+        FluxResourceRef {
+            api_version: "kustomize.toolkit.fluxcd.io/v1".to_string(),
+            kind: "Kustomization".to_string(),
+            name: name.to_string(),
+            namespace: "flux-system".to_string(),
+            ready: false,
+            message: None,
+            last_check: None,
+        }
+    }
+
+    fn process_with_flux_resources(refs: Vec<FluxResourceRef>) -> Process {
+        let mut p = Process::new("api-gateway", empty_spec());
+        p.metadata.namespace = Some("prod".into());
+        let mut status = ProcessStatus::default();
+        status.flux_resources = refs;
+        p.status = Some(status);
+        p
+    }
+
+    #[test]
+    fn observed_flux_resources_returns_empty_slice_when_status_is_none() {
+        // Missing-`status` corner pin: the primitive collapses the
+        // no-status case to `&[]` so downstream `.is_empty()` /
+        // `.len()` / iteration behave identically on a `Process`
+        // whose status field is `None` and on one whose status
+        // carries an empty `flux_resources` slot. Matches the
+        // pre-lift `.unwrap_or_default()`'s empty-`Vec` corner
+        // byte-identically at every reconciler consumer's downstream
+        // shape.
+        let mut p = Process::new("api", empty_spec());
+        p.status = None;
+        assert!(p.observed_flux_resources().is_empty());
+        assert_eq!(p.observed_flux_resources().len(), 0);
+    }
+
+    #[test]
+    fn observed_flux_resources_returns_empty_slice_when_flux_resources_is_empty() {
+        // Zero-refs-under-populated-status corner pin: the primitive
+        // returns an empty slice, matching the missing-`status`
+        // corner byte-identically. A regression that treated the two
+        // corners differently (a `None`-vs-empty signal that
+        // downstream consumers could grep on) would silently promote
+        // an internal representation detail (whether the reconciler
+        // has ever written a status subresource) into observable
+        // behavior.
+        let p = process_with_flux_resources(vec![]);
+        assert!(p.observed_flux_resources().is_empty());
+        assert_eq!(p.observed_flux_resources().len(), 0);
+    }
+
+    #[test]
+    fn observed_flux_resources_returns_slice_of_persisted_vec() {
+        // Happy-path pin: with a populated `status.flux_resources`
+        // slot, the primitive returns a borrowed slice whose length
+        // and per-element identity match the persisted vector. A
+        // regression that filtered / reshaped / deduplicated the
+        // slice would surface here rather than as silent skew at the
+        // downstream fetch consumers.
+        let refs = vec![
+            sample_flux_ref("observability-stack"),
+            sample_flux_ref("gateway"),
+        ];
+        let p = process_with_flux_resources(refs.clone());
+        let observed = p.observed_flux_resources();
+        assert_eq!(observed.len(), 2);
+        assert_eq!(observed[0].name, "observability-stack");
+        assert_eq!(observed[1].name, "gateway");
+    }
+
+    #[test]
+    fn observed_flux_resources_is_a_zero_copy_borrow_projection() {
+        // Borrow-discipline pin: the returned slice borrows the
+        // persisted `Vec<FluxResourceRef>` in place — NOT a fresh
+        // allocation or a clone. A regression that switched the
+        // projection to owned refs (via `.clone()` or `.to_vec()`)
+        // would defeat the zero-copy contract the lift's primary
+        // strict-widening delivers (the pre-lift 5-line chain
+        // eagerly cloned the whole vector per reconcile pass; the
+        // post-lift primitive borrows). Peer to the sibling
+        // `flux_resource_ref_fetch_coords_returns_borrows_of_owned_slots`
+        // pin on the per-ref borrow-projection axis.
+        let refs = vec![sample_flux_ref("observability-stack")];
+        let p = process_with_flux_resources(refs);
+        let observed = p.observed_flux_resources();
+        let persisted = &p.status.as_ref().unwrap().flux_resources;
+        assert!(std::ptr::eq(observed.as_ptr(), persisted.as_ptr()));
+    }
+
+    #[test]
+    fn observed_flux_resources_is_a_pure_projection() {
+        // Purity pin: calling the projection twice on the same
+        // `Process` returns byte-identical slices (same pointer,
+        // same length). A regression that introduced state — a
+        // lazy-cached slice materialized on first call, a
+        // normalization step that ran once and cached — would
+        // surface here rather than as silent drift between the
+        // VERIFY-phase and ATTEST-heartbeat consumers on the SAME
+        // `Process` within one reconcile pass.
+        let refs = vec![sample_flux_ref("observability-stack")];
+        let p = process_with_flux_resources(refs);
+        let a = p.observed_flux_resources();
+        let b = p.observed_flux_resources();
+        assert!(std::ptr::eq(a.as_ptr(), b.as_ptr()));
+        assert_eq!(a.len(), b.len());
+    }
+
+    #[test]
+    fn observed_flux_resources_matches_pre_lift_reconciler_chain_shape() {
+        // Byte-identical parity pin between the borrow-form primitive
+        // here and the pre-lift `tatara-reconciler::phase_machine`
+        // 5-line chain shape. Sweeps every corner every callsite
+        // plausibly encounters (missing status, empty flux_resources,
+        // populated flux_resources with one ref, populated with
+        // multiple refs). A regression that inserted a normalization
+        // step at the primitive the pre-lift chain does NOT apply —
+        // or vice versa — surfaces here rather than as silent drift
+        // between the pre-lift consumer sites and the ONE substrate
+        // owner they now route through. Peer to
+        // `coordinates_or_none_matches_pre_lift_reconciler_helper_shape`
+        // on the metadata axis's borrow-form primitive.
+        // `FluxResourceRef` does not derive `PartialEq` — the parity
+        // check walks the per-ref fetch-coords tuple (the same 4-slot
+        // borrow projection every downstream fetch consumer routes
+        // through) so a regression that reshaped ANY slot at ANY
+        // index surfaces here through the sibling
+        // `FluxResourceRef::fetch_coords` typed projection.
+        fn pre_lift(p: &Process) -> Vec<FluxResourceRef> {
+            p.status
+                .as_ref()
+                .map(|s| s.flux_resources.clone())
+                .unwrap_or_default()
+        }
+        fn coord_shape(refs: &[FluxResourceRef]) -> Vec<(String, String, String, String)> {
+            refs.iter()
+                .map(|r| {
+                    let (ns, av, kind, name) = r.fetch_coords();
+                    (
+                        ns.to_string(),
+                        av.to_string(),
+                        kind.to_string(),
+                        name.to_string(),
+                    )
+                })
+                .collect()
+        }
+        // Missing status.
+        let mut p = Process::new("api", empty_spec());
+        p.status = None;
+        assert_eq!(
+            coord_shape(p.observed_flux_resources()),
+            coord_shape(&pre_lift(&p))
+        );
+        // Populated status, empty slot.
+        let p = process_with_flux_resources(vec![]);
+        assert_eq!(
+            coord_shape(p.observed_flux_resources()),
+            coord_shape(&pre_lift(&p))
+        );
+        // Populated status, one ref.
+        let p = process_with_flux_resources(vec![sample_flux_ref("obs")]);
+        assert_eq!(
+            coord_shape(p.observed_flux_resources()),
+            coord_shape(&pre_lift(&p))
+        );
+        // Populated status, multiple refs.
+        let p = process_with_flux_resources(vec![
+            sample_flux_ref("obs"),
+            sample_flux_ref("gw"),
+            sample_flux_ref("api"),
+        ]);
+        assert_eq!(
+            coord_shape(p.observed_flux_resources()),
+            coord_shape(&pre_lift(&p))
+        );
+    }
+
+    #[test]
+    fn observed_flux_resources_missing_status_and_empty_slot_collapse_to_the_same_slice_shape() {
+        // Cross-corner coherence pin: the missing-`status` corner and
+        // the populated-empty-slot corner return slices whose
+        // `.is_empty()` / `.len()` observations are IDENTICAL. A
+        // regression that promoted the missing-`status` corner to
+        // returning `None` (via a signature change) — or that widened
+        // the empty-slot corner to a synthetic single-element slice
+        // — would surface here rather than as silent operator-facing
+        // divergence between a never-status-written Process and a
+        // status-emptied Process.
+        let mut p_no_status = Process::new("api", empty_spec());
+        p_no_status.status = None;
+        let p_empty_status = process_with_flux_resources(vec![]);
+        assert_eq!(
+            p_no_status.observed_flux_resources().len(),
+            p_empty_status.observed_flux_resources().len()
+        );
+        assert_eq!(
+            p_no_status.observed_flux_resources().is_empty(),
+            p_empty_status.observed_flux_resources().is_empty()
+        );
+    }
+
+    #[test]
+    fn observed_flux_resources_slice_preserves_persisted_ordering() {
+        // Ordering-preservation pin: the borrowed slice preserves
+        // the exact insertion order of the persisted vector — no
+        // sort, no dedup, no reshape. A regression that inserted a
+        // sort or reordering would silently misroute per-ref
+        // observations at the downstream VERIFY-phase / ATTEST-
+        // heartbeat consumers, both of which walk the slice
+        // positionally and correlate the position to the observed
+        // readiness.
+        let refs = vec![
+            sample_flux_ref("z-last"),
+            sample_flux_ref("a-first"),
+            sample_flux_ref("m-middle"),
+        ];
+        let p = process_with_flux_resources(refs);
+        let observed = p.observed_flux_resources();
+        assert_eq!(observed[0].name, "z-last");
+        assert_eq!(observed[1].name, "a-first");
+        assert_eq!(observed[2].name, "m-middle");
     }
 }

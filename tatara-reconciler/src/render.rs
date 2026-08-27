@@ -511,7 +511,18 @@ pub fn render_routing(
     // paired-composer substrate `qualified_process_ref` so the shape
     // convention is owned at ONE site too.
     let (process_namespace, process_name) = process.coordinates_or_defaults();
-    let process_uid = process.metadata.uid.as_deref().unwrap_or("");
+    // Borrow-form metadata-projection corner of the substrate primitive
+    // family — pre-lift this was a hand-authored
+    // `.metadata.uid.as_deref().unwrap_or("")` chain past the
+    // ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold, sibling to the
+    // `render_export_jobs` owner-refs seed that walks the same chain
+    // to gate `owner_references_json`'s empty-uid corner. Post-lift
+    // both sites route through the ONE `Process::uid_or_empty`
+    // primitive; the empty-slot sentinel this returns composes byte-
+    // identically with `tatara_process::owner_references_json`'s
+    // `is_empty` gate for the two owner-reference emitters on the
+    // SAME Process.
+    let process_uid = process.uid_or_empty();
     let process_ref = crate::ssapply::qualified_process_ref(process_namespace, process_name);
 
     // Content-hash form of ephemeral_id — derived once per Process,
@@ -650,7 +661,13 @@ pub fn render_export_jobs(
     // through the ONE primitive.
     let (ns, name) = process.coordinates_or_defaults();
     let process_ref = crate::ssapply::qualified_process_ref(ns, name);
-    let uid = process.metadata.uid.as_deref().unwrap_or("");
+    // Borrow-form metadata-projection corner of the substrate primitive
+    // family — peer to the `render_routing` seed above; both walked the
+    // `.metadata.uid.as_deref().unwrap_or("")` chain by hand pre-lift,
+    // and post-lift both compose through the ONE `Process::uid_or_empty`
+    // primitive that owns the empty-slot sentinel
+    // `tatara_process::owner_references_json`'s `is_empty` gate consumes.
+    let uid = process.uid_or_empty();
     // Borrow-form status-projection corner of the substrate
     // observed-* primitive family — pre-lift this was a hand-authored
     // `.status.as_ref().and_then(|s| s.attestation.as_ref())` chain

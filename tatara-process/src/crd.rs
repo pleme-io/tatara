@@ -364,6 +364,103 @@ impl Process {
             .map(String::as_str)
     }
 
+    /// Borrow-form metadata-projection primitive on the `metadata.uid`
+    /// axis: returns the K8s-API-server-assigned uid as a `&str`, with
+    /// the missing-uid corner collapsed to the load-bearing empty-string
+    /// sentinel — the ONE-liner collapse of the paired
+    /// `self.metadata.uid.as_deref().unwrap_or("")` incantation every
+    /// owner-reference-emitting consumer restated by hand pre-lift.
+    ///
+    /// The empty-string fallback is NOT arbitrary — it is the exact
+    /// sentinel value the sibling substrate composer
+    /// [`crate::owner_references_json`] gates on (`if uid.is_empty()
+    /// { vec![] } else { vec![owner_reference_json(name, uid)] }`) to
+    /// stamp `metadata.ownerReferences: []` on a resource whose owning
+    /// Process pre-dates the API server's `metadata.uid` assignment
+    /// (test fixture, mid-Forking snapshot before the first `patch`
+    /// round-trip, dynamic API response pre-uid-resolution). Pre-lift
+    /// each consumer spelled the fallback as `.unwrap_or("")` at its
+    /// callsite; the two literals in two files could drift silently to
+    /// `.unwrap_or_default()`, `.unwrap_or("<unknown>")`, or an
+    /// `if let Some(u) = &process.metadata.uid` gate that returned a
+    /// different owner-refs shape for the missing-uid corner. Post-lift
+    /// the sentinel value is composed at ONE substrate site so the
+    /// empty-uid gate at `owner_references_json` and its per-callsite
+    /// producers share the SAME `""` byte-string, and a rename of the
+    /// sentinel would land at ONE substrate site rather than at every
+    /// downstream `owner_references_json(name, uid)` call.
+    ///
+    /// Peer to [`Self::namespace_or_default`] +
+    /// [`Self::name_or_placeholder`] on the metadata-slot × fallback-
+    /// shape axis: `namespace_or_default` returns the K8s-canonical
+    /// `"default"` fallback (matching what the API server substitutes
+    /// on namespaced writes with no explicit namespace);
+    /// `name_or_placeholder` returns the workspace-wide `"unnamed"`
+    /// sentinel (a display placeholder for downstream grepping /
+    /// label-selecting); this method returns the empty-string sentinel
+    /// (a load-bearing gate value that composes with
+    /// [`crate::owner_references_json`]'s `is_empty` check). The three
+    /// primitives partition the metadata-slot family by whether the
+    /// consumer wants a K8s-canonical fallback (namespace), a display
+    /// placeholder (name), or a gate sentinel (uid).
+    ///
+    /// Pre-lift the `.metadata.uid.as_deref().unwrap_or("")` chain was
+    /// hand-authored at TWO sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold in `tatara-reconciler::render`, both
+    /// feeding a downstream owner-reference emitter:
+    /// * `render_routing` — the routing-edge seed that binds
+    ///   `process_uid` into every routing-form `EdgeContext` (Ingress +
+    ///   DNSEndpoint) built inside the fanout loop over
+    ///   `RoutingSpec::hostnames`; each `Edge::render` impl then walks
+    ///   its `EdgeContext` through `build_owner_refs` →
+    ///   [`crate::owner_references_json`] to stamp
+    ///   `metadata.ownerReferences` on the emitted resource.
+    /// * `render_export_jobs` — the ephemeral-export Job builder that
+    ///   passes the same uid slice to `tatara_process::
+    ///   owner_references_json(name, uid)` per rendered Job, stamping
+    ///   the export-Job's `metadata.ownerReferences` back at the
+    ///   owning Process.
+    ///
+    /// Both sites walked the SAME `.as_deref().unwrap_or("")` chain and
+    /// both wanted the `&str` form the primitive returns — as the
+    /// second positional argument to `owner_references_json(name, uid)`
+    /// on the ownership-tag axis. Post-lift each callsite reads
+    /// `let uid = process.uid_or_empty();` and the produced slice feeds
+    /// the same downstream composer unchanged.
+    ///
+    /// Return-form axis: `&str` mirrors the existing borrow-first
+    /// discipline of the peer metadata-fallback primitives
+    /// ([`Self::namespace_or_default`], [`Self::name_or_placeholder`]);
+    /// all three return owned-metadata borrows with a slot-specific
+    /// fallback baked in so downstream consumers compose the slice
+    /// directly into their next call without re-spelling the fallback.
+    ///
+    /// A future normalization step (a canonicalization pass that
+    /// rejects a malformed uid before the owner-ref stamp, a cross-
+    /// cluster uid rewrite for multi-tenant control planes, a stale-
+    /// uid warning annotation for a Process whose uid changed under
+    /// the reconciler mid-generation) lands at ONE substrate method
+    /// here and both downstream `owner_references_json` consumers
+    /// pick up the upgrade mechanically — no per-callsite hand-edit
+    /// at `render_routing` / `render_export_jobs`.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `.metadata.uid.as_deref().unwrap_or("")` chain recurred at
+    /// two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger, and is lifted to ONE owner here).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// the pins bind the missing-uid corner + the empty-string
+    /// sentinel byte-shape + the borrow-form `&str` lifetime + the
+    /// byte-identical parity with the pre-lift chain + the composition
+    /// coherence with [`crate::owner_references_json`]'s `is_empty`
+    /// gate, so a regression that drifted any surface at
+    /// `tests::uid_or_empty_*` rather than as silent operator-facing
+    /// skew between the two owner-reference emitters on the SAME
+    /// Process).
+    pub fn uid_or_empty(&self) -> &str {
+        self.metadata.uid.as_deref().unwrap_or("")
+    }
+
     /// Borrow-form spec-projection primitive on the declared parent-PID
     /// axis: returns the hierarchical PID path (e.g. `"seph.1"`) the
     /// author declared at `spec.identity.parent`, with the empty-slot
@@ -1690,6 +1787,161 @@ mod tests {
             true
         );
         assert_eq!(p.annotation("tatara.pleme.io/pool") == Some("other"), false);
+    }
+
+    // ─── Process::uid_or_empty substrate pins ──────────────────────────
+    //
+    // Pins the borrow-form metadata-projection primitive on the
+    // `metadata.uid` axis that owns the `.metadata.uid.as_deref()
+    // .unwrap_or("")` chain the two hand-authored
+    // `tatara-reconciler::render` sites (`render_routing` +
+    // `render_export_jobs`) restated by hand pre-lift. Peer to the
+    // sibling `namespace_or_default_*` + `name_or_placeholder_*` pin
+    // families on the metadata-slot × fallback-shape axis; all three
+    // primitives return borrows of an owned-metadata slot with a slot-
+    // specific fallback baked in (`"default"` for namespace, `"unnamed"`
+    // for name, `""` for uid — the load-bearing gate value for
+    // `owner_references_json`'s `is_empty` check). Fail-before-pass-
+    // after granularity: `uid_or_empty` did not exist pre-lift, so any
+    // test invoking it fails to compile pre-lift and passes post-lift.
+
+    #[test]
+    fn uid_or_empty_returns_empty_string_when_metadata_uid_is_none() {
+        // Empty-slot corner pin: the primitive collapses the no-uid
+        // case to `""`, matching the pre-lift `.as_deref().unwrap_or("")`
+        // chain's `""` byte-identically at both render consumer sites.
+        // Semantically corresponds to a Process pre-metadata (fixtured
+        // in tests, or caught mid-Forking before the API server has
+        // stamped a `uid`); the downstream `owner_references_json`
+        // composer gates on this exact `""` sentinel to stamp
+        // `metadata.ownerReferences: []` rather than emit an owner-ref
+        // pointing at a placeholder uid.
+        let mut p = Process::new("scratch", empty_spec());
+        p.metadata.uid = None;
+        assert_eq!(p.uid_or_empty(), "");
+    }
+
+    #[test]
+    fn uid_or_empty_returns_borrowed_str_when_slot_is_populated() {
+        // Happy-path pin: with a populated `metadata.uid` slot, the
+        // primitive returns a borrowed `&str` whose contents match the
+        // persisted `String`. A regression that reshaped / normalized
+        // / cross-cluster-stripped the uid without touching this pin
+        // would surface here rather than as silent skew at the two
+        // `owner_references_json(name, uid)` emitters on the SAME
+        // Process.
+        let mut p = Process::new("owned-proc", empty_spec());
+        p.metadata.uid = Some("uid-abc-123".into());
+        assert_eq!(p.uid_or_empty(), "uid-abc-123");
+    }
+
+    #[test]
+    fn uid_or_empty_returns_empty_string_when_slot_is_explicitly_empty_string() {
+        // Corner between the missing-slot `None` and the explicitly-
+        // empty-string `Some("")` — both collapse to `""` at the
+        // primitive because the downstream gate at
+        // `owner_references_json` treats `.is_empty()` uniformly (the
+        // empty-slot posture is what the whole primitive family
+        // encodes: "no admissible owner reference, stamp `[]`"). A
+        // regression that discriminated the two corners (returning a
+        // sentinel `"<none>"` for the missing slot but `""` for the
+        // explicit slot) would break the composition with
+        // `owner_references_json` at the exactly-two-corner gate.
+        let mut p = Process::new("owned-proc", empty_spec());
+        p.metadata.uid = Some(String::new());
+        assert_eq!(p.uid_or_empty(), "");
+    }
+
+    #[test]
+    fn uid_or_empty_is_a_zero_copy_borrow_projection() {
+        // Borrow-discipline pin: the returned `&str` borrows the
+        // persisted `String`'s underlying byte buffer in place — NOT
+        // a fresh allocation or a clone. A regression that switched
+        // the projection to an owned `String` (via `.clone()` or a
+        // `format!` wrap) would defeat the zero-copy contract the
+        // lift's primary strict-widening delivers, and would surface
+        // here via pointer-identity comparison.
+        let mut p = Process::new("owned-proc", empty_spec());
+        p.metadata.uid = Some("uid-borrow-pin".into());
+        let slice = p.uid_or_empty();
+        assert!(std::ptr::eq(
+            slice.as_ptr(),
+            p.metadata.uid.as_ref().unwrap().as_ptr()
+        ));
+    }
+
+    #[test]
+    fn uid_or_empty_is_a_pure_projection() {
+        // Purity pin — repeated calls return byte-identical slices
+        // (same pointer, same length). A regression that introduced
+        // state (a lazy-cached normalized slot, a first-call
+        // canonicalization pass) would surface here rather than as
+        // silent drift between the two render consumer sites on the
+        // SAME Process within one render pass.
+        let mut p = Process::new("owned-proc", empty_spec());
+        p.metadata.uid = Some("uid-pure".into());
+        let a = p.uid_or_empty();
+        let b = p.uid_or_empty();
+        assert!(std::ptr::eq(a.as_ptr(), b.as_ptr()));
+        assert_eq!(a.len(), b.len());
+    }
+
+    #[test]
+    fn uid_or_empty_matches_pre_lift_render_chain_shape() {
+        // Byte-identical parity pin between the borrow-form primitive
+        // here and the pre-lift `tatara-reconciler::render` chain shape
+        // — the exact `.metadata.uid.as_deref().unwrap_or("")`
+        // incantation both `render_routing` (line 514) and
+        // `render_export_jobs` (line 653) spelled by hand pre-lift.
+        // Sweeps every corner (missing uid slot, populated uid slot,
+        // explicitly-empty uid slot) so a regression that inserted a
+        // normalization the pre-lift chain does NOT apply — or vice
+        // versa — surfaces here rather than as silent drift between
+        // the ONE substrate owner and the two consumer sites.
+        fn pre_lift(p: &Process) -> &str {
+            p.metadata.uid.as_deref().unwrap_or("")
+        }
+        // Missing slot.
+        let mut p = Process::new("x", empty_spec());
+        p.metadata.uid = None;
+        assert_eq!(p.uid_or_empty(), pre_lift(&p));
+        // Populated slot.
+        let mut p = Process::new("x", empty_spec());
+        p.metadata.uid = Some("uid-42".into());
+        assert_eq!(p.uid_or_empty(), pre_lift(&p));
+        // Explicitly-empty slot.
+        let mut p = Process::new("x", empty_spec());
+        p.metadata.uid = Some(String::new());
+        assert_eq!(p.uid_or_empty(), pre_lift(&p));
+    }
+
+    #[test]
+    fn uid_or_empty_composes_with_owner_references_json_empty_gate() {
+        // Cross-primitive composition pin — the empty-string sentinel
+        // this primitive returns for the missing-uid corner is EXACTLY
+        // the sentinel the sibling substrate composer
+        // `owner_references_json(name, uid)` gates on to stamp
+        // `metadata.ownerReferences: []`. A regression that changed
+        // the sentinel at either end (this primitive returning
+        // `"<none>"`, `owner_references_json` gating on `uid == "0"`
+        // instead of `uid.is_empty()`) would break the composition
+        // and surface here rather than as an operator-observed
+        // orphan resource after apply.
+        let mut p = Process::new("x", empty_spec());
+        p.metadata.uid = None;
+        let refs = crate::owner_references_json("some-name", p.uid_or_empty());
+        assert!(
+            refs.is_empty(),
+            "empty-uid corner must produce empty owner-refs array"
+        );
+
+        p.metadata.uid = Some("real-uid".into());
+        let refs = crate::owner_references_json("some-name", p.uid_or_empty());
+        assert_eq!(
+            refs.len(),
+            1,
+            "populated-uid corner must produce one owner-ref entry"
+        );
     }
 
     // ─── Process::declared_parent_pid substrate pins ─────────────────

@@ -136,6 +136,27 @@ impl RoutingEdgeResource {
             Self::DnsEndpoint => "DNSEndpoint",
         }
     }
+
+    /// Project this variant onto the typed
+    /// [`crate::k8s_wire_identity::K8sWireIdentity`] pair — the
+    /// substrate primitive that owns the workspace-wide
+    /// `(apiVersion, kind)` pairing every emit or fetch site
+    /// composes against. Pre-lift the reconciler's two
+    /// `IngressEdge::render` / `DnsEndpointEdge::render` emit sites
+    /// hand-authored the pair as two adjacent `json!` slots
+    /// (`"apiVersion": RoutingEdgeResource::X.api_version(), "kind":
+    /// RoutingEdgeResource::X.kind()`) mentioning the same variant
+    /// twice; post-lift the emit site names the variant ONCE via
+    /// `.wire_identity().resource_json(json!({...}))` and the pair
+    /// binds structurally at the closed-set owner.
+    ///
+    /// `const fn` so a caller can bind the pair into a `const` slot
+    /// — sibling to [`crate::flux_resource::FluxResource::wire_identity`]
+    /// on the FluxCD wire-form axis; both project through the same
+    /// closed-set → typed-pair idiom.
+    pub const fn wire_identity(self) -> crate::k8s_wire_identity::K8sWireIdentity {
+        crate::k8s_wire_identity::K8sWireIdentity::new(self.api_version(), self.kind())
+    }
 }
 
 #[cfg(test)]
@@ -225,6 +246,39 @@ mod tests {
         assert_eq!(I_K, "Ingress");
         assert_eq!(D_AV, "externaldns.k8s.io/v1alpha1");
         assert_eq!(D_K, "DNSEndpoint");
+    }
+
+    #[test]
+    fn wire_identity_pairs_api_version_and_kind_per_variant() {
+        // Projection pin: every variant's `wire_identity()` binds
+        // the SAME closed-set variant's `api_version` and `kind`
+        // into a typed pair. Peer to the sibling `FluxResource`
+        // pin — both closed sets project through the same shape,
+        // and a regression that skewed the pair at one variant
+        // (say the `DnsEndpoint` projection accidentally returned
+        // `Ingress.kind()`) would surface here rather than at the
+        // reconciler wire.
+        for v in RoutingEdgeResource::ALL {
+            let id = v.wire_identity();
+            assert_eq!(id.api_version, v.api_version());
+            assert_eq!(id.kind, v.kind());
+        }
+    }
+
+    #[test]
+    fn wire_identity_is_const_reachable() {
+        // Compile-time reachability pin: `wire_identity` is `const
+        // fn` so a caller (any emit site or future coherence sweep)
+        // can bind the pair into a `const` slot. A regression that
+        // dropped the `const` qualifier would fail-loudly here.
+        const I: crate::k8s_wire_identity::K8sWireIdentity =
+            RoutingEdgeResource::Ingress.wire_identity();
+        const D: crate::k8s_wire_identity::K8sWireIdentity =
+            RoutingEdgeResource::DnsEndpoint.wire_identity();
+        assert_eq!(I.api_version, "networking.k8s.io/v1");
+        assert_eq!(I.kind, "Ingress");
+        assert_eq!(D.api_version, "externaldns.k8s.io/v1alpha1");
+        assert_eq!(D.kind, "DNSEndpoint");
     }
 
     #[test]

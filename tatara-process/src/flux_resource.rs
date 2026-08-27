@@ -146,6 +146,26 @@ impl FluxResource {
             Self::OCIRepository => "OCIRepository",
         }
     }
+
+    /// Project this variant onto the typed
+    /// [`crate::k8s_wire_identity::K8sWireIdentity`] pair — the
+    /// substrate primitive that owns the workspace-wide
+    /// `(apiVersion, kind)` pairing every emit or fetch site
+    /// composes against. Pre-lift the reconciler's three
+    /// `render_flux` / `render_aplicacao` emit sites hand-authored
+    /// the pair as two adjacent `json!` slots (`"apiVersion":
+    /// FluxResource::X.api_version(), "kind": FluxResource::X.kind()`)
+    /// mentioning the same variant twice; post-lift the emit site
+    /// names the variant ONCE via
+    /// `.wire_identity().resource_json(json!({...}))` and the pair
+    /// binds structurally at the closed-set owner.
+    ///
+    /// `const fn` so a caller can bind the pair into a `const` slot
+    /// — a future coherence sweep or a compile-time cache reads the
+    /// same pair with zero runtime overhead.
+    pub const fn wire_identity(self) -> crate::k8s_wire_identity::K8sWireIdentity {
+        crate::k8s_wire_identity::K8sWireIdentity::new(self.api_version(), self.kind())
+    }
 }
 
 #[cfg(test)]
@@ -250,6 +270,43 @@ mod tests {
         assert_eq!(H_K, "HelmRelease");
         assert_eq!(O_AV, "source.toolkit.fluxcd.io/v1beta2");
         assert_eq!(O_K, "OCIRepository");
+    }
+
+    #[test]
+    fn wire_identity_pairs_api_version_and_kind_per_variant() {
+        // Projection pin: every variant's `wire_identity()` binds the
+        // SAME closed-set variant's `api_version` and `kind` into a
+        // typed pair. A regression that projected the pair from two
+        // different variants (a copy-paste that referenced
+        // `Kustomization.api_version()` alongside `HelmRelease.kind()`
+        // at the projection body) would surface here rather than as
+        // a silent wire-form skew at every reconciler emit site.
+        for v in FluxResource::ALL {
+            let id = v.wire_identity();
+            assert_eq!(id.api_version, v.api_version());
+            assert_eq!(id.kind, v.kind());
+        }
+    }
+
+    #[test]
+    fn wire_identity_is_const_reachable() {
+        // Compile-time reachability pin: `wire_identity` is `const
+        // fn` so a caller can bind the pair into a `const` slot at
+        // compile time. A regression that dropped the `const`
+        // qualifier would fail-loudly here rather than as a runtime
+        // dispatch surfacing at every projection site.
+        const K: crate::k8s_wire_identity::K8sWireIdentity =
+            FluxResource::Kustomization.wire_identity();
+        const H: crate::k8s_wire_identity::K8sWireIdentity =
+            FluxResource::HelmRelease.wire_identity();
+        const O: crate::k8s_wire_identity::K8sWireIdentity =
+            FluxResource::OCIRepository.wire_identity();
+        assert_eq!(K.api_version, "kustomize.toolkit.fluxcd.io/v1");
+        assert_eq!(K.kind, "Kustomization");
+        assert_eq!(H.api_version, "helm.toolkit.fluxcd.io/v2");
+        assert_eq!(H.kind, "HelmRelease");
+        assert_eq!(O.api_version, "source.toolkit.fluxcd.io/v1beta2");
+        assert_eq!(O.kind, "OCIRepository");
     }
 
     #[test]

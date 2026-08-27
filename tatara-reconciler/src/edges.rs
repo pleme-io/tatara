@@ -337,33 +337,47 @@ impl Edge for IngressEdge {
         // edge kind (Gateway API HTTPRoute, NetworkPolicy edge,
         // Cloudflare API CR) automatically inherits by routing through
         // the same composer.
-        let ingress = json!({
-            "apiVersion": RoutingEdgeResource::Ingress.api_version(),
-            "kind": RoutingEdgeResource::Ingress.kind(),
-            "metadata": routing_edge_metadata(ctx, Self::name(ctx), annotations_map),
-            "spec": {
-                "ingressClassName": "nginx",
-                "tls": [{
-                    "hosts": [ctx.fqdn],
-                    "secretName": format!("{}-tls", Self::name(ctx)),
-                }],
-                "rules": [{
-                    "host": ctx.fqdn,
-                    "http": {
-                        "paths": [{
-                            "path": "/",
-                            "pathType": "Prefix",
-                            "backend": {
-                                "service": {
-                                    "name": ctx.backend.service,
-                                    "port": { "number": ctx.backend.port as i64 },
+        // Routing-edge `(apiVersion, kind)` pairing rides through the
+        // shared substrate composer
+        // [`tatara_process::K8sWireIdentity::resource_json`] — pre-lift
+        // this Ingress block was ONE of TWO hand-authored 2-slot
+        // `{"apiVersion": RoutingEdgeResource::X.api_version(), "kind":
+        // RoutingEdgeResource::X.kind()}` shapes past the ★★
+        // PRIME-DIRECTIVE ≥ 2 duplication threshold that mentioned the
+        // same variant twice per emit site (Ingress here +
+        // DnsEndpoint below). Post-lift each emit site names the
+        // variant ONCE via `.wire_identity()`; the pair binds
+        // structurally at the typed
+        // [`tatara_process::K8sWireIdentity`] so a copy-paste that
+        // swapped ONE mention of the variant across the two slots
+        // would no longer compile.
+        let ingress = RoutingEdgeResource::Ingress
+            .wire_identity()
+            .resource_json(json!({
+                "metadata": routing_edge_metadata(ctx, Self::name(ctx), annotations_map),
+                "spec": {
+                    "ingressClassName": "nginx",
+                    "tls": [{
+                        "hosts": [ctx.fqdn],
+                        "secretName": format!("{}-tls", Self::name(ctx)),
+                    }],
+                    "rules": [{
+                        "host": ctx.fqdn,
+                        "http": {
+                            "paths": [{
+                                "path": "/",
+                                "pathType": "Prefix",
+                                "backend": {
+                                    "service": {
+                                        "name": ctx.backend.service,
+                                        "port": { "number": ctx.backend.port as i64 },
+                                    }
                                 }
-                            }
-                        }]
-                    }
-                }]
-            }
-        });
+                            }]
+                        }
+                    }]
+                }
+            }));
         Ok(Some(ingress))
     }
 }
@@ -429,23 +443,32 @@ impl Edge for DnsEndpointEdge {
         // / backend / cert-manager extension needed — external-dns
         // reads only the `spec.endpoints` block, not the
         // annotations).
-        let endpoint = json!({
-            "apiVersion": RoutingEdgeResource::DnsEndpoint.api_version(),
-            "kind": RoutingEdgeResource::DnsEndpoint.kind(),
-            "metadata": routing_edge_metadata(
-                ctx,
-                Self::name(ctx),
-                crate::ssapply::ownership_annotations(ctx.process_ref),
-            ),
-            "spec": {
-                "endpoints": [{
-                    "dnsName": ctx.fqdn,
-                    "recordType": "CNAME",
-                    "recordTTL": self.ttl_seconds as i64,
-                    "targets": [target],
-                }]
-            }
-        });
+        // Routing-edge `(apiVersion, kind)` pairing rides through the
+        // shared substrate composer
+        // [`tatara_process::K8sWireIdentity::resource_json`] — sibling
+        // to the Ingress emit above. Pre-lift this DnsEndpoint block
+        // was the SECOND of TWO hand-authored 2-slot
+        // `{"apiVersion": RoutingEdgeResource::X.api_version(), "kind":
+        // RoutingEdgeResource::X.kind()}` shapes that mentioned the
+        // same variant twice; post-lift each emit site names the
+        // variant ONCE via `.wire_identity()`.
+        let endpoint = RoutingEdgeResource::DnsEndpoint
+            .wire_identity()
+            .resource_json(json!({
+                "metadata": routing_edge_metadata(
+                    ctx,
+                    Self::name(ctx),
+                    crate::ssapply::ownership_annotations(ctx.process_ref),
+                ),
+                "spec": {
+                    "endpoints": [{
+                        "dnsName": ctx.fqdn,
+                        "recordType": "CNAME",
+                        "recordTTL": self.ttl_seconds as i64,
+                        "targets": [target],
+                    }]
+                }
+            }));
         Ok(Some(endpoint))
     }
 }

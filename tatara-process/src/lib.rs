@@ -18,6 +18,7 @@ pub mod flux_resource;
 pub mod hostname;
 pub mod identity;
 pub mod intent;
+pub mod k8s_wire_identity;
 pub mod lifetime;
 pub mod lifetime_clock;
 pub mod matrix;
@@ -75,6 +76,7 @@ pub mod prelude {
         NixIntent, UnknownWorkloadKind, WorkloadKind, FLUX_HELM_DEFAULT_INTERVAL,
         HELM_LIFECYCLE_DEFAULT_RETRIES, HELM_LIFECYCLE_DEFAULT_TIMEOUT,
     };
+    pub use crate::k8s_wire_identity::K8sWireIdentity;
     pub use crate::lifetime::{
         EphemeralLifetime, Lifetime, LifetimeError, LifetimeKind, LifetimeVariant,
         PermanentLifetime, TeardownPolicy, UnknownTeardownPolicy,

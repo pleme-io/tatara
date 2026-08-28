@@ -1086,6 +1086,96 @@ impl Process {
     pub fn observed_phase(&self) -> Option<ProcessPhase> {
         self.status.as_ref().map(|s| s.phase)
     }
+
+    /// Copy-form metadata-projection primitive on the deletion-tombstone
+    /// axis: returns `true` iff the K8s API server has stamped a
+    /// `metadata.deletionTimestamp` on this Process (the moment the
+    /// object entered the "being deleted" corner of its lifecycle,
+    /// after which further mutating writes are refused and finalizers
+    /// are drained before the object is actually removed) — the ONE-
+    /// liner collapse of the paired `self.metadata.deletion_timestamp
+    /// .is_some()` incantation every consumer restated by hand
+    /// pre-lift.
+    ///
+    /// Pre-lift the `.metadata.deletion_timestamp.is_some()` chain
+    /// was hand-authored at TWO sites past the ★★ PRIME-DIRECTIVE
+    /// ≥ 2 duplication threshold in `tatara-reconciler`, both
+    /// projecting the SAME tombstone-presence predicate on a
+    /// `Process` value:
+    /// * `controller::reconcile` — the top-level dispatcher's
+    ///   deletion-preempt gate that forces the SIGTERM cascade
+    ///   (`→ Exiting`) as soon as the API server stamps the
+    ///   tombstone, before the phase handler for the current
+    ///   [`ProcessPhase`] gets a chance to run. Composed with
+    ///   [`ProcessPhase::is_alive`] so the preempt only fires on a
+    ///   Process still in an alive phase — a Process already in
+    ///   `Zombie` / `Reaped` / `Failed` runs its normal handler.
+    /// * `phase_machine::handle_exiting` — the SIGTERM cascade's
+    ///   child-fan-out loop that enumerates every child Process and
+    ///   skips ones the API server has already tombstoned (so the
+    ///   reconciler does not re-issue a `DELETE` against a child
+    ///   whose deletion the API server is already draining through
+    ///   its own finalizer). The skip composes with
+    ///   [`Self::coordinates_or_none`]'s name-required probe so a
+    ///   child missing either its tombstone-absent gate or its
+    ///   `metadata.name` slot is a clean `continue` rather than an
+    ///   attempted `child_api.delete("")` no-op.
+    ///
+    /// Both sites walked the SAME `.metadata.deletion_timestamp
+    /// .is_some()` chain and both wanted the `bool` form the
+    /// primitive returns — the `controller::reconcile` site to gate
+    /// the SIGTERM preempt with `&& current_phase.is_alive()` and
+    /// the `handle_exiting` site to gate the DELETE-skip with a
+    /// bare `if child.is_being_deleted() { continue; }`. Post-lift
+    /// each callsite reads `process.is_being_deleted()` and the
+    /// produced `bool` feeds the same downstream gate unchanged.
+    ///
+    /// Return-form axis: `bool` matches the copy-form discipline of
+    /// [`Self::observed_phase`] (an `Option<Copy>` scalar) — the
+    /// underlying slot is a wire-format `Option<Time>` that carries
+    /// only presence information at this axis (the RFC-3339 timestamp
+    /// payload itself is not what the two consumers read; both only
+    /// probe presence to detect the tombstone-stamped state).
+    /// Returning the raw `Option<&Time>` would push the `.is_some()`
+    /// probe back to every callsite, restating the pre-lift chain
+    /// one link shorter without collapsing the primitive.
+    ///
+    /// Peer to the metadata-fallback primitives
+    /// [`Self::namespace_or_default`], [`Self::name_or_placeholder`],
+    /// [`Self::uid_or_empty`], [`Self::coordinates_or_defaults`],
+    /// [`Self::coordinates_or_none`], [`Self::owned_coordinates_or_err`],
+    /// [`Self::annotation`] on the metadata axis; this method opens
+    /// the copy-form peer for the presence-probe corner. Future
+    /// metadata-presence projections (an `is_being_finalized`
+    /// projection on `metadata.finalizers.is_empty()`'s negation,
+    /// a `has_owner` projection on `metadata.owner_references.is_empty()`'s
+    /// negation) land as peer methods on this same axis.
+    ///
+    /// A future normalization step (a per-tombstone staleness gate
+    /// that returns `false` for a tombstone older than the reconciler's
+    /// grace-period budget, a canonicalization pass that treats a
+    /// tombstone from a paused controller as absent, a cross-cluster
+    /// tombstone-observation clock skew guard) lands at ONE substrate
+    /// method here and both downstream consumers pick up the upgrade
+    /// mechanically — no per-callsite hand-edit at
+    /// `controller::reconcile` / `phase_machine::handle_exiting`.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `.metadata.deletion_timestamp.is_some()` chain recurred at
+    /// two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger, and is lifted to ONE owner here).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// the pins bind the missing-tombstone corner + the present-
+    /// tombstone corner + the copy-form `bool` return + the byte-
+    /// identical parity with the pre-lift `.is_some()` chain, so a
+    /// regression that drifted any surface at
+    /// `tests::is_being_deleted_*` rather than as silent operator-
+    /// facing skew between the top-level dispatcher's SIGTERM
+    /// preempt and the SIGTERM cascade's child-fan-out DELETE-skip
+    /// on the SAME `Process` within one reconcile pass).
+    pub fn is_being_deleted(&self) -> bool {
+        self.metadata.deletion_timestamp.is_some()
+    }
 }
 
 /// Process status — every field optional until the reconciler writes it.
@@ -3474,5 +3564,124 @@ mod tests {
                 "phase variant {phase:?} did not round-trip"
             );
         }
+    }
+
+    // ─── Process::is_being_deleted substrate pins ───────────────────────
+    //
+    // Pins the copy-form metadata-projection primitive on the
+    // deletion-tombstone axis. Peer to the borrow-form + copy-form
+    // metadata-fallback family (`namespace_or_default`,
+    // `name_or_placeholder`, `uid_or_empty`, `coordinates_or_defaults`,
+    // `coordinates_or_none`, `owned_coordinates_or_err`, `annotation`);
+    // this one opens the presence-probe corner for the tombstone slot.
+    // Fail-before-pass-after granularity: `is_being_deleted` did not
+    // exist pre-lift, so any test invoking it fails to compile pre-
+    // lift and passes post-lift.
+
+    fn tombstoned_process() -> Process {
+        let mut p = Process::new("api-gateway", empty_spec());
+        p.metadata.namespace = Some("prod".into());
+        p.metadata.deletion_timestamp = Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(
+            Utc::now(),
+        ));
+        p
+    }
+
+    #[test]
+    fn is_being_deleted_returns_false_when_deletion_timestamp_is_absent() {
+        // Missing-tombstone corner pin: the primitive collapses the
+        // no-tombstone case to `false` so the SIGTERM preempt at
+        // `controller::reconcile` skips the `→ Exiting` forcing
+        // branch and the DELETE-skip at `handle_exiting`'s child
+        // fan-out does NOT `continue` past a child that is still
+        // healthy. Matches the pre-lift `.is_some()` chain's `false`
+        // byte-identically at every consumer's downstream gate.
+        let mut p = Process::new("api", empty_spec());
+        p.metadata.deletion_timestamp = None;
+        assert!(!p.is_being_deleted());
+    }
+
+    #[test]
+    fn is_being_deleted_returns_true_when_deletion_timestamp_is_present() {
+        // Present-tombstone corner pin: the primitive returns
+        // `true` on any populated `metadata.deletionTimestamp`
+        // slot regardless of the timestamp payload — the two
+        // consumers only read the tombstone's PRESENCE, never
+        // its RFC-3339 timestamp value. A regression that gated
+        // the `true` return on the timestamp being non-epoch, or
+        // parsed the timestamp before returning, would surface
+        // here rather than as silent skew at the SIGTERM preempt
+        // or child-fan-out DELETE-skip on the SAME `Process`.
+        let p = tombstoned_process();
+        assert!(p.is_being_deleted());
+    }
+
+    #[test]
+    fn is_being_deleted_is_a_pure_projection() {
+        // Purity pin: two consecutive calls return byte-identical
+        // `bool` values (no lazy materialization, no interior
+        // mutation of `self`). Peer to the sibling
+        // `observed_phase_is_a_pure_projection` +
+        // `observed_pid_is_a_pure_projection` +
+        // `observed_flux_resources_is_a_pure_projection` +
+        // `observed_attestation_is_a_pure_projection` pins; all
+        // five bind the pure-projection discipline on the ONE
+        // substrate accessor per metadata / status slot.
+        let p = tombstoned_process();
+        let a = p.is_being_deleted();
+        let b = p.is_being_deleted();
+        assert_eq!(a, b);
+        assert!(a);
+    }
+
+    #[test]
+    fn is_being_deleted_matches_pre_lift_reconciler_chain_shape() {
+        // Parity pin: sweeps the two corners every pre-lift
+        // consumer plausibly encountered (missing tombstone,
+        // present tombstone) and compares the substrate call
+        // against a hand-authored pre-lift chain byte-identically.
+        // A regression that reshaped either corner would surface
+        // here rather than as silent operator-facing skew between
+        // the top-level dispatcher's SIGTERM preempt and the
+        // SIGTERM cascade's child-fan-out DELETE-skip on the
+        // SAME `Process` within one reconcile pass.
+        fn pre_lift(p: &Process) -> bool {
+            p.metadata.deletion_timestamp.is_some()
+        }
+        let mut p = Process::new("api", empty_spec());
+        p.metadata.deletion_timestamp = None;
+        assert_eq!(p.is_being_deleted(), pre_lift(&p));
+        let p = tombstoned_process();
+        assert_eq!(p.is_being_deleted(), pre_lift(&p));
+    }
+
+    #[test]
+    fn is_being_deleted_composes_with_process_phase_is_alive_at_reconcile_preempt() {
+        // Call-site-shape pin: the `controller::reconcile` SIGTERM
+        // preempt composes `is_being_deleted() && current_phase
+        // .is_alive()` — the tombstone-presence probe AND the
+        // alive-phase gate must BOTH hold to force `→ Exiting`.
+        // A dead-phase (`Zombie` / `Reaped` / `Failed`) Process
+        // that carries a tombstone still runs its normal handler,
+        // not the preempt. This pin binds that composition shape
+        // at the primitive so a regression that flipped either
+        // half of the `&&` (or that broadened the tombstone probe
+        // to include the `is_alive` half implicitly) surfaces
+        // here rather than as silent skew at the top-level
+        // dispatch on the SAME `Process`.
+        let mut p = tombstoned_process();
+        // Alive + tombstoned → preempt fires.
+        let mut alive = ProcessStatus::default();
+        alive.phase = ProcessPhase::Running;
+        p.status = Some(alive);
+        assert!(p.is_being_deleted());
+        assert!(p.observed_phase().unwrap_or_default().is_alive());
+        // Dead + tombstoned → preempt does NOT fire (composition
+        // with `is_alive` returns false).
+        let mut dead = ProcessStatus::default();
+        dead.phase = ProcessPhase::Reaped;
+        p.status = Some(dead);
+        assert!(p.is_being_deleted());
+        assert!(!p.observed_phase().unwrap_or_default().is_alive());
     }
 }

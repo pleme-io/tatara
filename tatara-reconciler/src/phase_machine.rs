@@ -830,16 +830,19 @@ pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
         if !children.is_empty() {
             for child in &children {
                 // Skip ones already being deleted or missing a name —
-                // the name gate rides through the ONE substrate
-                // `Process::coordinates_or_none` primitive, sibling
-                // to the same-corner `process_holds_any_claim` call
-                // above. Pre-lift this site spelled the gate as
-                // `.metadata.name.as_deref().unwrap_or_default()`
-                // followed by an implicit no-op `child_api.delete("")`
-                // that silently 4xx'd against the K8s API and
-                // discarded the error; post-lift the `None` corner
-                // is a cleaner explicit `continue`.
-                if child.metadata.deletion_timestamp.is_some() {
+                // the tombstone-presence gate rides through the ONE
+                // substrate `Process::is_being_deleted` primitive
+                // (sibling to the same-corner SIGTERM preempt in
+                // `controller::reconcile`), and the name gate rides
+                // through the ONE substrate `Process::coordinates_or_none`
+                // primitive (sibling to the same-corner
+                // `process_holds_any_claim` call above). Pre-lift the
+                // name gate spelled as `.metadata.name.as_deref()
+                // .unwrap_or_default()` followed by an implicit no-op
+                // `child_api.delete("")` that silently 4xx'd against
+                // the K8s API and discarded the error; post-lift the
+                // `None` corner is a cleaner explicit `continue`.
+                if child.is_being_deleted() {
                     continue;
                 }
                 let Some((cns, cname)) = child.coordinates_or_none() else {

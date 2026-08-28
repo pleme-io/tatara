@@ -26,7 +26,10 @@ pub async fn reconcile(process: Arc<Process>, ctx: Arc<Context>) -> Result<Actio
     info!(namespace = ns, name, phase = %current_phase, "reconcile");
 
     // 1. Deletion preempts everything — force Exiting if still alive.
-    if process.metadata.deletion_timestamp.is_some() && current_phase.is_alive() {
+    //    Tombstone probe rides through the ONE substrate primitive
+    //    `Process::is_being_deleted`, sibling to the same-corner
+    //    child-fan-out DELETE-skip in `phase_machine::handle_exiting`.
+    if process.is_being_deleted() && current_phase.is_alive() {
         let api = ctx.process_api(ns);
         let body = patch::phase_status_msg(ProcessPhase::Exiting, "deletion requested");
         if let Err(e) = patch::patch_process_status(&api, name, body).await {

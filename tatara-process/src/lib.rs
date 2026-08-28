@@ -99,6 +99,7 @@ pub mod prelude {
         PoolSelector, PoolSpec, PoolStatus, ReplacementPolicy, ReturnPolicy, UnknownMemberState,
         UnknownPoolPhase, UnknownReplacementPolicy,
     };
+    pub use crate::qualified_process_ref;
     pub use crate::receipt::{
         default_receipt_config_map_name, ReceiptEnvelope, ReceiptError, ReceiptKind,
         RECEIPT_CM_SUFFIX, RECEIPT_VERSION,
@@ -141,6 +142,65 @@ pub const PROCESS_KIND: &str = "Process";
 /// `v1alpha1`.
 pub fn api_version() -> String {
     format!("{GROUP}/{VERSION}")
+}
+
+/// Substrate-primitive composer for the canonical
+/// **namespace-qualified process reference** — the `<ns>/<name>`
+/// string every consumer that grepped, keyed, or annotated a
+/// Process by "which cluster location owns it" hand-authored as
+/// `format!("{ns}/{name}")` at scattered sites across the workspace.
+/// Lifted onto `tatara-process` (from its prior home at
+/// `tatara_reconciler::ssapply::qualified_process_ref`) so callers
+/// BELOW the reconciler layer — `tatara-export-worker` (which does
+/// NOT depend on `tatara-reconciler`) and `tatara-pool-reconciler` —
+/// reach the SAME composer the reconciler-side sites do, closing
+/// the previously-open substrate corner where a downstream consumer
+/// re-authored the shape by hand rather than routing through the
+/// ONE primitive.
+///
+/// The `<ns>/<name>` shape is the workspace-wide convention for
+/// "how to name a namespaced K8s resource in a single string" — the
+/// same shape the K8s API server itself uses in
+/// [`OwnerReference`][ownref] pretty-printing, in the `holder` slot of
+/// [`crate::table::ClaimRecord`], and in the `tatara.pleme.io/process`
+/// annotation every reconciler-emitted resource carries. Callers
+/// with a live [`crate::prelude::Process`] compose through
+/// [`crate::prelude::Process::coordinates_or_defaults`] +
+/// [`Self`] (this function); callers with bare
+/// `(ns: &str, name: &str)` params (CLI-arg driven binaries,
+/// `metadata`-agnostic composers) call this directly.
+///
+/// The 2-arg signature encodes the invariant "the qualified
+/// reference is EXACTLY `<ns>/<name>`, in that order, joined by a
+/// single `/` separator" at the type level — a caller cannot
+/// accidentally swap the two axes (which would produce `<name>/<ns>`
+/// and silently break every downstream grep) nor omit either half,
+/// the way a pre-lift hand-authored `format!("{name}/{ns}")` or
+/// `format!("{ns}-{name}")` typo would.
+///
+/// A future change to the reference shape — a `<ns>/<name>@<gen>`
+/// multi-generation variant for attestation grepping, a
+/// `<cluster>/<ns>/<name>` cross-cluster form, a normalization
+/// (case-fold, unicode-safe collation) that must apply everywhere —
+/// lands at ONE substrate function here and every downstream
+/// composer (annotation seed, ProcessTable claim key, label
+/// selector, owner metadata, export-worker run-id fallback,
+/// receipt-owner filter) inherits the upgrade mechanically.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// the `<ns>/<name>` shape recurred at hand-authored sites past the
+/// ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted onto
+/// the ONE workspace-wide owner here). THEORY.md §II.1 invariant 5
+/// (composition preserves proofs — a regression that swapped the
+/// two axes or the separator at ONE site surfaces at
+/// [`qualified_process_ref_tests::qualified_process_ref_joins_ns_and_name_with_slash`]
+/// rather than as silent drift at every downstream annotation seed
+/// / claim key / label selector / run-id / receipt-owner filter).
+///
+/// [ownref]: https://kubernetes.io/docs/concepts/overview/working-with-objects/owners-dependents/
+#[must_use]
+pub fn qualified_process_ref(ns: &str, name: &str) -> String {
+    format!("{ns}/{name}")
 }
 
 /// Build a Kubernetes [`OwnerReference`][ownref] JSON blob pointing
@@ -572,6 +632,172 @@ mod owner_reference_tests {
         let owner_refs_empty = &wrapped_empty["metadata"]["ownerReferences"];
         assert!(owner_refs_empty.is_array());
         assert!(owner_refs_empty.as_array().unwrap().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod qualified_process_ref_tests {
+    //! Pin the [`qualified_process_ref`] composer at fail-before-
+    //! pass-after granularity. The `<ns>/<name>` shape is the
+    //! workspace-wide convention for a namespaced K8s resource
+    //! reference — every downstream grep (the reconciler's
+    //! `tatara.pleme.io/process` annotation reader, the
+    //! [`crate::table::ClaimRecord.holder`] slot, the
+    //! export-worker's receipt-owner filter, the reconciler's
+    //! `PROCESS=<ref>` label-selector composer) depends on the
+    //! two axes landing in `(ns, name)` order joined by a single
+    //! `/` separator. A regression that swapped the axes, dropped
+    //! either half, or renormalized the input surfaces HERE rather
+    //! than as silent operator-facing drift at every downstream
+    //! consumer.
+    use super::qualified_process_ref;
+
+    #[test]
+    fn qualified_process_ref_joins_ns_and_name_with_slash() {
+        // The invariant every downstream consumer composes against:
+        // the qualified reference is EXACTLY `<ns>/<name>`, in that
+        // order, joined by a single `/`.
+        assert_eq!(
+            qualified_process_ref("demo-ns", "ephemeral-demo"),
+            "demo-ns/ephemeral-demo",
+        );
+    }
+
+    #[test]
+    fn qualified_process_ref_binds_positional_slots_by_axis_order() {
+        // Positional pin — a copy-paste that swapped the two `&str`
+        // arguments (both mechanically interchangeable at the type
+        // level) would silently produce `<name>/<ns>` and break every
+        // downstream grep keyed on the reference shape. Distinct
+        // input slot values so a swap surfaces as an equality
+        // failure rather than accidental identity.
+        let out = qualified_process_ref("first-slot-ns", "second-slot-name");
+        assert!(
+            out.starts_with("first-slot-ns/"),
+            "position 0 must be the namespace slot: got {out}"
+        );
+        assert!(
+            out.ends_with("/second-slot-name"),
+            "position 1 must be the name slot: got {out}"
+        );
+    }
+
+    #[test]
+    fn qualified_process_ref_accepts_string_deref_and_str_slice_shapes() {
+        // Consumers split across two callsite shapes: owned
+        // `String` locals (via deref coercion), bare `&str` slices,
+        // and mixed provenance. Every shape must ride cleanly
+        // through the same 2-arg signature — matches every current
+        // pre-lift caller in `tatara-export-worker` (CLI-arg driven
+        // owned strings + `&str` from a struct field) and in
+        // `tatara-reconciler` (owned locals + function-param
+        // slices).
+        let owned_ns = String::from("owned-ns");
+        let owned_name = String::from("owned-app");
+        let borrowed_ns: &str = "borrowed-ns";
+        let borrowed_name: &str = "borrowed-app";
+        assert_eq!(
+            qualified_process_ref(&owned_ns, &owned_name),
+            "owned-ns/owned-app",
+        );
+        assert_eq!(
+            qualified_process_ref(borrowed_ns, borrowed_name),
+            "borrowed-ns/borrowed-app",
+        );
+        assert_eq!(
+            qualified_process_ref(&owned_ns, borrowed_name),
+            "owned-ns/borrowed-app",
+        );
+    }
+
+    #[test]
+    fn qualified_process_ref_rides_edge_case_axis_shapes() {
+        // The composer shapes the two axes as arbitrary strings —
+        // no length/character validation happens at the composer,
+        // so any shape a Process's `metadata.namespace` /
+        // `metadata.name` can hold rides through unchanged. Pin
+        // the empty-string cases (unnamed process pre-metadata,
+        // cluster-scoped `namespace = ""` fallback), and the
+        // whitespace-and-slash-in-name pathological case (a
+        // regression that URL-escaped or path-normalized the input
+        // at this primitive would silently break every downstream
+        // grep).
+        assert_eq!(qualified_process_ref("", ""), "/");
+        assert_eq!(qualified_process_ref("default", ""), "default/");
+        assert_eq!(qualified_process_ref("", "orphan"), "/orphan");
+        assert_eq!(
+            qualified_process_ref("weird ns", "with/slash"),
+            "weird ns/with/slash",
+        );
+    }
+
+    #[test]
+    fn qualified_process_ref_composes_from_process_coordinates_or_defaults() {
+        // The primary Process-driven callsite: a live
+        // [`crate::prelude::Process`] with populated metadata
+        // composes through
+        // [`crate::prelude::Process::coordinates_or_defaults`] +
+        // [`qualified_process_ref`]. Pin the composition so a
+        // regression in either primitive that broke the `(ns,
+        // name)` positional contract surfaces HERE rather than as
+        // silent drift at every downstream reconciler / export-
+        // worker / pool-reconciler consumer.
+        use crate::classification::{Classification, ConvergencePointType, SubstrateType};
+        use crate::crd::{Process, ProcessSpec};
+        let spec = ProcessSpec {
+            identity: Default::default(),
+            classification: Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Default::default(),
+                calm: Default::default(),
+                data_classification: Default::default(),
+            },
+            intent: Default::default(),
+            boundary: Default::default(),
+            compliance: Default::default(),
+            depends_on: vec![],
+            signals: Default::default(),
+            lifetime: Default::default(),
+            routing: None,
+            encapsulates: None,
+            suspended: false,
+        };
+        let mut p = Process::new("ephemeral-demo", spec);
+        p.metadata.namespace = Some("demo-ns".into());
+        let (ns, name) = p.coordinates_or_defaults();
+        assert_eq!(
+            qualified_process_ref(ns, name),
+            "demo-ns/ephemeral-demo",
+            "coordinates_or_defaults + qualified_process_ref must \
+             compose to the canonical <ns>/<name> shape"
+        );
+    }
+
+    #[test]
+    fn qualified_process_ref_matches_hand_authored_pre_lift_bytewise() {
+        // Byte-identical parity with the exact pre-lift
+        // `format!("{ns}/{name}")` incantation. A regression that
+        // reshaped the separator, reordered the axes, or dropped
+        // either half surfaces HERE rather than at every downstream
+        // annotation / claim-key / run-id consumer. Sweeps every
+        // shape combination the pre-lift callers plausibly
+        // encountered.
+        for (ns, name) in [
+            ("demo-ns", "ephemeral-demo"),
+            ("", ""),
+            ("default", ""),
+            ("", "orphan"),
+        ] {
+            let via_primitive = qualified_process_ref(ns, name);
+            let hand_authored = format!("{ns}/{name}");
+            assert_eq!(
+                via_primitive, hand_authored,
+                "qualified_process_ref must be byte-identical to \
+                 the pre-lift `format!(\"{{ns}}/{{name}}\")` \
+                 hand-authored shape on ({ns:?}, {name:?})"
+            );
+        }
     }
 }
 

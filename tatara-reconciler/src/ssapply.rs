@@ -346,8 +346,30 @@ pub fn owned_flux_metadata(ns: &str, name: &str) -> Value {
 /// Peer to [`ownership_annotations`], whose `process_ref` parameter
 /// is the value this primitive returns.
 ///
-/// Pre-lift the `format!("{ns}/{name}")` incantation was hand-authored
-/// at SEVEN sites past the PRIME-DIRECTIVE ≥ 2 duplication threshold:
+/// **Substrate move** — the composer body now lives in
+/// `tatara_process`
+/// ([`tatara_process::prelude::qualified_process_ref`]) so
+/// callers BELOW the reconciler layer reach the SAME `<ns>/<name>`
+/// composer without a `tatara-reconciler` dependency they cannot
+/// take (crates like `tatara-export-worker` — whose CLI-driven
+/// receipt-owner filter, run-id fallback, and `process_ref`
+/// composition all previously hand-authored `format!("{ns}/{name}")`
+/// — and `tatara-pool-reconciler` — whose allocation-time
+/// requestor-annotation seed did the same). This wrapper stays as
+/// the reconciler-side entry point so every pre-existing caller
+/// (annotation seeds in [`crate::render`], the SSA-time re-injection
+/// in [`inject_annotations`], the claim-arbiter comparator in
+/// [`crate::phase_machine::process_holds_any_claim`], the export-Job
+/// label-selector composer in [`crate::phase_machine::handle_releasing`])
+/// keeps its module path unchanged, but every future addition to
+/// the reference shape (a `<ns>/<name>@<gen>` multi-generation
+/// variant for attestation grepping, a `<cluster>/<ns>/<name>`
+/// cross-cluster form, a normalization pass) lands at the ONE
+/// substrate composer.
+///
+/// Pre-lift the `format!("{ns}/{name}")` incantation was hand-
+/// authored at SEVEN reconciler-side sites past the PRIME-DIRECTIVE
+/// ≥ 2 duplication threshold:
 /// * [`crate::render::render_flux`] — the Kustomization
 ///   `metadata.annotations` seed (`ownership_annotations(&format!
 ///   ("{ns}/{name}"))`).
@@ -366,14 +388,26 @@ pub fn owned_flux_metadata(ns: &str, name: &str) -> Value {
 ///   label-selector `PROCESS=<ns>/<name>` filter used to enumerate
 ///   THIS Process's Jobs (not any sibling Process's).
 ///
-/// Post-lift every callsite reads through this ONE primitive so a
-/// future change to the reference shape — a `<ns>/<name>@<gen>`
-/// multi-generation variant for attestation grepping, a
-/// `<cluster>/<ns>/<name>` cross-cluster form, a normalization
-/// (case-fold, unicode-safe collation) that must apply everywhere
-/// — lands at ONE substrate method here and every downstream
-/// composer (annotation seed, ProcessTable claim key, label
-/// selector, owner metadata) inherits the upgrade mechanically.
+/// PLUS THREE hand-authored sites below the reconciler layer that
+/// the substrate lift now covers:
+/// * [`tatara-export-worker`]'s CLI-arg driven
+///   `process_ref = format!("{}/{}", &cli.process_namespace,
+///   &cli.process_name)` binding in the binary entry point.
+/// * [`tatara-export-worker`]'s receipt-owner filter
+///   (`format!("{ns}/{name}")` gate on the
+///   `tatara.pleme.io/process` annotation) inside the
+///   `ArtifactVariant::Receipts` handler.
+/// * [`tatara-export-worker`]'s
+///   [`tatara_export_worker::resolve_run_id`] fallback shape
+///   (`format!("{namespace}/{name}")`) when no
+///   `experiment_id_override` is set.
+///
+/// Post-lift every callsite reads through the substrate primitive
+/// so a future change to the reference shape lands at ONE
+/// composer and every downstream consumer (annotation seed,
+/// ProcessTable claim key, label selector, owner metadata, run-id
+/// fallback, receipt-owner filter) inherits the upgrade
+/// mechanically.
 ///
 /// The `&str` parameters accept both `&String` (which coerces via
 /// deref) and `&str` literal / slice callers, matching every shape
@@ -394,16 +428,19 @@ pub fn owned_flux_metadata(ns: &str, name: &str) -> Value {
 /// would.
 ///
 /// Theory anchor: THEORY.md §VI.1 (generation over composition —
-/// the `<ns>/<name>` shape recurred at seven hand-authored sites
+/// the `<ns>/<name>` shape recurred at ten hand-authored sites
 /// well past the PRIME-DIRECTIVE ≥ 2 duplication trigger, and is
-/// lifted to ONE owner here). THEORY.md §II.1 invariant 5
-/// (composition preserves proofs — a regression that swapped the
-/// two axes or the separator at ONE site surfaces at
+/// lifted to ONE substrate owner in `tatara-process`).
+/// THEORY.md §II.1 invariant 5 (composition preserves proofs — a
+/// regression that swapped the two axes or the separator at ONE
+/// site surfaces at
 /// [`tests::qualified_process_ref_joins_ns_and_name_with_slash`]
-/// rather than as silent drift at every downstream annotation
-/// seed / claim key / label selector).
+/// (+ the substrate-side pin set at
+/// `tatara_process::qualified_process_ref_tests::*`) rather than
+/// as silent drift at every downstream annotation seed / claim
+/// key / label selector / run-id / receipt-owner filter).
 pub fn qualified_process_ref(ns: &str, name: &str) -> String {
-    format!("{ns}/{name}")
+    tatara_process::prelude::qualified_process_ref(ns, name)
 }
 
 /// Substrate-primitive resolver for the standard tatara-reconciler

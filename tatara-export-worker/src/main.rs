@@ -89,7 +89,8 @@ async fn main() -> Result<()> {
     let spec: ExportSpec = serde_json::from_str(&spec_json).context("parse ExportSpec JSON")?;
 
     let run_id = resolve_run_id(&spec, &cli.process_namespace, &cli.process_name);
-    let process_ref = format!("{}/{}", &cli.process_namespace, &cli.process_name);
+    let process_ref =
+        tatara_process::prelude::qualified_process_ref(&cli.process_namespace, &cli.process_name);
     info!(
         run_id = %run_id,
         process_ref = %process_ref,
@@ -228,7 +229,7 @@ async fn read_artifact(
                 .list(&Default::default())
                 .await
                 .context("list configmaps")?;
-            let want = format!("{ns}/{name}");
+            let want = tatara_process::prelude::qualified_process_ref(ns, name);
             let mut envelopes = Vec::new();
             for cm in cms.items {
                 let ann = cm.metadata.annotations.as_ref();

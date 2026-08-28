@@ -54,13 +54,21 @@ use tatara_process::receipt::ReceiptEnvelope;
 /// Single source of truth so every channel (HTTP, NATS, stdout) and
 /// every downstream consumer (shinryu cohort math, Vector
 /// transforms) agree on what "run id" means for a given export.
+///
+/// The fallback branch composes the `<ns>/<name>` shape through the
+/// substrate primitive [`tatara_process::prelude::qualified_process_ref`],
+/// matching what every reconciler-side annotation seed / claim key /
+/// label selector composes — so a Process's run-id in the
+/// no-override branch is byte-identical to the value the same
+/// Process's `tatara.pleme.io/process` annotation carries and the
+/// value a `PROCESS=<ref>` label-selector filters on.
 pub fn resolve_run_id(spec: &ExportSpec, namespace: &str, name: &str) -> String {
     if let Some(o) = &spec.experiment_id_override {
         if !o.is_empty() {
             return o.clone();
         }
     }
-    format!("{namespace}/{name}")
+    tatara_process::prelude::qualified_process_ref(namespace, name)
 }
 
 /// Substitute `{{run_id}}` placeholders in a NATS subject template.

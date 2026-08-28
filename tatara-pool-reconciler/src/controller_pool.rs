@@ -65,7 +65,19 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
         if process_belongs_to_pool(&p, &name) {
             let state = process_to_member_state(&p);
             members.push(PoolMember {
-                process_name: p.metadata.name.clone().unwrap_or_default(),
+                // Owned-form name projection rides through the ONE
+                // substrate primitive `Process::owned_name_or_empty` —
+                // pre-lift this was a hand-authored `.metadata.name
+                // .clone().unwrap_or_default()` chain, one of TWO
+                // workspace-wide restatements past the ★★ PRIME-
+                // DIRECTIVE ≥ 2 duplication threshold (peer at the
+                // desired-count `PoolMemberSnapshot` seed below).
+                // Post-lift both consumers share ONE substrate owner;
+                // a future name-canonicalization pass or per-pool
+                // alias table lands at `tatara_process::prelude::
+                // Process::owned_name_or_empty` and both row-builder
+                // seeds inherit it mechanically.
+                process_name: p.owned_name_or_empty(),
                 state,
                 entered_state_at: p
                     .status
@@ -105,7 +117,14 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
         let snapshots: Vec<PoolMemberSnapshot> = owned
             .iter()
             .map(|p| PoolMemberSnapshot {
-                process_name: p.metadata.name.clone().unwrap_or_default(),
+                // Owned-form name projection rides through the ONE
+                // substrate primitive `Process::owned_name_or_empty` —
+                // pre-lift this was a hand-authored `.metadata.name
+                // .clone().unwrap_or_default()` chain, sibling to the
+                // pool-member seed above; both routed through the
+                // same substrate owner so any future name-canonicalization
+                // pass lands once.
+                process_name: p.owned_name_or_empty(),
                 // Phase snapshot rides through the ONE substrate
                 // primitive `Process::observed_phase_or_pending` —
                 // pre-lift this was a hand-authored `.observed_phase()

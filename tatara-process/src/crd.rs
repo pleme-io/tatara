@@ -461,6 +461,95 @@ impl Process {
         self.metadata.uid.as_deref().unwrap_or("")
     }
 
+    /// Owned-form metadata-projection primitive on the `metadata.name`
+    /// axis: returns an owned `String` copy of the K8s object name, with
+    /// the missing-name corner collapsed to the load-bearing empty-string
+    /// sentinel — the ONE-liner collapse of the paired
+    /// `self.metadata.name.clone().unwrap_or_default()` incantation every
+    /// keying / row-builder consumer restated by hand pre-lift.
+    ///
+    /// Pre-lift the `.metadata.name.clone().unwrap_or_default()` chain
+    /// was hand-authored at TWO sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold in `tatara-pool-reconciler::controller_pool`,
+    /// both stamping the `PoolMember` / `PoolMemberSnapshot`
+    /// `process_name: String` slot inside a struct-literal fanout over
+    /// pool-owned `Process`es:
+    /// * `reconcile_pool`'s pool-member seed (annotation-matched Process
+    ///   list → `PoolMember { process_name, state, entered_state_at, .. }`)
+    ///   — the row every operator sees on the pool's status page.
+    /// * `reconcile_pool`'s desired-count snapshot seed
+    ///   (`PoolMemberSnapshot { process_name, phase, created_at }`)
+    ///   — the row fed into `decide_pool_convergence`.
+    ///
+    /// Both sites walked the SAME `.clone().unwrap_or_default()` chain
+    /// and both wanted the `String` form the primitive returns — as the
+    /// owned-form `process_name: String` slot on a struct literal
+    /// composed inside a `.iter().map(...)` fanout over the same
+    /// pool-owned `Process` list. Post-lift each callsite reads
+    /// `process_name: p.owned_name_or_empty()` and the produced value
+    /// feeds the same struct-literal slot unchanged.
+    ///
+    /// The empty-string fallback is the SAME sentinel the sibling
+    /// borrow-form primitive [`Self::uid_or_empty`] returns — the two
+    /// primitives partition the owned-form × borrow-form corner of the
+    /// metadata-slot family on identical fallback semantics (empty
+    /// string means "the slot is unset"), so a consumer that switches
+    /// between them based on downstream ownership requirements never
+    /// sees a different missing-slot spelling as a side effect.
+    ///
+    /// Peer to [`Self::name_or_placeholder`] on the (return-form ×
+    /// fallback-value) axis pair — closes the corner the family
+    /// previously left open:
+    ///
+    /// * borrow + display placeholder → [`Self::name_or_placeholder`]
+    ///   (log lines, annotation writers, ownership-tag composers —
+    ///   consumers whose downstream drops `"unnamed"` in place of a
+    ///   missing name without operator-visible failure);
+    /// * owned + empty sentinel → **this method** (row-builder /
+    ///   HashMap-key / struct-literal fanout consumers whose downstream
+    ///   fills a `String` field with the load-bearing `""` sentinel to
+    ///   flag "no name to key by" rather than substituting a display
+    ///   placeholder that would misalign a downstream lookup);
+    /// * owned + name-required → [`Self::owned_coordinates_or_err`] (kube-rs
+    ///   API-path calls — consumers whose downstream must NOT silently
+    ///   substitute a placeholder for the API call target).
+    ///
+    /// The primitive family's `""`-on-missing-name semantics
+    /// intentionally differs from [`Self::name_or_placeholder`]'s
+    /// `"unnamed"` semantics: the caller sites for this form (pool
+    /// membership row seeds, HashMap keys) are load-bearing keys — a
+    /// display placeholder like `"unnamed"` would silently alias every
+    /// missing-name Process to the same key, collapsing distinct rows
+    /// in the pool's member list. The empty-string sentinel keeps the
+    /// pre-lift byte-shape and lets downstream consumers gate on
+    /// `String::is_empty` if they need to filter the missing-name
+    /// corner explicitly.
+    ///
+    /// A future normalization step (a name-canonicalization pass, a
+    /// case-fold key builder, a per-pool alias table for renamed
+    /// Processes across generations) lands at ONE substrate method
+    /// here and both downstream `PoolMember` / `PoolMemberSnapshot`
+    /// seeds pick up the upgrade mechanically — no per-callsite hand-
+    /// edit at `reconcile_pool`.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `.metadata.name.clone().unwrap_or_default()` chain recurred
+    /// at two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger, and is lifted to ONE owner here).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// the pins bind the missing-name corner + the empty-string
+    /// sentinel byte-shape + the owned-form `String` return type +
+    /// the byte-identical parity with the pre-lift chain + the
+    /// fallback-value coherence with the sibling [`Self::uid_or_empty`]
+    /// on the metadata-slot × empty-sentinel axis, so a regression
+    /// that drifted any surface at `tests::owned_name_or_empty_*`
+    /// rather than as silent operator-facing skew between the pool-
+    /// member seed and the desired-count snapshot seed on the SAME
+    /// pool).
+    pub fn owned_name_or_empty(&self) -> String {
+        self.metadata.name.clone().unwrap_or_default()
+    }
+
     /// Borrow-form spec-projection primitive on the declared parent-PID
     /// axis: returns the hierarchical PID path (e.g. `"seph.1"`) the
     /// author declared at `spec.identity.parent`, with the empty-slot
@@ -2330,6 +2419,174 @@ mod tests {
             1,
             "populated-uid corner must produce one owner-ref entry"
         );
+    }
+
+    // ─── Process::owned_name_or_empty substrate pins ─────────────────
+    //
+    // Pins the owned-form metadata-projection primitive on the
+    // `metadata.name` axis that owns the
+    // `.metadata.name.clone().unwrap_or_default()` chain the two hand-
+    // authored `tatara-pool-reconciler::controller_pool` sites (the
+    // `PoolMember` seed at line 68 + the `PoolMemberSnapshot` desired-
+    // count seed at line 108) restated by hand pre-lift. Peer to the
+    // sibling `uid_or_empty` pin family on the (return-form × fallback-
+    // value) axis pair — `uid_or_empty` owns the BORROW + empty-sentinel
+    // corner (`&str` for owner-ref emitters gating on `.is_empty()`);
+    // this method owns the OWNED + empty-sentinel corner (`String` for
+    // struct-literal / HashMap-key row-builder consumers whose
+    // downstream fills a `String` field with the load-bearing `""`
+    // sentinel). Fail-before-pass-after granularity: `owned_name_or_empty`
+    // did not exist pre-lift, so any test invoking it fails to compile
+    // pre-lift and passes post-lift.
+
+    #[test]
+    fn owned_name_or_empty_returns_empty_string_when_metadata_name_is_none() {
+        // Empty-slot corner pin: the primitive collapses the no-name
+        // case to `String::new()`, matching the pre-lift
+        // `.clone().unwrap_or_default()` chain's empty `String` byte-
+        // identically at both pool-reconciler consumer sites.
+        // Semantically corresponds to a Process pre-metadata-name (test
+        // fixture, dynamic API response pre-name-resolution); the
+        // downstream `PoolMember { process_name, .. }` slot then holds
+        // `""` as a stable "no name to key by" signal rather than a
+        // display placeholder that would silently alias distinct rows.
+        let mut p = Process::new("scratch", empty_spec());
+        p.metadata.name = None;
+        assert_eq!(p.owned_name_or_empty(), String::new());
+    }
+
+    #[test]
+    fn owned_name_or_empty_returns_owned_string_when_slot_is_populated() {
+        // Happy-path pin: with a populated `metadata.name` slot, the
+        // primitive returns an owned `String` whose contents match the
+        // persisted `String`. A regression that reshaped / normalized
+        // / case-folded the name without touching this pin would surface
+        // here rather than as silent skew between the two pool-member
+        // seeds keying on the SAME Process's name.
+        let p = Process::new("api", empty_spec());
+        assert_eq!(p.owned_name_or_empty(), "api");
+    }
+
+    #[test]
+    fn owned_name_or_empty_returns_empty_string_when_slot_is_explicitly_empty_string() {
+        // Corner between the missing-slot `None` and the explicitly-
+        // empty-string `Some(String::new())` — both collapse to `""` at
+        // the primitive because the downstream pool-member consumers
+        // treat both corners uniformly (no name, no key). A regression
+        // that discriminated the two corners (returning a sentinel
+        // `"<none>"` for the missing slot but `""` for the explicit
+        // slot) would break `String::is_empty` gating at the row-builder
+        // callsites without moving this pin.
+        let mut p = Process::new("scratch", empty_spec());
+        p.metadata.name = Some(String::new());
+        assert_eq!(p.owned_name_or_empty(), String::new());
+        assert!(p.owned_name_or_empty().is_empty());
+    }
+
+    #[test]
+    fn owned_name_or_empty_is_a_pure_projection() {
+        // Purity pin — repeated calls return byte-identical `String`
+        // values. A regression that introduced state (a lazy-cached
+        // normalized slot, a first-call canonicalization pass) would
+        // surface here rather than as silent drift between the pool-
+        // member seed and the desired-count snapshot seed on the SAME
+        // Process within one reconcile pass.
+        let p = Process::new("stable-name", empty_spec());
+        assert_eq!(p.owned_name_or_empty(), p.owned_name_or_empty());
+    }
+
+    #[test]
+    fn owned_name_or_empty_returns_independent_owned_string() {
+        // Owned-discipline pin: the returned `String` is an independent
+        // allocation the caller may consume, `.push_str` into, or move
+        // into a struct-literal `process_name: String` slot — NOT a
+        // shared reference into `metadata.name`. A regression that
+        // switched the projection to a `Cow`-shaped variant or a slice-
+        // form projection would defeat the owned-form contract the two
+        // pool-reconciler struct-literal consumers depend on (a slice
+        // cannot land in a `process_name: String` slot without a re-
+        // clone), and would surface here at compile time via the mutate-
+        // in-place test below.
+        let p = Process::new("owned-proc", empty_spec());
+        let mut owned = p.owned_name_or_empty();
+        owned.push_str("-mutated");
+        assert_eq!(owned, "owned-proc-mutated");
+        // The Process's own slot is unchanged — the returned String
+        // owns its own byte buffer, disjoint from `metadata.name`.
+        assert_eq!(p.metadata.name.as_deref(), Some("owned-proc"));
+    }
+
+    #[test]
+    fn owned_name_or_empty_matches_pre_lift_controller_pool_chain_shape() {
+        // Byte-identical parity pin between the owned-form primitive
+        // here and the pre-lift `tatara-pool-reconciler::controller_pool`
+        // chain shape — the exact `.metadata.name.clone().unwrap_or_default()`
+        // incantation both `PoolMember` seed (line 68) and
+        // `PoolMemberSnapshot` seed (line 108) spelled by hand pre-lift.
+        // Sweeps every corner (missing name slot, populated name slot,
+        // explicitly-empty name slot) so a regression that inserted a
+        // normalization the pre-lift chain does NOT apply — or vice
+        // versa — surfaces here rather than as silent drift between
+        // the ONE substrate owner and the two consumer sites.
+        fn pre_lift(p: &Process) -> String {
+            p.metadata.name.clone().unwrap_or_default()
+        }
+        // Missing slot.
+        let mut p = Process::new("x", empty_spec());
+        p.metadata.name = None;
+        assert_eq!(p.owned_name_or_empty(), pre_lift(&p));
+        // Populated slot.
+        let p = Process::new("real-name", empty_spec());
+        assert_eq!(p.owned_name_or_empty(), pre_lift(&p));
+        // Explicitly-empty slot.
+        let mut p = Process::new("x", empty_spec());
+        p.metadata.name = Some(String::new());
+        assert_eq!(p.owned_name_or_empty(), pre_lift(&p));
+    }
+
+    #[test]
+    fn owned_name_or_empty_shares_empty_sentinel_with_uid_or_empty() {
+        // Cross-primitive coherence pin — the empty-string fallback this
+        // primitive returns for the missing-name corner is the SAME
+        // sentinel the sibling borrow-form primitive `uid_or_empty`
+        // returns for the missing-uid corner. Both partition the OWNED
+        // × BORROW corner of the metadata-slot family on identical
+        // fallback semantics ("the slot is unset"), so a consumer that
+        // switches between them based on downstream ownership
+        // requirements never sees a different missing-slot spelling as
+        // a side effect. A regression that drifted either sentinel
+        // (this primitive returning `"<unnamed>"`, `uid_or_empty`
+        // returning `"<none>"`) would break the partition and surface
+        // here rather than as silent shape drift across the family.
+        let mut p = Process::new("scratch", empty_spec());
+        p.metadata.name = None;
+        p.metadata.uid = None;
+        assert_eq!(p.owned_name_or_empty(), p.uid_or_empty());
+        assert!(p.owned_name_or_empty().is_empty());
+        assert!(p.uid_or_empty().is_empty());
+    }
+
+    #[test]
+    fn owned_name_or_empty_returns_distinct_fallback_from_name_or_placeholder() {
+        // Axis-partition pin — the owned + empty-sentinel primitive here
+        // and the borrow + display-placeholder primitive
+        // [`Self::name_or_placeholder`] MUST return distinct fallback
+        // values on the missing-name corner. The distinction is load-
+        // bearing: `owned_name_or_empty` is for HashMap-key / row-builder
+        // consumers that need distinct keys for missing-name Processes
+        // (empty string collides only with other missing-name rows,
+        // never with a real "unnamed" Process); `name_or_placeholder`
+        // is for log-line / display consumers that render the
+        // `"unnamed"` word to operators. A regression that unified the
+        // two fallbacks (either primitive returning the other's
+        // sentinel) would silently collapse missing-name pool members
+        // into a display-string key or expose the empty sentinel to
+        // operator log lines. This pin catches either drift.
+        let mut p = Process::new("scratch", empty_spec());
+        p.metadata.name = None;
+        assert_eq!(p.owned_name_or_empty(), "");
+        assert_eq!(p.name_or_placeholder(), Process::UNNAMED_PLACEHOLDER);
+        assert_ne!(p.owned_name_or_empty(), p.name_or_placeholder());
     }
 
     // ─── Process::declared_parent_pid substrate pins ─────────────────

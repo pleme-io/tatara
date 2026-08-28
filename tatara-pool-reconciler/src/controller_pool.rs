@@ -85,21 +85,31 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
     //     phases (Running/Attested = healthy; Failed/Zombie/Reaped
     //     = failed; everything else = transient).
     if pool.spec.desired > 0 {
+        // Snapshot each owned Process's (phase, created_at) pair through
+        // the substrate primitive family on `Process` — pre-lift the
+        // 3-line `.status.as_ref().map(|s| s.phase)` chain and the
+        // 5-line `.metadata.creation_timestamp.as_ref().map(|t| t.0)
+        // .unwrap_or_else(Utc::now)` chain were hand-authored here,
+        // duplicating the lift already living at
+        // [`tatara_process::prelude::Process::observed_phase`] (owner of
+        // the copy-form status-projection primitive on the phase axis)
+        // and [`tatara_process::prelude::Process::created_at`] (owner
+        // of the copy-form metadata-projection primitive on the
+        // creation-timestamp axis). Routing through both substrate
+        // primitives means a future normalization (generation filter,
+        // clock-skew guard, stale-observation gate) lands at ONE
+        // substrate site and this pool-desired-count seed inherits it
+        // mechanically — no per-callsite hand-edit here alongside the
+        // sibling consumers in `tatara-reconciler` /
+        // `tatara-process::lifetime_clock`.
         let snapshots: Vec<PoolMemberSnapshot> = owned
             .iter()
             .map(|p| PoolMemberSnapshot {
                 process_name: p.metadata.name.clone().unwrap_or_default(),
                 phase: p
-                    .status
-                    .as_ref()
-                    .map(|s| s.phase)
+                    .observed_phase()
                     .unwrap_or(tatara_process::phase::ProcessPhase::Pending),
-                created_at: p
-                    .metadata
-                    .creation_timestamp
-                    .as_ref()
-                    .map(|t| t.0)
-                    .unwrap_or_else(Utc::now),
+                created_at: p.created_at().unwrap_or_else(Utc::now),
             })
             .collect();
         let actions = decide_pool_convergence(&pool, &snapshots, Utc::now());
@@ -395,7 +405,14 @@ fn process_belongs_to_pool(p: &Process, pool_name: &str) -> bool {
 
 fn process_to_member_state(p: &Process) -> MemberState {
     use tatara_process::phase::ProcessPhase;
-    match p.status.as_ref().map(|s| s.phase) {
+    // Route the phase-observed lookup through the substrate primitive
+    // [`tatara_process::prelude::Process::observed_phase`] — pre-lift the
+    // 3-line `.status.as_ref().map(|s| s.phase)` chain was hand-authored
+    // here, duplicating the lift already living on `Process`. A future
+    // normalization (generation filter, stale-observation gate) lands at
+    // ONE substrate site and this member-state mapper inherits it
+    // mechanically alongside every peer consumer in `tatara-reconciler`.
+    match p.observed_phase() {
         Some(ProcessPhase::Attested) => {
             // Bound to an allocation iff lifetime is Ephemeral.
             if p.spec.lifetime.is_ephemeral() {

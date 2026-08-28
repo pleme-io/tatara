@@ -52,10 +52,20 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
         .items;
 
     // 2. Build a lookup of pool name → members (sourced from each Pool's status).
+    //
+    // The `HashMap<String, _>` key seed rides through the substrate
+    // primitive `EphemeralPool::owned_name_or_empty` — pre-lift this
+    // was a hand-authored `.metadata.name.clone().unwrap_or_default()`
+    // chain, one of TWO workspace-wide restatements past the ★★ PRIME-
+    // DIRECTIVE ≥ 2 duplication threshold (peer at
+    // `allocation_decide::AllocationConvergenceCtx::observe`'s
+    // `AllocationRef::name` seed). Post-lift the two consumers share
+    // ONE substrate owner; the produced key still flows into the same
+    // `HashMap<String, _>` map slot unchanged.
     let pool_members: std::collections::HashMap<String, Vec<PoolMember>> = pools
         .iter()
         .map(|p| {
-            let key = p.metadata.name.clone().unwrap_or_default();
+            let key = p.owned_name_or_empty();
             let members = p
                 .status
                 .as_ref()

@@ -108,8 +108,21 @@ impl AllocationConvergenceCtx {
         let (matched_pool, free_member) = if phase.needs_pool_routing() && !being_deleted {
             match resolve_pool(alloc, candidate_pools) {
                 Some(pool) => {
+                    // The `AllocationRef::name` slot rides through the
+                    // substrate primitive `EphemeralPool::owned_name_or_empty`
+                    // — pre-lift this was a hand-authored `.metadata.name
+                    // .clone().unwrap_or_default()` chain, one of TWO
+                    // workspace-wide restatements past the ★★ PRIME-
+                    // DIRECTIVE ≥ 2 duplication threshold (peer at
+                    // `controller_allocation::reconcile_inner`'s pool-
+                    // members HashMap key seed). Post-lift the two
+                    // consumers share ONE substrate owner. The paired
+                    // `.namespace` slot still spells the raw
+                    // `.metadata.namespace.clone().unwrap_or_default()`
+                    // chain — a future run may lift `owned_namespace_or_empty`
+                    // as the sibling axis peer.
                     let pool_ref = AllocationRef {
-                        name: pool.metadata.name.clone().unwrap_or_default(),
+                        name: pool.owned_name_or_empty(),
                         namespace: pool.metadata.namespace.clone().unwrap_or_default(),
                     };
                     let free = pool_members(pool)

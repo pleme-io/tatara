@@ -218,6 +218,88 @@ impl EphemeralPool {
     pub fn name_or_empty(&self) -> &str {
         self.metadata.name.as_deref().unwrap_or("")
     }
+
+    /// Owned-form metadata-projection primitive on the `metadata.name`
+    /// axis of `EphemeralPool`: returns an owned `String` copy of the K8s
+    /// object name with the missing-name corner collapsed to the load-
+    /// bearing empty-string sentinel — the ONE-liner collapse of the
+    /// paired `self.metadata.name.clone().unwrap_or_default()` incantation
+    /// every pool-side consumer restated by hand pre-lift.
+    ///
+    /// Pre-lift the `.metadata.name.clone().unwrap_or_default()` chain
+    /// was hand-authored at TWO sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold in `tatara-pool-reconciler`, both keyed by
+    /// the pool's own name slot in an `owned String` context:
+    /// * `controller_allocation::reconcile_inner` — the
+    ///   `HashMap<String, Vec<PoolMember>>` key seed inside a
+    ///   `pools.iter().map(|p| ...).collect()` fanout; the map key is
+    ///   the owned `String` form because the produced `HashMap<String, _>`
+    ///   outlives the pool-list borrow that generated it and the
+    ///   downstream `pool_members.get(pool.name_or_empty())` closure
+    ///   consumes it as `&str`.
+    /// * `allocation_decide::AllocationConvergenceCtx::observe` — the
+    ///   `AllocationRef::name` slot seed stamped on the matched-pool
+    ///   handle; the struct literal is `AllocationRef { name: String,
+    ///   namespace: String }` and the produced value is threaded through
+    ///   the `Decision::decide` transition rule downstream.
+    ///
+    /// Both sites walked the SAME `.clone().unwrap_or_default()` chain
+    /// and both wanted the `String` form the primitive returns — as the
+    /// owned key of a `HashMap<String, _>` and as the `String` slot of
+    /// an `AllocationRef` struct literal. Post-lift each callsite reads
+    /// `pool.owned_name_or_empty()` and the produced value feeds the
+    /// same downstream key / struct-literal slot unchanged.
+    ///
+    /// The empty-string fallback is the SAME sentinel the sibling
+    /// borrow-form primitive [`Self::name_or_empty`] returns AND the
+    /// SAME sentinel the sibling owned-form primitive
+    /// [`crate::crd::Process::owned_name_or_empty`] returns on the
+    /// `metadata.name` axis of the sister CRD — the three primitives
+    /// partition the (borrow-form × owned-form) corner of the metadata-
+    /// name family across BOTH tatara-process CRDs on identical missing-
+    /// slot semantics (empty string means "the slot is unset"), so a
+    /// consumer that switches between the CRD surfaces based on
+    /// downstream ownership requirements never sees a different
+    /// missing-slot spelling as a side effect.
+    ///
+    /// Peer to [`Self::name_or_empty`] on the (return-form × ownership)
+    /// axis pair — closes the corner the pool-side family previously
+    /// left open:
+    ///
+    /// * borrow + empty sentinel → [`Self::name_or_empty`] (router tie-
+    ///   break comparator, `HashMap<String, _>::get(&str)` lookup —
+    ///   consumers whose downstream keys by `&str` and allocates
+    ///   nothing);
+    /// * owned + empty sentinel → **this method** (HashMap-key seed in
+    ///   an outliving-borrow context, `AllocationRef::name` struct-
+    ///   literal slot — consumers whose downstream requires the owned
+    ///   `String` form because the produced value outlives the source-
+    ///   pool borrow).
+    ///
+    /// A future normalization step (a name-canonicalization pass, a
+    /// case-fold key builder, a per-cluster prefix stripper for cross-
+    /// cluster pool-name aliasing) lands at ONE substrate method here
+    /// and both downstream consumers pick up the upgrade mechanically —
+    /// no per-callsite hand-edit at `reconcile_inner` /
+    /// `AllocationConvergenceCtx::observe`.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `.metadata.name.clone().unwrap_or_default()` chain recurred
+    /// at two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger, and is lifted to ONE owner here).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// the pins bind the missing-name corner + the empty-string
+    /// sentinel byte-shape + the owned-form `String` return type + the
+    /// byte-identical parity with the pre-lift chain + the fallback-
+    /// value coherence with [`Self::name_or_empty`] +
+    /// [`crate::crd::Process::owned_name_or_empty`] on the metadata-
+    /// slot × empty-sentinel axis, so a regression that drifted any
+    /// surface at `tests::owned_name_or_empty_*` here rather than as
+    /// silent operator-facing skew between the pool-members lookup key
+    /// and the AllocationRef seed on the SAME pool candidate).
+    pub fn owned_name_or_empty(&self) -> String {
+        self.metadata.name.clone().unwrap_or_default()
+    }
 }
 
 /// What the pool reconciler does when a member reaches `Failed`.
@@ -1737,5 +1819,116 @@ mod tests {
         let p = pool_named("attest-pool");
         let s: &str = p.name_or_empty();
         assert_eq!(s.as_ptr(), p.metadata.name.as_deref().unwrap().as_ptr());
+    }
+
+    // ─── EphemeralPool::owned_name_or_empty substrate pins ────────────
+    //
+    // The owned-form peer of the borrow-form `name_or_empty` primitive
+    // above. Sibling to the sister-CRD primitive
+    // `crate::crd::Process::owned_name_or_empty` (owned + empty sentinel
+    // on `Process::metadata.name`) — the four primitives now partition
+    // the (borrow × owned) × (name × uid) corner of the metadata-slot
+    // family on identical missing-slot semantics across BOTH tatara-
+    // process CRDs (`Process::uid_or_empty` + `Process::owned_name_or_empty`
+    // + `EphemeralPool::name_or_empty` + this method). Fail-before-pass-
+    // after granularity: `owned_name_or_empty` did not exist on the pool
+    // CRD pre-lift; the compiler cannot resolve the name until the impl
+    // block above is in place, so a rollback of the primitive breaks
+    // this whole module.
+    #[test]
+    fn owned_name_or_empty_returns_empty_string_when_metadata_name_is_none() {
+        let p = pool_unnamed();
+        assert!(p.metadata.name.is_none(), "fixture invariant");
+        assert_eq!(p.owned_name_or_empty(), String::new());
+    }
+
+    #[test]
+    fn owned_name_or_empty_returns_owned_string_when_slot_is_populated() {
+        let p = pool_named("attest-pool");
+        assert_eq!(p.owned_name_or_empty(), "attest-pool");
+    }
+
+    #[test]
+    fn owned_name_or_empty_returns_empty_string_when_slot_is_explicitly_empty_string() {
+        // Corner between `None` (missing slot) and `Some(String::new())`
+        // (populated slot containing the empty string): the primitive
+        // MUST fold both to the same `""` byte-shape so a downstream
+        // `HashMap<String,_>::get(name)` sees ONE "unnamed pool" bucket
+        // regardless of which shape the K8s API server materialized.
+        // Byte-identical to what the pre-lift `.clone().unwrap_or_default()`
+        // chain produced.
+        let mut p = pool_named("scratch");
+        p.metadata.name = Some(String::new());
+        assert_eq!(p.owned_name_or_empty(), String::new());
+        assert!(p.owned_name_or_empty().is_empty());
+    }
+
+    #[test]
+    fn owned_name_or_empty_is_a_pure_projection() {
+        // Consecutive calls return byte-identical Strings — no cached
+        // state, no mutation on the `EphemeralPool` between calls.
+        // Guards against a future refactor that plants a cache field
+        // and drifts one caller from another silently.
+        let p = pool_named("router-pool");
+        assert_eq!(p.owned_name_or_empty(), p.owned_name_or_empty());
+        assert_eq!(p.owned_name_or_empty(), "router-pool");
+        assert_eq!(p.owned_name_or_empty(), "router-pool");
+    }
+
+    #[test]
+    fn owned_name_or_empty_matches_pre_lift_chain_verbatim() {
+        // Byte-identical parity with the two hand-authored
+        // `.metadata.name.clone().unwrap_or_default()` chains the
+        // primitive replaces in `tatara-pool-reconciler::
+        // controller_allocation::reconcile_inner` (HashMap key seed)
+        // and `tatara-pool-reconciler::allocation_decide::
+        // AllocationConvergenceCtx::observe` (AllocationRef.name slot
+        // seed). Runs across the FULL corner set of the metadata.name
+        // slot: absent, present-with-value, present-with-empty-string.
+        // A regression that inserted a normalization step at the
+        // primitive the pre-lift chain does NOT apply — or vice versa —
+        // surfaces here rather than as silent drift between the two
+        // owned-form callsites and the ONE substrate owner they now
+        // route through.
+        let cases: [(Option<String>, &str); 3] = [
+            (None, ""),
+            (Some("attest-pool".into()), "attest-pool"),
+            (Some(String::new()), ""),
+        ];
+        for (slot, expected) in cases {
+            let mut p = pool_named("scratch");
+            p.metadata.name = slot.clone();
+            let pre_lift = p.metadata.name.clone().unwrap_or_default();
+            assert_eq!(pre_lift.as_str(), expected, "pre-lift chain sanity");
+            assert_eq!(p.owned_name_or_empty(), pre_lift);
+            assert_eq!(p.owned_name_or_empty().as_str(), expected);
+        }
+    }
+
+    #[test]
+    fn owned_name_or_empty_matches_borrow_form_peer_on_populated_slot() {
+        // Cross-primitive coherence pin at the sibling corner: when the
+        // slot is present, the borrow-form (`name_or_empty`) and owned-
+        // form (`owned_name_or_empty`) primitives return the SAME byte
+        // sequence and differ only in ownership. A regression that
+        // skewed one form's fallback would surface here rather than as
+        // silent drift between the router tie-break comparator and the
+        // AllocationRef seed on the SAME pool.
+        let p = pool_named("attest-pool");
+        assert_eq!(p.name_or_empty(), p.owned_name_or_empty().as_str());
+    }
+
+    #[test]
+    fn owned_name_or_empty_matches_borrow_form_peer_on_missing_slot() {
+        // Sibling corner of the coherence pin above: when the slot is
+        // absent (or explicitly empty), BOTH primitives fold to the
+        // same empty-string byte-shape. The load-bearing property is
+        // that a caller who switches between the two return-forms
+        // based on downstream ownership requirements never sees a
+        // different missing-slot spelling as a side effect.
+        let p = pool_unnamed();
+        assert_eq!(p.name_or_empty(), p.owned_name_or_empty().as_str());
+        assert_eq!(p.name_or_empty(), "");
+        assert_eq!(p.owned_name_or_empty(), String::new());
     }
 }

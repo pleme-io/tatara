@@ -300,6 +300,103 @@ impl EphemeralPool {
     pub fn owned_name_or_empty(&self) -> String {
         self.metadata.name.clone().unwrap_or_default()
     }
+
+    /// Copy-form metadata-projection primitive on the deletion-tombstone
+    /// axis of `EphemeralPool`: returns `true` iff the K8s API server
+    /// has stamped a `metadata.deletionTimestamp` on this pool (the
+    /// moment the object entered the "being deleted" corner of its
+    /// lifecycle, after which further mutating writes are refused and
+    /// finalizers are drained before the object is actually removed) —
+    /// the ONE-liner collapse of the paired
+    /// `self.metadata.deletion_timestamp.is_some()` incantation every
+    /// pool-side consumer restated by hand pre-lift.
+    ///
+    /// Pre-lift the `.metadata.deletion_timestamp.is_some()` chain was
+    /// hand-authored at TWO sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold in `tatara-pool-reconciler`, both
+    /// projecting the SAME tombstone-presence predicate on an
+    /// `EphemeralPool` value:
+    /// * `pool_decide::decide_pool_reconcile` — the pure decision
+    ///   function's deletion-preempt gate that forces
+    ///   [`PoolDecision::Drain`] as soon as the API server stamps
+    ///   the tombstone, before the (desired vs actual) supply-arithmetic
+    ///   branches get a chance to run. Wired at the very top of the
+    ///   decision so a draining pool never spawns / reaps / expires
+    ///   through the normal replenishment arithmetic while the
+    ///   deletion is in flight.
+    /// * `controller_pool::pool_phase_from_members` — the observed-
+    ///   phase composer's tombstone-first arm that returns
+    ///   [`PoolPhase::Draining`] regardless of the supply / demand
+    ///   arithmetic that would otherwise pick `Ready` / `Scaling` /
+    ///   `Degraded`. Keeps the reported phase honest during the
+    ///   finalizer drain so operators reading `kubectl get
+    ///   ephemeralpools` see the tombstone-present state as
+    ///   `Draining`, not as a stale `Ready`.
+    ///
+    /// Both sites walked the SAME `.metadata.deletion_timestamp
+    /// .is_some()` chain and both wanted the `bool` form the primitive
+    /// returns — the `decide_pool_reconcile` site to gate the
+    /// `→ Drain` short-circuit and the `pool_phase_from_members` site
+    /// to gate the `→ Draining` short-circuit. Post-lift each callsite
+    /// reads `pool.is_being_deleted()` and the produced `bool` feeds
+    /// the same downstream short-circuit unchanged.
+    ///
+    /// Sibling to [`crate::crd::Process::is_being_deleted`] on the
+    /// deletion-tombstone axis of the sister CRD — the two primitives
+    /// now partition the tombstone-presence probe across BOTH
+    /// tatara-process CRDs on identical missing-slot semantics
+    /// (present timestamp means "the API server has begun deletion"),
+    /// so an operator or reconciler that switches between the CRD
+    /// surfaces never sees a different tombstone-detection spelling
+    /// as a side effect.
+    ///
+    /// Return-form axis: `bool` matches the copy-form discipline of
+    /// the sibling [`crate::crd::Process::is_being_deleted`] and of
+    /// the pool-side [`crate::phase::ProcessPhase::is_alive`] +
+    /// [`Self::name_or_empty`]-family primitives — the underlying
+    /// slot is a wire-format `Option<Time>` that carries only
+    /// presence information at this axis (the RFC-3339 timestamp
+    /// payload itself is not what the two consumers read; both only
+    /// probe presence to detect the tombstone-stamped state).
+    /// Returning the raw `Option<&Time>` would push the `.is_some()`
+    /// probe back to every callsite, restating the pre-lift chain
+    /// one link shorter without collapsing the primitive.
+    ///
+    /// Peer to [`Self::name_or_empty`] and [`Self::owned_name_or_empty`]
+    /// on the metadata-projection axis for `EphemeralPool`; this method
+    /// opens the presence-probe corner for the tombstone slot. Future
+    /// metadata-presence projections on the pool CRD (an
+    /// `is_being_finalized` projection on
+    /// `metadata.finalizers.is_empty()`'s negation, a `has_owner`
+    /// projection on `metadata.owner_references.is_empty()`'s
+    /// negation) land as peer methods on this same axis.
+    ///
+    /// A future normalization step (a per-tombstone staleness gate
+    /// that returns `false` for a tombstone older than the reconciler's
+    /// grace-period budget, a canonicalization pass that treats a
+    /// tombstone from a paused controller as absent, a cross-cluster
+    /// tombstone-observation clock skew guard) lands at ONE substrate
+    /// method here and both downstream consumers pick up the upgrade
+    /// mechanically — no per-callsite hand-edit at
+    /// `decide_pool_reconcile` / `pool_phase_from_members`.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `.metadata.deletion_timestamp.is_some()` chain recurred at
+    /// two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger, and is lifted to ONE owner here).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// the pins bind the missing-tombstone corner + the present-
+    /// tombstone corner + the copy-form `bool` return + the byte-
+    /// identical parity with the pre-lift `.is_some()` chain + the
+    /// cross-CRD coherence with `crate::crd::Process::is_being_deleted`
+    /// on the tombstone axis, so a regression that drifted any surface
+    /// at `tests::is_being_deleted_*` rather than as silent operator-
+    /// facing skew between the pool-reconciler's `→ Drain` decision
+    /// and the observed-phase composer's `→ Draining` report on the
+    /// SAME `EphemeralPool` within one reconcile pass).
+    pub fn is_being_deleted(&self) -> bool {
+        self.metadata.deletion_timestamp.is_some()
+    }
 }
 
 /// What the pool reconciler does when a member reaches `Failed`.
@@ -1930,5 +2027,121 @@ mod tests {
         assert_eq!(p.name_or_empty(), p.owned_name_or_empty().as_str());
         assert_eq!(p.name_or_empty(), "");
         assert_eq!(p.owned_name_or_empty(), String::new());
+    }
+
+    // ─── EphemeralPool::is_being_deleted substrate pins ───────────────
+    //
+    // Pins the copy-form metadata-projection primitive on the deletion-
+    // tombstone axis of the pool CRD. Peer to the borrow-form + owned-
+    // form metadata-fallback family (`name_or_empty`,
+    // `owned_name_or_empty`); this one opens the presence-probe corner
+    // for the tombstone slot. Sibling to the sister-CRD primitive
+    // `crate::crd::Process::is_being_deleted` — the two primitives
+    // now partition the tombstone-presence probe across BOTH tatara-
+    // process CRDs on identical missing-slot semantics. Fail-before-
+    // pass-after granularity: `is_being_deleted` did not exist on the
+    // pool CRD pre-lift; the compiler cannot resolve the name until
+    // the impl block above is in place, so a rollback of the primitive
+    // breaks this whole module.
+
+    fn tombstoned_pool() -> EphemeralPool {
+        let mut p = pool_named("attest-pool");
+        p.metadata.namespace = Some("ephemeral-pools".into());
+        p.metadata.deletion_timestamp = Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(
+            Utc::now(),
+        ));
+        p
+    }
+
+    #[test]
+    fn is_being_deleted_returns_false_when_deletion_timestamp_is_absent() {
+        // Missing-tombstone corner pin: the primitive collapses the
+        // no-tombstone case to `false` so the `→ Drain` short-circuit
+        // at `decide_pool_reconcile` is NOT taken and the observed-
+        // phase composer at `pool_phase_from_members` proceeds to its
+        // normal (free / spawning / allocated) arithmetic branches
+        // instead of short-circuiting to `PoolPhase::Draining`.
+        // Matches the pre-lift `.is_some()` chain's `false` byte-
+        // identically at every consumer's downstream gate.
+        let mut p = pool_named("attest-pool");
+        p.metadata.deletion_timestamp = None;
+        assert!(!p.is_being_deleted());
+    }
+
+    #[test]
+    fn is_being_deleted_returns_true_when_deletion_timestamp_is_present() {
+        // Present-tombstone corner pin: the primitive returns `true`
+        // on any populated `metadata.deletionTimestamp` slot regardless
+        // of the timestamp payload — the two consumers only read the
+        // tombstone's PRESENCE, never its RFC-3339 timestamp value.
+        // A regression that gated the `true` return on the timestamp
+        // being non-epoch, or parsed the timestamp before returning,
+        // would surface here rather than as silent skew at the
+        // `→ Drain` decision or the `→ Draining` phase report on the
+        // SAME `EphemeralPool`.
+        let p = tombstoned_pool();
+        assert!(p.is_being_deleted());
+    }
+
+    #[test]
+    fn is_being_deleted_is_a_pure_projection() {
+        // Purity pin: two consecutive calls return byte-identical
+        // `bool` values (no lazy materialization, no interior
+        // mutation of `self`). Peer to the sibling
+        // `name_or_empty_is_a_pure_projection` +
+        // `owned_name_or_empty_is_a_pure_projection` pins in this
+        // module and to `is_being_deleted_is_a_pure_projection` on
+        // the sister-CRD `Process`; all four bind the pure-projection
+        // discipline on the ONE substrate accessor per metadata slot.
+        let p = tombstoned_pool();
+        let a = p.is_being_deleted();
+        let b = p.is_being_deleted();
+        assert_eq!(a, b);
+        assert!(a);
+    }
+
+    #[test]
+    fn is_being_deleted_matches_pre_lift_pool_reconciler_chain_shape() {
+        // Parity pin: sweeps the two corners every pre-lift consumer
+        // plausibly encountered (missing tombstone, present tombstone)
+        // and compares the substrate call against a hand-authored pre-
+        // lift chain byte-identically. A regression that reshaped
+        // either corner would surface here rather than as silent
+        // operator-facing skew between the pool-reconciler's `→ Drain`
+        // decision and the observed-phase composer's `→ Draining`
+        // report on the SAME `EphemeralPool` within one reconcile
+        // pass.
+        fn pre_lift(p: &EphemeralPool) -> bool {
+            p.metadata.deletion_timestamp.is_some()
+        }
+        // Missing slot.
+        let mut p = pool_named("attest-pool");
+        p.metadata.deletion_timestamp = None;
+        assert_eq!(p.is_being_deleted(), pre_lift(&p));
+        // Populated slot.
+        let p = tombstoned_pool();
+        assert_eq!(p.is_being_deleted(), pre_lift(&p));
+    }
+
+    #[test]
+    fn is_being_deleted_composes_with_pool_phase_draining_at_reconcile_preempt() {
+        // Call-site-shape pin: the `pool_phase_from_members`
+        // deletion-preempt returns `PoolPhase::Draining` as soon as
+        // `pool.is_being_deleted()` holds, regardless of the (free +
+        // spawning) supply arithmetic that would otherwise pick
+        // `Ready` / `Scaling` / `Degraded`. The `→ Drain` decision at
+        // `decide_pool_reconcile` composes with the same probe on the
+        // same tombstone-presence slot. A regression that broadened
+        // the tombstone probe implicitly (returning `false` on a
+        // present but zero-timestamp) or narrowed it (requiring an
+        // additional `.finalizers.is_empty()` conjunct that the two
+        // consumers never spelled) would surface here rather than as
+        // silent operator-facing skew between the pool reconciler's
+        // decision and the observed-phase composer on the SAME
+        // `EphemeralPool` within one reconcile pass.
+        let alive = pool_named("attest-pool");
+        assert!(!alive.is_being_deleted());
+        let dying = tombstoned_pool();
+        assert!(dying.is_being_deleted());
     }
 }

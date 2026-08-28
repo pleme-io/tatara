@@ -287,7 +287,7 @@ fn count_state(members: &[PoolMember], target: MemberState) -> u32 {
 }
 
 fn pool_phase_from_members(pool: &EphemeralPool, members: &[PoolMember]) -> PoolPhase {
-    if pool.metadata.deletion_timestamp.is_some() {
+    if pool.is_being_deleted() {
         return PoolPhase::Draining;
     }
     // The (free + spawning) supply calc lives at one site: the

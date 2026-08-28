@@ -49,7 +49,7 @@ pub fn decide_pool_reconcile(
     members: &[PoolMember],
     now: DateTime<Utc>,
 ) -> PoolDecision {
-    if pool.metadata.deletion_timestamp.is_some() {
+    if pool.is_being_deleted() {
         return PoolDecision::Drain;
     }
 

@@ -115,16 +115,21 @@ impl AllocationConvergenceCtx {
                     // workspace-wide restatements past the ★★ PRIME-
                     // DIRECTIVE ≥ 2 duplication threshold (peer at
                     // `controller_allocation::reconcile_inner`'s pool-
-                    // members HashMap key seed). Post-lift the two
-                    // consumers share ONE substrate owner. The paired
-                    // `.namespace` slot still spells the raw
+                    // members HashMap key seed). The overall (name,
+                    // namespace) pair rides through the substrate
+                    // constructor `AllocationRef::new` — pre-lift the
+                    // `AllocationRef { name, namespace }` struct-
+                    // literal was hand-authored at FOUR workspace-wide
+                    // sites past the same threshold; both are now
+                    // owned by tatara-process. The paired `.namespace`
+                    // slot still spells the raw
                     // `.metadata.namespace.clone().unwrap_or_default()`
                     // chain — a future run may lift `owned_namespace_or_empty`
                     // as the sibling axis peer.
-                    let pool_ref = AllocationRef {
-                        name: pool.owned_name_or_empty(),
-                        namespace: pool.metadata.namespace.clone().unwrap_or_default(),
-                    };
+                    let pool_ref = AllocationRef::new(
+                        pool.owned_name_or_empty(),
+                        pool.metadata.namespace.clone().unwrap_or_default(),
+                    );
                     let free = pool_members(pool)
                         .iter()
                         .find(|m| m.state == MemberState::Free)

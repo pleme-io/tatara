@@ -191,15 +191,22 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
             let expires_at = now
                 + chrono::Duration::from_std(ttl_duration)
                     .unwrap_or_else(|_| chrono::Duration::hours(1));
+            // The `assignedProcess` status slot rides through the
+            // substrate constructor `AllocationRef::new` — pre-lift
+            // this was a hand-authored `AllocationRef { name, namespace }`
+            // struct-literal, one of FOUR workspace-wide restatements
+            // past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold
+            // (peers at the Release path below, at `allocation_decide::
+            // AllocationConvergenceCtx::observe`'s pool_ref seed, and
+            // at `tatara-github-watcher::allocation_factory`'s
+            // pool_ref seed). Post-lift the four consumers share ONE
+            // substrate owner.
             let body = json!({
                 "status": {
                     "phase": AllocationPhase::Bound,
                     "phaseSince": now,
                     "boundPool": pool,
-                    "assignedProcess": AllocationRef {
-                        name: member_process_name,
-                        namespace: ns.clone(),
-                    },
+                    "assignedProcess": AllocationRef::new(member_process_name, ns.clone()),
                     "allocatedAt": now,
                     "expiresAt": expires_at,
                     "message": "bound to pool member",
@@ -228,15 +235,19 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
                     })),
                 )
                 .await;
+            // The `assignedProcess` status slot rides through the
+            // substrate constructor `AllocationRef::new` — sibling
+            // shape to the Bind path's stamp above, both routed
+            // through the ONE substrate owner so a future refactor of
+            // the ref shape (added field, canonicalization, non-empty
+            // gate) lands at ONE place rather than at both status-
+            // patch sites here.
             let body = json!({
                 "status": {
                     "phase": AllocationPhase::Released,
                     "phaseSince": Utc::now(),
                     "boundPool": pool,
-                    "assignedProcess": AllocationRef {
-                        name: member_process_name,
-                        namespace: ns.clone(),
-                    },
+                    "assignedProcess": AllocationRef::new(member_process_name, ns.clone()),
                     "message": "released; pool reconciler will return the member",
                 }
             });

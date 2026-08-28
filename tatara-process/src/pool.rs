@@ -604,6 +604,94 @@ pub struct AllocationRef {
     pub namespace: String,
 }
 
+impl AllocationRef {
+    /// Substrate constructor for [`AllocationRef`]: composes the
+    /// `(name, namespace)` pair through ONE `impl Into<String>`-gated
+    /// entry point — the ONE-liner collapse of the paired
+    /// `AllocationRef { name: n.into(), namespace: ns.into() }`
+    /// struct-literal incantation every downstream consumer restated
+    /// by hand pre-lift.
+    ///
+    /// Pre-lift the `AllocationRef { name, namespace }` struct-literal
+    /// was hand-authored at FOUR production sites past the ★★ PRIME-
+    /// DIRECTIVE ≥ 2 duplication threshold across the workspace, all
+    /// composing an owned `(name: String, namespace: String)` pair
+    /// under one of two roles:
+    /// * `tatara-pool-reconciler::controller_allocation::reconcile_inner`
+    ///   Bind path — the `assignedProcess` status slot's ref, pairing
+    ///   the just-bound member Process name with the allocation's
+    ///   containing namespace.
+    /// * `tatara-pool-reconciler::controller_allocation::reconcile_inner`
+    ///   Release path — the same `assignedProcess` slot shape, stamped
+    ///   at the release-side status patch alongside the (unchanged)
+    ///   `boundPool` ref.
+    /// * `tatara-pool-reconciler::allocation_decide::AllocationConvergenceCtx::observe`
+    ///   pool-matched handle — the `matched_pool` slot's ref, pairing
+    ///   [`EphemeralPool::owned_name_or_empty`] with the pool's
+    ///   containing namespace.
+    /// * `tatara-github-watcher::allocation_factory::allocation_from_pr`
+    ///   — the `pool_ref` slot on the `AllocationSpec` emitted from a
+    ///   PullRequestEvent, pairing the operator-configured pool name
+    ///   with the watcher's target namespace.
+    ///
+    /// All FOUR sites walked the SAME two-field struct-literal shape
+    /// — an owned name half, an owned namespace half — differing only
+    /// in provenance. Post-lift each callsite reads
+    /// `AllocationRef::new(name, ns)` and the produced value feeds the
+    /// same downstream slot (`assignedProcess` / `bound_pool` /
+    /// `matched_pool` / `spec.pool_ref`) unchanged. The `impl Into<String>`
+    /// signature accepts every provenance the pre-lift sites carried —
+    /// owned `String` (the reconciler's owned-form projections), `&str`
+    /// (the factory's `n.to_string()` / `namespace.to_string()`
+    /// borrow-to-owned promotions), `Cow<str>`, and every other
+    /// `Into<String>` implementor — so no callsite has to change its
+    /// upstream provenance to route through the primitive.
+    ///
+    /// Return-form axis: owned [`AllocationRef`] — the wire-format
+    /// shape [`crate::pool::AllocationRef`]'s serde `rename_all =
+    /// "camelCase"` produces on both spec (`poolRef`) and status
+    /// (`boundPool` / `assignedProcess`) slots. The primitive owns
+    /// the axis-order `(name, namespace)` — the same order the four
+    /// consumers spelled — so a slot swap surfaces at the
+    /// `allocation_ref_new_positional_axis_order` pin below rather
+    /// than as silent `<namespace>/<name>` inversion downstream.
+    ///
+    /// Peer to the sibling substrate primitives already opened on the
+    /// pool-side (name, namespace) axis pair:
+    /// [`EphemeralPool::name_or_empty`] (borrow-form name),
+    /// [`EphemeralPool::owned_name_or_empty`] (owned-form name); this
+    /// constructor is the composer that folds the owned-form projections
+    /// into the wire-format ref shape.
+    ///
+    /// A future refactor of [`AllocationRef`]'s field set (a
+    /// `resource_kind: String` field for cross-CRD refs, an
+    /// `api_version: String` field for FQN references, a
+    /// canonicalization pass over the namespace half, a non-empty-name
+    /// gate) lands at ONE substrate constructor site here and every
+    /// downstream consumer inherits the upgrade mechanically — no per-
+    /// callsite hand-edit at the FOUR reconciler + factory sites.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `AllocationRef { name, namespace }` struct-literal shape
+    /// recurred at four hand-authored sites past the ★★ PRIME-
+    /// DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE owner
+    /// here). THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the pins bind the positional axis-order + the
+    /// `Into<String>` provenance closure + byte-identical parity with
+    /// the pre-lift struct-literal + `PartialEq` coherence with the
+    /// hand-authored form, so a regression that reshaped any surface
+    /// at `tests::allocation_ref_new_*` rather than as silent
+    /// operator-facing skew between the assignedProcess / bound_pool
+    /// / matched_pool / spec.pool_ref slots on the SAME allocation).
+    #[must_use]
+    pub fn new(name: impl Into<String>, namespace: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            namespace: namespace.into(),
+        }
+    }
+}
+
 /// Per-slot state in the pool's free list.
 ///
 /// Sibling closed-sets on the `EphemeralPool` axis: [`ReplacementPolicy::ALL`]
@@ -2143,5 +2231,170 @@ mod tests {
         assert!(!alive.is_being_deleted());
         let dying = tombstoned_pool();
         assert!(dying.is_being_deleted());
+    }
+
+    // ─── AllocationRef::new substrate pins ────────────────────────────
+    //
+    // Pins the substrate constructor for [`AllocationRef`] — the
+    // ONE-liner composer that lifts the paired
+    // `AllocationRef { name, namespace }` struct-literal every
+    // downstream consumer restated by hand pre-lift at FOUR production
+    // sites (2 × controller_allocation.rs assignedProcess seeds, 1 ×
+    // allocation_decide.rs pool_ref seed, 1 × allocation_factory.rs
+    // pool_ref seed) onto ONE substrate owner on `AllocationRef`.
+    // Fail-before-pass-after granularity: `AllocationRef::new` did not
+    // exist pre-lift; the compiler cannot resolve the name until the
+    // impl block above is in place, so a rollback of the primitive
+    // breaks this whole module.
+
+    #[test]
+    fn allocation_ref_new_composes_owned_string_pair_verbatim() {
+        // Happy-path pin: the constructor materializes an
+        // `AllocationRef { name: <name>, namespace: <namespace> }`
+        // byte-identical to the pre-lift struct literal every consumer
+        // spelled. A regression that dropped either slot (e.g. an
+        // erroneous `..Default::default()` on a shape that never had
+        // a Default derive) surfaces here rather than as silent slot
+        // loss downstream at the assignedProcess / bound_pool /
+        // matched_pool / spec.pool_ref sinks.
+        let r = AllocationRef::new(String::from("pr-42-demo"), String::from("ephemeral-pools"));
+        assert_eq!(r.name, "pr-42-demo");
+        assert_eq!(r.namespace, "ephemeral-pools");
+    }
+
+    #[test]
+    fn allocation_ref_new_matches_pre_lift_struct_literal_verbatim() {
+        // Byte-identical parity pin: the substrate constructor and the
+        // hand-authored struct literal produce equal `AllocationRef`
+        // values on every provenance the FOUR pre-lift sites carried
+        // (owned `String` from an owned-form projection; `&str`
+        // promoted through `.to_string()`). A regression that inserted
+        // a normalization step at the primitive the pre-lift literal
+        // does NOT apply — or vice versa — surfaces here rather than
+        // as silent drift between the four consumers and the ONE
+        // substrate owner they now route through.
+        let owned_name = String::from("pr-42-demo");
+        let owned_ns = String::from("ephemeral-pools");
+        let lifted = AllocationRef::new(owned_name.clone(), owned_ns.clone());
+        let pre_lift = AllocationRef {
+            name: owned_name,
+            namespace: owned_ns,
+        };
+        assert_eq!(lifted, pre_lift);
+    }
+
+    #[test]
+    fn allocation_ref_new_accepts_str_provenance_via_into_string() {
+        // `Into<String>` provenance-closure pin: the primitive accepts
+        // every provenance the pre-lift sites carried. The
+        // controller_allocation.rs assignedProcess seeds passed owned
+        // `String` values (a moved `member_process_name` +
+        // `ns.clone()`); the allocation_factory.rs pool_ref seed
+        // passed `&str` (`n.to_string()` / `namespace.to_string()`).
+        // Both provenances produce byte-identical output. A future
+        // refactor of the constructor signature that demanded owned
+        // `String` at author sites (dropping `impl Into<String>`)
+        // would force `.to_string()` back at the FOUR call sites — the
+        // pin fences that regression at ONE place.
+        let from_str = AllocationRef::new("pr-42-demo", "ephemeral-pools");
+        let from_string =
+            AllocationRef::new(String::from("pr-42-demo"), String::from("ephemeral-pools"));
+        assert_eq!(from_str, from_string);
+        // Mixed provenance is also load-bearing: the allocation_decide.rs
+        // matched_pool seed pairs an owned `String` (from
+        // `EphemeralPool::owned_name_or_empty()`) with a hand-authored
+        // `.clone().unwrap_or_default()` — also `String`. The
+        // controller_allocation.rs paths pair a moved `String` name
+        // with a `.clone()`-ed `ns: String`. Verify (owned, borrow)
+        // and (borrow, owned) both compose to the same shape as
+        // (owned, owned) / (borrow, borrow).
+        let mixed_a = AllocationRef::new(String::from("pr-42-demo"), "ephemeral-pools");
+        let mixed_b = AllocationRef::new("pr-42-demo", String::from("ephemeral-pools"));
+        assert_eq!(from_str, mixed_a);
+        assert_eq!(from_str, mixed_b);
+    }
+
+    #[test]
+    fn allocation_ref_new_positional_axis_order_pinned_name_first_namespace_second() {
+        // Axis-order pin: name is the FIRST positional argument;
+        // namespace is the SECOND. Reversing the pair at the
+        // constructor is the exact regression this pin fences — the
+        // FOUR pre-lift sites all spelled `name` before `namespace`
+        // (matching the struct definition's field order in
+        // `pub struct AllocationRef { pub name, pub namespace }`)
+        // and the wire-format serde output `{ "name": "...",
+        // "namespace": "..." }` reflects that order. A slot swap at
+        // the primitive would surface here rather than as silent
+        // `<namespace>/<name>` inversion at every downstream
+        // qualified-ref composer that reads `{ref.name}/{ref.namespace}`
+        // as an audit-log key.
+        let r = AllocationRef::new("alpha-name", "beta-namespace");
+        assert_eq!(r.name, "alpha-name");
+        assert_eq!(r.namespace, "beta-namespace");
+        assert_ne!(r.name, "beta-namespace");
+        assert_ne!(r.namespace, "alpha-name");
+    }
+
+    #[test]
+    fn allocation_ref_new_preserves_empty_string_verbatim() {
+        // Empty-string sentinel pin: the constructor is pure — it does
+        // NOT canonicalize empty inputs (does NOT default an empty
+        // namespace to `"default"`; does NOT reject an empty name).
+        // Preserves the pre-lift shape the allocation_decide.rs
+        // matched_pool seed relied on: when the pool's metadata.namespace
+        // is absent, `.clone().unwrap_or_default()` yields the empty
+        // string, and the AllocationRef's namespace slot carries that
+        // empty string verbatim to the downstream `bound_pool` sink.
+        // A future canonicalization pass (e.g. defaulting to
+        // `Process::DEFAULT_NAMESPACE`) MUST land here, not at the
+        // primitive body silently, so the pre-lift consumers' empty-
+        // sentinel semantics are the visible contract of the new
+        // constructor.
+        let r = AllocationRef::new("", "");
+        assert_eq!(r.name, "");
+        assert_eq!(r.namespace, "");
+        let mixed = AllocationRef::new("pr-42-demo", "");
+        assert_eq!(mixed.name, "pr-42-demo");
+        assert_eq!(mixed.namespace, "");
+    }
+
+    #[test]
+    fn allocation_ref_new_composes_with_owned_name_or_empty_pool_projection() {
+        // Composition pin: the constructor composes with the
+        // sibling substrate primitive [`EphemeralPool::owned_name_or_empty`]
+        // at the allocation_decide.rs pool_ref seed — the same
+        // primitive family the pool CRD already opened. The composed
+        // pair carries an owned `String` name half (from
+        // `pool.owned_name_or_empty()`) and an owned `String`
+        // namespace half (pre-lift chain, to be lifted as
+        // `owned_namespace_or_empty` in a peer run). A regression
+        // that broke the primitive's `impl Into<String>` acceptance
+        // of an owned `String` return type would surface here rather
+        // than as silent build failure at the pool-reconciler
+        // matched_pool seed.
+        let pool = pool_named("attest-pool");
+        let ns = pool.metadata.namespace.clone().unwrap_or_default();
+        let r = AllocationRef::new(pool.owned_name_or_empty(), ns.clone());
+        assert_eq!(r.name, "attest-pool");
+        assert_eq!(r.namespace, ns);
+    }
+
+    #[test]
+    fn allocation_ref_new_returns_wire_format_serialization_verbatim() {
+        // Wire-format pin: the constructor produces an
+        // [`AllocationRef`] whose serde `rename_all = "camelCase"`
+        // serialization is byte-identical to the pre-lift struct
+        // literal's serialization. The `bound_pool` and
+        // `assignedProcess` slots on `AllocationStatus` (and the
+        // `poolRef` slot on `AllocationSpec`) all round-trip through
+        // this shape — the pin fences a regression that added a
+        // private field or a `#[serde(skip)]` accidentally.
+        let r = AllocationRef::new("pr-42-demo", "ephemeral-pools");
+        let yaml = serde_yaml::to_string(&r).expect("AllocationRef serializes to yaml");
+        assert!(yaml.contains("name: pr-42-demo"), "{yaml}");
+        assert!(yaml.contains("namespace: ephemeral-pools"), "{yaml}");
+        let back: AllocationRef =
+            serde_yaml::from_str(&yaml).expect("AllocationRef round-trips through yaml");
+        assert_eq!(back, r);
     }
 }

@@ -30,7 +30,13 @@ pub fn allocation_name(repo: &str, pr_number: u64) -> String {
     let safe_repo = repo.replace('/', "-");
     let safe_repo: String = safe_repo
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
     let trimmed = if safe_repo.len() > 50 {
         &safe_repo[..50]
@@ -73,10 +79,17 @@ pub fn build_allocation(
         .map(|l| l.name.clone())
         .collect();
 
-    let pool_ref = pool_name.map(|n| AllocationRef {
-        name: n.to_string(),
-        namespace: namespace.to_string(),
-    });
+    // The `spec.poolRef` slot rides through the substrate
+    // constructor `AllocationRef::new` — pre-lift this was a hand-
+    // authored `AllocationRef { name, namespace }` struct-literal,
+    // one of FOUR workspace-wide restatements past the ★★ PRIME-
+    // DIRECTIVE ≥ 2 duplication threshold (peers at
+    // `tatara-pool-reconciler::controller_allocation`'s Bind + Release
+    // `assignedProcess` seeds, and at
+    // `tatara-pool-reconciler::allocation_decide::AllocationConvergenceCtx::observe`'s
+    // pool_ref seed). Post-lift the four consumers share ONE substrate
+    // owner on `AllocationRef`.
+    let pool_ref = pool_name.map(|n| AllocationRef::new(n, namespace));
 
     let spec = AllocationSpec {
         pool_ref,
@@ -168,7 +181,10 @@ mod tests {
         );
         assert_eq!(alloc.spec.requestor.pr_number, Some(42));
         assert_eq!(alloc.spec.requestor.sha.as_deref(), Some("abc123def"));
-        assert_eq!(alloc.spec.requestor.pr_labels, vec!["needs-ephemeral", "integration"]);
+        assert_eq!(
+            alloc.spec.requestor.pr_labels,
+            vec!["needs-ephemeral", "integration"]
+        );
         assert_eq!(alloc.spec.requestor.actor.as_deref(), Some("drzln"));
         // Selector-routed (no pool pinned).
         assert!(alloc.spec.pool_ref.is_none());
@@ -214,7 +230,9 @@ mod tests {
     #[test]
     fn allocation_name_is_dns_safe() {
         let n = allocation_name("Some/Org/Weird@Name", 7);
-        assert!(n.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'));
+        assert!(n
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'));
         assert!(n.starts_with("pr-7-"));
     }
 

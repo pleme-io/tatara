@@ -1176,6 +1176,98 @@ impl Process {
     pub fn is_being_deleted(&self) -> bool {
         self.metadata.deletion_timestamp.is_some()
     }
+
+    /// Copy-form metadata-projection primitive on the
+    /// `metadata.creationTimestamp` axis: returns the K8s-API-server-
+    /// assigned creation moment as a `DateTime<Utc>`, hiding the wire-
+    /// format `k8s_openapi::apimachinery::pkg::apis::meta::v1::Time`
+    /// newtype behind an inherent projection — the ONE-liner collapse
+    /// of the paired `self.metadata.creation_timestamp.as_ref().map(|t|
+    /// t.0)` incantation every timestamp-driven consumer restated by
+    /// hand pre-lift.
+    ///
+    /// Pre-lift the paired `.metadata.creation_timestamp.as_ref()` +
+    /// `t.0` unwrap chain was hand-authored at THREE sites past the
+    /// ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold across the
+    /// workspace, all projecting the SAME creation-moment `DateTime<Utc>`
+    /// on a `Process`:
+    /// * `tatara-process::lifetime_clock::evaluate` — TTL-expiry gate
+    ///   in the ephemeral-lifetime decision (`elapsed = now
+    ///   .signed_duration_since(creation.0)`), inside the non-terminal-
+    ///   phase guard that fires the `AutoTerminate::Now { TtlExpired }`
+    ///   branch. Pre-lift the site read `if let Some(creation) = process
+    ///   .metadata.creation_timestamp.as_ref() { ... creation.0 ... }`.
+    /// * `tatara-process::lifetime_clock::requeue_with_ttl` — sleep-
+    ///   budget picker for the reconciler's next requeue, choosing the
+    ///   smaller of HEARTBEAT and TTL-remaining so the reconciler
+    ///   doesn't oversleep past a TTL boundary. Pre-lift the site read
+    ///   `let Some(creation) = process.metadata.creation_timestamp
+    ///   .as_ref() else { return default; };` + `creation.0`.
+    /// * `tatara-reconciler::table_controller::reconcile_process_table`
+    ///   — stable-name claim-arbiter row builder, seeding each
+    ///   candidate row's `created_at` for the tie-break ordering
+    ///   (oldest wins). Pre-lift the site read `p.metadata
+    ///   .creation_timestamp.as_ref().map(|t| t.0).unwrap_or_else(Utc
+    ///   ::now)`.
+    ///
+    /// All THREE sites walked the SAME two-link chain — read the
+    /// `Option<Time>` slot as a borrow, then unwrap the `Time` newtype
+    /// to its inner `DateTime<Utc>` — differing only in the tail
+    /// (`if-let-Some` guard, `let-else` short-circuit, `Utc::now`
+    /// fallback). Post-lift each callsite reads
+    /// `process.created_at()` and applies its own tail at its own site
+    /// (`if let Some(creation) = ...`, `let Some(creation) = ... else`,
+    /// `.unwrap_or_else(Utc::now)`).
+    ///
+    /// Return-form axis: `Option<DateTime<Utc>>` matches the copy-form
+    /// discipline of the sibling status-projection primitive
+    /// [`Self::observed_phase`] — both return `Option<T>` where `T:
+    /// Copy` and hide the wire-format wrapper (`ProcessStatus` on the
+    /// status side; `Time` on the metadata side). Returning the raw
+    /// `Option<&Time>` would push the `.0` unwrap back to every
+    /// callsite, restating the pre-lift chain one link shorter without
+    /// collapsing the primitive; returning owned `Option<Time>` would
+    /// force a `Time` import at every consumer for a projection every
+    /// consumer immediately discards past `.0`.
+    ///
+    /// Peer to the metadata-fallback + presence-probe primitives
+    /// [`Self::namespace_or_default`], [`Self::name_or_placeholder`],
+    /// [`Self::uid_or_empty`], [`Self::coordinates_or_defaults`],
+    /// [`Self::coordinates_or_none`], [`Self::owned_coordinates_or_err`],
+    /// [`Self::annotation`], [`Self::is_being_deleted`] on the metadata
+    /// axis; this method opens the copy-form timestamp corner. Future
+    /// metadata-timestamp projections (a
+    /// `deletion_at() -> Option<DateTime<Utc>>` peer on the
+    /// tombstone-payload axis for staleness gates that need the
+    /// timestamp value alongside the presence bit) land as peer
+    /// methods on this same axis.
+    ///
+    /// A future normalization step (a per-cluster clock-skew guard
+    /// that offsets the returned timestamp by the observing controller's
+    /// measured skew, a canonicalization pass that maps a suspiciously-
+    /// zero creation moment to `None`, a per-namespace override that
+    /// substitutes a `spec.identity`-declared creation anchor for the
+    /// metadata slot on adopted resources) lands at ONE substrate
+    /// method here and all three downstream consumers pick up the
+    /// upgrade mechanically — no per-callsite hand-edit at `evaluate`
+    /// / `requeue_with_ttl` / `reconcile_process_table`.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `.metadata.creation_timestamp.as_ref().map(|t| t.0)` chain
+    /// recurred at three hand-authored sites past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
+    /// owner here). THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the pins bind the missing-timestamp corner + the
+    /// present-timestamp corner + the copy-form `DateTime<Utc>` return
+    /// + the byte-identical parity with the pre-lift `.as_ref().map(|t|
+    /// t.0)` chain, so a regression that drifted any surface at
+    /// `tests::created_at_*` rather than as silent operator-facing
+    /// skew between the TTL-expiry gate, the requeue-budget picker,
+    /// and the stable-name claim-arbiter tie-break on the SAME
+    /// `Process` within one reconcile pass).
+    pub fn created_at(&self) -> Option<DateTime<Utc>> {
+        self.metadata.creation_timestamp.as_ref().map(|t| t.0)
+    }
 }
 
 /// Process status — every field optional until the reconciler writes it.
@@ -3683,5 +3775,127 @@ mod tests {
         p.status = Some(dead);
         assert!(p.is_being_deleted());
         assert!(!p.observed_phase().unwrap_or_default().is_alive());
+    }
+
+    // ─── Process::created_at substrate pins ─────────────────────────
+    //
+    // Pins the copy-form metadata-projection primitive on the
+    // `metadata.creationTimestamp` axis that owns the
+    // `.metadata.creation_timestamp.as_ref().map(|t| t.0)` chain the
+    // three hand-authored sites (`lifetime_clock::evaluate`,
+    // `lifetime_clock::requeue_with_ttl`,
+    // `tatara-reconciler::table_controller`) restated by hand pre-lift.
+    // Peer to the sibling `is_being_deleted_*` +
+    // `observed_phase_*` pin families — all three primitives project a
+    // wire-format `Option<T>` slot into a `Copy` inner value at ONE
+    // owner. Fail-before-pass-after granularity: `created_at` did not
+    // exist pre-lift, so any test invoking it fails to compile pre-lift
+    // and passes post-lift.
+
+    fn creation_stamped_process(t: DateTime<Utc>) -> Process {
+        let mut p = Process::new("age-anchor", empty_spec());
+        p.metadata.namespace = Some("prod".into());
+        p.metadata.creation_timestamp =
+            Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(t));
+        p
+    }
+
+    #[test]
+    fn created_at_returns_none_when_creation_timestamp_is_absent() {
+        // Missing-slot corner pin: the primitive collapses the
+        // no-creation-timestamp case to `None` so the TTL-expiry gate
+        // at `lifetime_clock::evaluate` short-circuits its inner
+        // `if let Some(...)` branch (no elapsed computation), the
+        // requeue-budget picker returns its default sleep, and the
+        // stable-name arbiter's `.unwrap_or_else(Utc::now)` tail
+        // synthesizes a "just created" anchor at its own site. Matches
+        // the pre-lift `.as_ref().map(|t| t.0)` chain's `None`
+        // byte-identically at every consumer's downstream tail.
+        let mut p = Process::new("api", empty_spec());
+        p.metadata.creation_timestamp = None;
+        assert!(p.created_at().is_none());
+    }
+
+    #[test]
+    fn created_at_returns_some_datetime_when_slot_is_populated() {
+        // Populated-slot corner pin: with a populated
+        // `metadata.creationTimestamp` slot, the primitive unwraps the
+        // wire-format `Time` newtype to its inner `DateTime<Utc>` and
+        // returns it as `Some(datetime)` — hiding the `.0` field-access
+        // every pre-lift consumer restated to reach the underlying
+        // instant.
+        let anchor = Utc::now() - chrono::Duration::seconds(300);
+        let p = creation_stamped_process(anchor);
+        assert_eq!(p.created_at(), Some(anchor));
+    }
+
+    #[test]
+    fn created_at_is_a_pure_projection() {
+        // Purity pin: two consecutive calls return byte-identical
+        // `Option<DateTime<Utc>>` values (no lazy materialization, no
+        // interior mutation of `self`). Peer to the sibling
+        // `is_being_deleted_is_a_pure_projection` +
+        // `observed_phase_is_a_pure_projection` pins; all three bind
+        // the pure-projection discipline on the ONE substrate accessor
+        // per metadata / status slot.
+        let anchor = Utc::now();
+        let p = creation_stamped_process(anchor);
+        let a = p.created_at();
+        let b = p.created_at();
+        assert_eq!(a, b);
+        assert_eq!(a, Some(anchor));
+    }
+
+    #[test]
+    fn created_at_matches_pre_lift_creation_timestamp_chain_shape() {
+        // Parity pin: sweeps the two corners every pre-lift consumer
+        // plausibly encountered (missing slot, populated slot) and
+        // compares the substrate call against a hand-authored pre-lift
+        // chain byte-identically. A regression that reshaped either
+        // corner (returning `Some(Utc::now())` on the missing slot,
+        // returning a rounded / truncated timestamp on the populated
+        // slot) would surface here rather than as silent operator-
+        // facing skew between the TTL-expiry gate, the requeue-budget
+        // picker, and the stable-name claim-arbiter tie-break on the
+        // SAME `Process` within one reconcile pass.
+        fn pre_lift(p: &Process) -> Option<DateTime<Utc>> {
+            p.metadata.creation_timestamp.as_ref().map(|t| t.0)
+        }
+        // Missing slot.
+        let mut p = Process::new("x", empty_spec());
+        p.metadata.creation_timestamp = None;
+        assert_eq!(p.created_at(), pre_lift(&p));
+        // Populated slot.
+        let anchor = Utc::now() - chrono::Duration::seconds(42);
+        let p = creation_stamped_process(anchor);
+        assert_eq!(p.created_at(), pre_lift(&p));
+    }
+
+    #[test]
+    fn created_at_composes_with_signed_duration_since_at_ttl_gate() {
+        // Call-site-shape pin: the `lifetime_clock::evaluate` TTL-
+        // expiry gate composes `now.signed_duration_since(creation)`
+        // where `creation` is the `DateTime<Utc>` returned by this
+        // primitive's `Some` corner. A regression that returned a
+        // per-callsite `Local` timezone (or that stripped the timezone
+        // marker) would break the arithmetic silently. This pin
+        // computes the elapsed duration byte-identically against the
+        // pre-lift `.map(|t| t.0)` chain so a timezone drift surfaces
+        // here rather than as silent skew at the TTL-expiry decision
+        // on the SAME `Process` within one reconcile pass.
+        let now = Utc::now();
+        let anchor = now - chrono::Duration::seconds(120);
+        let p = creation_stamped_process(anchor);
+        let via_primitive = p.created_at().expect("populated slot");
+        let via_pre_lift = p
+            .metadata
+            .creation_timestamp
+            .as_ref()
+            .map(|t| t.0)
+            .expect("populated slot");
+        assert_eq!(
+            now.signed_duration_since(via_primitive),
+            now.signed_duration_since(via_pre_lift)
+        );
     }
 }

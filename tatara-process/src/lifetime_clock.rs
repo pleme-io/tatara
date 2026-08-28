@@ -314,10 +314,17 @@ pub fn evaluate(
     }
 
     // 2. TTL expiry — applies in any non-terminal phase.
+    //    The creation-anchor probe rides through the ONE substrate
+    //    `Process::created_at` primitive, sibling to the same-corner
+    //    requeue-budget picker in `requeue_with_ttl` below and the
+    //    stable-name claim-arbiter tie-break seed in
+    //    `tatara-reconciler::table_controller`. Post-lift the two
+    //    consumers here + downstream share the ONE
+    //    `Option<DateTime<Utc>>` return shape.
     if !is_terminal_or_exit(current_phase) {
-        if let Some(creation) = process.metadata.creation_timestamp.as_ref() {
+        if let Some(creation) = process.created_at() {
             if let Ok(ttl) = humantime::parse_duration(&ephemeral.ttl) {
-                let elapsed = now.signed_duration_since(creation.0).to_std().ok();
+                let elapsed = now.signed_duration_since(creation).to_std().ok();
                 if let Some(elapsed) = elapsed {
                     if elapsed >= ttl {
                         return AutoTerminate::Now {
@@ -354,13 +361,17 @@ pub fn requeue_with_ttl(process: &Process, now: DateTime<Utc>, default: Duration
     let Some(e) = process.spec.lifetime.resolved_ephemeral() else {
         return default;
     };
-    let Some(creation) = process.metadata.creation_timestamp.as_ref() else {
+    // Creation-anchor probe rides through the ONE substrate
+    // `Process::created_at` primitive (sibling to the TTL-expiry gate
+    // in `evaluate` above); the `let-else` short-circuits on the
+    // missing-slot corner to the caller's `default` sleep budget.
+    let Some(creation) = process.created_at() else {
         return default;
     };
     let Ok(ttl) = humantime::parse_duration(&e.ttl) else {
         return default;
     };
-    let elapsed = match now.signed_duration_since(creation.0).to_std() {
+    let elapsed = match now.signed_duration_since(creation).to_std() {
         Ok(d) => d,
         Err(_) => return default,
     };

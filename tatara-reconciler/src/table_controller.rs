@@ -60,12 +60,14 @@ pub async fn reconcile(
             .as_ref()
             .and_then(|s| s.pid.clone())
             .unwrap_or_default();
-        let created_at = p
-            .metadata
-            .creation_timestamp
-            .as_ref()
-            .map(|t| t.0)
-            .unwrap_or_else(Utc::now);
+        // Creation-anchor probe rides through the ONE substrate
+        // `Process::created_at` primitive (sibling to the TTL-expiry
+        // gate + requeue-budget picker in `tatara-process::
+        // lifetime_clock`); the `.unwrap_or_else(Utc::now)` tail keeps
+        // the "just created" fallback the pre-lift chain applied when
+        // the API server has not yet stamped the timestamp on a
+        // freshly-forked Process.
+        let created_at = p.created_at().unwrap_or_else(Utc::now);
         // Two-slot metadata pull → `<ns>/<name>` claim-row key. The
         // `(ns, name)` pair rides through `Process::
         // coordinates_or_defaults` (workspace-wide fallback owner)

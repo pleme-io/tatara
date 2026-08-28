@@ -823,6 +823,42 @@ mod tests {
         crate::tagged_union::assert_variant_round_trip::<Intent, _>(single_slot_intent);
     }
 
+    /// PRESENCE-PROBE WIRE CONTRACT: the `intent-<kind>` require-tag
+    /// dispatcher in `tatara-check` (`bin/tatara-check.rs`) parses
+    /// each suffix via `IntentKind::from_str` and dispatches through
+    /// the substrate primitive `Intent::has` (a one-line inherent
+    /// forwarder over [`crate::tagged_union::TaggedUnion::has`]).
+    /// Pre-lift the dispatcher restated five hand-authored
+    /// `spec.intent.<field>.is_some()` arms whose per-field addressing
+    /// drifted from `IntentKind::ALL` (the sixth variant `Guest` had
+    /// no `intent-guest` arm at all); post-lift adding a seventh
+    /// variant to `IntentKind` lands the corresponding `intent-<kind>`
+    /// tag automatically — the sweep here pins that every
+    /// `IntentKind` roundtrips through the `intent-{as_str}` wire
+    /// key, and that `Intent::has(k)` fires exactly on the populated
+    /// slot addressed by `k`.
+    #[test]
+    fn intent_has_dispatches_through_wire_key_across_every_kind() {
+        for populated in IntentKind::ALL {
+            let intent = single_slot_intent(populated);
+            for probed in IntentKind::ALL {
+                let wire_key = format!("intent-{}", probed.as_str());
+                let parsed: IntentKind = wire_key
+                    .strip_prefix("intent-")
+                    .expect("wire key composes as intent-<as_str>")
+                    .parse()
+                    .expect("as_str→from_str round trip pinned by DeriveClosedSet");
+                assert_eq!(parsed, probed);
+                let expected = probed == populated;
+                assert_eq!(
+                    intent.has(probed),
+                    expected,
+                    "Intent::has drift — populated={populated:?} probed={probed:?}",
+                );
+            }
+        }
+    }
+
     /// EMPTY-DIAGNOSTIC CONTRACT: the closed-set kind list embedded
     /// in `IntentError::Empty` echoes the canonical join of every
     /// `IntentKind::as_str()` projection. A variant added without

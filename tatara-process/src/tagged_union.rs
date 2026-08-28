@@ -263,6 +263,23 @@ macro_rules! declare_tagged_union_impls {
             pub fn variant(&self) -> ::std::result::Result<$variant<'_>, $err> {
                 <Self as $crate::tagged_union::TaggedUnion>::variant(self)
             }
+
+            /// Presence probe — does this tagged union carry a
+            /// populated slot addressed by the given closed-set
+            /// discriminator?
+            ///
+            /// One-line inherent forwarder that delegates to the
+            /// substrate primitive
+            /// [`crate::tagged_union::TaggedUnion::has`] — every
+            /// closed-set-driven presence check on `ProcessSpec`
+            /// dispatches through this ONE default body so the
+            /// per-slot `spec.<field>.is_some()` pattern lives at
+            /// ONE substrate site. The inherent surface stays
+            /// load-bearing so consumer callsites don't need
+            /// `use TaggedUnion`.
+            pub fn has(&self, kind: $kind) -> bool {
+                <Self as $crate::tagged_union::TaggedUnion>::has(self, kind)
+            }
         }
 
         impl $crate::tagged_union::VariantSelector<$parent> for $kind {
@@ -573,6 +590,29 @@ pub trait TaggedUnion: Sized {
             Self::KIND_LIST,
         )
     }
+
+    /// Presence probe — does this tagged union carry a populated
+    /// slot addressed by the given closed-set discriminator?
+    ///
+    /// One-liner that composes [`VariantSelector::select`]'s optional
+    /// borrow with `.is_some()` — the presence half of the resolve
+    /// contract, without allocating an [`Self::Error`] carrier when the
+    /// caller only needs the yes/no answer. Substrate primitive for
+    /// closed-set-driven dispatch tables (e.g. tatara-check's
+    /// `intent-<kind>` requires-tag sweep) where a hand-authored
+    /// per-slot `spec.<field>.is_some()` chain otherwise drifts from
+    /// the [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL)
+    /// enumeration as new variants land.
+    ///
+    /// Every one of the four production `.variant()` sites on
+    /// `ProcessSpec` picks this up for free through the trait default
+    /// — the [`declare_tagged_union_impls!`] macro emits a one-line
+    /// inherent forwarder so `intent.has(kind)` reads at consumer
+    /// callsites without `use TaggedUnion`. Adding a fifth sibling
+    /// picks up the presence probe with zero re-authored body.
+    fn has(&self, kind: Self::Kind) -> bool {
+        kind.select(self).is_some()
+    }
 }
 
 /// Generic diagnostic-stability testkit — pins that [`TaggedUnion::KIND_LIST`]
@@ -606,6 +646,56 @@ pub fn assert_kind_list_matches_closed_set<T: TaggedUnion>() {
         T::KIND_LIST,
         "TaggedUnion KIND_LIST drift — must equal <T::Kind as ClosedSet>::labels_joined(\"/\")",
     );
+}
+
+/// Generic presence-probe testkit — pins that [`TaggedUnion::has`]
+/// agrees with [`VariantSelector::select`]`.is_some()` across every
+/// [`ClosedSet::ALL`](tatara_closed_set::ClosedSet::ALL) entry, both
+/// on the diagonal (populated slot AND matching kind → `true`) and
+/// off the diagonal (populated slot BUT other kind → `false`).
+///
+/// Substrate primitive for the presence-probe half of the tagged-
+/// union contract — dispatch tables that key off `intent-<kind>` /
+/// `channel-<kind>` / `source-<kind>` require-tags gain a `.has(k)`
+/// call that structurally CANNOT drift from the closed-set sweep,
+/// but the pin here surfaces a `has` override that would break the
+/// contract (e.g. a future specialization that always returned
+/// `false`) at ONE call site rather than at every downstream
+/// dispatcher.
+///
+/// A fifth sibling tagged-union parent picks up the presence-probe
+/// check through ONE `assert_has_matches_select::<X, _>(single_slot)`
+/// invocation — no re-authored `for k in K::ALL { … }` sweep at the
+/// test site.
+#[track_caller]
+pub fn assert_has_matches_select<T, F>(single_slot: F)
+where
+    T: TaggedUnion,
+    T::Kind: PartialEq + std::fmt::Debug,
+    F: Fn(T::Kind) -> T,
+{
+    for populated in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+        .iter()
+        .copied()
+    {
+        let parent = single_slot(populated);
+        for probed in <T::Kind as tatara_closed_set::ClosedSet>::ALL
+            .iter()
+            .copied()
+        {
+            let expected = probed == populated;
+            assert_eq!(
+                parent.has(probed),
+                expected,
+                "TaggedUnion::has drift — populated={populated:?} probed={probed:?} expected={expected}",
+            );
+            assert_eq!(
+                probed.select(&parent).is_some(),
+                expected,
+                "VariantSelector::select drift — populated={populated:?} probed={probed:?} expected={expected}",
+            );
+        }
+    }
 }
 
 /// Generic ambiguity testkit — pins that [`TaggedUnion::variant`]
@@ -1217,6 +1307,7 @@ where
     assert_kind_list_matches_closed_set::<T>();
     assert_variant_round_trip::<T, _>(&single_slot);
     assert_two_slots_ambiguous::<T, _>(two_slot);
+    assert_has_matches_select::<T, _>(&single_slot);
     assert_single_slot_key_matches_label::<T, _>(single_slot);
 }
 
@@ -2663,6 +2754,55 @@ mod tests {
             bar: Some(2),
         };
         assert_eq!(p.variant().unwrap_err(), MacroLocalError::Ambiguous);
+    }
+
+    /// The macro-emitted inherent `.has()` forwarder dispatches
+    /// through the trait default body — the presence probe agrees
+    /// with `Kind::select(&parent).is_some()` on the diagonal
+    /// (populated slot AND matching Kind → `true`) and off the
+    /// diagonal (populated slot BUT other Kind → `false`) for the
+    /// same four-outcome truth table the macro-emitted `.variant()`
+    /// covers. The four production sites bind through this exact
+    /// same macro-emitted delegation shape; the substrate testkit
+    /// primitive [`assert_has_matches_select`] sweeps this contract
+    /// generically once each production Kind picks up the macro's
+    /// output.
+    #[test]
+    fn macro_emitted_inherent_has_dispatches_the_presence_probe_diagonal() {
+        // Foo populated → has(Foo) is true, has(Bar) is false.
+        let p = MacroLocalParent {
+            foo: Some(11),
+            bar: None,
+        };
+        assert!(p.has(MacroLocalKind::Foo));
+        assert!(!p.has(MacroLocalKind::Bar));
+
+        // Bar populated → has(Bar) is true, has(Foo) is false.
+        let p = MacroLocalParent {
+            foo: None,
+            bar: Some(22),
+        };
+        assert!(!p.has(MacroLocalKind::Foo));
+        assert!(p.has(MacroLocalKind::Bar));
+
+        // All none — every probe is false; no Empty carrier
+        // allocation on this path (the presence-probe half of the
+        // resolve contract deliberately elides diagnostic composition
+        // when the caller only needs yes/no).
+        let p = MacroLocalParent::default();
+        assert!(!p.has(MacroLocalKind::Foo));
+        assert!(!p.has(MacroLocalKind::Bar));
+
+        // Two populated — has(k) is true for BOTH populated slots
+        // (the probe is a per-slot projection, not the parent-wide
+        // resolver — Ambiguous is a resolve outcome, not a presence
+        // outcome).
+        let p = MacroLocalParent {
+            foo: Some(1),
+            bar: Some(2),
+        };
+        assert!(p.has(MacroLocalKind::Foo));
+        assert!(p.has(MacroLocalKind::Bar));
     }
 
     /// The macro-emitted `VariantSelector` impl's `select` body

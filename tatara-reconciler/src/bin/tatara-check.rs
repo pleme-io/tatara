@@ -12,6 +12,7 @@ use std::process::ExitCode;
 use kube::CustomResourceExt;
 use tatara_lisp::{domain, read, Expander, Sexp};
 use tatara_process::allocation::EphemeralAllocation;
+use tatara_process::intent::IntentKind;
 use tatara_process::pool::EphemeralPool;
 use tatara_process::prelude::{Process, ProcessTable};
 
@@ -341,20 +342,39 @@ fn check_lisp_compiles(args: &[Sexp], root: &Path, report: &mut Report) {
             }
             let first = &defs[0];
             for req in &requires {
-                let ok = match req.as_str() {
-                    "intent-nix" => first.spec.intent.nix.is_some(),
-                    "intent-flux" => first.spec.intent.flux.is_some(),
-                    "intent-lisp" => first.spec.intent.lisp.is_some(),
-                    "intent-container" => first.spec.intent.container.is_some(),
-                    "intent-aplicacao" => first.spec.intent.aplicacao.is_some(),
-                    "lifetime-ephemeral" => first.spec.lifetime.is_ephemeral(),
-                    "depends-on" => !first.spec.depends_on.is_empty(),
-                    "boundary-pre" => !first.spec.boundary.preconditions.is_empty(),
-                    "boundary-post" => !first.spec.boundary.postconditions.is_empty(),
-                    "compliance" => !first.spec.compliance.bindings.is_empty(),
-                    "signals" => first.spec.signals.sigterm_grace_seconds > 0,
-                    other => {
-                        return report.fail(label, format!("unknown :requires tag: {other}"));
+                // `intent-<kind>` require-tags dispatch through the
+                // typed [`IntentKind`] closed set — the suffix is
+                // parsed via the autoderived `FromStr` (whose
+                // vocabulary is `IntentKind::as_str`, byte-identical
+                // to the serde `rename_all = "camelCase"` field names
+                // on `Intent`) and the presence probe fans out via
+                // the substrate primitive [`Intent::has`]. Pre-lift
+                // the dispatcher restated five hand-authored
+                // `first.spec.intent.<field>.is_some()` arms that
+                // drifted from `IntentKind::ALL` (the sixth variant
+                // `Guest` had no `intent-guest` arm at all); post-
+                // lift adding a seventh variant lands at ONE
+                // `IntentKind` `ALL` entry + ONE `select` arm and
+                // the check-tag surface picks up the new
+                // `intent-<kind>` tag for free.
+                let ok = if let Some(suffix) = req.strip_prefix("intent-") {
+                    match suffix.parse::<IntentKind>() {
+                        Ok(kind) => first.spec.intent.has(kind),
+                        Err(_) => {
+                            return report.fail(label, format!("unknown :requires tag: {req}"));
+                        }
+                    }
+                } else {
+                    match req.as_str() {
+                        "lifetime-ephemeral" => first.spec.lifetime.is_ephemeral(),
+                        "depends-on" => !first.spec.depends_on.is_empty(),
+                        "boundary-pre" => !first.spec.boundary.preconditions.is_empty(),
+                        "boundary-post" => !first.spec.boundary.postconditions.is_empty(),
+                        "compliance" => !first.spec.compliance.bindings.is_empty(),
+                        "signals" => first.spec.signals.sigterm_grace_seconds > 0,
+                        other => {
+                            return report.fail(label, format!("unknown :requires tag: {other}"));
+                        }
                     }
                 };
                 if !ok {

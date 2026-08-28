@@ -66,12 +66,22 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
         .collect();
 
     // 3. Decide.
+    //
+    // The pool → members lookup key rides through the substrate
+    // primitive `EphemeralPool::name_or_empty` — pre-lift this was a
+    // hand-authored `.metadata.name.as_deref().unwrap_or("")` chain,
+    // one of TWO workspace-wide restatements past the ★★ PRIME-
+    // DIRECTIVE ≥ 2 duplication threshold (peer at
+    // `router::best_match` tie-break comparator). Post-lift the two
+    // consumers share ONE substrate owner; the `HashMap<String, _>::
+    // get(&str)` lookup still consumes the borrow directly, so this
+    // reroute allocates nothing new.
     let decision = decide_allocation_reconcile(
         &alloc,
         &pools,
         |p| {
             pool_members
-                .get(p.metadata.name.as_deref().unwrap_or(""))
+                .get(p.name_or_empty())
                 .map(Vec::as_slice)
                 .unwrap_or(&[])
         },
@@ -119,17 +129,13 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
         } => {
             // Flip the Process's lifetime to Ephemeral with the
             // allocation's TTL.
-            let ttl = alloc
-                .spec
-                .ttl
-                .clone()
-                .unwrap_or_else(|| {
-                    pools
-                        .iter()
-                        .find(|p| p.metadata.name.as_deref() == Some(pool.name.as_str()))
-                        .map(|p| p.spec.template.ttl.clone())
-                        .unwrap_or_else(|| "1h".into())
-                });
+            let ttl = alloc.spec.ttl.clone().unwrap_or_else(|| {
+                pools
+                    .iter()
+                    .find(|p| p.metadata.name.as_deref() == Some(pool.name.as_str()))
+                    .map(|p| p.spec.template.ttl.clone())
+                    .unwrap_or_else(|| "1h".into())
+            });
             let lifetime = Lifetime {
                 permanent: None,
                 ephemeral: Some(EphemeralLifetime {

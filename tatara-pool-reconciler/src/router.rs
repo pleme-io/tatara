@@ -28,23 +28,38 @@ pub fn best_match<'a>(
         let score = pool.spec.selector.specificity();
         match &best {
             None => {
-                best = Some(MatchedPool { pool, specificity: score });
+                best = Some(MatchedPool {
+                    pool,
+                    specificity: score,
+                });
             }
             Some(b) => {
                 let beat_score = score > b.specificity;
+                // Tie-break rides through the substrate primitive
+                // `EphemeralPool::name_or_empty` — pre-lift this was a
+                // hand-authored `.metadata.name.as_deref().unwrap_or
+                // ("")` chain lifted through a local `pool_name`
+                // helper, one of TWO workspace-wide restatements past
+                // the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold
+                // (peer at `controller_allocation::reconcile_inner`
+                // pool-member lookup closure). Post-lift the two
+                // consumers share ONE substrate owner; a future
+                // name-canonicalization pass (case-fold, per-cluster
+                // prefix strip) lands at `tatara_process::pool::
+                // EphemeralPool::name_or_empty` and every consumer
+                // inherits it mechanically.
                 let tie_break = score == b.specificity
-                    && pool_name(pool).cmp(pool_name(b.pool)) == std::cmp::Ordering::Less;
+                    && pool.name_or_empty().cmp(b.pool.name_or_empty()) == std::cmp::Ordering::Less;
                 if beat_score || tie_break {
-                    best = Some(MatchedPool { pool, specificity: score });
+                    best = Some(MatchedPool {
+                        pool,
+                        specificity: score,
+                    });
                 }
             }
         }
     }
     best
-}
-
-fn pool_name(p: &EphemeralPool) -> &str {
-    p.metadata.name.as_deref().unwrap_or("")
 }
 
 #[cfg(test)]

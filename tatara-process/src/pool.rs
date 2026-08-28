@@ -144,6 +144,82 @@ pub struct PoolSpec {
     pub stable_name_claim: bool,
 }
 
+impl EphemeralPool {
+    /// Borrow-form metadata-projection primitive on the `metadata.name`
+    /// axis of `EphemeralPool`: returns the K8s object name slice with
+    /// the missing-name corner collapsed to the load-bearing empty-string
+    /// sentinel — the ONE-liner collapse of the paired
+    /// `self.metadata.name.as_deref().unwrap_or("")` incantation every
+    /// pool-side consumer restated by hand pre-lift.
+    ///
+    /// Pre-lift the `.metadata.name.as_deref().unwrap_or("")` chain
+    /// was hand-authored at TWO sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold in `tatara-pool-reconciler`, both keyed
+    /// by the pool's own name slot:
+    /// * `router::pool_name` — the tie-break comparator inside
+    ///   `best_match`; a deterministic lexicographic-min-name arbiter
+    ///   across two pool candidates whose specificity scores tie.
+    /// * `controller_allocation::reconcile_inner` — the `HashMap<
+    ///   pool-name, Vec<PoolMember>>` lookup closure fed into
+    ///   `decide_allocation_reconcile`; keys the "which pool members
+    ///   back this allocation candidate?" projection at every
+    ///   allocation-reconcile pass.
+    ///
+    /// Both sites walked the SAME `.as_deref().unwrap_or("")` chain
+    /// and both wanted the `&str` form the primitive returns — as a
+    /// borrow suitable for lexicographic `str::cmp` in the tie-break
+    /// AND for the `HashMap<String, _>::get(&str)` lookup. Post-lift
+    /// each caller reaches for `pool.name_or_empty()` and the produced
+    /// slice feeds the same downstream comparator / lookup unchanged.
+    ///
+    /// The empty-string fallback is the SAME sentinel the sibling
+    /// borrow-form primitive [`crate::crd::Process::uid_or_empty`]
+    /// returns AND the SAME sentinel the owned-form sibling
+    /// [`crate::crd::Process::owned_name_or_empty`] returns on the
+    /// `metadata.name` axis of the sister CRD — the three primitives
+    /// partition the (borrow-form × owned-form) × (uid × name) corner
+    /// of the metadata-slot family on identical fallback semantics
+    /// (empty string means "the slot is unset"), so a consumer that
+    /// switches between the CRD surfaces based on downstream keying
+    /// requirements never sees a different missing-slot spelling as
+    /// a side effect.
+    ///
+    /// Return-form axis: `&str` mirrors the borrow-first discipline
+    /// of the peer metadata primitives on `Process`
+    /// ([`crate::crd::Process::namespace_or_default`],
+    /// [`crate::crd::Process::name_or_placeholder`],
+    /// [`crate::crd::Process::uid_or_empty`]). The one missing-slot
+    /// corner the chain swallowed pre-lift (missing `metadata.name`)
+    /// collapses to the empty-string sentinel so `str::is_empty` /
+    /// `HashMap::get` on an unnamed pool behaves identically to what
+    /// the pre-lift `.as_deref().unwrap_or("")` chain produced.
+    ///
+    /// A future normalization step (a name-canonicalization pass, a
+    /// case-fold key builder, a per-cluster prefix stripper for
+    /// cross-cluster pool-name aliasing) lands at ONE substrate
+    /// method here and both downstream consumers pick up the upgrade
+    /// mechanically — no per-callsite hand-edit at `pool_name` /
+    /// `reconcile_inner`.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `.metadata.name.as_deref().unwrap_or("")` chain recurred
+    /// at two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger, and is lifted to ONE owner here).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// the pins bind the missing-name corner + the empty-string
+    /// sentinel byte-shape + the borrow-form `&str` lifetime + the
+    /// byte-identical parity with the pre-lift chain + the fallback-
+    /// value coherence with `Process::uid_or_empty` /
+    /// `Process::owned_name_or_empty` on the metadata-slot × empty-
+    /// sentinel axis, so a regression that drifted any surface at
+    /// `tests::name_or_empty_*` here rather than as silent operator-
+    /// facing skew between the router tie-break and the allocation
+    /// member-lookup on the SAME pool candidate).
+    pub fn name_or_empty(&self) -> &str {
+        self.metadata.name.as_deref().unwrap_or("")
+    }
+}
+
 /// What the pool reconciler does when a member reaches `Failed`.
 ///
 /// Sibling closed-set lifts on the same `tatara-process` axis:
@@ -1527,5 +1603,139 @@ mod tests {
         assert_eq!(d, PoolPhase::Initializing);
         assert!(!d.is_steady());
         assert!(!d.is_terminal());
+    }
+
+    // ─────────────────────────────────────────────────────────────────
+    // `EphemeralPool::name_or_empty` — borrow-form metadata-projection
+    // primitive on the `metadata.name` axis. Pins the missing-slot
+    // corner, the populated-slot corner, the pre-lift chain-shape
+    // parity, and the pure-projection discipline that the two
+    // `tatara-pool-reconciler` consumers routed onto the primitive
+    // depend on. See the primitive's doc-comment for the full
+    // migration rationale.
+    // ─────────────────────────────────────────────────────────────────
+
+    fn empty_template() -> EphemeralSpec {
+        EphemeralSpec {
+            aplicacao: crate::intent::AplicacaoIntent {
+                chart_ref: "oci://x".into(),
+                version: "1".into(),
+                profile: String::new(),
+                values_overlay: serde_json::Value::Null,
+                release_name: None,
+                target_namespace: None,
+                install_timeout: None,
+            },
+            ttl: "1h".into(),
+            teardown: crate::lifetime::TeardownPolicy::Always,
+            max_concurrent: 0,
+            postconditions: vec![],
+            preconditions: vec![],
+            verify_timeout: None,
+            classification: None,
+            parent: None,
+            exports: vec![],
+            routing: None,
+        }
+    }
+
+    fn pool_spec() -> PoolSpec {
+        PoolSpec {
+            desired_size: 1,
+            min_size: 0,
+            max_size: 0,
+            return_policy: ReturnPolicy::Replace,
+            selector: PoolSelector::default(),
+            template: empty_template(),
+            free_ttl: "24h".into(),
+            max_allocation_ttl: "4h".into(),
+            desired: 0,
+            replacement_policy: ReplacementPolicy::default(),
+            stable_name_claim: false,
+        }
+    }
+
+    fn pool_named(name: &str) -> EphemeralPool {
+        EphemeralPool::new(name, pool_spec())
+    }
+
+    fn pool_unnamed() -> EphemeralPool {
+        let mut p = EphemeralPool::new("scratch", pool_spec());
+        p.metadata.name = None;
+        p
+    }
+
+    #[test]
+    fn name_or_empty_returns_empty_string_when_metadata_name_is_none() {
+        let p = pool_unnamed();
+        assert!(p.metadata.name.is_none(), "fixture invariant");
+        assert_eq!(p.name_or_empty(), "");
+    }
+
+    #[test]
+    fn name_or_empty_returns_populated_slot_verbatim() {
+        let p = pool_named("attest-pool");
+        assert_eq!(p.name_or_empty(), "attest-pool");
+    }
+
+    #[test]
+    fn name_or_empty_returns_empty_string_when_slot_is_explicitly_empty_string() {
+        // Corner between `None` (missing slot) and `Some(String::new())`
+        // (populated slot containing the empty string): the primitive
+        // MUST fold both to the same `""` byte-shape so a downstream
+        // `HashMap<String,_>::get(name)` / `str::cmp` sees ONE
+        // "unnamed pool" bucket regardless of which shape the K8s API
+        // server materialized. This is byte-identical to what the
+        // pre-lift `.as_deref().unwrap_or("")` chain produced.
+        let mut p = pool_named("scratch");
+        p.metadata.name = Some(String::new());
+        assert_eq!(p.name_or_empty(), "");
+    }
+
+    #[test]
+    fn name_or_empty_is_a_pure_projection() {
+        // Consecutive calls return byte-identical slices — no cached
+        // state, no mutation on the `EphemeralPool` between calls.
+        // Guards against a future refactor that plants a cache field
+        // and drifts one caller from another silently.
+        let p = pool_named("router-pool");
+        assert_eq!(p.name_or_empty(), p.name_or_empty());
+        assert_eq!(p.name_or_empty(), "router-pool");
+        assert_eq!(p.name_or_empty(), "router-pool");
+    }
+
+    #[test]
+    fn name_or_empty_matches_pre_lift_chain_verbatim() {
+        // Byte-identical parity with the two hand-authored
+        // `.metadata.name.as_deref().unwrap_or("")` chains the
+        // primitive replaces in `tatara-pool-reconciler::router` and
+        // `tatara-pool-reconciler::controller_allocation`. Runs across
+        // the FULL corner set of the metadata.name slot: absent,
+        // present-with-value, present-with-empty-string.
+        let cases: [(Option<String>, &str); 3] = [
+            (None, ""),
+            (Some("attest-pool".into()), "attest-pool"),
+            (Some(String::new()), ""),
+        ];
+        for (slot, expected) in cases {
+            let mut p = pool_named("scratch");
+            p.metadata.name = slot.clone();
+            let pre_lift = p.metadata.name.as_deref().unwrap_or("");
+            assert_eq!(pre_lift, expected, "pre-lift chain sanity");
+            assert_eq!(p.name_or_empty(), pre_lift);
+            assert_eq!(p.name_or_empty(), expected);
+        }
+    }
+
+    #[test]
+    fn name_or_empty_borrows_from_metadata_name_slot() {
+        // The returned `&str` is tied to the `EphemeralPool`'s
+        // lifetime — the caller can compare / hash / index without
+        // allocating. This is the load-bearing property that lets
+        // the `HashMap<String, _>::get(pool.name_or_empty())` closure
+        // in `controller_allocation::reconcile_inner` skip cloning.
+        let p = pool_named("attest-pool");
+        let s: &str = p.name_or_empty();
+        assert_eq!(s.as_ptr(), p.metadata.name.as_deref().unwrap().as_ptr());
     }
 }

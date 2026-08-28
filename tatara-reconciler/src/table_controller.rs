@@ -54,7 +54,19 @@ pub async fn reconcile(
             Some(r) if r.stable_name_claim => r,
             _ => continue,
         };
-        let phase = p.observed_phase().unwrap_or(ProcessPhase::Pending);
+        // Route the observed-phase pull through the ONE substrate
+        // primitive `Process::observed_phase_or_pending` — pre-lift
+        // this was a hand-authored `.observed_phase().unwrap_or
+        // (ProcessPhase::Pending)` two-link chain, one of FOUR
+        // workspace-wide restatements past the ★★ PRIME-DIRECTIVE
+        // ≥ 2 duplication threshold (peers at `controller::reconcile`
+        // and `boundary::evaluate_process_phase`, plus
+        // `tatara-pool-reconciler::controller_pool::reconcile_pool`).
+        // Post-lift the four consumers share ONE substrate owner
+        // and this claim-arbiter row seed inherits any future
+        // generation-filter or staleness-gate normalization
+        // mechanically.
+        let phase = p.observed_phase_or_pending();
         let pid = p
             .status
             .as_ref()

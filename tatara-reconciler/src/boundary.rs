@@ -959,7 +959,16 @@ async fn evaluate_process_phase(
             )))
         }
     };
-    let actual = target.observed_phase().unwrap_or(ProcessPhase::Pending);
+    // Route the observed-phase pull through the ONE substrate
+    // primitive `Process::observed_phase_or_pending` — pre-lift this
+    // was a hand-authored `.observed_phase().unwrap_or(ProcessPhase
+    // ::Pending)` two-link chain, one of FOUR workspace-wide
+    // restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold. Post-lift each callsite reads the substrate accessor
+    // directly and a future normalization on the phase-with-Pending-
+    // sink shape lands at ONE owner (see the `observed_phase_or_pending`
+    // doc for the future-normalization catalog).
+    let actual = target.observed_phase_or_pending();
     if phase_reached(actual, parsed.phase) {
         Ok(Satisfaction::Satisfied)
     } else {

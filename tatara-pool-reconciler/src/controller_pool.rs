@@ -106,9 +106,20 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
             .iter()
             .map(|p| PoolMemberSnapshot {
                 process_name: p.metadata.name.clone().unwrap_or_default(),
-                phase: p
-                    .observed_phase()
-                    .unwrap_or(tatara_process::phase::ProcessPhase::Pending),
+                // Phase snapshot rides through the ONE substrate
+                // primitive `Process::observed_phase_or_pending` —
+                // pre-lift this was a hand-authored `.observed_phase()
+                // .unwrap_or(ProcessPhase::Pending)` two-link chain,
+                // one of FOUR workspace-wide restatements past the
+                // ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold
+                // (peers at `tatara-reconciler::controller::reconcile`
+                // / `::boundary::evaluate_process_phase` /
+                // `::table_controller::stable_name_group_key`).
+                // Post-lift the four consumers share ONE substrate
+                // owner and this desired-count seed inherits any
+                // future generation-filter or staleness-gate
+                // normalization mechanically.
+                phase: p.observed_phase_or_pending(),
                 created_at: p.created_at().unwrap_or_else(Utc::now),
             })
             .collect();

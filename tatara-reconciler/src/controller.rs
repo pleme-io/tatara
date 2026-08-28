@@ -21,7 +21,20 @@ use crate::{patch, phase_machine, signals};
 pub async fn reconcile(process: Arc<Process>, ctx: Arc<Context>) -> Result<Action, kube::Error> {
     let name = process.metadata.name.as_deref().unwrap_or("<unnamed>");
     let ns = process.metadata.namespace.as_deref().unwrap_or("default");
-    let current_phase = process.observed_phase().unwrap_or(ProcessPhase::Pending);
+    // Phase seed rides through the substrate primitive
+    // `Process::observed_phase_or_pending` — pre-lift this was a
+    // hand-authored `.observed_phase().unwrap_or(ProcessPhase::
+    // Pending)` two-link chain, one of FOUR workspace-wide
+    // restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold (peers at `boundary::evaluate_process_phase`,
+    // `table_controller::stable_name_group_key`, and
+    // `tatara-pool-reconciler::controller_pool::reconcile_pool`).
+    // Post-lift the four consumers share ONE substrate owner; a
+    // future generation-filter or staleness-gate normalization
+    // lands at `tatara_process::prelude::Process::
+    // observed_phase_or_pending` and every consumer inherits it
+    // mechanically.
+    let current_phase = process.observed_phase_or_pending();
 
     info!(namespace = ns, name, phase = %current_phase, "reconcile");
 

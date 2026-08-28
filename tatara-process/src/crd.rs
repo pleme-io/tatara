@@ -1087,6 +1087,112 @@ impl Process {
         self.status.as_ref().map(|s| s.phase)
     }
 
+    /// The copy-form status-projection primitive on the phase axis
+    /// with the `Pending` sink applied — the ONE-liner collapse of
+    /// the paired `self.observed_phase().unwrap_or(ProcessPhase::
+    /// Pending)` incantation every reconciler consumer restated by
+    /// hand at the `Option`-flattening tail of the `observed_phase`
+    /// call. Sibling to [`Self::observed_phase`] on the (return-form
+    /// × fallback shape) axis pair — the raw-`Option` corner stays
+    /// as `observed_phase`, this method opens the `Pending`-defaulted
+    /// corner that four of the five hand-authored `observed_phase`
+    /// consumers chose (the fifth chose `Attested`; it keeps the raw
+    /// `Option` accessor because a `Pending` sink would silently drop
+    /// its released-from-annotation branch into the wrong label).
+    ///
+    /// The primitive returns [`ProcessPhase::Pending`] on any missing
+    /// `status` slot — the same sentinel [`ProcessPhase::default`]
+    /// returns, and the same fallback all four pre-lift consumers
+    /// wrote by hand. `ProcessPhase::Pending` is load-bearing as the
+    /// "not yet observed" default because the top-level dispatcher's
+    /// `Pending → Forking` transition, the boundary evaluator's
+    /// per-Process phase-reached postcondition, the routing groupby's
+    /// stable-name claim-arbiter row seed, and the pool controller's
+    /// desired-count snapshot all read a freshly-forked Process (no
+    /// `status` yet stamped by the reconciler) as being at the
+    /// entrypoint phase of the closed lifecycle. A caller with a
+    /// different default choice (currently only the SIGSTOP/SIGCONT
+    /// release gate's `Attested` fallback in
+    /// `phase_machine::p_current_phase_str`) keeps the raw
+    /// [`Self::observed_phase`] accessor at its own site.
+    ///
+    /// Pre-lift the two-link `.observed_phase().unwrap_or
+    /// (ProcessPhase::Pending)` chain was hand-authored at FOUR
+    /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold
+    /// across the workspace:
+    /// * `tatara-reconciler::controller::reconcile` — the top-level
+    ///   dispatcher's `current_phase` seed that feeds the
+    ///   deletion-preempt + signal-ingestion gates + the per-phase
+    ///   handler dispatch.
+    /// * `tatara-reconciler::boundary::evaluate_process_phase` — the
+    ///   boundary evaluator's [`ConditionKind::ProcessPhase`]
+    ///   evaluator that compares a peer-Process's observed phase
+    ///   against the operator-declared `phase`-reached postcondition.
+    /// * `tatara-reconciler::table_controller::stable_name_group_key`
+    ///   — the routing-groupby seed that pairs the phase with the
+    ///   PID + creation timestamp when partitioning Processes
+    ///   claiming the same stable name.
+    /// * `tatara-pool-reconciler::controller_pool::reconcile_pool` —
+    ///   the desired-count loop's per-member snapshot seed that feeds
+    ///   `decide_pool_convergence` with each owned Process's
+    ///   `(phase, created_at)` pair.
+    ///
+    /// All FOUR sites walked the SAME two-link chain and all four
+    /// closed with `ProcessPhase::Pending` as the sink; post-lift
+    /// each callsite reads `process.observed_phase_or_pending()` and
+    /// the produced `ProcessPhase` feeds the same downstream branch
+    /// (dispatch on the `current_phase` value, comparison against a
+    /// declared threshold, groupby-key composition, member-state
+    /// snapshot construction) unchanged.
+    ///
+    /// Return-form axis: `ProcessPhase` matches the copy discipline
+    /// of [`Self::observed_phase`] (a `Copy` scalar one byte wide),
+    /// with the [`Option`] wrapper collapsed at the primitive rather
+    /// than at every consumer. A caller that needs the missing-`status`
+    /// corner as a distinguishable value keeps the raw
+    /// [`Self::observed_phase`] accessor.
+    ///
+    /// A future normalization step (a generation-filter that
+    /// treats a phase stamped with a stale `metadata.generation` as
+    /// unobserved and therefore `Pending`, a staleness gate that
+    /// drops a phase whose observing `phase_since` predates a
+    /// reconcile deadline, a canonicalization pass that maps a phase
+    /// that no longer belongs to the CRD's closed set to `Pending`)
+    /// lands at ONE substrate method here — because this primitive
+    /// composes on top of [`Self::observed_phase`], the normalization
+    /// applies to both the raw-`Option` and the `Pending`-sinked
+    /// return through the SAME upstream body — and all four
+    /// downstream consumers pick up the upgrade mechanically.
+    ///
+    /// Peer to the sibling defaulted-fallback primitive family
+    /// [`Self::namespace_or_default`] +
+    /// [`Self::name_or_placeholder`] + [`Self::uid_or_empty`] on the
+    /// (return-shape × fallback-value) axis — those three open the
+    /// borrow-form defaulted corner for the metadata slots; this
+    /// method opens the copy-form defaulted corner for the phase
+    /// slot on `status`. Future defaulted-fallback status
+    /// projections (an `observed_pid_or_empty` on the PID axis, an
+    /// `observed_exit_code_or_zero` on the terminal-exit axis) land
+    /// as peer methods on this same axis.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the two-link `.observed_phase().unwrap_or(Pending)` chain
+    /// recurred at four hand-authored sites past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
+    /// owner here). THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the pins bind the missing-`status` sink to
+    /// `Pending` + populated-status pass-through + every
+    /// `ProcessPhase` variant round-trip + byte-identical parity
+    /// with the pre-lift two-link chain, so a regression that
+    /// drifted any surface at `tests::observed_phase_or_pending_*`
+    /// rather than as silent operator-facing skew between the
+    /// top-level dispatcher's `Pending → Forking` seed and the
+    /// boundary evaluator's per-Process phase-reached postcondition
+    /// on the SAME `Process` within one reconcile pass).
+    pub fn observed_phase_or_pending(&self) -> ProcessPhase {
+        self.observed_phase().unwrap_or(ProcessPhase::Pending)
+    }
+
     /// Copy-form metadata-projection primitive on the deletion-tombstone
     /// axis: returns `true` iff the K8s API server has stamped a
     /// `metadata.deletionTimestamp` on this Process (the moment the
@@ -3654,6 +3760,141 @@ mod tests {
                 p.observed_phase(),
                 Some(phase),
                 "phase variant {phase:?} did not round-trip"
+            );
+        }
+    }
+
+    // ─── Process::observed_phase_or_pending substrate pins ─────────────
+    //
+    // Pins the copy-form status-projection primitive on the phase
+    // axis with the `Pending` sink applied. Sibling to the raw
+    // `observed_phase_*` pin family on the (return-form × fallback
+    // shape) axis pair — the raw-`Option` corner stays with the
+    // sibling family; this pin family opens the `Pending`-defaulted
+    // corner that four of the five pre-lift `observed_phase`
+    // consumers wrote by hand. Fail-before-pass-after granularity:
+    // `observed_phase_or_pending` did not exist pre-lift, so any
+    // test invoking it fails to compile pre-lift and passes
+    // post-lift.
+
+    #[test]
+    fn observed_phase_or_pending_returns_pending_when_status_is_none() {
+        // Missing-`status` corner pin: the primitive collapses the
+        // no-status case to `Pending` — the sink four of the five
+        // pre-lift `observed_phase` consumers wrote by hand
+        // (`controller::reconcile` / `boundary::
+        // evaluate_process_phase` / `table_controller::
+        // stable_name_group_key` / `controller_pool::reconcile_pool`)
+        // and the sentinel `ProcessPhase::default()` returns. A
+        // regression that folded the `None` sink to any other phase
+        // (e.g. `Forking` — treating "not yet observed" as "already
+        // dispatched") would silently mis-seed the top-level
+        // dispatcher's `Pending → Forking` transition and surface as
+        // operator-visible reconcile-cycle skew on a freshly-forked
+        // Process rather than at this pin.
+        let mut p = Process::new("api", empty_spec());
+        p.status = None;
+        assert_eq!(p.observed_phase_or_pending(), ProcessPhase::Pending);
+    }
+
+    #[test]
+    fn observed_phase_or_pending_returns_persisted_phase_when_status_is_populated() {
+        // Populated-status corner pin: the primitive passes through
+        // the persisted `ProcessPhase` unchanged — the sink only
+        // fires on missing `status`, not on a populated one carrying
+        // a `Pending`-adjacent variant. Two variants pinned to
+        // separate the "pass through the persisted phase" arm from
+        // the "sink fires" arm: `Running` (mid-lifecycle) and
+        // `Attested` (post-verify) both round-trip unchanged where
+        // a regression that always returned `Pending` (dropped the
+        // pass-through arm entirely) would surface here rather than
+        // as silent skew at every reconciler's per-phase branch.
+        let p = process_with_phase(Some(ProcessPhase::Running));
+        assert_eq!(p.observed_phase_or_pending(), ProcessPhase::Running);
+        let p = process_with_phase(Some(ProcessPhase::Attested));
+        assert_eq!(p.observed_phase_or_pending(), ProcessPhase::Attested);
+    }
+
+    #[test]
+    fn observed_phase_or_pending_matches_pre_lift_unwrap_or_pending_chain_shape() {
+        // Byte-identical parity pin: the primitive's return equals
+        // the pre-lift two-link `.observed_phase().unwrap_or
+        // (ProcessPhase::Pending)` chain at every one of the four
+        // corner values (missing `status` → `Pending`, populated
+        // with `Pending` → `Pending`, populated with a mid-lifecycle
+        // variant → pass-through, populated with a terminal variant
+        // → pass-through). A regression that swapped the sink to
+        // `ProcessPhase::default()` (currently equivalent to
+        // `Pending`) would keep this pin green until the enum's
+        // `Default` impl drifted — the explicit `Pending` spelling
+        // in the pin binds the operator-visible label rather than
+        // the derived `Default`, so a future rename or reordering
+        // of `ProcessPhase` variants that shifted `Default` off
+        // `Pending` would surface here rather than as silent skew
+        // at the four downstream consumer sites.
+        let pre_lift = |p: &Process| p.observed_phase().unwrap_or(ProcessPhase::Pending);
+        let mut p = Process::new("api", empty_spec());
+        p.status = None;
+        assert_eq!(p.observed_phase_or_pending(), pre_lift(&p));
+        let p = process_with_phase(Some(ProcessPhase::Pending));
+        assert_eq!(p.observed_phase_or_pending(), pre_lift(&p));
+        let p = process_with_phase(Some(ProcessPhase::Running));
+        assert_eq!(p.observed_phase_or_pending(), pre_lift(&p));
+        let p = process_with_phase(Some(ProcessPhase::Reaped));
+        assert_eq!(p.observed_phase_or_pending(), pre_lift(&p));
+    }
+
+    #[test]
+    fn observed_phase_or_pending_is_a_pure_projection() {
+        // Purity pin: two back-to-back calls on the same `Process`
+        // return the same `ProcessPhase` — the primitive stamps no
+        // side effect (no clock read, no metadata write, no
+        // `status` mutation) despite the sibling `observed_phase`
+        // taking `&self` too. Peer to the sibling `observed_phase`
+        // purity pin; a regression that folded a clock read (e.g.
+        // "if the sink fired, stamp `phase_since = Utc::now()`")
+        // into the primitive would surface here rather than at the
+        // consumer sites' downstream reconcile-cycle behavior.
+        let p = process_with_phase(Some(ProcessPhase::Running));
+        let a = p.observed_phase_or_pending();
+        let b = p.observed_phase_or_pending();
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn observed_phase_or_pending_preserves_every_process_phase_variant() {
+        // Round-trip pin: every `ProcessPhase` variant round-trips
+        // through the primitive unchanged when the `status` slot is
+        // populated. Peer to the sibling `observed_phase_preserves
+        // _every_process_phase_variant` sweep; this pin sweeps the
+        // closed set through the `Pending`-sinked accessor rather
+        // than the raw-`Option` accessor so a canonicalization pass
+        // that dropped or reshaped one variant (e.g. folded
+        // `Reconverging` back into `Execing`, remapped `Zombie` to
+        // `Reaped`) surfaces at BOTH primitives' pin sets rather
+        // than as silent skew at a subset of the reconciler
+        // consumers. Covers every variant the
+        // `ProcessPhase::DeriveClosedSet` enumerates so a future
+        // variant addition surfaces via the closed-set macro rather
+        // than at a silent partial sweep.
+        for phase in [
+            ProcessPhase::Pending,
+            ProcessPhase::Forking,
+            ProcessPhase::Execing,
+            ProcessPhase::Running,
+            ProcessPhase::Attested,
+            ProcessPhase::Reconverging,
+            ProcessPhase::Releasing,
+            ProcessPhase::Exiting,
+            ProcessPhase::Failed,
+            ProcessPhase::Zombie,
+            ProcessPhase::Reaped,
+        ] {
+            let p = process_with_phase(Some(phase));
+            assert_eq!(
+                p.observed_phase_or_pending(),
+                phase,
+                "phase variant {phase:?} did not round-trip through observed_phase_or_pending"
             );
         }
     }

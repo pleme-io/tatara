@@ -144,9 +144,22 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
             // Flip the Process's lifetime to Ephemeral with the
             // allocation's TTL.
             let ttl = alloc.spec.ttl.clone().unwrap_or_else(|| {
+                // Pool-lookup by `AllocationRef.name` rides through the
+                // substrate primitive `EphemeralPool::has_name` — pre-
+                // lift this was a hand-authored `.metadata.name.as_deref
+                // () == Some(pool.name.as_str())` chain, one of TWO
+                // workspace-wide restatements past the ★★ PRIME-
+                // DIRECTIVE ≥ 2 duplication threshold (sibling site at
+                // `allocation_decide::resolve_pool`'s explicit-`pool_ref`
+                // half). The primitive keeps the `None`-preserving
+                // discipline so a namespace-absent pool with an empty
+                // `pool.name` returns `false`, not a spurious match at
+                // the TTL-inheritance fallback that would silently
+                // clone the wrong pool's `spec.template.ttl` into the
+                // newly-bound member Process's lifetime overlay.
                 pools
                     .iter()
-                    .find(|p| p.metadata.name.as_deref() == Some(pool.name.as_str()))
+                    .find(|p| p.has_name(&pool.name))
                     .map(|p| p.spec.template.ttl.clone())
                     .unwrap_or_else(|| "1h".into())
             });

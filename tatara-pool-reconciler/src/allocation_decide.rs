@@ -229,8 +229,21 @@ fn resolve_pool<'a>(
     candidate_pools: &'a [EphemeralPool],
 ) -> Option<&'a EphemeralPool> {
     if let Some(pool_ref) = alloc.spec.pool_ref.as_ref() {
+        // The `metadata.name` byte-comparison rides through the
+        // substrate primitive `EphemeralPool::has_name` — pre-lift
+        // this was a hand-authored `.metadata.name.as_deref() == Some
+        // (pool_ref.name.as_str())` chain, one of TWO workspace-wide
+        // restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+        // threshold (sibling site at
+        // `controller_allocation::reconcile_inner`'s TTL-inheritance
+        // fallback). The primitive keeps the `None`-preserving
+        // discipline: a namespace-absent pool with an empty
+        // `pool_ref.name` returns `false`, not a spurious match. The
+        // namespace half is intentionally still spelled here — only
+        // ONE site probes `metadata.namespace` this way, so it stays
+        // below the ≥ 2 duplication trigger.
         candidate_pools.iter().find(|p| {
-            p.metadata.name.as_deref() == Some(pool_ref.name.as_str())
+            p.has_name(&pool_ref.name)
                 && p.metadata.namespace.as_deref() == Some(pool_ref.namespace.as_str())
         })
     } else {

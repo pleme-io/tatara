@@ -501,6 +501,97 @@ impl EphemeralPool {
     pub fn owned_namespace_or_empty(&self) -> String {
         self.metadata.namespace.clone().unwrap_or_default()
     }
+
+    /// Copy-form metadata-projection primitive on the `metadata.name`
+    /// axis of `EphemeralPool` in its `presence-and-equal` corner:
+    /// returns `true` iff the K8s object name slot is BOTH `Some(_)`
+    /// AND byte-identical to the supplied candidate — the ONE-liner
+    /// collapse of the paired
+    /// `self.metadata.name.as_deref() == Some(candidate)` incantation
+    /// every pool-side lookup consumer restated by hand pre-lift.
+    ///
+    /// Pre-lift the `.metadata.name.as_deref() == Some(<candidate>)`
+    /// chain was hand-authored at TWO production sites past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication threshold in
+    /// `tatara-pool-reconciler`, both keyed by the `EphemeralPool`'s
+    /// own name slot inside a `candidate_pools.iter().find(|p| ...)`
+    /// closure that resolves a pool from an `AllocationRef.name` half:
+    /// * `allocation_decide::resolve_pool` — the explicit-`pool_ref`
+    ///   half of the pool-resolution ladder, one of two conjuncts in
+    ///   the `(name == X && namespace == Y)` byte-comparison against
+    ///   `AllocationSpec::pool_ref`. Pairs with the sibling namespace
+    ///   comparison (a future run may lift `has_namespace` as the
+    ///   paired-axis peer once a second namespace-probe site opens).
+    /// * `controller_allocation::reconcile_inner` — the TTL-inheritance
+    ///   fallback path's pool-lookup by `AllocationDecision::Bind::pool
+    ///   .name`, feeding the matched pool's `spec.template.ttl` into
+    ///   the just-bound member Process's lifetime overlay.
+    ///
+    /// Both sites walked the SAME `.as_deref() == Some(<x>.as_str())`
+    /// chain against a `&str` candidate held by an [`AllocationRef`]
+    /// or a similar owned-name handle, and both wanted the `bool`
+    /// form the primitive returns — the transition rule's discriminant
+    /// on either the `find(|p| p.has_name(&pool_ref.name))` closure
+    /// (which either matches ONE candidate pool or none) or the
+    /// TTL-inheritance closure's short-circuit through
+    /// `.map(...).unwrap_or_else(...)`. Post-lift each callsite reads
+    /// `p.has_name(&candidate)` and the produced `bool` feeds the same
+    /// downstream `find` / `map` closure unchanged.
+    ///
+    /// Distinct in semantics from the sibling primitive
+    /// [`Self::name_or_empty`] on the SAME `metadata.name` axis: the
+    /// `_or_empty` family folds the missing-slot corner to the load-
+    /// bearing empty-string sentinel (so `None` and `Some("")` both
+    /// project to `""`), whereas this primitive keeps `None` distinct
+    /// from `Some("")` at the `==` operator — a `None` slot returns
+    /// `false` even when the candidate is the empty string. That
+    /// discipline is load-bearing at both consumer sites: pre-lift
+    /// they compared `Option<&str>` against `Some(<candidate>)`, so a
+    /// substitution through `Self::name_or_empty` would silently
+    /// promote a namespace-absent pool with a `""` candidate into a
+    /// spurious match at the `find` closure, aliasing every unnamed
+    /// pool to the same lookup bucket at the resolver. Preserving the
+    /// `None ⇒ false` corner keeps the resolver's byte-comparison
+    /// honest.
+    ///
+    /// Peer to the sibling substrate primitives already opened on the
+    /// pool-side (`metadata.name` × return-form) axis:
+    /// * borrow-form + empty sentinel → [`Self::name_or_empty`] (`&str`
+    ///   projection with a `""` fallback for missing / explicitly-empty
+    ///   name slots; router tie-break comparator);
+    /// * owned-form + empty sentinel → [`Self::owned_name_or_empty`]
+    ///   (`String` projection with a `""` fallback; `AllocationRef.name`
+    ///   seed);
+    /// * **presence-and-equal probe → this method** (`bool` projection
+    ///   with `None`-preserving semantics; pool-lookup closure
+    ///   discriminant).
+    ///
+    /// A future normalization step (a name-canonicalization pass, a
+    /// case-fold key builder, a per-cluster prefix stripper for cross-
+    /// cluster pool-name aliasing, or a canonical-namespace default
+    /// lift) lands at ONE substrate method here and both downstream
+    /// consumers pick up the upgrade mechanically — no per-callsite
+    /// hand-edit at `resolve_pool` / `controller_allocation
+    /// ::reconcile_inner`.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `.metadata.name.as_deref() == Some(<candidate>)` chain
+    /// recurred at two hand-authored sites past the ★★ PRIME-
+    /// DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE owner
+    /// here). THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the pins bind the missing-slot corner (`None ⇒
+    /// false`, even against a `""` candidate) + the populated-slot
+    /// equal corner + the populated-slot unequal corner + the
+    /// byte-identical parity with the pre-lift `.as_deref() == Some
+    /// (<candidate>)` chain + the disjoint semantics vs. the
+    /// `_or_empty` sibling family, so a regression that drifted any
+    /// surface at `tests::has_name_*` here rather than as silent
+    /// operator-facing skew between the two `find` closures the
+    /// primitive owns).
+    #[must_use]
+    pub fn has_name(&self, candidate: &str) -> bool {
+        self.metadata.name.as_deref() == Some(candidate)
+    }
 }
 
 /// What the pool reconciler does when a member reaches `Failed`.
@@ -2903,5 +2994,145 @@ mod tests {
         let now = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
         let observed = PoolStatus::observed(PoolPhase::Steady, members, now);
         assert_eq!(observed.members.len(), 2);
+    }
+
+    // ─── EphemeralPool::has_name substrate pins ───────────────────────
+    //
+    // Pins the copy-form metadata-projection primitive on the
+    // `metadata.name` axis's presence-and-equal corner — the
+    // discriminant every `candidate_pools.iter().find(|p| ...)`
+    // closure that resolves a pool from an owned-name handle
+    // (`AllocationRef.name` / `AllocationDecision::Bind.pool.name`)
+    // routes through. Sibling to the `_or_empty` family on the SAME
+    // slot ([`EphemeralPool::name_or_empty`] +
+    // [`EphemeralPool::owned_name_or_empty`]) — this primitive owns
+    // the `None`-preserving corner the `_or_empty` family folds away.
+    // Fail-before-pass-after granularity: `has_name` did not exist
+    // pre-lift; the compiler cannot resolve the name until the impl
+    // block above is in place, so a rollback of the primitive breaks
+    // this whole module.
+    #[test]
+    fn has_name_returns_true_when_slot_is_populated_and_equal() {
+        // Happy-path pin: the slot is set AND byte-identical to the
+        // candidate. Both pre-lift `find` closures — `resolve_pool`'s
+        // explicit-`pool_ref` half and `controller_allocation`'s TTL-
+        // inheritance fallback — resolve their target pool exactly in
+        // this corner, and the primitive returns `true` here to
+        // authorize the resolution.
+        let p = pool_named("attest-pool");
+        assert!(p.has_name("attest-pool"));
+    }
+
+    #[test]
+    fn has_name_returns_false_when_slot_is_populated_and_different() {
+        // Populated-slot inequality pin: the primitive returns `false`
+        // for every candidate that is NOT byte-identical to the slot,
+        // including strict subsequences (`"attest"` vs. `"attest-pool"`),
+        // strict superstrings (`"attest-pool-2"` vs. `"attest-pool"`),
+        // and case-differ variants. This is the load-bearing property
+        // that lets `find(|p| p.has_name(&candidate))` reject
+        // non-matching pools rather than aliasing them together.
+        let p = pool_named("attest-pool");
+        assert!(!p.has_name("other-pool"));
+        assert!(!p.has_name("attest"));
+        assert!(!p.has_name("attest-pool-2"));
+        assert!(!p.has_name("ATTEST-POOL"));
+    }
+
+    #[test]
+    fn has_name_returns_false_when_slot_is_none_even_against_empty_candidate() {
+        // The `None`-preserving discipline pin: an unset `metadata.name`
+        // slot returns `false` even when the candidate is the empty
+        // string. Distinguishes `has_name` from a naïve substitution
+        // through the sibling `name_or_empty` primitive, which would
+        // fold both `None` and `Some("")` to `""` and silently promote
+        // an unnamed pool with an empty candidate into a spurious
+        // match at the resolver's `find` closure. Byte-identical to
+        // what the pre-lift `.as_deref() == Some(<candidate>)` chain
+        // produced (`None == Some("")` is `false`), which is what
+        // both consumer sites relied on.
+        let p = pool_unnamed();
+        assert!(p.metadata.name.is_none(), "fixture invariant");
+        assert!(!p.has_name(""));
+        assert!(!p.has_name("attest-pool"));
+    }
+
+    #[test]
+    fn has_name_returns_true_only_when_populated_slot_and_candidate_are_both_empty() {
+        // Populated-empty-slot corner pin: `Some(String::new())` is a
+        // populated slot with an empty payload. `has_name("")` returns
+        // `true` here (byte-identical `""` on both sides), while
+        // `has_name("<anything else>")` returns `false`. This is the
+        // corner where `has_name` DIVERGES from `name_or_empty`
+        // observably: the `_or_empty` family folds this corner into
+        // the same bucket as `None`, but `has_name` keeps the
+        // presence bit visible — `Some("") == Some("")` is `true`
+        // while `None == Some("")` is `false`.
+        let mut p = pool_named("scratch");
+        p.metadata.name = Some(String::new());
+        assert!(p.has_name(""));
+        assert!(!p.has_name("attest-pool"));
+    }
+
+    #[test]
+    fn has_name_matches_pre_lift_chain_verbatim_across_full_corner_set() {
+        // Byte-identical parity pin: the primitive returns the same
+        // `bool` as the pre-lift `.metadata.name.as_deref() == Some
+        // (candidate)` chain across the FULL cross product of
+        // (slot ∈ {None, Some("attest-pool"), Some("")}) × (candidate
+        // ∈ {"attest-pool", "", "other"}). A regression that inserted
+        // a normalization step at the primitive the pre-lift chain
+        // does NOT apply — or vice versa — surfaces here rather than
+        // as silent drift between the two `find` closures the primitive
+        // owns.
+        let slots: [Option<String>; 3] =
+            [None, Some(String::from("attest-pool")), Some(String::new())];
+        let candidates: [&str; 3] = ["attest-pool", "", "other"];
+        for slot in slots {
+            let mut p = pool_named("scratch");
+            p.metadata.name = slot.clone();
+            for candidate in candidates {
+                let pre_lift = p.metadata.name.as_deref() == Some(candidate);
+                assert_eq!(
+                    p.has_name(candidate),
+                    pre_lift,
+                    "slot = {slot:?}, candidate = {candidate:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn has_name_diverges_from_name_or_empty_on_the_missing_slot_corner() {
+        // Cross-primitive discipline pin: `has_name("")` and
+        // `name_or_empty() == ""` MUST disagree on the `None`-slot
+        // corner. `name_or_empty` returns `""` (its load-bearing
+        // sentinel), so a naïve `name_or_empty() == ""` probe would
+        // return `true` here — aliasing every unnamed pool to the
+        // empty-candidate bucket at the resolver. `has_name`
+        // preserves `Option::as_deref() == Some(_)`'s `None ⇒ false`
+        // semantics, so it returns `false` and rejects the spurious
+        // match. This test fences the WHOLE reason `has_name` exists
+        // as a distinct primitive from the `_or_empty` family: a
+        // future refactor that collapsed `has_name` into
+        // `name_or_empty() == candidate` would break this pin and
+        // silently regress the resolver's byte-comparison honesty.
+        let p = pool_unnamed();
+        assert_eq!(p.name_or_empty(), "");
+        assert!(!p.has_name(""));
+    }
+
+    #[test]
+    fn has_name_is_a_pure_projection() {
+        // Consecutive calls with the same candidate return the same
+        // `bool` — no cached state, no mutation on the `EphemeralPool`
+        // between calls. Guards against a future refactor that plants
+        // a cache field on `EphemeralPool` and drifts one caller from
+        // another silently.
+        let p = pool_named("router-pool");
+        assert_eq!(p.has_name("router-pool"), p.has_name("router-pool"));
+        assert_eq!(p.has_name("other"), p.has_name("other"));
+        assert!(p.has_name("router-pool"));
+        assert!(!p.has_name("other"));
     }
 }

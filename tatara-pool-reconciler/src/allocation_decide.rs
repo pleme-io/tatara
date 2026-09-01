@@ -108,27 +108,27 @@ impl AllocationConvergenceCtx {
         let (matched_pool, free_member) = if phase.needs_pool_routing() && !being_deleted {
             match resolve_pool(alloc, candidate_pools) {
                 Some(pool) => {
-                    // The `AllocationRef::name` slot rides through the
-                    // substrate primitive `EphemeralPool::owned_name_or_empty`
-                    // — pre-lift this was a hand-authored `.metadata.name
-                    // .clone().unwrap_or_default()` chain, one of TWO
-                    // workspace-wide restatements past the ★★ PRIME-
-                    // DIRECTIVE ≥ 2 duplication threshold (peer at
-                    // `controller_allocation::reconcile_inner`'s pool-
-                    // members HashMap key seed). The overall (name,
+                    // Both `AllocationRef` halves ride through the
+                    // paired substrate primitives
+                    // `EphemeralPool::owned_name_or_empty` +
+                    // `EphemeralPool::owned_namespace_or_empty` — pre-
+                    // lift both slots were hand-authored
+                    // `.metadata.<slot>.clone().unwrap_or_default()`
+                    // chains, one of TWO workspace-wide restatements
+                    // per slot past the ★★ PRIME-DIRECTIVE ≥ 2
+                    // duplication threshold. The overall (name,
                     // namespace) pair rides through the substrate
                     // constructor `AllocationRef::new` — pre-lift the
                     // `AllocationRef { name, namespace }` struct-
                     // literal was hand-authored at FOUR workspace-wide
-                    // sites past the same threshold; both are now
-                    // owned by tatara-process. The paired `.namespace`
-                    // slot still spells the raw
-                    // `.metadata.namespace.clone().unwrap_or_default()`
-                    // chain — a future run may lift `owned_namespace_or_empty`
-                    // as the sibling axis peer.
+                    // sites past the same threshold. All three
+                    // primitives are now owned by tatara-process; a
+                    // future canonicalization pass on either half lands
+                    // at the ONE substrate owner and this seed picks
+                    // it up mechanically.
                     let pool_ref = AllocationRef::new(
                         pool.owned_name_or_empty(),
-                        pool.metadata.namespace.clone().unwrap_or_default(),
+                        pool.owned_namespace_or_empty(),
                     );
                     let free = pool_members(pool)
                         .iter()

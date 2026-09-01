@@ -397,6 +397,110 @@ impl EphemeralPool {
     pub fn is_being_deleted(&self) -> bool {
         self.metadata.deletion_timestamp.is_some()
     }
+
+    /// Owned-form metadata-projection primitive on the `metadata.namespace`
+    /// axis of `EphemeralPool`: returns an owned `String` copy of the K8s
+    /// namespace with the missing-namespace corner collapsed to the load-
+    /// bearing empty-string sentinel — the ONE-liner collapse of the
+    /// paired `self.metadata.namespace.clone().unwrap_or_default()`
+    /// incantation every pool-side consumer restated by hand pre-lift.
+    ///
+    /// Pre-lift the `.metadata.namespace.clone().unwrap_or_default()`
+    /// chain was hand-authored at TWO sites past the ★★ PRIME-DIRECTIVE
+    /// ≥ 2 duplication threshold, both stamping the `AllocationRef
+    /// { namespace: String, .. }` slot inside an owned-`String` context:
+    /// * `tatara-pool-reconciler::allocation_decide::AllocationConvergenceCtx
+    ///   ::observe` — the matched-pool seed's `AllocationRef.namespace`
+    ///   slot, right beside the peer [`Self::owned_name_or_empty`] call
+    ///   that owns the paired name half. This is the exact site the
+    ///   pre-existing peer-primitive doc-comment forecast (`"a future
+    ///   run may lift owned_namespace_or_empty as the sibling axis
+    ///   peer"`).
+    /// * `crate::pool::tests::allocation_ref_new_composes_with_owned_name_or_empty_pool_projection`
+    ///   — the composition pin that seeded an `AllocationRef` from the
+    ///   same paired-primitive-half construction the production consumer
+    ///   in `allocation_decide::observe` performs. Post-lift the pin
+    ///   composes two peer primitives (`owned_name_or_empty` +
+    ///   `owned_namespace_or_empty`) rather than one primitive plus the
+    ///   pre-lift chain, sharpening it from a mixed-form composition
+    ///   check into a paired-primitive-family composition check.
+    ///
+    /// Both sites walked the SAME `.clone().unwrap_or_default()` chain
+    /// and both wanted the `String` form the primitive returns — as the
+    /// `String` slot of an `AllocationRef` struct literal built through
+    /// [`crate::pool::AllocationRef::new`]. Post-lift each callsite reads
+    /// `pool.owned_namespace_or_empty()` and the produced value feeds
+    /// the same downstream `AllocationRef` slot unchanged.
+    ///
+    /// The empty-string fallback is the SAME sentinel the sibling owned-
+    /// form primitive [`Self::owned_name_or_empty`] returns on the
+    /// `metadata.name` axis of the same CRD — the two primitives now
+    /// partition the (owned `String` × `metadata.<slot>`) corner of the
+    /// pool CRD's metadata family across BOTH object-coordinate slots
+    /// on identical missing-slot semantics (empty string means "the
+    /// slot is unset"), so the [`crate::pool::AllocationRef::new`]
+    /// composer sees a coherent owned-empty pair regardless of which
+    /// slot is absent on the source pool. Coherent with the workspace-
+    /// wide owned-empty sentinel that the peer primitives
+    /// [`crate::crd::Process::uid_or_empty`],
+    /// [`crate::crd::Process::owned_name_or_empty`],
+    /// [`Self::name_or_empty`], and [`Self::owned_name_or_empty`]
+    /// already share on the metadata-slot × empty-sentinel axis.
+    ///
+    /// Peer to [`Self::owned_name_or_empty`] on the
+    /// (`metadata.name` × `metadata.namespace`) axis of the owned-form
+    /// projection family — closes the corner the pool-side family
+    /// previously left open:
+    ///
+    /// * owned + name + empty sentinel → [`Self::owned_name_or_empty`]
+    ///   (`AllocationRef.name` seed, `HashMap<String, _>` key seed);
+    /// * owned + namespace + empty sentinel → **this method**
+    ///   (`AllocationRef.namespace` seed — the paired half the same
+    ///   `AllocationRef::new(name, namespace)` constructor consumes);
+    /// * copy + deletion + tombstone probe → [`Self::is_being_deleted`]
+    ///   (the presence-probe corner of the same metadata axis, already
+    ///   opened).
+    ///
+    /// A future normalization step (a namespace-canonicalization pass,
+    /// a case-fold key builder, a per-cluster prefix stripper, or the
+    /// canonical-namespace default lift that would substitute
+    /// [`crate::crd::Process::DEFAULT_NAMESPACE`] on the missing-slot
+    /// corner rather than the empty-string sentinel) lands at ONE
+    /// substrate method here and both downstream consumers pick up the
+    /// upgrade mechanically — no per-callsite hand-edit at
+    /// `AllocationConvergenceCtx::observe` / the composition pin.
+    ///
+    /// The empty-string fallback (rather than
+    /// [`crate::crd::Process::DEFAULT_NAMESPACE`]) is DELIBERATELY
+    /// pinned: the sole downstream consumer
+    /// (`AllocationConvergenceCtx::observe`'s matched-pool seed) feeds
+    /// the produced value into `AllocationRef.namespace`, which is then
+    /// matched byte-identically against `spec.pool_ref.namespace` at
+    /// [`crate::pool::allocation_decide::resolve_pool`]-style comparators.
+    /// A silent substitution of `"default"` at this primitive would
+    /// alias every namespace-absent pool to the `"default"` bucket at
+    /// the matcher, hiding the missing-slot corner from an operator
+    /// who explicitly authored an allocation against a namespace-
+    /// unset pool. The load-bearing empty-string sentinel keeps the
+    /// pre-lift `.clone().unwrap_or_default()` shape verbatim so the
+    /// downstream matcher's byte-comparison stays honest.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `.metadata.namespace.clone().unwrap_or_default()` chain
+    /// recurred at two hand-authored sites past the ★★ PRIME-DIRECTIVE
+    /// ≥ 2 duplication trigger, and is lifted to ONE owner here).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// the pins bind the missing-namespace corner + the empty-string
+    /// sentinel byte-shape + the owned-form `String` return type + the
+    /// byte-identical parity with the pre-lift chain + the fallback-
+    /// value coherence with [`Self::owned_name_or_empty`] on the
+    /// paired-slot axis, so a regression that drifted any surface at
+    /// `tests::owned_namespace_or_empty_*` rather than as silent
+    /// operator-facing skew between the paired name / namespace halves
+    /// of the SAME `AllocationRef` seed).
+    pub fn owned_namespace_or_empty(&self) -> String {
+        self.metadata.namespace.clone().unwrap_or_default()
+    }
 }
 
 /// What the pool reconciler does when a member reaches `Failed`.
@@ -2233,6 +2337,149 @@ mod tests {
         assert!(dying.is_being_deleted());
     }
 
+    // ─── EphemeralPool::owned_namespace_or_empty substrate pins ───────
+    //
+    // The owned-form peer of the `owned_name_or_empty` primitive on the
+    // sibling `metadata.namespace` axis — the paired half of the
+    // `AllocationRef { name, namespace }` struct literal both
+    // `AllocationConvergenceCtx::observe` and the composition pin
+    // consume through the SAME `AllocationRef::new(name, namespace)`
+    // constructor. Fail-before-pass-after granularity:
+    // `owned_namespace_or_empty` did not exist on the pool CRD pre-
+    // lift; the compiler cannot resolve the name until the impl block
+    // above is in place, so a rollback of the primitive breaks this
+    // whole module.
+    #[test]
+    fn owned_namespace_or_empty_returns_empty_string_when_metadata_namespace_is_none() {
+        // Missing-slot corner pin: the primitive collapses the no-
+        // namespace case to the load-bearing empty-string sentinel so
+        // the downstream `AllocationRef.namespace` slot carries `""`
+        // rather than a defaulted `"default"` string. See the doc-
+        // comment's DELIBERATE-EMPTY-SENTINEL rationale for why the
+        // fallback matches `.clone().unwrap_or_default()` byte-for-
+        // byte rather than substituting `Process::DEFAULT_NAMESPACE`
+        // at the primitive.
+        let mut p = pool_named("attest-pool");
+        p.metadata.namespace = None;
+        assert!(p.metadata.namespace.is_none(), "fixture invariant");
+        assert_eq!(p.owned_namespace_or_empty(), String::new());
+    }
+
+    #[test]
+    fn owned_namespace_or_empty_returns_owned_string_when_slot_is_populated() {
+        let mut p = pool_named("attest-pool");
+        p.metadata.namespace = Some("ephemeral-pools".into());
+        assert_eq!(p.owned_namespace_or_empty(), "ephemeral-pools");
+    }
+
+    #[test]
+    fn owned_namespace_or_empty_returns_empty_string_when_slot_is_explicitly_empty_string() {
+        // Corner between `None` (missing slot) and `Some(String::new())`
+        // (populated slot containing the empty string): the primitive
+        // MUST fold both to the same `""` byte-shape so a downstream
+        // `AllocationRef.namespace ==` comparator at
+        // `resolve_pool` sees ONE "unset namespace" bucket regardless
+        // of which shape the K8s API server materialized. Byte-
+        // identical to what the pre-lift `.clone().unwrap_or_default()`
+        // chain produced.
+        let mut p = pool_named("attest-pool");
+        p.metadata.namespace = Some(String::new());
+        assert_eq!(p.owned_namespace_or_empty(), String::new());
+        assert!(p.owned_namespace_or_empty().is_empty());
+    }
+
+    #[test]
+    fn owned_namespace_or_empty_is_a_pure_projection() {
+        // Consecutive calls return byte-identical Strings — no cached
+        // state, no mutation on the `EphemeralPool` between calls.
+        // Peer to the sibling `owned_name_or_empty_is_a_pure_projection`
+        // pin in this module and to `is_being_deleted_is_a_pure_projection`
+        // on the same CRD; all three bind the pure-projection
+        // discipline on the ONE substrate accessor per metadata slot.
+        let mut p = pool_named("attest-pool");
+        p.metadata.namespace = Some("ephemeral-pools".into());
+        assert_eq!(p.owned_namespace_or_empty(), p.owned_namespace_or_empty());
+        assert_eq!(p.owned_namespace_or_empty(), "ephemeral-pools");
+        assert_eq!(p.owned_namespace_or_empty(), "ephemeral-pools");
+    }
+
+    #[test]
+    fn owned_namespace_or_empty_matches_pre_lift_chain_verbatim() {
+        // Byte-identical parity with the two hand-authored
+        // `.metadata.namespace.clone().unwrap_or_default()` chains
+        // the primitive replaces in `tatara-pool-reconciler::
+        // allocation_decide::AllocationConvergenceCtx::observe`
+        // (matched-pool `AllocationRef.namespace` seed) and in the
+        // sibling composition pin
+        // `allocation_ref_new_composes_with_owned_name_or_empty_pool_projection`.
+        // Runs across the FULL corner set of the metadata.namespace
+        // slot: absent, present-with-value, present-with-empty-string.
+        // A regression that inserted a normalization step at the
+        // primitive the pre-lift chain does NOT apply — or vice versa —
+        // surfaces here rather than as silent drift between the two
+        // owned-form callsites and the ONE substrate owner they now
+        // route through.
+        let cases: [(Option<String>, &str); 3] = [
+            (None, ""),
+            (Some("ephemeral-pools".into()), "ephemeral-pools"),
+            (Some(String::new()), ""),
+        ];
+        for (slot, expected) in cases {
+            let mut p = pool_named("attest-pool");
+            p.metadata.namespace = slot.clone();
+            let pre_lift = p.metadata.namespace.clone().unwrap_or_default();
+            assert_eq!(pre_lift.as_str(), expected, "pre-lift chain sanity");
+            assert_eq!(p.owned_namespace_or_empty(), pre_lift);
+            assert_eq!(p.owned_namespace_or_empty().as_str(), expected);
+        }
+    }
+
+    #[test]
+    fn owned_namespace_or_empty_composes_with_owned_name_or_empty_on_paired_slot_axis() {
+        // Paired-axis coherence pin: the two owned-form primitives on
+        // the pool CRD's `metadata.name` + `metadata.namespace` slots
+        // share the SAME empty-string sentinel on the missing corner,
+        // so a caller that composes both halves into an
+        // `AllocationRef` (as `AllocationConvergenceCtx::observe`
+        // does) never sees a mixed-fallback pair (one `""`, the
+        // other `"default"`) as a side effect of one slot being
+        // absent. A regression that skewed either primitive's
+        // fallback would surface here rather than as silent operator-
+        // facing skew between the paired halves of the SAME
+        // `AllocationRef` seed.
+        let mut p = pool_named("attest-pool");
+        p.metadata.namespace = None;
+        p.metadata.name = None;
+        assert_eq!(p.owned_name_or_empty(), p.owned_namespace_or_empty());
+        assert_eq!(p.owned_name_or_empty(), String::new());
+        assert_eq!(p.owned_namespace_or_empty(), String::new());
+    }
+
+    #[test]
+    fn owned_namespace_or_empty_does_not_default_to_process_default_namespace() {
+        // Deliberate-empty-sentinel pin: the primitive's fallback is
+        // `""`, NOT `crate::crd::Process::DEFAULT_NAMESPACE`. The
+        // sole downstream consumer (`AllocationConvergenceCtx::observe`)
+        // feeds the produced value into `AllocationRef.namespace`,
+        // which is then matched byte-identically against
+        // `spec.pool_ref.namespace` at `resolve_pool`. A silent
+        // substitution of `"default"` at this primitive would alias
+        // every namespace-absent pool to the `"default"` bucket at
+        // the matcher, hiding the missing-slot corner from an
+        // operator who explicitly authored an allocation against a
+        // namespace-unset pool. Pinned so a future "helpful"
+        // canonicalization step lands as a compiler-visible failure
+        // here rather than as silent operator-facing skew at the
+        // matched-pool seed.
+        let mut p = pool_named("attest-pool");
+        p.metadata.namespace = None;
+        assert_ne!(
+            p.owned_namespace_or_empty(),
+            crate::crd::Process::DEFAULT_NAMESPACE
+        );
+        assert_eq!(p.owned_namespace_or_empty(), "");
+    }
+
     // ─── AllocationRef::new substrate pins ────────────────────────────
     //
     // Pins the substrate constructor for [`AllocationRef`] — the
@@ -2360,23 +2607,24 @@ mod tests {
 
     #[test]
     fn allocation_ref_new_composes_with_owned_name_or_empty_pool_projection() {
-        // Composition pin: the constructor composes with the
-        // sibling substrate primitive [`EphemeralPool::owned_name_or_empty`]
-        // at the allocation_decide.rs pool_ref seed — the same
-        // primitive family the pool CRD already opened. The composed
-        // pair carries an owned `String` name half (from
+        // Composition pin: the constructor composes with the paired
+        // substrate primitives [`EphemeralPool::owned_name_or_empty`]
+        // + [`EphemeralPool::owned_namespace_or_empty`] at the
+        // allocation_decide.rs pool_ref seed — the same primitive
+        // family the pool CRD opened for both halves of the
+        // `AllocationRef { name, namespace }` struct literal. The
+        // composed pair carries an owned `String` name half (from
         // `pool.owned_name_or_empty()`) and an owned `String`
-        // namespace half (pre-lift chain, to be lifted as
-        // `owned_namespace_or_empty` in a peer run). A regression
-        // that broke the primitive's `impl Into<String>` acceptance
-        // of an owned `String` return type would surface here rather
-        // than as silent build failure at the pool-reconciler
-        // matched_pool seed.
+        // namespace half (from `pool.owned_namespace_or_empty()`) —
+        // no pre-lift chain remains. A regression that broke the
+        // primitive family's `impl Into<String>` acceptance of an
+        // owned `String` return type would surface here rather than
+        // as silent build failure at the pool-reconciler matched_pool
+        // seed.
         let pool = pool_named("attest-pool");
-        let ns = pool.metadata.namespace.clone().unwrap_or_default();
-        let r = AllocationRef::new(pool.owned_name_or_empty(), ns.clone());
+        let r = AllocationRef::new(pool.owned_name_or_empty(), pool.owned_namespace_or_empty());
         assert_eq!(r.name, "attest-pool");
-        assert_eq!(r.namespace, ns);
+        assert_eq!(r.namespace, pool.owned_namespace_or_empty());
     }
 
     #[test]

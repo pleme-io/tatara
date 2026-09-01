@@ -13,7 +13,7 @@ use tracing::{info, warn};
 use tatara_process::allocation::{AllocationPhase, EphemeralAllocation};
 use tatara_process::lifetime::{EphemeralLifetime, Lifetime, TeardownPolicy};
 use tatara_process::pool::{AllocationRef, EphemeralPool, PoolMember};
-use tatara_process::prelude::Process;
+use tatara_process::prelude::{NamespacedApiCoordinates, Process};
 
 use crate::allocation_decide::{decide_allocation_reconcile, AllocationDecision};
 use crate::context::PoolContext;
@@ -29,16 +29,20 @@ pub async fn reconcile(
 }
 
 async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>) -> Result<Action> {
-    let ns = alloc
-        .metadata
-        .namespace
-        .clone()
-        .ok_or_else(|| anyhow!("Allocation has no metadata.namespace"))?;
-    let name = alloc
-        .metadata
-        .name
-        .clone()
-        .ok_or_else(|| anyhow!("Allocation has no metadata.name"))?;
+    // The (namespace, name) API-path pair rides through the substrate
+    // trait `tatara_process::NamespacedApiCoordinates` (blanket-implemented
+    // over every `kube::Resource<DynamicType = ()>` in the workspace) —
+    // pre-lift this was a hand-authored paired 5-line `.metadata.<slot>
+    // .clone().ok_or_else(|| anyhow!("Allocation has no metadata.<slot>"))?`
+    // chain, sibling to the pool reconciler's own top-level gate. Both
+    // sites walked the SAME shape and funneled every downstream
+    // `Api::namespaced` + `Api::patch_status` call through the same
+    // extracted `(ns, name)` tuple. Post-lift the trait's blanket impl
+    // owns the extraction; the error prefix now spells the canonical
+    // kube kind (`EphemeralAllocation`) rather than the pre-lift short-
+    // form (`Allocation`), matching `kubectl get ephemeralallocations`
+    // output verbatim.
+    let (ns, name) = alloc.owned_coordinates_required()?;
 
     let alloc_api: Api<EphemeralAllocation> = Api::namespaced(ctx.kube.clone(), &ns);
     let pool_api: Api<EphemeralPool> = Api::namespaced(ctx.kube.clone(), &ns);

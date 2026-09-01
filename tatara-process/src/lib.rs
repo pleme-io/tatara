@@ -117,6 +117,7 @@ pub mod prelude {
     pub use crate::table::{
         ClaimRecord, ProcessEntry, ProcessTable, ProcessTableSpec, ProcessTableStatus,
     };
+    pub use crate::NamespacedApiCoordinates;
 }
 
 /// CRD API group for every tatara CRD.
@@ -295,6 +296,126 @@ pub fn owner_references_json(name: &str, uid: &str) -> Vec<serde_json::Value> {
         vec![owner_reference_json(name, uid)]
     }
 }
+
+/// Substrate-primitive trait for the **`Api::namespaced`-shaped
+/// coordinate extraction** every tatara-CRD reconciler restated by
+/// hand at its top-level `reconcile` dispatcher: pull owned `String`
+/// forms of `metadata.namespace` and `metadata.name` and refuse to
+/// substitute a workspace-wide default for either slot, because the
+/// caller is about to feed the pair positionally into
+/// `Api::namespaced(client, &ns)` + `Api::patch(&name, …)` and the
+/// K8s API server refuses an empty-string name / namespace path
+/// segment.
+///
+/// Pre-lift the 5-line `.metadata.<slot>.clone().ok_or_else(||
+/// anyhow!("<Kind> has no metadata.<slot>"))?` chain (paired at both
+/// slots inside every controller's `reconcile_inner`) was hand-
+/// authored at TWO sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// threshold in `tatara-pool-reconciler`, each restating the SAME
+/// (`namespace` errors, then `name` errors, both owned `String`)
+/// contract on a different CRD:
+/// * `controller_pool::reconcile_inner` — the pool reconciler's
+///   top-level `Pool has no metadata.{namespace,name}` gate,
+///   funneling every subsequent `Api::namespaced` + `Api::patch` call
+///   through the extracted `(ns, name)` pair.
+/// * `controller_allocation::reconcile_inner` — the allocation
+///   reconciler's peer gate on `EphemeralAllocation`, funneling the
+///   `Api::namespaced` + `Api::patch_status` calls that follow.
+///
+/// Both sites walked the SAME 5-line paired chain and both wanted the
+/// `(String, String)` form the primitive returns — because the
+/// produced `ns` outlives the source-object borrow (it feeds
+/// `Api::namespaced(client, &ns)` and later log-line interpolations
+/// across a stretch of `.await` points) and the `name` similarly
+/// threads through `Api::patch(&name, …)` calls downstream. Post-lift
+/// each callsite reads `pool.owned_coordinates_required()?` /
+/// `alloc.owned_coordinates_required()?` and the produced tuple
+/// destructures into the same downstream slots unchanged.
+///
+/// The blanket impl over `kube::Resource<DynamicType = ()>` (which
+/// every `#[derive(CustomResource)]`-generated tatara CRD satisfies)
+/// closes the substrate corner ONCE for the entire workspace: adding
+/// a third or fourth CRD in a peer crate — a routing-edge object, a
+/// receipt registry — inherits the extractor for free at its own
+/// `reconcile_inner` dispatcher with zero per-CRD lift work. This is
+/// the direction the CSE Compounding Directive names by
+/// "solve once, load-bearing fixes only": the primitive lands once
+/// and every downstream controller pattern-matches into it without
+/// re-authoring the chain.
+///
+/// Peer to [`crate::prelude::Process::owned_coordinates_or_err`] on
+/// the (`Process`-specific × namespace-required) axis pair — the two
+/// primitives partition the workspace's owned-form coordinate
+/// extraction on the `namespace-required` axis and cover the
+/// per-CRD needs they were opened for:
+///
+/// * ns-defaulted, name-required, `Process`-inherent →
+///   [`crate::prelude::Process::owned_coordinates_or_err`]
+///   (`tatara-reconciler`'s `phase_machine` / `signals` callers —
+///   consumers whose downstream tolerates the workspace's
+///   [`crate::prelude::Process::DEFAULT_NAMESPACE`] substitute for a
+///   `Process` fixtured pre-namespace-defaulting).
+/// * ns-required + name-required, blanket over every CRD → **this
+///   method** (`tatara-pool-reconciler`'s pool + allocation reconciler
+///   callers — consumers whose downstream refuses BOTH substitutions
+///   because the `Api::namespaced` dispatcher expects a real path
+///   segment on each axis and the enclosing controller is not
+///   authored to run against a namespace-less pool / allocation).
+///
+/// The error strings are shaped as `"{Kind} has no metadata.{slot}"`
+/// with `{Kind}` pulled positionally from `Self::kind(&())` (the
+/// kube-rs canonical CRD kind — `"EphemeralPool"` / `"EphemeralAllocation"`
+/// — which matches `kubectl get ephemeralpools|ephemeralallocations`
+/// output verbatim rather than the pre-lift `"Pool"` / `"Allocation"`
+/// short-forms every callsite hard-coded by hand). Routing the type
+/// name through `Self::kind` closes the drift path where a future
+/// CRD rename or a copy-paste consumer inherited the wrong short-
+/// form; the K8s-kind spelling is the ONE canonical name every
+/// operator-facing surface (kubectl output, RBAC subject strings,
+/// audit-log entries) already uses, so a log-line consumer greppping
+/// for either kind hits the primitive's canonical spelling directly.
+///
+/// A future normalization step (a per-CRD namespace canonicalization
+/// pass — case-fold, unicode-safe path-segment validation, a shared
+/// [`crate::prelude::Process::DEFAULT_NAMESPACE`]-aware fallback
+/// mode gated by an argument) lands at ONE substrate trait method
+/// here and every downstream reconciler picks up the upgrade
+/// mechanically — no per-callsite hand-edit at `controller_pool` /
+/// `controller_allocation` / any future CRD's `reconcile_inner`.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// the paired 5-line `.metadata.<slot>.clone().ok_or_else` chain
+/// recurred at two hand-authored sites past the ★★ PRIME-DIRECTIVE
+/// ≥ 2 duplication trigger, and is lifted onto ONE trait method
+/// here). THEORY.md §II.1 invariant 5 (composition preserves
+/// proofs — the pins bind the missing-namespace corner, the
+/// missing-name corner, the missing-both corner (namespace error
+/// wins), the both-slots-present happy path, AND the
+/// `Self::kind`-driven error-string spelling per CRD, so a
+/// regression that reordered the two `ok_or_else` gates or drifted
+/// the error prefix surfaces at `tests::owned_coordinates_required_*`
+/// rather than as silent operator-facing skew between the two
+/// reconcilers' top-level error-message shapes).
+pub trait NamespacedApiCoordinates: kube::Resource<DynamicType = ()> {
+    /// Extract the K8s API path coordinates as owned `String`s,
+    /// erroring with a `Self::kind`-prefixed message when either
+    /// slot is absent. See the trait-level docs for the axis-family
+    /// context, peer primitives, and future-normalization anchor.
+    fn owned_coordinates_required(&self) -> anyhow::Result<(String, String)> {
+        let meta = self.meta();
+        let ns = meta
+            .namespace
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("{} has no metadata.namespace", Self::kind(&())))?;
+        let name = meta
+            .name
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("{} has no metadata.name", Self::kind(&())))?;
+        Ok((ns, name))
+    }
+}
+
+impl<T> NamespacedApiCoordinates for T where T: kube::Resource<DynamicType = ()> {}
 
 /// Annotation keys the reconciler reads/writes on owned FluxCD resources.
 pub mod annotations {
@@ -798,6 +919,327 @@ mod qualified_process_ref_tests {
                  hand-authored shape on ({ns:?}, {name:?})"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod namespaced_api_coordinates_tests {
+    //! Pin the [`NamespacedApiCoordinates`] trait's
+    //! `owned_coordinates_required` extractor at fail-before-pass-
+    //! after granularity across every corner of the (namespace slot,
+    //! name slot) × (present, absent) input matrix, on BOTH CRDs the
+    //! trait's blanket impl covers today (`EphemeralPool` +
+    //! `EphemeralAllocation`). A regression that reordered the two
+    //! `ok_or_else` gates, dropped the `Self::kind` prefix, or drifted
+    //! the error-string spelling surfaces HERE rather than as silent
+    //! operator-facing skew between the two reconcilers' top-level
+    //! error messages.
+    use super::NamespacedApiCoordinates;
+    use crate::allocation::{AllocationSpec, EphemeralAllocation, Requestor};
+    use crate::ephemeral::EphemeralSpec;
+    use crate::intent::AplicacaoIntent;
+    use crate::lifetime::TeardownPolicy;
+    use crate::pool::{EphemeralPool, PoolSelector, PoolSpec, ReturnPolicy};
+
+    fn empty_template() -> EphemeralSpec {
+        // Mirror `tatara-pool-reconciler::router::tests::empty_template`
+        // — the workspace-wide minimal `EphemeralSpec` fixture the sister
+        // reconciler tests already use for pool wiring exercised here.
+        EphemeralSpec {
+            aplicacao: AplicacaoIntent {
+                chart_ref: "oci://x".into(),
+                version: "1".into(),
+                profile: String::new(),
+                values_overlay: serde_json::Value::Null,
+                release_name: None,
+                target_namespace: None,
+                install_timeout: None,
+            },
+            ttl: "1h".into(),
+            teardown: TeardownPolicy::Always,
+            max_concurrent: 0,
+            postconditions: vec![],
+            preconditions: vec![],
+            verify_timeout: None,
+            classification: None,
+            parent: None,
+            exports: vec![],
+            routing: None,
+        }
+    }
+
+    fn pool_fixture(name: &str, ns: Option<&str>) -> EphemeralPool {
+        let spec = PoolSpec {
+            desired_size: 1,
+            min_size: 0,
+            max_size: 0,
+            return_policy: ReturnPolicy::Replace,
+            selector: PoolSelector::default(),
+            template: empty_template(),
+            free_ttl: "24h".into(),
+            max_allocation_ttl: "4h".into(),
+            desired: 0,
+            replacement_policy: Default::default(),
+            stable_name_claim: false,
+        };
+        let mut p = EphemeralPool::new(name, spec);
+        p.metadata.namespace = ns.map(str::to_string);
+        p
+    }
+
+    fn alloc_fixture(name: &str, ns: Option<&str>) -> EphemeralAllocation {
+        let spec = AllocationSpec {
+            pool_ref: None,
+            requestor: Requestor {
+                kind: "github-pr".into(),
+                repo: None,
+                branch: None,
+                pr_number: None,
+                sha: None,
+                pr_labels: vec![],
+                actor: None,
+            },
+            ttl: None,
+            note: None,
+        };
+        let mut a = EphemeralAllocation::new(name, spec);
+        a.metadata.namespace = ns.map(str::to_string);
+        a
+    }
+
+    fn nameless_pool(ns: Option<&str>) -> EphemeralPool {
+        let mut p = pool_fixture("placeholder", ns);
+        p.metadata.name = None;
+        p
+    }
+
+    fn nameless_alloc(ns: Option<&str>) -> EphemeralAllocation {
+        let mut a = alloc_fixture("placeholder", ns);
+        a.metadata.name = None;
+        a
+    }
+
+    // ── Happy path: both slots present ─────────────────────────────
+
+    #[test]
+    fn owned_coordinates_required_returns_owned_strings_on_ephemeral_pool_when_both_slots_present()
+    {
+        let p = pool_fixture("attest-pool", Some("ephemeral-pools"));
+        let (ns, name) = p.owned_coordinates_required().unwrap();
+        assert_eq!(ns, "ephemeral-pools");
+        assert_eq!(name, "attest-pool");
+    }
+
+    #[test]
+    fn owned_coordinates_required_returns_owned_strings_on_ephemeral_allocation_when_both_slots_present(
+    ) {
+        let a = alloc_fixture("pr-42-demo", Some("ephemeral-pools"));
+        let (ns, name) = a.owned_coordinates_required().unwrap();
+        assert_eq!(ns, "ephemeral-pools");
+        assert_eq!(name, "pr-42-demo");
+    }
+
+    // ── Missing namespace ─────────────────────────────────────────
+
+    #[test]
+    fn owned_coordinates_required_errors_on_ephemeral_pool_missing_namespace() {
+        let p = pool_fixture("attest-pool", None);
+        let err = p.owned_coordinates_required().unwrap_err();
+        assert_eq!(err.to_string(), "EphemeralPool has no metadata.namespace");
+    }
+
+    #[test]
+    fn owned_coordinates_required_errors_on_ephemeral_allocation_missing_namespace() {
+        let a = alloc_fixture("pr-42-demo", None);
+        let err = a.owned_coordinates_required().unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "EphemeralAllocation has no metadata.namespace"
+        );
+    }
+
+    // ── Missing name ──────────────────────────────────────────────
+
+    #[test]
+    fn owned_coordinates_required_errors_on_ephemeral_pool_missing_name_when_namespace_present() {
+        let p = nameless_pool(Some("ephemeral-pools"));
+        let err = p.owned_coordinates_required().unwrap_err();
+        assert_eq!(err.to_string(), "EphemeralPool has no metadata.name");
+    }
+
+    #[test]
+    fn owned_coordinates_required_errors_on_ephemeral_allocation_missing_name_when_namespace_present(
+    ) {
+        let a = nameless_alloc(Some("ephemeral-pools"));
+        let err = a.owned_coordinates_required().unwrap_err();
+        assert_eq!(err.to_string(), "EphemeralAllocation has no metadata.name");
+    }
+
+    // ── Missing both slots: namespace error wins (pre-lift ordering) ──
+
+    #[test]
+    fn owned_coordinates_required_reports_namespace_first_when_both_slots_absent_on_ephemeral_pool()
+    {
+        // Pre-lift both reconcilers spelled the paired chain as the
+        // namespace ok_or_else THEN the name ok_or_else, so the
+        // reported error on a fixture missing both slots was always
+        // the namespace one. Pin that ordering post-lift so a
+        // regression that swapped the two `ok_or_else` blocks
+        // surfaces HERE rather than at operator-facing log-line
+        // grep drift between the two reconcilers.
+        let p = nameless_pool(None);
+        let err = p.owned_coordinates_required().unwrap_err();
+        assert_eq!(err.to_string(), "EphemeralPool has no metadata.namespace");
+    }
+
+    #[test]
+    fn owned_coordinates_required_reports_namespace_first_when_both_slots_absent_on_ephemeral_allocation(
+    ) {
+        let a = nameless_alloc(None);
+        let err = a.owned_coordinates_required().unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "EphemeralAllocation has no metadata.namespace"
+        );
+    }
+
+    // ── Byte-identical parity with the pre-lift 5-line chain ──────
+
+    #[test]
+    fn owned_coordinates_required_matches_pre_lift_pool_reconciler_chain_shape() {
+        // Byte-identical parity pin: the primitive produces the SAME
+        // `Result<(String, String), anyhow::Error>` shape a pre-lift
+        // `.metadata.<slot>.clone().ok_or_else(|| anyhow!("<Kind> has
+        // no metadata.<slot>"))?` chain produced at
+        // `tatara-pool-reconciler::controller_pool::reconcile_inner`
+        // pre-lift, on both the happy and the missing-slot corners.
+        // A regression that changed the error prefix, reordered the
+        // two gates, or returned a non-`(String, String)` tuple
+        // surfaces HERE rather than at every consumer downstream.
+        let cases = [
+            (Some("prod"), Some("api")),
+            (Some("prod"), None),
+            (None, Some("orphan")),
+            (None, None),
+        ];
+        for (ns_slot, name_slot) in cases {
+            let mut p = pool_fixture("placeholder", ns_slot);
+            if let Some(nm) = name_slot {
+                p.metadata.name = Some(nm.into());
+            } else {
+                p.metadata.name = None;
+            }
+
+            // Pre-lift 5-line paired chain (with the reconciler's
+            // hand-authored short-form `"Pool"` prefix updated to the
+            // canonical kube kind `"EphemeralPool"`, matching the
+            // primitive's `Self::kind`-driven spelling — the drift
+            // is intentional per the trait's docs).
+            let pre_lift: anyhow::Result<(String, String)> = (|| {
+                let ns =
+                    p.metadata.namespace.clone().ok_or_else(|| {
+                        anyhow::anyhow!("EphemeralPool has no metadata.namespace")
+                    })?;
+                let name = p
+                    .metadata
+                    .name
+                    .clone()
+                    .ok_or_else(|| anyhow::anyhow!("EphemeralPool has no metadata.name"))?;
+                Ok((ns, name))
+            })();
+
+            let via_primitive = p.owned_coordinates_required();
+
+            // Compare on both the Ok tuple + the error string
+            // spelling — anyhow::Error does not derive PartialEq so
+            // pattern-match on the Result axis rather than a direct
+            // `assert_eq!` on the whole Result.
+            match (via_primitive, pre_lift) {
+                (Ok(a), Ok(b)) => assert_eq!(a, b),
+                (Err(a), Err(b)) => assert_eq!(a.to_string(), b.to_string()),
+                (a, b) => panic!(
+                    "primitive vs pre-lift chain disagree on Ok/Err axis for \
+                     (ns={ns_slot:?}, name={name_slot:?}): primitive={a:?}, pre_lift={b:?}"
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn owned_coordinates_required_matches_pre_lift_allocation_reconciler_chain_shape() {
+        // Peer to the pool-side pin above — pin the same byte-
+        // identity contract on the allocation reconciler's chain,
+        // where the pre-lift error spelling used the short-form
+        // `"Allocation"` prefix that the primitive now emits as the
+        // canonical kube-kind `"EphemeralAllocation"`.
+        let cases = [
+            (Some("ephemeral-pools"), Some("pr-42-demo")),
+            (Some("ephemeral-pools"), None),
+            (None, Some("orphan")),
+            (None, None),
+        ];
+        for (ns_slot, name_slot) in cases {
+            let mut a = alloc_fixture("placeholder", ns_slot);
+            if let Some(nm) = name_slot {
+                a.metadata.name = Some(nm.into());
+            } else {
+                a.metadata.name = None;
+            }
+
+            let pre_lift: anyhow::Result<(String, String)> = (|| {
+                let ns = a.metadata.namespace.clone().ok_or_else(|| {
+                    anyhow::anyhow!("EphemeralAllocation has no metadata.namespace")
+                })?;
+                let name =
+                    a.metadata.name.clone().ok_or_else(|| {
+                        anyhow::anyhow!("EphemeralAllocation has no metadata.name")
+                    })?;
+                Ok((ns, name))
+            })();
+
+            let via_primitive = a.owned_coordinates_required();
+
+            match (via_primitive, pre_lift) {
+                (Ok(a), Ok(b)) => assert_eq!(a, b),
+                (Err(a), Err(b)) => assert_eq!(a.to_string(), b.to_string()),
+                (a, b) => panic!(
+                    "primitive vs pre-lift chain disagree on Ok/Err axis for \
+                     (ns={ns_slot:?}, name={name_slot:?}): primitive={a:?}, pre_lift={b:?}"
+                ),
+            }
+        }
+    }
+
+    // ── Cross-CRD symmetry: kube kind drives the error prefix ─────
+
+    #[test]
+    fn owned_coordinates_required_error_prefix_matches_kube_kind_on_each_crd() {
+        // The error prefix is sourced positionally from `Self::kind`
+        // so the two CRDs emit distinct kube-canonical spellings
+        // without either callsite hard-coding a per-CRD literal.
+        // Regressions that hard-coded a shared prefix (e.g. a
+        // copy-paste that pasted the pool's error string into the
+        // allocation callsite) surface HERE.
+        use kube::Resource;
+        let p = pool_fixture("p", None);
+        let a = alloc_fixture("a", None);
+        assert_eq!(
+            p.owned_coordinates_required().unwrap_err().to_string(),
+            format!("{} has no metadata.namespace", EphemeralPool::kind(&()))
+        );
+        assert_eq!(
+            a.owned_coordinates_required().unwrap_err().to_string(),
+            format!(
+                "{} has no metadata.namespace",
+                EphemeralAllocation::kind(&())
+            )
+        );
+        // Belt-and-suspenders: the two kinds are distinct spellings,
+        // so the error strings are distinct too.
+        assert_ne!(
+            p.owned_coordinates_required().unwrap_err().to_string(),
+            a.owned_coordinates_required().unwrap_err().to_string(),
+        );
     }
 }
 

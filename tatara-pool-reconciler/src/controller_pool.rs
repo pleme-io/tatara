@@ -20,7 +20,7 @@ use crate::ReconcilerError;
 use tatara_process::ephemeral::EphemeralSpec;
 use tatara_process::lifetime::{Lifetime, PermanentLifetime};
 use tatara_process::pool::{EphemeralPool, MemberState, PoolMember, PoolPhase, PoolStatus};
-use tatara_process::prelude::{Process, ProcessSpec};
+use tatara_process::prelude::{NamespacedApiCoordinates, Process, ProcessSpec};
 
 use crate::context::PoolContext;
 use crate::desired::{decide_pool_convergence, ConvergenceAction, PoolMemberSnapshot};
@@ -40,16 +40,23 @@ pub async fn reconcile(
 }
 
 async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Result<Action> {
-    let ns = pool
-        .metadata
-        .namespace
-        .clone()
-        .ok_or_else(|| anyhow!("Pool has no metadata.namespace"))?;
-    let name = pool
-        .metadata
-        .name
-        .clone()
-        .ok_or_else(|| anyhow!("Pool has no metadata.name"))?;
+    // The (namespace, name) API-path pair rides through the substrate
+    // trait `tatara_process::NamespacedApiCoordinates` (blanket-implemented
+    // over every `kube::Resource<DynamicType = ()>` in the workspace) —
+    // pre-lift this was a hand-authored paired 5-line `.metadata.<slot>
+    // .clone().ok_or_else(|| anyhow!("Pool has no metadata.<slot>"))?`
+    // chain, one of TWO workspace-wide restatements past the ★★ PRIME-
+    // DIRECTIVE ≥ 2 duplication threshold (peer at
+    // `controller_allocation::reconcile_inner`'s Allocation top-level
+    // gate; both funneled every downstream `Api::namespaced` +
+    // `Api::patch` call through the same shape). Post-lift the two
+    // reconcilers share ONE substrate owner + every future CRD in a
+    // peer crate inherits the extractor for free at its own
+    // `reconcile_inner` dispatcher; the error prefix now spells the
+    // canonical kube kind (`EphemeralPool`) rather than the pre-lift
+    // short-form (`Pool`), matching `kubectl get ephemeralpools`
+    // output verbatim.
+    let (ns, name) = pool.owned_coordinates_required()?;
 
     let pool_api: Api<EphemeralPool> = Api::namespaced(ctx.kube.clone(), &ns);
     let process_api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);

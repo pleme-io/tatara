@@ -506,10 +506,10 @@ pub fn render_routing(
     // shares ONE owner with the render-time authoring seed (render),
     // the SSA-time re-injection (ssapply::inject_annotations), the
     // claim-arbiter row builder (table_controller::reconcile), and
-    // the boundary-evaluator default-namespace resolver. The
-    // `<ns>/<name>` composition below then rides through the
-    // paired-composer substrate `qualified_process_ref` so the shape
-    // convention is owned at ONE site too.
+    // the boundary-evaluator default-namespace resolver. The pair is
+    // still needed here for the per-hostname `EdgeContext` seed at
+    // lines 552-576 where `process_name` + `process_namespace` thread
+    // into per-Edge slots positionally.
     let (process_namespace, process_name) = process.coordinates_or_defaults();
     // Borrow-form metadata-projection corner of the substrate primitive
     // family — pre-lift this was a hand-authored
@@ -523,7 +523,23 @@ pub fn render_routing(
     // `is_empty` gate for the two owner-reference emitters on the
     // SAME Process.
     let process_uid = process.uid_or_empty();
-    let process_ref = crate::ssapply::qualified_process_ref(process_namespace, process_name);
+    // The `<ns>/<name>` composition rides through the substrate
+    // primitive `Process::qualified_ref` — pre-lift this was a hand-
+    // authored `qualified_process_ref(process_namespace, process_name)`
+    // that walked the SAME 2-step paired-projection + shape-composer
+    // chain as `render::render_export_jobs` and
+    // `table_controller::reconcile` (three workspace-wide restatements
+    // past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold). Post-lift
+    // all three sites share ONE substrate owner; a rename of either
+    // fallback string, a swap of the `<ns>/<name>` separator, or a
+    // future `<ns>/<name>@<gen>` / `<cluster>/<ns>/<name>` extension
+    // lands at `Process::qualified_ref` and every consumer inherits
+    // the upgrade mechanically. The composed reference is byte-
+    // identical to the pre-lift `qualified_process_ref(ns, name)` call
+    // (with `ns` / `name` supplied by the paired-projection primitive
+    // right above), so downstream `PROCESS=<ref>` annotation greps
+    // match bytewise.
+    let process_ref = process.qualified_ref();
 
     // Content-hash form of ephemeral_id — derived once per Process,
     // reused across every hostname on this Process.
@@ -656,11 +672,23 @@ pub fn render_export_jobs(
     // pulls from — the pre-lift hand-authored 2-slot fallback pair
     // (`"default"` / `"unnamed"`) now shares ONE substrate owner via
     // `Process::coordinates_or_defaults`, sibling to the render()
-    // dispatch seed above and the render_routing seed below. A
-    // future normalization sweep at the substrate reaches this seed
-    // through the ONE primitive.
+    // dispatch seed above and the render_routing seed below. The
+    // pair is still needed here for the per-export-Job body seed
+    // below (`one_export_job(ns, name, &process_ref, …)`) where
+    // `ns` + `name` thread into positional slots.
     let (ns, name) = process.coordinates_or_defaults();
-    let process_ref = crate::ssapply::qualified_process_ref(ns, name);
+    // The `<ns>/<name>` composition rides through the substrate
+    // primitive `Process::qualified_ref` — pre-lift this was a hand-
+    // authored `qualified_process_ref(ns, name)` that walked the SAME
+    // 2-step paired-projection + shape-composer chain as
+    // `render::render_routing` and `table_controller::reconcile`
+    // (three workspace-wide restatements past the ★★ PRIME-DIRECTIVE
+    // ≥ 2 duplication threshold). Post-lift all three sites share ONE
+    // substrate owner; the composed reference is byte-identical to
+    // the pre-lift `qualified_process_ref(ns, name)` call, so the
+    // downstream `PROCESS=<ref>` annotation seed on every emitted
+    // export Job matches bytewise.
+    let process_ref = process.qualified_ref();
     // Borrow-form metadata-projection corner of the substrate primitive
     // family — peer to the `render_routing` seed above; both walked the
     // `.metadata.uid.as_deref().unwrap_or("")` chain by hand pre-lift,

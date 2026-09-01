@@ -80,15 +80,23 @@ pub async fn reconcile(
         // the API server has not yet stamped the timestamp on a
         // freshly-forked Process.
         let created_at = p.created_at().unwrap_or_else(Utc::now);
-        // Two-slot metadata pull → `<ns>/<name>` claim-row key. The
-        // `(ns, name)` pair rides through `Process::
-        // coordinates_or_defaults` (workspace-wide fallback owner)
-        // and then through `qualified_process_ref` (workspace-wide
-        // `<ns>/<name>` shape owner) so a rename of either fallback
-        // string or of the reference separator lands at ONE site
-        // rather than at every claim-arbiter row builder.
-        let (ns, name) = p.coordinates_or_defaults();
-        let process_ref = crate::ssapply::qualified_process_ref(ns, name);
+        // Claim-row key rides through the substrate primitive
+        // `Process::qualified_ref` — pre-lift this was a hand-authored
+        // 2-step `coordinates_or_defaults() → qualified_process_ref(ns,
+        // name)` composition that walked the SAME paired-projection +
+        // shape-composer chain as `render::render_routing` and
+        // `render::render_export_jobs` (three workspace-wide
+        // restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+        // threshold). Post-lift all three sites share ONE substrate
+        // owner; the composed reference feeds
+        // `ClaimRecord.holder` (the slot every downstream claim-registry
+        // query greps by shape) byte-identically to the pre-lift
+        // paired composition, so a rename of either fallback string,
+        // a swap of the `<ns>/<name>` separator, or a future
+        // `<ns>/<name>@<gen>` / `<cluster>/<ns>/<name>` extension lands
+        // at `Process::qualified_ref` and the claim-arbiter row seed
+        // inherits the upgrade mechanically.
+        let process_ref = p.qualified_ref();
         for hostname in &routing.hostnames {
             let cluster = hostname.cluster.as_deref().unwrap_or(cfg_cluster);
             let key = format!("{cluster}/{}", hostname.app);

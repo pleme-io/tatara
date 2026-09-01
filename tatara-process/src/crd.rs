@@ -286,6 +286,87 @@ impl Process {
         Some((self.namespace_or_default(), name))
     }
 
+    /// Canonical `<ns>/<name>` **namespace-qualified process reference**
+    /// composed straight off the live [`Process`] — the ONE-liner
+    /// collapse of the paired
+    /// `let (ns, name) = process.coordinates_or_defaults(); let r =
+    /// qualified_process_ref(ns, name);` incantation every consumer
+    /// whose downstream keys a Process by "which cluster location owns
+    /// it" hand-authored at scattered sites across `tatara-reconciler`.
+    ///
+    /// Pre-lift the 2-step `coordinates_or_defaults() →
+    /// qualified_process_ref(ns, name)` composition was hand-authored
+    /// at THREE sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    /// threshold in `tatara-reconciler`, each restating the SAME
+    /// paired projection + `<ns>/<name>` shape:
+    /// * `render::render_routing` — routing-graph `PROCESS=<ref>`
+    ///   annotation seed on every emitted Ingress / DNSEndpoint,
+    ///   feeding [`crate::status::FluxResourceRef`] downstream.
+    /// * `render::render_export_jobs` — export-Job `PROCESS=<ref>`
+    ///   annotation seed on every emitted export `batch/v1` Job.
+    /// * `table_controller::reconcile` — claim-arbiter row-key +
+    ///   `Candidate.process_ref` seed on the stable-name claim
+    ///   registry (the reference lands verbatim in
+    ///   [`crate::table::ClaimRecord.holder`], where every downstream
+    ///   claim query greps it).
+    ///
+    /// All THREE sites walked the SAME 2-step chain — pull the
+    /// `(ns, name)` pair through [`Self::coordinates_or_defaults`],
+    /// then feed the pair positionally into
+    /// [`crate::qualified_process_ref`]. Post-lift each caller reads
+    /// `process.qualified_ref()` — the paired projection + shape
+    /// composer now sit at ONE substrate owner, so a rename of either
+    /// workspace-wide fallback (`"default"` / `"unnamed"`), a swap of
+    /// the `<ns>/<name>` separator, a normalization pass inserted
+    /// between the paired projection and the shape composer, or a
+    /// future `<ns>/<name>@<gen>` / `<cluster>/<ns>/<name>` cross-
+    /// cluster extension lands here exactly once and every consumer
+    /// (annotation seed, claim-row key, holder-slot writer, export-
+    /// Job seed, `Candidate` composer) inherits the upgrade
+    /// mechanically.
+    ///
+    /// Peer to [`Self::coordinates_or_defaults`] on the (return-form ×
+    /// composition-depth) axis pair:
+    /// * pair + defaulted → [`Self::coordinates_or_defaults`]
+    ///   (consumers that thread each half into a separate positional
+    ///   slot — `Api::namespaced(client, &ns) + Api::patch(&name, …)`,
+    ///   `one_export_job(ns, name, …)`, `EdgeContext { process_name,
+    ///   process_namespace, … }`);
+    /// * shape + defaulted → **this method** (consumers that key on
+    ///   the composed `<ns>/<name>` reference directly — the
+    ///   `PROCESS=<ref>` annotation seed, the `ClaimRecord.holder`
+    ///   slot, the label-selector composer).
+    ///
+    /// The namespace-fallback discipline matches
+    /// [`Self::coordinates_or_defaults`] (via
+    /// [`Self::namespace_or_default`]) and the name-fallback discipline
+    /// matches [`Self::name_or_placeholder`], so a consumer that
+    /// switches between the pair-returning primitive and this shape-
+    /// composing primitive never sees a different fallback string as
+    /// a side effect. The composed reference is byte-identical to the
+    /// pre-lift hand-authored `format!("{ns}/{name}")` with `ns` /
+    /// `name` supplied by the pair-returning primitive, so downstream
+    /// greps keyed on the reference shape (`PROCESS=<ref>` on emitted
+    /// resources, `holder = <ref>` on claim-registry queries) match
+    /// bytewise post-lift.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the 2-step paired-projection + shape-composer chain recurred at
+    /// three hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger, and is lifted onto ONE workspace-wide
+    /// owner here). THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — a regression that inserted a normalization step at
+    /// only two of three sites, or that drifted the fallback strings
+    /// between the paired projection and the shape composer, surfaces
+    /// at [`tests::qualified_ref_*`] rather than as silent operator-
+    /// visible skew across the three annotation / claim-key /
+    /// export-Job seed writers).
+    #[must_use]
+    pub fn qualified_ref(&self) -> String {
+        let (ns, name) = self.coordinates_or_defaults();
+        crate::qualified_process_ref(ns, name)
+    }
+
     /// Borrowed lookup of ONE key in `metadata.annotations`, with
     /// BOTH the missing-`annotations` corner AND the missing-key
     /// corner collapsed to `None` — the ONE-liner collapse of the
@@ -1691,6 +1772,139 @@ mod tests {
             q.coordinates_or_defaults(),
             (Process::DEFAULT_NAMESPACE, "api")
         );
+    }
+
+    // ─── Process::qualified_ref substrate pins ─────────────────────────
+    //
+    // Pins the paired-projection + shape-composer chain
+    // `coordinates_or_defaults() → qualified_process_ref(ns, name)` on
+    // the (return-form × composition-depth) axis pair. Fail-before-
+    // pass-after granularity: a regression that swapped the `<ns>/<name>`
+    // axis order, dropped either half, drifted the fallback strings
+    // between the paired-projection primitive and the shape composer, or
+    // inserted a normalization step at only the composed site and not
+    // the pair-returning primitive (or vice versa) surfaces here rather
+    // than as silent operator-visible skew across the three pre-lift
+    // `tatara-reconciler` sites (`render::render_routing`,
+    // `render::render_export_jobs`, `table_controller::reconcile`)
+    // whose downstream greps the reference shape verbatim (the
+    // `PROCESS=<ref>` annotation seed on every emitted Ingress /
+    // DNSEndpoint / export Job, the `ClaimRecord.holder` slot on the
+    // stable-name claim registry).
+
+    #[test]
+    fn qualified_ref_composes_ns_and_name_with_slash_when_both_slots_present() {
+        // Happy path — both metadata slots populated. The composed
+        // reference is EXACTLY `<ns>/<name>`, in that order, joined by
+        // a single `/`. A regression that swapped the two axes at
+        // this primitive would silently break every downstream
+        // `PROCESS=<ref>` annotation grep + claim-registry lookup.
+        let mut p = Process::new("api-gateway", empty_spec());
+        p.metadata.namespace = Some("prod-app".into());
+        assert_eq!(p.qualified_ref(), "prod-app/api-gateway");
+    }
+
+    #[test]
+    fn qualified_ref_falls_back_to_default_namespace_when_metadata_namespace_is_none() {
+        // Namespace-fallback pin: an absent `metadata.namespace` rides
+        // through `namespace_or_default()` → `DEFAULT_NAMESPACE`, so
+        // the composed reference lands as `default/<name>`. Matches
+        // what a pre-lift `qualified_process_ref(process.
+        // coordinates_or_defaults())` composition produced.
+        let mut p = Process::new("api-gateway", empty_spec());
+        p.metadata.namespace = None;
+        assert_eq!(p.qualified_ref(), "default/api-gateway");
+    }
+
+    #[test]
+    fn qualified_ref_falls_back_to_unnamed_placeholder_when_metadata_name_is_none() {
+        // Name-fallback pin: an absent `metadata.name` rides through
+        // `name_or_placeholder()` → `UNNAMED_PLACEHOLDER`, so the
+        // composed reference lands as `<ns>/unnamed`. A pre-lift
+        // consumer whose paired projection returned the placeholder
+        // (annotation writer, render owner-metadata seed) sees the
+        // exact same `<ns>/unnamed` shape post-lift, so downstream
+        // greps keyed on the pre-metadata Process's reference match
+        // bytewise.
+        let mut p = Process::new("ignored", empty_spec());
+        p.metadata.namespace = Some("staging".into());
+        p.metadata.name = None;
+        assert_eq!(p.qualified_ref(), "staging/unnamed");
+    }
+
+    #[test]
+    fn qualified_ref_falls_back_on_both_slots_when_both_metadata_are_none() {
+        // Both slots absent → both fallbacks land in the composed
+        // reference. The `default/unnamed` shape is what every pre-
+        // lift caller produced when a Process fixture (test or
+        // dynamic API response) surfaced without populated metadata;
+        // pinning it here holds the primitive's contract against a
+        // regression that dropped either fallback at only the
+        // composed site.
+        let mut p = Process::new("ignored", empty_spec());
+        p.metadata.namespace = None;
+        p.metadata.name = None;
+        assert_eq!(
+            p.qualified_ref(),
+            format!(
+                "{}/{}",
+                Process::DEFAULT_NAMESPACE,
+                Process::UNNAMED_PLACEHOLDER
+            )
+        );
+    }
+
+    #[test]
+    fn qualified_ref_matches_pre_lift_paired_composition_bytewise() {
+        // Byte-identical parity with the exact pre-lift 2-step
+        // composition every `tatara-reconciler` site hand-authored:
+        // `let (ns, name) = process.coordinates_or_defaults(); let r
+        // = qualified_process_ref(ns, name);`. Sweeps every metadata-
+        // slot combination the three pre-lift consumers plausibly
+        // encountered — both slots populated (steady state), one
+        // slot absent (Process mid-fork before API-server metadata
+        // stamp), both slots absent (dynamic API response / test
+        // fixture) — so a regression that reshaped the composition at
+        // the substrate primitive would surface here rather than as
+        // silent drift at the three consumer sites.
+        let fixtures: [(Option<&str>, Option<&str>); 4] = [
+            (Some("prod-app"), Some("api-gateway")),
+            (None, Some("api-gateway")),
+            (Some("staging"), None),
+            (None, None),
+        ];
+        for (ns_slot, name_slot) in fixtures {
+            let mut p = Process::new(name_slot.unwrap_or("seed"), empty_spec());
+            p.metadata.namespace = ns_slot.map(str::to_string);
+            p.metadata.name = name_slot.map(str::to_string);
+            let via_primitive = p.qualified_ref();
+            let (ns, name) = p.coordinates_or_defaults();
+            let via_paired = crate::qualified_process_ref(ns, name);
+            assert_eq!(
+                via_primitive, via_paired,
+                "qualified_ref must be byte-identical to the pre-lift \
+                 paired composition on (ns={ns_slot:?}, name={name_slot:?})"
+            );
+        }
+    }
+
+    #[test]
+    fn qualified_ref_composes_from_the_shared_coordinates_or_defaults_owner() {
+        // Composition invariant: the composed reference decomposes at
+        // the single `/` separator into EXACTLY the (ns, name) pair
+        // `coordinates_or_defaults` returns. A regression that
+        // introduced a per-callsite normalization at the shape
+        // composer (URL-escape, case-fold, path-normalize) or that
+        // pulled the pair from a different metadata source than the
+        // paired-projection primitive would surface here rather than
+        // at every downstream reference-shape grep.
+        let mut p = Process::new("api-gateway", empty_spec());
+        p.metadata.namespace = Some("prod-app".into());
+        let composed = p.qualified_ref();
+        let (ns, name) = p.coordinates_or_defaults();
+        let (composed_ns, composed_name) = composed.split_once('/').unwrap();
+        assert_eq!(composed_ns, ns);
+        assert_eq!(composed_name, name);
     }
 
     // ─── Process::owned_coordinates_or_err substrate pins ──────────────

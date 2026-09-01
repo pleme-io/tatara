@@ -161,19 +161,23 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
 
         // Update status from the same observations + skip the
         // legacy decision step.
+        //
+        // The 11-line `PoolStatus { phase, phase_since,
+        // ready/allocated/spawning/returning counts (each a per-slot
+        // `count_state` fanout), members, message: None, conditions:
+        // vec![] }` seed rides through the substrate constructor
+        // `PoolStatus::observed` — pre-lift this was hand-authored at
+        // TWO sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+        // threshold in this module (peer at the legacy allocation-
+        // driven `desired == 0` status-patch site below). Post-lift
+        // both consumers share ONE substrate owner; the four counters
+        // now ride a SINGLE closed-set-driven fold over the members
+        // list rather than four independent filter-and-count passes,
+        // and a future counter slot lands at ONE match arm in
+        // `tatara_process::pool::PoolMember::state_count_fanout`.
         let phase = pool_phase_from_members(&pool, &members);
         let status_patch = json!({
-            "status": PoolStatus {
-                phase,
-                phase_since: Some(Utc::now()),
-                ready_count: count_state(&members, MemberState::Free),
-                allocated_count: count_state(&members, MemberState::Allocated),
-                spawning_count: count_state(&members, MemberState::Spawning),
-                returning_count: count_state(&members, MemberState::Returning),
-                members: members.clone(),
-                message: None,
-                conditions: vec![],
-            },
+            "status": PoolStatus::observed(phase, members.clone(), Utc::now()),
         });
         let _ = pool_api
             .patch_status(&name, &PatchParams::default(), &Patch::Merge(&status_patch))
@@ -257,19 +261,14 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
     }
 
     // 4. Update Pool status.
+    //
+    // Legacy allocation-driven (`desired == 0`) status-patch seed —
+    // sibling of the desired-count status-patch seed above; both ride
+    // the substrate constructor `PoolStatus::observed`. See the peer
+    // site's pre-lift audit note for the duplication history.
     let phase = pool_phase_from_members(&pool, &members);
     let status_patch = json!({
-        "status": PoolStatus {
-            phase,
-            phase_since: Some(Utc::now()),
-            ready_count: count_state(&members, MemberState::Free),
-            allocated_count: count_state(&members, MemberState::Allocated),
-            spawning_count: count_state(&members, MemberState::Spawning),
-            returning_count: count_state(&members, MemberState::Returning),
-            members: members.clone(),
-            message: None,
-            conditions: vec![],
-        },
+        "status": PoolStatus::observed(phase, members.clone(), Utc::now()),
     });
     let _ = pool_api
         .patch_status(&name, &PatchParams::default(), &Patch::Merge(&status_patch))
@@ -287,10 +286,6 @@ pub fn error_policy(
 ) -> Action {
     warn!(error = ?err, "pool reconcile failed");
     Action::requeue(Duration::from_secs(15))
-}
-
-fn count_state(members: &[PoolMember], target: MemberState) -> u32 {
-    members.iter().filter(|m| m.state == target).count() as u32
 }
 
 fn pool_phase_from_members(pool: &EphemeralPool, members: &[PoolMember]) -> PoolPhase {

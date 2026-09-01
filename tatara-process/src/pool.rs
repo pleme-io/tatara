@@ -700,6 +700,128 @@ pub struct PoolMember {
     pub allocation_ref: Option<AllocationRef>,
 }
 
+impl PoolStatus {
+    /// Substrate constructor for the observed [`PoolStatus`] seed:
+    /// composes the `(phase, phase_since, ready/allocated/spawning
+    /// /returning counts, members, message, conditions)` 9-slot record
+    /// every pool-reconciler status-patch site restated by hand pre-
+    /// lift. The four counters ride a SINGLE closed-set-driven fold
+    /// over the members list (one pass rather than four independent
+    /// filter-and-count passes); the `message` + `conditions` slots
+    /// stay at their invariant `None` / `vec![]` defaults every pre-
+    /// lift caller stamped verbatim, and `phase_since` is derived from
+    /// the caller-supplied `now` timestamp so the constructor stays
+    /// clock-injectable rather than implicitly reading wall time.
+    ///
+    /// Pre-lift the 11-line
+    /// ```rust,ignore
+    /// PoolStatus {
+    ///     phase,
+    ///     phase_since: Some(Utc::now()),
+    ///     ready_count: count_state(&members, MemberState::Free),
+    ///     allocated_count: count_state(&members, MemberState::Allocated),
+    ///     spawning_count: count_state(&members, MemberState::Spawning),
+    ///     returning_count: count_state(&members, MemberState::Returning),
+    ///     members: members.clone(),
+    ///     message: None,
+    ///     conditions: vec![],
+    /// }
+    /// ```
+    /// incantation was hand-authored at TWO sites past the ★★ PRIME-
+    /// DIRECTIVE ≥ 2 duplication threshold in
+    /// `tatara-pool-reconciler::controller_pool::reconcile_inner`,
+    /// both restating the same 4-slot count fanout + defaults:
+    /// * The `desired > 0` path — status patch after the
+    ///   convergence-action loop when the operator drives the pool
+    ///   through the R11 desired-count invariant.
+    /// * The legacy allocation-driven path (`desired == 0`) — status
+    ///   patch after the [`crate::pool::PoolDecision`] apply loop.
+    ///
+    /// Both sites walked the SAME 4-slot count fanout on the SAME
+    /// four `MemberState` variants (Free/Allocated/Spawning/Returning)
+    /// and stamped the SAME defaults (`message: None`, `conditions:
+    /// vec![]`), even though the four counters walked the members list
+    /// four independent times pre-lift when a single pass suffices.
+    /// Post-lift both callers write
+    /// `PoolStatus::observed(phase, members, Utc::now())` and share
+    /// ONE substrate owner; a future counter slot (e.g., a
+    /// `warming_count` for a `MemberState::Warming` variant between
+    /// Spawning and Free) plugs into the fold at ONE match arm and
+    /// both status-patch sites inherit the new slot mechanically.
+    ///
+    /// The `Failed` variant is deliberately absent from the fold — no
+    /// `PoolStatus` slot counts failed members (they surface via
+    /// `pool_phase_from_members`'s `PoolPhase::Degraded` transition
+    /// instead), and the closed-set match on
+    /// [`MemberState`] pins that a future variant which SHOULD count
+    /// toward one of the four buckets triggers the compiler's
+    /// exhaustiveness check at this fold rather than silently sinking
+    /// into `Failed`'s no-op arm.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the 11-line status-seed incantation recurred at two hand-
+    /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    /// trigger, and is lifted to ONE owner here). THEORY.md §II.1
+    /// invariant 5 (composition preserves proofs — the pins bind the
+    /// 4-slot count fanout + the closed-set exhaustiveness on
+    /// `MemberState` + the invariant defaults, so a regression that
+    /// dropped a counter slot or swapped a variant surfaces at
+    /// `tests::pool_status_observed_*` rather than as silent operator-
+    /// facing skew between the two status-patch sites on the SAME
+    /// pool).
+    #[must_use]
+    pub fn observed(phase: PoolPhase, members: Vec<PoolMember>, now: DateTime<Utc>) -> Self {
+        let (ready_count, allocated_count, spawning_count, returning_count) =
+            PoolMember::state_count_fanout(&members);
+        Self {
+            phase,
+            phase_since: Some(now),
+            ready_count,
+            allocated_count,
+            spawning_count,
+            returning_count,
+            members,
+            message: None,
+            conditions: vec![],
+        }
+    }
+}
+
+impl PoolMember {
+    /// Substrate primitive: single-pass closed-set fold over a
+    /// `[PoolMember]` slice producing the `(ready, allocated,
+    /// spawning, returning)` 4-tuple every `PoolStatus` seed stamps at
+    /// its four counter slots. The `Failed` arm is a no-op (no
+    /// `PoolStatus` counter tracks failed members — they surface via
+    /// [`PoolPhase::Degraded`] instead), pinned by the closed-set
+    /// match so a future variant that SHOULD count toward one of the
+    /// four buckets triggers the compiler's exhaustiveness check here
+    /// rather than silently falling through.
+    ///
+    /// Consumed by [`PoolStatus::observed`]. A caller that needs a
+    /// single per-variant count outside the status-seed fanout should
+    /// keep spelling `members.iter().filter(...).count()` rather than
+    /// walking this 4-tuple — the fanout is shaped for the
+    /// `PoolStatus` fill, not for arbitrary per-variant queries.
+    #[must_use]
+    pub fn state_count_fanout(members: &[Self]) -> (u32, u32, u32, u32) {
+        let mut ready = 0u32;
+        let mut allocated = 0u32;
+        let mut spawning = 0u32;
+        let mut returning = 0u32;
+        for m in members {
+            match m.state {
+                MemberState::Free => ready += 1,
+                MemberState::Allocated => allocated += 1,
+                MemberState::Spawning => spawning += 1,
+                MemberState::Returning => returning += 1,
+                MemberState::Failed => {}
+            }
+        }
+        (ready, allocated, spawning, returning)
+    }
+}
+
 /// Light reference to an `EphemeralAllocation`.
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -2644,5 +2766,142 @@ mod tests {
         let back: AllocationRef =
             serde_yaml::from_str(&yaml).expect("AllocationRef round-trips through yaml");
         assert_eq!(back, r);
+    }
+
+    fn member(state: MemberState) -> PoolMember {
+        PoolMember {
+            process_name: "m".into(),
+            state,
+            entered_state_at: DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
+            allocation_ref: None,
+        }
+    }
+
+    #[test]
+    fn state_count_fanout_returns_all_zeros_on_empty_slice() {
+        // Zero-length pin: the empty-members corner produces a
+        // 4-tuple of zero counters, matching the pre-lift
+        // `count_state` fanout's four `.iter().filter(...).count()`
+        // calls each returning 0 on an empty iterator.
+        assert_eq!(PoolMember::state_count_fanout(&[]), (0, 0, 0, 0));
+    }
+
+    #[test]
+    fn state_count_fanout_partitions_variants_into_correct_slots() {
+        // Positional-axis pin: the returned 4-tuple's slot order
+        // matches the four `PoolStatus` counter slots in declaration
+        // order — `(ready, allocated, spawning, returning)`. A
+        // regression that swapped two slots (e.g., `ready` ↔
+        // `spawning`) surfaces here rather than as an operator-facing
+        // scale-out oscillation at the pool reconciler.
+        let members = vec![
+            member(MemberState::Free),
+            member(MemberState::Free),
+            member(MemberState::Allocated),
+            member(MemberState::Spawning),
+            member(MemberState::Spawning),
+            member(MemberState::Spawning),
+            member(MemberState::Returning),
+        ];
+        assert_eq!(PoolMember::state_count_fanout(&members), (2, 1, 3, 1));
+    }
+
+    #[test]
+    fn state_count_fanout_excludes_failed_from_every_counter() {
+        // Closed-set pin: no `PoolStatus` slot counts `Failed` members
+        // (they surface via `PoolPhase::Degraded` instead of a status
+        // counter). This test fences a regression that let a `Failed`
+        // member drift into one of the four counters and inflate the
+        // operator-visible ready/allocated/spawning/returning fanout.
+        let members = vec![
+            member(MemberState::Failed),
+            member(MemberState::Failed),
+            member(MemberState::Failed),
+        ];
+        assert_eq!(PoolMember::state_count_fanout(&members), (0, 0, 0, 0));
+
+        // Mixed with a Free member: the Free member is counted, the
+        // Failed members are not.
+        let mixed = vec![
+            member(MemberState::Free),
+            member(MemberState::Failed),
+            member(MemberState::Failed),
+        ];
+        assert_eq!(PoolMember::state_count_fanout(&mixed), (1, 0, 0, 0));
+    }
+
+    #[test]
+    fn state_count_fanout_matches_pre_lift_count_state_helper_verbatim() {
+        // Parity pin: for every possible members list, the 4-tuple
+        // returned by the substrate primitive matches the pre-lift
+        // `count_state(&members, MemberState::<slot>)` fanout that
+        // pool-reconciler restated at both status-patch sites. The
+        // pre-lift helper was
+        // ```rust,ignore
+        // fn count_state(members: &[PoolMember], target: MemberState) -> u32 {
+        //     members.iter().filter(|m| m.state == target).count() as u32
+        // }
+        // ```
+        // — re-implemented inline here as an oracle.
+        fn count_state(members: &[PoolMember], target: MemberState) -> u32 {
+            members.iter().filter(|m| m.state == target).count() as u32
+        }
+        let members = vec![
+            member(MemberState::Free),
+            member(MemberState::Allocated),
+            member(MemberState::Allocated),
+            member(MemberState::Spawning),
+            member(MemberState::Returning),
+            member(MemberState::Returning),
+            member(MemberState::Failed),
+        ];
+        let (ready, allocated, spawning, returning) = PoolMember::state_count_fanout(&members);
+        assert_eq!(ready, count_state(&members, MemberState::Free));
+        assert_eq!(allocated, count_state(&members, MemberState::Allocated));
+        assert_eq!(spawning, count_state(&members, MemberState::Spawning));
+        assert_eq!(returning, count_state(&members, MemberState::Returning));
+    }
+
+    #[test]
+    fn pool_status_observed_composes_pre_lift_status_seed_verbatim() {
+        // Composition pin: the substrate constructor produces a
+        // `PoolStatus` structurally equal to the pre-lift 11-line
+        // struct literal both pool-reconciler status-patch sites
+        // stamped by hand. Any drift in the defaults (`message`,
+        // `conditions`) or in the counter fanout surfaces here.
+        let now = DateTime::<Utc>::from_timestamp(1_700_000_000, 0).unwrap();
+        let members = vec![
+            member(MemberState::Free),
+            member(MemberState::Allocated),
+            member(MemberState::Spawning),
+            member(MemberState::Returning),
+            member(MemberState::Failed),
+        ];
+        let member_count = members.len();
+        let observed = PoolStatus::observed(PoolPhase::Steady, members, now);
+        assert_eq!(observed.phase, PoolPhase::Steady);
+        assert_eq!(observed.phase_since, Some(now));
+        assert_eq!(observed.ready_count, 1);
+        assert_eq!(observed.allocated_count, 1);
+        assert_eq!(observed.spawning_count, 1);
+        assert_eq!(observed.returning_count, 1);
+        assert_eq!(observed.members.len(), member_count);
+        assert!(observed.message.is_none());
+        assert!(observed.conditions.is_empty());
+    }
+
+    #[test]
+    fn pool_status_observed_moves_members_by_value_without_extra_clone() {
+        // Ownership pin: the constructor consumes the members Vec by
+        // value rather than borrowing + cloning internally. Both pre-
+        // lift sites called `.clone()` on their `members` binding for
+        // the struct-literal `members:` slot; the substrate lift keeps
+        // the same one-clone bound at the caller (or a straight move
+        // if the caller no longer needs the local `members` binding
+        // after the seed) rather than accidentally cloning twice.
+        let members = vec![member(MemberState::Free), member(MemberState::Spawning)];
+        let now = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+        let observed = PoolStatus::observed(PoolPhase::Steady, members, now);
+        assert_eq!(observed.members.len(), 2);
     }
 }

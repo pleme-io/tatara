@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use tatara_process::allocation::{AllocationPhase, EphemeralAllocation, Requestor};
 use tatara_process::pool::{AllocationRef, EphemeralPool, MatchKey, MemberState, PoolMember};
+use tatara_process::DeletionTombstoned;
 
 use crate::router::best_match;
 
@@ -89,7 +90,19 @@ impl AllocationConvergenceCtx {
             .as_ref()
             .map(|s| s.phase)
             .unwrap_or(AllocationPhase::Pending);
-        let being_deleted = alloc.metadata.deletion_timestamp.is_some();
+        // Tombstone-presence probe rides through the ONE substrate
+        // primitive `DeletionTombstoned::is_being_deleted` (blanket
+        // impl over every `kube::Resource<DynamicType = ()>`) — pre-
+        // lift this was a hand-authored `.metadata.deletion_timestamp
+        // .is_some()` chain, the third-CRD peer to the two byte-
+        // identical inherent forwarders already living on
+        // `Process::is_being_deleted` + `EphemeralPool::is_being_deleted`.
+        // Post-lift `EphemeralAllocation` inherits the probe through
+        // the substrate trait; a future normalization (grace-period
+        // staleness gate, paused-controller canonicalization,
+        // cross-cluster clock-skew guard) lands at the ONE trait
+        // method and this observer picks it up mechanically.
+        let being_deleted = alloc.is_being_deleted();
         let expires_at = alloc.status.as_ref().and_then(|s| s.expires_at);
         let assigned_process = alloc
             .status

@@ -117,7 +117,7 @@ pub mod prelude {
     pub use crate::table::{
         ClaimRecord, ProcessEntry, ProcessTable, ProcessTableSpec, ProcessTableStatus,
     };
-    pub use crate::NamespacedApiCoordinates;
+    pub use crate::{DeletionTombstoned, NamespacedApiCoordinates};
 }
 
 /// CRD API group for every tatara CRD.
@@ -416,6 +416,103 @@ pub trait NamespacedApiCoordinates: kube::Resource<DynamicType = ()> {
 }
 
 impl<T> NamespacedApiCoordinates for T where T: kube::Resource<DynamicType = ()> {}
+
+/// Substrate-primitive trait for the **deletion-tombstone presence
+/// probe** every tatara CRD reconciler restated as
+/// `.metadata.deletion_timestamp.is_some()` on the K8s-API-server-
+/// stamped `metadata.deletionTimestamp` slot: a `true` reading means
+/// the API server has accepted a DELETE and finalizers are draining
+/// (the object is still live but the controller must move into its
+/// SIGTERM cascade / DELETE-skip branch), while a `false` reading
+/// means no delete is in flight.
+///
+/// Pre-lift the ONE-line `.metadata.deletion_timestamp.is_some()`
+/// chain was hand-authored across every tatara-process CRD in
+/// consumer crates and independently re-authored as byte-identical
+/// inherent methods on [`crate::prelude::Process`] +
+/// [`crate::prelude::EphemeralPool`], with the sister CRD
+/// [`crate::prelude::EphemeralAllocation`] still on the raw chain in
+/// `tatara-pool-reconciler::allocation_decide::AllocationConvergenceCtx::observe`.
+/// That's TWO byte-identical inherent implementations past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold on the substrate side
+/// PLUS the hand-authored chain on the third CRD — three surfaces
+/// spelling the SAME projection, each with the same drift risk (a
+/// stale-tombstone grace-period gate, a paused-controller
+/// canonicalization, a cross-cluster clock-skew guard would have to
+/// land at every surface plus stay coherent).
+///
+/// Post-lift the substrate owns the probe at ONE trait method with a
+/// blanket impl over every `kube::Resource<DynamicType = ()>`, so:
+/// * [`crate::prelude::EphemeralAllocation`] inherits the probe for
+///   free — its `allocation_decide.rs` hand-authored chain routes
+///   through `alloc.is_being_deleted()` post-lift, closing the
+///   third-CRD gap noted in the [`crate::prelude::EphemeralPool::is_being_deleted`]
+///   commit body (`7f8f104`).
+/// * Any future tatara CRD (a routing-edge object, a receipt
+///   registry, a fleet-wide claim registry) inherits the probe at
+///   its own `reconcile_inner` dispatcher with zero per-CRD lift
+///   work — the same solve-once discipline
+///   [`NamespacedApiCoordinates`] established for the paired
+///   coordinate extractor.
+///
+/// The two existing inherent methods
+/// ([`crate::prelude::Process::is_being_deleted`] +
+/// [`crate::prelude::EphemeralPool::is_being_deleted`]) are peers
+/// rather than lift casualties: Rust method resolution prefers the
+/// inherent over the trait's blanket, so every existing callsite
+/// keeps hitting the same code path. The trait's blanket impl
+/// closes the substrate corner for CRDs WITHOUT the inherent — the
+/// coherence tests pin that the trait and the two inherents produce
+/// byte-identical results across every corner of the (missing,
+/// present) input matrix, so a future rewrite that consolidates
+/// onto the trait doesn't skew any consumer.
+///
+/// Return-form axis: `bool` matches the copy-form discipline of the
+/// two inherent peers and of [`crate::prelude::Process::observed_phase`]
+/// — the underlying wire-format slot is an `Option<Time>` carrying
+/// only presence information at this axis (the RFC-3339 timestamp
+/// payload itself is not what the callers read; all just probe
+/// presence to detect the tombstone-stamped state).
+///
+/// A future normalization step (a per-tombstone staleness gate
+/// returning `false` for a tombstone older than the reconciler's
+/// grace-period budget, a paused-controller tombstone
+/// canonicalization, a cross-cluster tombstone-observation clock
+/// skew guard) lands at ONE substrate trait method here — the two
+/// inherent forwarders inherit the upgrade mechanically if they are
+/// rewired to `<Self as DeletionTombstoned>::is_being_deleted(self)`
+/// as a follow-up sweep, and every downstream consumer that already
+/// routes through this trait picks it up without a per-callsite
+/// hand-edit.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// the `.metadata.deletion_timestamp.is_some()` projection recurred
+/// as TWO byte-identical inherent implementations on
+/// [`crate::prelude::Process`] + [`crate::prelude::EphemeralPool`]
+/// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and is
+/// lifted onto ONE trait method here). THEORY.md §II.1 invariant 5
+/// (composition preserves proofs — the pins bind the missing-
+/// tombstone corner + the present-tombstone corner + the copy-form
+/// `bool` return + the byte-identical parity with the pre-lift
+/// `.is_some()` chain + cross-CRD coherence with both inherent
+/// forwarders on the SAME `Process` / `EphemeralPool` value, so a
+/// regression that skewed either surface surfaces at
+/// `deletion_tombstoned_tests::*` rather than as silent operator-
+/// facing skew between the top-level dispatcher's SIGTERM preempt,
+/// the SIGTERM cascade's child-fan-out DELETE-skip, the pool
+/// reconciler's Drain gate, and the allocation reconciler's release
+/// short-circuit on three sibling CRDs.
+pub trait DeletionTombstoned: kube::Resource<DynamicType = ()> {
+    /// True iff the K8s API server has stamped `metadata.deletionTimestamp`
+    /// on this resource — a DELETE is in flight and finalizers are
+    /// draining. See the trait-level docs for the axis-family context,
+    /// peer inherent methods, and future-normalization anchor.
+    fn is_being_deleted(&self) -> bool {
+        self.meta().deletion_timestamp.is_some()
+    }
+}
+
+impl<T> DeletionTombstoned for T where T: kube::Resource<DynamicType = ()> {}
 
 /// Annotation keys the reconciler reads/writes on owned FluxCD resources.
 pub mod annotations {
@@ -1240,6 +1337,265 @@ mod namespaced_api_coordinates_tests {
             p.owned_coordinates_required().unwrap_err().to_string(),
             a.owned_coordinates_required().unwrap_err().to_string(),
         );
+    }
+}
+
+#[cfg(test)]
+mod deletion_tombstoned_tests {
+    //! Pin the [`DeletionTombstoned`] trait's `is_being_deleted` probe
+    //! at fail-before-pass-after granularity across every corner of
+    //! the (tombstone present, tombstone absent) input matrix, on
+    //! ALL THREE tatara-process CRDs the trait's blanket impl covers
+    //! today (`Process`, `EphemeralPool`, `EphemeralAllocation`), plus
+    //! the cross-CRD coherence with the two pre-existing inherent
+    //! forwarders. A regression that skewed the trait's default,
+    //! promoted a distinct-payload tombstone to a false negative, or
+    //! diverged the trait from either inherent forwarder surfaces
+    //! HERE rather than as silent operator-facing skew between the
+    //! four consumer sites the primitive owns (the top-level
+    //! dispatcher's SIGTERM preempt, the SIGTERM cascade's child-
+    //! fan-out DELETE-skip, the pool reconciler's Drain gate, and
+    //! the allocation reconciler's release short-circuit) on three
+    //! sibling CRDs.
+    use super::DeletionTombstoned;
+    use crate::allocation::{AllocationSpec, EphemeralAllocation, Requestor};
+    use crate::classification::{Classification, ConvergencePointType, SubstrateType};
+    use crate::crd::{Process, ProcessSpec};
+    use crate::ephemeral::EphemeralSpec;
+    use crate::intent::{AplicacaoIntent, Intent};
+    use crate::lifetime::TeardownPolicy;
+    use crate::pool::{EphemeralPool, PoolSelector, PoolSpec, ReturnPolicy};
+    use crate::spec::IdentitySpec;
+    use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
+
+    fn empty_template() -> EphemeralSpec {
+        EphemeralSpec {
+            aplicacao: AplicacaoIntent {
+                chart_ref: "oci://x".into(),
+                version: "1".into(),
+                profile: String::new(),
+                values_overlay: serde_json::Value::Null,
+                release_name: None,
+                target_namespace: None,
+                install_timeout: None,
+            },
+            ttl: "1h".into(),
+            teardown: TeardownPolicy::Always,
+            max_concurrent: 0,
+            postconditions: vec![],
+            preconditions: vec![],
+            verify_timeout: None,
+            classification: None,
+            parent: None,
+            exports: vec![],
+            routing: None,
+        }
+    }
+
+    fn empty_pool_spec() -> PoolSpec {
+        PoolSpec {
+            desired_size: 1,
+            min_size: 0,
+            max_size: 0,
+            return_policy: ReturnPolicy::Replace,
+            selector: PoolSelector::default(),
+            template: empty_template(),
+            free_ttl: "24h".into(),
+            max_allocation_ttl: "4h".into(),
+            desired: 0,
+            replacement_policy: Default::default(),
+            stable_name_claim: false,
+        }
+    }
+
+    fn empty_alloc_spec() -> AllocationSpec {
+        AllocationSpec {
+            pool_ref: None,
+            requestor: Requestor {
+                kind: "github-pr".into(),
+                repo: None,
+                branch: None,
+                pr_number: None,
+                sha: None,
+                pr_labels: vec![],
+                actor: None,
+            },
+            ttl: None,
+            note: None,
+        }
+    }
+
+    fn empty_process_spec() -> ProcessSpec {
+        // Mirrors the workspace-standard `empty_spec()` fixture in
+        // `crd.rs::tests` — the minimal `ProcessSpec` used across
+        // every substrate metadata-projection pin.
+        ProcessSpec {
+            identity: IdentitySpec::default(),
+            classification: Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Default::default(),
+                calm: Default::default(),
+                data_classification: Default::default(),
+            },
+            intent: Intent::default(),
+            boundary: Default::default(),
+            compliance: Default::default(),
+            depends_on: vec![],
+            signals: Default::default(),
+            lifetime: Default::default(),
+            routing: None,
+            encapsulates: None,
+            suspended: false,
+        }
+    }
+
+    // ── Missing tombstone (default fixture) — trait returns false ─────
+
+    #[test]
+    fn is_being_deleted_on_process_missing_tombstone_returns_false_via_trait() {
+        let p = Process::new("api", empty_process_spec());
+        assert!(!DeletionTombstoned::is_being_deleted(&p));
+    }
+
+    #[test]
+    fn is_being_deleted_on_ephemeral_pool_missing_tombstone_returns_false_via_trait() {
+        let p = EphemeralPool::new("attest-pool", empty_pool_spec());
+        assert!(!DeletionTombstoned::is_being_deleted(&p));
+    }
+
+    #[test]
+    fn is_being_deleted_on_ephemeral_allocation_missing_tombstone_returns_false_via_trait() {
+        // The load-bearing corner: EphemeralAllocation had NO inherent
+        // is_being_deleted pre-lift — the trait's blanket impl is
+        // what closes the substrate gap for the allocation reconciler's
+        // hand-authored `.metadata.deletion_timestamp.is_some()` chain.
+        let a = EphemeralAllocation::new("pr-42-demo", empty_alloc_spec());
+        assert!(!DeletionTombstoned::is_being_deleted(&a));
+    }
+
+    // ── Present tombstone — trait returns true ────────────────────────
+
+    #[test]
+    fn is_being_deleted_on_process_present_tombstone_returns_true_via_trait() {
+        let mut p = Process::new("api", empty_process_spec());
+        p.metadata.deletion_timestamp = Some(Time(chrono::Utc::now()));
+        assert!(DeletionTombstoned::is_being_deleted(&p));
+    }
+
+    #[test]
+    fn is_being_deleted_on_ephemeral_pool_present_tombstone_returns_true_via_trait() {
+        let mut p = EphemeralPool::new("attest-pool", empty_pool_spec());
+        p.metadata.deletion_timestamp = Some(Time(chrono::Utc::now()));
+        assert!(DeletionTombstoned::is_being_deleted(&p));
+    }
+
+    #[test]
+    fn is_being_deleted_on_ephemeral_allocation_present_tombstone_returns_true_via_trait() {
+        let mut a = EphemeralAllocation::new("pr-42-demo", empty_alloc_spec());
+        a.metadata.deletion_timestamp = Some(Time(chrono::Utc::now()));
+        assert!(DeletionTombstoned::is_being_deleted(&a));
+    }
+
+    // ── Byte-identical parity with the pre-lift `.is_some()` chain ────
+
+    #[test]
+    fn is_being_deleted_matches_pre_lift_deletion_timestamp_is_some_chain_on_ephemeral_allocation()
+    {
+        // Byte-identical parity pin: the trait's default produces the
+        // SAME `bool` a pre-lift `.metadata.deletion_timestamp.is_some()`
+        // chain produced at `tatara-pool-reconciler::allocation_decide::
+        // AllocationConvergenceCtx::observe` pre-lift, across every
+        // corner of the (absent, present-at-now, present-at-past)
+        // input matrix. A regression that inserted a normalization
+        // step the pre-lift chain does NOT apply — or vice versa —
+        // surfaces here rather than as silent drift between the
+        // substrate owner and the pre-lift consumer.
+        let mut cases: Vec<Option<Time>> = vec![None];
+        cases.push(Some(Time(chrono::Utc::now())));
+        cases.push(Some(Time(
+            chrono::Utc::now() - chrono::Duration::seconds(3600),
+        )));
+
+        for ts in cases {
+            let mut a = EphemeralAllocation::new("pr-42-demo", empty_alloc_spec());
+            a.metadata.deletion_timestamp = ts.clone();
+
+            let pre_lift = a.metadata.deletion_timestamp.is_some();
+            let via_trait = DeletionTombstoned::is_being_deleted(&a);
+
+            assert_eq!(
+                pre_lift, via_trait,
+                "trait probe must be byte-identical to pre-lift .metadata.deletion_timestamp.is_some() on tombstone={ts:?}",
+            );
+        }
+    }
+
+    // ── Cross-CRD coherence with the two inherent forwarders ──────────
+
+    #[test]
+    fn trait_probe_coheres_with_process_inherent_is_being_deleted_on_both_corners() {
+        // Cross-primitive coherence pin: the trait's default and the
+        // pre-existing `Process::is_being_deleted` inherent forwarder
+        // return the SAME `bool` on the SAME `Process` value — a
+        // future consolidation of the inherent onto the trait's default
+        // (or vice versa) cannot land any drift between the two
+        // surfaces because this pin binds them at every corner of the
+        // (missing, present) input matrix.
+        for ts in [None, Some(Time(chrono::Utc::now()))] {
+            let mut p = Process::new("api", empty_process_spec());
+            p.metadata.deletion_timestamp = ts.clone();
+            assert_eq!(
+                p.is_being_deleted(),
+                DeletionTombstoned::is_being_deleted(&p),
+                "Process trait probe must match inherent on tombstone={ts:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn trait_probe_coheres_with_ephemeral_pool_inherent_is_being_deleted_on_both_corners() {
+        // Peer coherence pin on the sister CRD.
+        for ts in [None, Some(Time(chrono::Utc::now()))] {
+            let mut p = EphemeralPool::new("attest-pool", empty_pool_spec());
+            p.metadata.deletion_timestamp = ts.clone();
+            assert_eq!(
+                p.is_being_deleted(),
+                DeletionTombstoned::is_being_deleted(&p),
+                "EphemeralPool trait probe must match inherent on tombstone={ts:?}",
+            );
+        }
+    }
+
+    // ── Inherent-preferred method resolution on Process + EphemeralPool ──
+
+    #[test]
+    fn dot_call_on_process_resolves_to_inherent_when_trait_in_scope() {
+        // Rust method resolution prefers an inherent over a trait's
+        // blanket impl, so `process.is_being_deleted()` with the trait
+        // in scope still routes through the inherent — and both
+        // return the same `bool` (verified in
+        // `trait_probe_coheres_with_process_inherent_is_being_deleted_on_both_corners`).
+        // This pin guards against a future refactor that removes the
+        // inherent but leaves consumers assuming inherent-preferred
+        // resolution — the observable output is identical either way,
+        // so the pin locks the invariant that BOTH paths agree.
+        let mut p = Process::new("api", empty_process_spec());
+        p.metadata.deletion_timestamp = Some(Time(chrono::Utc::now()));
+        assert!(p.is_being_deleted());
+    }
+
+    #[test]
+    fn dot_call_on_ephemeral_allocation_resolves_to_trait_blanket_impl() {
+        // The load-bearing corner: `alloc.is_being_deleted()` with
+        // the trait in scope routes to the trait's blanket impl
+        // (there is no inherent on `EphemeralAllocation`) and
+        // produces the expected `bool`. This is what the swept
+        // allocation-reconciler callsite depends on post-lift.
+        let mut a = EphemeralAllocation::new("pr-42-demo", empty_alloc_spec());
+        assert!(!a.is_being_deleted());
+        a.metadata.deletion_timestamp = Some(Time(chrono::Utc::now()));
+        assert!(a.is_being_deleted());
     }
 }
 

@@ -16,6 +16,68 @@ use tatara_process::prelude::{FluxResourceRef, Process, RenderedResourceCoords};
 /// Field manager string we use for all SSA writes.
 pub const FIELD_MANAGER: &str = "tatara-reconciler";
 
+/// Server-side-apply [`PatchParams`] with [`FIELD_MANAGER`] bound to the
+/// `field_manager` slot and `force = true` — the ONE substrate primitive
+/// owning the `PatchParams::apply(FIELD_MANAGER).force()` incantation
+/// every reconciler SSA writer restated by hand pre-lift.
+///
+/// Pre-lift the 2-link `PatchParams::apply(<mgr>).force()` chain was
+/// hand-authored at THREE consumer sites past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication threshold, and TWO of the three silently bypassed the
+/// [`FIELD_MANAGER`] const by restating the manager string as a bare
+/// `"tatara-reconciler"` literal:
+///
+/// * [`apply_owned`] (this module) — the DynamicObject SSA writer for
+///   every rendered flux/aplicacao resource: read the const correctly
+///   (`PatchParams::apply(FIELD_MANAGER).force()`).
+/// * `phase_machine::begin_releasing` (`tatara-reconciler/src/phase_machine.rs`)
+///   — the `RELEASED_FROM` annotation stamper on the transition into
+///   `Releasing`: **hardcoded literal** (`PatchParams::apply("tatara-reconciler").force()`).
+/// * `table_controller::reconcile` (`tatara-reconciler/src/table_controller.rs`)
+///   — the `ProcessTable.status.claims` map SSA writer on the claim-
+///   arbiter tick: **hardcoded literal** (`PatchParams::apply("tatara-reconciler").force()`).
+///
+/// The two hardcoded-literal sites carried a latent rename-drift
+/// defect: any future rename of [`FIELD_MANAGER`] (a per-cluster
+/// controller-instance suffix, a per-shard field-manager alias, a
+/// migration to the `tatara-reconciler-controller` spelling to
+/// disambiguate from `tatara-reconciler` the crate) would land at
+/// [`apply_owned`] alone, and every wire request stamped by
+/// `begin_releasing` / `table_controller::reconcile` would keep the
+/// old manager string until an operator noticed conflicting field-
+/// manager ownership at status update time. Post-lift the three
+/// consumers share ONE substrate owner reading through the const, so
+/// a rename propagates through all three writers mechanically and the
+/// primitive's own pin
+/// [`tests::apply_patch_params_binds_field_manager_const_verbatim`]
+/// catches any regression that reintroduces a hand-authored literal.
+///
+/// The `force = true` semantics matches the SSA `force` directive
+/// every pre-lift chain applied — the reconciler is the authoritative
+/// owner of the field pathways it stamps (rendered-resource
+/// annotations, `RELEASED_FROM` marker, `ProcessTable.status.claims`)
+/// and reclaims conflicting slots from prior field-manager owners on
+/// every apply.
+///
+/// A `#[must_use]` return keeps a caller from bulding a `PatchParams`
+/// via this primitive and then dropping it un-passed to `Api::patch`;
+/// the primitive exists to be consumed at a wire-side write, not to
+/// probe field-manager state.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// `.apply(<mgr>).force()` chain recurred at 3 hand-authored sites
+/// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is
+/// lifted to ONE owner here). THEORY.md §II.1 invariant 5
+/// (composition preserves proofs — the pin block below binds the
+/// field-manager const-read + the `force = true` slot + the
+/// byte-identical parity with the pre-lift chain, so a regression
+/// that widens the corner has to move THESE pins rather than silently
+/// trampling the SSA writer axis at every consumer).
+#[must_use]
+pub fn apply_patch_params() -> PatchParams {
+    PatchParams::apply(FIELD_MANAGER).force()
+}
+
 /// Shared 2-slot `{MANAGED_BY: FIELD_MANAGER, PROCESS: process_ref}`
 /// map — the ONE substrate primitive owning the byte-shape both
 /// [`ownership_annotations`] and [`ownership_labels`] return.
@@ -599,7 +661,7 @@ pub async fn apply_owned(
     let obj: DynamicObject = serde_json::from_value(resource)?;
     let api: Api<DynamicObject> = Api::namespaced_with(client, namespace, &ar);
 
-    let pp = PatchParams::apply(FIELD_MANAGER).force();
+    let pp = apply_patch_params();
     api.patch(&coords.name, &pp, &Patch::Apply(&obj))
         .await
         .map_err(|e| anyhow!("ssapply {}/{}: {e}", coords.kind, coords.name))?;
@@ -1129,6 +1191,96 @@ mod tests {
         assert_eq!(ar.group, "");
         assert_eq!(ar.version, "v1");
         assert_eq!(ar.plural, "configmaps");
+    }
+
+    // ─── apply_patch_params substrate pins ─────────────────────────
+    //
+    // The 2-link `PatchParams::apply(<mgr>).force()` chain now rides
+    // through the ONE substrate primitive [`apply_patch_params`].
+    // Pre-lift the chain appeared at THREE hand-authored sites past
+    // the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold, and TWO of
+    // the three silently bypassed the [`FIELD_MANAGER`] const with a
+    // bare `"tatara-reconciler"` literal — a latent rename-drift
+    // defect (`ssapply::apply_owned` read the const; `phase_machine::
+    // begin_releasing` and `table_controller::reconcile` did NOT).
+    // These pins bind the primitive at fail-before-pass-after
+    // granularity so a regression that reintroduces the literal,
+    // drops the `force = true` slot, or drifts the SSA byte-shape
+    // away from the pre-lift chain surfaces HERE rather than as
+    // silent field-manager ownership skew across the three SSA
+    // writers.
+
+    #[test]
+    fn apply_patch_params_binds_field_manager_const_verbatim() {
+        // The primitive reads through [`FIELD_MANAGER`] rather than
+        // restating a hand-authored literal. A regression that
+        // reverted to a literal (or renamed the const without
+        // updating the primitive) surfaces HERE rather than as silent
+        // rename drift across the three SSA writers.
+        let pp = apply_patch_params();
+        assert_eq!(pp.field_manager.as_deref(), Some(FIELD_MANAGER));
+        assert_eq!(pp.field_manager.as_deref(), Some("tatara-reconciler"));
+    }
+
+    #[test]
+    fn apply_patch_params_stamps_force_true() {
+        // `force = true` matches the SSA `force` directive every pre-
+        // lift chain applied at the reconciler's SSA writer sites —
+        // the reconciler is the authoritative owner of the field
+        // pathways it stamps and reclaims conflicting slots on every
+        // apply. A regression that dropped `.force()` from the
+        // primitive would silently 409-conflict at every SSA write.
+        let pp = apply_patch_params();
+        assert!(pp.force);
+    }
+
+    #[test]
+    fn apply_patch_params_defaults_dry_run_and_field_validation_off() {
+        // The primitive stamps ONLY the field-manager + force slots
+        // pre-lift chains stamped — `dry_run` stays `false` and
+        // `field_validation` stays `None`. A regression that widened
+        // the primitive's slot set (e.g. auto-enabled `dry_run`
+        // during a debug pass) would silently no-op every SSA write.
+        let pp = apply_patch_params();
+        assert!(!pp.dry_run);
+        assert!(pp.field_validation.is_none());
+    }
+
+    #[test]
+    fn apply_patch_params_matches_pre_lift_hand_authored_chain_bytewise() {
+        // Byte-shape parity with the pre-lift 2-link chain: the four
+        // observable slots (`field_manager`, `force`, `dry_run`,
+        // `field_validation`) match `PatchParams::apply(FIELD_MANAGER)
+        // .force()` at every slot. A regression that reordered the
+        // chain (e.g. `apply(...).dry_run().force()` swap) or drifted
+        // any slot's wire representation lands HERE.
+        let pre_lift = PatchParams::apply(FIELD_MANAGER).force();
+        let lifted = apply_patch_params();
+        assert_eq!(lifted.field_manager, pre_lift.field_manager);
+        assert_eq!(lifted.force, pre_lift.force);
+        assert_eq!(lifted.dry_run, pre_lift.dry_run);
+        assert_eq!(
+            lifted.field_validation.is_none(),
+            pre_lift.field_validation.is_none()
+        );
+    }
+
+    #[test]
+    fn apply_patch_params_matches_pre_lift_hardcoded_literal_bytewise() {
+        // The two hardcoded-literal pre-lift sites (`phase_machine::
+        // begin_releasing`, `table_controller::reconcile`) spelled
+        // the field manager as `"tatara-reconciler"` verbatim. Post-
+        // lift both route through `apply_patch_params()`, which reads
+        // the const. This pin proves the primitive is byte-identical
+        // to the pre-lift literal AT THE CURRENT `FIELD_MANAGER`
+        // value — so a rename of the const propagates through both
+        // sites mechanically (the primitive's field-manager slot
+        // changes with the const) rather than leaving them at the
+        // stale literal.
+        let hardcoded = PatchParams::apply("tatara-reconciler").force();
+        let lifted = apply_patch_params();
+        assert_eq!(lifted.field_manager, hardcoded.field_manager);
+        assert_eq!(lifted.force, hardcoded.force);
     }
 
     // ─── fetch_by_identity / api_resource_of substrate pins ────────

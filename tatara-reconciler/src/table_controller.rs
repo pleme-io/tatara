@@ -24,7 +24,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::Utc;
-use kube::api::{ListParams, Patch, PatchParams};
+use kube::api::{ListParams, Patch};
 use kube::runtime::controller::Action;
 use serde_json::json;
 use tracing::{info, warn};
@@ -34,6 +34,7 @@ use tatara_process::table::ClaimRecord;
 
 use crate::claim::{decide_claim_for, Candidate, ClaimDecision};
 use crate::context::Context;
+use crate::ssapply;
 
 pub async fn reconcile(
     _table: Arc<ProcessTable>,
@@ -198,7 +199,18 @@ pub async fn reconcile(
     // re-applying the same map is a no-op on the wire.
     if new_claims != current_claims {
         let patch = json!({ "status": { "claims": new_claims } });
-        let pp = PatchParams::apply("tatara-reconciler").force();
+        // SSA `PatchParams` rides through the ONE substrate primitive
+        // `ssapply::apply_patch_params` — pre-lift this slot was a
+        // hand-authored `PatchParams::apply("tatara-reconciler").force()`
+        // chain that spelled the field-manager string as a literal and
+        // silently bypassed the `ssapply::FIELD_MANAGER` const, one of
+        // THREE workspace-wide restatements past the ★★ PRIME-
+        // DIRECTIVE ≥ 2 duplication threshold (peers at
+        // `ssapply::apply_owned` + `phase_machine::begin_releasing`).
+        // Post-lift a rename of `FIELD_MANAGER` propagates through
+        // every SSA writer mechanically — the hand-authored literal
+        // cannot reach the wire.
+        let pp = ssapply::apply_patch_params();
         if let Err(e) = table_api
             .patch_status(&ctx.config.process_table_name, &pp, &Patch::Apply(&patch))
             .await

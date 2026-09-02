@@ -955,7 +955,17 @@ async fn transition_to_releasing(
             }
         }
     });
-    let pp = kube::api::PatchParams::apply("tatara-reconciler").force();
+    // SSA `PatchParams` rides through the ONE substrate primitive
+    // `ssapply::apply_patch_params` — pre-lift this slot was a
+    // hand-authored `PatchParams::apply("tatara-reconciler").force()`
+    // chain that spelled the field-manager string as a literal and
+    // silently bypassed the `ssapply::FIELD_MANAGER` const, one of
+    // THREE workspace-wide restatements past the ★★ PRIME-DIRECTIVE
+    // ≥ 2 duplication threshold (peers at `ssapply::apply_owned` +
+    // `table_controller::reconcile`). Post-lift a rename of
+    // `FIELD_MANAGER` propagates through every SSA writer
+    // mechanically — the hand-authored literal cannot reach the wire.
+    let pp = ssapply::apply_patch_params();
     api.patch(
         name,
         &pp,

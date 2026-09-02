@@ -141,6 +141,33 @@ impl ProcessPhase {
         !matches!(self, Self::Zombie | Self::Reaped | Self::Failed)
     }
 
+    /// True if the process has left the alive set — the closed-set
+    /// complement of [`Self::is_alive`]. Sinks to `Failed | Zombie |
+    /// Reaped`: the three phases where a Process is no longer
+    /// converging and its supervisor (pool reconciler, allocation
+    /// controller, cascade-delete GC) treats it as a terminated
+    /// member for reap / replace / status-count decisions. Named on
+    /// the "positive" pole so caller sites read as
+    /// `phase.has_exited()` instead of `!phase.is_alive()` — the
+    /// closed-set predicate family gains a symmetric member for the
+    /// same reason [`Self::is_running`] sits next to [`Self::is_alive`]
+    /// (both express live-set membership positively).
+    ///
+    /// Pre-lift the `Failed | Zombie | Reaped` set was hand-restated
+    /// as an inline `matches!(phase, Failed | Zombie | Reaped)` on
+    /// [`crate::pool::PoolMemberSnapshot::is_failed`] (peer to that
+    /// snapshot's `is_healthy` which restated the `Running | Attested`
+    /// set of [`Self::is_running`]). Both duplications now route
+    /// through their respective substrate closed-set predicate, so a
+    /// future variant added to the alive/dead partition (a new
+    /// `Draining` phase, a rename of `Zombie` → `Terminated`) lands
+    /// at the ONE closed-set surface here rather than as silent skew
+    /// between the substrate's `is_alive` and the pool reconciler's
+    /// downstream `is_failed` restatement.
+    pub const fn has_exited(self) -> bool {
+        !self.is_alive()
+    }
+
     /// True if the phase is the export window — declared `ExportSpec`s
     /// run here before SIGTERM. Reserved for the reconciler's
     /// `handle_releasing` step + tatara-export-worker Job emission.
@@ -297,6 +324,59 @@ mod tests {
         assert!(Attested.is_alive());
         assert!(!Zombie.is_alive());
         assert!(!Reaped.is_alive());
+    }
+
+    /// [`ProcessPhase::has_exited`] sinks to `{Failed, Zombie, Reaped}`
+    /// verbatim — pins the closed set the substrate's
+    /// [`crate::pool::PoolMemberSnapshot::is_failed`] alias delegates
+    /// to post-lift, so a variant added inside the exited partition
+    /// (a new terminal-error variant) is caught here rather than as
+    /// silent drift at the pool reconciler's health-count seed.
+    #[test]
+    fn has_exited_sinks_to_failed_zombie_reaped() {
+        for p in super::ProcessPhase::ALL {
+            let expected = matches!(p, Failed | Zombie | Reaped);
+            assert_eq!(
+                p.has_exited(),
+                expected,
+                "{p:?}.has_exited() should be {expected}"
+            );
+        }
+    }
+
+    /// [`ProcessPhase::has_exited`] IS the boolean complement of
+    /// [`ProcessPhase::is_alive`] across every variant — pinning the
+    /// closed-set complement invariant so a future rename of either
+    /// primitive that drifted one edge (e.g. a variant classified as
+    /// both alive AND exited, or as neither) surfaces here rather
+    /// than as an operator-facing pool-count skew where the same
+    /// Process is counted both toward the alive pool AND toward the
+    /// failed-reap queue.
+    #[test]
+    fn has_exited_is_complement_of_is_alive() {
+        for p in super::ProcessPhase::ALL {
+            assert_eq!(
+                p.has_exited(),
+                !p.is_alive(),
+                "{p:?}: has_exited should equal !is_alive"
+            );
+        }
+    }
+
+    /// The exited set and the [`ProcessPhase::is_running`] set are
+    /// disjoint — no Process is both "healthy" (Running or Attested)
+    /// and "exited" (Failed/Zombie/Reaped) at the same phase. Pins
+    /// the substrate invariant the pool reconciler's `is_healthy` +
+    /// `is_failed` snapshot predicates rely on to partition members
+    /// without double-counting.
+    #[test]
+    fn is_running_and_has_exited_are_disjoint() {
+        for p in super::ProcessPhase::ALL {
+            assert!(
+                !(p.is_running() && p.has_exited()),
+                "{p:?}: cannot be both is_running() and has_exited()"
+            );
+        }
     }
 
     // ── closed-set algebra contracts (ALL × as_str × FromStr) ────────

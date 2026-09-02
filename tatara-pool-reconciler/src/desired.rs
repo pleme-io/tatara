@@ -54,17 +54,32 @@ pub struct PoolMemberSnapshot {
 impl PoolMemberSnapshot {
     /// True iff this snapshot is in a phase that counts toward the
     /// pool's healthy member count.
+    ///
+    /// Delegates to [`ProcessPhase::is_running`] — the closed-set
+    /// predicate that spells `{Running, Attested}` on the substrate.
+    /// Pre-lift this method inlined `matches!(self.phase, Running |
+    /// Attested)`, restating the same set the substrate primitive
+    /// already owned; a variant added to the healthy partition (a
+    /// new post-Attested steady phase) now lands at ONE substrate
+    /// site rather than requiring per-snapshot re-classification.
     pub fn is_healthy(&self) -> bool {
-        matches!(self.phase, ProcessPhase::Running | ProcessPhase::Attested)
+        self.phase.is_running()
     }
 
     /// True iff this snapshot is in a phase that should be reaped
     /// + replaced (or held, per policy).
+    ///
+    /// Delegates to [`ProcessPhase::has_exited`] — the closed-set
+    /// complement of [`ProcessPhase::is_alive`] that spells
+    /// `{Failed, Zombie, Reaped}` on the substrate. Pre-lift this
+    /// method inlined `matches!(self.phase, Failed | Zombie |
+    /// Reaped)`, restating the substrate primitive's set by hand;
+    /// the closed-set-complement pin on the substrate side keeps
+    /// this predicate byte-identical with the pre-lift match and
+    /// disjoint from [`Self::is_healthy`] via
+    /// `is_running_and_has_exited_are_disjoint` on `ProcessPhase`.
     pub fn is_failed(&self) -> bool {
-        matches!(
-            self.phase,
-            ProcessPhase::Failed | ProcessPhase::Zombie | ProcessPhase::Reaped
-        )
+        self.phase.has_exited()
     }
 }
 
@@ -419,6 +434,53 @@ mod tests {
         // Healthy = 0; spawn 1.
         assert_eq!(actions.len(), 1);
         assert!(matches!(&actions[0], ConvergenceAction::CreateMember));
+    }
+
+    /// [`PoolMemberSnapshot::is_healthy`] agrees byte-for-byte with
+    /// the pre-lift `matches!(self.phase, Running | Attested)` chain
+    /// across every [`ProcessPhase`] variant — pins the substrate-
+    /// delegated predicate against the hand-authored classifier the
+    /// snapshot used pre-lift, so a regression that re-inlined the
+    /// match with drift (a variant added/removed on the substrate
+    /// side, or the snapshot's alias diverging from the substrate
+    /// canonical) surfaces here rather than as a wrong pool-count in
+    /// [`decide_pool_convergence`].
+    #[test]
+    fn is_healthy_parity_with_prelift_match() {
+        for phase in ProcessPhase::ALL {
+            let s = member("x", phase, 60);
+            let expected = matches!(phase, ProcessPhase::Running | ProcessPhase::Attested);
+            assert_eq!(
+                s.is_healthy(),
+                expected,
+                "{phase:?}: is_healthy() should match pre-lift Running|Attested pattern"
+            );
+        }
+    }
+
+    /// [`PoolMemberSnapshot::is_failed`] agrees byte-for-byte with
+    /// the pre-lift `matches!(self.phase, Failed | Zombie | Reaped)`
+    /// chain across every [`ProcessPhase`] variant. Paired with
+    /// [`is_healthy_parity_with_prelift_match`] to pin the two
+    /// snapshot predicates against the pre-lift classifier they
+    /// replaced, so any drift between the substrate closed-set
+    /// primitives (`is_running` / `has_exited`) and this crate's
+    /// pool-reconciler-specific aliases lands here at the boundary
+    /// rather than at an operator-visible reap decision.
+    #[test]
+    fn is_failed_parity_with_prelift_match() {
+        for phase in ProcessPhase::ALL {
+            let s = member("x", phase, 60);
+            let expected = matches!(
+                phase,
+                ProcessPhase::Failed | ProcessPhase::Zombie | ProcessPhase::Reaped
+            );
+            assert_eq!(
+                s.is_failed(),
+                expected,
+                "{phase:?}: is_failed() should match pre-lift Failed|Zombie|Reaped pattern"
+            );
+        }
     }
 
     #[test]

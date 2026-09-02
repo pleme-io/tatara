@@ -633,6 +633,32 @@ pub mod annotations {
     /// [`RoutingForm::as_str`][crate::routing::RoutingForm::as_str],
     /// never to a bare literal.
     pub const ROUTING_FORM: &str = "tatara.pleme.io/routing-form";
+    /// Stamped by `tatara-pool-reconciler::controller_allocation::
+    /// reconcile` on the member `Process` at the moment an
+    /// `EphemeralAllocation` transitions Queued → Bound. Value is
+    /// the requestor Allocation's `<ns>/<name>` qualified reference
+    /// (composed through the same `<ns>/<name>` shape every peer
+    /// substrate composer routes through — see
+    /// [`crate::qualified_process_ref`]). Downstream consumers
+    /// (operator dashboards, admission webhooks, audit-trail
+    /// scrapers) grep for this key to answer "which allocator drove
+    /// this member Process into its ephemeral overlay".
+    pub const REQUESTOR: &str = "tatara.pleme.io/requestor";
+    /// Peer to [`REQUESTOR`] on the same allocator-bind axis: the
+    /// bare Allocation name (no namespace prefix), stamped alongside
+    /// so downstream consumers that key on the Allocation identity
+    /// alone (a single-namespace UI, an in-cluster label selector
+    /// that already carries the namespace) don't need to re-split
+    /// [`REQUESTOR`]'s composed reference.
+    pub const ALLOCATION: &str = "tatara.pleme.io/allocation";
+    /// Peer to [`REQUESTOR`] + [`ALLOCATION`] on the same
+    /// allocator-bind axis: mirrors
+    /// [`crate::allocation::RequestorRef.kind`] verbatim onto the
+    /// bound member Process so consumers that dispatch on the
+    /// requestor-kind axis (a GitHub-PR-scoped webhook, a
+    /// scheduler-window scoped fairness gate, a per-kind quota
+    /// enforcer) never have to fetch the Allocation object again.
+    pub const REQUESTOR_KIND: &str = "tatara.pleme.io/requestor-kind";
 }
 
 /// Standard finalizer for the Process reconciler.
@@ -2061,6 +2087,87 @@ mod annotated_tests {
             cm.annotation("tatara.pleme.io/process"),
             Some("demo-ns/demo-app"),
         );
+    }
+}
+
+#[cfg(test)]
+mod annotations_pins {
+    //! Pin the three newly-lifted allocator-bind annotation keys
+    //! ([`crate::annotations::REQUESTOR`],
+    //! [`crate::annotations::ALLOCATION`],
+    //! [`crate::annotations::REQUESTOR_KIND`]) at their canonical
+    //! wire-form byte-values, and pin the coherence between each
+    //! constant and the pre-lift string literal the sibling writer +
+    //! reader test-sites still spell verbatim.
+    //!
+    //! Pre-lift each of the three keys was a bare `"tatara.pleme.io/…"`
+    //! string literal at both the writer (`tatara-pool-reconciler::
+    //! controller_allocation::reconcile_inner`'s Bind arm) AND the
+    //! reader-side test sites in `annotated_tests` above — six
+    //! restatements of `REQUESTOR_KIND` alone past the ★★
+    //! PRIME-DIRECTIVE ≥ 2 duplication threshold. Post-lift the writer
+    //! keys on the substrate constant; these pins bind the constant's
+    //! byte-shape so a future edit that drifted the constant (a
+    //! typo'd suffix, an accidental `tatara.pleme.io/v2/…` migration
+    //! landing at only the writer, an incoming rename that swapped
+    //! two of the three keys) surfaces here rather than as silent
+    //! operator-facing skew between the writer and the tatara-process
+    //! reader tests that still spell the literal.
+    //!
+    //! Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    //! preserves proofs — the wire-form value each downstream reader
+    //! depends on now has a compile-time pin at the substrate).
+    use crate::annotations;
+
+    #[test]
+    fn requestor_matches_pre_lift_wire_string() {
+        assert_eq!(annotations::REQUESTOR, "tatara.pleme.io/requestor");
+    }
+
+    #[test]
+    fn allocation_matches_pre_lift_wire_string() {
+        assert_eq!(annotations::ALLOCATION, "tatara.pleme.io/allocation");
+    }
+
+    #[test]
+    fn requestor_kind_matches_pre_lift_wire_string() {
+        assert_eq!(
+            annotations::REQUESTOR_KIND,
+            "tatara.pleme.io/requestor-kind",
+        );
+    }
+
+    #[test]
+    fn allocator_bind_axis_keys_are_distinct() {
+        // A copy-paste that duplicated one key's value across two
+        // slots (an oversight during the initial lift or a future
+        // rename that merged two keys by mistake) collapses BOTH
+        // downstream readers onto the same wire string and silently
+        // loses one of the three axes. Pin the closed set is
+        // partition-distinct.
+        assert_ne!(annotations::REQUESTOR, annotations::ALLOCATION);
+        assert_ne!(annotations::REQUESTOR, annotations::REQUESTOR_KIND);
+        assert_ne!(annotations::ALLOCATION, annotations::REQUESTOR_KIND);
+    }
+
+    #[test]
+    fn allocator_bind_axis_keys_share_tatara_namespace() {
+        // Every substrate-owned annotation key inhabits the
+        // `tatara.pleme.io/` reverse-DNS namespace; a future rename
+        // that dropped the prefix (a bare `"requestor"` key, a
+        // typo'd `pleme.io/requestor`) would collide with an
+        // arbitrary third-party operator's annotations on the same
+        // Process and silently corrupt cross-consumer reads.
+        for key in [
+            annotations::REQUESTOR,
+            annotations::ALLOCATION,
+            annotations::REQUESTOR_KIND,
+        ] {
+            assert!(
+                key.starts_with("tatara.pleme.io/"),
+                "annotation key {key:?} must inhabit tatara.pleme.io/ namespace",
+            );
+        }
     }
 }
 

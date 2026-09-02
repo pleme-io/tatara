@@ -11,6 +11,7 @@ use serde_json::json;
 use tracing::{info, warn};
 
 use tatara_process::allocation::{AllocationPhase, EphemeralAllocation};
+use tatara_process::annotations;
 use tatara_process::lifetime::{EphemeralLifetime, Lifetime, TeardownPolicy};
 use tatara_process::pool::{AllocationRef, PoolMember};
 use tatara_process::prelude::NamespacedApiCoordinates;
@@ -189,15 +190,31 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
                     exports: vec![],
                 }),
             };
+            // Annotation keys ride through the substrate constants
+            // `tatara_process::annotations::{REQUESTOR, ALLOCATION,
+            // REQUESTOR_KIND}` — pre-lift each of the three keys was a
+            // bare `"tatara.pleme.io/…"` string literal at this write
+            // site AND at multiple test-side reader sites in
+            // `tatara-process/src/lib.rs`
+            // (`Annotated::annotation(&a, "tatara.pleme.io/requestor-
+            // kind")` etc.), one of the six workspace-wide restatements
+            // of the `REQUESTOR_KIND` wire string alone past the ★★
+            // PRIME-DIRECTIVE ≥ 2 duplication threshold. Post-lift the
+            // writer and every future reader route through the ONE
+            // substrate owner; a rename of any key (a `tatara.pleme.io/
+            // v2/requestor` migration, an alias table for cross-cluster
+            // requestor identity, a per-namespace override) lands at
+            // ONE `pub const` in the substrate and every downstream
+            // consumer inherits the upgrade mechanically.
             let proc_patch = json!({
                 "spec": { "lifetime": lifetime },
                 "metadata": {
                     "annotations": {
-                        "tatara.pleme.io/requestor":
+                        annotations::REQUESTOR:
                             format!("{}/{}", ns, name),
-                        "tatara.pleme.io/allocation":
+                        annotations::ALLOCATION:
                             name.clone(),
-                        "tatara.pleme.io/requestor-kind":
+                        annotations::REQUESTOR_KIND:
                             alloc.spec.requestor.kind.clone(),
                     }
                 }

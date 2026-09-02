@@ -5,15 +5,15 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
-use kube::api::{Api, ListParams, Patch, PatchParams};
+use kube::api::{ListParams, Patch, PatchParams};
 use kube::runtime::controller::Action;
 use serde_json::json;
 use tracing::{info, warn};
 
 use tatara_process::allocation::{AllocationPhase, EphemeralAllocation};
 use tatara_process::lifetime::{EphemeralLifetime, Lifetime, TeardownPolicy};
-use tatara_process::pool::{AllocationRef, EphemeralPool, PoolMember};
-use tatara_process::prelude::{NamespacedApiCoordinates, Process};
+use tatara_process::pool::{AllocationRef, PoolMember};
+use tatara_process::prelude::NamespacedApiCoordinates;
 
 use crate::allocation_decide::{decide_allocation_reconcile, AllocationDecision};
 use crate::context::PoolContext;
@@ -44,9 +44,22 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
     // output verbatim.
     let (ns, name) = alloc.owned_coordinates_required()?;
 
-    let alloc_api: Api<EphemeralAllocation> = Api::namespaced(ctx.kube.clone(), &ns);
-    let pool_api: Api<EphemeralPool> = Api::namespaced(ctx.kube.clone(), &ns);
-    let process_api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
+    // All three `Api<T>` handles ride through the substrate
+    // primitives `PoolContext::{allocation_api, pool_api, process_api}`
+    // — pre-lift each slot was a hand-authored `Api::namespaced(
+    // ctx.kube.clone(), &ns)` chain, and the two collections shared
+    // with `controller_pool::reconcile_inner` (`Api<EphemeralPool>` +
+    // `Api<Process>`) each lived at TWO workspace-wide restatements
+    // past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold. The
+    // `Api<EphemeralAllocation>` slot has a single production
+    // callsite today and rides the peer substrate primitive so a
+    // future emitter of it reaches for the primitive rather than
+    // restating the incantation inline — matching the composition
+    // discipline every reconciler-context primitive on the workspace
+    // already follows.
+    let alloc_api = ctx.allocation_api(&ns);
+    let pool_api = ctx.pool_api(&ns);
+    let process_api = ctx.process_api(&ns);
 
     // 1. Gather candidate pools in this namespace.
     let pools = pool_api

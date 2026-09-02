@@ -58,8 +58,23 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
     // output verbatim.
     let (ns, name) = pool.owned_coordinates_required()?;
 
-    let pool_api: Api<EphemeralPool> = Api::namespaced(ctx.kube.clone(), &ns);
-    let process_api: Api<Process> = Api::namespaced(ctx.kube.clone(), &ns);
+    // Both `Api<EphemeralPool>` + `Api<Process>` handles ride through
+    // the substrate primitives `PoolContext::pool_api` +
+    // `PoolContext::process_api` — pre-lift both slots were hand-
+    // authored `Api::namespaced(ctx.kube.clone(), &ns)` chains, one of
+    // TWO workspace-wide restatements per typed collection past the
+    // ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold (peers at
+    // `controller_allocation::reconcile_inner`'s pool_api + process_api
+    // seeds; both funneled every downstream `list` / `create` /
+    // `delete` / `patch_status` call through the SAME `(client, ns)`
+    // pair). Post-lift the two consumers per typed collection share
+    // ONE substrate owner; a future change that layers request tracing
+    // spans, a default `PatchParams` builder, a namespace-scoped
+    // access-control gate, or per-request metrics onto every Api-typed
+    // request lands at ONE site in `PoolContext` rather than being
+    // restated at each callsite.
+    let pool_api = ctx.pool_api(&ns);
+    let process_api = ctx.process_api(&ns);
 
     // 1. Fetch the Processes owned by this Pool (annotation-matched).
     let all_processes = process_api

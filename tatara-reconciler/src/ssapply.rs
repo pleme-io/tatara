@@ -17,15 +17,15 @@ use tatara_process::prelude::{FluxResourceRef, Process, RenderedResourceCoords};
 pub const FIELD_MANAGER: &str = "tatara-reconciler";
 
 /// Server-side-apply [`PatchParams`] with [`FIELD_MANAGER`] bound to the
-/// `field_manager` slot and `force = true` — the ONE substrate primitive
-/// owning the `PatchParams::apply(FIELD_MANAGER).force()` incantation
-/// every reconciler SSA writer restated by hand pre-lift.
+/// `field_manager` slot and `force = true` — the reconciler-crate-local
+/// wrapper that binds [`FIELD_MANAGER`] into the substrate primitive
+/// [`tatara_process::patch::apply_patch_params`].
 ///
 /// Pre-lift the 2-link `PatchParams::apply(<mgr>).force()` chain was
-/// hand-authored at THREE consumer sites past the ★★ PRIME-DIRECTIVE ≥ 2
-/// duplication threshold, and TWO of the three silently bypassed the
-/// [`FIELD_MANAGER`] const by restating the manager string as a bare
-/// `"tatara-reconciler"` literal:
+/// hand-authored at THREE reconciler-crate consumer sites past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold, and TWO of the three
+/// silently bypassed the [`FIELD_MANAGER`] const by restating the
+/// manager string as a bare `"tatara-reconciler"` literal:
 ///
 /// * [`apply_owned`] (this module) — the DynamicObject SSA writer for
 ///   every rendered flux/aplicacao resource: read the const correctly
@@ -52,6 +52,19 @@ pub const FIELD_MANAGER: &str = "tatara-reconciler";
 /// [`tests::apply_patch_params_binds_field_manager_const_verbatim`]
 /// catches any regression that reintroduces a hand-authored literal.
 ///
+/// Post workspace-wide lift the underlying 2-link chain rides through
+/// the substrate primitive
+/// [`tatara_process::patch::apply_patch_params`], which owns the
+/// pass-through-parameterized SSA-side wire-posture across the three
+/// workspace consumer crates (`tatara-reconciler`,
+/// `tatara-pool-reconciler`, `tatara-export-worker`) — this wrapper
+/// remains the reconciler-crate binding of [`FIELD_MANAGER`] into that
+/// substrate slot, delegating the actual `PatchParams::apply(<mgr>)
+/// .force()` composition rather than restating it. A future
+/// normalization of the SSA-side posture (an added `dry_run` mode, a
+/// `field_validation` default, an injectable retry policy) lands at
+/// the substrate primitive and this wrapper inherits it mechanically.
+///
 /// The `force = true` semantics matches the SSA `force` directive
 /// every pre-lift chain applied — the reconciler is the authoritative
 /// owner of the field pathways it stamps (rendered-resource
@@ -75,7 +88,7 @@ pub const FIELD_MANAGER: &str = "tatara-reconciler";
 /// trampling the SSA writer axis at every consumer).
 #[must_use]
 pub fn apply_patch_params() -> PatchParams {
-    PatchParams::apply(FIELD_MANAGER).force()
+    tatara_process::patch::apply_patch_params(FIELD_MANAGER)
 }
 
 /// Shared 2-slot `{MANAGED_BY: FIELD_MANAGER, PROCESS: process_ref}`

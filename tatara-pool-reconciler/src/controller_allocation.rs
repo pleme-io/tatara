@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
-use kube::api::{ListParams, Patch, PatchParams};
+use kube::api::{ListParams, Patch};
 use kube::runtime::controller::Action;
 use serde_json::json;
 use tracing::{info, warn};
@@ -244,10 +244,28 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
                     }
                 }
             });
+            // SSA-side wire-posture rides through the substrate
+            // primitive `tatara_process::patch::apply_patch_params` —
+            // pre-lift this was a hand-authored 2-link
+            // `PatchParams::apply(&ctx.config.field_manager).force()`
+            // chain, one of THREE workspace-wide sites past the ★★
+            // PRIME-DIRECTIVE ≥ 2 duplication threshold (peer at the
+            // Release arm below feeding the same
+            // `ctx.config.field_manager`, sibling at
+            // `tatara-export-worker::main::write_receipt` feeding a
+            // `"tatara-export-worker"` literal, and the
+            // reconciler-crate-local wrapper
+            // `tatara_reconciler::ssapply::apply_patch_params` feeding
+            // the `FIELD_MANAGER` const). Post-lift every SSA writer
+            // across three consumer crates shares ONE substrate owner
+            // for the `PatchParams::apply(<mgr>).force()` shape; a
+            // future normalization of the SSA-side posture (an added
+            // `dry_run` mode, a `field_validation` default, an
+            // injectable retry policy) lands at ONE substrate site.
             if let Err(e) = process_api
                 .patch(
                     &member_process_name,
-                    &PatchParams::apply(&ctx.config.field_manager).force(),
+                    &tatara_process::patch::apply_patch_params(&ctx.config.field_manager),
                     &Patch::Merge(&proc_patch),
                 )
                 .await
@@ -308,10 +326,15 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
             // Permanent OR delete entirely depending on pool's
             // ReturnPolicy (the Pool reconciler will pick this up next
             // tick).
+            // Peer to the Bind arm above: SSA-side wire-posture rides
+            // through the ONE substrate primitive
+            // `tatara_process::patch::apply_patch_params`, the return-
+            // trigger annotation apply feeding the same
+            // `ctx.config.field_manager` as its sibling.
             let _ = process_api
                 .patch(
                     &member_process_name,
-                    &PatchParams::apply(&ctx.config.field_manager).force(),
+                    &tatara_process::patch::apply_patch_params(&ctx.config.field_manager),
                     &Patch::Merge(&json!({
                         "metadata": { "annotations": {
                             "tatara.pleme.io/return-trigger": "true",

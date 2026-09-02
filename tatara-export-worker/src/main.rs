@@ -23,7 +23,7 @@ use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use k8s_openapi::api::core::v1::ConfigMap;
 use k8s_openapi::ByteString;
-use kube::api::{Patch, PatchParams};
+use kube::api::Patch;
 use kube::{Api, Client};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -366,7 +366,19 @@ async fn write_receipt(
         binary_data: Option::<BTreeMap<String, ByteString>>::None,
         ..Default::default()
     };
-    let pp = PatchParams::apply("tatara-export-worker").force();
+    // SSA-side wire-posture rides through the substrate primitive
+    // `tatara_process::patch::apply_patch_params` — pre-lift this was
+    // a hand-authored 2-link `PatchParams::apply("tatara-export-
+    // worker").force()` chain, one of THREE workspace-wide sites past
+    // the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold (peers at
+    // `tatara-pool-reconciler::controller_allocation`'s bind + release
+    // arms feeding `ctx.config.field_manager`, and the reconciler-
+    // crate-local wrapper `tatara_reconciler::ssapply::
+    // apply_patch_params` feeding the `FIELD_MANAGER` const). Post-
+    // lift every SSA writer across three consumer crates shares ONE
+    // substrate owner for the `PatchParams::apply(<mgr>).force()`
+    // shape.
+    let pp = tatara_process::patch::apply_patch_params("tatara-export-worker");
     api.patch(configmap, &pp, &Patch::Apply(&cm))
         .await
         .map(|_| ())

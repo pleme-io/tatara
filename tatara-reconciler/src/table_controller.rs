@@ -73,13 +73,28 @@ pub async fn reconcile(
             .and_then(|s| s.pid.clone())
             .unwrap_or_default();
         // Creation-anchor probe rides through the ONE substrate
-        // `Process::created_at` primitive (sibling to the TTL-expiry
-        // gate + requeue-budget picker in `tatara-process::
-        // lifetime_clock`); the `.unwrap_or_else(Utc::now)` tail keeps
-        // the "just created" fallback the pre-lift chain applied when
-        // the API server has not yet stamped the timestamp on a
-        // freshly-forked Process.
-        let created_at = p.created_at().unwrap_or_else(Utc::now);
+        // composer `Process::created_at_or` (pure wrapper over the
+        // sibling `Process::created_at` projection that folds the
+        // `.unwrap_or(fallback)` sink into ONE substrate owner) —
+        // pre-lift this was a hand-authored 2-step
+        // `.created_at().unwrap_or_else(Utc::now)` chain, one of TWO
+        // production restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+        // duplication threshold (peer at
+        // `tatara-pool-reconciler::controller_pool::reconcile_inner`'s
+        // desired-count `PoolMemberSnapshot { created_at, .. }` seed;
+        // both stamped the SAME wall-clock fallback on the same
+        // missing-`metadata.creationTimestamp` corner). Post-lift the
+        // two consumers share ONE substrate owner; a future
+        // normalization step (a per-cluster clock-skew guard, a
+        // canonicalization pass that folds a suspiciously-zero anchor
+        // to the fallback, an adopted-resource
+        // `spec.identity`-declared anchor override) lands at ONE
+        // substrate method rather than being restated at each
+        // callsite. The wall-clock read stays at this callsite (as
+        // `Utc::now()` passed positionally) so the composer itself
+        // stays pure, matching the discipline every peer `observed_*`
+        // accessor follows.
+        let created_at = p.created_at_or(Utc::now());
         // Claim-row key rides through the substrate primitive
         // `Process::qualified_ref` — pre-lift this was a hand-authored
         // 2-step `coordinates_or_defaults() → qualified_process_ref(ns,

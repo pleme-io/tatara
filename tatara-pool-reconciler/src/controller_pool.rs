@@ -182,7 +182,24 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
                 // future generation-filter or staleness-gate
                 // normalization mechanically.
                 phase: p.observed_phase_or_pending(),
-                created_at: p.created_at().unwrap_or_else(Utc::now),
+                // Creation-anchor probe rides through the ONE substrate
+                // composer `Process::created_at_or` (pure wrapper over the
+                // sibling `Process::created_at` projection that folds the
+                // `.unwrap_or(fallback)` sink into ONE substrate owner) —
+                // pre-lift this was a hand-authored 2-step
+                // `.created_at().unwrap_or_else(Utc::now)` chain, one of
+                // TWO production restatements past the ★★ PRIME-
+                // DIRECTIVE ≥ 2 duplication threshold (peer at
+                // `tatara-reconciler::table_controller::reconcile_process_table`'s
+                // per-Process claim-row `created_at` seed; both stamped
+                // the SAME wall-clock fallback on the same missing-
+                // `metadata.creationTimestamp` corner). Post-lift the
+                // two consumers share ONE substrate owner; the wall-
+                // clock read stays at this callsite (as `Utc::now()`
+                // passed positionally) so the composer itself stays
+                // pure, matching the discipline every peer `observed_*`
+                // accessor follows.
+                created_at: p.created_at_or(Utc::now()),
             })
             .collect();
         let actions = decide_pool_convergence(&pool, &snapshots, Utc::now());

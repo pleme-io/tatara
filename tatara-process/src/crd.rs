@@ -1649,6 +1649,96 @@ impl Process {
         self.metadata.creation_timestamp.as_ref().map(|t| t.0)
     }
 
+    /// Pure composer over [`Self::created_at`] that folds the paired
+    /// `.unwrap_or(fallback)` sink into ONE substrate owner — the
+    /// ONE-liner collapse of the paired
+    /// `p.created_at().unwrap_or_else(Utc::now)` incantation the two
+    /// production consumers restated by hand pre-lift, with the
+    /// wall-clock read kept at the callsite (as `Utc::now()` passed in
+    /// positionally) so the primitive itself stays pure — matching the
+    /// discipline every peer `observed_*` / `created_at` copy-form
+    /// projection follows and the explicit warning against a
+    /// substrate-injected `Utc::now()` fallback that
+    /// [`Self::observed_phase_since`]'s doc already spelled out.
+    ///
+    /// Pre-lift the paired 2-step
+    /// `.created_at().unwrap_or_else(Utc::now)` chain was hand-authored
+    /// at TWO production sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold, both stamping the SAME wall-clock
+    /// fallback on the same missing-timestamp corner:
+    /// * `tatara-reconciler::table_controller::reconcile_process_table` —
+    ///   the per-Process claim-row's `created_at` anchor that feeds
+    ///   the stable-name group's tie-break comparator; a freshly-forked
+    ///   Process whose API server has not yet stamped
+    ///   `metadata.creationTimestamp` gets `Utc::now()` synthesized so
+    ///   the tie-break sorts by "just-created" order rather than
+    ///   short-circuiting on the missing slot.
+    /// * `tatara-pool-reconciler::controller_pool::reconcile_inner`'s
+    ///   desired-count `PoolMemberSnapshot { created_at, .. }` seed —
+    ///   the per-owned-Process snapshot fed to
+    ///   `decide_pool_convergence`, whose stability arithmetic
+    ///   subtracts the anchor from `now` to compute the observed dwell
+    ///   time; the same "just-created" fallback keeps a freshly-spawned
+    ///   pool member from being reaped as if it were a stale zombie.
+    ///
+    /// Both sites walked the SAME `.unwrap_or_else(Utc::now)` tail on
+    /// the SAME [`Self::created_at`] pure projection and both wanted
+    /// the resolved `DateTime<Utc>` the composer returns. Post-lift
+    /// each callsite reads `p.created_at_or(Utc::now())` and the
+    /// produced value feeds the same downstream slot unchanged.
+    ///
+    /// The `fallback: DateTime<Utc>` parameter (rather than a
+    /// substrate-injected `Utc::now()`) keeps the composer pure — a
+    /// test with a fixed-clock harness passes its own frozen anchor, a
+    /// production consumer passes `Utc::now()`, both go through the
+    /// same primitive without the composer itself reaching for the
+    /// wall clock. This resolves the tension the sibling
+    /// [`Self::observed_phase_since`]'s doc spelled out (a buried
+    /// `Utc::now()` fallback "would fold an impure wall-clock read
+    /// into the primitive, breaking the pure-projection discipline
+    /// every peer `observed_*` accessor follows") by lifting the
+    /// composition shape, not the wall-clock read.
+    ///
+    /// Return-form axis: `DateTime<Utc>` matches the `unwrap_or`-style
+    /// composer discipline of `Option::unwrap_or` in std — takes the
+    /// pure projection, an owned fallback, returns the resolved owned
+    /// value. Peer to the substrate composers
+    /// [`Self::observed_phase_or_pending`] on the status-phase axis and
+    /// [`Self::coordinates_or_defaults`] on the metadata-coordinate
+    /// axis; all three lift a `.unwrap_or(<fallback>)` tail into ONE
+    /// substrate site so the fallback-shape decision lives at ONE
+    /// owner per axis.
+    ///
+    /// A future normalization step (a per-cluster clock-skew guard
+    /// that offsets the returned timestamp by the observing
+    /// controller's measured skew before applying the fallback, a
+    /// canonicalization pass that folds a suspiciously-zero
+    /// `creationTimestamp` to the fallback rather than accepting it,
+    /// a per-namespace override that substitutes a `spec.identity`-
+    /// declared creation anchor for the metadata slot on adopted
+    /// resources) lands at ONE substrate method here and both
+    /// downstream consumers pick up the upgrade mechanically — no
+    /// per-callsite hand-edit at `reconcile_process_table` /
+    /// `reconcile_inner`.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the paired `.created_at().unwrap_or_else(Utc::now)` chain
+    /// recurred at two hand-authored sites past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
+    /// owner here). THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the pins bind the missing-slot fallback
+    /// corner + the populated-slot pass-through + the pure-composer
+    /// discipline + the byte-identical parity with the pre-lift
+    /// `.unwrap_or(fallback)` chain, so a regression that drifted
+    /// any surface at `tests::created_at_or_*` rather than as
+    /// silent operator-facing skew between the claim-arbiter's
+    /// tie-break anchor and the pool convergence snapshot's dwell-time
+    /// anchor on the SAME `Process` within one reconcile pass).
+    #[must_use]
+    pub fn created_at_or(&self, fallback: DateTime<Utc>) -> DateTime<Utc> {
+        self.created_at().unwrap_or(fallback)
+    }
+
     /// Compound spec-projection primitive on the `spec.lifetime` axis:
     /// returns `Some(&e)` iff the resolver unambiguously picks the
     /// `Ephemeral` slot, `None` otherwise — the ONE-liner collapse of
@@ -4994,6 +5084,136 @@ mod tests {
         assert_eq!(
             now.signed_duration_since(via_primitive),
             now.signed_duration_since(via_pre_lift)
+        );
+    }
+
+    // ─── Process::created_at_or substrate pins ──────────────────────
+    //
+    // Pins the pure composer over `Process::created_at` that owns the
+    // paired `.created_at().unwrap_or_else(Utc::now)` chain the two
+    // production consumers restated by hand pre-lift
+    // (`tatara-reconciler::table_controller::reconcile_process_table`
+    // + `tatara-pool-reconciler::controller_pool::reconcile_inner`).
+    // Fail-before-pass-after granularity: `created_at_or` did not
+    // exist pre-lift, so any test invoking it fails to compile
+    // pre-lift and passes post-lift.
+
+    #[test]
+    fn created_at_or_returns_fallback_when_creation_timestamp_is_absent() {
+        // Missing-slot corner pin: the composer collapses the
+        // no-creation-timestamp case to the caller's fallback anchor
+        // byte-identically to the pre-lift `.unwrap_or(fallback)`
+        // tail. A freshly-forked Process whose API server has not yet
+        // stamped `metadata.creationTimestamp` gets the caller's
+        // wall-clock read (or a test's frozen anchor) synthesized so
+        // downstream dwell-time / tie-break arithmetic proceeds
+        // without a special-case branch at each consumer.
+        let mut p = Process::new("api", empty_spec());
+        p.metadata.creation_timestamp = None;
+        let fallback = Utc::now() - chrono::Duration::seconds(42);
+        assert_eq!(p.created_at_or(fallback), fallback);
+    }
+
+    #[test]
+    fn created_at_or_returns_anchor_when_slot_is_populated() {
+        // Populated-slot corner pin: with a populated
+        // `metadata.creationTimestamp` slot, the composer ignores the
+        // caller's fallback and returns the observed anchor
+        // byte-identically to the pre-lift `.unwrap_or(fallback)`
+        // pass-through. Sibling to `created_at_returns_some_datetime_
+        // when_slot_is_populated` — that pin binds the pure projection,
+        // this pin binds the composer's pass-through on the same
+        // populated corner.
+        let anchor = Utc::now() - chrono::Duration::seconds(300);
+        let p = creation_stamped_process(anchor);
+        let unrelated_fallback = Utc::now() + chrono::Duration::seconds(9_999);
+        assert_eq!(p.created_at_or(unrelated_fallback), anchor);
+    }
+
+    #[test]
+    fn created_at_or_is_pure_over_the_fallback_argument() {
+        // Purity pin: the composer itself never reads the wall clock —
+        // two consecutive calls with the SAME fallback return
+        // byte-identical `DateTime<Utc>` values on both the missing-
+        // slot corner (both calls return the caller's fallback) and
+        // the populated-slot corner (both calls return the observed
+        // anchor). Peer to the sibling
+        // `created_at_is_a_pure_projection` pin; both bind the pure-
+        // projection / pure-composer discipline on the ONE substrate
+        // accessor per axis.
+        let fallback = Utc::now() - chrono::Duration::seconds(7);
+        // Missing slot.
+        let mut p = Process::new("x", empty_spec());
+        p.metadata.creation_timestamp = None;
+        assert_eq!(p.created_at_or(fallback), p.created_at_or(fallback));
+        // Populated slot.
+        let anchor = Utc::now() - chrono::Duration::seconds(120);
+        let p = creation_stamped_process(anchor);
+        assert_eq!(p.created_at_or(fallback), p.created_at_or(fallback));
+    }
+
+    #[test]
+    fn created_at_or_matches_pre_lift_unwrap_or_chain_shape() {
+        // Parity pin: sweeps the two corners every pre-lift consumer
+        // encountered (missing slot, populated slot) and compares the
+        // substrate call against the hand-authored pre-lift
+        // `.created_at().unwrap_or(fallback)` chain byte-identically.
+        // A regression that reshaped either corner (returning the
+        // fallback on a populated slot, returning `Utc::now()` on the
+        // missing slot regardless of the caller's fallback) would
+        // surface here rather than as silent operator-facing skew
+        // between the claim-arbiter's tie-break anchor and the pool
+        // convergence snapshot's dwell-time anchor on the SAME
+        // `Process` within one reconcile pass.
+        fn pre_lift(p: &Process, fallback: DateTime<Utc>) -> DateTime<Utc> {
+            p.created_at().unwrap_or(fallback)
+        }
+        let fallback = Utc::now() - chrono::Duration::seconds(13);
+        // Missing slot.
+        let mut p = Process::new("x", empty_spec());
+        p.metadata.creation_timestamp = None;
+        assert_eq!(p.created_at_or(fallback), pre_lift(&p, fallback));
+        // Populated slot.
+        let anchor = Utc::now() - chrono::Duration::seconds(42);
+        let p = creation_stamped_process(anchor);
+        assert_eq!(p.created_at_or(fallback), pre_lift(&p, fallback));
+    }
+
+    #[test]
+    fn created_at_or_composes_with_utc_now_at_reconciler_callsites() {
+        // Call-site-shape pin: the two production consumers
+        // (`table_controller::reconcile_process_table` +
+        // `controller_pool::reconcile_inner`) both call
+        // `p.created_at_or(Utc::now())`. On the populated corner the
+        // wall-clock fallback is irrelevant (the observed anchor
+        // wins); on the missing corner the fallback becomes the
+        // resolved value within the sub-second window between the
+        // caller's `Utc::now()` read and the assertion below. This
+        // pin binds that the callsite composition returns the
+        // observed anchor exactly on the populated corner (the
+        // stable, drift-free assertion) and a "recent" wall-clock
+        // read on the missing corner (bounded within a two-second
+        // window to absorb scheduler jitter). A regression that
+        // silently substituted a different fallback (`DateTime::MIN`,
+        // a per-cluster prefix offset, a hardcoded epoch) would
+        // surface at the second half of this pin.
+        // Populated corner: byte-identical to the observed anchor.
+        let anchor = Utc::now() - chrono::Duration::seconds(600);
+        let p = creation_stamped_process(anchor);
+        assert_eq!(p.created_at_or(Utc::now()), anchor);
+        // Missing corner: within a two-second wall-clock window.
+        let mut p = Process::new("x", empty_spec());
+        p.metadata.creation_timestamp = None;
+        let before = Utc::now();
+        let resolved = p.created_at_or(Utc::now());
+        let after = Utc::now();
+        assert!(
+            resolved >= before - chrono::Duration::seconds(2),
+            "resolved {resolved} is before window start {before}"
+        );
+        assert!(
+            resolved <= after + chrono::Duration::seconds(2),
+            "resolved {resolved} is after window end {after}"
         );
     }
 

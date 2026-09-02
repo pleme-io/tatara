@@ -267,6 +267,87 @@ pub struct EphemeralLifetime {
 }
 
 impl EphemeralLifetime {
+    /// The [`humantime`]-parsed `self.ttl` duration, or `None` if the
+    /// operator-authored `ttl` string doesn't parse — the one-line
+    /// collapse of the `humantime::parse_duration(&<eph>.ttl).ok()`
+    /// chain lifted to ONE typed owner past the ★★ PRIME-DIRECTIVE
+    /// ≥ 2 duplication threshold.
+    ///
+    /// Pre-lift the SAME chain was hand-authored at TWO workspace-wide
+    /// consumer sites in [`crate::lifetime_clock`], both walking
+    /// `humantime::parse_duration(&<ephemeral>.ttl)` on an
+    /// `&EphemeralLifetime` and discarding the parse-error arm to the
+    /// downstream "skip the timed decision" branch:
+    ///
+    /// * [`crate::lifetime_clock::evaluate`] — the TTL-expiry gate.
+    ///   Reads `if let Ok(ttl) = humantime::parse_duration(&ephemeral
+    ///   .ttl) { … }` inside the non-terminal-phase guard, comparing
+    ///   the parsed `Duration` against the wall-clock elapsed distance
+    ///   from `metadata.creation_timestamp` to fire
+    ///   `AutoTerminate::Now { TtlExpired }`.
+    /// * [`crate::lifetime_clock::requeue_with_ttl`] — the sleep-
+    ///   budget picker for the reconciler's next requeue. Reads
+    ///   `let Ok(ttl) = humantime::parse_duration(&e.ttl) else {
+    ///   return default; };` and short-circuits to the caller's
+    ///   `default` sleep budget on parse failure.
+    ///
+    /// Both sites walked the SAME `humantime::parse_duration(&<eph>
+    /// .ttl)` chain and both wanted the Option-shape (the `Ok` arm as
+    /// the parsed `Duration`, the `Err` arm collapsed to the
+    /// downstream skip-branch). Post-lift each caller reaches for
+    /// `<eph>.ttl_duration()` and applies its own tail at its own
+    /// site (`if let Some(ttl) = …` for the guard, `let Some(ttl) =
+    /// … else { return default; }` for the sleep-budget picker).
+    ///
+    /// Return-form axis: `Option<std::time::Duration>` matches the
+    /// downstream comparator's type. The peer projection
+    /// [`crate::time::elapsed_since`] returns the SAME
+    /// `Option<std::time::Duration>` shape, so the TTL-expiry gate's
+    /// `elapsed >= ttl` comparator and the sleep-budget picker's
+    /// `ttl.checked_sub(elapsed)` subtraction each land with both
+    /// operands on the same axis, no per-consumer conversion.
+    ///
+    /// The `None` arm is the "operator's ttl string doesn't parse"
+    /// corner — a typo (`"1our"`), an unsupported unit, a
+    /// non-humantime literal that reached the field. Every consumer
+    /// interprets the corner as "no ttl data → don't fire the timed
+    /// decision" — [`crate::lifetime_clock::evaluate`] skips the
+    /// `AutoTerminate::Now` branch, [`crate::lifetime_clock::
+    /// requeue_with_ttl`] returns the caller's `default` sleep
+    /// budget. The pins below bind that shape.
+    ///
+    /// A future normalization (a per-fleet minimum TTL floor before
+    /// the humantime cast, a canonical unit-normalization pass, a
+    /// warn-log on unparseable strings) lands at THIS ONE substrate
+    /// primitive and every downstream ephemeral-TTL consumer inherits
+    /// the upgrade mechanically — no per-site edit at either of the
+    /// TWO listed callers or at future consumers (an allocation-TTL
+    /// remaining-budget picker, a pool free-TTL floor gate, a
+    /// stable-name claim-arbiter max-age tie-break).
+    ///
+    /// Sibling substrate primitive on the same
+    /// `(humantime string × Option<Duration>) → Option<Duration>`
+    /// axis: [`crate::time::elapsed_since`] — the `(now, anchor) →
+    /// Option<Duration>` peer that every timed-decision gate
+    /// composes with THIS primitive to produce an `elapsed >= ttl` /
+    /// `ttl.checked_sub(elapsed)` comparison.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `humantime::parse_duration(&<eph>.ttl).ok()` chain recurred
+    /// at two hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger, and is lifted to ONE owner here).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// the pins bind the parse-failure corner AND the empty-ttl corner
+    /// AND the humantime edge shapes AND the return-form parity with
+    /// [`crate::time::elapsed_since`], so a regression that drifts any
+    /// surface fails at `tests::ttl_duration_*` here rather than as
+    /// silent operator-facing skew between the TTL-expiry gate and
+    /// the sleep-budget picker on the SAME EphemeralLifetime).
+    #[must_use]
+    pub fn ttl_duration(&self) -> Option<std::time::Duration> {
+        humantime::parse_duration(&self.ttl).ok()
+    }
+
     /// True iff any declared export's [`crate::export::ExportTrigger`]
     /// fires for the given terminal-reached phase. The reconciler
     /// uses this to decide whether to route `Attested`/`Failed`
@@ -916,5 +997,142 @@ mod tests {
         assert_eq!(e.exports.len(), 1);
         assert!(e.exports[0].source.receipts.is_some());
         assert!(e.exports[0].channel.http_event.is_some());
+    }
+
+    // ─── EphemeralLifetime::ttl_duration substrate pins ──────────────
+    //
+    // The `humantime::parse_duration(&<eph>.ttl).ok()` chain was open-
+    // lifted from TWO consumer sites in `crate::lifetime_clock`
+    // (`evaluate` + `requeue_with_ttl`) onto the ONE substrate
+    // primitive [`EphemeralLifetime::ttl_duration`]. These pins bind
+    // the primitive at the fail-before-pass-after level so a future
+    // regression that swaps the return-form (an
+    // `anyhow::Result<Duration>` — a per-consumer normalization gate
+    // — a saturating `Duration::ZERO` for the parse-error corner)
+    // fails HERE before landing at either consumer.
+
+    fn eph_with_ttl(ttl: &str) -> EphemeralLifetime {
+        EphemeralLifetime {
+            ttl: ttl.to_string(),
+            teardown_policy: TeardownPolicy::default(),
+            max_concurrent: 1,
+            exports: Vec::new(),
+        }
+    }
+
+    /// The canonical shape every consumer rides through — a parseable
+    /// humantime string projects to `Some(std::time::Duration)` matching
+    /// the operator-authored `ttl` verbatim. Pin: the returned duration
+    /// is EXACTLY what `humantime::parse_duration` produces for the
+    /// same input, in `std::time::Duration` so the downstream
+    /// `elapsed >= ttl` / `ttl.checked_sub(elapsed)` comparators land
+    /// with both operands on the same axis without a per-consumer
+    /// conversion.
+    #[test]
+    fn ttl_duration_parseable_humantime_projects_to_some() {
+        for (ttl, expected) in [
+            ("1h", std::time::Duration::from_secs(3600)),
+            ("30m", std::time::Duration::from_secs(1800)),
+            ("90s", std::time::Duration::from_secs(90)),
+            ("5m30s", std::time::Duration::from_secs(330)),
+            ("500ms", std::time::Duration::from_millis(500)),
+        ] {
+            assert_eq!(
+                eph_with_ttl(ttl).ttl_duration(),
+                Some(expected),
+                "ttl_duration drift for {ttl:?}",
+            );
+        }
+    }
+
+    /// The `None` arm is the "operator's ttl string doesn't parse"
+    /// corner every consumer collapses to the skip-branch — a typo, an
+    /// unsupported unit, an empty string, a free-form label that
+    /// reached the field. Pin the boundary at the primitive so a
+    /// future normalization can't silently substitute a default in
+    /// place of the parse-failure signal.
+    #[test]
+    fn ttl_duration_unparseable_returns_none() {
+        for bad in [
+            // Empty string — the operator left the ttl blank.
+            "", // Non-humantime literal — the operator wrote a foreign format.
+            "forever", "1our",
+            // Nonsense that looks numeric but isn't a humantime span.
+            "abc",
+            // Only-whitespace input — passes serde's non-empty gate but
+            // doesn't parse as a duration.
+            "   ",
+        ] {
+            assert_eq!(
+                eph_with_ttl(bad).ttl_duration(),
+                None,
+                "ttl_duration should be None for {bad:?}",
+            );
+        }
+    }
+
+    /// Zero-duration edge — `"0s"` parses to `Duration::ZERO`, not
+    /// `None`. Every consumer needs the zero-ttl EphemeralLifetime to
+    /// count as "elapsed=0 already ≥ ttl=0" so a zero-TTL ephemeral
+    /// expires on its own creation instant; swapping this arm to
+    /// `None` would silently keep every zero-TTL Process alive past
+    /// the TTL-expiry gate in [`crate::lifetime_clock::evaluate`].
+    #[test]
+    fn ttl_duration_zero_seconds_returns_some_zero() {
+        assert_eq!(
+            eph_with_ttl("0s").ttl_duration(),
+            Some(std::time::Duration::ZERO),
+        );
+    }
+
+    /// Subsecond precision survives the parse — a regression that
+    /// silently truncated to whole seconds would compare
+    /// `elapsed = 500ms` against a `ttl_duration()` of `500ms` as
+    /// `500ms >= 0s` (always fire) rather than `500ms >= 500ms`
+    /// (fires on the boundary). Peer to the sibling substrate
+    /// `elapsed_since` subsecond pin in `crate::time`.
+    #[test]
+    fn ttl_duration_preserves_subsecond_precision() {
+        assert_eq!(
+            eph_with_ttl("250ms").ttl_duration(),
+            Some(std::time::Duration::from_millis(250)),
+        );
+    }
+
+    /// Default `EphemeralLifetime` carries the canonical `"1h"` ttl
+    /// (matches `default_ttl()` at this file's top), so
+    /// `.ttl_duration()` on it agrees with a manually-parsed `"1h"`
+    /// pass through `humantime`. Pins the default-ttl contract at
+    /// the substrate so a future default rename lands at ONE site
+    /// (this ttl_duration pin + the `default_ttl` fn) without silent
+    /// wall-clock drift at either consumer.
+    #[test]
+    fn ttl_duration_of_default_ephemeral_matches_1h() {
+        let e = EphemeralLifetime::default();
+        assert_eq!(e.ttl, "1h");
+        assert_eq!(e.ttl_duration(), Some(std::time::Duration::from_secs(3600)));
+    }
+
+    /// Byte-for-byte parity with the pre-lift hand-authored chain —
+    /// `<eph>.ttl_duration()` produces the SAME
+    /// `Option<std::time::Duration>` as the two-link `humantime::
+    /// parse_duration(&<eph>.ttl).ok()` chain both `lifetime_clock`
+    /// consumers walked pre-lift. A regression at THIS pin fails
+    /// before it lands at either consumer as silent operator-facing
+    /// skew between the TTL-expiry gate and the sleep-budget picker.
+    #[test]
+    fn ttl_duration_matches_pre_lift_hand_authored_chain_bytewise() {
+        for ttl in [
+            "1h", "30m", "90s", "5m30s", "500ms", "0s", "1us", "forever", "", "1our",
+        ] {
+            let e = eph_with_ttl(ttl);
+            let via_primitive = e.ttl_duration();
+            let hand_authored = humantime::parse_duration(&e.ttl).ok();
+            assert_eq!(
+                via_primitive, hand_authored,
+                "ttl_duration must be byte-identical to `humantime::\
+                 parse_duration(&self.ttl).ok()` for {ttl:?}",
+            );
+        }
     }
 }

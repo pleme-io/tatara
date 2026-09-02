@@ -327,7 +327,20 @@ pub fn evaluate(
     //    `Option<DateTime<Utc>>` return shape.
     if !is_terminal_or_exit(current_phase) {
         if let Some(creation) = process.created_at() {
-            if let Ok(ttl) = humantime::parse_duration(&ephemeral.ttl) {
+            // TTL parse rides through the ONE substrate primitive
+            // [`crate::lifetime::EphemeralLifetime::ttl_duration`] —
+            // the `humantime::parse_duration(&<eph>.ttl).ok()` chain
+            // pre-lift hand-authored at TWO workspace-wide sites past
+            // the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold
+            // (peer at [`requeue_with_ttl`] below). Post-lift both
+            // consumers share ONE typed owner returning the same
+            // `Option<Duration>` shape [`crate::time::elapsed_since`]
+            // returns, so the `elapsed >= ttl` comparator lands with
+            // both operands on the same axis; a future TTL-side
+            // normalization (per-fleet minimum floor, canonical
+            // unit-normalization, warn-log on unparseable strings)
+            // lands at ONE substrate site.
+            if let Some(ttl) = ephemeral.ttl_duration() {
                 // The `(now, creation) → Option<std::time::Duration>`
                 // projection rides through the ONE substrate primitive
                 // [`crate::time::elapsed_since`], sibling to the same-
@@ -386,7 +399,16 @@ pub fn requeue_with_ttl(process: &Process, now: DateTime<Utc>, default: Duration
     let Some(creation) = process.created_at() else {
         return default;
     };
-    let Ok(ttl) = humantime::parse_duration(&e.ttl) else {
+    // Shared TTL-parse projection with [`evaluate`] above — the
+    // `humantime::parse_duration(&<eph>.ttl).ok()` chain rides through
+    // the ONE substrate primitive
+    // [`crate::lifetime::EphemeralLifetime::ttl_duration`]. The
+    // `let-else` short-circuits on the parse-failure corner (typo,
+    // unsupported unit, non-humantime literal on the wire) to the
+    // caller's `default` sleep budget — the same "no ttl data → do
+    // not fire the timed decision" interpretation the TTL-expiry
+    // gate in [`evaluate`] gives to the `None` arm.
+    let Some(ttl) = e.ttl_duration() else {
         return default;
     };
     // Sibling to the TTL-expiry gate in [`evaluate`] above: the

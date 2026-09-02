@@ -17,6 +17,7 @@ use tracing::{info, warn};
 
 use crate::ReconcilerError;
 
+use tatara_process::annotations;
 use tatara_process::ephemeral::EphemeralSpec;
 use tatara_process::lifetime::{Lifetime, PermanentLifetime};
 use tatara_process::pool::{EphemeralPool, MemberState, PoolMember, PoolPhase, PoolStatus};
@@ -28,8 +29,6 @@ use crate::naming::member_process_name;
 use crate::pool_decide::{decide_pool_reconcile, PoolDecision};
 
 const POOL_FINALIZER: &str = "tatara.pleme.io/pool-finalizer";
-const ANNOTATION_POOL: &str = "tatara.pleme.io/pool";
-const ANNOTATION_SLOT: &str = "tatara.pleme.io/pool-slot";
 
 /// One reconcile pass over a Pool. The kube-rs `Controller` calls this.
 pub async fn reconcile(
@@ -485,7 +484,19 @@ fn process_belongs_to_pool(p: &Process, pool_name: &str) -> bool {
     // [`tatara_process::prelude::Process::annotation`]; this callsite
     // composes its `== Some(pool_name)` equality tail at its own site,
     // preserving the pre-lift membership-gate semantics byte-for-byte.
-    p.annotation(ANNOTATION_POOL) == Some(pool_name)
+    // The annotation KEY rides through the substrate constant
+    // [`tatara_process::annotations::POOL`] — sibling to the paired
+    // [`tatara_process::annotations::POOL_SLOT`] the write site below
+    // (`build_member_process`) stamps in the same map. Pre-lift the
+    // two keys were bare `"tatara.pleme.io/…"` string literals at the
+    // file-scope `ANNOTATION_POOL` / `ANNOTATION_SLOT` consts here
+    // AND at four reader-side test sites in
+    // `tatara-process/src/lib.rs` + `crd.rs`; post-lift the writer
+    // and every reader route through ONE substrate owner so any
+    // future rename (a `tatara.pleme.io/v2/pool` migration, an alias
+    // table for cross-cluster pool identity) lands at ONE `pub const`
+    // in `tatara_process::annotations`.
+    p.annotation(annotations::POOL) == Some(pool_name)
 }
 
 fn process_to_member_state(p: &Process) -> MemberState {
@@ -530,10 +541,25 @@ fn build_member_process(
     let mut proc = Process::new(process_name, spec);
     let ns = pool.metadata.namespace.clone();
     proc.metadata.namespace = ns;
-    let mut annotations = std::collections::BTreeMap::new();
-    annotations.insert(ANNOTATION_POOL.to_string(), pool_name.to_string());
-    annotations.insert(ANNOTATION_SLOT.to_string(), slot.to_string());
-    proc.metadata.annotations = Some(annotations);
+    // Pool-membership annotation keys ride through the substrate
+    // constants `tatara_process::annotations::{POOL, POOL_SLOT}` —
+    // sibling to the [`tatara_process::annotations::{REQUESTOR,
+    // ALLOCATION, REQUESTOR_KIND}`] allocator-bind axis-family
+    // (`controller_allocation::reconcile_inner` Bind arm). Pre-lift
+    // the two keys were file-scope `const ANNOTATION_POOL /
+    // ANNOTATION_SLOT` in this module PLUS bare
+    // `"tatara.pleme.io/pool"` string literals at four
+    // reader-side test sites (in `tatara-process/src/lib.rs`'s
+    // `annotated_tests` + in `tatara-process/src/crd.rs`'s
+    // `annotation_composes_borrow_equality_tail_matching_pre_lift_pool`).
+    // Post-lift the writer routes through ONE substrate owner per
+    // key; the local binding stays shadowed as `metadata_annotations`
+    // so the outer `annotations` module name in scope keeps
+    // resolving to the substrate.
+    let mut metadata_annotations = std::collections::BTreeMap::new();
+    metadata_annotations.insert(annotations::POOL.to_string(), pool_name.to_string());
+    metadata_annotations.insert(annotations::POOL_SLOT.to_string(), slot.to_string());
+    proc.metadata.annotations = Some(metadata_annotations);
 
     // Owner reference so K8s cascade-deletes members on Pool deletion.
     if let (Some(uid), Some(name)) = (pool.metadata.uid.as_ref(), pool.metadata.name.as_ref()) {
@@ -653,7 +679,7 @@ mod tests {
     fn belongs_to_pool_via_annotation() {
         let mut p = Process::new("x", empty_spec());
         let mut anns = std::collections::BTreeMap::new();
-        anns.insert(ANNOTATION_POOL.into(), "demo-pool".into());
+        anns.insert(annotations::POOL.into(), "demo-pool".into());
         p.metadata.annotations = Some(anns);
         assert!(process_belongs_to_pool(&p, "demo-pool"));
         assert!(!process_belongs_to_pool(&p, "other"));

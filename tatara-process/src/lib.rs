@@ -659,6 +659,32 @@ pub mod annotations {
     /// scheduler-window scoped fairness gate, a per-kind quota
     /// enforcer) never have to fetch the Allocation object again.
     pub const REQUESTOR_KIND: &str = "tatara.pleme.io/requestor-kind";
+    /// Stamped by `tatara-pool-reconciler::controller_pool::
+    /// build_member_process` on every Process the pool controller
+    /// materializes into a pool slot. Value is the owning
+    /// [`crate::pool::EphemeralPool`]'s `metadata.name`; the pool
+    /// controller's `process_belongs_to_pool` membership gate reads
+    /// this key back through the substrate primitive
+    /// [`crate::prelude::Process::annotation`] to filter its owned
+    /// members out of the cluster-wide Process listing. Peer to
+    /// [`POOL_SLOT`] on the same pool-membership axis; the two keys
+    /// travel together at every write site so any future rename (a
+    /// `tatara.pleme.io/v2/pool` migration, an alias table for
+    /// cross-cluster pool identity, a per-cluster ownership prefix)
+    /// lands at ONE `pub const` in the substrate and every
+    /// downstream consumer (the pool reconciler's membership gate,
+    /// any future observability label emitter, a cross-namespace
+    /// pool-topology walker) inherits the upgrade mechanically.
+    pub const POOL: &str = "tatara.pleme.io/pool";
+    /// Peer to [`POOL`] on the same pool-membership axis: the
+    /// zero-based slot index the pool controller assigned to the
+    /// member Process, stamped alongside so downstream consumers
+    /// that need per-slot identity (a UI grid layout, a per-slot
+    /// affinity gate, a slot-scoped audit-trail scraper) can
+    /// dispatch on it without re-scanning the pool controller's
+    /// naming scheme. Value is the slot's `u32` rendered through
+    /// `.to_string()`.
+    pub const POOL_SLOT: &str = "tatara.pleme.io/pool-slot";
 }
 
 /// Standard finalizer for the Process reconciler.
@@ -2167,6 +2193,94 @@ mod annotations_pins {
                 key.starts_with("tatara.pleme.io/"),
                 "annotation key {key:?} must inhabit tatara.pleme.io/ namespace",
             );
+        }
+    }
+
+    // ── Pool-membership axis pins ────────────────────────────────────
+    //
+    // Pins the two newly-lifted pool-membership annotation keys
+    // ([`crate::annotations::POOL`], [`crate::annotations::POOL_SLOT`])
+    // at their canonical wire-form byte-values. Pre-lift each key was
+    // a file-scope `const ANNOTATION_POOL / ANNOTATION_SLOT` in
+    // `tatara-pool-reconciler::controller_pool` PLUS bare
+    // `"tatara.pleme.io/pool"` string literals at four reader-side
+    // test sites in this crate (in the sibling `annotated_tests` above
+    // and in `crd.rs`'s
+    // `annotation_composes_borrow_equality_tail_matching_pre_lift_pool`
+    // + `annotation_returns_none_when_metadata_annotations_is_none`).
+    // Post-lift the writer routes through the substrate constant; a
+    // future edit that drifted the constant (a typo'd suffix, an
+    // accidental `tatara.pleme.io/v2/pool` migration landing at only
+    // the writer, an incoming rename that swapped POOL and POOL_SLOT)
+    // surfaces here rather than as silent operator-facing skew
+    // between the pool controller's writer and its own membership-
+    // gate reader.
+
+    #[test]
+    fn pool_matches_pre_lift_wire_string() {
+        assert_eq!(annotations::POOL, "tatara.pleme.io/pool");
+    }
+
+    #[test]
+    fn pool_slot_matches_pre_lift_wire_string() {
+        assert_eq!(annotations::POOL_SLOT, "tatara.pleme.io/pool-slot");
+    }
+
+    #[test]
+    fn pool_membership_axis_keys_are_distinct() {
+        // A copy-paste that duplicated one key's value across both
+        // slots (an oversight during the initial lift, or a future
+        // rename that merged the two keys by mistake) collapses
+        // BOTH downstream readers onto the same wire string and
+        // silently loses the slot-index axis — the pool controller
+        // would still find its own members via POOL but every per-
+        // slot dispatch consumer would read the pool name where the
+        // slot index used to sit. Pin the closed set is partition-
+        // distinct.
+        assert_ne!(annotations::POOL, annotations::POOL_SLOT);
+    }
+
+    #[test]
+    fn pool_membership_axis_keys_share_tatara_namespace() {
+        // Same reverse-DNS namespace invariant the allocator-bind
+        // axis-family enforces above — a rename that dropped the
+        // prefix on either POOL or POOL_SLOT would collide with an
+        // arbitrary third-party operator's annotations on the same
+        // Process and silently corrupt every pool-membership read.
+        for key in [annotations::POOL, annotations::POOL_SLOT] {
+            assert!(
+                key.starts_with("tatara.pleme.io/"),
+                "annotation key {key:?} must inhabit tatara.pleme.io/ namespace",
+            );
+        }
+    }
+
+    #[test]
+    fn pool_membership_axis_keys_partition_distinct_from_allocator_bind_axis() {
+        // Cross-family distinctness pin — the pool-membership axis
+        // (POOL, POOL_SLOT) and the allocator-bind axis (REQUESTOR,
+        // ALLOCATION, REQUESTOR_KIND) travel on the SAME member
+        // Process at the SAME time (the pool controller writes POOL
+        // + POOL_SLOT at creation; the allocator later merges
+        // REQUESTOR / ALLOCATION / REQUESTOR_KIND onto the same
+        // Process at Bind). A copy-paste that collapsed any axis
+        // pair (e.g. POOL and REQUESTOR onto the same wire string)
+        // would let one write silently overwrite the other. Pin
+        // that every substrate-owned annotation key is unique
+        // across the two axis-families.
+        let pool_axis = [annotations::POOL, annotations::POOL_SLOT];
+        let bind_axis = [
+            annotations::REQUESTOR,
+            annotations::ALLOCATION,
+            annotations::REQUESTOR_KIND,
+        ];
+        for p in pool_axis {
+            for b in bind_axis {
+                assert_ne!(
+                    p, b,
+                    "pool-membership key {p:?} collides with allocator-bind key {b:?}",
+                );
+            }
         }
     }
 }

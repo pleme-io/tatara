@@ -34,6 +34,7 @@ pub mod spec;
 pub mod status;
 pub mod table;
 pub mod tagged_union;
+pub mod time;
 
 pub mod prelude {
     pub use crate::allocation::{
@@ -117,6 +118,7 @@ pub mod prelude {
     pub use crate::table::{
         ClaimRecord, ProcessEntry, ProcessTable, ProcessTableSpec, ProcessTableStatus,
     };
+    pub use crate::time::elapsed_since;
     pub use crate::{Annotated, DeletionTombstoned, NamespacedApiCoordinates};
 }
 

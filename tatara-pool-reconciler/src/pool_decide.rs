@@ -70,10 +70,23 @@ pub fn decide_pool_reconcile(
             MemberState::Free => {
                 free += 1;
                 if !free_ttl.is_zero() {
-                    if let Some(elapsed) = now
-                        .signed_duration_since(m.entered_state_at)
-                        .to_std()
-                        .ok()
+                    // The `(now, m.entered_state_at) → Option
+                    // <std::time::Duration>` projection rides through
+                    // the ONE substrate primitive
+                    // [`tatara_process::time::elapsed_since`], sibling
+                    // to the same-chain TTL-expiry gate in
+                    // `tatara-process::lifetime_clock::evaluate` and
+                    // the sleep-budget picker in `requeue_with_ttl`.
+                    // Pre-lift each of the three sites hand-authored
+                    // `now.signed_duration_since(<anchor>).to_std()
+                    // .ok()` past the ★★ PRIME-DIRECTIVE ≥ 2
+                    // duplication threshold; post-lift each routes
+                    // through ONE typed owner and a future
+                    // normalization (monotonic-clock cross-check,
+                    // per-fleet skew tolerance, subsecond truncation)
+                    // lands at ONE substrate site.
+                    if let Some(elapsed) =
+                        tatara_process::time::elapsed_since(now, m.entered_state_at)
                     {
                         if elapsed > free_ttl {
                             stale_free_names.push(m.process_name.clone());
@@ -122,7 +135,9 @@ pub fn decide_pool_reconcile(
     let want = spec.desired_size;
     let supply = free + spawning;
     if supply < want {
-        return PoolDecision::Spawn { count: want - supply };
+        return PoolDecision::Spawn {
+            count: want - supply,
+        };
     }
 
     // (7) Free overflow above desired — reap.
@@ -215,7 +230,10 @@ mod tests {
             member("a", MemberState::Free, 60),
             member("b", MemberState::Free, 60),
         ];
-        assert_eq!(decide_pool_reconcile(&p, &members, now()), PoolDecision::NoOp);
+        assert_eq!(
+            decide_pool_reconcile(&p, &members, now()),
+            PoolDecision::NoOp
+        );
     }
 
     #[test]
@@ -251,7 +269,10 @@ mod tests {
             member("a", MemberState::Spawning, 10),
             member("b", MemberState::Free, 60),
         ];
-        assert_eq!(decide_pool_reconcile(&p, &members, now()), PoolDecision::NoOp);
+        assert_eq!(
+            decide_pool_reconcile(&p, &members, now()),
+            PoolDecision::NoOp
+        );
     }
 
     #[test]
@@ -305,8 +326,9 @@ mod tests {
     #[test]
     fn deletion_stamp_triggers_drain() {
         let mut p = pool(1, 0, 0);
-        p.metadata.deletion_timestamp =
-            Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(Utc::now()));
+        p.metadata.deletion_timestamp = Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(
+            Utc::now(),
+        ));
         let members = vec![member("a", MemberState::Free, 60)];
         assert_eq!(
             decide_pool_reconcile(&p, &members, now()),

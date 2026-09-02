@@ -328,8 +328,20 @@ pub fn evaluate(
     if !is_terminal_or_exit(current_phase) {
         if let Some(creation) = process.created_at() {
             if let Ok(ttl) = humantime::parse_duration(&ephemeral.ttl) {
-                let elapsed = now.signed_duration_since(creation).to_std().ok();
-                if let Some(elapsed) = elapsed {
+                // The `(now, creation) → Option<std::time::Duration>`
+                // projection rides through the ONE substrate primitive
+                // [`crate::time::elapsed_since`], sibling to the same-
+                // chain sleep-budget picker in [`requeue_with_ttl`]
+                // below and the pool-staleness gate in
+                // `tatara-pool-reconciler::pool_decide`. Pre-lift each
+                // of the three sites hand-authored `now
+                // .signed_duration_since(<anchor>).to_std().ok()` past
+                // the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold;
+                // post-lift each routes through ONE typed owner and a
+                // future normalization (monotonic-clock cross-check,
+                // per-fleet skew tolerance, subsecond truncation) lands
+                // at ONE substrate site.
+                if let Some(elapsed) = crate::time::elapsed_since(now, creation) {
                     if elapsed >= ttl {
                         return AutoTerminate::Now {
                             reason: TerminateReason::TtlExpired {
@@ -377,9 +389,16 @@ pub fn requeue_with_ttl(process: &Process, now: DateTime<Utc>, default: Duration
     let Ok(ttl) = humantime::parse_duration(&e.ttl) else {
         return default;
     };
-    let elapsed = match now.signed_duration_since(creation).to_std() {
-        Ok(d) => d,
-        Err(_) => return default,
+    // Sibling to the TTL-expiry gate in [`evaluate`] above: the
+    // `(now, creation) → Option<std::time::Duration>` projection rides
+    // through the ONE substrate primitive [`crate::time::elapsed_since`].
+    // The `let-else` short-circuits on the negative-anchor corner
+    // (clock skew or a creation timestamp stamped past `now`) to the
+    // caller's `default` sleep budget — the same "no elapsed data → do
+    // not fire the timed decision" interpretation every other consumer
+    // gives to the `None` arm.
+    let Some(elapsed) = crate::time::elapsed_since(now, creation) else {
+        return default;
     };
     let remaining = ttl.checked_sub(elapsed).unwrap_or(Duration::from_secs(0));
     // Never sleep less than 1s; never longer than the default heartbeat.

@@ -253,8 +253,23 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
             // lands at ONE substrate method rather than being restated
             // at each callsite.
             let pool_uid = pool.owned_uid_or_name_or_empty();
-            let occupied_names: std::collections::HashSet<_> =
-                members.iter().map(|m| m.process_name.clone()).collect();
+            // The `HashSet<String>` occupied-names collision-set seed
+            // rides through the substrate primitive
+            // [`tatara_process::pool::PoolMember::process_names_set`] —
+            // pre-lift this was a hand-authored
+            // `members.iter().map(|m| m.process_name.clone()).collect
+            // ::<HashSet<_>>()` chain, one of TWO in-file restatements
+            // past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold
+            // (peer at `apply_convergence_actions` below; both feed
+            // the SAME `.contains(&member_process_name(&name,
+            // &pool_uid, slot))` collision probe per spawn slot).
+            // Post-lift both consumers share ONE substrate owner; a
+            // future normalization step on the occupied-name axis
+            // (case-fold before insertion, per-cluster prefix strip,
+            // exclusion of Returning/Failed members that no longer
+            // own their slot) lands at ONE substrate method rather
+            // than at each callsite.
+            let occupied_names = PoolMember::process_names_set(&members);
             let mut spawned = 0u32;
             for slot in 0..u32::MAX {
                 if spawned >= count {
@@ -394,8 +409,14 @@ async fn apply_convergence_actions(
     // projection past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
     // threshold; ONE substrate owner for both spawn arms).
     let pool_uid = pool.owned_uid_or_name_or_empty();
-    let occupied_names: std::collections::HashSet<_> =
-        members.iter().map(|m| m.process_name.clone()).collect();
+    // Peer to the legacy allocation-driven Spawn arm above: the
+    // occupied-names collision-set rides through the substrate
+    // primitive
+    // [`tatara_process::pool::PoolMember::process_names_set`]. See
+    // the sibling callsite's pre-lift audit note in
+    // `reconcile_inner`'s `PoolDecision::Spawn` arm for the full
+    // duplication history.
+    let occupied_names = PoolMember::process_names_set(members);
 
     // Track the next free slot index per call so multiple
     // CreateMember actions in one tick spawn distinct names.

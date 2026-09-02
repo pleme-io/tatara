@@ -1000,6 +1000,63 @@ impl PoolMember {
         }
         (ready, allocated, spawning, returning)
     }
+
+    /// Substrate primitive: single-pass closed-set collection of the
+    /// `process_name` axis over a `[PoolMember]` slice into an owned
+    /// `HashSet<String>` — the O(1)-lookup shape every spawn-arm on
+    /// the workspace builds pre-collision-check against a candidate
+    /// [`crate::pool::PoolMember::process_name`] produced by
+    /// [`tatara-pool-reconciler::naming::member_process_name`].
+    ///
+    /// Pre-lift the 2-line
+    /// `members.iter().map(|m| m.process_name.clone()).collect()`
+    /// chain was hand-authored at TWO sites past the ★★ PRIME-
+    /// DIRECTIVE ≥ 2 duplication threshold in
+    /// `tatara-pool-reconciler::controller_pool`, both restating the
+    /// SAME `process_name` projection through the SAME
+    /// `iter → map → collect` shape and both feeding a `.contains
+    /// (&candidate)` probe:
+    /// * `reconcile_inner`'s legacy allocation-driven
+    ///   `PoolDecision::Spawn` arm (`desired == 0` path) —
+    ///   collision-set for
+    ///   `member_process_name(&pool_name, &pool_uid, slot)` per spawn
+    ///   slot.
+    /// * `apply_convergence_actions` — collision-set for the SAME
+    ///   composer inside the R11 desired-count
+    ///   `ConvergenceAction::CreateMember` loop.
+    ///
+    /// Post-lift both consumers share ONE substrate owner; the
+    /// composed `HashSet<String>` still feeds the same
+    /// `HashSet::<String>::contains(&candidate)` probe at each
+    /// callsite unchanged. A future normalization step on the
+    /// occupied-name axis (case-fold before insertion, a per-cluster
+    /// prefix strip, deduplication against a sibling stale-name
+    /// registry, exclusion of `Returning`/`Failed` members that no
+    /// longer own their slot) lands at ONE substrate method rather
+    /// than being restated at each callsite.
+    ///
+    /// Sibling to [`Self::state_count_fanout`] on the `(collection
+    /// shape × slice-owned fold)` axis: both primitives fold a
+    /// `[PoolMember]` slice into one caller-shaped aggregate in a
+    /// single pass, both are `#[must_use]`, both take the slice by
+    /// reference so no caller has to reshape its `Vec<PoolMember>` or
+    /// `Vec<PoolMember>` slice upstream.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `HashSet<String>` collision-set shape recurred at TWO
+    /// hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger, and is lifted to ONE owner here).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// the pins bind the axis (`process_name`), the aggregate shape
+    /// (`HashSet<String>`), the empty-slice corner, and the
+    /// duplicate-name deduplication semantics `HashSet` provides
+    /// implicitly, so a regression at any of those surfaces at
+    /// `tests::process_names_set_*` rather than as silent occupied-
+    /// slot skew at either spawn arm).
+    #[must_use]
+    pub fn process_names_set(members: &[Self]) -> std::collections::HashSet<String> {
+        members.iter().map(|m| m.process_name.clone()).collect()
+    }
 }
 
 /// Light reference to an `EphemeralAllocation`.
@@ -3227,6 +3284,134 @@ mod tests {
         assert_eq!(allocated, count_state(&members, MemberState::Allocated));
         assert_eq!(spawning, count_state(&members, MemberState::Spawning));
         assert_eq!(returning, count_state(&members, MemberState::Returning));
+    }
+
+    // ─── PoolMember::process_names_set substrate pins ─────────────────
+    //
+    // Pins the closed-set slice-owned collection primitive on the
+    // `process_name` axis into a `HashSet<String>` — the O(1)-lookup
+    // shape both spawn arms in
+    // `tatara-pool-reconciler::controller_pool` build pre-collision-
+    // check against a candidate `member_process_name(&pool_name,
+    // &pool_uid, slot)`. Sibling to `state_count_fanout` on the
+    // `(collection shape × slice-owned fold)` axis; the fanout owns
+    // the state-counter tuple corner, this primitive owns the
+    // process-name-lookup corner. Fail-before-pass-after granularity:
+    // `process_names_set` did not exist pre-lift; the compiler cannot
+    // resolve the name until the impl block above is in place, so a
+    // rollback of the primitive breaks this whole test group.
+
+    fn named_member(process_name: &str, state: MemberState) -> PoolMember {
+        PoolMember {
+            process_name: process_name.into(),
+            state,
+            entered_state_at: DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
+            allocation_ref: None,
+        }
+    }
+
+    #[test]
+    fn process_names_set_returns_empty_hashset_on_empty_slice() {
+        // Zero-length pin: the empty-members corner produces an
+        // empty `HashSet<String>`, matching the pre-lift
+        // `.iter().map(...).collect()` chain's empty-iterator
+        // behavior. A regression that started producing a sentinel
+        // entry (a `""` placeholder, a static seed) on the empty-
+        // slice corner would silently reject the first spawn slot
+        // downstream — the pin closes that failure mode.
+        let empty: Vec<PoolMember> = vec![];
+        assert!(PoolMember::process_names_set(&empty).is_empty());
+    }
+
+    #[test]
+    fn process_names_set_collects_every_process_name_from_populated_slice() {
+        // Positive pin: every `PoolMember`'s `process_name` slot
+        // lands in the returned `HashSet<String>` verbatim. Cross-
+        // state (Free / Allocated / Spawning / Returning / Failed)
+        // to prove the primitive is state-agnostic — the spawn arms
+        // check occupancy on the name axis, NOT the state axis, so a
+        // future refactor that filtered by state would silently
+        // leave a returned/failed slot open to a duplicate spawn.
+        let members = vec![
+            named_member("pool-a-0", MemberState::Free),
+            named_member("pool-a-1", MemberState::Allocated),
+            named_member("pool-a-2", MemberState::Spawning),
+            named_member("pool-a-3", MemberState::Returning),
+            named_member("pool-a-4", MemberState::Failed),
+        ];
+        let set = PoolMember::process_names_set(&members);
+        assert_eq!(set.len(), 5);
+        for slot in 0..5 {
+            let want = format!("pool-a-{slot}");
+            assert!(set.contains(&want), "missing {want}; set = {set:?}");
+        }
+    }
+
+    #[test]
+    fn process_names_set_deduplicates_duplicate_process_names() {
+        // Deduplication pin: two `PoolMember` entries with the same
+        // `process_name` (a race between the two spawn arms, an
+        // adopted foreign Process the reconciler picked up twice)
+        // collapse to ONE entry in the `HashSet<String>`. Pins the
+        // `HashSet` deduplication semantics the pre-lift `.iter()
+        // .map(...).collect()` chain already inherited from the
+        // `FromIterator` impl — a regression that swapped the
+        // aggregate to a `Vec<String>` or `BTreeSet<String>` still
+        // matches the shape but changes the operator-visible count
+        // at the `.len()` probe here.
+        let members = vec![
+            named_member("pool-b-0", MemberState::Free),
+            named_member("pool-b-0", MemberState::Spawning),
+            named_member("pool-b-1", MemberState::Free),
+        ];
+        let set = PoolMember::process_names_set(&members);
+        assert_eq!(set.len(), 2);
+        assert!(set.contains("pool-b-0"));
+        assert!(set.contains("pool-b-1"));
+    }
+
+    #[test]
+    fn process_names_set_membership_probe_matches_pre_lift_chain_verbatim() {
+        // Byte-identical parity pin: the `.contains(&candidate)`
+        // probe on the substrate's `HashSet<String>` return returns
+        // the same `bool` as the pre-lift `members.iter().map(|m|
+        // m.process_name.clone()).collect::<HashSet<_>>().contains
+        // (&candidate)` chain across the FULL cross product of
+        // (candidate ∈ {an existing name, a novel name, the empty
+        // string}). A regression that inserted a normalization step
+        // at the primitive the pre-lift chain does NOT apply — or
+        // vice versa — surfaces here rather than as silent drift
+        // between the two spawn arms the primitive owns.
+        let members = vec![
+            named_member("pool-c-0", MemberState::Free),
+            named_member("pool-c-1", MemberState::Allocated),
+        ];
+        let candidates: [&str; 4] = ["pool-c-0", "pool-c-1", "pool-c-2", ""];
+        let via_primitive = PoolMember::process_names_set(&members);
+        for candidate in candidates {
+            let pre_lift: std::collections::HashSet<String> =
+                members.iter().map(|m| m.process_name.clone()).collect();
+            assert_eq!(
+                via_primitive.contains(candidate),
+                pre_lift.contains(candidate),
+                "candidate = {candidate:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn process_names_set_is_a_pure_projection() {
+        // Consecutive calls on the same slice return equal sets —
+        // no cached state, no mutation on the input. Guards against
+        // a future refactor that plants a cache field somewhere and
+        // drifts one caller from another silently.
+        let members = vec![
+            named_member("pool-d-0", MemberState::Free),
+            named_member("pool-d-1", MemberState::Spawning),
+        ];
+        let first = PoolMember::process_names_set(&members);
+        let second = PoolMember::process_names_set(&members);
+        assert_eq!(first, second);
     }
 
     #[test]

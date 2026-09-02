@@ -445,6 +445,73 @@ impl AllocationStatus {
             ..Default::default()
         }
     }
+
+    /// Substrate composer for a phase-transition [`AllocationStatus`]
+    /// seed whose `bound_pool` + `assigned_process` axis-pair is
+    /// stamped alongside the base [`Self::transition`] triplet
+    /// (`phase` + `phase_since = Some(now)` + `message =
+    /// Some(<supplied>)`). Every other slot lands at its
+    /// [`Default`]-equivalent variant so a caller-branch that attaches
+    /// an optional slot via struct-update syntax (a `Bind` arm's
+    /// `allocated_at` / `expires_at` addenda, say) does not silently
+    /// inherit a pre-populated non-`None` value.
+    ///
+    /// Pre-lift the `bound_pool: Some(pool)` + `assigned_process:
+    /// Some(AllocationRef::new(name, ns))` pair rode struct-update
+    /// syntax onto [`Self::transition`] at TWO sites past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication threshold in
+    /// `tatara-pool-reconciler::controller_allocation::reconcile_inner`
+    /// — the `AllocationDecision::Bind` arm ([`AllocationPhase::Bound`]
+    /// with two extra `allocated_at` / `expires_at` addenda) and the
+    /// `AllocationDecision::Release` arm ([`AllocationPhase::Released`]
+    /// with no addenda). Both restated the SAME pair-of-`Some`-slot
+    /// invariant against the SAME struct-update seed and funneled the
+    /// resulting body through the SAME `patch_status` call on
+    /// `Api<EphemeralAllocation>`. Post-lift both callers reach the
+    /// pair through ONE substrate composer; a future normalization on
+    /// the bound-set axis (a symmetry gate that the assigned_process's
+    /// namespace matches the bound_pool's namespace, a canonicalization
+    /// that closes the pair against a stale audit record, a
+    /// backwards-compatibility rename of either slot at the serde
+    /// surface) lands at ONE substrate site rather than at each
+    /// callsite in the two-arm allocation reconciler.
+    ///
+    /// Composes atop [`Self::transition`] so any future evolution to
+    /// the base three-slot invariant triplet (a `phase_since` rename,
+    /// a `message` promotion to a structured envelope, a fourth
+    /// always-stamped diagnostic slot) reaches this composer through
+    /// ONE substrate site and both consumers inherit the upgrade
+    /// mechanically. Sibling composition discipline to
+    /// [`crate::pool::PoolStatus::observed`]'s `state_count_fanout` +
+    /// `Utc::now()` fold — the compound composer names its axis + calls
+    /// the substrate primitive on the invariant it wraps rather than
+    /// restating the wrapped shape inline.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `bound_pool + assigned_process` pair recurred at two hand-
+    /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    /// trigger, and is lifted to ONE owner here). THEORY.md §II.1
+    /// invariant 5 (composition preserves proofs — the pins bind the
+    /// pair + the composed base triplet + byte-identical parity with
+    /// the pre-lift struct-update shape through serde round-trip, so a
+    /// regression that drifted any surface at
+    /// `tests::allocation_status_bound_transition_*` rather than as
+    /// silent operator-visible skew between the two Bind / Release
+    /// patch sites).
+    #[must_use]
+    pub fn bound_transition(
+        phase: AllocationPhase,
+        message: impl Into<String>,
+        now: DateTime<Utc>,
+        bound_pool: AllocationRef,
+        assigned_process: AllocationRef,
+    ) -> Self {
+        Self {
+            bound_pool: Some(bound_pool),
+            assigned_process: Some(assigned_process),
+            ..Self::transition(phase, message, now)
+        }
+    }
 }
 
 /// Allocation lifecycle phase.
@@ -2009,6 +2076,149 @@ mod tests {
         );
         assert_eq!(bind_status.allocated_at, Some(anchor));
         assert_eq!(bind_status.expires_at, Some(ttl));
+    }
+
+    // ─── AllocationStatus::bound_transition substrate pins ─────────────
+    //
+    // Pin the compound composer at fail-before-pass-after granularity:
+    // the composer wraps [`AllocationStatus::transition`] with the
+    // `bound_pool + assigned_process` pair the Bind / Release arms
+    // both stamped inline pre-lift.
+
+    #[test]
+    fn allocation_status_bound_transition_stamps_supplied_pool_and_process_verbatim() {
+        let anchor = anchor_time();
+        let pool = AllocationRef::new("demo-pool", "pools");
+        let assigned = AllocationRef::new("demo-abcd", "pools");
+        let s = AllocationStatus::bound_transition(
+            AllocationPhase::Released,
+            "released; pool reconciler will return the member",
+            anchor,
+            pool.clone(),
+            assigned.clone(),
+        );
+        assert_eq!(s.bound_pool.as_ref(), Some(&pool));
+        assert_eq!(s.assigned_process.as_ref(), Some(&assigned));
+    }
+
+    #[test]
+    fn allocation_status_bound_transition_inherits_transition_triplet_verbatim() {
+        // The compound composer must not stamp its own `phase +
+        // phase_since + message` triplet — it MUST compose the pair
+        // atop the substrate `Self::transition` seed so any future
+        // evolution to the base triplet lands at ONE site and this
+        // composer inherits the upgrade mechanically. Pin the triplet
+        // through the same axis-uniform reads the transition tests use.
+        let anchor = anchor_time();
+        let via_compound = AllocationStatus::bound_transition(
+            AllocationPhase::Bound,
+            "bound to pool member",
+            anchor,
+            AllocationRef::new("p", "ns"),
+            AllocationRef::new("q", "ns"),
+        );
+        let via_base =
+            AllocationStatus::transition(AllocationPhase::Bound, "bound to pool member", anchor);
+        assert_eq!(via_compound.phase, via_base.phase);
+        assert_eq!(via_compound.phase_since, via_base.phase_since);
+        assert_eq!(via_compound.message, via_base.message);
+    }
+
+    #[test]
+    fn allocation_status_bound_transition_defaults_every_optional_slot_beyond_the_pair() {
+        // The compound composer stamps only the base triplet + the
+        // `bound_pool + assigned_process` pair; every other optional
+        // slot (`allocated_at` / `expires_at` / `conditions`) must
+        // land at its `Default`-equivalent variant so a caller-branch
+        // that attaches an addendum via struct-update syntax (a Bind
+        // arm's `allocated_at` + `expires_at` stamp) does not
+        // silently inherit a pre-populated non-`None`/non-empty value.
+        let s = AllocationStatus::bound_transition(
+            AllocationPhase::Released,
+            "released",
+            anchor_time(),
+            AllocationRef::new("p", "ns"),
+            AllocationRef::new("q", "ns"),
+        );
+        assert!(
+            s.allocated_at.is_none(),
+            "allocated_at must default to None"
+        );
+        assert!(s.expires_at.is_none(), "expires_at must default to None");
+        assert!(
+            s.conditions.is_empty(),
+            "conditions must default to an empty Vec"
+        );
+    }
+
+    #[test]
+    fn allocation_status_bound_transition_composes_with_struct_update_for_bind_seed() {
+        // Pin the compound shape the `AllocationDecision::Bind`
+        // callsite post-lift composes: the compound composer seeds
+        // `phase + phase_since + message + bound_pool +
+        // assigned_process`, and the Bind branch attaches
+        // `allocated_at` + `expires_at` via struct-update syntax.
+        // Post-lift the two extra slots survive the compose intact
+        // and the base five slots inherit the composer's stamps
+        // verbatim.
+        let anchor = anchor_time();
+        let ttl = anchor + chrono::Duration::hours(1);
+        let pool = AllocationRef::new("demo-pool", "pools");
+        let assigned = AllocationRef::new("demo-abcd", "pools");
+        let bind_status = AllocationStatus {
+            allocated_at: Some(anchor),
+            expires_at: Some(ttl),
+            ..AllocationStatus::bound_transition(
+                AllocationPhase::Bound,
+                "bound to pool member",
+                anchor,
+                pool.clone(),
+                assigned.clone(),
+            )
+        };
+        assert_eq!(bind_status.phase, AllocationPhase::Bound);
+        assert_eq!(bind_status.phase_since, Some(anchor));
+        assert_eq!(bind_status.message.as_deref(), Some("bound to pool member"));
+        assert_eq!(bind_status.bound_pool.as_ref(), Some(&pool));
+        assert_eq!(bind_status.assigned_process.as_ref(), Some(&assigned));
+        assert_eq!(bind_status.allocated_at, Some(anchor));
+        assert_eq!(bind_status.expires_at, Some(ttl));
+    }
+
+    #[test]
+    fn allocation_status_bound_transition_matches_pre_lift_release_arm_verbatim() {
+        // Byte-shape pin against the exact pre-lift `AllocationStatus
+        // { bound_pool: Some(pool), assigned_process:
+        // Some(AllocationRef::new(..)), ..AllocationStatus::transition
+        // (Released, "…", now) }` composition the
+        // `AllocationDecision::Release` arm restated inline pre-lift.
+        // A regression that reordered the pair, dropped a `Some`, or
+        // drifted the composed base triplet here surfaces at THIS pin
+        // rather than as a subtle patch_status body the K8s API
+        // server accepts but the audit record disagrees on.
+        let anchor = anchor_time();
+        let pool = AllocationRef::new("demo-pool", "pools");
+        let assigned = AllocationRef::new("demo-abcd", "pools");
+        let via_composer = AllocationStatus::bound_transition(
+            AllocationPhase::Released,
+            "released; pool reconciler will return the member",
+            anchor,
+            pool.clone(),
+            assigned.clone(),
+        );
+        let via_hand_authored = AllocationStatus {
+            bound_pool: Some(pool),
+            assigned_process: Some(assigned),
+            ..AllocationStatus::transition(
+                AllocationPhase::Released,
+                "released; pool reconciler will return the member",
+                anchor,
+            )
+        };
+        assert_eq!(
+            serde_json::to_value(&via_composer).unwrap(),
+            serde_json::to_value(&via_hand_authored).unwrap(),
+        );
     }
 
     #[test]

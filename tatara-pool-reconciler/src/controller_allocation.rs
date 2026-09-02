@@ -263,36 +263,36 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
             let expires_at = now
                 + chrono::Duration::from_std(ttl_duration)
                     .unwrap_or_else(|_| chrono::Duration::hours(1));
-            // The `assignedProcess` status slot rides through the
-            // substrate constructor `AllocationRef::new` — pre-lift
-            // this was a hand-authored `AllocationRef { name, namespace }`
-            // struct-literal, one of FOUR workspace-wide restatements
-            // past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold
-            // (peers at the Release path below, at `allocation_decide::
-            // AllocationConvergenceCtx::observe`'s pool_ref seed, and
-            // at `tatara-github-watcher::allocation_factory`'s
-            // pool_ref seed). Post-lift the four consumers share ONE
-            // substrate owner.
-            // Peer to the NoMatchingPool / Wait arms above: the same
-            // substrate composer owns the invariant `phase +
-            // phase_since + message` triplet; this arm's four extra
-            // slots (`bound_pool` + `assigned_process` +
-            // `allocated_at` + `expires_at`) ride in via struct-update
-            // onto the seed. The composer accepts the shared local
-            // `now` binding so the same wall-clock read reaches BOTH
-            // `phase_since` and `allocated_at` — pre-lift the two
-            // slots stamped from the SAME `now`, so the composer's
-            // clock-injectability preserves that shape exactly.
+            // The compound `bound_pool + assigned_process` pair rides
+            // through the substrate composer
+            // [`tatara_process::allocation::AllocationStatus::bound_transition`]
+            // — pre-lift this pair rode struct-update syntax onto
+            // [`AllocationStatus::transition`] at TWO workspace-wide
+            // sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+            // threshold in this module (peer at the Release arm
+            // below). Post-lift both consumers share ONE substrate
+            // owner; the branch-specific `allocated_at + expires_at`
+            // stamp rides in via struct-update onto the compound
+            // composer's seed so a future symmetry gate on the
+            // bound-set axis (assigned_process's namespace matching
+            // the bound_pool's namespace, a canonicalization pass, a
+            // backwards-compatibility rename) lands at ONE substrate
+            // site rather than at each callsite here. The compound
+            // composer accepts the shared local `now` binding so the
+            // same wall-clock read reaches BOTH `phase_since` and
+            // `allocated_at` — pre-lift the two slots stamped from
+            // the SAME `now`, so the composer's clock-injectability
+            // preserves that shape exactly.
             let body = json!({
                 "status": AllocationStatus {
-                    bound_pool: Some(pool),
-                    assigned_process: Some(AllocationRef::new(member_process_name, ns.clone())),
                     allocated_at: Some(now),
                     expires_at: Some(expires_at),
-                    ..AllocationStatus::transition(
+                    ..AllocationStatus::bound_transition(
                         AllocationPhase::Bound,
                         "bound to pool member",
                         now,
+                        pool,
+                        AllocationRef::new(member_process_name, ns.clone()),
                     )
                 },
             });
@@ -319,30 +319,23 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
                     })),
                 )
                 .await;
-            // The `assignedProcess` status slot rides through the
-            // substrate constructor `AllocationRef::new` — sibling
-            // shape to the Bind path's stamp above, both routed
-            // through the ONE substrate owner so a future refactor of
-            // the ref shape (added field, canonicalization, non-empty
-            // gate) lands at ONE place rather than at both status-
-            // patch sites here.
-            // Peer to the NoMatchingPool / Wait / Bind arms above:
-            // the same substrate composer owns the invariant `phase +
-            // phase_since + message` triplet; the branch-specific
-            // `bound_pool` + `assigned_process` slots ride in via
-            // struct-update onto the seed so the four `reconcile_inner`
-            // patch sites now share ONE substrate owner for the
-            // three always-present slots.
+            // Peer to the Bind arm above: the compound `bound_pool +
+            // assigned_process` pair rides through the substrate
+            // composer
+            // [`tatara_process::allocation::AllocationStatus::bound_transition`]
+            // — post-lift both consumers share ONE substrate owner
+            // for the pair AND for the composed base `phase +
+            // phase_since + message` triplet, so this Release arm
+            // has no addenda past the compound composer's seed and
+            // patches the composed [`AllocationStatus`] verbatim.
             let body = json!({
-                "status": AllocationStatus {
-                    bound_pool: Some(pool),
-                    assigned_process: Some(AllocationRef::new(member_process_name, ns.clone())),
-                    ..AllocationStatus::transition(
-                        AllocationPhase::Released,
-                        "released; pool reconciler will return the member",
-                        Utc::now(),
-                    )
-                },
+                "status": AllocationStatus::bound_transition(
+                    AllocationPhase::Released,
+                    "released; pool reconciler will return the member",
+                    Utc::now(),
+                    pool,
+                    AllocationRef::new(member_process_name, ns.clone()),
+                ),
             });
             let _ = alloc_api
                 .patch_status(&name, &PatchParams::default(), &Patch::Merge(&body))

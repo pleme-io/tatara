@@ -1363,6 +1363,110 @@ impl Process {
         self.observed_phase().unwrap_or(ProcessPhase::Pending)
     }
 
+    /// The copy-form status-projection primitive on the
+    /// `status.phase_since` axis: returns the [`DateTime<Utc>`] the
+    /// reconciler stamped when this Process last transitioned into its
+    /// current [`ProcessPhase`], wrapped in an `Option` so BOTH the
+    /// missing-`status` corner AND the empty-slot corner
+    /// (`ProcessStatus.phase_since == None` — a freshly-forked Process
+    /// whose reconciler has not yet stamped a first transition) collapse
+    /// to `None` — the ONE-liner collapse of the paired
+    /// `self.status.as_ref().and_then(|s| s.phase_since)` incantation
+    /// the pool reconciler's per-owned-Process member-seed builder
+    /// restated by hand pre-lift.
+    ///
+    /// Pre-lift the 5-line
+    /// ```rust,ignore
+    /// p.status
+    ///     .as_ref()
+    ///     .and_then(|s| s.phase_since)
+    ///     .unwrap_or_else(Utc::now)
+    /// ```
+    /// chain was hand-authored at
+    /// `tatara-pool-reconciler::controller_pool::reconcile_inner`'s
+    /// per-owned-Process `PoolMember { entered_state_at: … }` seed —
+    /// the row-builder that feeds `pool_phase_from_members` +
+    /// `apply_pool_reconcile_decision` with each owned Process's
+    /// last-observed transition instant. Post-lift the callsite reads
+    /// `p.observed_phase_since().unwrap_or_else(Utc::now)`, a
+    /// one-liner symmetric to the peer `p.created_at()
+    /// .unwrap_or_else(Utc::now)` chain the sibling
+    /// [`PoolMemberSnapshot`] `created_at` seed two branches below
+    /// already routes through — closing the last raw
+    /// `.status.as_ref()` chain on `Process` at that reconciler site.
+    ///
+    /// Return-form axis: `Option<DateTime<Utc>>` matches the copy-form
+    /// discipline of the sibling metadata-projection primitive
+    /// [`Self::created_at`] (both return `Option<DateTime<Utc>>` and
+    /// hide the wire-format wrapper — `ProcessStatus` on the status
+    /// side, `k8s_openapi::…::v1::Time` on the metadata side) so the
+    /// two timestamp-projection primitives compose byte-uniformly at
+    /// the pool reconciler's `PoolMember` / `PoolMemberSnapshot`
+    /// seeds. Returning owned `DateTime<Utc>` with a
+    /// substrate-injected `Utc::now()` fallback would fold an impure
+    /// wall-clock read into the primitive, breaking the pure-
+    /// projection discipline every peer `observed_*` accessor
+    /// follows; the sink stays at the callsite where it composes with
+    /// [`Self::created_at`]'s identical `.unwrap_or_else(Utc::now)`
+    /// tail.
+    ///
+    /// Peer to the copy-form status-projection primitive
+    /// [`Self::observed_phase`] on the (return-shape × status-slot)
+    /// axis pair — both walk the paired `.status.as_ref().<map|and_then>
+    /// (|s| s.<slot>)` chain and both project a `Copy` inner from a
+    /// wire slot whose "not yet observed" corner collapses to `None`.
+    /// [`Self::observed_phase`] projects the `phase` slot (a bare
+    /// [`ProcessPhase`] with a `Default` sentinel — collapses only on
+    /// missing `status`); this method projects the `phase_since` slot
+    /// (an `Option<DateTime<Utc>>` with no sentinel — collapses on
+    /// missing `status` OR on empty slot). The paired
+    /// `.map` vs `.and_then` choice tracks the difference: the raw
+    /// slot is `Option<DateTime<Utc>>` here so the closure returns an
+    /// `Option` and the outer combinator flattens through `.and_then`,
+    /// where `observed_phase`'s raw slot is a bare `ProcessPhase` so
+    /// the closure returns a bare value and the outer combinator maps
+    /// through `.map`. Future status-timestamp projections (an
+    /// `observed_last_boundary_check` on
+    /// [`crate::status::BoundaryStatus.last_check`], an
+    /// `observed_last_export_receipt` on a future receipt-observation
+    /// slot) land as peer methods on this same axis.
+    ///
+    /// A future normalization step (a per-cluster clock-skew guard
+    /// that offsets the returned timestamp by the observing controller's
+    /// measured skew, a canonicalization pass that maps a suspiciously-
+    /// zero `phase_since` to `None` so consumers' `.unwrap_or_else
+    /// (Utc::now)` tails synthesize a fresh anchor, a staleness gate
+    /// that drops a `phase_since` predating a reconcile deadline) lands
+    /// at ONE substrate method here and every downstream consumer
+    /// picks up the upgrade mechanically — no per-callsite hand-edit
+    /// at `reconcile_inner`'s member-seed builder.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the paired `.status.as_ref().and_then(|s| s.phase_since)` chain
+    /// closes the last raw `.status.as_ref()` chain in
+    /// `tatara-pool-reconciler`'s production reconciler code on
+    /// `Process`, and is lifted to ONE substrate owner here alongside
+    /// the sibling `observed_phase` / `observed_phase_or_pending` /
+    /// `observed_identity` / `observed_pid` / `observed_attestation` /
+    /// `observed_flux_resources` primitives that closed their axes
+    /// previously). THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the pins bind the missing-`status` corner + the empty-
+    /// slot corner + the populated-slot pass-through + the pure-
+    /// projection discipline + the byte-identical parity with the pre-
+    /// lift `.status.as_ref().and_then(|s| s.phase_since)` chain + the
+    /// composition-shape agreement with [`Self::created_at`]'s
+    /// identical `.unwrap_or_else(Utc::now)` tail at the peer
+    /// pool-reconciler seed, so a regression that drifted any surface
+    /// at `tests::observed_phase_since_*` rather than as silent
+    /// operator-facing skew between the `PoolMember` row's observed-
+    /// transition anchor and the `PoolMemberSnapshot`'s creation-
+    /// timestamp anchor on the SAME owned `Process` within one
+    /// reconcile pass).
+    #[must_use]
+    pub fn observed_phase_since(&self) -> Option<DateTime<Utc>> {
+        self.status.as_ref().and_then(|s| s.phase_since)
+    }
+
     /// Copy-form metadata-projection primitive on the deletion-tombstone
     /// axis: returns `true` iff the K8s API server has stamped a
     /// `metadata.deletionTimestamp` on this Process (the moment the
@@ -4444,6 +4548,212 @@ mod tests {
                 "phase variant {phase:?} did not round-trip through observed_phase_or_pending"
             );
         }
+    }
+
+    // ─── Process::observed_phase_since substrate pins ──────────────────
+    //
+    // Pins the copy-form status-projection primitive on the
+    // `status.phase_since` axis that owns the paired 5-line
+    // `.status.as_ref().and_then(|s| s.phase_since).unwrap_or_else
+    // (Utc::now)` chain the pool reconciler's per-owned-Process
+    // `PoolMember { entered_state_at: … }` seed restated by hand pre-
+    // lift. Peer to the sibling `observed_phase_*` +
+    // `observed_identity_*` + `observed_attestation_*` +
+    // `observed_flux_resources_*` + `observed_pid_*` + `created_at_*`
+    // pin families — all six / seven primitives project a wire-format
+    // `Option<T>` slot into a `Copy`-or-borrow inner value at ONE
+    // owner. Fail-before-pass-after granularity: `observed_phase_since`
+    // did not exist pre-lift, so any test invoking it fails to
+    // compile pre-lift and passes post-lift.
+
+    fn process_with_phase_since(phase_since: Option<DateTime<Utc>>) -> Process {
+        let mut p = Process::new("api-gateway", empty_spec());
+        p.metadata.namespace = Some("prod".into());
+        let mut status = ProcessStatus::default();
+        status.phase_since = phase_since;
+        p.status = Some(status);
+        p
+    }
+
+    #[test]
+    fn observed_phase_since_returns_none_when_status_is_none() {
+        // Missing-`status` corner pin: the primitive collapses the
+        // no-status case to `None` so the pool reconciler's `PoolMember
+        // { entered_state_at: p.observed_phase_since().unwrap_or_else
+        // (Utc::now), .. }` seed synthesizes a "just entered" anchor
+        // at its own tail rather than materializing a stale timestamp
+        // at the substrate. Matches the pre-lift `.and_then(|s| s
+        // .phase_since)` chain's `None` byte-identically at the
+        // consumer's downstream tail.
+        let mut p = Process::new("api", empty_spec());
+        p.status = None;
+        assert!(p.observed_phase_since().is_none());
+    }
+
+    #[test]
+    fn observed_phase_since_returns_none_when_slot_is_empty() {
+        // Populated-status + empty-slot corner pin: a `ProcessStatus`
+        // whose `phase_since` slot is `None` (a freshly-forked
+        // Process whose reconciler has not yet stamped a first
+        // transition) collapses to `None` at the primitive. The
+        // paired-corner collapse with the missing-`status` corner
+        // (both → `None`) matches what `.and_then` produces
+        // structurally — one `None` cannot recover into a `Some` at
+        // the flat outer wrapper. A regression that swapped the outer
+        // combinator to `.map(|s| s.phase_since)` would flatten to
+        // `Option<Option<_>>` and the compiler would reject the
+        // signature, but a regression that "synthesized" a default
+        // anchor at the substrate (e.g. `Utc::now()` on the empty
+        // slot) would silently break the callsite's own
+        // `.unwrap_or_else(Utc::now)` tail's semantics — the sink
+        // fires ONCE at the callsite, not twice.
+        let p = process_with_phase_since(None);
+        assert!(p.observed_phase_since().is_none());
+    }
+
+    #[test]
+    fn observed_phase_since_returns_populated_timestamp_verbatim() {
+        // Populated-slot corner pin: with a populated `status
+        // .phase_since` slot, the primitive returns the persisted
+        // `DateTime<Utc>` verbatim — no rounding, no timezone
+        // stripping, no `Time` wrapper leaked. A regression that
+        // canonicalized the timestamp (e.g. truncated to the second,
+        // stripped the timezone marker) would surface here rather
+        // than as silent skew at the pool reconciler's per-member
+        // entered-state-at seed comparison against `Utc::now()`
+        // downstream at `pool_phase_from_members`.
+        let anchor = Utc::now() - chrono::Duration::seconds(720);
+        let p = process_with_phase_since(Some(anchor));
+        assert_eq!(p.observed_phase_since(), Some(anchor));
+    }
+
+    #[test]
+    fn observed_phase_since_is_a_pure_projection() {
+        // Purity pin: two consecutive calls return byte-identical
+        // `Option<DateTime<Utc>>` values (no lazy materialization,
+        // no interior mutation of `self`, no wall-clock read on the
+        // empty corner). Peer to the sibling
+        // `is_being_deleted_is_a_pure_projection` +
+        // `created_at_is_a_pure_projection` +
+        // `observed_phase_is_a_pure_projection` +
+        // `observed_phase_or_pending_is_a_pure_projection` pins; all
+        // five bind the pure-projection discipline on the ONE
+        // substrate accessor per metadata / status slot. A
+        // regression that folded the impure `Utc::now()` sink into
+        // this primitive (rather than keeping it at the callsite's
+        // `.unwrap_or_else(Utc::now)` tail alongside the sibling
+        // `created_at` seed) would surface here as two consecutive
+        // calls that returned distinct `Some(now_1)` /
+        // `Some(now_2)` values.
+        let anchor = Utc::now() - chrono::Duration::seconds(5);
+        let p = process_with_phase_since(Some(anchor));
+        let a = p.observed_phase_since();
+        let b = p.observed_phase_since();
+        assert_eq!(a, b);
+        assert_eq!(a, Some(anchor));
+        // Empty-slot corner: pure `None`, not a fresh `Utc::now()`.
+        let p_empty = process_with_phase_since(None);
+        let a = p_empty.observed_phase_since();
+        let b = p_empty.observed_phase_since();
+        assert_eq!(a, b);
+        assert!(a.is_none());
+    }
+
+    #[test]
+    fn observed_phase_since_matches_pre_lift_pool_reconciler_chain_shape() {
+        // Byte-identical parity pin between the copy-form primitive
+        // here and the pre-lift `tatara-pool-reconciler::
+        // controller_pool::reconcile_inner` 5-line chain shape
+        // (without the callsite's `.unwrap_or_else(Utc::now)` tail —
+        // that tail stays at the callsite). Sweeps every corner
+        // every pre-lift callsite plausibly encountered: missing
+        // `status`, populated `status` + empty `phase_since` slot,
+        // populated `status` + populated `phase_since` slot. A
+        // regression that inserted a normalization step at the
+        // primitive the pre-lift chain does NOT apply — or vice
+        // versa — surfaces here rather than as silent drift between
+        // the pre-lift consumer site and the ONE substrate owner it
+        // now routes through.
+        fn pre_lift(p: &Process) -> Option<DateTime<Utc>> {
+            p.status.as_ref().and_then(|s| s.phase_since)
+        }
+        // Missing status.
+        let mut p = Process::new("x", empty_spec());
+        p.status = None;
+        assert_eq!(p.observed_phase_since(), pre_lift(&p));
+        // Populated status, empty slot.
+        let p = process_with_phase_since(None);
+        assert_eq!(p.observed_phase_since(), pre_lift(&p));
+        // Populated status, populated slot.
+        let anchor = Utc::now() - chrono::Duration::seconds(90);
+        let p = process_with_phase_since(Some(anchor));
+        assert_eq!(p.observed_phase_since(), pre_lift(&p));
+    }
+
+    #[test]
+    fn observed_phase_since_missing_status_and_empty_slot_collapse_to_the_same_option_shape() {
+        // Cross-corner coherence pin: the missing-`status` corner
+        // AND the populated-empty-slot corner return `Option`s
+        // whose `.is_none()` observations are IDENTICAL — a
+        // shape peer to `observed_identity_missing_status_and_empty
+        // _slot_collapse_to_the_same_option_shape`. A regression
+        // that promoted the missing-`status` corner to returning a
+        // typed error (via a signature change to `Result<_, _>`) —
+        // or that widened the empty-slot corner to a synthetic
+        // `Some(Utc::now())` at the substrate — would surface here
+        // rather than as silent operator-facing divergence between
+        // a never-status-written Process and a phase-since-cleared
+        // Process at the pool reconciler's per-member row builder.
+        let mut p_no_status = Process::new("api", empty_spec());
+        p_no_status.status = None;
+        let p_empty_slot = process_with_phase_since(None);
+        assert_eq!(
+            p_no_status.observed_phase_since().is_none(),
+            p_empty_slot.observed_phase_since().is_none()
+        );
+        assert_eq!(
+            p_no_status.observed_phase_since().is_some(),
+            p_empty_slot.observed_phase_since().is_some()
+        );
+    }
+
+    #[test]
+    fn observed_phase_since_composes_with_unwrap_or_else_utc_now_tail_at_pool_seed() {
+        // Call-site-shape pin: the `tatara-pool-reconciler::
+        // controller_pool::reconcile_inner` per-owned-Process
+        // `PoolMember { entered_state_at: … }` seed composes
+        // `p.observed_phase_since().unwrap_or_else(Utc::now)`. A
+        // regression that returned `Some(Utc::now())` on the empty
+        // corner (folding the sink into the primitive) would break
+        // the observable contract that a caller with a distinct
+        // now-source (e.g. an injected `time_source: impl Fn() ->
+        // DateTime<Utc>`, or a test-time frozen clock) could
+        // substitute at the tail — this pin binds the empty-corner
+        // shape by observing that the substrate returns `None` (so
+        // the `.unwrap_or_else` runs at the callsite) and that the
+        // populated-corner shape is byte-identical between the
+        // substrate `Some(anchor)` and the composed
+        // `Some(anchor).unwrap_or_else(...)` (the fallback never
+        // fires when the corner is populated). Peer to
+        // `created_at_composes_with_signed_duration_since_at_ttl_gate`
+        // on the metadata-timestamp side — both bind the
+        // composition shape at the callsite so a substrate-side
+        // refactor cannot silently break the tail semantics.
+        let anchor = Utc::now() - chrono::Duration::seconds(30);
+        // Populated corner: substrate returns `Some(anchor)` and
+        // the composed tail returns `anchor` (fallback silent).
+        let p = process_with_phase_since(Some(anchor));
+        let composed = p.observed_phase_since().unwrap_or_else(Utc::now);
+        assert_eq!(composed, anchor);
+        // Empty corner: substrate returns `None` and the composed
+        // tail fires `Utc::now()` at the callsite (observed as a
+        // timestamp >= a `before` sample AND close to now).
+        let before = Utc::now();
+        let p = process_with_phase_since(None);
+        assert!(p.observed_phase_since().is_none());
+        let composed = p.observed_phase_since().unwrap_or_else(Utc::now);
+        assert!(composed >= before);
+        assert!(composed <= Utc::now() + chrono::Duration::seconds(1));
     }
 
     // ─── Process::is_being_deleted substrate pins ───────────────────────

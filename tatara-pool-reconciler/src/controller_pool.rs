@@ -101,11 +101,33 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
                 // seeds inherit it mechanically.
                 process_name: p.owned_name_or_empty(),
                 state,
-                entered_state_at: p
-                    .status
-                    .as_ref()
-                    .and_then(|s| s.phase_since)
-                    .unwrap_or_else(Utc::now),
+                // The last-transition anchor rides through the ONE
+                // substrate primitive `Process::observed_phase_since`
+                // — pre-lift this was a hand-authored 5-line
+                // `.status.as_ref().and_then(|s| s.phase_since)`
+                // chain, closing the LAST raw `.status.as_ref()`
+                // chain in this reconciler's production code on
+                // `Process`. Post-lift the chain rides ONE substrate
+                // owner symmetric to the peer `p.created_at()
+                // .unwrap_or_else(Utc::now)` seed the desired-count
+                // `PoolMemberSnapshot` builder two branches below
+                // already routes through — both timestamp-projection
+                // primitives on `Process` (metadata-timestamp
+                // `created_at` + status-timestamp
+                // `observed_phase_since`) now compose byte-uniformly
+                // at the pool reconciler's per-member row builder,
+                // with the `.unwrap_or_else(Utc::now)` sink kept at
+                // the callsite (matching every peer `observed_*`
+                // primitive's pure-projection discipline). A future
+                // normalization (a per-cluster clock-skew guard, a
+                // staleness gate that treats a `phase_since`
+                // predating a reconcile deadline as unobserved, a
+                // canonicalization that folds a suspiciously-zero
+                // slot to `None`) lands at ONE substrate site and
+                // both this per-member seed AND any future
+                // observed-transition consumer inherit the upgrade
+                // mechanically.
+                entered_state_at: p.observed_phase_since().unwrap_or_else(Utc::now),
                 allocation_ref: None,
             });
             owned.push(p);

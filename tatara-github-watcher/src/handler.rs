@@ -25,6 +25,38 @@ pub struct HandlerState {
     pub kube: Client,
 }
 
+impl HandlerState {
+    /// Namespaced `Api<EphemeralAllocation>` bound to this handler's
+    /// client + configured watcher namespace — the ONE substrate
+    /// primitive that owns the `Api::namespaced(self.kube.clone(),
+    /// &self.config.namespace)` shape for the github-watcher.
+    ///
+    /// Pre-lift the two-slot `(self.kube.clone(), &self.config.
+    /// namespace)` incantation was hand-authored at TWO sites in
+    /// `handler::handle_pr_event`, past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold — the `PrAction::Closed` delete-branch
+    /// slot (`api.delete(&name, …)`) plus the `PrAction::{Opened,
+    /// Reopened, Synchronize}` create-branch slot (`api.create(&pp,
+    /// &alloc)`) each restated the SAME `Api::namespaced(state.kube.
+    /// clone(), &state.config.namespace)` chain verbatim. Post-lift
+    /// the two consumers share ONE substrate owner; a future emitter
+    /// of `Api<EphemeralAllocation>` on the handler reaches for
+    /// `state.allocation_api()` rather than re-authoring the two-slot
+    /// chain a third time — matching the composition discipline the
+    /// peer [`tatara_pool_reconciler::context::PoolContext::
+    /// allocation_api`] substrate primitive already establishes on
+    /// the pool-reconciler side of the same CRD.
+    ///
+    /// The typed `Api<EphemeralAllocation>` return pins the resource
+    /// kind at rustc time — a future consumer that reaches for a
+    /// different CRD via this primitive's client-slot fails to
+    /// compile rather than silently issuing a REST request under the
+    /// wrong resource plural.
+    pub fn allocation_api(&self) -> Api<EphemeralAllocation> {
+        Api::namespaced(self.kube.clone(), &self.config.namespace)
+    }
+}
+
 /// POST handler for GitHub webhooks.
 pub async fn webhook(
     State(state): State<HandlerState>,
@@ -69,7 +101,9 @@ async fn handle_pr_event(state: &HandlerState, body: &[u8]) -> axum::response::R
     };
 
     // Repo allowlist.
-    if !state.config.allow_repos.is_empty() && !repo_allowed(&evt.repository.full_name, &state.config.allow_repos) {
+    if !state.config.allow_repos.is_empty()
+        && !repo_allowed(&evt.repository.full_name, &state.config.allow_repos)
+    {
         info!(repo = %evt.repository.full_name, "repo not in allowlist; skipping");
         return (StatusCode::OK, "repo not in allowlist").into_response();
     }
@@ -79,8 +113,15 @@ async fn handle_pr_event(state: &HandlerState, body: &[u8]) -> axum::response::R
         PrAction::Closed => {
             // Delete the allocation; pool reconciler returns the member.
             let name = allocation_name(&evt.repository.full_name, evt.number);
-            let api: Api<EphemeralAllocation> =
-                Api::namespaced(state.kube.clone(), &state.config.namespace);
+            // `Api<EphemeralAllocation>` binds via the ONE substrate
+            // primitive `HandlerState::allocation_api` — pre-lift this
+            // was a hand-authored `Api::namespaced(state.kube.clone(),
+            // &state.config.namespace)` chain, one of TWO workspace-
+            // wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+            // duplication threshold (peer at the `PrAction::{Opened,
+            // Reopened, Synchronize}` create-branch slot below). Post-
+            // lift the two consumers share ONE substrate owner.
+            let api = state.allocation_api();
             match api.delete(&name, &DeleteParams::default()).await {
                 Ok(_) => {
                     info!(
@@ -95,8 +136,7 @@ async fn handle_pr_event(state: &HandlerState, body: &[u8]) -> axum::response::R
                 }
                 Err(e) => {
                     warn!(error = %e, "delete failed");
-                    (StatusCode::INTERNAL_SERVER_ERROR, format!("delete: {e}"))
-                        .into_response()
+                    (StatusCode::INTERNAL_SERVER_ERROR, format!("delete: {e}")).into_response()
                 }
             }
         }
@@ -117,8 +157,14 @@ async fn handle_pr_event(state: &HandlerState, body: &[u8]) -> axum::response::R
                     return (StatusCode::OK, "action not allocatable").into_response();
                 }
             };
-            let api: Api<EphemeralAllocation> =
-                Api::namespaced(state.kube.clone(), &state.config.namespace);
+            // `Api<EphemeralAllocation>` binds via the ONE substrate
+            // primitive `HandlerState::allocation_api` — pre-lift this
+            // was a hand-authored `Api::namespaced(state.kube.clone(),
+            // &state.config.namespace)` chain, peer to the
+            // `PrAction::Closed` delete-branch slot already routed
+            // through the primitive above. Post-lift both consumers
+            // share ONE substrate owner.
+            let api = state.allocation_api();
             match api.create(&PostParams::default(), &alloc).await {
                 Ok(_) => {
                     info!(
@@ -136,8 +182,7 @@ async fn handle_pr_event(state: &HandlerState, body: &[u8]) -> axum::response::R
                 }
                 Err(e) => {
                     warn!(error = %e, "create allocation failed");
-                    (StatusCode::INTERNAL_SERVER_ERROR, format!("create: {e}"))
-                        .into_response()
+                    (StatusCode::INTERNAL_SERVER_ERROR, format!("create: {e}")).into_response()
                 }
             }
         }
@@ -160,6 +205,105 @@ fn repo_matches(pattern: &str, repo: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ─── HandlerState api-primitive substrate pins ─────────────────
+    //
+    // The two-slot `(state.kube.clone(), &state.config.namespace)`
+    // incantation was hand-authored at TWO sites in
+    // `handle_pr_event` before `HandlerState::allocation_api` closed
+    // it. These pins bind the primitive at fail-before-pass-after
+    // granularity so a regression that drifts the configured
+    // namespace, the resource kind, or the reused client-slot
+    // surfaces here rather than as silent operator-facing drift at
+    // every downstream webhook path.
+    //
+    // `Client::try_from(Config::new(url))` needs a live tokio
+    // reactor (`tower::buffer::Buffer::new` spawns a background task
+    // on construction), so every pin runs under `#[tokio::test]`.
+    #[cfg(test)]
+    mod api_primitive_pins {
+        use super::*;
+        use kube::Config;
+
+        fn state_with_namespace(namespace: &str) -> HandlerState {
+            let url = "http://localhost:9999".parse().expect("valid probe url");
+            let client = Client::try_from(Config::new(url)).expect("build kube client");
+            let config = WatcherConfig {
+                listen: "0.0.0.0:8080".into(),
+                secret: "test-secret".into(),
+                namespace: namespace.into(),
+                pin_pool: None,
+                include_drafts: false,
+                allow_repos: Vec::new(),
+            };
+            HandlerState {
+                config: Arc::new(config),
+                kube: client,
+            }
+        }
+
+        #[tokio::test]
+        async fn allocation_api_binds_configured_namespace_into_resource_url() {
+            // The webhook handler reads the target namespace from
+            // `state.config.namespace` (operator-configured via
+            // `TATARA_WATCHER_NAMESPACE`) and expects
+            // `state.allocation_api()` to bind that namespace onto
+            // the returned Api's REST path — the primitive routes
+            // the configured slot through to the `Api::namespaced`
+            // dispatcher's `ns` argument unchanged.
+            let state = state_with_namespace("watcher-test-ns");
+            let api = state.allocation_api();
+            let url = api.resource_url();
+            assert!(
+                url.contains("/namespaces/watcher-test-ns/"),
+                "allocation_api resource url must carry the configured namespace verbatim; got {url}"
+            );
+        }
+
+        #[tokio::test]
+        async fn allocation_api_binds_the_ephemeral_allocation_kind() {
+            // The typed `Api<EphemeralAllocation>` return pins the
+            // resource kind at rustc time; this pin adds the runtime
+            // witness — the emitted REST path targets the
+            // `tatara.pleme.io/v1alpha1/ephemeralallocations`
+            // collection matching the `#[kube(group =
+            // "tatara.pleme.io", version = "v1alpha1", plural =
+            // "ephemeralallocations")]` attribute on
+            // `AllocationSpec`.
+            let state = state_with_namespace("default");
+            let api = state.allocation_api();
+            let url = api.resource_url();
+            assert!(
+                url.starts_with("/apis/tatara.pleme.io/v1alpha1/"),
+                "Api resource url must be scoped to the tatara.pleme.io/v1alpha1 group; got {url}"
+            );
+            assert!(
+                url.ends_with("/ephemeralallocations"),
+                "Api resource url must terminate at the `ephemeralallocations` collection; got {url}"
+            );
+        }
+
+        #[tokio::test]
+        async fn allocation_api_matches_hand_authored_pre_lift_bytewise() {
+            // Bytewise equivalence with the pre-lift `Api::namespaced
+            // (state.kube.clone(), &state.config.namespace)` chain —
+            // the primitive changes the authoring surface, not the
+            // observable REST path, so a regression that drifts the
+            // routing on this primitive surfaces here rather than as
+            // silent operator-facing drift at every handler branch.
+            for ns in ["default", "ephemeral-pools", "watcher-alt"] {
+                let state = state_with_namespace(ns);
+                let via_primitive = state.allocation_api();
+                let via_pre_lift: Api<EphemeralAllocation> =
+                    Api::namespaced(state.kube.clone(), &state.config.namespace);
+                assert_eq!(
+                    via_primitive.resource_url(),
+                    via_pre_lift.resource_url(),
+                    "allocation_api must be byte-identical to the pre-lift chain for ns={ns:?}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn repo_matches_exact() {

@@ -567,9 +567,15 @@ async fn process_holds_any_claim(ctx: &Context, p: &Process) -> bool {
 }
 
 /// Stable hash of the Intent — canonical serde JSON → BLAKE3.
+///
+/// Delegates the 2-link `hex::encode(blake3::hash(bytes).as_bytes())`
+/// step to the substrate primitive [`tatara_process::hash::hex_blake3`]
+/// so this Intent-shaped pillar is byte-identical to the peer render
+/// pillar producers ([`crate::render::artifact_hash`],
+/// [`crate::render::intent_hash`]) that also route through it.
 fn compute_intent_hash(intent: &tatara_process::intent::Intent) -> String {
     let bytes = serde_json::to_vec(intent).unwrap_or_default();
-    hex::encode(blake3::hash(&bytes).as_bytes())
+    tatara_process::hash::hex_blake3(&bytes)
 }
 
 /// Build a `FluxResourceRef` from the emitted JSON — post-apply initial state.

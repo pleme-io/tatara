@@ -15,6 +15,7 @@ pub mod env;
 pub mod ephemeral;
 pub mod export;
 pub mod flux_resource;
+pub mod hash;
 pub mod hostname;
 pub mod identity;
 pub mod intent;
@@ -68,6 +69,7 @@ pub mod prelude {
         DEFAULT_VECTOR_INGEST,
     };
     pub use crate::flux_resource::FluxResource;
+    pub use crate::hash::hex_blake3;
     pub use crate::hostname::{
         ephemeral_id_from_spec, fmt_fqdn, fmt_fqdn_stable, resolve_ephemeral_id, HostnameError,
         EPHEMERAL_ID_HASH_LEN,

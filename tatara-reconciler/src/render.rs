@@ -428,8 +428,13 @@ fn canonical_bytes(resources: &[Value]) -> Vec<u8> {
 }
 
 /// Compute the `artifact_hash` pillar from canonical resource bytes.
+///
+/// Delegates the 2-link `hex::encode(blake3::hash(bytes).as_bytes())`
+/// step to the substrate primitive [`tatara_process::hash::hex_blake3`]
+/// so this pillar's hex encoding is byte-identical to every other
+/// three-pillar consumer routed through the same primitive.
 pub fn artifact_hash(bytes: &[u8]) -> String {
-    hex::encode(blake3::hash(bytes).as_bytes())
+    tatara_process::hash::hex_blake3(bytes)
 }
 
 /// Stamp every emitted resource with a `tatara.pleme.io/encapsulation-mode`
@@ -880,8 +885,13 @@ fn one_export_job(
 }
 
 /// Compute the `intent_hash` pillar from canonical intent bytes.
+///
+/// Delegates the 2-link `hex::encode(blake3::hash(bytes).as_bytes())`
+/// step to the substrate primitive [`tatara_process::hash::hex_blake3`]
+/// so this pillar's hex encoding is byte-identical to every other
+/// three-pillar consumer routed through the same primitive.
 pub fn intent_hash(bytes: &[u8]) -> String {
-    hex::encode(blake3::hash(bytes).as_bytes())
+    tatara_process::hash::hex_blake3(bytes)
 }
 
 #[cfg(test)]

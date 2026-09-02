@@ -192,8 +192,11 @@ fn canonical_json<T: Serialize>(value: &T) -> Result<Vec<u8>, serde_json::Error>
 }
 
 fn short_hex_blake3(bytes: &[u8], len: usize) -> String {
-    let hex = blake3::hash(bytes).to_hex().to_string();
-    hex.chars().take(len).collect()
+    // Delegate the 2-link `blake3::hash → hex` step to the substrate
+    // primitive so the ephemeral-id prefix stays byte-identical to
+    // every receipt/attestation hex-digest workspace-wide; take a
+    // stable prefix of the shared full-length hex.
+    crate::hash::hex_blake3(bytes).chars().take(len).collect()
 }
 
 #[cfg(test)]

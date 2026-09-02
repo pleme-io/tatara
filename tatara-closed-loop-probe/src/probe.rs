@@ -79,7 +79,7 @@ pub async fn run(cfg: ProbeConfig) -> Result<ProbeOutput> {
     }
     let token = extract_token(&auth_body)?;
     let token_present = !token.is_empty();
-    let artifact_hash = blake3_hex(token.as_bytes());
+    let artifact_hash = tatara_process::hash::hex_blake3(token.as_bytes());
 
     // 2. Fetch JWKS for intent_hash.
     let jwks_resp = http
@@ -89,7 +89,7 @@ pub async fn run(cfg: ProbeConfig) -> Result<ProbeOutput> {
         .with_context(|| format!("GET {issuer_jwks_url}"))?;
     let jwks_body = jwks_resp.text().await.unwrap_or_default();
     let jwks_key_count = count_jwks_keys(&jwks_body);
-    let intent_hash = blake3_hex(jwks_body.as_bytes());
+    let intent_hash = tatara_process::hash::hex_blake3(jwks_body.as_bytes());
 
     // 3. Present the token to the consumer.
     let whoami_resp = http
@@ -106,7 +106,7 @@ pub async fn run(cfg: ProbeConfig) -> Result<ProbeOutput> {
         ));
     }
     // control_hash = consumer's verdict
-    let control_hash = blake3_hex(whoami_body.as_bytes());
+    let control_hash = tatara_process::hash::hex_blake3(whoami_body.as_bytes());
 
     Ok(ProbeOutput {
         intent_hash,
@@ -139,10 +139,6 @@ fn count_jwks_keys(body: &str) -> u64 {
         .and_then(|v| v.get("keys").cloned())
         .and_then(|k| k.as_array().map(|xs| xs.len() as u64))
         .unwrap_or(0)
-}
-
-fn blake3_hex(bytes: &[u8]) -> String {
-    hex::encode(blake3::hash(bytes).as_bytes())
 }
 
 #[cfg(test)]
@@ -183,11 +179,5 @@ mod tests {
         assert_eq!(count_jwks_keys(""), 0);
         assert_eq!(count_jwks_keys("not json"), 0);
         assert_eq!(count_jwks_keys(r#"{"keys": "not-array"}"#), 0);
-    }
-
-    #[test]
-    fn blake3_hex_is_deterministic() {
-        assert_eq!(blake3_hex(b"hello"), blake3_hex(b"hello"));
-        assert_ne!(blake3_hex(b"hello"), blake3_hex(b"world"));
     }
 }

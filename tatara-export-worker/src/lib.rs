@@ -279,6 +279,7 @@ pub fn compose_export_receipt(
     run_id: &str,
     process_ref: Option<&str>,
 ) -> anyhow::Result<ReceiptEnvelope> {
+    use tatara_process::hash::hex_blake3;
     let intent_hash = hex_blake3(&canonical_json(spec)?);
     let artifact_hash = hex_blake3(shipped_event_bytes);
     let control_hash = hex_blake3(&canonical_json(outcome)?);
@@ -320,10 +321,6 @@ fn canonical_json<T: Serialize>(value: &T) -> anyhow::Result<Vec<u8>> {
     // declaration order (Rust struct field order).
     let v = serde_json::to_value(value)?;
     Ok(serde_json::to_vec(&v)?)
-}
-
-fn hex_blake3(bytes: &[u8]) -> String {
-    blake3::hash(bytes).to_hex().to_string()
 }
 
 // ─── Minimal inline base64 (no extra dep) ──────────────────────────

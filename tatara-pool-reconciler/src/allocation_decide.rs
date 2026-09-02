@@ -118,7 +118,26 @@ impl AllocationConvergenceCtx {
             .as_ref()
             .and_then(|s| s.assigned_process.as_ref())
             .map(|m| m.name.clone());
-        let bound_pool = alloc.status.as_ref().and_then(|s| s.bound_pool.clone());
+        // Bound-pool reference rides through the ONE substrate
+        // primitive `EphemeralAllocation::observed_bound_pool` — pre-
+        // lift this was a hand-authored `.status.as_ref().and_then(|s|
+        // s.bound_pool.clone())` chain that allocated an owned
+        // `AllocationRef` every reconcile pass, matching the substrate
+        // shape the peer `Process::observed_identity` borrow-form
+        // primitive already owns on the `status.identity` slot. Post-
+        // lift the borrow-form primitive returns the persisted
+        // reference in place and this seed clones only at the
+        // composition point where the `AllocationConvergenceCtx`
+        // snapshot slot (still `Option<AllocationRef>`-typed for
+        // serde stability) requires the owned value; the empty-borrow
+        // corner clones nothing (`Option::cloned` on `None` is
+        // `None`). A future normalization (a generation-filter, a
+        // canonicalization pass rejecting a malformed
+        // `(name, namespace)` pair, a cross-cluster reference-rewrite
+        // gate) lands at the ONE substrate method and this seed
+        // inherits the upgrade mechanically alongside the peer
+        // Process consumers.
+        let bound_pool = alloc.observed_bound_pool().cloned();
 
         // Resolve the target pool + a free member ONLY on the matching path
         // (Pending/Queued/NoMatchingPool, not deleting/terminal/Bound/Releasing).

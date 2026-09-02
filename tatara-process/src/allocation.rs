@@ -592,6 +592,87 @@ impl EphemeralAllocation {
     pub fn observed_phase_or_pending(&self) -> AllocationPhase {
         self.observed_phase().unwrap_or(AllocationPhase::Pending)
     }
+
+    /// The borrow-form status-projection primitive on the bound-pool
+    /// axis: returns the [`AllocationRef`] the pool reconciler
+    /// currently persists at `status.bound_pool` (name + namespace of
+    /// the pool that owns the matched member), with the
+    /// missing-`status` corner AND the empty-slot corner BOTH
+    /// collapsed to `None` — the ONE-liner collapse of the paired
+    /// `self.status.as_ref().and_then(|s| s.bound_pool.<clone|as_ref>())`
+    /// incantation the pool reconciler's `AllocationConvergenceCtx::
+    /// observe` restated by hand pre-lift.
+    ///
+    /// Cross-CRD peer to [`crate::prelude::Process::observed_identity`]
+    /// on the (CRD × structured-record-slot × borrow-form) axis pair
+    /// — both primitives walk the identical `.status.as_ref()
+    /// .and_then(|s| s.<slot>.as_ref())` shape, differing only in the
+    /// record projected ([`AllocationRef`] here, [`crate::identity::
+    /// Identity`] on `Process`). The substrate now owns the
+    /// borrow-form `.status.as_ref().and_then(|s| s.<slot>.as_ref())`
+    /// chain on the second `structured-record` slot across the two
+    /// `status`-having CRDs, so a future normalization step (a
+    /// generation-filter that returns `None` for a bound-pool
+    /// reference stamped with a stale `metadata.generation`, a
+    /// canonicalization pass that rejects a malformed
+    /// `(name, namespace)` pair, a cross-cluster reference-rewrite
+    /// gate) lands at ONE substrate method per CRD rather than being
+    /// restated at every observer.
+    ///
+    /// Return-form axis: `Option<&AllocationRef>` mirrors the
+    /// borrow-first discipline of [`crate::prelude::Process::
+    /// observed_identity`]. The lone pre-lift consumer
+    /// ([`tatara-pool-reconciler::allocation_decide::
+    /// AllocationConvergenceCtx::observe`]'s `bound_pool` seed) spelled
+    /// the projection as `.and_then(|s| s.bound_pool.clone())` — an
+    /// eager clone allocated inside every reconcile pass even when the
+    /// downstream branch (the Release-composition arm) needed only the
+    /// borrow for the `.as_ref()` re-projection two lines later.
+    /// Post-lift the consumer reaches the primitive borrow-first
+    /// (`alloc.observed_bound_pool().cloned()`) and the empty-borrow
+    /// corner clones nothing (`Option::cloned` on `None` is `None`);
+    /// the composition point where the owned `AllocationRef` fallback
+    /// is required (the `AllocationConvergenceCtx` snapshot slot,
+    /// still `Option<AllocationRef>`-typed for serde stability) is the
+    /// ONLY site that materializes an owned copy.
+    ///
+    /// The missing-`status` corner AND the populated-status-with-
+    /// `bound_pool=None` corner BOTH collapse to `None` so
+    /// `.is_some()` / `if let Some(_)` / `.cloned()` behave
+    /// identically on an `EphemeralAllocation` whose status field is
+    /// `None` and on one whose status carries an unpopulated
+    /// `bound_pool` slot — matching what the pre-lift `.and_then(...)`
+    /// chain produced. Consumers that need to tell those corners
+    /// apart reach for [`Self::status`] directly, exactly as the
+    /// existing peer accessors [`Self::observed_phase`] +
+    /// [`Self::observed_phase_or_pending`] admit.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition
+    /// — the `.status.as_ref().and_then(|s| s.<structured-record>
+    /// .<clone|as_ref>())` shape recurred as ONE hand-authored
+    /// `.and_then(|s| s.bound_pool.clone())` chain in
+    /// [`tatara-pool-reconciler::allocation_decide::
+    /// AllocationConvergenceCtx::observe`] AND as the peer
+    /// [`crate::prelude::Process::observed_identity`] primitive
+    /// already owned on the `Process` CRD's `status.identity` slot,
+    /// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger at
+    /// substrate-shape level. THEORY.md §II.1 invariant 5
+    /// (composition preserves proofs — the pins bind the missing-
+    /// `status` corner + the empty-`bound_pool`-slot corner + the
+    /// borrow-form `&AllocationRef` lifetime + the zero-copy
+    /// projection contract + byte-identical parity with the pre-lift
+    /// `.and_then(|s| s.bound_pool.clone())` chain across the full
+    /// corner set + cross-CRD peer coherence with
+    /// [`crate::prelude::Process::observed_identity`], so a
+    /// regression that drifted any surface at
+    /// `tests::observed_bound_pool_*` rather than as silent operator-
+    /// facing skew between the allocation observer's Release-
+    /// composition seed and the Process observer's FORK-time
+    /// identity seed on the SAME reconcile tick).
+    #[must_use]
+    pub fn observed_bound_pool(&self) -> Option<&AllocationRef> {
+        self.status.as_ref().and_then(|s| s.bound_pool.as_ref())
+    }
 }
 
 #[cfg(test)]
@@ -1186,6 +1267,210 @@ mod tests {
             crate::phase::ProcessPhase::default(),
             crate::phase::ProcessPhase::Pending,
         );
+    }
+
+    // ─── EphemeralAllocation::observed_bound_pool substrate pins ────
+    //
+    // The borrow-form status-projection primitive on the bound-pool
+    // axis. Collapses the pre-lift hand-authored `.status.as_ref()
+    // .and_then(|s| s.bound_pool.clone())` chain in
+    // `tatara-pool-reconciler::allocation_decide::
+    // AllocationConvergenceCtx::observe`'s `bound_pool` seed onto the
+    // ONE substrate primitive. Cross-CRD peer to
+    // `Process::observed_identity` on the (CRD × structured-record-
+    // slot × borrow-form) axis pair — both primitives walk the
+    // identical `.status.as_ref().and_then(|s| s.<slot>.as_ref())`
+    // shape. Each pin is fail-before-pass-after: `observed_bound_pool`
+    // did not exist pre-lift, so any test invoking it fails to compile
+    // pre-lift and passes post-lift.
+
+    fn sample_pool_ref(name: &str, ns: &str) -> AllocationRef {
+        AllocationRef {
+            name: name.to_string(),
+            namespace: ns.to_string(),
+        }
+    }
+
+    fn alloc_with_bound_pool(bound: Option<AllocationRef>) -> EphemeralAllocation {
+        let spec = AllocationSpec {
+            pool_ref: None,
+            requestor: Requestor {
+                kind: "manual".into(),
+                repo: None,
+                branch: None,
+                pr_number: None,
+                sha: None,
+                pr_labels: vec![],
+                actor: None,
+            },
+            ttl: None,
+            note: None,
+        };
+        let mut a = EphemeralAllocation::new("bp-alloc", spec);
+        a.status = Some(AllocationStatus {
+            phase: AllocationPhase::Bound,
+            bound_pool: bound,
+            ..AllocationStatus::default()
+        });
+        a
+    }
+
+    #[test]
+    fn observed_bound_pool_returns_none_when_status_is_none() {
+        // Missing-`status` corner pin: the primitive collapses the
+        // no-status case to `None` so downstream `.is_some()` /
+        // `if let Some(_)` / `.cloned().unwrap_or_else(...)` behave
+        // identically on an `EphemeralAllocation` whose status field
+        // is `None` and on one whose status carries an unpopulated
+        // `bound_pool` slot. Matches the pre-lift `.and_then(...)`
+        // chain's `None` byte-identically at the pool reconciler's
+        // Release-composition seed.
+        let a = alloc_without_status();
+        assert!(a.observed_bound_pool().is_none());
+    }
+
+    #[test]
+    fn observed_bound_pool_returns_none_when_slot_is_none() {
+        // Empty-slot-under-populated-status corner pin: the primitive
+        // returns `None`, matching the missing-`status` corner byte-
+        // identically. A regression that treated the two corners
+        // differently would silently promote an internal representation
+        // detail (whether the pool reconciler has ever written a
+        // status subresource) into observable behavior at the
+        // Release-composition branch of the allocation reconciler's
+        // `decide` transition rule.
+        let a = alloc_with_bound_pool(None);
+        assert!(a.observed_bound_pool().is_none());
+    }
+
+    #[test]
+    fn observed_bound_pool_returns_borrow_when_slot_is_populated() {
+        // Happy-path pin: with a populated `status.bound_pool` slot,
+        // the primitive returns a borrowed `&AllocationRef` whose
+        // (name, namespace) fields match the persisted record. A
+        // regression that filtered / reshaped / canonicalized the
+        // record would surface here rather than as silent skew at the
+        // Release-composition seed's `.cloned()` materialization.
+        let expected = sample_pool_ref("demo-pool", "pools");
+        let a = alloc_with_bound_pool(Some(expected.clone()));
+        let observed = a.observed_bound_pool().expect("populated slot");
+        assert_eq!(observed, &expected);
+        assert_eq!(observed.name, "demo-pool");
+        assert_eq!(observed.namespace, "pools");
+    }
+
+    #[test]
+    fn observed_bound_pool_is_a_zero_copy_borrow_projection() {
+        // Borrow-discipline pin: the returned reference points at the
+        // persisted `AllocationRef` in place — NOT a fresh allocation
+        // or a clone. A regression that switched the projection to an
+        // owned `AllocationRef` (via `.clone()`) would defeat the
+        // zero-copy contract the lift's primary strict-widening
+        // delivers (the observer's Release-composition arm clones
+        // once at the composition point where the
+        // `AllocationConvergenceCtx` snapshot slot requires the owned
+        // value). Peer to the sibling
+        // `Process::observed_identity_is_a_zero_copy_borrow_projection`
+        // pin on the `Process` CRD's `status.identity` slot.
+        let a = alloc_with_bound_pool(Some(sample_pool_ref("demo-pool", "pools")));
+        let observed = a.observed_bound_pool().expect("populated slot") as *const _;
+        let persisted = a.status.as_ref().unwrap().bound_pool.as_ref().unwrap() as *const _;
+        assert!(std::ptr::eq(observed, persisted));
+    }
+
+    #[test]
+    fn observed_bound_pool_is_a_pure_projection() {
+        // Purity pin: calling the projection twice on the same
+        // `EphemeralAllocation` returns byte-identical borrows (same
+        // pointer). A regression that introduced state — a lazy-
+        // cached reference, a normalization step that ran once and
+        // cached — would surface here rather than as silent drift
+        // between two dispatches within one reconcile pass.
+        let a = alloc_with_bound_pool(Some(sample_pool_ref("demo-pool", "pools")));
+        let one = a.observed_bound_pool().expect("populated slot") as *const _;
+        let two = a.observed_bound_pool().expect("populated slot") as *const _;
+        assert!(std::ptr::eq(one, two));
+    }
+
+    #[test]
+    fn observed_bound_pool_matches_pre_lift_chain_bytewise() {
+        // Byte-identical parity pin between the borrow-form primitive
+        // here and the pre-lift `tatara-pool-reconciler`
+        // `.status.as_ref().and_then(|s| s.bound_pool.clone())` chain.
+        // Sweeps every corner every callsite plausibly encounters
+        // (missing status, empty `bound_pool` slot, populated
+        // `bound_pool` slot). A regression that inserted a
+        // normalization step at the primitive the pre-lift chain does
+        // NOT apply — or vice versa — surfaces here rather than as
+        // silent drift between the pre-lift consumer site and the ONE
+        // substrate owner it now routes through.
+        fn pre_lift(a: &EphemeralAllocation) -> Option<AllocationRef> {
+            a.status.as_ref().and_then(|s| s.bound_pool.clone())
+        }
+        // Missing status.
+        let a = alloc_without_status();
+        assert_eq!(a.observed_bound_pool().cloned(), pre_lift(&a));
+        // Populated status, empty `bound_pool` slot.
+        let a = alloc_with_bound_pool(None);
+        assert_eq!(a.observed_bound_pool().cloned(), pre_lift(&a));
+        // Populated status, populated `bound_pool` slot.
+        let a = alloc_with_bound_pool(Some(sample_pool_ref("demo-pool", "pools")));
+        assert_eq!(a.observed_bound_pool().cloned(), pre_lift(&a));
+    }
+
+    #[test]
+    fn observed_bound_pool_missing_status_and_empty_slot_collapse_to_the_same_option_shape() {
+        // Cross-corner coherence pin: the missing-`status` corner and
+        // the populated-empty-slot corner return `Option`s whose
+        // `.is_none()` / `.is_some()` observations are IDENTICAL. A
+        // regression that promoted the missing-`status` corner to a
+        // typed error (via a signature change to `Result<_, _>`) — or
+        // that widened the empty-slot corner to a synthetic
+        // `Some(AllocationRef::default())` — would surface here rather
+        // than as silent operator-facing divergence between a never-
+        // status-written allocation and a bound-pool-cleared
+        // allocation on the Release-composition branch.
+        let a_no_status = alloc_without_status();
+        let a_empty_slot = alloc_with_bound_pool(None);
+        assert_eq!(
+            a_no_status.observed_bound_pool().is_none(),
+            a_empty_slot.observed_bound_pool().is_none(),
+        );
+        assert_eq!(
+            a_no_status.observed_bound_pool().is_some(),
+            a_empty_slot.observed_bound_pool().is_some(),
+        );
+    }
+
+    #[test]
+    fn observed_bound_pool_shape_agrees_with_process_observed_identity_peer_axis() {
+        // Cross-CRD peer-axis coherence pin binding the SAME
+        // `.status.as_ref().and_then(|s| s.<slot>.as_ref())` shape
+        // that both `EphemeralAllocation::observed_bound_pool` (this
+        // primitive) and `Process::observed_identity` walk, differing
+        // ONLY in the record projected. Structural test — both
+        // signatures must resolve as `&Self -> Option<&Record>` fn
+        // pointers, so a future rename or a signature drift that
+        // (say) widened one side to `Option<Record>` or narrowed one
+        // side to `Option<&str>` fails to compile here rather than
+        // silently drifting the two reconcilers apart at their
+        // respective observer seeds. The runtime side of the pin
+        // sweeps the missing-status + empty-slot corners on the
+        // `EphemeralAllocation` half; the `Process` half is exercised
+        // by its own `crd.rs::tests::observed_identity_*` pin
+        // family — this test binds only the peer-axis shape.
+        let a_no_status = alloc_without_status();
+        let a_empty_slot = alloc_with_bound_pool(None);
+        assert!(a_no_status.observed_bound_pool().is_none());
+        assert!(a_empty_slot.observed_bound_pool().is_none());
+        // Structural peer-axis coherence: bind both signatures as fn
+        // pointers at their peer resolution type so the compiler
+        // refuses to build if either side's shape drifts. The `_`
+        // let-bindings assert the target type inference.
+        let _bound_pool_shape: fn(&EphemeralAllocation) -> Option<&AllocationRef> =
+            EphemeralAllocation::observed_bound_pool;
+        let _identity_shape: fn(&crate::prelude::Process) -> Option<&crate::identity::Identity> =
+            crate::prelude::Process::observed_identity;
     }
 
     #[test]

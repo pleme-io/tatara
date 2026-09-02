@@ -13,7 +13,7 @@ use crate::compliance::ComplianceSpec;
 use crate::encapsulates::EncapsulatesSpec;
 use crate::identity::Identity;
 use crate::intent::Intent;
-use crate::lifetime::Lifetime;
+use crate::lifetime::{EphemeralLifetime, Lifetime};
 use crate::phase::ProcessPhase;
 use crate::routing::RoutingSpec;
 use crate::signal::ProcessSignal;
@@ -1543,6 +1543,82 @@ impl Process {
     /// `Process` within one reconcile pass).
     pub fn created_at(&self) -> Option<DateTime<Utc>> {
         self.metadata.creation_timestamp.as_ref().map(|t| t.0)
+    }
+
+    /// Compound spec-projection primitive on the `spec.lifetime` axis:
+    /// returns `Some(&e)` iff the resolver unambiguously picks the
+    /// `Ephemeral` slot, `None` otherwise — the ONE-liner collapse of
+    /// the 4-step `self.spec.lifetime.resolved_ephemeral()` chain the
+    /// two `lifetime_clock` consumers previously reached through and
+    /// the coherence-tightening lift of the naked
+    /// `self.spec.lifetime.ephemeral.as_ref()` raw-field access
+    /// `tatara_reconciler::render::render_export_jobs` previously
+    /// walked past.
+    ///
+    /// Pre-lift THREE consumer sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold reached the ephemeral inner through TWO
+    /// different chains that disagreed on the ambiguous corner:
+    /// * `tatara_process::lifetime_clock::evaluate` — ambiguity-aware:
+    ///   `process.spec.lifetime.resolved_ephemeral()` collapses BOTH-
+    ///   slots-set to `None`, matching the "no ephemeral action"
+    ///   outcome (`AutoTerminate::Skip`) the ambiguous case must yield.
+    /// * `tatara_process::lifetime_clock::requeue_with_ttl` —
+    ///   ambiguity-aware peer of `evaluate`; both share the SAME
+    ///   `resolved_ephemeral()` gate and MUST agree on the ambiguous
+    ///   corner or the reconciler's teardown decision and requeue-
+    ///   budget picker drift apart on the SAME `Process` within one
+    ///   reconcile pass.
+    /// * `tatara_reconciler::render::render_export_jobs` — RAW field
+    ///   access: `process.spec.lifetime.ephemeral.as_ref()` returned
+    ///   `Some(&e)` on the ambiguous corner, so an operator-authored
+    ///   `Process` with BOTH `permanent:` AND `ephemeral:` slots
+    ///   populated would emit export Jobs whose teardown-triggered
+    ///   fire semantics `lifetime_clock` refused to honor. The two
+    ///   consumers drifted at the mis-configuration corner.
+    ///
+    /// Post-lift ALL THREE consumers reach through ONE `Process` method
+    /// that composes `self.spec.lifetime.resolved_ephemeral()` — the
+    /// ambiguity-aware `variant().ok() + as_ephemeral` chain
+    /// [`crate::lifetime::Lifetime::resolved_ephemeral`] owns — and
+    /// the drift between the reconciler's export-render arm and the
+    /// lifetime clock's teardown/TTL arm CLOSES at ONE substrate site.
+    ///
+    /// Return-form axis: `Option<&EphemeralLifetime>` matches the
+    /// borrow-form discipline of the underlying
+    /// [`crate::lifetime::Lifetime::resolved_ephemeral`] projection so
+    /// the borrow carries the `'_self` lifetime through directly
+    /// without a temporary `LifetimeVariant` binding. Peer to the
+    /// borrow-form status-projection primitives
+    /// [`Self::observed_attestation`], [`Self::observed_identity`] and
+    /// the borrow-form metadata-projection primitive
+    /// [`Self::uid_or_empty`] — all four hide a wrapping `Option`-
+    /// carrying wire slot behind an inherent projection.
+    ///
+    /// A future normalization step (a canonicalization pass that maps
+    /// a suspiciously-zero `ttl` to a per-cluster default, a per-
+    /// namespace override that substitutes an operator-declared
+    /// teardown policy on adopted resources, a wire-schema migration
+    /// that renames `spec.lifetime.ephemeral` to `spec.lifetime.timed`
+    /// with a bridging `From` shim) lands at ONE substrate method here
+    /// and all three downstream consumers pick up the upgrade
+    /// mechanically — no per-callsite hand-edit at `evaluate` /
+    /// `requeue_with_ttl` / `render_export_jobs`.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the pins bind the Permanent-only corner, the
+    /// Ephemeral-only corner, the Both-set-ambiguous corner, the
+    /// empty-default corner, and the byte-identity parity with the
+    /// underlying `self.spec.lifetime.resolved_ephemeral()` delegate,
+    /// so a regression that silently swapped the projection back to
+    /// the raw `.ephemeral.as_ref()` field would surface here rather
+    /// than as operator-facing drift between the export-render arm
+    /// and the teardown/TTL arm on the SAME `Process`). THEORY.md
+    /// §VI.1 (generation over composition — the ambiguity-aware
+    /// projection recurred at three hand-authored sites past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
+    /// owner here).
+    pub fn resolved_ephemeral(&self) -> Option<&EphemeralLifetime> {
+        self.spec.lifetime.resolved_ephemeral()
     }
 }
 
@@ -4609,5 +4685,177 @@ mod tests {
             now.signed_duration_since(via_primitive),
             now.signed_duration_since(via_pre_lift)
         );
+    }
+
+    // ─── Process::resolved_ephemeral substrate pins ─────────────────
+    //
+    // Pins the compound spec-projection primitive on the
+    // `spec.lifetime` axis that owns the ambiguity-aware
+    // `resolved_ephemeral` chain the three hand-authored sites
+    // (`lifetime_clock::evaluate`, `lifetime_clock::requeue_with_ttl`,
+    // `tatara-reconciler::render::render_export_jobs`) restated by
+    // hand pre-lift through TWO different chains that disagreed on
+    // the ambiguous corner. Fail-before-pass-after granularity:
+    // `resolved_ephemeral` did not exist pre-lift on `impl Process`,
+    // so any test invoking it fails to compile pre-lift and passes
+    // post-lift.
+
+    fn permanent_only_process() -> Process {
+        let mut spec = empty_spec();
+        spec.lifetime = crate::lifetime::Lifetime {
+            permanent: Some(crate::lifetime::PermanentLifetime {}),
+            ..crate::lifetime::Lifetime::default()
+        };
+        Process::new("perm", spec)
+    }
+
+    fn ephemeral_only_process(ttl: &str) -> Process {
+        let mut spec = empty_spec();
+        spec.lifetime = crate::lifetime::Lifetime {
+            ephemeral: Some(EphemeralLifetime {
+                ttl: ttl.into(),
+                teardown_policy: crate::lifetime::TeardownPolicy::OnAttested,
+                max_concurrent: 3,
+                exports: vec![],
+            }),
+            ..crate::lifetime::Lifetime::default()
+        };
+        Process::new("eph", spec)
+    }
+
+    fn ambiguous_lifetime_process() -> Process {
+        let mut spec = empty_spec();
+        spec.lifetime = crate::lifetime::Lifetime {
+            permanent: Some(crate::lifetime::PermanentLifetime {}),
+            ephemeral: Some(EphemeralLifetime::default()),
+        };
+        Process::new("both", spec)
+    }
+
+    #[test]
+    fn resolved_ephemeral_returns_none_when_lifetime_is_default_empty() {
+        // Empty-default corner pin: neither slot populated. The
+        // resolver collapses to `Permanent(&DEFAULT_PERMANENT)` and
+        // the compound projection sees no ephemeral inner. Matches
+        // the pre-lift `lifetime_clock::evaluate` early-return to
+        // `AutoTerminate::Skip` byte-identically.
+        let p = Process::new("empty-lifetime", empty_spec());
+        assert!(p.resolved_ephemeral().is_none());
+    }
+
+    #[test]
+    fn resolved_ephemeral_returns_none_for_permanent_only_process() {
+        // Permanent-only corner pin: the `permanent:` slot is
+        // populated, `ephemeral:` is not. Matches the pre-lift
+        // `lifetime_clock::evaluate` outcome — the teardown/TTL
+        // branch is never reached on a Permanent Process, and the
+        // export-render arm now agrees at this call site (was
+        // previously reached through the raw `.ephemeral.as_ref()`
+        // that also returned `None` on this same corner — no drift
+        // here; the drift is at the ambiguous corner below).
+        let p = permanent_only_process();
+        assert!(p.resolved_ephemeral().is_none());
+    }
+
+    #[test]
+    fn resolved_ephemeral_returns_some_for_ephemeral_only_process() {
+        // Ephemeral-only corner pin: the ONE arm that projects. The
+        // returned borrow carries the operator-authored `ttl` /
+        // `teardown_policy` / `max_concurrent` verbatim. A
+        // regression that swapped the projection to the sibling
+        // `permanent:` slot would surface here as a type mismatch on
+        // the `EphemeralLifetime` fields rather than as silent
+        // operator-facing no-op teardown at the reconciler.
+        let p = ephemeral_only_process("42m");
+        let e = p
+            .resolved_ephemeral()
+            .expect("ephemeral-only Process must project");
+        assert_eq!(e.ttl, "42m");
+        assert_eq!(
+            e.teardown_policy,
+            crate::lifetime::TeardownPolicy::OnAttested
+        );
+        assert_eq!(e.max_concurrent, 3);
+    }
+
+    #[test]
+    fn resolved_ephemeral_returns_none_for_ambiguous_lifetime() {
+        // DRIFT-CLOSING CONTRACT: BOTH `permanent:` AND `ephemeral:`
+        // slots populated is an operator-authored mis-configuration.
+        // Pre-lift, `lifetime_clock::evaluate` (via
+        // `resolved_ephemeral()` on `Lifetime`) collapsed this
+        // corner to `None` and yielded `AutoTerminate::Skip`, while
+        // `tatara-reconciler::render::render_export_jobs` walked
+        // the naked `.spec.lifetime.ephemeral.as_ref()` chain and
+        // returned `Some(&e)` — so the reconciler would emit export
+        // Jobs on a Process whose teardown-triggered fire semantics
+        // the lifetime clock refused to honor. Post-lift this
+        // primitive collapses ambiguity to `None` at ONE site so
+        // BOTH consumers agree. A regression that broadened the
+        // projection back to the raw field (or that silently
+        // "preferred ephemeral" in the ambiguous case) surfaces
+        // here rather than as export-Job noise on a mis-configured
+        // ephemeral.
+        let p = ambiguous_lifetime_process();
+        assert!(p.resolved_ephemeral().is_none());
+        // The raw field IS populated at this corner — pins the
+        // pre-lift `.spec.lifetime.ephemeral.as_ref()` shape that
+        // returned `Some` here.
+        assert!(p.spec.lifetime.ephemeral.is_some());
+    }
+
+    #[test]
+    fn resolved_ephemeral_matches_spec_lifetime_forwarder() {
+        // Byte-identity pin: the `Process` projection delegates
+        // through the underlying `Lifetime::resolved_ephemeral`
+        // primitive at every corner (empty, permanent-only,
+        // ephemeral-only, ambiguous). A regression that silently
+        // reintroduced the raw `.ephemeral.as_ref()` shortcut, or
+        // that decided the ambiguous case by "prefer ephemeral"
+        // at the Process layer instead of delegating, surfaces
+        // here.
+        for p in [
+            Process::new("empty", empty_spec()),
+            permanent_only_process(),
+            ephemeral_only_process("1h"),
+            ambiguous_lifetime_process(),
+        ] {
+            let via_process = p.resolved_ephemeral();
+            let via_lifetime = p.spec.lifetime.resolved_ephemeral();
+            // Both borrows point into the SAME `EphemeralLifetime`
+            // slot when present — a regression that materialized a
+            // per-call clone at the Process layer would fail the
+            // pointer-equality gate.
+            match (via_process, via_lifetime) {
+                (Some(a), Some(b)) => assert!(
+                    std::ptr::eq(a, b),
+                    "Process::resolved_ephemeral must borrow the same slot as Lifetime::resolved_ephemeral"
+                ),
+                (None, None) => {}
+                (a, b) => panic!(
+                    "resolved_ephemeral shape drift: process={:?}, lifetime={:?}",
+                    a.is_some(),
+                    b.is_some()
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn resolved_ephemeral_is_a_pure_projection() {
+        // Purity pin: two consecutive calls return borrows into the
+        // same underlying slot (no lazy materialization, no interior
+        // mutation of `self`). Peer to the sibling
+        // `is_being_deleted_is_a_pure_projection` +
+        // `observed_attestation_is_a_pure_projection` pins; all
+        // three bind the pure-projection discipline on the ONE
+        // substrate accessor per spec / metadata / status slot.
+        let p = ephemeral_only_process("5m");
+        let a = p.resolved_ephemeral();
+        let b = p.resolved_ephemeral();
+        match (a, b) {
+            (Some(x), Some(y)) => assert!(std::ptr::eq(x, y)),
+            other => panic!("expected two Some borrows into the same slot, got {other:?}"),
+        }
     }
 }

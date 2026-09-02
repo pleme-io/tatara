@@ -663,9 +663,24 @@ pub fn render_export_jobs(
     image: &str,
     service_account: &str,
 ) -> Result<Vec<Value>> {
-    let ephemeral = match process.spec.lifetime.ephemeral.as_ref() {
-        Some(e) => e,
-        None => return Ok(vec![]),
+    // Ambiguity-aware compound spec-projection primitive on
+    // `impl Process` — pre-lift this site walked the naked
+    // `process.spec.lifetime.ephemeral.as_ref()` raw-field access
+    // that returned `Some(&e)` on the operator-authored mis-
+    // configuration corner where BOTH `permanent:` AND `ephemeral:`
+    // slots were populated. The sibling `lifetime_clock::evaluate`
+    // consumer walked the ambiguity-collapsing
+    // `resolved_ephemeral()` chain that returned `None` on the
+    // SAME corner, so pre-lift the reconciler would emit export
+    // Jobs on a Process whose teardown-triggered fire semantics
+    // the lifetime clock refused to honor. Post-lift both consumers
+    // reach through ONE `Process::resolved_ephemeral` gate on the
+    // substrate that owns the ambiguity-collapse discipline, so
+    // the export-render arm and the teardown/TTL arm agree on
+    // EVERY `Process` corner (empty, permanent-only, ephemeral-
+    // only, ambiguous) at ONE lift site.
+    let Some(ephemeral) = process.resolved_ephemeral() else {
+        return Ok(vec![]);
     };
     // Owner-metadata seed on the same borrow + name-defaulted axis
     // corner every render arm and the render_routing coord seed

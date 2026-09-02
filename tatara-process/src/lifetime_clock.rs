@@ -288,11 +288,15 @@ pub fn evaluate(
 ) -> AutoTerminate {
     // Closed-set projection: ambiguous → no-op; permanent → no-op;
     // ephemeral → fall through to teardown / TTL checks. ONE
-    // `resolved_ephemeral` gate — the compound `variant().ok() +
-    // as_ephemeral` projection lifted to `impl Lifetime` — replaces
-    // the previous two-step match-then-match dance and shares the
-    // primitive with `requeue_with_ttl` below.
-    let Some(ephemeral) = process.spec.lifetime.resolved_ephemeral() else {
+    // `Process::resolved_ephemeral` gate — the compound spec-projection
+    // primitive on `impl Process` that owns the ambiguity-aware
+    // `variant().ok() + as_ephemeral` chain — replaces the previous
+    // 4-step `process.spec.lifetime.resolved_ephemeral()` walk and
+    // shares the primitive with `requeue_with_ttl` below AND with
+    // `tatara-reconciler::render::render_export_jobs` (which pre-
+    // lift walked the naked `.spec.lifetime.ephemeral.as_ref()`
+    // raw-field access that disagreed on the ambiguous corner).
+    let Some(ephemeral) = process.resolved_ephemeral() else {
         return AutoTerminate::Skip;
     };
 
@@ -355,10 +359,12 @@ fn is_terminal_or_exit(p: ProcessPhase) -> bool {
 /// `evaluate()` returned `Skip` — picks the smaller of HEARTBEAT and
 /// TTL-remaining so we don't oversleep past expiry.
 pub fn requeue_with_ttl(process: &Process, now: DateTime<Utc>, default: Duration) -> Duration {
-    // Shared `resolved_ephemeral` projection with [`evaluate`] — the
-    // "give me only the unambiguous ephemeral case" compound-lift
-    // primitive on `impl Lifetime`.
-    let Some(e) = process.spec.lifetime.resolved_ephemeral() else {
+    // Shared `Process::resolved_ephemeral` projection with
+    // [`evaluate`] — the "give me only the unambiguous ephemeral case"
+    // compound-lift primitive on `impl Process` that composes through
+    // `impl Lifetime`'s `resolved_ephemeral` and closes drift with the
+    // export-Job render arm at ONE substrate site.
+    let Some(e) = process.resolved_ephemeral() else {
         return default;
     };
     // Creation-anchor probe rides through the ONE substrate

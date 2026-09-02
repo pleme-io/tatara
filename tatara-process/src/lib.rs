@@ -117,7 +117,7 @@ pub mod prelude {
     pub use crate::table::{
         ClaimRecord, ProcessEntry, ProcessTable, ProcessTableSpec, ProcessTableStatus,
     };
-    pub use crate::{DeletionTombstoned, NamespacedApiCoordinates};
+    pub use crate::{Annotated, DeletionTombstoned, NamespacedApiCoordinates};
 }
 
 /// CRD API group for every tatara CRD.
@@ -513,6 +513,88 @@ pub trait DeletionTombstoned: kube::Resource<DynamicType = ()> {
 }
 
 impl<T> DeletionTombstoned for T where T: kube::Resource<DynamicType = ()> {}
+
+/// Substrate-primitive trait for the ONE **borrow-form annotation
+/// lookup** every tatara CRD reconciler restated as the 3-line
+/// `.metadata.annotations.as_ref().and_then(|m| m.get(key)).map(String::as_str)`
+/// chain (or a `.cloned()` / `.cloned().unwrap_or_default()` variant
+/// of the same shape) on the K8s `metadata.annotations` map: returns
+/// `Some(&str)` iff the annotations block is present AND the key is
+/// present inside it; both missing corners collapse to `None`.
+///
+/// Peer to [`DeletionTombstoned`] + [`NamespacedApiCoordinates`] on
+/// the substrate-primitive-trait axis (kube-Resource blanket impls
+/// over `DynamicType = ()`), and peer to the pre-existing
+/// [`crate::prelude::Process::annotation`] inherent forwarder on the
+/// axis of "one annotation-lookup shape shared across every kube
+/// resource, tatara CRD or K8s built-in". The inherent stays as a
+/// peer — Rust method resolution prefers an inherent over a trait's
+/// blanket impl, so the three consumers already routed through
+/// `Process::annotation`
+/// (`tatara-reconciler::signals::ingest`,
+/// `tatara-reconciler::phase_machine::released_from_annotation`,
+/// `tatara-pool-reconciler::controller_pool::process_belongs_to_pool`)
+/// keep hitting the byte-identical code path — and the trait's
+/// blanket impl closes the substrate corner for kube resources
+/// WITHOUT the inherent: post-lift the hand-authored
+/// `.metadata.annotations.as_ref().and_then(|m| m.get(KEY))...` chain
+/// in `tatara-export-worker::main` (on `k8s_openapi`'s `ConfigMap`,
+/// which has no tatara-owned inherent) routes through the trait at
+/// `cm.annotation(KEY)`, and any future `EphemeralPool` /
+/// `EphemeralAllocation` (or new tatara CRD) consumer that needs an
+/// annotation lookup inherits the primitive for free — the same
+/// solve-once discipline the two peer traits already established.
+///
+/// Return-form axis: `Option<&str>` matches the borrow-first
+/// discipline of the peer metadata primitives
+/// ([`crate::prelude::Process::namespace_or_default`],
+/// [`crate::prelude::Process::name_or_placeholder`],
+/// [`crate::prelude::Process::coordinates_or_none`], and the inherent
+/// [`crate::prelude::Process::annotation`] this trait mirrors). The
+/// two corners the pre-lift chain swallowed (missing `annotations`
+/// map, missing key inside the map) BOTH collapse to `None` so
+/// `.is_some()` / `if let Some(_)` / `Option::map` behave identically
+/// on a resource whose annotations block is `None` and on one whose
+/// annotations block is populated but omits the key — matching what
+/// the pre-lift `.and_then(...)` chain produced.
+///
+/// A future normalization step (a key-canonicalization pass, a
+/// case-fold lookup, a per-key alias table for renamed annotations
+/// across API versions, a per-namespace override substrate) lands at
+/// ONE trait method here and every downstream consumer — the four
+/// current sites plus every future CRD reconciler that inherits the
+/// blanket impl — picks up the upgrade mechanically. If the inherent
+/// is ever rewired to `<Self as Annotated>::annotation(self, key)`
+/// as a follow-up sweep, the three inherent-preferred callsites
+/// automatically inherit any trait-level upgrade too.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// the annotation-lookup shape recurred as ONE inherent forwarder on
+/// `Process` PLUS a hand-authored chain on `ConfigMap` past the
+/// ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted onto
+/// ONE trait method here). THEORY.md §II.1 invariant 5 (composition
+/// preserves proofs — the pins bind the missing-annotations corner +
+/// the missing-key corner + the borrow-form `&str` lifetime + the
+/// byte-identical parity with the pre-lift 3-line chain + the
+/// cross-primitive coherence with `Process::annotation` on the SAME
+/// `Process` value, so a regression that skewed either surface
+/// surfaces at `annotated_tests::*` rather than as silent operator-
+/// facing skew between the SIGNAL / RELEASED_FROM / POOL annotation
+/// readers on Process and the receipts-owner filter on ConfigMap).
+pub trait Annotated: kube::Resource<DynamicType = ()> {
+    /// Borrow one key from `metadata.annotations`. See the trait-level
+    /// docs for the axis-family context, peer inherent method, and
+    /// future-normalization anchor.
+    fn annotation(&self, key: &str) -> Option<&str> {
+        self.meta()
+            .annotations
+            .as_ref()
+            .and_then(|m| m.get(key))
+            .map(String::as_str)
+    }
+}
+
+impl<T> Annotated for T where T: kube::Resource<DynamicType = ()> {}
 
 /// Annotation keys the reconciler reads/writes on owned FluxCD resources.
 pub mod annotations {
@@ -1596,6 +1678,389 @@ mod deletion_tombstoned_tests {
         assert!(!a.is_being_deleted());
         a.metadata.deletion_timestamp = Some(Time(chrono::Utc::now()));
         assert!(a.is_being_deleted());
+    }
+}
+
+#[cfg(test)]
+mod annotated_tests {
+    //! Pin the [`Annotated`] trait's `annotation` lookup at fail-
+    //! before-pass-after granularity across every corner of the
+    //! (annotations map: absent / present-empty / present-with-key /
+    //! present-without-key) × (value form: normal / empty-string)
+    //! input matrix, on the three tatara-process CRDs the trait's
+    //! blanket impl covers today (`Process`, `EphemeralPool`,
+    //! `EphemeralAllocation`) PLUS a K8s built-in (`ConfigMap`) — the
+    //! load-bearing fourth surface that `tatara-export-worker::main`
+    //! consumes post-lift where no tatara-owned inherent forwarder
+    //! exists. Also pin cross-primitive coherence with the pre-existing
+    //! `Process::annotation` inherent so a future consolidation onto
+    //! the trait's default cannot silently skew the three consumers
+    //! already routed through the inherent
+    //! (`signals::ingest`,
+    //! `phase_machine::released_from_annotation`,
+    //! `controller_pool::process_belongs_to_pool`).
+    use super::Annotated;
+    use crate::allocation::{AllocationSpec, EphemeralAllocation, Requestor};
+    use crate::classification::{Classification, ConvergencePointType, SubstrateType};
+    use crate::crd::{Process, ProcessSpec};
+    use crate::ephemeral::EphemeralSpec;
+    use crate::intent::{AplicacaoIntent, Intent};
+    use crate::lifetime::TeardownPolicy;
+    use crate::pool::{EphemeralPool, PoolSelector, PoolSpec, ReturnPolicy};
+    use crate::spec::IdentitySpec;
+    use k8s_openapi::api::core::v1::ConfigMap;
+    use std::collections::BTreeMap;
+
+    fn empty_template() -> EphemeralSpec {
+        EphemeralSpec {
+            aplicacao: AplicacaoIntent {
+                chart_ref: "oci://x".into(),
+                version: "1".into(),
+                profile: String::new(),
+                values_overlay: serde_json::Value::Null,
+                release_name: None,
+                target_namespace: None,
+                install_timeout: None,
+            },
+            ttl: "1h".into(),
+            teardown: TeardownPolicy::Always,
+            max_concurrent: 0,
+            postconditions: vec![],
+            preconditions: vec![],
+            verify_timeout: None,
+            classification: None,
+            parent: None,
+            exports: vec![],
+            routing: None,
+        }
+    }
+
+    fn empty_pool_spec() -> PoolSpec {
+        PoolSpec {
+            desired_size: 1,
+            min_size: 0,
+            max_size: 0,
+            return_policy: ReturnPolicy::Replace,
+            selector: PoolSelector::default(),
+            template: empty_template(),
+            free_ttl: "24h".into(),
+            max_allocation_ttl: "4h".into(),
+            desired: 0,
+            replacement_policy: Default::default(),
+            stable_name_claim: false,
+        }
+    }
+
+    fn empty_alloc_spec() -> AllocationSpec {
+        AllocationSpec {
+            pool_ref: None,
+            requestor: Requestor {
+                kind: "github-pr".into(),
+                repo: None,
+                branch: None,
+                pr_number: None,
+                sha: None,
+                pr_labels: vec![],
+                actor: None,
+            },
+            ttl: None,
+            note: None,
+        }
+    }
+
+    fn empty_process_spec() -> ProcessSpec {
+        ProcessSpec {
+            identity: IdentitySpec::default(),
+            classification: Classification {
+                point_type: ConvergencePointType::Gate,
+                substrate: SubstrateType::Compute,
+                horizon: Default::default(),
+                calm: Default::default(),
+                data_classification: Default::default(),
+            },
+            intent: Intent::default(),
+            boundary: Default::default(),
+            compliance: Default::default(),
+            depends_on: vec![],
+            signals: Default::default(),
+            lifetime: Default::default(),
+            routing: None,
+            encapsulates: None,
+            suspended: false,
+        }
+    }
+
+    fn one_annotation(key: &str, value: &str) -> BTreeMap<String, String> {
+        let mut m = BTreeMap::new();
+        m.insert(key.into(), value.into());
+        m
+    }
+
+    // ── Missing annotations map — trait returns None on every key ─────
+
+    #[test]
+    fn annotation_on_process_missing_annotations_returns_none_via_trait() {
+        let mut p = Process::new("api", empty_process_spec());
+        p.metadata.annotations = None;
+        assert_eq!(Annotated::annotation(&p, "tatara.pleme.io/signal"), None);
+        assert_eq!(Annotated::annotation(&p, ""), None);
+    }
+
+    #[test]
+    fn annotation_on_ephemeral_pool_missing_annotations_returns_none_via_trait() {
+        let mut p = EphemeralPool::new("attest-pool", empty_pool_spec());
+        p.metadata.annotations = None;
+        assert_eq!(Annotated::annotation(&p, "tatara.pleme.io/pool"), None);
+    }
+
+    #[test]
+    fn annotation_on_ephemeral_allocation_missing_annotations_returns_none_via_trait() {
+        // The peer load-bearing corner: EphemeralAllocation has NO
+        // inherent `annotation()` pre-lift — the trait's blanket impl
+        // is what closes the substrate gap here, exactly as the
+        // sibling `DeletionTombstoned` trait already did on the
+        // tombstone axis for the SAME third CRD.
+        let mut a = EphemeralAllocation::new("pr-42-demo", empty_alloc_spec());
+        a.metadata.annotations = None;
+        assert_eq!(
+            Annotated::annotation(&a, "tatara.pleme.io/requestor-kind"),
+            None,
+        );
+    }
+
+    #[test]
+    fn annotation_on_config_map_missing_annotations_returns_none_via_trait() {
+        // The load-bearing corner the export-worker's post-lift call
+        // depends on: `ConfigMap` is a K8s built-in with no tatara-
+        // owned inherent forwarder, and the receipts-owner filter
+        // needs to route through the trait's blanket impl at
+        // `cm.annotation(KEY)`.
+        let cm = ConfigMap::default();
+        // `Default::default()` produces an object with an empty
+        // ObjectMeta whose `annotations` slot is `None` — the exact
+        // missing-annotations corner the trait must collapse to
+        // `None` at every key lookup, matching what the pre-lift
+        // `cm.metadata.annotations.as_ref().and_then(...)` chain
+        // produced.
+        assert_eq!(Annotated::annotation(&cm, "tatara.pleme.io/process"), None,);
+    }
+
+    // ── Missing key inside populated map — trait returns None ─────────
+
+    #[test]
+    fn annotation_on_process_missing_key_returns_none_via_trait() {
+        let mut p = Process::new("api", empty_process_spec());
+        p.metadata.annotations = Some(one_annotation("other/key", "irrelevant"));
+        assert_eq!(Annotated::annotation(&p, "tatara.pleme.io/signal"), None);
+        assert_eq!(Annotated::annotation(&p, ""), None);
+    }
+
+    #[test]
+    fn annotation_on_config_map_missing_key_returns_none_via_trait() {
+        let mut cm = ConfigMap::default();
+        cm.metadata.annotations = Some(one_annotation("unrelated", "yes"));
+        assert_eq!(Annotated::annotation(&cm, "tatara.pleme.io/process"), None,);
+    }
+
+    // ── Present key — trait returns borrowed slice ────────────────────
+
+    #[test]
+    fn annotation_on_process_present_key_returns_borrowed_slice_via_trait() {
+        let mut p = Process::new("api", empty_process_spec());
+        p.metadata.annotations = Some(one_annotation("tatara.pleme.io/signal", "SIGHUP"));
+        assert_eq!(
+            Annotated::annotation(&p, "tatara.pleme.io/signal"),
+            Some("SIGHUP"),
+        );
+    }
+
+    #[test]
+    fn annotation_on_ephemeral_pool_present_key_returns_borrowed_slice_via_trait() {
+        let mut p = EphemeralPool::new("attest-pool", empty_pool_spec());
+        p.metadata.annotations = Some(one_annotation("tatara.pleme.io/pool", "demo-pool"));
+        assert_eq!(
+            Annotated::annotation(&p, "tatara.pleme.io/pool"),
+            Some("demo-pool"),
+        );
+    }
+
+    #[test]
+    fn annotation_on_ephemeral_allocation_present_key_returns_borrowed_slice_via_trait() {
+        let mut a = EphemeralAllocation::new("pr-42-demo", empty_alloc_spec());
+        a.metadata.annotations = Some(one_annotation(
+            "tatara.pleme.io/requestor-kind",
+            "github-pr",
+        ));
+        assert_eq!(
+            Annotated::annotation(&a, "tatara.pleme.io/requestor-kind"),
+            Some("github-pr"),
+        );
+    }
+
+    #[test]
+    fn annotation_on_config_map_present_key_returns_borrowed_slice_via_trait() {
+        // The exact receipts-owner filter shape from
+        // `tatara-export-worker::main`: a ConfigMap carrying the
+        // `tatara.pleme.io/process` annotation set to the qualified
+        // process reference `<ns>/<name>`. Pin that the trait produces
+        // the exact borrowed slice the equality comparison against the
+        // caller's `want.as_str()` sentinel consumes.
+        let mut cm = ConfigMap::default();
+        cm.metadata.annotations = Some(one_annotation(
+            "tatara.pleme.io/process",
+            "demo-ns/demo-app",
+        ));
+        assert_eq!(
+            Annotated::annotation(&cm, "tatara.pleme.io/process"),
+            Some("demo-ns/demo-app"),
+        );
+    }
+
+    // ── Empty-value contract: `Some("")` — the pre-lift chain never
+    //    swallowed empty values into `None`, so the trait must not
+    //    either. Pinned separately from the missing-slot corners.
+
+    #[test]
+    fn annotation_present_key_with_empty_value_returns_some_empty_slice_via_trait() {
+        let mut p = Process::new("api", empty_process_spec());
+        p.metadata.annotations = Some(one_annotation("tatara.pleme.io/signal", ""));
+        assert_eq!(
+            Annotated::annotation(&p, "tatara.pleme.io/signal"),
+            Some("")
+        );
+    }
+
+    // ── Byte-identical parity with the pre-lift 3-line chain ──────────
+
+    #[test]
+    fn annotation_matches_pre_lift_annotations_lookup_chain_on_config_map() {
+        // The four-corner input matrix the pre-lift
+        // `cm.metadata.annotations.as_ref().and_then(|m| m.get(KEY))
+        // .map(String::as_str)` chain traversed in
+        // `tatara-export-worker::main` pre-lift. A regression that
+        // inserted a normalization step the pre-lift chain does NOT
+        // apply — or vice versa — surfaces here rather than as silent
+        // drift between the substrate owner and the pre-lift consumer.
+        const KEY: &str = "tatara.pleme.io/process";
+        let cases: Vec<(Option<BTreeMap<String, String>>, Option<&str>)> = vec![
+            (None, None),
+            (Some(BTreeMap::new()), None),
+            (Some(one_annotation("unrelated", "yes")), None),
+            (
+                Some(one_annotation(KEY, "demo-ns/demo-app")),
+                Some("demo-ns/demo-app"),
+            ),
+            (Some(one_annotation(KEY, "")), Some("")),
+        ];
+        for (anns, expected) in cases {
+            let mut cm = ConfigMap::default();
+            cm.metadata.annotations = anns.clone();
+
+            let pre_lift: Option<&str> = cm
+                .metadata
+                .annotations
+                .as_ref()
+                .and_then(|m| m.get(KEY))
+                .map(String::as_str);
+            let via_trait = Annotated::annotation(&cm, KEY);
+
+            assert_eq!(
+                pre_lift, expected,
+                "pre-lift chain must return {expected:?} for annotations={anns:?}",
+            );
+            assert_eq!(
+                via_trait, pre_lift,
+                "trait probe must be byte-identical to pre-lift chain for annotations={anns:?}",
+            );
+        }
+    }
+
+    // ── Cross-primitive coherence with Process's inherent forwarder ───
+
+    #[test]
+    fn trait_probe_coheres_with_process_inherent_annotation_on_every_corner() {
+        // Cross-primitive coherence pin: the trait's default and the
+        // pre-existing `Process::annotation` inherent forwarder return
+        // the SAME `Option<&str>` on the SAME `Process` value — a
+        // future consolidation of the inherent onto the trait's
+        // default cannot land any drift because this pin binds them
+        // at every corner of the (absent, present-missing-key,
+        // present-with-key, present-with-empty-value) input matrix.
+        const KEY: &str = "tatara.pleme.io/signal";
+        let cases: Vec<Option<BTreeMap<String, String>>> = vec![
+            None,
+            Some(BTreeMap::new()),
+            Some(one_annotation("other/key", "irrelevant")),
+            Some(one_annotation(KEY, "SIGHUP")),
+            Some(one_annotation(KEY, "")),
+        ];
+        for anns in cases {
+            let mut p = Process::new("api", empty_process_spec());
+            p.metadata.annotations = anns.clone();
+            let via_inherent = p.annotation(KEY);
+            let via_trait = Annotated::annotation(&p, KEY);
+            assert_eq!(
+                via_inherent, via_trait,
+                "Process inherent + Annotated trait must agree on annotations={anns:?}",
+            );
+        }
+    }
+
+    // ── Inherent-preferred method resolution on Process ───────────────
+
+    #[test]
+    fn dot_call_on_process_resolves_to_inherent_when_trait_in_scope() {
+        // Rust method resolution prefers an inherent over a trait's
+        // blanket impl, so `process.annotation(key)` with the trait in
+        // scope still routes through the inherent — and both return
+        // the same `Option<&str>` (verified in
+        // `trait_probe_coheres_with_process_inherent_annotation_on_every_corner`).
+        // This pin guards against a future refactor that removes the
+        // inherent but leaves consumers assuming inherent-preferred
+        // resolution — the observable output is identical either way,
+        // so the pin locks the invariant that BOTH paths agree.
+        let mut p = Process::new("api", empty_process_spec());
+        p.metadata.annotations = Some(one_annotation("tatara.pleme.io/signal", "SIGHUP"));
+        assert_eq!(p.annotation("tatara.pleme.io/signal"), Some("SIGHUP"));
+    }
+
+    #[test]
+    fn dot_call_on_ephemeral_allocation_resolves_to_trait_blanket_impl() {
+        // The peer load-bearing corner: `alloc.annotation(key)` with
+        // the trait in scope routes to the trait's blanket impl —
+        // there is no inherent on `EphemeralAllocation` — and produces
+        // the expected `Option<&str>`. The same discipline the sibling
+        // `DeletionTombstoned` trait already established on the
+        // tombstone axis for the SAME third CRD.
+        let mut a = EphemeralAllocation::new("pr-42-demo", empty_alloc_spec());
+        assert_eq!(a.annotation("tatara.pleme.io/requestor-kind"), None);
+        a.metadata.annotations = Some(one_annotation(
+            "tatara.pleme.io/requestor-kind",
+            "github-pr",
+        ));
+        assert_eq!(
+            a.annotation("tatara.pleme.io/requestor-kind"),
+            Some("github-pr"),
+        );
+    }
+
+    #[test]
+    fn dot_call_on_config_map_resolves_to_trait_blanket_impl() {
+        // The load-bearing corner the export-worker's post-lift call
+        // exercises: `cm.annotation(KEY)` with the trait in scope
+        // routes to the blanket impl (ConfigMap is a K8s built-in
+        // with no tatara-owned inherent) and produces the same
+        // `Option<&str>` the pre-lift 3-line chain did.
+        let mut cm = ConfigMap::default();
+        assert_eq!(cm.annotation("tatara.pleme.io/process"), None);
+        cm.metadata.annotations = Some(one_annotation(
+            "tatara.pleme.io/process",
+            "demo-ns/demo-app",
+        ));
+        assert_eq!(
+            cm.annotation("tatara.pleme.io/process"),
+            Some("demo-ns/demo-app"),
+        );
     }
 }
 

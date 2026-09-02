@@ -34,6 +34,7 @@ use tatara_export_worker::{
     ExportOutcome,
 };
 use tatara_process::export::{ArtifactVariant, ChannelVariant, ExportSpec};
+use tatara_process::prelude::Annotated;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -170,24 +171,14 @@ fn extract_signal_type(spec: &ExportSpec) -> String {
     if let Some(n) = &spec.channel.nats_subject {
         // NATS doesn't carry a separate signal_type; the subject's
         // last segment is the convention.
-        return n
-            .subject
-            .rsplit('.')
-            .next()
-            .unwrap_or("event")
-            .to_string();
+        return n.subject.rsplit('.').next().unwrap_or("event").to_string();
     }
     "event".into()
 }
 
 // ─── Artifact readers ──────────────────────────────────────────────
 
-async fn read_artifact(
-    spec: &ExportSpec,
-    kube: &Client,
-    ns: &str,
-    name: &str,
-) -> Result<Vec<u8>> {
+async fn read_artifact(spec: &ExportSpec, kube: &Client, ns: &str, name: &str) -> Result<Vec<u8>> {
     let v = spec.source.variant().map_err(|e| anyhow!("source: {e}"))?;
     match v {
         ArtifactVariant::RunMarker(_) => Ok(Vec::new()),
@@ -232,19 +223,31 @@ async fn read_artifact(
             let want = tatara_process::prelude::qualified_process_ref(ns, name);
             let mut envelopes = Vec::new();
             for cm in cms.items {
-                let ann = cm.metadata.annotations.as_ref();
-                let owned = ann
-                    .and_then(|m| m.get("tatara.pleme.io/process"))
-                    .map(|p| p == &want)
-                    .unwrap_or(false);
-                if !owned {
+                // Annotation lookup rides through the ONE substrate
+                // primitive `Annotated::annotation` (blanket impl over
+                // every `kube::Resource<DynamicType = ()>`) — pre-lift
+                // this was a hand-authored 3-line
+                // `.metadata.annotations.as_ref().and_then(|m|
+                // m.get("tatara.pleme.io/process")).map(|p| p == &want)
+                // .unwrap_or(false)` chain on a K8s built-in
+                // `ConfigMap`, the fourth workspace surface spelling
+                // the annotation-lookup axis alongside the three
+                // tatara-reconciler / pool-reconciler consumers already
+                // routed through the peer `Process::annotation`
+                // inherent (`signals::ingest`,
+                // `phase_machine::released_from_annotation`,
+                // `controller_pool::process_belongs_to_pool`). Post-
+                // lift the four surfaces share ONE substrate owner;
+                // any future annotation-lookup consumer (a new tatara
+                // CRD, another K8s built-in) inherits the primitive
+                // through the trait's blanket impl with zero per-
+                // callsite lift work.
+                if cm.annotation("tatara.pleme.io/process") != Some(want.as_str()) {
                     continue;
                 }
                 if let Some(d) = &cm.data {
                     for (_k, v) in d {
-                        if let Ok(env) =
-                            tatara_process::receipt::ReceiptEnvelope::parse_either(v)
-                        {
+                        if let Ok(env) = tatara_process::receipt::ReceiptEnvelope::parse_either(v) {
                             envelopes.push(env);
                         }
                     }
@@ -311,7 +314,9 @@ async fn ship_nats(
         Err(e) => return ExportOutcome::Failed(format!("NATS connect: {e}")),
     };
     let js = async_nats::jetstream::new(client);
-    let ack = js.publish(subject.clone(), event_bytes.to_vec().into()).await;
+    let ack = js
+        .publish(subject.clone(), event_bytes.to_vec().into())
+        .await;
     match ack {
         Ok(fut) => match fut.await {
             Ok(_) => ExportOutcome::Shipped,

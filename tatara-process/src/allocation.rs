@@ -328,8 +328,123 @@ pub struct AllocationStatus {
     pub message: Option<String>,
 
     /// Standard Conditions.
-    #[serde(default)]
+    ///
+    /// The empty case is skipped at serialization so a merge-patch
+    /// body built from a caller-supplied [`AllocationStatus`] whose
+    /// `conditions` slot has not been touched does NOT emit
+    /// `"conditions": []` on the wire — under RFC-7396 JSON Merge
+    /// Patch (the shape `Patch::Merge` sends) an empty array
+    /// REPLACES the persisted list rather than merges into it, so a
+    /// controller round-trip that reused a scratch `AllocationStatus`
+    /// as a patch body would silently clobber whatever conditions the
+    /// prior status carried. Peer to `phase_since` /
+    /// `bound_pool` / `assigned_process` / `allocated_at` /
+    /// `expires_at` above, each already skip-serialized on its
+    /// [`Default`]-equivalent variant.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub conditions: Vec<AllocationCondition>,
+}
+
+impl AllocationStatus {
+    /// Substrate composer for a phase-transition [`AllocationStatus`]
+    /// seed: stamps the THREE always-present slots (`phase` +
+    /// `phase_since = Some(now)` + `message = Some(<supplied>)`) and
+    /// defaults every other slot (`bound_pool` / `assigned_process` /
+    /// `allocated_at` / `expires_at` = `None`, `conditions = vec![]`).
+    /// Caller-branches attach the extra slots via struct-update
+    /// syntax onto the seed.
+    ///
+    /// Pre-lift the 4-slot phase-transition seed
+    /// ```rust,ignore
+    /// json!({
+    ///     "status": {
+    ///         "phase": <AllocationPhase-variant>,
+    ///         "phaseSince": Utc::now(),
+    ///         "message": "<transition-reason>",
+    ///         …optional caller-attached slots…
+    ///     }
+    /// })
+    /// ```
+    /// was hand-authored at FOUR sites past the ★★ PRIME-DIRECTIVE
+    /// ≥ 2 duplication threshold in
+    /// `tatara-pool-reconciler::controller_allocation::reconcile_inner`,
+    /// each restating the SAME `phase + phase_since + message` invariant
+    /// triplet on a different [`AllocationPhase`] variant:
+    /// * `AllocationDecision::NoMatchingPool` — the "no Pool selector
+    ///   matched this Requestor" fallthrough
+    ///   ([`AllocationPhase::NoMatchingPool`]).
+    /// * `AllocationDecision::Wait` — the "pool matched; no Free member
+    ///   available" queued path
+    ///   ([`AllocationPhase::Queued`]) with a `bound_pool` addition.
+    /// * `AllocationDecision::Bind` — the "bound to pool member"
+    ///   allocation path ([`AllocationPhase::Bound`]) with
+    ///   `bound_pool` + `assigned_process` + `allocated_at` +
+    ///   `expires_at` additions.
+    /// * `AllocationDecision::Release` — the "released; pool reconciler
+    ///   will return the member" release path
+    ///   ([`AllocationPhase::Released`]) with `bound_pool` +
+    ///   `assigned_process` additions.
+    ///
+    /// All four hand-authored the SAME `phaseSince: Utc::now()` stamp
+    /// alongside the phase transition, and all four spelled the
+    /// invariant triplet as bare JSON keys inside a `json!({...})`
+    /// literal — a fragile shape where any drift in the underlying
+    /// [`AllocationStatus`] field naming (a rename from `phaseSince`
+    /// to `phase_since` at the serde surface, a promotion of `message`
+    /// to a structured envelope) silently stops the JSON keys from
+    /// mapping to the typed struct's fields and the K8s API server
+    /// merges an ill-shaped patch. Post-lift the four callers build a
+    /// typed [`AllocationStatus`] via `AllocationStatus::transition`,
+    /// attach any branch-specific slots via struct-update syntax, and
+    /// wrap the result in `json!({ "status": s })` — the serde
+    /// `rename_all = "camelCase"` derive on [`AllocationStatus`] owns
+    /// the wire-shape composition, so a field rename lands at ONE
+    /// site (the derive) and every emit site inherits the upgrade
+    /// mechanically.
+    ///
+    /// Cross-CRD peer to [`crate::pool::PoolStatus::observed`] on the
+    /// same `<CRD>Status` substrate-composer axis — both primitives
+    /// stamp `phase_since = Some(now)` from a caller-supplied `now`
+    /// timestamp so the composer stays clock-injectable rather than
+    /// implicitly reading wall time, and both close every optional slot
+    /// with its [`Default`]-equivalent variant so a future slot
+    /// addition on either status shape plugs into the composer at ONE
+    /// site and every downstream emit site inherits the new slot
+    /// mechanically.
+    ///
+    /// Cross-CRD peer to the `tatara-reconciler::patch::phase_status_msg`
+    /// primitive on the (CRD × phase-transition-with-message) axis —
+    /// both primitives own the three-slot `phase + phase_since +
+    /// message` invariant on their respective CRDs' status subresource,
+    /// and both accept `impl Into<String>` for the message so the
+    /// callsite carries `&'static str` literal reasons and
+    /// `format!(...)`-owned strings without widening the signature.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the 4-slot phase-transition status-seed incantation recurred at
+    /// four hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger, and is lifted to ONE owner here).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// the pins bind the three always-present slots + the
+    /// [`Default`]-defaulted rest + byte-identical parity with the
+    /// pre-lift `json!({...})` triplet through serde round-trip, so a
+    /// regression that drifted any surface at
+    /// `tests::allocation_status_transition_*` rather than as silent
+    /// operator-visible skew between the four allocation-decision
+    /// patch sites).
+    #[must_use]
+    pub fn transition(
+        phase: AllocationPhase,
+        message: impl Into<String>,
+        now: DateTime<Utc>,
+    ) -> Self {
+        Self {
+            phase,
+            phase_since: Some(now),
+            message: Some(message.into()),
+            ..Default::default()
+        }
+    }
 }
 
 /// Allocation lifecycle phase.
@@ -1738,5 +1853,182 @@ mod tests {
         assert!(!yaml.contains("poolRef"));
         assert!(!yaml.contains("ttl"));
         assert!(!yaml.contains("note"));
+    }
+
+    // ─── AllocationStatus::transition substrate pins ────────────────────
+    //
+    // Pin the substrate composer at fail-before-pass-after granularity:
+    // the composer did not exist pre-lift, so any regression against
+    // the four hand-authored sites in
+    // `tatara-pool-reconciler::controller_allocation::reconcile_inner`
+    // surfaces at these pins rather than as silent operator-visible
+    // status-patch skew.
+
+    fn anchor_time() -> DateTime<Utc> {
+        // A deterministic non-`Utc::now()` anchor so pins that read
+        // back `phase_since` do not race the wall clock.
+        DateTime::parse_from_rfc3339("2026-05-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc)
+    }
+
+    #[test]
+    fn allocation_status_transition_stamps_supplied_phase_verbatim() {
+        for phase in AllocationPhase::ALL {
+            let s = AllocationStatus::transition(phase, "irrelevant", anchor_time());
+            assert_eq!(s.phase, phase, "phase drifted for {phase:?}");
+        }
+    }
+
+    #[test]
+    fn allocation_status_transition_stamps_supplied_message_verbatim() {
+        let s = AllocationStatus::transition(
+            AllocationPhase::Queued,
+            "pool matched; no Free member available",
+            anchor_time(),
+        );
+        assert_eq!(
+            s.message.as_deref(),
+            Some("pool matched; no Free member available"),
+        );
+    }
+
+    #[test]
+    fn allocation_status_transition_sets_phase_since_to_supplied_now() {
+        let anchor = anchor_time();
+        let s = AllocationStatus::transition(AllocationPhase::Bound, "bound", anchor);
+        assert_eq!(
+            s.phase_since,
+            Some(anchor),
+            "phase_since must be the supplied `now`, not a fresh Utc::now()",
+        );
+    }
+
+    #[test]
+    fn allocation_status_transition_defaults_every_optional_slot() {
+        // The composer stamps only the three always-present slots
+        // (`phase + phase_since + message`); every other slot on
+        // `AllocationStatus` must land at its `Default`-equivalent
+        // variant so a caller-branch that attaches an optional slot
+        // via struct-update syntax does not silently inherit a
+        // pre-populated non-`None`/non-empty value.
+        let s = AllocationStatus::transition(AllocationPhase::Released, "released", anchor_time());
+        assert!(s.bound_pool.is_none(), "bound_pool must default to None");
+        assert!(
+            s.assigned_process.is_none(),
+            "assigned_process must default to None"
+        );
+        assert!(
+            s.allocated_at.is_none(),
+            "allocated_at must default to None"
+        );
+        assert!(s.expires_at.is_none(), "expires_at must default to None");
+        assert!(
+            s.conditions.is_empty(),
+            "conditions must default to an empty Vec"
+        );
+    }
+
+    #[test]
+    fn allocation_status_transition_accepts_owned_string_and_static_str() {
+        // `impl Into<String>` matches every current callsite:
+        // three of the four hand-authored sites pass `&'static str`
+        // literal reasons; the fourth ("bound to pool member") also
+        // passes a `&'static str`. Sibling to
+        // `tatara-reconciler::patch::phase_status_msg`'s identical
+        // `impl Into<String>` signature.
+        let via_static = AllocationStatus::transition(
+            AllocationPhase::NoMatchingPool,
+            "no Pool selector matched this Requestor",
+            anchor_time(),
+        );
+        let via_owned = AllocationStatus::transition(
+            AllocationPhase::NoMatchingPool,
+            String::from("no Pool selector matched this Requestor"),
+            anchor_time(),
+        );
+        assert_eq!(via_static.message, via_owned.message);
+    }
+
+    #[test]
+    fn allocation_status_transition_serializes_to_pre_lift_json_shape() {
+        // Byte-shape pin against the exact `json!({ "status": {
+        // "phase": <variant>, "phaseSince": <now>, "message": "<msg>"
+        // } })` incantation every pre-lift callsite restated. A
+        // regression that reordered a slot, dropped the `phaseSince`
+        // stamp, or drifted the camelCase key naming here surfaces at
+        // THIS pin rather than as a subtle patch_status body the K8s
+        // API server accepts but the pool reconciler's next observe
+        // pass fails to read back.
+        let anchor = anchor_time();
+        let via_composer =
+            AllocationStatus::transition(AllocationPhase::NoMatchingPool, "no match", anchor);
+        let composed = serde_json::json!({ "status": via_composer });
+        let hand_authored = serde_json::json!({
+            "status": {
+                "phase": AllocationPhase::NoMatchingPool,
+                "phaseSince": anchor,
+                "message": "no match",
+            }
+        });
+        assert_eq!(composed, hand_authored);
+    }
+
+    #[test]
+    fn allocation_status_transition_composes_with_struct_update_for_bind_seed() {
+        // Pin the compound shape the `AllocationDecision::Bind`
+        // callsite composes: the substrate seed carries `phase +
+        // phase_since + message`, and the branch attaches
+        // `bound_pool` + `assigned_process` + `allocated_at` +
+        // `expires_at` via struct-update syntax. Post-lift the four
+        // extra slots survive the compose intact and the base three
+        // slots inherit the composer's stamps verbatim.
+        let anchor = anchor_time();
+        let ttl = anchor + chrono::Duration::hours(1);
+        let pool = AllocationRef::new("demo-pool", "pools");
+        let assigned = AllocationRef::new("demo-abcd", "pools");
+        let bind_status = AllocationStatus {
+            bound_pool: Some(pool.clone()),
+            assigned_process: Some(assigned.clone()),
+            allocated_at: Some(anchor),
+            expires_at: Some(ttl),
+            ..AllocationStatus::transition(AllocationPhase::Bound, "bound to pool member", anchor)
+        };
+        // Base-three slots stamped by the composer.
+        assert_eq!(bind_status.phase, AllocationPhase::Bound);
+        assert_eq!(bind_status.phase_since, Some(anchor));
+        assert_eq!(bind_status.message.as_deref(), Some("bound to pool member"));
+        // Struct-update-attached branch slots.
+        assert_eq!(
+            bind_status.bound_pool.as_ref().map(|r| &r.name),
+            Some(&pool.name)
+        );
+        assert_eq!(
+            bind_status.assigned_process.as_ref().map(|r| &r.name),
+            Some(&assigned.name)
+        );
+        assert_eq!(bind_status.allocated_at, Some(anchor));
+        assert_eq!(bind_status.expires_at, Some(ttl));
+    }
+
+    #[test]
+    fn allocation_status_transition_shape_agrees_with_pool_status_observed_peer() {
+        // Cross-CRD peer-axis coherence: both substrate composers
+        // (`PoolStatus::observed`, `AllocationStatus::transition`)
+        // accept a caller-supplied `now: DateTime<Utc>` at the SAME
+        // signature slot, stamp it into `phase_since` uniformly, and
+        // leave every other slot at its `Default`-equivalent variant.
+        // Structural pin: if either side's `now` signature drifts to
+        // `impl Into<DateTime<Utc>>` or a reference form, this bind
+        // fails to compile here rather than silently drifting the
+        // family apart.
+        let _allocation_shape: fn(
+            AllocationPhase,
+            &'static str,
+            DateTime<Utc>,
+        ) -> AllocationStatus = AllocationStatus::transition;
+        // (`PoolStatus::observed`'s pinned coherence lives at its own
+        // peer pin family in `crate::pool`; this pin binds the
+        // `AllocationStatus::transition` side of the peer pair.)
     }
 }

@@ -10,7 +10,7 @@ use kube::runtime::controller::Action;
 use serde_json::json;
 use tracing::{info, warn};
 
-use tatara_process::allocation::{AllocationPhase, EphemeralAllocation};
+use tatara_process::allocation::{AllocationPhase, AllocationStatus, EphemeralAllocation};
 use tatara_process::annotations;
 use tatara_process::lifetime::{EphemeralLifetime, Lifetime, TeardownPolicy};
 use tatara_process::pool::{AllocationRef, PoolMember};
@@ -127,25 +127,50 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
     match decision {
         AllocationDecision::NoOp | AllocationDecision::HeartbeatBound => {}
         AllocationDecision::NoMatchingPool => {
+            // The `AllocationDecision::NoMatchingPool` phase-transition
+            // status seed rides through the substrate composer
+            // [`tatara_process::allocation::AllocationStatus::transition`]
+            // — pre-lift this was a hand-authored 4-line `json!({
+            // "status": { "phase": ..., "phaseSince": Utc::now(),
+            // "message": ..., } })` incantation, one of FOUR
+            // workspace-wide restatements past the ★★ PRIME-DIRECTIVE
+            // ≥ 2 duplication threshold in this module (peers at the
+            // Wait / Bind / Release arms below). Post-lift the four
+            // consumers share ONE substrate owner so a rename of the
+            // typed [`AllocationStatus`] field naming (a `phaseSince`
+            // → `phase_since` serde surface change, a structured-
+            // envelope promotion of `message`) lands at ONE derive
+            // and every emit site inherits the upgrade mechanically.
             let body = json!({
-                "status": {
-                    "phase": AllocationPhase::NoMatchingPool,
-                    "phaseSince": Utc::now(),
-                    "message": "no Pool selector matched this Requestor",
-                }
+                "status": AllocationStatus::transition(
+                    AllocationPhase::NoMatchingPool,
+                    "no Pool selector matched this Requestor",
+                    Utc::now(),
+                ),
             });
             let _ = alloc_api
                 .patch_status(&name, &PatchParams::default(), &Patch::Merge(&body))
                 .await;
         }
         AllocationDecision::Wait { pool } => {
+            // Peer to the NoMatchingPool arm above: the same substrate
+            // composer stamps the `phase + phase_since + message`
+            // invariant triplet; the branch-specific `bound_pool` slot
+            // rides in via struct-update syntax onto the seed so a
+            // future addition to the composer's stamped triplet (a
+            // `by:` transition-source annotation, a
+            // `transitionCount:` diagnostic counter) reaches this
+            // Wait/Queued site through the substrate rather than by
+            // hand-edit.
             let body = json!({
-                "status": {
-                    "phase": AllocationPhase::Queued,
-                    "phaseSince": Utc::now(),
-                    "boundPool": pool,
-                    "message": "pool matched; no Free member available",
-                }
+                "status": AllocationStatus {
+                    bound_pool: Some(pool),
+                    ..AllocationStatus::transition(
+                        AllocationPhase::Queued,
+                        "pool matched; no Free member available",
+                        Utc::now(),
+                    )
+                },
             });
             let _ = alloc_api
                 .patch_status(&name, &PatchParams::default(), &Patch::Merge(&body))
@@ -248,16 +273,28 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
             // at `tatara-github-watcher::allocation_factory`'s
             // pool_ref seed). Post-lift the four consumers share ONE
             // substrate owner.
+            // Peer to the NoMatchingPool / Wait arms above: the same
+            // substrate composer owns the invariant `phase +
+            // phase_since + message` triplet; this arm's four extra
+            // slots (`bound_pool` + `assigned_process` +
+            // `allocated_at` + `expires_at`) ride in via struct-update
+            // onto the seed. The composer accepts the shared local
+            // `now` binding so the same wall-clock read reaches BOTH
+            // `phase_since` and `allocated_at` — pre-lift the two
+            // slots stamped from the SAME `now`, so the composer's
+            // clock-injectability preserves that shape exactly.
             let body = json!({
-                "status": {
-                    "phase": AllocationPhase::Bound,
-                    "phaseSince": now,
-                    "boundPool": pool,
-                    "assignedProcess": AllocationRef::new(member_process_name, ns.clone()),
-                    "allocatedAt": now,
-                    "expiresAt": expires_at,
-                    "message": "bound to pool member",
-                }
+                "status": AllocationStatus {
+                    bound_pool: Some(pool),
+                    assigned_process: Some(AllocationRef::new(member_process_name, ns.clone())),
+                    allocated_at: Some(now),
+                    expires_at: Some(expires_at),
+                    ..AllocationStatus::transition(
+                        AllocationPhase::Bound,
+                        "bound to pool member",
+                        now,
+                    )
+                },
             });
             let _ = alloc_api
                 .patch_status(&name, &PatchParams::default(), &Patch::Merge(&body))
@@ -289,14 +326,23 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
             // the ref shape (added field, canonicalization, non-empty
             // gate) lands at ONE place rather than at both status-
             // patch sites here.
+            // Peer to the NoMatchingPool / Wait / Bind arms above:
+            // the same substrate composer owns the invariant `phase +
+            // phase_since + message` triplet; the branch-specific
+            // `bound_pool` + `assigned_process` slots ride in via
+            // struct-update onto the seed so the four `reconcile_inner`
+            // patch sites now share ONE substrate owner for the
+            // three always-present slots.
             let body = json!({
-                "status": {
-                    "phase": AllocationPhase::Released,
-                    "phaseSince": Utc::now(),
-                    "boundPool": pool,
-                    "assignedProcess": AllocationRef::new(member_process_name, ns.clone()),
-                    "message": "released; pool reconciler will return the member",
-                }
+                "status": AllocationStatus {
+                    bound_pool: Some(pool),
+                    assigned_process: Some(AllocationRef::new(member_process_name, ns.clone())),
+                    ..AllocationStatus::transition(
+                        AllocationPhase::Released,
+                        "released; pool reconciler will return the member",
+                        Utc::now(),
+                    )
+                },
             });
             let _ = alloc_api
                 .patch_status(&name, &PatchParams::default(), &Patch::Merge(&body))

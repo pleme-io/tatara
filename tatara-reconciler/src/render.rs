@@ -558,7 +558,17 @@ pub fn render_routing(
 
     let mut out: Vec<Value> = Vec::new();
     for hostname in &routing.hostnames {
-        let host_cluster = hostname.cluster.as_deref().unwrap_or(cluster);
+        // Cluster override rides through the ONE substrate primitive
+        // `RoutingHostname::cluster_or` — pre-lift this was a hand-
+        // authored `.cluster.as_deref().unwrap_or(cluster)` chain,
+        // one of TWO workspace-wide restatements past the ★★
+        // PRIME-DIRECTIVE ≥ 2 duplication threshold (peer at
+        // `table_controller::stable_name_group_key`). Post-lift both
+        // consumers share ONE substrate owner; a future normalization
+        // (case-fold, cross-cluster alias resolution, per-fleet
+        // canonicalization) lands at `RoutingHostname::cluster_or`
+        // and every consumer inherits it mechanically.
+        let host_cluster = hostname.cluster_or(cluster);
         let eph_id = resolve_ephemeral_id(hostname, &fallback_hash);
 
         // (1) Per-instance form — always emitted.

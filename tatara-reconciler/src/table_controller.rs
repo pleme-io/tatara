@@ -98,7 +98,18 @@ pub async fn reconcile(
         // inherits the upgrade mechanically.
         let process_ref = p.qualified_ref();
         for hostname in &routing.hostnames {
-            let cluster = hostname.cluster.as_deref().unwrap_or(cfg_cluster);
+            // Cluster override rides through the ONE substrate
+            // primitive `RoutingHostname::cluster_or` — pre-lift this
+            // was a hand-authored `.cluster.as_deref().unwrap_or
+            // (cfg_cluster)` chain, one of TWO workspace-wide
+            // restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+            // duplication threshold (peer at
+            // `render::render_routing`). Post-lift both consumers
+            // share ONE substrate owner; a future normalization
+            // (case-fold, cross-cluster alias resolution, per-fleet
+            // canonicalization) lands at `RoutingHostname::cluster_or`
+            // and every consumer inherits it mechanically.
+            let cluster = hostname.cluster_or(cfg_cluster);
             let key = format!("{cluster}/{}", hostname.app);
             groups.entry(key).or_default().push(Candidate {
                 process_ref: process_ref.clone(),

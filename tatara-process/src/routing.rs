@@ -148,6 +148,53 @@ impl RoutingHostname {
     pub fn is_named(&self) -> bool {
         self.instance.as_deref().is_some_and(|s| !s.is_empty())
     }
+
+    /// Cluster override slice with a caller-supplied per-config
+    /// fallback applied — the ONE-line collapse of the paired
+    /// `self.cluster.as_deref().unwrap_or(fallback)` incantation the
+    /// reconciler's FQDN composer + stable-claim group-key composer
+    /// both spelled by hand pre-lift.
+    ///
+    /// Pre-lift the projection was hand-authored at TWO sites past
+    /// the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold in
+    /// `tatara-reconciler`, each walking the SAME borrow-form
+    /// `Option<String>` slot × per-config-fallback shape:
+    /// * `render::render_routing` — per-instance FQDN composer seed
+    ///   for [`crate::hostname::fmt_fqdn`], keyed on the cluster
+    ///   segment.
+    /// * `table_controller::stable_name_group_key` — claim-arbiter
+    ///   `(cluster, app)` group-key seed, keyed on the cluster
+    ///   segment.
+    ///
+    /// Both sites walked the SAME projection: pull the borrow-form
+    /// `.cluster.as_deref()` slot, sink an absent slot to the
+    /// per-config fallback the caller threads in from
+    /// `Context.config.cluster`. Post-lift both consumers read
+    /// `hostname.cluster_or(cfg_cluster)` — the projection sits at
+    /// ONE substrate owner, so a future normalization (a case-fold
+    /// pass, an empty-string-to-fallback promotion, a cross-cluster
+    /// alias resolver, a per-fleet cluster-name canonicalization)
+    /// lands here exactly once and every consumer (FQDN composer,
+    /// claim-arbiter group key, and any future edge whose downstream
+    /// keys on the cluster segment) inherits the upgrade
+    /// mechanically.
+    ///
+    /// Peer to [`Self::is_named`] on the (Option<String> slot ×
+    /// fallback shape) axis pair — both live on `RoutingHostname`
+    /// and hide the missing-slot corner behind ONE substrate
+    /// primitive; both preserve the borrow-form return, so downstream
+    /// composers thread the slice without a `.to_string()` step.
+    ///
+    /// Semantics: an explicit `Some("")` returns the empty string
+    /// (matching the pre-lift `.as_deref().unwrap_or(fallback)`
+    /// chain's behavior). Callers whose downstream rejects an
+    /// empty cluster segment must gate on that separately —
+    /// [`crate::hostname::fmt_fqdn`]'s validator does so
+    /// automatically via [`crate::hostname::HostnameError::
+    /// InvalidLabel`].
+    pub fn cluster_or<'a>(&'a self, fallback: &'a str) -> &'a str {
+        self.cluster.as_deref().unwrap_or(fallback)
+    }
 }
 
 /// Wire-form value stamped at
@@ -287,6 +334,178 @@ mod tests {
             cluster: None,
         };
         assert!(!h_empty.is_named()); // empty string ⇒ unnamed
+    }
+
+    // ─── RoutingHostname::cluster_or substrate pins ──────────────
+    //
+    // The pre-lift reconciler restated the same
+    // `hostname.cluster.as_deref().unwrap_or(<cfg-cluster>)` chain at
+    // TWO callsites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // trigger:
+    //   * render.rs::render_routing (line 561) — FQDN composer seed
+    //   * table_controller.rs::stable_name_group_key (line 101) —
+    //     claim-arbiter group-key seed
+    // Every corner of the paired projection is pinned here so a
+    // future normalization at the primitive lands with a
+    // fail-before-pass-after regression at THIS composer's pins
+    // rather than as silent operator-visible drift across the two
+    // callsite arms.
+
+    #[test]
+    fn cluster_or_returns_slot_when_cluster_is_populated() {
+        let h = RoutingHostname {
+            app: "api".into(),
+            instance: None,
+            cluster: Some("pleme-prod".into()),
+        };
+        assert_eq!(h.cluster_or("pleme-dev"), "pleme-prod");
+    }
+
+    #[test]
+    fn cluster_or_falls_back_to_caller_string_when_cluster_is_none() {
+        let h = RoutingHostname {
+            app: "api".into(),
+            instance: None,
+            cluster: None,
+        };
+        assert_eq!(h.cluster_or("pleme-dev"), "pleme-dev");
+    }
+
+    #[test]
+    fn cluster_or_returns_empty_slice_when_cluster_is_explicitly_empty_string() {
+        // Populated-empty short-circuit pin: `Some("")` is a
+        // populated slot for `as_deref().unwrap_or(...)`, so the
+        // fallback is NOT taken. The downstream FQDN composer's
+        // validator (`fmt_fqdn`) rejects the empty label with a
+        // typed `HostnameError::InvalidLabel`, not this primitive.
+        let h = RoutingHostname {
+            app: "api".into(),
+            instance: None,
+            cluster: Some(String::new()),
+        };
+        assert_eq!(h.cluster_or("pleme-dev"), "");
+    }
+
+    #[test]
+    fn cluster_or_is_a_pure_projection() {
+        // Two identical inputs → two identical outputs; no interior
+        // mutation or per-call hidden state.
+        let h = RoutingHostname {
+            app: "api".into(),
+            instance: Some("demo-prod".into()),
+            cluster: Some("pleme-prod".into()),
+        };
+        let a = h.cluster_or("pleme-dev");
+        let b = h.cluster_or("pleme-dev");
+        assert_eq!(a, b);
+        assert_eq!(a, "pleme-prod");
+    }
+
+    #[test]
+    fn cluster_or_borrow_form_return_shape_matches_fmt_fqdn_arg_shape() {
+        // The primitive returns `&str` so it slots straight into
+        // `fmt_fqdn(&hostname.app, eph_id, host_cluster, location,
+        // domain)` at `render::render_routing` without a
+        // `.to_string()` step. Compose here so a future return-shape
+        // change (owned `String`, `Cow<'_, str>`) breaks this pin,
+        // not the reconciler.
+        use crate::hostname::fmt_fqdn;
+        let h = RoutingHostname {
+            app: "api".into(),
+            instance: Some("demo-prod".into()),
+            cluster: None,
+        };
+        let host_cluster: &str = h.cluster_or("pleme-dev");
+        let fqdn = fmt_fqdn(
+            &h.app,
+            h.instance.as_deref().unwrap(),
+            host_cluster,
+            "use1",
+            "quero.lol",
+        )
+        .expect("fmt_fqdn");
+        assert_eq!(fqdn, "api.demo-prod.pleme-dev.use1.quero.lol");
+    }
+
+    #[test]
+    fn cluster_or_matches_pre_lift_chain_verbatim() {
+        // Full 4-corner byte-identical parity table across the
+        // `(cluster slot × fallback shape)` axis pair. Any
+        // divergence between the primitive and each pre-lift
+        // callsite's inline chain surfaces HERE rather than as
+        // per-site operator-visible drift.
+        let fallbacks = ["pleme-dev", "pleme-prod", "", "some-other-cluster"];
+        let cluster_slots = [
+            None,
+            Some(String::new()),
+            Some("pleme-prod".into()),
+            Some("edge-1".into()),
+        ];
+        for fallback in fallbacks {
+            for cluster in &cluster_slots {
+                let h = RoutingHostname {
+                    app: "api".into(),
+                    instance: None,
+                    cluster: cluster.clone(),
+                };
+                let pre_lift = h.cluster.as_deref().unwrap_or(fallback);
+                let via_primitive = h.cluster_or(fallback);
+                assert_eq!(
+                    via_primitive, pre_lift,
+                    "primitive must match pre-lift `.as_deref().unwrap_or(fallback)` chain \
+                     byte-identically at (fallback={fallback:?}, cluster={cluster:?})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn cluster_or_composes_with_stable_group_key_shape() {
+        // Peer-composition pin against
+        // `table_controller::stable_name_group_key`'s downstream
+        // seed shape (`format!("{cluster}/{}", hostname.app)`).
+        // A future rename of the separator or the composer's
+        // ordering breaks this pin, not the claim-arbiter row seed.
+        let h = RoutingHostname {
+            app: "api".into(),
+            instance: None,
+            cluster: None,
+        };
+        let cluster = h.cluster_or("pleme-dev");
+        let key = format!("{cluster}/{}", h.app);
+        assert_eq!(key, "pleme-dev/api");
+
+        let h_over = RoutingHostname {
+            app: "api".into(),
+            instance: None,
+            cluster: Some("pleme-prod".into()),
+        };
+        let cluster = h_over.cluster_or("pleme-dev");
+        let key = format!("{cluster}/{}", h_over.app);
+        assert_eq!(key, "pleme-prod/api");
+    }
+
+    #[test]
+    fn cluster_or_lifetime_ties_output_to_the_shorter_of_self_or_fallback() {
+        // Compile-time proof (via the return signature) that the
+        // returned slice borrows through EITHER `&self.cluster` or
+        // `&fallback` — the caller cannot outlive the shorter of
+        // the two. If a future refactor loosens the lifetime to
+        // `&'a str` where `'a` is only tied to `self`, this test
+        // stops compiling with the fallback-borrow arm.
+        let h = RoutingHostname {
+            app: "api".into(),
+            instance: None,
+            cluster: None,
+        };
+        {
+            let fallback = String::from("pleme-dev");
+            let slice = h.cluster_or(&fallback);
+            assert_eq!(slice, "pleme-dev");
+            // `slice` cannot escape this scope — its lifetime is
+            // bounded by `fallback`. That's the compile-time
+            // discipline the `<'a>` on the primitive encodes.
+        }
     }
 
     #[test]

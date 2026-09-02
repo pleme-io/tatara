@@ -85,11 +85,20 @@ impl AllocationConvergenceCtx {
     where
         F: Fn(&'a EphemeralPool) -> &'a [PoolMember],
     {
-        let phase = alloc
-            .status
-            .as_ref()
-            .map(|s| s.phase)
-            .unwrap_or(AllocationPhase::Pending);
+        // Phase snapshot rides through the ONE substrate primitive
+        // `EphemeralAllocation::observed_phase_or_pending` — pre-lift
+        // this was a hand-authored 5-line `.status.as_ref().map(|s|
+        // s.phase).unwrap_or(AllocationPhase::Pending)` chain, the
+        // cross-CRD peer of the same-shape lift already owned by
+        // `Process::observed_phase_or_pending` (which sank FIVE
+        // pre-lift restatements). Both CRDs' phase-slot observers
+        // now share ONE substrate accessor per CRD; a future
+        // normalization (a generation-filter, a staleness gate, a
+        // canonicalization pass) lands at `tatara_process::prelude::
+        // EphemeralAllocation::observed_phase_or_pending` and this
+        // routing seed inherits the upgrade mechanically alongside
+        // the `Process` peer consumers.
+        let phase = alloc.observed_phase_or_pending();
         // Tombstone-presence probe rides through the ONE substrate
         // primitive `DeletionTombstoned::is_being_deleted` (blanket
         // impl over every `kube::Resource<DynamicType = ()>`) — pre-

@@ -512,6 +512,88 @@ pub struct AllocationCondition {
     pub last_transition_time: DateTime<Utc>,
 }
 
+impl EphemeralAllocation {
+    /// The copy-form status-projection primitive on the phase axis:
+    /// returns the [`AllocationPhase`] the pool reconciler currently
+    /// persists at `status.phase`, wrapped in an `Option` so the
+    /// missing-`status` corner collapses to `None` — the ONE-liner
+    /// collapse of the paired `self.status.as_ref().map(|s| s.phase)`
+    /// incantation the pool reconciler's `AllocationConvergenceCtx::
+    /// observe` restated by hand pre-lift.
+    ///
+    /// Cross-CRD peer to [`crate::prelude::Process::observed_phase`]
+    /// on the (CRD × phase-slot × observed-status) axis pair — both
+    /// primitives walk the identical `.status.as_ref().map(|s| s.
+    /// phase)` shape, differing only in the `Phase` type projected
+    /// ([`AllocationPhase`] vs [`crate::phase::ProcessPhase`]). The
+    /// substrate now owns the borrow-form `.status.as_ref().map(|s|
+    /// s.phase)` chain axis-uniformly across the two `Phase`-having
+    /// CRDs so a future normalization (a generation-filter that
+    /// returns `None` for a phase stamped with a stale
+    /// `metadata.generation`, a staleness gate that drops a phase
+    /// whose observing `phase_since` predates a reconcile deadline,
+    /// a canonicalization pass that maps a phase outside the CRD's
+    /// closed set to `None`) lands at ONE substrate method per CRD
+    /// rather than being restated at every observer.
+    #[must_use]
+    pub fn observed_phase(&self) -> Option<AllocationPhase> {
+        self.status.as_ref().map(|s| s.phase)
+    }
+
+    /// The copy-form status-projection primitive on the phase axis
+    /// with the [`AllocationPhase::Pending`] sink applied — the
+    /// ONE-liner collapse of the paired `self.observed_phase().
+    /// unwrap_or(AllocationPhase::Pending)` incantation the pool
+    /// reconciler's `AllocationConvergenceCtx::observe` restated by
+    /// hand pre-lift as a 5-line `.status.as_ref().map(|s| s.phase).
+    /// unwrap_or(AllocationPhase::Pending)` chain.
+    ///
+    /// Pre-lift the chain sat at [`tatara-pool-reconciler::
+    /// allocation_decide::AllocationConvergenceCtx::observe`]'s
+    /// `phase` seed. Cross-CRD peer to [`crate::prelude::Process::
+    /// observed_phase_or_pending`] on the (CRD × phase-slot × sink)
+    /// axis pair — both primitives close the missing-`status`
+    /// corner with each CRD's respective [`Default`]-equivalent
+    /// `Pending` variant, and both compose on top of their peer
+    /// [`Self::observed_phase`] / [`crate::prelude::Process::
+    /// observed_phase`] borrow-form projections so a future
+    /// normalization at the underlying `observed_phase` primitive
+    /// reaches both the raw-`Option` accessor and the `Pending`-
+    /// sinked composer through the SAME upstream body.
+    ///
+    /// The [`AllocationPhase::Pending`] sink is load-bearing as the
+    /// "not yet observed" default — the pool reconciler's typed
+    /// `AllocationPhase::needs_pool_routing` predicate returns
+    /// `true` for `Pending`, so a freshly-admitted Allocation whose
+    /// pool reconciler has not yet stamped a `.status` slot reads
+    /// as `Pending` and immediately enters the routing ladder,
+    /// matching the pre-lift `AllocationPhase::Pending` fallback
+    /// semantics verbatim.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition
+    /// — the two-link `.status.as_ref().map(|s| s.phase).unwrap_or
+    /// (AllocationPhase::Pending)` chain recurred at both the
+    /// [`crate::prelude::Process`] site (already lifted onto
+    /// [`crate::prelude::Process::observed_phase_or_pending`]) AND
+    /// the [`EphemeralAllocation`] site by hand, i.e. the SHAPE
+    /// itself recurs past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    /// trigger, and is lifted to ONE owner per CRD here). THEORY.md
+    /// §II.1 invariant 5 (composition preserves proofs — the pins
+    /// bind the missing-`status` sink to `Pending` + populated-
+    /// status pass-through + every [`AllocationPhase`] variant
+    /// round-trip + byte-identical parity with the pre-lift
+    /// two-link chain + cross-CRD peer coherence with
+    /// [`crate::prelude::Process::observed_phase_or_pending`], so
+    /// a regression that drifted any surface at
+    /// `tests::observed_phase_*` rather than as silent operator-
+    /// facing skew between the allocation observer's routing seed
+    /// and the Process observer's dispatch seed).
+    #[must_use]
+    pub fn observed_phase_or_pending(&self) -> AllocationPhase {
+        self.observed_phase().unwrap_or(AllocationPhase::Pending)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // `FromStr` lives in scope at the test surface only — the derive
@@ -841,6 +923,270 @@ mod tests {
     // `tatara_lisp_derive::pascal_to_spaced_lowercase_tests` —
     // together the two contracts guarantee the operator-facing
     // diagnostic without needing per-enum literal pins.
+
+    // ─── EphemeralAllocation::observed_phase* substrate pins ────────
+    //
+    // Fail-before-pass-after granularity: neither `observed_phase` nor
+    // `observed_phase_or_pending` existed before this commit, so each
+    // pin fails to compile until the corresponding inherent method
+    // lands. Post-lift the pins bind the missing-`status` corner + the
+    // populated-status pass-through + byte-identical parity with the
+    // pre-lift 5-line `.status.as_ref().map(|s| s.phase).unwrap_or
+    // (AllocationPhase::Pending)` chain the pool reconciler's
+    // `AllocationConvergenceCtx::observe` walked. Cross-CRD peer
+    // coherence with `Process::observed_phase_or_pending` is pinned
+    // by the `_matches_process_peer_shape` sweep at the tail.
+
+    fn alloc_with_phase(phase: AllocationPhase) -> EphemeralAllocation {
+        let spec = AllocationSpec {
+            pool_ref: None,
+            requestor: Requestor {
+                kind: "manual".into(),
+                repo: None,
+                branch: None,
+                pr_number: None,
+                sha: None,
+                pr_labels: vec![],
+                actor: None,
+            },
+            ttl: None,
+            note: None,
+        };
+        let mut a = EphemeralAllocation::new("obs-alloc", spec);
+        a.status = Some(AllocationStatus {
+            phase,
+            ..AllocationStatus::default()
+        });
+        a
+    }
+
+    fn alloc_without_status() -> EphemeralAllocation {
+        let spec = AllocationSpec {
+            pool_ref: None,
+            requestor: Requestor {
+                kind: "manual".into(),
+                repo: None,
+                branch: None,
+                pr_number: None,
+                sha: None,
+                pr_labels: vec![],
+                actor: None,
+            },
+            ttl: None,
+            note: None,
+        };
+        let mut a = EphemeralAllocation::new("no-status-alloc", spec);
+        a.status = None;
+        a
+    }
+
+    #[test]
+    fn observed_phase_returns_none_when_status_is_none() {
+        let a = alloc_without_status();
+        assert!(a.observed_phase().is_none());
+    }
+
+    #[test]
+    fn observed_phase_returns_populated_variant_verbatim() {
+        for p in AllocationPhase::ALL {
+            let a = alloc_with_phase(p);
+            assert_eq!(
+                a.observed_phase(),
+                Some(p),
+                "observed_phase must project the persisted variant verbatim for {p:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn observed_phase_matches_pre_lift_chain_bytewise() {
+        // Sweep every corner: (status: None) plus every populated
+        // (status: Some(phase)) variant. The pre-lift chain was
+        // `alloc.status.as_ref().map(|s| s.phase)` — a 3-link chain
+        // hand-authored inline at the observer. The primitive must
+        // return the same `Option<AllocationPhase>` on every corner.
+        let none_alloc = alloc_without_status();
+        assert_eq!(
+            none_alloc.observed_phase(),
+            none_alloc.status.as_ref().map(|s| s.phase),
+        );
+        for p in AllocationPhase::ALL {
+            let a = alloc_with_phase(p);
+            assert_eq!(
+                a.observed_phase(),
+                a.status.as_ref().map(|s| s.phase),
+                "primitive must be byte-identical to the pre-lift chain for {p:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn observed_phase_or_pending_defaults_to_pending_when_status_absent() {
+        let a = alloc_without_status();
+        assert_eq!(a.observed_phase_or_pending(), AllocationPhase::Pending);
+    }
+
+    #[test]
+    fn observed_phase_or_pending_returns_populated_phase_verbatim() {
+        for p in AllocationPhase::ALL {
+            let a = alloc_with_phase(p);
+            assert_eq!(
+                a.observed_phase_or_pending(),
+                p,
+                "populated status must pass through verbatim for {p:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn observed_phase_or_pending_defaults_agree_with_allocation_phase_default() {
+        // The `Pending` sink is load-bearing as the "not yet observed"
+        // default. `AllocationPhase::default()` returns `Pending`; the
+        // primitive must return the same variant on the missing-status
+        // corner. A future default-variant rename that flipped
+        // `AllocationPhase::default` without flipping the primitive
+        // (or vice versa) surfaces here as a divergent seed for the
+        // routing ladder.
+        let a = alloc_without_status();
+        assert_eq!(a.observed_phase_or_pending(), AllocationPhase::default());
+    }
+
+    #[test]
+    fn observed_phase_or_pending_matches_pre_lift_chain_bytewise() {
+        // The exact pre-lift 5-line chain in
+        // `tatara-pool-reconciler::allocation_decide::
+        // AllocationConvergenceCtx::observe` was:
+        //     let phase = alloc
+        //         .status
+        //         .as_ref()
+        //         .map(|s| s.phase)
+        //         .unwrap_or(AllocationPhase::Pending);
+        // Sweep every corner: (status: None) plus every populated
+        // status variant. The primitive must be byte-identical for
+        // every corner so the observer's routing decision matches
+        // bytewise post-lift.
+        let none_alloc = alloc_without_status();
+        assert_eq!(
+            none_alloc.observed_phase_or_pending(),
+            none_alloc
+                .status
+                .as_ref()
+                .map(|s| s.phase)
+                .unwrap_or(AllocationPhase::Pending),
+        );
+        for p in AllocationPhase::ALL {
+            let a = alloc_with_phase(p);
+            assert_eq!(
+                a.observed_phase_or_pending(),
+                a.status
+                    .as_ref()
+                    .map(|s| s.phase)
+                    .unwrap_or(AllocationPhase::Pending),
+                "primitive must be byte-identical to the pre-lift 5-line chain for {p:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn observed_phase_or_pending_composes_from_observed_phase() {
+        // The composer sits on top of the borrow-form projection —
+        // `observed_phase_or_pending() == observed_phase().unwrap_or
+        // (Pending)`. Pinning the composition means a future
+        // normalization step layered onto `observed_phase` (a
+        // generation-filter, a staleness gate, a canonicalization
+        // pass) reaches BOTH the raw-`Option` accessor and the
+        // `Pending`-sinked composer through the SAME upstream body,
+        // without needing a per-corner rewrite of the composer.
+        let none_alloc = alloc_without_status();
+        assert_eq!(
+            none_alloc.observed_phase_or_pending(),
+            none_alloc
+                .observed_phase()
+                .unwrap_or(AllocationPhase::Pending),
+        );
+        for p in AllocationPhase::ALL {
+            let a = alloc_with_phase(p);
+            assert_eq!(
+                a.observed_phase_or_pending(),
+                a.observed_phase().unwrap_or(AllocationPhase::Pending),
+                "composer must ride on top of the borrow-form projection for {p:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn observed_phase_is_a_pure_projection() {
+        // Reading the phase twice must not mutate the allocation or
+        // its status slot — pure projection semantics. Also witnesses
+        // that the accessor doesn't clone / drop the inner `phase`
+        // (the `Copy` scalar comes out identical on both reads).
+        let a = alloc_with_phase(AllocationPhase::Bound);
+        let one = a.observed_phase();
+        let two = a.observed_phase();
+        assert_eq!(one, two);
+        assert!(a.status.is_some(), "projection must not consume the status");
+    }
+
+    #[test]
+    fn observed_phase_pending_missing_status_and_populated_pending_collapse_to_same_composer_output(
+    ) {
+        // A subtle correctness pin: the missing-`status` corner and
+        // a populated-with-Pending status BOTH read as `Pending`
+        // through the composer — the observer cannot distinguish the
+        // two through this accessor. This matches the pre-lift 5-line
+        // chain's semantics exactly (an operator patching
+        // `status.phase: Pending` is indistinguishable from a
+        // freshly-admitted allocation with no status stamped yet).
+        // The borrow-form `observed_phase` accessor DOES distinguish
+        // the two, so a caller that needs to tell them apart reaches
+        // for the raw `Option`.
+        let none_alloc = alloc_without_status();
+        let pending_alloc = alloc_with_phase(AllocationPhase::Pending);
+
+        assert_eq!(
+            none_alloc.observed_phase_or_pending(),
+            pending_alloc.observed_phase_or_pending(),
+        );
+        assert_ne!(
+            none_alloc.observed_phase(),
+            pending_alloc.observed_phase(),
+            "borrow-form accessor MUST distinguish missing-status from populated-Pending",
+        );
+    }
+
+    #[test]
+    fn observed_phase_or_pending_missing_status_sink_agrees_with_process_peer_shape() {
+        // Cross-CRD peer-axis coherence with
+        // `Process::observed_phase_or_pending`. Both primitives walk
+        // the identical `.status.as_ref().map(|s| s.phase).unwrap_or
+        // (<Phase>::Pending)` chain differing ONLY in the `Phase`
+        // type projected. On a missing-status observation, each
+        // primitive must return its CRD's `Default`-equivalent
+        // `Pending` variant — for `EphemeralAllocation` that's
+        // `AllocationPhase::Pending`; for `Process` that's
+        // `crate::phase::ProcessPhase::Pending`. This pin binds the
+        // sink-parity structurally so a future rename of either
+        // default variant surfaces here as a divergent seed for the
+        // observer's routing / dispatch decision rather than as
+        // silent drift between the two reconcilers.
+        let no_status_alloc = alloc_without_status();
+        assert_eq!(
+            no_status_alloc.observed_phase_or_pending(),
+            AllocationPhase::default(),
+        );
+        // Peer-axis invariant on the `Process` side — the primitive
+        // that owns the same shape reads `ProcessPhase::Pending` on
+        // the missing-status corner via its own inherent method. The
+        // parity is coordinated at the `Default` seat: both CRDs'
+        // phase types default to `Pending`, so a rename that broke
+        // one without the other would fail one of these two
+        // conjoined assertions.
+        assert_eq!(AllocationPhase::default(), AllocationPhase::Pending,);
+        assert_eq!(
+            crate::phase::ProcessPhase::default(),
+            crate::phase::ProcessPhase::Pending,
+        );
+    }
 
     #[test]
     fn allocation_spec_omits_optional_fields() {

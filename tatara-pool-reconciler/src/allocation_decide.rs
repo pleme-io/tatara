@@ -112,7 +112,19 @@ impl AllocationConvergenceCtx {
         // cross-cluster clock-skew guard) lands at the ONE trait
         // method and this observer picks it up mechanically.
         let being_deleted = alloc.is_being_deleted();
-        let expires_at = alloc.status.as_ref().and_then(|s| s.expires_at);
+        // TTL-expiry deadline rides through the ONE substrate primitive
+        // `EphemeralAllocation::observed_expires_at` — pre-lift this was
+        // a hand-authored `.status.as_ref().and_then(|s| s.expires_at)`
+        // chain, the third-slot copy-form peer to the two byte-identical
+        // status-projection primitives already living on the same CRD
+        // (`observed_phase` on `status.phase`, `observed_bound_pool` on
+        // `status.bound_pool`). Post-lift the substrate owns every
+        // `Copy`-valued and structured-record status-slot projection on
+        // `EphemeralAllocation`; a future normalization (a clock-skew
+        // guard, a monotonic-deadline canonicalization, a stale-timestamp
+        // gate) lands at the ONE substrate method and this Release-
+        // composition TTL gate inherits the upgrade mechanically.
+        let expires_at = alloc.observed_expires_at();
         let assigned_process = alloc
             .status
             .as_ref()

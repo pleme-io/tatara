@@ -673,6 +673,79 @@ impl EphemeralAllocation {
     pub fn observed_bound_pool(&self) -> Option<&AllocationRef> {
         self.status.as_ref().and_then(|s| s.bound_pool.as_ref())
     }
+
+    /// The copy-form status-projection primitive on the TTL-expiry axis:
+    /// returns the wall-clock deadline the pool reconciler currently
+    /// persists at `status.expires_at` (derived from `spec.ttl` +
+    /// `allocated_at` at Bind time), wrapped in an `Option` so both the
+    /// missing-`status` corner AND the populated-status-with-`expires_at
+    /// =None` corner collapse to `None` — the ONE-liner collapse of the
+    /// paired `self.status.as_ref().and_then(|s| s.expires_at)`
+    /// incantation the pool reconciler's `AllocationConvergenceCtx::
+    /// observe` restated by hand pre-lift.
+    ///
+    /// Same-CRD peer to [`Self::observed_phase`] on the (CRD × copy-form
+    /// × status-slot) axis pair — both primitives walk the identical
+    /// `.status.as_ref().<map|and_then>(|s| s.<Copy-field>)` shape,
+    /// differing only in the record projected ([`DateTime<Utc>`] here,
+    /// [`AllocationPhase`] on the phase axis) and in the outer combinator
+    /// (`and_then` here because the persisted field is itself an
+    /// `Option<DateTime<Utc>>`, `map` there because the persisted phase
+    /// is bare). The substrate now owns the copy-form
+    /// `.status.as_ref().<map|and_then>(|s| s.<Copy-field>)` chain
+    /// axis-uniformly across every `Copy`-valued slot on
+    /// `AllocationStatus`, so a future normalization (a clock-skew
+    /// guard that drops an `expires_at` stamped before its owning
+    /// allocation's observed `allocated_at`, a canonicalization pass
+    /// that clamps a deadline to a monotonic upper bound, a stale-
+    /// timestamp gate that returns `None` on an `expires_at` older than
+    /// a controller-configured horizon) lands at ONE substrate method
+    /// rather than being restated at every observer.
+    ///
+    /// Return-form axis: `Option<DateTime<Utc>>` mirrors the copy-first
+    /// discipline of [`Self::observed_phase`]. The lone pre-lift consumer
+    /// ([`tatara-pool-reconciler::allocation_decide::
+    /// AllocationConvergenceCtx::observe`]'s `expires_at` seed) spelled
+    /// the projection as `.status.as_ref().and_then(|s| s.expires_at)` —
+    /// a 3-link hand-authored chain the observer walked on every
+    /// reconcile pass. Post-lift the consumer reaches the primitive
+    /// once and the whole missing-status + empty-slot corner cross
+    /// collapses at the substrate rather than at the callsite.
+    ///
+    /// The missing-`status` corner AND the populated-status-with-
+    /// `expires_at=None` corner BOTH collapse to `None` so
+    /// `.is_some()` / `if let Some(_)` / any `>=` deadline comparison
+    /// behave identically on an `EphemeralAllocation` whose status
+    /// field is `None` and on one whose status carries an unpopulated
+    /// `expires_at` slot — matching what the pre-lift `.and_then(...)`
+    /// chain produced. Consumers that need to tell those corners apart
+    /// reach for [`Self::status`] directly, exactly as the existing peer
+    /// accessors [`Self::observed_phase`] +
+    /// [`Self::observed_phase_or_pending`] admit.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `.status.as_ref().and_then(|s| s.<Copy-field>)` shape
+    /// recurred as ONE hand-authored chain in
+    /// [`tatara-pool-reconciler::allocation_decide::
+    /// AllocationConvergenceCtx::observe`] AND as the copy-form peer
+    /// [`Self::observed_phase`] primitive already owned on the same
+    /// CRD's `status.phase` slot, past the substrate-shape recurrence
+    /// trigger; the substrate now owns the third status-projection
+    /// primitive on `EphemeralAllocation`, closing the copy-form family
+    /// alongside the borrow-form [`Self::observed_bound_pool`]).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs — the
+    /// pins bind the missing-`status` corner + the empty-`expires_at`-
+    /// slot corner + the copy-form `DateTime<Utc>` return + byte-
+    /// identical parity with the pre-lift `.and_then(|s| s.expires_at)`
+    /// chain across the full corner set, so a regression that drifted
+    /// any surface surfaces at `tests::observed_expires_at_*` rather
+    /// than as silent operator-facing skew between the allocation
+    /// observer's Release-composition TTL gate and any future consumer
+    /// that reaches for the same slot).
+    #[must_use]
+    pub fn observed_expires_at(&self) -> Option<DateTime<Utc>> {
+        self.status.as_ref().and_then(|s| s.expires_at)
+    }
 }
 
 #[cfg(test)]
@@ -1471,6 +1544,178 @@ mod tests {
             EphemeralAllocation::observed_bound_pool;
         let _identity_shape: fn(&crate::prelude::Process) -> Option<&crate::identity::Identity> =
             crate::prelude::Process::observed_identity;
+    }
+
+    // ─── EphemeralAllocation::observed_expires_at substrate pins ────
+    //
+    // The copy-form status-projection primitive on the TTL-expiry axis.
+    // Collapses the pre-lift hand-authored `.status.as_ref().and_then(
+    // |s| s.expires_at)` chain in `tatara-pool-reconciler::
+    // allocation_decide::AllocationConvergenceCtx::observe`'s
+    // `expires_at` seed onto the ONE substrate primitive. Same-CRD peer
+    // to `observed_phase` on the (copy-form × status-slot) axis — both
+    // primitives walk the identical `.status.as_ref().<map|and_then>(
+    // |s| s.<Copy-field>)` shape. Each pin is fail-before-pass-after:
+    // `observed_expires_at` did not exist pre-lift, so any test invoking
+    // it fails to compile pre-lift and passes post-lift.
+
+    fn alloc_with_expires_at(expires_at: Option<DateTime<Utc>>) -> EphemeralAllocation {
+        let spec = AllocationSpec {
+            pool_ref: None,
+            requestor: Requestor {
+                kind: "manual".into(),
+                repo: None,
+                branch: None,
+                pr_number: None,
+                sha: None,
+                pr_labels: vec![],
+                actor: None,
+            },
+            ttl: None,
+            note: None,
+        };
+        let mut a = EphemeralAllocation::new("exp-alloc", spec);
+        a.status = Some(AllocationStatus {
+            phase: AllocationPhase::Bound,
+            expires_at,
+            ..AllocationStatus::default()
+        });
+        a
+    }
+
+    #[test]
+    fn observed_expires_at_returns_none_when_status_is_none() {
+        // Missing-`status` corner pin: the primitive collapses the
+        // no-status case to `None` so downstream `.is_some()` / any
+        // deadline comparison behaves identically on an
+        // `EphemeralAllocation` whose status field is `None` and on
+        // one whose status carries an unpopulated `expires_at` slot.
+        // Matches the pre-lift `.and_then(...)` chain's `None` byte-
+        // identically at the pool reconciler's Release-composition
+        // TTL gate.
+        let a = alloc_without_status();
+        assert!(a.observed_expires_at().is_none());
+    }
+
+    #[test]
+    fn observed_expires_at_returns_none_when_slot_is_none() {
+        // Empty-slot-under-populated-status corner pin: the primitive
+        // returns `None`, matching the missing-`status` corner byte-
+        // identically. A regression that treated the two corners
+        // differently would silently promote an internal representation
+        // detail (whether the pool reconciler has ever written a
+        // `status.expires_at` field for a not-yet-Bound allocation)
+        // into observable behavior at the Release-composition branch
+        // of the allocation reconciler's `decide` transition rule.
+        let a = alloc_with_expires_at(None);
+        assert!(a.observed_expires_at().is_none());
+    }
+
+    #[test]
+    fn observed_expires_at_returns_populated_timestamp_verbatim() {
+        // Happy-path pin: with a populated `status.expires_at` slot,
+        // the primitive returns the persisted `DateTime<Utc>` verbatim.
+        // A regression that filtered / clamped / canonicalized the
+        // timestamp would surface here rather than as silent skew at
+        // the Release-composition TTL gate's `>=` deadline comparison.
+        let expected = Utc::now();
+        let a = alloc_with_expires_at(Some(expected));
+        assert_eq!(a.observed_expires_at(), Some(expected));
+    }
+
+    #[test]
+    fn observed_expires_at_is_a_pure_projection() {
+        // Purity pin: calling the projection twice on the same
+        // `EphemeralAllocation` returns byte-identical `Option`s. A
+        // regression that introduced state — a lazy-cached value, a
+        // normalization step that ran once and cached — would surface
+        // here rather than as silent drift between two dispatches
+        // within one reconcile pass.
+        let expected = Utc::now();
+        let a = alloc_with_expires_at(Some(expected));
+        assert_eq!(a.observed_expires_at(), a.observed_expires_at());
+    }
+
+    #[test]
+    fn observed_expires_at_matches_pre_lift_chain_bytewise() {
+        // Byte-identical parity pin between the copy-form primitive
+        // here and the pre-lift `tatara-pool-reconciler`
+        // `.status.as_ref().and_then(|s| s.expires_at)` chain. Sweeps
+        // every corner every callsite plausibly encounters (missing
+        // status, empty `expires_at` slot, populated `expires_at`
+        // slot). A regression that inserted a normalization step at
+        // the primitive the pre-lift chain does NOT apply — or vice
+        // versa — surfaces here rather than as silent drift between
+        // the pre-lift consumer site and the ONE substrate owner it
+        // now routes through.
+        fn pre_lift(a: &EphemeralAllocation) -> Option<DateTime<Utc>> {
+            a.status.as_ref().and_then(|s| s.expires_at)
+        }
+        // Missing status.
+        let a = alloc_without_status();
+        assert_eq!(a.observed_expires_at(), pre_lift(&a));
+        // Populated status, empty `expires_at` slot.
+        let a = alloc_with_expires_at(None);
+        assert_eq!(a.observed_expires_at(), pre_lift(&a));
+        // Populated status, populated `expires_at` slot.
+        let a = alloc_with_expires_at(Some(Utc::now()));
+        assert_eq!(a.observed_expires_at(), pre_lift(&a));
+    }
+
+    #[test]
+    fn observed_expires_at_missing_status_and_empty_slot_collapse_to_the_same_option_shape() {
+        // Cross-corner coherence pin: the missing-`status` corner and
+        // the populated-empty-slot corner return `Option`s whose
+        // `.is_none()` / `.is_some()` observations are IDENTICAL. A
+        // regression that promoted the missing-`status` corner to a
+        // typed error (via a signature change to `Result<_, _>`) — or
+        // that widened the empty-slot corner to a synthetic
+        // `Some(Utc::now())` — would surface here rather than as
+        // silent operator-facing divergence between a never-status-
+        // written allocation and a Bind-time-without-TTL allocation on
+        // the Release-composition branch.
+        let a_no_status = alloc_without_status();
+        let a_empty_slot = alloc_with_expires_at(None);
+        assert_eq!(
+            a_no_status.observed_expires_at().is_none(),
+            a_empty_slot.observed_expires_at().is_none(),
+        );
+        assert_eq!(
+            a_no_status.observed_expires_at().is_some(),
+            a_empty_slot.observed_expires_at().is_some(),
+        );
+    }
+
+    #[test]
+    fn observed_expires_at_shape_agrees_with_observed_phase_peer_axis() {
+        // Same-CRD peer-axis coherence pin binding the SAME
+        // `.status.as_ref().<map|and_then>(|s| s.<Copy-field>)` shape
+        // that both `EphemeralAllocation::observed_expires_at` (this
+        // primitive) and `EphemeralAllocation::observed_phase` walk,
+        // differing only in the outer combinator (`and_then` here
+        // because the persisted field is itself `Option<T>`, `map`
+        // there because the persisted phase is bare) and in the
+        // projected `Copy` type. Structural test — both signatures
+        // must resolve as `&Self -> Option<T>` fn pointers with `T`
+        // `Copy`, so a future rename or a signature drift that (say)
+        // widened one side to `Option<&T>` or narrowed one side to
+        // `T` fails to compile here rather than silently drifting
+        // the family apart. The runtime side of the pin sweeps the
+        // missing-status + empty-slot corners on the `expires_at`
+        // half; the `phase` half is exercised by its own
+        // `tests::observed_phase_*` pin family — this test binds
+        // only the peer-axis shape.
+        let a_no_status = alloc_without_status();
+        let a_empty_slot = alloc_with_expires_at(None);
+        assert!(a_no_status.observed_expires_at().is_none());
+        assert!(a_empty_slot.observed_expires_at().is_none());
+        // Structural peer-axis coherence: bind both signatures as fn
+        // pointers at their peer resolution type so the compiler
+        // refuses to build if either side's shape drifts.
+        let _expires_at_shape: fn(&EphemeralAllocation) -> Option<DateTime<Utc>> =
+            EphemeralAllocation::observed_expires_at;
+        let _phase_shape: fn(&EphemeralAllocation) -> Option<AllocationPhase> =
+            EphemeralAllocation::observed_phase;
     }
 
     #[test]

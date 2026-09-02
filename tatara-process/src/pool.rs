@@ -502,6 +502,95 @@ impl EphemeralPool {
         self.metadata.namespace.clone().unwrap_or_default()
     }
 
+    /// Compound owned-form metadata-projection primitive on the paired
+    /// `(metadata.uid, metadata.name)` axis of `EphemeralPool`: returns
+    /// a stable owned `String` seed for slot-slug derivation, PREFERRING
+    /// the K8s-assigned uid, FALLING BACK to the pool's own name, then
+    /// SINKING to the load-bearing empty-string sentinel when both slots
+    /// are absent — the ONE-liner collapse of the paired
+    /// `pool.metadata.uid.clone().unwrap_or_else(|| name.<into>())`
+    /// incantation every pool-slot-name-composing consumer restated by
+    /// hand pre-lift.
+    ///
+    /// Pre-lift the `.metadata.uid.clone().unwrap_or_else(|| name.<into>())`
+    /// chain was hand-authored at TWO production sites past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication threshold in
+    /// `tatara-pool-reconciler::controller_pool`, both feeding the SAME
+    /// `member_process_name(&pool_name, &pool_uid_or_name_fallback, slot)`
+    /// composer:
+    /// * `reconcile_inner` — the desired-count `PoolDecision::Spawn`
+    ///   arm's spawn-loop slot-slug seed (fallback bound as
+    ///   `|| name.clone()` from the extracted-earlier owned `name`
+    ///   half of `owned_coordinates_required()`).
+    /// * `apply_convergence_actions` — the legacy allocation-driven
+    ///   `ConvergenceAction::CreateMember` arm's slot-slug seed
+    ///   (fallback bound as `|| name.to_string()` from the borrowed
+    ///   `name: &str` parameter that the same
+    ///   `owned_coordinates_required()`-extracted `String` was passed
+    ///   through by reference).
+    ///
+    /// Both sites computed the SAME "prefer the k8s uid; fall back to
+    /// the pool's own name" projection on the SAME `EphemeralPool`
+    /// value, differing only in the surface syntax of the fallback
+    /// (`.clone()` vs `.to_string()`) — a per-callsite typing artefact
+    /// of the enclosing scope's `name` binding rather than a semantic
+    /// distinction. Post-lift each callsite reads
+    /// `pool.owned_uid_or_name_or_empty()` and the produced owned
+    /// `String` feeds the same `member_process_name(&name, &_, slot)`
+    /// composer verbatim; the caller no longer threads its own local
+    /// `name` handle through as the fallback, since the primitive
+    /// reaches through the same `self.metadata.name` slot the caller
+    /// extracted from earlier — coherent by construction with the
+    /// sibling primitive [`Self::owned_name_or_empty`] on the missing-
+    /// name corner.
+    ///
+    /// The compound (uid-preferred, name-fallback, empty-sentinel)
+    /// precedence is DELIBERATELY pinned: the K8s API server stamps
+    /// `metadata.uid` on every persisted object at admission time, so
+    /// the reachable state at both callsites (each already gated by
+    /// `owned_coordinates_required()?`) has `uid = Some(_)`. The name
+    /// fallback is a load-bearing safety net for the vanishingly rare
+    /// pre-admission-uid corner + the unit-test path that constructs
+    /// an `EphemeralPool` value in-memory without stamping a uid; the
+    /// empty-string sink is the sentinel-coherent complement of the
+    /// missing-both corner (both slots `None`) so a regression that
+    /// dropped either fallback surfaces as a compiler-visible test
+    /// failure rather than as an operator-facing skew between spawn
+    /// slots derived from mixed-fallback seeds within one reconcile
+    /// pass. Coherent with the workspace-wide owned-empty sentinel
+    /// that the peer primitives [`Self::owned_name_or_empty`],
+    /// [`Self::owned_namespace_or_empty`],
+    /// [`crate::crd::Process::owned_name_or_empty`], and
+    /// [`crate::crd::Process::uid_or_empty`] already share on the
+    /// metadata-slot × empty-sentinel axis.
+    ///
+    /// A future normalization step (a per-cluster uid-prefix stripper,
+    /// a case-fold key builder, canonicalization of a suspiciously-
+    /// empty uid to the name fallback, a namespace-scoped hashing pass
+    /// that mixes cluster identity into the seed) lands at ONE
+    /// substrate method here and both downstream `spawn` /
+    /// `apply_convergence_actions` consumers pick up the upgrade
+    /// mechanically — no per-callsite hand-edit at `controller_pool`.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `.metadata.uid.clone().unwrap_or_else(|| name.<into>())`
+    /// chain recurred at two hand-authored sites past the ★★ PRIME-
+    /// DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE owner
+    /// here). THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the pins bind the uid-present corner + the uid-absent
+    /// name-fallback corner + the both-absent empty-sentinel corner +
+    /// the owned-form `String` return type + the byte-identical parity
+    /// with each pre-lift callsite's fallback surface, so a regression
+    /// that drifted any surface at `tests::owned_uid_or_name_or_empty_*`
+    /// rather than as silent operator-facing skew between the two
+    /// slot-slug seeds within ONE reconcile pass).
+    pub fn owned_uid_or_name_or_empty(&self) -> String {
+        self.metadata
+            .uid
+            .clone()
+            .unwrap_or_else(|| self.owned_name_or_empty())
+    }
+
     /// Copy-form metadata-projection primitive on the `metadata.name`
     /// axis of `EphemeralPool` in its `presence-and-equal` corner:
     /// returns `true` iff the K8s object name slot is BOTH `Some(_)`
@@ -2691,6 +2780,193 @@ mod tests {
             crate::crd::Process::DEFAULT_NAMESPACE
         );
         assert_eq!(p.owned_namespace_or_empty(), "");
+    }
+
+    // ─── EphemeralPool::owned_uid_or_name_or_empty substrate pins ─────
+    //
+    // Pins the compound owned-form projection on the paired
+    // `(metadata.uid, metadata.name)` axis of the pool CRD — the
+    // ONE-liner collapse of the paired `.metadata.uid.clone()
+    // .unwrap_or_else(|| name.<into>())` chain every pool-slot-name
+    // consumer restated by hand pre-lift at TWO production sites in
+    // `tatara-pool-reconciler::controller_pool` (spawn arm +
+    // apply_convergence_actions arm), both feeding the SAME
+    // `member_process_name(&pool_name, &pool_uid_or_name_fallback,
+    // slot)` composer. Fail-before-pass-after granularity:
+    // `owned_uid_or_name_or_empty` did not exist on the pool CRD pre-
+    // lift; the compiler cannot resolve the name until the impl block
+    // above is in place, so a rollback of the primitive breaks this
+    // whole module.
+    #[test]
+    fn owned_uid_or_name_or_empty_returns_uid_when_uid_is_present() {
+        // Preferred-slot pin: uid populated → uid wins, regardless of
+        // whether the name-fallback slot is populated. Byte-identical
+        // to what each pre-lift `.metadata.uid.clone().unwrap_or_else
+        // (|| name.<into>())` chain returned in the reachable-state
+        // corner where the K8s API server has stamped a uid (the
+        // common case at both callsites, which are already gated by
+        // `owned_coordinates_required()?`).
+        let mut p = pool_named("attest-pool");
+        p.metadata.uid = Some("uid-42".into());
+        assert_eq!(p.owned_uid_or_name_or_empty(), "uid-42");
+    }
+
+    #[test]
+    fn owned_uid_or_name_or_empty_falls_back_to_name_when_uid_is_missing() {
+        // Fallback-slot pin: uid absent → name wins. Byte-identical
+        // to what each pre-lift chain returned in the corner where
+        // the K8s API server has NOT yet stamped a uid (pre-admission
+        // / unit-test in-memory pool). The pre-lift chain reached
+        // the fallback via a locally-bound `name` string derived from
+        // the same `.metadata.name` slot the primitive reaches via
+        // `owned_name_or_empty()`.
+        let mut p = pool_named("attest-pool");
+        p.metadata.uid = None;
+        assert_eq!(p.owned_uid_or_name_or_empty(), "attest-pool");
+    }
+
+    #[test]
+    fn owned_uid_or_name_or_empty_sinks_to_empty_when_both_slots_are_missing() {
+        // Missing-both corner pin: uid absent AND name absent → the
+        // load-bearing empty-string sentinel. Coherent with the
+        // sibling primitives `owned_name_or_empty` +
+        // `owned_namespace_or_empty` on the SAME empty-sentinel axis.
+        // A regression that dropped either fallback surfaces here
+        // rather than as a runtime panic on `.unwrap()` at a spawn
+        // callsite that assumed both slots were populated.
+        let mut p = pool_named("attest-pool");
+        p.metadata.uid = None;
+        p.metadata.name = None;
+        assert_eq!(p.owned_uid_or_name_or_empty(), String::new());
+        assert!(p.owned_uid_or_name_or_empty().is_empty());
+    }
+
+    #[test]
+    fn owned_uid_or_name_or_empty_prefers_uid_when_both_slots_are_present() {
+        // Precedence pin: both slots populated → uid wins. The pre-
+        // lift `.unwrap_or_else(|| name.<into>())` chain's short-
+        // circuit on the `Some(u)` arm skipped the fallback entirely;
+        // the primitive matches that byte-for-byte via `.clone()
+        // .unwrap_or_else(|| self.owned_name_or_empty())`, so the
+        // name-fallback slot is not read when uid is populated.
+        let mut p = pool_named("attest-pool");
+        p.metadata.uid = Some("uid-preferred".into());
+        p.metadata.name = Some("attest-pool".into());
+        assert_eq!(p.owned_uid_or_name_or_empty(), "uid-preferred");
+        assert_ne!(p.owned_uid_or_name_or_empty(), "attest-pool");
+    }
+
+    #[test]
+    fn owned_uid_or_name_or_empty_returns_uid_even_when_uid_is_explicitly_empty_string() {
+        // Corner between `None` (missing slot) and `Some(String::new())`
+        // (populated slot containing the empty string): the primitive
+        // MUST return the populated-empty-string uid rather than
+        // falling back to the name half — byte-identical to what the
+        // pre-lift `.metadata.uid.clone().unwrap_or_else(|| name...)`
+        // chain produced, whose `unwrap_or_else` short-circuits on
+        // `Some(_)` regardless of the wrapped value. Pinned so a
+        // future "helpful" canonicalization that treats
+        // `Some(String::new())` as `None` at the primitive lands as
+        // a compiler-visible failure here rather than as silent
+        // operator-facing skew between the two spawn-slot-slug seeds.
+        let mut p = pool_named("attest-pool");
+        p.metadata.uid = Some(String::new());
+        p.metadata.name = Some("attest-pool".into());
+        assert_eq!(p.owned_uid_or_name_or_empty(), String::new());
+        assert_ne!(p.owned_uid_or_name_or_empty(), "attest-pool");
+    }
+
+    #[test]
+    fn owned_uid_or_name_or_empty_is_a_pure_projection() {
+        // Consecutive calls return byte-identical Strings across the
+        // FULL corner set (uid-present, uid-absent name-fallback,
+        // both-absent empty-sentinel) — no cached state, no mutation
+        // on the `EphemeralPool` between calls. Peer to the sibling
+        // `owned_name_or_empty_is_a_pure_projection` +
+        // `owned_namespace_or_empty_is_a_pure_projection` pins in
+        // this module; all three bind the pure-projection discipline
+        // on the ONE substrate accessor per metadata-derived slot.
+        let mut p = pool_named("attest-pool");
+        p.metadata.uid = Some("uid-42".into());
+        assert_eq!(
+            p.owned_uid_or_name_or_empty(),
+            p.owned_uid_or_name_or_empty()
+        );
+        p.metadata.uid = None;
+        assert_eq!(
+            p.owned_uid_or_name_or_empty(),
+            p.owned_uid_or_name_or_empty()
+        );
+        p.metadata.name = None;
+        assert_eq!(
+            p.owned_uid_or_name_or_empty(),
+            p.owned_uid_or_name_or_empty()
+        );
+    }
+
+    #[test]
+    fn owned_uid_or_name_or_empty_matches_pre_lift_chain_verbatim() {
+        // Byte-identical parity with the two hand-authored
+        // `.metadata.uid.clone().unwrap_or_else(|| name.<into>())`
+        // chains the primitive replaces in
+        // `tatara-pool-reconciler::controller_pool` (spawn arm +
+        // apply_convergence_actions arm). Runs across the FULL
+        // corner set of the paired (metadata.uid, metadata.name)
+        // slots. A regression that inserted a normalization step at
+        // the primitive the pre-lift chain does NOT apply — or vice
+        // versa — surfaces here rather than as silent drift between
+        // the two owned-form callsites and the ONE substrate owner
+        // they now route through.
+        let cases: [(Option<String>, Option<String>, &str); 6] = [
+            (Some("uid-42".into()), Some("attest-pool".into()), "uid-42"),
+            (Some("uid-42".into()), None, "uid-42"),
+            (Some(String::new()), Some("attest-pool".into()), ""),
+            (None, Some("attest-pool".into()), "attest-pool"),
+            (None, Some(String::new()), ""),
+            (None, None, ""),
+        ];
+        for (uid_slot, name_slot, expected) in cases {
+            let mut p = pool_named("attest-pool");
+            p.metadata.uid = uid_slot.clone();
+            p.metadata.name = name_slot.clone();
+            // Reproduce the pre-lift chain shape at the spawn arm
+            // (fallback `|| name.clone()` on an extracted-earlier
+            // `String` name) — semantically equivalent to
+            // `.metadata.name.clone().unwrap_or_default()` at the
+            // point of call because `owned_coordinates_required()?`
+            // gate guarantees the caller's `name` binding matches
+            // the pool's own `metadata.name` slot.
+            let pre_lift = p
+                .metadata
+                .uid
+                .clone()
+                .unwrap_or_else(|| p.metadata.name.clone().unwrap_or_default());
+            assert_eq!(pre_lift.as_str(), expected, "pre-lift chain sanity");
+            assert_eq!(p.owned_uid_or_name_or_empty(), pre_lift);
+            assert_eq!(p.owned_uid_or_name_or_empty().as_str(), expected);
+        }
+    }
+
+    #[test]
+    fn owned_uid_or_name_or_empty_composes_with_member_process_name_seed_shape() {
+        // Composition pin: the produced owned `String` feeds the
+        // downstream `member_process_name(&pool_name, &pool_uid_or_
+        // name_fallback, slot)` composer at both callsites, so the
+        // seed's `String` shape must survive being borrowed as
+        // `&str` for the composer without any owned/borrow-form
+        // adaptation at the callsite. Binds the primitive's return
+        // type + the borrow-form availability that the pre-lift
+        // chain also produced (a locally-owned `String` from
+        // `.clone().unwrap_or_else(|| name.<into>())`).
+        let mut p = pool_named("attest-pool");
+        p.metadata.uid = Some("uid-42".into());
+        let seed: String = p.owned_uid_or_name_or_empty();
+        let _borrowed: &str = &seed;
+        assert_eq!(seed, "uid-42");
+        p.metadata.uid = None;
+        let seed_fallback: String = p.owned_uid_or_name_or_empty();
+        let _borrowed_fallback: &str = &seed_fallback;
+        assert_eq!(seed_fallback, "attest-pool");
     }
 
     // ─── AllocationRef::new substrate pins ────────────────────────────

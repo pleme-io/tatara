@@ -217,7 +217,21 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
     match decision {
         PoolDecision::NoOp => {}
         PoolDecision::Spawn { count } => {
-            let pool_uid = pool.metadata.uid.clone().unwrap_or_else(|| name.clone());
+            // The paired `(metadata.uid, metadata.name)` slot-slug
+            // seed rides through the substrate primitive
+            // `EphemeralPool::owned_uid_or_name_or_empty` — pre-lift
+            // this was a hand-authored `.metadata.uid.clone()
+            // .unwrap_or_else(|| name.<into>())` chain, one of TWO
+            // in-file restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+            // duplication threshold (peer at `apply_convergence_
+            // actions` in this same module; both feed the SAME
+            // `member_process_name(&pool_name, &pool_uid_seed, slot)`
+            // composer). Post-lift both consumers share ONE substrate
+            // owner; a future normalization step (per-cluster prefix
+            // stripper, case-fold key builder, hash-mixing pass)
+            // lands at ONE substrate method rather than being restated
+            // at each callsite.
+            let pool_uid = pool.owned_uid_or_name_or_empty();
             let occupied_names: std::collections::HashSet<_> =
                 members.iter().map(|m| m.process_name.clone()).collect();
             let mut spawned = 0u32;
@@ -352,11 +366,13 @@ async fn apply_convergence_actions(
         return Ok(());
     }
 
-    let pool_uid = pool
-        .metadata
-        .uid
-        .clone()
-        .unwrap_or_else(|| name.to_string());
+    // Slot-slug seed rides through the substrate primitive
+    // `EphemeralPool::owned_uid_or_name_or_empty` — see the peer
+    // callsite in `reconcile_inner`'s `PoolDecision::Spawn` arm above
+    // for the full rationale (paired `(metadata.uid, metadata.name)`
+    // projection past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold; ONE substrate owner for both spawn arms).
+    let pool_uid = pool.owned_uid_or_name_or_empty();
     let occupied_names: std::collections::HashSet<_> =
         members.iter().map(|m| m.process_name.clone()).collect();
 

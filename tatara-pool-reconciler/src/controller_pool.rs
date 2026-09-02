@@ -10,9 +10,8 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
-use kube::api::{Api, DeleteParams, ListParams, Patch, PatchParams, PostParams};
+use kube::api::{Api, DeleteParams, ListParams, PostParams};
 use kube::runtime::controller::Action;
-use serde_json::json;
 use tracing::{info, warn};
 
 use crate::ReconcilerError;
@@ -229,12 +228,12 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
         // and a future counter slot lands at ONE match arm in
         // `tatara_process::pool::PoolMember::state_count_fanout`.
         let phase = pool_phase_from_members(&pool, &members);
-        let status_patch = json!({
-            "status": PoolStatus::observed(phase, members.clone(), Utc::now()),
-        });
-        let _ = pool_api
-            .patch_status(&name, &PatchParams::default(), &Patch::Merge(&status_patch))
-            .await;
+        let _ = tatara_process::patch::merge_status(
+            &pool_api,
+            &name,
+            &PoolStatus::observed(phase, members.clone(), Utc::now()),
+        )
+        .await;
         return Ok(Action::requeue(Duration::from_secs(
             ctx.config.heartbeat_seconds,
         )));
@@ -349,12 +348,12 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
     // the substrate constructor `PoolStatus::observed`. See the peer
     // site's pre-lift audit note for the duplication history.
     let phase = pool_phase_from_members(&pool, &members);
-    let status_patch = json!({
-        "status": PoolStatus::observed(phase, members.clone(), Utc::now()),
-    });
-    let _ = pool_api
-        .patch_status(&name, &PatchParams::default(), &Patch::Merge(&status_patch))
-        .await;
+    let _ = tatara_process::patch::merge_status(
+        &pool_api,
+        &name,
+        &PoolStatus::observed(phase, members.clone(), Utc::now()),
+    )
+    .await;
 
     Ok(Action::requeue(Duration::from_secs(
         ctx.config.heartbeat_seconds,

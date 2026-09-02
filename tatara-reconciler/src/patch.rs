@@ -17,14 +17,24 @@ use tatara_process::prelude::{Identity, Process, ProcessTable};
 use tatara_process::table::ProcessTableSpec;
 
 /// Merge-patch the status subresource of a Process.
+///
+/// Delegates the wire-body wrap + `PatchParams::default() +
+/// Patch::Merge` chain to the substrate primitive
+/// [`tatara_process::patch::merge_status`], the ONE owner of the
+/// merge-status idiom across every workspace controller (peer of
+/// `tatara_reconciler::ssapply::apply_patch_params` on the SSA axis).
+/// The public shape (`Value` status body → `Result<Process,
+/// KubeError>`) is preserved so existing callers (the
+/// `SignalEffect::TransitionTo` / `ForceAttest` arms + every
+/// `phase_machine.rs` transition writer) reach the substrate through
+/// this thin, `Process`-typed wrapper without a per-consumer signature
+/// churn.
 pub async fn patch_process_status(
     api: &Api<Process>,
     name: &str,
     status_patch: Value,
 ) -> Result<Process, KubeError> {
-    let body = json!({ "status": status_patch });
-    api.patch_status(name, &PatchParams::default(), &Patch::Merge(&body))
-        .await
+    tatara_process::patch::merge_status(api, name, &status_patch).await
 }
 
 /// Merge-patch the spec of a ProcessTable (we keep `nextSequence` in spec

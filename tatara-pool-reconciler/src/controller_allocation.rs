@@ -141,16 +141,16 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
             // → `phase_since` serde surface change, a structured-
             // envelope promotion of `message`) lands at ONE derive
             // and every emit site inherits the upgrade mechanically.
-            let body = json!({
-                "status": AllocationStatus::transition(
+            let _ = tatara_process::patch::merge_status(
+                &alloc_api,
+                &name,
+                &AllocationStatus::transition(
                     AllocationPhase::NoMatchingPool,
                     "no Pool selector matched this Requestor",
                     Utc::now(),
                 ),
-            });
-            let _ = alloc_api
-                .patch_status(&name, &PatchParams::default(), &Patch::Merge(&body))
-                .await;
+            )
+            .await;
         }
         AllocationDecision::Wait { pool } => {
             // Peer to the NoMatchingPool arm above: the same substrate
@@ -162,8 +162,10 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
             // `transitionCount:` diagnostic counter) reaches this
             // Wait/Queued site through the substrate rather than by
             // hand-edit.
-            let body = json!({
-                "status": AllocationStatus {
+            let _ = tatara_process::patch::merge_status(
+                &alloc_api,
+                &name,
+                &AllocationStatus {
                     bound_pool: Some(pool),
                     ..AllocationStatus::transition(
                         AllocationPhase::Queued,
@@ -171,10 +173,8 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
                         Utc::now(),
                     )
                 },
-            });
-            let _ = alloc_api
-                .patch_status(&name, &PatchParams::default(), &Patch::Merge(&body))
-                .await;
+            )
+            .await;
         }
         AllocationDecision::Bind {
             pool,
@@ -283,8 +283,10 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
             // `allocated_at` — pre-lift the two slots stamped from
             // the SAME `now`, so the composer's clock-injectability
             // preserves that shape exactly.
-            let body = json!({
-                "status": AllocationStatus {
+            let _ = tatara_process::patch::merge_status(
+                &alloc_api,
+                &name,
+                &AllocationStatus {
                     allocated_at: Some(now),
                     expires_at: Some(expires_at),
                     ..AllocationStatus::bound_transition(
@@ -295,10 +297,8 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
                         AllocationRef::new(member_process_name, ns.clone()),
                     )
                 },
-            });
-            let _ = alloc_api
-                .patch_status(&name, &PatchParams::default(), &Patch::Merge(&body))
-                .await;
+            )
+            .await;
         }
         AllocationDecision::Release {
             member_process_name,
@@ -328,18 +328,18 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
             // phase_since + message` triplet, so this Release arm
             // has no addenda past the compound composer's seed and
             // patches the composed [`AllocationStatus`] verbatim.
-            let body = json!({
-                "status": AllocationStatus::bound_transition(
+            let _ = tatara_process::patch::merge_status(
+                &alloc_api,
+                &name,
+                &AllocationStatus::bound_transition(
                     AllocationPhase::Released,
                     "released; pool reconciler will return the member",
                     Utc::now(),
                     pool,
                     AllocationRef::new(member_process_name, ns.clone()),
                 ),
-            });
-            let _ = alloc_api
-                .patch_status(&name, &PatchParams::default(), &Patch::Merge(&body))
-                .await;
+            )
+            .await;
         }
     }
 

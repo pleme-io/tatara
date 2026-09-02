@@ -25,6 +25,7 @@ pub mod k8s_wire_identity;
 pub mod lifetime;
 pub mod lifetime_clock;
 pub mod matrix;
+pub mod patch;
 pub mod phase;
 pub mod pool;
 pub mod receipt;

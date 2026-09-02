@@ -1933,13 +1933,7 @@ mod tests {
     fn empty_spec() -> ProcessSpec {
         ProcessSpec {
             identity: IdentitySpec::default(),
-            classification: Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Default::default(),
-                calm: Default::default(),
-                data_classification: Default::default(),
-            },
+            classification: Classification::gate_compute(),
             intent: Intent::default(),
             boundary: Default::default(),
             compliance: Default::default(),

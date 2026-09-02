@@ -162,7 +162,7 @@ fn best_candidate<'a, 'b>(live: &'b [&'a Candidate<'a>]) -> &'a Candidate<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tatara_process::classification::{Classification, ConvergencePointType, SubstrateType};
+    use tatara_process::classification::Classification;
     use tatara_process::crd::{ProcessSpec, ProcessStatus};
 
     fn candidate<'a>(
@@ -189,13 +189,7 @@ mod tests {
     fn empty_process(name: &str, ns: &str) -> Process {
         let spec = ProcessSpec {
             identity: Default::default(),
-            classification: Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Default::default(),
-                calm: Default::default(),
-                data_classification: Default::default(),
-            },
+            classification: Classification::gate_compute(),
             intent: Default::default(),
             boundary: Default::default(),
             compliance: Default::default(),

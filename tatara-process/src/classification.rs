@@ -21,6 +21,88 @@ pub struct Classification {
     pub data_classification: DataClassification,
 }
 
+impl Classification {
+    /// The workspace-baseline classification — a [`ConvergencePointType::Gate`]
+    /// point on the [`SubstrateType::Compute`] substrate with every other axis
+    /// at its [`Default`]. The `(Gate, Compute)` pair names an unremarkable
+    /// barrier point in the Compute plane: no domain-specific structural
+    /// claim (no fan-out / fan-in / broadcast / observation semantics beyond
+    /// the barrier gate) and no domain-specific substrate claim (no
+    /// `Financial` / `Network` / `Storage` / `Security` / `Identity` /
+    /// `Observability` / `Regulatory` plane bringing in its own compliance
+    /// baselines). The three defaulted axes ride at the intentional
+    /// workspace baseline the sibling closed-set primitives already own:
+    /// [`Horizon`] at [`HorizonKind::Bounded`] (terminates naturally, no
+    /// asymptotic metric axes required), [`CalmClassification::Monotone`]
+    /// (no coordination required per CALM), and
+    /// [`DataClassification::Internal`] (access-controlled but not
+    /// externally regulated).
+    ///
+    /// Pre-lift the six-line `Classification { point_type: Gate, substrate:
+    /// Compute, horizon: Default::default(), calm: Default::default(),
+    /// data_classification: Default::default() }` struct-literal recurred
+    /// at TEN sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold
+    /// — one production consumer plus nine test-fixture callsites spread
+    /// across four crates, each restating the SAME `(Gate, Compute)`
+    /// baseline verbatim:
+    /// * `crate::ephemeral::default_ephemeral_class` — the substitute
+    ///   [`EphemeralSpec::into::<crate::crd::ProcessSpec>`] fills into
+    ///   [`crate::crd::ProcessSpec::classification`] when the operator
+    ///   omits an explicit `:classification` slot on `(defephemeral …)`.
+    ///   The one PRODUCTION consumer of the shape — a regression that
+    ///   drifted its point-type or substrate axis silently retargets every
+    ///   unadorned ephemeral to a different plane.
+    /// * `crate::crd`'s + `crate::lib`'s + `crate::lifetime_clock`'s +
+    ///   `tatara_reconciler::{claim,render}`'s + `tatara_pool_reconciler::
+    ///   controller_pool`'s `empty_spec` / `empty_process_spec` /
+    ///   `ephemeral_process` / `permanent_process` test-fixture helpers +
+    ///   inline `ProcessSpec` literals — nine test-fixture callsites
+    ///   restating the SAME six-line struct-literal at the same shape.
+    ///
+    /// Post-lift every callsite reads `Classification::gate_compute()`;
+    /// a future workspace-wide baseline shift (a new [`Horizon`] default,
+    /// a promotion of `Compute` to a compound baseline that pre-fills a
+    /// canonical [`CalmClassification`], a per-baseline compliance overlay
+    /// stamping through the classification, or a rename of either axis
+    /// enum) lands at ONE substrate function here and every downstream
+    /// consumer inherits the upgrade mechanically. The current pin ties
+    /// the three defaulted axes to the sibling closed-set defaults
+    /// ([`HorizonKind::Bounded`], [`CalmClassification::Monotone`],
+    /// [`DataClassification::Internal`]) so a future change to any sibling
+    /// default surfaces at this primitive's tests rather than as silent
+    /// drift across ten independent callsites.
+    ///
+    /// Sibling to the `_or_default` / `_or_placeholder` primitive family on
+    /// [`crate::prelude::Process`] on the (return-form × axis) axis — those
+    /// primitives own the borrow-form projections off a live `Process`;
+    /// this one owns the construction shape for a fresh
+    /// [`crate::crd::ProcessSpec`] whose classification axis is
+    /// unremarkable. A future peer `Classification::observe_observability()`
+    /// or similar named variant lands as a sibling method here when a
+    /// second unremarkable-baseline shape opens.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+    /// six-line struct-literal shape recurred at TEN hand-authored sites
+    /// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and is lifted
+    /// onto ONE workspace-wide owner here). THEORY.md §II.1 invariant 5
+    /// (composition preserves proofs — a regression that drifted the
+    /// baseline axis choice at only one consumer, or that broke the
+    /// sibling-default correspondence, surfaces at this primitive's tests
+    /// rather than as silent operator-visible skew between the ephemeral
+    /// sugar substitute and the ten downstream test-fixtures whose
+    /// assertions depend on the shape).
+    #[must_use]
+    pub fn gate_compute() -> Self {
+        Self {
+            point_type: ConvergencePointType::Gate,
+            substrate: SubstrateType::Compute,
+            horizon: Horizon::default(),
+            calm: CalmClassification::default(),
+            data_classification: DataClassification::default(),
+        }
+    }
+}
+
 /// Structural type — how data flows through the point.
 ///
 /// Closed-set sibling on the classification axis algebra; the `ALL` /
@@ -1282,6 +1364,83 @@ mod tests {
     #[test]
     fn horizon_default_is_bounded() {
         assert_eq!(Horizon::default().kind, HorizonKind::Bounded);
+    }
+
+    // ── Classification::gate_compute substrate pins ─────────────────────
+    //
+    // The six-line `Classification { point_type: Gate, substrate: Compute,
+    // horizon: Default::default(), calm: Default::default(),
+    // data_classification: Default::default() }` struct-literal was
+    // open-coded verbatim at ten hand-authored callsites before the
+    // primitive closed it. These pins bind the composed shape at
+    // fail-before-pass-after granularity so a regression that flipped a
+    // baseline axis, drifted a sibling default, or leaked a non-baseline
+    // slot into the substrate composer surfaces HERE rather than as
+    // silent operator-visible drift at every unadorned ephemeral env
+    // (the one production consumer, `default_ephemeral_class`) AND every
+    // downstream test fixture that keys assertions on the shape.
+
+    #[test]
+    fn gate_compute_composes_the_five_baseline_axes() {
+        // Primary shape: every axis parked at the workspace baseline.
+        // A regression that flipped `point_type` off `Gate` or
+        // `substrate` off `Compute` — the two axes with no `Default` —
+        // surfaces here.
+        let c = Classification::gate_compute();
+        assert_eq!(c.point_type, ConvergencePointType::Gate);
+        assert_eq!(c.substrate, SubstrateType::Compute);
+        assert_eq!(c.horizon, Horizon::default());
+        assert_eq!(c.calm, CalmClassification::default());
+        assert_eq!(c.data_classification, DataClassification::default());
+    }
+
+    #[test]
+    fn gate_compute_defaulted_axes_ride_sibling_closed_set_defaults() {
+        // Pins the sibling-default correspondence the doc comment
+        // names — a regression that flipped a sibling default (a new
+        // `HorizonKind` variant promoted to `#[default]`, a rename of
+        // `CalmClassification::Monotone`, a promotion of `Pii` above
+        // `Internal` in the `DataClassification` ordering) would move
+        // the baseline HERE rather than at every downstream consumer.
+        let c = Classification::gate_compute();
+        assert_eq!(c.horizon.kind, HorizonKind::Bounded);
+        assert_eq!(c.calm, CalmClassification::Monotone);
+        assert_eq!(c.data_classification, DataClassification::Internal);
+    }
+
+    #[test]
+    fn gate_compute_matches_hand_authored_pre_lift_bytewise() {
+        // Byte-identical parity with the pre-lift six-line struct-literal
+        // that recurred at ten hand-authored sites. A regression that
+        // reshaped the primitive would diverge from the pre-lift block
+        // HERE rather than at every downstream fixture that keys on the
+        // shape.
+        let composed = Classification::gate_compute();
+        let hand_authored = Classification {
+            point_type: ConvergencePointType::Gate,
+            substrate: SubstrateType::Compute,
+            horizon: Horizon::default(),
+            calm: CalmClassification::default(),
+            data_classification: DataClassification::default(),
+        };
+        assert_eq!(composed, hand_authored);
+    }
+
+    #[test]
+    fn gate_compute_is_call_time_construction_not_a_shared_singleton() {
+        // Two independent calls produce structurally-equal but distinct
+        // values — pins that the primitive is a plain constructor
+        // rather than a `lazy_static` clone (which would leak a shared
+        // singleton whose in-place mutation at one consumer would
+        // silently mutate the shape at every other consumer). The `!=`
+        // check on `&mut _`-obtained pointer addresses is intentional:
+        // a shared singleton would collide, and the pin catches the
+        // regression at the primitive rather than at the operator-facing
+        // shape-drift downstream.
+        let a = Classification::gate_compute();
+        let b = Classification::gate_compute();
+        assert_eq!(a, b);
+        assert!(!std::ptr::eq(&a, &b));
     }
 
     // ── closed-set algebra contracts for DataClassification

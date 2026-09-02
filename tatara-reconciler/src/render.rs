@@ -1114,13 +1114,7 @@ mod aplicacao_tests {
         };
         let spec = ProcessSpec {
             identity: Default::default(),
-            classification: tatara_process::classification::Classification {
-                point_type: tatara_process::classification::ConvergencePointType::Gate,
-                substrate: tatara_process::classification::SubstrateType::Compute,
-                horizon: Default::default(),
-                calm: Default::default(),
-                data_classification: Default::default(),
-            },
+            classification: tatara_process::classification::Classification::gate_compute(),
             intent: intent.clone(),
             boundary: Default::default(),
             compliance: Default::default(),
@@ -1234,7 +1228,7 @@ mod aplicacao_tests {
 mod export_job_tests {
     use super::*;
     use tatara_process::attestation::ProcessAttestation;
-    use tatara_process::classification::{Classification, ConvergencePointType, SubstrateType};
+    use tatara_process::classification::Classification;
     use tatara_process::crd::{ProcessSpec, ProcessStatus};
     use tatara_process::export::{
         ArtifactSource, ExportSpec, ExportTrigger, HttpEventChannel, NatsSubjectChannel,
@@ -1290,13 +1284,7 @@ mod export_job_tests {
         }
         let spec = ProcessSpec {
             identity: Default::default(),
-            classification: Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Default::default(),
-                calm: Default::default(),
-                data_classification: Default::default(),
-            },
+            classification: Classification::gate_compute(),
             intent: Default::default(),
             boundary: Default::default(),
             compliance: Default::default(),
@@ -1562,20 +1550,14 @@ mod export_job_tests {
 mod routing_tests {
     use super::*;
     use std::collections::BTreeMap;
-    use tatara_process::classification::{Classification, ConvergencePointType, SubstrateType};
+    use tatara_process::classification::Classification;
     use tatara_process::crd::ProcessSpec;
     use tatara_process::routing::{RoutingBackend, RoutingHostname, RoutingSpec};
 
     fn demo_process(routing: Option<RoutingSpec>) -> Process {
         let spec = ProcessSpec {
             identity: Default::default(),
-            classification: Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Default::default(),
-                calm: Default::default(),
-                data_classification: Default::default(),
-            },
+            classification: Classification::gate_compute(),
             intent: Default::default(),
             boundary: Default::default(),
             compliance: Default::default(),

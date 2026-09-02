@@ -390,7 +390,7 @@ pub fn requeue_with_ttl(process: &Process, now: DateTime<Utc>, default: Duration
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::classification::{Classification, ConvergencePointType, SubstrateType};
+    use crate::classification::Classification;
     use crate::crd::ProcessSpec;
     use crate::intent::{AplicacaoIntent, Intent};
     use crate::lifetime::{EphemeralLifetime, Lifetime, TeardownPolicy};
@@ -399,13 +399,7 @@ mod tests {
     fn ephemeral_process(ttl: &str, teardown: TeardownPolicy, age_secs: i64) -> Process {
         let spec = ProcessSpec {
             identity: Default::default(),
-            classification: Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Default::default(),
-                calm: Default::default(),
-                data_classification: Default::default(),
-            },
+            classification: Classification::gate_compute(),
             intent: Intent {
                 aplicacao: Some(AplicacaoIntent {
                     chart_ref: "oci://x".into(),
@@ -445,13 +439,7 @@ mod tests {
     fn permanent_process() -> Process {
         let spec = ProcessSpec {
             identity: Default::default(),
-            classification: Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Default::default(),
-                calm: Default::default(),
-                data_classification: Default::default(),
-            },
+            classification: Classification::gate_compute(),
             intent: Intent {
                 aplicacao: Some(AplicacaoIntent {
                     chart_ref: "oci://x".into(),

@@ -628,13 +628,7 @@ mod tests {
             "x",
             ProcessSpec {
                 identity: Default::default(),
-                classification: tatara_process::classification::Classification {
-                    point_type: tatara_process::classification::ConvergencePointType::Gate,
-                    substrate: tatara_process::classification::SubstrateType::Compute,
-                    horizon: Default::default(),
-                    calm: Default::default(),
-                    data_classification: Default::default(),
-                },
+                classification: tatara_process::classification::Classification::gate_compute(),
                 intent: Default::default(),
                 boundary: Default::default(),
                 compliance: Default::default(),
@@ -657,13 +651,7 @@ mod tests {
     fn process_to_member_state_attested_ephemeral_is_allocated() {
         let mut spec = ProcessSpec {
             identity: Default::default(),
-            classification: tatara_process::classification::Classification {
-                point_type: tatara_process::classification::ConvergencePointType::Gate,
-                substrate: tatara_process::classification::SubstrateType::Compute,
-                horizon: Default::default(),
-                calm: Default::default(),
-                data_classification: Default::default(),
-            },
+            classification: tatara_process::classification::Classification::gate_compute(),
             intent: Default::default(),
             boundary: Default::default(),
             compliance: Default::default(),
@@ -694,13 +682,7 @@ mod tests {
     fn empty_spec() -> ProcessSpec {
         ProcessSpec {
             identity: Default::default(),
-            classification: tatara_process::classification::Classification {
-                point_type: tatara_process::classification::ConvergencePointType::Gate,
-                substrate: tatara_process::classification::SubstrateType::Compute,
-                horizon: Default::default(),
-                calm: Default::default(),
-                data_classification: Default::default(),
-            },
+            classification: tatara_process::classification::Classification::gate_compute(),
             intent: Default::default(),
             boundary: Default::default(),
             compliance: Default::default(),

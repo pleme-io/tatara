@@ -33,9 +33,7 @@ use serde::{Deserialize, Serialize};
 use tatara_lisp::DeriveTataraDomain;
 
 use crate::boundary::{Boundary, Condition};
-use crate::classification::{
-    Classification, ConvergencePointType, DataClassification, Horizon, SubstrateType,
-};
+use crate::classification::Classification;
 use crate::crd::ProcessSpec;
 use crate::export::ExportSpec;
 use crate::intent::{AplicacaoIntent, Intent};
@@ -166,13 +164,12 @@ impl From<EphemeralSpec> for ProcessSpec {
 }
 
 fn default_ephemeral_class() -> Classification {
-    Classification {
-        point_type: ConvergencePointType::Gate,
-        substrate: SubstrateType::Compute,
-        horizon: Horizon::default(),
-        calm: Default::default(),
-        data_classification: DataClassification::default(),
-    }
+    // Delegates through the substrate `(Gate, Compute)` baseline owner
+    // so the shape lives at ONE workspace-wide site — see
+    // [`Classification::gate_compute`] for the pre-lift ten-callsite
+    // duplication history and the sibling-default correspondence
+    // pinned there.
+    Classification::gate_compute()
 }
 
 /// Compile a `(defephemeral …)` Lisp source into named `EphemeralSpec` values.
@@ -186,6 +183,7 @@ pub fn compile_ephemeral_source(
 mod tests {
     use super::*;
     use crate::boundary::ConditionKind;
+    use crate::classification::{ConvergencePointType, SubstrateType};
     use crate::intent::IntentVariant;
     use crate::lifetime::LifetimeVariant;
 
@@ -305,10 +303,7 @@ mod tests {
             d.spec.postconditions[0].kind,
             ConditionKind::HelmReleaseReleased
         );
-        assert_eq!(
-            d.spec.postconditions[1].kind,
-            ConditionKind::ClosedLoopAuth
-        );
+        assert_eq!(d.spec.postconditions[1].kind, ConditionKind::ClosedLoopAuth);
 
         // Lowers to ProcessSpec with the right shape.
         let ps: ProcessSpec = d.spec.clone().into();

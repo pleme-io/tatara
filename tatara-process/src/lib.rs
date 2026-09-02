@@ -1094,17 +1094,11 @@ mod qualified_process_ref_tests {
         // name)` positional contract surfaces HERE rather than as
         // silent drift at every downstream reconciler / export-
         // worker / pool-reconciler consumer.
-        use crate::classification::{Classification, ConvergencePointType, SubstrateType};
+        use crate::classification::Classification;
         use crate::crd::{Process, ProcessSpec};
         let spec = ProcessSpec {
             identity: Default::default(),
-            classification: Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Default::default(),
-                calm: Default::default(),
-                data_classification: Default::default(),
-            },
+            classification: Classification::gate_compute(),
             intent: Default::default(),
             boundary: Default::default(),
             compliance: Default::default(),
@@ -1493,7 +1487,7 @@ mod deletion_tombstoned_tests {
     //! sibling CRDs.
     use super::DeletionTombstoned;
     use crate::allocation::{AllocationSpec, EphemeralAllocation, Requestor};
-    use crate::classification::{Classification, ConvergencePointType, SubstrateType};
+    use crate::classification::Classification;
     use crate::crd::{Process, ProcessSpec};
     use crate::ephemeral::EphemeralSpec;
     use crate::intent::{AplicacaoIntent, Intent};
@@ -1565,13 +1559,7 @@ mod deletion_tombstoned_tests {
         // every substrate metadata-projection pin.
         ProcessSpec {
             identity: IdentitySpec::default(),
-            classification: Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Default::default(),
-                calm: Default::default(),
-                data_classification: Default::default(),
-            },
+            classification: Classification::gate_compute(),
             intent: Intent::default(),
             boundary: Default::default(),
             compliance: Default::default(),
@@ -1753,7 +1741,7 @@ mod annotated_tests {
     //! `controller_pool::process_belongs_to_pool`).
     use super::Annotated;
     use crate::allocation::{AllocationSpec, EphemeralAllocation, Requestor};
-    use crate::classification::{Classification, ConvergencePointType, SubstrateType};
+    use crate::classification::Classification;
     use crate::crd::{Process, ProcessSpec};
     use crate::ephemeral::EphemeralSpec;
     use crate::intent::{AplicacaoIntent, Intent};
@@ -1823,13 +1811,7 @@ mod annotated_tests {
     fn empty_process_spec() -> ProcessSpec {
         ProcessSpec {
             identity: IdentitySpec::default(),
-            classification: Classification {
-                point_type: ConvergencePointType::Gate,
-                substrate: SubstrateType::Compute,
-                horizon: Default::default(),
-                calm: Default::default(),
-                data_classification: Default::default(),
-            },
+            classification: Classification::gate_compute(),
             intent: Intent::default(),
             boundary: Default::default(),
             compliance: Default::default(),

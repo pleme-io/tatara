@@ -7,7 +7,7 @@ use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
-use kube::api::{Api, DeleteParams, PostParams};
+use kube::api::{Api, DeleteParams};
 use kube::Client;
 use tracing::{info, warn};
 
@@ -172,7 +172,16 @@ async fn handle_pr_event(state: &HandlerState, body: &[u8]) -> axum::response::R
             // through the primitive above. Post-lift both consumers
             // share ONE substrate owner.
             let api = state.allocation_api();
-            match api.create(&PostParams::default(), &alloc).await {
+            // Create-verb dispatch rides the substrate primitive
+            // `tatara_process::create::default` — pre-lift this was a
+            // hand-authored `api.create(&PostParams::default(), &alloc)`
+            // chain, one of FIVE workspace-wide restatements past the
+            // ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold. Post-lift
+            // the create-verb family lives at ONE substrate owner and
+            // the compound "create-or-treat-409-as-ok" idiom (pairing
+            // this call with `kube_error::is_conflict` below) reads as
+            // TWO substrate primitives composed at the callsite.
+            match tatara_process::create::default(&api, &alloc).await {
                 Ok(_) => {
                     info!(
                         namespace = %state.config.namespace,

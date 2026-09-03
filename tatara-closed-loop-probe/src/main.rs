@@ -14,7 +14,6 @@
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use k8s_openapi::api::core::v1::ConfigMap;
-use kube::api::PostParams;
 use kube::{Api, Client};
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -41,7 +40,11 @@ struct Args {
 
     /// Issuer's JWKS endpoint — the probe fetches this to compute the
     /// `intent_hash` pillar.
-    #[arg(long, env = "ISSUER_JWKS_PATH", default_value = "/.well-known/jwks.json")]
+    #[arg(
+        long,
+        env = "ISSUER_JWKS_PATH",
+        default_value = "/.well-known/jwks.json"
+    )]
     issuer_jwks_path: String,
 
     /// Consumer Service name (in-namespace).
@@ -106,24 +109,22 @@ async fn main() -> Result<()> {
         "starting closed-loop probe"
     );
 
-    let probe_result = probe::run(
-        probe::ProbeConfig {
-            issuer: probe::ServiceEndpoint {
-                service: args.issuer_service,
-                port: args.issuer_port,
-            },
-            issuer_auth_path: args.issuer_auth_path,
-            issuer_jwks_path: args.issuer_jwks_path,
-            consumer: probe::ServiceEndpoint {
-                service: args.consumer_service,
-                port: args.consumer_port,
-            },
-            consumer_auth_path: args.consumer_auth_path,
-            access_id,
-            access_key,
-            http_timeout: args.timeout.into(),
+    let probe_result = probe::run(probe::ProbeConfig {
+        issuer: probe::ServiceEndpoint {
+            service: args.issuer_service,
+            port: args.issuer_port,
         },
-    )
+        issuer_auth_path: args.issuer_auth_path,
+        issuer_jwks_path: args.issuer_jwks_path,
+        consumer: probe::ServiceEndpoint {
+            service: args.consumer_service,
+            port: args.consumer_port,
+        },
+        consumer_auth_path: args.consumer_auth_path,
+        access_id,
+        access_key,
+        http_timeout: args.timeout.into(),
+    })
     .await?;
 
     let mut envelope = ReceiptEnvelope::build(
@@ -182,7 +183,15 @@ async fn write_receipt(envelope: &ReceiptEnvelope, cm_name: &str, ns: &str) -> R
         ..Default::default()
     };
 
-    match api.create(&PostParams::default(), &cm).await {
+    // Create-verb dispatch rides the substrate primitive
+    // `tatara_process::create::default` — pre-lift this was a hand-
+    // authored `api.create(&PostParams::default(), &cm)` chain, one of
+    // FIVE workspace-wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold. Post-lift the create-verb family lives at
+    // ONE substrate owner and the compound "create-then-409-retry"
+    // idiom composes THREE substrate primitives (`create::default` +
+    // `kube_error::is_conflict` + `patch::merge`) at the callsite.
+    match tatara_process::create::default(&api, &cm).await {
         Ok(_) => Ok(()),
         // 409 detection rides the substrate primitive
         // `tatara_process::kube_error::is_conflict` — pre-lift this

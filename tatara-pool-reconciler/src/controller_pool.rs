@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
-use kube::api::{Api, DeleteParams, ListParams, PostParams};
+use kube::api::{Api, DeleteParams, ListParams};
 use kube::runtime::controller::Action;
 use tracing::{info, warn};
 
@@ -296,7 +296,19 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
                     continue;
                 }
                 let proc = build_member_process(&pool, &proc_name, slot, &name)?;
-                match process_api.create(&PostParams::default(), &proc).await {
+                // Create-verb dispatch rides the substrate primitive
+                // `tatara_process::create::default` — pre-lift this was
+                // a hand-authored `process_api.create(&PostParams::
+                // default(), &proc)` chain, one of FIVE workspace-wide
+                // restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+                // duplication threshold (peer at the desired-loop
+                // spawn branch below + the reconciler ProcessTable
+                // seed + the watcher allocation create + the probe
+                // receipt-ConfigMap seed). Post-lift the create-verb
+                // family lives at ONE substrate owner (sibling to
+                // `patch::merge` on the wire-verb axis + `patch::
+                // apply_patch_params` on the wire-posture axis).
+                match tatara_process::create::default(&process_api, &proc).await {
                     Ok(_) => {
                         info!(namespace = %ns, pool = %name, process = %proc_name, "spawned member");
                         spawned += 1;
@@ -462,7 +474,11 @@ async fn apply_convergence_actions(
                     }
                 };
                 let proc = build_member_process(pool, &proc_name, next_slot - 1, name)?;
-                match process_api.create(&PostParams::default(), &proc).await {
+                // Create-verb dispatch rides the substrate primitive
+                // `tatara_process::create::default` — desired-loop
+                // spawn peer of the spawn-branch arm above; both share
+                // ONE substrate owner post-lift.
+                match tatara_process::create::default(&process_api, &proc).await {
                     Ok(_) => {
                         info!(namespace = %ns, pool = %name, process = %proc_name, "desired-loop spawned");
                     }

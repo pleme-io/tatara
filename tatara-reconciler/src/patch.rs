@@ -7,7 +7,7 @@
 //! are resolved by resourceVersion conflict retries at the controller level.
 
 use chrono::Utc;
-use kube::api::{Api, PostParams};
+use kube::api::Api;
 use kube::Error as KubeError;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -86,7 +86,13 @@ pub async fn ensure_process_table(
         },
         status: None,
     };
-    api.create(&PostParams::default(), &pt).await
+    // Create-verb dispatch rides the substrate primitive
+    // `tatara_process::create::default` — pre-lift this was a hand-
+    // authored `api.create(&PostParams::default(), &pt)` chain, one of
+    // FIVE workspace-wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold. Post-lift the create-verb family lives at
+    // ONE substrate owner (sibling to `merge` on the wire-verb axis).
+    tatara_process::create::default(api, &pt).await
 }
 
 /// The two-slot `{"phase": <phase>, "phaseSince": <now>}` byte-shape

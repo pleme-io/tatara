@@ -131,7 +131,7 @@ pub mod prelude {
     pub use crate::table::{
         ClaimRecord, ProcessEntry, ProcessTable, ProcessTableSpec, ProcessTableStatus,
     };
-    pub use crate::time::{elapsed_since, seconds_ago};
+    pub use crate::time::{elapsed_since, seconds_ago, tombstone_at, tombstone_now};
     pub use crate::{Annotated, DeletionTombstoned, NamespacedApiCoordinates};
 }
 
@@ -1585,21 +1585,25 @@ mod deletion_tombstoned_tests {
     #[test]
     fn is_being_deleted_on_process_present_tombstone_returns_true_via_trait() {
         let mut p = Process::new("api", empty_process_spec());
-        p.metadata.deletion_timestamp = Some(Time(chrono::Utc::now()));
+        // Routes through the ONE substrate composer
+        // `tatara_process::time::tombstone_now` — one of 12 pre-lift
+        // exact-match sites past the ★★ PRIME-DIRECTIVE ≥ 2 threshold
+        // for the `Some(Time(Utc::now()))` wire shape.
+        p.metadata.deletion_timestamp = crate::time::tombstone_now();
         assert!(DeletionTombstoned::is_being_deleted(&p));
     }
 
     #[test]
     fn is_being_deleted_on_ephemeral_pool_present_tombstone_returns_true_via_trait() {
         let mut p = EphemeralPool::new("attest-pool", empty_pool_spec());
-        p.metadata.deletion_timestamp = Some(Time(chrono::Utc::now()));
+        p.metadata.deletion_timestamp = crate::time::tombstone_now();
         assert!(DeletionTombstoned::is_being_deleted(&p));
     }
 
     #[test]
     fn is_being_deleted_on_ephemeral_allocation_present_tombstone_returns_true_via_trait() {
         let mut a = EphemeralAllocation::new("pr-42-demo", empty_alloc_spec());
-        a.metadata.deletion_timestamp = Some(Time(chrono::Utc::now()));
+        a.metadata.deletion_timestamp = crate::time::tombstone_now();
         assert!(DeletionTombstoned::is_being_deleted(&a));
     }
 
@@ -1617,9 +1621,14 @@ mod deletion_tombstoned_tests {
         // step the pre-lift chain does NOT apply — or vice versa —
         // surfaces here rather than as silent drift between the
         // substrate owner and the pre-lift consumer.
+        // Routes through the ONE substrate composer family
+        // `tatara_process::time::{tombstone_now,tombstone_at}` — the
+        // present-at-now corner rides `tombstone_now`, the present-at-
+        // past corner composes `tombstone_at(seconds_ago(3600))` per
+        // the composer's canonical stale-fixture shape.
         let mut cases: Vec<Option<Time>> = vec![None];
-        cases.push(Some(Time(chrono::Utc::now())));
-        cases.push(Some(Time(crate::time::seconds_ago(3600))));
+        cases.push(crate::time::tombstone_now());
+        cases.push(crate::time::tombstone_at(crate::time::seconds_ago(3600)));
 
         for ts in cases {
             let mut a = EphemeralAllocation::new("pr-42-demo", empty_alloc_spec());
@@ -1646,7 +1655,9 @@ mod deletion_tombstoned_tests {
         // (or vice versa) cannot land any drift between the two
         // surfaces because this pin binds them at every corner of the
         // (missing, present) input matrix.
-        for ts in [None, Some(Time(chrono::Utc::now()))] {
+        // Routes the tombstone-present corner through the ONE
+        // substrate composer `tatara_process::time::tombstone_now`.
+        for ts in [None, crate::time::tombstone_now()] {
             let mut p = Process::new("api", empty_process_spec());
             p.metadata.deletion_timestamp = ts.clone();
             assert_eq!(
@@ -1660,7 +1671,7 @@ mod deletion_tombstoned_tests {
     #[test]
     fn trait_probe_coheres_with_ephemeral_pool_inherent_is_being_deleted_on_both_corners() {
         // Peer coherence pin on the sister CRD.
-        for ts in [None, Some(Time(chrono::Utc::now()))] {
+        for ts in [None, crate::time::tombstone_now()] {
             let mut p = EphemeralPool::new("attest-pool", empty_pool_spec());
             p.metadata.deletion_timestamp = ts.clone();
             assert_eq!(
@@ -1685,7 +1696,8 @@ mod deletion_tombstoned_tests {
         // resolution — the observable output is identical either way,
         // so the pin locks the invariant that BOTH paths agree.
         let mut p = Process::new("api", empty_process_spec());
-        p.metadata.deletion_timestamp = Some(Time(chrono::Utc::now()));
+        // Routes through `tatara_process::time::tombstone_now`.
+        p.metadata.deletion_timestamp = crate::time::tombstone_now();
         assert!(p.is_being_deleted());
     }
 
@@ -1698,7 +1710,7 @@ mod deletion_tombstoned_tests {
         // allocation-reconciler callsite depends on post-lift.
         let mut a = EphemeralAllocation::new("pr-42-demo", empty_alloc_spec());
         assert!(!a.is_being_deleted());
-        a.metadata.deletion_timestamp = Some(Time(chrono::Utc::now()));
+        a.metadata.deletion_timestamp = crate::time::tombstone_now();
         assert!(a.is_being_deleted());
     }
 }

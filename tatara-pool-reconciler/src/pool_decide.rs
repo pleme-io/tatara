@@ -340,9 +340,11 @@ mod tests {
     #[test]
     fn deletion_stamp_triggers_drain() {
         let mut p = pool(1, 0, 0);
-        p.metadata.deletion_timestamp = Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(
-            Utc::now(),
-        ));
+        // Routes through the ONE substrate composer
+        // `tatara_process::time::tombstone_now` — one of 12 pre-lift
+        // exact-match sites past the ★★ PRIME-DIRECTIVE ≥ 2 threshold
+        // for the `Some(Time(Utc::now()))` wire shape.
+        p.metadata.deletion_timestamp = tatara_process::time::tombstone_now();
         let members = vec![member("a", MemberState::Free, 60)];
         assert_eq!(
             decide_pool_reconcile(&p, &members, now()),

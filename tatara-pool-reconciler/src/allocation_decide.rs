@@ -606,9 +606,11 @@ mod tests {
     fn deletion_timestamp_releases_assigned_process() {
         let p = pool("demo-pool", "pools", PoolSelector::default());
         let mut a = alloc("manual", "any/repo", "main");
-        a.metadata.deletion_timestamp = Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(
-            Utc::now(),
-        ));
+        // Routes through the ONE substrate composer
+        // `tatara_process::time::tombstone_now` — one of 12 pre-lift
+        // exact-match sites past the ★★ PRIME-DIRECTIVE ≥ 2 threshold
+        // for the `Some(Time(Utc::now()))` wire shape.
+        a.metadata.deletion_timestamp = tatara_process::time::tombstone_now();
         a.status = Some(AllocationStatus {
             phase: AllocationPhase::Bound,
             bound_pool: Some(AllocationRef {

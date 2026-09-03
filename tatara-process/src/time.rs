@@ -1,18 +1,27 @@
 //! Wall-clock time primitives — the small typed layer over the
 //! `chrono::DateTime<Utc>` → `std::time::Duration` bridge every timed
-//! decision in the workspace passes through.
+//! decision in the workspace passes through, plus the K8s wire-form
+//! composers ([`tombstone_now`], [`tombstone_at`]) that lift a
+//! `DateTime<Utc>` anchor into the `Option<Time>` shape
+//! `ObjectMeta::deletion_timestamp` (and its metadata-Time peers)
+//! carry.
 //!
 //! Kubernetes exposes wall-clock anchors on the wire as
 //! `k8s_openapi::apimachinery::pkg::apis::meta::v1::Time`
 //! (`DateTime<Utc>` after `.0`) — `metadata.creationTimestamp`,
-//! `status.phaseSince`, `PoolMember.enteredStateAt`, etc. Every timed
-//! decision (TTL expiry, sleep-budget picker, staleness gate) then
-//! projects `(now, anchor)` onto an `Option<std::time::Duration>` so
-//! it can be compared to a `humantime`-parsed budget (also
+//! `metadata.deletionTimestamp`, `status.phaseSince`,
+//! `PoolMember.enteredStateAt`, etc. Every timed decision (TTL
+//! expiry, sleep-budget picker, staleness gate) then projects
+//! `(now, anchor)` onto an `Option<std::time::Duration>` so it can
+//! be compared to a `humantime`-parsed budget (also
 //! `std::time::Duration`). This module owns the one-line chain that
-//! projection reduces to.
+//! projection reduces to on the READ side, and — via [`tombstone_now`]
+//! and [`tombstone_at`] — the 5-token `Some(Time(<anchor>))` wire
+//! wrap every WRITE-side fixture that seeds a tombstone-present
+//! corner stamps on the metadata slot.
 
 use chrono::{DateTime, Utc};
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use std::time::Duration;
 
 /// Elapsed wall-clock time between `anchor` and `now`, or `None` if
@@ -128,6 +137,126 @@ pub fn elapsed_since(now: DateTime<Utc>, anchor: DateTime<Utc>) -> Option<Durati
 #[must_use]
 pub fn seconds_ago(secs: i64) -> DateTime<Utc> {
     Utc::now() - chrono::Duration::seconds(secs)
+}
+
+/// A tombstone stamp for a K8s [`metadata.deletionTimestamp`][kdel]
+/// slot at the current wall-clock instant — the wire shape K8s
+/// stamps once the API server has received a DELETE request but the
+/// finalizer chain has not yet released the object for GC. The
+/// `Option<Time>` return form matches the slot's own type
+/// (`ObjectMeta::deletion_timestamp: Option<Time>`) so the tombstone
+/// composes directly into the metadata without a per-caller `Some(...)`
+/// wrap or a per-caller `Time(...)` wrap of the `Utc::now()` read.
+///
+/// Pre-lift the SAME
+/// `Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(Utc::now()))`
+/// / `Some(Time(chrono::Utc::now()))` 5-token wire shape was hand-
+/// authored at 11 workspace-wide fixture sites across four files,
+/// each stamping the tombstone slot on one of the three tatara-owned
+/// CRDs to seed a deletion-in-progress fixture:
+///
+/// * [`crate::crd`] `crd::deletion_tombstoned_tests::tombstoned_process`
+///   — the shared `Process` fixture the [`crate::crd::Process::is_being_deleted`]
+///   inherent-forwarder pin family (7 test cases at `crd.rs` line 4956)
+///   destructures for its tombstone-present corner.
+/// * [`crate::pool`] `pool::deletion_tombstoned_tests::tombstoned_pool`
+///   — the peer `EphemeralPool` fixture the sibling
+///   [`crate::pool::EphemeralPool::is_being_deleted`] inherent-forwarder
+///   pin family destructures (at `pool.rs` line 2768).
+/// * `tatara-pool-reconciler::allocation_decide::tests::
+///   deletion_timestamp_releases_assigned_process` — the allocation
+///   reconciler's tombstone-releases-bind pin (at `allocation_decide.rs`
+///   line 609).
+/// * `tatara-pool-reconciler::pool_decide::tests::
+///   deletion_stamp_triggers_drain` — the pool reconciler's
+///   tombstone-triggers-Drain pin (at `pool_decide.rs` line 343).
+/// * [`crate::deletion_tombstoned_tests`] — 7 pins in `lib.rs` (lines
+///   1588, 1595, 1602, 1621, 1649, 1663, 1688, 1701) covering the
+///   trait's blanket-impl behavior across all three CRDs plus the
+///   two inherent-forwarder coherence pins.
+///
+/// Every callsite walked the SAME 5-token chain — take the wall-clock
+/// instant, wrap it in the K8s Time newtype, wrap that in `Some` — and
+/// wanted the `Option<Time>` form for direct assignment to the
+/// `metadata.deletion_timestamp` slot. Post-lift each callsite reads
+/// `tombstone_now()` and the wall-clock read + K8s Time wrap + Option
+/// wrap sinks live at ONE substrate owner.
+///
+/// Return-form axis: `Option<Time>` — the exact type
+/// `ObjectMeta::deletion_timestamp` carries. A caller wanting the bare
+/// [`Time`] (e.g. seeding a `LastTransitionTime` on a `Condition`,
+/// where the field is `Time` and not `Option<Time>`) unwraps via
+/// `tombstone_now().unwrap()` at the callsite — but this primitive's
+/// contract is the `Option<Time>` slot, matching the pre-lift shape
+/// every one of the 11 hand-authored callsites walked. The peer
+/// [`tombstone_at`] takes an explicit anchor for callers that need a
+/// past-anchored tombstone (e.g. a "stamped an hour ago" fixture for
+/// a stale-tombstone garbage-collection probe).
+///
+/// Peer to [`crate::DeletionTombstoned`] on the (WRITE, READ) axis:
+/// [`crate::DeletionTombstoned::is_being_deleted`] is the READ probe
+/// (the trait's blanket impl reads `.metadata.deletion_timestamp.
+/// is_some()` on any tatara CRD); [`tombstone_now`] is the WRITE
+/// composer (the substrate owner for the 5-token wire shape every
+/// fixture that seeds a tombstone-present corner stamps). The two
+/// primitives partition the deletion-timestamp surface at the (read,
+/// write) axis and cover it end-to-end at the substrate.
+///
+/// A future normalization (a monotonic-clock cross-check on the wall
+/// read, a per-fleet skew Δ that biases the tombstone anchor past a
+/// known-bad range, a widening of the K8s Time wire form under a
+/// future k8s-openapi crate bump, a debug-build assertion that the
+/// caller has admission privileges to stamp a tombstone at all) lands
+/// at THIS ONE substrate primitive and every downstream fixture / seed
+/// / stamp callsite inherits the upgrade mechanically — no per-site
+/// edit at any of the 11 listed callers or at future consumers (a
+/// stable-name claim-arbiter's tombstoned-generation seed, a
+/// tatara-testing helper that stamps a tombstone on a mock-server
+/// object, an admission-webhook fixture that fires the tombstone
+/// stamp itself).
+///
+/// [kdel]: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.30/#objectmeta-v1-meta
+#[must_use]
+pub fn tombstone_now() -> Option<Time> {
+    Some(Time(Utc::now()))
+}
+
+/// A tombstone stamp for a K8s [`metadata.deletionTimestamp`][kdel]
+/// slot at the operator-supplied `when` anchor — the peer of
+/// [`tombstone_now`] on the anchor-explicit axis. Composes directly
+/// with [`seconds_ago`] so a callsite needing a "stamped `N` seconds
+/// ago" tombstone (e.g. a stale-tombstone garbage-collection probe, a
+/// fixture that seeds a tombstone predating the reconciler's `now` by
+/// enough to trip a `deletion_grace_period_seconds` cutoff) reads
+/// `tombstone_at(seconds_ago(N))` and routes through ONE substrate
+/// owner for both the anchor construction and the wire-form wrap.
+///
+/// Pre-lift the SAME `Some(Time(<anchor>))` wire shape was hand-
+/// authored at 1 workspace-wide site — the tombstone-present corner
+/// of [`crate::deletion_tombstoned_tests::is_being_deleted_matches_pre_lift_deletion_timestamp_is_some_chain_on_ephemeral_allocation`],
+/// which sweeps three corners of the (absent, present-at-now,
+/// present-at-past) input matrix and stamps `Some(Time(seconds_ago(3600)))`
+/// on the present-at-past corner. Together with [`tombstone_now`]'s
+/// 11 callsites, the pair covers the 12-site `Some(Time(<anchor>))`
+/// family the substrate opens ownership over.
+///
+/// The `DateTime<Utc>` parameter form encodes the invariant "the caller
+/// has already chosen the anchor" at the type level — a caller wanting
+/// the current-instant tombstone routes through [`tombstone_now`]
+/// instead of `tombstone_at(Utc::now())`, keeping the wall-clock read
+/// at ONE substrate owner and avoiding the "did the caller mean the
+/// clock at the seed-instant or the clock at the assertion-instant"
+/// ambiguity a `DateTime<Utc>::default()` form would open.
+///
+/// A future normalization at the wire form (see the doc-comment on
+/// [`tombstone_now`] for the full rationale) lands at THIS primitive
+/// alongside [`tombstone_now`] so both anchor shapes inherit the
+/// upgrade mechanically at the same substrate site.
+///
+/// [kdel]: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.30/#objectmeta-v1-meta
+#[must_use]
+pub fn tombstone_at(when: DateTime<Utc>) -> Option<Time> {
+    Some(Time(when))
 }
 
 #[cfg(test)]
@@ -320,5 +449,141 @@ mod tests {
             anchor <= now + chrono::Duration::seconds(11),
             "anchor {anchor} must be within (10s + jitter) after now {now}"
         );
+    }
+
+    // ─── tombstone_now + tombstone_at substrate pins ──────────────────
+    //
+    // Bind the two K8s-wire tombstone composers at fail-before-pass-
+    // after granularity so a regression that dropped the `Some` wrap
+    // (yielding `Option<Time>` = `None`, which would silently un-
+    // tombstone every fixture), swapped the `Time` newtype for a raw
+    // `DateTime<Utc>` (breaking the `metadata.deletion_timestamp: Option<Time>`
+    // slot's shape), or diverged the two composers on the anchor axis
+    // (a `tombstone_at(when)` that ignored `when` and read the wall
+    // clock, an anchor-invariant that clamped a future anchor into
+    // the past) surfaces HERE rather than as silent operator-facing
+    // skew at the 12 downstream fixture consumers.
+    //
+    // Each pin is fail-before-pass-after: the primitives did not exist
+    // pre-lift, so any test that invokes them fails to compile pre-
+    // lift and passes post-lift; the byte-identity pins below then
+    // bind the specific shape choice.
+
+    #[test]
+    fn tombstone_now_returns_some_time_at_current_instant() {
+        // Primary shape asserted end-to-end: the returned option is
+        // `Some(Time(anchor))` with the anchor bracketed by two
+        // wall-clock reads taken immediately before + after the call.
+        // A regression that dropped the `Some` wrap would fail the
+        // outer `is_some()` probe; a regression that stamped a
+        // constant (module-load `Utc::now()`, a `DateTime::<Utc>::
+        // default()` = epoch) would fail the bracket check.
+        let before = Utc::now();
+        let stamp = tombstone_now();
+        let after = Utc::now();
+        let stamped = stamp.expect("tombstone_now must return Some(Time(...))");
+        assert!(
+            stamped.0 >= before && stamped.0 <= after,
+            "tombstone anchor {} must fall in [{before}, {after}]",
+            stamped.0,
+        );
+    }
+
+    #[test]
+    fn tombstone_now_matches_hand_authored_pre_lift_chain_shape() {
+        // Byte-identical parity with the pre-lift
+        // `Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(
+        // Utc::now()))` block that all 11 hand-authored fixture sites
+        // restated verbatim (differing only in `chrono::Utc` vs `Utc`
+        // module-path prefix). Both blocks read the wall clock at
+        // DIFFERENT instants so the two anchors CAN differ by the
+        // wall-clock delta between calls — bound the divergence at
+        // 100ms scheduler jitter, matching the peer
+        // `seconds_ago_matches_hand_authored_pre_lift_chain_shape`
+        // pin's tolerance.
+        let composed = tombstone_now().expect("tombstone_now returns Some");
+        let hand_authored = Some(Time(Utc::now())).expect("hand-authored fixture");
+        let delta = (hand_authored.0 - composed.0).abs();
+        assert!(
+            delta <= chrono::Duration::milliseconds(100),
+            "composed {} and hand-authored {} must agree within 100ms scheduler jitter",
+            composed.0,
+            hand_authored.0,
+        );
+    }
+
+    #[test]
+    fn tombstone_at_returns_some_time_preserving_the_operator_anchor() {
+        // Primary shape for the anchor-explicit peer: the returned
+        // option is `Some(Time(when))` and the anchor is exactly the
+        // `when` argument — no wall-clock read, no normalization, no
+        // clamp. A regression that fell through to the current instant
+        // (`tombstone_at` ignoring `when` and re-reading the wall
+        // clock) would fail the identity check.
+        let epoch = DateTime::<Utc>::from_timestamp(1_700_000_000, 0).expect("valid epoch second");
+        let stamp = tombstone_at(epoch).expect("tombstone_at returns Some");
+        assert_eq!(stamp.0, epoch, "anchor must be preserved verbatim");
+    }
+
+    #[test]
+    fn tombstone_at_composes_with_seconds_ago_at_stale_fixture_shape() {
+        // The canonical downstream composition: a fixture that needs a
+        // "stamped N seconds ago" tombstone composes `tombstone_at(
+        // seconds_ago(N))` and expects the returned anchor to be ~N
+        // seconds in the past. Matches the single pre-lift site at
+        // `lib.rs::deletion_tombstoned_tests::is_being_deleted_matches_pre_lift_deletion_timestamp_is_some_chain_on_ephemeral_allocation`
+        // which stamps `Some(Time(crate::time::seconds_ago(3600)))`.
+        // A regression that reshaped either primitive so the two no
+        // longer round-trip would surface HERE rather than as silent
+        // skew at the stale-tombstone fixture family.
+        let secs = 3_600_i64;
+        let anchor = seconds_ago(secs);
+        let stamp = tombstone_at(anchor).expect("tombstone_at returns Some");
+        assert_eq!(
+            stamp.0, anchor,
+            "tombstone_at must preserve the seconds_ago-produced anchor verbatim",
+        );
+        // And the anchor is ~N seconds in the past — this is the
+        // downstream property every fixture using the composition
+        // relies on.
+        let elapsed = elapsed_since(Utc::now(), stamp.0).expect("elapsed is Some for past anchor");
+        assert!(
+            elapsed >= Duration::from_secs(secs as u64),
+            "elapsed {elapsed:?} must be ≥ {secs}s — the anchor was stamped {secs}s ago",
+        );
+    }
+
+    #[test]
+    fn tombstone_now_and_tombstone_at_agree_at_the_current_instant() {
+        // Cross-composer coherence pin: `tombstone_now()` and
+        // `tombstone_at(Utc::now())` produce the SAME shape (`Some(
+        // Time(...))`) with anchors that agree within scheduler jitter.
+        // A future refactor that consolidated one composer onto the
+        // other (or split them further) cannot land any anchor-axis
+        // drift because this pin binds them at the current-instant
+        // corner where both callsites converge.
+        let a = tombstone_now().expect("tombstone_now returns Some");
+        let b = tombstone_at(Utc::now()).expect("tombstone_at returns Some");
+        let delta = (b.0 - a.0).abs();
+        assert!(
+            delta <= chrono::Duration::milliseconds(100),
+            "tombstone_now anchor {} and tombstone_at(Utc::now()) anchor {} must agree within 100ms scheduler jitter",
+            a.0,
+            b.0,
+        );
+    }
+
+    #[test]
+    fn tombstone_at_preserves_a_future_anchor_without_clamping() {
+        // Corner: `tombstone_at` accepts a future anchor verbatim —
+        // matches the pre-lift `Some(Time(<future>))` shape a caller
+        // wanting a future-offset tombstone would hand-author. Pin the
+        // identity so a future normalization that clamps the anchor
+        // into the past (a "no tombstone can be in the future" policy)
+        // has to explicitly move this pin rather than silently
+        // trampling future callers.
+        let future = Utc::now() + chrono::Duration::seconds(3_600);
+        let stamp = tombstone_at(future).expect("tombstone_at returns Some");
+        assert_eq!(stamp.0, future);
     }
 }

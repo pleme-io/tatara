@@ -4953,9 +4953,11 @@ mod tests {
     fn tombstoned_process() -> Process {
         let mut p = Process::new("api-gateway", empty_spec());
         p.metadata.namespace = Some("prod".into());
-        p.metadata.deletion_timestamp = Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(
-            Utc::now(),
-        ));
+        // Routes through the ONE substrate composer
+        // `tatara_process::time::tombstone_now` — one of 12 pre-lift
+        // exact-match sites past the ★★ PRIME-DIRECTIVE ≥ 2 threshold
+        // for the `Some(Time(Utc::now()))` wire shape.
+        p.metadata.deletion_timestamp = crate::time::tombstone_now();
         p
     }
 

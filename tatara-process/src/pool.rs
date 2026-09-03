@@ -2765,9 +2765,11 @@ mod tests {
     fn tombstoned_pool() -> EphemeralPool {
         let mut p = pool_named("attest-pool");
         p.metadata.namespace = Some("ephemeral-pools".into());
-        p.metadata.deletion_timestamp = Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(
-            Utc::now(),
-        ));
+        // Routes through the ONE substrate composer
+        // `tatara_process::time::tombstone_now` — see the peer
+        // `tombstoned_process` doc-comment in `crd.rs` for the full
+        // migration rationale.
+        p.metadata.deletion_timestamp = crate::time::tombstone_now();
         p
     }
 

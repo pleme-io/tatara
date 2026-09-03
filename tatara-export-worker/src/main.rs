@@ -24,7 +24,7 @@ use clap::Parser;
 use k8s_openapi::api::core::v1::ConfigMap;
 use k8s_openapi::ByteString;
 use kube::api::Patch;
-use kube::{Api, Client};
+use kube::Client;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use tracing::{info, warn};
@@ -214,8 +214,15 @@ async fn read_artifact(spec: &ExportSpec, kube: &Client, ns: &str, name: &str) -
         }
         ArtifactVariant::ProcessSnapshot(_) => {
             // Read the owning Process as a typed CR; serialize to JSON.
-            use tatara_process::crd::Process;
-            let api: Api<Process> = Api::namespaced(kube.clone(), ns);
+            // Ns-scoped `Api<Process>` binding rides the substrate
+            // primitive `tatara_process::process_api::namespaced` —
+            // peer to the `tatara_process::configmap::namespaced` +
+            // ProcessSnapshot arms below/above, closing the same
+            // `Api::namespaced(<client>.clone(), <ns>)` shape that
+            // was hand-authored at THIS site + `tatara-reconciler::
+            // boundary::{evaluate_process_phase, check_depends_on}`
+            // pre-lift.
+            let api = tatara_process::process_api::namespaced(kube.clone(), ns);
             let p = api
                 .get(name)
                 .await

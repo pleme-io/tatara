@@ -19,7 +19,7 @@
 //! dependencies structured for UX messaging.
 
 use anyhow::{anyhow, Result};
-use kube::{Api, Client};
+use kube::Client;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -960,7 +960,7 @@ async fn evaluate_process_phase(
 ) -> Result<Satisfaction> {
     let parsed: ProcessPhaseParams = parse_params_or_return_unknown!("ProcessPhase", params);
     let ns = ssapply::resolve_target_namespace(parsed.namespace.as_deref(), default_ns);
-    let api: Api<Process> = Api::namespaced(client, ns);
+    let api = tatara_process::process_api::namespaced(client, ns);
     let target = match api
         .get_opt(&parsed.process_ref)
         .await
@@ -1089,7 +1089,7 @@ pub async fn check_depends_on(client: Client, process: &Process) -> Result<Vec<U
     for dep in &process.spec.depends_on {
         let ns = ssapply::resolve_target_namespace(dep.namespace.as_deref(), default_ns);
         let required: ProcessPhase = dep.must_reach.into();
-        let api: Api<Process> = Api::namespaced(client.clone(), ns);
+        let api = tatara_process::process_api::namespaced(client.clone(), ns);
         match api.get_opt(&dep.name).await {
             Ok(Some(target)) => {
                 let actual = target.observed_phase();

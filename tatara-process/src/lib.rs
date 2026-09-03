@@ -33,6 +33,7 @@ pub mod matrix;
 pub mod patch;
 pub mod phase;
 pub mod pool;
+pub mod process_api;
 pub mod receipt;
 pub mod requeue;
 pub mod routing;

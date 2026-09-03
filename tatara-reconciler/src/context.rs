@@ -35,7 +35,19 @@ impl Context {
     /// out of `namespace_and_name(p)?` and pass `&ns`; the boundary
     /// evaluators + controller pass `ns: &str` slices unchanged.
     pub fn process_api(&self, ns: &str) -> Api<Process> {
-        Api::namespaced(self.kube.clone(), ns)
+        // Delegates through the workspace-wide substrate owner
+        // `tatara_process::process_api::namespaced` (peer to
+        // `tatara_process::configmap::namespaced` on the K8s-built-in
+        // axis), so a future normalization of the ns-scoped
+        // Process-handle posture — a wired-in tracing span, a
+        // per-namespace retry budget, an SSA field-manager default,
+        // a fixture-backed client for CI smoke-tests — lands at ONE
+        // substrate primitive and reaches BOTH this per-request
+        // reconciler forwarder AND every below-controller consumer
+        // (`tatara_reconciler::boundary::{evaluate_process_phase,
+        // check_depends_on}`, `tatara_export_worker::main::read_artifact`)
+        // through the same owner.
+        tatara_process::process_api::namespaced(self.kube.clone(), ns)
     }
 
     /// Cluster-scoped `Api<ProcessTable>` bound to this context's client —

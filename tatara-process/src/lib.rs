@@ -1207,15 +1207,12 @@ mod namespaced_api_coordinates_tests {
     }
 
     fn alloc_fixture(name: &str, ns: Option<&str>) -> EphemeralAllocation {
-        // Requestor rides through the ONE substrate composer
-        // `Requestor::kind_only` — one of TEN pre-lift exact-match
-        // sites past the ★★ PRIME-DIRECTIVE ≥ 2 threshold.
-        let spec = AllocationSpec {
-            pool_ref: None,
-            requestor: Requestor::kind_only("github-pr"),
-            ttl: None,
-            note: None,
-        };
+        // AllocationSpec rides through the ONE substrate composer
+        // `AllocationSpec::requestor_only`; the inner Requestor rides
+        // through the peer composer `Requestor::kind_only`. Nine
+        // pre-lift exact-match sites past the ★★ PRIME-DIRECTIVE ≥ 2
+        // threshold collapse onto this ONE substrate owner.
+        let spec = AllocationSpec::requestor_only(Requestor::kind_only("github-pr"));
         let mut a = EphemeralAllocation::new(name, spec);
         a.metadata.namespace = ns.map(str::to_string);
         a
@@ -1510,17 +1507,12 @@ mod deletion_tombstoned_tests {
     }
 
     fn empty_alloc_spec() -> AllocationSpec {
-        // Requestor rides through the ONE substrate composer
-        // `Requestor::kind_only` — sibling to the `alloc_fixture`
-        // callsite above in this file. Pre-lift this was the 9-line
-        // struct-literal restated verbatim at TEN workspace-wide
-        // fixture sites past the ★★ PRIME-DIRECTIVE ≥ 2 threshold.
-        AllocationSpec {
-            pool_ref: None,
-            requestor: Requestor::kind_only("github-pr"),
-            ttl: None,
-            note: None,
-        }
+        // AllocationSpec rides through the ONE substrate composer
+        // `AllocationSpec::requestor_only`; the inner Requestor rides
+        // through `Requestor::kind_only`. Nine pre-lift exact-match
+        // fixture sites past the ★★ PRIME-DIRECTIVE ≥ 2 threshold
+        // collapse onto this ONE substrate owner.
+        AllocationSpec::requestor_only(Requestor::kind_only("github-pr"))
     }
 
     fn empty_process_spec() -> ProcessSpec {
@@ -1746,16 +1738,11 @@ mod annotated_tests {
     }
 
     fn empty_alloc_spec() -> AllocationSpec {
-        // Requestor rides through the ONE substrate composer
-        // `Requestor::kind_only` — sibling to the peer
-        // `empty_alloc_spec` fixture in the DeletionTombstoned pin
-        // module above.
-        AllocationSpec {
-            pool_ref: None,
-            requestor: Requestor::kind_only("github-pr"),
-            ttl: None,
-            note: None,
-        }
+        // AllocationSpec rides through `AllocationSpec::requestor_only`;
+        // the inner Requestor rides through `Requestor::kind_only` —
+        // sibling to the peer `empty_alloc_spec` fixture in the
+        // DeletionTombstoned pin module above.
+        AllocationSpec::requestor_only(Requestor::kind_only("github-pr"))
     }
 
     fn empty_process_spec() -> ProcessSpec {

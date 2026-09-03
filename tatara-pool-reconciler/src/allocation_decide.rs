@@ -389,20 +389,26 @@ mod tests {
     }
 
     fn alloc(kind: &str, repo: &str, branch: &str) -> EphemeralAllocation {
-        let spec = AllocationSpec {
-            pool_ref: None,
-            requestor: Requestor {
-                kind: kind.into(),
-                repo: Some(repo.into()),
-                branch: Some(branch.into()),
-                pr_number: None,
-                sha: None,
-                pr_labels: vec![],
-                actor: None,
-            },
-            ttl: None,
-            note: None,
-        };
+        // AllocationSpec rides through the ONE substrate composer
+        // `AllocationSpec::requestor_only` — one of NINE pre-lift
+        // exact-match `AllocationSpec { pool_ref: None, requestor:
+        // <r>, ttl: None, note: None }` fixture sites past the ★★
+        // PRIME-DIRECTIVE ≥ 2 threshold. The inner Requestor keeps
+        // its exhaustive struct literal here because this fixture is
+        // the ONE callsite that populates repo + branch alongside the
+        // kind slot — Requestor::kind_only would leave repo + branch
+        // at None, so the caller composes on top of the six-slot
+        // default tail via struct-update rather than through the
+        // kind-only sibling composer.
+        let spec = AllocationSpec::requestor_only(Requestor {
+            kind: kind.into(),
+            repo: Some(repo.into()),
+            branch: Some(branch.into()),
+            pr_number: None,
+            sha: None,
+            pr_labels: vec![],
+            actor: None,
+        });
         let mut a = EphemeralAllocation::new("alloc-1", spec);
         a.meta_mut().namespace = Some("pools".into());
         a

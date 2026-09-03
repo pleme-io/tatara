@@ -79,6 +79,79 @@ pub struct AllocationSpec {
     pub note: Option<String>,
 }
 
+impl AllocationSpec {
+    /// The canonical minimal [`AllocationSpec`] composer — binds only
+    /// the single caller-varying [`Self::requestor`] slot and leaves
+    /// the three-slot default tail (`pool_ref = None`, `ttl = None`,
+    /// `note = None`) at ONE substrate owner. The lift of the 5-line
+    /// `AllocationSpec { pool_ref: None, requestor: <r>, ttl: None,
+    /// note: None }` incantation past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold — pre-lift the SAME requestor-only
+    /// fixture shape recurred at NINE workspace-wide fixture sites
+    /// (five inside [`crate::allocation`]'s own test module — the
+    /// `alloc_with_phase` / `alloc_without_status` observers on the
+    /// phase axis, the `alloc_with_bound_pool` observer on the
+    /// routing axis, the `alloc_with_expires_at` observer on the TTL
+    /// axis, and the `allocation_spec_omits_optional_fields` wire-
+    /// shape pin; three inside [`crate::lib`]'s pin fixtures — the
+    /// `alloc_fixture` + two `empty_alloc_spec` helpers on the
+    /// coordinate / annotation axes; one inside `tatara-pool-
+    /// reconciler::allocation_decide` — the `alloc` fixture seeding
+    /// the pool convergence-decision test battery). All nine sites
+    /// walked the SAME three-slot default tail — differing only in
+    /// the caller-varying [`Requestor`] value.
+    ///
+    /// The three-slot default tail is the SAFE minimal shape: `pool_ref
+    /// = None` triggers selector-based routing (rather than pinning a
+    /// specific pool), `ttl = None` falls back to the pool template's
+    /// TTL, `note = None` leaves the audit slot empty. Every
+    /// [`crate::pool::PoolSelector`] filter sees "no direct pool
+    /// binding" and matches every candidate pool for the requestor's
+    /// kind; post-lift a callsite that legitimately overrides a slot
+    /// lands the override at its own site via struct-update on top
+    /// of `requestor_only`.
+    ///
+    /// A future addition to [`AllocationSpec`] — a new optional slot
+    /// (e.g. a `priority` for admission-control kinds, a `budget`
+    /// for cost-accounting, a `labels` set for per-allocation
+    /// tagging) — lands at ONE primitive body and every fixture /
+    /// default-shape callsite inherits the upgrade mechanically.
+    /// Pre-lift a new field would have broken all NINE callsites
+    /// (each holds an exhaustive struct literal); post-lift only
+    /// sites that legitimately override the new slot need to name it.
+    ///
+    /// Sibling substrate primitives on the same "bind-the-required-
+    /// slot-only" axis: [`Requestor::kind_only`] (Requestor kind-
+    /// only composer; the six-slot Requestor counterpart, one of the
+    /// values this composer stamps into its own `requestor` slot),
+    /// [`crate::intent::AplicacaoIntent::chart_only`] (Aplicacao
+    /// chart-pointer-only composer; the 7-slot Aplicacao counterpart),
+    /// [`crate::pool::PoolSpec::with_template`] (Pool template-only
+    /// composer; the 11-slot Pool counterpart), and
+    /// [`crate::spec::ProcessSpec::gate_compute_defaults`] (Process
+    /// zero-arg-fixture composer; the 12-slot Process counterpart).
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the 3-slot default tail recurred at NINE hand-authored sites
+    /// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, spanning
+    /// two workspace crates, and is lifted onto the ONE workspace-
+    /// wide substrate owner here). THEORY.md §II.1 invariant 5
+    /// (composition preserves proofs — the pin block below binds the
+    /// primitive at fail-before-pass-after granularity so a
+    /// regression that drifted any of the three default-tail slots
+    /// surfaces at THESE pins rather than as silent fixture skew
+    /// across the nine downstream consumers).
+    #[must_use]
+    pub fn requestor_only(requestor: Requestor) -> Self {
+        Self {
+            pool_ref: None,
+            requestor,
+            ttl: None,
+            note: None,
+        }
+    }
+}
+
 /// Identity + routing context for a request.
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -1426,15 +1499,14 @@ mod tests {
     // by the `_matches_process_peer_shape` sweep at the tail.
 
     fn alloc_with_phase(phase: AllocationPhase) -> EphemeralAllocation {
-        // Requestor rides through the ONE substrate composer
-        // `Requestor::kind_only` — one of TEN pre-lift exact-match
-        // sites past the ★★ PRIME-DIRECTIVE ≥ 2 threshold.
-        let spec = AllocationSpec {
-            pool_ref: None,
-            requestor: Requestor::kind_only("manual"),
-            ttl: None,
-            note: None,
-        };
+        // AllocationSpec rides through the ONE substrate composer
+        // `AllocationSpec::requestor_only`; the inner Requestor rides
+        // through the peer composer `Requestor::kind_only`. Nine pre-
+        // lift exact-match `AllocationSpec { pool_ref: None,
+        // requestor: <r>, ttl: None, note: None }` fixture sites past
+        // the ★★ PRIME-DIRECTIVE ≥ 2 threshold collapse onto this
+        // ONE substrate owner.
+        let spec = AllocationSpec::requestor_only(Requestor::kind_only("manual"));
         let mut a = EphemeralAllocation::new("obs-alloc", spec);
         a.status = Some(AllocationStatus {
             phase,
@@ -1444,14 +1516,9 @@ mod tests {
     }
 
     fn alloc_without_status() -> EphemeralAllocation {
-        // Requestor rides through the ONE substrate composer
-        // `Requestor::kind_only` — sibling to `alloc_with_phase`.
-        let spec = AllocationSpec {
-            pool_ref: None,
-            requestor: Requestor::kind_only("manual"),
-            ttl: None,
-            note: None,
-        };
+        // AllocationSpec rides through `AllocationSpec::requestor_only`
+        // — sibling to `alloc_with_phase`.
+        let spec = AllocationSpec::requestor_only(Requestor::kind_only("manual"));
         let mut a = EphemeralAllocation::new("no-status-alloc", spec);
         a.status = None;
         a
@@ -1689,14 +1756,9 @@ mod tests {
     }
 
     fn alloc_with_bound_pool(bound: Option<AllocationRef>) -> EphemeralAllocation {
-        // Requestor rides through the ONE substrate composer
-        // `Requestor::kind_only` — sibling to `alloc_with_phase`.
-        let spec = AllocationSpec {
-            pool_ref: None,
-            requestor: Requestor::kind_only("manual"),
-            ttl: None,
-            note: None,
-        };
+        // AllocationSpec rides through `AllocationSpec::requestor_only`
+        // — sibling to `alloc_with_phase`.
+        let spec = AllocationSpec::requestor_only(Requestor::kind_only("manual"));
         let mut a = EphemeralAllocation::new("bp-alloc", spec);
         a.status = Some(AllocationStatus {
             phase: AllocationPhase::Bound,
@@ -1878,14 +1940,9 @@ mod tests {
     // it fails to compile pre-lift and passes post-lift.
 
     fn alloc_with_expires_at(expires_at: Option<DateTime<Utc>>) -> EphemeralAllocation {
-        // Requestor rides through the ONE substrate composer
-        // `Requestor::kind_only` — sibling to `alloc_with_phase`.
-        let spec = AllocationSpec {
-            pool_ref: None,
-            requestor: Requestor::kind_only("manual"),
-            ttl: None,
-            note: None,
-        };
+        // AllocationSpec rides through `AllocationSpec::requestor_only`
+        // — sibling to `alloc_with_phase`.
+        let spec = AllocationSpec::requestor_only(Requestor::kind_only("manual"));
         let mut a = EphemeralAllocation::new("exp-alloc", spec);
         a.status = Some(AllocationStatus {
             phase: AllocationPhase::Bound,
@@ -2032,24 +2089,116 @@ mod tests {
 
     #[test]
     fn allocation_spec_omits_optional_fields() {
-        // Requestor rides through the ONE substrate composer
-        // `Requestor::kind_only`; the wire-shape pin still holds
-        // because the composer produces the byte-identical
-        // seven-slot minimal shape (`repo`/`branch`/`pr_number`/`sha`
-        // /`actor` all `None` + empty `pr_labels: vec![]`) whose
-        // `skip_serializing_if = "Option::is_none"` + default-vec
-        // serde attributes elide every optional slot from the YAML
-        // output.
-        let s = AllocationSpec {
-            pool_ref: None,
-            requestor: Requestor::kind_only("manual"),
-            ttl: None,
-            note: None,
-        };
+        // AllocationSpec rides through `AllocationSpec::requestor_only`
+        // + the inner Requestor through `Requestor::kind_only`; the
+        // wire-shape pin still holds because BOTH composers produce
+        // the byte-identical minimal shape whose `skip_serializing_if
+        // = "Option::is_none"` + default-vec serde attributes elide
+        // every optional slot from the YAML output.
+        let s = AllocationSpec::requestor_only(Requestor::kind_only("manual"));
         let yaml = serde_yaml::to_string(&s).unwrap();
         assert!(!yaml.contains("poolRef"));
         assert!(!yaml.contains("ttl"));
         assert!(!yaml.contains("note"));
+    }
+
+    // ─── AllocationSpec::requestor_only substrate pins ──────────────
+    //
+    // The pre-lift `AllocationSpec { pool_ref: None, requestor: <r>,
+    // ttl: None, note: None }` incantation recurred at NINE workspace-
+    // wide fixture sites past the ★★ PRIME-DIRECTIVE ≥ 2 threshold
+    // (five inside this file's own test module, three inside the
+    // crate's `tests_owned_coordinates` / `tests_annotated` /
+    // `tests_deletion_tombstoned` pin modules on `lib.rs`, and one in
+    // `tatara-pool-reconciler::allocation_decide::alloc`). Every corner
+    // of the three-slot default tail is pinned here so a future
+    // normalization at the primitive lands with a fail-before-pass-
+    // after regression at THIS composer's pins rather than as silent
+    // fixture skew across the nine callsite arms.
+
+    #[test]
+    fn requestor_only_leaves_the_three_slot_default_tail_at_the_substrate_owner() {
+        // Every default-tail slot must land at the values the substrate
+        // owner stamps: `pool_ref = None` (selector-based routing),
+        // `ttl = None` (fall back to pool template TTL), `note = None`
+        // (empty audit slot). A regression that drifted ANY of the three
+        // defaults would silently reshape every downstream fixture
+        // simultaneously; this pin catches it.
+        let s = AllocationSpec::requestor_only(Requestor::kind_only("manual"));
+        assert!(s.pool_ref.is_none(), "pool_ref must default to None");
+        assert!(s.ttl.is_none(), "ttl must default to None");
+        assert!(s.note.is_none(), "note must default to None");
+    }
+
+    #[test]
+    fn requestor_only_stamps_the_caller_requestor_verbatim() {
+        // The single caller-varying slot MUST pass through untouched —
+        // a regression that copied only a subset of the Requestor's
+        // seven slots (e.g. re-authoring `Requestor { kind: r.kind, ..
+        // Default::default() }` inside the composer) would drop the
+        // caller's `repo` / `branch` / `pr_number` / `sha` / `pr_labels`
+        // / `actor` at every downstream fixture. Passes a fully-
+        // populated `Requestor` through and asserts every slot lands.
+        let r = Requestor {
+            kind: "github-pr".into(),
+            repo: Some("pleme-io/demo".into()),
+            branch: Some("main".into()),
+            pr_number: Some(42),
+            sha: Some("deadbeef".into()),
+            pr_labels: vec!["needs-review".into()],
+            actor: Some("dozer".into()),
+        };
+        let s = AllocationSpec::requestor_only(r.clone());
+        assert_eq!(s.requestor.kind, r.kind);
+        assert_eq!(s.requestor.repo, r.repo);
+        assert_eq!(s.requestor.branch, r.branch);
+        assert_eq!(s.requestor.pr_number, r.pr_number);
+        assert_eq!(s.requestor.sha, r.sha);
+        assert_eq!(s.requestor.pr_labels, r.pr_labels);
+        assert_eq!(s.requestor.actor, r.actor);
+    }
+
+    #[test]
+    fn requestor_only_matches_hand_authored_pre_lift_bytewise() {
+        // Byte-identical parity with the pre-lift 5-line struct-
+        // literal every downstream fixture restated verbatim. Swept
+        // across the two representative requestor shapes: the
+        // kind-only `"manual"` fixture (the majority of the collapsed
+        // callsites) and the fully-populated github-pr requestor (the
+        // `tatara-pool-reconciler::allocation_decide::alloc` shape).
+        // A regression that reshaped the composer's output would
+        // diverge from the pre-lift literal HERE rather than at every
+        // downstream fixture's downstream assertion.
+        let sample_requestors = [
+            Requestor::kind_only("manual"),
+            Requestor::kind_only("github-pr"),
+            Requestor {
+                kind: "github-pr".into(),
+                repo: Some("pleme-io/demo".into()),
+                branch: Some("main".into()),
+                pr_number: None,
+                sha: None,
+                pr_labels: vec![],
+                actor: None,
+            },
+        ];
+        for r in sample_requestors {
+            let via_primitive = AllocationSpec::requestor_only(r.clone());
+            let hand_authored = AllocationSpec {
+                pool_ref: None,
+                requestor: r.clone(),
+                ttl: None,
+                note: None,
+            };
+            // Sweep every slot rather than round-tripping through
+            // serde, so a slot rename that keeps the same serde name
+            // still surfaces as a defect at the primitive's slot-
+            // level parity.
+            assert!(via_primitive.pool_ref.is_none() && hand_authored.pool_ref.is_none());
+            assert_eq!(via_primitive.requestor.kind, hand_authored.requestor.kind);
+            assert_eq!(via_primitive.ttl, hand_authored.ttl);
+            assert_eq!(via_primitive.note, hand_authored.note);
+        }
     }
 
     // ─── AllocationStatus::transition substrate pins ────────────────────

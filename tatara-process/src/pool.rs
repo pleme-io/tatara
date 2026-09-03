@@ -144,6 +144,92 @@ pub struct PoolSpec {
     pub stable_name_claim: bool,
 }
 
+impl PoolSpec {
+    /// Humantime-parsed [`std::time::Duration`] projection of the
+    /// [`Self::free_ttl`] slot — the ONE-line collapse of the paired
+    /// `humantime::parse_duration(&<pool>.spec.free_ttl).ok()`
+    /// incantation the pool reconciler's stale-free bucket loop
+    /// hand-authored pre-lift, sibling to
+    /// [`crate::lifetime::EphemeralLifetime::ttl_duration`] on the
+    /// SAME `(humantime string field × Option<Duration>) → Option<
+    /// Duration>` substrate axis.
+    ///
+    /// Pre-lift the `humantime::parse_duration(&<field>).ok()` shape
+    /// was owned at ONE substrate primitive on
+    /// [`crate::lifetime::EphemeralLifetime`] (the `spec.lifetime
+    /// .ephemeral.ttl` axis, feeding
+    /// [`crate::lifetime_clock::evaluate`]'s TTL-expiry gate + the
+    /// `requeue_with_ttl` sleep-budget picker) AND hand-authored at
+    /// ONE peer consumer site — `tatara-pool-reconciler::pool_decide
+    /// ::decide_pool`, which parses `pool.spec.free_ttl` with the
+    /// byte-identical shape (`humantime::parse_duration(&spec
+    /// .free_ttl).unwrap_or_default()`) and gates the stale-free
+    /// bucket loop on the result. That's ONE substrate owner + ONE
+    /// hand-authored chain on a peer humantime field of a peer spec
+    /// type past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger —
+    /// two surfaces spelling the SAME projection with the SAME drift
+    /// risk (a per-fleet minimum TTL floor before the humantime cast,
+    /// a canonical unit-normalization pass, a warn-log on
+    /// unparseable strings would have had to land at every surface
+    /// plus stay coherent between them).
+    ///
+    /// Post-lift both peer humantime fields
+    /// ([`crate::lifetime::EphemeralLifetime::ttl`] +
+    /// [`Self::free_ttl`]) publish the SAME shape at TWO peer
+    /// inherent methods on peer spec types — the tatara-pool-
+    /// reconciler's stale-free bucket loop reads `pool.spec.free_ttl
+    /// _duration().unwrap_or_default()` and the produced [`std::time
+    /// ::Duration`] feeds the same `!free_ttl.is_zero()` guard +
+    /// `elapsed > free_ttl` comparator unchanged. A future
+    /// normalization (per-fleet minimum floor, canonical unit
+    /// normalization, warn-log on unparseable strings) lands at TWO
+    /// substrate methods here + on
+    /// [`crate::lifetime::EphemeralLifetime::ttl_duration`], reachable
+    /// via ONE workspace-wide sweep across the peer axis rather than
+    /// as a per-callsite hand-edit at every downstream humantime-ttl
+    /// consumer.
+    ///
+    /// Return-form axis: `Option<std::time::Duration>` matches the
+    /// peer primitive on
+    /// [`crate::lifetime::EphemeralLifetime::ttl_duration`] and the
+    /// downstream comparator's type. The peer projection
+    /// [`crate::time::elapsed_since`] returns the SAME `Option<std
+    /// ::time::Duration>` shape, so the stale-free gate's `elapsed >
+    /// free_ttl` comparator lands with both operands on the same
+    /// axis without a per-consumer conversion step.
+    ///
+    /// The `None` arm is the "operator's `free_ttl` string doesn't
+    /// parse" corner — a typo (`"1our"`), an unsupported unit, a
+    /// non-humantime literal that reached the field. The pool
+    /// reconciler's stale-free bucket loop collapses the corner via
+    /// `.unwrap_or_default()`, yielding the `Duration::ZERO` value
+    /// that already gates its follow-on `!free_ttl.is_zero()` check
+    /// — post-lift semantics is byte-identical to the pre-lift
+    /// hand-authored `humantime::parse_duration(&spec.free_ttl)
+    /// .unwrap_or_default()` shape.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `humantime::parse_duration(&<field>).ok()` shape recurred
+    /// at ONE substrate owner + ONE hand-authored peer site past the
+    /// ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted onto
+    /// TWO peer inherent methods on peer spec types here + on
+    /// [`crate::lifetime::EphemeralLifetime::ttl_duration`]).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// the pins below bind the parse-failure corner, the empty-ttl
+    /// corner, the humantime edge shapes, the return-form parity with
+    /// [`crate::lifetime::EphemeralLifetime::ttl_duration`], and the
+    /// byte-identical parity with the pre-lift `.ok()` chain on the
+    /// SAME `spec.free_ttl` value, so a regression that drifts any
+    /// surface fails at `tests::pool_spec_free_ttl_duration_*` here
+    /// rather than as silent operator-facing skew between the pool
+    /// stale-free bucket loop and the ephemeral TTL-expiry gate on
+    /// the two peer humantime-string fields).
+    #[must_use]
+    pub fn free_ttl_duration(&self) -> Option<std::time::Duration> {
+        humantime::parse_duration(&self.free_ttl).ok()
+    }
+}
+
 impl EphemeralPool {
     /// Borrow-form metadata-projection primitive on the `metadata.name`
     /// axis of `EphemeralPool`: returns the K8s object name slice with
@@ -3595,5 +3681,149 @@ mod tests {
         assert_eq!(p.has_name("other"), p.has_name("other"));
         assert!(p.has_name("router-pool"));
         assert!(!p.has_name("other"));
+    }
+
+    // ─── PoolSpec::free_ttl_duration substrate pins ─────────────────
+    //
+    // The `humantime::parse_duration(&<field>).ok()` shape rides
+    // through TWO peer inherent methods on peer spec types post-lift:
+    // [`crate::lifetime::EphemeralLifetime::ttl_duration`] on the
+    // `spec.lifetime.ephemeral.ttl` axis + [`PoolSpec::free_ttl_
+    // duration`] on the `pool.spec.free_ttl` axis. These pins bind the
+    // pool-spec-side primitive at fail-before-pass-after granularity
+    // so a regression that drifts either surface (a per-fleet minimum
+    // floor added at only one primitive, a canonical unit-normalization
+    // pass, a warn-log on unparseable strings) fails here rather than
+    // as silent operator-facing skew between the pool stale-free
+    // bucket loop in `tatara-pool-reconciler::pool_decide::decide_pool`
+    // and the ephemeral TTL-expiry gate in
+    // `tatara-process::lifetime_clock::evaluate`.
+
+    fn pool_spec_with_free_ttl(free_ttl: &str) -> PoolSpec {
+        PoolSpec {
+            free_ttl: free_ttl.into(),
+            ..pool_spec()
+        }
+    }
+
+    #[test]
+    fn pool_spec_free_ttl_duration_parseable_humantime_projects_to_some() {
+        for (ttl, expected_secs) in [
+            ("30s", 30u64),
+            ("5m", 300),
+            ("1h", 3600),
+            ("24h", 86_400),
+            ("1d", 86_400),
+        ] {
+            let spec = pool_spec_with_free_ttl(ttl);
+            assert_eq!(
+                spec.free_ttl_duration(),
+                Some(std::time::Duration::from_secs(expected_secs)),
+                "free_ttl_duration drift for {ttl:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn pool_spec_free_ttl_duration_unparseable_returns_none() {
+        // A typo (`"1our"`), an unsupported unit (`"1w"` — humantime
+        // supports `w`, but `"forever"` doesn't), a non-humantime
+        // literal that reached the field via API-server acceptance
+        // ALL collapse to `None`. The `pool_decide::decide_pool`
+        // caller collapses the corner via `.unwrap_or_default()`,
+        // yielding `Duration::ZERO` — byte-identical to the pre-lift
+        // hand-authored `humantime::parse_duration(&spec.free_ttl)
+        // .unwrap_or_default()` semantics.
+        for bad in ["", "1our", "forever", "not-a-duration", "1", "-1s"] {
+            let spec = pool_spec_with_free_ttl(bad);
+            assert_eq!(
+                spec.free_ttl_duration(),
+                None,
+                "free_ttl_duration should be None for {bad:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn pool_spec_free_ttl_duration_zero_seconds_returns_some_zero() {
+        // `"0s"` is a parseable-but-zero humantime literal — the
+        // primitive returns `Some(Duration::ZERO)`, distinguishable
+        // from the parse-failure `None` corner. Downstream consumers
+        // that gate on `!free_ttl.is_zero()` collapse this back
+        // together with the `None`-via-`unwrap_or_default()` corner,
+        // but the primitive itself keeps the two shapes distinct so
+        // a future consumer needing that distinction can reach for
+        // it without a re-parse.
+        let spec = pool_spec_with_free_ttl("0s");
+        assert_eq!(
+            spec.free_ttl_duration(),
+            Some(std::time::Duration::ZERO),
+            "0s should project to Some(Duration::ZERO), not None",
+        );
+    }
+
+    #[test]
+    fn pool_spec_free_ttl_duration_default_free_ttl_matches_24h() {
+        // The default `free_ttl` is `"24h"` (via [`default_free_ttl`]).
+        // The primitive on a `PoolSpec` carrying the default must
+        // agree with a manually-parsed `"24h"` — a future
+        // `default_free_ttl` change (a shorter recycling window, a
+        // per-fleet override) reaches BOTH surfaces at once (this
+        // pin + the `default_free_ttl` fn) without silent skew.
+        let spec = pool_spec_with_free_ttl(&default_free_ttl());
+        assert_eq!(
+            spec.free_ttl_duration(),
+            Some(std::time::Duration::from_secs(24 * 3600)),
+        );
+    }
+
+    #[test]
+    fn pool_spec_free_ttl_duration_matches_pre_lift_hand_authored_chain_bytewise() {
+        // Byte-shape parity with the pre-lift hand-authored chain the
+        // `pool_decide::decide_pool` stale-free bucket loop restated
+        // (`humantime::parse_duration(&spec.free_ttl).ok()` — the
+        // `.ok()` tail and the caller's `.unwrap_or_default()` compose
+        // to the same `Duration::ZERO`-on-failure semantics). Sweeps
+        // every callsite corner the pool reconciler plausibly
+        // encounters: the default `"24h"` free-recycling window, a
+        // short-window test override (`"10s"`), a parse-failure typo,
+        // an empty string.
+        for ttl in ["24h", "10s", "1our", ""] {
+            let spec = pool_spec_with_free_ttl(ttl);
+            let via_primitive = spec.free_ttl_duration();
+            let hand_authored = humantime::parse_duration(&spec.free_ttl).ok();
+            assert_eq!(
+                via_primitive, hand_authored,
+                "free_ttl_duration must be byte-identical to `humantime::\
+                 parse_duration(&spec.free_ttl).ok()` for {ttl:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn pool_spec_free_ttl_duration_matches_peer_ephemeral_lifetime_ttl_duration_shape() {
+        // Return-shape parity with the peer primitive
+        // [`crate::lifetime::EphemeralLifetime::ttl_duration`]: given
+        // the SAME humantime string on both peer fields (the pool
+        // `free_ttl` slot AND the ephemeral `ttl` slot), the two
+        // primitives return byte-identical `Option<Duration>` values.
+        // A regression that inserted a per-primitive normalization
+        // step at only one surface — a per-fleet minimum floor, a
+        // canonical unit-normalization pass — surfaces here rather
+        // than as silent operator-facing skew between the pool
+        // stale-free bucket loop and the ephemeral TTL-expiry gate
+        // on the SAME humantime literal.
+        for ttl in ["30s", "1h", "24h", "1our", ""] {
+            let pool_spec = pool_spec_with_free_ttl(ttl);
+            let eph = crate::lifetime::EphemeralLifetime {
+                ttl: ttl.into(),
+                ..Default::default()
+            };
+            assert_eq!(
+                pool_spec.free_ttl_duration(),
+                eph.ttl_duration(),
+                "peer-primitive shape drift for {ttl:?}",
+            );
+        }
     }
 }

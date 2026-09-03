@@ -63,7 +63,25 @@ pub fn decide_pool_reconcile(
     let mut failed_names: Vec<String> = Vec::new();
     let mut stale_free_names: Vec<String> = Vec::new();
 
-    let free_ttl = humantime::parse_duration(&spec.free_ttl).unwrap_or_default();
+    // The `humantime::parse_duration(&<field>).ok()` shape rides
+    // through the ONE substrate primitive
+    // [`tatara_process::pool::PoolSpec::free_ttl_duration`] — pre-lift
+    // this was a hand-authored `humantime::parse_duration(&spec
+    // .free_ttl).ok()` chain (spelled with a `.unwrap_or_default()`
+    // tail collapsing the parse-failure corner to `Duration::ZERO`,
+    // which the `!free_ttl.is_zero()` gate below immediately rejected).
+    // The shape was already owned at ONE substrate primitive on
+    // [`tatara_process::lifetime::EphemeralLifetime::ttl_duration`]
+    // (the `spec.lifetime.ephemeral.ttl` axis), so this site restated
+    // the SAME shape on a peer humantime field of a peer spec type
+    // past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger. Post-lift
+    // both peer fields publish the SAME shape at TWO peer inherent
+    // methods on peer spec types; a future normalization (per-fleet
+    // minimum floor, canonical unit normalization, warn-log on
+    // unparseable strings) lands at ONE workspace-wide sweep across
+    // the peer axis rather than as a per-callsite hand-edit here + on
+    // the ephemeral TTL-expiry gate.
+    let free_ttl = spec.free_ttl_duration().unwrap_or_default();
 
     for m in members {
         match m.state {

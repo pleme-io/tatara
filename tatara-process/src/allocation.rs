@@ -1681,10 +1681,11 @@ mod tests {
     // pre-lift and passes post-lift.
 
     fn sample_pool_ref(name: &str, ns: &str) -> AllocationRef {
-        AllocationRef {
-            name: name.to_string(),
-            namespace: ns.to_string(),
-        }
+        // Fixture ref rides through the ONE substrate composer
+        // `AllocationRef::new` — the `impl Into<String>` signature
+        // accepts the borrow-form `&str` slot pair verbatim without
+        // a per-fixture `.to_string()` promotion.
+        AllocationRef::new(name, ns)
     }
 
     fn alloc_with_bound_pool(bound: Option<AllocationRef>) -> EphemeralAllocation {

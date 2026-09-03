@@ -479,10 +479,11 @@ mod tests {
             },
         );
         let mut a = alloc("manual", "completely-unrelated/repo", "main");
-        a.spec.pool_ref = Some(AllocationRef {
-            name: "pinned".into(),
-            namespace: "pools".into(),
-        });
+        // Fixture ref rides through the ONE substrate composer
+        // `AllocationRef::new` — sibling collapse of the pool-side
+        // fixture-family struct-literal onto the substrate primitive
+        // whose production callers already route through it.
+        a.spec.pool_ref = Some(AllocationRef::new("pinned", "pools"));
         let members = vec![member("pinned-aaaa", MemberState::Free)];
         let pools = vec![p];
         let d = decide_allocation_reconcile(&a, &pools, |_| &members, Utc::now());
@@ -497,14 +498,8 @@ mod tests {
         a.status = Some(AllocationStatus {
             phase: AllocationPhase::Bound,
             phase_since: Some(one_hour_ago),
-            bound_pool: Some(AllocationRef {
-                name: "demo-pool".into(),
-                namespace: "pools".into(),
-            }),
-            assigned_process: Some(AllocationRef {
-                name: "demo-abcd".into(),
-                namespace: "pools".into(),
-            }),
+            bound_pool: Some(AllocationRef::new("demo-pool", "pools")),
+            assigned_process: Some(AllocationRef::new("demo-abcd", "pools")),
             allocated_at: Some(one_hour_ago),
             expires_at: Some(one_hour_ago + chrono::Duration::minutes(30)),
             message: None,
@@ -571,14 +566,8 @@ mod tests {
         let mut a = alloc("manual", "any/repo", "main");
         a.status = Some(AllocationStatus {
             phase: AllocationPhase::Releasing,
-            bound_pool: Some(AllocationRef {
-                name: "demo-pool".into(),
-                namespace: "pools".into(),
-            }),
-            assigned_process: Some(AllocationRef {
-                name: "demo-old".into(),
-                namespace: "pools".into(),
-            }),
+            bound_pool: Some(AllocationRef::new("demo-pool", "pools")),
+            assigned_process: Some(AllocationRef::new("demo-old", "pools")),
             ..Default::default()
         });
         let members = vec![member("demo-fresh", MemberState::Free)];
@@ -605,14 +594,8 @@ mod tests {
         a.metadata.deletion_timestamp = tatara_process::time::tombstone_now();
         a.status = Some(AllocationStatus {
             phase: AllocationPhase::Bound,
-            bound_pool: Some(AllocationRef {
-                name: "demo-pool".into(),
-                namespace: "pools".into(),
-            }),
-            assigned_process: Some(AllocationRef {
-                name: "demo-xyz".into(),
-                namespace: "pools".into(),
-            }),
+            bound_pool: Some(AllocationRef::new("demo-pool", "pools")),
+            assigned_process: Some(AllocationRef::new("demo-xyz", "pools")),
             ..Default::default()
         });
         let d = decide_allocation_reconcile(&a, &[p], |_| &[], Utc::now());
@@ -631,10 +614,7 @@ mod tests {
     //    literal (no allocation / pools / member closure needed). ──
 
     fn pool_ref() -> AllocationRef {
-        AllocationRef {
-            name: "demo-pool".into(),
-            namespace: "pools".into(),
-        }
+        AllocationRef::new("demo-pool", "pools")
     }
 
     fn pending_ctx(

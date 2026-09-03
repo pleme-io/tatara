@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
-use kube::api::{ListParams, Patch};
+use kube::api::Patch;
 use kube::runtime::controller::Action;
 use serde_json::json;
 use tracing::{info, warn};
@@ -63,8 +63,19 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
     let process_api = ctx.process_api(&ns);
 
     // 1. Gather candidate pools in this namespace.
-    let pools = pool_api
-        .list(&ListParams::default())
+    // Wire-verb dispatch routes through the ONE substrate primitive
+    // `tatara_process::list::default` — pre-lift this was a hand-
+    // authored `.list(&ListParams::default())` 2-link chain, one of
+    // FOUR workspace-wide restatements past the ★★ PRIME-DIRECTIVE
+    // ≥ 2 duplication threshold (peers at the claim-arbiter walk in
+    // `tatara-reconciler::table_controller`, the SIGTERM-cascade
+    // fan-out in `tatara-reconciler::phase_machine`, and the pool
+    // controller's owned-members walk in `controller_pool`).
+    // Post-lift the four consumers share ONE substrate owner; the
+    // namespace-wide EphemeralPool walk here inherits any future
+    // paginated `limit` / reconciler-budget `timeout` / resource-
+    // version-continuation normalization mechanically.
+    let pools = tatara_process::list::default(&pool_api)
         .await
         .map_err(|e| anyhow!("list Pools in {ns}: {e}"))?
         .items;

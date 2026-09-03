@@ -27,6 +27,7 @@ pub mod k8s_wire_identity;
 pub mod kube_error;
 pub mod lifetime;
 pub mod lifetime_clock;
+pub mod list;
 pub mod matrix;
 pub mod patch;
 pub mod phase;

@@ -829,8 +829,21 @@ pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
     if let Some(pid) = my_pid {
         // Enumerate Processes cluster-wide and find direct children.
         let all = ctx.processes_all_api();
-        let list = all
-            .list(&kube::api::ListParams::default())
+        // Wire-verb dispatch routes through the ONE substrate primitive
+        // `tatara_process::list::default` — pre-lift this was a hand-
+        // authored `.list(&kube::api::ListParams::default())` 2-link
+        // chain, one of FOUR workspace-wide restatements past the ★★
+        // PRIME-DIRECTIVE ≥ 2 duplication threshold (peers at the
+        // claim-arbiter cluster-wide walk in `table_controller`, the
+        // pool controller's owned-members walk in
+        // `tatara-pool-reconciler::controller_pool`, and the allocation
+        // controller's pool lookup in
+        // `tatara-pool-reconciler::controller_allocation`). Post-lift
+        // the four consumers share ONE substrate owner; the
+        // SIGTERM-cascade child-discovery walk here inherits any
+        // future paginated `limit` / reconciler-budget `timeout` /
+        // resource-version-continuation normalization mechanically.
+        let list = tatara_process::list::default(&all)
             .await
             .map_err(|e| anyhow!("list processes: {e}"))?;
         // Each candidate child's declared parent-PID rides through the

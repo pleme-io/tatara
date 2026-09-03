@@ -24,7 +24,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::Utc;
-use kube::api::{ListParams, Patch};
+use kube::api::Patch;
 use kube::runtime::controller::Action;
 use serde_json::json;
 use tracing::{info, warn};
@@ -42,7 +42,21 @@ pub async fn reconcile(
 ) -> Result<Action, kube::Error> {
     // (1) List every Process cluster-wide.
     let process_api = ctx.processes_all_api();
-    let processes = process_api.list(&ListParams::default()).await?.items;
+    // Wire-verb dispatch routes through the ONE substrate primitive
+    // `tatara_process::list::default` — pre-lift this was a hand-
+    // authored `.list(&ListParams::default())` 2-link chain, one of
+    // FOUR workspace-wide restatements past the ★★ PRIME-DIRECTIVE
+    // ≥ 2 duplication threshold (peers at the SIGTERM-cascade fan-out
+    // in `phase_machine`, the pool controller's owned-members walk in
+    // `tatara-pool-reconciler::controller_pool`, and the allocation
+    // controller's pool lookup in `tatara-pool-reconciler::controller_allocation`).
+    // Post-lift the four consumers share ONE substrate owner; a
+    // future normalization step (a paginated `limit` slot, a
+    // reconciler-budget `timeout`, a resource-version continuation
+    // for watch-adjacent snapshots) lands at ONE substrate function
+    // and this cluster-wide arbiter walk inherits the upgrade
+    // mechanically.
+    let processes = tatara_process::list::default(&process_api).await?.items;
 
     // (2) + (3) Filter + group: build candidates per (cluster, app).
     // The (cluster, app) key uses the reconciler-config cluster as

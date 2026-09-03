@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
-use kube::api::{Api, ListParams};
+use kube::api::Api;
 use kube::runtime::controller::Action;
 use tracing::{info, warn};
 
@@ -75,8 +75,19 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
     let process_api = ctx.process_api(&ns);
 
     // 1. Fetch the Processes owned by this Pool (annotation-matched).
-    let all_processes = process_api
-        .list(&ListParams::default())
+    // Wire-verb dispatch routes through the ONE substrate primitive
+    // `tatara_process::list::default` — pre-lift this was a hand-
+    // authored `.list(&ListParams::default())` 2-link chain, one of
+    // FOUR workspace-wide restatements past the ★★ PRIME-DIRECTIVE
+    // ≥ 2 duplication threshold (peers at the claim-arbiter walk in
+    // `tatara-reconciler::table_controller`, the SIGTERM-cascade
+    // fan-out in `tatara-reconciler::phase_machine`, and the
+    // allocation controller's pool lookup in `controller_allocation`).
+    // Post-lift the four consumers share ONE substrate owner; the
+    // namespace-wide owned-members walk here inherits any future
+    // paginated `limit` / reconciler-budget `timeout` / resource-
+    // version-continuation normalization mechanically.
+    let all_processes = tatara_process::list::default(&process_api)
         .await
         .map_err(|e| anyhow!("list Processes in {ns}: {e}"))?;
     let mut members: Vec<PoolMember> = Vec::new();

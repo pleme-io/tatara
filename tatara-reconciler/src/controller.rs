@@ -7,7 +7,6 @@
 //!   4. Phase: dispatch to `phase_machine::handle_*`.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use kube::runtime::controller::Action;
 use tracing::{info, warn};
@@ -50,7 +49,7 @@ pub async fn reconcile(process: Arc<Process>, ctx: Arc<Context>) -> Result<Actio
         } else {
             info!(namespace = ns, name, "→ Exiting (deletionTimestamp set)");
         }
-        return Ok(Action::requeue(Duration::from_secs(1)));
+        return Ok(tatara_process::requeue::after_secs(1));
     }
 
     // 2. Signal ingestion — only while the Process is still alive.
@@ -70,7 +69,7 @@ pub async fn reconcile(process: Arc<Process>, ctx: Arc<Context>) -> Result<Actio
                 if let Err(e) = signals::consume_effect(&process, &ctx, effect).await {
                     warn!(error = %e, "signal effect apply failed");
                 }
-                return Ok(Action::requeue(Duration::from_secs(1)));
+                return Ok(tatara_process::requeue::after_secs(1));
             }
             Ok(None) => {}
             Err(e) => warn!(error = %e, "signal ingestion failed; continuing"),
@@ -79,9 +78,9 @@ pub async fn reconcile(process: Arc<Process>, ctx: Arc<Context>) -> Result<Actio
 
     // 3. Suspend check.
     if process.spec.suspended && current_phase.is_alive() {
-        return Ok(Action::requeue(Duration::from_secs(
+        return Ok(tatara_process::requeue::after_secs(
             ctx.config.heartbeat_seconds,
-        )));
+        ));
     }
 
     // 4. Phase dispatch.
@@ -103,7 +102,7 @@ pub async fn reconcile(process: Arc<Process>, ctx: Arc<Context>) -> Result<Actio
         Ok(action) => Ok(action),
         Err(e) => {
             warn!(namespace = ns, name, error = %e, "reconcile error — requeuing");
-            Ok(Action::requeue(Duration::from_secs(30)))
+            Ok(tatara_process::requeue::after_secs(30))
         }
     }
 }
@@ -111,5 +110,5 @@ pub async fn reconcile(process: Arc<Process>, ctx: Arc<Context>) -> Result<Actio
 /// kube-runtime error policy — used for `Controller::run`.
 pub fn error_policy(_proc: Arc<Process>, err: &kube::Error, _ctx: Arc<Context>) -> Action {
     warn!(error = %err, "controller error; requeuing");
-    Action::requeue(Duration::from_secs(30))
+    tatara_process::requeue::after_secs(30)
 }

@@ -1,7 +1,6 @@
 //! Allocation controller — applies `AllocationDecision`.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
@@ -282,7 +281,7 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
                 .await
             {
                 warn!(error = %e, "bind failed; will retry");
-                return Ok(Action::requeue(Duration::from_secs(5)));
+                return Ok(tatara_process::requeue::after_secs(5));
             }
 
             // Status patch on Allocation.
@@ -378,9 +377,9 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
     }
 
     let _ = ALLOC_FINALIZER;
-    Ok(Action::requeue(Duration::from_secs(
+    Ok(tatara_process::requeue::after_secs(
         ctx.config.heartbeat_seconds,
-    )))
+    ))
 }
 
 pub fn error_policy(
@@ -389,5 +388,5 @@ pub fn error_policy(
     _ctx: Arc<PoolContext>,
 ) -> Action {
     warn!(error = ?err, "allocation reconcile failed");
-    Action::requeue(Duration::from_secs(15))
+    tatara_process::requeue::after_secs(15)
 }

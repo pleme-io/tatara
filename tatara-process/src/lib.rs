@@ -33,6 +33,7 @@ pub mod patch;
 pub mod phase;
 pub mod pool;
 pub mod receipt;
+pub mod requeue;
 pub mod routing;
 pub mod routing_edge_resource;
 pub mod signal;
@@ -113,6 +114,7 @@ pub mod prelude {
         ReceiptError, ReceiptKind, RECEIPT_CM_KEYS, RECEIPT_CM_MISSING_KEY_MSG, RECEIPT_CM_SUFFIX,
         RECEIPT_JSON_KEY, RECEIPT_VERSION, RECEIPT_YAML_KEY,
     };
+    pub use crate::requeue::after_secs as requeue_after_secs;
     pub use crate::routing::{RoutingBackend, RoutingForm, RoutingHostname, RoutingSpec};
     pub use crate::routing_edge_resource::RoutingEdgeResource;
     pub use crate::signal::{ProcessSignal, SighupStrategy, UnknownSighupStrategy};

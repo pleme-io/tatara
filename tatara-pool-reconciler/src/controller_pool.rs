@@ -6,7 +6,6 @@
 //! create/delete + status patch.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
@@ -245,9 +244,9 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
             &PoolStatus::observed(phase, members.clone(), Utc::now()),
         )
         .await;
-        return Ok(Action::requeue(Duration::from_secs(
+        return Ok(tatara_process::requeue::after_secs(
             ctx.config.heartbeat_seconds,
-        )));
+        ));
     }
 
     // 2b. Legacy allocation-driven decision (desired == 0 path).
@@ -388,9 +387,9 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
     )
     .await;
 
-    Ok(Action::requeue(Duration::from_secs(
+    Ok(tatara_process::requeue::after_secs(
         ctx.config.heartbeat_seconds,
-    )))
+    ))
 }
 
 pub fn error_policy(
@@ -399,7 +398,7 @@ pub fn error_policy(
     _ctx: Arc<PoolContext>,
 ) -> Action {
     warn!(error = ?err, "pool reconcile failed");
-    Action::requeue(Duration::from_secs(15))
+    tatara_process::requeue::after_secs(15)
 }
 
 fn pool_phase_from_members(pool: &EphemeralPool, members: &[PoolMember]) -> PoolPhase {

@@ -21,7 +21,6 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use chrono::Utc;
 use kube::api::Patch;
@@ -243,10 +242,10 @@ pub async fn reconcile(
         "ProcessTable heartbeat"
     );
 
-    Ok(Action::requeue(Duration::from_secs(30)))
+    Ok(tatara_process::requeue::after_secs(30))
 }
 
 pub fn error_policy(_t: Arc<ProcessTable>, err: &kube::Error, _ctx: Arc<Context>) -> Action {
     tracing::warn!(error = %err, "ProcessTable reconcile error; requeuing");
-    Action::requeue(Duration::from_secs(30))
+    tatara_process::requeue::after_secs(30)
 }

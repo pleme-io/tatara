@@ -116,6 +116,78 @@ impl PoolContext {
     pub fn process_api(&self, ns: &str) -> Api<Process> {
         Api::namespaced(self.kube.clone(), ns)
     }
+
+    /// Cluster-scoped `Api<EphemeralPool>` bound to this context's
+    /// client — the substrate primitive the top-level
+    /// [`Controller::new`][ctrl] watch wiring in `main.rs` rides
+    /// through, peer to the namespaced [`Self::pool_api`] on the
+    /// (cluster-scoped × namespaced) axis pair for the SAME
+    /// `EphemeralPool` typed collection.
+    ///
+    /// Pre-lift the `Api::all(client.clone())` incantation for
+    /// `Api<EphemeralPool>` was hand-authored at ONE site in
+    /// `tatara-pool-reconciler::main::main` — the top-level watch
+    /// binding fed into `Controller::new(pool_api, …)` — restating
+    /// the same `(cluster-scoped × client-clone)` shape the sister
+    /// [`Self::allocations_all_api`] primitive covers on
+    /// `EphemeralAllocation` (also pre-lift in `main.rs`) and the
+    /// peer [`tatara_reconciler::context::Context::processes_all_api`]
+    /// primitive covers for `Api<Process>` on `tatara-reconciler`.
+    /// That's TWO byte-identical `Api::all(client.clone())` chains in
+    /// THIS crate's `main.rs` past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold plus the peer primitive already open on
+    /// `tatara-reconciler`. Post-lift `main.rs` reads
+    /// `ctx.pools_all_api()` and the pre-lift raw incantation retreats
+    /// to ONE substrate owner on `PoolContext`.
+    ///
+    /// Unlike [`Self::pool_api`], no namespace slot is exposed: the
+    /// cluster-scoped `Api::all` handle carries no namespace path
+    /// segment and is used exclusively to seed the top-level watch
+    /// that must observe every `EphemeralPool` regardless of
+    /// namespace. The signature encodes that invariant structurally
+    /// — a caller cannot accidentally pass a namespace and get a
+    /// broken `Api::namespaced` binding for a watch that expected
+    /// cluster-wide visibility.
+    ///
+    /// Post-lift a future change that layers a cluster-wide watch
+    /// filter, a client-side QPS limiter, per-request tracing spans,
+    /// or a fixture-backed client for CI/smoke-tests onto every
+    /// cluster-wide `EphemeralPool` read lands at ONE substrate
+    /// method here rather than being restated at every consumer.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `Api::all(client.clone())` chain recurred at TWO
+    /// hand-authored sites in this crate's `main.rs` past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication trigger, alongside the peer
+    /// primitive already open on `tatara-reconciler::context`, and is
+    /// lifted onto ONE owner here). THEORY.md §II.1 invariant 5
+    /// (composition preserves proofs — the primitive binds the
+    /// (client, cluster-scoped, typed collection) triple structurally;
+    /// a regression that drifted the client-slot or the resource
+    /// kind surfaces at the resource-url pins rather than as silent
+    /// watch-misroute against a wrong collection).
+    ///
+    /// [ctrl]: kube::runtime::controller::Controller::new
+    pub fn pools_all_api(&self) -> Api<EphemeralPool> {
+        Api::all(self.kube.clone())
+    }
+
+    /// Cluster-scoped `Api<EphemeralAllocation>` bound to this
+    /// context's client — the peer substrate primitive alongside
+    /// [`Self::pools_all_api`], closing the `Api::all(client.clone())`
+    /// shape for the second cluster-scoped watch binding the
+    /// top-level [`Controller::new`][ctrl] wiring in `main.rs` rides
+    /// through.
+    ///
+    /// See [`Self::pools_all_api`] for the axis-family context, peer
+    /// primitives, pre-lift call-site history, and future-normalization
+    /// anchor — this primitive shares that owner's contract on the
+    /// `EphemeralAllocation`-typed collection axis.
+    ///
+    /// [ctrl]: kube::runtime::controller::Controller::new
+    pub fn allocations_all_api(&self) -> Api<EphemeralAllocation> {
+        Api::all(self.kube.clone())
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -354,5 +426,179 @@ mod tests {
                 );
             }
         }
+    }
+
+    // ── pools_all_api ───────────────────────────────────────────────
+    //
+    // Pin the cluster-scoped `Api<EphemeralPool>` primitive `main.rs`'s
+    // top-level `Controller::new(pool_api, …)` watch wiring rides
+    // through. Every corner of the (cluster-scope, EphemeralPool kind,
+    // shared client-slot) triple lands as a pin so a regression that
+    // swapped the scope for `Api::namespaced`, drifted the resource
+    // kind onto a sibling collection, or manufactured a fresh client
+    // surfaces HERE rather than as a silent watch-misroute at start-up
+    // that observes the wrong resource-collection or blindly leaks a
+    // watch against the wrong client's connection pool.
+
+    #[tokio::test]
+    async fn pools_all_api_binds_cluster_scope_not_namespace() {
+        // Cluster-scoped: no `/namespaces/<ns>/` path segment appears
+        // in the resource url. A regression that swapped the scope for
+        // `Api::namespaced` — silently limiting the watch to a single
+        // namespace — surfaces HERE rather than as an operator-visible
+        // gap where every EphemeralPool in every OTHER namespace goes
+        // unreconciled at start-up.
+        let api = ctx().pools_all_api();
+        let url = api.resource_url();
+        assert!(
+            !url.contains("/namespaces/"),
+            "cluster-scoped Api resource url must NOT carry a namespace segment; got {url}"
+        );
+    }
+
+    #[tokio::test]
+    async fn pools_all_api_binds_the_ephemeral_pool_kind() {
+        // The typed `Api<EphemeralPool>` return pins the resource kind
+        // at rustc time; this pin adds the runtime witness — the
+        // emitted REST path targets the
+        // `tatara.pleme.io/v1alpha1/ephemeralpools` collection matching
+        // the `#[kube(group = "tatara.pleme.io", version = "v1alpha1",
+        // plural = "ephemeralpools")]` attribute on `PoolSpec`.
+        let api = ctx().pools_all_api();
+        let url = api.resource_url();
+        assert!(
+            url.starts_with("/apis/tatara.pleme.io/v1alpha1/"),
+            "Api resource url must be scoped to the tatara.pleme.io/v1alpha1 group; got {url}"
+        );
+        assert!(
+            url.ends_with("/ephemeralpools"),
+            "Api resource url must terminate at the `ephemeralpools` collection; got {url}"
+        );
+    }
+
+    // ── allocations_all_api ─────────────────────────────────────────
+
+    #[tokio::test]
+    async fn allocations_all_api_binds_cluster_scope_not_namespace() {
+        let api = ctx().allocations_all_api();
+        let url = api.resource_url();
+        assert!(
+            !url.contains("/namespaces/"),
+            "cluster-scoped Api resource url must NOT carry a namespace segment; got {url}"
+        );
+    }
+
+    #[tokio::test]
+    async fn allocations_all_api_binds_the_ephemeral_allocation_kind() {
+        let api = ctx().allocations_all_api();
+        let url = api.resource_url();
+        assert!(
+            url.starts_with("/apis/tatara.pleme.io/v1alpha1/"),
+            "Api resource url must be scoped to the tatara.pleme.io/v1alpha1 group; got {url}"
+        );
+        assert!(
+            url.ends_with("/ephemeralallocations"),
+            "Api resource url must terminate at the `ephemeralallocations` collection; got {url}"
+        );
+    }
+
+    // ── cross-primitive coherence — cluster-scoped family ────────────
+
+    #[tokio::test]
+    async fn cluster_scoped_pair_binds_distinct_collections() {
+        // The two cluster-scoped peers share the client-slot + the
+        // `tatara.pleme.io/v1alpha1` group + the cluster scope but must
+        // resolve to DISTINCT collections — `/ephemeralpools` vs
+        // `/ephemeralallocations`. A regression that conflated the two
+        // typed returns (e.g. a copy-paste that pointed
+        // `pools_all_api` at `EphemeralAllocation` instead of
+        // `EphemeralPool`) would collapse both urls onto the same
+        // collection and silently misroute every downstream watch to
+        // the wrong endpoint at start-up.
+        let c = ctx();
+        let pools = c.pools_all_api().resource_url().to_string();
+        let allocs = c.allocations_all_api().resource_url().to_string();
+        assert!(
+            pools.ends_with("/ephemeralpools"),
+            "pools_all_api → /ephemeralpools; got {pools}"
+        );
+        assert!(
+            allocs.ends_with("/ephemeralallocations"),
+            "allocations_all_api → /ephemeralallocations; got {allocs}"
+        );
+        assert_ne!(
+            pools, allocs,
+            "pools_all_api and allocations_all_api must resolve to distinct collections"
+        );
+    }
+
+    #[tokio::test]
+    async fn cluster_scoped_and_namespaced_peers_share_typed_collection() {
+        // Peer discipline across the (cluster-scoped × namespaced)
+        // axis pair: on the SAME typed collection
+        // (EphemeralPool / EphemeralAllocation), the cluster-scoped
+        // primitive and its namespaced peer must both terminate at
+        // the SAME collection tail — only the presence of the
+        // `/namespaces/<ns>/` segment distinguishes them. A regression
+        // that drifted either primitive off its typed collection
+        // (e.g. renaming `EphemeralPool.plural` without a coherent
+        // sweep) surfaces HERE rather than as silent per-primitive
+        // misroute.
+        let c = ctx();
+        for (all, ns_of, tail) in [
+            (
+                c.pools_all_api().resource_url().to_string(),
+                c.pool_api("shared-ns").resource_url().to_string(),
+                "/ephemeralpools",
+            ),
+            (
+                c.allocations_all_api().resource_url().to_string(),
+                c.allocation_api("shared-ns").resource_url().to_string(),
+                "/ephemeralallocations",
+            ),
+        ] {
+            assert!(
+                all.ends_with(tail),
+                "cluster-scoped url must terminate at {tail}; got {all}"
+            );
+            assert!(
+                ns_of.ends_with(tail),
+                "namespaced url must terminate at {tail}; got {ns_of}"
+            );
+            assert!(
+                !all.contains("/namespaces/"),
+                "cluster-scoped url must NOT carry a namespace segment; got {all}"
+            );
+            assert!(
+                ns_of.contains("/namespaces/shared-ns/"),
+                "namespaced url must carry the caller's namespace verbatim; got {ns_of}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn cluster_scoped_pair_matches_pre_lift_api_all_shape() {
+        // Byte-identical parity with the exact pre-lift
+        // `Api::all(client.clone())` incantation `main.rs`
+        // hand-authored twice past the ★★ PRIME-DIRECTIVE ≥ 2
+        // threshold. A regression that reshaped the primitive
+        // (e.g. flipped it to `Api::default_namespaced` — kube-rs's
+        // `.default_namespace()`-defaulted binding — or manufactured a
+        // fresh `Client::try_default()`) would surface HERE rather
+        // than as silent watch-misroute at `Controller::new` binding.
+        let c = ctx();
+        // The pre-lift 2-line incantation, byte-for-byte.
+        let hand_authored_pools: Api<EphemeralPool> = Api::all(c.kube.clone());
+        let hand_authored_allocs: Api<EphemeralAllocation> = Api::all(c.kube.clone());
+        assert_eq!(
+            c.pools_all_api().resource_url(),
+            hand_authored_pools.resource_url(),
+            "pools_all_api must be byte-identical to the pre-lift `Api::all(client.clone())` chain",
+        );
+        assert_eq!(
+            c.allocations_all_api().resource_url(),
+            hand_authored_allocs.resource_url(),
+            "allocations_all_api must be byte-identical to the pre-lift `Api::all(client.clone())` chain",
+        );
     }
 }

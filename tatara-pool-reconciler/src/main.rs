@@ -11,7 +11,6 @@ use std::sync::Arc;
 use anyhow::Result;
 use clap::Parser;
 use futures::StreamExt;
-use kube::api::Api;
 use kube::runtime::controller::Controller;
 use kube::Client;
 use tracing::info;
@@ -20,13 +19,18 @@ use tracing_subscriber::EnvFilter;
 use tatara_pool_reconciler::context::{PoolContext, PoolReconcilerConfig};
 use tatara_pool_reconciler::{controller_allocation, controller_pool};
 
-use tatara_process::allocation::EphemeralAllocation;
-use tatara_process::pool::EphemeralPool;
-
 #[derive(Parser, Debug)]
-#[command(name = "tatara-pool-reconciler", version, about = "EphemeralPool + EphemeralAllocation controller")]
+#[command(
+    name = "tatara-pool-reconciler",
+    version,
+    about = "EphemeralPool + EphemeralAllocation controller"
+)]
 struct Args {
-    #[arg(long, env = "TATARA_POOL_NAMESPACE", default_value = "tatara-pool-system")]
+    #[arg(
+        long,
+        env = "TATARA_POOL_NAMESPACE",
+        default_value = "tatara-pool-system"
+    )]
     controller_namespace: String,
     #[arg(long, env = "TATARA_POOL_HEARTBEAT_SECONDS", default_value_t = 30)]
     heartbeat_seconds: u64,
@@ -37,7 +41,9 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
         .json()
         .init();
 
@@ -60,8 +66,15 @@ async fn main() -> Result<()> {
         config,
     });
 
-    let pool_api: Api<EphemeralPool> = Api::all(client.clone());
-    let alloc_api: Api<EphemeralAllocation> = Api::all(client.clone());
+    // Cluster-scoped `Api::all(client.clone())` for the two watch
+    // bindings rides through the ONE substrate owner on `PoolContext`
+    // (peer to `tatara_reconciler::context::Context::processes_all_api`
+    // + `Context::process_table_api`), closing the pre-lift two-site
+    // duplication of the raw `Api::all(client.clone())` incantation
+    // this main.rs hand-authored past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold.
+    let pool_api = ctx.pools_all_api();
+    let alloc_api = ctx.allocations_all_api();
 
     let pool_ctx = ctx.clone();
     let pool_controller = Controller::new(pool_api, Default::default())

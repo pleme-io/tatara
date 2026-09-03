@@ -21,23 +21,24 @@
 //! controller is the thin async glue that fetches/applies; the
 //! decisions are the algebra.
 
+pub mod allocation_decide;
 pub mod context;
+pub mod controller_allocation;
+pub mod controller_pool;
 pub mod desired;
 pub mod naming;
+pub mod pool_decide;
 pub mod return_policy;
 pub mod router;
-pub mod pool_decide;
-pub mod allocation_decide;
-pub mod controller_pool;
-pub mod controller_allocation;
 
+pub use allocation_decide::{
+    decide_allocation_reconcile, AllocationConvergence, AllocationConvergenceCtx,
+    AllocationDecision,
+};
 pub use context::{PoolContext, PoolReconcilerConfig};
 pub use pool_decide::{decide_pool_reconcile, PoolDecision};
-pub use allocation_decide::{
-    decide_allocation_reconcile, AllocationConvergence, AllocationConvergenceCtx, AllocationDecision,
-};
-pub use router::{best_match, MatchedPool};
 pub use return_policy::{plan_return, ReturnPlan};
+pub use router::{best_match, MatchedPool};
 
 /// Typed reconciler error — kube `Controller<T>` requires a
 /// `std::error::Error`-implementing type, which `anyhow::Error` is

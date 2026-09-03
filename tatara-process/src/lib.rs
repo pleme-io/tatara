@@ -1160,7 +1160,7 @@ mod namespaced_api_coordinates_tests {
     use crate::ephemeral::EphemeralSpec;
     use crate::intent::AplicacaoIntent;
     use crate::lifetime::TeardownPolicy;
-    use crate::pool::{EphemeralPool, PoolSelector, PoolSpec, ReturnPolicy};
+    use crate::pool::{EphemeralPool, PoolSpec};
 
     fn empty_template() -> EphemeralSpec {
         // Mirror `tatara-pool-reconciler::router::tests::empty_template`
@@ -1190,18 +1190,14 @@ mod namespaced_api_coordinates_tests {
     }
 
     fn pool_fixture(name: &str, ns: Option<&str>) -> EphemeralPool {
+        // Every non-template slot rides the ONE substrate composer
+        // [`PoolSpec::with_template`]; pre-lift this fixture spelled the
+        // full 11-slot struct-literal verbatim as one of eight cross-
+        // crate hand-authored copies. See the primitive's doc-comment
+        // for the full migration rationale.
         let spec = PoolSpec {
             desired_size: 1,
-            min_size: 0,
-            max_size: 0,
-            return_policy: ReturnPolicy::Replace,
-            selector: PoolSelector::default(),
-            template: empty_template(),
-            free_ttl: "24h".into(),
-            max_allocation_ttl: "4h".into(),
-            desired: 0,
-            replacement_policy: Default::default(),
-            stable_name_claim: false,
+            ..PoolSpec::with_template(empty_template())
         };
         let mut p = EphemeralPool::new(name, spec);
         p.metadata.namespace = ns.map(str::to_string);
@@ -1487,7 +1483,7 @@ mod deletion_tombstoned_tests {
     use crate::ephemeral::EphemeralSpec;
     use crate::intent::AplicacaoIntent;
     use crate::lifetime::TeardownPolicy;
-    use crate::pool::{EphemeralPool, PoolSelector, PoolSpec, ReturnPolicy};
+    use crate::pool::{EphemeralPool, PoolSpec};
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 
     fn empty_template() -> EphemeralSpec {
@@ -1515,18 +1511,12 @@ mod deletion_tombstoned_tests {
     }
 
     fn empty_pool_spec() -> PoolSpec {
+        // Every non-template slot rides the ONE substrate composer
+        // [`PoolSpec::with_template`]; see the primitive's doc-comment
+        // for the full migration rationale.
         PoolSpec {
             desired_size: 1,
-            min_size: 0,
-            max_size: 0,
-            return_policy: ReturnPolicy::Replace,
-            selector: PoolSelector::default(),
-            template: empty_template(),
-            free_ttl: "24h".into(),
-            max_allocation_ttl: "4h".into(),
-            desired: 0,
-            replacement_policy: Default::default(),
-            stable_name_claim: false,
+            ..PoolSpec::with_template(empty_template())
         }
     }
 
@@ -1729,7 +1719,7 @@ mod annotated_tests {
     use crate::ephemeral::EphemeralSpec;
     use crate::intent::AplicacaoIntent;
     use crate::lifetime::TeardownPolicy;
-    use crate::pool::{EphemeralPool, PoolSelector, PoolSpec, ReturnPolicy};
+    use crate::pool::{EphemeralPool, PoolSpec};
     use k8s_openapi::api::core::v1::ConfigMap;
     use std::collections::BTreeMap;
 
@@ -1758,18 +1748,12 @@ mod annotated_tests {
     }
 
     fn empty_pool_spec() -> PoolSpec {
+        // Every non-template slot rides the ONE substrate composer
+        // [`PoolSpec::with_template`]; see the primitive's doc-comment
+        // for the full migration rationale.
         PoolSpec {
             desired_size: 1,
-            min_size: 0,
-            max_size: 0,
-            return_policy: ReturnPolicy::Replace,
-            selector: PoolSelector::default(),
-            template: empty_template(),
-            free_ttl: "24h".into(),
-            max_allocation_ttl: "4h".into(),
-            desired: 0,
-            replacement_policy: Default::default(),
-            stable_name_claim: false,
+            ..PoolSpec::with_template(empty_template())
         }
     }
 

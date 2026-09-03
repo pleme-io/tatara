@@ -69,7 +69,7 @@ mod tests {
     use tatara_process::ephemeral::EphemeralSpec;
     use tatara_process::intent::AplicacaoIntent;
     use tatara_process::lifetime::TeardownPolicy;
-    use tatara_process::pool::{PoolSelector, PoolSpec, ReturnPolicy};
+    use tatara_process::pool::{PoolSelector, PoolSpec};
 
     fn empty_template() -> EphemeralSpec {
         EphemeralSpec {
@@ -96,18 +96,13 @@ mod tests {
     }
 
     fn pool(name: &str, selector: PoolSelector) -> EphemeralPool {
+        // Every non-template slot rides the ONE substrate composer
+        // [`PoolSpec::with_template`]; see the primitive's doc-comment
+        // for the full migration rationale.
         let spec = PoolSpec {
             desired_size: 1,
-            min_size: 0,
-            max_size: 0,
-            return_policy: ReturnPolicy::Replace,
             selector,
-            template: empty_template(),
-            free_ttl: "24h".into(),
-            max_allocation_ttl: "4h".into(),
-            desired: 0,
-            replacement_policy: Default::default(),
-            stable_name_claim: false,
+            ..PoolSpec::with_template(empty_template())
         };
         let mut p = EphemeralPool::new(name, spec);
         p.meta_mut().namespace = Some("ephemeral-pools".into());

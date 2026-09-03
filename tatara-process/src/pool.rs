@@ -228,6 +228,90 @@ impl PoolSpec {
     pub fn free_ttl_duration(&self) -> Option<std::time::Duration> {
         humantime::parse_duration(&self.free_ttl).ok()
     }
+
+    /// Compose a [`PoolSpec`] for the given member `template`, stamping
+    /// every non-template slot at the `#[serde(default …)]` value the
+    /// wire-schema publishes above — the ONE substrate composer that
+    /// closes the 11-slot `PoolSpec { desired_size: 1, min_size: 0,
+    /// max_size: 0, return_policy: ReturnPolicy::Replace, selector:
+    /// PoolSelector::default(), template, free_ttl: "24h".into(),
+    /// max_allocation_ttl: "4h".into(), desired: 0, replacement_policy:
+    /// Default::default(), stable_name_claim: false }` struct-literal
+    /// every test-side + reconciler-side seed hand-authored pre-lift.
+    ///
+    /// Sibling to [`crate::crd::ProcessSpec::gate_compute_defaults`] on
+    /// the (spec-type × full-baseline-composer) axis — that primitive
+    /// owns the 11-slot [`crate::crd::ProcessSpec`] baseline composer;
+    /// this one owns the peer 11-slot [`PoolSpec`] baseline composer.
+    /// Both take a caller-supplied slot (there: the classification
+    /// baseline via `Classification::gate_compute()`; here: the
+    /// `template` [`EphemeralSpec`], which has no natural default) and
+    /// fill every other slot at its wire-published default so a caller
+    /// composes with struct-update syntax (`PoolSpec { desired_size: 1,
+    /// ..PoolSpec::with_template(empty_template()) }`) rather than
+    /// re-spelling the 10 defaulted slots at every seed. A future
+    /// promotion of a defaulted slot to a non-default (a per-fleet
+    /// minimum `min_size` floor, a shifted `default_free_ttl`,
+    /// a widened `ReturnPolicy` default) lands at ONE substrate
+    /// composer here and every downstream seed inherits the upgrade
+    /// mechanically.
+    ///
+    /// Pre-lift the 11-slot struct-literal was hand-authored at EIGHT
+    /// sites across TWO crates past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger:
+    /// * `tatara-process::lib::tests::pool_fixture` — the
+    ///   `qualified_process_ref` + trait-pin fixture seed;
+    /// * `tatara-process::lib::tests::empty_pool_spec` (×2) — the two
+    ///   sibling fixtures inside separate pin modules;
+    /// * `tatara-process::pool::tests::pool_spec` — the `name_or_empty`
+    ///   / `namespace_or_empty` pin fixture;
+    /// * `tatara-pool-reconciler::router::tests::pool` — the router-
+    ///   candidate-arbiter pin fixture (overrides `selector`);
+    /// * `tatara-pool-reconciler::desired::tests::pool_with_desired` —
+    ///   the desired-count-loop pin fixture (overrides `desired` +
+    ///   `replacement_policy`);
+    /// * `tatara-pool-reconciler::pool_decide::tests::pool` — the
+    ///   pure-decision pin fixture (overrides sizes);
+    /// * `tatara-pool-reconciler::allocation_decide::tests::pool` —
+    ///   the allocation-router pin fixture (overrides `selector`).
+    ///
+    /// The three fields the wire-schema does NOT default (`desired_size`
+    /// carries no `#[serde(default)]` above; `template` is the caller-
+    /// supplied slot) are stamped at their operator-friendly seed
+    /// values here — `desired_size = 0` matches every other reset
+    /// slot's `0` / `false` / `Default` stamp, so a caller can compose
+    /// `PoolSpec { desired_size: 1, ..PoolSpec::with_template(t) }` for
+    /// the single-slot pool the majority of pre-lift seeds spelled, or
+    /// `PoolSpec { desired_size: 0, desired: 5, ..with_template(t) }`
+    /// for the desired-count-loop shape one seed spelled.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+    /// 11-slot [`PoolSpec`] struct-literal recurred at EIGHT hand-
+    /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    /// trigger and is lifted onto ONE workspace-wide owner here).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs — a
+    /// regression that drifted a wire-published default at only one
+    /// consumer, or that broke the sibling-default correspondence with
+    /// [`crate::crd::ProcessSpec::gate_compute_defaults`], surfaces at
+    /// this primitive's tests rather than as silent operator-visible
+    /// skew across the eight fixtures whose assertions key on the
+    /// shape).
+    #[must_use]
+    pub fn with_template(template: EphemeralSpec) -> Self {
+        Self {
+            desired_size: 0,
+            min_size: 0,
+            max_size: 0,
+            return_policy: ReturnPolicy::default(),
+            selector: PoolSelector::default(),
+            template,
+            free_ttl: default_free_ttl(),
+            max_allocation_ttl: default_max_allocation_ttl(),
+            desired: 0,
+            replacement_policy: ReplacementPolicy::default(),
+            stable_name_claim: false,
+        }
+    }
 }
 
 impl EphemeralPool {
@@ -2456,18 +2540,15 @@ mod tests {
     }
 
     fn pool_spec() -> PoolSpec {
+        // Every non-template slot rides the ONE substrate composer
+        // [`PoolSpec::with_template`] at its wire-published default;
+        // pre-lift this fixture spelled the full 11-slot struct-literal
+        // verbatim as one of eight cross-crate hand-authored copies past
+        // the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold. See the
+        // primitive's doc-comment for the full migration rationale.
         PoolSpec {
             desired_size: 1,
-            min_size: 0,
-            max_size: 0,
-            return_policy: ReturnPolicy::Replace,
-            selector: PoolSelector::default(),
-            template: empty_template(),
-            free_ttl: "24h".into(),
-            max_allocation_ttl: "4h".into(),
-            desired: 0,
-            replacement_policy: ReplacementPolicy::default(),
-            stable_name_claim: false,
+            ..PoolSpec::with_template(empty_template())
         }
     }
 
@@ -3825,5 +3906,196 @@ mod tests {
                 "peer-primitive shape drift for {ttl:?}",
             );
         }
+    }
+
+    // ── PoolSpec::with_template substrate pins ──────────────────────
+    //
+    // The 11-slot `PoolSpec { desired_size: <N>, min_size: 0, max_size:
+    // 0, return_policy: ReturnPolicy::Replace, selector: <PoolSelector
+    // ::default() or override>, template: <EphemeralSpec>, free_ttl:
+    // "24h".into(), max_allocation_ttl: "4h".into(), desired: 0,
+    // replacement_policy: Default::default(), stable_name_claim: false
+    // }` struct-literal was open-coded verbatim at EIGHT hand-authored
+    // callsites across two crates before this primitive closed it.
+    // These pins bind the composed shape at fail-before-pass-after
+    // granularity so a regression that drifted the wire-published
+    // default at only one slot — a shorter `default_free_ttl`, a
+    // widened `ReturnPolicy` default, a promoted `stable_name_claim`
+    // seed — surfaces HERE rather than as silent operator-visible drift
+    // across every fixture that keys assertions on the shape.
+    fn hand_authored_pre_lift_with_template() -> PoolSpec {
+        PoolSpec {
+            desired_size: 0,
+            min_size: 0,
+            max_size: 0,
+            return_policy: ReturnPolicy::Replace,
+            selector: PoolSelector::default(),
+            template: empty_template(),
+            free_ttl: "24h".into(),
+            max_allocation_ttl: "4h".into(),
+            desired: 0,
+            replacement_policy: ReplacementPolicy::default(),
+            stable_name_claim: false,
+        }
+    }
+
+    #[test]
+    fn with_template_stamps_caller_supplied_template_verbatim() {
+        // The caller-supplied slot is the ONE the substrate does not
+        // default. A regression that reshaped the primitive's
+        // pass-through — a hidden re-encode through
+        // `serde_json::to_value` and back, a per-primitive
+        // normalization that flipped a defaulted-inner slot — would
+        // surface HERE rather than at every downstream seed whose
+        // assertions key on the template shape.
+        let t = empty_template();
+        let s = PoolSpec::with_template(t.clone());
+        assert_eq!(
+            serde_json::to_value(&s.template).unwrap(),
+            serde_json::to_value(&t).unwrap(),
+        );
+    }
+
+    #[test]
+    fn with_template_defaulted_slots_ride_wire_schema_defaults() {
+        // Pins the sibling-default correspondence the doc-comment
+        // names — every non-template slot rides its own
+        // `#[serde(default = "…")]` value from the `pub struct
+        // PoolSpec` schema above. A regression that promoted any
+        // defaulted slot to a non-default (a shorter
+        // `default_free_ttl`, a widened `ReturnPolicy` default, a
+        // `stable_name_claim: true` seed) would move the baseline
+        // HERE rather than at every downstream fixture.
+        let s = PoolSpec::with_template(empty_template());
+        assert_eq!(s.desired_size, 0);
+        assert_eq!(s.min_size, 0);
+        assert_eq!(s.max_size, 0);
+        assert_eq!(s.return_policy, ReturnPolicy::default());
+        assert_eq!(
+            serde_json::to_value(&s.selector).unwrap(),
+            serde_json::to_value(PoolSelector::default()).unwrap(),
+        );
+        assert_eq!(s.free_ttl, default_free_ttl());
+        assert_eq!(s.max_allocation_ttl, default_max_allocation_ttl());
+        assert_eq!(s.desired, 0);
+        assert_eq!(s.replacement_policy, ReplacementPolicy::default());
+        assert!(!s.stable_name_claim);
+    }
+
+    #[test]
+    fn with_template_matches_hand_authored_pre_lift_bytewise() {
+        // Byte-identical parity pin between the substrate primitive
+        // and the pre-lift 11-slot struct-literal that recurred at
+        // eight hand-authored sites (compared with `desired_size:
+        // 0` to match the primitive's baseline — the five hand-
+        // authored `desired_size: 1` sites compose the baseline via
+        // struct-update and the pin below binds THAT axis
+        // separately). Compares via `serde_json` value equality —
+        // `PoolSpec` does not derive `PartialEq` (the typed fields
+        // it composes over do not uniformly derive it), so a
+        // serialize round-trip is the shape-equality currency the
+        // pin family already uses.
+        let composed = PoolSpec::with_template(empty_template());
+        let hand = hand_authored_pre_lift_with_template();
+        assert_eq!(
+            serde_json::to_value(&composed).unwrap(),
+            serde_json::to_value(&hand).unwrap(),
+        );
+    }
+
+    #[test]
+    fn with_template_supports_struct_update_override_at_each_pre_lift_axis() {
+        // Sweeps every override axis the eight pre-lift seeds
+        // exercised via struct-update syntax:
+        // * `desired_size: 1` — six sites (the majority of pre-lift
+        //   fixtures use a single-slot pool).
+        // * `selector: <custom>` — two sites (router.rs +
+        //   allocation_decide.rs).
+        // * `desired: N` + `replacement_policy: <policy>` — one
+        //   site (desired.rs's desired-count-loop fixture).
+        // * `desired_size: N, min_size: N, max_size: N` — one site
+        //   (pool_decide.rs's pure-decision fixture).
+        // A regression that broke the struct-update path (e.g. a
+        // `#[non_exhaustive]` attribute added to `PoolSpec` that
+        // would refuse struct-update syntax across crate boundaries)
+        // surfaces at compile time HERE rather than as an eight-site
+        // downstream break.
+        let base = PoolSpec::with_template(empty_template());
+        let size_1 = PoolSpec {
+            desired_size: 1,
+            ..PoolSpec::with_template(empty_template())
+        };
+        assert_eq!(base.desired_size, 0);
+        assert_eq!(size_1.desired_size, 1);
+        // Every other slot rides the base composition.
+        assert_eq!(size_1.free_ttl, base.free_ttl);
+        assert_eq!(size_1.max_allocation_ttl, base.max_allocation_ttl);
+
+        let custom_selector = PoolSelector::default();
+        let with_selector = PoolSpec {
+            desired_size: 1,
+            selector: custom_selector,
+            ..PoolSpec::with_template(empty_template())
+        };
+        assert_eq!(with_selector.desired_size, 1);
+        assert_eq!(with_selector.free_ttl, base.free_ttl);
+
+        let with_desired = PoolSpec {
+            desired: 5,
+            replacement_policy: ReplacementPolicy::HoldFailed,
+            ..PoolSpec::with_template(empty_template())
+        };
+        assert_eq!(with_desired.desired, 5);
+        assert_eq!(
+            with_desired.replacement_policy,
+            ReplacementPolicy::HoldFailed
+        );
+        assert_eq!(with_desired.desired_size, 0);
+
+        let with_sizes = PoolSpec {
+            desired_size: 3,
+            min_size: 1,
+            max_size: 5,
+            ..PoolSpec::with_template(empty_template())
+        };
+        assert_eq!(with_sizes.desired_size, 3);
+        assert_eq!(with_sizes.min_size, 1);
+        assert_eq!(with_sizes.max_size, 5);
+        assert_eq!(with_sizes.replacement_policy, base.replacement_policy);
+    }
+
+    #[test]
+    fn with_template_is_call_time_construction_not_a_shared_singleton() {
+        // Two independent calls produce structurally-equal but
+        // distinct values — pins that the primitive is a plain
+        // constructor rather than a `lazy_static` clone whose in-
+        // place mutation at one consumer would silently mutate the
+        // shape at every other consumer. Mirrors the sibling
+        // `gate_compute_defaults_is_call_time_construction_not_a_
+        // shared_singleton` pin on `ProcessSpec::gate_compute_defaults`.
+        let a = PoolSpec::with_template(empty_template());
+        let b = PoolSpec::with_template(empty_template());
+        assert_eq!(
+            serde_json::to_value(&a).unwrap(),
+            serde_json::to_value(&b).unwrap(),
+        );
+        assert!(!std::ptr::eq(&a, &b));
+    }
+
+    #[test]
+    fn with_template_free_ttl_composes_with_free_ttl_duration_at_default_window() {
+        // The primitive's `free_ttl` slot rides `default_free_ttl()`;
+        // the sibling `free_ttl_duration` primitive parses that
+        // literal into the same 24h `Duration` every pre-lift
+        // reconciler-side seed produced. Pins the round-trip so a
+        // regression that shifted `default_free_ttl` without
+        // updating this baseline (or vice versa) surfaces HERE
+        // rather than as silent skew between the composer and the
+        // ttl-parse gate that consumes it.
+        let s = PoolSpec::with_template(empty_template());
+        assert_eq!(
+            s.free_ttl_duration(),
+            Some(std::time::Duration::from_secs(24 * 3600)),
+        );
     }
 }

@@ -7,7 +7,7 @@
 //! are resolved by resourceVersion conflict retries at the controller level.
 
 use chrono::Utc;
-use kube::api::{Api, Patch, PatchParams, PostParams};
+use kube::api::{Api, PostParams};
 use kube::Error as KubeError;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -40,14 +40,23 @@ pub async fn patch_process_status(
 /// Merge-patch the spec of a ProcessTable (we keep `nextSequence` in spec
 /// for parity with convergence-controller; future refactor may move it to
 /// status).
+///
+/// Wire-side dispatch rides the substrate primitive
+/// [`tatara_process::patch::merge`] — pre-lift this was a hand-authored
+/// 3-link `api.patch(name, &PatchParams::default(), &Patch::Merge(&body))`
+/// chain, one of SIX workspace-wide restatements past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication trigger. Post-lift the primary-
+/// resource merge posture lives at ONE substrate owner (sibling to
+/// [`tatara_process::patch::merge_status`] on the wire-endpoint axis
+/// and to [`tatara_process::patch::apply_patch_params`] on the wire-
+/// posture axis).
 pub async fn patch_process_table_spec(
     api: &Api<ProcessTable>,
     name: &str,
     spec_patch: Value,
 ) -> Result<ProcessTable, KubeError> {
     let body = json!({ "spec": spec_patch });
-    api.patch(name, &PatchParams::default(), &Patch::Merge(&body))
-        .await
+    tatara_process::patch::merge(api, name, &body).await
 }
 
 /// Ensure the cluster-scoped ProcessTable singleton exists, creating it
@@ -265,8 +274,16 @@ where
         return Ok(false);
     };
     let patch = finalizers_metadata_patch(&new);
-    api.patch(name, &PatchParams::default(), &Patch::Merge(&patch))
-        .await?;
+    // Wire-side dispatch rides the substrate primitive
+    // `tatara_process::patch::merge` — pre-lift this was a hand-
+    // authored `api.patch(name, &PatchParams::default(),
+    // &Patch::Merge(&patch))` chain, one of SIX workspace-wide
+    // restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold. Post-lift the primary-resource merge posture lives at
+    // ONE substrate owner (peer of `merge_status` on the `/status`
+    // subresource axis + `apply_patch_params` on the SSA wire-posture
+    // axis).
+    tatara_process::patch::merge(api, name, &patch).await?;
     Ok(true)
 }
 

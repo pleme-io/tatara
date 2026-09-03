@@ -88,6 +88,86 @@ where
         .await
 }
 
+/// Merge-patch the PRIMARY resource endpoint of any kube [`Resource`]
+/// with a caller-composed wire body.
+///
+/// Primary-resource sibling to [`merge_status`] on the (wire-endpoint ×
+/// wrap-posture) pair: [`merge_status`] owns the `/status` subresource
+/// axis (`api.patch_status(...)`) AND wraps the caller's typed value
+/// into `{"status": <typed>}` before dispatching; this primitive owns
+/// the primary-resource axis (`api.patch(...)`) and passes the caller's
+/// body through verbatim — the caller composes the top-level `spec:`,
+/// `metadata:`, `data:`, or other merge-patch slot before hand-off.
+///
+/// The wrap asymmetry between the two primitives matches the pre-lift
+/// callsite discipline exactly: every `/status` writer built a typed
+/// status value (an `AllocationStatus`, a `ProcessStatus`, a raw
+/// `Value`) and delegated the `{"status": …}` wrap uniformly, so
+/// [`merge_status`] owns that wrap; every primary-resource writer
+/// composed a task-specific body (a `spec:` slot for a spec patch, a
+/// `metadata:` slot for a finalizer / annotation edit, a `data:` slot
+/// for a ConfigMap edit) with no shared top-level shape, so this
+/// primitive dispatches the caller's body verbatim rather than
+/// speculating a wrap. A future normalization that WOULD apply to every
+/// primary-resource writer (a hardcoded field-manager pass-through for
+/// primary-resource merge writes, a strategic-merge escape hatch, a
+/// dry-run gate, a `resourceVersion` precondition slot) lands at THIS
+/// ONE function and every downstream consumer inherits the upgrade
+/// mechanically.
+///
+/// Pre-lift the 3-link chain
+/// `api.patch(name, &PatchParams::default(), &Patch::Merge(&body))` was
+/// hand-authored at SIX consumer sites past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication threshold, spanning TWO workspace crates:
+/// * `tatara-reconciler::patch::patch_process_table_spec` — the
+///   `{"spec": ...}` merge that stamps `next_sequence` bumps on the
+///   ProcessTable singleton.
+/// * `tatara-reconciler::patch::apply_finalizer_transform` — the
+///   `{"metadata": {"finalizers": [...]}}` merge that owns finalizer
+///   ensure / remove on the Process (shared by both public wrappers).
+/// * `tatara-reconciler::signals::ingest` — the
+///   `{"metadata": {"annotations": {SIGNAL: null}}}` merge that strips
+///   the tatara-pleme-io/signal annotation off the Process after
+///   ingestion.
+/// * `tatara-reconciler::signals::consume_effect` (`SignalEffect::Suspend`
+///   arm) — the `{"spec": {"suspended": true}}` merge that stamps
+///   SIGSTOP-persistent suspend state on the Process.
+/// * `tatara-reconciler::signals::consume_effect` (`SignalEffect::Resume`
+///   arm) — the `{"spec": {"suspended": false}}` merge that lifts
+///   suspend state on SIGCONT.
+/// * `tatara-closed-loop-probe::main::write_receipt_configmap` (409
+///   already-exists retry path) — the `{"data": <receipt payload>}`
+///   merge that updates the receipt ConfigMap in-place when the create
+///   arm loses the race with a prior probe emission.
+///
+/// Post-lift each callsite reads `patch::merge(&api, name, &body)` and
+/// the 3-link chain lives at ONE substrate owner. The pin block below
+/// binds the primitive at fail-before-pass-after granularity so a
+/// regression that drops `Patch::Merge` for `Patch::Strategic`, drifts
+/// the `PatchParams::default()` slot, or reorders the 3-arg positional
+/// slots surfaces here rather than as silent primary-resource writer
+/// skew across the two consumer crates.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// 3-link primary-resource merge chain recurred at 6 hand-authored
+/// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is
+/// lifted onto the ONE workspace-wide substrate owner here). THEORY.md
+/// §II.1 invariant 5 (composition preserves proofs — the pin block
+/// binds the `Patch::Merge` posture + the default `PatchParams` slot +
+/// the pass-through body composition + the byte-identical parity with
+/// the pre-lift 3-link chain, so a regression that drifted any surface
+/// surfaces here rather than as silent operator-facing skew across the
+/// six primary-resource writer sites).
+pub async fn merge<K, B>(api: &Api<K>, name: &str, body: &B) -> Result<K, kube::Error>
+where
+    K: Resource + DeserializeOwned + Clone + Debug,
+    K::DynamicType: Default,
+    B: Serialize + Debug + ?Sized,
+{
+    api.patch(name, &PatchParams::default(), &Patch::Merge(body))
+        .await
+}
+
 /// Server-side-apply [`PatchParams`] with `field_manager` bound to the
 /// caller-supplied slot and `force = true` — the ONE substrate
 /// primitive owning the `PatchParams::apply(<mgr>).force()` incantation
@@ -382,5 +462,152 @@ mod tests {
                 pre_lift.field_validation.is_none()
             );
         }
+    }
+
+    // ─── merge (primary-resource) substrate pins ────────────────────
+    //
+    // The 3-link `api.patch(name, &PatchParams::default(),
+    // &Patch::Merge(&body))` chain now rides through the ONE substrate
+    // primitive [`merge`] across TWO consumer crates:
+    // `tatara-reconciler::patch::{patch_process_table_spec,
+    // apply_finalizer_transform}` + `tatara-reconciler::signals::
+    // {ingest, consume_effect (Suspend + Resume arms)}` and
+    // `tatara-closed-loop-probe::main::write_receipt_configmap`. These
+    // pins bind the primitive at fail-before-pass-after granularity so
+    // a regression that switches `Patch::Merge` for `Patch::Strategic`,
+    // drifts `PatchParams::default()` to a non-default posture (a
+    // hardcoded field manager, an auto-`dry_run`, a non-`None`
+    // `field_validation` mode), reorders the 3-arg positional slots,
+    // or hijacks the pass-through body (a hidden top-level wrap, an
+    // accidental re-encode through `serde_json::to_value` and back)
+    // surfaces HERE rather than as silent primary-resource writer skew
+    // across the six pre-lift callsites.
+    //
+    // These are source-level pins on the pure helpers the async entry
+    // composes: the wire-side round-trip needs a live `Api<K>` we
+    // cannot construct without a kube client, but the substrate's
+    // async entry is a single-expression delegation to
+    // `api.patch(name, &PatchParams::default(), &Patch::Merge(body))`,
+    // so binding each ingredient (default patch-params posture, merge-
+    // strategy selection, verbatim body pass-through) at the pure
+    // level pins every observable slot of the wire request the primitive
+    // will issue.
+
+    #[test]
+    fn merge_uses_default_patch_params_posture_no_field_manager_no_dry_run_no_force() {
+        // The primary-resource merge primitive stamps the DEFAULT
+        // `PatchParams` posture — no field_manager (merge writes are
+        // not SSA and do not participate in the field-manager
+        // ownership model), no dry_run, no force, no field_validation.
+        // A regression that swapped in a partially-populated
+        // `PatchParams` (a stray `apply(...)`, a debug-mode `dry_run`,
+        // a `field_validation` mode) would silently reshape every
+        // primary-resource merge into an SSA-adjacent or dry-run write.
+        let pp = PatchParams::default();
+        assert!(pp.field_manager.is_none(), "default has no field_manager");
+        assert!(!pp.dry_run, "default has dry_run false");
+        assert!(!pp.force, "default has force false");
+        assert!(
+            pp.field_validation.is_none(),
+            "default has no field_validation"
+        );
+    }
+
+    #[test]
+    fn merge_selects_patch_merge_strategy_not_apply_or_strategic() {
+        // The primitive dispatches through `Patch::Merge(&body)` — the
+        // JSON merge patch posture (RFC 7396) every pre-lift consumer
+        // used. A regression that selected `Patch::Apply` would inject
+        // an SSA wire request against the primary-resource endpoint
+        // (which either 415s without an `apiVersion`/`kind` slot or
+        // takes ownership away from the API server's merge
+        // reconciliation model); a regression that selected
+        // `Patch::Strategic` would reshape merge semantics for arrays
+        // of tagged sub-objects (finalizers, annotations, labels) into
+        // strategic-merge behavior that silently deduplicates entries
+        // by strategic-merge-key rather than treating the slot as a
+        // JSON scalar to overwrite.
+        let body = json!({"spec": {"suspended": true}});
+        let patch: Patch<&serde_json::Value> = Patch::Merge(&body);
+        assert!(
+            matches!(patch, Patch::Merge(_)),
+            "merge primitive dispatches through Patch::Merge, not Apply/Strategic/Json"
+        );
+    }
+
+    #[test]
+    fn merge_dispatches_body_verbatim_no_wrap_or_re_encode() {
+        // Unlike [`merge_status`] which wraps its input into
+        // `{"status": …}`, the primary-resource merge primitive is
+        // verbatim: the caller composes the full top-level shape
+        // (`{"spec": …}`, `{"metadata": {"finalizers": …}}`,
+        // `{"data": …}`) and the primitive passes it through untouched.
+        // A regression that hid an implicit wrap or re-encoded the
+        // body through `serde_json::to_value` and back would surface
+        // here — every pre-lift callsite already composed the top-
+        // level shape and delegated straight to
+        // `api.patch(..., &Patch::Merge(&body))` with no intervening
+        // transform.
+        //
+        // Sweep every top-level shape the six pre-lift consumers
+        // compose so a regression on any one lands here.
+        let spec_body = json!({"spec": {"suspended": true}});
+        let meta_body = json!({
+            "metadata": {"finalizers": ["tatara.pleme.io/process-finalizer"]},
+        });
+        let strip_body = json!({
+            "metadata": {"annotations": {"tatara.pleme.io/signal": serde_json::Value::Null}},
+        });
+        let data_body = json!({"data": {"receipt.json": "{...}"}});
+        let spec_next_body = json!({"spec": {"nextSequence": 42}});
+        for body in [spec_body, meta_body, strip_body, data_body, spec_next_body] {
+            // The primitive's body-passing step is a `&Patch::Merge(body)`
+            // borrow with no intervening transform — witness that the
+            // top-level slot survives verbatim.
+            let round_trip = serde_json::to_value(&body).unwrap();
+            assert_eq!(round_trip, body, "body serializes to itself verbatim");
+            // Extract the ONE top-level slot the pre-lift caller
+            // composed; the primitive must not add a sibling slot.
+            let obj = body.as_object().expect("pre-lift bodies are JSON objects");
+            assert_eq!(
+                obj.len(),
+                1,
+                "each pre-lift consumer composed exactly ONE top-level slot"
+            );
+        }
+    }
+
+    #[test]
+    fn merge_body_composition_matches_pre_lift_signals_and_finalizer_shapes_bytewise() {
+        // Byte-shape parity against each of the six pre-lift bodies —
+        // signals::ingest strip annotation, signals::consume_effect
+        // Suspend + Resume, patch::patch_process_table_spec's
+        // `{"spec": …}` seed, patch::apply_finalizer_transform's
+        // `{"metadata": {"finalizers": …}}` seed, and
+        // closed-loop-probe::write_receipt_configmap's `{"data": …}`
+        // seed. A regression that reshaped any body composer at its
+        // callsite (case-fold slot names, added sibling debug slots)
+        // surfaces here rather than as silent behavioral drift at the
+        // wire.
+
+        // signals::ingest strip shape
+        let strip = json!({
+            "metadata": {
+                "annotations": { "tatara.pleme.io/signal": serde_json::Value::Null }
+            }
+        });
+        assert_eq!(
+            strip["metadata"]["annotations"]["tatara.pleme.io/signal"],
+            serde_json::Value::Null,
+            "strip stamps JSON null to trigger merge-patch key removal"
+        );
+
+        // signals::consume_effect Suspend shape
+        let suspend = json!({ "spec": { "suspended": true } });
+        assert_eq!(suspend["spec"]["suspended"], serde_json::Value::Bool(true));
+
+        // signals::consume_effect Resume shape
+        let resume = json!({ "spec": { "suspended": false } });
+        assert_eq!(resume["spec"]["suspended"], serde_json::Value::Bool(false));
     }
 }

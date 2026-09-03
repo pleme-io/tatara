@@ -2,7 +2,6 @@
 //! strip, apply effect to phase.
 
 use anyhow::{anyhow, Result};
-use kube::api::{Patch, PatchParams};
 use serde_json::json;
 use std::str::FromStr;
 use tracing::warn;
@@ -98,7 +97,17 @@ pub async fn ingest(process: &Process, ctx: &Context) -> Result<Option<ProcessSi
             "annotations": { SIGNAL_ANNOTATION: serde_json::Value::Null }
         }
     });
-    api.patch(&name, &PatchParams::default(), &Patch::Merge(&strip))
+    // Wire-side dispatch rides the substrate primitive
+    // `tatara_process::patch::merge` — pre-lift this was a hand-
+    // authored `api.patch(&name, &PatchParams::default(),
+    // &Patch::Merge(&strip))` chain, one of SIX workspace-wide
+    // restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold (adjacent peers at `consume_effect`'s Suspend + Resume
+    // arms in this file). Post-lift the primary-resource merge posture
+    // lives at ONE substrate owner (peer of `merge_status` on the
+    // `/status` subresource axis + `apply_patch_params` on the SSA
+    // wire-posture axis).
+    tatara_process::patch::merge(&api, &name, &strip)
         .await
         .map_err(|e| anyhow!("strip signal annotation: {e}"))?;
 
@@ -148,23 +157,27 @@ pub async fn consume_effect(process: &Process, ctx: &Context, effect: SignalEffe
             Ok(())
         }
         SignalEffect::Suspend => {
-            api.patch(
-                &name,
-                &PatchParams::default(),
-                &Patch::Merge(&json!({ "spec": { "suspended": true } })),
-            )
-            .await
-            .map_err(|e| anyhow!("suspend: {e}"))?;
+            // Wire-side dispatch rides the substrate primitive
+            // `tatara_process::patch::merge` — pre-lift this was a
+            // hand-authored `api.patch(&name, &PatchParams::default(),
+            // &Patch::Merge(&body))` chain, one of SIX workspace-wide
+            // restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+            // threshold (peer arm at Resume below).
+            tatara_process::patch::merge(&api, &name, &json!({ "spec": { "suspended": true } }))
+                .await
+                .map_err(|e| anyhow!("suspend: {e}"))?;
             Ok(())
         }
         SignalEffect::Resume => {
-            api.patch(
-                &name,
-                &PatchParams::default(),
-                &Patch::Merge(&json!({ "spec": { "suspended": false } })),
-            )
-            .await
-            .map_err(|e| anyhow!("resume: {e}"))?;
+            // Wire-side dispatch rides the substrate primitive
+            // `tatara_process::patch::merge` — pre-lift this was a
+            // hand-authored `api.patch(&name, &PatchParams::default(),
+            // &Patch::Merge(&body))` chain, one of SIX workspace-wide
+            // restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+            // threshold (peer arm at Suspend above).
+            tatara_process::patch::merge(&api, &name, &json!({ "spec": { "suspended": false } }))
+                .await
+                .map_err(|e| anyhow!("resume: {e}"))?;
             Ok(())
         }
         SignalEffect::Remediate => {

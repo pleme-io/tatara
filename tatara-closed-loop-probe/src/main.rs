@@ -14,7 +14,7 @@
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use k8s_openapi::api::core::v1::ConfigMap;
-use kube::api::{Patch, PatchParams, PostParams};
+use kube::api::PostParams;
 use kube::{Api, Client};
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -187,7 +187,17 @@ async fn write_receipt(envelope: &ReceiptEnvelope, cm_name: &str, ns: &str) -> R
         Err(kube::Error::Api(e)) if e.code == 409 => {
             // Already exists — PATCH the data field.
             let patch = json!({ "data": cm.data });
-            api.patch(cm_name, &PatchParams::default(), &Patch::Merge(&patch))
+            // Wire-side dispatch rides the substrate primitive
+            // `tatara_process::patch::merge` — pre-lift this was a
+            // hand-authored `api.patch(cm_name, &PatchParams::
+            // default(), &Patch::Merge(&patch))` chain, one of SIX
+            // workspace-wide restatements past the ★★ PRIME-DIRECTIVE
+            // ≥ 2 duplication threshold. Post-lift the primary-
+            // resource merge posture lives at ONE substrate owner
+            // (peers of `merge_status` on the `/status` subresource
+            // axis + `apply_patch_params` on the SSA wire-posture
+            // axis, both already opened on the substrate side).
+            tatara_process::patch::merge(&api, cm_name, &patch)
                 .await
                 .map_err(|e| anyhow!("patch ConfigMap {ns}/{cm_name}: {e}"))?;
             Ok(())

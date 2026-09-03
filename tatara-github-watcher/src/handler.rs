@@ -131,7 +131,14 @@ async fn handle_pr_event(state: &HandlerState, body: &[u8]) -> axum::response::R
                     );
                     (StatusCode::OK, "allocation deleted").into_response()
                 }
-                Err(kube::Error::Api(e)) if e.code == 404 => {
+                // 404 detection rides the substrate primitive
+                // `tatara_process::kube_error::is_not_found` — pre-lift
+                // this was a hand-authored `Err(kube::Error::Api(e)) if
+                // e.code == 404` match-arm guard, one of FIVE workspace-
+                // wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+                // duplication threshold (the OTHER four sites all key
+                // off 409, routed through the peer `is_conflict`).
+                Err(ref e) if tatara_process::kube_error::is_not_found(e) => {
                     (StatusCode::OK, "allocation already gone").into_response()
                 }
                 Err(e) => {
@@ -176,7 +183,13 @@ async fn handle_pr_event(state: &HandlerState, body: &[u8]) -> axum::response::R
                     );
                     (StatusCode::CREATED, "allocation created").into_response()
                 }
-                Err(kube::Error::Api(e)) if e.code == 409 => {
+                // 409 detection rides the substrate primitive
+                // `tatara_process::kube_error::is_conflict` — pre-lift
+                // this was a hand-authored `Err(kube::Error::Api(e)) if
+                // e.code == 409` match-arm guard, sibling to the 404
+                // arm above (both routed through the same substrate
+                // module's paired predicates).
+                Err(ref e) if tatara_process::kube_error::is_conflict(e) => {
                     // Already exists — refresh via PATCH (synchronize event).
                     (StatusCode::OK, "allocation already exists (synchronize)").into_response()
                 }

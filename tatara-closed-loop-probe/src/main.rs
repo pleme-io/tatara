@@ -184,7 +184,14 @@ async fn write_receipt(envelope: &ReceiptEnvelope, cm_name: &str, ns: &str) -> R
 
     match api.create(&PostParams::default(), &cm).await {
         Ok(_) => Ok(()),
-        Err(kube::Error::Api(e)) if e.code == 409 => {
+        // 409 detection rides the substrate primitive
+        // `tatara_process::kube_error::is_conflict` — pre-lift this
+        // was a hand-authored `Err(kube::Error::Api(e)) if e.code ==
+        // 409` match-arm guard, one of FIVE workspace-wide restatements
+        // past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold. Post-
+        // lift the two-link matches-shape lives at ONE substrate owner
+        // (peer of `is_not_found` for HTTP 404 on the same axis).
+        Err(ref e) if tatara_process::kube_error::is_conflict(e) => {
             // Already exists — PATCH the data field.
             let patch = json!({ "data": cm.data });
             // Wire-side dispatch rides the substrate primitive

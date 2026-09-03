@@ -22,6 +22,7 @@ pub mod intent;
 pub mod k8s_builtin_resource;
 pub mod k8s_object_ref;
 pub mod k8s_wire_identity;
+pub mod kube_error;
 pub mod lifetime;
 pub mod lifetime_clock;
 pub mod matrix;

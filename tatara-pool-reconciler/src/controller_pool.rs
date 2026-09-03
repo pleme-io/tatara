@@ -301,7 +301,15 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
                         info!(namespace = %ns, pool = %name, process = %proc_name, "spawned member");
                         spawned += 1;
                     }
-                    Err(kube::Error::Api(e)) if e.code == 409 => {
+                    // 409 detection rides the substrate primitive
+                    // `tatara_process::kube_error::is_conflict` — pre-
+                    // lift this was a hand-authored
+                    // `Err(kube::Error::Api(e)) if e.code == 409`
+                    // match-arm guard, one of FIVE workspace-wide
+                    // restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+                    // duplication threshold (peer at the desired-loop
+                    // spawn branch below + the watcher + probe sites).
+                    Err(ref e) if tatara_process::kube_error::is_conflict(e) => {
                         // race — someone else created this Process; treat as ok.
                         spawned += 1;
                     }
@@ -458,7 +466,13 @@ async fn apply_convergence_actions(
                     Ok(_) => {
                         info!(namespace = %ns, pool = %name, process = %proc_name, "desired-loop spawned");
                     }
-                    Err(kube::Error::Api(e)) if e.code == 409 => {
+                    // 409 detection rides the substrate primitive
+                    // `tatara_process::kube_error::is_conflict` — the
+                    // desired-loop spawn's peer of the spawn-branch
+                    // arm above; both interpret the race as a no-op
+                    // (the next reconcile picks up the existing
+                    // Process).
+                    Err(ref e) if tatara_process::kube_error::is_conflict(e) => {
                         // already exists — race with another reconcile; OK.
                     }
                     Err(e) => {

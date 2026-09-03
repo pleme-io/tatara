@@ -39,6 +39,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::attestation::ProcessAttestation;
+use crate::three_pillar;
 
 /// Canonical version string. Bump → `tatara-receipt/v2` if the wire
 /// shape changes; parsers refuse anything else for the v1 reader.
@@ -554,7 +555,7 @@ impl ReceiptEnvelope {
         let intent_hash = intent_hash.into();
         let artifact_hash = artifact_hash.into();
         let control_hash = control_hash.into();
-        let composed_root = compose_root(
+        let composed_root = three_pillar::compose_root(
             &artifact_hash,
             empty_to_none(&control_hash),
             &intent_hash,
@@ -689,13 +690,13 @@ impl ReceiptEnvelope {
     /// `expected_previous_root` is the previous root in the Process's
     /// attestation chain (or `None` for first attestation).
     pub fn verify_root(&self, expected_previous_root: Option<&str>) -> bool {
-        let want = compose_root(
+        let want = three_pillar::compose_root(
             &self.artifact_hash,
             self.control_hash_opt(),
             &self.intent_hash,
             expected_previous_root,
         );
-        constant_time_eq(want.as_bytes(), self.composed_root.as_bytes())
+        three_pillar::constant_time_eq(want.as_bytes(), self.composed_root.as_bytes())
     }
 
     /// Strict-equality check against an operator-provided expected root.
@@ -752,8 +753,8 @@ impl ReceiptEnvelope {
     /// `Some(hash)` when a control step ran, `None` when it did not.
     ///
     /// The wire form stamps `control_hash: String` (schema-open,
-    /// serde-friendly), but the substrate's `compose_root` +
-    /// `ProcessAttestation::compose` compositions both take an
+    /// serde-friendly), but the substrate's `three_pillar::compose_root`
+    /// + `ProcessAttestation::compose` compositions both take an
     /// `Option<&str>` / `Option<String>` and thread `None` through the
     /// exact BLAKE3 bytes pattern an absent-pillar walk emits — an
     /// empty `control_hash` and an absent-pillar receipt hash to the
@@ -799,10 +800,10 @@ impl ReceiptEnvelope {
     /// PRIME-DIRECTIVE ≥ 2 duplication threshold and is lifted to ONE
     /// owner here. THEORY.md §V.3 — three-pillar attestation; the
     /// receipt's second pillar (control step) has ONE typed projection
-    /// site the composition primitives ([`compose_root`],
-    /// [`ProcessAttestation::compose`]) both bind against, so the
-    /// pillar's wire-vs-typed identity cannot drift across the three
-    /// consumers.
+    /// site the composition primitives
+    /// ([`three_pillar::compose_root`], [`ProcessAttestation::compose`])
+    /// both bind against, so the pillar's wire-vs-typed identity
+    /// cannot drift across the three consumers.
     #[must_use]
     pub fn control_hash_opt(&self) -> Option<&str> {
         empty_to_none(&self.control_hash)
@@ -812,9 +813,9 @@ impl ReceiptEnvelope {
 /// Project a wire-form pillar string onto its typed `Option<&str>`
 /// contract — `Some(s)` when `s` is non-empty, `None` when `s` is
 /// empty (the substrate's "no such pillar" convention that
-/// [`compose_root`] + [`ProcessAttestation::compose`] both thread as
-/// an absent-pillar walk through the BLAKE3 domain-tagged
-/// composition).
+/// [`three_pillar::compose_root`] + [`ProcessAttestation::compose`]
+/// both thread as an absent-pillar walk through the BLAKE3
+/// domain-tagged composition).
 ///
 /// The free-fn peer of [`ReceiptEnvelope::control_hash_opt`] for
 /// call sites that hold a borrowed pillar string BEFORE a
@@ -887,46 +888,12 @@ fn require_nonempty(field: &'static str, value: &str) -> Result<(), ReceiptError
     Ok(())
 }
 
-const DOMAIN_TAG: &[u8] = b"tatara-process/v1alpha1\n";
-
-/// Same composition as `ProcessAttestation::composed_hex` — kept local so
-/// `tatara_process::receipt::compose_root(...)` is a single line in
-/// downstream code without re-importing the attestation module.
-fn compose_root(
-    artifact: &str,
-    control: Option<&str>,
-    intent: &str,
-    previous: Option<&str>,
-) -> String {
-    let mut h = blake3::Hasher::new();
-    h.update(DOMAIN_TAG);
-    h.update(artifact.as_bytes());
-    h.update(b"\n");
-    h.update(control.unwrap_or("").as_bytes());
-    h.update(b"\n");
-    h.update(intent.as_bytes());
-    h.update(b"\n");
-    h.update(previous.unwrap_or("").as_bytes());
-    hex::encode(h.finalize().as_bytes())
-}
-
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut acc: u8 = 0;
-    for (x, y) in a.iter().zip(b.iter()) {
-        acc |= x ^ y;
-    }
-    acc == 0
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn sample_payload() -> &'static str {
-        // Composed_root precomputed from compose_root("bbbb", Some("cccc"), "aaaa", None)
+        // Composed_root precomputed from three_pillar::compose_root("bbbb", Some("cccc"), "aaaa", None)
         // (recomputed at test time to be canonical; this string is regenerated
         // if the domain tag ever changes).
         r#"{
@@ -941,7 +908,7 @@ mod tests {
     }
 
     fn canonical_payload_json() -> String {
-        let root = compose_root("bbbb", Some("cccc"), "aaaa", None);
+        let root = three_pillar::compose_root("bbbb", Some("cccc"), "aaaa", None);
         sample_payload().replace("RECOMPUTE", &root)
     }
 
@@ -983,7 +950,10 @@ artifact_hash: bbbb
 control_hash:  cccc
 generated_at:  2026-05-19T12:00:00Z
 "#
-        .replace("ROOT", &compose_root("bbbb", Some("cccc"), "aaaa", None));
+        .replace(
+            "ROOT",
+            &three_pillar::compose_root("bbbb", Some("cccc"), "aaaa", None),
+        );
         let r = ReceiptEnvelope::parse_yaml(&yaml).expect("yaml parse");
         assert_eq!(r.kind, "db-migration");
         assert!(r.verify_root(None));
@@ -1000,7 +970,10 @@ artifact_hash: bbbb
 control_hash:  cccc
 generated_at:  2026-05-19T12:00:00Z
 "#
-        .replace("ROOT", &compose_root("bbbb", Some("cccc"), "aaaa", None));
+        .replace(
+            "ROOT",
+            &three_pillar::compose_root("bbbb", Some("cccc"), "aaaa", None),
+        );
         assert!(ReceiptEnvelope::parse_either(&yaml).is_ok());
     }
 
@@ -1267,7 +1240,7 @@ generated_at:  2026-05-19T12:00:00Z
         for control in ["", "control-hash-cccc"] {
             let env = ReceiptEnvelope::build("test-suite", "i", "a", control, None);
             // `verify_root` composes through the inherent method AND
-            // through the same `compose_root(&artifact, control_opt,
+            // through the same `three_pillar::compose_root(&artifact, control_opt,
             // &intent, previous)` skeleton `build` binds — so the
             // envelope must verify against its own composed root.
             assert!(

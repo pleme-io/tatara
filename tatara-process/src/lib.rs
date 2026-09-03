@@ -43,6 +43,7 @@ pub mod spec;
 pub mod status;
 pub mod table;
 pub mod tagged_union;
+pub mod three_pillar;
 pub mod time;
 
 pub mod prelude {

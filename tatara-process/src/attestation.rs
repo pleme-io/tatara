@@ -1,9 +1,23 @@
 //! Three-pillar BLAKE3 attestation — wire-compatible with
 //! `tatara_engine::domain::attestation::ConvergenceAttestation`.
+//!
+//! Every BLAKE3-side operation (compose, verify) rides through the
+//! substrate primitive [`crate::three_pillar`] — pre-lift the same
+//! domain-tagged chain + constant-time comparator lived at TWO
+//! sites (here + `crate::receipt`), each with its own private
+//! `DOMAIN_TAG`, `composed_hex`/`compose_root` fn, and
+//! `constant_time_eq` body. Post-lift the theorem-critical
+//! composition + the comparator live at ONE substrate owner so a
+//! future CRD-version bump or a comparator normalization lands at
+//! one edit rather than two silently divergent ones. See the
+//! module-doc of [`crate::three_pillar`] for the full lift
+//! narrative.
 
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+
+use crate::three_pillar;
 
 /// Attestation written to `Process.status.attestation` after each convergence cycle.
 ///
@@ -38,8 +52,6 @@ pub struct ProcessAttestation {
     pub attested_at: DateTime<Utc>,
 }
 
-const DOMAIN_TAG: &[u8] = b"tatara-process/v1alpha1\n";
-
 impl ProcessAttestation {
     /// Compose an attestation from the three pillars + chain context.
     pub fn compose(
@@ -49,7 +61,7 @@ impl ProcessAttestation {
         previous_root: Option<String>,
         generation: u64,
     ) -> Self {
-        let composed_root = Self::composed_hex(
+        let composed_root = three_pillar::compose_root(
             &artifact_hash,
             control_hash.as_deref(),
             &intent_hash,
@@ -93,43 +105,14 @@ impl ProcessAttestation {
 
     /// Verify that `composed_root` is consistent with the pillars + `previous_root`.
     pub fn verify(&self) -> bool {
-        let recomputed = Self::composed_hex(
+        let recomputed = three_pillar::compose_root(
             &self.artifact_hash,
             self.control_hash.as_deref(),
             &self.intent_hash,
             self.previous_root.as_deref(),
         );
-        constant_time_eq(recomputed.as_bytes(), self.composed_root.as_bytes())
+        three_pillar::constant_time_eq(recomputed.as_bytes(), self.composed_root.as_bytes())
     }
-
-    fn composed_hex(
-        artifact: &str,
-        control: Option<&str>,
-        intent: &str,
-        previous: Option<&str>,
-    ) -> String {
-        let mut h = blake3::Hasher::new();
-        h.update(DOMAIN_TAG);
-        h.update(artifact.as_bytes());
-        h.update(b"\n");
-        h.update(control.unwrap_or("").as_bytes());
-        h.update(b"\n");
-        h.update(intent.as_bytes());
-        h.update(b"\n");
-        h.update(previous.unwrap_or("").as_bytes());
-        hex::encode(h.finalize().as_bytes())
-    }
-}
-
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut acc: u8 = 0;
-    for (x, y) in a.iter().zip(b.iter()) {
-        acc |= x ^ y;
-    }
-    acc == 0
 }
 
 #[cfg(test)]

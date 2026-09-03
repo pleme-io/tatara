@@ -85,7 +85,9 @@
 //!   the shift mechanically.
 
 use k8s_openapi::api::core::v1::ConfigMap;
+use kube::api::ObjectMeta;
 use kube::{Api, Client};
+use std::collections::BTreeMap;
 
 /// Bind a namespace-scoped typed [`Api<ConfigMap>`] handle for
 /// [`Client`] + `ns`.
@@ -132,6 +134,97 @@ use kube::{Api, Client};
 /// across the four consumer sites).
 pub fn namespaced(client: Client, ns: &str) -> Api<ConfigMap> {
     Api::namespaced(client, ns)
+}
+
+/// Compose a namespaced [`ConfigMap`] resource carrying a typed
+/// `String → String` [`BTreeMap`] payload, optionally labeled.
+///
+/// Owns the wire-shape chain
+///
+/// ```text
+/// let cm = ConfigMap {
+///     metadata: ObjectMeta {
+///         name: Some(<name>.to_string()),
+///         namespace: Some(<ns>.to_string()),
+///         labels: <labels>,
+///         ..Default::default()
+///     },
+///     data: Some(<data>),
+///     ..Default::default()
+/// };
+/// ```
+///
+/// that every workspace consumer building a `String`-payload ConfigMap
+/// through the K8s wire format hand-authored pre-lift at each
+/// construction site. Peer to [`namespaced`] on the same axis — the
+/// namespaced binder covers the Api<ConfigMap> handle-side; this
+/// composer covers the resource-body side.
+///
+/// Pre-lift the 5-link struct-literal recurred at TWO hand-authored
+/// consumer sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// threshold:
+/// - `tatara-closed-loop-probe::main::write_receipt` — the closed-
+///   loop auth probe's receipt-CM writer. Labeled with
+///   `"tatara.pleme.io/receipt" → "tatara-receipt/v1"` so operators
+///   can `kubectl get cm -l tatara.pleme.io/receipt=tatara-receipt/v1`.
+/// - `tatara-export-worker::main::write_receipt` — the export
+///   worker's receipt-CM writer. No labels (SSA writer against a name
+///   the operator already knows via the ExportSpec channel).
+///
+/// Each site consumes the returned [`ConfigMap`] either through a
+/// `crate::create::default(&api, &cm).await` writer chain (the
+/// closed-loop-probe consumer's create-then-409-patch idempotent
+/// write) or an `api.patch(name, &pp, &Patch::Apply(&cm))` SSA-writer
+/// chain (the export-worker consumer's SSA-side apply) — the composer
+/// returns a fresh owned `ConfigMap` verbatim so the downstream write-
+/// verb dispatch rides unchanged.
+///
+/// The `labels` slot is [`Option`]-shaped so consumers that need no
+/// metadata labels pass `None` and get an unlabeled ObjectMeta, while
+/// consumers that need labels pass `Some(<map>)` and get them stamped
+/// on the ObjectMeta — matching the underlying [`ObjectMeta`]
+/// field's own `Option<BTreeMap<String, String>>` shape (a `Some(<empty
+/// map>)` and `None` are distinguishable at the K8s API server, so
+/// the composer surfaces both shapes rather than collapsing them).
+///
+/// The `binary_data` slot on [`ConfigMap`] rides `..Default::default()`
+/// — both hand-authored consumer sites emit `None` (either implicit
+/// via their own `..Default::default()` at the export-worker site, or
+/// explicit as `Option::<BTreeMap<String, ByteString>>::None` at the
+/// same site pre-lift, which is byte-equivalent to the implicit
+/// default). A future binary-payload writer composes a peer
+/// `with_binary_data` primitive on this module rather than widening
+/// this one — the string-payload posture (`data: Some(<map>)`) is
+/// the invariant this composer names.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// 5-link struct-literal chain recurred at 2 hand-authored sites past
+/// the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and is lifted onto
+/// the ONE workspace-wide substrate owner here). THEORY.md §II.1
+/// invariant 5 (composition preserves proofs — the pin block below
+/// binds the composer at fail-before-pass-after granularity, so a
+/// regression that swapped a slot's default (`data: None` when a
+/// consumer expected `Some(<data>)`, `metadata.name: None` when the
+/// K8s API server needs a name for the create-verb call, `labels`
+/// leaking off the passed slot into a hard-coded map) surfaces at
+/// `configmap::tests::*` rather than as silent operator-facing
+/// receipt-writer skew across the two consumer sites).
+pub fn with_data(
+    name: &str,
+    ns: &str,
+    data: BTreeMap<String, String>,
+    labels: Option<BTreeMap<String, String>>,
+) -> ConfigMap {
+    ConfigMap {
+        metadata: ObjectMeta {
+            name: Some(name.to_string()),
+            namespace: Some(ns.to_string()),
+            labels,
+            ..Default::default()
+        },
+        data: Some(data),
+        ..Default::default()
+    }
 }
 
 #[cfg(test)]
@@ -223,6 +316,135 @@ mod tests {
         assert_eq!(
             via_direct as usize, via_direct as usize,
             "hand-authored chain fn-pointer is stable across evaluations",
+        );
+    }
+
+    // ─── ConfigMap::with_data substrate pins ─────────────────────────
+    //
+    // The composer [`with_data`] binds the wire-shape 5-link struct-
+    // literal `ConfigMap { metadata: ObjectMeta { name: Some(<name>),
+    // namespace: Some(<ns>), labels: <labels>, ..Default::default() },
+    // data: Some(<data>), ..Default::default() }` at ONE substrate site
+    // across TWO consumer callsites (closed-loop-probe receipt writer,
+    // export-worker receipt writer). These pins bind the observable
+    // slots (name-into-Some-metadata, ns-into-Some-metadata, labels-
+    // slot-preserved, data-into-Some-body, binary_data-default-None)
+    // at fail-before-pass-after granularity so a regression that
+    // drifted any slot (name silently dropped so the K8s API server's
+    // create-verb call rejects a nameless resource; labels leaking off
+    // the passed slot into a hard-coded map that would mis-label the
+    // receipt-CM operators kubectl-select on; data slotted into
+    // `binary_data` instead of `data` so the JSON receipt reader gates
+    // in `tatara-reconciler::boundary::verify_receipt_cm` see a missing
+    // key) surfaces HERE rather than as silent operator-facing skew at
+    // the two consumer sites.
+
+    #[test]
+    fn with_data_signature_binds_borrowed_name_and_ns_string_data_and_option_labels() {
+        // The composer's signature binds `name: &str` + `ns: &str` on
+        // the input side (both hand-authored consumer sites pass a
+        // borrowed `&str` field — the closed-loop-probe passes
+        // `args.receipt_config_map` + `args.receipt_namespace` through
+        // its `write_receipt(envelope, cm_name: &str, ns: &str)`
+        // signature; the export-worker passes `&str` slice fields
+        // through its `write_receipt(kube, namespace: &str, configmap:
+        // &str, ...)` signature). `data: BTreeMap<String, String>` on
+        // the payload slot (both consumers build a `BTreeMap<String,
+        // String>` via `data.insert(<key>.to_string(), <val>)`).
+        // `labels: Option<BTreeMap<String, String>>` on the labels
+        // slot (the closed-loop-probe passes `Some(BTreeMap::from([...]))`;
+        // the export-worker passes `None`). Return `ConfigMap`
+        // matches every downstream write-verb dispatch's owned-input
+        // slot.
+        //
+        // A regression that widened `name`/`ns` to `String` (which
+        // would force both callsites to `.to_string()` at the boundary,
+        // moving allocation from the composer's `to_string()` into
+        // the caller's site — a per-site perf regression that also
+        // fights the `&str`-fields-in-args idiom the callers thread),
+        // narrowed the `labels` slot away from `Option` (which would
+        // force the no-label caller to pass an empty map that
+        // structurally differs from `None` at the K8s API server —
+        // an unlabeled ObjectMeta vs an `ObjectMeta` with an empty
+        // labels map are distinct wire shapes), or narrowed the
+        // return type off `ConfigMap` (which would break the SSA
+        // `Patch::Apply(&cm)` slot the export-worker chains through)
+        // fails this coercion at compile time.
+        let _witness: fn(
+            &str,
+            &str,
+            BTreeMap<String, String>,
+            Option<BTreeMap<String, String>>,
+        ) -> ConfigMap = with_data;
+    }
+
+    #[test]
+    fn with_data_stamps_name_namespace_data_and_default_binary_data_when_no_labels() {
+        // Byte-shape parity witness against the export-worker's pre-
+        // lift 5-link struct literal (`ConfigMap { metadata:
+        // ObjectMeta { name: Some(<name>.to_string()), namespace:
+        // Some(<ns>.to_string()), ..Default::default() }, data:
+        // Some(<data>), binary_data: None, ..Default::default() }`) —
+        // every observable slot the pre-lift chain stamped is present
+        // in the composer's output with the same value.
+        let mut data = BTreeMap::new();
+        data.insert("receipt.yaml".to_string(), "envelope payload".to_string());
+
+        let cm = with_data("export-run-1", "tatara-system", data.clone(), None);
+
+        assert_eq!(
+            cm.metadata.name.as_deref(),
+            Some("export-run-1"),
+            "name-slot rides `Some(<name>.to_string())` at the composer",
+        );
+        assert_eq!(
+            cm.metadata.namespace.as_deref(),
+            Some("tatara-system"),
+            "ns-slot rides `Some(<ns>.to_string())` at the composer",
+        );
+        assert!(
+            cm.metadata.labels.is_none(),
+            "labels-slot preserves the `None` the export-worker consumer passes — an empty map would be a distinct wire shape",
+        );
+        assert_eq!(
+            cm.data.as_ref(),
+            Some(&data),
+            "data-slot rides `Some(<data>)` at the composer — the receipt payload the reader gates on",
+        );
+        assert!(
+            cm.binary_data.is_none(),
+            "binary_data rides `..Default::default()` = `None` — the export-worker's explicit `Option::<BTreeMap<String, ByteString>>::None` pre-lift is byte-equivalent",
+        );
+    }
+
+    #[test]
+    fn with_data_preserves_passed_labels_map_verbatim_when_some() {
+        // Byte-shape parity witness against the closed-loop-probe's
+        // pre-lift 5-link struct literal (`ConfigMap { metadata:
+        // ObjectMeta { name: Some(<name>.into()), namespace:
+        // Some(<ns>.into()), labels: Some(BTreeMap::from([...])),
+        // ..Default::default() }, data: Some(<data>),
+        // ..Default::default() }`) — the labels map the caller passes
+        // rides through to the ObjectMeta verbatim (no key rename, no
+        // value coercion, no default injection of unrelated labels).
+        let mut data = BTreeMap::new();
+        data.insert("receipt.json".to_string(), "{}".to_string());
+        let labels = BTreeMap::from([(
+            "tatara.pleme.io/receipt".to_string(),
+            "tatara-receipt/v1".to_string(),
+        )]);
+
+        let cm = with_data(
+            "closed-loop-probe-receipt",
+            "probe-ns",
+            data,
+            Some(labels.clone()),
+        );
+
+        assert_eq!(
+            cm.metadata.labels.as_ref(),
+            Some(&labels),
+            "labels-slot preserves the passed map verbatim — a regression that dropped the tatara.pleme.io/receipt label would silently break operator kubectl-selectors",
         );
     }
 }

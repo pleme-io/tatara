@@ -21,8 +21,6 @@
 
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
-use k8s_openapi::api::core::v1::ConfigMap;
-use k8s_openapi::ByteString;
 use kube::api::Patch;
 use kube::Client;
 use std::collections::BTreeMap;
@@ -381,16 +379,22 @@ async fn write_receipt(
     let api = tatara_process::configmap::namespaced(kube.clone(), namespace);
     let mut data = BTreeMap::new();
     data.insert(key.to_string(), payload.to_string());
-    let cm = ConfigMap {
-        metadata: kube::api::ObjectMeta {
-            name: Some(configmap.to_string()),
-            namespace: Some(namespace.to_string()),
-            ..Default::default()
-        },
-        data: Some(data),
-        binary_data: Option::<BTreeMap<String, ByteString>>::None,
-        ..Default::default()
-    };
+    // Wire-shape 5-link `ConfigMap { metadata: ObjectMeta { name,
+    // namespace, ..Default }, data: Some(<data>), ..Default }`
+    // composition rides the substrate primitive
+    // `tatara_process::configmap::with_data` — pre-lift this was a
+    // hand-authored struct literal, one of TWO workspace-wide
+    // restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold (peer at `tatara-closed-loop-probe::main::
+    // write_receipt`, which stamps its own receipt-CM through the
+    // same wire shape with a `Some(<labels>)` — the composer's
+    // `labels: Option<...>` slot preserves both consumers' postures,
+    // this site passes `None`). Post-lift the ConfigMap-body
+    // composition lives at ONE substrate owner (peer of
+    // `configmap::namespaced` on the same axis — the namespaced
+    // binder covers the Api<ConfigMap> handle-side; this composer
+    // covers the resource-body side).
+    let cm = tatara_process::configmap::with_data(configmap, namespace, data, None);
     // SSA-side wire-posture rides through the substrate primitive
     // `tatara_process::patch::apply_patch_params` — pre-lift this was
     // a hand-authored 2-link `PatchParams::apply("tatara-export-

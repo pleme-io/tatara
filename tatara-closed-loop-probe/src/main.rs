@@ -13,7 +13,6 @@
 
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
-use k8s_openapi::api::core::v1::ConfigMap;
 use kube::Client;
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -197,19 +196,30 @@ async fn write_receipt(envelope: &ReceiptEnvelope, cm_name: &str, ns: &str) -> R
     );
 
     // Try create-or-patch — idempotent across re-runs.
-    let cm = ConfigMap {
-        metadata: kube::core::ObjectMeta {
-            name: Some(cm_name.into()),
-            namespace: Some(ns.into()),
-            labels: Some(BTreeMap::from([(
-                "tatara.pleme.io/receipt".into(),
-                "tatara-receipt/v1".into(),
-            )])),
-            ..Default::default()
-        },
-        data: Some(data),
-        ..Default::default()
-    };
+    //
+    // Wire-shape 5-link `ConfigMap { metadata: ObjectMeta { name,
+    // namespace, labels, ..Default }, data: Some(<data>),
+    // ..Default }` composition rides the substrate primitive
+    // `tatara_process::configmap::with_data` — pre-lift this was a
+    // hand-authored struct literal, one of TWO workspace-wide
+    // restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold (peer at `tatara-export-worker::main::write_receipt`,
+    // which stamps its own receipt-CM through the same wire shape
+    // without labels — the composer's `labels: Option<...>` slot
+    // preserves both consumers' postures). Post-lift the ConfigMap-
+    // body composition lives at ONE substrate owner (peer of
+    // `configmap::namespaced` on the same axis — the namespaced
+    // binder covers the Api<ConfigMap> handle-side; this composer
+    // covers the resource-body side).
+    let cm = tatara_process::configmap::with_data(
+        cm_name,
+        ns,
+        data,
+        Some(BTreeMap::from([(
+            "tatara.pleme.io/receipt".into(),
+            "tatara-receipt/v1".into(),
+        )])),
+    );
 
     // Create-verb dispatch rides the substrate primitive
     // `tatara_process::create::default` — pre-lift this was a hand-

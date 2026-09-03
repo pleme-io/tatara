@@ -4804,7 +4804,7 @@ mod tests {
         // than as silent skew at the pool reconciler's per-member
         // entered-state-at seed comparison against `Utc::now()`
         // downstream at `pool_phase_from_members`.
-        let anchor = Utc::now() - chrono::Duration::seconds(720);
+        let anchor = crate::time::seconds_ago(720);
         let p = process_with_phase_since(Some(anchor));
         assert_eq!(p.observed_phase_since(), Some(anchor));
     }
@@ -4827,7 +4827,7 @@ mod tests {
         // `created_at` seed) would surface here as two consecutive
         // calls that returned distinct `Some(now_1)` /
         // `Some(now_2)` values.
-        let anchor = Utc::now() - chrono::Duration::seconds(5);
+        let anchor = crate::time::seconds_ago(5);
         let p = process_with_phase_since(Some(anchor));
         let a = p.observed_phase_since();
         let b = p.observed_phase_since();
@@ -4867,7 +4867,7 @@ mod tests {
         let p = process_with_phase_since(None);
         assert_eq!(p.observed_phase_since(), pre_lift(&p));
         // Populated status, populated slot.
-        let anchor = Utc::now() - chrono::Duration::seconds(90);
+        let anchor = crate::time::seconds_ago(90);
         let p = process_with_phase_since(Some(anchor));
         assert_eq!(p.observed_phase_since(), pre_lift(&p));
     }
@@ -4921,7 +4921,7 @@ mod tests {
         // on the metadata-timestamp side — both bind the
         // composition shape at the callsite so a substrate-side
         // refactor cannot silently break the tail semantics.
-        let anchor = Utc::now() - chrono::Duration::seconds(30);
+        let anchor = crate::time::seconds_ago(30);
         // Populated corner: substrate returns `Some(anchor)` and
         // the composed tail returns `anchor` (fallback silent).
         let p = process_with_phase_since(Some(anchor));
@@ -5104,7 +5104,7 @@ mod tests {
         // returns it as `Some(datetime)` — hiding the `.0` field-access
         // every pre-lift consumer restated to reach the underlying
         // instant.
-        let anchor = Utc::now() - chrono::Duration::seconds(300);
+        let anchor = crate::time::seconds_ago(300);
         let p = creation_stamped_process(anchor);
         assert_eq!(p.created_at(), Some(anchor));
     }
@@ -5146,7 +5146,7 @@ mod tests {
         p.metadata.creation_timestamp = None;
         assert_eq!(p.created_at(), pre_lift(&p));
         // Populated slot.
-        let anchor = Utc::now() - chrono::Duration::seconds(42);
+        let anchor = crate::time::seconds_ago(42);
         let p = creation_stamped_process(anchor);
         assert_eq!(p.created_at(), pre_lift(&p));
     }
@@ -5202,7 +5202,7 @@ mod tests {
         // without a special-case branch at each consumer.
         let mut p = Process::new("api", empty_spec());
         p.metadata.creation_timestamp = None;
-        let fallback = Utc::now() - chrono::Duration::seconds(42);
+        let fallback = crate::time::seconds_ago(42);
         assert_eq!(p.created_at_or(fallback), fallback);
     }
 
@@ -5216,7 +5216,7 @@ mod tests {
         // when_slot_is_populated` — that pin binds the pure projection,
         // this pin binds the composer's pass-through on the same
         // populated corner.
-        let anchor = Utc::now() - chrono::Duration::seconds(300);
+        let anchor = crate::time::seconds_ago(300);
         let p = creation_stamped_process(anchor);
         let unrelated_fallback = Utc::now() + chrono::Duration::seconds(9_999);
         assert_eq!(p.created_at_or(unrelated_fallback), anchor);
@@ -5233,13 +5233,13 @@ mod tests {
         // `created_at_is_a_pure_projection` pin; both bind the pure-
         // projection / pure-composer discipline on the ONE substrate
         // accessor per axis.
-        let fallback = Utc::now() - chrono::Duration::seconds(7);
+        let fallback = crate::time::seconds_ago(7);
         // Missing slot.
         let mut p = Process::new("x", empty_spec());
         p.metadata.creation_timestamp = None;
         assert_eq!(p.created_at_or(fallback), p.created_at_or(fallback));
         // Populated slot.
-        let anchor = Utc::now() - chrono::Duration::seconds(120);
+        let anchor = crate::time::seconds_ago(120);
         let p = creation_stamped_process(anchor);
         assert_eq!(p.created_at_or(fallback), p.created_at_or(fallback));
     }
@@ -5260,13 +5260,13 @@ mod tests {
         fn pre_lift(p: &Process, fallback: DateTime<Utc>) -> DateTime<Utc> {
             p.created_at().unwrap_or(fallback)
         }
-        let fallback = Utc::now() - chrono::Duration::seconds(13);
+        let fallback = crate::time::seconds_ago(13);
         // Missing slot.
         let mut p = Process::new("x", empty_spec());
         p.metadata.creation_timestamp = None;
         assert_eq!(p.created_at_or(fallback), pre_lift(&p, fallback));
         // Populated slot.
-        let anchor = Utc::now() - chrono::Duration::seconds(42);
+        let anchor = crate::time::seconds_ago(42);
         let p = creation_stamped_process(anchor);
         assert_eq!(p.created_at_or(fallback), pre_lift(&p, fallback));
     }
@@ -5290,7 +5290,7 @@ mod tests {
         // a per-cluster prefix offset, a hardcoded epoch) would
         // surface at the second half of this pin.
         // Populated corner: byte-identical to the observed anchor.
-        let anchor = Utc::now() - chrono::Duration::seconds(600);
+        let anchor = crate::time::seconds_ago(600);
         let p = creation_stamped_process(anchor);
         assert_eq!(p.created_at_or(Utc::now()), anchor);
         // Missing corner: within a two-second wall-clock window.

@@ -170,7 +170,7 @@ mod tests {
         phase: ProcessPhase,
         age_secs: i64,
     ) -> Candidate<'a> {
-        let created_at = Utc::now() - chrono::Duration::seconds(age_secs);
+        let created_at = tatara_process::time::seconds_ago(age_secs);
         Candidate {
             process_ref: format!(
                 "{}/{}",
@@ -233,7 +233,7 @@ mod tests {
         let current = ClaimRecord {
             holder: "ns/a".into(),
             pid: "pid-a".into(),
-            granted_at: Utc::now() - chrono::Duration::seconds(500),
+            granted_at: tatara_process::time::seconds_ago(500),
             priority: 100,
         };
         let d = decide_claim_for("k", Some(&current), &c, Utc::now());
@@ -253,7 +253,7 @@ mod tests {
         let current = ClaimRecord {
             holder: "ns/a".into(),
             pid: "pid-a".into(),
-            granted_at: Utc::now() - chrono::Duration::seconds(500),
+            granted_at: tatara_process::time::seconds_ago(500),
             priority: 100,
         };
         let d = decide_claim_for("k", Some(&current), &c, Utc::now());
@@ -274,7 +274,7 @@ mod tests {
         let current = ClaimRecord {
             holder: "ns/a".into(),
             pid: "pid-a".into(),
-            granted_at: Utc::now() - chrono::Duration::seconds(500),
+            granted_at: tatara_process::time::seconds_ago(500),
             priority: 50,
         };
         let d = decide_claim_for("k", Some(&current), &c, Utc::now());

@@ -221,7 +221,7 @@ mod tests {
         PoolMember {
             process_name: name.into(),
             state,
-            entered_state_at: Utc::now() - chrono::Duration::seconds(age_secs),
+            entered_state_at: tatara_process::time::seconds_ago(age_secs),
             allocation_ref: None,
         }
     }

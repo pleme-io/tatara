@@ -126,7 +126,7 @@ pub mod prelude {
     pub use crate::table::{
         ClaimRecord, ProcessEntry, ProcessTable, ProcessTableSpec, ProcessTableStatus,
     };
-    pub use crate::time::elapsed_since;
+    pub use crate::time::{elapsed_since, seconds_ago};
     pub use crate::{Annotated, DeletionTombstoned, NamespacedApiCoordinates};
 }
 
@@ -1614,9 +1614,7 @@ mod deletion_tombstoned_tests {
         // substrate owner and the pre-lift consumer.
         let mut cases: Vec<Option<Time>> = vec![None];
         cases.push(Some(Time(chrono::Utc::now())));
-        cases.push(Some(Time(
-            chrono::Utc::now() - chrono::Duration::seconds(3600),
-        )));
+        cases.push(Some(Time(crate::time::seconds_ago(3600))));
 
         for ts in cases {
             let mut a = EphemeralAllocation::new("pr-42-demo", empty_alloc_spec());

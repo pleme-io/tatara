@@ -270,7 +270,7 @@ mod tests {
         PoolMemberSnapshot {
             process_name: name.into(),
             phase,
-            created_at: Utc::now() - chrono::Duration::seconds(age_secs),
+            created_at: tatara_process::time::seconds_ago(age_secs),
         }
     }
 

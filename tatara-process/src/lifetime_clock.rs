@@ -467,7 +467,10 @@ mod tests {
         };
         let mut p = Process::new("e", spec);
         p.metadata.namespace = Some("ns".into());
-        let creation = Utc::now() - chrono::Duration::seconds(age_secs);
+        // Routes through the ONE substrate primitive `crate::time::
+        // seconds_ago` — one of 21 pre-lift exact-match sites past the
+        // ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold.
+        let creation = crate::time::seconds_ago(age_secs);
         p.metadata.creation_timestamp = Some(Time(creation));
         p
     }

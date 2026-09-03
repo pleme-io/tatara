@@ -230,15 +230,7 @@ mod tests {
 
     fn empty_template() -> EphemeralSpec {
         EphemeralSpec {
-            aplicacao: AplicacaoIntent {
-                chart_ref: "oci://x".into(),
-                version: "1".into(),
-                profile: String::new(),
-                values_overlay: serde_json::Value::Null,
-                release_name: None,
-                target_namespace: None,
-                install_timeout: None,
-            },
+            aplicacao: AplicacaoIntent::chart_only("oci://x", "1"),
             ttl: "1h".into(),
             teardown: TeardownPolicy::Always,
             max_concurrent: 0,

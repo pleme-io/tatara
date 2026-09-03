@@ -431,6 +431,102 @@ impl HelmLifecyclePolicy {
 }
 
 impl AplicacaoIntent {
+    /// Chart-pointer-only composer — the canonical minimal
+    /// `AplicacaoIntent` every fixture and default-shape callsite
+    /// restated pre-lift by binding only `(chart_ref, version)` and
+    /// leaving every remaining slot at its K8s-schema-default value
+    /// (`profile = ""`, `values_overlay = Value::Null`,
+    /// `release_name = target_namespace = install_timeout = None`).
+    ///
+    /// Pre-lift the 7-slot struct-literal was hand-authored at 14
+    /// workspace-wide sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold, each restating the SAME 5-slot default
+    /// tail after a caller-varying `(chart_ref, version)` pair:
+    ///
+    /// * `tatara-process` — 10 sites across `lib.rs` (3× `empty_template`
+    ///   in the ephemeral-spec / matrix / observer test blocks),
+    ///   `lifetime_clock.rs` (2× the ephemeral / permanent Process
+    ///   composer helpers), `tagged_union.rs` (1× the
+    ///   `IntentKind::Aplicacao` sample-intent arm), `pool.rs` (1×
+    ///   `empty_template`), and `intent.rs` (3× the `helm_intent`
+    ///   helper + the `aplicacao_plus_flux_is_ambiguous` fixture + the
+    ///   `IntentKind::Aplicacao` sample-intent-for arm).
+    /// * `tatara-pool-reconciler` — 4 sites across `router.rs`,
+    ///   `pool_decide.rs`, `desired.rs`, `allocation_decide.rs`
+    ///   (all `empty_template` fixtures seeding the pool + allocation
+    ///   convergence-decision test batteries).
+    /// * `tatara-reconciler` — 1 site in `render.rs`
+    ///   (`helmrepository_chartref_for_non_oci` production-shape
+    ///   fixture stamping the non-OCI chart-ref render path).
+    ///
+    /// All 14 sites walked the SAME 5-slot default tail — differing
+    /// only in the caller-varying `chart_ref` / `version` values
+    /// (`"oci://x"` / `"1"` on the majority test-fixture slice,
+    /// `"oci://ghcr.io/x"` / `"0.1.0"` on the `IntentKind` sample,
+    /// `"pleme-io/lareira-demo-app"` / `"0.5.5"` on the non-OCI
+    /// render pin). Post-lift each callsite reads
+    /// `AplicacaoIntent::chart_only(chart, version)` and the 5-slot
+    /// default tail lives at ONE substrate owner.
+    ///
+    /// The `impl Into<String>` argument form matches the pre-lift
+    /// call shape — every site that spelled `"oci://x".into()` +
+    /// `"1".into()` in the struct-literal continues to compile
+    /// unchanged, and callers with a live `String` (e.g. reading
+    /// from a caller-supplied fixture parameter) pass it through
+    /// without a `.to_string()` re-wrap.
+    ///
+    /// Return-form axis: `AplicacaoIntent` — the owned typed value
+    /// every consumer's downstream `Intent { aplicacao: Some(...), ..
+    /// }` / `EphemeralSpec { aplicacao: ..., .. }` binding stamps
+    /// verbatim, matching the pre-lift 7-slot struct-literal's return
+    /// shape exactly. The five default-tail slots reify the K8s
+    /// schema's own defaults (`profile` empty ⇒ chart profile default;
+    /// `values_overlay = Null` ⇒ pass-through; three `None` slots ⇒
+    /// server / chart-computed) so no consumer inherits a semantic
+    /// change from the lift.
+    ///
+    /// A future normalization of the "minimal AplicacaoIntent" default
+    /// — an added struct field with its own K8s-schema default, a
+    /// tightening of a `None` slot to a substrate-owned default value,
+    /// a per-workspace-default `install_timeout` override — lands at
+    /// THIS ONE substrate primitive and every downstream fixture /
+    /// default-shape consumer inherits the upgrade mechanically — no
+    /// per-site edit at any of the 14 listed callers or at future
+    /// consumers (a new pool-shard-flavor fixture, a new intent-axis
+    /// convergence probe, a per-tenant AplicacaoIntent minimal seed).
+    ///
+    /// Peer to [`Self::helm_lifecycle_policy`] +
+    /// [`Self::flux_reconcile_interval`] on the (COMPOSE, DERIVE)
+    /// axis: `chart_only` is the WRITE-side composer (stamp a minimal
+    /// `AplicacaoIntent`); the lifecycle + interval methods are the
+    /// READ-side derivers (project a substrate-default Flux policy /
+    /// cadence off an `AplicacaoIntent`). The three primitives
+    /// partition the `AplicacaoIntent` compose × derive surface at
+    /// the substrate.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the 5-slot default tail recurred at 14 hand-authored sites
+    /// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, spanning
+    /// three workspace crates, and is lifted onto the ONE workspace-
+    /// wide substrate owner here). THEORY.md §II.1 invariant 5
+    /// (composition preserves proofs — the pin block below binds the
+    /// primitive at fail-before-pass-after granularity so a
+    /// regression that drifted any of the five default-tail slots
+    /// surfaces at THESE pins rather than as silent fixture skew
+    /// across the 14 downstream consumers).
+    #[must_use]
+    pub fn chart_only(chart_ref: impl Into<String>, version: impl Into<String>) -> Self {
+        Self {
+            chart_ref: chart_ref.into(),
+            version: version.into(),
+            profile: String::new(),
+            values_overlay: serde_json::Value::Null,
+            release_name: None,
+            target_namespace: None,
+            install_timeout: None,
+        }
+    }
+
     /// Derive the Flux `HelmRelease.spec.{install,upgrade}` policy
     /// this intent publishes on BOTH slots. Pre-lift the reconciler's
     /// `render_aplicacao` restated the shape by hand via two adjacent
@@ -979,15 +1075,7 @@ mod tests {
                 ..Intent::default()
             },
             IntentKind::Aplicacao => Intent {
-                aplicacao: Some(AplicacaoIntent {
-                    chart_ref: "oci://ghcr.io/x".into(),
-                    version: "0.1.0".into(),
-                    profile: String::new(),
-                    values_overlay: serde_json::Value::Null,
-                    release_name: None,
-                    target_namespace: None,
-                    install_timeout: None,
-                }),
+                aplicacao: Some(AplicacaoIntent::chart_only("oci://ghcr.io/x", "0.1.0")),
                 ..Intent::default()
             },
             IntentKind::Guest => Intent {
@@ -1097,15 +1185,7 @@ mod tests {
     #[test]
     fn aplicacao_plus_flux_is_ambiguous() {
         let i = Intent {
-            aplicacao: Some(AplicacaoIntent {
-                chart_ref: "x".into(),
-                version: "1".into(),
-                profile: String::new(),
-                values_overlay: serde_json::Value::Null,
-                release_name: None,
-                target_namespace: None,
-                install_timeout: None,
-            }),
+            aplicacao: Some(AplicacaoIntent::chart_only("x", "1")),
             flux: Some(FluxIntent {
                 git_repository: "g".into(),
                 path: "p".into(),
@@ -1124,13 +1204,8 @@ mod tests {
 
     fn helm_intent(install_timeout: Option<&str>) -> AplicacaoIntent {
         AplicacaoIntent {
-            chart_ref: "oci://ghcr.io/pleme-io/charts/lareira-demo-app".into(),
-            version: "0.5.5".into(),
-            profile: String::new(),
-            values_overlay: serde_json::Value::Null,
-            release_name: None,
-            target_namespace: None,
             install_timeout: install_timeout.map(str::to_string),
+            ..AplicacaoIntent::chart_only("oci://ghcr.io/pleme-io/charts/lareira-demo-app", "0.5.5")
         }
     }
 
@@ -1287,5 +1362,101 @@ mod tests {
             seen.into_iter().next().as_deref(),
             Some(FLUX_HELM_DEFAULT_INTERVAL),
         );
+    }
+
+    // ─── AplicacaoIntent::chart_only substrate pins ─────────────────
+    //
+    // Bind the chart-pointer-only composer at fail-before-pass-after
+    // granularity so a regression that drifted any of the five
+    // default-tail slots (profile → non-empty, values_overlay → non-
+    // `Null`, any of the three `Option<String>` slots → `Some`),
+    // reshaped the two-argument surface, or swapped the positional
+    // slot order surfaces HERE rather than as silent fixture skew at
+    // the 14 downstream consumers.
+
+    #[test]
+    fn chart_only_binds_two_caller_slots_and_defaults_the_other_five() {
+        // Primary shape asserted end-to-end: the returned value
+        // carries the caller-supplied `(chart_ref, version)` and the
+        // K8s-schema-default `("", Null, None, None, None)` tail. A
+        // regression that swapped the two positional slots would
+        // land `"1"` in `chart_ref` and `"oci://x"` in `version`;
+        // the byte-equality pin below catches that.
+        let a = AplicacaoIntent::chart_only("oci://x", "1");
+        assert_eq!(a.chart_ref, "oci://x");
+        assert_eq!(a.version, "1");
+        assert_eq!(a.profile, "");
+        assert_eq!(a.values_overlay, serde_json::Value::Null);
+        assert!(a.release_name.is_none());
+        assert!(a.target_namespace.is_none());
+        assert!(a.install_timeout.is_none());
+    }
+
+    #[test]
+    fn chart_only_matches_hand_authored_pre_lift_struct_literal_shape() {
+        // Byte-identical parity with the pre-lift 7-slot struct-
+        // literal every one of the 14 hand-authored sites restated.
+        // A regression that drifted the composer would surface HERE
+        // rather than as silent fixture skew at every downstream
+        // `empty_template` / `sample_intent_for` / `helm_intent`
+        // consumer. Swept across the three representative
+        // `(chart_ref, version)` shape families the pre-lift sites
+        // used (fixture stub `oci://x`/`1`; sample `oci://ghcr.io/x`
+        // / `0.1.0`; production non-OCI `pleme-io/lareira-demo-app`
+        // / `0.5.5`).
+        for (chart_ref, version) in [
+            ("oci://x", "1"),
+            ("oci://ghcr.io/x", "0.1.0"),
+            ("pleme-io/lareira-demo-app", "0.5.5"),
+            ("x", "1"),
+        ] {
+            let composed = AplicacaoIntent::chart_only(chart_ref, version);
+            let hand_authored = AplicacaoIntent {
+                chart_ref: chart_ref.into(),
+                version: version.into(),
+                profile: String::new(),
+                values_overlay: serde_json::Value::Null,
+                release_name: None,
+                target_namespace: None,
+                install_timeout: None,
+            };
+            assert_eq!(
+                serde_json::to_value(&composed).unwrap(),
+                serde_json::to_value(&hand_authored).unwrap(),
+                "composed and hand-authored must agree for ({chart_ref}, {version})"
+            );
+        }
+    }
+
+    #[test]
+    fn chart_only_accepts_string_and_str_uniformly() {
+        // The `impl Into<String>` argument form matches both the
+        // pre-lift `"literal".into()` shape AND callers with a live
+        // `String` (e.g. a fixture parameter). A regression that
+        // narrowed the argument type to `&str` or `String` would
+        // break one of the two shapes; this pin binds both.
+        let owned_chart = String::from("oci://y");
+        let owned_version = String::from("2");
+        let via_string = AplicacaoIntent::chart_only(owned_chart.clone(), owned_version.clone());
+        let via_str = AplicacaoIntent::chart_only("oci://y", "2");
+        assert_eq!(
+            serde_json::to_value(&via_string).unwrap(),
+            serde_json::to_value(&via_str).unwrap(),
+        );
+    }
+
+    #[test]
+    fn chart_only_composes_downstream_through_helm_lifecycle_policy_default_branch() {
+        // Cross-primitive coherence pin: an `AplicacaoIntent` built
+        // through `chart_only` has `install_timeout = None` and
+        // therefore rides the workspace-default branch of
+        // `helm_lifecycle_policy`. A regression that flipped
+        // `install_timeout` to `Some(_)` at the composer would
+        // silently un-default every downstream Helm policy; this
+        // pin binds the default-branch composition end-to-end.
+        let a = AplicacaoIntent::chart_only("oci://x", "1");
+        let policy = a.helm_lifecycle_policy();
+        assert_eq!(policy.timeout, HELM_LIFECYCLE_DEFAULT_TIMEOUT);
+        assert_eq!(policy.remediation.retries, HELM_LIFECYCLE_DEFAULT_RETRIES);
     }
 }

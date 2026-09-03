@@ -1068,15 +1068,7 @@ mod aplicacao_tests {
 
     #[test]
     fn helmrepository_chartref_for_non_oci() {
-        let a = AplicacaoIntent {
-            chart_ref: "pleme-io/lareira-demo-app".into(),
-            version: "0.5.5".into(),
-            profile: String::new(),
-            values_overlay: serde_json::Value::Null,
-            release_name: None,
-            target_namespace: None,
-            install_timeout: None,
-        };
+        let a = AplicacaoIntent::chart_only("pleme-io/lareira-demo-app", "0.5.5");
         let (resources, _) = render_aplicacao("p", "ns", &a);
         // No OCIRepository — just a HelmRelease pointing at a HelmRepository.
         assert_eq!(resources.len(), 1);

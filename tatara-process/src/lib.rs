@@ -1177,15 +1177,7 @@ mod namespaced_api_coordinates_tests {
         // — the workspace-wide minimal `EphemeralSpec` fixture the sister
         // reconciler tests already use for pool wiring exercised here.
         EphemeralSpec {
-            aplicacao: AplicacaoIntent {
-                chart_ref: "oci://x".into(),
-                version: "1".into(),
-                profile: String::new(),
-                values_overlay: serde_json::Value::Null,
-                release_name: None,
-                target_namespace: None,
-                install_timeout: None,
-            },
+            aplicacao: AplicacaoIntent::chart_only("oci://x", "1"),
             ttl: "1h".into(),
             teardown: TeardownPolicy::Always,
             max_concurrent: 0,
@@ -1498,15 +1490,7 @@ mod deletion_tombstoned_tests {
 
     fn empty_template() -> EphemeralSpec {
         EphemeralSpec {
-            aplicacao: AplicacaoIntent {
-                chart_ref: "oci://x".into(),
-                version: "1".into(),
-                profile: String::new(),
-                values_overlay: serde_json::Value::Null,
-                release_name: None,
-                target_namespace: None,
-                install_timeout: None,
-            },
+            aplicacao: AplicacaoIntent::chart_only("oci://x", "1"),
             ttl: "1h".into(),
             teardown: TeardownPolicy::Always,
             max_concurrent: 0,
@@ -1745,15 +1729,7 @@ mod annotated_tests {
 
     fn empty_template() -> EphemeralSpec {
         EphemeralSpec {
-            aplicacao: AplicacaoIntent {
-                chart_ref: "oci://x".into(),
-                version: "1".into(),
-                profile: String::new(),
-                values_overlay: serde_json::Value::Null,
-                release_name: None,
-                target_namespace: None,
-                install_timeout: None,
-            },
+            aplicacao: AplicacaoIntent::chart_only("oci://x", "1"),
             ttl: "1h".into(),
             teardown: TeardownPolicy::Always,
             max_concurrent: 0,

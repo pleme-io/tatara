@@ -2237,15 +2237,7 @@ mod tests {
                 ..Intent::default()
             },
             IntentKind::Aplicacao => Intent {
-                aplicacao: Some(AplicacaoIntent {
-                    chart_ref: "x".into(),
-                    version: "1".into(),
-                    profile: String::new(),
-                    values_overlay: serde_json::Value::Null,
-                    release_name: None,
-                    target_namespace: None,
-                    install_timeout: None,
-                }),
+                aplicacao: Some(AplicacaoIntent::chart_only("x", "1")),
                 ..Intent::default()
             },
             IntentKind::Guest => Intent {

@@ -1099,21 +1099,12 @@ mod qualified_process_ref_tests {
         // name)` positional contract surfaces HERE rather than as
         // silent drift at every downstream reconciler / export-
         // worker / pool-reconciler consumer.
-        use crate::classification::Classification;
         use crate::crd::{Process, ProcessSpec};
-        let spec = ProcessSpec {
-            identity: Default::default(),
-            classification: Classification::gate_compute(),
-            intent: Default::default(),
-            boundary: Default::default(),
-            compliance: Default::default(),
-            depends_on: vec![],
-            signals: Default::default(),
-            lifetime: Default::default(),
-            routing: None,
-            encapsulates: None,
-            suspended: false,
-        };
+        // Routes through the ONE substrate composer
+        // `ProcessSpec::gate_compute_defaults` — pre-lift this was a
+        // 12-line inline struct-literal restated verbatim inside this
+        // pin body.
+        let spec = ProcessSpec::gate_compute_defaults();
         let mut p = Process::new("ephemeral-demo", spec);
         p.metadata.namespace = Some("demo-ns".into());
         let (ns, name) = p.coordinates_or_defaults();
@@ -1492,13 +1483,11 @@ mod deletion_tombstoned_tests {
     //! sibling CRDs.
     use super::DeletionTombstoned;
     use crate::allocation::{AllocationSpec, EphemeralAllocation, Requestor};
-    use crate::classification::Classification;
     use crate::crd::{Process, ProcessSpec};
     use crate::ephemeral::EphemeralSpec;
-    use crate::intent::{AplicacaoIntent, Intent};
+    use crate::intent::AplicacaoIntent;
     use crate::lifetime::TeardownPolicy;
     use crate::pool::{EphemeralPool, PoolSelector, PoolSpec, ReturnPolicy};
-    use crate::spec::IdentitySpec;
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 
     fn empty_template() -> EphemeralSpec {
@@ -1559,22 +1548,12 @@ mod deletion_tombstoned_tests {
     }
 
     fn empty_process_spec() -> ProcessSpec {
-        // Mirrors the workspace-standard `empty_spec()` fixture in
-        // `crd.rs::tests` — the minimal `ProcessSpec` used across
-        // every substrate metadata-projection pin.
-        ProcessSpec {
-            identity: IdentitySpec::default(),
-            classification: Classification::gate_compute(),
-            intent: Intent::default(),
-            boundary: Default::default(),
-            compliance: Default::default(),
-            depends_on: vec![],
-            signals: Default::default(),
-            lifetime: Default::default(),
-            routing: None,
-            encapsulates: None,
-            suspended: false,
-        }
+        // Routes through the ONE substrate composer
+        // `ProcessSpec::gate_compute_defaults` — the minimal
+        // `ProcessSpec` used across every substrate metadata-projection
+        // pin. Pre-lift this was the 12-line struct-literal restated
+        // verbatim at every fixture in this pin family.
+        ProcessSpec::gate_compute_defaults()
     }
 
     // ── Missing tombstone (default fixture) — trait returns false ─────
@@ -1746,13 +1725,11 @@ mod annotated_tests {
     //! `controller_pool::process_belongs_to_pool`).
     use super::Annotated;
     use crate::allocation::{AllocationSpec, EphemeralAllocation, Requestor};
-    use crate::classification::Classification;
     use crate::crd::{Process, ProcessSpec};
     use crate::ephemeral::EphemeralSpec;
-    use crate::intent::{AplicacaoIntent, Intent};
+    use crate::intent::AplicacaoIntent;
     use crate::lifetime::TeardownPolicy;
     use crate::pool::{EphemeralPool, PoolSelector, PoolSpec, ReturnPolicy};
-    use crate::spec::IdentitySpec;
     use k8s_openapi::api::core::v1::ConfigMap;
     use std::collections::BTreeMap;
 
@@ -1814,19 +1791,11 @@ mod annotated_tests {
     }
 
     fn empty_process_spec() -> ProcessSpec {
-        ProcessSpec {
-            identity: IdentitySpec::default(),
-            classification: Classification::gate_compute(),
-            intent: Intent::default(),
-            boundary: Default::default(),
-            compliance: Default::default(),
-            depends_on: vec![],
-            signals: Default::default(),
-            lifetime: Default::default(),
-            routing: None,
-            encapsulates: None,
-            suspended: false,
-        }
+        // Routes through the ONE substrate composer
+        // `ProcessSpec::gate_compute_defaults` — sibling to the
+        // `empty_process_spec` fixture in the DeletionTombstoned pin
+        // module above and to `empty_spec` in `crd.rs::tests`.
+        ProcessSpec::gate_compute_defaults()
     }
 
     fn one_annotation(key: &str, value: &str) -> BTreeMap<String, String> {

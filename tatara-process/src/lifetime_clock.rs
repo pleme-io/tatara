@@ -431,16 +431,17 @@ pub fn requeue_with_ttl(process: &Process, now: DateTime<Utc>, default: Duration
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::classification::Classification;
     use crate::crd::ProcessSpec;
     use crate::intent::{AplicacaoIntent, Intent};
     use crate::lifetime::{EphemeralLifetime, Lifetime, TeardownPolicy};
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 
     fn ephemeral_process(ttl: &str, teardown: TeardownPolicy, age_secs: i64) -> Process {
+        // Struct-update through the ONE substrate composer
+        // `ProcessSpec::gate_compute_defaults` — pre-lift the nine
+        // other slots were hand-authored inline alongside the `intent`
+        // + `lifetime` overrides; post-lift the substrate owns them.
         let spec = ProcessSpec {
-            identity: Default::default(),
-            classification: Classification::gate_compute(),
             intent: Intent {
                 aplicacao: Some(AplicacaoIntent {
                     chart_ref: "oci://x".into(),
@@ -453,10 +454,6 @@ mod tests {
                 }),
                 ..Intent::default()
             },
-            boundary: Default::default(),
-            compliance: Default::default(),
-            depends_on: vec![],
-            signals: Default::default(),
             lifetime: Lifetime {
                 ephemeral: Some(EphemeralLifetime {
                     ttl: ttl.into(),
@@ -466,9 +463,7 @@ mod tests {
                 }),
                 ..Lifetime::default()
             },
-            routing: None,
-            encapsulates: None,
-            suspended: false,
+            ..ProcessSpec::gate_compute_defaults()
         };
         let mut p = Process::new("e", spec);
         p.metadata.namespace = Some("ns".into());
@@ -478,9 +473,12 @@ mod tests {
     }
 
     fn permanent_process() -> Process {
+        // Struct-update through the ONE substrate composer
+        // `ProcessSpec::gate_compute_defaults` — the ten other slots
+        // (identity / classification / boundary / compliance /
+        // depends_on / signals / lifetime / routing / encapsulates /
+        // suspended) ride the substrate; only `intent` is overridden.
         let spec = ProcessSpec {
-            identity: Default::default(),
-            classification: Classification::gate_compute(),
             intent: Intent {
                 aplicacao: Some(AplicacaoIntent {
                     chart_ref: "oci://x".into(),
@@ -493,14 +491,7 @@ mod tests {
                 }),
                 ..Intent::default()
             },
-            boundary: Default::default(),
-            compliance: Default::default(),
-            depends_on: vec![],
-            signals: Default::default(),
-            lifetime: Lifetime::default(),
-            routing: None,
-            encapsulates: None,
-            suspended: false,
+            ..ProcessSpec::gate_compute_defaults()
         };
         Process::new("e", spec)
     }

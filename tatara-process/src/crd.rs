@@ -1816,6 +1816,110 @@ impl Process {
     }
 }
 
+impl ProcessSpec {
+    /// Canonical minimum [`ProcessSpec`] — a [`Classification::gate_compute`]
+    /// classification with every other field parked at its [`Default`] —
+    /// the workspace-baseline spec every consumer that needed "a
+    /// `ProcessSpec` that just exists, with no domain-specific claim on
+    /// intent / boundary / lifetime / routing / encapsulates" hand-authored
+    /// as a 12-line struct-literal at scattered sites across the workspace.
+    ///
+    /// The composition is the two-primitive product of
+    /// [`Classification::gate_compute`] (the two axes with no `Default` — a
+    /// `Gate` point on the `Compute` substrate) with the `Default` impl on
+    /// every other slot: [`IdentitySpec`], [`Intent`], [`Boundary`],
+    /// [`ComplianceSpec`], `Vec<DependsOn>`, [`SignalPolicy`], [`Lifetime`],
+    /// `Option<RoutingSpec>`, `Option<EncapsulatesSpec>`, `bool`. The 11
+    /// defaulted axes ride at the sibling closed-set + `#[serde(default)]`
+    /// defaults the CRD already owns; the two `_or_default` /
+    /// `_or_placeholder` corners on the metadata axis stay closed at the
+    /// substrate ([`Process::coordinates_or_defaults`],
+    /// [`Process::name_or_placeholder`]) since this primitive builds the
+    /// `spec` half, not the `metadata` half.
+    ///
+    /// Pre-lift the 12-line `ProcessSpec { identity: <Default>,
+    /// classification: Classification::gate_compute(), intent: <Default>,
+    /// boundary: Default::default(), compliance: Default::default(),
+    /// depends_on: vec![], signals: Default::default(), lifetime:
+    /// Default::default(), routing: None, encapsulates: None, suspended:
+    /// false }` struct-literal recurred at EIGHT hand-authored sites past
+    /// the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold across four
+    /// crates, each restating the SAME 12-slot verbatim:
+    /// * `tatara-process::crd::tests::empty_spec` — the substrate test
+    ///   fixture that pins every `Process::*_or_*` metadata-projection
+    ///   primitive on the (return-form × fallback-shape) axis;
+    /// * `tatara-process::lib::tests::empty_process_spec` (×2) — the
+    ///   sibling fixture inside the `qualified_process_ref` +
+    ///   `DeletionTombstoned` / `Annotated` trait pin modules;
+    /// * `tatara-process::lib::tests` (one inline site in the
+    ///   `qualified_process_ref_composes_from_process_coordinates_or_defaults`
+    ///   pin) — restated the SAME 12-line block inside the test body;
+    /// * `tatara-reconciler::claim::tests::empty_process` — the claim-
+    ///   arbiter row-builder pin fixture;
+    /// * `tatara-pool-reconciler::controller_pool::tests` (×3) — the
+    ///   `empty_spec` fixture + two inline `process_to_member_state_*` pin
+    ///   sites that hand-composed the same 12-slot spec inline.
+    ///
+    /// Five more sites walked the SAME 12-slot shape but overrode ONE
+    /// field (intent, lifetime, or routing) inline and are lifted onto
+    /// the primitive via struct-update syntax
+    /// (`..ProcessSpec::gate_compute_defaults()`): the three
+    /// `tatara-reconciler::render` test-fixture helpers
+    /// (`render_through_top_level_intent_dispatch`, `process_with`,
+    /// `demo_process`) and the two `tatara-process::lifetime_clock`
+    /// helpers (`ephemeral_process`, `permanent_process`).
+    ///
+    /// Post-lift each callsite reads `ProcessSpec::gate_compute_defaults()`
+    /// (or `ProcessSpec { <slot>: <value>,
+    /// ..ProcessSpec::gate_compute_defaults() }` for the override sites);
+    /// a future workspace-wide baseline shift (a new `#[serde(default)]`
+    /// on a promoted [`Intent`] variant, a rename of a defaulted slot, a
+    /// per-baseline compliance overlay stamping through the spec) lands
+    /// at ONE substrate function here and every downstream consumer
+    /// inherits the upgrade mechanically. The current pin ties the
+    /// classification axis to the sibling [`Classification::gate_compute`]
+    /// primitive so a future change to that baseline surfaces at this
+    /// primitive's tests rather than as silent drift across thirteen
+    /// independent callsites.
+    ///
+    /// Sibling to [`Classification::gate_compute`] on the composition-
+    /// depth axis — that primitive owns the ONE-axis-slice construction
+    /// (the 5-slot [`Classification`] value); this primitive owns the
+    /// FULL-spec construction (the 11-slot [`ProcessSpec`] value that
+    /// wraps the classification-slice plus every other slot at
+    /// `Default`). A future peer `ProcessSpec::observability_stack()` or
+    /// similar named variant lands as a sibling method here when a
+    /// second unremarkable-baseline shape opens.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+    /// 12-line struct-literal shape recurred at EIGHT hand-authored sites
+    /// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger and is lifted
+    /// onto ONE workspace-wide owner here). THEORY.md §II.1 invariant 5
+    /// (composition preserves proofs — a regression that drifted the
+    /// baseline axis choice at only one consumer, or that broke the
+    /// sibling-default correspondence with [`Classification::gate_compute`],
+    /// surfaces at this primitive's tests rather than as silent operator-
+    /// visible skew between the eight exact-match test-fixtures + the
+    /// five override sites whose struct-update composition depends on the
+    /// shape).
+    #[must_use]
+    pub fn gate_compute_defaults() -> Self {
+        Self {
+            identity: IdentitySpec::default(),
+            classification: Classification::gate_compute(),
+            intent: Intent::default(),
+            boundary: Boundary::default(),
+            compliance: ComplianceSpec::default(),
+            depends_on: Vec::new(),
+            signals: SignalPolicy::default(),
+            lifetime: Lifetime::default(),
+            routing: None,
+            encapsulates: None,
+            suspended: false,
+        }
+    }
+}
+
 /// Process status — every field optional until the reconciler writes it.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -1931,19 +2035,13 @@ mod tests {
     // builder / render owner-metadata seed.
 
     fn empty_spec() -> ProcessSpec {
-        ProcessSpec {
-            identity: IdentitySpec::default(),
-            classification: Classification::gate_compute(),
-            intent: Intent::default(),
-            boundary: Default::default(),
-            compliance: Default::default(),
-            depends_on: vec![],
-            signals: Default::default(),
-            lifetime: Default::default(),
-            routing: None,
-            encapsulates: None,
-            suspended: false,
-        }
+        // Routes through the ONE substrate composer
+        // `ProcessSpec::gate_compute_defaults` — pre-lift this was the
+        // 12-line struct-literal restated verbatim at every fixture in
+        // this pin family, one of EIGHT hand-authored exact-match sites
+        // past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold across
+        // four crates.
+        ProcessSpec::gate_compute_defaults()
     }
 
     #[test]
@@ -5381,5 +5479,155 @@ mod tests {
             (Some(x), Some(y)) => assert!(std::ptr::eq(x, y)),
             other => panic!("expected two Some borrows into the same slot, got {other:?}"),
         }
+    }
+
+    // ── ProcessSpec::gate_compute_defaults substrate pins ───────────────
+    //
+    // The 12-line `ProcessSpec { identity: <Default>, classification:
+    // Classification::gate_compute(), intent: <Default>, boundary:
+    // Default::default(), compliance: Default::default(), depends_on:
+    // vec![], signals: Default::default(), lifetime: Default::default(),
+    // routing: None, encapsulates: None, suspended: false }` struct-
+    // literal was open-coded verbatim at eight hand-authored callsites
+    // before this primitive closed it. These pins bind the composed
+    // shape at fail-before-pass-after granularity so a regression that
+    // drifted the classification baseline, promoted a defaulted slot to
+    // a non-default, or leaked a non-baseline slot into the substrate
+    // composer surfaces HERE rather than as silent operator-visible
+    // drift across every test fixture that keys assertions on the
+    // shape.
+    fn hand_authored_pre_lift() -> ProcessSpec {
+        ProcessSpec {
+            identity: IdentitySpec::default(),
+            classification: Classification::gate_compute(),
+            intent: Intent::default(),
+            boundary: Default::default(),
+            compliance: Default::default(),
+            depends_on: vec![],
+            signals: Default::default(),
+            lifetime: Default::default(),
+            routing: None,
+            encapsulates: None,
+            suspended: false,
+        }
+    }
+
+    #[test]
+    fn gate_compute_defaults_composes_the_classification_baseline() {
+        // Primary shape: the classification axis rides the sibling
+        // `Classification::gate_compute` primitive verbatim. A
+        // regression that flipped the classification baseline (a new
+        // `#[default]` on the sibling closed-set, a re-import through a
+        // different composer) surfaces HERE rather than at every
+        // downstream fixture whose assertions key on
+        // `spec.classification`.
+        let s = ProcessSpec::gate_compute_defaults();
+        assert_eq!(s.classification, Classification::gate_compute());
+    }
+
+    #[test]
+    fn gate_compute_defaults_defaulted_slots_ride_sibling_defaults() {
+        // Pins the sibling-default correspondence the doc comment
+        // names — a regression that promoted any defaulted slot to a
+        // non-default (a new `#[default]` on `Intent`, a `Lifetime`
+        // baseline shift, a per-field overlay stamping through the
+        // primitive) would move the baseline HERE rather than at every
+        // downstream consumer.
+        let s = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            serde_json::to_value(&s.identity).unwrap(),
+            serde_json::to_value(IdentitySpec::default()).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(&s.intent).unwrap(),
+            serde_json::to_value(Intent::default()).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(&s.boundary).unwrap(),
+            serde_json::to_value(Boundary::default()).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(&s.compliance).unwrap(),
+            serde_json::to_value(ComplianceSpec::default()).unwrap()
+        );
+        assert!(s.depends_on.is_empty());
+        assert_eq!(
+            serde_json::to_value(&s.signals).unwrap(),
+            serde_json::to_value(SignalPolicy::default()).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_value(&s.lifetime).unwrap(),
+            serde_json::to_value(Lifetime::default()).unwrap()
+        );
+        assert!(s.routing.is_none());
+        assert!(s.encapsulates.is_none());
+        assert!(!s.suspended);
+    }
+
+    #[test]
+    fn gate_compute_defaults_matches_hand_authored_pre_lift_bytewise() {
+        // Byte-identical parity pin between the substrate primitive
+        // and the pre-lift 12-line struct-literal that recurred at
+        // eight hand-authored sites. Compares via `serde_json` value
+        // equality — `ProcessSpec` does not derive `PartialEq` (the
+        // typed fields it composes over do not uniformly derive it),
+        // so a serialize round-trip is the shape-equality currency the
+        // pin family already uses for `ProcessSpec`-shaped assertions
+        // elsewhere in this test module. A regression that reshaped
+        // the primitive would diverge from the pre-lift block HERE
+        // rather than at every downstream fixture that keys on the
+        // shape.
+        let composed = ProcessSpec::gate_compute_defaults();
+        let hand_authored = hand_authored_pre_lift();
+        assert_eq!(
+            serde_json::to_value(&composed).unwrap(),
+            serde_json::to_value(&hand_authored).unwrap(),
+        );
+    }
+
+    #[test]
+    fn gate_compute_defaults_supports_struct_update_override() {
+        // The five override sites (three `render.rs` fixtures + two
+        // `lifetime_clock.rs` fixtures) rely on struct-update syntax
+        // to override a single slot while the primitive supplies the
+        // other eleven. Pin the composition here so a regression that
+        // broke the struct-update path (e.g. a `#[non_exhaustive]`
+        // attribute added to `ProcessSpec` that would refuse struct-
+        // update syntax across crate boundaries) surfaces at compile
+        // time HERE rather than as a five-site downstream break.
+        let base = ProcessSpec::gate_compute_defaults();
+        let overridden = ProcessSpec {
+            suspended: true,
+            ..ProcessSpec::gate_compute_defaults()
+        };
+        assert!(!base.suspended);
+        assert!(overridden.suspended);
+        // Every other slot rides the same default as the base.
+        assert_eq!(
+            serde_json::to_value(&overridden.classification).unwrap(),
+            serde_json::to_value(&base.classification).unwrap(),
+        );
+        assert_eq!(
+            serde_json::to_value(&overridden.lifetime).unwrap(),
+            serde_json::to_value(&base.lifetime).unwrap(),
+        );
+    }
+
+    #[test]
+    fn gate_compute_defaults_is_call_time_construction_not_a_shared_singleton() {
+        // Two independent calls produce structurally-equal but
+        // distinct values — pins that the primitive is a plain
+        // constructor rather than a `lazy_static` clone whose in-
+        // place mutation at one consumer would silently mutate the
+        // shape at every other consumer. Mirrors the sibling
+        // `gate_compute_is_call_time_construction_not_a_shared_singleton`
+        // pin on `Classification::gate_compute`.
+        let a = ProcessSpec::gate_compute_defaults();
+        let b = ProcessSpec::gate_compute_defaults();
+        assert_eq!(
+            serde_json::to_value(&a).unwrap(),
+            serde_json::to_value(&b).unwrap(),
+        );
+        assert!(!std::ptr::eq(&a, &b));
     }
 }

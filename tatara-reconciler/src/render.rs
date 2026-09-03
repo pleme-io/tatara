@@ -1122,18 +1122,14 @@ mod aplicacao_tests {
             aplicacao: Some(demo_intent()),
             ..tatara_process::intent::Intent::default()
         };
+        // Struct-update through the ONE substrate composer
+        // `ProcessSpec::gate_compute_defaults` — pre-lift this restated
+        // the 12-line struct-literal verbatim with the `intent` slot
+        // overridden inline; post-lift the ten other slots ride the
+        // substrate.
         let spec = ProcessSpec {
-            identity: Default::default(),
-            classification: tatara_process::classification::Classification::gate_compute(),
             intent: intent.clone(),
-            boundary: Default::default(),
-            compliance: Default::default(),
-            depends_on: vec![],
-            signals: Default::default(),
-            lifetime: Default::default(),
-            routing: None,
-            encapsulates: None,
-            suspended: false,
+            ..ProcessSpec::gate_compute_defaults()
         };
         let mut proc = Process::new("ephemeral-demo", spec);
         proc.meta_mut().namespace = Some("demo-test".into());
@@ -1238,7 +1234,6 @@ mod aplicacao_tests {
 mod export_job_tests {
     use super::*;
     use tatara_process::attestation::ProcessAttestation;
-    use tatara_process::classification::Classification;
     use tatara_process::crd::{ProcessSpec, ProcessStatus};
     use tatara_process::export::{
         ArtifactSource, ExportSpec, ExportTrigger, HttpEventChannel, NatsSubjectChannel,
@@ -1292,14 +1287,11 @@ mod export_job_tests {
                 "intent".into(),
             ));
         }
+        // Struct-update through the ONE substrate composer
+        // `ProcessSpec::gate_compute_defaults` — pre-lift the ten other
+        // slots were hand-authored inline alongside the `lifetime`
+        // override; post-lift the substrate owns the shape.
         let spec = ProcessSpec {
-            identity: Default::default(),
-            classification: Classification::gate_compute(),
-            intent: Default::default(),
-            boundary: Default::default(),
-            compliance: Default::default(),
-            depends_on: vec![],
-            signals: Default::default(),
             lifetime: Lifetime {
                 ephemeral: Some(EphemeralLifetime {
                     ttl: "1h".into(),
@@ -1309,9 +1301,7 @@ mod export_job_tests {
                 }),
                 ..Lifetime::default()
             },
-            routing: None,
-            encapsulates: None,
-            suspended: false,
+            ..ProcessSpec::gate_compute_defaults()
         };
         let mut p = Process::new("r1", spec);
         p.metadata.namespace = Some("demo-test".into());
@@ -1560,23 +1550,17 @@ mod export_job_tests {
 mod routing_tests {
     use super::*;
     use std::collections::BTreeMap;
-    use tatara_process::classification::Classification;
     use tatara_process::crd::ProcessSpec;
     use tatara_process::routing::{RoutingBackend, RoutingHostname, RoutingSpec};
 
     fn demo_process(routing: Option<RoutingSpec>) -> Process {
+        // Struct-update through the ONE substrate composer
+        // `ProcessSpec::gate_compute_defaults` — pre-lift the ten other
+        // slots were hand-authored inline alongside the `routing`
+        // override; post-lift the substrate owns the shape.
         let spec = ProcessSpec {
-            identity: Default::default(),
-            classification: Classification::gate_compute(),
-            intent: Default::default(),
-            boundary: Default::default(),
-            compliance: Default::default(),
-            depends_on: vec![],
-            signals: Default::default(),
-            lifetime: Default::default(),
             routing,
-            encapsulates: None,
-            suspended: false,
+            ..ProcessSpec::gate_compute_defaults()
         };
         let mut p = Process::new("demo-prod", spec);
         p.metadata.namespace = Some("demo-ns".into());

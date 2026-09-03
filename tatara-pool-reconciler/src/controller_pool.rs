@@ -623,22 +623,10 @@ mod tests {
 
     #[test]
     fn process_to_member_state_attested_permanent_is_free() {
-        let mut p = Process::new(
-            "x",
-            ProcessSpec {
-                identity: Default::default(),
-                classification: tatara_process::classification::Classification::gate_compute(),
-                intent: Default::default(),
-                boundary: Default::default(),
-                compliance: Default::default(),
-                depends_on: vec![],
-                signals: Default::default(),
-                lifetime: Default::default(),
-                routing: None,
-                encapsulates: None,
-                suspended: false,
-            },
-        );
+        // Routes through the ONE substrate composer
+        // `ProcessSpec::gate_compute_defaults` — one of EIGHT pre-lift
+        // exact-match sites past the ★★ PRIME-DIRECTIVE ≥ 2 threshold.
+        let mut p = Process::new("x", ProcessSpec::gate_compute_defaults());
         p.status = Some(tatara_process::crd::ProcessStatus {
             phase: ProcessPhase::Attested,
             ..Default::default()
@@ -648,19 +636,7 @@ mod tests {
 
     #[test]
     fn process_to_member_state_attested_ephemeral_is_allocated() {
-        let mut spec = ProcessSpec {
-            identity: Default::default(),
-            classification: tatara_process::classification::Classification::gate_compute(),
-            intent: Default::default(),
-            boundary: Default::default(),
-            compliance: Default::default(),
-            depends_on: vec![],
-            signals: Default::default(),
-            lifetime: Default::default(),
-            routing: None,
-            encapsulates: None,
-            suspended: false,
-        };
+        let mut spec = ProcessSpec::gate_compute_defaults();
         spec.lifetime = Lifetime {
             ephemeral: Some(tatara_process::lifetime::EphemeralLifetime {
                 ttl: "1h".into(),
@@ -679,19 +655,10 @@ mod tests {
     }
 
     fn empty_spec() -> ProcessSpec {
-        ProcessSpec {
-            identity: Default::default(),
-            classification: tatara_process::classification::Classification::gate_compute(),
-            intent: Default::default(),
-            boundary: Default::default(),
-            compliance: Default::default(),
-            depends_on: vec![],
-            signals: Default::default(),
-            lifetime: Default::default(),
-            routing: None,
-            encapsulates: None,
-            suspended: false,
-        }
+        // Routes through the ONE substrate composer
+        // `ProcessSpec::gate_compute_defaults` — sibling to the
+        // `empty_spec` fixture in `tatara-process::crd::tests`.
+        ProcessSpec::gate_compute_defaults()
     }
 
     #[test]

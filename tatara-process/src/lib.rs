@@ -1207,17 +1207,12 @@ mod namespaced_api_coordinates_tests {
     }
 
     fn alloc_fixture(name: &str, ns: Option<&str>) -> EphemeralAllocation {
+        // Requestor rides through the ONE substrate composer
+        // `Requestor::kind_only` — one of TEN pre-lift exact-match
+        // sites past the ★★ PRIME-DIRECTIVE ≥ 2 threshold.
         let spec = AllocationSpec {
             pool_ref: None,
-            requestor: Requestor {
-                kind: "github-pr".into(),
-                repo: None,
-                branch: None,
-                pr_number: None,
-                sha: None,
-                pr_labels: vec![],
-                actor: None,
-            },
+            requestor: Requestor::kind_only("github-pr"),
             ttl: None,
             note: None,
         };
@@ -1515,17 +1510,14 @@ mod deletion_tombstoned_tests {
     }
 
     fn empty_alloc_spec() -> AllocationSpec {
+        // Requestor rides through the ONE substrate composer
+        // `Requestor::kind_only` — sibling to the `alloc_fixture`
+        // callsite above in this file. Pre-lift this was the 9-line
+        // struct-literal restated verbatim at TEN workspace-wide
+        // fixture sites past the ★★ PRIME-DIRECTIVE ≥ 2 threshold.
         AllocationSpec {
             pool_ref: None,
-            requestor: Requestor {
-                kind: "github-pr".into(),
-                repo: None,
-                branch: None,
-                pr_number: None,
-                sha: None,
-                pr_labels: vec![],
-                actor: None,
-            },
+            requestor: Requestor::kind_only("github-pr"),
             ttl: None,
             note: None,
         }
@@ -1754,17 +1746,13 @@ mod annotated_tests {
     }
 
     fn empty_alloc_spec() -> AllocationSpec {
+        // Requestor rides through the ONE substrate composer
+        // `Requestor::kind_only` — sibling to the peer
+        // `empty_alloc_spec` fixture in the DeletionTombstoned pin
+        // module above.
         AllocationSpec {
             pool_ref: None,
-            requestor: Requestor {
-                kind: "github-pr".into(),
-                repo: None,
-                branch: None,
-                pr_number: None,
-                sha: None,
-                pr_labels: vec![],
-                actor: None,
-            },
+            requestor: Requestor::kind_only("github-pr"),
             ttl: None,
             note: None,
         }

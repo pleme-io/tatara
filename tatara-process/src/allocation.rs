@@ -144,6 +144,75 @@ impl Requestor {
     pub fn known_kind(&self) -> Option<RequestorKind> {
         self.kind.parse().ok()
     }
+
+    /// The canonical minimal [`Requestor`] composer — binds only the
+    /// single caller-varying [`Self::kind`] slot and leaves the
+    /// six-slot default tail (`repo = None`, `branch = None`,
+    /// `pr_number = None`, `sha = None`, `pr_labels = vec![]`,
+    /// `actor = None`) at ONE substrate owner. The lift of the 9-line
+    /// `Requestor { kind: <lit>.into(), repo: None, branch: None,
+    /// pr_number: None, sha: None, pr_labels: vec![], actor: None }`
+    /// incantation past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    /// threshold — pre-lift the SAME kind-only fixture shape recurred
+    /// at TEN workspace-wide fixture sites (six inside
+    /// [`crate::allocation`]'s own test module — the
+    /// `known_kind_decodes_built_requestors` sweep, the
+    /// `known_kind_returns_none_for_open_kinds` open-kind pin, the
+    /// `alloc_with_phase` / `alloc_without_status` observers on the
+    /// phase axis, the `bound_pool` observer on the routing axis, the
+    /// `expires_at` observer on the TTL axis, and the
+    /// `allocation_spec_omits_optional_fields` wire-shape pin; three
+    /// inside [`crate::lib`]'s pin fixtures (the `alloc_fixture` +
+    /// two `empty_alloc_spec` helpers on the coordinate / annotation
+    /// axes)).
+    ///
+    /// `impl Into<String>` on the argument accepts every pre-lift
+    /// caller shape verbatim without an argument recast:
+    /// * `Requestor::kind_only("manual")` — the operator-authored
+    ///   default fixture, matching the pre-lift `kind: "manual".into()`.
+    /// * `Requestor::kind_only("github-pr")` — the GitHub-webhook
+    ///   fixture, matching the pre-lift `kind: "github-pr".into()`.
+    /// * `Requestor::kind_only(RequestorKind::GithubPr)` — the
+    ///   typed-round-trip callsite, matching the pre-lift `kind: k
+    ///   .into()` where `k: RequestorKind` composes through the
+    ///   `From<RequestorKind> for String` bridge.
+    /// * `Requestor::kind_only("operator-custom-kind")` — the
+    ///   open-kind pin, matching the pre-lift `kind:
+    ///   "operator-custom-kind".into()`.
+    ///
+    /// The six-slot default tail is the SAFE minimal shape: every
+    /// [`crate::pool::PoolSelector`] filter sees "no repo constraint,
+    /// no branch constraint, no PR labels" and matches every pool
+    /// (post-lift a callsite that legitimately overrides a slot lands
+    /// the override at its own site via struct-update on top of
+    /// `kind_only`). A future addition to [`Requestor`] — a new
+    /// optional slot (e.g. a `run_id` for CI kinds, an `email` for
+    /// scheduled kinds, a `cluster` scoping override) — lands at ONE
+    /// primitive body and every fixture / default-shape callsite
+    /// inherits the upgrade mechanically. Pre-lift a new field would
+    /// have broken all TEN callsites (each holds an exhaustive struct
+    /// literal); post-lift only sites that legitimately override the
+    /// new slot need to name it.
+    ///
+    /// Sibling substrate primitives on the same "bind-the-required-
+    /// slots-only" axis: [`crate::intent::AplicacaoIntent::chart_only`]
+    /// (Aplicacao chart-pointer-only composer; the 7-slot Aplicacao
+    /// counterpart), [`crate::pool::PoolSpec::with_template`] (Pool
+    /// template-only composer; the 11-slot Pool counterpart), and
+    /// [`crate::spec::ProcessSpec::gate_compute_defaults`] (Process
+    /// zero-arg-fixture composer; the 12-slot Process counterpart).
+    #[must_use]
+    pub fn kind_only(kind: impl Into<String>) -> Self {
+        Self {
+            kind: kind.into(),
+            repo: None,
+            branch: None,
+            pr_number: None,
+            sha: None,
+            pr_labels: vec![],
+            actor: None,
+        }
+    }
 }
 
 /// Closed-set view over the substrate-emitted canonical
@@ -1204,15 +1273,10 @@ mod tests {
     #[test]
     fn known_kind_decodes_built_requestors() {
         for k in RequestorKind::ALL {
-            let r = Requestor {
-                kind: k.into(),
-                repo: None,
-                branch: None,
-                pr_number: None,
-                sha: None,
-                pr_labels: vec![],
-                actor: None,
-            };
+            // Routes through the ONE substrate composer
+            // `Requestor::kind_only` — one of TEN pre-lift exact-match
+            // sites past the ★★ PRIME-DIRECTIVE ≥ 2 threshold.
+            let r = Requestor::kind_only(k);
             assert_eq!(r.known_kind(), Some(k), "round-trip failed for {k:?}");
         }
     }
@@ -1223,15 +1287,10 @@ mod tests {
     /// `ReceiptEnvelope::known_kind`'s open-kind posture.
     #[test]
     fn known_kind_returns_none_for_open_kinds() {
-        let r = Requestor {
-            kind: "operator-custom-kind".into(),
-            repo: None,
-            branch: None,
-            pr_number: None,
-            sha: None,
-            pr_labels: vec![],
-            actor: None,
-        };
+        // Routes through the ONE substrate composer
+        // `Requestor::kind_only` — one of TEN pre-lift exact-match
+        // sites past the ★★ PRIME-DIRECTIVE ≥ 2 threshold.
+        let r = Requestor::kind_only("operator-custom-kind");
         assert_eq!(r.known_kind(), None);
     }
 
@@ -1247,6 +1306,99 @@ mod tests {
         // The `allocation_spec_omits_optional_fields` fixture below
         // composes `kind: "manual".into()` verbatim.
         assert_eq!(RequestorKind::Manual.as_str(), "manual");
+    }
+
+    // ─── Requestor::kind_only substrate pins ────────────────────────
+    //
+    // Fail-before-pass-after granularity: `Requestor::kind_only` did
+    // not exist before this commit. The composer's job is to bind ONE
+    // caller-varying slot (`kind`) and freeze the six-slot default
+    // tail so a future addition to `Requestor` lands at ONE primitive
+    // body rather than at every fixture / default-shape callsite.
+    // Sibling to the `AplicacaoIntent::chart_only` pin family (the
+    // 7-slot chart-pointer-only composer) and the `PoolSpec::with_template`
+    // pin family (the 11-slot pool full-spec composer).
+
+    #[test]
+    fn kind_only_binds_kind_slot_and_defaults_the_other_six() {
+        // Positional-binding pin: the sole caller slot lands at
+        // `kind`; every other slot lands at its safe empty default
+        // (`None` / `vec![]`).
+        let r = Requestor::kind_only("manual");
+        assert_eq!(r.kind, "manual");
+        assert!(r.repo.is_none());
+        assert!(r.branch.is_none());
+        assert!(r.pr_number.is_none());
+        assert!(r.sha.is_none());
+        assert!(r.pr_labels.is_empty());
+        assert!(r.actor.is_none());
+    }
+
+    #[test]
+    fn kind_only_matches_hand_authored_pre_lift_struct_literal_shape() {
+        // Byte-identity pin: every pre-lift `Requestor { kind: <lit>
+        // .into(), repo: None, branch: None, pr_number: None, sha:
+        // None, pr_labels: vec![], actor: None }` shape must
+        // deserialize back to the same fixture composed via
+        // `kind_only`. Sweeps the two families every callsite used
+        // (`"manual"` — the operator-authored fixture at seven
+        // sites; `"github-pr"` — the github-webhook fixture at three
+        // sites) plus one open-kind sample (`"operator-custom-kind"` —
+        // the `known_kind_returns_none_for_open_kinds` open-kind pin)
+        // so any drift between the primitive and the pre-lift shape
+        // surfaces at ONE pin rather than as silent fixture skew at
+        // ten downstream consumers.
+        for kind in ["manual", "github-pr", "operator-custom-kind"] {
+            let via_primitive = Requestor::kind_only(kind);
+            let hand_authored = Requestor {
+                kind: kind.into(),
+                repo: None,
+                branch: None,
+                pr_number: None,
+                sha: None,
+                pr_labels: vec![],
+                actor: None,
+            };
+            let via_yaml = serde_yaml::to_string(&via_primitive).unwrap();
+            let hand_yaml = serde_yaml::to_string(&hand_authored).unwrap();
+            assert_eq!(
+                via_yaml, hand_yaml,
+                "kind_only({kind:?}) must be YAML-identical to the pre-lift struct literal"
+            );
+        }
+    }
+
+    #[test]
+    fn kind_only_accepts_string_and_str_and_requestor_kind_uniformly() {
+        // `impl Into<String>` symmetry across the three caller shapes
+        // pre-lift authors used verbatim: `&'static str` (`"manual"`),
+        // owned `String` (from a formatted context), and
+        // [`RequestorKind`] (via the `From<RequestorKind> for String`
+        // bridge exercised at `known_kind_decodes_built_requestors`).
+        let from_str_literal = Requestor::kind_only("manual");
+        let from_owned_string = Requestor::kind_only(String::from("manual"));
+        let from_typed_variant = Requestor::kind_only(RequestorKind::Manual);
+        assert_eq!(from_str_literal.kind, "manual");
+        assert_eq!(from_owned_string.kind, "manual");
+        assert_eq!(from_typed_variant.kind, "manual");
+    }
+
+    #[test]
+    fn kind_only_composes_downstream_through_known_kind_projection() {
+        // Cross-primitive coherence pin: every substrate-emitted
+        // `RequestorKind` variant round-trips through `kind_only` +
+        // `known_kind` back to the same typed variant. Byte-identical
+        // to the `known_kind_decodes_built_requestors` sweep the
+        // primitive replaced — pins the primitive as the composer the
+        // typed decoder sees the SAME wire shape from.
+        for k in RequestorKind::ALL {
+            let r = Requestor::kind_only(k);
+            assert_eq!(
+                r.known_kind(),
+                Some(k),
+                "kind_only({k:?}).known_kind() must round-trip to Some({k:?})"
+            );
+        }
     }
 
     // Per-implementor `unknown_X_message_matches_substrate_convention`
@@ -1274,17 +1426,12 @@ mod tests {
     // by the `_matches_process_peer_shape` sweep at the tail.
 
     fn alloc_with_phase(phase: AllocationPhase) -> EphemeralAllocation {
+        // Requestor rides through the ONE substrate composer
+        // `Requestor::kind_only` — one of TEN pre-lift exact-match
+        // sites past the ★★ PRIME-DIRECTIVE ≥ 2 threshold.
         let spec = AllocationSpec {
             pool_ref: None,
-            requestor: Requestor {
-                kind: "manual".into(),
-                repo: None,
-                branch: None,
-                pr_number: None,
-                sha: None,
-                pr_labels: vec![],
-                actor: None,
-            },
+            requestor: Requestor::kind_only("manual"),
             ttl: None,
             note: None,
         };
@@ -1297,17 +1444,11 @@ mod tests {
     }
 
     fn alloc_without_status() -> EphemeralAllocation {
+        // Requestor rides through the ONE substrate composer
+        // `Requestor::kind_only` — sibling to `alloc_with_phase`.
         let spec = AllocationSpec {
             pool_ref: None,
-            requestor: Requestor {
-                kind: "manual".into(),
-                repo: None,
-                branch: None,
-                pr_number: None,
-                sha: None,
-                pr_labels: vec![],
-                actor: None,
-            },
+            requestor: Requestor::kind_only("manual"),
             ttl: None,
             note: None,
         };
@@ -1547,17 +1688,11 @@ mod tests {
     }
 
     fn alloc_with_bound_pool(bound: Option<AllocationRef>) -> EphemeralAllocation {
+        // Requestor rides through the ONE substrate composer
+        // `Requestor::kind_only` — sibling to `alloc_with_phase`.
         let spec = AllocationSpec {
             pool_ref: None,
-            requestor: Requestor {
-                kind: "manual".into(),
-                repo: None,
-                branch: None,
-                pr_number: None,
-                sha: None,
-                pr_labels: vec![],
-                actor: None,
-            },
+            requestor: Requestor::kind_only("manual"),
             ttl: None,
             note: None,
         };
@@ -1742,17 +1877,11 @@ mod tests {
     // it fails to compile pre-lift and passes post-lift.
 
     fn alloc_with_expires_at(expires_at: Option<DateTime<Utc>>) -> EphemeralAllocation {
+        // Requestor rides through the ONE substrate composer
+        // `Requestor::kind_only` — sibling to `alloc_with_phase`.
         let spec = AllocationSpec {
             pool_ref: None,
-            requestor: Requestor {
-                kind: "manual".into(),
-                repo: None,
-                branch: None,
-                pr_number: None,
-                sha: None,
-                pr_labels: vec![],
-                actor: None,
-            },
+            requestor: Requestor::kind_only("manual"),
             ttl: None,
             note: None,
         };
@@ -1902,17 +2031,17 @@ mod tests {
 
     #[test]
     fn allocation_spec_omits_optional_fields() {
+        // Requestor rides through the ONE substrate composer
+        // `Requestor::kind_only`; the wire-shape pin still holds
+        // because the composer produces the byte-identical
+        // seven-slot minimal shape (`repo`/`branch`/`pr_number`/`sha`
+        // /`actor` all `None` + empty `pr_labels: vec![]`) whose
+        // `skip_serializing_if = "Option::is_none"` + default-vec
+        // serde attributes elide every optional slot from the YAML
+        // output.
         let s = AllocationSpec {
             pool_ref: None,
-            requestor: Requestor {
-                kind: "manual".into(),
-                repo: None,
-                branch: None,
-                pr_number: None,
-                sha: None,
-                pr_labels: vec![],
-                actor: None,
-            },
+            requestor: Requestor::kind_only("manual"),
             ttl: None,
             note: None,
         };

@@ -54,6 +54,14 @@ tatara-closed-set = "0.3"
 kube = { version = "0.99", features = ["runtime", "derive", "client"] }
 k8s-openapi = { version = "0.24", features = ["latest"] }
 schemars = { version = "0.8", features = ["chrono"] }
+# Return-type of the `Api::delete` wire-verb the `crate::delete::default`
+# substrate primitive delegates to — its return is `Result<either::
+# Either<K, Status>, kube::Error>`. Already a transitive dep through
+# kube-client (which uses it internally); direct dep here lets the
+# primitive name the return type without re-crossing the transitive
+# edge and gives downstream consumers a shape to match on if they need
+# to distinguish the pre-delete body from the bare Status.
+either = "1"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }

@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
-use kube::api::{Api, DeleteParams, ListParams};
+use kube::api::{Api, ListParams};
 use kube::runtime::controller::Action;
 use tracing::{info, warn};
 
@@ -340,23 +340,25 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
                 .take(count as usize)
                 .collect();
             for m in to_reap {
-                let _ = process_api
-                    .delete(&m.process_name, &DeleteParams::default())
-                    .await;
+                // `Api::delete(name, &DeleteParams::default())` routes
+                // through the ONE substrate primitive
+                // `tatara_process::delete::default` — see the
+                // pre-lift audit note on the peer `SignalSigterm`
+                // arm below for the full seven-site duplication
+                // provenance.
+                let _ = tatara_process::delete::default(&process_api, &m.process_name).await;
                 info!(namespace = %ns, pool = %name, process = %m.process_name, "reaped excess");
             }
         }
         PoolDecision::ReplaceMembers { process_names } => {
             for n in process_names {
-                let _ = process_api.delete(&n, &DeleteParams::default()).await;
+                let _ = tatara_process::delete::default(&process_api, &n).await;
                 info!(namespace = %ns, pool = %name, process = %n, "replaced (deleted; respawn next tick)");
             }
         }
         PoolDecision::Drain => {
             for m in &members {
-                let _ = process_api
-                    .delete(&m.process_name, &DeleteParams::default())
-                    .await;
+                let _ = tatara_process::delete::default(&process_api, &m.process_name).await;
             }
         }
     }
@@ -500,9 +502,21 @@ async fn apply_convergence_actions(
             ConvergenceAction::SignalSigterm { process_name } => {
                 // Delete the Process — the reconciler's finalizer +
                 // SIGTERM cascade unfolds via the standard exit path.
-                let _ = process_api
-                    .delete(&process_name, &DeleteParams::default())
-                    .await;
+                //
+                // `Api::delete(name, &DeleteParams::default())` routes
+                // through the ONE substrate primitive
+                // `tatara_process::delete::default` — pre-lift this
+                // was one of SEVEN workspace-wide hand-authored
+                // restatements of the 2-link chain past the ★★ PRIME-
+                // DIRECTIVE ≥ 2 duplication threshold (five in this
+                // controller_pool alone across pool-decision +
+                // convergence-action arms, one in the reconciler
+                // SIGTERM-cascade fan-out, one in the watcher
+                // PR-close arm). Post-lift every DELETE-verb consumer
+                // shares ONE substrate owner alongside the peer
+                // create / patch primitives already lifted in
+                // `tatara_process::{create,patch}`.
+                let _ = tatara_process::delete::default(&process_api, &process_name).await;
                 info!(
                     namespace = %ns,
                     pool = %name,
@@ -511,9 +525,7 @@ async fn apply_convergence_actions(
                 );
             }
             ConvergenceAction::ReapFailed { process_name } => {
-                let _ = process_api
-                    .delete(&process_name, &DeleteParams::default())
-                    .await;
+                let _ = tatara_process::delete::default(&process_api, &process_name).await;
                 info!(
                     namespace = %ns,
                     pool = %name,

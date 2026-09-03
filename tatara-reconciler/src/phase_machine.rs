@@ -872,9 +872,18 @@ pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
                     continue;
                 };
                 let child_api = ctx.process_api(cns);
-                let _ = child_api
-                    .delete(cname, &kube::api::DeleteParams::default())
-                    .await;
+                // `Api::delete(name, &DeleteParams::default())` routes
+                // through the ONE substrate primitive
+                // `tatara_process::delete::default` — pre-lift this
+                // was one of SEVEN workspace-wide hand-authored
+                // restatements of the 2-link chain past the ★★ PRIME-
+                // DIRECTIVE ≥ 2 duplication threshold. Post-lift every
+                // DELETE-verb consumer (pool decision + convergence-
+                // action arms, this reconciler SIGTERM cascade,
+                // watcher PR-close arm) shares ONE substrate owner
+                // alongside the peer create / patch primitives already
+                // lifted in `tatara_process::{create,patch}`.
+                let _ = tatara_process::delete::default(&child_api, cname).await;
             }
             info!(
                 namespace = %ns,

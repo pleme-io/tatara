@@ -7,7 +7,7 @@ use axum::body::Bytes;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
-use kube::api::{Api, DeleteParams};
+use kube::api::Api;
 use kube::Client;
 use tracing::{info, warn};
 
@@ -122,7 +122,19 @@ async fn handle_pr_event(state: &HandlerState, body: &[u8]) -> axum::response::R
             // Reopened, Synchronize}` create-branch slot below). Post-
             // lift the two consumers share ONE substrate owner.
             let api = state.allocation_api();
-            match api.delete(&name, &DeleteParams::default()).await {
+            // `Api::delete(&name, &DeleteParams::default())` routes
+            // through the ONE substrate primitive
+            // `tatara_process::delete::default` — pre-lift this was
+            // one of SEVEN workspace-wide hand-authored restatements
+            // of the 2-link `api.delete(name, &DeleteParams::
+            // default())` chain past the ★★ PRIME-DIRECTIVE ≥ 2
+            // duplication threshold. Post-lift every DELETE-verb
+            // consumer (pool decision + convergence-action arms,
+            // reconciler SIGTERM cascade, this watcher PR-close arm)
+            // shares ONE substrate owner alongside the peer create /
+            // patch primitives already lifted in
+            // `tatara_process::{create,patch}`.
+            match tatara_process::delete::default(&api, &name).await {
                 Ok(_) => {
                     info!(
                         namespace = %state.config.namespace,

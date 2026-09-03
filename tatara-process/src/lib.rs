@@ -9,6 +9,7 @@ pub mod attestation;
 pub mod boundary;
 pub mod classification;
 pub mod compliance;
+pub mod configmap;
 pub mod crd;
 pub mod create;
 pub mod delete;

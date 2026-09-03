@@ -184,7 +184,18 @@ async fn read_artifact(spec: &ExportSpec, kube: &Client, ns: &str, name: &str) -
         ArtifactVariant::RunMarker(_) => Ok(Vec::new()),
         ArtifactVariant::TestReport(tr) => {
             let cm_ns = tr.namespace.as_deref().unwrap_or(ns);
-            let api: Api<ConfigMap> = Api::namespaced(kube.clone(), cm_ns);
+            // Ns-scoped `Api<ConfigMap>` binding rides the substrate
+            // primitive `tatara_process::configmap::namespaced` — pre-
+            // lift this was a hand-authored 1-link `let api:
+            // Api<ConfigMap> = Api::namespaced(kube.clone(), cm_ns)`
+            // chain, one of FOUR workspace-wide restatements past the
+            // ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold (peer sites:
+            // the Receipts-arm walker below, this crate's own SSA-side
+            // `write_receipt`, and `tatara-closed-loop-probe::main::
+            // write_receipt`). Post-lift the ns-scoped ConfigMap
+            // handle binding lives at ONE substrate owner and the
+            // concrete `K = ConfigMap` type is fixed at the primitive.
+            let api = tatara_process::configmap::namespaced(kube.clone(), cm_ns);
             let cm = api
                 .get(&tr.configmap)
                 .await
@@ -215,7 +226,11 @@ async fn read_artifact(spec: &ExportSpec, kube: &Client, ns: &str, name: &str) -
             // Receipts collection — list ConfigMaps in the Process's
             // namespace carrying our process annotation, parse each
             // as a YAML ReceiptEnvelope, return the JSON array.
-            let api: Api<ConfigMap> = Api::namespaced(kube.clone(), ns);
+            // Ns-scoped `Api<ConfigMap>` binding rides the substrate
+            // primitive `tatara_process::configmap::namespaced` — see
+            // the TestReport-arm comment above for the FOUR-site
+            // lift narrative.
+            let api = tatara_process::configmap::namespaced(kube.clone(), ns);
             let cms = api
                 .list(&Default::default())
                 .await
@@ -353,7 +368,10 @@ async fn write_receipt(
     key: &str,
     payload: &str,
 ) -> Result<()> {
-    let api: Api<ConfigMap> = Api::namespaced(kube.clone(), namespace);
+    // Ns-scoped `Api<ConfigMap>` binding rides the substrate primitive
+    // `tatara_process::configmap::namespaced` — see the peer
+    // `read_artifact` sites above for the FOUR-site lift narrative.
+    let api = tatara_process::configmap::namespaced(kube.clone(), namespace);
     let mut data = BTreeMap::new();
     data.insert(key.to_string(), payload.to_string());
     let cm = ConfigMap {

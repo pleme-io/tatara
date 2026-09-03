@@ -14,7 +14,7 @@
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use k8s_openapi::api::core::v1::ConfigMap;
-use kube::{Api, Client};
+use kube::Client;
 use serde_json::json;
 use std::collections::BTreeMap;
 use tatara_process::receipt::{ReceiptEnvelope, ReceiptKind, RECEIPT_JSON_KEY, RECEIPT_YAML_KEY};
@@ -159,7 +159,18 @@ async fn write_receipt(envelope: &ReceiptEnvelope, cm_name: &str, ns: &str) -> R
     let client = Client::try_default()
         .await
         .context("create in-cluster kube client")?;
-    let api: Api<ConfigMap> = Api::namespaced(client, ns);
+    // Ns-scoped `Api<ConfigMap>` binding rides the substrate primitive
+    // `tatara_process::configmap::namespaced` — pre-lift this was a
+    // hand-authored 1-link `let api: Api<ConfigMap> = Api::namespaced(
+    // client, ns)` chain, one of FOUR workspace-wide restatements
+    // past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold (peers at
+    // the three `tatara-export-worker::main` sites — the inbound
+    // test-report reader, the receipts-collection walker, and the
+    // SSA-side receipt writer). Post-lift the ns-scoped ConfigMap
+    // handle binding lives at ONE substrate owner and the concrete
+    // `K = ConfigMap` type is fixed at the primitive rather than
+    // restated at each `let api: Api<ConfigMap> = ...` bind.
+    let api = tatara_process::configmap::namespaced(client, ns);
     let payload = serde_json::to_string(envelope)?;
 
     // Receipt-CM `data` key spellings ride through the substrate

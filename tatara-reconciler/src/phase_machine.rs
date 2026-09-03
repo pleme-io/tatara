@@ -343,15 +343,25 @@ pub async fn handle_running(p: &Process, ctx: &Context) -> Result<Action> {
                 (false, Some("not yet observed".to_string()))
             }
         };
-        updated.push(FluxResourceRef {
-            api_version: r.api_version.clone(),
-            kind: r.kind.clone(),
-            name: r.name.clone(),
-            namespace: r.namespace.clone(),
+        // 7-slot `FluxResourceRef { …, last_check: Some(chrono::
+        // Utc::now()) }` struct-literal rides through the ONE
+        // substrate composer [`FluxResourceRef::observed`], sibling
+        // to the post-SSA `flux_ref_from_json` seeder that shares
+        // the same composer. Pre-lift both sites restated the same
+        // 7-slot struct-literal (four `String` coordinates + `ready`
+        // + `message` + `last_check: Some(chrono::Utc::now())`) past
+        // the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger; post-lift
+        // the stamp lives at ONE substrate site so a future clock-
+        // injection point lands there, not at every hand-authored
+        // `Some(chrono::Utc::now())` stamp.
+        updated.push(FluxResourceRef::observed(
+            r.api_version.clone(),
+            r.kind.clone(),
+            r.name.clone(),
+            r.namespace.clone(),
             ready,
             message,
-            last_check: Some(chrono::Utc::now()),
-        });
+        ));
     }
 
     // Always patch updated per-ref state so users see live progress.
@@ -588,15 +598,22 @@ fn compute_intent_hash(intent: &tatara_process::intent::Intent) -> String {
 fn flux_ref_from_json(res: &Value) -> Result<FluxResourceRef> {
     let coords = RenderedResourceCoords::from_json(res)?;
     let namespace = coords.namespace_or_default().to_string();
-    Ok(FluxResourceRef {
-        api_version: coords.api_version,
-        kind: coords.kind,
-        name: coords.name,
+    // 7-slot `FluxResourceRef { …, last_check: Some(chrono::Utc
+    // ::now()) }` struct-literal rides through the ONE substrate
+    // composer [`FluxResourceRef::observed`], sibling to the
+    // VERIFY-phase `handle_running` per-ref rebuild that shares
+    // the same composer. Post-SSA the ref is stamped `ready =
+    // false` with the canonical `"applied; awaiting reconciliation"`
+    // wording that the pre-lift hand-authored literal spelled
+    // verbatim here.
+    Ok(FluxResourceRef::observed(
+        coords.api_version,
+        coords.kind,
+        coords.name,
         namespace,
-        ready: false,
-        message: Some("applied; awaiting reconciliation".into()),
-        last_check: Some(chrono::Utc::now()),
-    })
+        false,
+        Some("applied; awaiting reconciliation".into()),
+    ))
 }
 
 pub async fn handle_reconverging(p: &Process, ctx: &Context) -> Result<Action> {

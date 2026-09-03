@@ -139,6 +139,75 @@ impl FluxResourceRef {
     pub fn fetch_coords(&self) -> (&str, &str, &str, &str) {
         (&self.namespace, &self.api_version, &self.kind, &self.name)
     }
+
+    /// Compose a `FluxResourceRef` stamped at "observed now" — the
+    /// `last_check` slot is set to `Some(Utc::now())` at ONE substrate
+    /// owner, and the four coordinate slots + `ready` + `message`
+    /// are bound positionally so a slot-swap regression surfaces at
+    /// the constructor's positional pin rather than as silent drift
+    /// at every downstream `ProcessStatus.flux_resources` writer.
+    ///
+    /// Pre-lift the 7-slot `FluxResourceRef { …, last_check:
+    /// Some(chrono::Utc::now()) }` struct-literal was hand-authored
+    /// at TWO sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    /// threshold in `tatara-reconciler::phase_machine`:
+    /// * `handle_running` — the VERIFY-phase per-ref rebuild that
+    ///   restamps each polled ref with fresh `ready` + `message` +
+    ///   `last_check`.
+    /// * `flux_ref_from_json` — the post-SSA initial-state seeder
+    ///   that stamps a freshly-applied ref as `ready = false`,
+    ///   `message = Some("applied; awaiting reconciliation")`,
+    ///   `last_check = Some(Utc::now())`.
+    ///
+    /// Both sites restated the SAME seven field bindings in the
+    /// SAME order, and both restated the SAME `Some(chrono::Utc::
+    /// now())` stamp. A copy-paste that swapped two adjacent
+    /// `String` slots (`api_version` and `kind`, `kind` and `name`,
+    /// or `name` and `namespace` are all mechanically
+    /// indistinguishable at the type level) would silently persist
+    /// a slot-inverted ref that the downstream Flux fetch consumer
+    /// (via [`Self::fetch_coords`]) would then 404 on. Post-lift
+    /// both sites name the six inputs ONCE and route through this
+    /// ONE composer; the seventh slot (`last_check`) is stamped at
+    /// the composer's body so a future injection point (a fake
+    /// clock for testing, a monotonic-clock cross-check, a per-
+    /// fleet skew tolerance) lands at ONE substrate site rather
+    /// than at every hand-authored `Some(chrono::Utc::now())` stamp.
+    ///
+    /// Return-order pin lives at
+    /// [`tests::flux_resource_ref_observed_binds_slots_by_position`]
+    /// so a regression that swapped `api_version` and `kind` (both
+    /// `String`, same type) inside the constructor's argument list
+    /// fails-loudly here rather than as a silent wire-time 404 at
+    /// every downstream fetch consumer.
+    ///
+    /// Theory grounding: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the 6-slot positional binding + the
+    /// `last_check` stamp compose at ONE typed owner, so a
+    /// regression across the four `String` coordinate slots fails
+    /// at the composer's positional pin rather than at every
+    /// downstream Flux status writer). THEORY.md §VI.1 (generation
+    /// over composition — the 7-slot struct-literal recurred at two
+    /// hand-authored sites past the ≥ 2 duplication trigger, and is
+    /// lifted to ONE typed composer here).
+    pub fn observed(
+        api_version: String,
+        kind: String,
+        name: String,
+        namespace: String,
+        ready: bool,
+        message: Option<String>,
+    ) -> Self {
+        Self {
+            api_version,
+            kind,
+            name,
+            namespace,
+            ready,
+            message,
+            last_check: Some(Utc::now()),
+        }
+    }
 }
 
 /// Identifying coordinates of a rendered K8s resource — the
@@ -541,6 +610,140 @@ mod tests {
             std::mem::size_of::<(&str, &str, &str, &str)>(),
             "the 4-tuple width must match the raw fetch signature's four `&str` slots"
         );
+    }
+
+    // ─── FluxResourceRef::observed substrate pins ─────────────────
+    //
+    // The 6-arg composer stamps `last_check` at ONE substrate site
+    // (the pre-lift 7-slot struct-literal restated `Some(chrono::
+    // Utc::now())` at TWO hand-authored sites in
+    // `tatara-reconciler::phase_machine` — `handle_running`'s per-
+    // ref VERIFY rebuild and `flux_ref_from_json`'s post-SSA
+    // seeder). These pins bind the six input slots by position so a
+    // regression that swapped `api_version` and `kind` (both
+    // `String`, mechanically interchangeable to a bad refactor)
+    // surfaces HERE rather than as a silent wire-time 404 at every
+    // downstream fetch consumer.
+    //
+    // Every test constructs distinct values across the four
+    // `String` coordinate slots so a slot swap fails structurally
+    // rather than by accident of matching literals.
+
+    #[test]
+    fn flux_resource_ref_observed_binds_slots_by_position() {
+        // Positional pin: the 6-arg constructor binds
+        // `(api_version, kind, name, namespace, ready, message)`
+        // in THAT order, matching the pre-lift 7-slot struct-
+        // literal's declaration order. A regression that swapped
+        // ANY pair of adjacent `String` coordinate slots (all four
+        // are mechanically indistinguishable at the type level)
+        // would surface here rather than as a wire-time 404 at
+        // every downstream Flux fetch consumer.
+        let r = FluxResourceRef::observed(
+            "kustomize.toolkit.fluxcd.io/v1".to_string(),
+            "Kustomization".to_string(),
+            "observability-stack".to_string(),
+            "flux-system".to_string(),
+            true,
+            Some("healthy".to_string()),
+        );
+        assert_eq!(r.api_version, "kustomize.toolkit.fluxcd.io/v1");
+        assert_eq!(r.kind, "Kustomization");
+        assert_eq!(r.name, "observability-stack");
+        assert_eq!(r.namespace, "flux-system");
+        assert!(r.ready);
+        assert_eq!(r.message.as_deref(), Some("healthy"));
+    }
+
+    #[test]
+    fn flux_resource_ref_observed_stamps_last_check_at_now() {
+        // Stamp pin: the `last_check` slot is filled with
+        // `Some(<recent Utc>)` at the composer's body. A
+        // regression that dropped the stamp (leaving `None`) or
+        // shifted it to a stale constant would surface here rather
+        // than as silent operator-observed staleness at
+        // `ProcessStatus.flux_resources` panels. Bounds the stamp
+        // to within a generous 5s window of the composer call so
+        // slow CI runners do not false-positive.
+        let before = Utc::now();
+        let r = FluxResourceRef::observed(
+            "v1".to_string(),
+            "K".to_string(),
+            "n".to_string(),
+            "ns".to_string(),
+            false,
+            None,
+        );
+        let after = Utc::now();
+        let stamp = r.last_check.expect("observed must stamp last_check");
+        assert!(stamp >= before, "stamp must be >= before-call `now`");
+        assert!(stamp <= after, "stamp must be <= after-call `now`");
+    }
+
+    #[test]
+    fn flux_resource_ref_observed_round_trips_through_fetch_coords() {
+        // Cross-composer coherence pin: a ref built by `observed`
+        // then unpacked by `fetch_coords` returns the same four
+        // slots in the peer projection's positional order
+        // `(namespace, api_version, kind, name)`. Composition of
+        // the two primitives on the same ref preserves the slot
+        // identity — a regression at either end (a slot swap in
+        // `observed`, or a slot swap in `fetch_coords`) would
+        // surface here rather than as silent drift between the
+        // writer and the reader on the same persisted slice.
+        let r = FluxResourceRef::observed(
+            "helm.toolkit.fluxcd.io/v2".to_string(),
+            "HelmRelease".to_string(),
+            "prometheus-op".to_string(),
+            "monitoring".to_string(),
+            false,
+            Some("applied; awaiting reconciliation".to_string()),
+        );
+        let (ns, av, kind, name) = r.fetch_coords();
+        assert_eq!(ns, "monitoring");
+        assert_eq!(av, "helm.toolkit.fluxcd.io/v2");
+        assert_eq!(kind, "HelmRelease");
+        assert_eq!(name, "prometheus-op");
+    }
+
+    #[test]
+    fn flux_resource_ref_observed_matches_pre_lift_struct_literal_field_for_field() {
+        // Byte-for-byte parity pin against the pre-lift 7-slot
+        // struct-literal spelled at BOTH `phase_machine::
+        // handle_running` and `phase_machine::flux_ref_from_json`.
+        // A regression that reordered any of the six inputs at
+        // the composer's argument list, or that swapped a
+        // `ready`/`message` pair inside the composer's body,
+        // would surface here rather than as silent divergence
+        // between the composer's output and the pre-lift hand-
+        // authored shape every persisted status writer restated.
+        let composed = FluxResourceRef::observed(
+            "source.toolkit.fluxcd.io/v1beta2".to_string(),
+            "OCIRepository".to_string(),
+            "chart-source".to_string(),
+            "flux-system".to_string(),
+            false,
+            Some("applied; awaiting reconciliation".to_string()),
+        );
+        // Hand-authored the same seven slots directly, with a
+        // held-open stamp window across the composer call.
+        let stamped = composed.last_check.expect("stamped");
+        let baseline = FluxResourceRef {
+            api_version: "source.toolkit.fluxcd.io/v1beta2".to_string(),
+            kind: "OCIRepository".to_string(),
+            name: "chart-source".to_string(),
+            namespace: "flux-system".to_string(),
+            ready: false,
+            message: Some("applied; awaiting reconciliation".to_string()),
+            last_check: Some(stamped),
+        };
+        assert_eq!(composed.api_version, baseline.api_version);
+        assert_eq!(composed.kind, baseline.kind);
+        assert_eq!(composed.name, baseline.name);
+        assert_eq!(composed.namespace, baseline.namespace);
+        assert_eq!(composed.ready, baseline.ready);
+        assert_eq!(composed.message, baseline.message);
+        assert_eq!(composed.last_check, baseline.last_check);
     }
 
     #[test]

@@ -17,7 +17,7 @@ use k8s_openapi::api::core::v1::ConfigMap;
 use kube::{Api, Client};
 use serde_json::json;
 use std::collections::BTreeMap;
-use tatara_process::receipt::{ReceiptEnvelope, ReceiptKind};
+use tatara_process::receipt::{ReceiptEnvelope, ReceiptKind, RECEIPT_JSON_KEY, RECEIPT_YAML_KEY};
 use tracing::{info, warn};
 
 mod probe;
@@ -162,11 +162,28 @@ async fn write_receipt(envelope: &ReceiptEnvelope, cm_name: &str, ns: &str) -> R
     let api: Api<ConfigMap> = Api::namespaced(client, ns);
     let payload = serde_json::to_string(envelope)?;
 
+    // Receipt-CM `data` key spellings ride through the substrate
+    // primitives `tatara_process::receipt::{RECEIPT_JSON_KEY,
+    // RECEIPT_YAML_KEY}` — pre-lift the two `&'static str` literals
+    // were hand-authored inline here AND at the reader-side lookup
+    // gate in `tatara-reconciler::boundary::verify_receipt_cm`, one of
+    // FOUR workspace-wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold with NO shared owner binding the two
+    // keys' spelling. Post-lift the two keys live at ONE substrate-
+    // owned pair of constants and every writer insert AND every
+    // reader lookup routes through ONE substrate owner — a rename at
+    // ONE writer key or ONE reader key can no longer silently
+    // desynchronize the twin (a probe writing `"receipt.jsonl"` while
+    // the reader still gates on `"receipt.json"`), because both sides
+    // now read the same const.
     let mut data = BTreeMap::new();
-    data.insert("receipt.json".to_string(), payload.clone());
+    data.insert(RECEIPT_JSON_KEY.to_string(), payload.clone());
     // YAML twin so operators can `kubectl get cm -o yaml` and read the receipt
     // without re-parsing the embedded JSON.
-    data.insert("receipt.yaml".to_string(), serde_yaml::to_string(envelope)?);
+    data.insert(
+        RECEIPT_YAML_KEY.to_string(),
+        serde_yaml::to_string(envelope)?,
+    );
 
     // Try create-or-patch — idempotent across re-runs.
     let cm = ConfigMap {

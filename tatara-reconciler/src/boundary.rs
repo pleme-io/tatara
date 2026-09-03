@@ -30,7 +30,9 @@ use tatara_process::phase::ProcessPhase;
 use tatara_process::prelude::Process;
 #[cfg(test)]
 use tatara_process::receipt::ReceiptKind;
-use tatara_process::receipt::{ReceiptEnvelope, ReceiptError};
+use tatara_process::receipt::{
+    extract_receipt_payload_json, ReceiptEnvelope, ReceiptError, RECEIPT_CM_MISSING_KEY_MSG,
+};
 
 use crate::ssapply;
 
@@ -853,9 +855,18 @@ enum ReceiptVerdict {
     Ok(String),
 }
 
-/// Fetch the receipt ConfigMap, look up `data['receipt.json']` (or
-/// `data['receipt.yaml']` as a fallback), and delegate parsing to the
-/// typed `ReceiptEnvelope::parse_either` in `tatara-process`.
+/// Fetch the receipt ConfigMap, look up the receipt payload through
+/// the substrate primitive `tatara_process::receipt::
+/// extract_receipt_payload_json` (which iterates
+/// [`tatara_process::receipt::RECEIPT_CM_KEYS`] in primary-first order
+/// — `RECEIPT_JSON_KEY` before `RECEIPT_YAML_KEY`), and delegate
+/// parsing to the typed `ReceiptEnvelope::parse_either` in
+/// `tatara-process`. Pre-lift the primary/fallback lookup chain was
+/// hand-authored inline here AND the two key literals appeared on the
+/// writer side in `tatara-closed-loop-probe`; the substrate now owns
+/// both the key pair AND the reader-side lookup gate so a rename or a
+/// primary/fallback swap can no longer silently desync writer/reader
+/// pairs.
 async fn verify_receipt_cm(
     client: Client,
     ns: &str,
@@ -892,15 +903,19 @@ async fn verify_receipt_cm(
     let Some(obj) = obj else {
         return Ok(ReceiptVerdict::Missing);
     };
+    // Primary/fallback lookup gate rides through the substrate primitive
+    // `tatara_process::receipt::extract_receipt_payload_json` — pre-lift
+    // this was a hand-authored 3-link `.and_then(...).or_else(...).
+    // and_then(|v| v.as_str())` combinator chain restating BOTH key
+    // literals AND the primary-first ordering as inline plumbing. Post-
+    // lift the primary/fallback chain lives at ONE substrate owner
+    // (peer of the two key consts + `RECEIPT_CM_MISSING_KEY_MSG` on the
+    // wire-form-key axis) so a rename at either key OR a swap of the
+    // primary/fallback ordering can no longer silently desynchronize
+    // this reader from the writer-side probe binary.
     let data = obj.data.get("data");
-    let payload = data
-        .and_then(|d| d.get("receipt.json"))
-        .or_else(|| data.and_then(|d| d.get("receipt.yaml")))
-        .and_then(|v| v.as_str());
-    let Some(payload) = payload else {
-        return Ok(ReceiptVerdict::Malformed(
-            "ConfigMap missing data['receipt.json' | 'receipt.yaml'] string key".into(),
-        ));
+    let Some(payload) = extract_receipt_payload_json(data) else {
+        return Ok(ReceiptVerdict::Malformed(RECEIPT_CM_MISSING_KEY_MSG.into()));
     };
     Ok(parse_receipt_payload(payload, expected_root))
 }

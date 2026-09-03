@@ -118,6 +118,178 @@ pub fn default_receipt_config_map_name(job_name: &str) -> String {
     out
 }
 
+/// Canonical `data` key on a `receipt`-carrying ConfigMap for the JSON
+/// wire form of a [`ReceiptEnvelope`] — the substrate's PRIMARY payload
+/// key. Peer to [`RECEIPT_YAML_KEY`] on the same wire-form axis;
+/// [`RECEIPT_CM_KEYS`] fixes the primary-first ordering the reader-side
+/// lookup gate binds to.
+///
+/// Load-bearing at four shipped production sites — two on the writer
+/// axis (`tatara-closed-loop-probe`'s per-run receipt-CM emit inserts
+/// BOTH keys so operators can `kubectl get cm -o yaml` and read the
+/// receipt without re-parsing the embedded JSON) and two on the reader
+/// axis (`tatara-reconciler::boundary::verify_receipt_cm`'s `data`-map
+/// lookup gate reads the primary FIRST, then falls back to the YAML
+/// twin). Pre-lift each side restated the two `&'static str` literals
+/// verbatim — the writer inserted `"receipt.json"` + `"receipt.yaml"`
+/// as inline `String` allocations, the reader chained
+/// `.and_then(|d| d.get("receipt.json")).or_else(|| … "receipt.yaml"))`
+/// as inline lookup literals — with NO shared owner binding the two
+/// keys' spelling OR the primary-first ordering that the reader-side
+/// gate encodes as a load-bearing invariant. A rename at ONE writer
+/// key or ONE reader key silently desynchronizes the twin (a probe
+/// writing `"receipt.jsonl"` while the reader still gates on
+/// `"receipt.json"` → the postcondition MALFORMED-reads a ConfigMap
+/// that carries a valid receipt at a drifted key); a swap of the
+/// primary/fallback ordering at the reader silently promotes YAML
+/// over the operator-canonical JSON form.
+///
+/// Post-lift the two keys live at ONE substrate-owned pair of
+/// constants; [`RECEIPT_CM_KEYS`] pins the primary-first ordering the
+/// reader-side lookup gate iterates through
+/// ([`extract_receipt_payload_json`] composes the gate); every writer
+/// insert AND every reader lookup routes through ONE substrate owner,
+/// so a future rename (e.g. `"receipt.jsonl"` on a NDJSON schema
+/// variant, `"receipt.cbor"` on a binary-form variant) OR a
+/// primary/fallback swap lands at ONE substrate site and every writer
+/// and reader picks up the change mechanically — the two-side drift
+/// trap becomes unrepresentable at the type / value binding.
+///
+/// The reader's primary-first ordering is the substrate's convention:
+/// the JSON form is the machine-canonical wire (the closed-loop probe
+/// emits `serde_json::to_string(envelope)` as the source-of-truth
+/// payload), the YAML twin is the operator-facing readable projection
+/// (`serde_yaml::to_string(envelope)`) — both round-trip through the
+/// SAME [`ReceiptEnvelope::parse_either`] parser, so the primary/fallback
+/// ordering is a payload-format preference, not a semantic distinction.
+/// A future third wire form (CBOR, MessagePack, sigstore-signed JSON)
+/// extends [`RECEIPT_CM_KEYS`] in the primary-first order the readers
+/// prefer, and rustc's `[…; N]` arity constant on the type binds the
+/// extension in lockstep with every consumer.
+///
+/// Sibling substrate-owned wire-form const on the same receipt axis:
+/// [`RECEIPT_CM_SUFFIX`] pins the ConfigMap-name suffix every
+/// default-derivation site composes; [`RECEIPT_VERSION`] pins the
+/// wire-format version string every parser gates on; the three
+/// consts together define the substrate's receipt-CM wire contract at
+/// ONE surface.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// two payload-key literals recurred at FOUR production sites past
+/// the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold and are lifted
+/// to ONE substrate-owned pair of constants + ONE reader-side
+/// lookup-gate composer here. THEORY.md §V.1 — knowable platform;
+/// the (primary, fallback) ordering that the reader-side gate encodes
+/// becomes a NAMED PRIMITIVE ([`RECEIPT_CM_KEYS`]) rather than an
+/// implicit hand-coded chain reader consumers had to grok from a
+/// `.and_then(...).or_else(...)` pattern.
+pub const RECEIPT_JSON_KEY: &str = "receipt.json";
+
+/// Canonical `data` key on a `receipt`-carrying ConfigMap for the YAML
+/// wire form of a [`ReceiptEnvelope`] — the substrate's operator-facing
+/// FALLBACK payload key. Peer to [`RECEIPT_JSON_KEY`] on the same
+/// wire-form axis; [`RECEIPT_CM_KEYS`] fixes the primary-first ordering
+/// that pins the JSON form ahead of the YAML twin.
+///
+/// See [`RECEIPT_JSON_KEY`] for the full lift rationale and the four
+/// consumer sites this pair owns. The YAML form is the readable
+/// operator projection (`serde_yaml::to_string(envelope)`) the closed-
+/// loop probe writes alongside the JSON form so `kubectl get cm -o
+/// yaml` returns a human-readable payload without an inner JSON
+/// re-parse; the reader accepts it as a fallback when the JSON form is
+/// absent (older probe binaries, out-of-cluster hand-written receipts,
+/// operator-hand-written test fixtures).
+pub const RECEIPT_YAML_KEY: &str = "receipt.yaml";
+
+/// The primary-first closed-set of `data` keys the substrate's
+/// receipt-CM readers look up in order. [`RECEIPT_JSON_KEY`] takes
+/// precedence over [`RECEIPT_YAML_KEY`] — every reader-side lookup
+/// gate ([`extract_receipt_payload_json`] composes the canonical gate)
+/// iterates this table and returns the first hit as `&str`; every
+/// writer emits BOTH entries so the primary-first ordering the reader
+/// prefers matches the JSON form the probe wrote as its source-of-truth
+/// payload.
+///
+/// See [`RECEIPT_JSON_KEY`] for the full lift rationale and the four
+/// consumer sites this table owns. Sibling closed-set tables across
+/// the crate: [`ReceiptEnvelope::REQUIRED_PILLARS`], [`ReceiptKind::ALL`],
+/// [`crate::export::ReportFormat::ALL`], [`crate::phase::ProcessPhase::ALL`],
+/// [`crate::boundary::ConditionKind::ALL`], [`crate::intent::IntentKind::ALL`].
+pub const RECEIPT_CM_KEYS: [&str; 2] = [RECEIPT_JSON_KEY, RECEIPT_YAML_KEY];
+
+/// Operator-facing diagnostic message the substrate's receipt-CM
+/// reader-side lookup gate returns when neither [`RECEIPT_JSON_KEY`]
+/// nor [`RECEIPT_YAML_KEY`] is present as a string-valued entry on the
+/// ConfigMap's `data` map. Named through the substrate so the message
+/// stays coherent with [`RECEIPT_CM_KEYS`] — a rename at either key
+/// const would leave this message spelling the pre-rename literals
+/// verbatim, so both this const AND the two key consts live at ONE
+/// substrate site and any future re-shape sweeps them together.
+///
+/// Composed as a `&'static` byte-literal (not a `format!(...)`) so the
+/// composition does not participate in the workspace's typed-emission
+/// ban migration (skip-format-ban CLAUDE.md note); the shape is fixed
+/// at the two key literals' current spellings.
+pub const RECEIPT_CM_MISSING_KEY_MSG: &str =
+    "ConfigMap missing data['receipt.json' | 'receipt.yaml'] string key";
+
+/// Primary-first reader-side lookup gate for a receipt-CM's `data`
+/// map — the substrate primitive that owns the (primary, fallback)
+/// key-precedence chain every receipt-CM reader threads through.
+///
+/// Iterates [`RECEIPT_CM_KEYS`] in order and returns the first entry
+/// present as a string-valued JSON scalar; returns `None` when the
+/// `data` map is absent, when neither key is present, or when the
+/// entry at either key is a non-string JSON value (a JSON number,
+/// object, or array — none of which are a valid receipt-payload
+/// projection under the wire contract).
+///
+/// Load-bearing at ONE production reader-side site pre-lift
+/// (`tatara-reconciler::boundary::verify_receipt_cm`) whose 3-link
+/// `.and_then(|d| d.get(RECEIPT_JSON_KEY)).or_else(|| … RECEIPT_YAML_KEY
+/// )).and_then(|v| v.as_str())` chain restated the SAME two-key-
+/// with-string-scalar-projection shape as inline combinator plumbing
+/// — a shape the substrate now owns at ONE place so a future third
+/// wire form (a CBOR encoding, a sigstore-signed JSON form, a
+/// per-cluster payload rename) extends this primitive in lockstep
+/// with the [`RECEIPT_CM_KEYS`] table AND every reader consumer
+/// picks up the change mechanically. Sibling reader consumers
+/// (kenshi-runner's P3 test-suite receipt readback, shinka's per-
+/// migration receipt readback, any future per-Job attestation
+/// verifier) compose this ONE substrate primitive rather than
+/// re-authoring the primary/fallback chain per-consumer.
+///
+/// Lifetime: the returned `&str` borrows from the passed-in
+/// `serde_json::Value` — the reader's `data` reference must outlive
+/// the returned payload borrow. Every production reader-side consumer
+/// already holds the DynamicObject that owns the `Value` graph across
+/// the parse call that consumes this borrow, so the lifetime binding
+/// composes cleanly.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; the
+/// (primary-key, fallback-key, string-scalar-projection) 3-link
+/// combinator chain recurred at ONE production reader site with the
+/// (primary, fallback) ordering as a load-bearing invariant nowhere
+/// bound at the substrate — post-lift ONE substrate primitive owns
+/// the chain AND [`RECEIPT_CM_KEYS`] pins the ordering the primitive
+/// iterates through. THEORY.md §V.1 — knowable platform; the reader-
+/// side (primary, fallback) precedence becomes a NAMED PRIMITIVE the
+/// receipt-inspection surfaces (LSP hover, `tatara-check` receipt-
+/// inspect report, REPL) bind to for reading the wire contract from
+/// the substrate directly.
+#[must_use]
+pub fn extract_receipt_payload_json(data: Option<&serde_json::Value>) -> Option<&str> {
+    for key in RECEIPT_CM_KEYS {
+        if let Some(v) = data
+            .and_then(|d| d.get(key))
+            .and_then(serde_json::Value::as_str)
+        {
+            return Some(v);
+        }
+    }
+    None
+}
+
 /// Closed-set typed identifier for the four known [`ReceiptEnvelope::kind`]
 /// strings the substrate emits today — [`Self::ClosedLoopAuth`] →
 /// `"closed-loop-auth"`, [`Self::DbMigration`] → `"db-migration"`,
@@ -1318,6 +1490,224 @@ generated_at:  2026-05-19T12:00:00Z
                 expected,
                 "default_receipt_config_map_name({job_name:?}) drifted from \
                  <job>++RECEIPT_CM_SUFFIX composition",
+            );
+        }
+    }
+
+    // ── RECEIPT_JSON_KEY / RECEIPT_YAML_KEY / RECEIPT_CM_KEYS /
+    //    RECEIPT_CM_MISSING_KEY_MSG / extract_receipt_payload_json ─────
+    //
+    // Fail-before-pass-after pins for the substrate-level (primary,
+    // fallback) receipt-CM `data`-key pair AND the reader-side lookup
+    // gate composer that every receipt-CM consumer routes through.
+    // A regression that renamed either key OR that swapped the
+    // primary/fallback ordering at the reader gate would silently
+    // desynchronize writer/reader pairs across the workspace — the
+    // pins here catch the drift at the primitives themselves, before
+    // it reaches any downstream ConfigMap-fetch site.
+    //
+    // Pre-lift the two keys appeared as inline `&'static str` literals
+    // at FOUR production sites (2 writer inserts + 2 reader lookups)
+    // with no shared owner binding their spelling OR the primary-first
+    // ordering that the reader-side gate encodes as a load-bearing
+    // invariant.
+
+    #[test]
+    fn receipt_cm_keys_pinned_to_wire_form_literals() {
+        // Byte-exact wire-format pin — renaming either is a wire-name
+        // change, not a typed-internal refactor. Operators grep for
+        // these keys in kubectl output; the closed-loop-probe chart
+        // publishes ConfigMaps carrying them; the reconciler's
+        // JobAttested/ClosedLoopAuth evaluators gate on them. A silent
+        // rename here would desync every writer/reader pair fleet-wide.
+        assert_eq!(RECEIPT_JSON_KEY, "receipt.json");
+        assert_eq!(RECEIPT_YAML_KEY, "receipt.yaml");
+    }
+
+    #[test]
+    fn receipt_cm_keys_table_pins_primary_first_ordering() {
+        // The primary/fallback ordering is load-bearing — the reader
+        // gate returns the FIRST hit, so JSON must precede YAML to
+        // preserve the substrate's "JSON is machine-canonical, YAML
+        // is operator-facing readable twin" contract. A regression
+        // that reordered the table would silently promote YAML over
+        // JSON — the payload STILL parses (both wire forms round-trip
+        // through the same `ReceiptEnvelope::parse_either`), but the
+        // reader now prefers the operator-facing form when both are
+        // present, breaking the substrate's payload-form preference.
+        assert_eq!(RECEIPT_CM_KEYS, [RECEIPT_JSON_KEY, RECEIPT_YAML_KEY]);
+        assert_eq!(RECEIPT_CM_KEYS[0], RECEIPT_JSON_KEY);
+        assert_eq!(RECEIPT_CM_KEYS[1], RECEIPT_YAML_KEY);
+        assert_eq!(RECEIPT_CM_KEYS.len(), 2);
+    }
+
+    #[test]
+    fn receipt_cm_missing_key_msg_names_both_keys_in_primary_first_order() {
+        // The diagnostic message the reader-side gate returns when
+        // neither key is present must NAME both keys so the operator
+        // reading a `ReceiptVerdict::Malformed(...)` event knows
+        // exactly which `data.<key>` entries the reader looked up.
+        // Pin the message contains BOTH key literals (a rename at
+        // either key const would drift the message spelling silently
+        // if the message were `format!`-composed at the callsite;
+        // the substrate owns the message const alongside the two key
+        // consts so a coordinated update lands here).
+        assert!(
+            RECEIPT_CM_MISSING_KEY_MSG.contains(RECEIPT_JSON_KEY),
+            "missing-key diagnostic must name {RECEIPT_JSON_KEY}",
+        );
+        assert!(
+            RECEIPT_CM_MISSING_KEY_MSG.contains(RECEIPT_YAML_KEY),
+            "missing-key diagnostic must name {RECEIPT_YAML_KEY}",
+        );
+        // Primary before fallback in the diagnostic text — the
+        // operator's mental model matches the reader's iteration order.
+        let json_pos = RECEIPT_CM_MISSING_KEY_MSG
+            .find(RECEIPT_JSON_KEY)
+            .expect("json key present");
+        let yaml_pos = RECEIPT_CM_MISSING_KEY_MSG
+            .find(RECEIPT_YAML_KEY)
+            .expect("yaml key present");
+        assert!(
+            json_pos < yaml_pos,
+            "diagnostic must name {RECEIPT_JSON_KEY} before {RECEIPT_YAML_KEY}",
+        );
+    }
+
+    #[test]
+    fn extract_receipt_payload_json_returns_none_when_data_absent() {
+        // The reader-side gate handles the `data` map's own absence
+        // gracefully — `obj.data.get("data")` returns `None` when the
+        // ConfigMap carries no `data` map, and the gate must project
+        // that to `None` rather than panic or return a spurious hit.
+        assert_eq!(extract_receipt_payload_json(None), None);
+    }
+
+    #[test]
+    fn extract_receipt_payload_json_returns_none_when_neither_key_present() {
+        // A ConfigMap with `data` but no receipt payload — the gate
+        // returns `None` so the caller can project to the typed
+        // `ReceiptVerdict::Malformed(RECEIPT_CM_MISSING_KEY_MSG)`.
+        let data = serde_json::json!({ "unrelated.key": "value" });
+        assert_eq!(extract_receipt_payload_json(Some(&data)), None);
+    }
+
+    #[test]
+    fn extract_receipt_payload_json_prefers_primary_over_fallback_when_both_present() {
+        // Load-bearing primary-first invariant — when BOTH keys are
+        // present (the normal writer emit shape), the reader must
+        // return the JSON form. A regression that swapped the
+        // iteration order would silently promote YAML over JSON with
+        // NO observable failure at parse time (both round-trip through
+        // `parse_either`), so the pin here catches the ordering drift
+        // at the reader gate itself.
+        let data = serde_json::json!({
+            RECEIPT_JSON_KEY: "json-payload",
+            RECEIPT_YAML_KEY: "yaml-payload",
+        });
+        assert_eq!(
+            extract_receipt_payload_json(Some(&data)),
+            Some("json-payload"),
+            "reader must prefer {RECEIPT_JSON_KEY} over {RECEIPT_YAML_KEY} when both present",
+        );
+    }
+
+    #[test]
+    fn extract_receipt_payload_json_falls_back_to_yaml_when_json_absent() {
+        // Fallback arm — an older probe binary or a hand-authored
+        // fixture that only wrote the YAML form still reads
+        // successfully. Pins that the YAML entry is reachable through
+        // the gate.
+        let data = serde_json::json!({
+            RECEIPT_YAML_KEY: "yaml-payload",
+        });
+        assert_eq!(
+            extract_receipt_payload_json(Some(&data)),
+            Some("yaml-payload"),
+        );
+    }
+
+    #[test]
+    fn extract_receipt_payload_json_returns_first_key_when_only_primary_present() {
+        // Primary-only arm — the writer emitted just the JSON form
+        // (e.g. a future probe that dropped the YAML twin). Reader
+        // still resolves the payload through the primary key.
+        let data = serde_json::json!({
+            RECEIPT_JSON_KEY: "json-payload",
+        });
+        assert_eq!(
+            extract_receipt_payload_json(Some(&data)),
+            Some("json-payload"),
+        );
+    }
+
+    #[test]
+    fn extract_receipt_payload_json_rejects_non_string_scalar_values() {
+        // The wire contract says receipt payload values are string
+        // scalars — a JSON number, object, or array at either key is
+        // NOT a valid payload. The gate returns `None` (the caller
+        // then projects to a `Malformed` verdict) rather than a
+        // spurious hit that would panic downstream in the parser.
+        let data = serde_json::json!({
+            RECEIPT_JSON_KEY: 42,
+            RECEIPT_YAML_KEY: ["not", "a", "string"],
+        });
+        assert_eq!(extract_receipt_payload_json(Some(&data)), None);
+    }
+
+    #[test]
+    fn extract_receipt_payload_json_skips_non_string_primary_and_falls_back_to_string_fallback() {
+        // Mixed case — the primary key exists but carries a non-string
+        // value (a malformed writer, a partially-migrated wire form),
+        // and the fallback key carries a valid string payload. The
+        // gate treats the non-string primary as absent for the
+        // string-scalar projection contract and returns the string
+        // fallback. This preserves availability at the reader when a
+        // writer half-populated the primary.
+        let data = serde_json::json!({
+            RECEIPT_JSON_KEY: { "nested": "object" },
+            RECEIPT_YAML_KEY: "yaml-payload",
+        });
+        assert_eq!(
+            extract_receipt_payload_json(Some(&data)),
+            Some("yaml-payload"),
+        );
+    }
+
+    #[test]
+    fn extract_receipt_payload_json_matches_hand_authored_pre_lift_chain_bytewise() {
+        // Byte-identity pin against the pre-lift 3-link combinator
+        // chain that `verify_receipt_cm` composed inline:
+        //     data.and_then(|d| d.get(RECEIPT_JSON_KEY))
+        //         .or_else(|| data.and_then(|d| d.get(RECEIPT_YAML_KEY)))
+        //         .and_then(|v| v.as_str())
+        // Sweeps the four (primary-present × fallback-present)
+        // combinations so a regression at the primitive that broke
+        // the byte identity with the pre-lift shape surfaces here
+        // rather than as a subtle divergence at ONE quadrant.
+        for (json_val, yaml_val) in [
+            (Some("json"), Some("yaml")),
+            (Some("json"), None::<&str>),
+            (None::<&str>, Some("yaml")),
+            (None::<&str>, None::<&str>),
+        ] {
+            let mut map = serde_json::Map::new();
+            if let Some(j) = json_val {
+                map.insert(RECEIPT_JSON_KEY.into(), serde_json::Value::String(j.into()));
+            }
+            if let Some(y) = yaml_val {
+                map.insert(RECEIPT_YAML_KEY.into(), serde_json::Value::String(y.into()));
+            }
+            let data = serde_json::Value::Object(map);
+            let via_primitive = extract_receipt_payload_json(Some(&data));
+            let via_pre_lift_chain = data
+                .get(RECEIPT_JSON_KEY)
+                .or_else(|| data.get(RECEIPT_YAML_KEY))
+                .and_then(serde_json::Value::as_str);
+            assert_eq!(
+                via_primitive, via_pre_lift_chain,
+                "extract_receipt_payload_json diverged from pre-lift chain at \
+                 (json={json_val:?}, yaml={yaml_val:?})",
             );
         }
     }

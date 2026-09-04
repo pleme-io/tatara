@@ -151,6 +151,121 @@ impl Lifetime {
         self.permanent.is_none() && self.ephemeral.is_none()
     }
 
+    /// Permanent-only [`Lifetime`] — the `permanent` slot is populated with
+    /// the zero-sized [`PermanentLifetime`] marker and the `ephemeral` slot
+    /// is `None`. Peer of [`Self::ephemeral`] on the `LifetimeKind` closed
+    /// set; the two composers between them cover every non-ambiguous
+    /// non-empty corner of the two-slot tagged-union wire shape.
+    ///
+    /// Pre-lift the 4-token `Lifetime { permanent: Some(PermanentLifetime
+    /// {}), ephemeral: None }` (equivalently `Lifetime { permanent:
+    /// Some(PermanentLifetime {}), ..Lifetime::default() }`) fixture
+    /// literal was hand-authored at FOUR workspace-wide sites past the
+    /// ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold:
+    ///
+    /// * [`crate::crd::tests::permanent_only_process`] — `Process` fixture
+    ///   with the permanent-only lifetime slot for the `resolved_ephemeral`
+    ///   projection test matrix.
+    /// * [`tests::resolved_ephemeral_projects_only_the_unambiguous_ephemeral_slot`]
+    ///   — the "Permanent-only" branch of the same matrix in this module.
+    /// * [`tests::single_slot_lifetime`] — closed-set helper's `Permanent`
+    ///   arm, shared across property tests that walk `LifetimeKind::ALL`.
+    /// * `tatara-pool-reconciler::controller_pool::process_from_template`
+    ///   — production seed of a pool-member Process's lifetime slot on the
+    ///   fork path (Pool member starts Permanent; allocation flips it).
+    ///
+    /// Post-lift every callsite reads `Lifetime::permanent()` and the
+    /// substrate owns the shape. A future normalization (a warn-log on
+    /// callers that construct a permanent-only lifetime past a hardening
+    /// window, an audit trail that stamps a compile-generation onto the
+    /// zero-sized `PermanentLifetime`, or a deprecation of the empty
+    /// marker in favor of a richer permanent variant) lands at THIS ONE
+    /// substrate function and every downstream consumer inherits the
+    /// upgrade mechanically.
+    ///
+    /// The ambiguous corner (both `permanent` AND `ephemeral` set) is
+    /// deliberately NOT reachable through this composer — the composer's
+    /// contract is "the resolver picks `Permanent`", and an ambiguous
+    /// `Lifetime` resolves to [`LifetimeError::Ambiguous`], not to
+    /// `Permanent`. Tests that exercise the ambiguous corner (e.g.
+    /// [`crate::crd::tests::ambiguous_lifetime_process`],
+    /// [`tests::ambiguous_lifetime_errors`]) stay hand-authored as
+    /// struct literals — they need to violate the "exactly one slot"
+    /// invariant this composer preserves.
+    ///
+    /// Sibling composer: [`Self::ephemeral`] on the `Ephemeral` arm of
+    /// the same `LifetimeKind` closed set.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `Lifetime { permanent: Some(PermanentLifetime {}), .. }`
+    /// shape recurred at four hand-authored sites past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
+    /// owner here). THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the pins bind the resolved-variant corner AND the
+    /// discriminator kind AND the round-trip through [`Self::variant`]
+    /// so a regression that drifted any surface fails at
+    /// `tests::permanent_composer_*` here rather than as silent
+    /// operator-facing skew between the fork-path production seed and
+    /// the test-side fixture literals).
+    #[must_use]
+    pub fn permanent() -> Self {
+        Self {
+            permanent: Some(PermanentLifetime {}),
+            ephemeral: None,
+        }
+    }
+
+    /// Ephemeral-only [`Lifetime`] — the `ephemeral` slot is populated
+    /// with the supplied [`EphemeralLifetime`] and the `permanent` slot
+    /// is `None`. Peer of [`Self::permanent`] on the `LifetimeKind`
+    /// closed set.
+    ///
+    /// Pre-lift the 4-token `Lifetime { permanent: None, ephemeral:
+    /// Some(<e>) }` (equivalently `Lifetime { ephemeral: Some(<e>),
+    /// ..Lifetime::default() }`) fixture literal was hand-authored at
+    /// ELEVEN+ workspace-wide sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold, split across production seeds
+    /// (`tatara-process::ephemeral::From<EphemeralSpec> for ProcessSpec`
+    /// — the `(defephemeral …)` Lisp form's typed lowering;
+    /// `tatara-pool-reconciler::controller_allocation` — the allocator
+    /// Bind arm flipping a pool-member Process from Permanent to
+    /// Ephemeral with the requestor's TTL) and test fixtures across
+    /// [`crate::crd`], [`crate::lifetime_clock`], this module,
+    /// `tatara-pool-reconciler`, and `tatara-reconciler::render`.
+    ///
+    /// Post-lift every callsite reads `Lifetime::ephemeral(<e>)` and
+    /// the substrate owns the shape. A future normalization (a
+    /// per-fleet TTL floor stamp before storing the inner
+    /// `EphemeralLifetime`, an audit trail that records the composed
+    /// lifetime's provenance, a shared warn on empty `exports` at
+    /// Attested-terminal phases) lands at THIS ONE substrate function
+    /// and every downstream consumer inherits the upgrade mechanically.
+    ///
+    /// Return-form axis: takes an owned [`EphemeralLifetime`] rather
+    /// than a `&EphemeralLifetime`, matching every current caller
+    /// (each constructs the inner `EphemeralLifetime` directly at the
+    /// call site as a rvalue-shape struct literal, then hands it to
+    /// the composer).
+    ///
+    /// The ambiguous corner (both slots set) is NOT reachable through
+    /// this composer — see [`Self::permanent`]'s docs for the parity
+    /// with the peer + the rationale for keeping ambiguous-corner
+    /// tests as hand-authored struct literals.
+    ///
+    /// Sibling composer: [`Self::permanent`] on the `Permanent` arm of
+    /// the same `LifetimeKind` closed set.
+    ///
+    /// Theory anchor: same as [`Self::permanent`] — THEORY.md §VI.1
+    /// (generation over composition) + §II.1 invariant 5 (composition
+    /// preserves proofs).
+    #[must_use]
+    pub fn ephemeral(e: EphemeralLifetime) -> Self {
+        Self {
+            permanent: None,
+            ephemeral: Some(e),
+        }
+    }
+
     /// Resolve to a variant view. Empty resolves to `Permanent` (a static
     /// borrow on the embedded `DEFAULT_PERMANENT`); ambiguous (both set) is
     /// an error.
@@ -526,10 +641,10 @@ mod tests {
 
     #[test]
     fn ephemeral_set_resolves() {
-        let l = Lifetime {
-            ephemeral: Some(EphemeralLifetime::default()),
-            ..Lifetime::default()
-        };
+        // Routes through the ONE substrate composer
+        // [`Lifetime::ephemeral`] — see the composer's doc-comment for
+        // the full migration rationale.
+        let l = Lifetime::ephemeral(EphemeralLifetime::default());
         assert!(l.is_ephemeral());
         match l.variant().unwrap() {
             LifetimeVariant::Ephemeral(e) => {
@@ -673,15 +788,15 @@ mod tests {
 
     #[test]
     fn serde_round_trip_ephemeral() {
-        let l = Lifetime {
-            ephemeral: Some(EphemeralLifetime {
-                ttl: "30m".into(),
-                teardown_policy: TeardownPolicy::OnAttested,
-                max_concurrent: 4,
-                exports: vec![],
-            }),
-            ..Lifetime::default()
-        };
+        // Routes through the ONE substrate composer
+        // [`Lifetime::ephemeral`] — see the composer's doc-comment for
+        // the full migration rationale.
+        let l = Lifetime::ephemeral(EphemeralLifetime {
+            ttl: "30m".into(),
+            teardown_policy: TeardownPolicy::OnAttested,
+            max_concurrent: 4,
+            exports: vec![],
+        });
         let yaml = serde_yaml::to_string(&l).unwrap();
         assert!(yaml.contains("ttl: 30m"));
         assert!(yaml.contains("teardownPolicy: OnAttested"));
@@ -889,10 +1004,9 @@ mod tests {
         assert!(l.resolved_ephemeral().is_none());
 
         // 2. Permanent-only.
-        let l = Lifetime {
-            permanent: Some(PermanentLifetime {}),
-            ..Lifetime::default()
-        };
+        // Routes through the ONE substrate composer
+        // [`Lifetime::permanent`] — see the composer's doc-comment.
+        let l = Lifetime::permanent();
         assert!(l.resolved_ephemeral().is_none());
 
         // 3. Ephemeral-only — the ONE arm that projects.
@@ -902,10 +1016,9 @@ mod tests {
             max_concurrent: 7,
             exports: vec![],
         };
-        let l = Lifetime {
-            ephemeral: Some(ephemeral.clone()),
-            ..Lifetime::default()
-        };
+        // Routes through the ONE substrate composer
+        // [`Lifetime::ephemeral`] — see the composer's doc-comment.
+        let l = Lifetime::ephemeral(ephemeral.clone());
         let e = l.resolved_ephemeral().expect("ephemeral-only must project");
         assert_eq!(e.ttl, "13m");
         assert_eq!(e.teardown_policy, TeardownPolicy::OnFailed);
@@ -944,15 +1057,13 @@ mod tests {
     /// closed-set property tests so they each cover every variant
     /// without restating the construction table.
     fn single_slot_lifetime(kind: LifetimeKind) -> Lifetime {
+        // Each arm routes through the ONE substrate composer for its
+        // closed-set discriminator — [`Lifetime::permanent`] /
+        // [`Lifetime::ephemeral`]. See their doc-comments for the
+        // migration rationale.
         match kind {
-            LifetimeKind::Permanent => Lifetime {
-                permanent: Some(PermanentLifetime {}),
-                ..Lifetime::default()
-            },
-            LifetimeKind::Ephemeral => Lifetime {
-                ephemeral: Some(EphemeralLifetime::default()),
-                ..Lifetime::default()
-            },
+            LifetimeKind::Permanent => Lifetime::permanent(),
+            LifetimeKind::Ephemeral => Lifetime::ephemeral(EphemeralLifetime::default()),
         }
     }
 
@@ -962,26 +1073,25 @@ mod tests {
             ArtifactSource, ExportSpec, ExportTrigger, HttpEventChannel, ReceiptsSource,
             VectorChannel,
         };
-        let l = Lifetime {
-            ephemeral: Some(EphemeralLifetime {
-                ttl: "30m".into(),
-                teardown_policy: TeardownPolicy::OnAttested,
-                max_concurrent: 1,
-                exports: vec![ExportSpec {
-                    source: ArtifactSource {
-                        receipts: Some(ReceiptsSource::default()),
-                        ..ArtifactSource::default()
-                    },
-                    channel: VectorChannel {
-                        http_event: Some(HttpEventChannel::signal("receipt")),
-                        ..VectorChannel::default()
-                    },
-                    when: ExportTrigger::OnAttested,
-                    experiment_id_override: None,
-                }],
-            }),
-            ..Lifetime::default()
-        };
+        // Routes through the ONE substrate composer
+        // [`Lifetime::ephemeral`] — see the composer's doc-comment.
+        let l = Lifetime::ephemeral(EphemeralLifetime {
+            ttl: "30m".into(),
+            teardown_policy: TeardownPolicy::OnAttested,
+            max_concurrent: 1,
+            exports: vec![ExportSpec {
+                source: ArtifactSource {
+                    receipts: Some(ReceiptsSource::default()),
+                    ..ArtifactSource::default()
+                },
+                channel: VectorChannel {
+                    http_event: Some(HttpEventChannel::signal("receipt")),
+                    ..VectorChannel::default()
+                },
+                when: ExportTrigger::OnAttested,
+                experiment_id_override: None,
+            }],
+        });
         let yaml = serde_yaml::to_string(&l).unwrap();
         assert!(yaml.contains("exports:"));
         assert!(yaml.contains("receipts: {}"));
@@ -1128,5 +1238,154 @@ mod tests {
                  parse_duration(&self.ttl).ok()` for {ttl:?}",
             );
         }
+    }
+
+    // ─── Lifetime::{permanent,ephemeral} substrate composer pins ─────
+    //
+    // The `Lifetime { permanent: Some(PermanentLifetime {}), .. }` +
+    // `Lifetime { ephemeral: Some(<e>), .. }` shapes were open-lifted
+    // from FOUR + ELEVEN+ hand-authored fixture literals onto the ONE
+    // substrate composer pair [`Lifetime::permanent`] +
+    // [`Lifetime::ephemeral`]. These pins bind the composers at the
+    // fail-before-pass-after level so a future regression that flipped
+    // either arm (a swapped slot assignment, a stray `Some` on the
+    // opposite slot, a drift in the resolver's landing variant) fails
+    // HERE before landing at any of the fifteen+ consumer sites.
+
+    /// Pre-lift the `Lifetime { permanent: Some(PermanentLifetime {}),
+    /// ephemeral: None }` (equivalently `Lifetime { permanent:
+    /// Some(PermanentLifetime {}), ..Lifetime::default() }`) shape had
+    /// three surfaces every consumer paired: the resolver picks
+    /// `Permanent`, the `is_ephemeral` gate reads `false`, and the
+    /// two slots read as (`Some`, `None`). Bind all three from the
+    /// composer in ONE assertion group.
+    #[test]
+    fn lifetime_permanent_composer_matches_pre_lift_shape_bytewise() {
+        let via_primitive = Lifetime::permanent();
+        let hand_authored = Lifetime {
+            permanent: Some(PermanentLifetime {}),
+            ephemeral: None,
+        };
+
+        // Both slots read identically.
+        assert!(via_primitive.permanent.is_some());
+        assert!(hand_authored.permanent.is_some());
+        assert!(via_primitive.ephemeral.is_none());
+        assert!(hand_authored.ephemeral.is_none());
+
+        // is_default is false (permanent is set), is_ephemeral is false.
+        assert!(!via_primitive.is_default());
+        assert!(!via_primitive.is_ephemeral());
+        assert_eq!(via_primitive.is_default(), hand_authored.is_default());
+        assert_eq!(via_primitive.is_ephemeral(), hand_authored.is_ephemeral());
+
+        // Resolver lands on `Permanent`, not on `Ambiguous`.
+        assert_eq!(
+            via_primitive
+                .variant()
+                .expect("permanent-only resolves")
+                .kind(),
+            LifetimeKind::Permanent,
+        );
+
+        // resolved_ephemeral projects to None (peer arm of the
+        // ephemeral-only composer's Some(&e) landing).
+        assert!(via_primitive.resolved_ephemeral().is_none());
+    }
+
+    /// Pre-lift the `Lifetime { permanent: None, ephemeral: Some(<e>) }`
+    /// (equivalently `Lifetime { ephemeral: Some(<e>), ..Lifetime::
+    /// default() }`) shape had four surfaces every consumer paired: the
+    /// resolver picks `Ephemeral(<e>)`, the `is_ephemeral` gate reads
+    /// `true`, the two slots read as (`None`, `Some`), and
+    /// [`Lifetime::resolved_ephemeral`] projects to `Some(&<e>)` with
+    /// the SAME inner spec bytes the caller supplied. Bind all four
+    /// from the composer in ONE assertion group.
+    #[test]
+    fn lifetime_ephemeral_composer_matches_pre_lift_shape_bytewise() {
+        let inner = EphemeralLifetime {
+            ttl: "17m".into(),
+            teardown_policy: TeardownPolicy::OnFailed,
+            max_concurrent: 5,
+            exports: vec![],
+        };
+        let via_primitive = Lifetime::ephemeral(inner.clone());
+        let hand_authored = Lifetime {
+            permanent: None,
+            ephemeral: Some(inner.clone()),
+        };
+
+        // Both slots read identically.
+        assert!(via_primitive.permanent.is_none());
+        assert!(hand_authored.permanent.is_none());
+        assert!(via_primitive.ephemeral.is_some());
+        assert!(hand_authored.ephemeral.is_some());
+
+        // is_default is false, is_ephemeral is true.
+        assert!(!via_primitive.is_default());
+        assert!(via_primitive.is_ephemeral());
+        assert_eq!(via_primitive.is_default(), hand_authored.is_default());
+        assert_eq!(via_primitive.is_ephemeral(), hand_authored.is_ephemeral());
+
+        // Resolver lands on `Ephemeral` with the SAME inner bytes.
+        let via_inner = via_primitive
+            .resolved_ephemeral()
+            .expect("ephemeral-only resolves to Some(&e)");
+        assert_eq!(via_inner.ttl, inner.ttl);
+        assert_eq!(via_inner.teardown_policy, inner.teardown_policy);
+        assert_eq!(via_inner.max_concurrent, inner.max_concurrent);
+
+        // Kind projects to `Ephemeral`.
+        assert_eq!(
+            via_primitive
+                .variant()
+                .expect("ephemeral-only resolves")
+                .kind(),
+            LifetimeKind::Ephemeral,
+        );
+    }
+
+    /// The two composers PARTITION the closed set — every
+    /// `LifetimeKind` variant is reachable by exactly ONE composer,
+    /// and the composer's landing kind matches the discriminator. A
+    /// future third variant added to `LifetimeKind` without a paired
+    /// composer would surface here (the exhaustive `ALL` sweep would
+    /// hit a case with no arm to construct through).
+    #[test]
+    fn lifetime_composers_cover_every_non_ambiguous_closed_set_arm() {
+        for kind in LifetimeKind::ALL {
+            let via_composer = match kind {
+                LifetimeKind::Permanent => Lifetime::permanent(),
+                LifetimeKind::Ephemeral => Lifetime::ephemeral(EphemeralLifetime::default()),
+            };
+            let resolved = via_composer
+                .variant()
+                .expect("composer output resolves unambiguously")
+                .kind();
+            assert_eq!(
+                resolved, kind,
+                "composer for {kind:?} must land on the SAME resolver kind",
+            );
+        }
+    }
+
+    /// Neither composer produces the ambiguous corner — the composer's
+    /// contract is "exactly one slot set", and the ambiguous case
+    /// [`LifetimeError::Ambiguous`] must be unreachable through them.
+    /// A future refactor that widened either composer to accept the
+    /// opposite slot (e.g. added a `permanent_with_ephemeral_override`
+    /// arm) would surface here.
+    #[test]
+    fn lifetime_composers_never_produce_ambiguous_variant() {
+        assert!(
+            Lifetime::permanent().variant().is_ok(),
+            "Lifetime::permanent must never resolve to Ambiguous",
+        );
+        assert!(
+            Lifetime::ephemeral(EphemeralLifetime::default())
+                .variant()
+                .is_ok(),
+            "Lifetime::ephemeral must never resolve to Ambiguous",
+        );
     }
 }

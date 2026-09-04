@@ -212,19 +212,23 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
                     .map(|p| p.spec.template.ttl.clone())
                     .unwrap_or_else(|| "1h".into())
             });
-            let lifetime = Lifetime {
-                permanent: None,
-                ephemeral: Some(EphemeralLifetime {
-                    ttl: ttl.clone(),
-                    teardown_policy: TeardownPolicy::Always,
-                    max_concurrent: 0,
-                    // Allocation-patch path doesn't add new exports;
-                    // any :exports on the underlying pool template
-                    // are already on spec.lifetime.ephemeral when
-                    // the pool reconciler materialized the Process.
-                    exports: vec![],
-                }),
-            };
+            // Routes through the ONE substrate composer
+            // [`tatara_process::lifetime::Lifetime::ephemeral`] —
+            // pre-lift this was one of ELEVEN+ hand-authored
+            // `Lifetime { ephemeral: Some(<e>), permanent: None }`
+            // sites past the ★★ PRIME-DIRECTIVE ≥ 2 threshold. See
+            // the composer's doc-comment for the full migration
+            // rationale.
+            let lifetime = Lifetime::ephemeral(EphemeralLifetime {
+                ttl: ttl.clone(),
+                teardown_policy: TeardownPolicy::Always,
+                max_concurrent: 0,
+                // Allocation-patch path doesn't add new exports;
+                // any :exports on the underlying pool template
+                // are already on spec.lifetime.ephemeral when
+                // the pool reconciler materialized the Process.
+                exports: vec![],
+            });
             // Annotation keys ride through the substrate constants
             // `tatara_process::annotations::{REQUESTOR, ALLOCATION,
             // REQUESTOR_KIND}` — pre-lift each of the three keys was a

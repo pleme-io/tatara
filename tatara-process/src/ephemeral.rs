@@ -136,15 +136,18 @@ impl From<EphemeralSpec> for ProcessSpec {
             compliance: Default::default(),
             depends_on: vec![],
             signals: Default::default(),
-            lifetime: Lifetime {
-                ephemeral: Some(EphemeralLifetime {
-                    ttl: e.ttl,
-                    teardown_policy: e.teardown,
-                    max_concurrent: e.max_concurrent,
-                    exports: e.exports,
-                }),
-                ..Lifetime::default()
-            },
+            // Routes through the ONE substrate composer
+            // [`Lifetime::ephemeral`] — pre-lift this was one of
+            // ELEVEN+ hand-authored `Lifetime { ephemeral: Some(<e>),
+            // .. }` sites past the ★★ PRIME-DIRECTIVE ≥ 2 threshold.
+            // See the composer's doc-comment for the full migration
+            // rationale.
+            lifetime: Lifetime::ephemeral(EphemeralLifetime {
+                ttl: e.ttl,
+                teardown_policy: e.teardown,
+                max_concurrent: e.max_concurrent,
+                exports: e.exports,
+            }),
             // R5 — propagate routing template (None = no edges).
             routing: e.routing,
             // EncapsulatesSpec isn't exposed via EphemeralSpec sugar;

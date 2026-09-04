@@ -1280,15 +1280,15 @@ mod export_job_tests {
         // slots were hand-authored inline alongside the `lifetime`
         // override; post-lift the substrate owns the shape.
         let spec = ProcessSpec {
-            lifetime: Lifetime {
-                ephemeral: Some(EphemeralLifetime {
-                    ttl: "1h".into(),
-                    teardown_policy: TeardownPolicy::OnAttested,
-                    max_concurrent: 1,
-                    exports,
-                }),
-                ..Lifetime::default()
-            },
+            // Routes through the ONE substrate composer
+            // [`Lifetime::ephemeral`] — see the composer's doc-comment
+            // for the full migration rationale.
+            lifetime: Lifetime::ephemeral(EphemeralLifetime {
+                ttl: "1h".into(),
+                teardown_policy: TeardownPolicy::OnAttested,
+                max_concurrent: 1,
+                exports,
+            }),
             ..ProcessSpec::gate_compute_defaults()
         };
         let mut p = Process::new("r1", spec);

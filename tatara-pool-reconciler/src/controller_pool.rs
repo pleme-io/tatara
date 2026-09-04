@@ -17,7 +17,7 @@ use crate::ReconcilerError;
 
 use tatara_process::annotations;
 use tatara_process::ephemeral::EphemeralSpec;
-use tatara_process::lifetime::{Lifetime, PermanentLifetime};
+use tatara_process::lifetime::Lifetime;
 use tatara_process::pool::{EphemeralPool, MemberState, PoolMember, PoolPhase, PoolStatus};
 use tatara_process::prelude::{NamespacedApiCoordinates, Process, ProcessSpec};
 
@@ -622,10 +622,13 @@ fn build_member_process(
     // them to Ephemeral with the requestor's TTL.
     let template: EphemeralSpec = pool.spec.template.clone();
     let mut spec: ProcessSpec = template.into();
-    spec.lifetime = Lifetime {
-        permanent: Some(PermanentLifetime {}),
-        ephemeral: None,
-    };
+    // Routes through the ONE substrate composer
+    // [`tatara_process::lifetime::Lifetime::permanent`] — pre-lift
+    // this was one of FOUR hand-authored `Lifetime { permanent:
+    // Some(PermanentLifetime {}), .. }` sites past the ★★
+    // PRIME-DIRECTIVE ≥ 2 threshold. See the composer's doc-comment
+    // for the full migration rationale.
+    spec.lifetime = Lifetime::permanent();
 
     let mut proc = Process::new(process_name, spec);
     let ns = pool.metadata.namespace.clone();
@@ -689,15 +692,15 @@ mod tests {
     #[test]
     fn process_to_member_state_attested_ephemeral_is_allocated() {
         let mut spec = ProcessSpec::gate_compute_defaults();
-        spec.lifetime = Lifetime {
-            ephemeral: Some(tatara_process::lifetime::EphemeralLifetime {
-                ttl: "1h".into(),
-                teardown_policy: tatara_process::lifetime::TeardownPolicy::Always,
-                max_concurrent: 0,
-                exports: vec![],
-            }),
-            ..Default::default()
-        };
+        // Routes through the ONE substrate composer
+        // [`tatara_process::lifetime::Lifetime::ephemeral`] — see the
+        // composer's doc-comment for the full migration rationale.
+        spec.lifetime = Lifetime::ephemeral(tatara_process::lifetime::EphemeralLifetime {
+            ttl: "1h".into(),
+            teardown_policy: tatara_process::lifetime::TeardownPolicy::Always,
+            max_concurrent: 0,
+            exports: vec![],
+        });
         let mut p = Process::new("y", spec);
         p.status = Some(tatara_process::crd::ProcessStatus {
             phase: ProcessPhase::Attested,

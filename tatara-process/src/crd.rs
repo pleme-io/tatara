@@ -5326,24 +5326,28 @@ mod tests {
 
     fn permanent_only_process() -> Process {
         let mut spec = empty_spec();
-        spec.lifetime = crate::lifetime::Lifetime {
-            permanent: Some(crate::lifetime::PermanentLifetime {}),
-            ..crate::lifetime::Lifetime::default()
-        };
+        // Routes through the ONE substrate composer
+        // [`crate::lifetime::Lifetime::permanent`] — one of FOUR
+        // pre-lift exact-match sites past the ★★ PRIME-DIRECTIVE ≥ 2
+        // threshold; see the composer's doc-comment for the full
+        // migration rationale.
+        spec.lifetime = crate::lifetime::Lifetime::permanent();
         Process::new("perm", spec)
     }
 
     fn ephemeral_only_process(ttl: &str) -> Process {
         let mut spec = empty_spec();
-        spec.lifetime = crate::lifetime::Lifetime {
-            ephemeral: Some(EphemeralLifetime {
-                ttl: ttl.into(),
-                teardown_policy: crate::lifetime::TeardownPolicy::OnAttested,
-                max_concurrent: 3,
-                exports: vec![],
-            }),
-            ..crate::lifetime::Lifetime::default()
-        };
+        // Routes through the ONE substrate composer
+        // [`crate::lifetime::Lifetime::ephemeral`] — one of ELEVEN+
+        // pre-lift exact-match sites past the ★★ PRIME-DIRECTIVE ≥ 2
+        // threshold; see the composer's doc-comment for the full
+        // migration rationale.
+        spec.lifetime = crate::lifetime::Lifetime::ephemeral(EphemeralLifetime {
+            ttl: ttl.into(),
+            teardown_policy: crate::lifetime::TeardownPolicy::OnAttested,
+            max_concurrent: 3,
+            exports: vec![],
+        });
         Process::new("eph", spec)
     }
 

@@ -520,15 +520,15 @@ mod tests {
                 aplicacao: Some(AplicacaoIntent::chart_only("oci://x", "1")),
                 ..Intent::default()
             },
-            lifetime: Lifetime {
-                ephemeral: Some(EphemeralLifetime {
-                    ttl: ttl.into(),
-                    teardown_policy: teardown,
-                    max_concurrent: 1,
-                    exports: vec![],
-                }),
-                ..Lifetime::default()
-            },
+            // Routes through the ONE substrate composer
+            // [`Lifetime::ephemeral`] — see the composer's doc-comment
+            // for the full migration rationale.
+            lifetime: Lifetime::ephemeral(EphemeralLifetime {
+                ttl: ttl.into(),
+                teardown_policy: teardown,
+                max_concurrent: 1,
+                exports: vec![],
+            }),
             ..ProcessSpec::gate_compute_defaults()
         };
         let mut p = Process::new("e", spec);

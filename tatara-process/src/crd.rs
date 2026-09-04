@@ -3536,16 +3536,17 @@ mod tests {
         // site — a slot-inversion regression cannot masquerade as
         // identity by accident. Peer to the sibling
         // `tatara_process::status::tests::sample_flux_ref` discipline
-        // on the fetch-coords axis.
-        FluxResourceRef {
-            api_version: "kustomize.toolkit.fluxcd.io/v1".to_string(),
-            kind: "Kustomization".to_string(),
-            name: name.to_string(),
-            namespace: "flux-system".to_string(),
-            ready: false,
-            message: None,
-            last_check: None,
-        }
+        // on the fetch-coords axis. Routes through the ONE substrate
+        // composer [`FluxResourceRef::pending`] — the 4-slot pre-
+        // observation-shape composer that owns the workspace-wide
+        // `FluxResourceRef { …, ready: false, message: None,
+        // last_check: None }` fixture literal.
+        FluxResourceRef::pending(
+            "kustomize.toolkit.fluxcd.io/v1",
+            "Kustomization",
+            name,
+            "flux-system",
+        )
     }
 
     fn process_with_flux_resources(refs: Vec<FluxResourceRef>) -> Process {

@@ -208,6 +208,94 @@ impl FluxResourceRef {
             last_check: Some(Utc::now()),
         }
     }
+
+    /// Compose a `FluxResourceRef` in the pre-observation shape — the
+    /// 4-slot coordinate binding with the three status slots defaulted
+    /// (`ready: false`, `message: None`, `last_check: None`). The
+    /// deterministic-fixture peer of [`Self::observed`] on the same
+    /// `→ FluxResourceRef` composer axis: `observed` reads the wall
+    /// clock and takes 6 args (a live post-fetch stamp), `pending`
+    /// reads no clock and takes 4 args (a pre-observation fixture
+    /// seed, and the natural base for `..base.clone()` spread updates
+    /// that vary a single slot for a per-corner test sweep).
+    ///
+    /// Pre-lift the SAME 7-slot `FluxResourceRef { api_version, kind,
+    /// name, namespace, ready: false, message: None, last_check: None
+    /// }` struct-literal was hand-authored at THREE workspace-wide
+    /// fixture sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    /// threshold:
+    ///
+    /// * [`crate::crd`]
+    ///   `crd::observed_flux_resources_tests::sample_flux_ref(name)`
+    ///   — the shared `Kustomization`/`flux-system` fixture the
+    ///   `Process::observed_flux_resources` pin family destructures
+    ///   for its `flux_resources`-populated corners.
+    /// * `tatara-reconciler::ssapply::tests::sample_flux_ref_for_diag`
+    ///   — the `HelmRelease`/`flux-system` fixture the
+    ///   `flux_ref_fetch_error_context` diagnostic-wording pin
+    ///   family destructures for its (kind, name) slot-coverage
+    ///   sweep.
+    /// * `tatara-reconciler::ssapply::tests::
+    ///   flux_ref_fetch_error_context_matches_pre_lift_hand_authored_wording`
+    ///   — the inline 7-slot literal inside the cross-substrate
+    ///   coherence pin's per-case sweep over three distinct
+    ///   `(api_version, kind, name, namespace)` tuples.
+    ///
+    /// All THREE sites restated the SAME seven field bindings in the
+    /// SAME order and the SAME three defaulted status slots (`ready:
+    /// false, message: None, last_check: None`), differing only in
+    /// the four coordinate `String` values. Post-lift each callsite
+    /// reads `FluxResourceRef::pending(<api_version>, <kind>, <name>,
+    /// <namespace>)` and the four-slot bind + three-slot default
+    /// sinks live at ONE substrate owner.
+    ///
+    /// The `impl Into<String>` signature accepts BOTH `&'static str`
+    /// (the fixture-helper sites that spell coordinate literals
+    /// inline) AND owned `String` (a future callsite handing off a
+    /// dynamically-derived coordinate) without widening. Matches the
+    /// discipline of the sibling substrate composers
+    /// [`crate::pool::PoolMember::unallocated`] +
+    /// [`crate::allocation::AllocationRef::new`] on the identity-slot
+    /// axis.
+    ///
+    /// A future normalization (a case-fold on the group, a
+    /// virtual-cluster prefix rewrite for multi-tenancy, a stricter
+    /// kind gate, a `generateName` fallback on the name slot, a
+    /// canonical rename of one of the three defaulted status slots
+    /// to a typed `PreObservation` marker) lands at THIS ONE
+    /// substrate primitive and every downstream fixture / helper
+    /// inherits the upgrade mechanically — no per-site edit at any
+    /// of the THREE listed callers or at future consumers (a
+    /// stable-name claim-arbiter's pending-ref seed, a kenshi-runner
+    /// pre-observation fixture, a mirror-audit drift-probe test
+    /// helper).
+    ///
+    /// Theory grounding: THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the 4-slot positional binding + the three
+    /// defaulted status slots compose at ONE typed owner, so a
+    /// regression across the four `String` coordinate slots fails at
+    /// the composer's positional pin rather than at every downstream
+    /// fixture consumer). THEORY.md §VI.1 (generation over
+    /// composition — the 7-slot struct-literal recurred at three
+    /// hand-authored fixture sites past the ≥ 2 duplication trigger,
+    /// and is lifted to ONE typed composer here).
+    #[must_use]
+    pub fn pending(
+        api_version: impl Into<String>,
+        kind: impl Into<String>,
+        name: impl Into<String>,
+        namespace: impl Into<String>,
+    ) -> Self {
+        Self {
+            api_version: api_version.into(),
+            kind: kind.into(),
+            name: name.into(),
+            namespace: namespace.into(),
+            ready: false,
+            message: None,
+            last_check: None,
+        }
+    }
 }
 
 /// Identifying coordinates of a rendered K8s resource — the
@@ -744,6 +832,202 @@ mod tests {
         assert_eq!(composed.ready, baseline.ready);
         assert_eq!(composed.message, baseline.message);
         assert_eq!(composed.last_check, baseline.last_check);
+    }
+
+    // ─── FluxResourceRef::pending substrate pins ─────────────────────
+    //
+    // Bind [`FluxResourceRef::pending`] at fail-before-pass-after
+    // granularity so a regression that leaked a non-default status
+    // slot (`ready: true`, `message: Some("something")`, `last_check:
+    // Some(Utc::now())`), swapped two adjacent coordinate slots (all
+    // four are `String` and mechanically interchangeable at the type
+    // level), or diverged from the pre-lift 7-slot struct-literal on
+    // any of the seven fields surfaces HERE rather than as silent
+    // operator-invisible drift at the 3 downstream fixture consumers
+    // (crd.rs `sample_flux_ref`, ssapply.rs `sample_flux_ref_for_diag`,
+    // ssapply.rs `flux_ref_fetch_error_context_matches_pre_lift_...`).
+    //
+    // Each pin is fail-before-pass-after: the primitive did not exist
+    // pre-lift, so any test that invokes it fails to compile pre-lift
+    // and passes post-lift; the byte-identity pins below then bind
+    // the specific shape choice.
+
+    #[test]
+    fn flux_resource_ref_pending_binds_coordinate_slots_by_position() {
+        // Positional pin: the 4-arg constructor binds `(api_version,
+        // kind, name, namespace)` in THAT order, matching the pre-
+        // lift 7-slot struct-literal's declaration order. A regression
+        // that swapped ANY pair of adjacent `String` coordinate slots
+        // (all four are mechanically indistinguishable at the type
+        // level) would surface here rather than as a wire-time 404 at
+        // every downstream Flux fetch consumer that walks
+        // `FluxResourceRef.fetch_coords`.
+        let r = FluxResourceRef::pending(
+            "kustomize.toolkit.fluxcd.io/v1",
+            "Kustomization",
+            "observability-stack",
+            "flux-system",
+        );
+        assert_eq!(r.api_version, "kustomize.toolkit.fluxcd.io/v1");
+        assert_eq!(r.kind, "Kustomization");
+        assert_eq!(r.name, "observability-stack");
+        assert_eq!(r.namespace, "flux-system");
+    }
+
+    #[test]
+    fn flux_resource_ref_pending_defaults_every_status_slot() {
+        // Default-slot pin: the three status slots (`ready`, `message`,
+        // `last_check`) are ALL defaulted at the composer's body — no
+        // wall-clock read, no non-`None` `message` leak, no `ready:
+        // true` regression that would silently un-pend the fixture.
+        // A regression that stamped `Some(Utc::now())` into
+        // `last_check` (matching the sibling `observed` composer's
+        // wall-clock read) would silently defeat the deterministic-
+        // fixture contract the peer partition holds.
+        let r = FluxResourceRef::pending("v1", "K", "n", "ns");
+        assert!(
+            !r.ready,
+            "pending composer must default `ready` to false — non-`false` breaks the pre-observation contract"
+        );
+        assert_eq!(
+            r.message, None,
+            "pending composer must default `message` to None — non-`None` leaks a stale message into the pre-observation seed",
+        );
+        assert_eq!(
+            r.last_check, None,
+            "pending composer must default `last_check` to None — a `Some(_)` leak defeats the deterministic-peer partition against `observed`",
+        );
+    }
+
+    #[test]
+    fn flux_resource_ref_pending_accepts_both_owned_and_borrowed_coordinates() {
+        // The `impl Into<String>` ergonomic contract: both `&'static
+        // str` literals (the fixture-helper sites that spell
+        // coordinates inline) and owned `String` (a future callsite
+        // handing off a dynamically-derived coordinate) round-trip
+        // through the SAME composer signature without widening. A
+        // regression that specialised the signature to one form or
+        // the other would break either the inline-literal helpers or
+        // the owned-`String` downstream consumers.
+        let borrowed: FluxResourceRef = FluxResourceRef::pending("v1", "K", "n", "ns");
+        let owned: FluxResourceRef = FluxResourceRef::pending(
+            "v1".to_string(),
+            "K".to_string(),
+            "n".to_string(),
+            "ns".to_string(),
+        );
+        assert_eq!(borrowed.api_version, owned.api_version);
+        assert_eq!(borrowed.kind, owned.kind);
+        assert_eq!(borrowed.name, owned.name);
+        assert_eq!(borrowed.namespace, owned.namespace);
+        assert_eq!(borrowed.ready, owned.ready);
+        assert_eq!(borrowed.message, owned.message);
+        assert_eq!(borrowed.last_check, owned.last_check);
+    }
+
+    #[test]
+    fn flux_resource_ref_pending_matches_pre_lift_struct_literal_bytewise() {
+        // Byte-for-byte parity pin against the pre-lift 7-slot
+        // struct-literal spelled at ALL THREE hand-authored fixture
+        // sites (crd.rs `sample_flux_ref`, ssapply.rs
+        // `sample_flux_ref_for_diag`, ssapply.rs inline in the
+        // cross-substrate coherence pin's per-case sweep). Sweeps the
+        // three representative coordinate tuples the pre-lift sites
+        // used, so a regression that special-cased any one variant
+        // (a `Kustomization`-only path via `if kind ==
+        // "Kustomization" ...`) surfaces here.
+        let cases = [
+            (
+                "kustomize.toolkit.fluxcd.io/v1",
+                "Kustomization",
+                "observability-stack",
+                "flux-system",
+            ),
+            (
+                "helm.toolkit.fluxcd.io/v2",
+                "HelmRelease",
+                "prometheus-op",
+                "monitoring",
+            ),
+            (
+                "source.toolkit.fluxcd.io/v1beta2",
+                "OCIRepository",
+                "chart-source",
+                "flux-system",
+            ),
+        ];
+        for (av, kind, name, ns) in cases {
+            let composed = FluxResourceRef::pending(av, kind, name, ns);
+            let hand_authored = FluxResourceRef {
+                api_version: av.to_string(),
+                kind: kind.to_string(),
+                name: name.to_string(),
+                namespace: ns.to_string(),
+                ready: false,
+                message: None,
+                last_check: None,
+            };
+            assert_eq!(composed.api_version, hand_authored.api_version);
+            assert_eq!(composed.kind, hand_authored.kind);
+            assert_eq!(composed.name, hand_authored.name);
+            assert_eq!(composed.namespace, hand_authored.namespace);
+            assert_eq!(composed.ready, hand_authored.ready);
+            assert_eq!(composed.message, hand_authored.message);
+            assert_eq!(composed.last_check, hand_authored.last_check);
+        }
+    }
+
+    #[test]
+    fn flux_resource_ref_pending_partitions_the_composer_axis_against_observed() {
+        // Cross-composer partition pin: `pending` and `observed`
+        // both produce `FluxResourceRef` but partition the composer
+        // axis at the (deterministic-fixture, wall-clock-observed)
+        // split — `pending` reads no clock and leaves `last_check:
+        // None`, `observed` reads the wall clock and stamps
+        // `last_check: Some(<recent Utc>)`. A regression that merged
+        // either primitive onto the other (a `pending` that started
+        // stamping `Utc::now()`, an `observed` that started leaving
+        // `last_check: None`) would collapse the partition and
+        // surface here.
+        let p = FluxResourceRef::pending("v1", "K", "n", "ns");
+        assert_eq!(
+            p.last_check, None,
+            "pending is deterministic — no clock read"
+        );
+        let o = FluxResourceRef::observed(
+            "v1".to_string(),
+            "K".to_string(),
+            "n".to_string(),
+            "ns".to_string(),
+            false,
+            None,
+        );
+        assert!(o.last_check.is_some(), "observed reads the wall clock");
+    }
+
+    #[test]
+    fn flux_resource_ref_pending_composes_with_fetch_coords_at_pre_observation_shape() {
+        // Cross-composer coherence pin: a ref built by `pending`
+        // then unpacked by `fetch_coords` returns the same four
+        // slots in the peer projection's positional order
+        // `(namespace, api_version, kind, name)`. Composition of
+        // the two primitives on the same pre-observation ref
+        // preserves the slot identity — a regression at either end
+        // (a slot swap in `pending`, or a slot swap in
+        // `fetch_coords`) would surface here rather than as silent
+        // drift between the fixture writer and every downstream
+        // fetch reader.
+        let r = FluxResourceRef::pending(
+            "helm.toolkit.fluxcd.io/v2",
+            "HelmRelease",
+            "prometheus-op",
+            "monitoring",
+        );
+        let (ns, av, kind, name) = r.fetch_coords();
+        assert_eq!(ns, "monitoring");
+        assert_eq!(av, "helm.toolkit.fluxcd.io/v2");
+        assert_eq!(kind, "HelmRelease");
+        assert_eq!(name, "prometheus-op");
     }
 
     #[test]

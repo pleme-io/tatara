@@ -2458,16 +2458,17 @@ mod tests {
     fn sample_flux_ref_for_diag() -> FluxResourceRef {
         // Distinct kind + name so a swap between the two axes at the
         // diagnostic-context helper surfaces as an equality failure
-        // rather than as identity coincidence.
-        FluxResourceRef {
-            api_version: "helm.toolkit.fluxcd.io/v2".to_string(),
-            kind: "HelmRelease".to_string(),
-            name: "observability-stack".to_string(),
-            namespace: "flux-system".to_string(),
-            ready: false,
-            message: None,
-            last_check: None,
-        }
+        // rather than as identity coincidence. Routes through the ONE
+        // substrate composer [`tatara_process::status::FluxResourceRef::pending`]
+        // — the 4-slot pre-observation-shape composer that owns the
+        // workspace-wide `FluxResourceRef { …, ready: false, message:
+        // None, last_check: None }` fixture literal.
+        FluxResourceRef::pending(
+            "helm.toolkit.fluxcd.io/v2",
+            "HelmRelease",
+            "observability-stack",
+            "flux-system",
+        )
     }
 
     #[test]
@@ -2581,15 +2582,11 @@ mod tests {
             ),
         ];
         for (av, kind, name, ns) in cases {
-            let r = FluxResourceRef {
-                api_version: av.to_string(),
-                kind: kind.to_string(),
-                name: name.to_string(),
-                namespace: ns.to_string(),
-                ready: false,
-                message: None,
-                last_check: None,
-            };
+            // Routes through the ONE substrate composer
+            // [`FluxResourceRef::pending`] on the pre-observation
+            // fixture axis; every per-case sweep now rides through
+            // the same 4-slot composer as the peer helpers.
+            let r = FluxResourceRef::pending(av, kind, name, ns);
             assert_eq!(
                 flux_ref_fetch_error_context(&r),
                 format!("fetch {}/{}", r.kind, r.name),

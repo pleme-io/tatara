@@ -146,14 +146,31 @@ pub(super) fn phase_status_base(phase: ProcessPhase) -> Value {
 
 /// Common status patch builder — phase + phaseSince, optionally identity.
 ///
-/// Composes the shared two-slot base through [`phase_status_base`] and
-/// attaches an optional `identity` third slot.
+/// Composes the shared two-slot base through [`phase_status_base`] and,
+/// when the caller supplied an [`Identity`], attaches it under the
+/// caller-known `"identity"` third slot by delegating through the
+/// substrate composer [`phase_status_with`] — pre-lift the third-slot
+/// attach was open-coded here as
+/// `v["identity"] = serde_json::to_value(id).unwrap_or(Value::Null);`,
+/// one of TWO workspace-wide restatements of the "attach a serde-
+/// serialisable value to a `phase_status_base` slot with a `Value::Null`
+/// fallback" byte-shape past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// threshold (the sibling site is [`phase_status_with`] itself,
+/// generalised over the extra-key axis). Post-lift the fixed-`"identity"`
+/// variant rides through the generic composer so a future normalization
+/// of the third-slot attach discipline (a promotion of the `Value::Null`
+/// fallback to a typed error, a canonicalization pass over the extra
+/// value's own shape, an added `must_use` on the returned `Value`)
+/// lands at ONE substrate function and both siblings inherit the upgrade
+/// mechanically. The `"identity"` key is compile-time safe against the
+/// composer's `debug_assert!` base-slot-collision guard (it is neither
+/// `"phase"` nor `"phaseSince"`), so the delegation preserves the pre-
+/// lift `None`-arm byte-shape exactly.
 pub fn phase_status(phase: ProcessPhase, identity: Option<&Identity>) -> Value {
-    let mut v = phase_status_base(phase);
-    if let Some(id) = identity {
-        v["identity"] = serde_json::to_value(id).unwrap_or(Value::Null);
+    match identity {
+        Some(id) => phase_status_with(phase, "identity", id),
+        None => phase_status_base(phase),
     }
-    v
 }
 
 /// Status patch builder — phase + phaseSince + operator-visible `message`.
@@ -205,6 +222,21 @@ pub fn phase_status_msg(phase: ProcessPhase, message: impl Into<String>) -> Valu
 /// `&Vec<FluxResourceRef>` and `&ProcessAttestation`). A serialisation
 /// failure resolves to `Value::Null`, matching the existing
 /// `phase_status(phase, identity)` primitive's posture.
+///
+/// Also the substrate owner of the "attach a serde-serialisable value
+/// to a `phase_status_base` slot with a `Value::Null` fallback" byte-
+/// shape shared with [`phase_status`]'s `Some` arm — pre-lift the shape
+/// recurred at TWO workspace-wide restatements past the ★★ PRIME-
+/// DIRECTIVE ≥ 2 duplication threshold (this primitive over a caller-
+/// named `&'static str` key + a `T: Serialize` extra, [`phase_status`]
+/// over the fixed `"identity"` key + a `&Identity` extra). Post-lift
+/// [`phase_status`]'s `Some` arm delegates through this primitive, so a
+/// future promotion of the third-slot attach discipline (a typed
+/// serialisation-error return in place of the `Value::Null` fallback, a
+/// canonicalization pass over the extra value's shape, a fourth always-
+/// stamped diagnostic slot alongside the base pair) lands at ONE
+/// substrate function and BOTH the fixed-`"identity"` and caller-named
+/// variants inherit the upgrade mechanically.
 pub fn phase_status_with<T: Serialize>(phase: ProcessPhase, key: &'static str, value: T) -> Value {
     debug_assert!(
         key != "phase" && key != "phaseSince",
@@ -698,6 +730,145 @@ mod tests {
         assert!(msg.get("message").is_some());
         // Both agree on the phase discriminant they were built with.
         assert_eq!(bare.get("phase"), msg.get("phase"));
+    }
+
+    // ─── phase_status delegation-through-phase_status_with pins ───────────
+    //
+    // The "attach a serde-serialisable value to a `phase_status_base` slot
+    // with a `Value::Null` serialisation fallback" byte-shape recurred at
+    // TWO workspace-wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold before `phase_status`'s `Some` arm was routed
+    // through `phase_status_with`: the fixed-`"identity"` variant here in
+    // `phase_status` and the caller-named `&'static str`-keyed variant in
+    // `phase_status_with`. These pins bind the delegation at fail-before-
+    // pass-after granularity so a regression that stopped routing
+    // `phase_status`'s `Some` arm through the substrate composer would
+    // drift the fallback posture or the third-slot attach discipline at
+    // ONE site while the other stayed unchanged — the parity pin surfaces
+    // it HERE rather than as silent operator-facing skew between the
+    // identity-carrying and extra-key-carrying phase-transition patch
+    // sites.
+
+    #[test]
+    fn phase_status_some_delegates_through_phase_status_with_bytewise() {
+        // The `phase_status(phase, Some(&id))` path must produce the SAME
+        // wire-body as the direct `phase_status_with(phase, "identity",
+        // &id)` call, modulo the wall-clock delta between the two
+        // `phaseSince` stamps (both call `phase_status_base` which reads
+        // `Utc::now()` at call time, so the stamps CAN differ by the
+        // scheduling delta). Drop `phaseSince` before comparing.
+        //
+        // Swept across five representative `ProcessPhase` discriminants so
+        // a regression that broke ONE phase's routing through the composer
+        // (e.g. an accidental early-return for a specific phase) surfaces
+        // per-phase, not swallowed by the passing majority.
+        let id = Identity {
+            name: "seph".to_string(),
+            content_hash: "a3f7x9kp2bfhmnqr5tvwxyzabc".to_string(),
+            name_override: false,
+        };
+        for phase in [
+            ProcessPhase::Pending,
+            ProcessPhase::Execing,
+            ProcessPhase::Running,
+            ProcessPhase::Attested,
+            ProcessPhase::Failed,
+        ] {
+            let mut via_phase_status = phase_status(phase, Some(&id));
+            let mut via_phase_status_with = phase_status_with(phase, "identity", &id);
+            via_phase_status
+                .as_object_mut()
+                .expect("object")
+                .remove("phaseSince");
+            via_phase_status_with
+                .as_object_mut()
+                .expect("object")
+                .remove("phaseSince");
+            assert_eq!(
+                via_phase_status, via_phase_status_with,
+                "phase_status(phase, Some(&id)) must delegate through phase_status_with(phase, \"identity\", &id) for phase `{phase}`",
+            );
+        }
+    }
+
+    #[test]
+    fn phase_status_none_delegates_through_phase_status_base_bytewise() {
+        // The `phase_status(phase, None)` path must produce the SAME
+        // wire-body as the direct `phase_status_base(phase)` call, modulo
+        // the wall-clock delta between the two `phaseSince` stamps. A
+        // regression that leaked the `"identity"` slot into the `None`
+        // arm (e.g. a match-arm swap that stamped `Value::Null` unconditionally)
+        // would inflate the slot count and surface HERE at every one of the
+        // five bare `handle_*` transition callsites (reconverging→execing,
+        // exiting→zombie, failed→zombie, zombie→reaped, signal transition)
+        // rather than at each callsite's downstream K8s round-trip.
+        for phase in [
+            ProcessPhase::Pending,
+            ProcessPhase::Execing,
+            ProcessPhase::Running,
+            ProcessPhase::Attested,
+            ProcessPhase::Failed,
+        ] {
+            let via_phase_status = phase_status(phase, None);
+            let via_phase_status_base = phase_status_base(phase);
+            // Slot-count guard first: bare stays at 2. A regression that
+            // leaked an `"identity": null` sentinel into the None arm
+            // would inflate the slot count to 3 and stamp a bogus null
+            // identity on the wire.
+            assert_eq!(
+                via_phase_status.as_object().unwrap().len(),
+                2,
+                "phase_status(phase, None) must own exactly the two base slots for phase `{phase}` — no null-identity leak",
+            );
+            // Now compare the two paths bytewise modulo `phaseSince`,
+            // which both stamp at call time (so the two stamps CAN differ
+            // by the scheduling delta between the two `phase_status_base`
+            // invocations).
+            let mut a = via_phase_status;
+            let mut b = via_phase_status_base;
+            a.as_object_mut().expect("object").remove("phaseSince");
+            b.as_object_mut().expect("object").remove("phaseSince");
+            assert_eq!(
+                a, b,
+                "phase_status(phase, None) must delegate through phase_status_base(phase) for phase `{phase}` — the None arm carries no third slot",
+            );
+        }
+    }
+
+    #[test]
+    fn phase_status_some_carries_the_identity_slot_under_the_fixed_key() {
+        // Cross-check that the `Some` arm's third slot lands under the
+        // fixed `"identity"` key — a regression that renamed the key at
+        // the delegation boundary (a `"id"` shorthand, an accidental
+        // `"identity_hash"` typo picking up the content_hash field name)
+        // would break every downstream consumer reading
+        // `status.identity.{name,content_hash,name_override}` on the K8s
+        // API server side, and the pin catches it at the primitive.
+        let id = Identity {
+            name: "seph".to_string(),
+            content_hash: "a3f7x9kp2bfhmnqr5tvwxyzabc".to_string(),
+            name_override: true,
+        };
+        let v = phase_status(ProcessPhase::Attested, Some(&id));
+        let obj = v.as_object().expect("object");
+        assert_eq!(obj.len(), 3, "phase + phaseSince + identity");
+        // The three sub-slots ride through the identity's serde surface
+        // verbatim (camelCase field names, string / bool discriminants).
+        assert_eq!(
+            v.pointer("/identity/name").and_then(Value::as_str),
+            Some("seph"),
+            "identity.name rides through the delegation verbatim",
+        );
+        assert_eq!(
+            v.pointer("/identity/content_hash").and_then(Value::as_str),
+            Some("a3f7x9kp2bfhmnqr5tvwxyzabc"),
+            "identity.content_hash rides through the delegation verbatim (Identity has no camelCase rename)",
+        );
+        assert_eq!(
+            v.pointer("/identity/name_override").and_then(Value::as_bool),
+            Some(true),
+            "identity.name_override rides through the delegation verbatim (Identity has no camelCase rename)",
+        );
     }
 
     // ─── phase_status_with substrate pins ─────────────────────────────────

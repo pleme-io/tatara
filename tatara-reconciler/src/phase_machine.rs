@@ -174,14 +174,17 @@ pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
         );
     }
 
-    // 3. Advance to Execing.
-    patch::patch_process_status(
-        &api,
-        &name,
-        patch::phase_status_msg(ProcessPhase::Execing, "dependencies satisfied"),
-    )
-    .await
-    .map_err(|e| anyhow!("patch (forking→execing): {e}"))?;
+    // 3. Advance to Execing. Compose+dispatch rides through the
+    //    substrate peer `patch::transition_msg` — pre-lift this was
+    //    a hand-authored `patch::patch_process_status(&api, &name,
+    //    patch::phase_status_msg(<phase>, <msg>))` chain, one of NINE
+    //    workspace-wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+    //    duplication trigger; post-lift the compose+dispatch sink
+    //    lives at ONE substrate owner (peer of `patch::transition`
+    //    on the bare-transition axis).
+    patch::transition_msg(&api, &name, ProcessPhase::Execing, "dependencies satisfied")
+        .await
+        .map_err(|e| anyhow!("patch (forking→execing): {e}"))?;
 
     info!(namespace = %ns, name = %name, "forking → execing");
     Ok(tatara_process::requeue::after_secs(TICK_RETRY))
@@ -495,10 +498,11 @@ pub async fn handle_attested(p: &Process, ctx: &Context) -> Result<Action> {
 
     if drift {
         let api = ctx.process_api(&ns);
-        patch::patch_process_status(
+        patch::transition_msg(
             &api,
             &name,
-            patch::phase_status_msg(ProcessPhase::Reconverging, "flux resource drift detected"),
+            ProcessPhase::Reconverging,
+            "flux resource drift detected",
         )
         .await
         .map_err(|e| anyhow!("patch (attested→reconverging): {e}"))?;
@@ -640,13 +644,9 @@ pub async fn handle_reconverging(p: &Process, ctx: &Context) -> Result<Action> {
     // SIGHUP or drift detected — flip back to Execing.
     let (ns, name) = p.owned_coordinates_or_err()?;
     let api = ctx.process_api(&ns);
-    patch::patch_process_status(
-        &api,
-        &name,
-        patch::phase_status(ProcessPhase::Execing, None),
-    )
-    .await
-    .map_err(|e| anyhow!("patch (reconverging→execing): {e}"))?;
+    patch::transition(&api, &name, ProcessPhase::Execing)
+        .await
+        .map_err(|e| anyhow!("patch (reconverging→execing): {e}"))?;
     info!(namespace = %ns, name = %name, "reconverging → execing (RECONVERGE)");
     Ok(tatara_process::requeue::after_secs(TICK_RETRY))
 }
@@ -813,13 +813,9 @@ async fn advance_out_of_releasing(
         _ => ProcessPhase::Exiting,
     };
     let api = ctx.process_api(ns);
-    patch::patch_process_status(
-        &api,
-        name,
-        patch::phase_status_msg(next, format!("releasing → {next} — {reason}")),
-    )
-    .await
-    .map_err(|e| anyhow!("patch (releasing→{next}): {e}"))?;
+    patch::transition_msg(&api, name, next, format!("releasing → {next} — {reason}"))
+        .await
+        .map_err(|e| anyhow!("patch (releasing→{next}): {e}"))?;
     info!(
         namespace = %ns,
         name = %name,
@@ -930,7 +926,7 @@ pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
 
     // No children (or no pid — never forked). Advance to Zombie.
     let api = ctx.process_api(&ns);
-    patch::patch_process_status(&api, &name, patch::phase_status(ProcessPhase::Zombie, None))
+    patch::transition(&api, &name, ProcessPhase::Zombie)
         .await
         .map_err(|e| anyhow!("patch (exiting→zombie): {e}"))?;
     info!(namespace = %ns, name = %name, "exiting → zombie");
@@ -964,18 +960,14 @@ pub async fn handle_failed(p: &Process, ctx: &Context) -> Result<Action> {
         // finalizer-driven owner GC, while still recording the
         // teardown reason so the operator sees why cleanup happened
         // automatically.
-        patch::patch_process_status(
-            &api,
-            &name,
-            patch::phase_status_msg(ProcessPhase::Zombie, rendered),
-        )
-        .await
-        .map_err(|e| anyhow!("patch (failed→zombie, ephemeral teardown): {e}"))?;
+        patch::transition_msg(&api, &name, ProcessPhase::Zombie, rendered)
+            .await
+            .map_err(|e| anyhow!("patch (failed→zombie, ephemeral teardown): {e}"))?;
         info!(namespace = %ns, name = %name, "failed → zombie (ephemeral teardown)");
         return Ok(tatara_process::requeue::after_secs(TICK_RETRY));
     }
 
-    patch::patch_process_status(&api, &name, patch::phase_status(ProcessPhase::Zombie, None))
+    patch::transition(&api, &name, ProcessPhase::Zombie)
         .await
         .map_err(|e| anyhow!("patch (failed→zombie): {e}"))?;
     info!(namespace = %ns, name = %name, "failed → zombie");
@@ -1039,13 +1031,11 @@ async fn transition_to_releasing(
         .map_err(|e| anyhow!("annotate released-from: {e}"))?;
 
     // 2. Patch phase=Releasing with the operator-visible reason.
-    patch::patch_process_status(
+    patch::transition_msg(
         &api,
         name,
-        patch::phase_status_msg(
-            ProcessPhase::Releasing,
-            format!("releasing exports — {reason}"),
-        ),
+        ProcessPhase::Releasing,
+        format!("releasing exports — {reason}"),
     )
     .await
     .map_err(|e| anyhow!("patch (→releasing): {e}"))?;
@@ -1084,13 +1074,9 @@ async fn transition_to_exiting(
     reason: &str,
 ) -> Result<Action> {
     let api = ctx.process_api(ns);
-    patch::patch_process_status(
-        &api,
-        name,
-        patch::phase_status_msg(ProcessPhase::Exiting, reason),
-    )
-    .await
-    .map_err(|e| anyhow!("patch (→exiting, ephemeral): {e}"))?;
+    patch::transition_msg(&api, name, ProcessPhase::Exiting, reason)
+        .await
+        .map_err(|e| anyhow!("patch (→exiting, ephemeral): {e}"))?;
     info!(
         namespace = %ns,
         name = %name,
@@ -1105,7 +1091,7 @@ pub async fn handle_zombie(p: &Process, ctx: &Context) -> Result<Action> {
     // may force-reap earlier on zombie_timeout_seconds overflow (future).
     let (ns, name) = p.owned_coordinates_or_err()?;
     let api = ctx.process_api(&ns);
-    patch::patch_process_status(&api, &name, patch::phase_status(ProcessPhase::Reaped, None))
+    patch::transition(&api, &name, ProcessPhase::Reaped)
         .await
         .map_err(|e| anyhow!("patch (zombie→reaped): {e}"))?;
     info!(namespace = %ns, name = %name, "zombie → reaped");

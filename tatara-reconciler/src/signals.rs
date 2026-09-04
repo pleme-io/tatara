@@ -140,17 +140,18 @@ pub async fn consume_effect(process: &Process, ctx: &Context, effect: SignalEffe
     match effect {
         SignalEffect::Noop => Ok(()),
         SignalEffect::TransitionTo(phase) => {
-            patch::patch_process_status(&api, &name, patch::phase_status(phase, None))
+            patch::transition(&api, &name, phase)
                 .await
                 .map_err(|e| anyhow!("transition via signal: {e}"))?;
             Ok(())
         }
         SignalEffect::ForceAttest => {
             // Flip back to Running — re-verify + re-attest without changing spec.
-            patch::patch_process_status(
+            patch::transition_msg(
                 &api,
                 &name,
-                patch::phase_status_msg(ProcessPhase::Running, "forced re-attestation (SIGUSR1)"),
+                ProcessPhase::Running,
+                "forced re-attestation (SIGUSR1)",
             )
             .await
             .map_err(|e| anyhow!("force attest: {e}"))?;
@@ -203,13 +204,11 @@ pub async fn consume_effect(process: &Process, ctx: &Context, effect: SignalEffe
         }
         SignalEffect::Remediate => {
             // Trigger reconverge with a note; real remediation hooks (kensa) land later.
-            patch::patch_process_status(
+            patch::transition_msg(
                 &api,
                 &name,
-                patch::phase_status_msg(
-                    ProcessPhase::Reconverging,
-                    "remediate requested (SIGUSR2)",
-                ),
+                ProcessPhase::Reconverging,
+                "remediate requested (SIGUSR2)",
             )
             .await
             .map_err(|e| anyhow!("remediate: {e}"))?;

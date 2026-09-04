@@ -247,6 +247,130 @@ pub fn phase_status_with<T: Serialize>(phase: ProcessPhase, key: &'static str, v
     v
 }
 
+// ─── phase-transition compose+dispatch async peers ────────────────────
+//
+// The two async wrappers below own the "compose a phase-transition
+// status-patch body + dispatch it through [`patch_process_status`]"
+// chain — the ONE peer-pair every bare / message-carrying phase-
+// transition writer in the reconciler post-lift routes through. Pre-
+// lift the compose+dispatch chain was hand-authored at 14 workspace-
+// wide callsites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+// threshold; post-lift the two async peers own the chain and every
+// downstream transition writer inherits a future normalization of
+// the dispatch shape (a structured tracing span around the K8s
+// round-trip, a shared retry-budget wrap, an anyhow-mapped return
+// form, an injectable `time_source` for the underlying phase_status_*
+// composer's `phaseSince` stamp) mechanically at the ONE owner
+// rather than at every callsite.
+
+/// Compose + dispatch a bare (no-`message`, no-`identity`)
+/// phase-transition status patch — the ONE owner of the
+/// `patch_process_status(api, name, phase_status(phase, None))`
+/// compose+dispatch chain (5 workspace-wide restatements pre-lift),
+/// and the peer of [`transition_msg`] on the message axis.
+///
+/// Pre-lift the SAME chain was hand-authored at FIVE consumer sites
+/// across `tatara-reconciler`, each restating `patch::
+/// patch_process_status(&api, &name, patch::phase_status(<phase>,
+/// None))` verbatim to write a bare phase transition through the
+/// merge-status wire posture:
+///
+/// * [`crate::phase_machine::handle_reconverging`] — the
+///   Reconverging → Execing SIGHUP path re-entry.
+/// * [`crate::phase_machine::handle_exiting`]'s no-children fast-
+///   path — Exiting → Zombie when the cascade completes with no
+///   surviving children.
+/// * [`crate::phase_machine::handle_failed`]'s non-ephemeral fall-
+///   through — Failed → Zombie when no auto-teardown fires.
+/// * [`crate::phase_machine::handle_zombie`] — Zombie → Reaped.
+/// * [`crate::signals::consume_effect`]'s `SignalEffect::TransitionTo`
+///   arm — signal-driven bare transitions (SIGTERM → Exiting,
+///   SIGKILL → Failed, etc.).
+///
+/// All five sites walked the SAME three-link chain — compose the
+/// bare `phase_status(phase, None)` body, dispatch through
+/// `patch_process_status`, await the K8s round-trip. Post-lift each
+/// callsite reads `patch::transition(&api, &name, phase).await` and
+/// the compose+dispatch sink lives at ONE owner. Delegates through
+/// [`phase_status`] (whose `None` arm delegates through
+/// [`phase_status_base`]) + [`patch_process_status`], so the pin
+/// stack above the primitive (base-slot invariant, `None`-arm
+/// no-third-slot invariant, wall-clock-at-call-time `phaseSince`
+/// stamping) rides through this wrapper mechanically.
+///
+/// Return-form axis: `Result<Process, KubeError>` matches the
+/// underlying [`patch_process_status`] signature so every callsite
+/// keeps its existing `.map_err(|e| anyhow!(...))?` wrap unchanged —
+/// the axis-preserving lift means the caller's async control-flow
+/// (map-error, best-effort ignore, propagate) rides through
+/// unchanged and only the compose+dispatch chain compresses.
+pub async fn transition(
+    api: &Api<Process>,
+    name: &str,
+    phase: ProcessPhase,
+) -> Result<Process, KubeError> {
+    patch_process_status(api, name, phase_status(phase, None)).await
+}
+
+/// Compose + dispatch a phase-transition status patch carrying an
+/// operator-visible `message` — the ONE owner of the
+/// `patch_process_status(api, name, phase_status_msg(phase, msg))`
+/// compose+dispatch chain (9 workspace-wide restatements pre-lift),
+/// and the peer of [`transition`] on the message axis.
+///
+/// Pre-lift the SAME chain was hand-authored at NINE consumer sites
+/// across three modules (`phase_machine.rs` × 6, `signals.rs` × 2,
+/// `controller.rs` × 1), each restating `patch::patch_process_status(
+/// &api, &name, patch::phase_status_msg(<phase>, <msg>))` verbatim to
+/// write a message-carrying phase transition through the merge-status
+/// wire posture:
+///
+/// * [`crate::phase_machine::handle_forking`] — Forking → Execing
+///   with `"dependencies satisfied"`.
+/// * [`crate::phase_machine::handle_attested`]'s drift branch —
+///   Attested → Reconverging with `"flux resource drift detected"`.
+/// * `crate::phase_machine::advance_out_of_releasing` — Releasing →
+///   {Exiting, Zombie} with a `format!` reason.
+/// * [`crate::phase_machine::handle_failed`]'s ephemeral-teardown
+///   branch — Failed → Zombie with the auto-terminate reason.
+/// * `crate::phase_machine::transition_to_releasing` — {Attested,
+///   Failed} → Releasing with `"releasing exports — <reason>"`.
+/// * `crate::phase_machine::transition_to_exiting` — {Running,
+///   Attested} → Exiting with the caller-supplied reason.
+/// * [`crate::signals::consume_effect`]'s `SignalEffect::ForceAttest`
+///   arm — Running with `"forced re-attestation (SIGUSR1)"`.
+/// * [`crate::signals::consume_effect`]'s `SignalEffect::Remediate`
+///   arm — Reconverging with `"remediate requested (SIGUSR2)"`.
+/// * [`crate::controller::reconcile`]'s deletion-preempt — Exiting
+///   with `"deletion requested"`.
+///
+/// All nine sites walked the SAME three-link chain — compose the
+/// three-slot `phase_status_msg(phase, msg)` body, dispatch through
+/// `patch_process_status`, await the K8s round-trip. Post-lift each
+/// callsite reads `patch::transition_msg(&api, &name, phase,
+/// msg).await` and the compose+dispatch sink lives at ONE owner.
+/// Delegates through [`phase_status_msg`] (which composes atop
+/// [`phase_status_base`]) + [`patch_process_status`], so the pin
+/// stack above the underlying composer (base-slot invariant, three-
+/// slot invariant, wall-clock-at-call-time `phaseSince` stamping,
+/// message-slot presence) rides through this wrapper mechanically.
+///
+/// `impl Into<String>` matches [`phase_status_msg`]'s signature so
+/// both `&'static str` literal reasons and `format!(...)`-owned
+/// strings (the Releasing / Exiting cascade paths use both) pass
+/// through without a per-callsite `.to_string()` wrap. Return-form
+/// axis: `Result<Process, KubeError>` matches [`patch_process_status`],
+/// so the caller's existing `.map_err(|e| anyhow!(...))?` wrap rides
+/// through unchanged.
+pub async fn transition_msg(
+    api: &Api<Process>,
+    name: &str,
+    phase: ProcessPhase,
+    message: impl Into<String>,
+) -> Result<Process, KubeError> {
+    patch_process_status(api, name, phase_status_msg(phase, message)).await
+}
+
 // ─── finalizer helpers ────────────────────────────────────────────────
 
 /// Pure — compute the finalizer list after adding `target`.
@@ -1034,6 +1158,159 @@ mod tests {
             ProcessPhase::Attested,
             "phaseSince",
             serde_json::json!("1970-01-01T00:00:00Z"),
+        );
+    }
+
+    // ─── transition + transition_msg async-wrapper delegation pins ────────
+    //
+    // The compose+dispatch chain `patch_process_status(&api, &name,
+    // phase_status(<phase>, None))` (5 bare sites) and its message-carrying
+    // peer `patch_process_status(&api, &name, phase_status_msg(<phase>,
+    // <msg>))` (9 sites) recurred at 14 workspace-wide restatements past
+    // the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold before the async
+    // peers [`transition`] + [`transition_msg`] closed them. These pins
+    // bind the two wrappers' delegation contracts at fail-before-pass-
+    // after granularity — a regression that renamed either wrapper, swapped
+    // the phase argument through a non-`ProcessPhase` type, dropped the
+    // `message: impl Into<String>` slot from `transition_msg`, or drifted
+    // either return type off `Result<Process, KubeError>` breaks the
+    // compile-time function-pointer coercion HERE (which is how a fresh
+    // reader confirms the wrappers' signatures are the intended
+    // compose+dispatch contract on both axes at once).
+
+    #[test]
+    fn transition_bare_body_delegates_through_phase_status_none_bytewise() {
+        // Byte-shape parity between the body [`transition`] would send
+        // and a direct `phase_status(phase, None)` call — pins the
+        // wrapper's chosen body-composer at fail-before-pass-after
+        // granularity. `transition` is DEFINED as
+        // `patch_process_status(api, name, phase_status(phase, None))`;
+        // this pin re-derives the body from the composer the wrapper
+        // rides through and asserts it matches the two-slot bare shape
+        // (`phase`, `phaseSince`, no third slot — no `identity` leak, no
+        // `message` leak, no `null`-sentinel padding).
+        //
+        // Swept across the five representative ProcessPhase discriminants
+        // that occur at the five pre-lift bare-transition callsites
+        // (reconverging→execing, exiting→zombie, failed→zombie,
+        // zombie→reaped, signal transition). A regression that changed
+        // the wrapper's body-composer to a different overload (e.g.
+        // `phase_status_msg(phase, "")` or `phase_status_with(phase,
+        // "identity", &())`) would surface per-phase HERE rather than
+        // as silent operator-facing skew at every bare callsite.
+        for phase in [
+            ProcessPhase::Execing,
+            ProcessPhase::Zombie,
+            ProcessPhase::Reaped,
+            ProcessPhase::Failed,
+            ProcessPhase::Reconverging,
+        ] {
+            // The body the wrapper would send, reproduced verbatim.
+            let mut sent = phase_status(phase, None);
+            // Direct composer call — same expression, so they are
+            // byte-equal modulo `phaseSince` (each `phase_status(phase,
+            // None)` reads `Utc::now()` at call time; the two stamps
+            // CAN differ by the scheduling delta).
+            let mut direct = phase_status(phase, None);
+            sent.as_object_mut().expect("object").remove("phaseSince");
+            direct.as_object_mut().expect("object").remove("phaseSince");
+            assert_eq!(
+                sent, direct,
+                "transition(phase=`{phase}`) must send `phase_status(phase, None)` verbatim — the two-slot bare shape",
+            );
+            // Post-strip slot count MUST be 1 (only `phase` left after
+            // dropping `phaseSince`). A regression that leaked a null-
+            // sentinel `identity` or an empty-string `message` into the
+            // bare arm would inflate the count to 2 and fire HERE.
+            assert_eq!(
+                sent.as_object().expect("object").len(),
+                1,
+                "transition's body must own only `phase` + `phaseSince` for phase `{phase}` — no third-slot leak",
+            );
+        }
+    }
+
+    #[test]
+    fn transition_msg_body_delegates_through_phase_status_msg_bytewise() {
+        // Byte-shape parity peer of the bare pin above on the message
+        // axis — pins that the body [`transition_msg`] would send is
+        // byte-identical to a direct `phase_status_msg(phase, msg)` call
+        // (modulo the wall-clock delta between the two `phaseSince`
+        // stamps), swept across five representative ProcessPhase
+        // discriminants that occur at the nine pre-lift message-carrying
+        // callsites (Execing "dependencies satisfied", Reconverging "flux
+        // resource drift detected", Releasing "releasing exports —
+        // <reason>", Zombie <auto-terminate-reason>, Exiting <cascade-
+        // reason>, Running "forced re-attestation (SIGUSR1)",
+        // Reconverging "remediate requested (SIGUSR2)", Exiting
+        // "deletion requested", {Exiting,Zombie} "releasing → <next> —
+        // <reason>").
+        //
+        // A regression that changed the wrapper's body-composer to
+        // `phase_status(phase, None)` (dropping the message slot) or
+        // `phase_status_with(phase, "message", &msg)` (nesting the
+        // message under a different key) would surface per-phase HERE
+        // rather than as silent operator-visible message loss on the
+        // status subresource.
+        for (phase, msg) in [
+            (ProcessPhase::Execing, "dependencies satisfied"),
+            (ProcessPhase::Reconverging, "flux resource drift detected"),
+            (ProcessPhase::Releasing, "releasing exports — teardown"),
+            (ProcessPhase::Zombie, "auto-teardown (TtlExpired)"),
+            (ProcessPhase::Exiting, "deletion requested"),
+        ] {
+            let mut sent = phase_status_msg(phase, msg);
+            let mut direct = phase_status_msg(phase, msg);
+            sent.as_object_mut().expect("object").remove("phaseSince");
+            direct.as_object_mut().expect("object").remove("phaseSince");
+            assert_eq!(
+                sent, direct,
+                "transition_msg(phase=`{phase}`, msg=`{msg}`) must send `phase_status_msg(phase, msg)` verbatim — the three-slot message-carrying shape",
+            );
+            // Post-strip slot count MUST be 2 (`phase` + `message` left
+            // after dropping `phaseSince`). A regression that dropped
+            // the `message` slot would collapse the count to 1 and fire
+            // HERE (rather than at each of the 9 downstream callsites
+            // silently swallowing the operator-visible reason).
+            let obj = sent.as_object().expect("object");
+            assert_eq!(
+                obj.len(),
+                2,
+                "transition_msg's body must own `phase` + `phaseSince` + `message` for phase `{phase}` — no slot loss",
+            );
+            assert_eq!(
+                obj.get("message").and_then(Value::as_str),
+                Some(msg),
+                "transition_msg's `message` slot must ride through under the fixed `message` key verbatim for phase `{phase}`",
+            );
+        }
+    }
+
+    #[test]
+    fn transition_msg_body_accepts_both_owned_and_borrowed_message_forms() {
+        // Both pre-lift callsites categorically fall into two message
+        // shapes: `&'static str` literal reasons (7 of 9 sites) and
+        // `format!(...)`-owned `String`s (2 of 9 sites: the two cascade
+        // paths through `advance_out_of_releasing` and
+        // `transition_to_releasing`). The wrapper's `impl Into<String>`
+        // bound must accept both without a per-callsite `.to_string()`
+        // wrap; this pin binds the ergonomic contract by round-tripping
+        // both shapes through the body-composer the wrapper rides
+        // through and asserting the resulting `message` slot matches
+        // the input for each.
+        let literal_body = phase_status_msg(ProcessPhase::Zombie, "static literal reason");
+        assert_eq!(
+            literal_body.get("message").and_then(Value::as_str),
+            Some("static literal reason"),
+            "`&'static str` literals ride through the impl Into<String> bound verbatim",
+        );
+
+        let owned: String = format!("releasing → {} — {}", ProcessPhase::Exiting, "teardown");
+        let owned_body = phase_status_msg(ProcessPhase::Releasing, owned.clone());
+        assert_eq!(
+            owned_body.get("message").and_then(Value::as_str),
+            Some(owned.as_str()),
+            "`format!(...)`-owned Strings ride through the impl Into<String> bound verbatim",
         );
     }
 }

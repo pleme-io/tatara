@@ -43,8 +43,17 @@ pub async fn reconcile(process: Arc<Process>, ctx: Arc<Context>) -> Result<Actio
     //    child-fan-out DELETE-skip in `phase_machine::handle_exiting`.
     if process.is_being_deleted() && current_phase.is_alive() {
         let api = ctx.process_api(ns);
-        let body = patch::phase_status_msg(ProcessPhase::Exiting, "deletion requested");
-        if let Err(e) = patch::patch_process_status(&api, name, body).await {
+        // Compose+dispatch rides through the substrate peer
+        // `patch::transition_msg` — pre-lift this was a hand-authored
+        // `patch::patch_process_status(&api, name,
+        // patch::phase_status_msg(<phase>, <msg>))` chain, one of NINE
+        // workspace-wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+        // duplication trigger; post-lift the compose+dispatch sink
+        // lives at ONE substrate owner (peer of `patch::transition`
+        // on the bare-transition axis).
+        if let Err(e) =
+            patch::transition_msg(&api, name, ProcessPhase::Exiting, "deletion requested").await
+        {
             warn!(namespace = ns, name, error = %e, "force-Exiting patch failed; requeuing");
         } else {
             info!(namespace = ns, name, "→ Exiting (deletionTimestamp set)");

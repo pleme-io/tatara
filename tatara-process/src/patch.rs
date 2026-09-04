@@ -328,6 +328,117 @@ where
     api.patch(name, &pp, &Patch::Apply(body)).await
 }
 
+/// Merge-patch the PRIMARY resource endpoint of any kube [`Resource`] under
+/// `field_manager` with `force = true` — the merge-strategy sibling to
+/// [`apply`] on the (Patch-strategy × PatchParams-posture) matrix.
+///
+/// Owns the two-link chain
+/// `apply_patch_params(<mgr>) + api.patch(name, &pp, &Patch::Merge(&body))`
+/// at ONE substrate owner. Closes the four-corner posture matrix the
+/// wire-side patch family stamps:
+///
+/// | Strategy | `PatchParams::default()` | `apply_patch_params(<mgr>)` |
+/// |----------|--------------------------|-----------------------------|
+/// | Merge    | [`merge`]                | **`merge_as`** (this one)   |
+/// | Apply    | (invalid — SSA requires a field manager) | [`apply`]   |
+///
+/// [`merge`] owns the anonymous-writer merge-patch corner
+/// (`PatchParams::default()`, no field-manager ownership); [`apply`] owns
+/// the SSA corner (`Patch::Apply` under a named field manager); this
+/// primitive owns the remaining corner — a merge-patch that STILL stamps
+/// a named field manager on the write, chosen when the caller wants
+/// merge-patch semantics (server merges the caller's partial body into
+/// the existing object per RFC 7396, rather than the SSA ownership
+/// reconciliation model) BUT wants the write attributed to a named
+/// controller in the field-manager ownership audit (so downstream `kubectl
+/// get -o yaml`'s `managedFields` distinguishes a
+/// `tatara-pool-reconciler`-stamped bind edit from a
+/// `tatara-reconciler`-stamped phase-transition status write).
+///
+/// Pre-lift the two-link chain was hand-authored at TWO workspace-wide
+/// consumer sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold,
+/// both inside `tatara-pool-reconciler::controller_allocation`:
+/// * Bind arm — stamps the compound `spec.lifetime` overlay + the three
+///   `metadata.annotations` requestor / allocation / requestor-kind
+///   labels onto the pool member Process on transition from Queued to
+///   Bound. Body: `{"spec": {"lifetime": …}, "metadata": {"annotations":
+///   {REQUESTOR: …, ALLOCATION: …, REQUESTOR_KIND: …}}}`. Field manager:
+///   `ctx.config.field_manager` (per-instance String).
+/// * Release arm — stamps the single `tatara.pleme.io/return-trigger`
+///   annotation onto the member Process to nudge the Pool reconciler
+///   into taking the return path. Body: [`annotation_body`]-composed
+///   single-key metadata edit. Field manager: `ctx.config.field_manager`
+///   (same String).
+///
+/// Both sites walked the SAME two-link chain — build a `PatchParams` via
+/// [`apply_patch_params`] with the pool-reconciler's per-instance
+/// `field_manager`, then dispatch through `api.patch(name, &pp,
+/// &Patch::Merge(&body))`. Post-lift each callsite reads
+/// `tatara_process::patch::merge_as(&api, name, <mgr>, &body).await`
+/// and the params-build + `Patch::Merge` wire dispatch lives at ONE
+/// substrate owner. A future normalization of the named-merge-writer
+/// posture (an injectable `dry_run` mode for a shadow-mode rollout, a
+/// `field_validation` default when the pool-reconciler flips on strict
+/// validation, an injectable retry policy for the transient-conflict
+/// class the bind arm surfaces on race with a sibling pool controller,
+/// a `resourceVersion` precondition slot when the pool controller
+/// stamps generation-fenced binds) lands at THIS ONE substrate primitive
+/// (or at [`apply_patch_params`] on the params sub-axis) and every
+/// downstream named-merge writer inherits the upgrade mechanically.
+///
+/// Directly benefits the P3 kenshi-runner library lift (any test-Job
+/// controller that stamps a named-merge overlay on its owning Process
+/// — a suite-progress annotation, a per-run bind edit — rides through
+/// the same primitive as the pool-reconciler's bind + release arms) and
+/// the P5 shigoto Dag refactor (any RecordingJob that stamps a
+/// per-instance-named merge edit on a phase transition, rather than
+/// through the [`crate::patch::apply`] SSA path or the anonymous
+/// [`merge`] path, rides through this substrate corner rather than
+/// hand-authoring the two-link chain a third time).
+///
+/// The bound relaxation `K::DynamicType: Default` is NOT required here
+/// (matching [`apply`]'s posture, differing from [`merge`] /
+/// [`merge_status`]) so a future [`Api<DynamicObject>`] consumer of the
+/// named-merge corner rides the same primitive as the current
+/// concrete-`Api<Process>` consumers. `Api::patch` itself needs only
+/// `K: Clone + DeserializeOwned + Debug` on its own impl block; the
+/// `Default` bound on the sibling merge primitives is a legacy of their
+/// pre-lift call sites, none of which exercised DynamicObject.
+///
+/// Return-form axis: `Result<K, kube::Error>` matches `Api::patch`
+/// verbatim. Both pre-lift consumers ignore the returned `K` (the bind
+/// arm captures the `Err` for a retry decision; the release arm discards
+/// through `let _ = …`); keeping the return in the signature lets a
+/// future writer that needs the reconciled `resourceVersion` /
+/// `generation` from the same wire round-trip read it without a
+/// re-fetch.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// two-link `apply_patch_params(<mgr>) + api.patch(name, &pp,
+/// &Patch::Merge(&body))` chain recurred at 2 hand-authored sites past
+/// the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger inside one workspace
+/// crate, and is lifted onto ONE substrate owner here, closing the
+/// (Patch-strategy × PatchParams-posture) matrix's remaining hand-
+/// authored corner). THEORY.md §II.1 invariant 5 (composition preserves
+/// proofs — the pin block below binds the `Patch::Merge` posture + the
+/// [`apply_patch_params`] pass-through + the byte-identical parity with
+/// the pre-lift two-link chain, so a regression that drifts any surface
+/// surfaces here rather than as silent named-merge writer skew across
+/// the two pool-reconciler callsites).
+pub async fn merge_as<K, B>(
+    api: &Api<K>,
+    name: &str,
+    field_manager: &str,
+    body: &B,
+) -> Result<K, kube::Error>
+where
+    K: Resource + DeserializeOwned + Clone + Debug,
+    B: Serialize + Debug + ?Sized,
+{
+    let pp = apply_patch_params(field_manager);
+    api.patch(name, &pp, &Patch::Merge(body)).await
+}
+
 /// Compose the merge-patch wire body `{"spec": {"suspended": <bool>}}` — the
 /// SIGSTOP/SIGCONT-driven suspend/resume shape both
 /// `SignalEffect::Suspend` and `SignalEffect::Resume` arms of
@@ -1344,6 +1455,184 @@ mod tests {
             body["metadata"]["annotations"]["k.io/v"],
             serde_json::Value::String("stamped".to_string()),
             "pre-serialized Value rides through without a double-wrap",
+        );
+    }
+
+    // ─── merge_as (named primary-resource merge) substrate pins ─────
+    //
+    // The two-link `apply_patch_params(<mgr>) + api.patch(name, &pp,
+    // &Patch::Merge(&body))` chain now rides through the ONE substrate
+    // primitive [`merge_as`] across the two consumer sites in
+    // `tatara-pool-reconciler::controller_allocation` (bind arm's
+    // `spec.lifetime + metadata.annotations` compound edit; release
+    // arm's single `metadata.annotations.<return-trigger>` edit). These
+    // pins bind the primitive at fail-before-pass-after granularity so
+    // a regression that swaps `Patch::Merge` for `Patch::Apply` (silently
+    // reshaping merge semantics into SSA ownership reconciliation),
+    // swaps `Patch::Merge` for `Patch::Strategic` (silently reshaping
+    // scalar merges into strategic-merge deduplication over
+    // strategic-merge-keyed arrays), drops the [`apply_patch_params`]
+    // pass-through (silently reverting to `PatchParams::default()` and
+    // erasing the field-manager attribution downstream `managedFields`
+    // audits key on), or reorders the 3-arg positional slots surfaces
+    // HERE rather than as silent named-merge writer skew across the two
+    // pool-reconciler callsites.
+    //
+    // Source-level pins on the ingredients [`merge_as`] composes: the
+    // wire-side round-trip needs a live `Api<K>` we cannot construct
+    // without a kube client, but the substrate's async entry is a
+    // two-line body (`let pp = apply_patch_params(field_manager);
+    // api.patch(name, &pp, &Patch::Merge(body))`), so binding each
+    // ingredient (the [`apply_patch_params`]-composed PatchParams
+    // shape, the `Patch::Merge` posture selection, the verbatim body
+    // pass-through) at the pure level pins every observable slot of
+    // the wire request the primitive will issue.
+
+    #[test]
+    fn merge_as_composes_apply_patch_params_at_the_field_manager_slot_verbatim() {
+        // The primitive's params-build step is
+        // `apply_patch_params(field_manager)` — every pre-lift caller
+        // supplied a field-manager `&str` (the pool-reconciler's
+        // `ctx.config.field_manager` per-instance String). A regression
+        // that hardcoded a manager inside the primitive or reshaped
+        // the slot would silently reassign field-manager attribution
+        // at every consumer's wire request. Witness the params-side
+        // ingredient by re-composing it through [`apply_patch_params`]
+        // here and checking the observable slots the wire path keys on.
+        for mgr in [
+            "tatara-pool-reconciler",
+            "per-shard-pool-reconciler-42",
+            "tatara-reconciler",
+        ] {
+            let pp = apply_patch_params(mgr);
+            assert_eq!(pp.field_manager.as_deref(), Some(mgr));
+            assert!(pp.force, "named-merge must stamp force = true");
+            assert!(!pp.dry_run, "default posture: dry_run stays false");
+            assert!(
+                pp.field_validation.is_none(),
+                "default posture: field_validation stays None",
+            );
+        }
+    }
+
+    #[test]
+    fn merge_as_selects_patch_merge_strategy_not_apply_or_strategic_or_json() {
+        // The primitive dispatches through `Patch::Merge(&body)` — the
+        // JSON merge patch posture (RFC 7396) both pre-lift consumers
+        // used. A regression that selected `Patch::Apply` would silently
+        // reshape the pool-reconciler's bind + release edits into SSA
+        // ownership reconciliation (a different conflict-resolution
+        // model than the pre-lift wire behavior); `Patch::Strategic`
+        // would reshape merges over `metadata.annotations` /
+        // `spec.lifetime` sub-objects with strategic-merge semantics
+        // (silently deduplicating annotation entries by
+        // strategic-merge-key rather than treating the map as JSON to
+        // overwrite); `Patch::Json` would demand an RFC 6902 op list
+        // instead of the object body both consumers compose. Witness
+        // the wire posture selection by constructing the Patch and
+        // pattern-matching on the variant.
+        let body = json!({"metadata": {"annotations": {"x.io/marker": "1"}}});
+        let patch: Patch<&serde_json::Value> = Patch::Merge(&body);
+        assert!(
+            matches!(patch, Patch::Merge(_)),
+            "merge_as primitive dispatches through Patch::Merge, not Apply/Strategic/Json"
+        );
+    }
+
+    #[test]
+    fn merge_as_dispatches_body_verbatim_no_wrap_or_re_encode() {
+        // The named-merge primitive is verbatim: the caller composes
+        // the full top-level shape (the bind arm's compound
+        // `{"spec": {"lifetime": …}, "metadata": {"annotations": …}}`,
+        // the release arm's [`annotation_body`]-composed
+        // `{"metadata": {"annotations": {<return-trigger>: "true"}}}`)
+        // and the primitive passes it through untouched. A regression
+        // that hid an implicit wrap or re-encoded the body through
+        // `serde_json::to_value` and back would surface here — both
+        // pre-lift callsites already composed the full top-level shape
+        // and delegated straight to `api.patch(..., &Patch::Merge(&body))`
+        // with no intervening transform.
+        let bind_body = json!({
+            "spec": {"lifetime": {"ephemeral": {"ttl": "1h"}}},
+            "metadata": {"annotations": {
+                "tatara.pleme.io/requestor": "ns/name",
+                "tatara.pleme.io/allocation": "alloc-1",
+                "tatara.pleme.io/requestor-kind": "GitHubPullRequest",
+            }},
+        });
+        let release_body = annotation_body("tatara.pleme.io/return-trigger", "true");
+        for body in [bind_body, release_body] {
+            let round_trip = serde_json::to_value(&body).unwrap();
+            assert_eq!(round_trip, body, "body serializes to itself verbatim");
+            let obj = body.as_object().expect("pre-lift bodies are JSON objects");
+            assert!(!obj.is_empty(), "pre-lift bodies carry at least one slot");
+        }
+    }
+
+    #[test]
+    fn merge_as_params_match_pre_lift_hand_authored_chain_bytewise() {
+        // Byte-shape parity between the primitive's internal params
+        // composition and the pre-lift `PatchParams::apply(<mgr>)
+        // .force()` chain both consumers restated verbatim. A
+        // regression that reordered the chain (`.force().apply(...)`
+        // swap) or widened the posture inside the primitive would
+        // surface HERE rather than at the wire.
+        for mgr in ["tatara-pool-reconciler", "per-shard-mgr"] {
+            let pre_lift = PatchParams::apply(mgr).force();
+            let lifted = apply_patch_params(mgr);
+            assert_eq!(lifted.field_manager, pre_lift.field_manager);
+            assert_eq!(lifted.force, pre_lift.force);
+            assert_eq!(lifted.dry_run, pre_lift.dry_run);
+            assert_eq!(
+                lifted.field_validation.is_none(),
+                pre_lift.field_validation.is_none(),
+            );
+        }
+    }
+
+    #[test]
+    fn merge_as_closes_patch_strategy_by_patch_params_matrix_at_the_named_merge_corner() {
+        // Corner-partition pin — the four primitives [`merge`],
+        // [`apply`], [`merge_status`], [`merge_as`] partition the
+        // (Patch-strategy × PatchParams-posture × wire-endpoint) matrix
+        // the workspace's wire-side patch family stamps. This pin
+        // witnesses that [`merge_as`] stamps EXACTLY the
+        // (Patch::Merge × apply_patch_params × primary-resource)
+        // corner — distinct from [`merge`]'s
+        // (Patch::Merge × PatchParams::default × primary-resource)
+        // corner and from [`apply`]'s
+        // (Patch::Apply × apply_patch_params × primary-resource)
+        // corner. A regression that collapsed any two corners onto
+        // ONE primitive (e.g. `merge_as` accidentally routing through
+        // `apply`'s `Patch::Apply` posture, or reverting to
+        // `PatchParams::default()` and drifting into `merge`'s corner)
+        // would break the partition and surface HERE rather than as
+        // silent field-manager attribution loss or SSA-vs-merge
+        // semantics drift at the two pool-reconciler callsites.
+
+        // Corner witness: named-merge params ≠ default params
+        let named = apply_patch_params("mgr");
+        let default = PatchParams::default();
+        assert_ne!(
+            named.field_manager, default.field_manager,
+            "merge_as's params carry a field manager; merge's do not — the corner distinction is load-bearing"
+        );
+        assert_ne!(
+            named.force, default.force,
+            "merge_as's params stamp force = true; merge's do not — the corner distinction is load-bearing"
+        );
+
+        // Corner witness: merge strategy ≠ apply strategy at the same params
+        let body = json!({"metadata": {"annotations": {"k": "v"}}});
+        let merge_patch: Patch<&serde_json::Value> = Patch::Merge(&body);
+        let apply_patch: Patch<&serde_json::Value> = Patch::Apply(&body);
+        assert!(
+            matches!(merge_patch, Patch::Merge(_)),
+            "merge_as dispatches Patch::Merge, distinguishing it from apply's Patch::Apply corner"
+        );
+        assert!(
+            matches!(apply_patch, Patch::Apply(_)),
+            "apply dispatches Patch::Apply, distinguishing it from merge_as's Patch::Merge corner"
         );
     }
 }

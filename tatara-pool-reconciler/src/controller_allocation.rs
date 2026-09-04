@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
-use kube::api::Patch;
 use kube::runtime::controller::Action;
 use serde_json::json;
 use tracing::{info, warn};
@@ -281,31 +280,35 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
                     }
                 }
             });
-            // SSA-side wire-posture rides through the substrate
-            // primitive `tatara_process::patch::apply_patch_params` —
-            // pre-lift this was a hand-authored 2-link
-            // `PatchParams::apply(&ctx.config.field_manager).force()`
-            // chain, one of THREE workspace-wide sites past the ★★
+            // Named-merge compose+dispatch rides through the ONE
+            // substrate primitive `tatara_process::patch::merge_as` —
+            // pre-lift this was a hand-authored 3-link
+            // `process_api.patch(&member_process_name, &apply_patch_params
+            // (&ctx.config.field_manager), &Patch::Merge(&proc_patch))`
+            // chain, one of TWO workspace-wide restatements past the ★★
             // PRIME-DIRECTIVE ≥ 2 duplication threshold (peer at the
             // Release arm below feeding the same
-            // `ctx.config.field_manager`, sibling at
-            // `tatara-export-worker::main::write_receipt` feeding a
-            // `"tatara-export-worker"` literal, and the
-            // reconciler-crate-local wrapper
-            // `tatara_reconciler::ssapply::apply_patch_params` feeding
-            // the `FIELD_MANAGER` const). Post-lift every SSA writer
-            // across three consumer crates shares ONE substrate owner
-            // for the `PatchParams::apply(<mgr>).force()` shape; a
-            // future normalization of the SSA-side posture (an added
+            // `ctx.config.field_manager` through the same
+            // `apply_patch_params + Patch::Merge` two-link chain). Post-
+            // lift both consumers share ONE substrate owner for the
+            // (Patch::Merge × apply_patch_params × primary-resource)
+            // corner of the wire-side patch-family matrix, closing its
+            // last hand-authored corner (siblings: `merge` on the
+            // default-params corner, `apply` on the SSA-Apply corner,
+            // `merge_status` on the /status subresource corner). A
+            // future normalization of the named-merge posture (an added
             // `dry_run` mode, a `field_validation` default, an
-            // injectable retry policy) lands at ONE substrate site.
-            if let Err(e) = process_api
-                .patch(
-                    &member_process_name,
-                    &tatara_process::patch::apply_patch_params(&ctx.config.field_manager),
-                    &Patch::Merge(&proc_patch),
-                )
-                .await
+            // injectable retry policy for the transient-conflict class
+            // this arm surfaces on race with a sibling pool controller,
+            // a `resourceVersion` precondition slot for
+            // generation-fenced binds) lands at ONE substrate site.
+            if let Err(e) = tatara_process::patch::merge_as(
+                &process_api,
+                &member_process_name,
+                &ctx.config.field_manager,
+                &proc_patch,
+            )
+            .await
             {
                 warn!(error = %e, "bind failed; will retry");
                 return Ok(tatara_process::requeue::after_secs(5));
@@ -382,13 +385,20 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
             // ONE substrate owner.
             let trigger_body =
                 tatara_process::patch::annotation_body("tatara.pleme.io/return-trigger", "true");
-            let _ = process_api
-                .patch(
-                    &member_process_name,
-                    &tatara_process::patch::apply_patch_params(&ctx.config.field_manager),
-                    &Patch::Merge(&trigger_body),
-                )
-                .await;
+            // Peer to the Bind arm above: named-merge compose+dispatch
+            // rides through the ONE substrate primitive
+            // `tatara_process::patch::merge_as`, closing the last hand-
+            // authored corner of the (Patch::Merge × apply_patch_params
+            // × primary-resource) wire-posture matrix. Post-lift both
+            // pool-reconciler callsites share ONE substrate owner; see
+            // the Bind arm's re-route above for the full peer inventory.
+            let _ = tatara_process::patch::merge_as(
+                &process_api,
+                &member_process_name,
+                &ctx.config.field_manager,
+                &trigger_body,
+            )
+            .await;
             // Peer to the Bind arm above: the compound `bound_pool +
             // assigned_process` pair rides through the substrate
             // composer

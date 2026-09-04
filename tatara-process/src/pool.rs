@@ -1135,6 +1135,88 @@ impl PoolStatus {
             conditions: vec![],
         }
     }
+
+    /// Wall-clock-anchored peer of [`Self::observed`] — the ONE
+    /// substrate owner of the 4-arg `PoolStatus::observed(phase,
+    /// members, Utc::now())` composition every pool-reconciler
+    /// status-patch site that reads the wall clock at tick-time
+    /// hand-authored pre-lift.
+    ///
+    /// # Why it exists
+    ///
+    /// Pre-lift the 4-arg `PoolStatus::observed(phase, members.clone(),
+    /// chrono::Utc::now())` chain was hand-authored at TWO sites past the
+    /// ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold in
+    /// `tatara-pool-reconciler::controller_pool::reconcile_inner`, each
+    /// pairing the 3-arg [`Self::observed`] composer with a
+    /// `chrono::Utc::now()` third argument at the status-patch stamp:
+    ///
+    /// * The `desired > 0` path — status patch after the
+    ///   convergence-action loop when the operator drives the pool
+    ///   through the R11 desired-count invariant.
+    /// * The legacy allocation-driven path (`desired == 0`) — status
+    ///   patch after the [`crate::pool::PoolDecision`] apply loop.
+    ///
+    /// Both sites walked the SAME 4-arg call with the SAME
+    /// `chrono::Utc::now()` third argument — the wall-clock projection
+    /// had no per-callsite variation. Post-lift both consumers share ONE
+    /// substrate owner for the wall-clock-at-tick projection; a future
+    /// clock swap (a monotonic clock cross-check, a per-reconciler
+    /// injected time source, a test-only override at the production
+    /// callsite via feature flag) lands at ONE substrate function and
+    /// every pool-reconciler status-patch site inherits the upgrade
+    /// mechanically.
+    ///
+    /// The 3-arg [`Self::observed`] peer stays load-bearing for test
+    /// callers — the injected-`now` shape is what unit tests use to
+    /// drive the clock deterministically (every
+    /// `PoolStatus::observed(phase, members, seeded_now)` in this
+    /// module's own test suite reads that surface). This peer is
+    /// production-only: pinning the wall-clock at the substrate site
+    /// means no test can accidentally consume it without the
+    /// deterministic-clock injection that makes the test meaningful.
+    ///
+    /// Sibling of
+    /// [`crate::lifetime_clock::evaluate_now`] on the (typed
+    /// pure-fn, wall-clock-anchored peer) axis — both primitives own
+    /// the "read the wall clock at tick-time" projection on a peer
+    /// clock-injectable primitive so the workspace's timed-decision
+    /// family stays uniform across `EphemeralLifetime` TTL expiry and
+    /// `PoolStatus` observed-state stamp.
+    ///
+    /// # Invariants
+    ///
+    /// - **Same shape:** returns the SAME [`PoolStatus`] the 3-arg
+    ///   [`Self::observed`] returns when passed `chrono::Utc::now()` as
+    ///   the third argument. This is a delegation, not a
+    ///   re-implementation.
+    /// - **Wall-clock read once:** `Utc::now()` is called exactly ONCE
+    ///   per invocation, at the primitive's body, so a future consumer
+    ///   that chains two `observed_now` calls back-to-back still sees
+    ///   monotonic `now` reads (each call reads a fresh instant, not a
+    ///   cached one) — matches the pre-lift shape where each of the two
+    ///   status-patch sites computed its own `chrono::Utc::now()` at its
+    ///   own line.
+    ///
+    /// # `#[must_use]`
+    ///
+    /// Every consumer feeds the returned [`PoolStatus`] into
+    /// `tatara_process::patch::merge_status(&pool_api, &name, &<status>)`
+    /// or a peer status-patch call. Dropping the return means the
+    /// observation composed for no observable reason — the attribute
+    /// surfaces that as a warning at every call site.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the 4-arg call with `chrono::Utc::now()` as the third argument
+    /// recurred at 2 hand-authored sites past the ★★ PRIME-DIRECTIVE
+    /// ≥ 2 duplication trigger, lifted onto the ONE workspace-wide
+    /// substrate owner here). THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the wall-clock projection lives at ONE site
+    /// so a future clock swap reaches both consumers through one edit).
+    #[must_use]
+    pub fn observed_now(phase: PoolPhase, members: Vec<PoolMember>) -> Self {
+        Self::observed(phase, members, Utc::now())
+    }
 }
 
 impl PoolMember {
@@ -3702,6 +3784,144 @@ mod tests {
         let now = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
         let observed = PoolStatus::observed(PoolPhase::Steady, members, now);
         assert_eq!(observed.members.len(), 2);
+    }
+
+    // ─── PoolStatus::observed_now substrate pins ─────────────────────
+    //
+    // Bind [`PoolStatus::observed_now`] at fail-before-pass-after
+    // granularity so a regression that dropped the wall-clock read
+    // (yielding a `phase_since` of `Some(DateTime::default())`),
+    // reshaped the delegation target (a peer 4-arg composer that
+    // stamped different defaults), or diverged the peer from the 3-arg
+    // [`PoolStatus::observed`] on any observable slot surfaces HERE
+    // rather than as silent operator-facing drift at the two
+    // controller_pool status-patch sites.
+    //
+    // Each pin is fail-before-pass-after: the primitive did not exist
+    // pre-lift, so any test that invokes it fails to compile pre-lift
+    // and passes post-lift; the byte-identity pins below then bind the
+    // specific shape choice.
+
+    #[test]
+    fn pool_status_observed_now_composes_through_observed_with_wall_clock() {
+        // Composition pin: `observed_now` MUST agree with the 3-arg
+        // `observed(phase, members, Utc::now())` peer at every slot
+        // other than `phase_since` (which reads the wall clock at
+        // different instants and diverges by scheduler jitter). A
+        // regression that specialized either composer (a stray
+        // canonicalization at `observed_now`, a swapped default at the
+        // 3-arg peer) would surface HERE rather than as silent skew at
+        // the two controller_pool sites the primitive owns.
+        let members = vec![
+            member(MemberState::Free),
+            member(MemberState::Allocated),
+            member(MemberState::Spawning),
+            member(MemberState::Returning),
+        ];
+        let via_now = PoolStatus::observed_now(PoolPhase::Steady, members.clone());
+        let via_injected =
+            PoolStatus::observed(PoolPhase::Steady, members.clone(), chrono::Utc::now());
+        assert_eq!(via_now.phase, via_injected.phase);
+        assert_eq!(via_now.ready_count, via_injected.ready_count);
+        assert_eq!(via_now.allocated_count, via_injected.allocated_count);
+        assert_eq!(via_now.spawning_count, via_injected.spawning_count);
+        assert_eq!(via_now.returning_count, via_injected.returning_count);
+        assert_eq!(via_now.members.len(), via_injected.members.len());
+        assert_eq!(via_now.message, via_injected.message);
+        assert_eq!(via_now.conditions.len(), via_injected.conditions.len());
+    }
+
+    #[test]
+    fn pool_status_observed_now_reads_wall_clock_into_phase_since() {
+        // Wall-clock pin: `phase_since` MUST fall between `Utc::now()`
+        // reads bracketed around the call. A regression that dropped
+        // the wall-clock read to a module-load constant (`Utc::now()`
+        // captured at `static` init), a `DateTime::default()` (epoch),
+        // or a stale `None` would fail this bracket check.
+        let before = chrono::Utc::now();
+        let observed = PoolStatus::observed_now(PoolPhase::Steady, vec![]);
+        let after = chrono::Utc::now();
+        let phase_since = observed
+            .phase_since
+            .expect("observed_now must stamp phase_since with the wall clock");
+        assert!(
+            phase_since >= before && phase_since <= after,
+            "phase_since {phase_since} must fall in [{before}, {after}]"
+        );
+    }
+
+    #[test]
+    fn pool_status_observed_now_stamps_the_same_defaults_as_the_injected_peer() {
+        // Defaults pin: `message: None` + `conditions: vec![]` MUST
+        // agree with the 3-arg [`PoolStatus::observed`] peer verbatim.
+        // A regression that stamped a per-caller message default at
+        // `observed_now` (a "wall-clock-stamped observation" prefix,
+        // say) or seeded a "just-observed" Condition row would surface
+        // HERE rather than as silent operator-facing drift at either
+        // status-patch site.
+        let observed = PoolStatus::observed_now(PoolPhase::Steady, vec![]);
+        assert!(observed.message.is_none());
+        assert!(observed.conditions.is_empty());
+    }
+
+    #[test]
+    fn pool_status_observed_now_wall_clock_is_read_per_invocation_not_cached() {
+        // Monotonic-read pin: two back-to-back `observed_now` calls
+        // MUST read `Utc::now()` twice — the second `phase_since` MUST
+        // be `>=` the first. A regression that cached a wall-clock read
+        // into a `OnceLock` / lazy `static` would fire the SAME
+        // `phase_since` for every caller on the reconciler's process
+        // and every status-patch would carry the module-load instant
+        // rather than the tick instant. Both instants may coincide on
+        // a fast machine; use `>=` (not `>`) to keep the pin robust
+        // against subsecond scheduler granularity while still catching
+        // a cached-constant regression (where the second read would
+        // be < the wall clock).
+        let first = PoolStatus::observed_now(PoolPhase::Steady, vec![])
+            .phase_since
+            .expect("first observed_now stamps phase_since");
+        let second = PoolStatus::observed_now(PoolPhase::Steady, vec![])
+            .phase_since
+            .expect("second observed_now stamps phase_since");
+        assert!(
+            second >= first,
+            "second phase_since {second} must be >= first phase_since {first}"
+        );
+        // AND the second read MUST NOT precede the wall clock reads
+        // bracketing the call — a cached-past constant would fail
+        // this bound.
+        let after = chrono::Utc::now();
+        assert!(
+            second <= after,
+            "second phase_since {second} must be <= {after}"
+        );
+    }
+
+    #[test]
+    fn pool_status_observed_now_matches_pre_lift_utc_now_composition_shape() {
+        // Byte-identical parity with the pre-lift
+        // `PoolStatus::observed(phase, members.clone(), Utc::now())`
+        // block both hand-authored callsites restated at their status-
+        // patch sites, swept across representative pool-phase variants.
+        // Both blocks read the wall clock at DIFFERENT instants so the
+        // two anchors CAN differ by the wall-clock delta between calls
+        // — bound the divergence at 100ms scheduler jitter, matching
+        // the peer `seconds_ago_matches_hand_authored_pre_lift_chain_shape`
+        // pin's tolerance on the sibling `crate::time` module.
+        let members = vec![member(MemberState::Free), member(MemberState::Spawning)];
+        for phase in [PoolPhase::Steady, PoolPhase::ScalingUp, PoolPhase::Degraded] {
+            let composed = PoolStatus::observed_now(phase, members.clone())
+                .phase_since
+                .expect("observed_now stamps phase_since");
+            let hand_authored = PoolStatus::observed(phase, members.clone(), chrono::Utc::now())
+                .phase_since
+                .expect("observed stamps phase_since");
+            let delta = (hand_authored - composed).abs();
+            assert!(
+                delta <= chrono::Duration::milliseconds(100),
+                "composed {composed} and hand-authored {hand_authored} must agree within 100ms scheduler jitter for phase={phase:?}"
+            );
+        }
     }
 
     // ─── PoolMember::unallocated substrate pins ───────────────────────

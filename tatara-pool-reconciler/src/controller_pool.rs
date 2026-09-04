@@ -252,11 +252,27 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
         // list rather than four independent filter-and-count passes,
         // and a future counter slot lands at ONE match arm in
         // `tatara_process::pool::PoolMember::state_count_fanout`.
+        //
+        // Wall-clock read at tick-time rides through the ONE substrate
+        // peer `PoolStatus::observed_now` (delegates to `observed(...,
+        // Utc::now())`) — pre-lift the 4-arg call with a hand-authored
+        // `Utc::now()` third argument was the SAME shape at both
+        // status-patch sites in this module past the ★★ PRIME-
+        // DIRECTIVE ≥ 2 duplication threshold. Post-lift both callers
+        // route through the wall-clock-anchored peer so a future clock
+        // swap (a monotonic clock cross-check, a per-reconciler time
+        // source injection, a test-only override at the production
+        // site) lands at ONE substrate function and both sites inherit
+        // the upgrade mechanically. Sibling to the peer wall-clock-
+        // anchored primitive `tatara_process::lifetime_clock::
+        // evaluate_now` on the same `(typed-pure-fn, wall-clock-
+        // anchored peer)` axis pair the workspace's timed-decision
+        // family walks.
         let phase = pool_phase_from_members(&pool, &members);
         let _ = tatara_process::patch::merge_status(
             &pool_api,
             &name,
-            &PoolStatus::observed(phase, members.clone(), Utc::now()),
+            &PoolStatus::observed_now(phase, members.clone()),
         )
         .await;
         return Ok(tatara_process::requeue::after_secs(
@@ -392,13 +408,16 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
     //
     // Legacy allocation-driven (`desired == 0`) status-patch seed —
     // sibling of the desired-count status-patch seed above; both ride
-    // the substrate constructor `PoolStatus::observed`. See the peer
-    // site's pre-lift audit note for the duplication history.
+    // the substrate constructor `PoolStatus::observed` composed with
+    // the wall-clock-anchored peer `PoolStatus::observed_now` (which
+    // owns the `Utc::now()` read at tick-time for both status-patch
+    // sites). See the peer site's pre-lift audit note for the
+    // duplication history.
     let phase = pool_phase_from_members(&pool, &members);
     let _ = tatara_process::patch::merge_status(
         &pool_api,
         &name,
-        &PoolStatus::observed(phase, members.clone(), Utc::now()),
+        &PoolStatus::observed_now(phase, members.clone()),
     )
     .await;
 

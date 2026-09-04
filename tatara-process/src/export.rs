@@ -804,6 +804,75 @@ impl NatsSubjectChannel {
     pub fn resolved_url(&self) -> &str {
         self.url.as_deref().unwrap_or(DEFAULT_NATS_URL)
     }
+
+    /// Compose a [`NatsSubjectChannel`] pinned to the in-cluster
+    /// default NATS URL ([`DEFAULT_NATS_URL`], stamped as `url: None`
+    /// so [`Self::resolved_url`] resolves the same URL on read) and
+    /// the given `subject` + `stream` — the ONE substrate primitive
+    /// owning the 3-slot `NatsSubjectChannel { subject, stream, url:
+    /// None }` fixture literal every consumer restated by hand
+    /// pre-lift.
+    ///
+    /// Pre-lift the same 3-slot chain (`subject: <s>.into()`,
+    /// `stream: <s>.into()`, `url: None`) was hand-authored at SIX
+    /// workspace-wide sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold, EVERY one of them the "default-URL,
+    /// subject-and-stream-only" shape (no site in the workspace
+    /// stamps a non-None `url` on a `NatsSubjectChannel` literal):
+    ///
+    /// * `tatara-process::export` — two sites: the
+    ///   `vector_channel_resolves_nats_subject` round-trip fixture
+    ///   plus the `single_slot_channel` closed-set ambiguity probe.
+    /// * `tatara-process::tagged_union` — one site: the
+    ///   `single_slot_vector_channel_probe` closed-set probe (the
+    ///   sibling of the `single_slot_channel` fixture in
+    ///   `tatara-process::export`).
+    /// * `tatara-reconciler::render` — one site: the
+    ///   `spec_receipts_attested` fixture the ephemeral-export-Job
+    ///   renderer's tests seed.
+    /// * `tatara-export-worker::lib` — two sites: the
+    ///   `subject_substitutes_run_id_template` template-substitution
+    ///   fixture plus the `subject_passthrough_when_no_template`
+    ///   passthrough fixture.
+    ///
+    /// Post-lift every callsite reads
+    /// `NatsSubjectChannel::publish(<subject>, <stream>)` and the
+    /// three-slot struct's `url` slot stays owned by the ONE
+    /// substrate site. The `impl Into<String>` bound on both
+    /// positional args accepts every pre-lift caller shape verbatim
+    /// — `&'static str` literals (`"S"`, `"EPHEMERAL_RECEIPTS"`,
+    /// `"pleme.pleme-dev.ephemeral.{{run_id}}.receipt"`), owned
+    /// `String` values, and `.into()`-terminated chains alike —
+    /// without a per-site coercion.
+    ///
+    /// A future addition (a default-URL override for a per-fleet
+    /// NATS endpoint, a per-fleet `subject` prefix normalization, a
+    /// `stream` clamp against a shinryu-registered stream catalog,
+    /// or an authenticated NATS URL seed pulled from a config
+    /// surface) lands at THIS ONE substrate primitive and every
+    /// downstream consumer inherits the upgrade mechanically — no
+    /// per-site edit at any of the six listed callers or at future
+    /// test fixtures.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `NatsSubjectChannel { subject, stream, url: None }`
+    /// fixture literal recurred at six hand-authored sites past the
+    /// ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to
+    /// ONE owner here). THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — a regression that drifted the default-URL
+    /// sentinel from `None` to a hardcoded string, or reordered the
+    /// three struct slots, surfaces at the
+    /// `publish_composes_byte_identical_to_pre_lift_literal_across_every_subject_stream_pair`
+    /// pin below rather than as silent skew at every downstream
+    /// fixture).
+    #[must_use]
+    pub fn publish(subject: impl Into<String>, stream: impl Into<String>) -> Self {
+        Self {
+            subject: subject.into(),
+            stream: stream.into(),
+            url: None,
+        }
+    }
 }
 
 /// Stdout channel — worker prints the event; Vector picks up via
@@ -1009,11 +1078,10 @@ mod tests {
     #[test]
     fn vector_channel_resolves_nats_subject() {
         let c = VectorChannel {
-            nats_subject: Some(NatsSubjectChannel {
-                subject: "pleme.pleme-dev.ephemeral.{{run_id}}.receipt".into(),
-                stream: "EPHEMERAL_RECEIPTS".into(),
-                url: None,
-            }),
+            nats_subject: Some(NatsSubjectChannel::publish(
+                "pleme.pleme-dev.ephemeral.{{run_id}}.receipt",
+                "EPHEMERAL_RECEIPTS",
+            )),
             ..VectorChannel::default()
         };
         match c.variant().unwrap() {
@@ -1637,6 +1705,148 @@ mod tests {
         assert_eq!(via_kind.kind(), ChannelKind::HttpEvent);
     }
 
+    // ── NatsSubjectChannel::publish substrate primitive pins ──────────
+    //
+    // Sibling to the HttpEventChannel::signal block above. Sweeps the
+    // wire-shape corners the six pre-lift `NatsSubjectChannel {
+    // subject, stream, url: None }` hand-authored fixture literals
+    // covered — the default-URL sentinel projects to `None`, the
+    // `subject` and `stream` slots ride through verbatim, and the
+    // downstream [`NatsSubjectChannel::resolved_url`] read still
+    // resolves to [`DEFAULT_NATS_URL`]. A regression that seeded a
+    // hardcoded URL on the composer, dropped the `Into<String>` bound
+    // on either positional arg so a `&str` caller has to `.to_string()`
+    // per-site, or reordered the three struct slots surfaces here
+    // rather than as silent skew at any of the six downstream fixtures
+    // (two in `tatara-process::export`, one in
+    // `tatara-process::tagged_union`, one in
+    // `tatara-reconciler::render`, two in `tatara-export-worker::lib`).
+
+    /// PRIMARY SHAPE: byte-identical parity with the pre-lift 3-slot
+    /// hand-authored literal every fixture spelled. Sweeps every
+    /// (subject, stream) pair the six collapsed sites carry so a
+    /// regression that dropped or mutated any observable slot's value
+    /// surfaces HERE rather than downstream. The `url: None` sentinel
+    /// is the load-bearing slot ([`NatsSubjectChannel::resolved_url`]
+    /// gates on `.is_none()` to reach [`DEFAULT_NATS_URL`]); the pin
+    /// binds it before the primitive can drift.
+    #[test]
+    fn publish_composes_byte_identical_to_pre_lift_literal_across_every_subject_stream_pair() {
+        for (subject, stream) in [
+            (
+                "pleme.pleme-dev.ephemeral.{{run_id}}.receipt",
+                "EPHEMERAL_RECEIPTS",
+            ),
+            ("pleme.fixed.subject", "S"),
+            ("s", "S"),
+            ("pleme.demo.subject.2026-05-20", "DEMO_STREAM"),
+        ] {
+            let via_primitive = NatsSubjectChannel::publish(subject, stream);
+            let hand_authored = NatsSubjectChannel {
+                subject: subject.to_string(),
+                stream: stream.to_string(),
+                url: None,
+            };
+            assert_eq!(
+                via_primitive.subject, hand_authored.subject,
+                "publish must project the subject slot byte-identically \
+                 to the pre-lift literal on (subject={subject:?}, stream={stream:?})",
+            );
+            assert_eq!(
+                via_primitive.stream, hand_authored.stream,
+                "publish must project the stream slot byte-identically \
+                 to the pre-lift literal on (subject={subject:?}, stream={stream:?})",
+            );
+            assert_eq!(
+                via_primitive.url, hand_authored.url,
+                "publish must project the url slot byte-identically \
+                 to the pre-lift literal on (subject={subject:?}, stream={stream:?})",
+            );
+            assert!(
+                via_primitive.url.is_none(),
+                "publish must stamp url: None so resolved_url reaches \
+                 DEFAULT_NATS_URL on (subject={subject:?}, stream={stream:?})",
+            );
+            assert_eq!(
+                via_primitive.resolved_url(),
+                DEFAULT_NATS_URL,
+                "publish must compose with resolved_url's default-fallback \
+                 gate on (subject={subject:?}, stream={stream:?})",
+            );
+        }
+    }
+
+    /// COERCION AXIS PIN: the `impl Into<String>` bound on both
+    /// positional args accepts every pre-lift caller shape without a
+    /// per-site coercion. Pre-lift the six sites carried three
+    /// distinct source shapes: `&'static str` literals with `.into()`
+    /// (`"S".into()`), owned `String` values, and short single-char
+    /// property-probe labels. Post-lift EVERY shape reaches the
+    /// composer through the same `Into<String>` gate; the pin binds
+    /// that so a future narrowing to `&str` (which would break every
+    /// worker-crate fixture that pre-lift wrote `subject: <s>.into()`)
+    /// surfaces here.
+    #[test]
+    fn publish_accepts_every_pre_lift_caller_source_shape() {
+        // Shape 1: `&'static str` literals on both positional args —
+        // the closed-set property probes' shape.
+        let a = NatsSubjectChannel::publish("s", "S");
+        assert_eq!(a.subject, "s");
+        assert_eq!(a.stream, "S");
+        // Shape 2: owned `String` values on both positional args — the
+        // shape a caller reaches for after `let subj = format!(...);`
+        // or `let stream = String::from(...);` bindings.
+        let owned_subject: String = "pleme.demo.subject".to_string();
+        let owned_stream: String = "DEMO_STREAM".to_string();
+        let b = NatsSubjectChannel::publish(owned_subject, owned_stream);
+        assert_eq!(b.subject, "pleme.demo.subject");
+        assert_eq!(b.stream, "DEMO_STREAM");
+        // Shape 3: mixed — `&str` slice on one arg, owned `String` on
+        // the other — verifies the two positional bounds are
+        // independent (a regression that unified them under a single
+        // generic type parameter `T: Into<String>` would break this).
+        let subj_slice = String::from("pleme.mixed.subject");
+        let stream_owned: String = "MIXED_STREAM".to_string();
+        let c = NatsSubjectChannel::publish(&subj_slice[..], stream_owned);
+        assert_eq!(c.subject, "pleme.mixed.subject");
+        assert_eq!(c.stream, "MIXED_STREAM");
+    }
+
+    /// COMPOSITION PIN: `NatsSubjectChannel::publish` composes byte-
+    /// identically with [`ChannelKind::select`] on the resolver axis —
+    /// wrapping the primitive's output in the `VectorChannel` tagged-
+    /// union slot yields the same `ChannelVariant::NatsSubject(...)`
+    /// projection as the pre-lift literal did. Guards the primary
+    /// downstream consumer (the tagged-union `.variant()` resolver
+    /// every fixture round-trips through) against a regression that
+    /// projected the primitive onto a non-nats-subject slot or dropped
+    /// its `subject`/`stream`/`url` slots between composition sites.
+    #[test]
+    fn publish_composes_with_channel_variant_resolver() {
+        let c = VectorChannel {
+            nats_subject: Some(NatsSubjectChannel::publish(
+                "pleme.pleme-dev.ephemeral.{{run_id}}.receipt",
+                "EPHEMERAL_RECEIPTS",
+            )),
+            ..VectorChannel::default()
+        };
+        match c.variant().unwrap() {
+            ChannelVariant::NatsSubject(n) => {
+                assert_eq!(n.subject, "pleme.pleme-dev.ephemeral.{{run_id}}.receipt");
+                assert_eq!(n.stream, "EPHEMERAL_RECEIPTS");
+                assert_eq!(n.resolved_url(), DEFAULT_NATS_URL);
+                assert!(n.url.is_none());
+            }
+            other => panic!("expected NatsSubject, got {other:?}"),
+        }
+        // Kind projection through the closed-set discriminator stays
+        // coherent with `ChannelKind::NatsSubject` — a regression that
+        // wired the primitive to a non-nats-subject slot would surface
+        // here as a wrong-kind panic before any downstream test firing.
+        let via_kind = ChannelKind::NatsSubject.select(&c).unwrap();
+        assert_eq!(via_kind.kind(), ChannelKind::NatsSubject);
+    }
+
     // ── closed-set algebra for ArtifactKind (ALL × as_str × Display ×
     //    FromStr × select × ArtifactVariant::kind) ─────────────────────
 
@@ -1991,11 +2201,7 @@ mod tests {
                 ..VectorChannel::default()
             },
             ChannelKind::NatsSubject => VectorChannel {
-                nats_subject: Some(NatsSubjectChannel {
-                    subject: "s".into(),
-                    stream: "S".into(),
-                    url: None,
-                }),
+                nats_subject: Some(NatsSubjectChannel::publish("s", "S")),
                 ..VectorChannel::default()
             },
             ChannelKind::Stdout => VectorChannel {

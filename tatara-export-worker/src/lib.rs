@@ -406,11 +406,10 @@ mod tests {
 
     #[test]
     fn subject_substitutes_run_id_template() {
-        let ch = NatsSubjectChannel {
-            subject: "pleme.pleme-dev.ephemeral.{{run_id}}.receipt".into(),
-            stream: "EPHEMERAL_RECEIPTS".into(),
-            url: None,
-        };
+        let ch = NatsSubjectChannel::publish(
+            "pleme.pleme-dev.ephemeral.{{run_id}}.receipt",
+            "EPHEMERAL_RECEIPTS",
+        );
         assert_eq!(
             resolve_subject(&ch, "ns/n"),
             "pleme.pleme-dev.ephemeral.ns/n.receipt"
@@ -419,11 +418,7 @@ mod tests {
 
     #[test]
     fn subject_passthrough_when_no_template() {
-        let ch = NatsSubjectChannel {
-            subject: "pleme.fixed.subject".into(),
-            stream: "S".into(),
-            url: None,
-        };
+        let ch = NatsSubjectChannel::publish("pleme.fixed.subject", "S");
         assert_eq!(resolve_subject(&ch, "ignored"), "pleme.fixed.subject");
     }
 

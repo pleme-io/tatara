@@ -2332,11 +2332,7 @@ mod tests {
                 ..VectorChannel::default()
             },
             ChannelKind::NatsSubject => VectorChannel {
-                nats_subject: Some(NatsSubjectChannel {
-                    subject: "s".into(),
-                    stream: "S".into(),
-                    url: None,
-                }),
+                nats_subject: Some(NatsSubjectChannel::publish("s", "S")),
                 ..VectorChannel::default()
             },
             ChannelKind::Stdout => VectorChannel {

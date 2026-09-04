@@ -1240,11 +1240,10 @@ mod export_job_tests {
                 ..ArtifactSource::default()
             },
             channel: VectorChannel {
-                nats_subject: Some(NatsSubjectChannel {
-                    subject: "pleme.pleme-dev.ephemeral.{{run_id}}.receipt".into(),
-                    stream: "EPHEMERAL_RECEIPTS".into(),
-                    url: None,
-                }),
+                nats_subject: Some(NatsSubjectChannel::publish(
+                    "pleme.pleme-dev.ephemeral.{{run_id}}.receipt",
+                    "EPHEMERAL_RECEIPTS",
+                )),
                 ..VectorChannel::default()
             },
             when: ExportTrigger::OnAttested,

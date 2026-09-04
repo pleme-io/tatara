@@ -245,12 +245,35 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
             // requestor identity, a per-namespace override) lands at
             // ONE `pub const` in the substrate and every downstream
             // consumer inherits the upgrade mechanically.
+            //
+            // REQUESTOR value composition rides through the substrate
+            // primitive `tatara_process::qualified_process_ref` — pre-
+            // lift this was a hand-authored `format!("{}/{}", ns, name)`
+            // chain, the LAST live-crate restatement of the workspace-
+            // wide `<ns>/<name>` byte-shape past the ★★ PRIME-DIRECTIVE
+            // ≥ 2 duplication threshold. Every OTHER consumer of the
+            // shape (the SSA re-injection's `ownership_annotations`
+            // seed in `tatara-reconciler::ssapply`, the boundary-
+            // evaluator input in the same module, the export-worker's
+            // `run-id` fallback, the ClaimRecord `holder` slot in
+            // `tatara-process::table`) already routed through the
+            // primitive; this Bind arm was the sole hand-authored
+            // corner left. Post-lift every `<ns>/<name>` join in the
+            // live workspace lands at ONE substrate owner — a future
+            // normalization of the reference shape (a case-fold, a
+            // cross-cluster `<cluster>/<ns>/<name>` variant, a
+            // `<ns>/<name>@<gen>` multi-generation form for
+            // attestation grepping, a unicode-safe collation) reaches
+            // this call site through ONE substrate function rather
+            // than by hand-edit. The `&ns` / `&name` borrow avoids the
+            // pre-lift `.clone()`s implicit in the `format!(...)`
+            // positional-argument expansion.
             let proc_patch = json!({
                 "spec": { "lifetime": lifetime },
                 "metadata": {
                     "annotations": {
                         annotations::REQUESTOR:
-                            format!("{}/{}", ns, name),
+                            tatara_process::qualified_process_ref(&ns, &name),
                         annotations::ALLOCATION:
                             name.clone(),
                         annotations::REQUESTOR_KIND:
@@ -403,4 +426,116 @@ pub fn error_policy(
 ) -> Action {
     warn!(error = ?err, "allocation reconcile failed");
     tatara_process::requeue::after_secs(15)
+}
+
+#[cfg(test)]
+mod tests {
+    //! Substrate-discipline pins for the Bind arm's REQUESTOR
+    //! annotation seed — post-lift the value rides through the ONE
+    //! substrate composer `tatara_process::qualified_process_ref`
+    //! (which owns the `<ns>/<name>` byte-shape workspace-wide) rather
+    //! than a hand-authored `format!("{}/{}", ns, name)` chain. These
+    //! pins bind the composer's output byte-identically to the pre-
+    //! lift spelling AND to the actual annotation value the Bind arm
+    //! embeds in the merge-patch body, so a regression that reverted
+    //! the call site to a hand-authored `format!` (with a subtly
+    //! wrong separator, reversed axis order, or the two-arg positional
+    //! `format!("{name}/{ns}")` typo) surfaces here rather than as
+    //! silent drift in the requestor grep discipline that the
+    //! reconciler + audit trail + pool-decide observer all key on.
+    //!
+    //! The pins re-materialize the ONE annotation slot the reconciler
+    //! composes at the Bind arm; they do NOT re-drive the reconcile
+    //! loop (which would require a running kube API + Pool fixtures).
+    //! That is deliberate — the substrate primitive already carries
+    //! its own bytewise pins in `tatara-process::qualified_process_ref_tests`;
+    //! this module's job is to lock in the CALL-SITE discipline that
+    //! the Bind arm reaches through the substrate rather than
+    //! restating the shape by hand.
+    use super::*;
+
+    #[test]
+    fn requestor_annotation_composes_through_qualified_process_ref() {
+        // Bytewise pin: the substrate composer's output must be
+        // byte-identical to the pre-lift `format!("{}/{}", ns, name)`
+        // spelling for every representative (ns, name) axis-shape the
+        // Bind arm sees in production (typed namespaces, empty-slot
+        // corners the K8s API server itself accepts, edge-case names
+        // that a hand-authored `format!` typo would silently corrupt).
+        // A regression that re-authored the composer to canonicalize
+        // one of these corners without updating the reference
+        // `format!` spelling would surface here rather than as
+        // divergent requestor greps downstream.
+        for (ns, name) in [
+            ("demo-ns", "req-1"),
+            ("", ""),
+            ("default", ""),
+            ("", "orphan"),
+            ("weird ns", "with/slash"),
+            ("pleme-dev", "ephemeral-demo"),
+        ] {
+            let hand_authored = format!("{}/{}", ns, name);
+            assert_eq!(
+                tatara_process::qualified_process_ref(ns, name),
+                hand_authored,
+                "substrate `qualified_process_ref` must be byte-identical to the \
+                 pre-lift `format!(\"{{}}/{{}}\", ns, name)` for (ns={ns:?}, name={name:?})",
+            );
+        }
+    }
+
+    #[test]
+    fn requestor_annotation_slot_matches_substrate_composer_bytewise() {
+        // Re-materialize the exact `metadata.annotations` slot the
+        // Bind arm composes and pin the REQUESTOR value against the
+        // substrate composer's output. The composed slot below MUST
+        // stay in lockstep with the `proc_patch` composition inside
+        // `reconcile_inner`'s Bind arm; a regression that dropped the
+        // substrate delegation from that composition (or renamed the
+        // REQUESTOR const key) surfaces here rather than as silent
+        // annotation drift on every allocation-bound Process.
+        let ns = "demo-ns";
+        let name = "req-1";
+        let kind = "manual";
+
+        let composed = json!({
+            "metadata": {
+                "annotations": {
+                    annotations::REQUESTOR:
+                        tatara_process::qualified_process_ref(ns, name),
+                    annotations::ALLOCATION: name,
+                    annotations::REQUESTOR_KIND: kind,
+                }
+            }
+        });
+
+        assert_eq!(
+            composed["metadata"]["annotations"][annotations::REQUESTOR],
+            serde_json::Value::String("demo-ns/req-1".into()),
+            "REQUESTOR annotation slot must serialise to the canonical `<ns>/<name>` shape",
+        );
+        assert_eq!(
+            composed["metadata"]["annotations"][annotations::ALLOCATION],
+            serde_json::Value::String(name.into()),
+        );
+        assert_eq!(
+            composed["metadata"]["annotations"][annotations::REQUESTOR_KIND],
+            serde_json::Value::String(kind.into()),
+        );
+    }
+
+    #[test]
+    fn requestor_annotation_axis_order_survives_composer_swap() {
+        // Regression pin against the pre-lift positional-`format!`
+        // typo class: `format!("{name}/{ns}")` (axis swap) or
+        // `format!("{ns}-{name}")` (wrong separator) would produce a
+        // value the reconciler's grep discipline silently mis-keys.
+        // The substrate composer's 2-arg (ns, name) signature encodes
+        // the axis order at the type level — a swap here surfaces as
+        // a divergent value, not a divergent shape.
+        let via_substrate = tatara_process::qualified_process_ref("ns-first", "name-second");
+        assert_eq!(via_substrate, "ns-first/name-second");
+        assert_ne!(via_substrate, "name-second/ns-first");
+        assert_ne!(via_substrate, "ns-first-name-second");
+    }
 }

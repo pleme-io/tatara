@@ -409,7 +409,17 @@ pub async fn handle_running(p: &Process, ctx: &Context) -> Result<Action> {
         h.update(r.name.as_bytes());
         h.update(b"\n");
     }
-    let artifact_hash = hex::encode(h.finalize().as_bytes());
+    // Terminal `hex::encode(<hash>.as_bytes())` step rides through
+    // the substrate primitive `tatara_process::hash::hex_blake3_hash`
+    // — the ONE owner of the streaming-digest hex encoding. Pre-lift
+    // this site restated `hex::encode(h.finalize().as_bytes())`
+    // inline, sibling to the same 1-link chain hand-authored inside
+    // `tatara_process::three_pillar::compose_root` past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold; post-lift both
+    // consumers route through ONE substrate function, and a future
+    // re-encoding (base32, uppercase-hex, `Hash::to_hex()`) reaches
+    // both mechanically.
+    let artifact_hash = tatara_process::hash::hex_blake3_hash(&h.finalize());
     advance_to_attested(p, ctx, &ns, &name, Some(artifact_hash)).await
 }
 

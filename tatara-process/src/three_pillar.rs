@@ -137,7 +137,17 @@ pub fn compose_root(
     h.update(intent.as_bytes());
     h.update(b"\n");
     h.update(previous.unwrap_or("").as_bytes());
-    hex::encode(h.finalize().as_bytes())
+    // Terminal `hex::encode(<hash>.as_bytes())` step rides through
+    // the substrate primitive [`crate::hash::hex_blake3_hash`] — the
+    // ONE owner of the streaming-digest hex encoding. Pre-lift this
+    // site restated `hex::encode(h.finalize().as_bytes())` inline,
+    // sibling to the same 1-link chain hand-authored at
+    // `tatara-reconciler::phase_machine::handle_running` (the per-ref
+    // artifact-hash fold on the ATTEST step) past the ★★ PRIME-
+    // DIRECTIVE ≥ 2 duplication threshold; post-lift both consumers
+    // route through ONE substrate function, and a future re-encoding
+    // reaches both mechanically.
+    crate::hash::hex_blake3_hash(&h.finalize())
 }
 
 /// Length-checked, bit-mask-folded constant-time byte comparator.

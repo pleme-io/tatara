@@ -709,6 +709,72 @@ impl HttpEventChannel {
     pub fn resolved_endpoint(&self) -> &str {
         self.endpoint.as_deref().unwrap_or(DEFAULT_VECTOR_INGEST)
     }
+
+    /// Compose an [`HttpEventChannel`] pinned to the in-cluster
+    /// default endpoint ([`DEFAULT_VECTOR_INGEST`], stamped as
+    /// `endpoint: None` so [`Self::resolved_endpoint`] resolves the
+    /// same URL on read) and the given `signal_type` — the ONE
+    /// substrate primitive owning the 4-token `HttpEventChannel {
+    /// endpoint: None, signal_type: <s>.into() }` fixture literal every
+    /// consumer restated by hand pre-lift.
+    ///
+    /// Pre-lift the same 3-slot chain (`endpoint: None`,
+    /// `signal_type: <label>.into()`, `..` for the two-slot struct's
+    /// non-existent tail) was hand-authored at TEN workspace-wide
+    /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold,
+    /// EVERY one of them the "default-endpoint, name-only" shape (no
+    /// site in the workspace stamps a non-None endpoint on an
+    /// `HttpEventChannel` literal):
+    ///
+    /// * `tatara-process::export` — five sites: two closed-set
+    ///   ambiguity probes (`single_slot_channel`, the
+    ///   `kind_equals_variant_kind_across_all_carriers` probe), plus
+    ///   three round-trip tests (`vector_channel_resolves_http_event`,
+    ///   `export_spec_serde_round_trip`, `run_marker_labels_round_trip`).
+    /// * `tatara-process::lifetime` — two round-trip tests
+    ///   (`applicable_exports_filters_by_trigger`,
+    ///   `exports_round_trip_through_lifetime`).
+    /// * `tatara-process::tagged_union` — two closed-set property probes
+    ///   (`single_slot_vector_channel_probe`,
+    ///   `kind_equals_variant_kind_across_all_carriers`).
+    /// * `tatara-reconciler::render` — the `spec_run_marker_always`
+    ///   fixture the ephemeral-export-Job renderer's tests seed.
+    /// * `tatara-export-worker::lib` — the `http_spec` fixture the
+    ///   worker's `resolve_run_id` tests seed.
+    ///
+    /// Post-lift every callsite reads `HttpEventChannel::signal(<label>)`
+    /// and the two-slot struct's `endpoint` slot stays owned by the ONE
+    /// substrate site. The `impl Into<String>` bound accepts every
+    /// pre-lift caller shape verbatim — `&'static str` literals
+    /// (`"receipt"`, `"test-report"`, `"ephemeral-marker"`), owned
+    /// `String` values (worker fixture's `signal_type.to_string()`), and
+    /// `.into()`-terminated chains alike — without a per-site coercion.
+    ///
+    /// A future addition (a default-endpoint override for a
+    /// per-fleet Vector ingress, a `signal_type` normalization step
+    /// clamping the tag to shinryu's allowed set, a per-fleet
+    /// `endpoint` seed pulled from a config surface) lands at THIS
+    /// ONE substrate primitive and every downstream consumer inherits
+    /// the upgrade mechanically — no per-site edit at any of the ten
+    /// listed callers or at future test fixtures.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `HttpEventChannel { endpoint: None, signal_type: <s>.into() }`
+    /// fixture literal recurred at ten hand-authored sites past the
+    /// ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to
+    /// ONE owner here). THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — a regression that drifted the default-
+    /// endpoint sentinel from `None` to a hardcoded string, or
+    /// reordered the two struct slots, surfaces at the
+    /// `signal_composes_byte_identical_to_pre_lift_literal_across_every_label`
+    /// pin below rather than as silent skew at every downstream fixture).
+    #[must_use]
+    pub fn signal(signal_type: impl Into<String>) -> Self {
+        Self {
+            endpoint: None,
+            signal_type: signal_type.into(),
+        }
+    }
 }
 
 /// NATS JetStream channel — guaranteed-delivery publish.
@@ -928,10 +994,7 @@ mod tests {
     #[test]
     fn vector_channel_resolves_http_event() {
         let c = VectorChannel {
-            http_event: Some(HttpEventChannel {
-                endpoint: None,
-                signal_type: "test-report".into(),
-            }),
+            http_event: Some(HttpEventChannel::signal("test-report")),
             ..VectorChannel::default()
         };
         match c.variant().unwrap() {
@@ -1384,10 +1447,7 @@ mod tests {
                 ..ArtifactSource::default()
             },
             channel: VectorChannel {
-                http_event: Some(HttpEventChannel {
-                    endpoint: None,
-                    signal_type: "test-report".into(),
-                }),
+                http_event: Some(HttpEventChannel::signal("test-report")),
                 ..VectorChannel::default()
             },
             when: ExportTrigger::Always,
@@ -1423,10 +1483,7 @@ mod tests {
                 ..ArtifactSource::default()
             },
             channel: VectorChannel {
-                http_event: Some(HttpEventChannel {
-                    endpoint: None,
-                    signal_type: "ephemeral-marker".into(),
-                }),
+                http_event: Some(HttpEventChannel::signal("ephemeral-marker")),
                 ..VectorChannel::default()
             },
             when: ExportTrigger::Always,
@@ -1453,6 +1510,131 @@ mod tests {
             DEFAULT_NATS_URL,
             "nats://nats.observability.svc.cluster.local:4222"
         );
+    }
+
+    // ── HttpEventChannel::signal substrate primitive pins ────────────
+    //
+    // Sweeps the wire-shape corners the ten pre-lift `HttpEventChannel {
+    // endpoint: None, signal_type: <s>.into() }` hand-authored fixture
+    // literals covered — the default-endpoint sentinel projects to
+    // `None`, the `signal_type` slot rides through verbatim, and the
+    // downstream [`HttpEventChannel::resolved_endpoint`] read still
+    // resolves to [`DEFAULT_VECTOR_INGEST`]. A regression that seeded
+    // a hardcoded endpoint on the composer, dropped the `Into<String>`
+    // bound so a `&str` caller has to `.to_string()` per-site, or
+    // reordered the two struct slots surfaces here rather than as
+    // silent skew at any of the ten downstream fixtures (five in
+    // `tatara-process::export`, two in `tatara-process::lifetime`, two
+    // in `tatara-process::tagged_union`, one in
+    // `tatara-reconciler::render`, one in `tatara-export-worker::lib`).
+
+    /// PRIMARY SHAPE: byte-identical parity with the pre-lift 4-token
+    /// hand-authored literal every fixture spelled. Sweeps every label
+    /// the ten collapsed sites carry so a regression that dropped or
+    /// mutated any observable slot's value surfaces HERE rather than
+    /// downstream. The `endpoint: None` sentinel is the load-bearing
+    /// slot ([`HttpEventChannel::resolved_endpoint`] gates on `.is_none()`
+    /// to reach [`DEFAULT_VECTOR_INGEST`]); the pin binds it before the
+    /// primitive can drift.
+    #[test]
+    fn signal_composes_byte_identical_to_pre_lift_literal_across_every_label() {
+        for label in [
+            "receipt",
+            "test-report",
+            "ephemeral-marker",
+            "x",
+            "s",
+            "demo-run-2026-05-20",
+        ] {
+            let via_primitive = HttpEventChannel::signal(label);
+            let hand_authored = HttpEventChannel {
+                endpoint: None,
+                signal_type: label.to_string(),
+            };
+            assert_eq!(
+                via_primitive.endpoint, hand_authored.endpoint,
+                "signal must project the endpoint slot byte-identically \
+                 to the pre-lift literal on label={label:?}",
+            );
+            assert_eq!(
+                via_primitive.signal_type, hand_authored.signal_type,
+                "signal must project the signal_type slot byte-identically \
+                 to the pre-lift literal on label={label:?}",
+            );
+            assert!(
+                via_primitive.endpoint.is_none(),
+                "signal must stamp endpoint: None so resolved_endpoint \
+                 reaches DEFAULT_VECTOR_INGEST on label={label:?}",
+            );
+            assert_eq!(
+                via_primitive.resolved_endpoint(),
+                DEFAULT_VECTOR_INGEST,
+                "signal must compose with resolved_endpoint's \
+                 default-fallback gate on label={label:?}",
+            );
+        }
+    }
+
+    /// COERCION AXIS PIN: the `impl Into<String>` bound accepts every
+    /// pre-lift caller shape without a per-site coercion. Pre-lift the
+    /// ten sites carried three distinct source shapes for the
+    /// `signal_type` slot: `&'static str` literals with `.into()`
+    /// (`"receipt".into()`), the export-worker fixture's owned
+    /// `String` via `.to_string()` (`signal_type.to_string()`), and
+    /// the property-probe fixtures' short single-char labels. Post-lift
+    /// EVERY shape reaches the composer through the same `Into<String>`
+    /// gate; the pin binds that so a future narrowing to `&str` (which
+    /// would break the export-worker's `signal_type: &str` parameter
+    /// shape) surfaces here.
+    #[test]
+    fn signal_accepts_every_pre_lift_caller_source_shape() {
+        // Shape 1: `&'static str` literal — every test-fixture site.
+        let a = HttpEventChannel::signal("receipt");
+        assert_eq!(a.signal_type, "receipt");
+        // Shape 2: owned `String` — the export-worker `http_spec`
+        // fixture pre-lift spelled `signal_type: signal_type.to_string()`
+        // to project its `&str` parameter into the slot.
+        let owned: String = "test-report".to_string();
+        let b = HttpEventChannel::signal(owned);
+        assert_eq!(b.signal_type, "test-report");
+        // Shape 3: `&String` — verifies the `Into<String>` bound
+        // accepts a borrowed owned string without an explicit clone
+        // (matches the reference shape a caller might reach for after
+        // an intermediate `let label = String::from("...");` binding).
+        let borrowed = String::from("ephemeral-marker");
+        let c = HttpEventChannel::signal(&borrowed[..]);
+        assert_eq!(c.signal_type, "ephemeral-marker");
+    }
+
+    /// COMPOSITION PIN: `HttpEventChannel::signal` composes byte-
+    /// identically with [`ChannelKind::select`] on the resolver axis —
+    /// wrapping the primitive's output in the `VectorChannel` tagged-
+    /// union slot yields the same `ChannelVariant::HttpEvent(...)`
+    /// projection as the pre-lift literal did. Guards the primary
+    /// downstream consumer (the tagged-union `.variant()` resolver
+    /// every fixture round-trips through) against a regression that
+    /// projected the primitive onto a non-http-event slot or dropped
+    /// its `endpoint`/`signal_type` slots between composition sites.
+    #[test]
+    fn signal_composes_with_channel_variant_resolver() {
+        let c = VectorChannel {
+            http_event: Some(HttpEventChannel::signal("receipt")),
+            ..VectorChannel::default()
+        };
+        match c.variant().unwrap() {
+            ChannelVariant::HttpEvent(h) => {
+                assert_eq!(h.signal_type, "receipt");
+                assert_eq!(h.resolved_endpoint(), DEFAULT_VECTOR_INGEST);
+                assert!(h.endpoint.is_none());
+            }
+            other => panic!("expected HttpEvent, got {other:?}"),
+        }
+        // Kind projection through the closed-set discriminator stays
+        // coherent with `ChannelKind::HttpEvent` — a regression that
+        // wired the primitive to a non-http-event slot would surface
+        // here as a wrong-kind panic before any downstream test firing.
+        let via_kind = ChannelKind::HttpEvent.select(&c).unwrap();
+        assert_eq!(via_kind.kind(), ChannelKind::HttpEvent);
     }
 
     // ── closed-set algebra for ArtifactKind (ALL × as_str × Display ×
@@ -1805,10 +1987,7 @@ mod tests {
     fn single_slot_channel(kind: ChannelKind) -> VectorChannel {
         match kind {
             ChannelKind::HttpEvent => VectorChannel {
-                http_event: Some(HttpEventChannel {
-                    endpoint: None,
-                    signal_type: "x".into(),
-                }),
+                http_event: Some(HttpEventChannel::signal("x")),
                 ..VectorChannel::default()
             },
             ChannelKind::NatsSubject => VectorChannel {

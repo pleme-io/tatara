@@ -704,10 +704,7 @@ mod tests {
                 ..ArtifactSource::default()
             },
             channel: VectorChannel {
-                http_event: Some(HttpEventChannel {
-                    endpoint: None,
-                    signal_type: "receipt".into(),
-                }),
+                http_event: Some(HttpEventChannel::signal("receipt")),
                 ..VectorChannel::default()
             },
             when: ExportTrigger::OnAttested,
@@ -976,10 +973,7 @@ mod tests {
                         ..ArtifactSource::default()
                     },
                     channel: VectorChannel {
-                        http_event: Some(HttpEventChannel {
-                            endpoint: None,
-                            signal_type: "receipt".into(),
-                        }),
+                        http_event: Some(HttpEventChannel::signal("receipt")),
                         ..VectorChannel::default()
                     },
                     when: ExportTrigger::OnAttested,

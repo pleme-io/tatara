@@ -1259,10 +1259,7 @@ mod export_job_tests {
                 ..ArtifactSource::default()
             },
             channel: VectorChannel {
-                http_event: Some(HttpEventChannel {
-                    endpoint: None,
-                    signal_type: "ephemeral-marker".into(),
-                }),
+                http_event: Some(HttpEventChannel::signal("ephemeral-marker")),
                 ..VectorChannel::default()
             },
             when: ExportTrigger::Always,

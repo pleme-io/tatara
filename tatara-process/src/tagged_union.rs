@@ -2328,10 +2328,7 @@ mod tests {
         };
         match kind {
             ChannelKind::HttpEvent => VectorChannel {
-                http_event: Some(HttpEventChannel {
-                    endpoint: None,
-                    signal_type: "x".into(),
-                }),
+                http_event: Some(HttpEventChannel::signal("x")),
                 ..VectorChannel::default()
             },
             ChannelKind::NatsSubject => VectorChannel {
@@ -3295,10 +3292,7 @@ mod tests {
         let av = ArtifactVariant::Receipts(&rs);
         assert_eq!(av.kind(), av.variant_kind());
 
-        let ch = HttpEventChannel {
-            endpoint: None,
-            signal_type: "s".into(),
-        };
+        let ch = HttpEventChannel::signal("s");
         let cv = ChannelVariant::HttpEvent(&ch);
         assert_eq!(cv.kind(), cv.variant_kind());
     }

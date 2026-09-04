@@ -376,10 +376,7 @@ mod tests {
                 ..ArtifactSource::default()
             },
             channel: VectorChannel {
-                http_event: Some(HttpEventChannel {
-                    endpoint: None,
-                    signal_type: signal_type.to_string(),
-                }),
+                http_event: Some(HttpEventChannel::signal(signal_type)),
                 ..VectorChannel::default()
             },
             when: Default::default(),

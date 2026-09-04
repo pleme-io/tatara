@@ -371,6 +371,80 @@ pub fn evaluate(
     AutoTerminate::Skip
 }
 
+/// Wall-clock-anchored peer of [`evaluate`] — pins the `now` argument
+/// to [`chrono::Utc::now`] so every production reconciler tick reads a
+/// single-shape 2-arg call rather than restating the wall-clock
+/// projection at each phase handler.
+///
+/// # Why it exists
+///
+/// Pre-lift the 3-arg `evaluate(p, ProcessPhase::X, chrono::Utc::now())`
+/// chain was hand-authored at THREE sites past the ★★ PRIME-DIRECTIVE
+/// ≥ 2 duplication threshold in `tatara-reconciler::phase_machine`,
+/// each pairing an ephemeral-lifetime clock check against wall-clock
+/// time inside a `handle_<phase>` async fn:
+///
+/// * `handle_running` — VERIFY-phase clock check on `ProcessPhase::
+///   Running`; a `Now` verdict force-transitions to `Exiting`
+///   regardless of postcondition state.
+/// * `handle_attested` — ATTEST-heartbeat clock check on `ProcessPhase::
+///   Attested`; a `Now` verdict routes through Releasing when exports
+///   are declared, otherwise straight to `Exiting`.
+/// * `handle_failed` — Failed-phase clock check on `ProcessPhase::
+///   Failed`; a `Now` verdict routes through Releasing when post-mortem
+///   exports are declared, otherwise straight to `Zombie`.
+///
+/// All three sites walked the SAME 3-arg call with the SAME
+/// `chrono::Utc::now()` third argument — the wall-clock projection had
+/// no per-callsite variation. Post-lift the three consumers share ONE
+/// substrate owner for the wall-clock-at-tick projection; a future
+/// clock swap (a monotonic clock cross-check, a per-reconciler
+/// injected time source, a test-only override at the production
+/// callsite via feature flag) lands at ONE substrate function and
+/// every phase handler inherits the upgrade mechanically.
+///
+/// The 3-arg [`evaluate`] peer stays load-bearing for test callers —
+/// the injected-`now` shape is what unit tests use to drive the clock
+/// deterministically (every `evaluate(&p, phase, Utc::now())` /
+/// `evaluate(&p, phase, seeded_now)` in this module's own test suite
+/// reads that surface). This peer is production-only: pinning the
+/// wall-clock at the substrate site means no test can accidentally
+/// consume it without the deterministic-clock injection that makes
+/// the test meaningful.
+///
+/// # Invariants
+///
+/// - **Same decision shape:** returns the SAME [`AutoTerminate`] the
+///   3-arg [`evaluate`] returns when passed `chrono::Utc::now()` as the
+///   third argument. This is a delegation, not a re-implementation.
+/// - **Wall-clock read once:** `Utc::now()` is called exactly ONCE per
+///   invocation, at the primitive's body, so a future consumer that
+///   chains two `evaluate_now` calls back-to-back still sees monotonic
+///   `now` reads (each call reads a fresh instant, not a cached one) —
+///   matches the pre-lift shape where each of the three phase
+///   handlers computed its own `chrono::Utc::now()` at its own line.
+///
+/// # `#[must_use]`
+///
+/// Every consumer either destructures the returned `AutoTerminate` at
+/// an `if let AutoTerminate::Now { reason } = …` guard (the three
+/// pre-lift phase-handler shapes) or feeds it into a downstream
+/// dispatcher that gates on `AutoTerminate::is_now`. Dropping the
+/// return means the clock check fired for no observable reason — the
+/// attribute surfaces that as a warning at every call site.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// 3-arg call with `chrono::Utc::now()` as the third argument recurred
+/// at 3 hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication trigger, lifted onto the ONE workspace-wide substrate
+/// owner here). THEORY.md §II.1 invariant 5 (composition preserves
+/// proofs — the wall-clock projection lives at ONE site so a future
+/// clock swap reaches all three consumers through one edit).
+#[must_use]
+pub fn evaluate_now(process: &Process, current_phase: ProcessPhase) -> AutoTerminate {
+    evaluate(process, current_phase, Utc::now())
+}
+
 /// Phases past which TTL cannot meaningfully fire — the SIGTERM path
 /// is already in progress.
 fn is_terminal_or_exit(p: ProcessPhase) -> bool {
@@ -562,6 +636,117 @@ mod tests {
         assert_eq!(
             evaluate(&p, ProcessPhase::Running, Utc::now()),
             AutoTerminate::Skip
+        );
+    }
+
+    // ─── evaluate_now substrate pins ────────────────────────────────
+    //
+    // The wall-clock-anchored peer [`evaluate_now`] pins the 3-arg
+    // `evaluate(p, phase, chrono::Utc::now())` chain at ONE substrate
+    // site across THREE consumer callsites in
+    // `tatara-reconciler::phase_machine` (handle_running,
+    // handle_attested, handle_failed). These pins bind the peer at
+    // fail-before-pass-after granularity so a regression that swapped
+    // the delegated clock (a monotonic-clock read, a stale cached
+    // instant, a fixed epoch) or drifted the decision shape (returning
+    // a different `AutoTerminate` variant than the 3-arg peer would on
+    // the same wall-clock instant) surfaces HERE rather than as silent
+    // ephemeral-teardown skew at three phase handlers simultaneously.
+
+    #[test]
+    fn evaluate_now_permanent_process_returns_skip() {
+        // Peer-parity witness on the permanent-process corner: the
+        // 3-arg [`evaluate`] returns `Skip` for a permanent Process on
+        // every phase; the wall-clock-anchored [`evaluate_now`] must
+        // return the SAME `Skip` — the delegation must not silently
+        // trip a teardown branch on a Process that lacks an
+        // `EphemeralLifetime` block at all.
+        let p = permanent_process();
+        for phase in [
+            ProcessPhase::Pending,
+            ProcessPhase::Execing,
+            ProcessPhase::Running,
+            ProcessPhase::Attested,
+            ProcessPhase::Failed,
+        ] {
+            assert_eq!(
+                evaluate_now(&p, phase),
+                AutoTerminate::Skip,
+                "evaluate_now must delegate to evaluate on permanent-process corner (phase={phase:?})",
+            );
+        }
+    }
+
+    #[test]
+    fn evaluate_now_agrees_with_evaluate_on_teardown_policy_corner() {
+        // Peer-parity witness on the teardown-policy corner: for a
+        // Process whose ephemeral teardown policy fires on
+        // `Attested` / `Failed`, both peers must return an
+        // `AutoTerminate::Now` verdict. The reason payload IS allowed
+        // to differ by microseconds (`TtlExpired`'s `elapsed` field
+        // reads a fresh `Utc::now()` inside `evaluate_now`), but the
+        // teardown-policy corner emits `TerminateReason::TeardownPolicy`
+        // whose payload is (policy, phase) — no wall-clock drift.
+        let p = ephemeral_process("1h", TeardownPolicy::Always, 60);
+        for phase in [ProcessPhase::Attested, ProcessPhase::Failed] {
+            let via_now = evaluate_now(&p, phase);
+            let via_evaluate = evaluate(&p, phase, Utc::now());
+            assert_eq!(
+                via_now, via_evaluate,
+                "evaluate_now teardown-policy verdict must match evaluate's on {phase:?}",
+            );
+            assert!(
+                matches!(via_now, AutoTerminate::Now { .. }),
+                "expected AutoTerminate::Now on {phase:?}, got {via_now:?}",
+            );
+        }
+        // Non-terminal phase → both must return Skip (teardown policy
+        // gates on terminal phases only).
+        assert_eq!(
+            evaluate_now(&p, ProcessPhase::Running),
+            AutoTerminate::Skip,
+            "teardown policy must not fire on non-terminal Running phase",
+        );
+    }
+
+    #[test]
+    fn evaluate_now_fires_ttl_when_elapsed() {
+        // Wall-clock-anchored TTL fires when the creation-anchored
+        // TTL has elapsed against the pinned `Utc::now()` read. The
+        // fixture stamps `metadata.creation_timestamp` 60s ago and
+        // sets a 30s TTL — so `evaluate_now` at reconcile time
+        // reads `Utc::now()`, subtracts the 60s-ago anchor, and
+        // returns `Now(TtlExpired{...})` on the VERIFY-phase read.
+        // A regression that pinned the delegated `now` to a stale
+        // constant (e.g. `DateTime::default()`) would silently miss
+        // the elapsed-TTL corner and return `Skip` here — the pin
+        // surfaces that drift at this test rather than as silent
+        // never-terminating ephemeral envs in production.
+        let p = ephemeral_process("30s", TeardownPolicy::Never, 60);
+        assert!(
+            matches!(
+                evaluate_now(&p, ProcessPhase::Running),
+                AutoTerminate::Now { .. }
+            ),
+            "TTL elapsed via wall-clock must fire Now verdict",
+        );
+    }
+
+    #[test]
+    fn evaluate_now_skips_when_ttl_not_yet_elapsed() {
+        // Peer of the elapsed-TTL pin above: a 1h TTL against a
+        // 60s-old creation anchor must NOT fire; the pinned
+        // `Utc::now()` read stays within the TTL window and
+        // `evaluate_now` returns `Skip`. A regression that pinned
+        // the delegated `now` to a far-future constant would trip
+        // the elapsed corner unconditionally and force-terminate
+        // every ephemeral Process before its TTL — the pin
+        // surfaces that drift here.
+        let p = ephemeral_process("1h", TeardownPolicy::Never, 60);
+        assert_eq!(
+            evaluate_now(&p, ProcessPhase::Running),
+            AutoTerminate::Skip,
+            "TTL not yet elapsed via wall-clock must not fire",
         );
     }
 

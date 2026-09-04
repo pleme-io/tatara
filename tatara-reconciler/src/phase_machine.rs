@@ -304,9 +304,19 @@ pub async fn handle_running(p: &Process, ctx: &Context) -> Result<Action> {
     // Ephemeral TTL clock — if the lifetime is :ephemeral and TTL has
     // elapsed, force-transition to Exiting regardless of postcondition
     // state. The phase machine handles SIGTERM cascade from there.
-    if let AutoTerminate::Now { reason } =
-        lifetime_clock::evaluate(p, ProcessPhase::Running, chrono::Utc::now())
-    {
+    //
+    // Wall-clock-anchored clock check rides the substrate primitive
+    // `tatara_process::lifetime_clock::evaluate_now` — pre-lift this
+    // was a hand-authored 3-arg `evaluate(p, ProcessPhase::Running,
+    // chrono::Utc::now())` chain, one of THREE workspace-wide
+    // restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold (peers at `handle_attested` + `handle_failed`, both
+    // pairing the same wall-clock projection against their own phase
+    // discriminator). Post-lift every production phase handler shares
+    // ONE substrate owner for the wall-clock-at-tick projection; the
+    // injected-`now` 3-arg `evaluate` peer stays load-bearing for the
+    // deterministic-clock tests in `tatara-process`.
+    if let AutoTerminate::Now { reason } = lifetime_clock::evaluate_now(p, ProcessPhase::Running) {
         return transition_to_exiting(ctx, &ns, &name, &reason.to_string()).await;
     }
 
@@ -450,9 +460,11 @@ pub async fn handle_attested(p: &Process, ctx: &Context) -> Result<Action> {
     // policy that includes Attested skip the heartbeat and SIGTERM now.
     let (ns, name) = p.owned_coordinates_or_err()?;
 
-    if let AutoTerminate::Now { reason } =
-        lifetime_clock::evaluate(p, ProcessPhase::Attested, chrono::Utc::now())
-    {
+    // Wall-clock-anchored clock check rides the substrate primitive
+    // `tatara_process::lifetime_clock::evaluate_now` — sibling to
+    // `handle_running` + `handle_failed`, all three phase handlers now
+    // share ONE substrate owner for the wall-clock-at-tick projection.
+    if let AutoTerminate::Now { reason } = lifetime_clock::evaluate_now(p, ProcessPhase::Attested) {
         // Route through Releasing iff applicable exports declared.
         // Empty exports / no-trigger-match → fall through to the
         // existing Attested → Exiting path (zero-trace ephemeral).
@@ -933,9 +945,12 @@ pub async fn handle_failed(p: &Process, ctx: &Context) -> Result<Action> {
     let (ns, name) = p.owned_coordinates_or_err()?;
     let api = ctx.process_api(&ns);
 
-    if let AutoTerminate::Now { reason } =
-        lifetime_clock::evaluate(p, ProcessPhase::Failed, chrono::Utc::now())
-    {
+    // Wall-clock-anchored clock check rides the substrate primitive
+    // `tatara_process::lifetime_clock::evaluate_now` — sibling to
+    // `handle_running` + `handle_attested`, all three phase handlers
+    // now share ONE substrate owner for the wall-clock-at-tick
+    // projection.
+    if let AutoTerminate::Now { reason } = lifetime_clock::evaluate_now(p, ProcessPhase::Failed) {
         // Route through Releasing iff applicable post-mortem exports
         // declared. Without any, Failed → Zombie directly (no export
         // window to run).

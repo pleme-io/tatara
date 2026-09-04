@@ -344,16 +344,26 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
             // through the ONE substrate primitive
             // `tatara_process::patch::apply_patch_params`, the return-
             // trigger annotation apply feeding the same
-            // `ctx.config.field_manager` as its sibling.
+            // `ctx.config.field_manager` as its sibling. Wire-body
+            // composition rides the substrate primitive
+            // `tatara_process::patch::annotation_body` — pre-lift this
+            // was a hand-authored `json!({"metadata": {"annotations":
+            // {<return-trigger-key>: "true"}}})` chain inside the
+            // `Patch::Merge` slot, one of THREE workspace-wide
+            // restatements of the single-annotation merge-body shape
+            // past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold
+            // (peers at `tatara-reconciler::signals::ingest`'s Null-
+            // value SIGNAL strip + `tatara-reconciler::phase_machine::
+            // transition_to_releasing`'s RELEASED_FROM stamp). Post-
+            // lift the single-annotation merge-body posture lives at
+            // ONE substrate owner.
+            let trigger_body =
+                tatara_process::patch::annotation_body("tatara.pleme.io/return-trigger", "true");
             let _ = process_api
                 .patch(
                     &member_process_name,
                     &tatara_process::patch::apply_patch_params(&ctx.config.field_manager),
-                    &Patch::Merge(&json!({
-                        "metadata": { "annotations": {
-                            "tatara.pleme.io/return-trigger": "true",
-                        }}
-                    })),
+                    &Patch::Merge(&trigger_body),
                 )
                 .await;
             // Peer to the Bind arm above: the compound `bound_pool +

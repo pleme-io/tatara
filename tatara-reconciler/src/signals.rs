@@ -2,7 +2,6 @@
 //! strip, apply effect to phase.
 
 use anyhow::{anyhow, Result};
-use serde_json::json;
 use std::str::FromStr;
 use tracing::warn;
 
@@ -91,12 +90,20 @@ pub async fn ingest(process: &Process, ctx: &Context) -> Result<Option<ProcessSi
     let (ns, name) = process.owned_coordinates_or_err()?;
 
     // Always strip — JSON merge patch interprets `null` as "remove key".
+    // Wire-body composition rides the substrate primitive
+    // `tatara_process::patch::annotation_body` — pre-lift this was a
+    // hand-authored `json!({"metadata": {"annotations": {SIGNAL_ANNOTATION:
+    // serde_json::Value::Null}}})` chain, one of THREE workspace-wide
+    // restatements of the single-annotation merge-body shape past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold (peers at `phase_machine
+    // ::transition_to_releasing`'s RELEASED_FROM stamp + `tatara-pool-
+    // reconciler::controller_allocation`'s return-trigger stamp). Post-
+    // lift the single-annotation merge-body posture lives at ONE
+    // substrate owner; passing `Value::Null` at the value slot rides
+    // through as JSON null verbatim so the K8s API server's JSON-merge-
+    // patch strip semantics fire unchanged.
     let api = ctx.process_api(&ns);
-    let strip = json!({
-        "metadata": {
-            "annotations": { SIGNAL_ANNOTATION: serde_json::Value::Null }
-        }
-    });
+    let strip = tatara_process::patch::annotation_body(SIGNAL_ANNOTATION, serde_json::Value::Null);
     // Wire-side dispatch rides the substrate primitive
     // `tatara_process::patch::merge` — pre-lift this was a hand-
     // authored `api.patch(&name, &PatchParams::default(),

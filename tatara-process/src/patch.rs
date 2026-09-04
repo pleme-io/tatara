@@ -370,6 +370,128 @@ pub fn spec_suspended_body(suspended: bool) -> serde_json::Value {
     json!({ "spec": { "suspended": suspended } })
 }
 
+/// Compose the merge-patch wire body
+/// `{"metadata": {"annotations": {<key>: <value>}}}` — the ONE substrate
+/// owner of the single-annotation stamp / strip merge-body shape every
+/// workspace controller reaches for when it needs to publish exactly ONE
+/// operator-visible annotation on the primary resource (or strip one by
+/// stamping `Value::Null`) through the merge-patch semantics of either
+/// [`merge`] or [`apply`].
+///
+/// Pre-lift the wire-shape recurred at THREE hand-authored consumer
+/// sites across TWO active workspace crates past the ★★ PRIME-DIRECTIVE
+/// ≥ 2 duplication threshold:
+///
+/// - `tatara-reconciler::signals::ingest` — strips the
+///   `tatara.pleme.io/signal` annotation off the Process after
+///   ingestion by stamping `serde_json::Value::Null` (JSON merge patch
+///   interprets `null` as "remove key"). Dispatched through
+///   [`merge`] on the primary-resource merge-patch axis.
+/// - `tatara-reconciler::phase_machine::transition_to_releasing` —
+///   stamps the caller-observed `tatara.pleme.io/released-from`
+///   annotation with the current phase string on Attested/Failed →
+///   Releasing. Dispatched through [`apply`] on the primary-resource
+///   SSA axis (SSA `Patch::Apply` accepts the same
+///   `{"metadata": {"annotations": …}}` body shape as `Patch::Merge`
+///   — the top-level slot naming is what this composer owns).
+/// - `tatara-pool-reconciler::controller_allocation` (Release arm) —
+///   stamps the `tatara.pleme.io/return-trigger` annotation with the
+///   literal `"true"` on the member Process to nudge the Pool
+///   reconciler into taking the return path. Dispatched through the
+///   raw `Api::patch` call inside the release arm (also with
+///   [`apply_patch_params`]-composed PatchParams; the wire shape is
+///   the same `{"metadata": {"annotations": {<one key>: <one value>}}}`
+///   this composer names).
+///
+/// Post-lift each site reads `tatara_process::patch::annotation_body(
+/// <key>, <value>)` and the merge-body wire-shape composition lives at
+/// ONE substrate owner. A future normalization of the single-annotation
+/// merge-body posture (a canonicalization pass over the key spelling —
+/// a case-fold or a namespace-prefix normalization for a future annotation
+/// naming discipline; a stricter serde-failure return in place of the
+/// silent `Value::Null` fallback; a `by:` sibling slot naming the
+/// stamping controller for post-hoc audit; a version-tagged wrap for a
+/// future `metadata.v2.annotations` migration) lands at THIS ONE function
+/// and every downstream single-annotation writer inherits the upgrade
+/// mechanically. Directly benefits the P3 kenshi-runner library lift
+/// (any Job-based observer that stamps a per-suite annotation on its
+/// owning Process rides through the same composer as the strip / stamp
+/// / return-trigger family) and the P5 shigoto Dag refactor (every
+/// phase-machine RecordingJob that stamps an annotation on a transition
+/// rides through the same composer).
+///
+/// ### Value axis — `impl Serialize` accepts every pre-lift shape
+///
+/// The `value` slot is `impl Serialize` matching the discipline of
+/// [`phase_status_with`] on the extra-key axis: accepts owned or borrowed
+/// values of any serde-serialisable type without widening the signature.
+/// All three pre-lift consumer sites pass distinct value shapes and this
+/// composer serves each verbatim through `serde_json::to_value`:
+///
+/// - `serde_json::Value::Null` (signals::ingest strip) — the primitive
+///   [`serde_json::to_value`] round-trips a `Value::Null` back to
+///   `Value::Null`, which JSON merge patch interprets as "remove key".
+/// - `String` (phase_machine::transition_to_releasing) — the primitive
+///   [`serde_json::to_value`] serializes a `String` to a JSON string
+///   verbatim.
+/// - `&'static str` (controller_allocation Release arm) — the primitive
+///   [`serde_json::to_value`] serializes a `&str` to a JSON string
+///   verbatim, matching the pre-lift `"true"` literal.
+///
+/// A serialisation failure resolves to `Value::Null`, matching the
+/// existing [`phase_status_with`] primitive's posture. In practice
+/// serialisation of the shapes this composer accepts (a
+/// `serde_json::Value`, a `String`, a `&str`) never fails; the fallback
+/// is a defensive guard against a future caller passing a `T: Serialize`
+/// whose `Serialize` impl signals a runtime error.
+///
+/// ### Key axis — `&str` matches every pre-lift call form
+///
+/// The `key` slot is `&str` matching the pre-lift call forms exactly:
+/// [`crate::annotations::SIGNAL`] via `SIGNAL_ANNOTATION: &str` at
+/// signals.rs, [`crate::annotations::RELEASED_FROM`] via a `pub const:
+/// &str` at phase_machine.rs, and a `"tatara.pleme.io/return-trigger"`
+/// literal at controller_allocation.rs. `&str` accepts both the
+/// pre-existing `pub const: &str` constants in [`crate::annotations`]
+/// and inline `&'static str` literals at the same signature.
+///
+/// A future caller composing a `String` key at runtime (a per-fleet
+/// prefix, a runtime-computed annotation name) coerces via `&*key`
+/// or `key.as_str()` at the call site — the composer stays borrowed
+/// so the common const-fed path pays no allocation.
+///
+/// ### `must_use` on the return
+///
+/// The primitive exists to be handed to a wire-side write ([`merge`],
+/// [`apply`], or a raw `Api::patch` call at the pool-reconciler's
+/// release arm), not to probe the merge-body shape. `#[must_use]`
+/// keeps a caller from building the body and dropping it un-passed to
+/// a wire dispatcher.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// 3-link `json!({"metadata": {"annotations": {<key>: <value>}}})` merge-
+/// body composition recurred at 3 hand-authored sites past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication trigger, spanning two active
+/// workspace crates, and is lifted onto ONE substrate owner here).
+/// THEORY.md §II.1 invariant 5 (composition preserves proofs — the pin
+/// block below binds the composer at fail-before-pass-after granularity,
+/// so a regression that drifts the top-level `metadata` slot, the nested
+/// `annotations` slot, the caller-passed key spelling, or the value-slot
+/// pass-through discipline surfaces HERE rather than as silent
+/// operator-facing annotation-writer skew across the three consumer
+/// sites).
+#[must_use]
+pub fn annotation_body(key: &str, value: impl Serialize) -> serde_json::Value {
+    let v = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
+    json!({
+        "metadata": {
+            "annotations": {
+                key: v,
+            }
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -984,5 +1106,244 @@ mod tests {
                 "spec_suspended_body({value}) must be byte-identical to the pre-lift `json!` block",
             );
         }
+    }
+
+    // ─── annotation_body substrate pins ─────────────────────────────
+    //
+    // The pre-lift `json!({"metadata": {"annotations": {<key>: <value>}}})`
+    // merge-body composition recurred at THREE hand-authored consumer
+    // sites across TWO active workspace crates past the ★★ PRIME-
+    // DIRECTIVE ≥ 2 duplication threshold: `tatara-reconciler::signals::
+    // ingest` (Null-value strip of the SIGNAL annotation), `tatara-
+    // reconciler::phase_machine::transition_to_releasing` (String-value
+    // stamp of the RELEASED_FROM annotation), and `tatara-pool-
+    // reconciler::controller_allocation` Release arm (&str-value stamp
+    // of the return-trigger annotation). These pins bind the composer
+    // at fail-before-pass-after granularity so a regression that drifts
+    // the top-level `metadata` slot (case-fold to `Metadata`, alias
+    // rename to `meta`, version-tagged wrap like `v1_metadata`), the
+    // nested `annotations` slot (camelCase drift to `Annotations`,
+    // rename to `annotationMap`, a stray sibling like `labels`
+    // leaking in), the caller-passed key spelling (silent trimming,
+    // case-fold, per-key allow-list gate), or the value-slot pass-
+    // through (accidental promotion of `Value::Null` to
+    // `Value::String("null")` breaking the JSON-merge-patch strip
+    // semantics; an over-eager `to_value` re-encoding a `Value` argument
+    // through a `String` wrap; the fallback silently promoting a
+    // Serialize-failure to a non-null sentinel) surfaces HERE rather
+    // than as silent operator-facing annotation-writer skew across the
+    // three consumer sites.
+
+    #[test]
+    fn annotation_body_wraps_null_value_for_merge_patch_strip_semantics() {
+        // Byte-shape parity witness against the `signals::ingest` pre-
+        // lift strip block (`json!({"metadata": {"annotations":
+        // {SIGNAL_ANNOTATION: serde_json::Value::Null}}})`) — passing
+        // `Value::Null` at the value slot round-trips through
+        // `serde_json::to_value` to a `Value::Null` in the composed
+        // body, so the K8s API server's JSON-merge-patch semantics
+        // interpret it as "remove key". A regression that promoted the
+        // null to a `"null"` string, dropped the slot entirely, or
+        // reshaped the null through an intermediate wrapper would
+        // silently un-strip every signal annotation post-ingestion.
+        let body = annotation_body("tatara.pleme.io/signal", serde_json::Value::Null);
+        assert_eq!(
+            body,
+            json!({
+                "metadata": {
+                    "annotations": { "tatara.pleme.io/signal": serde_json::Value::Null }
+                }
+            }),
+        );
+        assert_eq!(
+            body["metadata"]["annotations"]["tatara.pleme.io/signal"],
+            serde_json::Value::Null,
+            "value at the caller-passed key rides through as JSON null verbatim",
+        );
+    }
+
+    #[test]
+    fn annotation_body_wraps_string_value_for_merge_patch_stamp_semantics() {
+        // Byte-shape parity witness against the `phase_machine::
+        // transition_to_releasing` pre-lift stamp block (`json!(
+        // {"metadata": {"annotations": {RELEASED_FROM: gate}}})` where
+        // `gate: String` is the current phase spelling) — passing an
+        // owned `String` at the value slot round-trips through
+        // `serde_json::to_value` to a JSON string in the composed body.
+        // A regression that dropped the String's ownership or reshaped
+        // it through a wrapper would silently drift the stamped value.
+        let body = annotation_body("tatara.pleme.io/released-from", String::from("Attested"));
+        assert_eq!(
+            body,
+            json!({
+                "metadata": {
+                    "annotations": { "tatara.pleme.io/released-from": "Attested" }
+                }
+            }),
+        );
+        assert_eq!(
+            body["metadata"]["annotations"]["tatara.pleme.io/released-from"],
+            serde_json::Value::String("Attested".to_string()),
+            "String value rides through as JSON string verbatim",
+        );
+    }
+
+    #[test]
+    fn annotation_body_wraps_str_literal_value_for_return_trigger_stamp() {
+        // Byte-shape parity witness against the `controller_allocation`
+        // Release-arm pre-lift stamp block (`json!({"metadata":
+        // {"annotations": {"tatara.pleme.io/return-trigger": "true"}}})`)
+        // — passing a `&'static str` literal at the value slot round-
+        // trips through `serde_json::to_value` to a JSON string in the
+        // composed body, matching the pre-lift shape byte-identically.
+        let body = annotation_body("tatara.pleme.io/return-trigger", "true");
+        assert_eq!(
+            body,
+            json!({
+                "metadata": {
+                    "annotations": { "tatara.pleme.io/return-trigger": "true" }
+                }
+            }),
+        );
+    }
+
+    #[test]
+    fn annotation_body_top_level_slot_is_exactly_metadata_lowercase() {
+        // Any drift on the top-level slot name (case-fold to `Metadata`,
+        // an alias rename to `meta`, a version-tagged wrap like
+        // `v1_metadata`) breaks the merge-patch on the wire: the K8s
+        // API server silently applies to a sibling field the CRD does
+        // not define, and the operator sees the annotation never
+        // appear. This pin binds the exact spelling the K8s API server
+        // + every generated openapi type expect.
+        let body = annotation_body("k", "v");
+        let obj = body.as_object().expect("top-level must be a JSON object");
+        assert_eq!(obj.len(), 1, "wrap adds exactly ONE top-level slot");
+        assert!(
+            obj.contains_key("metadata"),
+            "top-level slot must be exactly `metadata` (lowercase)"
+        );
+    }
+
+    #[test]
+    fn annotation_body_nested_slot_is_exactly_annotations_lowercase() {
+        // Any drift on the nested slot name (camelCase to `Annotations`,
+        // an alias rename to `annotationMap`, a stray sibling like
+        // `labels` leaking in) breaks the merge-patch: the K8s API
+        // silently applies to a wrong field. This pin binds the exact
+        // spelling downstream metadata handlers expect and guards
+        // against a sibling-slot leak inside the metadata wrap.
+        let body = annotation_body("k", "v");
+        let meta = body["metadata"]
+            .as_object()
+            .expect("nested metadata must be a JSON object");
+        assert_eq!(
+            meta.len(),
+            1,
+            "metadata carries exactly ONE nested slot (`annotations`) — no `labels` / `finalizers` sibling leaks"
+        );
+        assert!(
+            meta.contains_key("annotations"),
+            "nested slot must be exactly `annotations` (lowercase)"
+        );
+    }
+
+    #[test]
+    fn annotation_body_preserves_caller_key_verbatim_no_trim_or_case_fold() {
+        // The `key` argument is stamped byte-identically as the inner
+        // JSON slot name: no trimming of whitespace-adjacent chars, no
+        // case-fold of any segment (a `tatara.pleme.io/RELEASED-from`
+        // caller would land on the wire exactly that way), no per-key
+        // allow-list gate that silently drops "unknown" annotations.
+        // Sweep across every pre-lift caller's key spelling so a
+        // regression that added a canonicalization pass surfaces here
+        // rather than as a silent annotation drop at any downstream
+        // writer.
+        for key in [
+            "tatara.pleme.io/signal",
+            "tatara.pleme.io/released-from",
+            "tatara.pleme.io/return-trigger",
+            "custom-fleet.example.com/opaque",
+            "SCREAMING.CASE/PRESERVED",
+        ] {
+            let body = annotation_body(key, "v");
+            let annotations = body["metadata"]["annotations"]
+                .as_object()
+                .expect("annotations must be a JSON object");
+            assert_eq!(
+                annotations.len(),
+                1,
+                "annotations carries exactly ONE key ({key}) — no synthetic sibling leaks",
+            );
+            assert!(
+                annotations.contains_key(key),
+                "annotations key must be exactly `{key}` verbatim (no trim / case-fold / allow-list gate)",
+            );
+        }
+    }
+
+    #[test]
+    fn annotation_body_matches_pre_lift_hand_authored_shapes_bytewise() {
+        // Byte-shape parity witness against all THREE pre-lift consumer
+        // sites' hand-authored blocks — the signals::ingest strip
+        // (Null value), the phase_machine::transition_to_releasing
+        // stamp (String value), and the controller_allocation Release-
+        // arm return-trigger (&str value). A regression that reshaped
+        // ANY site's byte-shape at the composer surfaces HERE rather
+        // than at the wire.
+        //
+        // Sweep three representative (key, value) tuples matching the
+        // three pre-lift call forms.
+        let signal_strip = annotation_body("tatara.pleme.io/signal", serde_json::Value::Null);
+        assert_eq!(
+            signal_strip,
+            json!({
+                "metadata": {
+                    "annotations": { "tatara.pleme.io/signal": serde_json::Value::Null }
+                }
+            }),
+            "signals::ingest strip byte-shape",
+        );
+
+        let released_stamp =
+            annotation_body("tatara.pleme.io/released-from", String::from("Running"));
+        assert_eq!(
+            released_stamp,
+            json!({
+                "metadata": {
+                    "annotations": { "tatara.pleme.io/released-from": "Running" }
+                }
+            }),
+            "phase_machine::transition_to_releasing stamp byte-shape",
+        );
+
+        let return_trigger = annotation_body("tatara.pleme.io/return-trigger", "true");
+        assert_eq!(
+            return_trigger,
+            json!({
+                "metadata": {
+                    "annotations": { "tatara.pleme.io/return-trigger": "true" }
+                }
+            }),
+            "controller_allocation Release-arm return-trigger byte-shape",
+        );
+    }
+
+    #[test]
+    fn annotation_body_accepts_serde_json_value_at_value_slot_without_double_wrap() {
+        // Callers that already have a `serde_json::Value` (e.g. a
+        // `Value::String` or `Value::Number` computed upstream via a
+        // typed derivation) pass it directly through `impl Serialize`
+        // without a double-wrap. A regression that re-encoded a
+        // `Value` argument through a `String` wrap (silently producing
+        // `Value::String("\"stamped\"")` — a JSON-encoded string of a
+        // JSON-encoded string) would surface HERE.
+        let pre = serde_json::Value::String("stamped".to_string());
+        let body = annotation_body("k.io/v", pre);
+        assert_eq!(
+            body["metadata"]["annotations"]["k.io/v"],
+            serde_json::Value::String("stamped".to_string()),
+            "pre-serialized Value rides through without a double-wrap",
+        );
     }
 }

@@ -1007,14 +1007,21 @@ async fn transition_to_releasing(
 
     // 1. Stamp the released-from annotation — derived from the
     //    *current* phase, which is the gate we're leaving.
+    // Wire-body composition rides the substrate primitive
+    // `tatara_process::patch::annotation_body` — pre-lift this was a
+    // hand-authored `json!({"metadata": {"annotations": {RELEASED_FROM:
+    // gate}}})` chain, one of THREE workspace-wide restatements of the
+    // single-annotation merge-body shape past the ★★ PRIME-DIRECTIVE ≥
+    // 2 duplication threshold (peers at `signals::ingest`'s Null-value
+    // SIGNAL strip + `tatara-pool-reconciler::controller_allocation`'s
+    // return-trigger stamp). Post-lift the single-annotation merge-body
+    // posture lives at ONE substrate owner; passing the `gate: String`
+    // at the value slot rides through as a JSON string verbatim, so
+    // the SSA `Patch::Apply` posture stamps the current phase as the
+    // released-from marker exactly as the pre-lift chain did.
     let gate = p_current_phase_str(&api, name).await?;
-    let annotation_patch = json!({
-        "metadata": {
-            "annotations": {
-                tatara_process::annotations::RELEASED_FROM: gate,
-            }
-        }
-    });
+    let annotation_patch =
+        tatara_process::patch::annotation_body(tatara_process::annotations::RELEASED_FROM, &gate);
     // SSA-side wire dispatch rides the substrate primitive
     // `tatara_process::patch::apply` — pre-lift this was a hand-
     // authored 2-link `let pp = ssapply::apply_patch_params();

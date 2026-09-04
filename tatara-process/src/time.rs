@@ -20,7 +20,7 @@
 //! wrap every WRITE-side fixture that seeds a tombstone-present
 //! corner stamps on the metadata slot.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, FixedOffset, Utc};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use std::time::Duration;
 
@@ -257,6 +257,60 @@ pub fn tombstone_now() -> Option<Time> {
 #[must_use]
 pub fn tombstone_at(when: DateTime<Utc>) -> Option<Time> {
     Some(Time(when))
+}
+
+/// Parse an `Option<&str>` as an RFC-3339 wall-clock stamp, discarding
+/// the `ParseError` arm on the parseable-input axis. The one-line
+/// `<opt>.and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())`
+/// chain lifted to ONE typed owner past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication threshold, and the sibling of every timed-decision
+/// assertion / API-input parser that reads an RFC-3339 stamp out of a
+/// JSON slot, an HTTP query param, or a K8s `status`-subresource value.
+///
+/// Pre-lift the SAME chain was hand-authored at 7 workspace-wide sites
+/// across `tatara-reconciler::patch` — the wire-body substrate tests
+/// pinning the `phase_status_base` / `phase_status_msg` /
+/// `phase_status_with` sibling family's `phaseSince` slot at
+/// fail-before-pass-after granularity:
+///
+/// * 3 sites walk `.and_then(Value::as_str).and_then(|s|
+///   chrono::DateTime::parse_from_rfc3339(s).ok())` to lift the parsed
+///   `DateTime<FixedOffset>` for a `[before, after]` bracket check that
+///   proves the primitive stamped at call time.
+/// * 4 sites walk `.and_then(Value::as_str).is_some_and(|s|
+///   chrono::DateTime::parse_from_rfc3339(s).is_ok())` inside an
+///   `assert!` that pins the slot's shape as "present + parses as
+///   RFC-3339". The `bool` derives from `parse_rfc3339_opt(<opt>)
+///   .is_some()`.
+///
+/// All 7 sites walked the SAME two-link chain — take an `Option<&str>`
+/// (typically from a `serde_json::Value::as_str` cast), then parse the
+/// inner `&str` as RFC-3339 and discard the `Err` arm. Post-lift each
+/// callsite reads `parse_rfc3339_opt(<opt>)` (with `.is_some()` at the
+/// 4 predicate sites) and the parser + `Result::ok()` discard sinks
+/// live at ONE substrate owner.
+///
+/// Return-form axis: `Option<DateTime<FixedOffset>>` matches
+/// `chrono::DateTime::parse_from_rfc3339`'s own return type — every
+/// consumer that wants a `DateTime<Utc>` composes `.map(|dt| dt
+/// .with_timezone(&chrono::Utc))` at its own site (the shape the
+/// production `list_events` handlers at `tatara-api::rest::list_events`
+/// + `tatara-testing::server::list_events` already walk), keeping the
+/// timezone-normalization axis at the caller rather than baking a
+/// specific `Utc` cast into the primitive.
+///
+/// A future normalization (a relaxed RFC-3339 profile that accepts a
+/// `space`-separated date/time separator, a per-fleet clock-skew Δ
+/// that rejects stamps too far in the future, a debug-build assertion
+/// that the caller has already trimmed surrounding whitespace) lands
+/// at THIS ONE substrate primitive and every downstream consumer
+/// inherits the upgrade mechanically — no per-site edit at any of the
+/// 7 listed callers or at future consumers (a `/proc`-table READ-side
+/// timestamp reader, a compliance-binding freshness gate, a probe-
+/// receipt `verified_at` field parser).
+#[must_use]
+pub fn parse_rfc3339_opt(s: Option<&str>) -> Option<DateTime<FixedOffset>> {
+    s.and_then(|s| DateTime::parse_from_rfc3339(s).ok())
 }
 
 #[cfg(test)]
@@ -571,6 +625,133 @@ mod tests {
             a.0,
             b.0,
         );
+    }
+
+    // ─── parse_rfc3339_opt substrate pins ───────────────────────────
+    //
+    // Bind [`parse_rfc3339_opt`] at fail-before-pass-after granularity
+    // so a regression that swallowed the `Some(_)` arm (yielding
+    // `None` on a well-formed stamp), swapped the parser for a
+    // rfc2822/naive/ISO-8601-only variant (silently rejecting the
+    // `+00:00` offset every K8s `metadata.Time.0` serialiser emits),
+    // or flipped the `.ok()` discard for a `.unwrap()` (panicking on
+    // malformed input rather than short-circuiting at the caller's
+    // `.expect(...)`) surfaces HERE rather than as silent operator-
+    // facing drift at the 7 downstream `phaseSince`-slot pins.
+    //
+    // Each pin is fail-before-pass-after: the primitive did not exist
+    // pre-lift, so any test that invokes it fails to compile pre-lift
+    // and passes post-lift; the byte-identity pins below then bind
+    // the specific shape choice.
+
+    #[test]
+    fn parse_rfc3339_opt_returns_some_datetime_on_well_formed_utc_stamp() {
+        // Primary shape asserted end-to-end: a well-formed `+00:00`
+        // stamp (the exact wire form every K8s `metadata.Time`
+        // serialiser emits, and every `phaseSince`-stamped
+        // `Utc::now()` produces once serialised via `serde_json` into
+        // a `Value`) parses to `Some(dt)` with the anchor preserved
+        // verbatim.
+        let stamp = "2026-05-01T12:34:56+00:00";
+        let parsed = parse_rfc3339_opt(Some(stamp)).expect("well-formed RFC-3339 stamp");
+        let expected =
+            DateTime::parse_from_rfc3339(stamp).expect("hand-authored fixture is well-formed");
+        assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn parse_rfc3339_opt_passes_none_through_verbatim() {
+        // The `Option::and_then` short-circuit: a `None` input flows
+        // straight to `None` output without touching the parser. A
+        // regression that expected `Some(_)` unconditionally
+        // (`unwrap_or_default` on the input, an early `.unwrap()`)
+        // would panic HERE rather than at the caller's `.expect(...)`.
+        assert_eq!(parse_rfc3339_opt(None), None);
+    }
+
+    #[test]
+    fn parse_rfc3339_opt_discards_the_err_arm_on_malformed_input() {
+        // The `.ok()` discard arm: a `Some(&str)` that isn't RFC-3339
+        // flows to `None` — the caller's `.is_some()` predicate then
+        // returns `false` for the "present-but-malformed" corner. A
+        // regression that panicked (`unwrap`) or bubbled the
+        // `ParseError` (a `Result` return form) would break every
+        // predicate-site assertion that reads the return as a bool.
+        assert_eq!(parse_rfc3339_opt(Some("not-a-timestamp")), None);
+        assert_eq!(parse_rfc3339_opt(Some("")), None);
+        // A naive-only shape (no offset) — RFC-3339 requires the
+        // offset, so this must land on the `None` arm.
+        assert_eq!(parse_rfc3339_opt(Some("2026-05-01T12:34:56")), None);
+    }
+
+    #[test]
+    fn parse_rfc3339_opt_matches_hand_authored_pre_lift_chain_shape() {
+        // Byte-identical parity with the pre-lift `<opt>.and_then(|s|
+        // chrono::DateTime::parse_from_rfc3339(s).ok())` block all 7
+        // hand-authored callsites restated verbatim, swept across the
+        // four representative corners: a well-formed `Some(&str)`, a
+        // `None`, a `Some("")`, and a `Some(<malformed>)`. Both blocks
+        // must project the SAME `Option<DateTime<FixedOffset>>` on
+        // every corner so the collapse is observationally invisible.
+        for (opt, name) in [
+            (Some("2026-05-01T12:34:56+00:00"), "well-formed +00:00"),
+            (Some("2026-05-01T12:34:56.789012345+00:00"), "sub-second"),
+            (Some("2026-05-01T12:34:56-05:00"), "non-UTC offset"),
+            (Some("2026-05-01T12:34:56Z"), "Z-form UTC"),
+            (Some(""), "empty string"),
+            (Some("not-a-timestamp"), "malformed"),
+            (None, "none input"),
+        ] {
+            let composed = parse_rfc3339_opt(opt);
+            let hand_authored = opt.and_then(|s| DateTime::parse_from_rfc3339(s).ok());
+            assert_eq!(
+                composed, hand_authored,
+                "corner `{name}` must round-trip through both shapes",
+            );
+        }
+    }
+
+    #[test]
+    fn parse_rfc3339_opt_is_some_derives_the_predicate_shape() {
+        // The `.is_some()` composition on the primitive's return is
+        // the byte-identical replacement for the pre-lift `<opt>
+        // .is_some_and(|s| chrono::DateTime::parse_from_rfc3339(s)
+        // .is_ok())` chain the 4 predicate-site pins walked. Sweep
+        // the four representative corners: present-and-well-formed,
+        // present-but-malformed, present-but-empty, absent. A
+        // regression that flipped the primitive's `None`-on-malformed
+        // arm to `Some(default)` would silently pass the malformed
+        // corner past every predicate-site assertion.
+        for (opt, expected, name) in [
+            (Some("2026-05-01T12:34:56+00:00"), true, "well-formed"),
+            (Some("not-a-timestamp"), false, "malformed"),
+            (Some(""), false, "empty string"),
+            (None, false, "none input"),
+        ] {
+            assert_eq!(
+                parse_rfc3339_opt(opt).is_some(),
+                expected,
+                "corner `{name}` must project to `{expected}` through the predicate shape",
+            );
+        }
+    }
+
+    #[test]
+    fn parse_rfc3339_opt_round_trips_a_freshly_stamped_utc_now() {
+        // The canonical downstream composition: a `Utc::now()` stamp
+        // serialised via `chrono::DateTime::to_rfc3339` — the shape
+        // every `phaseSince` slot the reconciler stamps writes onto
+        // the wire — parses back through this primitive to a
+        // `DateTime<FixedOffset>` whose UTC-normalised anchor agrees
+        // with the source stamp bytewise. Pin the round-trip identity
+        // so a future normalization (a millisecond-precision
+        // truncation, a per-fleet skew Δ) cannot silently drift the
+        // reader off the writer at the reconciler's own `phaseSince`
+        // wire.
+        let source = Utc::now();
+        let wire = source.to_rfc3339();
+        let parsed = parse_rfc3339_opt(Some(&wire)).expect("Utc::now → to_rfc3339 must round-trip");
+        assert_eq!(parsed.with_timezone(&Utc), source);
     }
 
     #[test]

@@ -384,9 +384,8 @@ mod tests {
             "phase key present and serialises as the discriminant string",
         );
         assert!(
-            obj.get("phaseSince")
-                .and_then(Value::as_str)
-                .is_some_and(|s| chrono::DateTime::parse_from_rfc3339(s).is_ok()),
+            tatara_process::time::parse_rfc3339_opt(obj.get("phaseSince").and_then(Value::as_str))
+                .is_some(),
             "phaseSince key present and is a valid RFC-3339 timestamp",
         );
         // The sibling third-slot keys must NOT leak into the base — a
@@ -411,11 +410,9 @@ mod tests {
         let before = Utc::now();
         let v = phase_status_base(ProcessPhase::Attested);
         let after = Utc::now();
-        let stamped = v
-            .get("phaseSince")
-            .and_then(Value::as_str)
-            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-            .expect("phaseSince is an RFC-3339 timestamp");
+        let stamped =
+            tatara_process::time::parse_rfc3339_opt(v.get("phaseSince").and_then(Value::as_str))
+                .expect("phaseSince is an RFC-3339 timestamp");
         let stamped_utc = stamped.with_timezone(&chrono::Utc);
         assert!(
             (before..=after).contains(&stamped_utc),
@@ -497,9 +494,10 @@ mod tests {
                 "{name} must carry the shared `phase` slot with the same discriminant",
             );
             assert!(
-                v.get("phaseSince")
-                    .and_then(Value::as_str)
-                    .is_some_and(|s| chrono::DateTime::parse_from_rfc3339(s).is_ok()),
+                tatara_process::time::parse_rfc3339_opt(
+                    v.get("phaseSince").and_then(Value::as_str)
+                )
+                .is_some(),
                 "{name} must carry the shared `phaseSince` slot as an RFC-3339 timestamp",
             );
         }
@@ -539,9 +537,8 @@ mod tests {
             "message key present and rides through verbatim"
         );
         assert!(
-            obj.get("phaseSince")
-                .and_then(Value::as_str)
-                .is_some_and(|s| chrono::DateTime::parse_from_rfc3339(s).is_ok()),
+            tatara_process::time::parse_rfc3339_opt(obj.get("phaseSince").and_then(Value::as_str))
+                .is_some(),
             "phaseSince key present and is a valid RFC-3339 timestamp"
         );
     }
@@ -571,11 +568,9 @@ mod tests {
         let before = Utc::now();
         let v = phase_status_msg(ProcessPhase::Reconverging, "drift");
         let after = Utc::now();
-        let stamped = v
-            .get("phaseSince")
-            .and_then(Value::as_str)
-            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-            .expect("phaseSince is an RFC-3339 timestamp");
+        let stamped =
+            tatara_process::time::parse_rfc3339_opt(v.get("phaseSince").and_then(Value::as_str))
+                .expect("phaseSince is an RFC-3339 timestamp");
         let stamped_utc = stamped.with_timezone(&chrono::Utc);
         assert!(
             (before..=after).contains(&stamped_utc),
@@ -737,9 +732,8 @@ mod tests {
             "phase key present and serialises as the discriminant string"
         );
         assert!(
-            obj.get("phaseSince")
-                .and_then(Value::as_str)
-                .is_some_and(|s| chrono::DateTime::parse_from_rfc3339(s).is_ok()),
+            tatara_process::time::parse_rfc3339_opt(obj.get("phaseSince").and_then(Value::as_str))
+                .is_some(),
             "phaseSince key present and is a valid RFC-3339 timestamp"
         );
         assert!(
@@ -753,11 +747,9 @@ mod tests {
         let before = Utc::now();
         let v = phase_status_with(ProcessPhase::Attested, "attestation", serde_json::json!({}));
         let after = Utc::now();
-        let stamped = v
-            .get("phaseSince")
-            .and_then(Value::as_str)
-            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-            .expect("phaseSince is an RFC-3339 timestamp");
+        let stamped =
+            tatara_process::time::parse_rfc3339_opt(v.get("phaseSince").and_then(Value::as_str))
+                .expect("phaseSince is an RFC-3339 timestamp");
         let stamped_utc = stamped.with_timezone(&chrono::Utc);
         assert!(
             (before..=after).contains(&stamped_utc),

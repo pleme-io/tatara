@@ -3525,7 +3525,7 @@ mod tests {
         // pool::reconcile_inner` walk + the two `pool_decide::tests::
         // member` / `allocation_decide::tests::member` helpers + the
         // sibling `named_member` helper in this file).
-        PoolMember::unallocated("m", state, DateTime::<Utc>::from_timestamp(0, 0).unwrap())
+        PoolMember::unallocated("m", state, crate::time::at_epoch_second(0))
     }
 
     #[test]
@@ -3632,11 +3632,7 @@ mod tests {
         // 4-slot unallocated seed rides through the ONE substrate
         // owner `PoolMember::unallocated` — sibling to the `member`
         // helper in this file on the same epoch-anchored axis.
-        PoolMember::unallocated(
-            process_name,
-            state,
-            DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
-        )
+        PoolMember::unallocated(process_name, state, crate::time::at_epoch_second(0))
     }
 
     #[test]
@@ -3750,7 +3746,7 @@ mod tests {
         // struct literal both pool-reconciler status-patch sites
         // stamped by hand. Any drift in the defaults (`message`,
         // `conditions`) or in the counter fanout surfaces here.
-        let now = DateTime::<Utc>::from_timestamp(1_700_000_000, 0).unwrap();
+        let now = crate::time::at_epoch_second(1_700_000_000);
         let members = vec![
             member(MemberState::Free),
             member(MemberState::Allocated),
@@ -3781,7 +3777,7 @@ mod tests {
         // if the caller no longer needs the local `members` binding
         // after the seed) rather than accidentally cloning twice.
         let members = vec![member(MemberState::Free), member(MemberState::Spawning)];
-        let now = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+        let now = crate::time::at_epoch_second(0);
         let observed = PoolStatus::observed(PoolPhase::Steady, members, now);
         assert_eq!(observed.members.len(), 2);
     }
@@ -3949,7 +3945,7 @@ mod tests {
         // swapped `process_name` and `entered_state_at` at the composer
         // entry (or that renamed the `allocation_ref` invariant slot to
         // a different `None`-preserving field) surfaces here.
-        let anchor = DateTime::<Utc>::from_timestamp(1_700_000_000, 0).unwrap();
+        let anchor = crate::time::at_epoch_second(1_700_000_000);
         let m = PoolMember::unallocated("pool-x-0", MemberState::Free, anchor);
         assert_eq!(m.process_name, "pool-x-0");
         assert_eq!(m.state, MemberState::Free);
@@ -3968,7 +3964,7 @@ mod tests {
         // production site's `owned_name_or_empty` handoff; a regression
         // that narrowed to `String` alone would force every test helper
         // to `.into()` at the callsite. This pin fences both corners.
-        let anchor = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+        let anchor = crate::time::at_epoch_second(0);
         let via_str = PoolMember::unallocated("pool-y-0", MemberState::Spawning, anchor);
         let owned: String = "pool-y-0".to_string();
         let via_string = PoolMember::unallocated(owned, MemberState::Spawning, anchor);
@@ -3987,7 +3983,7 @@ mod tests {
         // `Allocated` to a bogus `Some(<placeholder>)` at the composer)
         // surfaces here rather than at the four downstream helpers'
         // callsites.
-        let anchor = DateTime::<Utc>::from_timestamp(1_700_000_000, 0).unwrap();
+        let anchor = crate::time::at_epoch_second(1_700_000_000);
         for state in [
             MemberState::Free,
             MemberState::Allocated,
@@ -4023,8 +4019,8 @@ mod tests {
         // regression that started stamping the composer's own
         // `Utc::now()` would silently reset every downstream anchor
         // and break the fanout tests' epoch-based expectations.
-        let epoch = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
-        let future = DateTime::<Utc>::from_timestamp(2_000_000_000, 0).unwrap();
+        let epoch = crate::time::at_epoch_second(0);
+        let future = crate::time::at_epoch_second(2_000_000_000);
         let anchored_at_epoch = PoolMember::unallocated("a", MemberState::Free, epoch);
         let anchored_at_future = PoolMember::unallocated("b", MemberState::Free, future);
         assert_eq!(anchored_at_epoch.entered_state_at, epoch);

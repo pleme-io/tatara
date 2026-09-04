@@ -313,12 +313,128 @@ pub fn parse_rfc3339_opt(s: Option<&str>) -> Option<DateTime<FixedOffset>> {
     s.and_then(|s| DateTime::parse_from_rfc3339(s).ok())
 }
 
+/// A `DateTime<Utc>` anchor at the whole-second Unix epoch offset
+/// `secs` — the one-line `DateTime::<Utc>::from_timestamp(secs, 0)
+/// .expect("valid epoch second")` chain lifted to ONE typed owner past
+/// the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold, and the
+/// deterministic-anchor peer of the wall-clock-reading composers
+/// [`seconds_ago`] / [`tombstone_now`] on the same `→ DateTime<Utc>`
+/// axis.
+///
+/// Pre-lift the SAME chain was hand-authored at 10 workspace-wide
+/// fixture / helper sites within `tatara-process`, each restating the
+/// whole-second `DateTime::<Utc>::from_timestamp(<secs>, 0)
+/// .unwrap()` / `.expect(...)` shape to seed a deterministic anchor
+/// that a fanout / composition / preservation pin can compare
+/// verbatim (differing only in the whole-second `secs` argument and
+/// in the `.unwrap()` vs `.expect("valid epoch second")` failure
+/// arm):
+///
+/// * `tatara-process::time::tests::t` — the private test helper
+///   `fn t(secs: i64) -> DateTime<Utc>` inside this module's own
+///   tests, called out of every `elapsed_since` composition pin;
+///   swept the `secs = 100 / 160 / 200 / 500` corners.
+/// * `tatara-process::pool::tests::member` — the 3rd-arg
+///   `entered_state_at` seed for the `PoolMember::unallocated` test
+///   helper feeding the `state_count_fanout` / `process_names_set`
+///   pin family; pinned at `secs = 0`.
+/// * `tatara-process::pool::tests::named_member` — the peer
+///   `named_member(process_name, state)` helper feeding the
+///   `process_names_set` deduplication pins; pinned at `secs = 0`.
+/// * `tatara-process::pool::tests::pool_status_observed_composes_
+///   pre_lift_status_seed_verbatim` — the `now` anchor for the
+///   `PoolStatus::observed` composition pin; pinned at `secs =
+///   1_700_000_000` (a mid-2023 wall-clock timestamp).
+/// * `tatara-process::pool::tests::pool_status_observed_moves_
+///   members_by_value_without_extra_clone` — the `now` anchor for
+///   the ownership pin; pinned at `secs = 0`.
+/// * `tatara-process::pool::tests::pool_member_unallocated_fills_
+///   every_slot_verbatim` — the positional-axis pin anchor; pinned
+///   at `secs = 1_700_000_000`.
+/// * `tatara-process::pool::tests::pool_member_unallocated_accepts_
+///   owned_string_and_str_at_the_same_signature` — the `impl
+///   Into<String>` axis pin anchor; pinned at `secs = 0`.
+/// * `tatara-process::pool::tests::pool_member_unallocated_matches_
+///   pre_lift_struct_literal_bytewise` — the byte-shape parity pin
+///   anchor swept across every `MemberState` variant; pinned at
+///   `secs = 1_700_000_000`.
+/// * `tatara-process::pool::tests::pool_member_unallocated_
+///   preserves_caller_clock_anchor` — TWO anchors on the
+///   epoch-vs-future axis, pinned at `secs = 0` and `secs =
+///   2_000_000_000` (a mid-2033 wall-clock timestamp).
+///
+/// All 10 sites walked the SAME two-link chain — build a UTC
+/// `DateTime` from a whole-second Unix epoch offset, then discard
+/// the `None` arm via `.unwrap()` / `.expect(...)` — differing only
+/// in the second-count `secs` and in the failure-arm phrasing.
+/// Post-lift each callsite reads `at_epoch_second(N)` and the
+/// `chrono::DateTime::<Utc>::from_timestamp` construction + `None`-
+/// arm discard sinks live at ONE substrate owner.
+///
+/// Return-form axis: `DateTime<Utc>` — the copy-form anchor every
+/// consumer's downstream `signed_duration_since` / [`elapsed_since`]
+/// / [`tombstone_at`] / `PoolMember::unallocated(<name>, <state>,
+/// <anchor>)` composer takes as its `DateTime<Utc>`-typed operand.
+/// The `i64` `secs` parameter matches `chrono::DateTime::<Utc>::
+/// from_timestamp`'s own signature so a negative value (rare but
+/// permitted for pre-epoch anchors) or a value past `i64::MAX / 2`
+/// (also rare) yields whatever chrono itself yields, preserving the
+/// pre-lift semantics verbatim on every corner every caller cared
+/// about.
+///
+/// Failure-arm axis: `.expect("valid epoch second")` — matches the
+/// module-internal helper's phrasing (which every existing
+/// `elapsed_since` composition pin already routed through) rather
+/// than pool.rs's `.unwrap()` phrasing. The composer is
+/// `#[must_use]` and consumers write `at_epoch_second(N)` inline; a
+/// caller that specifically needed the `.unwrap()` message can still
+/// panic via the primitive because `chrono::DateTime::<Utc>::
+/// from_timestamp` returns `Option<Self>` on the exact SAME
+/// out-of-range corner — the `.expect(...)` phrasing sharpens the
+/// panic message without changing the panic condition.
+///
+/// Sibling to [`seconds_ago`] on the `→ DateTime<Utc>` axis:
+/// `seconds_ago` reads the wall clock at call time and returns an
+/// anchor `N` seconds before it (a production timed-decision seed),
+/// `at_epoch_second` reads a caller-supplied whole-second Unix epoch
+/// offset and returns the anchor deterministically (a test-fixture /
+/// deterministic-composition seed). The two composers partition the
+/// `→ DateTime<Utc>` axis at the (wall-clock, deterministic) split
+/// and cover it end-to-end at the substrate.
+///
+/// A future normalization (a per-fleet millisecond-precision
+/// truncation on the anchor, a debug-build assertion that `secs` is
+/// in a permitted window, a swap of the underlying
+/// `chrono::DateTime::<Utc>::from_timestamp` for a
+/// `TryFrom<UnixEpochSeconds>` typed alternative that pushes the
+/// out-of-range corner into the type system) lands at THIS ONE
+/// substrate primitive and every downstream consumer inherits the
+/// upgrade mechanically — no per-site edit at any of the 10 listed
+/// callers or at future consumers (a stable-name claim-arbiter's
+/// deterministic-anchor fixture, a compliance-binding freshness-gate
+/// test seed, a probe-receipt `verified_at` field's deterministic
+/// fixture).
+#[must_use]
+pub fn at_epoch_second(secs: i64) -> DateTime<Utc> {
+    DateTime::<Utc>::from_timestamp(secs, 0).expect("valid epoch second")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn t(secs: i64) -> DateTime<Utc> {
-        DateTime::<Utc>::from_timestamp(secs, 0).expect("valid epoch second")
+        // The whole-second epoch anchor rides through the ONE
+        // substrate owner `at_epoch_second` (peer of the 10 workspace-
+        // wide restatements of the SAME
+        // `DateTime::<Utc>::from_timestamp(<secs>, 0).expect(...)` /
+        // `.unwrap()` fixture chain that pre-lift lived at every
+        // deterministic-anchor test helper in this crate — this
+        // module's own tests + `pool::tests::{member, named_member,
+        // pool_status_observed_composes_pre_lift_status_seed_verbatim,
+        // pool_status_observed_moves_members_by_value_without_extra_
+        // clone, pool_member_unallocated_*}`).
+        at_epoch_second(secs)
     }
 
     #[test]
@@ -766,5 +882,123 @@ mod tests {
         let future = Utc::now() + chrono::Duration::seconds(3_600);
         let stamp = tombstone_at(future).expect("tombstone_at returns Some");
         assert_eq!(stamp.0, future);
+    }
+
+    // ─── at_epoch_second substrate pins ───────────────────────────────
+    //
+    // Bind [`at_epoch_second`] at fail-before-pass-after granularity so
+    // a regression that drifted the nanosecond slot off the whole-
+    // second axis (a `from_timestamp(secs, 1)` typo that stamps a
+    // 1-ns offset into every deterministic fixture), swapped the
+    // `.expect(...)` for a saturating fallback (yielding
+    // `DateTime::<Utc>::default()` = epoch on the out-of-range corner
+    // rather than panicking), or reshaped the return form off
+    // `DateTime<Utc>` (e.g., to `DateTime<FixedOffset>`) surfaces HERE
+    // rather than as silent operator-invisible drift at the 10
+    // downstream fixture consumers.
+    //
+    // Each pin is fail-before-pass-after: the primitive did not exist
+    // pre-lift, so any test that invokes it fails to compile pre-lift
+    // and passes post-lift; the byte-identity pins below then bind the
+    // specific shape choice.
+
+    #[test]
+    fn at_epoch_second_returns_utc_datetime_at_whole_second_offset() {
+        // Primary shape asserted end-to-end: the returned anchor is
+        // exactly `secs` whole seconds past the Unix epoch, with no
+        // nanosecond component. A regression that stamped a stray
+        // nanosecond slot (a `from_timestamp(secs, 1)` typo, a
+        // per-fleet skew Δ added below the composer) would surface
+        // here as a non-zero `.timestamp_subsec_nanos()`.
+        let anchor = at_epoch_second(1_700_000_000);
+        assert_eq!(anchor.timestamp(), 1_700_000_000);
+        assert_eq!(anchor.timestamp_subsec_nanos(), 0);
+    }
+
+    #[test]
+    fn at_epoch_second_matches_hand_authored_pre_lift_chain_shape() {
+        // Byte-identical parity with the pre-lift `DateTime::<Utc>::
+        // from_timestamp(<secs>, 0).unwrap()` / `.expect(...)` block
+        // that all 10 hand-authored callsites restated verbatim,
+        // swept across the four representative second-counts every
+        // pre-lift consumer used: `0` (the epoch anchor), `100` (the
+        // `elapsed_since` composition pin anchor), `1_700_000_000`
+        // (the mid-2023 wall-clock anchor), and `2_000_000_000` (the
+        // mid-2033 future anchor). Both blocks must project the SAME
+        // `DateTime<Utc>` on every corner so the collapse is
+        // observationally invisible.
+        for secs in [0_i64, 100, 1_700_000_000, 2_000_000_000] {
+            let composed = at_epoch_second(secs);
+            let hand_authored = DateTime::<Utc>::from_timestamp(secs, 0)
+                .expect("hand-authored fixture is well-formed");
+            assert_eq!(
+                composed, hand_authored,
+                "corner `secs={secs}` must round-trip through both shapes",
+            );
+        }
+    }
+
+    #[test]
+    fn at_epoch_second_is_deterministic_across_repeated_calls() {
+        // Determinism pin: `at_epoch_second` does NOT read the wall
+        // clock — every call with the SAME `secs` produces byte-
+        // identical anchors, in contrast to the sibling
+        // [`seconds_ago`] / [`tombstone_now`] wall-clock-reading
+        // peers. A regression that started stamping the composer's
+        // own `Utc::now()` (a fallback default, a per-call skew) would
+        // silently defeat every fanout / composition / preservation
+        // pin that relies on the anchor being replayable.
+        let first = at_epoch_second(500);
+        let second = at_epoch_second(500);
+        assert_eq!(
+            first, second,
+            "at_epoch_second must be deterministic — no wall-clock read",
+        );
+    }
+
+    #[test]
+    fn at_epoch_second_partitions_the_datetime_axis_against_seconds_ago() {
+        // Cross-composer partition pin: `at_epoch_second` and
+        // [`seconds_ago`] both produce `DateTime<Utc>` but partition
+        // the axis at the (deterministic, wall-clock-reading) split —
+        // `at_epoch_second(0)` is byte-identical across two calls,
+        // `seconds_ago(0)` drifts by the scheduler jitter between two
+        // calls. A regression that merged either primitive onto the
+        // other (a `seconds_ago` that started reading a module-load
+        // constant, an `at_epoch_second` that started subtracting from
+        // `Utc::now`) would collapse the partition and surface here.
+        let a = at_epoch_second(0);
+        let b = at_epoch_second(0);
+        assert_eq!(a, b, "at_epoch_second is deterministic");
+        let live_1 = seconds_ago(0);
+        // Do not compare `live_1` to `a` bytewise — the two live at
+        // different points on the `DateTime<Utc>` axis by design.
+        // Instead, pin that the deterministic anchor equals the epoch
+        // (a live wall-clock read is unambiguously past the epoch on
+        // any post-2020 system clock).
+        assert_eq!(a.timestamp(), 0, "at_epoch_second(0) is the Unix epoch");
+        assert!(
+            live_1.timestamp() > 0,
+            "seconds_ago(0) reads the wall clock, which is unambiguously past the epoch",
+        );
+    }
+
+    #[test]
+    fn at_epoch_second_composes_with_tombstone_at_at_deterministic_fixture_shape() {
+        // The canonical downstream composition: a fixture that needs a
+        // deterministic tombstone at a fixed epoch offset composes
+        // `tombstone_at(at_epoch_second(N))` and expects the returned
+        // anchor to be exactly `N` seconds past the Unix epoch. A
+        // regression that reshaped either primitive so the two no
+        // longer round-trip would surface HERE rather than as silent
+        // skew at the deterministic-tombstone fixture family.
+        let anchor = at_epoch_second(1_700_000_000);
+        let stamp = tombstone_at(anchor).expect("tombstone_at returns Some");
+        assert_eq!(
+            stamp.0, anchor,
+            "tombstone_at must preserve the at_epoch_second-produced anchor verbatim",
+        );
+        assert_eq!(stamp.0.timestamp(), 1_700_000_000);
+        assert_eq!(stamp.0.timestamp_subsec_nanos(), 0);
     }
 }

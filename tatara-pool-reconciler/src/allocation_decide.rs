@@ -351,7 +351,6 @@ struct MatchKeyStrs<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kube::Resource;
     use tatara_process::allocation::{AllocationSpec, AllocationStatus};
     use tatara_process::ephemeral::EphemeralSpec;
     use tatara_process::intent::AplicacaoIntent;
@@ -383,9 +382,13 @@ mod tests {
             selector,
             ..PoolSpec::with_template(empty_template())
         };
-        let mut p = EphemeralPool::new(name, spec);
-        p.meta_mut().namespace = Some(ns.into());
-        p
+        // The 2-line construct-then-set-namespace chain rides the ONE
+        // substrate composer [`EphemeralPool::new_in`] — one of FOUR
+        // pre-lift sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+        // threshold in this crate; see the primitive's doc-comment
+        // for the migration rationale + the sibling
+        // `EphemeralAllocation::new_in` peer.
+        EphemeralPool::new_in(name, ns, spec)
     }
 
     fn alloc(kind: &str, repo: &str, branch: &str) -> EphemeralAllocation {
@@ -409,9 +412,15 @@ mod tests {
             pr_labels: vec![],
             actor: None,
         });
-        let mut a = EphemeralAllocation::new("alloc-1", spec);
-        a.meta_mut().namespace = Some("pools".into());
-        a
+        // The 2-line construct-then-set-namespace chain rides the ONE
+        // substrate composer [`EphemeralAllocation::new_in`] — one of
+        // TWO pre-lift sites past the ★★ PRIME-DIRECTIVE ≥ 2
+        // duplication threshold across two workspace crates (peer at
+        // `tatara-github-watcher::allocation_factory::build_allocation`
+        // — the production PR-webhook emitter); see the primitive's
+        // doc-comment for the migration rationale + the sibling
+        // `EphemeralPool::new_in` peer.
+        EphemeralAllocation::new_in("alloc-1", "pools", spec)
     }
 
     fn member(name: &str, state: MemberState) -> PoolMember {

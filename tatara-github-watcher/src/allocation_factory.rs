@@ -3,8 +3,6 @@
 //! Pure function: GitHub event in, typed Allocation out. The handler
 //! applies the resulting Allocation via kube-rs.
 
-use kube::Resource;
-
 use tatara_process::allocation::{AllocationSpec, EphemeralAllocation, Requestor};
 use tatara_process::pool::AllocationRef;
 
@@ -111,9 +109,15 @@ pub fn build_allocation(
         )),
     };
 
-    let mut alloc = EphemeralAllocation::new(&name, spec);
-    alloc.meta_mut().namespace = Some(namespace.to_string());
-    Ok(alloc)
+    // The 2-line construct-then-set-namespace chain rides the ONE
+    // substrate composer [`EphemeralAllocation::new_in`] — one of TWO
+    // pre-lift sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold across two workspace crates (peer at
+    // `tatara-pool-reconciler::allocation_decide::tests::alloc` — the
+    // allocation-decision test fixture); see the primitive's doc-
+    // comment for the migration rationale + the sibling
+    // `EphemeralPool::new_in` peer.
+    Ok(EphemeralAllocation::new_in(&name, namespace, spec))
 }
 
 fn format_action(a: PrAction) -> &'static str {

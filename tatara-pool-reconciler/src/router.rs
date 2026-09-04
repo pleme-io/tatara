@@ -65,7 +65,6 @@ pub fn best_match<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kube::Resource;
     use tatara_process::ephemeral::EphemeralSpec;
     use tatara_process::intent::AplicacaoIntent;
     use tatara_process::lifetime::TeardownPolicy;
@@ -90,15 +89,18 @@ mod tests {
     fn pool(name: &str, selector: PoolSelector) -> EphemeralPool {
         // Every non-template slot rides the ONE substrate composer
         // [`PoolSpec::with_template`]; see the primitive's doc-comment
-        // for the full migration rationale.
+        // for the full migration rationale. The 2-line construct-
+        // then-set-namespace chain rides the ONE substrate composer
+        // [`EphemeralPool::new_in`] — one of FOUR pre-lift sites past
+        // the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold in this
+        // crate; see the primitive's doc-comment for the migration
+        // rationale + the sibling `EphemeralAllocation::new_in` peer.
         let spec = PoolSpec {
             desired_size: 1,
             selector,
             ..PoolSpec::with_template(empty_template())
         };
-        let mut p = EphemeralPool::new(name, spec);
-        p.meta_mut().namespace = Some("ephemeral-pools".into());
-        p
+        EphemeralPool::new_in(name, "ephemeral-pools", spec)
     }
 
     #[test]

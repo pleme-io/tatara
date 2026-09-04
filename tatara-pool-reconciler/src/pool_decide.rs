@@ -172,7 +172,6 @@ pub fn decide_pool_reconcile(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kube::Resource;
     use tatara_process::ephemeral::EphemeralSpec;
     use tatara_process::intent::AplicacaoIntent;
     use tatara_process::lifetime::TeardownPolicy;
@@ -204,9 +203,13 @@ mod tests {
             max_size: max,
             ..PoolSpec::with_template(empty_template())
         };
-        let mut p = EphemeralPool::new("test-pool", spec);
-        p.meta_mut().namespace = Some("pools".into());
-        p
+        // The 2-line construct-then-set-namespace chain rides the ONE
+        // substrate composer [`EphemeralPool::new_in`] — one of FOUR
+        // pre-lift sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+        // threshold in this crate; see the primitive's doc-comment
+        // for the migration rationale + the sibling
+        // `EphemeralAllocation::new_in` peer.
+        EphemeralPool::new_in("test-pool", "pools", spec)
     }
 
     fn member(name: &str, state: MemberState, age_secs: i64) -> PoolMember {

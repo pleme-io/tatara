@@ -1070,6 +1070,85 @@ impl EphemeralAllocation {
     pub fn observed_expires_at(&self) -> Option<DateTime<Utc>> {
         self.status.as_ref().and_then(|s| s.expires_at)
     }
+
+    /// The namespaced-CRD constructor composer on the
+    /// `EphemeralAllocation` axis: forwards `(name, spec)` to the
+    /// kube-derived [`Self::new`] constructor + stamps
+    /// `metadata.namespace` with the caller-supplied slot in ONE
+    /// step. The ONE-liner collapse of the paired `let mut a =
+    /// EphemeralAllocation::new(<name>, <spec>); a.meta_mut().
+    /// namespace = Some(<ns>.into());` incantation every allocation-
+    /// side emitter restated by hand pre-lift.
+    ///
+    /// Pre-lift the 2-line construct-then-set-namespace chain was
+    /// hand-authored at TWO sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold across TWO workspace crates, composing
+    /// a namespaced `EphemeralAllocation` fixture / event from a
+    /// `name` slot and an `AllocationSpec`:
+    /// * `tatara-github-watcher::allocation_factory::build_allocation`
+    ///   — the production PR-webhook → `EphemeralAllocation` emitter
+    ///   at `alloc.meta_mut().namespace = Some(namespace.to_string
+    ///   ())`; stamps the ephemeral-pools namespace as part of the
+    ///   canonical opened / reopened / synchronize allocation shape.
+    /// * `tatara-pool-reconciler::allocation_decide::tests::alloc` —
+    ///   the allocation-decision test fixture pinned to `"pools"`,
+    ///   sibling to the peer `pool` fixture in the same module that
+    ///   composes an `EphemeralPool` via [`crate::pool::EphemeralPool::
+    ///   new_in`] on the same `ns` slot value.
+    ///
+    /// Both sites walked the SAME 2-line chain and both wanted the
+    /// `EphemeralAllocation` back with `metadata.namespace` stamped as
+    /// `Some(<ns>.into())`. Post-lift each callsite reads
+    /// `EphemeralAllocation::new_in(<name>, <ns>, <spec>)` and the
+    /// produced value feeds the same downstream `Api::create(&pp,
+    /// &alloc)` chain / test-battery input unchanged.
+    ///
+    /// The `impl Into<String>` at the `namespace` slot matches the
+    /// sibling `impl Into<String>`-widening discipline the workspace's
+    /// other namespaced-CRD-adjacent composers walk
+    /// ([`crate::pool::PoolMember::unallocated`] on the
+    /// `process_name` slot, [`crate::pool::AllocationRef::new`] on the
+    /// `(name, namespace)` slot pair, [`Requestor::kind_only`] on the
+    /// `kind` slot) and accepts BOTH `&'static str` (the majority
+    /// pre-lift caller shape) AND owned `String` at the SAME
+    /// signature.
+    ///
+    /// Peer to [`crate::pool::EphemeralPool::new_in`] on the sister
+    /// `EphemeralPool` CRD — the two primitives partition the
+    /// namespaced-CRD-constructor family axis for the two pool-
+    /// adjacent CRDs the workspace stamps at reconciler fixture /
+    /// GitHub-webhook-emitter time. A future normalization (a per-
+    /// fleet virtual-cluster prefix rewrite on the `namespace` slot,
+    /// a per-cluster canonical case-fold pass, a `generateName`
+    /// fallback on the `name` slot, an operator-scoped default
+    /// namespace for cluster-local test rigs, an audit-tag stamped
+    /// on every fixture-emitted CRD for post-hoc grep discipline)
+    /// lands at ONE primitive body per CRD and every downstream
+    /// consumer inherits the upgrade mechanically.
+    ///
+    /// `#[must_use]` on the return keeps a caller from composing the
+    /// namespaced value and dropping it un-passed to a `kube::Api`
+    /// create call or a `Vec<EphemeralAllocation>` reconciler-input
+    /// slot.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the 2-line construct-then-set-namespace chain recurred at
+    /// TWO hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger, spanning two workspace crates, and is
+    /// lifted to ONE substrate owner here). THEORY.md §II.1
+    /// invariant 5 (composition preserves proofs — the pins below
+    /// bind the (name-slot → metadata.name, ns-slot → metadata.
+    /// namespace, spec-slot → spec) slot-projection triple + the
+    /// byte-identical parity with the pre-lift 2-line chain across
+    /// the two representative `impl Into<String>` value shapes
+    /// (`&'static str` and owned `String`) + the sibling-composer
+    /// coherence with [`Self::new`]).
+    #[must_use]
+    pub fn new_in(name: &str, namespace: impl Into<String>, spec: AllocationSpec) -> Self {
+        let mut a = Self::new(name, spec);
+        a.metadata.namespace = Some(namespace.into());
+        a
+    }
 }
 
 #[cfg(test)]
@@ -2519,5 +2598,129 @@ mod tests {
         // (`PoolStatus::observed`'s pinned coherence lives at its own
         // peer pin family in `crate::pool`; this pin binds the
         // `AllocationStatus::transition` side of the peer pair.)
+    }
+
+    // ─── EphemeralAllocation::new_in substrate pins ────────────────────
+    //
+    // The pre-lift 2-line `let mut a = EphemeralAllocation::new(<name>,
+    // <spec>); a.meta_mut().namespace = Some(<ns>.into());` chain
+    // recurred at TWO workspace-wide sites past the ★★ PRIME-DIRECTIVE
+    // ≥ 2 threshold across TWO crates (production PR-webhook emitter
+    // at `tatara-github-watcher::allocation_factory::build_allocation`
+    // + allocation-decision test fixture at `tatara-pool-reconciler::
+    // allocation_decide::tests::alloc`). Post-lift the ONE substrate
+    // composer stamps a namespaced `EphemeralAllocation` from
+    // `(name, ns, spec)` in one call. Fail-before-pass-after
+    // granularity: `new_in` did not exist pre-lift; the compiler
+    // cannot resolve the name until the impl block above is in place,
+    // so a rollback of the primitive breaks this whole pin block.
+
+    fn sample_spec() -> AllocationSpec {
+        AllocationSpec::requestor_only(Requestor::kind_only("manual"))
+    }
+
+    #[test]
+    fn allocation_new_in_stamps_metadata_name_from_the_name_slot() {
+        // `name` slot → `metadata.name` projection pin. Guards against
+        // a regression that dropped the `name` slot into a `generate_
+        // name` slot, an `annotations` seed, or any downstream slot the
+        // kube-derived [`EphemeralAllocation::new`] does not populate
+        // at `metadata.name` verbatim.
+        let a = EphemeralAllocation::new_in("pr-42-demo", "pools", sample_spec());
+        assert_eq!(a.metadata.name.as_deref(), Some("pr-42-demo"));
+    }
+
+    #[test]
+    fn allocation_new_in_stamps_metadata_namespace_from_the_ns_slot() {
+        // `ns` slot → `metadata.namespace` projection pin. Guards
+        // against a regression that dropped the `ns` slot into a
+        // `labels` seed, an unrelated annotation, or that stamped
+        // `namespace = None` even after a caller-supplied value.
+        let a = EphemeralAllocation::new_in("pr-42-demo", "pools", sample_spec());
+        assert_eq!(a.metadata.namespace.as_deref(), Some("pools"));
+    }
+
+    #[test]
+    fn allocation_new_in_stamps_spec_from_the_spec_slot_verbatim() {
+        // `spec` slot → `spec` projection pin. A regression that
+        // silently normalized the caller-supplied spec inside the
+        // composer would diverge from the byte-identical pass-through
+        // the pre-lift 2-line chain produced.
+        let spec = AllocationSpec::requestor_only(Requestor::kind_only("github-pr"));
+        let a = EphemeralAllocation::new_in("pr-42-demo", "pools", spec.clone());
+        assert_eq!(a.spec.requestor.kind, spec.requestor.kind);
+        assert!(a.spec.pool_ref.is_none());
+        assert!(a.spec.ttl.is_none());
+        assert!(a.spec.note.is_none());
+    }
+
+    #[test]
+    fn allocation_new_in_accepts_both_owned_and_borrowed_namespace_slot() {
+        // The `impl Into<String>` ergonomic contract round-trips
+        // through both `&'static str` (the pre-lift test-fixture caller
+        // shape) AND owned `String` (the pre-lift production-emitter
+        // caller shape at `build_allocation`, where `namespace:
+        // &str` was pushed through a `.to_string()`) at the SAME
+        // signature. Guards against a regression that narrowed the
+        // slot to `&str` only or that silently double-`.into()`d an
+        // already-owned String.
+        let via_str = EphemeralAllocation::new_in("pr-42-demo", "pools", sample_spec());
+        let via_string =
+            EphemeralAllocation::new_in("pr-42-demo", String::from("pools"), sample_spec());
+        assert_eq!(via_str.metadata.namespace, via_string.metadata.namespace);
+    }
+
+    #[test]
+    fn allocation_new_in_matches_pre_lift_construct_then_set_namespace_bytewise() {
+        // Byte-shape parity witness against the pre-lift 2-line chain
+        // across the two representative namespace shapes the collapsed
+        // sites used (`"pools"` at `allocation_decide::alloc` +
+        // production-emitter `"ephemeral-pools"` at `build_allocation`
+        // + the free-form namespace `build_allocation` accepts). A
+        // regression that shifted the composer's output would diverge
+        // from the pre-lift literal HERE rather than at every
+        // downstream consumer's assertion.
+        for ns in ["pools", "ephemeral-pools", "custom-ns"] {
+            let via_primitive = EphemeralAllocation::new_in("pr-42-demo", ns, sample_spec());
+            let mut hand_authored = EphemeralAllocation::new("pr-42-demo", sample_spec());
+            hand_authored.metadata.namespace = Some(ns.into());
+            assert_eq!(via_primitive.metadata.name, hand_authored.metadata.name);
+            assert_eq!(
+                via_primitive.metadata.namespace,
+                hand_authored.metadata.namespace,
+            );
+        }
+    }
+
+    #[test]
+    fn allocation_new_in_defaults_other_metadata_slots_at_kube_derived_new() {
+        // The composer forwards to the kube-derived
+        // [`EphemeralAllocation::new`] for every non-namespace metadata
+        // slot. A regression that stamped finalizers, owner_references,
+        // labels, or annotations inside the composer's body —
+        // inheriting the pre-lift chain's undocumented emptiness at
+        // those slots — would surface here.
+        let a = EphemeralAllocation::new_in("pr-42-demo", "pools", sample_spec());
+        assert!(a.metadata.finalizers.is_none());
+        assert!(a.metadata.owner_references.is_none());
+        assert!(a.metadata.labels.is_none());
+        assert!(a.metadata.annotations.is_none());
+    }
+
+    #[test]
+    fn allocation_new_in_shape_agrees_with_pool_new_in_peer() {
+        // Cross-CRD peer-axis structural coherence: both substrate
+        // composers (`EphemeralPool::new_in`, `EphemeralAllocation::
+        // new_in`) accept `(name: &str, namespace: impl Into<String>,
+        // spec: <CRD>Spec)` at the SAME positional slot order and
+        // return the CRD with `metadata.name` + `metadata.namespace`
+        // stamped uniformly. Structural pin: if either side's slot
+        // order drifts (e.g. `(ns, name, spec)`), this bind fails to
+        // compile here rather than silently drifting the family apart.
+        let _allocation_shape: fn(&str, &'static str, AllocationSpec) -> EphemeralAllocation =
+            EphemeralAllocation::new_in;
+        // (`EphemeralPool::new_in`'s pinned coherence lives at its own
+        // peer pin family in `crate::pool`; this pin binds the
+        // `EphemeralAllocation::new_in` side of the peer pair.)
     }
 }

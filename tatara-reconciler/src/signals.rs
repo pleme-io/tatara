@@ -158,26 +158,47 @@ pub async fn consume_effect(process: &Process, ctx: &Context, effect: SignalEffe
         }
         SignalEffect::Suspend => {
             // Wire-side dispatch rides the substrate primitive
-            // `tatara_process::patch::merge` — pre-lift this was a
-            // hand-authored `api.patch(&name, &PatchParams::default(),
-            // &Patch::Merge(&body))` chain, one of SIX workspace-wide
-            // restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-            // threshold (peer arm at Resume below).
-            tatara_process::patch::merge(&api, &name, &json!({ "spec": { "suspended": true } }))
-                .await
-                .map_err(|e| anyhow!("suspend: {e}"))?;
+            // `tatara_process::patch::merge`; the merge body itself
+            // rides the substrate composer
+            // `tatara_process::patch::spec_suspended_body` — pre-lift
+            // this arm hand-authored BOTH the `api.patch(&name,
+            // &PatchParams::default(), &Patch::Merge(&body))` 3-link
+            // chain (one of six workspace-wide restatements at the
+            // `merge` primitive lift) AND the `json!({ "spec": {
+            // "suspended": true } })` body composition (one of two
+            // adjacent restatements at the composer lift, peer arm at
+            // Resume below). Post-lift both restatements ride through
+            // ONE substrate owner each: a future addition to the
+            // suspend/resume wire body (a `by:` signal-source slot, a
+            // `suspendedAt:` transition timestamp, a symmetry gate
+            // that refuses conflicting overlays) lands at
+            // `spec_suspended_body` and both arms inherit it
+            // mechanically.
+            tatara_process::patch::merge(
+                &api,
+                &name,
+                &tatara_process::patch::spec_suspended_body(true),
+            )
+            .await
+            .map_err(|e| anyhow!("suspend: {e}"))?;
             Ok(())
         }
         SignalEffect::Resume => {
-            // Wire-side dispatch rides the substrate primitive
-            // `tatara_process::patch::merge` — pre-lift this was a
-            // hand-authored `api.patch(&name, &PatchParams::default(),
-            // &Patch::Merge(&body))` chain, one of SIX workspace-wide
-            // restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
-            // threshold (peer arm at Suspend above).
-            tatara_process::patch::merge(&api, &name, &json!({ "spec": { "suspended": false } }))
-                .await
-                .map_err(|e| anyhow!("resume: {e}"))?;
+            // Peer arm to Suspend above — see that arm's docstring for
+            // the composer + wire-dispatch substrate-lift story. Both
+            // arms compose the merge body through
+            // `tatara_process::patch::spec_suspended_body` (this arm
+            // feeds `false`, the peer feeds `true`) and dispatch it
+            // through `tatara_process::patch::merge`; a future addition
+            // to the shared wire body lands at ONE composer and both
+            // arms inherit it.
+            tatara_process::patch::merge(
+                &api,
+                &name,
+                &tatara_process::patch::spec_suspended_body(false),
+            )
+            .await
+            .map_err(|e| anyhow!("resume: {e}"))?;
             Ok(())
         }
         SignalEffect::Remediate => {

@@ -238,6 +238,48 @@ pub fn apply_patch_params(field_manager: &str) -> PatchParams {
     PatchParams::apply(field_manager).force()
 }
 
+/// Compose the merge-patch wire body `{"spec": {"suspended": <bool>}}` — the
+/// SIGSTOP/SIGCONT-driven suspend/resume shape both
+/// `SignalEffect::Suspend` and `SignalEffect::Resume` arms of
+/// `tatara-reconciler::signals::consume_effect` stamp on the Process spec.
+///
+/// Both arms compose through this ONE substrate owner and hand the produced
+/// body straight to [`merge`]; pre-lift each arm restated `json!({ "spec":
+/// { "suspended": <bool> } })` verbatim at its callsite (both are named in
+/// the `merge` docstring's six-consumer inventory above). Two hand-authored
+/// restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger; post-
+/// lift a future addition to the suspend/resume wire body (a `by:` slot
+/// naming the signal source, a `suspendedAt:` transition timestamp, a
+/// symmetry gate that refuses conflicting suspend + resume overlays, a
+/// version-tagged wrap for a `spec.suspend.v2` migration) lands at THIS
+/// function and both arms inherit the upgrade mechanically.
+///
+/// The `bool` argument matches the pre-lift call sites' spelling exactly
+/// (`true` at the Suspend arm, `false` at the Resume arm) — the primitive
+/// does not force one polarity, because the merge-patch body itself is
+/// symmetric between the two arms and the shape stays load-bearing at
+/// both polarities.
+///
+/// Sibling to [`merge_status_body`] on the (wire-endpoint × wrap-posture)
+/// pair: [`merge_status_body`] owns the `/status` subresource wrap;
+/// this primitive owns one specific `{"spec": …}` primary-resource wrap
+/// (the suspend/resume one) — a body composer, not a wire-dispatcher, so
+/// consumers still hand the produced body to [`merge`] for the round-
+/// trip.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// two-arm `json!({ "spec": { "suspended": <bool> } })` restatement is
+/// lifted onto ONE substrate composer). THEORY.md §II.1 invariant 5
+/// (composition preserves proofs — the pin block below binds the shape
+/// at fail-before-pass-after granularity so a regression that drifts the
+/// top-level `spec` slot, the inner `suspended` slot, or the JSON bool
+/// value type at either polarity surfaces here rather than as silent
+/// signal-arm skew at the two suspend/resume callsites).
+#[must_use]
+pub fn spec_suspended_body(suspended: bool) -> serde_json::Value {
+    json!({ "spec": { "suspended": suspended } })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -609,5 +651,107 @@ mod tests {
         // signals::consume_effect Resume shape
         let resume = json!({ "spec": { "suspended": false } });
         assert_eq!(resume["spec"]["suspended"], serde_json::Value::Bool(false));
+    }
+
+    // ─── spec_suspended_body substrate pins ─────────────────────────
+    //
+    // The pre-lift `json!({ "spec": { "suspended": <bool> } })`
+    // restatement recurred at TWO hand-authored sites in
+    // `tatara-reconciler::signals::consume_effect` (Suspend arm feeding
+    // `true`, Resume arm feeding `false`) past the ★★ PRIME-DIRECTIVE
+    // ≥ 2 duplication threshold. These pins bind the composer at fail-
+    // before-pass-after granularity so a regression that drifts the
+    // top-level `spec` slot (case-fold to `Spec`, verbose rename to
+    // `spec_patch`), the inner `suspended` slot (camelCase drift to
+    // `Suspended`, alias rename to `paused`), the JSON bool value type
+    // (accidental promotion to `"true"` / `"false"` strings), or the
+    // wrap posture (a `{"metadata": {...}}` sibling slot slipping in at
+    // the top-level) surfaces HERE rather than as silent signal-arm
+    // skew across the two hand-authored suspend/resume callsites.
+
+    #[test]
+    fn spec_suspended_body_wraps_true_under_spec_suspended_slot() {
+        let body = spec_suspended_body(true);
+        assert_eq!(body, json!({ "spec": { "suspended": true } }));
+    }
+
+    #[test]
+    fn spec_suspended_body_wraps_false_under_spec_suspended_slot() {
+        let body = spec_suspended_body(false);
+        assert_eq!(body, json!({ "spec": { "suspended": false } }));
+    }
+
+    #[test]
+    fn spec_suspended_body_top_level_slot_is_exactly_spec_lowercase() {
+        // Any drift on the top-level slot name (case-fold to `Spec`, a
+        // substrate-side rename to `spec_patch`, a version-tagged wrap
+        // like `v1alpha1_spec`) breaks the merge-patch on the wire.
+        // This pin binds the exact spelling downstream K8s API + the
+        // Process CRD's `.spec.suspended` field path expect.
+        for value in [true, false] {
+            let body = spec_suspended_body(value);
+            let obj = body.as_object().expect("top-level must be a JSON object");
+            assert_eq!(obj.len(), 1, "wrap adds exactly ONE top-level slot");
+            assert!(
+                obj.contains_key("spec"),
+                "top-level slot must be exactly `spec` (lowercase)"
+            );
+        }
+    }
+
+    #[test]
+    fn spec_suspended_body_inner_slot_is_exactly_suspended_lowercase() {
+        // Any drift on the inner slot name (camelCase to `Suspended`, a
+        // rename to `paused`, a version-tagged rename to `suspend_v2`)
+        // breaks the merge-patch: the K8s API silently applies the wrong
+        // field and the reconciler's suspend gate never fires.
+        for value in [true, false] {
+            let body = spec_suspended_body(value);
+            let spec = body["spec"]
+                .as_object()
+                .expect("inner `spec` must be a JSON object");
+            assert_eq!(
+                spec.len(),
+                1,
+                "inner spec carries exactly ONE slot (`suspended`)"
+            );
+            assert!(
+                spec.contains_key("suspended"),
+                "inner slot must be exactly `suspended` (lowercase)"
+            );
+        }
+    }
+
+    #[test]
+    fn spec_suspended_body_inner_value_is_json_bool_not_string() {
+        // Accidental promotion of the bool to a `"true"` / `"false"`
+        // JSON string would silently 400 on the wire (schema validation
+        // rejects a string on a bool field) or silently deserialize as
+        // `Default::default()` on the field, breaking the suspend gate.
+        assert_eq!(
+            spec_suspended_body(true)["spec"]["suspended"],
+            serde_json::Value::Bool(true),
+        );
+        assert_eq!(
+            spec_suspended_body(false)["spec"]["suspended"],
+            serde_json::Value::Bool(false),
+        );
+    }
+
+    #[test]
+    fn spec_suspended_body_matches_pre_lift_hand_authored_shape_bytewise() {
+        // Byte-shape parity with the pre-lift 2-site `json!({ "spec": {
+        // "suspended": <bool> } })` block that both `SignalEffect::
+        // Suspend` (true polarity) and `SignalEffect::Resume` (false
+        // polarity) arms restated pre-lift. A regression that reshaped
+        // either polarity would drift here rather than at the wire.
+        for value in [true, false] {
+            let composed = spec_suspended_body(value);
+            let hand_authored = json!({ "spec": { "suspended": value } });
+            assert_eq!(
+                composed, hand_authored,
+                "spec_suspended_body({value}) must be byte-identical to the pre-lift `json!` block",
+            );
+        }
     }
 }

@@ -94,50 +94,65 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
     for p in all_processes.items {
         if process_belongs_to_pool(&p, &name) {
             let state = process_to_member_state(&p);
-            members.push(PoolMember {
-                // Owned-form name projection rides through the ONE
-                // substrate primitive `Process::owned_name_or_empty` —
-                // pre-lift this was a hand-authored `.metadata.name
-                // .clone().unwrap_or_default()` chain, one of TWO
-                // workspace-wide restatements past the ★★ PRIME-
-                // DIRECTIVE ≥ 2 duplication threshold (peer at the
-                // desired-count `PoolMemberSnapshot` seed below).
-                // Post-lift both consumers share ONE substrate owner;
-                // a future name-canonicalization pass or per-pool
-                // alias table lands at `tatara_process::prelude::
-                // Process::owned_name_or_empty` and both row-builder
-                // seeds inherit it mechanically.
-                process_name: p.owned_name_or_empty(),
+            // 4-slot unallocated seed rides through the ONE substrate
+            // owner `tatara_process::pool::PoolMember::unallocated` —
+            // pre-lift this was a hand-authored 4-slot
+            // `PoolMember { process_name, state, entered_state_at,
+            // allocation_ref: None }` struct literal, one of FIVE
+            // workspace-wide restatements past the ★★ PRIME-DIRECTIVE
+            // ≥ 2 duplication threshold (peers at the four test
+            // helpers `pool_decide::tests::member`,
+            // `allocation_decide::tests::member`, and the two
+            // `tatara-process::pool::tests::{member, named_member}`
+            // helpers — every one pinning `allocation_ref: None`).
+            // Post-lift every consumer routes through ONE substrate
+            // owner; a future promotion of the unallocated shape
+            // lands at ONE `PoolMember::unallocated` entry.
+            //
+            // Owned-form name projection rides through the ONE
+            // substrate primitive `Process::owned_name_or_empty` —
+            // pre-lift this was a hand-authored `.metadata.name
+            // .clone().unwrap_or_default()` chain, one of TWO
+            // workspace-wide restatements past the ★★ PRIME-
+            // DIRECTIVE ≥ 2 duplication threshold (peer at the
+            // desired-count `PoolMemberSnapshot` seed below).
+            // Post-lift both consumers share ONE substrate owner;
+            // a future name-canonicalization pass or per-pool
+            // alias table lands at `tatara_process::prelude::
+            // Process::owned_name_or_empty` and both row-builder
+            // seeds inherit it mechanically.
+            //
+            // The last-transition anchor rides through the ONE
+            // substrate primitive `Process::observed_phase_since`
+            // — pre-lift this was a hand-authored 5-line
+            // `.status.as_ref().and_then(|s| s.phase_since)`
+            // chain, closing the LAST raw `.status.as_ref()`
+            // chain in this reconciler's production code on
+            // `Process`. Post-lift the chain rides ONE substrate
+            // owner symmetric to the peer `p.created_at()
+            // .unwrap_or_else(Utc::now)` seed the desired-count
+            // `PoolMemberSnapshot` builder two branches below
+            // already routes through — both timestamp-projection
+            // primitives on `Process` (metadata-timestamp
+            // `created_at` + status-timestamp
+            // `observed_phase_since`) now compose byte-uniformly
+            // at the pool reconciler's per-member row builder,
+            // with the `.unwrap_or_else(Utc::now)` sink kept at
+            // the callsite (matching every peer `observed_*`
+            // primitive's pure-projection discipline). A future
+            // normalization (a per-cluster clock-skew guard, a
+            // staleness gate that treats a `phase_since`
+            // predating a reconcile deadline as unobserved, a
+            // canonicalization that folds a suspiciously-zero
+            // slot to `None`) lands at ONE substrate site and
+            // both this per-member seed AND any future
+            // observed-transition consumer inherit the upgrade
+            // mechanically.
+            members.push(PoolMember::unallocated(
+                p.owned_name_or_empty(),
                 state,
-                // The last-transition anchor rides through the ONE
-                // substrate primitive `Process::observed_phase_since`
-                // — pre-lift this was a hand-authored 5-line
-                // `.status.as_ref().and_then(|s| s.phase_since)`
-                // chain, closing the LAST raw `.status.as_ref()`
-                // chain in this reconciler's production code on
-                // `Process`. Post-lift the chain rides ONE substrate
-                // owner symmetric to the peer `p.created_at()
-                // .unwrap_or_else(Utc::now)` seed the desired-count
-                // `PoolMemberSnapshot` builder two branches below
-                // already routes through — both timestamp-projection
-                // primitives on `Process` (metadata-timestamp
-                // `created_at` + status-timestamp
-                // `observed_phase_since`) now compose byte-uniformly
-                // at the pool reconciler's per-member row builder,
-                // with the `.unwrap_or_else(Utc::now)` sink kept at
-                // the callsite (matching every peer `observed_*`
-                // primitive's pure-projection discipline). A future
-                // normalization (a per-cluster clock-skew guard, a
-                // staleness gate that treats a `phase_since`
-                // predating a reconcile deadline as unobserved, a
-                // canonicalization that folds a suspiciously-zero
-                // slot to `None`) lands at ONE substrate site and
-                // both this per-member seed AND any future
-                // observed-transition consumer inherit the upgrade
-                // mechanically.
-                entered_state_at: p.observed_phase_since().unwrap_or_else(Utc::now),
-                allocation_ref: None,
-            });
+                p.observed_phase_since().unwrap_or_else(Utc::now),
+            ));
             owned.push(p);
         }
     }

@@ -1227,6 +1227,87 @@ impl PoolMember {
     pub fn process_names_set(members: &[Self]) -> std::collections::HashSet<String> {
         members.iter().map(|m| m.process_name.clone()).collect()
     }
+
+    /// Substrate composer for the unallocated `PoolMember` seed: the
+    /// 4-slot `{ process_name, state, entered_state_at, allocation_ref:
+    /// None }` fixture literal every non-`Allocated`-role callsite
+    /// stamped by hand pre-lift.
+    ///
+    /// Pre-lift the 4-slot struct literal `PoolMember { process_name,
+    /// state, entered_state_at, allocation_ref: None }` was hand-authored
+    /// at FIVE workspace-wide sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold across TWO crates:
+    /// * `tatara-pool-reconciler::controller_pool::reconcile_inner` —
+    ///   the production per-owned-Process seed built inside the
+    ///   `for p in all_processes.items` walk; `entered_state_at` rides
+    ///   in from [`crate::prelude::Process::observed_phase_since`] with
+    ///   the `Utc::now` fallback at the callsite.
+    /// * `tatara-pool-reconciler::pool_decide::tests::member` — test
+    ///   helper for the pool decision suite; `entered_state_at` rides
+    ///   in from [`crate::time::seconds_ago`].
+    /// * `tatara-pool-reconciler::allocation_decide::tests::member` —
+    ///   test helper for the allocation decision suite;
+    ///   `entered_state_at` rides in from `Utc::now`.
+    /// * `tatara-process::pool::tests::member` — test helper for the
+    ///   fanout / status suite; `entered_state_at` rides in from the
+    ///   epoch anchor `DateTime::<Utc>::from_timestamp(0, 0)`.
+    /// * `tatara-process::pool::tests::named_member` — test helper for
+    ///   the `process_names_set` suite; same epoch anchor.
+    ///
+    /// Every one of those FIVE sites pinned `allocation_ref: None`
+    /// verbatim — no `PoolMember` construction site in the workspace
+    /// pairs `allocation_ref: Some(<ref>)` with a hand-authored 4-slot
+    /// struct literal, so this composer's `None` slot is safe by
+    /// construction (the compiler exhaustiveness check on the struct's
+    /// four fields catches a future 5th slot addition here rather than
+    /// at any of the callsites).
+    ///
+    /// Post-lift every consumer writes
+    /// `PoolMember::unallocated(<name>, <state>, <anchor>)` and shares
+    /// ONE substrate owner; a future promotion of the unallocated shape
+    /// (a per-cluster clock-skew guard on the `entered_state_at`
+    /// anchor, a canonical rename of the None-slot to a typed
+    /// `Unallocated` marker, a lint-friendly closed-set restriction to
+    /// the four `MemberState` variants that legitimately carry no
+    /// `allocation_ref`) lands at ONE substrate site and every downstream
+    /// consumer inherits the upgrade mechanically.
+    ///
+    /// `impl Into<String>` accepts both `&str` literals (every test
+    /// helper site) and owned `String` produced by
+    /// [`crate::prelude::Process::owned_name_or_empty`] (the production
+    /// controller-pool site) without widening the signature.
+    ///
+    /// Sibling to [`AllocationRef::new`] on the substrate-composer
+    /// axis: both take `impl Into<String>`-gated identity slots and
+    /// return their owner-type by value; [`AllocationRef::new`] owns
+    /// the (name, namespace) pair, this composer owns the four-slot
+    /// unallocated-member seed.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the 4-slot unallocated-`PoolMember` seed recurred at FIVE hand-
+    /// authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    /// trigger, and is lifted to ONE owner here). THEORY.md §II.1
+    /// invariant 5 (composition preserves proofs — the pins bind the
+    /// four-slot fill AND the `allocation_ref: None` invariant AND the
+    /// caller-clock-injectability of `entered_state_at`, so a
+    /// regression that drifts any surface fails at
+    /// `tests::pool_member_unallocated_*` rather than as silent
+    /// operator-facing skew between the production controller-pool seed
+    /// and the three test-suite helpers on the SAME `PoolMember`
+    /// shape).
+    #[must_use]
+    pub fn unallocated(
+        process_name: impl Into<String>,
+        state: MemberState,
+        entered_state_at: DateTime<Utc>,
+    ) -> Self {
+        Self {
+            process_name: process_name.into(),
+            state,
+            entered_state_at,
+            allocation_ref: None,
+        }
+    }
 }
 
 /// Light reference to an `EphemeralAllocation`.
@@ -3354,12 +3435,15 @@ mod tests {
     }
 
     fn member(state: MemberState) -> PoolMember {
-        PoolMember {
-            process_name: "m".into(),
-            state,
-            entered_state_at: DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
-            allocation_ref: None,
-        }
+        // 4-slot unallocated seed rides through the ONE substrate
+        // owner `PoolMember::unallocated` (peer of the four workspace-
+        // wide restatements of the SAME `PoolMember { process_name,
+        // state, entered_state_at, allocation_ref: None }` fixture
+        // literal that pre-lift lived at the production `controller_
+        // pool::reconcile_inner` walk + the two `pool_decide::tests::
+        // member` / `allocation_decide::tests::member` helpers + the
+        // sibling `named_member` helper in this file).
+        PoolMember::unallocated("m", state, DateTime::<Utc>::from_timestamp(0, 0).unwrap())
     }
 
     #[test]
@@ -3463,12 +3547,14 @@ mod tests {
     // rollback of the primitive breaks this whole test group.
 
     fn named_member(process_name: &str, state: MemberState) -> PoolMember {
-        PoolMember {
-            process_name: process_name.into(),
+        // 4-slot unallocated seed rides through the ONE substrate
+        // owner `PoolMember::unallocated` — sibling to the `member`
+        // helper in this file on the same epoch-anchored axis.
+        PoolMember::unallocated(
+            process_name,
             state,
-            entered_state_at: DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
-            allocation_ref: None,
-        }
+            DateTime::<Utc>::from_timestamp(0, 0).unwrap(),
+        )
     }
 
     #[test]
@@ -3616,6 +3702,117 @@ mod tests {
         let now = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
         let observed = PoolStatus::observed(PoolPhase::Steady, members, now);
         assert_eq!(observed.members.len(), 2);
+    }
+
+    // ─── PoolMember::unallocated substrate pins ───────────────────────
+    //
+    // Pins the 4-slot `{ process_name, state, entered_state_at,
+    // allocation_ref: None }` composer's fill at fail-before-pass-after
+    // granularity: `unallocated` did not exist pre-lift; the compiler
+    // cannot resolve the name until the impl block above is in place,
+    // so a rollback of the primitive breaks this whole test group. The
+    // primitive owns FIVE workspace-wide seed sites (one production
+    // walk in `tatara-pool-reconciler::controller_pool::reconcile_inner`
+    // and four test helpers across `pool.rs`, `pool_decide.rs`, and
+    // `allocation_decide.rs`) so a regression that drifts any of the
+    // four slots (a mistyped `allocation_ref: Some(<sentinel>)`, a
+    // reversed positional order at the composer entry, an accidental
+    // canonicalization of the `entered_state_at` anchor) surfaces here
+    // rather than as silent operator-facing skew between the production
+    // seed and the three test-suite helpers on the SAME `PoolMember`
+    // shape.
+
+    #[test]
+    fn pool_member_unallocated_fills_every_slot_verbatim() {
+        // Positional-axis pin: the composer's four inputs land at the
+        // four struct slots in declaration order. A regression that
+        // swapped `process_name` and `entered_state_at` at the composer
+        // entry (or that renamed the `allocation_ref` invariant slot to
+        // a different `None`-preserving field) surfaces here.
+        let anchor = DateTime::<Utc>::from_timestamp(1_700_000_000, 0).unwrap();
+        let m = PoolMember::unallocated("pool-x-0", MemberState::Free, anchor);
+        assert_eq!(m.process_name, "pool-x-0");
+        assert_eq!(m.state, MemberState::Free);
+        assert_eq!(m.entered_state_at, anchor);
+        assert!(m.allocation_ref.is_none());
+    }
+
+    #[test]
+    fn pool_member_unallocated_accepts_owned_string_and_str_at_the_same_signature() {
+        // `impl Into<String>` axis pin: both the `&'static str` shape
+        // (every test-helper site) and the `String` shape (produced by
+        // `Process::owned_name_or_empty` at the production
+        // `controller_pool::reconcile_inner` site) reach the same
+        // composer entry without a per-caller conversion. A regression
+        // that narrowed the signature to `&str` alone would break the
+        // production site's `owned_name_or_empty` handoff; a regression
+        // that narrowed to `String` alone would force every test helper
+        // to `.into()` at the callsite. This pin fences both corners.
+        let anchor = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+        let via_str = PoolMember::unallocated("pool-y-0", MemberState::Spawning, anchor);
+        let owned: String = "pool-y-0".to_string();
+        let via_string = PoolMember::unallocated(owned, MemberState::Spawning, anchor);
+        assert_eq!(via_str.process_name, via_string.process_name);
+        assert_eq!(via_str.state, via_string.state);
+        assert_eq!(via_str.entered_state_at, via_string.entered_state_at);
+        assert_eq!(via_str.allocation_ref, via_string.allocation_ref);
+    }
+
+    #[test]
+    fn pool_member_unallocated_matches_pre_lift_struct_literal_bytewise() {
+        // Byte-shape parity pin: the composer output is structurally
+        // equal to the pre-lift 4-slot struct literal every hand-
+        // authored site stamped. Sweeps every `MemberState` variant so
+        // a regression that special-cased one variant (e.g., pinned
+        // `Allocated` to a bogus `Some(<placeholder>)` at the composer)
+        // surfaces here rather than at the four downstream helpers'
+        // callsites.
+        let anchor = DateTime::<Utc>::from_timestamp(1_700_000_000, 0).unwrap();
+        for state in [
+            MemberState::Free,
+            MemberState::Allocated,
+            MemberState::Spawning,
+            MemberState::Returning,
+            MemberState::Failed,
+        ] {
+            let via_primitive = PoolMember::unallocated("m", state, anchor);
+            let hand_authored = PoolMember {
+                process_name: "m".into(),
+                state,
+                entered_state_at: anchor,
+                allocation_ref: None,
+            };
+            assert_eq!(via_primitive.process_name, hand_authored.process_name);
+            assert_eq!(via_primitive.state, hand_authored.state);
+            assert_eq!(
+                via_primitive.entered_state_at,
+                hand_authored.entered_state_at
+            );
+            assert_eq!(via_primitive.allocation_ref, hand_authored.allocation_ref);
+        }
+    }
+
+    #[test]
+    fn pool_member_unallocated_preserves_caller_clock_anchor() {
+        // Clock-injectability pin: the composer does NOT read wall
+        // time on its own — every consumer supplies its own
+        // `entered_state_at` anchor (the production site from
+        // `Process::observed_phase_since`, the `pool_decide` helper
+        // from `crate::time::seconds_ago`, the `allocation_decide` and
+        // `pool.rs` helpers from `Utc::now` / the epoch anchor). A
+        // regression that started stamping the composer's own
+        // `Utc::now()` would silently reset every downstream anchor
+        // and break the fanout tests' epoch-based expectations.
+        let epoch = DateTime::<Utc>::from_timestamp(0, 0).unwrap();
+        let future = DateTime::<Utc>::from_timestamp(2_000_000_000, 0).unwrap();
+        let anchored_at_epoch = PoolMember::unallocated("a", MemberState::Free, epoch);
+        let anchored_at_future = PoolMember::unallocated("b", MemberState::Free, future);
+        assert_eq!(anchored_at_epoch.entered_state_at, epoch);
+        assert_eq!(anchored_at_future.entered_state_at, future);
+        assert_ne!(
+            anchored_at_epoch.entered_state_at, anchored_at_future.entered_state_at,
+            "composer must preserve the caller-supplied anchor verbatim",
+        );
     }
 
     // ─── EphemeralPool::has_name substrate pins ───────────────────────

@@ -415,12 +415,17 @@ mod tests {
     }
 
     fn member(name: &str, state: MemberState) -> PoolMember {
-        PoolMember {
-            process_name: name.into(),
-            state,
-            entered_state_at: Utc::now(),
-            allocation_ref: None,
-        }
+        // 4-slot unallocated seed rides through the ONE substrate
+        // owner `tatara_process::pool::PoolMember::unallocated` — peer
+        // of the four workspace-wide restatements at the production
+        // `controller_pool::reconcile_inner` walk + the sibling
+        // `pool_decide::tests::member` helper (which anchors via
+        // `tatara_process::time::seconds_ago`) + the two `pool::tests::
+        // {member, named_member}` helpers in `tatara-process` (which
+        // anchor at the epoch). This helper keeps its wall-clock
+        // anchor via `Utc::now()` at the callsite — the composer is
+        // clock-injectable rather than reading wall time itself.
+        PoolMember::unallocated(name, state, Utc::now())
     }
 
     #[test]

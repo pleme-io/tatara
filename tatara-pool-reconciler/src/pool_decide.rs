@@ -210,12 +210,19 @@ mod tests {
     }
 
     fn member(name: &str, state: MemberState, age_secs: i64) -> PoolMember {
-        PoolMember {
-            process_name: name.into(),
-            state,
-            entered_state_at: tatara_process::time::seconds_ago(age_secs),
-            allocation_ref: None,
-        }
+        // 4-slot unallocated seed rides through the ONE substrate
+        // owner `tatara_process::pool::PoolMember::unallocated` — peer
+        // of the four workspace-wide restatements of the SAME 4-slot
+        // fixture literal at the production `controller_pool::
+        // reconcile_inner` walk + the sibling `allocation_decide::
+        // tests::member` helper + the two `pool::tests::{member,
+        // named_member}` helpers in `tatara-process`. The `seconds_ago`
+        // anchor rides in on the peer substrate primitive
+        // `tatara_process::time::seconds_ago` (same-axis clock-past
+        // composer) so both the anchor + the seed compose through
+        // typed substrate owners rather than through hand-authored
+        // struct-literals here.
+        PoolMember::unallocated(name, state, tatara_process::time::seconds_ago(age_secs))
     }
 
     fn now() -> DateTime<Utc> {

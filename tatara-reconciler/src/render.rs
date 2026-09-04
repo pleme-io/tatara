@@ -1107,8 +1107,7 @@ mod aplicacao_tests {
     fn render_through_top_level_intent_dispatch() {
         // End-to-end: a ProcessSpec with Intent::Aplicacao routes through
         // the top-level `render()` function.
-        use kube::Resource;
-        use tatara_process::prelude::{Process, ProcessSpec};
+        use tatara_process::prelude::{PlacedInNamespace, Process, ProcessSpec};
 
         let intent = tatara_process::intent::Intent {
             aplicacao: Some(demo_intent()),
@@ -1123,8 +1122,12 @@ mod aplicacao_tests {
             intent: intent.clone(),
             ..ProcessSpec::gate_compute_defaults()
         };
-        let mut proc = Process::new("ephemeral-demo", spec);
-        proc.meta_mut().namespace = Some("demo-test".into());
+        // Namespace stamp rides through the ONE substrate owner
+        // `PlacedInNamespace::in_namespace` — the blanket-impl trait
+        // over `kube::Resource<DynamicType = ()>` that also backs the
+        // per-CRD `EphemeralPool::new_in` + `EphemeralAllocation::new_in`
+        // composers on their respective CRDs.
+        let proc = Process::new("ephemeral-demo", spec).in_namespace("demo-test");
         let out = render(&proc, &intent).expect("render");
         assert_eq!(out.resources.len(), 2);
         assert!(!out.intent_bytes.is_empty());

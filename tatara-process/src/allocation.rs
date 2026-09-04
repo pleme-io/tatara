@@ -1145,9 +1145,18 @@ impl EphemeralAllocation {
     /// coherence with [`Self::new`]).
     #[must_use]
     pub fn new_in(name: &str, namespace: impl Into<String>, spec: AllocationSpec) -> Self {
-        let mut a = Self::new(name, spec);
-        a.metadata.namespace = Some(namespace.into());
-        a
+        // Routes through the ONE substrate owner of the
+        // `metadata.namespace` stamp — the [`crate::PlacedInNamespace`]
+        // blanket-impl trait over `kube::Resource<DynamicType = ()>`.
+        // Byte-identical to the pre-lift 3-line body
+        // (`Self::new(name, spec); metadata.namespace = Some(namespace
+        // .into())`); the trait-forwarding form collapses the mutation
+        // duplication with the sibling per-CRD composer
+        // [`crate::pool::EphemeralPool::new_in`] and with the
+        // render-fixture site on `Process` that has no per-CRD
+        // `new_in` sibling.
+        use crate::PlacedInNamespace;
+        Self::new(name, spec).in_namespace(namespace)
     }
 }
 

@@ -132,7 +132,7 @@ pub mod prelude {
         ClaimRecord, ProcessEntry, ProcessTable, ProcessTableSpec, ProcessTableStatus,
     };
     pub use crate::time::{elapsed_since, seconds_ago, tombstone_at, tombstone_now};
-    pub use crate::{Annotated, DeletionTombstoned, NamespacedApiCoordinates};
+    pub use crate::{Annotated, DeletionTombstoned, NamespacedApiCoordinates, PlacedInNamespace};
 }
 
 /// CRD API group for every tatara CRD.
@@ -610,6 +610,106 @@ pub trait Annotated: kube::Resource<DynamicType = ()> {
 }
 
 impl<T> Annotated for T where T: kube::Resource<DynamicType = ()> {}
+
+/// Substrate-primitive trait for the **place-in-namespace** fluent
+/// builder every consumer of a `kube::Resource` restated as
+/// `let mut cr = <CRD>::new(name, spec); cr.meta_mut().namespace = Some(ns.into()); cr`
+/// on the freshly-minted resource whose derive-supplied
+/// `::new(name, spec)` constructor stamps `metadata.name` alone and
+/// leaves `metadata.namespace` at `None`.
+///
+/// Pre-lift the pattern was hand-authored across THREE tatara-owned
+/// axes past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold:
+///
+/// * `tatara-reconciler::render::tests::render_through_top_level_intent_dispatch`
+///   — the ONE remaining hand-authored site on the `Process` CRD
+///   (the sibling `Process::new_in` was not opened in the prior
+///   pool/allocation sweep because no `Process`-side pool fixture
+///   restated the pattern at ≥ 2 sites in isolation).
+/// * [`crate::pool::EphemeralPool::new_in`] — a per-CRD inherent
+///   composer opened in commit `a5dbb26` that inlined the identical
+///   `Self::new(name, spec); metadata.namespace = Some(namespace.into())`
+///   body on the `EphemeralPool` axis.
+/// * [`crate::allocation::EphemeralAllocation::new_in`] — the sister
+///   inherent composer opened in the same commit on the
+///   `EphemeralAllocation` axis with the byte-identical body.
+///
+/// Post-lift the substrate owns the `metadata.namespace` stamp at
+/// ONE trait method with a blanket impl over every
+/// `kube::Resource<DynamicType = ()>`, so:
+///
+/// * The two per-CRD `new_in` composers forward through
+///   `Self::new(name, spec).in_namespace(namespace)` — three
+///   substrate copies of the mutation collapse to one. The
+///   composers keep their ergonomic per-CRD signatures so existing
+///   callers stay unchanged; only the body threads through here.
+/// * The `tatara-reconciler::render` fixture routes through
+///   `Process::new(...).in_namespace(...)` on the SAME trait method,
+///   closing the last hand-authored site on the tatara CRD trio.
+/// * Any future tatara CRD (a routing-edge object, a receipt
+///   registry, a fleet-wide claim registry) inherits the builder at
+///   its own operator-facing factory + its own test-fixture site
+///   with zero per-CRD lift work — the same solve-once discipline
+///   [`NamespacedApiCoordinates`] established for the paired
+///   coordinate extractor and [`DeletionTombstoned`] established
+///   for the deletion-tombstone probe.
+/// * Any K8s built-in CRD (`ConfigMap`, `Job`, `Ingress`) inherits
+///   the builder too — the sibling [`Annotated`] blanket already
+///   covers the same category on the annotation-read axis, so an
+///   emitter that composes a `ConfigMap` in a specific namespace can
+///   now write `<owner-composer>().in_namespace(ns)` on the SAME
+///   finished value.
+///
+/// Return-form axis: `Self` (owned, by-value) — the builder
+/// consumes `self` and returns the mutated value so chained
+/// composers read left-to-right as `<CRD>::new(name, spec)
+/// .in_namespace(ns)` in the ONE natural composition order operators
+/// reach for. Peer to the borrow-form observer
+/// [`Annotated::annotation`] on the (mutation direction ×
+/// ObjectMeta-slot family) axis pair; both traits close their
+/// respective ObjectMeta-slot corners at ONE trait method with a
+/// blanket impl over the SAME `kube::Resource<DynamicType = ()>`
+/// bound so a future consumer that alternates between reading an
+/// annotation and stamping a namespace never sees two different
+/// trait-import spellings.
+///
+/// A future normalization step (a per-fleet virtual-cluster prefix
+/// rewrite on the `namespace` slot, a per-cluster canonical
+/// case-fold pass, an operator-scoped default namespace for
+/// cluster-local test rigs, a promotion to a typed `Namespace`
+/// newtype that carries K8s DNS-1123 validation as a phantom-type
+/// guard) lands at ONE substrate trait method here — every
+/// downstream consumer routed through `.in_namespace(...)` picks up
+/// the upgrade mechanically, and the two per-CRD `new_in` composers
+/// inherit it for free through their one-line forwarders.
+///
+/// Theory anchor: THEORY.md §II.1 invariant 5 (composition preserves
+/// proofs — the pins bind `<CRD>::new(name, spec).in_namespace(ns)
+/// .metadata.namespace == Some(ns.to_string())` on every corner of
+/// the (CRD ∈ {`Process`, `EphemeralPool`, `EphemeralAllocation`,
+/// `ConfigMap`} × input form ∈ {`&str`, `String`}) input matrix
+/// PLUS the overwrite corner where `.in_namespace(a).in_namespace(b)`
+/// binds `b`, so a regression that skewed either surface surfaces
+/// at `placed_in_namespace_tests::*` rather than as silent
+/// operator-facing skew between the tatara-reconciler render
+/// fixture, the two per-CRD `new_in` composers, and any future
+/// CRD-adjacent namespace-stamping consumer). THEORY.md §VI.1
+/// (generation over composition — the mutation recurred as three
+/// substrate copies past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// trigger).
+pub trait PlacedInNamespace: kube::Resource<DynamicType = ()> + Sized {
+    /// Stamp `namespace` onto `self.metadata.namespace` and return
+    /// the mutated value by-value. See the trait-level docs for the
+    /// axis-family context, peer trait, and future-normalization
+    /// anchor.
+    #[must_use]
+    fn in_namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.meta_mut().namespace = Some(namespace.into());
+        self
+    }
+}
+
+impl<T> PlacedInNamespace for T where T: kube::Resource<DynamicType = ()> {}
 
 /// Annotation keys the reconciler reads/writes on owned FluxCD resources.
 pub mod annotations {
@@ -2403,6 +2503,154 @@ mod compile_tests {
         assert_eq!(
             d.spec.boundary.postconditions[1].kind,
             crate::boundary::ConditionKind::ClosedLoopAuth
+        );
+    }
+}
+
+#[cfg(test)]
+mod placed_in_namespace_tests {
+    //! Pin the [`PlacedInNamespace`] trait's `in_namespace` builder at
+    //! fail-before-pass-after granularity across every corner of the
+    //! (CRD ∈ {`Process`, `EphemeralPool`, `EphemeralAllocation`,
+    //! `ConfigMap`}) × (input form ∈ {`&str`, `String`, `&String`})
+    //! matrix — the three tatara-owned CRDs the trait's blanket impl
+    //! covers today PLUS one K8s built-in (`ConfigMap`) whose sibling
+    //! [`Annotated`] blanket already covers the same category on the
+    //! annotation-read axis. Also pin (a) the overwrite corner where
+    //! `.in_namespace(a).in_namespace(b)` binds `b`, so a future
+    //! consumer that chains two stamps in one composition never sees
+    //! stale semantics, and (b) the byte-identical parity corner with
+    //! the pre-lift 3-line body of the per-CRD `EphemeralPool::new_in`
+    //! and `EphemeralAllocation::new_in` composers post-forwarding —
+    //! `<CRD>::new_in(name, ns, spec)` must yield a value structurally
+    //! identical to `<CRD>::new(name, spec).in_namespace(ns)` on every
+    //! metadata slot the derive stamps.
+    use super::PlacedInNamespace;
+    use crate::allocation::{AllocationSpec, EphemeralAllocation, Requestor};
+    use crate::crd::{Process, ProcessSpec};
+    use crate::pool::{EphemeralPool, PoolSpec};
+    use k8s_openapi::api::core::v1::ConfigMap;
+    use kube::api::ObjectMeta;
+
+    fn empty_process_spec() -> ProcessSpec {
+        ProcessSpec::gate_compute_defaults()
+    }
+
+    fn empty_pool_spec() -> PoolSpec {
+        PoolSpec {
+            desired_size: 1,
+            ..PoolSpec::with_template(crate::ephemeral::EphemeralSpec {
+                aplicacao: crate::intent::AplicacaoIntent::chart_only("oci://x", "1"),
+                ttl: "1h".into(),
+                teardown: crate::lifetime::TeardownPolicy::Always,
+                max_concurrent: 0,
+                postconditions: vec![],
+                preconditions: vec![],
+                verify_timeout: None,
+                classification: None,
+                parent: None,
+                exports: vec![],
+                routing: None,
+            })
+        }
+    }
+
+    fn empty_alloc_spec() -> AllocationSpec {
+        AllocationSpec::requestor_only(Requestor::kind_only("github-pr"))
+    }
+
+    #[test]
+    fn in_namespace_on_process_stamps_borrowed_str() {
+        let p = Process::new("api", empty_process_spec()).in_namespace("prod");
+        assert_eq!(p.metadata.namespace.as_deref(), Some("prod"));
+    }
+
+    #[test]
+    fn in_namespace_on_process_stamps_owned_string() {
+        let ns: String = "prod".into();
+        let p = Process::new("api", empty_process_spec()).in_namespace(ns);
+        assert_eq!(p.metadata.namespace.as_deref(), Some("prod"));
+    }
+
+    #[test]
+    fn in_namespace_on_process_stamps_string_ref() {
+        let ns: String = "prod".into();
+        let p = Process::new("api", empty_process_spec()).in_namespace(&ns);
+        assert_eq!(p.metadata.namespace.as_deref(), Some("prod"));
+    }
+
+    #[test]
+    fn in_namespace_on_ephemeral_pool_stamps_borrowed_str() {
+        let p = EphemeralPool::new("pool-1", empty_pool_spec()).in_namespace("pools");
+        assert_eq!(p.metadata.namespace.as_deref(), Some("pools"));
+    }
+
+    #[test]
+    fn in_namespace_on_ephemeral_allocation_stamps_borrowed_str() {
+        let a = EphemeralAllocation::new("alloc-1", empty_alloc_spec()).in_namespace("pools");
+        assert_eq!(a.metadata.namespace.as_deref(), Some("pools"));
+    }
+
+    #[test]
+    fn in_namespace_on_configmap_via_blanket_stamps_ns() {
+        let cm = ConfigMap {
+            metadata: ObjectMeta {
+                name: Some("cm-1".into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let cm = cm.in_namespace("demo");
+        assert_eq!(cm.metadata.namespace.as_deref(), Some("demo"));
+    }
+
+    #[test]
+    fn in_namespace_second_call_overwrites_first() {
+        let p = Process::new("api", empty_process_spec())
+            .in_namespace("staging")
+            .in_namespace("prod");
+        assert_eq!(p.metadata.namespace.as_deref(), Some("prod"));
+    }
+
+    #[test]
+    fn in_namespace_preserves_name_and_spec_untouched() {
+        // Byte-identical parity with the pre-lift two-line pattern:
+        // only `metadata.namespace` moves; `metadata.name` + `spec`
+        // stay at the values the derive-supplied `::new` stamped.
+        // Serialize both `spec` sides through serde_json so we can
+        // pin equality without requiring `PartialEq` on `ProcessSpec`.
+        let p = Process::new("api", empty_process_spec()).in_namespace("prod");
+        assert_eq!(p.metadata.name.as_deref(), Some("api"));
+        assert_eq!(p.metadata.namespace.as_deref(), Some("prod"));
+        let expected = serde_json::to_value(empty_process_spec()).unwrap();
+        let actual = serde_json::to_value(&p.spec).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn pool_new_in_forwarder_matches_trait_form() {
+        // Cross-composer coherence witness — the per-CRD
+        // `EphemeralPool::new_in` forwarder must produce a value
+        // structurally identical to what `Process::new(...).in_namespace(...)`
+        // does on the same axis. Serialize both sides through
+        // serde_json so any drift between the forwarding form and a
+        // direct trait-call materializes at this pin.
+        let via_new_in = EphemeralPool::new_in("pool-x", "pools", empty_pool_spec());
+        let via_trait = EphemeralPool::new("pool-x", empty_pool_spec()).in_namespace("pools");
+        assert_eq!(
+            serde_json::to_value(&via_new_in).unwrap(),
+            serde_json::to_value(&via_trait).unwrap(),
+        );
+    }
+
+    #[test]
+    fn allocation_new_in_forwarder_matches_trait_form() {
+        let via_new_in = EphemeralAllocation::new_in("alloc-x", "pools", empty_alloc_spec());
+        let via_trait =
+            EphemeralAllocation::new("alloc-x", empty_alloc_spec()).in_namespace("pools");
+        assert_eq!(
+            serde_json::to_value(&via_new_in).unwrap(),
+            serde_json::to_value(&via_trait).unwrap(),
         );
     }
 }

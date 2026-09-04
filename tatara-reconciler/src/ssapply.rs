@@ -5,7 +5,7 @@
 //! are unit-tested; the `apply_owned`/`fetch` entry points require a cluster.
 
 use anyhow::{anyhow, Result};
-use kube::api::{ApiResource, DynamicObject, Patch, PatchParams};
+use kube::api::{ApiResource, DynamicObject, PatchParams};
 use kube::{Api, Client};
 use serde_json::{json, Value};
 
@@ -674,8 +674,20 @@ pub async fn apply_owned(
     let obj: DynamicObject = serde_json::from_value(resource)?;
     let api: Api<DynamicObject> = Api::namespaced_with(client, namespace, &ar);
 
-    let pp = apply_patch_params();
-    api.patch(&coords.name, &pp, &Patch::Apply(&obj))
+    // SSA-side wire dispatch rides the substrate primitive
+    // `tatara_process::patch::apply` — pre-lift this was a hand-
+    // authored 2-link `let pp = apply_patch_params();
+    // api.patch(&coords.name, &pp, &Patch::Apply(&obj)).await` chain,
+    // one of THREE workspace-wide restatements past the ★★ PRIME-
+    // DIRECTIVE ≥ 2 duplication threshold (peers at
+    // `phase_machine::transition_to_releasing` feeding the same
+    // `FIELD_MANAGER` const, and `tatara-export-worker::main::
+    // write_receipt` feeding a `"tatara-export-worker"` literal).
+    // Post-lift the primary-resource SSA apply posture lives at ONE
+    // substrate owner (sibling to `tatara_process::patch::merge` on
+    // the wire-endpoint axis and to `apply_patch_params` on the
+    // wire-params sub-axis).
+    tatara_process::patch::apply(&api, &coords.name, FIELD_MANAGER, &obj)
         .await
         .map_err(|e| anyhow!("ssapply {}/{}: {e}", coords.kind, coords.name))?;
     Ok(())

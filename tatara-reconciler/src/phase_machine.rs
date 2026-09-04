@@ -998,24 +998,20 @@ async fn transition_to_releasing(
             }
         }
     });
-    // SSA `PatchParams` rides through the ONE substrate primitive
-    // `ssapply::apply_patch_params` — pre-lift this slot was a
-    // hand-authored `PatchParams::apply("tatara-reconciler").force()`
-    // chain that spelled the field-manager string as a literal and
-    // silently bypassed the `ssapply::FIELD_MANAGER` const, one of
-    // THREE workspace-wide restatements past the ★★ PRIME-DIRECTIVE
-    // ≥ 2 duplication threshold (peers at `ssapply::apply_owned` +
-    // `table_controller::reconcile`). Post-lift a rename of
-    // `FIELD_MANAGER` propagates through every SSA writer
-    // mechanically — the hand-authored literal cannot reach the wire.
-    let pp = ssapply::apply_patch_params();
-    api.patch(
-        name,
-        &pp,
-        &kube::api::Patch::Apply::<serde_json::Value>(annotation_patch),
-    )
-    .await
-    .map_err(|e| anyhow!("annotate released-from: {e}"))?;
+    // SSA-side wire dispatch rides the substrate primitive
+    // `tatara_process::patch::apply` — pre-lift this was a hand-
+    // authored 2-link `let pp = ssapply::apply_patch_params();
+    // api.patch(name, &pp, &Patch::Apply(&annotation_patch)).await`
+    // chain, one of THREE workspace-wide restatements past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold (peers at
+    // `ssapply::apply_owned` + `tatara-export-worker::main::
+    // write_receipt`). Post-lift the primary-resource SSA apply
+    // posture lives at ONE substrate owner; the `FIELD_MANAGER`
+    // const is passed through the substrate primitive's field-
+    // manager slot so a rename propagates mechanically.
+    tatara_process::patch::apply(&api, name, ssapply::FIELD_MANAGER, &annotation_patch)
+        .await
+        .map_err(|e| anyhow!("annotate released-from: {e}"))?;
 
     // 2. Patch phase=Releasing with the operator-visible reason.
     patch::patch_process_status(

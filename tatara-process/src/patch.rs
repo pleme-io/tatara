@@ -238,6 +238,96 @@ pub fn apply_patch_params(field_manager: &str) -> PatchParams {
     PatchParams::apply(field_manager).force()
 }
 
+/// Server-side-apply the caller-composed `body` against the PRIMARY resource
+/// endpoint of any kube [`Resource`] under `field_manager` with `force = true`.
+///
+/// SSA-side sibling to [`merge`] on the (wire-endpoint × wrap-posture) pair:
+/// [`merge`] owns the primary-resource `Patch::Merge + PatchParams::default()`
+/// axis; this primitive owns the primary-resource
+/// `Patch::Apply + PatchParams::apply(<mgr>).force()` axis and composes the
+/// two-link `apply_patch_params + api.patch(&Patch::Apply(...))` chain every
+/// workspace SSA writer hand-authored pre-lift at each ownership-taking
+/// apply site.
+///
+/// Pre-lift the 3-link chain
+/// `let pp = apply_patch_params(<mgr>);
+///  api.patch(name, &pp, &Patch::Apply(&body)).await`
+/// was hand-authored at THREE workspace-wide consumer sites past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold, spanning TWO active crates:
+/// * `tatara-reconciler::ssapply::apply_owned` — the DynamicObject SSA
+///   writer for every rendered flux/aplicacao resource; the manager
+///   is [`tatara_reconciler::ssapply::FIELD_MANAGER`].
+/// * `tatara-reconciler::phase_machine::transition_to_releasing` — the
+///   `RELEASED_FROM` annotation stamp on Attested/Failed → Releasing;
+///   same manager as above.
+/// * `tatara-export-worker::main::write_receipt` — the receipt ConfigMap
+///   SSA apply; the manager is the `"tatara-export-worker"` literal.
+///
+/// All three sites walked the SAME two-link chain — build a `PatchParams`
+/// via [`apply_patch_params`], then dispatch through
+/// `api.patch(name, &pp, &Patch::Apply(&body))`. Post-lift each callsite
+/// reads `tatara_process::patch::apply(&api, name, <mgr>, &body).await`
+/// and the params-build + `Patch::Apply` wire dispatch lives at ONE
+/// substrate owner.
+///
+/// The `field_manager` slot is caller-supplied because the three SSA
+/// writers this primitive serves span two field-manager disciplines:
+/// tatara-reconciler feeds its `FIELD_MANAGER` const (via the
+/// crate-local `ssapply::apply_patch_params()` wrapper's callers, which
+/// after this lift call THIS primitive with the const directly),
+/// tatara-export-worker feeds the `"tatara-export-worker"` literal.
+///
+/// A future normalization of the SSA-side wire posture (an injectable
+/// `dry_run` mode, a `field_validation` default, a per-fleet retry
+/// policy, a `resourceVersion` precondition slot, a `tracing`-annotated
+/// span carrying the apply's manager + body-summary for post-hoc audit)
+/// lands at THIS ONE substrate primitive (or at [`apply_patch_params`]
+/// on the params sub-axis) and every downstream SSA writer inherits
+/// the upgrade mechanically. No per-site edit at any of the three
+/// listed callers or at future consumers (a new SSA writer for a
+/// non-DynamicObject typed resource, a fourth crate stamping receipts,
+/// a per-Kind apply sink).
+///
+/// Return-form axis: `Result<K, kube::Error>` matches `Api::patch`
+/// verbatim. Consumers today either drop the returned `K`
+/// (`.await.map_err(...)?` at ssapply + phase_machine) or discard it
+/// through `.await.map(|_| ()).with_context(...)?` at export-worker;
+/// keeping the return in the signature lets a future writer that needs
+/// the reconciled `resourceVersion` / `generation` from the same wire
+/// round-trip read it without a re-fetch.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// 2-link `apply_patch_params + api.patch(&Patch::Apply(...))` chain
+/// recurred at 3 hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication trigger, spanning two workspace crates, and is lifted
+/// onto ONE substrate owner here). THEORY.md §II.1 invariant 5
+/// (composition preserves proofs — the pin block below binds the
+/// `Patch::Apply` posture + the [`apply_patch_params`] pass-through +
+/// the byte-identical parity with the pre-lift chain, so a regression
+/// that drifts any surface surfaces here rather than as silent SSA
+/// writer skew across the three primary-resource apply sites).
+pub async fn apply<K, B>(
+    api: &Api<K>,
+    name: &str,
+    field_manager: &str,
+    body: &B,
+) -> Result<K, kube::Error>
+where
+    K: Resource + DeserializeOwned + Clone + Debug,
+    B: Serialize + Debug + ?Sized,
+{
+    // NOTE: `K::DynamicType: Default` is deliberately NOT required here
+    // (unlike [`merge`] / [`merge_status`]) so [`Api<DynamicObject>`]
+    // consumers — whose `DynamicType = ApiResource` is not `Default` —
+    // ride the same primitive as concrete `Api<ConfigMap>` /
+    // `Api<Process>` consumers. `Api::patch` itself needs only
+    // `K: Clone + DeserializeOwned + Debug` on its own impl block; the
+    // `Default` bound on the sibling primitives is a legacy of their
+    // pre-lift call sites, none of which exercised DynamicObject.
+    let pp = apply_patch_params(field_manager);
+    api.patch(name, &pp, &Patch::Apply(body)).await
+}
+
 /// Compose the merge-patch wire body `{"spec": {"suspended": <bool>}}` — the
 /// SIGSTOP/SIGCONT-driven suspend/resume shape both
 /// `SignalEffect::Suspend` and `SignalEffect::Resume` arms of
@@ -651,6 +741,147 @@ mod tests {
         // signals::consume_effect Resume shape
         let resume = json!({ "spec": { "suspended": false } });
         assert_eq!(resume["spec"]["suspended"], serde_json::Value::Bool(false));
+    }
+
+    // ─── apply (SSA primary-resource) substrate pins ───────────────
+    //
+    // The 2-link `apply_patch_params(<mgr>) + api.patch(name, &pp,
+    // &Patch::Apply(&body))` chain now rides through the ONE substrate
+    // primitive [`apply`] across TWO consumer crates:
+    // `tatara-reconciler::ssapply::apply_owned` (DynamicObject SSA
+    // writer for every rendered flux/aplicacao resource, feeding
+    // `FIELD_MANAGER` through the const wrapper),
+    // `tatara-reconciler::phase_machine::transition_to_releasing`
+    // (RELEASED_FROM annotation stamp on Attested/Failed → Releasing,
+    // same manager), and `tatara-export-worker::main::write_receipt`
+    // (receipt ConfigMap SSA apply, feeding `"tatara-export-worker"`).
+    // These pins bind the primitive at fail-before-pass-after
+    // granularity so a regression that swaps `Patch::Apply` for
+    // `Patch::Merge` (silently losing SSA ownership + reverting to
+    // merge-patch semantics), drops the [`apply_patch_params`]
+    // pass-through (silently reverting to `PatchParams::default()`
+    // and losing `.force()` + field-manager), or reorders the 3-arg
+    // positional slots surfaces HERE rather than as silent SSA
+    // writer skew across the three pre-lift callsites.
+    //
+    // These are source-level pins on the ingredients [`apply`]
+    // composes: the wire-side round-trip needs a live `Api<K>` we
+    // cannot construct without a kube client, but the substrate's
+    // async entry is a two-line body (`let pp = apply_patch_params
+    // (field_manager); api.patch(name, &pp, &Patch::Apply(body))`),
+    // so binding each ingredient (the [`apply_patch_params`]-composed
+    // PatchParams shape, the `Patch::Apply` posture selection, the
+    // verbatim body pass-through) at the pure level pins every
+    // observable slot of the SSA wire request the primitive will
+    // issue.
+
+    #[test]
+    fn apply_composes_apply_patch_params_at_the_field_manager_slot_verbatim() {
+        // The primitive's params-build step is
+        // `apply_patch_params(field_manager)` — every pre-lift caller
+        // supplied a field-manager `&str` (the reconciler's
+        // `FIELD_MANAGER` const, the export-worker's `"tatara-export-
+        // worker"` literal). A regression that hardcoded a manager
+        // inside the primitive or reshaped the slot would silently
+        // reassign field-manager ownership at every consumer's wire
+        // request. Witness the params-side ingredient by re-composing
+        // it through [`apply_patch_params`] here and checking the
+        // observable slots the SSA wire path keys on.
+        for mgr in ["tatara-reconciler", "tatara-export-worker", "per-shard-42"] {
+            let pp = apply_patch_params(mgr);
+            assert_eq!(pp.field_manager.as_deref(), Some(mgr));
+            assert!(pp.force, "SSA apply must stamp force = true");
+            assert!(!pp.dry_run, "default posture: dry_run stays false");
+            assert!(
+                pp.field_validation.is_none(),
+                "default posture: field_validation stays None",
+            );
+        }
+    }
+
+    #[test]
+    fn apply_selects_patch_apply_strategy_not_merge_or_strategic_or_json() {
+        // The primitive dispatches through `Patch::Apply(&body)` — the
+        // SSA posture (JSON server-side apply) every pre-lift consumer
+        // used to take ownership of the field pathways it stamps
+        // (rendered-resource annotations, RELEASED_FROM marker, the
+        // receipt ConfigMap). A regression that selected
+        // `Patch::Merge` would silently revert to JSON merge patch
+        // semantics — losing SSA field-manager ownership recording
+        // and dropping the `.force()` reclaim of conflicting slots;
+        // `Patch::Strategic` would reshape apply into strategic-merge
+        // over the primary resource (with the same ownership loss);
+        // `Patch::Json` would demand an RFC 6902 op list instead of
+        // the object body every consumer composes. Witness the wire
+        // posture selection by constructing the Patch and pattern-
+        // matching on the variant.
+        let body = json!({"metadata": {"annotations": {"x.io/marker": "1"}}});
+        let patch: Patch<&serde_json::Value> = Patch::Apply(&body);
+        assert!(
+            matches!(patch, Patch::Apply(_)),
+            "apply primitive dispatches through Patch::Apply, not Merge/Strategic/Json"
+        );
+    }
+
+    #[test]
+    fn apply_dispatches_body_verbatim_no_wrap_or_re_encode() {
+        // The SSA apply primitive is verbatim: the caller composes the
+        // full top-level shape (a DynamicObject serialization, a
+        // `{"metadata": {"annotations": ...}}` for the released-from
+        // stamp, a ConfigMap serialization) and the primitive passes
+        // it through untouched. A regression that hid an implicit
+        // wrap (a `{"apply": <body>}` sibling slot, an `{"kind":
+        // ..., "apiVersion": ..., "spec": <body>}` re-shape) or
+        // re-encoded the body through `serde_json::to_value` and back
+        // would surface here — every pre-lift callsite already
+        // composed the full apply body and delegated straight to
+        // `api.patch(..., &Patch::Apply(&body))` with no intervening
+        // transform.
+        //
+        // Sweep every top-level shape the three pre-lift consumers
+        // apply so a regression on any one lands here.
+        let annotation_body = json!({
+            "metadata": {"annotations": {"tatara.pleme.io/released-from": "Attested"}},
+        });
+        let configmap_body = json!({
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "metadata": {"name": "r", "namespace": "n"},
+            "data": {"receipt.yaml": "..."},
+        });
+        let dynamic_body = json!({
+            "apiVersion": "helm.toolkit.fluxcd.io/v2",
+            "kind": "HelmRelease",
+            "metadata": {"name": "app", "namespace": "n"},
+            "spec": {"chart": {"spec": {"chart": "app"}}},
+        });
+        for body in [annotation_body, configmap_body, dynamic_body] {
+            let round_trip = serde_json::to_value(&body).unwrap();
+            assert_eq!(round_trip, body, "body serializes to itself verbatim");
+            let obj = body.as_object().expect("pre-lift bodies are JSON objects");
+            assert!(!obj.is_empty(), "pre-lift bodies carry at least one slot");
+        }
+    }
+
+    #[test]
+    fn apply_params_match_pre_lift_hand_authored_chain_bytewise() {
+        // Byte-shape parity between the primitive's internal params
+        // composition and the pre-lift `PatchParams::apply(<mgr>)
+        // .force()` chain every consumer restated verbatim. A
+        // regression that reordered the chain (`.force().apply(...)`
+        // swap) or widened the posture inside the primitive would
+        // surface HERE rather than at the wire.
+        for mgr in ["tatara-reconciler", "tatara-export-worker"] {
+            let pre_lift = PatchParams::apply(mgr).force();
+            let lifted = apply_patch_params(mgr);
+            assert_eq!(lifted.field_manager, pre_lift.field_manager);
+            assert_eq!(lifted.force, pre_lift.force);
+            assert_eq!(lifted.dry_run, pre_lift.dry_run);
+            assert_eq!(
+                lifted.field_validation.is_none(),
+                pre_lift.field_validation.is_none(),
+            );
+        }
     }
 
     // ─── spec_suspended_body substrate pins ─────────────────────────

@@ -21,7 +21,6 @@
 
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
-use kube::api::Patch;
 use kube::Client;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -395,20 +394,19 @@ async fn write_receipt(
     // binder covers the Api<ConfigMap> handle-side; this composer
     // covers the resource-body side).
     let cm = tatara_process::configmap::with_data(configmap, namespace, data, None);
-    // SSA-side wire-posture rides through the substrate primitive
-    // `tatara_process::patch::apply_patch_params` — pre-lift this was
-    // a hand-authored 2-link `PatchParams::apply("tatara-export-
-    // worker").force()` chain, one of THREE workspace-wide sites past
-    // the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold (peers at
-    // `tatara-pool-reconciler::controller_allocation`'s bind + release
-    // arms feeding `ctx.config.field_manager`, and the reconciler-
-    // crate-local wrapper `tatara_reconciler::ssapply::
-    // apply_patch_params` feeding the `FIELD_MANAGER` const). Post-
-    // lift every SSA writer across three consumer crates shares ONE
-    // substrate owner for the `PatchParams::apply(<mgr>).force()`
-    // shape.
-    let pp = tatara_process::patch::apply_patch_params("tatara-export-worker");
-    api.patch(configmap, &pp, &Patch::Apply(&cm))
+    // SSA-side wire dispatch rides the substrate primitive
+    // `tatara_process::patch::apply` — pre-lift this was a hand-
+    // authored 2-link `let pp = apply_patch_params("tatara-export-
+    // worker"); api.patch(configmap, &pp, &Patch::Apply(&cm)).await`
+    // chain, one of THREE workspace-wide restatements past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold (peers at
+    // `tatara-reconciler::ssapply::apply_owned` +
+    // `tatara-reconciler::phase_machine::transition_to_releasing`,
+    // both feeding the reconciler's `FIELD_MANAGER` const). Post-
+    // lift every SSA writer across two active workspace crates
+    // shares ONE substrate owner for the `apply_patch_params(<mgr>)
+    // + api.patch(&Patch::Apply(...))` shape.
+    tatara_process::patch::apply(&api, configmap, "tatara-export-worker", &cm)
         .await
         .map(|_| ())
         .with_context(|| format!("apply configmap {namespace}/{configmap}"))?;

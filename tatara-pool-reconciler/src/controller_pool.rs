@@ -24,7 +24,7 @@ use tatara_process::prelude::{NamespacedApiCoordinates, Process, ProcessSpec};
 use crate::context::PoolContext;
 use crate::desired::{decide_pool_convergence, ConvergenceAction, PoolMemberSnapshot};
 use crate::naming::member_process_name;
-use crate::pool_decide::{decide_pool_reconcile, PoolDecision};
+use crate::pool_decide::{decide_pool_reconcile_now, PoolDecision};
 
 const POOL_FINALIZER: &str = "tatara.pleme.io/pool-finalizer";
 
@@ -297,7 +297,20 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
     }
 
     // 2b. Legacy allocation-driven decision (desired == 0 path).
-    let decision = decide_pool_reconcile(&pool, &members, Utc::now());
+    //
+    // Rides the ONE substrate composer
+    // [`crate::pool_decide::decide_pool_reconcile_now`] — collapses the
+    // pre-lift 3-arg `decide_pool_reconcile(&pool, &members, Utc::now())`
+    // chain (one production status-tick here + ten unit tests in
+    // `pool_decide::tests` that walked the SAME `Utc::now()` third-arg
+    // shape through a local `fn now()` shim) onto the crate-wide typed
+    // wall-clock-anchored peer. Sibling of
+    // `tatara_process::pool::PoolStatus::observed_now`,
+    // `tatara_process::allocation::AllocationStatus::transition_now`,
+    // and `tatara_process::lifetime_clock::evaluate_now` on the
+    // `(typed pure-fn, wall-clock-anchored peer)` axis for the
+    // workspace's timed-decision family.
+    let decision = decide_pool_reconcile_now(&pool, &members);
 
     info!(
         namespace = %ns,

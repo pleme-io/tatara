@@ -169,6 +169,73 @@ pub fn decide_pool_reconcile(
     PoolDecision::NoOp
 }
 
+/// Wall-clock-anchored peer of [`decide_pool_reconcile`] — the ONE
+/// substrate owner of the `decide_pool_reconcile(<pool>, <members>,
+/// chrono::Utc::now())` shape every production status-tick + every
+/// clock-defaulted unit test walked pre-lift.
+///
+/// # Pre-lift shape + migration rationale
+///
+/// The 3-arg [`decide_pool_reconcile`] takes a `now: DateTime<Utc>`
+/// tick-anchor that the (7)-rule ladder threads down to the free-TTL
+/// staleness gate; every production reconciler tick reads a fresh
+/// wall-clock instant at the callsite and every clock-defaulted test
+/// helper (the local `now()` shim that returned `Utc::now()`) fed the
+/// SAME instant in. Pre-lift 11 sites (1 production status-tick at
+/// [`crate::controller_pool::reconcile_inner`] + 10 unit tests in
+/// this module's own suite) walked the SAME 3-arg call with the SAME
+/// `chrono::Utc::now()` third argument. Post-lift they share ONE
+/// substrate owner; a future clock swap (a monotonic clock cross-
+/// check, a per-reconciler injected time source, a test-only override
+/// via feature flag) lands at ONE substrate function and every pool-
+/// reconcile status-tick + every clock-defaulted test inherits the
+/// upgrade mechanically.
+///
+/// The 3-arg [`decide_pool_reconcile`] peer stays load-bearing for
+/// test callers that drive the clock deterministically (any test that
+/// pins a specific instant relative to a member's `entered_state_at`
+/// still reaches the 3-arg surface with an explicit anchor) — this
+/// peer is for the (production-tick + clock-defaulted-test) family
+/// where the wall clock is the correct anchor.
+///
+/// Sibling of [`tatara_process::allocation::AllocationStatus::
+/// transition_now`], [`tatara_process::pool::PoolStatus::observed_now`],
+/// and [`tatara_process::lifetime_clock::evaluate_now`] on the
+/// `(typed pure-fn, wall-clock-anchored peer)` axis for the
+/// `tatara-pool-reconciler` decision family — each primitive owns the
+/// "read the wall clock at tick-time" projection at ONE substrate
+/// composer so the workspace's timed-decision family stays uniform
+/// across every `<CRD>Status` composer + every `decide_<crd>_<verb>`
+/// entry point.
+///
+/// # Invariants
+///
+/// - **Same shape:** returns the SAME [`PoolDecision`] the 3-arg
+///   [`decide_pool_reconcile`] returns when passed
+///   `chrono::Utc::now()` as the third argument. This is a
+///   delegation, not a re-implementation — the `_now_matches_utc_
+///   now_stamped_base` parity test in this module's own suite
+///   guards the equivalence.
+/// - **Wall-clock read once:** `Utc::now()` is called exactly ONCE
+///   per invocation, at the primitive's body, so a caller that
+///   composes two decisions back-to-back still sees monotonic `now`
+///   reads (each call reads a fresh instant, not a cached one) —
+///   matches the pre-lift shape where each of the 11 hand-authored
+///   sites computed its own `chrono::Utc::now()` at its own line.
+///
+/// Theory anchor: `theory/THEORY.md` §VI.1 (generation over
+/// composition — the 3-arg call with `chrono::Utc::now()` as the
+/// third argument recurred at 11 hand-authored sites past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication trigger, lifted onto the ONE
+/// crate-wide substrate owner here). `theory/THEORY.md` §II.1
+/// invariant 5 (composition preserves proofs — the wall-clock
+/// projection lives at ONE site so a future clock swap reaches
+/// every pool-reconcile consumer through one edit).
+#[must_use]
+pub fn decide_pool_reconcile_now(pool: &EphemeralPool, members: &[PoolMember]) -> PoolDecision {
+    decide_pool_reconcile(pool, members, Utc::now())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,14 +295,16 @@ mod tests {
         PoolMember::unallocated(name, state, tatara_process::time::seconds_ago(age_secs))
     }
 
-    fn now() -> DateTime<Utc> {
-        Utc::now()
-    }
+    // The local `fn now() -> DateTime<Utc> { Utc::now() }` shim that
+    // pre-lift wrapped every clock-defaulted test call has been folded
+    // into the substrate peer [`decide_pool_reconcile_now`] — every
+    // site below reaches the wall-clock projection through the typed
+    // owner rather than through an ad-hoc test-side helper.
 
     #[test]
     fn empty_pool_below_desired_spawns_to_desired() {
         let p = pool(3, 0, 0);
-        let d = decide_pool_reconcile(&p, &[], now());
+        let d = decide_pool_reconcile_now(&p, &[]);
         assert_eq!(d, PoolDecision::Spawn { count: 3 });
     }
 
@@ -246,10 +315,7 @@ mod tests {
             member("a", MemberState::Free, 60),
             member("b", MemberState::Free, 60),
         ];
-        assert_eq!(
-            decide_pool_reconcile(&p, &members, now()),
-            PoolDecision::NoOp
-        );
+        assert_eq!(decide_pool_reconcile_now(&p, &members), PoolDecision::NoOp);
     }
 
     #[test]
@@ -261,7 +327,7 @@ mod tests {
             member("c", MemberState::Free, 60),
         ];
         assert_eq!(
-            decide_pool_reconcile(&p, &members, now()),
+            decide_pool_reconcile_now(&p, &members),
             PoolDecision::ReapExcess { count: 2 }
         );
     }
@@ -273,7 +339,7 @@ mod tests {
         let p = pool(1, 0, 0);
         let members = vec![member("a", MemberState::Allocated, 60)];
         assert_eq!(
-            decide_pool_reconcile(&p, &members, now()),
+            decide_pool_reconcile_now(&p, &members),
             PoolDecision::Spawn { count: 1 }
         );
     }
@@ -285,10 +351,7 @@ mod tests {
             member("a", MemberState::Spawning, 10),
             member("b", MemberState::Free, 60),
         ];
-        assert_eq!(
-            decide_pool_reconcile(&p, &members, now()),
-            PoolDecision::NoOp
-        );
+        assert_eq!(decide_pool_reconcile_now(&p, &members), PoolDecision::NoOp);
     }
 
     #[test]
@@ -299,7 +362,7 @@ mod tests {
             member("bad", MemberState::Failed, 60),
             member("c", MemberState::Spawning, 10),
         ];
-        let d = decide_pool_reconcile(&p, &members, now());
+        let d = decide_pool_reconcile_now(&p, &members);
         match d {
             PoolDecision::ReplaceMembers { process_names } => {
                 assert_eq!(process_names, vec!["bad".to_string()]);
@@ -313,7 +376,7 @@ mod tests {
         let mut p = pool(1, 0, 0);
         p.spec.free_ttl = "10s".into();
         let members = vec![member("old", MemberState::Free, 60)];
-        let d = decide_pool_reconcile(&p, &members, now());
+        let d = decide_pool_reconcile_now(&p, &members);
         assert!(matches!(d, PoolDecision::ReplaceMembers { .. }));
     }
 
@@ -322,7 +385,7 @@ mod tests {
         // desired=0, min=2, allocated=1 → spawn 1 to reach min=2.
         let p = pool(0, 2, 0);
         let members = vec![member("a", MemberState::Allocated, 60)];
-        let d = decide_pool_reconcile(&p, &members, now());
+        let d = decide_pool_reconcile_now(&p, &members);
         assert_eq!(d, PoolDecision::Spawn { count: 1 });
     }
 
@@ -335,7 +398,7 @@ mod tests {
             member("b", MemberState::Free, 60),
             member("c", MemberState::Free, 60),
         ];
-        let d = decide_pool_reconcile(&p, &members, now());
+        let d = decide_pool_reconcile_now(&p, &members);
         assert_eq!(d, PoolDecision::ReapExcess { count: 1 });
     }
 
@@ -348,9 +411,76 @@ mod tests {
         // for the `Some(Time(Utc::now()))` wire shape.
         p.metadata.deletion_timestamp = tatara_process::time::tombstone_now();
         let members = vec![member("a", MemberState::Free, 60)];
-        assert_eq!(
-            decide_pool_reconcile(&p, &members, now()),
-            PoolDecision::Drain
-        );
+        assert_eq!(decide_pool_reconcile_now(&p, &members), PoolDecision::Drain);
+    }
+
+    /// Parity guard: the wall-clock-anchored peer
+    /// [`decide_pool_reconcile_now`] MUST return the SAME
+    /// [`PoolDecision`] the 3-arg [`decide_pool_reconcile`] returns
+    /// when passed `chrono::Utc::now()` as the third argument. A
+    /// regression that reshaped one surface without the other (a
+    /// clock-swap that touched only one, a rule-priority reordering
+    /// applied only to the `_now` peer, a rounding step introduced
+    /// on the peer's own tick anchor) would silently drift the ONE
+    /// substrate owner from its clock-injectable base — the parity
+    /// test forces both surfaces to walk the SAME rule ladder.
+    ///
+    /// Fires the peer + the base at wall clocks that differ only by
+    /// the microseconds between the two calls; the decision family
+    /// is stable across sub-second drift so both MUST agree even
+    /// though `Utc::now()` reads twice.
+    #[test]
+    fn decide_pool_reconcile_now_matches_utc_now_stamped_base_call() {
+        // Rules (2) failed-members-replace + (5) max-cap reap +
+        // (6) free-below-desired spawn + (8) NoOp — a spread across
+        // the ladder's priority tiers so the parity test exercises
+        // every non-time-sensitive arm, not just one.
+        let cases: Vec<(EphemeralPool, Vec<PoolMember>, PoolDecision)> = vec![
+            // (2) Failed short-circuit.
+            (
+                pool(3, 0, 0),
+                vec![
+                    member("a", MemberState::Free, 60),
+                    member("bad", MemberState::Failed, 60),
+                ],
+                PoolDecision::ReplaceMembers {
+                    process_names: vec!["bad".to_string()],
+                },
+            ),
+            // (5) Max-size cap reap.
+            (
+                pool(5, 0, 2),
+                vec![
+                    member("a", MemberState::Allocated, 60),
+                    member("b", MemberState::Free, 60),
+                    member("c", MemberState::Free, 60),
+                ],
+                PoolDecision::ReapExcess { count: 1 },
+            ),
+            // (6) Below desired → spawn.
+            (pool(3, 0, 0), vec![], PoolDecision::Spawn { count: 3 }),
+            // (8) NoOp — at desired with free members.
+            (
+                pool(2, 0, 0),
+                vec![
+                    member("x", MemberState::Free, 60),
+                    member("y", MemberState::Free, 60),
+                ],
+                PoolDecision::NoOp,
+            ),
+        ];
+
+        for (p, members, expected) in cases {
+            let via_peer = decide_pool_reconcile_now(&p, &members);
+            let via_base = decide_pool_reconcile(&p, &members, Utc::now());
+            assert_eq!(
+                via_peer, expected,
+                "peer disagreed with expectation on {expected:?}",
+            );
+            assert_eq!(
+                via_peer, via_base,
+                "peer/base drift on {expected:?}: peer={via_peer:?} base={via_base:?}",
+            );
+        }
     }
 }

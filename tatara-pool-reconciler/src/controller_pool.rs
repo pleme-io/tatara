@@ -712,14 +712,18 @@ mod tests {
 
     #[test]
     fn process_to_member_state_attested_permanent_is_free() {
-        // Routes through the ONE substrate composer
+        // Spec composed through the ONE substrate composer
         // `ProcessSpec::gate_compute_defaults` — one of EIGHT pre-lift
         // exact-match sites past the ★★ PRIME-DIRECTIVE ≥ 2 threshold.
+        // Status observed through the peer substrate composer
+        // [`tatara_process::crd::ProcessStatus::at_phase`] — one of TWO
+        // pre-lift exact-match `ProcessStatus { phase, ..Default }`
+        // fixture sites past the same threshold, both inside this
+        // module.
         let mut p = Process::new("x", ProcessSpec::gate_compute_defaults());
-        p.status = Some(tatara_process::crd::ProcessStatus {
-            phase: ProcessPhase::Attested,
-            ..Default::default()
-        });
+        p.status = Some(tatara_process::crd::ProcessStatus::at_phase(
+            ProcessPhase::Attested,
+        ));
         assert_eq!(process_to_member_state(&p), MemberState::Free);
     }
 
@@ -736,10 +740,12 @@ mod tests {
             exports: vec![],
         });
         let mut p = Process::new("y", spec);
-        p.status = Some(tatara_process::crd::ProcessStatus {
-            phase: ProcessPhase::Attested,
-            ..Default::default()
-        });
+        // Status observed through the peer substrate composer
+        // [`tatara_process::crd::ProcessStatus::at_phase`] — sibling
+        // pool-reconciler pin site above.
+        p.status = Some(tatara_process::crd::ProcessStatus::at_phase(
+            ProcessPhase::Attested,
+        ));
         assert_eq!(process_to_member_state(&p), MemberState::Allocated);
     }
 

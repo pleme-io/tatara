@@ -1981,6 +1981,79 @@ pub struct ProcessStatus {
     pub exit_code: Option<i32>,
 }
 
+impl ProcessStatus {
+    /// Canonical phase-slot-only [`ProcessStatus`] fixture — a
+    /// [`ProcessPhase`] pinned at the caller-supplied variant with every
+    /// other slot parked at its [`Default`] — the workspace-baseline
+    /// status shape every pool-reconciler phase-decision fixture and
+    /// every below-controller test that "just wants a Process whose
+    /// status carries a specific `phase`, nothing else observed" hand-
+    /// authored as a 3-line `Some(ProcessStatus { phase, ..Default })`
+    /// struct-literal at scattered pin sites.
+    ///
+    /// Pre-lift the 3-line `ProcessStatus { phase: <ProcessPhase::…>,
+    /// ..Default::default() }` shape recurred at TWO hand-authored
+    /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold,
+    /// both inside `tatara-pool-reconciler::controller_pool::tests`:
+    /// * `process_to_member_state_attested_permanent_is_free` — the
+    ///   Free-arm pin that binds "a Process whose observed phase is
+    ///   Attested + whose declared `lifetime` is Permanent maps to
+    ///   `MemberState::Free`".
+    /// * `process_to_member_state_attested_ephemeral_is_allocated` —
+    ///   the Allocated-arm pin that binds the peer transition on the
+    ///   `Lifetime::Ephemeral` corner.
+    ///
+    /// Both pin sites walked the SAME 3-line shape stamping
+    /// `ProcessPhase::Attested`; the composer serves both directly and
+    /// stays parameterized on `phase` so a future pin on a peer variant
+    /// (`Running`, `Reconverging`, `Reaped`) rides the same primitive
+    /// without a new shape opening.
+    ///
+    /// Post-lift each callsite reads
+    /// `p.status = Some(ProcessStatus::at_phase(ProcessPhase::Attested));`
+    /// and the phase-slot-only status fixture lives at ONE substrate
+    /// owner. Sibling to [`ProcessSpec::gate_compute_defaults`] on the
+    /// (spec × status) construction-shape pair: that primitive owns the
+    /// FULL-spec baseline builder for every downstream `Process::new`
+    /// consumer; this primitive owns the phase-slot-observation status
+    /// builder for every downstream `p.status = Some(...)` fixture.
+    ///
+    /// A future normalization of the phase-only status shape (a
+    /// call-time `phase_since` stamp mirroring the phase-transition
+    /// writer's discipline, a `boundary` slot default overlay pinning
+    /// the phase to a matching BoundaryStatus corner, a wired-in
+    /// `identity` fixture for the phase-decision fixtures that today
+    /// leave the slot at `None`) lands at THIS ONE function and every
+    /// downstream phase-decision pin inherits the upgrade mechanically.
+    /// Directly benefits the P5 shigoto Dag refactor (any RecordingJob
+    /// test fixture stamping "a Process whose observed phase is X" rides
+    /// the same composer rather than restating the 3-line shape a third
+    /// time) and the P3 kenshi-runner library lift (any test-Job
+    /// controller that binds a phase-observation fixture on its owning
+    /// Process rides through the same composer as the pool-reconciler's
+    /// two phase-decision pins).
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the 3-line `ProcessStatus { phase, ..Default::default() }`
+    /// struct-literal recurred at 2 hand-authored sites past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication trigger inside one workspace
+    /// crate, and is lifted onto ONE substrate owner here). THEORY.md
+    /// §II.1 invariant 5 (composition preserves proofs — the pin block
+    /// binds the primitive at fail-before-pass-after granularity so a
+    /// regression that drifted the phase slot pass-through, leaked a
+    /// sibling slot away from `Default`, or hijacked the composer to
+    /// stamp a static `phase_since` on the `phase` transition surfaces
+    /// at THESE pins rather than as silent phase-decision skew across
+    /// the two pool-reconciler callsites).
+    #[must_use]
+    pub fn at_phase(phase: ProcessPhase) -> Self {
+        Self {
+            phase,
+            ..Self::default()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5636,5 +5709,178 @@ mod tests {
             serde_json::to_value(&b).unwrap(),
         );
         assert!(!std::ptr::eq(&a, &b));
+    }
+
+    // ─── ProcessStatus::at_phase substrate pins ─────────────────────
+    //
+    // The 3-line `ProcessStatus { phase: <ProcessPhase::…>, ..Default::
+    // default() }` shape now rides through the ONE substrate composer
+    // [`ProcessStatus::at_phase`] across the two pool-reconciler
+    // phase-decision pin sites (`process_to_member_state_attested_
+    // permanent_is_free`, `process_to_member_state_attested_ephemeral_
+    // is_allocated`). These pins bind the primitive at fail-before-pass-
+    // after granularity so a regression that drifted the phase slot
+    // pass-through, leaked a sibling slot away from `Default`, or
+    // hijacked the composer to stamp a static `phase_since` /
+    // `attestation` on the `phase` transition surfaces HERE rather
+    // than as silent phase-decision skew across the two pool-reconciler
+    // callsites (or across any future consumer fixture that binds a
+    // phase-observation shape).
+
+    #[test]
+    fn at_phase_binds_caller_supplied_phase_verbatim_at_the_phase_slot() {
+        // The composer's `phase` slot is the caller-supplied
+        // `ProcessPhase` verbatim — no case-fold, no substitution, no
+        // remapping to a peer variant. Sweep every variant so a
+        // regression that hijacked one arm to stamp a different variant
+        // silently would surface here (per-variant coverage matters
+        // because the pool-reconciler's `process_to_member_state`
+        // matcher already keys on `ProcessPhase::Attested` specifically,
+        // and a peer variant lift would need the pass-through to
+        // faithfully carry any of the eight variants without translation).
+        for phase in [
+            ProcessPhase::Pending,
+            ProcessPhase::Forking,
+            ProcessPhase::Execing,
+            ProcessPhase::Running,
+            ProcessPhase::Reconverging,
+            ProcessPhase::Attested,
+            ProcessPhase::Failed,
+            ProcessPhase::Exiting,
+        ] {
+            let s = ProcessStatus::at_phase(phase);
+            assert_eq!(
+                s.phase, phase,
+                "at_phase({phase:?}) must stamp the caller-supplied phase verbatim",
+            );
+        }
+    }
+
+    #[test]
+    fn at_phase_leaves_every_other_slot_at_default_no_sibling_leak() {
+        // The composer stamps ONLY the `phase` slot — every other slot
+        // (`pid`, `parent`, `children`, `identity`, `phase_since`,
+        // `attestation`, `flux_resources`, `boundary`, `compliance`,
+        // `signal_queue`, `conditions`, `message`, `exit_code`) parks at
+        // `Default`. A regression that widened the composer's stamped
+        // slot set (an auto-stamped `phase_since = Utc::now()` overlay
+        // that would break byte-identical parity with the pre-lift
+        // 3-line struct-literal, a defaulted-non-empty `flux_resources`
+        // fixture that would silently reshape every pool-reconciler
+        // phase-decision test's downstream `.flux_resources` observation)
+        // surfaces HERE at the pin block rather than as silent skew
+        // at every fixture consumer.
+        let s = ProcessStatus::at_phase(ProcessPhase::Attested);
+        assert!(s.pid.is_none(), "pid parks at Default (None)");
+        assert!(s.parent.is_none(), "parent parks at Default (None)");
+        assert!(
+            s.children.is_empty(),
+            "children parks at Default (Vec::new())"
+        );
+        assert!(s.identity.is_none(), "identity parks at Default (None)");
+        assert!(
+            s.phase_since.is_none(),
+            "phase_since parks at Default (None) — a call-time Utc::now() stamp would break \
+             byte-identical parity with the pre-lift `..Default::default()` struct-update shape",
+        );
+        assert!(
+            s.attestation.is_none(),
+            "attestation parks at Default (None)"
+        );
+        assert!(
+            s.flux_resources.is_empty(),
+            "flux_resources parks at Default (Vec::new())",
+        );
+        assert_eq!(
+            serde_json::to_value(&s.boundary).unwrap(),
+            serde_json::to_value(BoundaryStatus::default()).unwrap(),
+            "boundary parks at Default",
+        );
+        assert_eq!(
+            serde_json::to_value(&s.compliance).unwrap(),
+            serde_json::to_value(ComplianceStatus::default()).unwrap(),
+            "compliance parks at Default",
+        );
+        assert!(
+            s.signal_queue.is_empty(),
+            "signal_queue parks at Default (Vec::new())",
+        );
+        assert!(
+            s.conditions.is_empty(),
+            "conditions parks at Default (Vec::new())"
+        );
+        assert!(s.message.is_none(), "message parks at Default (None)");
+        assert!(s.exit_code.is_none(), "exit_code parks at Default (None)");
+    }
+
+    #[test]
+    fn at_phase_matches_hand_authored_pre_lift_bytewise() {
+        // Byte-identical parity pin between the substrate composer and
+        // the pre-lift 3-line `ProcessStatus { phase: <p>, ..Default::
+        // default() }` struct-literal that recurred at both pool-
+        // reconciler pin sites. Compares via `serde_json` value
+        // equality — `ProcessStatus` does not derive `PartialEq` (the
+        // typed fields it composes over do not uniformly derive it),
+        // so a serialize round-trip is the shape-equality currency the
+        // pin family already uses for status-shaped assertions in this
+        // module (see the sibling `gate_compute_defaults_matches_hand_
+        // authored_pre_lift_bytewise` pin on the spec side). A
+        // regression that reshaped the primitive would diverge from
+        // the pre-lift struct-literal HERE rather than at every
+        // downstream fixture that keys on the shape.
+        for phase in [
+            ProcessPhase::Attested,
+            ProcessPhase::Running,
+            ProcessPhase::Pending,
+        ] {
+            let composed = ProcessStatus::at_phase(phase);
+            let hand_authored = ProcessStatus {
+                phase,
+                ..Default::default()
+            };
+            assert_eq!(
+                serde_json::to_value(&composed).unwrap(),
+                serde_json::to_value(&hand_authored).unwrap(),
+                "primitive must be byte-identical to the pre-lift struct-literal for phase {phase:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn at_phase_is_call_time_construction_not_a_shared_singleton() {
+        // Two independent calls produce structurally-equal but distinct
+        // values — pins that the primitive is a plain constructor
+        // rather than a `lazy_static` clone whose in-place mutation at
+        // one consumer would silently mutate the shape at every other
+        // consumer. Mirrors the sibling
+        // `gate_compute_defaults_is_call_time_construction_not_a_shared_singleton`
+        // pin on `ProcessSpec::gate_compute_defaults`.
+        let a = ProcessStatus::at_phase(ProcessPhase::Attested);
+        let b = ProcessStatus::at_phase(ProcessPhase::Attested);
+        assert_eq!(
+            serde_json::to_value(&a).unwrap(),
+            serde_json::to_value(&b).unwrap(),
+        );
+        assert!(!std::ptr::eq(&a, &b));
+    }
+
+    #[test]
+    fn at_phase_default_variant_equals_process_status_default() {
+        // Handing the composer the `ProcessPhase::default()` variant
+        // yields a value byte-identical to `ProcessStatus::default()`
+        // itself — pins that the composer's ONLY divergence from
+        // `Default` is the caller-supplied `phase` slot, and that when
+        // the caller passes the same variant `phase` already defaults
+        // to, the composer collapses cleanly to the plain default.
+        // A regression that stamped a non-default value on any sibling
+        // slot (a runtime timestamp on `phase_since`, a synthetic
+        // `identity` seed) would break this collapse and surface HERE.
+        let default_phase = ProcessPhase::default();
+        let via_at_phase = ProcessStatus::at_phase(default_phase);
+        let via_default = ProcessStatus::default();
+        assert_eq!(
+            serde_json::to_value(&via_at_phase).unwrap(),
+            serde_json::to_value(&via_default).unwrap(),
+        );
     }
 }

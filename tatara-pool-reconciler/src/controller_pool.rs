@@ -123,35 +123,40 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
             // seeds inherit it mechanically.
             //
             // The last-transition anchor rides through the ONE
-            // substrate primitive `Process::observed_phase_since`
-            // — pre-lift this was a hand-authored 5-line
-            // `.status.as_ref().and_then(|s| s.phase_since)`
-            // chain, closing the LAST raw `.status.as_ref()`
-            // chain in this reconciler's production code on
-            // `Process`. Post-lift the chain rides ONE substrate
-            // owner symmetric to the peer `p.created_at()
-            // .unwrap_or_else(Utc::now)` seed the desired-count
-            // `PoolMemberSnapshot` builder two branches below
-            // already routes through — both timestamp-projection
-            // primitives on `Process` (metadata-timestamp
-            // `created_at` + status-timestamp
-            // `observed_phase_since`) now compose byte-uniformly
-            // at the pool reconciler's per-member row builder,
-            // with the `.unwrap_or_else(Utc::now)` sink kept at
-            // the callsite (matching every peer `observed_*`
-            // primitive's pure-projection discipline). A future
-            // normalization (a per-cluster clock-skew guard, a
-            // staleness gate that treats a `phase_since`
-            // predating a reconcile deadline as unobserved, a
-            // canonicalization that folds a suspiciously-zero
-            // slot to `None`) lands at ONE substrate site and
-            // both this per-member seed AND any future
-            // observed-transition consumer inherit the upgrade
-            // mechanically.
+            // substrate composer `Process::observed_phase_since_or`
+            // — pure wrapper over the sibling
+            // `Process::observed_phase_since` projection that folds
+            // the `.unwrap_or(fallback)` sink into ONE substrate
+            // owner. Pre-lift this was a hand-authored 2-step
+            // `.observed_phase_since().unwrap_or_else(Utc::now)`
+            // chain (with the underlying 5-line `.status.as_ref()
+            // .and_then(|s| s.phase_since)` projection ALSO
+            // hand-authored pre-lift; the projection lift closed
+            // that raw `.status.as_ref()` chain, and this composer
+            // lift closes the last `.unwrap_or_else(Utc::now)` tail
+            // on `Process` in this reconciler's production code).
+            // Symmetric to the peer `p.created_at_or(Utc::now())`
+            // seed the desired-count `PoolMemberSnapshot` builder
+            // two branches below already routes through — both
+            // timestamp-projection composers on `Process` (metadata-
+            // timestamp `created_at_or` + status-timestamp
+            // `observed_phase_since_or`) now compose byte-uniformly
+            // at the pool reconciler's per-member row builder, with
+            // the wall-clock read kept at this callsite (as
+            // `Utc::now()` passed positionally) so the composer
+            // itself stays pure, matching the discipline every peer
+            // `observed_*` accessor follows. A future normalization
+            // (a per-cluster clock-skew guard, a staleness gate that
+            // treats a `phase_since` predating a reconcile deadline
+            // as unobserved, a canonicalization that folds a
+            // suspiciously-zero slot to the fallback) lands at ONE
+            // substrate site and both this per-member seed AND any
+            // future observed-transition consumer inherit the
+            // upgrade mechanically.
             members.push(PoolMember::unallocated(
                 p.owned_name_or_empty(),
                 state,
-                p.observed_phase_since().unwrap_or_else(Utc::now),
+                p.observed_phase_since_or(Utc::now()),
             ));
             owned.push(p);
         }

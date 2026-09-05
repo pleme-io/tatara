@@ -1467,6 +1467,110 @@ impl Process {
         self.status.as_ref().and_then(|s| s.phase_since)
     }
 
+    /// Pure composer over [`Self::observed_phase_since`] that folds the
+    /// paired `.unwrap_or(fallback)` sink into ONE substrate owner — the
+    /// ONE-liner collapse of the paired
+    /// `p.observed_phase_since().unwrap_or_else(Utc::now)` incantation
+    /// the pool-reconciler consumer restated by hand pre-lift, and the
+    /// status-slot peer of the sibling [`Self::created_at_or`] composer
+    /// on the metadata-timestamp axis. The wall-clock read stays at the
+    /// callsite (as `Utc::now()` passed in positionally) so the composer
+    /// itself stays pure — matching the discipline every peer `observed_*`
+    /// / `created_at` copy-form projection follows and the explicit
+    /// warning against a substrate-injected `Utc::now()` fallback that
+    /// [`Self::observed_phase_since`]'s doc already spelled out.
+    ///
+    /// Pre-lift the paired 2-step
+    /// `.observed_phase_since().unwrap_or_else(Utc::now)` chain was hand-
+    /// authored at THREE workspace-wide sites past the ★★ PRIME-DIRECTIVE
+    /// ≥ 2 duplication threshold, all stamping the SAME wall-clock
+    /// fallback on the same missing-`phase_since` corner:
+    /// * `tatara-pool-reconciler::controller_pool::reconcile_inner` —
+    ///   the per-owned-Process `PoolMember { entered_state_at, .. }`
+    ///   seed feeding `pool_phase_from_members` +
+    ///   `apply_pool_reconcile_decision`. A freshly-forked pool member
+    ///   whose reconciler has not yet stamped a first phase-transition
+    ///   gets `Utc::now()` synthesized so the observed-transition
+    ///   anchor sorts as "just entered" rather than short-circuiting
+    ///   on the missing slot.
+    /// * `tatara-process::crd::tests::
+    ///   observed_phase_since_composes_with_unwrap_or_else_utc_now_tail_at_pool_seed`
+    ///   — the call-site-shape pin that binds the composed tail's
+    ///   behavior on both the populated corner (fallback silent) and
+    ///   the empty corner (fallback fires). Two hand-authored
+    ///   restatements inside the single test pin the same 2-step chain
+    ///   at fail-before-pass-after granularity.
+    ///
+    /// All THREE sites walked the SAME `.unwrap_or_else(Utc::now)` tail
+    /// on the SAME [`Self::observed_phase_since`] pure projection and
+    /// all THREE wanted the resolved `DateTime<Utc>` the composer
+    /// returns. Post-lift each production callsite reads
+    /// `p.observed_phase_since_or(Utc::now())` and the produced value
+    /// feeds the same downstream slot unchanged; the test pin retains
+    /// the pre-lift `.unwrap_or_else(Utc::now)` composition to bind the
+    /// pure-projection primitive's own byte-identical behavior while a
+    /// peer test pin binds this composer's byte-identical parity.
+    ///
+    /// The `fallback: DateTime<Utc>` parameter (rather than a
+    /// substrate-injected `Utc::now()`) keeps the composer pure — a
+    /// test with a fixed-clock harness passes its own frozen anchor, a
+    /// production consumer passes `Utc::now()`, both go through the
+    /// same primitive without the composer itself reaching for the
+    /// wall clock. This resolves exactly the tension
+    /// [`Self::observed_phase_since`]'s doc spelled out (a buried
+    /// `Utc::now()` fallback "would fold an impure wall-clock read
+    /// into the primitive, breaking the pure-projection discipline
+    /// every peer `observed_*` accessor follows") by lifting the
+    /// composition shape, not the wall-clock read.
+    ///
+    /// Return-form axis: `DateTime<Utc>` matches the `unwrap_or`-style
+    /// composer discipline of `Option::unwrap_or` in std — takes the
+    /// pure projection, an owned fallback, returns the resolved owned
+    /// value. Peer to the substrate composer [`Self::created_at_or`]
+    /// on the metadata-timestamp axis — both lift a
+    /// `.unwrap_or(<fallback>)` tail into ONE substrate site so the
+    /// fallback-shape decision lives at ONE owner per axis; the two
+    /// timestamp-projection composers on `Process` (metadata-timestamp
+    /// [`Self::created_at_or`] + status-timestamp [`Self`]) now
+    /// compose byte-uniformly at the pool reconciler's per-member row
+    /// builder, closing the last hand-authored `.unwrap_or_else(Utc::
+    /// now)` tail on `Process` in that reconciler's production code.
+    ///
+    /// A future normalization step (a per-cluster clock-skew guard
+    /// that offsets the returned timestamp by the observing
+    /// controller's measured skew before applying the fallback, a
+    /// canonicalization pass that folds a suspiciously-zero
+    /// `phase_since` to the fallback rather than accepting it, a
+    /// staleness gate that treats a `phase_since` predating a
+    /// reconcile deadline as unobserved and falls through to the
+    /// fallback) lands at ONE substrate method here and every
+    /// downstream consumer picks up the upgrade mechanically — no
+    /// per-callsite hand-edit at
+    /// `controller_pool::reconcile_inner`'s member-seed builder or at
+    /// any future observed-transition consumer (a stable-name claim-
+    /// arbiter age tie-break on the status-transition anchor, a
+    /// per-pool dwell-time reap probe on the same slot).
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the paired `.observed_phase_since().unwrap_or_else(Utc::now)`
+    /// chain recurred at three hand-authored sites past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to ONE
+    /// owner here alongside the sibling [`Self::created_at_or`] on
+    /// the metadata-timestamp axis). THEORY.md §II.1 invariant 5
+    /// (composition preserves proofs — the pins bind the missing-slot
+    /// fallback corner + the populated-slot pass-through + the pure-
+    /// composer discipline + the byte-identical parity with the
+    /// pre-lift `.unwrap_or(fallback)` chain, so a regression that
+    /// drifted any surface at `tests::observed_phase_since_or_*`
+    /// rather than as silent operator-facing skew between the
+    /// `PoolMember` row's observed-transition anchor and any future
+    /// observed-transition consumer on the SAME `Process` within one
+    /// reconcile pass).
+    #[must_use]
+    pub fn observed_phase_since_or(&self, fallback: DateTime<Utc>) -> DateTime<Utc> {
+        self.observed_phase_since().unwrap_or(fallback)
+    }
+
     /// Copy-form metadata-projection primitive on the deletion-tombstone
     /// axis: returns `true` iff the K8s API server has stamped a
     /// `metadata.deletionTimestamp` on this Process (the moment the
@@ -5105,6 +5209,172 @@ mod tests {
         let composed = p.observed_phase_since().unwrap_or_else(Utc::now);
         assert!(composed >= before);
         assert!(composed <= Utc::now() + chrono::Duration::seconds(1));
+    }
+
+    // ─── Process::observed_phase_since_or substrate pins ────────────────
+    //
+    // Pins the pure composer over `Process::observed_phase_since` that
+    // owns the paired `.observed_phase_since().unwrap_or_else(Utc::now)`
+    // chain the pool-reconciler consumer restated by hand pre-lift
+    // (`tatara-pool-reconciler::controller_pool::reconcile_inner`) and
+    // that the sibling `observed_phase_since_composes_with_unwrap_or_
+    // else_utc_now_tail_at_pool_seed` call-site-shape pin binds at
+    // fail-before-pass-after granularity above. Peer to the sibling
+    // `created_at_or_*` pin family — both bind the pure-composer
+    // discipline (fallback owned by the caller, wall-clock read stays
+    // at the callsite) at one substrate accessor per axis. Fail-before-
+    // pass-after granularity: `observed_phase_since_or` did not exist
+    // pre-lift, so any test invoking it fails to compile pre-lift and
+    // passes post-lift.
+
+    #[test]
+    fn observed_phase_since_or_returns_fallback_when_status_is_none() {
+        // Missing-`status` corner pin: the composer collapses the
+        // no-status case to the caller's fallback anchor byte-
+        // identically to the pre-lift `.unwrap_or(fallback)` tail on
+        // the `.and_then(|s| s.phase_since)` pure projection. A
+        // freshly-forked Process whose reconciler has not yet stamped
+        // a first phase-transition gets the caller's wall-clock read
+        // (or a test's frozen anchor) synthesized so downstream
+        // dwell-time / tie-break arithmetic proceeds without a
+        // special-case branch at each consumer.
+        let mut p = Process::new("api", empty_spec());
+        p.status = None;
+        let fallback = crate::time::seconds_ago(42);
+        assert_eq!(p.observed_phase_since_or(fallback), fallback);
+    }
+
+    #[test]
+    fn observed_phase_since_or_returns_fallback_when_slot_is_empty() {
+        // Populated-`status` + empty-slot corner pin: a
+        // `ProcessStatus` whose `phase_since` slot is `None`
+        // collapses to the caller's fallback at the composer. Peer
+        // to the missing-`status` corner above — both compose the
+        // `None` output of the pure projection through the same
+        // `.unwrap_or(fallback)` tail. A regression that returned
+        // the fallback ONLY on the missing-`status` corner (and
+        // panicked / returned a stale sentinel on the empty-slot
+        // corner) would silently break the pool-reconciler's
+        // per-member row builder on freshly-forked members whose
+        // reconciler HAD stamped an empty status but not yet a
+        // first transition.
+        let p = process_with_phase_since(None);
+        let fallback = crate::time::seconds_ago(7);
+        assert_eq!(p.observed_phase_since_or(fallback), fallback);
+    }
+
+    #[test]
+    fn observed_phase_since_or_returns_anchor_when_slot_is_populated() {
+        // Populated-slot corner pin: with a populated
+        // `phase_since` slot, the composer ignores the caller's
+        // fallback and returns the observed anchor byte-identically
+        // to the pre-lift `.unwrap_or(fallback)` pass-through.
+        // Sibling to `observed_phase_since_returns_anchor_when_slot_
+        // is_populated` — that pin binds the pure projection, this
+        // pin binds the composer's pass-through on the same
+        // populated corner.
+        let anchor = crate::time::seconds_ago(300);
+        let p = process_with_phase_since(Some(anchor));
+        let unrelated_fallback = Utc::now() + chrono::Duration::seconds(9_999);
+        assert_eq!(p.observed_phase_since_or(unrelated_fallback), anchor);
+    }
+
+    #[test]
+    fn observed_phase_since_or_is_pure_over_the_fallback_argument() {
+        // Purity pin: the composer itself never reads the wall clock
+        // — two consecutive calls with the SAME fallback return
+        // byte-identical `DateTime<Utc>` values on both the missing-
+        // slot corner (both calls return the caller's fallback) and
+        // the populated-slot corner (both calls return the observed
+        // anchor). Peer to the sibling `created_at_or_is_pure_over_
+        // the_fallback_argument` pin; both bind the pure-composer
+        // discipline on the ONE substrate accessor per timestamp
+        // axis.
+        let fallback = crate::time::seconds_ago(7);
+        // Missing status.
+        let mut p = Process::new("x", empty_spec());
+        p.status = None;
+        assert_eq!(
+            p.observed_phase_since_or(fallback),
+            p.observed_phase_since_or(fallback),
+        );
+        // Populated slot.
+        let anchor = crate::time::seconds_ago(120);
+        let p = process_with_phase_since(Some(anchor));
+        assert_eq!(
+            p.observed_phase_since_or(fallback),
+            p.observed_phase_since_or(fallback),
+        );
+    }
+
+    #[test]
+    fn observed_phase_since_or_matches_pre_lift_unwrap_or_chain_shape() {
+        // Parity pin: sweeps the three corners every pre-lift
+        // consumer encountered (missing status, empty slot, populated
+        // slot) and compares the substrate call against the hand-
+        // authored pre-lift `.observed_phase_since().unwrap_or(
+        // fallback)` chain byte-identically. A regression that
+        // reshaped either corner (returning the fallback on a
+        // populated slot, returning a sentinel like `DateTime::MIN`
+        // on the missing corner regardless of the caller's fallback)
+        // would surface here rather than as silent operator-facing
+        // skew between the pool convergence snapshot's observed-
+        // transition anchor and any future observed-transition
+        // consumer on the SAME `Process` within one reconcile pass.
+        fn pre_lift(p: &Process, fallback: DateTime<Utc>) -> DateTime<Utc> {
+            p.observed_phase_since().unwrap_or(fallback)
+        }
+        let fallback = crate::time::seconds_ago(13);
+        // Missing status.
+        let mut p = Process::new("x", empty_spec());
+        p.status = None;
+        assert_eq!(p.observed_phase_since_or(fallback), pre_lift(&p, fallback),);
+        // Empty slot.
+        let p = process_with_phase_since(None);
+        assert_eq!(p.observed_phase_since_or(fallback), pre_lift(&p, fallback),);
+        // Populated slot.
+        let anchor = crate::time::seconds_ago(42);
+        let p = process_with_phase_since(Some(anchor));
+        assert_eq!(p.observed_phase_since_or(fallback), pre_lift(&p, fallback),);
+    }
+
+    #[test]
+    fn observed_phase_since_or_composes_with_utc_now_at_reconciler_callsite() {
+        // Call-site-shape pin: the production consumer
+        // (`controller_pool::reconcile_inner`'s per-owned-Process
+        // `PoolMember { entered_state_at, .. }` seed) calls
+        // `p.observed_phase_since_or(Utc::now())`. On the populated
+        // corner the wall-clock fallback is irrelevant (the observed
+        // anchor wins); on the missing/empty corner the fallback
+        // becomes the resolved value within the sub-second window
+        // between the caller's `Utc::now()` read and the assertion
+        // below. This pin binds that the callsite composition
+        // returns the observed anchor exactly on the populated
+        // corner (the stable, drift-free assertion) and a "recent"
+        // wall-clock read on the empty corner (bounded within a
+        // two-second window to absorb scheduler jitter). A
+        // regression that silently substituted a different fallback
+        // (`DateTime::MIN`, a per-cluster prefix offset, a
+        // hardcoded epoch) would surface at the second half of this
+        // pin.
+        // Populated corner: byte-identical to the observed anchor.
+        let anchor = crate::time::seconds_ago(600);
+        let p = process_with_phase_since(Some(anchor));
+        assert_eq!(p.observed_phase_since_or(Utc::now()), anchor);
+        // Missing status corner: within a two-second wall-clock window.
+        let mut p = Process::new("x", empty_spec());
+        p.status = None;
+        let before = Utc::now();
+        let resolved = p.observed_phase_since_or(Utc::now());
+        let after = Utc::now();
+        assert!(
+            resolved >= before - chrono::Duration::seconds(2),
+            "resolved {resolved} is before window start {before}"
+        );
+        assert!(
+            resolved <= after + chrono::Duration::seconds(2),
+            "resolved {resolved} is after window end {after}"
+        );
     }
 
     // ─── Process::is_being_deleted substrate pins ───────────────────────

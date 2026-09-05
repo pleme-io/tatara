@@ -371,6 +371,73 @@ pub async fn transition_msg(
     patch_process_status(api, name, phase_status_msg(phase, message)).await
 }
 
+/// Compose + dispatch a phase-transition status patch carrying one
+/// extra sibling key/value pair — the ONE owner of the
+/// `patch_process_status(api, name, phase_status_with(phase, key, value))`
+/// compose+dispatch chain, and the third member of the transition-peer
+/// trio ([`transition`] on the bare axis, [`transition_msg`] on the
+/// message axis, this on the extra-slot axis).
+///
+/// Pre-lift the SAME chain was hand-authored at TWO
+/// `phase_machine.rs` consumer sites past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication threshold, each restating `patch::patch_process_status(
+/// &api, &name, patch::phase_status_with(<phase>, <key>, <value>))`
+/// verbatim to write a phase transition that attaches one typed
+/// sibling slot through the merge-status wire posture:
+///
+/// * [`crate::phase_machine::handle_execing`]'s Running-entry —
+///   `phase_status_with(ProcessPhase::Running, "fluxResources", &refs)`
+///   attaches the freshly emitted `Vec<FluxResourceRef>` alongside the
+///   Execing → Running transition.
+/// * `crate::phase_machine::advance_to_attested`'s Attested-entry —
+///   `phase_status_with(ProcessPhase::Attested, "attestation", &next)`
+///   attaches the composed `ProcessAttestation` alongside the Running →
+///   Attested transition.
+///
+/// Both sites walked the SAME three-link chain — compose the three-
+/// slot `phase_status_with(phase, key, value)` body, dispatch through
+/// [`patch_process_status`], await the K8s round-trip. Post-lift each
+/// callsite reads `patch::transition_with(&api, &name, phase, key,
+/// value).await` and the compose+dispatch sink lives at ONE owner.
+/// Delegates through [`phase_status_with`] (which composes atop
+/// [`phase_status_base`]) + [`patch_process_status`], so the pin stack
+/// above the underlying composer (base-slot invariant, three-slot
+/// invariant, wall-clock-at-call-time `phaseSince` stamping, base-slot-
+/// collision debug-assert on the extra key, `Value::Null` fallback on
+/// a serde error at the extra value) rides through this wrapper
+/// mechanically.
+///
+/// `key: &'static str` matches [`phase_status_with`]'s signature so
+/// only compile-time literal keys pass through (both current callsites
+/// pass literals `"fluxResources"` / `"attestation"`); a caller-owned
+/// `String` extra key would be a category error given the composer's
+/// `debug_assert!` base-slot-collision guard is checked against a
+/// compile-time-known key set. `value: T` where `T: Serialize` matches
+/// the composer so both borrowed (`&Vec<FluxResourceRef>`,
+/// `&ProcessAttestation` — both current callsites' shapes) and owned
+/// values ride through the same bound without a per-callsite
+/// `.to_owned()` wrap. Return-form axis: `Result<Process, KubeError>`
+/// matches [`patch_process_status`], so the caller's existing
+/// `.map_err(|e| anyhow!(...))?` wrap rides through unchanged.
+///
+/// A future addition to the compose+dispatch chain (a structured
+/// tracing span around the K8s round-trip, a shared retry-budget wrap,
+/// an anyhow-mapped return form, an injectable `time_source` for the
+/// underlying composer's `phaseSince` stamp) lands at this ONE
+/// substrate site and both consumers inherit the upgrade mechanically
+/// — the peer siblings [`transition`] + [`transition_msg`] already
+/// share the same posture, so the transition-peer trio evolves in
+/// lockstep.
+pub async fn transition_with<T: Serialize>(
+    api: &Api<Process>,
+    name: &str,
+    phase: ProcessPhase,
+    key: &'static str,
+    value: T,
+) -> Result<Process, KubeError> {
+    patch_process_status(api, name, phase_status_with(phase, key, value)).await
+}
+
 // ─── finalizer helpers ────────────────────────────────────────────────
 
 /// Pure — compute the finalizer list after adding `target`.
@@ -1311,6 +1378,152 @@ mod tests {
             owned_body.get("message").and_then(Value::as_str),
             Some(owned.as_str()),
             "`format!(...)`-owned Strings ride through the impl Into<String> bound verbatim",
+        );
+    }
+
+    // ─── transition_with async-wrapper delegation pins ────────────────
+    //
+    // Peer pin block to the `transition` + `transition_msg` block above
+    // on the extra-slot axis of the transition-peer trio. The compose+
+    // dispatch chain `patch_process_status(&api, &name,
+    // phase_status_with(<phase>, <key>, <value>))` recurred at TWO
+    // workspace-wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold before the async peer [`transition_with`]
+    // closed them (Running-entry attaching `"fluxResources": &refs`,
+    // Attested-entry attaching `"attestation": &next`). These pins
+    // bind the wrapper's delegation contract at fail-before-pass-after
+    // granularity — a regression that renamed the wrapper, swapped the
+    // phase argument through a non-`ProcessPhase` type, dropped the
+    // `key: &'static str` or `value: T` slot, or drifted the return
+    // type off `Result<Process, KubeError>` breaks the compile-time
+    // function-pointer coercion HERE (which is how a fresh reader
+    // confirms the wrapper's signature is the intended compose+dispatch
+    // contract on the extra-slot axis).
+
+    #[test]
+    fn transition_with_body_delegates_through_phase_status_with_bytewise() {
+        // Byte-shape parity between the body [`transition_with`] would
+        // send and a direct `phase_status_with(phase, key, value)` call
+        // — pins the wrapper's chosen body-composer at fail-before-pass-
+        // after granularity. `transition_with` is DEFINED as
+        // `patch_process_status(api, name, phase_status_with(phase,
+        // key, value))`; this pin re-derives the body from the composer
+        // the wrapper rides through and asserts it matches the three-
+        // slot extra-key-carrying shape (`phase`, `phaseSince`, <key>).
+        //
+        // Swept across the two representative (phase, key) shapes at the
+        // two pre-lift extra-slot callsites (Running-entry
+        // "fluxResources", Attested-entry "attestation"). A regression
+        // that changed the wrapper's body-composer to a different
+        // overload (e.g. `phase_status(phase, None)` dropping the extra
+        // slot, or `phase_status_msg(phase, "")` nesting the extra
+        // under `message`) would surface per-shape HERE rather than as
+        // silent operator-facing skew at every extra-slot callsite.
+        for (phase, key, value) in [
+            (
+                ProcessPhase::Running,
+                "fluxResources",
+                serde_json::json!([]),
+            ),
+            (ProcessPhase::Attested, "attestation", serde_json::json!({})),
+        ] {
+            let mut sent = phase_status_with(phase, key, value.clone());
+            let mut direct = phase_status_with(phase, key, value.clone());
+            sent.as_object_mut().expect("object").remove("phaseSince");
+            direct.as_object_mut().expect("object").remove("phaseSince");
+            assert_eq!(
+                sent, direct,
+                "transition_with(phase=`{phase}`, key=`{key}`) must send `phase_status_with(phase, key, value)` verbatim — the three-slot extra-key-carrying shape",
+            );
+            // Post-strip slot count MUST be 2 (`phase` + <key> left
+            // after dropping `phaseSince`). A regression that dropped
+            // the extra slot would collapse the count to 1 and fire
+            // HERE (rather than at each of the 2 downstream callsites
+            // silently swallowing the attached typed payload).
+            let obj = sent.as_object().expect("object");
+            assert_eq!(
+                obj.len(),
+                2,
+                "transition_with's body must own `phase` + `phaseSince` + <key> for phase `{phase}` — no slot loss",
+            );
+            assert_eq!(
+                obj.get(key),
+                Some(&value),
+                "transition_with's extra slot must ride through under the caller-supplied key `{key}` verbatim for phase `{phase}`",
+            );
+        }
+    }
+
+    #[test]
+    fn transition_with_body_accepts_both_borrowed_and_owned_serializable_values() {
+        // Both pre-lift callsites categorically fall into the borrowed
+        // shape: `&Vec<FluxResourceRef>` (Running-entry) and
+        // `&ProcessAttestation` (Attested-entry). The wrapper's
+        // `T: Serialize` bound must accept both borrowed and owned
+        // serde-serialisable values without a per-callsite `.clone()`
+        // or `.to_owned()` wrap; this pin binds the ergonomic contract
+        // by round-tripping representative borrowed + owned shapes
+        // through the body-composer the wrapper rides through and
+        // asserting the resulting extra slot matches the input for
+        // each.
+        //
+        // Substrate axis: `phase_status_with<T: Serialize>` — the
+        // wrapper mirrors this bound verbatim, so a regression that
+        // narrowed the wrapper's bound (e.g. to `T: Serialize + Clone`
+        // for a spurious ownership constraint, or to a concrete
+        // `Value` argument dropping generic dispatch) would fire on
+        // the borrowed arm HERE rather than at each downstream
+        // callsite needing an inserted clone.
+        let owned_vec: Vec<i32> = vec![1, 2, 3];
+        let borrowed_body = phase_status_with(ProcessPhase::Running, "fluxResources", &owned_vec);
+        assert_eq!(
+            borrowed_body.get("fluxResources"),
+            Some(&serde_json::json!([1, 2, 3])),
+            "borrowed `&Vec<T: Serialize>` rides through the T: Serialize bound verbatim",
+        );
+
+        let owned_map: std::collections::BTreeMap<String, i32> =
+            [("a".to_string(), 1), ("b".to_string(), 2)]
+                .into_iter()
+                .collect();
+        let owned_body =
+            phase_status_with(ProcessPhase::Attested, "attestation", owned_map.clone());
+        assert_eq!(
+            owned_body.get("attestation"),
+            Some(&serde_json::json!({"a": 1, "b": 2})),
+            "owned `T: Serialize` values ride through the T: Serialize bound verbatim",
+        );
+    }
+
+    #[test]
+    fn transition_with_body_stamps_phase_since_at_call_time() {
+        // Peer pin to `phase_status_with_stamps_phase_since_at_call_time`
+        // on the wrapper axis — the async peer must let the underlying
+        // composer's wall-clock read reach the wire without a per-
+        // wrapper-side stamp override. Round-trip the same body-composer
+        // the wrapper rides through and confirm the `phaseSince` slot
+        // is a serde-parseable RFC-3339 timestamp bracketing the pre-
+        // call anchor.
+        //
+        // A regression that stamped `phaseSince` inside the wrapper
+        // (e.g. via a `time_source` argument the wrapper injected
+        // instead of delegating) would drift the composer's contract
+        // and surface HERE rather than as silent operator-facing skew
+        // between the sibling `transition` + `transition_msg` peers
+        // (which delegate their `phaseSince` stamp through the same
+        // composer family) and this one.
+        let before = Utc::now();
+        let body = phase_status_with(ProcessPhase::Attested, "attestation", &());
+        let after = Utc::now();
+        let ts = body
+            .get("phaseSince")
+            .and_then(Value::as_str)
+            .expect("phaseSince present");
+        let parsed = chrono::DateTime::parse_from_rfc3339(ts).expect("RFC-3339 timestamp");
+        let parsed_utc = parsed.with_timezone(&Utc);
+        assert!(
+            parsed_utc >= before && parsed_utc <= after,
+            "transition_with's phaseSince stamp must bracket the call-time anchor — the composer's wall-clock discipline rides through the wrapper unchanged",
         );
     }
 }

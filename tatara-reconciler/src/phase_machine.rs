@@ -281,13 +281,20 @@ pub async fn handle_execing(p: &Process, ctx: &Context) -> Result<Action> {
     };
 
     let api = ctx.process_api(&ns);
-    patch::patch_process_status(
-        &api,
-        &name,
-        patch::phase_status_with(ProcessPhase::Running, "fluxResources", &refs),
-    )
-    .await
-    .map_err(|e| anyhow!("patch status (execing→running): {e}"))?;
+    // Compose+dispatch rides through the substrate peer
+    // `patch::transition_with` — pre-lift this was a hand-authored
+    // `patch::patch_process_status(&api, &name,
+    // patch::phase_status_with(<phase>, <key>, <value>))` chain, one of
+    // TWO workspace-wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold (peer at `advance_to_attested` below
+    // attaching `"attestation": &next`). Post-lift the compose+dispatch
+    // sink for the extra-slot axis lives at ONE substrate owner, the
+    // third member of the transition-peer trio (`patch::transition` on
+    // the bare axis, `patch::transition_msg` on the message axis, this
+    // on the extra-slot axis).
+    patch::transition_with(&api, &name, ProcessPhase::Running, "fluxResources", &refs)
+        .await
+        .map_err(|e| anyhow!("patch status (execing→running): {e}"))?;
 
     info!(
         namespace = %ns,
@@ -547,13 +554,14 @@ async fn advance_to_attested(
     let generation = next.generation;
 
     let api = ctx.process_api(ns);
-    patch::patch_process_status(
-        &api,
-        name,
-        patch::phase_status_with(ProcessPhase::Attested, "attestation", &next),
-    )
-    .await
-    .map_err(|e| anyhow!("patch attestation: {e}"))?;
+    // Peer to the Running-entry compose+dispatch above: both consumers
+    // of the extra-slot axis route through the substrate peer
+    // `patch::transition_with` — the third member of the transition-
+    // peer trio. See the peer callsite above for the full pre-lift
+    // rationale + duplication inventory.
+    patch::transition_with(&api, name, ProcessPhase::Attested, "attestation", &next)
+        .await
+        .map_err(|e| anyhow!("patch attestation: {e}"))?;
 
     info!(
         namespace = %ns,

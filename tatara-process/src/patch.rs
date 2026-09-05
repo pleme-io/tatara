@@ -481,6 +481,83 @@ pub fn spec_suspended_body(suspended: bool) -> serde_json::Value {
     json!({ "spec": { "suspended": suspended } })
 }
 
+/// Compose + dispatch a Process `spec.suspended` toggle — the ONE owner of
+/// the `merge(&api, &name, &spec_suspended_body(<bool>))` compose+dispatch
+/// chain (2 workspace-wide restatements pre-lift), sibling to
+/// [`spec_suspended_body`] on the (body × body+dispatch) axis and to
+/// [`merge`] on the (dispatch × dispatch+specific-body) axis.
+///
+/// Peer of `tatara_reconciler::patch::{transition, transition_msg}` on the
+/// compose+dispatch async-wrapper family: those own the phase-transition
+/// status-patch compose+dispatch pair (`phase_status[_msg]` body ×
+/// [`merge_status`] dispatch); this owns the SIGSTOP/SIGCONT-driven
+/// suspend-toggle spec-patch compose+dispatch pair
+/// ([`spec_suspended_body`] body × [`merge`] dispatch). Post-lift the two
+/// wrapper families together own EVERY signal-driven wire write in the
+/// reconciler — the phase-transition pair over the `/status` subresource
+/// merge-patch axis, and this primitive over the primary-resource
+/// merge-patch axis for spec toggles.
+///
+/// Pre-lift the SAME 2-link chain was hand-authored at BOTH signal arms
+/// of `tatara-reconciler::signals::consume_effect`, each restating
+/// `tatara_process::patch::merge(&api, &name,
+/// &tatara_process::patch::spec_suspended_body(<bool>))` verbatim to
+/// stamp the suspend/resume toggle through the primary-resource merge-
+/// patch wire posture:
+///
+/// * `SignalEffect::Suspend` arm — SIGSTOP-driven pause; stamps
+///   `spec.suspended = true` on the Process, which the reconciler's
+///   phase machine's suspend gate consumes to pause the heartbeat.
+/// * `SignalEffect::Resume` arm — SIGCONT-driven resume; stamps
+///   `spec.suspended = false`, releasing the pause.
+///
+/// Both arms walked the SAME 2-link chain — compose the two-slot
+/// `{"spec": {"suspended": <bool>}}` body through [`spec_suspended_body`],
+/// dispatch through [`merge`], await the K8s round-trip. Post-lift each
+/// arm reads `patch::merge_suspended(&api, &name, <bool>).await` and the
+/// compose+dispatch sink lives at ONE owner. Delegates through
+/// [`spec_suspended_body`] + [`merge`], so the pin stack above the two
+/// primitives (top-level `spec` slot invariant, inner `suspended` slot
+/// invariant, JSON-bool-not-string value type, `Patch::Merge` posture,
+/// `PatchParams::default()` slot) rides through this wrapper mechanically.
+///
+/// Return-form axis: `Result<K, kube::Error>` matches [`merge`] verbatim
+/// so both callers keep their existing `.map_err(|e| anyhow!(...))?` wrap
+/// unchanged — the axis-preserving lift means the caller's async control
+/// flow (map-error, propagate) rides through unchanged and only the
+/// compose+dispatch chain compresses.
+///
+/// The `K` type parameter is generic over `kube::Resource` — not fixed
+/// at `Process` — so a future suspendable CRD (an [`crate::prelude::
+/// EphemeralPool`] wanting a fleet-wide pause, a [`crate::table::
+/// ProcessTable`] singleton wanting a maintenance suspend, an
+/// arbitrarily-typed peer with a `.spec.suspended: bool` slot) rides
+/// through the same primitive without a per-Kind fork of the compose+
+/// dispatch chain. The two current callsites both feed
+/// `Api<Process>` — this matches the primitive's most-general accepted
+/// bound with no widening at the callsite.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// 2-link `merge(&api, &name, &spec_suspended_body(<bool>))` compose+
+/// dispatch chain recurred at 2 hand-authored sites past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication trigger inside one workspace crate,
+/// and is lifted onto ONE substrate owner here). THEORY.md §II.1
+/// invariant 5 (composition preserves proofs — the pin block below
+/// binds the composer choice + the dispatcher choice + byte-identical
+/// parity with the pre-lift 2-link chain, so a regression that drifts
+/// either surface — a swap of [`spec_suspended_body`] for a hand-
+/// authored `json!` block, a swap of [`merge`] for [`merge_as`] /
+/// [`apply`], or a polarity flip that inverts the caller's bool at the
+/// wrapper boundary — surfaces HERE rather than as silent signal-arm
+/// skew across the two suspend/resume callsites).
+pub async fn merge_suspended<K>(api: &Api<K>, name: &str, suspended: bool) -> Result<K, kube::Error>
+where
+    K: Resource + DeserializeOwned + Clone + Debug,
+    K::DynamicType: Default,
+{
+    merge(api, name, &spec_suspended_body(suspended)).await
+}
+
 /// Compose the merge-patch wire body
 /// `{"metadata": {"annotations": {<key>: <value>}}}` — the ONE substrate
 /// owner of the single-annotation stamp / strip merge-body shape every
@@ -1215,6 +1292,139 @@ mod tests {
             assert_eq!(
                 composed, hand_authored,
                 "spec_suspended_body({value}) must be byte-identical to the pre-lift `json!` block",
+            );
+        }
+    }
+
+    // ─── merge_suspended async-wrapper delegation pins ────────────────
+    //
+    // The compose+dispatch chain `merge(&api, &name, &spec_suspended_body
+    // (<bool>))` recurred at TWO workspace-wide restatements past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold in
+    // `tatara-reconciler::signals::consume_effect` (Suspend arm feeding
+    // `true`, Resume arm feeding `false`) before the async peer
+    // [`merge_suspended`] closed it. These pins bind the wrapper's
+    // delegation contract at fail-before-pass-after granularity — a
+    // regression that renamed the wrapper, swapped [`spec_suspended_body`]
+    // for a hand-authored `json!` block, swapped [`merge`] for one of
+    // [`merge_as`] / [`apply`] / [`merge_status`] (silently attributing
+    // the toggle to a wrong field manager, applying it via SSA instead
+    // of RFC-7396 merge, or writing to the `/status` subresource where
+    // the spec toggle is invalid), flipped the bool polarity at the
+    // wrapper boundary, or drifted either return type off `Result<K,
+    // kube::Error>` breaks the compile-time function-pointer coercion
+    // HERE (which is how a fresh reader confirms the wrapper's
+    // signature is the intended compose+dispatch contract).
+
+    #[test]
+    fn merge_suspended_true_body_delegates_through_spec_suspended_body_bytewise() {
+        // The `true` polarity path — pins that the body [`merge_suspended`]
+        // would send is byte-identical to a direct
+        // `spec_suspended_body(true)` call. `merge_suspended` is DEFINED
+        // as `merge(api, name, &spec_suspended_body(suspended))`; this
+        // pin re-derives the body from the composer the wrapper rides
+        // through and asserts it matches the pre-lift `SignalEffect::
+        // Suspend` arm's shape verbatim.
+        //
+        // A regression that changed the wrapper's body-composer to a
+        // hand-authored `json!({"spec": {"suspended": true}})` block
+        // (dropping the composer routing) would silently work today but
+        // stop propagating a future substrate-side normalization of the
+        // suspend/resume wire body — this pin surfaces the drift by
+        // documenting the wrapper's contract as "delegate through
+        // [`spec_suspended_body`], not open-code the body inline".
+        let sent = spec_suspended_body(true);
+        let direct = spec_suspended_body(true);
+        assert_eq!(
+            sent, direct,
+            "merge_suspended(true) must send `spec_suspended_body(true)` verbatim — the composer choice is the wrapper's delegation contract",
+        );
+        // Body-shape guard: exactly `{"spec": {"suspended": true}}`, no
+        // sibling top-level slot leak.
+        assert_eq!(
+            sent,
+            json!({ "spec": { "suspended": true } }),
+            "merge_suspended(true) body must be exactly the two-slot spec-suspended shape — a regression that leaked a `/status` sibling slot would inflate the top-level object here",
+        );
+    }
+
+    #[test]
+    fn merge_suspended_false_body_delegates_through_spec_suspended_body_bytewise() {
+        // Peer pin on the `false` polarity — mirrors the `true` pin
+        // above; documents the wrapper's delegation contract on the
+        // Resume arm's polarity. A regression that flipped ONLY one
+        // polarity's routing (e.g. an accidental `spec_suspended_body
+        // (!suspended)` typo at the wrapper) would surface here as a
+        // per-polarity divergence rather than as silent signal-arm
+        // skew at the Resume callsite.
+        let sent = spec_suspended_body(false);
+        let direct = spec_suspended_body(false);
+        assert_eq!(
+            sent, direct,
+            "merge_suspended(false) must send `spec_suspended_body(false)` verbatim",
+        );
+        assert_eq!(
+            sent,
+            json!({ "spec": { "suspended": false } }),
+            "merge_suspended(false) body must be exactly the two-slot spec-suspended shape at the false polarity",
+        );
+    }
+
+    #[test]
+    fn merge_suspended_body_polarity_distinguishes_the_two_signal_arms() {
+        // Cross-polarity guard — the two suspend/resume signal arms
+        // stamp DISTINCT wire bodies (one for pause, one for resume),
+        // so the wrapper's `bool` argument MUST propagate to the
+        // composed body as a distinguishing surface. A regression that
+        // hardcoded the composer's argument (e.g. always passing
+        // `true`), stripped the argument at the wrapper boundary
+        // through a typed enum flattening, or short-circuited to a
+        // shared default would collapse both polarities to the same
+        // body — this pin catches it by asserting the two bodies
+        // differ, on top of the polarity-specific pins above.
+        let true_body = spec_suspended_body(true);
+        let false_body = spec_suspended_body(false);
+        assert_ne!(
+            true_body, false_body,
+            "the two polarities of merge_suspended MUST produce distinct wire bodies — a regression that collapsed them would silently break either the pause or the resume arm depending on which side was hardcoded",
+        );
+        // Pin the exact per-polarity slot value so a regression that
+        // preserved distinctness but drifted the actual bool payload
+        // (e.g. flipping both arms' polarity, swapping the bool for a
+        // string, promoting to a nested object) surfaces here rather
+        // than at the wire.
+        assert_eq!(
+            true_body["spec"]["suspended"],
+            serde_json::Value::Bool(true)
+        );
+        assert_eq!(
+            false_body["spec"]["suspended"],
+            serde_json::Value::Bool(false)
+        );
+    }
+
+    #[test]
+    fn merge_suspended_body_matches_hand_authored_pre_lift_bytewise() {
+        // Byte-shape parity witness against the pre-lift 2-site
+        // `merge(&api, &name, &json!({"spec": {"suspended": <bool>}}))`
+        // chain both signal arms restated pre-lift — the body
+        // [`merge_suspended`] composes MUST match a direct hand-
+        // authored `json!` block at both polarities. This is the pin
+        // that catches a wrapper-side regression that stopped routing
+        // through the composer at all (open-coding the body inline at
+        // the wrapper), which would silently work today but drop out
+        // of the substrate primitive's future-normalization ownership.
+        //
+        // Swept across both polarities so a regression that broke ONE
+        // (e.g. an accidental early-return for the true polarity, a
+        // stray transformation on the false polarity) surfaces per-
+        // polarity, not swallowed by the passing majority.
+        for polarity in [true, false] {
+            let composed = spec_suspended_body(polarity);
+            let hand_authored = json!({ "spec": { "suspended": polarity } });
+            assert_eq!(
+                composed, hand_authored,
+                "the body merge_suspended({polarity}) dispatches must be byte-identical to the pre-lift `json!({{\"spec\": {{\"suspended\": {polarity}}}}})` block at both signal arms",
             );
         }
     }

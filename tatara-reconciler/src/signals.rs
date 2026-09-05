@@ -165,48 +165,38 @@ pub async fn consume_effect(process: &Process, ctx: &Context, effect: SignalEffe
             Ok(())
         }
         SignalEffect::Suspend => {
-            // Wire-side dispatch rides the substrate primitive
-            // `tatara_process::patch::merge`; the merge body itself
-            // rides the substrate composer
-            // `tatara_process::patch::spec_suspended_body` — pre-lift
-            // this arm hand-authored BOTH the `api.patch(&name,
-            // &PatchParams::default(), &Patch::Merge(&body))` 3-link
-            // chain (one of six workspace-wide restatements at the
-            // `merge` primitive lift) AND the `json!({ "spec": {
-            // "suspended": true } })` body composition (one of two
-            // adjacent restatements at the composer lift, peer arm at
-            // Resume below). Post-lift both restatements ride through
-            // ONE substrate owner each: a future addition to the
-            // suspend/resume wire body (a `by:` signal-source slot, a
-            // `suspendedAt:` transition timestamp, a symmetry gate
-            // that refuses conflicting overlays) lands at
-            // `spec_suspended_body` and both arms inherit it
+            // Compose+dispatch rides through the substrate peer
+            // `tatara_process::patch::merge_suspended` — pre-lift this
+            // arm hand-authored the 2-link `merge(&api, &name,
+            // &spec_suspended_body(true))` chain, one of TWO
+            // workspace-wide restatements past the ★★ PRIME-DIRECTIVE
+            // ≥ 2 duplication trigger (peer at the Resume arm below).
+            // Post-lift the compose+dispatch sink lives at ONE
+            // substrate owner; a future addition to the suspend/resume
+            // wire body (a `by:` signal-source slot, a `suspendedAt:`
+            // transition timestamp, a symmetry gate that refuses
+            // conflicting overlays) OR a future normalization of the
+            // wire dispatch (a shared retry-budget wrap, an injectable
+            // `dry_run` mode) lands at THIS ONE compose+dispatch
+            // peer + the underlying `spec_suspended_body` / `merge`
+            // primitives, and both arms inherit the upgrade
             // mechanically.
-            tatara_process::patch::merge(
-                &api,
-                &name,
-                &tatara_process::patch::spec_suspended_body(true),
-            )
-            .await
-            .map_err(|e| anyhow!("suspend: {e}"))?;
+            tatara_process::patch::merge_suspended(&api, &name, true)
+                .await
+                .map_err(|e| anyhow!("suspend: {e}"))?;
             Ok(())
         }
         SignalEffect::Resume => {
             // Peer arm to Suspend above — see that arm's docstring for
-            // the composer + wire-dispatch substrate-lift story. Both
-            // arms compose the merge body through
-            // `tatara_process::patch::spec_suspended_body` (this arm
-            // feeds `false`, the peer feeds `true`) and dispatch it
-            // through `tatara_process::patch::merge`; a future addition
-            // to the shared wire body lands at ONE composer and both
-            // arms inherit it.
-            tatara_process::patch::merge(
-                &api,
-                &name,
-                &tatara_process::patch::spec_suspended_body(false),
-            )
-            .await
-            .map_err(|e| anyhow!("resume: {e}"))?;
+            // the compose+dispatch substrate-lift story. Both arms
+            // route through `tatara_process::patch::merge_suspended`
+            // (this arm feeds `false`, the peer feeds `true`); a
+            // future addition to the shared wire body or dispatch
+            // posture lands at the substrate peer and both arms
+            // inherit it mechanically.
+            tatara_process::patch::merge_suspended(&api, &name, false)
+                .await
+                .map_err(|e| anyhow!("resume: {e}"))?;
             Ok(())
         }
         SignalEffect::Remediate => {

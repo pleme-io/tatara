@@ -778,23 +778,26 @@ pub async fn handle_releasing(p: &Process, ctx: &Context) -> Result<Action> {
 /// `Attested` when absent (forward-compat: pre-annotation Processes
 /// in Releasing are treated as Attested-routed).
 fn released_from_annotation(p: &Process) -> ProcessPhase {
-    // Annotation lookup via the substrate primitive — pre-lift this
-    // was a hand-authored 3-line `.metadata.annotations.as_ref()
-    // .and_then(|m| m.get(RELEASED_FROM)).cloned().unwrap_or_default()`
-    // chain, one of THREE workspace-wide restatements past the ★★
-    // PRIME-DIRECTIVE ≥ 2 duplication threshold (peers at
-    // `signals::ingest` and `tatara-pool-reconciler::controller_pool::
-    // process_belongs_to_pool`). Post-lift the three lookups route
-    // through ONE substrate owner [`Process::annotation`]; this
-    // callsite matches directly on the returned `Option<&str>`
-    // (`Some("Failed")` → `Failed`, everything else including the
-    // pre-lift bare `""` fallback → `Attested`), preserving the
-    // pre-lift dispatch behavior byte-for-byte across both corners
-    // (annotation present with unexpected value, annotation absent).
-    match p.annotation(tatara_process::annotations::RELEASED_FROM) {
-        Some("Failed") => ProcessPhase::Failed,
-        _ => ProcessPhase::Attested,
-    }
+    // Annotation lookup via the substrate primitive
+    // [`Process::annotation`] (see `signals::ingest` for the full
+    // three-consumer lift story). The `Option<&str>` → `ProcessPhase`
+    // decoder rides through the ONE substrate owner
+    // [`ProcessPhase::parse_released_from`] — pre-lift this was a
+    // hand-authored `match p.annotation(RELEASED_FROM) {
+    // Some("Failed") => Failed, _ => Attested }` block with hardcoded
+    // string literals that did NOT route through `ProcessPhase::as_str`,
+    // one of TWO workspace-wide restatements past the ★★ PRIME-
+    // DIRECTIVE ≥ 2 duplication trigger (peer at `p_current_phase_str`
+    // below — the symmetric encoder for the same
+    // annotation, similarly hardcoded pre-lift). Post-lift both the
+    // encoder + the decoder route their canonical labels through
+    // `ProcessPhase::as_str`, so a future wire-format rename of the
+    // `Failed` or `Attested` variant reaches BOTH sites through ONE
+    // constant; the forward-compat semantics (unexpected value →
+    // Attested, None → Attested) ride through the substrate primitive
+    // verbatim per its `parse_released_from_matches_hardcoded_pre_lift_reader`
+    // pin.
+    ProcessPhase::parse_released_from(p.annotation(tatara_process::annotations::RELEASED_FROM))
 }
 
 /// Patch the Process to its post-Releasing destination per the
@@ -1064,11 +1067,25 @@ async fn p_current_phase_str(api: &Api<Process>, name: &str) -> Result<String> {
         .get_status(name)
         .await
         .map_err(|e| anyhow!("get status (released-from): {e}"))?;
-    let phase = p.observed_phase().unwrap_or(ProcessPhase::Attested);
-    Ok(match phase {
-        ProcessPhase::Failed => "Failed".to_string(),
-        _ => "Attested".to_string(),
-    })
+    // Wire-label projection rides the substrate primitive
+    // [`ProcessPhase::released_from_label`] — pre-lift this arm
+    // hand-authored a `match phase { Failed => "Failed", _ =>
+    // "Attested" }` block with hardcoded string literals that did
+    // NOT route through `ProcessPhase::as_str`, one of TWO workspace-
+    // wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // trigger (peer at `released_from_annotation` above — the
+    // symmetric decoder for the same annotation, similarly hardcoded
+    // pre-lift). Post-lift the encoder + decoder route through the
+    // ONE substrate primitive pair; a future wire-format rename of
+    // the `Failed` or `Attested` variant reaches BOTH sites through
+    // `ProcessPhase::as_str`. The forward-compat semantics
+    // (non-{Attested,Failed} observed phase → "Attested") ride
+    // through the substrate primitive verbatim per its
+    // `released_from_label_collapses_non_gate_phases_to_attested` pin.
+    Ok(p.observed_phase()
+        .unwrap_or(ProcessPhase::Attested)
+        .released_from_label()
+        .to_string())
 }
 
 /// Transition Running/Attested → Exiting with an operator-visible reason.

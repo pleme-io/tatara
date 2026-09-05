@@ -183,6 +183,49 @@ impl ProcessPhase {
         matches!(self, Self::Attested | Self::Failed)
     }
 
+    /// Canonical wire label stamped into the
+    /// [`crate::annotations::RELEASED_FROM`] annotation when a
+    /// Process transitions Attested/Failed → Releasing. Encodes the
+    /// terminal-reached-gate axis into the two labels
+    /// `handle_releasing`'s `advance_out_of_releasing` dispatch reads
+    /// back through [`Self::parse_released_from`]. Non-gate phases
+    /// (Running, Reconverging, etc.) collapse to `"Attested"` per the
+    /// forward-compat invariant `p_current_phase_str` promised
+    /// pre-lift, so an unexpected observed-phase never leaks into the
+    /// annotation as a Zombie-routing "Failed" label.
+    ///
+    /// Peer to [`Self::parse_released_from`] on the encoder/decoder
+    /// pair — a wire-format drift on `Failed`'s `as_str` reaches both
+    /// sites through the ONE substrate owner.
+    pub const fn released_from_label(self) -> &'static str {
+        match self {
+            Self::Failed => Self::Failed.as_str(),
+            _ => Self::Attested.as_str(),
+        }
+    }
+
+    /// Decode a [`crate::annotations::RELEASED_FROM`] annotation
+    /// value back to the terminal-reached gate the Process came
+    /// through. Mirror of [`Self::released_from_label`]: only the
+    /// exact string [`Self::Failed`]`.as_str()` decodes to `Failed`;
+    /// every other value (including `None`, an empty string, a
+    /// case-drifted "failed", a value from a future phase variant)
+    /// collapses to `Attested`, preserving `released_from_annotation`'s
+    /// pre-lift forward-compat semantics byte-for-byte.
+    ///
+    /// The two together form a total closed-set projection over
+    /// `{Attested, Failed}` — every input on both sides maps into
+    /// the gate set, and the composition
+    /// `parse_released_from(Some(p.released_from_label()))` is the
+    /// identity on `{Attested, Failed}` (pinned by
+    /// `released_from_label_and_parse_are_inverse_on_terminal_gates`).
+    pub fn parse_released_from(s: Option<&str>) -> Self {
+        match s {
+            Some(v) if v == Self::Failed.as_str() => Self::Failed,
+            _ => Self::Attested,
+        }
+    }
+
     /// True if the phase transition `self → next` is legal.
     pub const fn can_transition_to(self, next: Self) -> bool {
         use ProcessPhase::*;
@@ -442,6 +485,159 @@ mod tests {
         for bad in ["attested", "FAILED", "Cancelled", "Reapped"] {
             let err = super::ProcessPhase::from_str(bad).unwrap_err();
             assert_eq!(err.0, bad, "error payload should echo input verbatim");
+        }
+    }
+
+    // ─── released_from encoder/decoder substrate pins ────────────────
+    //
+    // Bind [`ProcessPhase::released_from_label`] +
+    // [`ProcessPhase::parse_released_from`] at fail-before-pass-after
+    // granularity so a regression that reshapes either side of the
+    // wire-format bijection over the terminal-reached-gate set
+    // {Attested, Failed} surfaces HERE rather than as silent skew
+    // between the phase machine's `p_current_phase_str` writer and
+    // its `released_from_annotation` reader — the two callsites the
+    // encoder/decoder pair collapses onto ONE substrate owner.
+    //
+    // Pre-lift both sites hand-authored a `match phase { Failed =>
+    // "Failed", _ => "Attested" }` / `match anno { Some("Failed") =>
+    // Failed, _ => Attested }` block with hardcoded string literals
+    // that did not go through `ProcessPhase::as_str`. A wire-format
+    // rename of the `Failed` or `Attested` variant that touched
+    // `as_str` alone would silently break the annotation contract at
+    // both callsites; post-lift the primitives route through
+    // `ProcessPhase::as_str` so the rename lands mechanically.
+
+    #[test]
+    fn released_from_label_maps_failed_to_failed_string() {
+        assert_eq!(super::ProcessPhase::Failed.released_from_label(), "Failed");
+    }
+
+    #[test]
+    fn released_from_label_maps_attested_to_attested_string() {
+        assert_eq!(
+            super::ProcessPhase::Attested.released_from_label(),
+            "Attested"
+        );
+    }
+
+    #[test]
+    fn released_from_label_collapses_non_gate_phases_to_attested() {
+        // Forward-compat pin: every non-{Attested,Failed} variant
+        // collapses to "Attested" — an unexpected observed-phase
+        // (Running, Reconverging, Zombie, …) leaking through to
+        // `p_current_phase_str`'s writer never stamps a Zombie-
+        // routing "Failed" label into the annotation. Sweep via ALL
+        // so a future variant is covered automatically.
+        for p in super::ProcessPhase::ALL {
+            if matches!(p, super::ProcessPhase::Failed) {
+                continue;
+            }
+            assert_eq!(
+                p.released_from_label(),
+                "Attested",
+                "{p:?} must collapse to \"Attested\" under released_from_label",
+            );
+        }
+    }
+
+    #[test]
+    fn parse_released_from_matches_hardcoded_pre_lift_reader() {
+        // Byte-for-byte parity witness against the pre-lift
+        // `phase_machine::released_from_annotation` match block:
+        //     match p.annotation(RELEASED_FROM) {
+        //         Some("Failed") => ProcessPhase::Failed,
+        //         _              => ProcessPhase::Attested,
+        //     }
+        // A regression that widened the "Failed" arm (a case-fold to
+        // Some("failed"), an alias like Some("FailedRun")), narrowed
+        // it (Some("Failed") + a trailing-newline gate), or drifted
+        // the default arm (a None-vs-Some("Attested") split) surfaces
+        // HERE.
+        assert_eq!(
+            super::ProcessPhase::parse_released_from(Some("Failed")),
+            super::ProcessPhase::Failed,
+        );
+        assert_eq!(
+            super::ProcessPhase::parse_released_from(Some("Attested")),
+            super::ProcessPhase::Attested,
+        );
+        assert_eq!(
+            super::ProcessPhase::parse_released_from(None),
+            super::ProcessPhase::Attested,
+        );
+        // Non-canonical inputs collapse to Attested — same forward-
+        // compat semantics the pre-lift `_` arm gave.
+        for bad in [
+            "",
+            "failed",
+            "FAILED",
+            "attested",
+            "Running",
+            "Reaped",
+            "Some(Failed)",
+        ] {
+            assert_eq!(
+                super::ProcessPhase::parse_released_from(Some(bad)),
+                super::ProcessPhase::Attested,
+                "non-canonical input {bad:?} must collapse to Attested",
+            );
+        }
+    }
+
+    #[test]
+    fn released_from_label_and_parse_are_inverse_on_terminal_gates() {
+        // The encoder/decoder pair round-trips exactly over
+        // {Attested, Failed} — the closed set the annotation is
+        // designed to carry. Sweep both gates; a regression that
+        // desynced the two projections (e.g. the encoder started
+        // stamping "attested" lowercase while the decoder still
+        // keyed on "Attested") would surface HERE.
+        for gate in [super::ProcessPhase::Attested, super::ProcessPhase::Failed] {
+            let round_trip =
+                super::ProcessPhase::parse_released_from(Some(gate.released_from_label()));
+            assert_eq!(
+                round_trip, gate,
+                "{gate:?} must round-trip through label→parse",
+            );
+        }
+    }
+
+    #[test]
+    fn released_from_label_routes_through_as_str_not_a_hardcoded_literal() {
+        // The primitive dispatches through `ProcessPhase::as_str` for
+        // both canonical labels — a future rename of either variant's
+        // wire form (an operator-facing normalization pass, a serde-
+        // rename attribute) that touched `as_str` alone would silently
+        // break the annotation contract if the encoder used hardcoded
+        // string literals. Witness the routing by matching the
+        // encoder's output against the corresponding variant's
+        // `as_str` projection.
+        assert_eq!(
+            super::ProcessPhase::Failed.released_from_label(),
+            super::ProcessPhase::Failed.as_str(),
+        );
+        assert_eq!(
+            super::ProcessPhase::Attested.released_from_label(),
+            super::ProcessPhase::Attested.as_str(),
+        );
+    }
+
+    #[test]
+    fn released_from_label_output_is_always_a_terminal_gate() {
+        // The encoder's codomain is exactly {Attested, Failed} — the
+        // two labels `advance_out_of_releasing`'s reader dispatches
+        // on. A regression that leaked a third label (e.g. the
+        // default arm returning "Unknown", or a new `Draining` gate
+        // added to the terminal-reached set producing its own label
+        // without a matching decoder arm) surfaces HERE.
+        for p in super::ProcessPhase::ALL {
+            let label = p.released_from_label();
+            let decoded = super::ProcessPhase::parse_released_from(Some(label));
+            assert!(
+                matches!(decoded, super::ProcessPhase::Attested | super::ProcessPhase::Failed),
+                "{p:?}'s label {label:?} decoded to {decoded:?} — must land in the {{Attested,Failed}} gate set",
+            );
         }
     }
 }

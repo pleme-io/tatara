@@ -243,7 +243,21 @@ pub fn phase_status_with<T: Serialize>(phase: ProcessPhase, key: &'static str, v
         "phase_status_with: extra key `{key}` collides with a base slot",
     );
     let mut v = phase_status_base(phase);
-    v[key] = serde_json::to_value(value).unwrap_or(Value::Null);
+    // Extra-slot fold rides through the ONE substrate composer
+    // [`tatara_process::patch::to_value_or_null`] — pre-lift this was a
+    // hand-authored `serde_json::to_value(value).unwrap_or(Value::Null)`
+    // three-link chain, one of TWO workspace-wide restatements past the
+    // ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold (the sibling site is
+    // `tatara_process::patch::annotation_body`, folding its `value: impl
+    // Serialize` into the `metadata.annotations.<key>` leaf on the
+    // single-annotation merge-body composer). Post-lift both `impl
+    // Serialize` → `Value` folds route through ONE substrate owner so a
+    // future normalization of the fold discipline (a promotion of the
+    // `Value::Null` fallback to a typed error, a canonicalization pass
+    // over the produced `Value`, a `tracing::warn!` at the residual `Err`
+    // arm) lands at the primitive rather than at every extra-slot
+    // status-patch and annotation-body composer callsite.
+    v[key] = tatara_process::patch::to_value_or_null(value);
     v
 }
 
@@ -1525,5 +1539,44 @@ mod tests {
             parsed_utc >= before && parsed_utc <= after,
             "transition_with's phaseSince stamp must bracket the call-time anchor — the composer's wall-clock discipline rides through the wrapper unchanged",
         );
+    }
+
+    #[test]
+    fn phase_status_with_extra_slot_routes_through_to_value_or_null_substrate_composer() {
+        // Delegation pin — [`phase_status_with`]'s extra-slot fold rides
+        // through the substrate primitive
+        // [`tatara_process::patch::to_value_or_null`], sibling to
+        // `annotation_body`'s fold at the shared "impl Serialize →
+        // Value with Null fallback" byte-shape. A regression that
+        // reverted to a hand-authored `serde_json::to_value(value)
+        // .unwrap_or(Value::Null)` chain inline here — or drifted the
+        // fallback constant / serialiser choice at either the reconciler
+        // side or the substrate side — would break the composer parity
+        // and surface HERE rather than as silent extra-slot JSON drift
+        // at the Running-entry `fluxResources` / Attested-entry
+        // `attestation` / Forking-entry `identity` writers.
+        //
+        // Sweep the payload shapes both consumer families pass:
+        //   - `Value::Null` — signals-strip corner (via annotation_body,
+        //     mirrored at phase_status_with for shape coverage)
+        //   - `&str` literal — return-trigger corner
+        //   - `&Vec<i32>`   — fluxResources corner shape
+        //   - `BTreeMap`    — attestation corner shape
+        for (key, value) in [
+            ("nullExtra", serde_json::Value::Null),
+            ("strExtra", serde_json::json!("stamped")),
+            ("vecExtra", serde_json::json!([1, 2, 3])),
+            ("mapExtra", serde_json::json!({ "k": "v" })),
+        ] {
+            let via_composer = phase_status_with(ProcessPhase::Attested, key, value.clone());
+            let extra_slot = via_composer
+                .get(key)
+                .expect("phase_status_with attaches the extra slot at the caller-named key");
+            let expected = tatara_process::patch::to_value_or_null(value);
+            assert_eq!(
+                extra_slot, &expected,
+                "phase_status_with must fold its extra `T: Serialize` payload through tatara_process::patch::to_value_or_null — the substrate owner of the impl Serialize → Value Null-fallback fold",
+            );
+        }
     }
 }

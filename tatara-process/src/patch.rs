@@ -670,7 +670,7 @@ where
 /// sites).
 #[must_use]
 pub fn annotation_body(key: &str, value: impl Serialize) -> serde_json::Value {
-    let v = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
+    let v = to_value_or_null(value);
     json!({
         "metadata": {
             "annotations": {
@@ -678,6 +678,102 @@ pub fn annotation_body(key: &str, value: impl Serialize) -> serde_json::Value {
             }
         }
     })
+}
+
+/// Serialise a `T: Serialize` into a `serde_json::Value`, folding the
+/// (in-practice unreachable) [`serde_json::to_value`] error to
+/// [`serde_json::Value::Null`] — the ONE substrate owner of the "serde-
+/// serialise a caller-supplied `T` into a JSON slot value, falling back
+/// to `Value::Null` on the residual `Err` arm the round-trip's contract
+/// permits but no in-workspace payload triggers" shape.
+///
+/// Pre-lift the SAME `serde_json::to_value(<T>).unwrap_or(Value::Null)`
+/// chain was hand-authored at TWO consumer sites past the ★★
+/// PRIME-DIRECTIVE ≥ 2 duplication threshold, each restating the same
+/// three-link chain (`to_value` → `unwrap_or` → `Value::Null` fallback)
+/// to seed a JSON slot value from a caller-supplied serde-serialisable
+/// payload:
+///
+/// * [`annotation_body`] — folds the caller's `value: impl Serialize`
+///   into the `metadata.annotations.<key>` leaf on the single-annotation
+///   merge-body composer. Every downstream single-annotation writer
+///   (signals-strip, `RELEASED_FROM` stamp, `return-trigger` stamp)
+///   rides through this fold.
+/// * `tatara_reconciler::patch::phase_status_with` — folds the caller's
+///   `value: impl Serialize` into the caller-named third slot on the
+///   phase-transition status-patch composer. Every downstream
+///   extra-slot phase-transition writer (Running-entry `fluxResources`
+///   attach, Attested-entry `attestation` attach, and — via
+///   [`crate::patch::phase_status`]'s `Some` arm delegating through the
+///   composer — the Forking-entry `identity` attach) rides through this
+///   fold. The reconciler-side callsite reaches THIS substrate primitive
+///   by fully-qualified name (`tatara_process::patch::to_value_or_null`).
+///
+/// Both sites walked the SAME three-link chain — `serde_json::to_value`
+/// on the caller-supplied `T`, `Result::unwrap_or` on the residual
+/// `Err` arm, `serde_json::Value::Null` as the fallback constant.
+/// Differing only in the `T` slot's downstream consumer (an
+/// `annotations.<key>` leaf vs a `phase_status_base` sibling slot).
+/// Post-lift each callsite reads `to_value_or_null(v)` and the
+/// three-link chain lives at ONE substrate owner.
+///
+/// A future normalization of the fold discipline — a promotion of the
+/// `Value::Null` fallback to a typed error return so a caller's
+/// `Serialize` impl that legitimately fails at runtime surfaces at the
+/// composer rather than being silently dropped to `null`; a
+/// canonicalization pass over the produced `Value` (a sort-map-keys
+/// walk for deterministic byte output, a whitespace-strip for size);
+/// a `tracing::warn!` span at the `Err` arm so the silent drop leaves
+/// an operator-visible breadcrumb; a switch to `serde_json::to_value`'s
+/// `Cow`-returning peer for zero-copy on already-`Value` inputs —
+/// lands at THIS ONE substrate primitive and both downstream fold
+/// consumers (plus every future JSON-slot-seeded-from-`T: Serialize`
+/// writer that grows a third consumer) inherit the upgrade
+/// mechanically. No per-site edit at [`annotation_body`] or at
+/// `phase_status_with`; a new consumer (a hypothetical typed labels
+/// composer, an annotations-batch composer, a per-slot status-patch
+/// composer) picks up the sibling primitive by name and inherits the
+/// same fold discipline.
+///
+/// Sibling to [`crate::three_pillar::pillar_bytes`] on the (`T:
+/// Serialize` → wire-shape) axis pair: [`pillar_bytes`] owns the
+/// `serde_json::to_vec(<T>).unwrap_or_default()` fold for the
+/// attestation-pillar bytes axis (returning `Vec<u8>` with a
+/// `Vec::default()` empty fallback); this primitive owns the
+/// `serde_json::to_value(<T>).unwrap_or(Value::Null)` fold for the
+/// JSON-slot value axis (returning `Value` with a `Value::Null`
+/// fallback). Both hold the invariant that a caller-supplied
+/// serde-serialisable payload folds into a wire-form value at ONE
+/// substrate owner rather than at each per-site hand-authored chain.
+///
+/// The `T: Serialize` bound accepts owned or borrowed values of any
+/// serde-serialisable type without widening the signature — matches
+/// [`annotation_body`]'s `impl Serialize` value slot verbatim and
+/// matches `phase_status_with`'s `T: Serialize` extra slot verbatim.
+/// A serialisation failure (the `Err` arm the `serde_json::to_value`
+/// contract permits) resolves to [`serde_json::Value::Null`], matching
+/// the pre-lift discipline both callsites carried before this lift.
+/// In practice the shapes each callsite passes (a `Value::Null`, a
+/// `String`, a `&'static str`, an `&Identity`, a `&Vec<FluxResourceRef>`,
+/// a `&ProcessAttestation`) never fail to serialise; the fallback is a
+/// defensive guard against a future caller passing a `T` whose
+/// `Serialize` impl signals a runtime error at that boundary.
+///
+/// [`pillar_bytes`]: crate::three_pillar::pillar_bytes
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// 3-link `serde_json::to_value(<T>).unwrap_or(Value::Null)` chain
+/// recurred at 2 hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication trigger inside two workspace crates, and is lifted onto
+/// ONE substrate owner here). THEORY.md §II.1 invariant 5 (composition
+/// preserves proofs — the pin block below binds the composer at
+/// fail-before-pass-after granularity, so a regression that drifts the
+/// serialiser choice, flips the fallback constant, reshapes the return
+/// form, or narrows the `T: Serialize` bound surfaces HERE rather than
+/// as silent JSON-slot-value skew across the two consumer sites).
+#[must_use]
+pub fn to_value_or_null<T: Serialize>(value: T) -> serde_json::Value {
+    serde_json::to_value(value).unwrap_or(serde_json::Value::Null)
 }
 
 #[cfg(test)]
@@ -1844,5 +1940,150 @@ mod tests {
             matches!(apply_patch, Patch::Apply(_)),
             "apply dispatches Patch::Apply, distinguishing it from merge_as's Patch::Merge corner"
         );
+    }
+
+    // ─── to_value_or_null substrate pins ────────────────────────────
+    //
+    // Bind [`to_value_or_null`] at fail-before-pass-after granularity
+    // so a regression that swapped the serialiser
+    // (`serde_json::to_string` for `to_value`), flipped the fallback
+    // constant (`Value::Bool(false)` for `Value::Null`), narrowed the
+    // `T: Serialize` bound (a `&str`-only monomorphisation), or
+    // reshaped the return form (a `Result<Value, _>` in place of the
+    // folded `Value`) surfaces HERE rather than as silent JSON-slot
+    // drift at the two consumer sites (`annotation_body`'s
+    // `annotations.<key>` leaf and `tatara_reconciler::patch::
+    // phase_status_with`'s caller-named third slot).
+
+    #[test]
+    fn to_value_or_null_folds_serializable_payload_into_the_corresponding_value_shape() {
+        // Primary shape: each `T: Serialize` payload folds into the
+        // exact `Value` shape `serde_json::to_value` yields for that
+        // type. Sweep the representative payload shapes both consumer
+        // sites pass in production:
+        //
+        //   - `Value::Null`  → signals::ingest strip via annotation_body
+        //   - `String`       → transition_to_releasing stamp via annotation_body
+        //   - `&'static str` → controller_allocation return-trigger via annotation_body
+        //   - `&Identity`    → phase_status(phase, Some(&id)) via phase_status_with
+        //   - `Vec<_>` ref   → Running-entry fluxResources via phase_status_with
+        //   - `&Attestation` → Attested-entry attestation via phase_status_with
+        //
+        // Represented here by shape families the primitive must fold
+        // (Null / owned-String / borrowed-str / borrowed-struct-ref /
+        // borrowed-Vec-ref / borrowed-map-ref) without kube-side types
+        // this crate's `tatara-process` layer doesn't own.
+        assert_eq!(
+            to_value_or_null(serde_json::Value::Null),
+            serde_json::Value::Null
+        );
+        assert_eq!(to_value_or_null(String::from("Running")), json!("Running"));
+        assert_eq!(to_value_or_null("true"), json!("true"));
+
+        #[derive(Serialize)]
+        struct IdLike<'a> {
+            name: &'a str,
+            content_hash: &'a str,
+        }
+        let id_like = IdLike {
+            name: "observability-stack",
+            content_hash: "abc123",
+        };
+        assert_eq!(
+            to_value_or_null(&id_like),
+            json!({ "name": "observability-stack", "content_hash": "abc123" }),
+            "borrowed-struct-ref folds through serde's rename_all-off default (snake_case field names verbatim)",
+        );
+
+        let vec_like = vec!["a".to_string(), "b".to_string()];
+        assert_eq!(to_value_or_null(&vec_like), json!(["a", "b"]));
+
+        let mut map_like = std::collections::BTreeMap::new();
+        map_like.insert("k1", 1_u32);
+        map_like.insert("k2", 2_u32);
+        assert_eq!(to_value_or_null(&map_like), json!({ "k1": 1, "k2": 2 }));
+    }
+
+    #[test]
+    fn to_value_or_null_null_payload_round_trips_verbatim() {
+        // The signals::ingest strip arm passes `serde_json::Value::
+        // Null` verbatim so JSON merge patch interprets the resulting
+        // annotation-body leaf as "remove key". A regression that
+        // promoted the Null through a `String` wrap (silently producing
+        // `Value::String("null")`) would break that strip semantics —
+        // pin the round-trip at the primitive.
+        let folded = to_value_or_null(serde_json::Value::Null);
+        assert!(
+            folded.is_null(),
+            "Null payload folds to Value::Null, not to a JSON string \"null\"",
+        );
+    }
+
+    #[test]
+    fn to_value_or_null_matches_pre_lift_hand_authored_chain_bytewise() {
+        // Byte-shape parity witness against the pre-lift
+        // `serde_json::to_value(<T>).unwrap_or(Value::Null)` chain both
+        // consumer sites restated verbatim. Sweep representative
+        // payload shapes; a regression that reshaped either link would
+        // surface HERE rather than as silent JSON-slot drift at
+        // `annotation_body` or `phase_status_with`.
+        #[derive(Serialize)]
+        struct Pair {
+            phase: &'static str,
+            since: &'static str,
+        }
+        let pair = Pair {
+            phase: "Attested",
+            since: "2026-09-05T00:00:00Z",
+        };
+        let via_primitive = to_value_or_null(&pair);
+        let hand_authored = serde_json::to_value(&pair).unwrap_or(serde_json::Value::Null);
+        assert_eq!(
+            via_primitive, hand_authored,
+            "to_value_or_null must byte-match the pre-lift `to_value(&pair).unwrap_or(Value::Null)` chain",
+        );
+
+        for scalar in ["short", ""] {
+            let via_primitive = to_value_or_null(scalar);
+            let hand_authored = serde_json::to_value(scalar).unwrap_or(serde_json::Value::Null);
+            assert_eq!(
+                via_primitive, hand_authored,
+                "scalar `&str` payload `{scalar}` must byte-match pre-lift chain",
+            );
+        }
+
+        let via_primitive = to_value_or_null(serde_json::Value::Null);
+        let hand_authored =
+            serde_json::to_value(serde_json::Value::Null).unwrap_or(serde_json::Value::Null);
+        assert_eq!(
+            via_primitive, hand_authored,
+            "Null payload must byte-match pre-lift chain",
+        );
+    }
+
+    #[test]
+    fn to_value_or_null_composes_at_annotation_body_and_phase_status_with_shape() {
+        // Consumer-composition witness: [`annotation_body`] and (in the
+        // reconciler crate) `phase_status_with` both fold their `T:
+        // Serialize` extras through THIS primitive. Verify the
+        // `annotation_body` side composes correctly at the exact leaf
+        // slot; the reconciler-side consumer is exercised by that
+        // crate's own `phase_status_with` pins that already sweep the
+        // Serialize matrix. A regression that split the fold discipline
+        // (a per-callsite drift in how the residual `Err` arm is
+        // handled) would surface HERE at the composition-parity pin.
+        for value_shape in [
+            serde_json::Value::Null,
+            json!("stamped"),
+            json!(42),
+            json!({ "nested": "shape" }),
+        ] {
+            let via_composition = annotation_body("k.io/v", value_shape.clone());
+            let expected_leaf = to_value_or_null(value_shape);
+            assert_eq!(
+                via_composition["metadata"]["annotations"]["k.io/v"], expected_leaf,
+                "annotation_body's leaf value equals to_value_or_null of the same payload",
+            );
+        }
     }
 }

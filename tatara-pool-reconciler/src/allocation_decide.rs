@@ -302,12 +302,7 @@ fn resolve_pool<'a>(
     } else {
         let key = match_key_from_requestor(&alloc.spec.requestor);
         let labels_owned: Vec<String> = alloc.spec.requestor.pr_labels.clone();
-        let key = MatchKey {
-            repo: key.repo,
-            branch: key.branch,
-            pr_labels: &labels_owned,
-            kind: key.kind,
-        };
+        let key = MatchKey::new(key.repo, key.branch, &labels_owned, key.kind);
         best_match(candidate_pools, &key).map(|m| m.pool)
     }
 }

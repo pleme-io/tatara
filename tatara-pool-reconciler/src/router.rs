@@ -105,12 +105,7 @@ mod tests {
 
     #[test]
     fn no_candidates_returns_none() {
-        let key = MatchKey {
-            repo: "x",
-            branch: "y",
-            pr_labels: &[],
-            kind: "manual",
-        };
+        let key = MatchKey::unlabeled("x", "y", "manual");
         assert!(best_match(&[], &key).is_none());
     }
 
@@ -123,12 +118,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let key = MatchKey {
-            repo: "drzln/dotfiles",
-            branch: "main",
-            pr_labels: &[],
-            kind: "manual",
-        };
+        let key = MatchKey::unlabeled("drzln/dotfiles", "main", "manual");
         assert!(best_match(&[p], &key).is_none());
     }
 
@@ -144,12 +134,8 @@ mod tests {
                 ..Default::default()
             },
         );
-        let key = MatchKey {
-            repo: "pleme-io/demo-app",
-            branch: "main",
-            pr_labels: &["needs-ephemeral".into()],
-            kind: "github-pr",
-        };
+        let labels: [String; 1] = ["needs-ephemeral".into()];
+        let key = MatchKey::new("pleme-io/demo-app", "main", &labels, "github-pr");
         let pools = vec![general, specific];
         let m = best_match(&pools, &key).unwrap();
         assert_eq!(m.pool.metadata.name.as_deref(), Some("specific"));
@@ -171,12 +157,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let key = MatchKey {
-            repo: "pleme-io/demo-app",
-            branch: "x",
-            pr_labels: &[],
-            kind: "manual",
-        };
+        let key = MatchKey::unlabeled("pleme-io/demo-app", "x", "manual");
         let pools = vec![z, a];
         let m = best_match(&pools, &key).unwrap();
         assert_eq!(m.pool.metadata.name.as_deref(), Some("a-pool"));
@@ -185,12 +166,7 @@ mod tests {
     #[test]
     fn default_selector_matches_general_traffic() {
         let p = pool("general", PoolSelector::default());
-        let key = MatchKey {
-            repo: "any/repo",
-            branch: "any-branch",
-            pr_labels: &[],
-            kind: "manual",
-        };
+        let key = MatchKey::unlabeled("any/repo", "any-branch", "manual");
         assert!(best_match(&[p], &key).is_some());
     }
 }

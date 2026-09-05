@@ -2291,6 +2291,37 @@ pub struct MatchKey<'a> {
     pub kind: &'a str,
 }
 
+impl<'a> MatchKey<'a> {
+    /// Canonical 4-slot composer. Every routing key threads through
+    /// this constructor so a future field addition — or a slot-order
+    /// change — lands at ONE site instead of every fixture literal
+    /// across `tatara-process::pool` tests + `tatara-pool-reconciler`
+    /// (router + allocation_decide).
+    #[must_use]
+    pub const fn new(
+        repo: &'a str,
+        branch: &'a str,
+        pr_labels: &'a [String],
+        kind: &'a str,
+    ) -> Self {
+        Self {
+            repo,
+            branch,
+            pr_labels,
+            kind,
+        }
+    }
+
+    /// Label-agnostic peer of [`Self::new`] — routes through it with a
+    /// static empty label slice. Every test that doesn't exercise the
+    /// `pr_labels` axis names its intent (no labels) by calling this
+    /// instead of hand-writing `pr_labels: &[]`.
+    #[must_use]
+    pub const fn unlabeled(repo: &'a str, branch: &'a str, kind: &'a str) -> Self {
+        Self::new(repo, branch, &[], kind)
+    }
+}
+
 fn glob_any(patterns: &[String], value: &str) -> bool {
     if patterns.is_empty() {
         return true;
@@ -2332,6 +2363,36 @@ mod tests {
     // `use std::str::FromStr;` at the file head.
     use std::str::FromStr;
 
+    /// SLOT-BINDING CONTRACT: [`MatchKey::new`] threads every input
+    /// verbatim into its named slot — a future field addition or
+    /// slot-order swap in the struct lands here at ONE site instead
+    /// of every fixture literal across the workspace.
+    #[test]
+    fn match_key_new_binds_all_four_slots_verbatim() {
+        let labels: Vec<String> = vec!["needs-ephemeral".into()];
+        let k = MatchKey::new("r", "b", &labels, "kind");
+        assert_eq!(k.repo, "r");
+        assert_eq!(k.branch, "b");
+        assert_eq!(k.pr_labels, labels.as_slice());
+        assert_eq!(k.kind, "kind");
+    }
+
+    /// UNLABELED-PEER CONTRACT: [`MatchKey::unlabeled`] is
+    /// definitionally [`MatchKey::new`] with a static empty label
+    /// slice — the two composers must produce structurally identical
+    /// keys on the label-empty axis.
+    #[test]
+    fn match_key_unlabeled_routes_through_new_with_empty_slice() {
+        let empty: &[String] = &[];
+        let via_unlabeled = MatchKey::unlabeled("r", "b", "kind");
+        let via_new = MatchKey::new("r", "b", empty, "kind");
+        assert_eq!(via_unlabeled.repo, via_new.repo);
+        assert_eq!(via_unlabeled.branch, via_new.branch);
+        assert_eq!(via_unlabeled.pr_labels, via_new.pr_labels);
+        assert_eq!(via_unlabeled.kind, via_new.kind);
+        assert!(via_unlabeled.pr_labels.is_empty());
+    }
+
     #[test]
     fn glob_trailing_star_matches_prefix() {
         assert!(glob_match("pleme-io/*", "pleme-io/demo-app"));
@@ -2345,12 +2406,7 @@ mod tests {
     #[test]
     fn empty_selector_matches_anything() {
         let s = PoolSelector::default();
-        assert!(s.matches(&MatchKey {
-            repo: "any/repo",
-            branch: "any-branch",
-            pr_labels: &[],
-            kind: "any",
-        }));
+        assert!(s.matches(&MatchKey::unlabeled("any/repo", "any-branch", "any")));
     }
 
     #[test]
@@ -2359,18 +2415,8 @@ mod tests {
             repos: vec!["pleme-io/demo-*".into()],
             ..Default::default()
         };
-        assert!(s.matches(&MatchKey {
-            repo: "pleme-io/demo-app",
-            branch: "x",
-            pr_labels: &[],
-            kind: "y",
-        }));
-        assert!(!s.matches(&MatchKey {
-            repo: "pleme-io/other-repo",
-            branch: "x",
-            pr_labels: &[],
-            kind: "y",
-        }));
+        assert!(s.matches(&MatchKey::unlabeled("pleme-io/demo-app", "x", "y")));
+        assert!(!s.matches(&MatchKey::unlabeled("pleme-io/other-repo", "x", "y")));
     }
 
     #[test]
@@ -2380,23 +2426,18 @@ mod tests {
             ..Default::default()
         };
         // Both labels present → match.
-        assert!(s.matches(&MatchKey {
-            repo: "x",
-            branch: "y",
-            pr_labels: &[
+        assert!(s.matches(&MatchKey::new(
+            "x",
+            "y",
+            &[
                 "needs-ephemeral".into(),
                 "integration".into(),
                 "extra".into()
             ],
-            kind: "z",
-        }));
+            "z",
+        )));
         // One label missing → no match.
-        assert!(!s.matches(&MatchKey {
-            repo: "x",
-            branch: "y",
-            pr_labels: &["needs-ephemeral".into()],
-            kind: "z",
-        }));
+        assert!(!s.matches(&MatchKey::new("x", "y", &["needs-ephemeral".into()], "z",)));
     }
 
     #[test]
@@ -2558,18 +2599,8 @@ mod tests {
             kinds: vec!["github-pr".into(), "manual".into()],
             ..Default::default()
         };
-        assert!(s.matches(&MatchKey {
-            repo: "x",
-            branch: "y",
-            pr_labels: &[],
-            kind: "github-pr",
-        }));
-        assert!(!s.matches(&MatchKey {
-            repo: "x",
-            branch: "y",
-            pr_labels: &[],
-            kind: "scheduled",
-        }));
+        assert!(s.matches(&MatchKey::unlabeled("x", "y", "github-pr")));
+        assert!(!s.matches(&MatchKey::unlabeled("x", "y", "scheduled")));
     }
 
     // ── closed-set algebra contracts for ReturnPolicy

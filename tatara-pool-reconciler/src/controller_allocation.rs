@@ -138,25 +138,32 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
         AllocationDecision::NoMatchingPool => {
             // The `AllocationDecision::NoMatchingPool` phase-transition
             // status seed rides through the substrate composer
-            // [`tatara_process::allocation::AllocationStatus::transition`]
-            // — pre-lift this was a hand-authored 4-line `json!({
-            // "status": { "phase": ..., "phaseSince": Utc::now(),
-            // "message": ..., } })` incantation, one of FOUR
-            // workspace-wide restatements past the ★★ PRIME-DIRECTIVE
-            // ≥ 2 duplication threshold in this module (peers at the
-            // Wait / Bind / Release arms below). Post-lift the four
-            // consumers share ONE substrate owner so a rename of the
-            // typed [`AllocationStatus`] field naming (a `phaseSince`
-            // → `phase_since` serde surface change, a structured-
-            // envelope promotion of `message`) lands at ONE derive
-            // and every emit site inherits the upgrade mechanically.
+            // [`tatara_process::allocation::AllocationStatus::transition_now`]
+            // — the wall-clock-anchored peer of the 3-arg
+            // [`AllocationStatus::transition`] composer (which itself
+            // pre-dates the wall-clock-anchored lift and owns the
+            // typed `phase + phase_since + message` triplet against
+            // every peer arm in this module). Pre-lift the inline
+            // `AllocationStatus::transition(<phase>, <msg>, Utc::now())`
+            // 3-arg call with the wall clock as its trailing argument
+            // was hand-authored at TWO workspace-wide production
+            // sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+            // threshold in this module (peer at the Wait arm below).
+            // Post-lift both consumers share ONE substrate owner for
+            // the wall-clock-at-tick projection; a future clock swap
+            // (a monotonic clock cross-check, a per-reconciler
+            // injected time source, a test-only override at the
+            // production callsite via feature flag) lands at ONE
+            // substrate function and both allocation-decision
+            // status-patch sites inherit the upgrade mechanically.
+            // Sibling of `PoolStatus::observed_now` on the peer
+            // wall-clock-anchored composer family.
             let _ = tatara_process::patch::merge_status(
                 &alloc_api,
                 &name,
-                &AllocationStatus::transition(
+                &AllocationStatus::transition_now(
                     AllocationPhase::NoMatchingPool,
                     "no Pool selector matched this Requestor",
-                    Utc::now(),
                 ),
             )
             .await;
@@ -164,22 +171,25 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
         AllocationDecision::Wait { pool } => {
             // Peer to the NoMatchingPool arm above: the same substrate
             // composer stamps the `phase + phase_since + message`
-            // invariant triplet; the branch-specific `bound_pool` slot
-            // rides in via struct-update syntax onto the seed so a
-            // future addition to the composer's stamped triplet (a
-            // `by:` transition-source annotation, a
-            // `transitionCount:` diagnostic counter) reaches this
-            // Wait/Queued site through the substrate rather than by
-            // hand-edit.
+            // invariant triplet through the wall-clock-anchored
+            // [`AllocationStatus::transition_now`] primitive; the
+            // branch-specific `bound_pool` slot rides in via struct-
+            // update syntax onto the seed so a future addition to the
+            // composer's stamped triplet (a `by:` transition-source
+            // annotation, a `transitionCount:` diagnostic counter)
+            // reaches this Wait/Queued site through the substrate
+            // rather than by hand-edit. Both consumers of the peer
+            // composer now route the wall clock through ONE substrate
+            // owner (see the NoMatchingPool arm above for the full
+            // peer-inventory + rationale).
             let _ = tatara_process::patch::merge_status(
                 &alloc_api,
                 &name,
                 &AllocationStatus {
                     bound_pool: Some(pool),
-                    ..AllocationStatus::transition(
+                    ..AllocationStatus::transition_now(
                         AllocationPhase::Queued,
                         "pool matched; no Free member available",
-                        Utc::now(),
                     )
                 },
             )

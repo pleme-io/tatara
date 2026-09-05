@@ -654,6 +654,86 @@ impl AllocationStatus {
             ..Self::transition(phase, message, now)
         }
     }
+
+    /// Wall-clock-anchored peer of [`Self::transition`] — reads
+    /// `Utc::now()` at call time and forwards it into the substrate
+    /// composer's `now` slot.
+    ///
+    /// Pre-lift the 3-arg [`Self::transition`] chain fed by an inline
+    /// `Utc::now()` third argument was hand-authored at TWO production
+    /// sites in `tatara-pool-reconciler::controller_allocation::
+    /// reconcile_inner` past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    /// threshold:
+    ///
+    /// * The `AllocationDecision::NoMatchingPool` arm — status seed at
+    ///   `AllocationPhase::NoMatchingPool` (no addenda; the composer's
+    ///   seed is patched verbatim).
+    /// * The `AllocationDecision::Wait { pool }` arm — status seed at
+    ///   `AllocationPhase::Queued` inside a `..Self::transition(...)`
+    ///   struct-update that adds `bound_pool: Some(pool)`.
+    ///
+    /// Both sites walked the SAME 3-arg call with the SAME
+    /// `chrono::Utc::now()` third argument — the wall-clock projection
+    /// had no per-callsite variation. Post-lift both consumers share
+    /// ONE substrate owner for the wall-clock-at-tick projection; a
+    /// future clock swap (a monotonic clock cross-check, a per-
+    /// reconciler injected time source, a test-only override at the
+    /// production callsite via feature flag) lands at ONE substrate
+    /// function and every allocation-decision status-patch site
+    /// inherits the upgrade mechanically.
+    ///
+    /// The 3-arg [`Self::transition`] peer stays load-bearing for test
+    /// callers — the injected-`now` shape is what unit tests use to
+    /// drive the clock deterministically (every
+    /// `AllocationStatus::transition(phase, msg, anchor_time())` in
+    /// this module's own test suite reads that surface). This peer is
+    /// production-only: pinning the wall-clock at the substrate site
+    /// means no test can accidentally consume it without the
+    /// deterministic-clock injection that makes the test meaningful.
+    ///
+    /// Sibling of [`crate::pool::PoolStatus::observed_now`] on the
+    /// (`<CRD>Status` substrate composer × wall-clock-anchored peer)
+    /// axis — both primitives own the "read the wall clock at tick-
+    /// time" projection on a peer clock-injectable substrate composer
+    /// so the workspace's `<CRD>Status` composer family stays uniform
+    /// across `PoolStatus.observed` on the pool axis and
+    /// `AllocationStatus.transition` on the allocation axis. Peer to
+    /// [`crate::lifetime_clock::evaluate_now`] on the (typed pure-fn,
+    /// wall-clock-anchored peer) axis for the timed-decision family.
+    ///
+    /// # Invariants
+    ///
+    /// - **Same shape:** returns the SAME [`AllocationStatus`] the
+    ///   3-arg [`Self::transition`] returns when passed
+    ///   `chrono::Utc::now()` as the third argument. This is a
+    ///   delegation, not a re-implementation.
+    /// - **Wall-clock read once:** `Utc::now()` is called exactly ONCE
+    ///   per invocation, at the primitive's body, so a future consumer
+    ///   that chains two `transition_now` calls back-to-back still sees
+    ///   monotonic `now` reads (each call reads a fresh instant, not a
+    ///   cached one) — matches the pre-lift shape where each of the
+    ///   two status-patch sites computed its own `chrono::Utc::now()`
+    ///   at its own line.
+    ///
+    /// # `#[must_use]`
+    ///
+    /// Every consumer feeds the returned [`AllocationStatus`] into
+    /// `tatara_process::patch::merge_status(&alloc_api, &name, &<status>)`
+    /// or a peer status-patch call. Dropping the return means the
+    /// transition composed for no observable reason — the attribute
+    /// surfaces that as a warning at every call site.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the 3-arg call with `chrono::Utc::now()` as the third argument
+    /// recurred at 2 hand-authored sites past the ★★ PRIME-DIRECTIVE
+    /// ≥ 2 duplication trigger, lifted onto the ONE workspace-wide
+    /// substrate owner here). THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the wall-clock projection lives at ONE site
+    /// so a future clock swap reaches both consumers through one edit).
+    #[must_use]
+    pub fn transition_now(phase: AllocationPhase, message: impl Into<String>) -> Self {
+        Self::transition(phase, message, Utc::now())
+    }
 }
 
 /// Allocation lifecycle phase.
@@ -2586,6 +2666,196 @@ mod tests {
             serde_json::to_value(&via_composer).unwrap(),
             serde_json::to_value(&via_hand_authored).unwrap(),
         );
+    }
+
+    // ─── AllocationStatus::transition_now substrate pins ──────────────
+    //
+    // Bind [`AllocationStatus::transition_now`] at fail-before-pass-after
+    // granularity so a regression that dropped the wall-clock read
+    // (yielding a `phase_since` of `Some(DateTime::default())`),
+    // reshaped the delegation target (a peer 3-arg composer that
+    // stamped different defaults), or diverged the peer from the 3-arg
+    // [`AllocationStatus::transition`] on any observable slot surfaces
+    // HERE rather than as silent operator-facing drift at the two
+    // controller_allocation status-patch sites.
+    //
+    // Each pin is fail-before-pass-after: the primitive did not exist
+    // pre-lift, so any test that invokes it fails to compile pre-lift
+    // and passes post-lift; the byte-identity pins below then bind the
+    // specific shape choice. Sibling of the
+    // `pool_status_observed_now_*` family in `crate::pool`.
+
+    #[test]
+    fn allocation_status_transition_now_composes_through_transition_with_wall_clock() {
+        // Composition pin: `transition_now` MUST agree with the 3-arg
+        // `transition(phase, msg, Utc::now())` peer at every slot other
+        // than `phase_since` (which reads the wall clock at different
+        // instants and diverges by scheduler jitter). A regression that
+        // specialized either composer (a stray canonicalization at
+        // `transition_now`, a swapped default at the 3-arg peer) would
+        // surface HERE rather than as silent skew at the two
+        // controller_allocation sites the primitive owns.
+        let via_now = AllocationStatus::transition_now(AllocationPhase::Queued, "queued");
+        let via_injected =
+            AllocationStatus::transition(AllocationPhase::Queued, "queued", Utc::now());
+        assert_eq!(via_now.phase, via_injected.phase);
+        assert_eq!(via_now.message, via_injected.message);
+        assert_eq!(via_now.bound_pool, via_injected.bound_pool);
+        assert_eq!(via_now.assigned_process, via_injected.assigned_process);
+        assert_eq!(via_now.allocated_at, via_injected.allocated_at);
+        assert_eq!(via_now.expires_at, via_injected.expires_at);
+        assert_eq!(via_now.conditions.len(), via_injected.conditions.len());
+    }
+
+    #[test]
+    fn allocation_status_transition_now_reads_wall_clock_into_phase_since() {
+        // Wall-clock pin: `phase_since` MUST fall between `Utc::now()`
+        // reads bracketed around the call. A regression that dropped
+        // the wall-clock read to a module-load constant (`Utc::now()`
+        // captured at `static` init), a `DateTime::default()` (epoch),
+        // or a stale `None` would fail this bracket check.
+        let before = Utc::now();
+        let s = AllocationStatus::transition_now(
+            AllocationPhase::NoMatchingPool,
+            "no Pool selector matched this Requestor",
+        );
+        let after = Utc::now();
+        let phase_since = s
+            .phase_since
+            .expect("transition_now must stamp phase_since with the wall clock");
+        assert!(
+            phase_since >= before && phase_since <= after,
+            "phase_since {phase_since} must fall in [{before}, {after}]"
+        );
+    }
+
+    #[test]
+    fn allocation_status_transition_now_stamps_the_same_defaults_as_the_injected_peer() {
+        // Defaults pin: every optional slot beyond the base triplet
+        // (`bound_pool` / `assigned_process` / `allocated_at` /
+        // `expires_at` / `conditions`) MUST agree with the 3-arg
+        // [`AllocationStatus::transition`] peer verbatim. A regression
+        // that stamped a per-caller default at `transition_now` (a
+        // "wall-clock-stamped transition" placeholder, say) or seeded
+        // a "just-transitioned" Condition row would surface HERE
+        // rather than as silent operator-facing drift at either
+        // status-patch site.
+        let s = AllocationStatus::transition_now(AllocationPhase::NoMatchingPool, "no match");
+        assert!(s.bound_pool.is_none(), "bound_pool must default to None");
+        assert!(
+            s.assigned_process.is_none(),
+            "assigned_process must default to None"
+        );
+        assert!(
+            s.allocated_at.is_none(),
+            "allocated_at must default to None"
+        );
+        assert!(s.expires_at.is_none(), "expires_at must default to None");
+        assert!(
+            s.conditions.is_empty(),
+            "conditions must default to an empty Vec"
+        );
+    }
+
+    #[test]
+    fn allocation_status_transition_now_wall_clock_is_read_per_invocation_not_cached() {
+        // Monotonic-read pin: two back-to-back `transition_now` calls
+        // MUST read `Utc::now()` twice — the second `phase_since` MUST
+        // be `>=` the first. A regression that cached a wall-clock
+        // read into a `OnceLock` / lazy `static` would fire the SAME
+        // `phase_since` for every caller on the reconciler's process
+        // and every status-patch would carry the module-load instant
+        // rather than the tick instant. Both instants may coincide on
+        // a fast machine; use `>=` (not `>`) to keep the pin robust
+        // against subsecond scheduler granularity while still catching
+        // a cached-constant regression (where the second read would
+        // be < the wall clock).
+        let first = AllocationStatus::transition_now(AllocationPhase::Queued, "queued")
+            .phase_since
+            .expect("first transition_now stamps phase_since");
+        let second = AllocationStatus::transition_now(AllocationPhase::Queued, "queued")
+            .phase_since
+            .expect("second transition_now stamps phase_since");
+        assert!(
+            second >= first,
+            "second phase_since {second} must be >= first phase_since {first}"
+        );
+        let after = Utc::now();
+        assert!(
+            second <= after,
+            "second phase_since {second} must be <= {after}"
+        );
+    }
+
+    #[test]
+    fn allocation_status_transition_now_accepts_owned_string_and_static_str() {
+        // `impl Into<String>` matches every current callsite: both
+        // hand-authored production sites pass `&'static str` literal
+        // reasons; a future callsite that composes a `format!`-owned
+        // reason routes through the same signature without widening.
+        // Sibling to the 3-arg `AllocationStatus::transition` peer's
+        // identical `impl Into<String>` signature.
+        let via_static = AllocationStatus::transition_now(
+            AllocationPhase::NoMatchingPool,
+            "no Pool selector matched this Requestor",
+        );
+        let via_owned = AllocationStatus::transition_now(
+            AllocationPhase::NoMatchingPool,
+            String::from("no Pool selector matched this Requestor"),
+        );
+        assert_eq!(via_static.message, via_owned.message);
+    }
+
+    #[test]
+    fn allocation_status_transition_now_composes_with_struct_update_for_wait_seed() {
+        // Pin the compound shape the `AllocationDecision::Wait { pool }`
+        // callsite post-lift composes: the composer seeds `phase +
+        // phase_since + message`, and the Wait branch attaches
+        // `bound_pool: Some(pool)` via struct-update syntax. Post-lift
+        // the branch slot survives the compose intact and the base
+        // three slots inherit the composer's stamps verbatim — matches
+        // the pre-lift shape where `..AllocationStatus::transition(
+        // Queued, msg, Utc::now())` fed the same struct-update seed.
+        let pool = AllocationRef::new("attest-pool", "pools");
+        let wait_status = AllocationStatus {
+            bound_pool: Some(pool.clone()),
+            ..AllocationStatus::transition_now(
+                AllocationPhase::Queued,
+                "pool matched; no Free member available",
+            )
+        };
+        assert_eq!(wait_status.phase, AllocationPhase::Queued);
+        assert_eq!(wait_status.bound_pool.as_ref(), Some(&pool));
+        assert_eq!(
+            wait_status.message.as_deref(),
+            Some("pool matched; no Free member available")
+        );
+        assert!(
+            wait_status.phase_since.is_some(),
+            "phase_since must be stamped from the wall clock"
+        );
+        assert!(
+            wait_status.assigned_process.is_none(),
+            "assigned_process must remain None on the Wait seed"
+        );
+    }
+
+    #[test]
+    fn allocation_status_transition_now_shape_agrees_with_pool_status_observed_now_peer() {
+        // Cross-CRD peer-axis coherence: both wall-clock-anchored
+        // substrate composers
+        // (`PoolStatus::observed_now`, `AllocationStatus::transition_now`)
+        // read `Utc::now()` at their own body and stamp it into
+        // `phase_since` uniformly across the two `<CRD>Status` axes.
+        // Structural pin: if either side's `now` slot leaks into the
+        // signature (e.g. adding an `impl Into<DateTime<Utc>>`
+        // parameter), this bind fails to compile here rather than
+        // silently drifting the wall-clock-anchored peer family apart.
+        let _allocation_shape: fn(AllocationPhase, &'static str) -> AllocationStatus =
+            AllocationStatus::transition_now;
+        // (`PoolStatus::observed_now`'s pinned coherence lives at its
+        // own peer pin family in `crate::pool`; this pin binds the
+        // `AllocationStatus::transition_now` side of the peer pair.)
     }
 
     #[test]

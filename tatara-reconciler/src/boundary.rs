@@ -57,6 +57,71 @@ impl Satisfaction {
             Self::Unsatisfied(m) | Self::Unknown(m) => Some(m),
         }
     }
+
+    /// Compose a `Satisfaction::Unsatisfied` diagnostic for the
+    /// resource-fetch "not found" corner every boundary evaluator on
+    /// this file surfaces when its `get_opt(...)` returns `None`. The
+    /// ONE substrate owner of the `<label> <ns>/<name> not found`
+    /// diagnostic shape restated by hand at THREE sites past the
+    /// ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold:
+    ///
+    /// * [`classify_job_status`] on the [`JobLookup::Missing`] arm —
+    ///   `format!("{label} {ns}/{name} not found")`.
+    /// * [`evaluate_process_phase`] on the `api.get_opt(&process_ref)
+    ///   → None` arm — `format!("process {}/{} not found", ns,
+    ///   parsed.process_ref)`.
+    /// * [`evaluate_flux_ready`] on the `fetch_by_identity → None`
+    ///   arm — `format!("{kind} {}/{} not found", ns, parsed.name)`.
+    ///
+    /// The `<ns>/<name>` join routes through the workspace-wide
+    /// [`tatara_process::qualified_process_ref`] composer via its
+    /// [`crate::ssapply::qualified_process_ref`] re-export — pre-lift
+    /// TWO of the three sites hand-authored a `{}/{}` join that did
+    /// NOT ride through the composer, so a future normalization of
+    /// the join (case-fold, unicode-safe collation, etc.) would have
+    /// skipped these three diagnostic bodies. Post-lift every "not
+    /// found" body inherits the workspace-wide `<ns>/<name>` join
+    /// mechanically, matching the sibling
+    /// [`UnmetDependency::not_found`] composer's routing convention
+    /// (see boundary.rs:1176 for the peer composer that pre-existed
+    /// this lift and already routed through `qualified_process_ref`).
+    ///
+    /// Sibling to [`classify_job_status`] and
+    /// [`classify_receipt_verdict`] on the same axis of "operator-
+    /// facing `Satisfaction::Unsatisfied` diagnostic bodies with a
+    /// `<label> <ns>/<name> …` head". This composer owns the
+    /// resource-fetch corner where the referenced object simply
+    /// isn't in the cluster; the two sibling `classify_*` primitives
+    /// own the Job-status projection and the receipt-verdict
+    /// projection respectively.
+    ///
+    /// Byte-shape pin: `resource_not_found("Job", "flux-system",
+    /// "my-job")` yields
+    /// `Satisfaction::Unsatisfied("Job flux-system/my-job not
+    /// found")`, byte-identical to the pre-lift shape the existing
+    /// [`classify_job_status_tests::missing_job_projects_to_unsatisfied_with_label_prefix`]
+    /// test already pinned. Each future boundary evaluator that
+    /// projects a `get_opt(...) → None` fetch corner onto
+    /// [`Satisfaction::Unsatisfied`] lands as ONE new callsite through
+    /// this composer instead of another hand-authored `format!(...)`
+    /// with the same `<label> <ns>/<name> not found` shape.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the shape recurred at three sites past the PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger, and is lifted to ONE owner here). THEORY
+    /// .md §II.1 invariant 5 (composition preserves proofs — the three
+    /// evaluators now compose structurally through ONE primitive; a
+    /// regression that drifted the wording at ONE site surfaces at
+    /// [`satisfaction_resource_not_found_tests`] rather than as silent
+    /// drift at every future boundary evaluator with a
+    /// resource-fetch corner).
+    #[must_use]
+    pub fn resource_not_found(label: &str, ns: &str, name: &str) -> Self {
+        Self::Unsatisfied(format!(
+            "{label} {qname} not found",
+            qname = crate::ssapply::qualified_process_ref(ns, name),
+        ))
+    }
 }
 
 /// Closed set of diagnostic label prefixes used by Job-based boundary
@@ -676,9 +741,17 @@ fn classify_job_status(
     lookup: JobLookup,
 ) -> Result<JobStatusView, Satisfaction> {
     match lookup {
-        JobLookup::Missing => Err(Satisfaction::Unsatisfied(format!(
-            "{label} {ns}/{name} not found"
-        ))),
+        // Missing arm routes through the substrate composer
+        // `Satisfaction::resource_not_found(label, ns, name)` — ONE
+        // of THREE workspace-wide sites on this file that pre-lift
+        // hand-authored the `<label> <ns>/<name> not found`
+        // diagnostic shape past the ★★ PRIME-DIRECTIVE ≥ 2
+        // duplication threshold (siblings at `evaluate_process_phase`
+        // + `evaluate_flux_ready`). See the composer's doc for the
+        // full three-arm pre-lift shape catalog + the
+        // `qualified_process_ref` routing invariant this arm now
+        // inherits mechanically.
+        JobLookup::Missing => Err(Satisfaction::resource_not_found(label, ns, name)),
         JobLookup::Found(status) => {
             if status.failed > 0 {
                 Err(Satisfaction::Unsatisfied(format!(
@@ -967,11 +1040,20 @@ async fn evaluate_process_phase(
         .map_err(|e| anyhow!("fetch process {ns}/{}: {e}", parsed.process_ref))?
     {
         Some(t) => t,
+        // The None arm routes through the substrate composer
+        // `Satisfaction::resource_not_found("process", ns,
+        // &parsed.process_ref)`. Pre-lift this hand-authored the
+        // `<label> <ns>/<name> not found` shape with a `{}/{}` join
+        // that did NOT ride through `qualified_process_ref` — one
+        // of THREE workspace-wide sites past the ★★ PRIME-DIRECTIVE
+        // ≥ 2 duplication threshold. Post-lift the join rides
+        // through the workspace-wide composer mechanically.
         None => {
-            return Ok(Satisfaction::Unsatisfied(format!(
-                "process {}/{} not found",
-                ns, parsed.process_ref
-            )))
+            return Ok(Satisfaction::resource_not_found(
+                "process",
+                ns,
+                &parsed.process_ref,
+            ))
         }
     };
     // Route the observed-phase pull through the ONE substrate
@@ -1029,10 +1111,15 @@ async fn evaluate_flux_ready(
     let obj =
         ssapply::fetch_by_identity(client, ns, resource.wire_identity(), &parsed.name).await?;
     match obj {
-        None => Ok(Satisfaction::Unsatisfied(format!(
-            "{kind} {}/{} not found",
-            ns, parsed.name
-        ))),
+        // The None arm routes through the substrate composer
+        // `Satisfaction::resource_not_found(kind, ns, &parsed.name)`.
+        // Pre-lift this hand-authored the `<label> <ns>/<name> not
+        // found` shape with a `{}/{}` join that did NOT ride through
+        // `qualified_process_ref` — one of THREE workspace-wide
+        // sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+        // threshold. Post-lift the join rides through the workspace-
+        // wide composer mechanically.
+        None => Ok(Satisfaction::resource_not_found(kind, ns, &parsed.name)),
         Some(dyn_obj) => match ssapply::ready_condition(&dyn_obj) {
             ssapply::ReadyState::Ready => Ok(Satisfaction::Satisfied),
             ssapply::ReadyState::NotReady(m) => Ok(Satisfaction::Unsatisfied(
@@ -1465,6 +1552,148 @@ mod tests {
             "helm.toolkit.fluxcd.io/v2"
         );
         assert_eq!(FluxResource::HelmRelease.kind(), "HelmRelease");
+    }
+}
+
+/// Substrate-primitive tests for [`Satisfaction::resource_not_found`]
+/// — the ONE workspace-wide owner of the `<label> <ns>/<name> not
+/// found` diagnostic shape that pre-lift lived at three sites
+/// ([`classify_job_status`] on the [`JobLookup::Missing`] arm,
+/// [`evaluate_process_phase`] on the `get_opt → None` arm,
+/// [`evaluate_flux_ready`] on the `fetch_by_identity → None` arm),
+/// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold.
+///
+/// Pins two contract axes at fail-before-pass-after granularity:
+///
+/// 1. Byte-shape identity of the diagnostic body — a regression that
+///    reshaped the `<label> <ns>/<name> not found` phrase (a swapped
+///    slot order, a lost separator, a lost label prefix) surfaces at
+///    the byte-equality assertions rather than as silent operator-
+///    facing drift across the three evaluators.
+/// 2. `<ns>/<name>` routing invariant — the join rides through
+///    [`crate::ssapply::qualified_process_ref`] (a re-export of the
+///    workspace-wide [`tatara_process::qualified_process_ref`]
+///    composer). A regression that re-inlined a `{}/{}` join at the
+///    composer would surface here + at the sibling composer's own
+///    pins in `tatara_process::lib::qualified_process_ref_tests`.
+///
+/// Sibling of the `tests` module above (on the [`Satisfaction`] /
+/// [`phase_rank`] / [`parse_receipt_payload`] axes) — kept as its
+/// own module so a regression at the substrate composer's axis
+/// surfaces distinctly.
+#[cfg(test)]
+mod satisfaction_resource_not_found_tests {
+    use super::Satisfaction;
+
+    // ── Contract axis 1: byte-shape identity across the three
+    // pre-lift restatements ─────────────────────────────────────────
+    //
+    // Each assertion below binds the composer to the exact diagnostic
+    // body one of the three pre-lift `format!(...)` chains produced,
+    // so a regression that reshaped the composer's `format!` body
+    // surfaces at whichever axis carries the drift.
+
+    #[test]
+    fn shape_matches_classify_job_status_missing_arm_pre_lift() {
+        // Pre-lift: `format!("{label} {ns}/{name} not found")` at
+        // `classify_job_status` on the `JobLookup::Missing` arm.
+        // This is the byte-shape the existing
+        // `classify_job_status_tests::missing_job_projects_to_unsatisfied_with_label_prefix`
+        // test pinned at `"Job flux-system/my-job not found"` — the
+        // composer must preserve that shape byte-identically or the
+        // pre-existing test would regress simultaneously.
+        let s = Satisfaction::resource_not_found("Job", "flux-system", "my-job");
+        assert_eq!(
+            s,
+            Satisfaction::Unsatisfied("Job flux-system/my-job not found".into()),
+        );
+    }
+
+    #[test]
+    fn shape_matches_evaluate_process_phase_missing_arm_pre_lift() {
+        // Pre-lift: `format!("process {}/{} not found", ns,
+        // parsed.process_ref)` at `evaluate_process_phase` on the
+        // `api.get_opt → None` arm — a hand-authored `{}/{}` join
+        // that did NOT ride through `qualified_process_ref`. Post-
+        // lift the join rides through the composer, and this pin
+        // fixes the byte-identity of the resulting diagnostic body.
+        let s = Satisfaction::resource_not_found("process", "default", "my-proc");
+        assert_eq!(
+            s,
+            Satisfaction::Unsatisfied("process default/my-proc not found".into()),
+        );
+    }
+
+    #[test]
+    fn shape_matches_evaluate_flux_ready_missing_arm_pre_lift() {
+        // Pre-lift: `format!("{kind} {}/{} not found", ns,
+        // parsed.name)` at `evaluate_flux_ready` on the
+        // `fetch_by_identity → None` arm — also a hand-authored
+        // `{}/{}` join that did NOT ride through
+        // `qualified_process_ref`. Post-lift the join rides through
+        // the composer, and this pin fixes the byte-identity for
+        // both live FluxResource variants (Kustomization,
+        // HelmRelease).
+        assert_eq!(
+            Satisfaction::resource_not_found("Kustomization", "flux-system", "my-kust"),
+            Satisfaction::Unsatisfied("Kustomization flux-system/my-kust not found".into()),
+        );
+        assert_eq!(
+            Satisfaction::resource_not_found("HelmRelease", "app", "my-hr"),
+            Satisfaction::Unsatisfied("HelmRelease app/my-hr not found".into()),
+        );
+    }
+
+    // ── Contract axis 2: routing invariant — the `<ns>/<name>` join
+    // rides through `qualified_process_ref` ────────────────────────
+    //
+    // A regression that re-inlined a `{}/{}` join at the composer
+    // would silently skip a future workspace-wide normalization of
+    // the `<ns>/<name>` shape (case-fold, unicode-safe collation,
+    // etc.). This pin binds the composer's diagnostic prefix to the
+    // ONE workspace-wide `<ns>/<name>` owner byte-identically, so a
+    // regression at either side surfaces here.
+
+    #[test]
+    fn ns_name_join_rides_qualified_process_ref_composer() {
+        let ns = "flux-system";
+        let name = "my-job";
+        let s = Satisfaction::resource_not_found("Job", ns, name);
+        let Satisfaction::Unsatisfied(msg) = s else {
+            panic!("resource_not_found must project to Satisfaction::Unsatisfied");
+        };
+        let qname = tatara_process::qualified_process_ref(ns, name);
+        assert!(
+            msg.contains(&qname),
+            "diagnostic body must carry the substrate `<ns>/<name>` join `{qname}` — a regression \
+             that re-inlined a `{{}}/{{}}` join would surface here; got {msg:?}",
+        );
+        // Anchor the join at the position immediately after the
+        // label prefix + one space — pins the two-slot spatial
+        // ordering (`<label> <ns>/<name>` head, not
+        // `<ns>/<name> <label>`).
+        assert!(
+            msg.starts_with(&format!("Job {qname} ")),
+            "diagnostic body must open with `<label> <ns>/<name> ` — a regression that swapped \
+             the two slots would surface here; got {msg:?}",
+        );
+    }
+
+    #[test]
+    fn tail_binds_not_found_suffix_verbatim() {
+        // A regression that drifted the `"not found"` phrase (a
+        // rename to `"missing"`, a lost trailing period, a swapped
+        // separator) would silently break operator grep patterns
+        // across the three evaluators simultaneously — surfaces here.
+        let s = Satisfaction::resource_not_found("process", "ns", "name");
+        let Satisfaction::Unsatisfied(msg) = s else {
+            unreachable!()
+        };
+        assert!(
+            msg.ends_with(" not found"),
+            "diagnostic body must end with ` not found` (leading space + verbatim phrase) — a \
+             regression that drifted the tail would surface here; got {msg:?}",
+        );
     }
 }
 

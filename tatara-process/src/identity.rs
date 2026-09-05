@@ -29,8 +29,20 @@ pub struct Identity {
 }
 
 /// Compute the content hash of any serializable spec.
+///
+/// The canonical pillar-bytes input rides through the ONE substrate
+/// primitive [`crate::three_pillar::pillar_bytes`] — peer of the
+/// intent-attestation-pillar consumers (`IntentVariant::canonical_bytes`,
+/// `render::render_{flux,aplicacao,nix}`, `phase_machine::
+/// compute_intent_hash`) that all route through the same
+/// `serde_json::to_vec(v).unwrap_or_default()` shape. A future
+/// upgrade of the pillar-bytes projection (a canonical-JSON
+/// serializer for stable byte ordering, a size-cap guard, a serde-
+/// error trace event before returning empty) lands at the substrate
+/// owner and every content-hash + attestation consumer inherits the
+/// upgrade mechanically.
 pub fn content_hash<T: Serialize>(spec: &T) -> String {
-    let canonical = serde_json::to_vec(spec).unwrap_or_default();
+    let canonical = crate::three_pillar::pillar_bytes(spec);
     let digest = blake3::hash(&canonical);
     base32_encode(&digest.as_bytes()[..HASH_BYTES])
 }

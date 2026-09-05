@@ -89,7 +89,7 @@ pub fn render(process: &Process, intent: &Intent) -> Result<RenderOutput> {
             // Guest intents (HVF / VZ / WASM) are owned by tatara-hospedeiro —
             // the reconciler emits no K8s resources for them. Intent bytes
             // still feed the three-pillar attestation chain.
-            IntentVariant::Guest(g) => (vec![], serde_json::to_vec(g).unwrap_or_default()),
+            IntentVariant::Guest(g) => (vec![], tatara_process::three_pillar::pillar_bytes(g)),
             IntentVariant::Aplicacao(a) => {
                 // Adopt mode is implicit: render_aplicacao already uses
                 // `a.release_name` as the HelmRelease releaseName when
@@ -194,7 +194,7 @@ fn render_flux(name: &str, ns: &str, f: &FluxIntent) -> (Vec<Value>, Vec<u8>) {
         Value::Object(spec),
     );
 
-    let intent_bytes = serde_json::to_vec(f).unwrap_or_default();
+    let intent_bytes = tatara_process::three_pillar::pillar_bytes(f);
     (vec![kustomization], intent_bytes)
 }
 
@@ -383,7 +383,7 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
     );
     resources.push(helm_release);
 
-    let intent_bytes = serde_json::to_vec(a).unwrap_or_default();
+    let intent_bytes = tatara_process::three_pillar::pillar_bytes(a);
     (resources, intent_bytes)
 }
 
@@ -418,7 +418,7 @@ fn render_nix(_name: &str, _ns: &str, n: &NixIntent) -> (Vec<Value>, Vec<u8>) {
     // TODO: hand off to tatara-engine nix_eval driver (or delegate via NixBuild CRD
     // when `n.delegate_to_nix_build == true`) and then wrap the resulting resource
     // set in an emitted Kustomization pointing at a controller-managed path.
-    let intent_bytes = serde_json::to_vec(n).unwrap_or_default();
+    let intent_bytes = tatara_process::three_pillar::pillar_bytes(n);
     (vec![], intent_bytes)
 }
 
@@ -426,8 +426,9 @@ fn render_lisp(_name: &str, _ns: &str, l: &LispIntent) -> Result<(Vec<Value>, Ve
     // Parse the Lisp source — an AST-form intent_hash input even if
     // macroexpansion has not yet landed.
     let forms = tatara_lisp::read(&l.source)?;
-    let ast_bytes = serde_json::to_vec(&forms.iter().map(|f| f.to_string()).collect::<Vec<_>>())
-        .unwrap_or_default();
+    let ast_bytes = tatara_process::three_pillar::pillar_bytes(
+        &forms.iter().map(|f| f.to_string()).collect::<Vec<_>>(),
+    );
     // TODO: macroexpand `(defpoint ...)` forms → compile to ProcessSpec or resources.
     Ok((vec![], ast_bytes))
 }

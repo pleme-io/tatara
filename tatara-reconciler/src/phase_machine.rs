@@ -634,9 +634,18 @@ async fn process_holds_any_claim(ctx: &Context, p: &Process) -> bool {
 /// step to the substrate primitive [`tatara_process::hash::hex_blake3`]
 /// so this Intent-shaped pillar is byte-identical to the peer render
 /// pillar producers ([`crate::render::artifact_hash`],
-/// [`crate::render::intent_hash`]) that also route through it.
+/// [`crate::render::intent_hash`]) that also route through it. The
+/// pillar-input `serde_json::to_vec(intent).unwrap_or_default()`
+/// shape rides through the substrate primitive
+/// [`tatara_process::three_pillar::pillar_bytes`] — sibling to
+/// every intent-attestation-pillar consumer (the four
+/// `render::render_*` workload emitters, the Guest arm in
+/// `render::render`, `identity::content_hash`,
+/// `intent::IntentVariant::canonical_bytes`) so a future upgrade of
+/// the pillar-bytes projection reaches every downstream consumer
+/// mechanically through ONE substrate function.
 fn compute_intent_hash(intent: &tatara_process::intent::Intent) -> String {
-    let bytes = serde_json::to_vec(intent).unwrap_or_default();
+    let bytes = tatara_process::three_pillar::pillar_bytes(intent);
     tatara_process::hash::hex_blake3(&bytes)
 }
 

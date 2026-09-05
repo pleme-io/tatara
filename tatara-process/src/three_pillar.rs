@@ -92,6 +92,7 @@
 //! any caller.
 
 use blake3::Hasher;
+use serde::Serialize;
 
 /// The domain-separation tag every three-pillar composition rides.
 ///
@@ -148,6 +149,80 @@ pub fn compose_root(
     // route through ONE substrate function, and a future re-encoding
     // reaches both mechanically.
     crate::hash::hex_blake3_hash(&h.finalize())
+}
+
+/// Canonical serialize-to-bytes projection for an attestation-pillar
+/// input.
+///
+/// Owns the pre-lift `serde_json::to_vec(v).unwrap_or_default()`
+/// shape every producer of a pillar-shaped byte buffer restated by
+/// hand pre-lift — SIX workspace-wide sites past the ★★ PRIME-
+/// DIRECTIVE ≥ 2 duplication trigger:
+///
+/// * [`crate::intent::IntentVariant::canonical_bytes`] — SIX arms
+///   inside the enum-dispatch method, each restating the fallback
+///   shape on a different inner variant reference. Post-lift each
+///   arm names the payload once and delegates through this ONE
+///   primitive.
+/// * [`crate::identity::content_hash`] — the 128-bit content-
+///   addressable BLAKE3 identity input every `Process` walks; the
+///   base32-encoding downstream is untouched, only the shared
+///   pillar-bytes input rides through the substrate owner.
+/// * `tatara-reconciler::render::render_flux` /
+///   `render_aplicacao` / `render_nix` — the three workload-emitting
+///   render helpers whose `intent_bytes` return value feeds the
+///   ATTEST-phase intent-pillar hash.
+/// * `tatara-reconciler::render::render` (Guest arm) — Guest
+///   intents (HVF / VZ / WASM) are owned by tatara-hospedeiro and
+///   emit no K8s resources, but their intent bytes still feed the
+///   three-pillar attestation chain.
+/// * `tatara-reconciler::phase_machine::compute_intent_hash` — the
+///   stable-hash-of-intent projection on the reconcile-tick side,
+///   feeding `hex_blake3` directly.
+///
+/// # `unwrap_or_default()` — why the empty-bytes fallback is
+/// load-bearing
+///
+/// `serde_json::to_vec` returns `Err` only when the input contains
+/// a non-serializable shape (a map with non-string keys, a value
+/// too deep for the recursion limit) — none of which the typed
+/// intent / spec inputs at any current callsite can produce. The
+/// `unwrap_or_default()` fallback is a defensive guard that
+/// composes empty bytes onto the pillar hash rather than panicking
+/// the reconciler; a regression that swapped it for `.expect(...)`
+/// would turn a serde-error corner into a controller-crash corner
+/// (silently — no test panics if the corner never triggers). ONE
+/// substrate owner concentrates the policy so a future upgrade (a
+/// serde-error trace event before returning empty, a size-cap
+/// guard against pathological payloads, a canonical-JSON
+/// serializer for stable byte ordering across serde versions) lands
+/// at this ONE function and every pillar-bytes consumer inherits
+/// the upgrade mechanically.
+///
+/// # `#[must_use]`
+///
+/// Every consumer either feeds the returned bytes into a BLAKE3
+/// hash (intent pillar, artifact pillar, content-hash identity)
+/// or stores them into a `RenderOutput.intent_bytes` slot. Dropping
+/// the return means the payload was serialized for no observable
+/// reason.
+///
+/// # Theory anchor
+///
+/// THEORY.md §VI.1 (generation over composition — the
+/// `serde_json::to_vec(v).unwrap_or_default()` shape recurred at
+/// SIX hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication threshold, and lifts to ONE substrate owner here).
+/// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+/// the byte-identity pin
+/// [`tests::pillar_bytes_matches_pre_lift_serde_json_to_vec_shape_bytewise`]
+/// binds the primitive byte-identically to the pre-lift spelling
+/// so a regression at the substrate owner surfaces at ONE pin
+/// rather than as silent pillar-bytes drift across every
+/// downstream three-pillar consumer).
+#[must_use]
+pub fn pillar_bytes<T: Serialize + ?Sized>(v: &T) -> Vec<u8> {
+    serde_json::to_vec(v).unwrap_or_default()
 }
 
 /// Length-checked, bit-mask-folded constant-time byte comparator.
@@ -320,6 +395,96 @@ mod tests {
         assert_eq!(out.len(), 64);
         assert!(out.chars().all(|c| c.is_ascii_hexdigit()));
         assert!(out.chars().all(|c| !c.is_ascii_uppercase()));
+    }
+
+    // ── pillar_bytes byte-identity + corner pins ──────────────────
+
+    #[test]
+    fn pillar_bytes_matches_pre_lift_serde_json_to_vec_shape_bytewise() {
+        // Byte-identical parity with the pre-lift
+        // `serde_json::to_vec(v).unwrap_or_default()` spelling every
+        // three-pillar producer restated at its own body. Swept across
+        // representative pillar-input shapes (unit, primitive, struct,
+        // vec, map, nested) so a substrate-side canonicalization or
+        // reordering the pre-lift chain does NOT apply would surface
+        // HERE rather than as silent pillar-bytes drift at every
+        // downstream three-pillar consumer.
+        use serde::Serialize;
+        #[derive(Serialize)]
+        struct Inner {
+            a: u32,
+            b: String,
+        }
+        assert_eq!(
+            pillar_bytes(&()),
+            serde_json::to_vec(&()).unwrap_or_default(),
+        );
+        assert_eq!(
+            pillar_bytes(&42u64),
+            serde_json::to_vec(&42u64).unwrap_or_default(),
+        );
+        assert_eq!(
+            pillar_bytes(&"hello".to_string()),
+            serde_json::to_vec(&"hello".to_string()).unwrap_or_default(),
+        );
+        let inner = Inner {
+            a: 7,
+            b: "x".into(),
+        };
+        assert_eq!(
+            pillar_bytes(&inner),
+            serde_json::to_vec(&inner).unwrap_or_default(),
+        );
+        let v: Vec<u32> = vec![1, 2, 3];
+        assert_eq!(pillar_bytes(&v), serde_json::to_vec(&v).unwrap_or_default());
+        let mut map = std::collections::BTreeMap::new();
+        map.insert("k".to_string(), 1u32);
+        map.insert("j".to_string(), 2u32);
+        assert_eq!(
+            pillar_bytes(&map),
+            serde_json::to_vec(&map).unwrap_or_default(),
+        );
+    }
+
+    #[test]
+    fn pillar_bytes_is_deterministic_across_calls() {
+        // serde_json is deterministic on a stable input; the primitive
+        // is pure. A regression that accidentally seeded a nonce, read
+        // a clock, or salted the encoding would fail loudly HERE rather
+        // than as silent composed_root drift at every downstream
+        // consumer.
+        #[derive(serde::Serialize)]
+        struct S {
+            a: u32,
+        }
+        let s = S { a: 1 };
+        assert_eq!(pillar_bytes(&s), pillar_bytes(&s));
+    }
+
+    #[test]
+    fn pillar_bytes_of_unit_produces_null_json() {
+        // The empty-bytes fallback is triggered by serde errors, NOT
+        // by an empty input — `pillar_bytes(&())` is `b"null"`, not
+        // `[]`. Pin the corner so a regression that mis-conflated
+        // "empty pillar" with "serde failure" would fail HERE rather
+        // than as silent pillar-input drift at any downstream reader
+        // that treated the two corners identically.
+        assert_eq!(pillar_bytes(&()), b"null");
+    }
+
+    #[test]
+    fn pillar_bytes_accepts_borrowed_and_owned_serializable_inputs() {
+        // Both borrowed (`&String`) and owned-via-borrow (`&<T:
+        // Serialize>` where the caller already owns the payload)
+        // ride through the same `T: Serialize + ?Sized` bound
+        // without a per-callsite `.to_owned()` / `.clone()` wrap.
+        // The `?Sized` relaxation is required so `pillar_bytes(&"x")`
+        // (a `&str`, unsized) type-checks the same as
+        // `pillar_bytes(&owned_string)`.
+        let owned: String = "hello".into();
+        assert_eq!(pillar_bytes(&owned), b"\"hello\"");
+        assert_eq!(pillar_bytes("hello"), b"\"hello\"");
+        assert_eq!(pillar_bytes(&owned), pillar_bytes("hello"));
     }
 
     // ── constant_time_eq byte-identity + corner pins ──────────────

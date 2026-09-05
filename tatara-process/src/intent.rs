@@ -73,20 +73,23 @@ impl IntentVariant<'_> {
     }
 
     /// Canonical attestation-pillar bytes for the populated variant —
-    /// `serde_json::to_vec` on the inner reference, with an empty
-    /// fallback that matches the pre-lift Observe-mode shape in
-    /// `tatara-reconciler::render`. ONE site owns the per-variant
-    /// serialization so adding a 7th variant requires only the
-    /// arm here, not the parallel match the pre-lift Observe arm
-    /// carried.
+    /// the pre-lift `serde_json::to_vec(<inner>).unwrap_or_default()`
+    /// shape every arm restated by hand now rides through the ONE
+    /// substrate primitive [`crate::three_pillar::pillar_bytes`],
+    /// peer of the four workload-render sites +
+    /// `phase_machine::compute_intent_hash` + `identity::content_hash`
+    /// consumers post-lift. Each arm names its inner payload ONCE;
+    /// the fallback rule lives at the substrate owner. Adding a 7th
+    /// intent variant requires only the arm here + one `pillar_bytes`
+    /// delegation, not a per-arm fallback restatement.
     pub fn canonical_bytes(&self) -> Vec<u8> {
         match self {
-            Self::Nix(n) => serde_json::to_vec(n).unwrap_or_default(),
-            Self::Flux(f) => serde_json::to_vec(f).unwrap_or_default(),
-            Self::Lisp(l) => serde_json::to_vec(l).unwrap_or_default(),
-            Self::Container(c) => serde_json::to_vec(c).unwrap_or_default(),
-            Self::Aplicacao(a) => serde_json::to_vec(a).unwrap_or_default(),
-            Self::Guest(g) => serde_json::to_vec(g).unwrap_or_default(),
+            Self::Nix(n) => crate::three_pillar::pillar_bytes(n),
+            Self::Flux(f) => crate::three_pillar::pillar_bytes(f),
+            Self::Lisp(l) => crate::three_pillar::pillar_bytes(l),
+            Self::Container(c) => crate::three_pillar::pillar_bytes(c),
+            Self::Aplicacao(a) => crate::three_pillar::pillar_bytes(a),
+            Self::Guest(g) => crate::three_pillar::pillar_bytes(g),
         }
     }
 }

@@ -11,6 +11,7 @@ use serde_json::{json, Value};
 
 use tatara_process::annotations;
 use tatara_process::flux_resource::FluxResource;
+use tatara_process::json_object::ValueObjectExt;
 use tatara_process::k8s_wire_identity::K8sWireIdentity;
 use tatara_process::prelude::{FluxResourceRef, Process, RenderedResourceCoords};
 
@@ -1186,15 +1187,21 @@ fn build_owner_reference(p: &Process) -> Result<Value> {
 /// rather than as silent drift across both downstream `inject_*`
 /// callsites simultaneously).
 fn metadata_object_mut(resource: &mut Value) -> Result<&mut serde_json::Map<String, Value>> {
-    let root = resource
-        .as_object_mut()
-        .ok_or_else(|| anyhow!("resource is not an object"))?;
+    // Substrate object-guard family — the pre-lift `.as_object_mut().
+    // ok_or_else(|| anyhow!("<slot> is not an object"))?` incantation
+    // recurred at THREE hand-authored sites in this module past the ★★
+    // PRIME-DIRECTIVE ≥ 2 duplication threshold. Post-lift the two
+    // guards below (root + metadata slot) plus the `annotations` slot
+    // guard in `inject_annotations` share ONE substrate owner on
+    // `tatara_process::json_object::ValueObjectExt::as_object_mut_or`
+    // — a regression that drifts the guard error wording surfaces at
+    // the trait's own byte-shape pins rather than at each downstream
+    // SSA-time mutation.
+    let root = resource.as_object_mut_or("resource")?;
     let metadata = root
         .entry("metadata")
         .or_insert_with(|| Value::Object(Default::default()));
-    metadata
-        .as_object_mut()
-        .ok_or_else(|| anyhow!("metadata is not an object"))
+    metadata.as_object_mut_or("metadata")
 }
 
 fn inject_owner_reference(resource: &mut Value, owner_ref: Value) -> Result<()> {
@@ -1213,9 +1220,10 @@ fn inject_annotations(resource: &mut Value, process: &Process) -> Result<()> {
     let annot = md
         .entry("annotations")
         .or_insert_with(|| Value::Object(Default::default()));
-    let annot = annot
-        .as_object_mut()
-        .ok_or_else(|| anyhow!("annotations is not an object"))?;
+    // Peer of the two `metadata_object_mut` guards above — routes the
+    // annotations-slot type-check through the ONE substrate owner
+    // `tatara_process::json_object::ValueObjectExt::as_object_mut_or`.
+    let annot = annot.as_object_mut_or("annotations")?;
 
     // Route the two-slot metadata pull through the substrate primitive
     // on `Process` — the pre-lift hand-authored `.metadata.namespace

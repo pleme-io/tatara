@@ -23,6 +23,7 @@ pub mod hash;
 pub mod hostname;
 pub mod identity;
 pub mod intent;
+pub mod json_object;
 pub mod k8s_builtin_resource;
 pub mod k8s_object_ref;
 pub mod k8s_wire_identity;

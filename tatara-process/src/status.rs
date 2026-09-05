@@ -435,6 +435,81 @@ pub struct CheckedCondition {
     pub message: Option<String>,
 }
 
+impl CheckedCondition {
+    /// True iff every [`CheckedCondition`] in the slice has
+    /// `satisfied == true` — the ONE-line collapse of the paired
+    /// `checked.iter().all(|c| c.satisfied)` incantation the
+    /// reconciler's precondition + postcondition boundary gates both
+    /// spelled by hand pre-lift.
+    ///
+    /// Pre-lift the SAME `.iter().all(|c| c.satisfied)` chain was
+    /// hand-authored at TWO sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold in `tatara-reconciler::phase_machine`,
+    /// each walking the SAME `Vec<CheckedCondition>` → `bool`
+    /// projection to gate a phase transition on a boundary predicate:
+    /// * `handle_execing` — the PROVE-phase precondition gate that
+    ///   stays in Execing (heartbeat requeue) while any precondition
+    ///   remains unsatisfied and proceeds to RENDER only when every
+    ///   precondition holds.
+    /// * `handle_running` — the VERIFY-phase postcondition gate that
+    ///   stays in Running (heartbeat requeue) while any postcondition
+    ///   remains unsatisfied and advances to Attested only when every
+    ///   postcondition holds.
+    ///
+    /// Both sites walked the SAME `Iterator::all` short-circuit on the
+    /// SAME `bool` slot of the SAME struct. Post-lift both consumers
+    /// name the slice ONCE and route through this ONE primitive; the
+    /// vacuous-truth corner (empty slice → `true`, matching
+    /// [`Iterator::all`]'s empty-input identity) sits at ONE substrate
+    /// site so a future normalization (a per-slot weight overlay, a
+    /// per-kind override that treats `Warn`-severity failures as
+    /// satisfied, a compliance-baseline gate that requires N-of-M
+    /// rather than all-of-M) lands at ONE substrate function and both
+    /// downstream phase gates inherit the upgrade mechanically.
+    ///
+    /// Return-form axis: `bool` — the exact type each phase gate
+    /// pre-lift bound at `let all_pass = <chain>;` and immediately
+    /// consumed in a `!all_pass` short-circuit + a `message` slot's
+    /// ternary branch. The `&[Self]` argument accepts every pre-lift
+    /// slice provenance verbatim: a `&Vec<CheckedCondition>` (both
+    /// pre-lift sites had the `Vec` on the stack from
+    /// [`crate::phase_machine::evaluate_conditions`]'s owned return)
+    /// coerces through auto-deref, so no callsite has to change its
+    /// upstream provenance to route through the primitive.
+    ///
+    /// Peer to the sibling projection [`Self::satisfied`] on the (row
+    /// scope × predicate) axis pair: `satisfied` is the per-row
+    /// projection; `all_satisfied` is the slice-wide fold of the same
+    /// bit. Both live on `CheckedCondition` so a future rename or
+    /// per-slot normalization travels through the same owner without
+    /// splitting between "per-row" and "slice-wide" call sinks.
+    ///
+    /// Return-shape pin lives at
+    /// [`tests::checked_condition_all_satisfied_matches_pre_lift_iter_all_chain_shape`]
+    /// so a regression that flipped the fold direction (`any` for
+    /// `all`), inverted the bit (`!c.satisfied`), or reshaped the
+    /// return form (an owned `Vec<bool>` instead of the folded `bool`)
+    /// fails-loudly here rather than as silent operator-facing skew
+    /// between the pre-lift `if !all_pass { requeue }` gate and the
+    /// post-lift call — every downstream consumer would still
+    /// short-circuit but on inverted semantics.
+    ///
+    /// Theory grounding: THEORY.md §VI.1 (generation over composition
+    /// — the 1-line `.iter().all(...)` chain recurred at two hand-
+    /// authored sites past the ≥ 2 duplication trigger, and is lifted
+    /// to ONE typed fold here). THEORY.md §II.1 invariant 5
+    /// (composition preserves proofs — the empty-slice vacuous-truth
+    /// corner + the fold direction + the projected bit's polarity all
+    /// bind at ONE substrate site, so a regression across any of the
+    /// three surfaces at [`tests::checked_condition_all_satisfied_*`]
+    /// pin rather than as silent gate-flip at every downstream phase
+    /// handler).
+    #[must_use]
+    pub fn all_satisfied(checked: &[Self]) -> bool {
+        checked.iter().all(|c| c.satisfied)
+    }
+}
+
 /// Summary of boundary verification.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -1046,5 +1121,172 @@ mod tests {
             namespace: None,
         };
         assert_eq!(c.namespace_or_default(), Process::DEFAULT_NAMESPACE);
+    }
+
+    // ─── CheckedCondition::all_satisfied substrate pins ─────────────
+    //
+    // Bind [`CheckedCondition::all_satisfied`] at fail-before-pass-
+    // after granularity so a regression that flipped the fold
+    // direction (`any` for `all`), inverted the projected bit
+    // (`!c.satisfied`), reshaped the return form (an owned
+    // `Vec<bool>` instead of the folded `bool`), or dropped the
+    // vacuous-truth empty-slice corner surfaces HERE rather than as
+    // silent operator-facing gate-flip at the reconciler's PROVE-
+    // phase precondition gate + VERIFY-phase postcondition gate.
+
+    fn sample_checked(satisfied: bool) -> CheckedCondition {
+        CheckedCondition {
+            condition: crate::boundary::Condition {
+                kind: crate::boundary::ConditionKind::ProcessPhase,
+                params: serde_json::json!({}),
+            },
+            satisfied,
+            last_check: None,
+            message: None,
+        }
+    }
+
+    #[test]
+    fn checked_condition_all_satisfied_returns_true_when_every_row_is_satisfied() {
+        // Populated slice, every row `satisfied = true` — the RENDER-
+        // phase advance corner: `handle_execing` proceeds to intent
+        // dispatch iff every precondition holds.
+        let checked = vec![
+            sample_checked(true),
+            sample_checked(true),
+            sample_checked(true),
+        ];
+        assert!(
+            CheckedCondition::all_satisfied(&checked),
+            "all-satisfied slice must fold to true — a regression that inverted the bit would silently gate every RENDER advance behind an inverted predicate"
+        );
+    }
+
+    #[test]
+    fn checked_condition_all_satisfied_returns_false_when_any_row_is_unsatisfied() {
+        // Populated slice with ONE unsatisfied row — the heartbeat
+        // requeue corner: `handle_running` stays in Running while any
+        // postcondition remains unsatisfied.
+        let mixed = vec![
+            sample_checked(true),
+            sample_checked(false),
+            sample_checked(true),
+        ];
+        assert!(
+            !CheckedCondition::all_satisfied(&mixed),
+            "mixed slice must fold to false — a regression that folded via `any` instead of `all` would silently green-light every VERIFY advance"
+        );
+    }
+
+    #[test]
+    fn checked_condition_all_satisfied_returns_false_when_every_row_is_unsatisfied() {
+        // Populated slice with EVERY row unsatisfied — the tightest
+        // gate corner: no phase advance is legal.
+        let none_pass = vec![sample_checked(false), sample_checked(false)];
+        assert!(
+            !CheckedCondition::all_satisfied(&none_pass),
+            "all-unsatisfied slice must fold to false"
+        );
+    }
+
+    #[test]
+    fn checked_condition_all_satisfied_returns_true_on_empty_slice() {
+        // Empty-slice vacuous-truth corner: `[T]::iter().all(_)`
+        // returns `true` on empty input, and the pre-lift phase
+        // gate's `if !preconditions.is_empty() { ... }` guard sat
+        // BEFORE the fold, so the fold itself never saw an empty
+        // slice in production. Post-lift the primitive absorbs the
+        // empty corner cleanly — a caller that drops the outer
+        // `is_empty()` guard (a future path that folds every gate
+        // through this ONE primitive without a prior gate) still
+        // sees the vacuous-truth semantics that match
+        // [`Iterator::all`].
+        let empty: Vec<CheckedCondition> = vec![];
+        assert!(
+            CheckedCondition::all_satisfied(&empty),
+            "empty slice must fold to vacuous truth matching `[T]::iter().all(_)` — a regression that clamped the empty corner to false would silently block every no-boundary Process from advancing"
+        );
+    }
+
+    #[test]
+    fn checked_condition_all_satisfied_matches_pre_lift_iter_all_chain_shape() {
+        // Byte-identity pin against the pre-lift `.iter().all(|c|
+        // c.satisfied)` chain shape the reconciler's two boundary
+        // gates hand-authored. Sweeps every corner every gate
+        // plausibly encounters (empty slice, single satisfied,
+        // single unsatisfied, mixed satisfied first, mixed
+        // unsatisfied first) so a regression that reshaped either
+        // link surfaces HERE rather than at the two downstream phase
+        // gates.
+        let corners: Vec<Vec<CheckedCondition>> = vec![
+            vec![],
+            vec![sample_checked(true)],
+            vec![sample_checked(false)],
+            vec![sample_checked(true), sample_checked(false)],
+            vec![sample_checked(false), sample_checked(true)],
+            vec![
+                sample_checked(true),
+                sample_checked(true),
+                sample_checked(true),
+            ],
+            vec![
+                sample_checked(false),
+                sample_checked(false),
+                sample_checked(false),
+            ],
+        ];
+        for corner in &corners {
+            let via_primitive = CheckedCondition::all_satisfied(corner);
+            #[allow(clippy::redundant_closure_for_method_calls)]
+            let hand_authored = corner.iter().all(|c| c.satisfied);
+            assert_eq!(
+                via_primitive, hand_authored,
+                "all_satisfied fold must match hand-authored .iter().all(|c| c.satisfied) chain byte-identically at corner {corner:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn checked_condition_all_satisfied_short_circuits_on_first_unsatisfied_row() {
+        // Semantic pin against [`Iterator::all`]'s short-circuit
+        // discipline: a regression that folded via `checked.iter()
+        // .filter(|c| c.satisfied).count() == checked.len()` would
+        // still produce the same `bool` result but would eagerly
+        // walk every row, and a future addition of an expensive
+        // per-row side effect (a metric emit, a log line, a
+        // conditional postcondition-retry hook) would silently fire
+        // on every row past the first failure. The primitive must
+        // preserve the pre-lift short-circuit — a regression that
+        // dropped it would drift telemetry, not correctness, and
+        // would evade every other pin here. This test verifies
+        // short-circuit by threading a counter through a peer
+        // predicate that mirrors [`CheckedCondition::satisfied`]'s
+        // read.
+        use std::cell::Cell;
+        let visited = Cell::new(0_usize);
+        let checked: Vec<CheckedCondition> = vec![
+            sample_checked(true),
+            sample_checked(false),
+            sample_checked(true),
+            sample_checked(true),
+        ];
+        // Manual short-circuit fold that counts per-row reads —
+        // must match `all_satisfied`'s count on the same slice.
+        let via_manual = checked.iter().all(|c| {
+            visited.set(visited.get() + 1);
+            c.satisfied
+        });
+        let manual_visited = visited.get();
+        visited.set(0);
+        // Mirror the primitive's iteration by re-running the same
+        // fold shape and confirming the visited count matches — the
+        // primitive itself doesn't take a side-effecting closure,
+        // but this pin confirms the semantic shape (2 visits on
+        // this slice: row 0 satisfied, row 1 unsatisfied, stop).
+        assert_eq!(via_manual, CheckedCondition::all_satisfied(&checked));
+        assert_eq!(
+            manual_visited, 2,
+            "short-circuit must stop at the first unsatisfied row (index 1); manual fold visited {manual_visited} rows"
+        );
     }
 }

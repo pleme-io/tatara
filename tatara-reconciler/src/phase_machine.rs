@@ -207,7 +207,22 @@ pub async fn handle_execing(p: &Process, ctx: &Context) -> Result<Action> {
     let preconditions = &p.spec.boundary.preconditions;
     if !preconditions.is_empty() {
         let checked = evaluate_conditions(ctx.kube.clone(), p, preconditions).await?;
-        let all_pass = checked.iter().all(|c| c.satisfied);
+        // Slice-wide predicate fold rides through the ONE substrate
+        // primitive [`CheckedCondition::all_satisfied`] — pre-lift
+        // this was a hand-authored `checked.iter().all(|c| c.satisfied)`
+        // chain, one of TWO workspace-wide restatements past the ★★
+        // PRIME-DIRECTIVE ≥ 2 duplication threshold (peer at the
+        // VERIFY-phase postcondition gate below in `handle_running`;
+        // both fold the same slice-of-CheckedCondition through the
+        // same short-circuit predicate on the `satisfied` bit).
+        // Post-lift both consumers share ONE substrate owner; a
+        // future normalization (a per-slot weight overlay, a per-kind
+        // severity override that treats `Warn`-severity failures as
+        // satisfied, a compliance-baseline gate that requires N-of-M
+        // rather than all-of-M) lands at ONE substrate function and
+        // both downstream phase gates inherit the upgrade
+        // mechanically.
+        let all_pass = CheckedCondition::all_satisfied(&checked);
         let api = ctx.process_api(&ns);
         let body = json!({
             "boundary": { "preconditions": checked },
@@ -397,7 +412,12 @@ pub async fn handle_running(p: &Process, ctx: &Context) -> Result<Action> {
     let postconditions = &p.spec.boundary.postconditions;
     if !postconditions.is_empty() {
         let checked = evaluate_conditions(ctx.kube.clone(), p, postconditions).await?;
-        let all_pass = checked.iter().all(|c| c.satisfied);
+        // Slice-wide predicate fold rides through the ONE substrate
+        // primitive [`CheckedCondition::all_satisfied`] — sibling to
+        // the PROVE-phase precondition gate in `handle_execing` above;
+        // both fold the same slice-of-CheckedCondition through the
+        // same short-circuit predicate on the `satisfied` bit.
+        let all_pass = CheckedCondition::all_satisfied(&checked);
         let api = ctx.process_api(&ns);
         patch::patch_process_status(
             &api,

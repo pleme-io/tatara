@@ -76,8 +76,7 @@ pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
     // 1. Check `dependsOn` — stay in Forking if any dep unmet.
     // 2. Allocate PID from `ProcessTable.nextSequence` (idempotent if already set).
     // 3. Advance to Execing.
-    let (ns, name) = p.owned_coordinates_or_err()?;
-    let api = ctx.process_api(&ns);
+    let (ns, name, api) = ctx.owned_process_binding(p)?;
 
     // 1. Dependency gate.
     let unmet = boundary::check_depends_on(ctx.kube.clone(), p)
@@ -679,8 +678,7 @@ fn flux_ref_from_json(res: &Value) -> Result<FluxResourceRef> {
 
 pub async fn handle_reconverging(p: &Process, ctx: &Context) -> Result<Action> {
     // SIGHUP or drift detected — flip back to Execing.
-    let (ns, name) = p.owned_coordinates_or_err()?;
-    let api = ctx.process_api(&ns);
+    let (ns, name, api) = ctx.owned_process_binding(p)?;
     patch::transition(&api, &name, ProcessPhase::Execing)
         .await
         .map_err(|e| anyhow!("patch (reconverging→execing): {e}"))?;
@@ -978,8 +976,7 @@ pub async fn handle_failed(p: &Process, ctx: &Context) -> Result<Action> {
     // through Exiting (children drain) before reaching Zombie; permanent
     // and Never-teardown ephemeral Processes go straight to Zombie so the
     // operator can inspect the failure.
-    let (ns, name) = p.owned_coordinates_or_err()?;
-    let api = ctx.process_api(&ns);
+    let (ns, name, api) = ctx.owned_process_binding(p)?;
 
     // Wall-clock-anchored clock check rides the substrate primitive
     // `tatara_process::lifetime_clock::evaluate_now` — sibling to
@@ -1150,8 +1147,7 @@ async fn transition_to_exiting(
 pub async fn handle_zombie(p: &Process, ctx: &Context) -> Result<Action> {
     // Final post-exit pass — advance to Reaped; the ProcessTable controller
     // may force-reap earlier on zombie_timeout_seconds overflow (future).
-    let (ns, name) = p.owned_coordinates_or_err()?;
-    let api = ctx.process_api(&ns);
+    let (ns, name, api) = ctx.owned_process_binding(p)?;
     patch::transition(&api, &name, ProcessPhase::Reaped)
         .await
         .map_err(|e| anyhow!("patch (zombie→reaped): {e}"))?;
@@ -1161,8 +1157,7 @@ pub async fn handle_zombie(p: &Process, ctx: &Context) -> Result<Action> {
 
 pub async fn handle_reaped(p: &Process, ctx: &Context) -> Result<Action> {
     // Release the finalizer — K8s GC removes the Process object + owned Flux CRs.
-    let (ns, name) = p.owned_coordinates_or_err()?;
-    let api = ctx.process_api(&ns);
+    let (ns, name, api) = ctx.owned_process_binding(p)?;
     patch::remove_finalizer(&api, &name, p, tatara_process::PROCESS_FINALIZER)
         .await
         .map_err(|e| anyhow!("release finalizer: {e}"))?;

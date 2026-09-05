@@ -134,15 +134,17 @@ pub async fn ingest(process: &Process, ctx: &Context) -> Result<Option<ProcessSi
 
 /// Apply a `SignalEffect` by patching the Process.
 pub async fn consume_effect(process: &Process, ctx: &Context, effect: SignalEffect) -> Result<()> {
-    // Owned coordinates via the substrate primitive — sibling site
-    // to the `ingest` restatement above; both routed through
-    // [`Process::owned_coordinates_or_err`] post-lift so a future
-    // normalization (case-fold, cross-cluster prefix, a rename of
-    // the "default" fallback, an alternate error wording) reaches
-    // both signal handlers plus the 10 `crate::phase_machine`
-    // callers through ONE substrate owner.
-    let (ns, name) = process.owned_coordinates_or_err()?;
-    let api = ctx.process_api(&ns);
+    // Owned coordinates + namespaced Api via the composed substrate
+    // primitive — sibling site to the `ingest` restatement above; both
+    // routed through [`Process::owned_coordinates_or_err`] post-lift so
+    // a future normalization (case-fold, cross-cluster prefix, a rename
+    // of the "default" fallback, an alternate error wording) reaches
+    // both signal handlers plus every `crate::phase_machine` handler-entry
+    // through ONE substrate owner. Composed shape from
+    // [`Context::owned_process_binding`] on the (ns, name, api) tuple
+    // axis — closes the two-line duet every handler-entry authored
+    // pre-lift onto ONE primitive.
+    let (ns, name, api) = ctx.owned_process_binding(process)?;
 
     match effect {
         SignalEffect::Noop => Ok(()),

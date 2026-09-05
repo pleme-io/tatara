@@ -107,6 +107,40 @@ impl Context {
     pub fn processes_all_api(&self) -> Api<Process> {
         Api::all(self.kube.clone())
     }
+
+    /// Handler-entry composer on the (namespace, name, api) tuple axis —
+    /// closes the two-line duet every phase-machine + signal-dispatch
+    /// site inside this crate authored verbatim before this composer.
+    ///
+    /// Pre-lift each site restated the same two-line incantation:
+    /// ```ignore
+    /// let (ns, name) = p.owned_coordinates_or_err()?;
+    /// let api = ctx.process_api(&ns);
+    /// ```
+    /// … at 6 sites across `phase_machine::handle_{forking,
+    /// reconverging, failed, zombie, reaped}` + `signals::consume_effect`.
+    ///
+    /// Post-lift every site rides ONE substrate primitive — a future
+    /// change that wires a per-request tracing span keyed on the
+    /// `(ns, name)` pair, a namespace-scoped RBAC gate, a per-Process
+    /// metrics label, or a shared retry budget onto every handler-entry
+    /// lands at ONE substrate method here rather than being restated at
+    /// every callsite.
+    ///
+    /// The composer is a pure fold of the two peers on this same
+    /// `impl` block — [`Context::process_api`] on the client-slot axis
+    /// and [`Process::owned_coordinates_or_err`] on the metadata axis
+    /// (see `tatara-process/src/crd.rs`) — so a regression that drifts
+    /// either peer surfaces at the peer's own substrate pins first, and
+    /// the composed shape falls out as a consequence.
+    pub fn owned_process_binding(
+        &self,
+        p: &Process,
+    ) -> anyhow::Result<(String, String, Api<Process>)> {
+        let (ns, name) = p.owned_coordinates_or_err()?;
+        let api = self.process_api(&ns);
+        Ok((ns, name, api))
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -485,6 +519,121 @@ mod tests {
         assert!(
             ns_url.contains("/namespaces/scoped-ns/"),
             "process_api must carry the caller's namespace slot; got {ns_url}"
+        );
+    }
+
+    // ─── Context::owned_process_binding substrate pins ─────────────────
+    //
+    // The two-line duet
+    //     let (ns, name) = p.owned_coordinates_or_err()?;
+    //     let api = ctx.process_api(&ns);
+    // was hand-authored at 6 handler-entry sites across
+    // `phase_machine.rs` (handle_forking, handle_reconverging,
+    // handle_failed, handle_zombie, handle_reaped) + `signals.rs`
+    // (consume_effect) before `owned_process_binding` closed it. These
+    // pins bind the composer at fail-before-pass-after granularity so a
+    // regression that drifts the tuple ordering, the client-slot, the
+    // namespace binding, or the error-shape surfaces here rather than
+    // as silent operator-facing drift.
+    //
+    // The composer forwards onto two peers already covered by their
+    // own substrate pins (`Context::process_api` above +
+    // `Process::owned_coordinates_or_err` in `tatara-process/src/crd.rs`),
+    // so these pins add only the composed-shape witnesses — the tuple
+    // ordering, the pass-through of both peers, and the error-shape
+    // fidelity on the failing branch.
+    fn process_with(ns: Option<&str>, name: Option<&str>) -> Process {
+        // Routes the minimal `ProcessSpec` through the substrate
+        // composer `ProcessSpec::gate_compute_defaults` (sibling to
+        // every `empty_process_spec` fixture family in
+        // `tatara-process/src/lib.rs`) so a schema drift lands at ONE
+        // owner rather than a hand-authored default-slot litany here.
+        let mut p = Process::new(
+            name.unwrap_or(""),
+            tatara_process::prelude::ProcessSpec::gate_compute_defaults(),
+        );
+        p.metadata.namespace = ns.map(String::from);
+        if name.is_none() {
+            p.metadata.name = None;
+        }
+        p
+    }
+
+    #[tokio::test]
+    async fn owned_process_binding_returns_ns_name_api_in_that_order() {
+        // The tuple ordering is load-bearing — every callsite destructures
+        // `let (ns, name, api) = ctx.owned_process_binding(&p)?;` and passes
+        // `&api` / `&name` / `&ns` unchanged to `patch::transition`,
+        // `patch::remove_finalizer`, log fields, and error wording. A
+        // regression that swapped the tuple axes would collide with the
+        // downstream consumers' type expectations at rustc time OR misroute
+        // a String pair silently.
+        let c = ctx();
+        let p = process_with(Some("acme-prod"), Some("obs-stack"));
+        let (ns, name, api) = c.owned_process_binding(&p).expect("both slots present");
+        assert_eq!(ns, "acme-prod");
+        assert_eq!(name, "obs-stack");
+        assert!(api.resource_url().contains("/namespaces/acme-prod/"));
+        assert!(api.resource_url().ends_with("/processes"));
+    }
+
+    #[tokio::test]
+    async fn owned_process_binding_forwards_namespace_into_process_api_peer() {
+        // The composer routes its `ns` slot into `Context::process_api`
+        // rather than manufacturing a second Api-builder path. Pin: the
+        // composed Api matches the peer's Api on the SAME namespace,
+        // proving no drift between the two Api-construction paths.
+        let c = ctx();
+        let p = process_with(Some("scoped-ns"), Some("some-proc"));
+        let (_, _, composed) = c.owned_process_binding(&p).unwrap();
+        let peer = c.process_api("scoped-ns");
+        assert_eq!(
+            composed.resource_url(),
+            peer.resource_url(),
+            "composed Api must match the process_api peer on the SAME namespace"
+        );
+    }
+
+    #[tokio::test]
+    async fn owned_process_binding_falls_back_to_default_namespace_matching_peer_wording() {
+        // A Process with no `.metadata.namespace` falls through
+        // `Process::owned_coordinates_or_err`'s substrate fallback (see
+        // `owned_coordinates_or_err_namespace_fallback_matches_default_namespace_const`
+        // pin in tatara-process). The composer preserves that fallback
+        // shape — no divergence between the composed path and the peer
+        // path on the "missing namespace" axis.
+        let c = ctx();
+        let p = process_with(None, Some("some-proc"));
+        let (ns, _, api) = c
+            .owned_process_binding(&p)
+            .expect("name present → composer succeeds");
+        // Peer axis: `owned_coordinates_or_err` alone on the same shape.
+        let (peer_ns, _) = p.owned_coordinates_or_err().unwrap();
+        assert_eq!(
+            ns, peer_ns,
+            "composed ns must match the substrate peer's fallback"
+        );
+        assert!(
+            api.resource_url().contains(&format!("/namespaces/{ns}/")),
+            "composed api must carry the fallback namespace verbatim; got {}",
+            api.resource_url()
+        );
+    }
+
+    #[tokio::test]
+    async fn owned_process_binding_propagates_owned_coordinates_error_verbatim() {
+        // The composer forwards `owned_coordinates_or_err`'s error via
+        // `?` — no re-wording, no map_err. A regression that softened the
+        // error shape (`.unwrap_or_default()`, a swallowed match arm,
+        // or a re-wrapped anyhow) would surface here as a divergence
+        // between the composed error and the peer's error.
+        let c = ctx();
+        let p = process_with(Some("some-ns"), None);
+        let composed_err = c.owned_process_binding(&p).unwrap_err().to_string();
+        let peer_err = p.owned_coordinates_or_err().unwrap_err().to_string();
+        assert_eq!(
+            composed_err, peer_err,
+            "composed error must match the substrate peer's error verbatim"
         );
     }
 

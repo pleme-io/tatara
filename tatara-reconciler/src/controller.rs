@@ -58,7 +58,18 @@ pub async fn reconcile(process: Arc<Process>, ctx: Arc<Context>) -> Result<Actio
         } else {
             info!(namespace = ns, name, "→ Exiting (deletionTimestamp set)");
         }
-        return Ok(tatara_process::requeue::after_secs(1));
+        // Fast re-poll rides through the ONE substrate composer
+        // `tatara_process::requeue::tick` — pre-lift this + the
+        // signal-consumed arm below hand-authored a bare `1` literal
+        // at `after_secs(1)`, restating the SAME "immediate re-poll
+        // after a state-change latch" intent the sibling
+        // `phase_machine::TICK_RETRY` const bound at 10 workspace-
+        // wide handler-tail sites, past the ★★ PRIME-DIRECTIVE ≥ 2
+        // duplication threshold across two files. Post-lift both
+        // sites here + the 10 phase_machine sites read the semantic
+        // helper and the intent → second-count binding lives at ONE
+        // typed owner.
+        return Ok(tatara_process::requeue::tick());
     }
 
     // 2. Signal ingestion — only while the Process is still alive.
@@ -78,7 +89,7 @@ pub async fn reconcile(process: Arc<Process>, ctx: Arc<Context>) -> Result<Actio
                 if let Err(e) = signals::consume_effect(&process, &ctx, effect).await {
                     warn!(error = %e, "signal effect apply failed");
                 }
-                return Ok(tatara_process::requeue::after_secs(1));
+                return Ok(tatara_process::requeue::tick());
             }
             Ok(None) => {}
             Err(e) => warn!(error = %e, "signal ingestion failed; continuing"),
@@ -111,7 +122,17 @@ pub async fn reconcile(process: Arc<Process>, ctx: Arc<Context>) -> Result<Actio
         Ok(action) => Ok(action),
         Err(e) => {
             warn!(namespace = ns, name, error = %e, "reconcile error — requeuing");
-            Ok(tatara_process::requeue::after_secs(30))
+            // Reconcile-error back-off rides through the ONE
+            // substrate composer `tatara_process::requeue::heartbeat`
+            // — pre-lift this + the sibling `error_policy` return +
+            // the two `table_controller.rs` sites hand-authored a
+            // bare `30` literal, restating the SAME "back off to the
+            // default steady-state heartbeat cadence after an error"
+            // intent the sibling `phase_machine::HEARTBEAT` const
+            // bound at 7 handler-tail sites, past the ★★
+            // PRIME-DIRECTIVE ≥ 2 duplication threshold across three
+            // files.
+            Ok(tatara_process::requeue::heartbeat())
         }
     }
 }
@@ -119,5 +140,8 @@ pub async fn reconcile(process: Arc<Process>, ctx: Arc<Context>) -> Result<Actio
 /// kube-runtime error policy — used for `Controller::run`.
 pub fn error_policy(_proc: Arc<Process>, err: &kube::Error, _ctx: Arc<Context>) -> Action {
     warn!(error = %err, "controller error; requeuing");
-    tatara_process::requeue::after_secs(30)
+    // Peer to the reconcile-error sink above — same "back off to
+    // heartbeat cadence after an error" intent, same substrate
+    // composer.
+    tatara_process::requeue::heartbeat()
 }

@@ -245,10 +245,21 @@ pub async fn reconcile(
         "ProcessTable heartbeat"
     );
 
-    Ok(tatara_process::requeue::after_secs(30))
+    // ProcessTable heartbeat rides through the ONE substrate
+    // composer `tatara_process::requeue::heartbeat` — pre-lift this
+    // + the sibling `error_policy` return + the two `controller.rs`
+    // sites hand-authored a bare `30` literal, restating the SAME
+    // "default periodic reconcile heartbeat cadence" intent the
+    // sibling `phase_machine::HEARTBEAT` const bound at 7 handler-
+    // tail sites, past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // threshold across three files.
+    Ok(tatara_process::requeue::heartbeat())
 }
 
 pub fn error_policy(_t: Arc<ProcessTable>, err: &kube::Error, _ctx: Arc<Context>) -> Action {
     tracing::warn!(error = %err, "ProcessTable reconcile error; requeuing");
-    tatara_process::requeue::after_secs(30)
+    // Peer to the ProcessTable heartbeat above — same "back off to
+    // heartbeat cadence after an error" intent, same substrate
+    // composer.
+    tatara_process::requeue::heartbeat()
 }

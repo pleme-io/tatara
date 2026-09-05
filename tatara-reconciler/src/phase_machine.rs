@@ -30,9 +30,17 @@ use crate::context::Context;
 use crate::lifetime_clock::{self, AutoTerminate};
 use crate::{boundary, patch, pid, render, ssapply};
 
-const HEARTBEAT: u64 = 30;
-const SHORT_RETRY: u64 = 5;
-const TICK_RETRY: u64 = 1;
+// Named requeue intents (`tick` / `short_retry` / `heartbeat`) live
+// at ONE workspace-wide substrate owner in `tatara_process::requeue`
+// — pre-lift the `TICK_RETRY` / `SHORT_RETRY` / `HEARTBEAT` local
+// consts were bound here and restated as bare `1` / `5` / `30`
+// literals in `tatara-reconciler::controller`, `table_controller`,
+// and `tatara-pool-reconciler::controller_allocation`, past the
+// ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold across three files
+// (28 total call sites). Post-lift each callsite reads the semantic
+// `requeue::tick()` / `requeue::short_retry()` / `requeue::heartbeat()`
+// helper and the intent → second-count binding lives at ONE typed
+// owner.
 
 pub async fn handle_pending(p: &Process, ctx: &Context) -> Result<Action> {
     // DECLARE — canonicalize the spec, compute content hash, attach Identity,
@@ -69,7 +77,7 @@ pub async fn handle_pending(p: &Process, ctx: &Context) -> Result<Action> {
         content_hash = %identity.content_hash,
         "pending → forking (DECLARE)"
     );
-    Ok(tatara_process::requeue::after_secs(TICK_RETRY))
+    Ok(tatara_process::requeue::tick())
 }
 
 pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
@@ -99,7 +107,7 @@ pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
             unmet = unmet.len(),
             "forking — dependencies unmet; will retry"
         );
-        return Ok(tatara_process::requeue::after_secs(HEARTBEAT));
+        return Ok(tatara_process::requeue::heartbeat());
     }
 
     // 2. Allocate PID if we don't already have one. The presence
@@ -186,7 +194,7 @@ pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
         .map_err(|e| anyhow!("patch (forking→execing): {e}"))?;
 
     info!(namespace = %ns, name = %name, "forking → execing");
-    Ok(tatara_process::requeue::after_secs(TICK_RETRY))
+    Ok(tatara_process::requeue::tick())
 }
 
 // The prior private `namespace_and_name(p)` helper lifted to the
@@ -239,7 +247,7 @@ pub async fn handle_execing(p: &Process, ctx: &Context) -> Result<Action> {
                 checked = checked.len(),
                 "execing — preconditions unmet"
             );
-            return Ok(tatara_process::requeue::after_secs(HEARTBEAT));
+            return Ok(tatara_process::requeue::heartbeat());
         }
     }
 
@@ -255,7 +263,7 @@ pub async fn handle_execing(p: &Process, ctx: &Context) -> Result<Action> {
                 variant = ?std::mem::discriminant(&other),
                 "execing — intent variant not yet implemented, staying in Execing"
             );
-            return Ok(tatara_process::requeue::after_secs(HEARTBEAT));
+            return Ok(tatara_process::requeue::heartbeat());
         }
     }
 
@@ -317,7 +325,7 @@ pub async fn handle_execing(p: &Process, ctx: &Context) -> Result<Action> {
         routing = routing_resources,
         "execing → running (RENDER)"
     );
-    Ok(tatara_process::requeue::after_secs(SHORT_RETRY))
+    Ok(tatara_process::requeue::short_retry())
 }
 
 pub async fn handle_running(p: &Process, ctx: &Context) -> Result<Action> {
@@ -404,7 +412,7 @@ pub async fn handle_running(p: &Process, ctx: &Context) -> Result<Action> {
 
     if !all_ready {
         info!(namespace = %ns, name = %name, "running (VERIFY — not all flux refs ready)");
-        return Ok(tatara_process::requeue::after_secs(HEARTBEAT));
+        return Ok(tatara_process::requeue::heartbeat());
     }
 
     // All flux refs ready — now evaluate boundary.postconditions.
@@ -432,7 +440,7 @@ pub async fn handle_running(p: &Process, ctx: &Context) -> Result<Action> {
                 checked = checked.len(),
                 "running — postconditions unmet"
             );
-            return Ok(tatara_process::requeue::after_secs(HEARTBEAT));
+            return Ok(tatara_process::requeue::heartbeat());
         }
     }
 
@@ -533,10 +541,10 @@ pub async fn handle_attested(p: &Process, ctx: &Context) -> Result<Action> {
         .await
         .map_err(|e| anyhow!("patch (attested→reconverging): {e}"))?;
         info!(namespace = %ns, name = %name, "attested → reconverging (DRIFT)");
-        Ok(tatara_process::requeue::after_secs(SHORT_RETRY))
+        Ok(tatara_process::requeue::short_retry())
     } else {
         info!(namespace = %ns, name = %name, "attested (heartbeat)");
-        Ok(tatara_process::requeue::after_secs(HEARTBEAT))
+        Ok(tatara_process::requeue::heartbeat())
     }
 }
 
@@ -589,7 +597,7 @@ async fn advance_to_attested(
         root = %composed_root,
         "running → attested (ATTEST)"
     );
-    Ok(tatara_process::requeue::after_secs(HEARTBEAT))
+    Ok(tatara_process::requeue::heartbeat())
 }
 
 /// Read the cluster-scoped ProcessTable + check if any entry in
@@ -683,7 +691,7 @@ pub async fn handle_reconverging(p: &Process, ctx: &Context) -> Result<Action> {
         .await
         .map_err(|e| anyhow!("patch (reconverging→execing): {e}"))?;
     info!(namespace = %ns, name = %name, "reconverging → execing (RECONVERGE)");
-    Ok(tatara_process::requeue::after_secs(TICK_RETRY))
+    Ok(tatara_process::requeue::tick())
 }
 
 /// Releasing — the export window. Process has reached a terminal
@@ -792,7 +800,7 @@ pub async fn handle_releasing(p: &Process, ctx: &Context) -> Result<Action> {
     if active > 0 || total < applicable.len() {
         // Some Jobs still running, or some Jobs not yet picked up by
         // our list (Job creation lag). Heartbeat back.
-        return Ok(tatara_process::requeue::after_secs(SHORT_RETRY));
+        return Ok(tatara_process::requeue::short_retry());
     }
 
     // All Jobs reached a terminal state. Even a Failed Job is fine —
@@ -862,7 +870,7 @@ async fn advance_out_of_releasing(
         reason = %reason,
         "releasing → next"
     );
-    Ok(tatara_process::requeue::after_secs(TICK_RETRY))
+    Ok(tatara_process::requeue::tick())
 }
 
 pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
@@ -958,7 +966,7 @@ pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
                 children = children.len(),
                 "exiting — waiting for children to terminate"
             );
-            return Ok(tatara_process::requeue::after_secs(SHORT_RETRY));
+            return Ok(tatara_process::requeue::short_retry());
         }
     }
 
@@ -968,7 +976,7 @@ pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
         .await
         .map_err(|e| anyhow!("patch (exiting→zombie): {e}"))?;
     info!(namespace = %ns, name = %name, "exiting → zombie");
-    Ok(tatara_process::requeue::after_secs(TICK_RETRY))
+    Ok(tatara_process::requeue::tick())
 }
 
 pub async fn handle_failed(p: &Process, ctx: &Context) -> Result<Action> {
@@ -1001,14 +1009,14 @@ pub async fn handle_failed(p: &Process, ctx: &Context) -> Result<Action> {
             .await
             .map_err(|e| anyhow!("patch (failed→zombie, ephemeral teardown): {e}"))?;
         info!(namespace = %ns, name = %name, "failed → zombie (ephemeral teardown)");
-        return Ok(tatara_process::requeue::after_secs(TICK_RETRY));
+        return Ok(tatara_process::requeue::tick());
     }
 
     patch::transition(&api, &name, ProcessPhase::Zombie)
         .await
         .map_err(|e| anyhow!("patch (failed→zombie): {e}"))?;
     info!(namespace = %ns, name = %name, "failed → zombie");
-    Ok(tatara_process::requeue::after_secs(TICK_RETRY))
+    Ok(tatara_process::requeue::tick())
 }
 
 /// True iff the Process has at least one ephemeral export whose
@@ -1090,7 +1098,7 @@ async fn transition_to_releasing(
         reason = %reason,
         "→ releasing (export window opens)"
     );
-    Ok(tatara_process::requeue::after_secs(TICK_RETRY))
+    Ok(tatara_process::requeue::tick())
 }
 
 /// Read the Process's current phase as a string for the
@@ -1141,7 +1149,7 @@ async fn transition_to_exiting(
         reason = %reason,
         "→ exiting (ephemeral lifetime clock)"
     );
-    Ok(tatara_process::requeue::after_secs(TICK_RETRY))
+    Ok(tatara_process::requeue::tick())
 }
 
 pub async fn handle_zombie(p: &Process, ctx: &Context) -> Result<Action> {
@@ -1152,7 +1160,7 @@ pub async fn handle_zombie(p: &Process, ctx: &Context) -> Result<Action> {
         .await
         .map_err(|e| anyhow!("patch (zombie→reaped): {e}"))?;
     info!(namespace = %ns, name = %name, "zombie → reaped");
-    Ok(tatara_process::requeue::after_secs(TICK_RETRY))
+    Ok(tatara_process::requeue::tick())
 }
 
 pub async fn handle_reaped(p: &Process, ctx: &Context) -> Result<Action> {

@@ -321,7 +321,17 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
             .await
             {
                 warn!(error = %e, "bind failed; will retry");
-                return Ok(tatara_process::requeue::after_secs(5));
+                // Bind-retry back-off rides through the ONE
+                // substrate composer
+                // `tatara_process::requeue::short_retry` — pre-lift
+                // this hand-authored a bare `5` literal, restating
+                // the SAME "short retry after transient failure"
+                // intent the sibling
+                // `tatara-reconciler::phase_machine::SHORT_RETRY`
+                // const bound at 4 handler-branch sites, past the
+                // ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold
+                // across two files.
+                return Ok(tatara_process::requeue::short_retry());
             }
 
             // Status patch on Allocation.

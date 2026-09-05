@@ -10,6 +10,7 @@ use kube::{Api, Client};
 use serde_json::{json, Value};
 
 use tatara_process::annotations;
+use tatara_process::flux_resource::FluxResource;
 use tatara_process::k8s_wire_identity::K8sWireIdentity;
 use tatara_process::prelude::{FluxResourceRef, Process, RenderedResourceCoords};
 
@@ -412,6 +413,85 @@ pub fn owned_flux_metadata(ns: &str, name: &str) -> Value {
         "namespace": ns,
         "annotations": ownership_annotations_by_coord(ns, name),
     })
+}
+
+/// Substrate-primitive composer for a **complete Flux-owned resource
+/// JSON** — the 4-slot `{apiVersion, kind, metadata, spec}` shape
+/// every `render::render_{flux,aplicacao}` emit site restated by
+/// hand. Pairs the closed-set variant's [`K8sWireIdentity`]
+/// projection with [`owned_flux_metadata`] so an emit site names
+/// its variant + its spec ONCE.
+///
+/// Pre-lift the 4-slot compound
+/// `<FluxResource>.wire_identity().resource_json(json!({"metadata":
+/// owned_flux_metadata(ns, name), "spec": <spec>}))` shape was
+/// hand-authored at THREE Flux-owned emit sites in
+/// `tatara-reconciler::render` past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication threshold:
+///
+/// * [`crate::render::render_flux`] — the Kustomization emit at the
+///   [`FluxResource::Kustomization`] arm.
+/// * [`crate::render::render_aplicacao`] — the OCIRepository emit at
+///   the [`FluxResource::OCIRepository`] arm (only reached for
+///   `oci://` chart refs).
+/// * [`crate::render::render_aplicacao`] — the HelmRelease emit at
+///   the [`FluxResource::HelmRelease`] arm.
+///
+/// All three sites walked the SAME compound: the variant's
+/// `.wire_identity()` for `(apiVersion, kind)`,
+/// [`owned_flux_metadata`] for `metadata`, and a caller-supplied
+/// spec JSON. The per-emit-site variation was ONLY the variant
+/// choice + the spec expression; the `metadata` slot's `(ns, name,
+/// annotations)` composition was byte-identical across all three.
+///
+/// Post-lift each emit site names the variant + the spec exactly
+/// ONCE — the substrate primitive owns the `(apiVersion, kind,
+/// metadata)` composition. A future upgrade to the Flux-owned emit
+/// shape (a `labels` axis promoted onto every Flux resource, a
+/// `finalizers` slot, a wire-form migration to `apiextensions/v2`
+/// carrying an extra `metadata.resourceVersion` guard, a switch
+/// from `owned_flux_metadata` to a broader `owned_metadata`
+/// composer shared with routing edges) lands at ONE substrate site
+/// and every downstream Flux emit site inherits mechanically.
+/// A future NEW Flux-owned emit site (a notification-controller
+/// `Alert` / `Provider` variant added to
+/// [`FluxResource`] and rendered here) inherits the same composer
+/// through the same 4-arg call.
+///
+/// The identity slots (`apiVersion` + `kind`) win over any inline
+/// collision in the spec expression — this delegates to
+/// [`K8sWireIdentity::resource_json`], whose byte-shape pins bind
+/// the identity-vs-extras collision precedence — so a caller who
+/// accidentally inlined a stale `apiVersion` literal on top of the
+/// spec cannot skew the emit's wire-form identity.
+///
+/// Sibling to [`owned_flux_metadata`] on the (Flux-owned resource
+/// scaffold × per-slot composer) axis — the metadata composer owns
+/// the 3-slot `{name, namespace, annotations}` inner shape, this
+/// composer owns the enclosing 4-slot resource JSON that consumes
+/// it. Peer to how [`crate::edges::IngressEdge::render`] +
+/// [`crate::edges::DnsEndpointEdge::render`] on the routing-edge
+/// axis compose their own `{routing_edge_metadata, spec}` scaffold
+/// through the sibling [`RoutingEdgeResource::wire_identity`]
+/// projection — a future unification of the two scaffolds would
+/// land at ONE substrate primitive here + ONE at the edge site.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition —
+/// the 4-slot Flux-owned resource shape recurred at three hand-
+/// authored emit sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// trigger, and is lifted to ONE owner here). THEORY.md §II.1
+/// invariant 5 (composition preserves proofs — the pins in
+/// [`tests::owned_flux_resource_*`] bind the composed primitive to
+/// the pre-lift hand-authored shape byte-identically, so a
+/// regression that reordered a slot, dropped one, or drifted the
+/// metadata scaffold surfaces here rather than at every downstream
+/// Flux emit site).
+#[must_use]
+pub fn owned_flux_resource(variant: FluxResource, ns: &str, name: &str, spec: Value) -> Value {
+    variant.wire_identity().resource_json(json!({
+        "metadata": owned_flux_metadata(ns, name),
+        "spec": spec,
+    }))
 }
 
 /// Substrate-primitive builder for the standard tatara-reconciler
@@ -2209,6 +2289,177 @@ mod tests {
         assert_eq!(
             a, b,
             "owned_flux_metadata must be a pure function of (ns, name) — same args → same output",
+        );
+    }
+
+    // ─── owned_flux_resource substrate pins ─────────────────────────────
+    //
+    // The composer [`owned_flux_resource`] binds the compound 4-slot
+    // `{apiVersion, kind, metadata, spec}` Flux-owned resource JSON
+    // at ONE substrate site across THREE consumer emit sites in
+    // `tatara-reconciler::render` (`render_flux`'s Kustomization
+    // arm, `render_aplicacao`'s OCIRepository + HelmRelease arms).
+    // The pins bind the composer's shape byte-identically to the
+    // pre-lift hand-authored composition every emit site restated
+    // so a regression that dropped a slot, reshaped one, or drifted
+    // the metadata scaffold surfaces here rather than as silent
+    // wire-form skew at the K8s API server.
+
+    #[test]
+    fn owned_flux_resource_stamps_variant_wire_identity() {
+        // Wire-form identity pin: the composer routes the variant's
+        // `(apiVersion, kind)` pair through `wire_identity()` — the
+        // typed closed-set projection binds structurally so a
+        // regression that hand-authored a stale literal on one arm
+        // (e.g. renamed OCIRepository to OCIRepositoryV2 on the
+        // Flux side while the composer kept emitting the old kind)
+        // cannot happen — the variant is named ONCE at the callsite.
+        for v in FluxResource::ALL {
+            let out = owned_flux_resource(v, "demo-ns", "demo", json!({"key": "value"}));
+            let obj = out
+                .as_object()
+                .expect("owned_flux_resource must return a JSON object");
+            assert_eq!(
+                obj["apiVersion"].as_str(),
+                Some(v.api_version()),
+                "owned_flux_resource drifted apiVersion for {v:?}",
+            );
+            assert_eq!(
+                obj["kind"].as_str(),
+                Some(v.kind()),
+                "owned_flux_resource drifted kind for {v:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn owned_flux_resource_seeds_metadata_through_owned_flux_metadata() {
+        // Composition pin: the composer's `metadata` slot is
+        // byte-identical to what `owned_flux_metadata(ns, name)`
+        // returns. A regression that re-open-coded the metadata
+        // scaffold (bypassing the sibling composer, silently
+        // dropping the annotations slot, drifting the `ns`/`name`
+        // stamping) would surface here rather than as an SSA-time
+        // ownership-tag miss at every downstream Flux emit.
+        for (ns, name) in [
+            ("flux-system", "observability-stack"),
+            ("demo-ns", "ephemeral-demo"),
+            ("prod", "seph-agent"),
+        ] {
+            let out = owned_flux_resource(
+                FluxResource::HelmRelease,
+                ns,
+                name,
+                json!({"releaseName": name}),
+            );
+            assert_eq!(
+                out["metadata"],
+                owned_flux_metadata(ns, name),
+                "owned_flux_resource drifted from owned_flux_metadata for {ns:?}/{name:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn owned_flux_resource_passes_spec_slot_verbatim() {
+        // Spec passthrough pin: the caller-supplied spec JSON rides
+        // through verbatim into the `spec` slot — a regression that
+        // silently reshaped the spec (e.g. normalized `null` to
+        // `{}`, wrapped scalars, dropped inner fields) would surface
+        // here rather than as a Flux-controller reject at apply
+        // time.
+        let spec = json!({
+            "interval": "5m",
+            "url": "oci://ghcr.io/pleme-io/charts",
+            "ref": { "tag": "0.2.0" },
+        });
+        let out = owned_flux_resource(
+            FluxResource::OCIRepository,
+            "flux-system",
+            "demo",
+            spec.clone(),
+        );
+        assert_eq!(
+            out["spec"], spec,
+            "owned_flux_resource must pass the spec JSON through verbatim",
+        );
+    }
+
+    #[test]
+    fn owned_flux_resource_matches_pre_lift_hand_authored_shape_bytewise() {
+        // Byte-shape parity witness: the composer's output matches
+        // the pre-lift hand-authored 4-slot composition every emit
+        // site restated, byte-for-byte, across every variant + a
+        // corpus of representative `(ns, name)` shapes. Guards the
+        // three post-lift emit sites (Kustomization,
+        // OCIRepository, HelmRelease) against silent divergence
+        // from the pre-lift wire form operators + Flux controllers
+        // consume.
+        for v in FluxResource::ALL {
+            for (ns, name) in [
+                ("flux-system", "observability-stack"),
+                ("demo-ns", "ephemeral-demo"),
+                ("prod", "seph-agent"),
+                ("", ""),
+            ] {
+                let spec = json!({"replicas": 3, "kind_hint": v.kind()});
+                let composed = owned_flux_resource(v, ns, name, spec.clone());
+                let hand_authored = v.wire_identity().resource_json(json!({
+                    "metadata": owned_flux_metadata(ns, name),
+                    "spec": spec,
+                }));
+                assert_eq!(
+                    composed, hand_authored,
+                    "owned_flux_resource drifted from the pre-lift hand-authored 4-slot shape on {v:?} / {ns:?}/{name:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn owned_flux_resource_identity_slots_win_over_spec_collision() {
+        // Coherence pin: a caller who accidentally inlined an
+        // `apiVersion` or `kind` slot at the top of a spec (e.g. a
+        // typo that swapped nested vs top-level shape) cannot skew
+        // the emit's wire-form identity — the typed pair from the
+        // closed-set variant wins. Delegates to
+        // [`K8sWireIdentity::resource_json`], whose collision-
+        // precedence pin binds this behavior directly. A regression
+        // that inverted the merge order at this composer (e.g.
+        // stamped identity FIRST then merged spec on top) would
+        // let the stale literal win and silently break the K8s
+        // API server's kind dispatch.
+        let out = owned_flux_resource(
+            FluxResource::HelmRelease,
+            "demo-ns",
+            "demo",
+            json!({
+                "apiVersion": "wrong.io/v0",
+                "kind": "WrongKind",
+                "releaseName": "demo",
+            }),
+        );
+        assert_eq!(
+            out["apiVersion"].as_str(),
+            Some(FluxResource::HelmRelease.api_version()),
+        );
+        assert_eq!(out["kind"].as_str(), Some(FluxResource::HelmRelease.kind()));
+    }
+
+    #[test]
+    fn owned_flux_resource_is_a_pure_function_of_its_four_args() {
+        // Purity pin: repeated calls with the same `(variant, ns,
+        // name, spec)` return byte-identical output. Guards against
+        // any future implementation refactor that introduced hidden
+        // state (a cache, a monotonic counter in the annotations
+        // scaffold) that would silently drift the three post-lift
+        // Flux emit sites apart from each other.
+        let spec = json!({"replicas": 3});
+        let a = owned_flux_resource(FluxResource::Kustomization, "ns", "name", spec.clone());
+        let b = owned_flux_resource(FluxResource::Kustomization, "ns", "name", spec);
+        assert_eq!(
+            a, b,
+            "owned_flux_resource must be a pure function of (variant, ns, name, spec)",
         );
     }
 

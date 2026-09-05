@@ -180,12 +180,19 @@ fn render_flux(name: &str, ns: &str, f: &FluxIntent) -> (Vec<Value>, Vec<u8>) {
     // [`tatara_process::K8sWireIdentity`] so a copy-paste that
     // swapped ONE mention of the variant across the two slots would
     // no longer compile.
-    let kustomization = FluxResource::Kustomization
-        .wire_identity()
-        .resource_json(json!({
-            "metadata": crate::ssapply::owned_flux_metadata(ns, name),
-            "spec": Value::Object(spec),
-        }));
+    // Full 4-slot `{apiVersion, kind, metadata, spec}` Flux-owned
+    // resource JSON rides through the ONE substrate composer
+    // [`crate::ssapply::owned_flux_resource`] — sibling to the
+    // OCIRepository + HelmRelease emit sites in `render_aplicacao`
+    // below. Post-lift each emit site names the variant + the spec
+    // exactly ONCE; the `(apiVersion, kind, metadata)` scaffold is
+    // owned by the substrate primitive.
+    let kustomization = crate::ssapply::owned_flux_resource(
+        FluxResource::Kustomization,
+        ns,
+        name,
+        Value::Object(spec),
+    );
 
     let intent_bytes = serde_json::to_vec(f).unwrap_or_default();
     (vec![kustomization], intent_bytes)
@@ -234,25 +241,30 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
         // HelmRelease site below; the three pre-lift hand-authored
         // `{name, namespace, annotations: ownership_annotations_by_coord(
         // ns, name)}` blocks now compose at ONE owner.
-        let oci_repo = FluxResource::OCIRepository
-            .wire_identity()
-            .resource_json(json!({
-                "metadata": crate::ssapply::owned_flux_metadata(ns, name),
-                "spec": {
-                    // Flux `OCIRepository.spec.interval` — pre-lift this
-                    // was a hand-authored `"5m"` string literal past the
-                    // ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold, one
-                    // of two adjacent identical Flux-interval sites in
-                    // this function. Post-lift both slots ride through
-                    // the ONE typed
-                    // `AplicacaoIntent::flux_reconcile_interval` composer
-                    // on the owning intent; a future divergence lands at
-                    // the primitive's shape, not at this callsite.
-                    "interval": a.flux_reconcile_interval(),
-                    "url": oci.registry_url,
-                    "ref": { "tag": a.version },
-                },
-            }));
+        // Full 4-slot `{apiVersion, kind, metadata, spec}` Flux-owned
+        // resource JSON rides through the ONE substrate composer
+        // [`crate::ssapply::owned_flux_resource`] — sibling to the
+        // Kustomization emit site in `render_flux` above and the
+        // HelmRelease emit site below.
+        let oci_repo = crate::ssapply::owned_flux_resource(
+            FluxResource::OCIRepository,
+            ns,
+            name,
+            json!({
+                // Flux `OCIRepository.spec.interval` — pre-lift this
+                // was a hand-authored `"5m"` string literal past the
+                // ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold, one
+                // of two adjacent identical Flux-interval sites in
+                // this function. Post-lift both slots ride through
+                // the ONE typed
+                // `AplicacaoIntent::flux_reconcile_interval` composer
+                // on the owning intent; a future divergence lands at
+                // the primitive's shape, not at this callsite.
+                "interval": a.flux_reconcile_interval(),
+                "url": oci.registry_url,
+                "ref": { "tag": a.version },
+            }),
+        );
         // HelmRelease v2 `chartRef` pointer. Sibling to the
         // GitRepository `sourceRef` in `render_flux` and the
         // HelmRepository `sourceRef` below — all three 3-slot
@@ -359,12 +371,16 @@ fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, V
     // twice; post-lift each emit site names the variant ONCE via
     // `.wire_identity()` and the pair binds structurally at the
     // typed [`tatara_process::K8sWireIdentity`].
-    let helm_release = FluxResource::HelmRelease
-        .wire_identity()
-        .resource_json(json!({
-            "metadata": crate::ssapply::owned_flux_metadata(ns, name),
-            "spec": Value::Object(hr_spec),
-        }));
+    // Full 4-slot `{apiVersion, kind, metadata, spec}` Flux-owned
+    // resource JSON rides through the ONE substrate composer
+    // [`crate::ssapply::owned_flux_resource`] — sibling to the
+    // Kustomization + OCIRepository emit sites above.
+    let helm_release = crate::ssapply::owned_flux_resource(
+        FluxResource::HelmRelease,
+        ns,
+        name,
+        Value::Object(hr_spec),
+    );
     resources.push(helm_release);
 
     let intent_bytes = serde_json::to_vec(a).unwrap_or_default();

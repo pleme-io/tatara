@@ -129,10 +129,7 @@ pub fn ephemeral_id_from_spec<T: Serialize>(spec: &T) -> Result<String, Hostname
 /// The split-arg design keeps this pure — the spec hash is computed
 /// once by the caller (via [`ephemeral_id_from_spec`]) and reused
 /// across every hostname on the same Process.
-pub fn resolve_ephemeral_id<'a>(
-    hostname: &'a RoutingHostname,
-    fallback_hash: &'a str,
-) -> &'a str {
+pub fn resolve_ephemeral_id<'a>(hostname: &'a RoutingHostname, fallback_hash: &'a str) -> &'a str {
     match &hostname.instance {
         Some(s) if !s.is_empty() => s.as_str(),
         _ => fallback_hash,
@@ -233,7 +230,10 @@ mod tests {
     #[test]
     fn empty_label_rejected() {
         let r = fmt_fqdn("", "x", "y", "z", "example.com");
-        assert!(matches!(r, Err(HostnameError::InvalidLabel { segment: "app", .. })));
+        assert!(matches!(
+            r,
+            Err(HostnameError::InvalidLabel { segment: "app", .. })
+        ));
     }
 
     #[test]
@@ -277,7 +277,10 @@ mod tests {
 
     #[test]
     fn ephemeral_id_is_8_hex_chars() {
-        let spec = TestSpec { a: 1, b: "x".into() };
+        let spec = TestSpec {
+            a: 1,
+            b: "x".into(),
+        };
         let id = ephemeral_id_from_spec(&spec).unwrap();
         assert_eq!(id.len(), EPHEMERAL_ID_HASH_LEN);
         assert!(id.chars().all(|c| c.is_ascii_hexdigit()));
@@ -285,8 +288,14 @@ mod tests {
 
     #[test]
     fn ephemeral_id_is_deterministic() {
-        let s1 = TestSpec { a: 1, b: "x".into() };
-        let s2 = TestSpec { a: 1, b: "x".into() };
+        let s1 = TestSpec {
+            a: 1,
+            b: "x".into(),
+        };
+        let s2 = TestSpec {
+            a: 1,
+            b: "x".into(),
+        };
         assert_eq!(
             ephemeral_id_from_spec(&s1).unwrap(),
             ephemeral_id_from_spec(&s2).unwrap()
@@ -295,9 +304,18 @@ mod tests {
 
     #[test]
     fn ephemeral_id_changes_with_spec() {
-        let s1 = TestSpec { a: 1, b: "x".into() };
-        let s2 = TestSpec { a: 2, b: "x".into() };
-        let s3 = TestSpec { a: 1, b: "y".into() };
+        let s1 = TestSpec {
+            a: 1,
+            b: "x".into(),
+        };
+        let s2 = TestSpec {
+            a: 2,
+            b: "x".into(),
+        };
+        let s3 = TestSpec {
+            a: 1,
+            b: "y".into(),
+        };
         let id1 = ephemeral_id_from_spec(&s1).unwrap();
         let id2 = ephemeral_id_from_spec(&s2).unwrap();
         let id3 = ephemeral_id_from_spec(&s3).unwrap();
@@ -310,7 +328,10 @@ mod tests {
     fn ephemeral_id_lowercase_valid_dns_label() {
         // BLAKE3 hex is lowercase by design; the validator must
         // accept the output as a valid DNS label.
-        let spec = TestSpec { a: 42, b: "anything".into() };
+        let spec = TestSpec {
+            a: 42,
+            b: "anything".into(),
+        };
         let id = ephemeral_id_from_spec(&spec).unwrap();
         validate_label("ephemeral_id", &id).unwrap();
     }
@@ -319,11 +340,7 @@ mod tests {
 
     #[test]
     fn resolve_named_slot_wins() {
-        let h = RoutingHostname {
-            app: "api".into(),
-            instance: Some("demo-prod".into()),
-            cluster: None,
-        };
+        let h = RoutingHostname::instanced("api", "demo-prod");
         assert_eq!(resolve_ephemeral_id(&h, "fallback"), "demo-prod");
     }
 
@@ -339,11 +356,7 @@ mod tests {
 
     #[test]
     fn resolve_unset_named_falls_back() {
-        let h = RoutingHostname {
-            app: "api".into(),
-            instance: None,
-            cluster: None,
-        };
+        let h = RoutingHostname::content_hashed("api");
         assert_eq!(resolve_ephemeral_id(&h, "abc123de"), "abc123de");
     }
 
@@ -351,27 +364,21 @@ mod tests {
 
     #[test]
     fn end_to_end_named_and_unnamed_for_same_process() {
-        let spec = TestSpec { a: 1, b: "x".into() };
+        let spec = TestSpec {
+            a: 1,
+            b: "x".into(),
+        };
         let hash = ephemeral_id_from_spec(&spec).unwrap();
 
-        let h_named = RoutingHostname {
-            app: "api".into(),
-            instance: Some("demo-prod".into()),
-            cluster: None,
-        };
-        let h_anon = RoutingHostname {
-            app: "gateway".into(),
-            instance: None,
-            cluster: None,
-        };
+        let h_named = RoutingHostname::instanced("api", "demo-prod");
+        let h_anon = RoutingHostname::content_hashed("gateway");
 
         let id_named = resolve_ephemeral_id(&h_named, &hash);
         let id_anon = resolve_ephemeral_id(&h_anon, &hash);
 
         let fqdn_named =
             fmt_fqdn(&h_named.app, id_named, "pleme-dev", "use1", "quero.lol").unwrap();
-        let fqdn_anon =
-            fmt_fqdn(&h_anon.app, id_anon, "pleme-dev", "use1", "quero.lol").unwrap();
+        let fqdn_anon = fmt_fqdn(&h_anon.app, id_anon, "pleme-dev", "use1", "quero.lol").unwrap();
 
         assert_eq!(fqdn_named, "api.demo-prod.pleme-dev.use1.quero.lol");
         assert!(fqdn_anon.starts_with("gateway."));

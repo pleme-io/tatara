@@ -1556,7 +1556,6 @@ mod export_job_tests {
 #[cfg(test)]
 mod routing_tests {
     use super::*;
-    use std::collections::BTreeMap;
     use tatara_process::crd::ProcessSpec;
     use tatara_process::routing::{RoutingBackend, RoutingHostname, RoutingSpec};
 
@@ -1578,23 +1577,10 @@ mod routing_tests {
     fn two_hostname_routing(stable: bool) -> RoutingSpec {
         RoutingSpec {
             hostnames: vec![
-                RoutingHostname {
-                    app: "api".into(),
-                    instance: Some("demo-prod".into()),
-                    cluster: None,
-                },
-                RoutingHostname {
-                    app: "gateway".into(),
-                    instance: Some("demo-prod".into()),
-                    cluster: None,
-                },
+                RoutingHostname::instanced("api", "demo-prod"),
+                RoutingHostname::instanced("gateway", "demo-prod"),
             ],
-            backend: RoutingBackend {
-                service: "demo-app-gateway".into(),
-                port: 8000,
-                tls_issuer: None,
-                ingress_annotations: BTreeMap::new(),
-            },
+            backend: RoutingBackend::plain("demo-app-gateway", 8000),
             stable_name_claim: stable,
             priority: 100,
         }
@@ -1678,12 +1664,7 @@ mod routing_tests {
     fn empty_hostnames_emits_nothing() {
         let r = RoutingSpec {
             hostnames: vec![],
-            backend: RoutingBackend {
-                service: "svc".into(),
-                port: 80,
-                tls_issuer: None,
-                ingress_annotations: BTreeMap::new(),
-            },
+            backend: RoutingBackend::plain("svc", 80),
             stable_name_claim: false,
             priority: 0,
         };
@@ -1695,17 +1676,8 @@ mod routing_tests {
     #[test]
     fn anonymous_hostname_uses_content_hash() {
         let r = RoutingSpec {
-            hostnames: vec![RoutingHostname {
-                app: "smoke".into(),
-                instance: None, // ⇒ content-hash form
-                cluster: None,
-            }],
-            backend: RoutingBackend {
-                service: "svc".into(),
-                port: 80,
-                tls_issuer: None,
-                ingress_annotations: BTreeMap::new(),
-            },
+            hostnames: vec![RoutingHostname::content_hashed("smoke")],
+            backend: RoutingBackend::plain("svc", 80),
             stable_name_claim: false,
             priority: 0,
         };

@@ -517,20 +517,11 @@ mod tests {
     }
 
     fn api_hostname() -> RoutingHostname {
-        RoutingHostname {
-            app: "api".into(),
-            instance: Some("demo-prod".into()),
-            cluster: None,
-        }
+        RoutingHostname::instanced("api", "demo-prod")
     }
 
     fn api_backend() -> RoutingBackend {
-        RoutingBackend {
-            service: "demo-app-gateway".into(),
-            port: 8000,
-            tls_issuer: None,
-            ingress_annotations: BTreeMap::new(),
-        }
+        RoutingBackend::plain("demo-app-gateway", 8000)
     }
 
     #[test]
@@ -769,11 +760,7 @@ mod tests {
         // — pin against a distinctive value so a regression that
         // swapped it for `ctx.process_name` or `ctx.fqdn` surfaces
         // HERE.
-        let h = RoutingHostname {
-            app: "gateway".into(),
-            instance: Some("demo-prod".into()),
-            cluster: None,
-        };
+        let h = RoutingHostname::instanced("gateway", "demo-prod");
         let b = api_backend();
         let c = ctx(&h, &b, "host", "demo-prod", false);
         let labels = routing_edge_labels(&c);

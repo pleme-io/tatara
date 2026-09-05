@@ -195,6 +195,174 @@ impl RoutingHostname {
     pub fn cluster_or<'a>(&'a self, fallback: &'a str) -> &'a str {
         self.cluster.as_deref().unwrap_or(fallback)
     }
+
+    /// Compose a [`RoutingHostname`] pinned to the "named-slot,
+    /// per-config cluster fallback" shape (`instance: Some(<instance>)`,
+    /// `cluster: None`) — the ONE substrate primitive owning the
+    /// 3-slot `RoutingHostname { app, instance: Some(<instance>),
+    /// cluster: None }` fixture literal every consumer restated by
+    /// hand pre-lift.
+    ///
+    /// Pre-lift the same 3-slot chain (`app: <s>.into()`, `instance:
+    /// Some(<s>.into())`, `cluster: None`) was hand-authored at TEN
+    /// workspace-wide sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication threshold, EVERY one of them the "named instance
+    /// segment, cluster-inherits-from-config" shape:
+    ///
+    /// * `tatara-process::hostname` — two sites: the `resolve_named_slot_wins`
+    ///   fixture plus the `end_to_end_named_and_unnamed_for_same_process`
+    ///   named-arm fixture.
+    /// * `tatara-process::routing` — four sites: the `demo_routing` seed
+    ///   (two hostnames), the `hostname_is_named_when_instance_nonempty`
+    ///   populated-instance pin, and the `cluster_or_borrow_form_return_shape_matches_fmt_fqdn_arg_shape`
+    ///   FQDN-composer parity pin.
+    /// * `tatara-reconciler::edges` — two sites: the `api_hostname`
+    ///   test fixture plus the `routing_edge_labels_stamps_app_slot_from_hostname`
+    ///   APP-slot pin (which stamps `"gateway"` instead of `"api"`).
+    /// * `tatara-reconciler::render` — two sites: the `two_hostname_routing`
+    ///   seed's `api` + `gateway` hostname pair.
+    ///
+    /// Post-lift every callsite reads `RoutingHostname::instanced(<app>,
+    /// <instance>)` and the three-slot struct's `cluster` slot stays
+    /// owned by the ONE substrate site — the per-config-cluster
+    /// fallback resolved through [`Self::cluster_or`] at read time
+    /// stays the ONLY axis a cluster override travels through, so a
+    /// future normalization (a per-cluster canonicalization, a
+    /// cross-cluster alias resolver, a claim-arbiter fallback swap)
+    /// lands here exactly once and every consumer inherits the
+    /// upgrade mechanically. The `impl Into<String>` bound on both
+    /// positional args accepts every pre-lift caller shape verbatim
+    /// — `&'static str` literals, owned `String` values, and
+    /// `.into()`-terminated chains alike — without a per-site
+    /// coercion.
+    ///
+    /// Peer to [`Self::content_hashed`] on the (instance slot ×
+    /// cluster slot) axis pair: both live on `RoutingHostname` and
+    /// hide the pair's "per-config cluster fallback" corner behind
+    /// ONE substrate primitive; [`Self::instanced`] fills the
+    /// `Some(<name>)` arm of the `instance` slot, [`Self::content_hashed`]
+    /// fills the `None` arm.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `RoutingHostname { app, instance: Some(<i>), cluster: None }`
+    /// fixture literal recurred at ten hand-authored sites past the
+    /// ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to
+    /// ONE owner here). THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — a regression that drifted the default-
+    /// cluster sentinel from `None` to a hardcoded string, or
+    /// reordered the three struct slots, surfaces at the
+    /// `instanced_composes_byte_identical_to_pre_lift_literal_across_every_app_instance_pair`
+    /// pin below rather than as silent skew at every downstream
+    /// fixture).
+    #[must_use]
+    pub fn instanced(app: impl Into<String>, instance: impl Into<String>) -> Self {
+        Self {
+            app: app.into(),
+            instance: Some(instance.into()),
+            cluster: None,
+        }
+    }
+
+    /// Compose a [`RoutingHostname`] pinned to the "content-hash
+    /// anonymous, per-config cluster fallback" shape (`instance: None`,
+    /// `cluster: None`) — the ONE substrate primitive owning the
+    /// 3-slot `RoutingHostname { app, instance: None, cluster: None }`
+    /// fixture literal every consumer restated by hand pre-lift.
+    ///
+    /// The `instance: None` slot instructs the reconciler's
+    /// [`crate::hostname::resolve_ephemeral_id`] to substitute
+    /// `blake3(canonical_spec)[:8]` — the content-hashed FQDN form
+    /// documented on [`RoutingHostname`]. Pre-lift the same 3-slot
+    /// chain (`app: <s>.into()`, `instance: None`, `cluster: None`)
+    /// was hand-authored at NINE workspace-wide sites past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication threshold, EVERY one of them
+    /// the "unnamed instance, cluster-inherits-from-config" shape:
+    ///
+    /// * `tatara-process::hostname` — two sites: the `resolve_unset_named_falls_back`
+    ///   fixture plus the `end_to_end_named_and_unnamed_for_same_process`
+    ///   anon-arm fixture.
+    /// * `tatara-process::routing` — six sites: the `h_anon` pin, the
+    ///   `cluster_or_falls_back_to_caller_string_when_cluster_is_none`
+    ///   fallback pin, and four more `cluster_or` / round-trip fixtures.
+    /// * `tatara-reconciler::render` — one site: the
+    ///   `anonymous_hostname_uses_content_hash` FQDN composer pin.
+    ///
+    /// Peer to [`Self::instanced`] on the (instance slot × cluster
+    /// slot) axis pair — [`Self::content_hashed`] fills the `None`
+    /// arm of the `instance` slot, [`Self::instanced`] fills the
+    /// `Some(<name>)` arm.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `RoutingHostname { app, instance: None, cluster: None }`
+    /// fixture literal recurred at nine hand-authored sites past the
+    /// ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to
+    /// ONE owner here). THEORY.md §II.1 invariant 5.
+    #[must_use]
+    pub fn content_hashed(app: impl Into<String>) -> Self {
+        Self {
+            app: app.into(),
+            instance: None,
+            cluster: None,
+        }
+    }
+}
+
+impl RoutingBackend {
+    /// Compose a [`RoutingBackend`] pinned to the "reconciler-default
+    /// TLS issuer, no per-Ingress annotations" shape (`tls_issuer:
+    /// None`, `ingress_annotations: BTreeMap::new()`) — the ONE
+    /// substrate primitive owning the 4-slot `RoutingBackend { service,
+    /// port, tls_issuer: None, ingress_annotations: BTreeMap::new() }`
+    /// fixture literal every consumer restated by hand pre-lift.
+    ///
+    /// Pre-lift the same 4-slot chain (`service: <s>.into()`, `port:
+    /// <u16>`, `tls_issuer: None`, `ingress_annotations:
+    /// BTreeMap::new()`) was hand-authored at SEVEN workspace-wide
+    /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold,
+    /// EVERY one of them the "default-issuer, empty-annotations"
+    /// shape:
+    ///
+    /// * `tatara-process::routing` — three sites: the `demo_routing`
+    ///   seed plus two round-trip pins (`empty_routing_resolves_no_hostnames`,
+    ///   `empty_fields_skip_serialize`).
+    /// * `tatara-reconciler::edges` — one site: the `api_backend`
+    ///   test fixture consumed by every `IngressEdge` / `DnsEndpointEdge`
+    ///   render pin.
+    /// * `tatara-reconciler::render` — three sites: the `two_hostname_routing`
+    ///   seed's backend, the `empty_hostnames_emits_nothing` pin, and
+    ///   the `anonymous_hostname_uses_content_hash` pin.
+    ///
+    /// Post-lift every callsite reads `RoutingBackend::plain(<service>,
+    /// <port>)` and the four-slot struct's `tls_issuer` +
+    /// `ingress_annotations` slots stay owned by the ONE substrate
+    /// site — a future normalization (a per-fleet default `ClusterIssuer`
+    /// selection, a per-fleet baseline Ingress annotation set, a
+    /// SPIRE-vs-Let's-Encrypt discriminator) lands here exactly once
+    /// and every consumer inherits the upgrade mechanically. The
+    /// `impl Into<String>` bound on `service` accepts every pre-lift
+    /// caller shape verbatim.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the `RoutingBackend { service, port, tls_issuer: None,
+    /// ingress_annotations: BTreeMap::new() }` fixture literal recurred
+    /// at seven hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    /// duplication trigger, and is lifted to ONE owner here).
+    /// THEORY.md §II.1 invariant 5 (composition preserves proofs —
+    /// a regression that drifted the default `tls_issuer` sentinel
+    /// from `None` to a hardcoded string, or reordered the four
+    /// struct slots, surfaces at the
+    /// `plain_composes_byte_identical_to_pre_lift_literal_across_every_service_port_pair`
+    /// pin below rather than as silent skew at every downstream
+    /// fixture).
+    #[must_use]
+    pub fn plain(service: impl Into<String>, port: u16) -> Self {
+        Self {
+            service: service.into(),
+            port,
+            tls_issuer: None,
+            ingress_annotations: BTreeMap::new(),
+        }
+    }
 }
 
 /// Wire-form value stamped at
@@ -265,23 +433,10 @@ mod tests {
     fn demo_routing() -> RoutingSpec {
         RoutingSpec {
             hostnames: vec![
-                RoutingHostname {
-                    app: "api".into(),
-                    instance: Some("demo-prod".into()),
-                    cluster: None,
-                },
-                RoutingHostname {
-                    app: "gateway".into(),
-                    instance: Some("demo-prod".into()),
-                    cluster: None,
-                },
+                RoutingHostname::instanced("api", "demo-prod"),
+                RoutingHostname::instanced("gateway", "demo-prod"),
             ],
-            backend: RoutingBackend {
-                service: "demo-app-gateway".into(),
-                port: 8000,
-                tls_issuer: None,
-                ingress_annotations: BTreeMap::new(),
-            },
+            backend: RoutingBackend::plain("demo-app-gateway", 8000),
             stable_name_claim: true,
             priority: 100,
         }
@@ -291,12 +446,7 @@ mod tests {
     fn empty_routing_resolves_no_hostnames() {
         let r = RoutingSpec {
             hostnames: vec![],
-            backend: RoutingBackend {
-                service: "x".into(),
-                port: 80,
-                tls_issuer: None,
-                ingress_annotations: BTreeMap::new(),
-            },
+            backend: RoutingBackend::plain("x", 80),
             stable_name_claim: false,
             priority: 0,
         };
@@ -314,18 +464,10 @@ mod tests {
 
     #[test]
     fn hostname_is_named_when_instance_nonempty() {
-        let h = RoutingHostname {
-            app: "x".into(),
-            instance: Some("env-a".into()),
-            cluster: None,
-        };
+        let h = RoutingHostname::instanced("x", "env-a");
         assert!(h.is_named());
 
-        let h_anon = RoutingHostname {
-            app: "x".into(),
-            instance: None,
-            cluster: None,
-        };
+        let h_anon = RoutingHostname::content_hashed("x");
         assert!(!h_anon.is_named());
 
         let h_empty = RoutingHostname {
@@ -363,11 +505,7 @@ mod tests {
 
     #[test]
     fn cluster_or_falls_back_to_caller_string_when_cluster_is_none() {
-        let h = RoutingHostname {
-            app: "api".into(),
-            instance: None,
-            cluster: None,
-        };
+        let h = RoutingHostname::content_hashed("api");
         assert_eq!(h.cluster_or("pleme-dev"), "pleme-dev");
     }
 
@@ -410,11 +548,7 @@ mod tests {
         // change (owned `String`, `Cow<'_, str>`) breaks this pin,
         // not the reconciler.
         use crate::hostname::fmt_fqdn;
-        let h = RoutingHostname {
-            app: "api".into(),
-            instance: Some("demo-prod".into()),
-            cluster: None,
-        };
+        let h = RoutingHostname::instanced("api", "demo-prod");
         let host_cluster: &str = h.cluster_or("pleme-dev");
         let fqdn = fmt_fqdn(
             &h.app,
@@ -466,11 +600,7 @@ mod tests {
         // seed shape (`format!("{cluster}/{}", hostname.app)`).
         // A future rename of the separator or the composer's
         // ordering breaks this pin, not the claim-arbiter row seed.
-        let h = RoutingHostname {
-            app: "api".into(),
-            instance: None,
-            cluster: None,
-        };
+        let h = RoutingHostname::content_hashed("api");
         let cluster = h.cluster_or("pleme-dev");
         let key = format!("{cluster}/{}", h.app);
         assert_eq!(key, "pleme-dev/api");
@@ -493,11 +623,7 @@ mod tests {
         // the two. If a future refactor loosens the lifetime to
         // `&'a str` where `'a` is only tied to `self`, this test
         // stops compiling with the fallback-borrow arm.
-        let h = RoutingHostname {
-            app: "api".into(),
-            instance: None,
-            cluster: None,
-        };
+        let h = RoutingHostname::content_hashed("api");
         {
             let fallback = String::from("pleme-dev");
             let slice = h.cluster_or(&fallback);
@@ -506,6 +632,168 @@ mod tests {
             // bounded by `fallback`. That's the compile-time
             // discipline the `<'a>` on the primitive encodes.
         }
+    }
+
+    // ─── RoutingHostname::instanced substrate pins ───────────────
+    //
+    // The pre-lift workspace restated the 3-slot `RoutingHostname {
+    // app, instance: Some(<i>), cluster: None }` fixture literal at
+    // TEN hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication trigger. Every corner of the shipped shape is
+    // pinned here so a regression that drifted the default-cluster
+    // sentinel from `None` to a hardcoded string, or reordered the
+    // three struct slots, surfaces at THIS composer's shipped-shape
+    // pin rather than as silent skew at every downstream fixture.
+
+    #[test]
+    fn instanced_composes_populated_instance_with_default_cluster() {
+        let h = RoutingHostname::instanced("api", "demo-prod");
+        assert_eq!(h.app, "api");
+        assert_eq!(h.instance.as_deref(), Some("demo-prod"));
+        assert!(h.cluster.is_none());
+    }
+
+    #[test]
+    fn instanced_composes_byte_identical_to_pre_lift_literal_across_every_app_instance_pair() {
+        // Full 3-corner byte-identical parity table across the
+        // `(app × instance)` axis pair. Any divergence between the
+        // primitive and each pre-lift callsite's inline literal
+        // surfaces HERE rather than as per-site operator-visible
+        // drift.
+        let pairs = [
+            ("api", "demo-prod"),
+            ("gateway", "demo-prod"),
+            ("x", "env-a"),
+        ];
+        for (app, instance) in pairs {
+            let via_primitive = RoutingHostname::instanced(app, instance);
+            let pre_lift = RoutingHostname {
+                app: app.into(),
+                instance: Some(instance.into()),
+                cluster: None,
+            };
+            assert_eq!(
+                via_primitive, pre_lift,
+                "primitive must match pre-lift `RoutingHostname {{ app, instance: Some(..), \
+                 cluster: None }}` literal byte-identically at (app={app:?}, instance={instance:?})"
+            );
+        }
+    }
+
+    #[test]
+    fn instanced_is_named_via_peer_projection() {
+        // Peer-composition pin: the primitive's shipped shape must
+        // continue to satisfy `is_named` (the sibling `RoutingHostname`
+        // projection that reads the same `instance` slot).
+        assert!(RoutingHostname::instanced("api", "demo-prod").is_named());
+    }
+
+    #[test]
+    fn instanced_cluster_or_falls_back_to_caller_string() {
+        // Peer-composition pin against `cluster_or`: the primitive
+        // stamps `cluster: None`, so `cluster_or` MUST return the
+        // caller-supplied fallback verbatim.
+        let h = RoutingHostname::instanced("api", "demo-prod");
+        assert_eq!(h.cluster_or("pleme-dev"), "pleme-dev");
+    }
+
+    // ─── RoutingHostname::content_hashed substrate pins ──────────
+    //
+    // The pre-lift workspace restated the 3-slot `RoutingHostname {
+    // app, instance: None, cluster: None }` fixture literal at NINE
+    // hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+    // trigger. Every corner of the shipped shape is pinned here.
+
+    #[test]
+    fn content_hashed_composes_unset_instance_with_default_cluster() {
+        let h = RoutingHostname::content_hashed("smoke");
+        assert_eq!(h.app, "smoke");
+        assert!(h.instance.is_none());
+        assert!(h.cluster.is_none());
+    }
+
+    #[test]
+    fn content_hashed_composes_byte_identical_to_pre_lift_literal_across_every_app_slot() {
+        let apps = ["api", "gateway", "smoke", "x"];
+        for app in apps {
+            let via_primitive = RoutingHostname::content_hashed(app);
+            let pre_lift = RoutingHostname {
+                app: app.into(),
+                instance: None,
+                cluster: None,
+            };
+            assert_eq!(
+                via_primitive, pre_lift,
+                "primitive must match pre-lift `RoutingHostname {{ app, instance: None, \
+                 cluster: None }}` literal byte-identically at (app={app:?})"
+            );
+        }
+    }
+
+    #[test]
+    fn content_hashed_is_not_named() {
+        // Peer-composition pin against `is_named`: an unset
+        // `instance` slot is definitionally content-hashed, i.e. NOT
+        // named — the reconciler's FQDN composer downstream
+        // substitutes `blake3(canonical_spec)[:8]` for the segment.
+        assert!(!RoutingHostname::content_hashed("smoke").is_named());
+    }
+
+    // ─── RoutingBackend::plain substrate pins ────────────────────
+    //
+    // The pre-lift workspace restated the 4-slot `RoutingBackend {
+    // service, port, tls_issuer: None, ingress_annotations:
+    // BTreeMap::new() }` fixture literal at SEVEN hand-authored sites
+    // past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger.
+
+    #[test]
+    fn plain_composes_default_issuer_and_empty_annotations() {
+        let b = RoutingBackend::plain("svc", 8080);
+        assert_eq!(b.service, "svc");
+        assert_eq!(b.port, 8080);
+        assert!(b.tls_issuer.is_none());
+        assert!(b.ingress_annotations.is_empty());
+    }
+
+    #[test]
+    fn plain_composes_byte_identical_to_pre_lift_literal_across_every_service_port_pair() {
+        let pairs = [
+            ("demo-app-gateway", 8000_u16),
+            ("svc", 80),
+            ("svc", 8080),
+            ("x", 80),
+        ];
+        for (service, port) in pairs {
+            let via_primitive = RoutingBackend::plain(service, port);
+            let pre_lift = RoutingBackend {
+                service: service.into(),
+                port,
+                tls_issuer: None,
+                ingress_annotations: BTreeMap::new(),
+            };
+            assert_eq!(
+                via_primitive, pre_lift,
+                "primitive must match pre-lift `RoutingBackend {{ service, port, tls_issuer: \
+                 None, ingress_annotations: BTreeMap::new() }}` literal byte-identically at \
+                 (service={service:?}, port={port})"
+            );
+        }
+    }
+
+    #[test]
+    fn plain_wire_form_skips_defaulted_slots() {
+        // Peer-composition pin: the primitive stamps `tls_issuer:
+        // None` + empty `ingress_annotations`, both of which are
+        // `serde(skip_serializing_if)` — so the wire form MUST NOT
+        // include either key. A regression that flipped the default
+        // sentinels to non-empty values would leak them into every
+        // rendered wire form; this pin fails first.
+        let b = RoutingBackend::plain("svc", 80);
+        let yaml = serde_yaml::to_string(&b).unwrap();
+        assert!(!yaml.contains("tlsIssuer:"));
+        assert!(!yaml.contains("ingressAnnotations:"));
+        assert!(yaml.contains("service: svc"));
+        assert!(yaml.contains("port: 80"));
     }
 
     #[test]
@@ -533,17 +821,8 @@ mod tests {
         // Minimal RoutingSpec — verify that absent optional fields
         // don't pollute the wire format.
         let r = RoutingSpec {
-            hostnames: vec![RoutingHostname {
-                app: "api".into(),
-                instance: None,
-                cluster: None,
-            }],
-            backend: RoutingBackend {
-                service: "svc".into(),
-                port: 8080,
-                tls_issuer: None,
-                ingress_annotations: BTreeMap::new(),
-            },
+            hostnames: vec![RoutingHostname::content_hashed("api")],
+            backend: RoutingBackend::plain("svc", 8080),
             stable_name_claim: false,
             priority: 0,
         };
@@ -678,11 +957,7 @@ mod tests {
             "10m".into(),
         );
         let r = RoutingSpec {
-            hostnames: vec![RoutingHostname {
-                app: "api".into(),
-                instance: None,
-                cluster: None,
-            }],
+            hostnames: vec![RoutingHostname::content_hashed("api")],
             backend: RoutingBackend {
                 service: "svc".into(),
                 port: 8080,

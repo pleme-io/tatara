@@ -207,23 +207,28 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
                 // normalization mechanically.
                 phase: p.observed_phase_or_pending(),
                 // Creation-anchor probe rides through the ONE substrate
-                // composer `Process::created_at_or` (pure wrapper over the
-                // sibling `Process::created_at` projection that folds the
-                // `.unwrap_or(fallback)` sink into ONE substrate owner) —
-                // pre-lift this was a hand-authored 2-step
-                // `.created_at().unwrap_or_else(Utc::now)` chain, one of
-                // TWO production restatements past the ★★ PRIME-
+                // peer [`Process::created_at_or_now`] — the wall-clock-
+                // anchored peer of the pure [`Process::created_at_or`]
+                // composer (which itself pre-dates the wall-clock-anchored
+                // lift and owns the `.unwrap_or(fallback)` sink at ONE
+                // substrate owner). Pre-lift the 2-arg
+                // `p.created_at_or(Utc::now())` chain with the wall
+                // clock as its argument was hand-authored at TWO
+                // workspace-wide production sites past the ★★ PRIME-
                 // DIRECTIVE ≥ 2 duplication threshold (peer at
                 // `tatara-reconciler::table_controller::reconcile_process_table`'s
                 // per-Process claim-row `created_at` seed; both stamped
                 // the SAME wall-clock fallback on the same missing-
-                // `metadata.creationTimestamp` corner). Post-lift the
-                // two consumers share ONE substrate owner; the wall-
-                // clock read stays at this callsite (as `Utc::now()`
-                // passed positionally) so the composer itself stays
-                // pure, matching the discipline every peer `observed_*`
-                // accessor follows.
-                created_at: p.created_at_or(Utc::now()),
+                // `metadata.creationTimestamp` corner). Post-lift both
+                // consumers share ONE substrate owner for the wall-
+                // clock-at-tick projection; a future clock swap lands
+                // at ONE substrate function and both anchor seeds
+                // inherit the upgrade mechanically. Sibling of the
+                // wall-clock-anchored peer family across the workspace's
+                // timed-decision axes: `PoolStatus::observed_now`,
+                // `AllocationStatus::transition_now`,
+                // `lifetime_clock::evaluate_now`.
+                created_at: p.created_at_or_now(),
             })
             .collect();
         let actions = decide_pool_convergence(&pool, &snapshots, Utc::now());

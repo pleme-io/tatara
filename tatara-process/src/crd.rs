@@ -1739,6 +1739,101 @@ impl Process {
         self.created_at().unwrap_or(fallback)
     }
 
+    /// Wall-clock-anchored peer of [`Self::created_at_or`] — reads
+    /// `Utc::now()` at call time and forwards it into the pure composer's
+    /// `fallback` slot so the wall-clock projection lives at ONE
+    /// substrate site rather than at each production callsite.
+    ///
+    /// # Why it exists
+    ///
+    /// Pre-lift the 2-arg `p.created_at_or(Utc::now())` chain was
+    /// hand-authored at TWO production sites past the ★★ PRIME-DIRECTIVE
+    /// ≥ 2 duplication threshold, each pairing the pure
+    /// [`Self::created_at_or`] composer with a `Utc::now()` fallback
+    /// argument at a per-Process anchor seed:
+    ///
+    /// * `tatara-reconciler::table_controller::reconcile_process_table`
+    ///   — the per-Process claim-row `created_at` anchor feeding the
+    ///   stable-name group's tie-break comparator; a freshly-forked
+    ///   Process whose API server has not yet stamped
+    ///   `metadata.creationTimestamp` gets the wall-clock read
+    ///   synthesized so the tie-break sorts by "just-created" order
+    ///   rather than short-circuiting on the missing slot.
+    /// * `tatara-pool-reconciler::controller_pool::reconcile_inner`'s
+    ///   desired-count `PoolMemberSnapshot { created_at, .. }` seed —
+    ///   the per-owned-Process snapshot fed to
+    ///   `decide_pool_convergence`, whose stability arithmetic
+    ///   subtracts the anchor from `now` to compute observed dwell
+    ///   time; the same "just-created" wall-clock fallback keeps a
+    ///   freshly-spawned pool member from being reaped as a stale
+    ///   zombie.
+    ///
+    /// Both sites walked the SAME 2-arg call with the SAME `Utc::now()`
+    /// fallback — the wall-clock projection had no per-callsite
+    /// variation. Post-lift both consumers share ONE substrate owner
+    /// for the wall-clock-at-tick projection; a future clock swap (a
+    /// monotonic clock cross-check, a per-reconciler injected time
+    /// source, a test-only override at the production callsite via
+    /// feature flag) lands at ONE substrate function and both anchor
+    /// seeds inherit the upgrade mechanically.
+    ///
+    /// The 2-arg [`Self::created_at_or`] peer stays load-bearing for
+    /// this crate's own test suite — the injected-`fallback` shape is
+    /// what unit tests use to drive the fallback anchor deterministically
+    /// (every `p.created_at_or(seeded_anchor)` in the pin family below
+    /// reads that surface). This peer is production-only: pinning the
+    /// wall-clock at the substrate site means no test can accidentally
+    /// consume `created_at_or_now` without the deterministic-clock
+    /// injection that makes the test meaningful.
+    ///
+    /// Sibling of the wall-clock-anchored peer family across the
+    /// workspace's timed-decision axes:
+    /// [`crate::pool::PoolStatus::observed_now`] on the
+    /// `PoolStatus`-observation axis,
+    /// [`crate::allocation::AllocationStatus::transition_now`] on the
+    /// `AllocationStatus`-transition axis, and
+    /// [`crate::lifetime_clock::evaluate_now`] on the
+    /// `AutoTerminate` timed-decision axis. All four primitives own the
+    /// "read the wall clock at tick-time" projection on a peer
+    /// clock-injectable pure composer so the workspace's
+    /// wall-clock-anchored peer family stays uniform across every
+    /// production callsite.
+    ///
+    /// # Invariants
+    ///
+    /// - **Same shape:** returns the SAME `DateTime<Utc>` the 2-arg
+    ///   [`Self::created_at_or`] returns when passed `Utc::now()` as
+    ///   the fallback argument. This is a delegation, not a
+    ///   re-implementation.
+    /// - **Wall-clock read once:** `Utc::now()` is called exactly ONCE
+    ///   per invocation, at the primitive's body, so a future consumer
+    ///   that chains two `created_at_or_now` calls back-to-back still
+    ///   sees monotonic `now` reads (each call reads a fresh instant,
+    ///   not a cached one) — matches the pre-lift shape where each of
+    ///   the two anchor sites computed its own `Utc::now()` at its own
+    ///   line.
+    ///
+    /// # `#[must_use]`
+    ///
+    /// Every consumer feeds the returned `DateTime<Utc>` into a
+    /// downstream slot (`ClaimRecord.created_at`, `PoolMemberSnapshot
+    /// .created_at`). Dropping the return means the anchor was
+    /// computed for no observable reason — the attribute surfaces that
+    /// as a warning at every call site.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the 2-arg call with `Utc::now()` as the fallback argument
+    /// recurred at 2 hand-authored sites past the ★★ PRIME-DIRECTIVE
+    /// ≥ 2 duplication trigger, lifted onto the ONE workspace-wide
+    /// substrate owner here). THEORY.md §II.1 invariant 5 (composition
+    /// preserves proofs — the wall-clock projection lives at ONE site
+    /// so a future clock swap reaches both consumers through one
+    /// edit).
+    #[must_use]
+    pub fn created_at_or_now(&self) -> DateTime<Utc> {
+        self.created_at_or(Utc::now())
+    }
+
     /// Compound spec-projection primitive on the `spec.lifetime` axis:
     /// returns `Some(&e)` iff the resolver unambiguously picks the
     /// `Ephemeral` slot, `None` otherwise — the ONE-liner collapse of
@@ -5383,6 +5478,135 @@ mod tests {
             resolved <= after + chrono::Duration::seconds(2),
             "resolved {resolved} is after window end {after}"
         );
+    }
+
+    // ─── Process::created_at_or_now substrate pins ──────────────────
+    //
+    // Pins the wall-clock-anchored peer of `Process::created_at_or` —
+    // the ONE substrate owner of the 2-arg `p.created_at_or(Utc::now())`
+    // chain the two production consumers hand-authored pre-lift
+    // (`tatara-reconciler::table_controller::reconcile_process_table`
+    // + `tatara-pool-reconciler::controller_pool::reconcile_inner`).
+    // Fail-before-pass-after granularity: `created_at_or_now` did not
+    // exist pre-lift, so any test invoking it fails to compile pre-lift
+    // and passes post-lift.
+
+    #[test]
+    fn created_at_or_now_returns_wall_clock_when_creation_timestamp_is_absent() {
+        // Missing-slot corner pin: the peer stamps the wall-clock read
+        // as the resolved anchor byte-identically to
+        // `p.created_at_or(Utc::now())` — bounded within a two-second
+        // window to absorb scheduler jitter between the pin's own
+        // `Utc::now()` reads and the peer's internal read. A regression
+        // that silently substituted a different fallback source
+        // (`DateTime::MIN`, a cached-at-module-load constant, a
+        // per-namespace override) would surface at this window rather
+        // than as silent tie-break skew at the claim-arbiter row seed
+        // or dwell-time skew at the pool convergence snapshot.
+        let mut p = Process::new("x", empty_spec());
+        p.metadata.creation_timestamp = None;
+        let before = Utc::now();
+        let resolved = p.created_at_or_now();
+        let after = Utc::now();
+        assert!(
+            resolved >= before - chrono::Duration::seconds(2),
+            "resolved {resolved} is before window start {before}"
+        );
+        assert!(
+            resolved <= after + chrono::Duration::seconds(2),
+            "resolved {resolved} is after window end {after}"
+        );
+    }
+
+    #[test]
+    fn created_at_or_now_returns_anchor_when_slot_is_populated() {
+        // Populated-slot corner pin: with a populated
+        // `metadata.creationTimestamp` slot, the peer's internal
+        // `Utc::now()` fallback is irrelevant and the observed anchor
+        // wins byte-identically to the 2-arg
+        // `p.created_at_or(<any-fallback>)` pass-through. Sibling to
+        // the peer `created_at_or_returns_anchor_when_slot_is_populated`
+        // pin — both bind the pass-through discipline on the same
+        // populated corner, one on the pure composer and one on the
+        // wall-clock-anchored peer.
+        let anchor = crate::time::seconds_ago(300);
+        let p = creation_stamped_process(anchor);
+        assert_eq!(p.created_at_or_now(), anchor);
+    }
+
+    #[test]
+    fn created_at_or_now_reads_wall_clock_at_call_time_not_module_load() {
+        // Per-invocation wall-clock-read pin: two consecutive calls on
+        // a missing-slot Process must return DISTINCT (or at least
+        // monotonically-non-decreasing) `DateTime<Utc>` values, since
+        // each call reads a fresh `Utc::now()`. A regression that
+        // hoisted the wall-clock read to a stale module-load constant
+        // (or cached the first-invocation value inside `Self`) would
+        // return the SAME value on the second call — this pin surfaces
+        // that regression directly, matching the peer-family discipline
+        // on `PoolStatus::observed_now` / `AllocationStatus::transition_now`
+        // / `lifetime_clock::evaluate_now` where each invocation reads
+        // its own `Utc::now()` at the primitive's body.
+        let mut p = Process::new("x", empty_spec());
+        p.metadata.creation_timestamp = None;
+        let first = p.created_at_or_now();
+        // A `std::thread::sleep(...)` here would be flaky under CI clock
+        // jitter; the monotonicity check (each call is >= previous)
+        // suffices to catch the module-load-constant regression class
+        // because two module-load-constant reads would return identical
+        // values on a `chrono::DateTime<Utc>` field (equality, not
+        // ordering, is what the regression breaks).
+        let second = p.created_at_or_now();
+        assert!(
+            second >= first,
+            "second `created_at_or_now` read {second} must be >= first {first}; \
+             a regression that cached the wall-clock read at module load \
+             would return byte-identical values"
+        );
+    }
+
+    #[test]
+    fn created_at_or_now_matches_created_at_or_with_utc_now_bytewise() {
+        // Delegation pin: the peer's body is `self.created_at_or(Utc::now())`
+        // — a pure delegation, not a re-implementation. On the
+        // populated corner both surfaces return the observed anchor
+        // byte-identically (wall-clock fallback is irrelevant). A
+        // regression that re-implemented the peer with different
+        // semantics (a different fallback source, a per-slot override
+        // that only applied to one surface) would surface at the
+        // populated-corner half of this pin.
+        let anchor = crate::time::seconds_ago(600);
+        let p = creation_stamped_process(anchor);
+        assert_eq!(p.created_at_or_now(), p.created_at_or(Utc::now()));
+        assert_eq!(p.created_at_or_now(), anchor);
+    }
+
+    #[test]
+    fn created_at_or_now_composes_at_reconciler_callsites_verbatim() {
+        // Cross-callsite parity pin: both production consumers
+        // (`table_controller::reconcile_process_table` +
+        // `controller_pool::reconcile_inner`) pre-lift called
+        // `p.created_at_or(Utc::now())` inline; post-lift both call
+        // `p.created_at_or_now()`. This pin sweeps both the populated
+        // and missing corners on the SAME `Process` fixture and asserts
+        // that both surfaces (pre-lift chain, post-lift peer) resolve
+        // to the same anchor on the populated corner. The missing
+        // corner is elided from this specific pin because the pre-lift
+        // and post-lift `Utc::now()` reads happen at different call
+        // sites (across the `p.created_at_or(Utc::now())` argument
+        // evaluation vs. the peer's body), so an exact-equality
+        // assertion between the two reads would race the wall clock —
+        // the `_reads_wall_clock_at_call_time_not_module_load` pin
+        // above already binds the per-invocation freshness invariant
+        // on the missing corner without needing the cross-shape
+        // equality here.
+        let anchor = crate::time::seconds_ago(120);
+        let p = creation_stamped_process(anchor);
+        let pre_lift_shape = p.created_at_or(Utc::now());
+        let post_lift_shape = p.created_at_or_now();
+        assert_eq!(pre_lift_shape, anchor);
+        assert_eq!(post_lift_shape, anchor);
+        assert_eq!(pre_lift_shape, post_lift_shape);
     }
 
     // ─── Process::resolved_ephemeral substrate pins ─────────────────

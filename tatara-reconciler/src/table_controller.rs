@@ -86,29 +86,32 @@ pub async fn reconcile(
             .as_ref()
             .and_then(|s| s.pid.clone())
             .unwrap_or_default();
-        // Creation-anchor probe rides through the ONE substrate
-        // composer `Process::created_at_or` (pure wrapper over the
-        // sibling `Process::created_at` projection that folds the
-        // `.unwrap_or(fallback)` sink into ONE substrate owner) —
-        // pre-lift this was a hand-authored 2-step
-        // `.created_at().unwrap_or_else(Utc::now)` chain, one of TWO
-        // production restatements past the ★★ PRIME-DIRECTIVE ≥ 2
-        // duplication threshold (peer at
+        // Creation-anchor probe rides through the ONE substrate peer
+        // [`Process::created_at_or_now`] — the wall-clock-anchored
+        // peer of the pure [`Process::created_at_or`] composer (which
+        // itself pre-dates the wall-clock-anchored lift and owns the
+        // `.unwrap_or(fallback)` sink at ONE substrate owner). Pre-lift
+        // the 2-arg `p.created_at_or(Utc::now())` chain with the wall
+        // clock as its argument was hand-authored at TWO workspace-wide
+        // production sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+        // threshold (peer at
         // `tatara-pool-reconciler::controller_pool::reconcile_inner`'s
         // desired-count `PoolMemberSnapshot { created_at, .. }` seed;
         // both stamped the SAME wall-clock fallback on the same
-        // missing-`metadata.creationTimestamp` corner). Post-lift the
-        // two consumers share ONE substrate owner; a future
-        // normalization step (a per-cluster clock-skew guard, a
-        // canonicalization pass that folds a suspiciously-zero anchor
-        // to the fallback, an adopted-resource
-        // `spec.identity`-declared anchor override) lands at ONE
-        // substrate method rather than being restated at each
-        // callsite. The wall-clock read stays at this callsite (as
-        // `Utc::now()` passed positionally) so the composer itself
-        // stays pure, matching the discipline every peer `observed_*`
-        // accessor follows.
-        let created_at = p.created_at_or(Utc::now());
+        // missing-`metadata.creationTimestamp` corner). Post-lift both
+        // consumers share ONE substrate owner for the wall-clock-at-tick
+        // projection; a future clock swap (a monotonic clock
+        // cross-check, a per-reconciler injected time source, a
+        // test-only override at the production callsite via feature
+        // flag) lands at ONE substrate function and both anchor seeds
+        // inherit the upgrade mechanically. The 2-arg
+        // [`Process::created_at_or`] peer stays load-bearing for the
+        // crate's own test suite (which drives the fallback anchor
+        // deterministically via a seeded value). Sibling of the
+        // wall-clock-anchored peer family across the workspace's
+        // timed-decision axes: `PoolStatus::observed_now`,
+        // `AllocationStatus::transition_now`, `lifetime_clock::evaluate_now`.
+        let created_at = p.created_at_or_now();
         // Claim-row key rides through the substrate primitive
         // `Process::qualified_ref` — pre-lift this was a hand-authored
         // 2-step `coordinates_or_defaults() → qualified_process_ref(ns,

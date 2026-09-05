@@ -56,6 +56,97 @@ pub enum HostnameError {
     ReservedApp(String),
 }
 
+/// Substrate extension trait over `Result<T, HostnameError>` — the ONE
+/// substrate owner of the `.map_err(|e| anyhow::anyhow!("<ctx>: {e}"))`
+/// wrap-shape every reconciler consumer restated by hand at the
+/// hostname-formatter → anyhow error boundary. Peer of
+/// [`crate::kube_error::KubeResultExt`] on the wrap-shape axis; the two
+/// traits partition the flatten-wrap space by underlying error type
+/// (`kube::Error` on that peer, [`HostnameError`] on this one).
+///
+/// Pre-lift the shape was hand-authored at THREE sites in
+/// `tatara-reconciler::render::render_routing` — each of the three
+/// `HostnameError`-returning hostname primitives ([`ephemeral_id_from_spec`],
+/// [`fmt_fqdn`], [`fmt_fqdn_stable`]) had ITS consumer restate the
+/// SAME closure at the R9 routing-edge render — capture the
+/// [`HostnameError`], prepend a static context slug identifying which
+/// hostname primitive faulted, delegate the tail to [`HostnameError`]'s
+/// `Display` impl via the `{e}` slot — differing only in the context
+/// slug prefix each callsite stamped (`"ephemeral_id_from_spec"` /
+/// `"fmt_fqdn (per-instance)"` / `"fmt_fqdn_stable"`). Three
+/// hand-authored callsites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+/// threshold.
+///
+/// Post-lift each callsite reads
+/// `<hostname-primitive>().hostname_ctx("<slug>")?` and the wrap-shape
+/// lives at ONE substrate owner here. The composed [`anyhow::Error`]'s
+/// `Display` is byte-identical to the pre-lift chain
+/// (`format!("{ctx}: {e}")`, threading the [`HostnameError`]'s own
+/// `Display` verbatim into the `{e}` slot), so operator-facing log
+/// output and any error-chain greps still match bytewise. A regression
+/// that drifts the separator, swaps the two slots, or wraps the
+/// [`HostnameError`] with a chain-form `source` (which would change
+/// `Display` output on the `err` slot) surfaces at
+/// [`tests::hostname_ctx_static_str_context_matches_pre_lift_format_bytewise`]
+/// rather than as silent operator-facing drift across the three
+/// pre-lift consumers.
+///
+/// ### Naming — `hostname_ctx`, not `anyhow::Context::context`
+///
+/// Same discipline as [`crate::kube_error::KubeResultExt::kube_ctx`] —
+/// `anyhow::Context::context` wraps the source in a chain (so `Display`
+/// emits only the context slug and callers reach the [`HostnameError`]
+/// via [`std::error::Error::source`] traversal), while this trait's
+/// `hostname_ctx` FLATTENS to a display-prefix shape (`"<ctx>: <HostnameError
+/// display>"`) — the pre-lift wire format every consumer's log output
+/// already encoded. Sharing the name would let a caller who has
+/// `anyhow::Context` in scope resolve to the WRONG method (a chain-wrap
+/// instead of the display-prefix flatten) and silently change every
+/// operator log message.
+///
+/// ### Static-slug only (no `_with` peer yet)
+///
+/// Every current callsite composes its slug at compile time
+/// (`"ephemeral_id_from_spec"`, `"fmt_fqdn (per-instance)"`,
+/// `"fmt_fqdn_stable"`); no consumer needs a `format!`-composed
+/// runtime slug. The static-`&'static str` binding keeps the substrate
+/// contract minimal — a future dynamic-slug consumer would add a
+/// `hostname_ctx_with` peer here matching the `kube_ctx_with` shape,
+/// but until then this trait exposes only the static peer.
+///
+/// ### `#[must_use]`
+///
+/// Every consumer threads the `?` short-circuit onto its handler's
+/// `Result<_, anyhow::Error>` return — dropping the wrap swallows the
+/// hostname-format failure entirely, which is never the intended
+/// semantic (a rejected DNS label at emit time silently produces a
+/// resource with a `""` FQDN slot that the K8s API server accepts and
+/// then no downstream Ingress / DNSEndpoint dispatcher can route to).
+/// The attribute surfaces that as a warning at every call site.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// [`HostnameError`] → anyhow-with-display-prefix wrap-shape recurred
+/// at three hand-authored sites past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication trigger, and is lifted to ONE substrate owner here).
+/// THEORY.md §II.1 invariant 5 (composition preserves proofs — a
+/// regression that drifts the display-prefix separator or the byte-
+/// shape at ONE site surfaces here at the substrate pin rather than
+/// as silent operator-facing skew across every render_routing tick).
+pub trait HostnameResultExt<T>: Sized {
+    /// Wrap the [`HostnameError`] (if any) with a static context
+    /// prefix, producing an [`anyhow::Result`] whose error `Display`
+    /// reads exactly `"<context>: <HostnameError display>"`.
+    #[must_use = "an error wrap that isn't threaded via `?` swallows the hostname-format failure"]
+    fn hostname_ctx(self, context: &'static str) -> anyhow::Result<T>;
+}
+
+impl<T> HostnameResultExt<T> for Result<T, HostnameError> {
+    #[inline]
+    fn hostname_ctx(self, context: &'static str) -> anyhow::Result<T> {
+        self.map_err(|e| anyhow::anyhow!("{context}: {e}"))
+    }
+}
+
 /// Format the per-instance FQDN.
 ///
 /// ```
@@ -361,6 +452,108 @@ mod tests {
     }
 
     // ─── End-to-end ──────────────────────────────────────────────
+
+    // ─── HostnameResultExt::hostname_ctx substrate pins ──────────
+    //
+    // Fail-before-pass-after granularity: the `HostnameResultExt::
+    // hostname_ctx` trait method did not exist before this commit,
+    // so each test below fails to compile pre-lift. Post-lift they
+    // collectively pin the display-prefix wrap-shape at ONE substrate
+    // owner — a regression that drifts the separator, swaps the two
+    // slots, wraps the `HostnameError` with a chain-form `source`, or
+    // promotes the pass-through arm to a synthesis (an empty `Ok(())`,
+    // a mutated context slug) surfaces HERE rather than as silent
+    // operator-facing skew across the three pre-lift consumers whose
+    // log output already encoded the flat `"<ctx>: <HostnameError
+    // display>"` shape.
+
+    fn sample_err() -> HostnameError {
+        HostnameError::InvalidLabel {
+            segment: "app",
+            label: "BAD".into(),
+            reason: "must contain only [a-z0-9-]",
+        }
+    }
+
+    #[test]
+    fn hostname_ctx_static_str_context_matches_pre_lift_format_bytewise() {
+        // Byte-shape parity pin: the wrap output of `hostname_ctx
+        // ("<slug>")` MUST be `Display`-identical to the pre-lift
+        // hand-authored `.map_err(|e| anyhow!("<slug>: {e}"))` chain.
+        // A regression that inserted a separator character (`"<slug>::
+        // <hostname>"`), dropped the space after the colon, or swapped
+        // the two slots (`"<hostname>: <slug>"`) surfaces HERE rather
+        // than as silent drift at every downstream log-output consumer.
+        let raw: Result<(), HostnameError> = Err(sample_err());
+        let via_trait = raw.hostname_ctx("fmt_fqdn (per-instance)").unwrap_err();
+        let pre_lift = anyhow::anyhow!("fmt_fqdn (per-instance): {}", sample_err());
+        assert_eq!(
+            format!("{via_trait}"),
+            format!("{pre_lift}"),
+            "hostname_ctx wrap must be Display-identical to pre-lift anyhow! chain"
+        );
+    }
+
+    #[test]
+    fn hostname_ctx_ok_arm_is_a_pure_passthrough() {
+        // Ok-arm invariant: `hostname_ctx` on `Ok(t)` MUST return
+        // `Ok(t)` verbatim — no side-effect on the payload, no
+        // synthesis of a context-tagged error, no allocation. Peer to
+        // the Err-arm byte-shape pin; a regression that promoted the
+        // Ok arm to ALWAYS produce a synthesis Error would silently
+        // break every successful hostname-format call in the pre-lift
+        // consumer set.
+        let raw: Result<&'static str, HostnameError> = Ok("api.demo-prod.pleme-dev.use1.quero.lol");
+        assert_eq!(
+            raw.hostname_ctx("noop").unwrap(),
+            "api.demo-prod.pleme-dev.use1.quero.lol"
+        );
+    }
+
+    #[test]
+    fn hostname_ctx_threads_the_underlying_hostname_error_display_verbatim() {
+        // Display-tail invariant: the wrapped `anyhow::Error`'s
+        // `Display` output MUST contain the `HostnameError`'s own
+        // `Display` output verbatim as the tail past `"<ctx>: "`. A
+        // regression that inserted a normalization (uppercase, JSON
+        // encoding, truncation) between the composed `{e}` slot and
+        // the underlying thiserror-derived Display impl would surface
+        // HERE rather than as silent operator-facing skew across the
+        // three consumers whose grep patterns already encoded the
+        // canonical `HostnameError` variant wordings ("invalid DNS
+        // label ...", "app label ... is reserved").
+        let raw: Result<(), HostnameError> = Err(HostnameError::ReservedApp("auth".into()));
+        let wrapped = raw.hostname_ctx("fmt_fqdn_stable").unwrap_err();
+        let expected_tail = format!("{}", HostnameError::ReservedApp("auth".into()));
+        let expected = format!("fmt_fqdn_stable: {expected_tail}");
+        assert_eq!(format!("{wrapped}"), expected);
+        // Also assert the tail appears verbatim as a suffix — a change
+        // in the thiserror-derived Display for ReservedApp would fail
+        // both this assertion and the RECEIPT_VERSION-in-tail invariant
+        // its docstring pins.
+        assert!(
+            format!("{wrapped}").ends_with(&expected_tail),
+            "wrap must end with the HostnameError Display verbatim"
+        );
+    }
+
+    #[test]
+    fn hostname_ctx_composes_over_ephemeral_id_from_spec_call_shape() {
+        // End-to-end composition pin: the substrate trait method
+        // composes cleanly over the `ephemeral_id_from_spec` return
+        // shape at a real callsite (the `render_routing` R9 seed).
+        // A regression that specialized the trait bound to only one
+        // hostname primitive's Result shape would surface HERE.
+        #[derive(Serialize)]
+        struct NoSuchThingAsAnUnserializableStruct {
+            a: u32,
+        }
+        let v = NoSuchThingAsAnUnserializableStruct { a: 1 };
+        let composed: anyhow::Result<String> =
+            ephemeral_id_from_spec(&v).hostname_ctx("ephemeral_id_from_spec");
+        assert!(composed.is_ok());
+        assert_eq!(composed.unwrap().len(), EPHEMERAL_ID_HASH_LEN);
+    }
 
     #[test]
     fn end_to_end_named_and_unnamed_for_same_process() {

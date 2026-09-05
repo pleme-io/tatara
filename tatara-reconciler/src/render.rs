@@ -8,7 +8,7 @@ use tatara_process::annotations;
 use tatara_process::export::ExportSpec;
 use tatara_process::flux_resource::FluxResource;
 use tatara_process::hostname::{
-    ephemeral_id_from_spec, fmt_fqdn, fmt_fqdn_stable, resolve_ephemeral_id,
+    ephemeral_id_from_spec, fmt_fqdn, fmt_fqdn_stable, resolve_ephemeral_id, HostnameResultExt,
 };
 use tatara_process::intent::{
     AplicacaoIntent, FluxIntent, Intent, IntentVariant, LispIntent, NixIntent,
@@ -564,9 +564,18 @@ pub fn render_routing(
     let process_ref = process.qualified_ref();
 
     // Content-hash form of ephemeral_id — derived once per Process,
-    // reused across every hostname on this Process.
-    let fallback_hash = ephemeral_id_from_spec(&process.spec)
-        .map_err(|e| anyhow::anyhow!("ephemeral_id_from_spec: {e}"))?;
+    // reused across every hostname on this Process. HostnameError →
+    // anyhow flatten-wrap rides through the ONE substrate primitive
+    // `HostnameResultExt::hostname_ctx` (peer of
+    // `kube_error::KubeResultExt::kube_ctx` on the flatten-wrap axis)
+    // — pre-lift this site hand-authored `.map_err(|e| anyhow!
+    // ("ephemeral_id_from_spec: {e}"))?` verbatim, one of THREE
+    // workspace-wide restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+    // duplication threshold (siblings at the `fmt_fqdn` per-instance
+    // + `fmt_fqdn_stable` calls below). Post-lift the wrap-shape
+    // lives at ONE substrate owner.
+    let fallback_hash =
+        ephemeral_id_from_spec(&process.spec).hostname_ctx("ephemeral_id_from_spec")?;
 
     // Per-Edge handlers — the trait object list is the substrate
     // extension point. New edge target ⇒ one new impl + one entry.
@@ -593,9 +602,13 @@ pub fn render_routing(
         let host_cluster = hostname.cluster_or(cluster);
         let eph_id = resolve_ephemeral_id(hostname, &fallback_hash);
 
-        // (1) Per-instance form — always emitted.
+        // (1) Per-instance form — always emitted. HostnameError →
+        // anyhow flatten-wrap rides through the substrate primitive
+        // `HostnameResultExt::hostname_ctx` (see the sibling
+        // `ephemeral_id_from_spec` seed above for the full three-site
+        // pre-lift audit + the peer-with-`kube_ctx` naming rationale).
         let fqdn = fmt_fqdn(&hostname.app, eph_id, host_cluster, location, domain)
-            .map_err(|e| anyhow::anyhow!("fmt_fqdn (per-instance): {e}"))?;
+            .hostname_ctx("fmt_fqdn (per-instance)")?;
         let ctx = EdgeContext {
             process_name,
             process_namespace,
@@ -616,7 +629,7 @@ pub fn render_routing(
         // (2) Stable form — emitted iff Process holds the claim.
         if routing.stable_name_claim && holds_stable_claim {
             let fqdn_stable = fmt_fqdn_stable(&hostname.app, host_cluster, location, domain)
-                .map_err(|e| anyhow::anyhow!("fmt_fqdn_stable: {e}"))?;
+                .hostname_ctx("fmt_fqdn_stable")?;
             let ctx = EdgeContext {
                 process_name,
                 process_namespace,

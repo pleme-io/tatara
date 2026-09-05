@@ -81,7 +81,7 @@ pub mod prelude {
     pub use crate::hash::hex_blake3;
     pub use crate::hostname::{
         ephemeral_id_from_spec, fmt_fqdn, fmt_fqdn_stable, resolve_ephemeral_id, HostnameError,
-        EPHEMERAL_ID_HASH_LEN,
+        HostnameResultExt, EPHEMERAL_ID_HASH_LEN,
     };
     pub use crate::identity::{content_hash, derive_identity, format_process_address, Identity};
     pub use crate::intent::{

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use chrono::Utc;
 use kube::runtime::controller::Action;
 use serde_json::json;
@@ -10,6 +10,7 @@ use tracing::{info, warn};
 
 use tatara_process::allocation::{AllocationPhase, AllocationStatus, EphemeralAllocation};
 use tatara_process::annotations;
+use tatara_process::kube_error::KubeResultExt;
 use tatara_process::lifetime::{EphemeralLifetime, Lifetime, TeardownPolicy};
 use tatara_process::pool::{AllocationRef, PoolMember};
 use tatara_process::prelude::NamespacedApiCoordinates;
@@ -75,7 +76,7 @@ async fn reconcile_inner(alloc: Arc<EphemeralAllocation>, ctx: Arc<PoolContext>)
     // version-continuation normalization mechanically.
     let pools = tatara_process::list::default(&pool_api)
         .await
-        .map_err(|e| anyhow!("list Pools in {ns}: {e}"))?
+        .kube_ctx_with(format!("list Pools in {ns}"))?
         .items;
 
     // 2. Build a lookup of pool name → members (sourced from each Pool's status).

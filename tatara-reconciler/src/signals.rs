@@ -1,11 +1,12 @@
 //! Signal ingestion — read `tatara.pleme.io/signal` annotations, parse,
 //! strip, apply effect to phase.
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use std::str::FromStr;
 use tracing::warn;
 
 use tatara_process::annotations;
+use tatara_process::kube_error::KubeResultExt;
 use tatara_process::phase::ProcessPhase;
 use tatara_process::prelude::Process;
 use tatara_process::signal::{ProcessSignal, SighupStrategy};
@@ -116,7 +117,7 @@ pub async fn ingest(process: &Process, ctx: &Context) -> Result<Option<ProcessSi
     // wire-posture axis).
     tatara_process::patch::merge(&api, &name, &strip)
         .await
-        .map_err(|e| anyhow!("strip signal annotation: {e}"))?;
+        .kube_ctx("strip signal annotation")?;
 
     match ProcessSignal::from_str(&raw) {
         Ok(s) => Ok(Some(s)),
@@ -151,7 +152,7 @@ pub async fn consume_effect(process: &Process, ctx: &Context, effect: SignalEffe
         SignalEffect::TransitionTo(phase) => {
             patch::transition(&api, &name, phase)
                 .await
-                .map_err(|e| anyhow!("transition via signal: {e}"))?;
+                .kube_ctx("transition via signal")?;
             Ok(())
         }
         SignalEffect::ForceAttest => {
@@ -163,7 +164,7 @@ pub async fn consume_effect(process: &Process, ctx: &Context, effect: SignalEffe
                 "forced re-attestation (SIGUSR1)",
             )
             .await
-            .map_err(|e| anyhow!("force attest: {e}"))?;
+            .kube_ctx("force attest")?;
             Ok(())
         }
         SignalEffect::Suspend => {
@@ -185,7 +186,7 @@ pub async fn consume_effect(process: &Process, ctx: &Context, effect: SignalEffe
             // mechanically.
             tatara_process::patch::merge_suspended(&api, &name, true)
                 .await
-                .map_err(|e| anyhow!("suspend: {e}"))?;
+                .kube_ctx("suspend")?;
             Ok(())
         }
         SignalEffect::Resume => {
@@ -198,7 +199,7 @@ pub async fn consume_effect(process: &Process, ctx: &Context, effect: SignalEffe
             // inherit it mechanically.
             tatara_process::patch::merge_suspended(&api, &name, false)
                 .await
-                .map_err(|e| anyhow!("resume: {e}"))?;
+                .kube_ctx("resume")?;
             Ok(())
         }
         SignalEffect::Remediate => {
@@ -210,7 +211,7 @@ pub async fn consume_effect(process: &Process, ctx: &Context, effect: SignalEffe
                 "remediate requested (SIGUSR2)",
             )
             .await
-            .map_err(|e| anyhow!("remediate: {e}"))?;
+            .kube_ctx("remediate")?;
             Ok(())
         }
     }

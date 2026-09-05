@@ -17,6 +17,7 @@ use crate::ReconcilerError;
 
 use tatara_process::annotations;
 use tatara_process::ephemeral::EphemeralSpec;
+use tatara_process::kube_error::KubeResultExt;
 use tatara_process::lifetime::Lifetime;
 use tatara_process::pool::{EphemeralPool, MemberState, PoolMember, PoolStatus};
 use tatara_process::prelude::{NamespacedApiCoordinates, Process, ProcessSpec};
@@ -88,7 +89,7 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
     // version-continuation normalization mechanically.
     let all_processes = tatara_process::list::default(&process_api)
         .await
-        .map_err(|e| anyhow!("list Processes in {ns}: {e}"))?;
+        .kube_ctx_with(format!("list Processes in {ns}"))?;
     let mut members: Vec<PoolMember> = Vec::new();
     let mut owned: Vec<Process> = Vec::new();
     for p in all_processes.items {

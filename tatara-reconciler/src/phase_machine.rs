@@ -23,6 +23,7 @@ use tracing::{info, warn};
 use tatara_process::boundary::Condition;
 use tatara_process::identity::derive_identity;
 use tatara_process::intent::IntentVariant;
+use tatara_process::kube_error::KubeResultExt;
 use tatara_process::prelude::*;
 use tatara_process::status::CheckedCondition;
 
@@ -63,12 +64,12 @@ pub async fn handle_pending(p: &Process, ctx: &Context) -> Result<Action> {
     let api = ctx.process_api(&ns);
     patch::ensure_finalizer(&api, &name, p, tatara_process::PROCESS_FINALIZER)
         .await
-        .map_err(|e| anyhow!("install finalizer: {e}"))?;
+        .kube_ctx("install finalizer")?;
 
     let patch_body = patch::phase_status(ProcessPhase::Forking, Some(&identity));
     patch::patch_process_status(&api, &name, patch_body)
         .await
-        .map_err(|e| anyhow!("patch status: {e}"))?;
+        .kube_ctx("patch status")?;
 
     info!(
         namespace = %ns,
@@ -146,7 +147,7 @@ pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
         let pt_api = ctx.process_table_api();
         let pt = patch::ensure_process_table(&pt_api, &ctx.config.process_table_name)
             .await
-            .map_err(|e| anyhow!("ensure ProcessTable: {e}"))?;
+            .kube_ctx("ensure ProcessTable")?;
         let next_seq = pt.spec.next_sequence;
         // Declared parent PID rides through the ONE substrate
         // `Process::declared_parent_pid` primitive, sibling to the
@@ -166,11 +167,11 @@ pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
             json!({ "nextSequence": next_seq + 1 }),
         )
         .await
-        .map_err(|e| anyhow!("bump nextSequence: {e}"))?;
+        .kube_ctx("bump nextSequence")?;
 
         patch::patch_process_status(&api, &name, json!({ "pid": new_pid, "parent": parent_pid }))
             .await
-            .map_err(|e| anyhow!("patch pid: {e}"))?;
+            .kube_ctx("patch pid")?;
 
         info!(
             namespace = %ns,
@@ -191,7 +192,7 @@ pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
     //    on the bare-transition axis).
     patch::transition_msg(&api, &name, ProcessPhase::Execing, "dependencies satisfied")
         .await
-        .map_err(|e| anyhow!("patch (forking→execing): {e}"))?;
+        .kube_ctx("patch (forking→execing)")?;
 
     info!(namespace = %ns, name = %name, "forking → execing");
     Ok(tatara_process::requeue::tick())
@@ -316,7 +317,7 @@ pub async fn handle_execing(p: &Process, ctx: &Context) -> Result<Action> {
     // on the extra-slot axis).
     patch::transition_with(&api, &name, ProcessPhase::Running, "fluxResources", &refs)
         .await
-        .map_err(|e| anyhow!("patch status (execing→running): {e}"))?;
+        .kube_ctx("patch status (execing→running)")?;
 
     info!(
         namespace = %ns,
@@ -408,7 +409,7 @@ pub async fn handle_running(p: &Process, ctx: &Context) -> Result<Action> {
     let api = ctx.process_api(&ns);
     patch::patch_process_status(&api, &name, json!({ "fluxResources": updated }))
         .await
-        .map_err(|e| anyhow!("patch fluxResources: {e}"))?;
+        .kube_ctx("patch fluxResources")?;
 
     if !all_ready {
         info!(namespace = %ns, name = %name, "running (VERIFY — not all flux refs ready)");
@@ -432,7 +433,7 @@ pub async fn handle_running(p: &Process, ctx: &Context) -> Result<Action> {
             json!({ "boundary": { "postconditions": checked } }),
         )
         .await
-        .map_err(|e| anyhow!("patch postconditions: {e}"))?;
+        .kube_ctx("patch postconditions")?;
         if !all_pass {
             info!(
                 namespace = %ns,
@@ -539,7 +540,7 @@ pub async fn handle_attested(p: &Process, ctx: &Context) -> Result<Action> {
             "flux resource drift detected",
         )
         .await
-        .map_err(|e| anyhow!("patch (attested→reconverging): {e}"))?;
+        .kube_ctx("patch (attested→reconverging)")?;
         info!(namespace = %ns, name = %name, "attested → reconverging (DRIFT)");
         Ok(tatara_process::requeue::short_retry())
     } else {
@@ -588,7 +589,7 @@ async fn advance_to_attested(
     // rationale + duplication inventory.
     patch::transition_with(&api, name, ProcessPhase::Attested, "attestation", &next)
         .await
-        .map_err(|e| anyhow!("patch attestation: {e}"))?;
+        .kube_ctx("patch attestation")?;
 
     info!(
         namespace = %ns,
@@ -689,7 +690,7 @@ pub async fn handle_reconverging(p: &Process, ctx: &Context) -> Result<Action> {
     let (ns, name, api) = ctx.owned_process_binding(p)?;
     patch::transition(&api, &name, ProcessPhase::Execing)
         .await
-        .map_err(|e| anyhow!("patch (reconverging→execing): {e}"))?;
+        .kube_ctx("patch (reconverging→execing)")?;
     info!(namespace = %ns, name = %name, "reconverging → execing (RECONVERGE)");
     Ok(tatara_process::requeue::tick())
 }
@@ -764,10 +765,7 @@ pub async fn handle_releasing(p: &Process, ctx: &Context) -> Result<Action> {
         tatara_process::annotations::ROLE,
     );
     let lp = kube::api::ListParams::default().labels(&selector);
-    let jobs = jobs_api
-        .list(&lp)
-        .await
-        .map_err(|e| anyhow!("list export jobs: {e}"))?;
+    let jobs = jobs_api.list(&lp).await.kube_ctx("list export jobs")?;
 
     let mut total = 0usize;
     let mut succeeded = 0usize;
@@ -861,7 +859,7 @@ async fn advance_out_of_releasing(
     let api = ctx.process_api(ns);
     patch::transition_msg(&api, name, next, format!("releasing → {next} — {reason}"))
         .await
-        .map_err(|e| anyhow!("patch (releasing→{next}): {e}"))?;
+        .kube_ctx_with(format!("patch (releasing→{next})"))?;
     info!(
         namespace = %ns,
         name = %name,
@@ -907,7 +905,7 @@ pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
         // resource-version-continuation normalization mechanically.
         let list = tatara_process::list::default(&all)
             .await
-            .map_err(|e| anyhow!("list processes: {e}"))?;
+            .kube_ctx("list processes")?;
         // Each candidate child's declared parent-PID rides through the
         // ONE substrate `Process::declared_parent_pid` primitive,
         // sibling to the same-shape `handle_forking` ALLOCATE-PID
@@ -974,7 +972,7 @@ pub async fn handle_exiting(p: &Process, ctx: &Context) -> Result<Action> {
     let api = ctx.process_api(&ns);
     patch::transition(&api, &name, ProcessPhase::Zombie)
         .await
-        .map_err(|e| anyhow!("patch (exiting→zombie): {e}"))?;
+        .kube_ctx("patch (exiting→zombie)")?;
     info!(namespace = %ns, name = %name, "exiting → zombie");
     Ok(tatara_process::requeue::tick())
 }
@@ -1007,14 +1005,14 @@ pub async fn handle_failed(p: &Process, ctx: &Context) -> Result<Action> {
         // automatically.
         patch::transition_msg(&api, &name, ProcessPhase::Zombie, rendered)
             .await
-            .map_err(|e| anyhow!("patch (failed→zombie, ephemeral teardown): {e}"))?;
+            .kube_ctx("patch (failed→zombie, ephemeral teardown)")?;
         info!(namespace = %ns, name = %name, "failed → zombie (ephemeral teardown)");
         return Ok(tatara_process::requeue::tick());
     }
 
     patch::transition(&api, &name, ProcessPhase::Zombie)
         .await
-        .map_err(|e| anyhow!("patch (failed→zombie): {e}"))?;
+        .kube_ctx("patch (failed→zombie)")?;
     info!(namespace = %ns, name = %name, "failed → zombie");
     Ok(tatara_process::requeue::tick())
 }
@@ -1080,7 +1078,7 @@ async fn transition_to_releasing(
     // manager slot so a rename propagates mechanically.
     tatara_process::patch::apply(&api, name, ssapply::FIELD_MANAGER, &annotation_patch)
         .await
-        .map_err(|e| anyhow!("annotate released-from: {e}"))?;
+        .kube_ctx("annotate released-from")?;
 
     // 2. Patch phase=Releasing with the operator-visible reason.
     patch::transition_msg(
@@ -1090,7 +1088,7 @@ async fn transition_to_releasing(
         format!("releasing exports — {reason}"),
     )
     .await
-    .map_err(|e| anyhow!("patch (→releasing): {e}"))?;
+    .kube_ctx("patch (→releasing)")?;
     info!(
         namespace = %ns,
         name = %name,
@@ -1108,7 +1106,7 @@ async fn p_current_phase_str(api: &Api<Process>, name: &str) -> Result<String> {
     let p = api
         .get_status(name)
         .await
-        .map_err(|e| anyhow!("get status (released-from): {e}"))?;
+        .kube_ctx("get status (released-from)")?;
     // Wire-label projection rides the substrate primitive
     // [`ProcessPhase::released_from_label`] — pre-lift this arm
     // hand-authored a `match phase { Failed => "Failed", _ =>
@@ -1142,7 +1140,7 @@ async fn transition_to_exiting(
     let api = ctx.process_api(ns);
     patch::transition_msg(&api, name, ProcessPhase::Exiting, reason)
         .await
-        .map_err(|e| anyhow!("patch (→exiting, ephemeral): {e}"))?;
+        .kube_ctx("patch (→exiting, ephemeral)")?;
     info!(
         namespace = %ns,
         name = %name,
@@ -1158,7 +1156,7 @@ pub async fn handle_zombie(p: &Process, ctx: &Context) -> Result<Action> {
     let (ns, name, api) = ctx.owned_process_binding(p)?;
     patch::transition(&api, &name, ProcessPhase::Reaped)
         .await
-        .map_err(|e| anyhow!("patch (zombie→reaped): {e}"))?;
+        .kube_ctx("patch (zombie→reaped)")?;
     info!(namespace = %ns, name = %name, "zombie → reaped");
     Ok(tatara_process::requeue::tick())
 }
@@ -1168,7 +1166,7 @@ pub async fn handle_reaped(p: &Process, ctx: &Context) -> Result<Action> {
     let (ns, name, api) = ctx.owned_process_binding(p)?;
     patch::remove_finalizer(&api, &name, p, tatara_process::PROCESS_FINALIZER)
         .await
-        .map_err(|e| anyhow!("release finalizer: {e}"))?;
+        .kube_ctx("release finalizer")?;
     info!(namespace = %ns, name = %name, "reaped — finalizer released");
     Ok(Action::await_change())
 }

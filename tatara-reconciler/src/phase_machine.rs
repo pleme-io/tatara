@@ -14,12 +14,13 @@
 //! | Zombie       | (terminate)              | children gone, waiting on finalizer            |
 //! | Reaped       | (GC)                     | finalizer released                             |
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use kube::runtime::controller::Action;
 use kube::{Api, Client};
 use serde_json::{json, Value};
 use tracing::{info, warn};
 
+use tatara_process::anyhow_flatten::FlattenCtxExt;
 use tatara_process::boundary::Condition;
 use tatara_process::identity::derive_identity;
 use tatara_process::intent::IntentVariant;
@@ -90,7 +91,7 @@ pub async fn handle_forking(p: &Process, ctx: &Context) -> Result<Action> {
     // 1. Dependency gate.
     let unmet = boundary::check_depends_on(ctx.kube.clone(), p)
         .await
-        .map_err(|e| anyhow!("depends_on check: {e}"))?;
+        .flatten_ctx("depends_on check")?;
     if !unmet.is_empty() {
         let messages: Vec<String> = unmet.iter().map(|u| u.message.clone()).collect();
         let body = json!({
@@ -294,7 +295,7 @@ pub async fn handle_execing(p: &Process, ctx: &Context) -> Result<Action> {
             &ctx.config.domain,
             dns_lb,
         )
-        .map_err(|e| anyhow!("render routing: {e}"))?;
+        .flatten_ctx("render routing")?;
         for res in &routes {
             ssapply::apply_owned(ctx.kube.clone(), p, &ns, res.clone()).await?;
         }
@@ -481,7 +482,7 @@ async fn evaluate_conditions(
     for c in conditions {
         let sat = boundary::evaluate(client.clone(), process, c)
             .await
-            .map_err(|e| anyhow!("evaluate {:?}: {e}", c.kind))?;
+            .flatten_ctx_with(format!("evaluate {:?}", c.kind))?;
         out.push(CheckedCondition {
             condition: c.clone(),
             satisfied: sat.is_satisfied(),
@@ -748,11 +749,11 @@ pub async fn handle_releasing(p: &Process, ctx: &Context) -> Result<Action> {
         &ctx.config.export_worker_image,
         &ctx.config.export_worker_service_account,
     )
-    .map_err(|e| anyhow!("render export jobs: {e}"))?;
+    .flatten_ctx("render export jobs")?;
     for job in rendered {
         ssapply::apply_owned(ctx.kube.clone(), p, &ns, job)
             .await
-            .map_err(|e| anyhow!("apply export job: {e}"))?;
+            .flatten_ctx("apply export job")?;
     }
 
     // 4. Watch all our export Jobs. Use a label selector that picks

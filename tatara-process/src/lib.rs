@@ -5,6 +5,7 @@
 //! The reconciliation loop *is* Unix: fork → exec → wait → exit → reap.
 
 pub mod allocation;
+pub mod anyhow_flatten;
 pub mod attestation;
 pub mod boundary;
 pub mod classification;
@@ -51,6 +52,7 @@ pub mod prelude {
         AllocationCondition, AllocationPhase, AllocationSpec, AllocationStatus,
         EphemeralAllocation, Requestor,
     };
+    pub use crate::anyhow_flatten::FlattenCtxExt;
     pub use crate::attestation::ProcessAttestation;
     pub use crate::boundary::{Boundary, Condition, ConditionKind, UnknownConditionKind};
     pub use crate::classification::{

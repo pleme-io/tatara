@@ -473,18 +473,8 @@ impl EnvMatrixSpec {
         let Some(envelope) = &self.breathe else {
             return vec![];
         };
-        let target_name = env
-            .spec
-            .aplicacao
-            .release_name
-            .clone()
-            .unwrap_or_else(|| env.name.clone());
-        let namespace = env
-            .spec
-            .aplicacao
-            .target_namespace
-            .clone()
-            .unwrap_or_else(|| env.name.clone());
+        let target_name = env.spec.aplicacao.release_name_or(&env.name);
+        let namespace = env.spec.aplicacao.target_namespace_or(&env.name);
         let mut annotations = serde_json::Map::new();
         if let Some(ceiling) = &self.budget.cost_ceiling {
             annotations.insert(

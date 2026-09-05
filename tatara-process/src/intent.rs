@@ -527,6 +527,61 @@ impl AplicacaoIntent {
         }
     }
 
+    /// Effective HelmRelease name — the operator-supplied
+    /// [`Self::release_name`] override when set, else the caller-
+    /// supplied fallback (canonically the Process's PID-derived name
+    /// at the reconciler's `render_aplicacao` site, and the enclosing
+    /// matrix env's `NamedEphemeral.name` at the matrix
+    /// `breathe_bands` site — both are the Process's own `name`).
+    ///
+    /// Pre-lift the pattern was hand-authored at 2 workspace-wide
+    /// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold,
+    /// each restating the SAME `Option::clone().unwrap_or_else(||
+    /// fallback.into())` chain differing only in the caller-varying
+    /// fallback slot:
+    ///
+    /// * `tatara-reconciler::render::render_aplicacao` — the
+    ///   `HelmRelease.spec.releaseName` slot on the Flux-owned
+    ///   release the reconciler emits per Helm-driven Process.
+    /// * `tatara-process::matrix::EnvMatrixSpec::breathe_bands` —
+    ///   the `spec.targetRef.name` slot on the breathe Band CRs the
+    ///   matrix sweep emits per generated env × dimension.
+    ///
+    /// Post-lift both sites read `a.release_name_or(fallback)` and
+    /// the fallback-composition shape lives at ONE substrate owner.
+    /// A future tightening — a workspace-wide default seeded off the
+    /// PID, a fallback shape derived off `Self::chart_ref`, a
+    /// validation that the fallback is a DNS-1123 label — lands at
+    /// THIS ONE primitive.
+    ///
+    /// Peer to [`Self::target_namespace_or`] on the same (release,
+    /// namespace) axis: both project one operator-optional
+    /// override-or-fallback slot the reconciler + matrix consume in
+    /// lock-step.
+    #[must_use]
+    pub fn release_name_or(&self, fallback: &str) -> String {
+        self.release_name.clone().unwrap_or_else(|| fallback.into())
+    }
+
+    /// Effective HelmRelease target namespace — the operator-supplied
+    /// [`Self::target_namespace`] override when set, else the caller-
+    /// supplied fallback (canonically the Process's own namespace at
+    /// the reconciler's `render_aplicacao` site, and the enclosing
+    /// matrix env's `NamedEphemeral.name` at the matrix
+    /// `breathe_bands` site).
+    ///
+    /// Peer to [`Self::release_name_or`] — same substrate-owner
+    /// motivation, same 2-site collapse. Post-lift both consumers
+    /// read `a.target_namespace_or(fallback)` and the
+    /// `Option::clone().unwrap_or_else(|| fallback.into())` shape
+    /// lives at ONE primitive here.
+    #[must_use]
+    pub fn target_namespace_or(&self, fallback: &str) -> String {
+        self.target_namespace
+            .clone()
+            .unwrap_or_else(|| fallback.into())
+    }
+
     /// Derive the Flux `HelmRelease.spec.{install,upgrade}` policy
     /// this intent publishes on BOTH slots. Pre-lift the reconciler's
     /// `render_aplicacao` restated the shape by hand via two adjacent
@@ -1443,6 +1498,91 @@ mod tests {
             serde_json::to_value(&via_string).unwrap(),
             serde_json::to_value(&via_str).unwrap(),
         );
+    }
+
+    // ── AplicacaoIntent::{release_name,target_namespace}_or pins ───
+    //
+    // Bind the (override, fallback) fallback-composer pair at
+    // fail-before-pass-after granularity so a regression that flipped
+    // the branch order (fallback wins when override is Some), dropped
+    // the `.clone()` on the override, dropped the lazy branch on the
+    // fallback, or swapped the two field slots surfaces HERE rather
+    // than as silent drift at the two production consumers
+    // (`tatara-reconciler::render::render_aplicacao` and
+    // `tatara-process::matrix::EnvMatrixSpec::breathe_bands`).
+
+    #[test]
+    fn release_name_or_returns_override_when_set() {
+        let mut a = AplicacaoIntent::chart_only("oci://x", "1");
+        a.release_name = Some("operator-picked".into());
+        assert_eq!(a.release_name_or("fallback-pid"), "operator-picked");
+    }
+
+    #[test]
+    fn release_name_or_returns_fallback_when_unset() {
+        let a = AplicacaoIntent::chart_only("oci://x", "1");
+        assert!(a.release_name.is_none());
+        assert_eq!(a.release_name_or("fallback-pid"), "fallback-pid");
+    }
+
+    #[test]
+    fn target_namespace_or_returns_override_when_set() {
+        let mut a = AplicacaoIntent::chart_only("oci://x", "1");
+        a.target_namespace = Some("operator-picked".into());
+        assert_eq!(a.target_namespace_or("fallback-ns"), "operator-picked");
+    }
+
+    #[test]
+    fn target_namespace_or_returns_fallback_when_unset() {
+        let a = AplicacaoIntent::chart_only("oci://x", "1");
+        assert!(a.target_namespace.is_none());
+        assert_eq!(a.target_namespace_or("fallback-ns"), "fallback-ns");
+    }
+
+    #[test]
+    fn release_name_and_target_namespace_or_are_independent_across_all_four_shapes() {
+        // Coherence axis: the two fallback slots are independent —
+        // any of the four (release_name, target_namespace) ∈
+        // {None, Some} shapes projects the expected pair with no
+        // cross-slot bleed. A regression that keyed one field off
+        // the other's `Option` state would surface HERE.
+        for (rn, tn) in [
+            (None, None),
+            (Some("r".to_string()), None),
+            (None, Some("t".to_string())),
+            (Some("r".to_string()), Some("t".to_string())),
+        ] {
+            let mut a = AplicacaoIntent::chart_only("oci://x", "1");
+            a.release_name = rn.clone();
+            a.target_namespace = tn.clone();
+            let got_rn = a.release_name_or("rn-fb");
+            let got_tn = a.target_namespace_or("tn-fb");
+            let want_rn = rn.clone().unwrap_or_else(|| "rn-fb".into());
+            let want_tn = tn.clone().unwrap_or_else(|| "tn-fb".into());
+            assert_eq!(got_rn, want_rn, "release_name_or for ({rn:?}, {tn:?})");
+            assert_eq!(got_tn, want_tn, "target_namespace_or for ({rn:?}, {tn:?})");
+        }
+    }
+
+    #[test]
+    fn release_name_or_matches_hand_authored_pre_lift_option_clone_unwrap_or_else_shape() {
+        // Byte-identical parity with the two pre-lift call shapes.
+        // A regression that drifted the composer would surface HERE
+        // rather than as silent skew at either production site.
+        for override_ in [None, Some("op".to_string())] {
+            let mut a = AplicacaoIntent::chart_only("oci://x", "1");
+            a.release_name = override_.clone();
+            let via_primitive = a.release_name_or("fb");
+            let hand_authored = a.release_name.clone().unwrap_or_else(|| "fb".into());
+            assert_eq!(via_primitive, hand_authored);
+        }
+        for override_ in [None, Some("op".to_string())] {
+            let mut a = AplicacaoIntent::chart_only("oci://x", "1");
+            a.target_namespace = override_.clone();
+            let via_primitive = a.target_namespace_or("fb");
+            let hand_authored = a.target_namespace.clone().unwrap_or_else(|| "fb".into());
+            assert_eq!(via_primitive, hand_authored);
+        }
     }
 
     #[test]

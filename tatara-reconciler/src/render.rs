@@ -209,8 +209,8 @@ fn render_flux(name: &str, ns: &str, f: &FluxIntent) -> (Vec<Value>, Vec<u8>) {
 /// the release name + namespace, and we emit both into the same
 /// namespace as the Process.
 fn render_aplicacao(name: &str, ns: &str, a: &AplicacaoIntent) -> (Vec<Value>, Vec<u8>) {
-    let release_name = a.release_name.clone().unwrap_or_else(|| name.into());
-    let target_ns = a.target_namespace.clone().unwrap_or_else(|| ns.into());
+    let release_name = a.release_name_or(name);
+    let target_ns = a.target_namespace_or(ns);
 
     // Merge the operator's values_overlay with the profile keyword so the
     // typed `profile:` chart switch is always set when the operator

@@ -935,6 +935,142 @@ impl EphemeralPool {
         use crate::PlacedInNamespace;
         Self::new(name, spec).in_namespace(namespace)
     }
+
+    /// Observed pool phase from live member observations — the pure
+    /// typed projection every pool-reconciler status-patch site needs
+    /// before it stamps [`PoolStatus`] on the wire.
+    ///
+    /// # Why it exists
+    ///
+    /// Pre-lift the phase computation lived at
+    /// `tatara-pool-reconciler::controller_pool::pool_phase_from_members`
+    /// as a private free function — a repo-local closed-set match over
+    /// the (tombstone-first, empty-members, min-floor, supply-vs-desired)
+    /// gate ladder. Every downstream that wanted to know a pool's
+    /// observed phase from its members had to reach into the
+    /// reconciler crate for the helper, so the projection stayed a
+    /// controller-internal detail even though `EphemeralPool` +
+    /// `PoolMember` + `PoolPhase` all live in this substrate crate.
+    /// Post-lift the projection lives at the ONE typed accessor on
+    /// `EphemeralPool` — the natural owner, since the four gate slots
+    /// the ladder reads (`is_being_deleted()`, `spec.desired_size`,
+    /// `spec.min_size`, and the members supply computed via
+    /// [`crate::pool::MemberState::counts_toward_supply`]) all belong
+    /// to `EphemeralPool` or to the shared substrate. Any future
+    /// consumer (a feira `pool status --phase` command, an MCP tool
+    /// that renders pool health, a dashboard SSE feed, a peer
+    /// controller that mirrors pool state into an external system)
+    /// reads the phase through this ONE substrate method rather than
+    /// re-implementing the gate ladder against the pre-lift
+    /// controller-internal shape.
+    ///
+    /// # Gate ladder
+    ///
+    /// The ladder walks in strict priority order — the first gate
+    /// that fires returns:
+    ///
+    /// 1. **Tombstone-first** — `is_being_deleted()` → `Draining`.
+    ///    Keeps the reported phase honest during the finalizer drain
+    ///    so operators reading `kubectl get ephemeralpools` see the
+    ///    tombstone-present state as `Draining`, not as a stale
+    ///    `Steady` derived from the pre-tombstone supply arithmetic.
+    /// 2. **Empty-members** — `members.is_empty()` → `Initializing`.
+    ///    A pool with zero members is either fresh (never had a
+    ///    spawn) or fully reaped without the tombstone; either way
+    ///    the supply arithmetic below has no signal to work with,
+    ///    so the ladder short-circuits.
+    /// 3. **Min-floor** — `spec.min_size > 0 && supply < spec.min_size`
+    ///    → `Degraded`. Hard floor breach: the pool has members but
+    ///    not enough Free/Spawning capacity to serve requestors
+    ///    without dipping below the operator-declared floor.
+    /// 4. **Supply-vs-desired** — `supply < spec.desired_size` →
+    ///    `ScalingUp`; `supply > spec.desired_size` → `ScalingDown`.
+    ///    The standard replenishment arithmetic that the reconciler's
+    ///    convergence loop drives toward zero.
+    /// 5. **Steady** — the terminal arm. Supply matches desired, no
+    ///    scaling pending, no tombstone, no floor breach.
+    ///
+    /// The supply computation rides through the closed-set predicate
+    /// [`crate::pool::MemberState::counts_toward_supply`] — a
+    /// `MemberState` variant that should also count toward supply
+    /// (e.g. a "Warming" state between Spawning and Free) lands at
+    /// ONE predicate arm and this method inherits the new bucketing
+    /// automatically. The
+    /// `member_state_failed_implies_no_supply` contract test on
+    /// [`crate::pool::MemberState`] pins that a `Failed` member can
+    /// never inflate this count and pollute the ladder's gate
+    /// decisions.
+    ///
+    /// # Invariants
+    ///
+    /// - **Priority order:** the ladder walks tombstone → empty →
+    ///   floor → supply → steady; a regression that reordered any two
+    ///   gates would surface at `tests::observed_phase_from_*` as a
+    ///   truth-table mismatch across the gate corners.
+    /// - **Pure projection:** two consecutive calls on the same
+    ///   `(pool, members)` pair return the same `PoolPhase` — no
+    ///   hidden state, no per-tick clock read (the tombstone probe
+    ///   is a metadata slot presence check, not a wall-clock
+    ///   comparison).
+    /// - **Byte-identical to the pre-lift chain:** the ladder
+    ///   collapses to the same `PoolPhase` the reconciler's private
+    ///   `pool_phase_from_members` free function produced pre-lift
+    ///   at every gate corner — pinned by
+    ///   `tests::observed_phase_from_matches_pre_lift_reconciler_chain`.
+    ///
+    /// Sibling to the peer typed-projection primitives on
+    /// `EphemeralPool` ([`Self::is_being_deleted`],
+    /// [`Self::name_or_empty`], [`Self::owned_name_or_empty`],
+    /// [`Self::owned_namespace_or_empty`]) — closes the corner the
+    /// pool-side family previously left open on the (observation →
+    /// derived-phase) axis. Peer to
+    /// [`crate::pool::PoolStatus::observed_from`] on the (pure typed
+    /// projection, compound-composer) axis; the peer chains this
+    /// projection with the wall-clock-anchored
+    /// [`crate::pool::PoolStatus::observed_now`] stamp so both
+    /// pool-reconciler status-patch sites route the observation
+    /// through ONE substrate composer rather than through the pre-
+    /// lift 3-line (phase-compute + observed_now + merge_status)
+    /// chain.
+    ///
+    /// # `#[must_use]`
+    ///
+    /// The returned [`PoolPhase`] is a pure typed projection; every
+    /// consumer feeds it into a downstream status-patch composer or
+    /// operator-facing diagnostic. Dropping the return means the
+    /// projection was computed for no observable reason.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 3 (typed exit — the
+    /// gate ladder's five arms partition the observed-phase space
+    /// exhaustively and the closed-set match at each arm keeps the
+    /// exhaustiveness under compiler control). THEORY.md §III (the
+    /// typescape — this projection is a typed accessor on
+    /// `EphemeralPool`, coherent with the workspace-wide typed
+    /// projection family the pool-side primitives already anchor).
+    #[must_use]
+    pub fn observed_phase_from(&self, members: &[PoolMember]) -> PoolPhase {
+        if self.is_being_deleted() {
+            return PoolPhase::Draining;
+        }
+        if members.is_empty() {
+            return PoolPhase::Initializing;
+        }
+        let supply = members
+            .iter()
+            .filter(|m| m.state.counts_toward_supply())
+            .count() as u32;
+        if self.spec.min_size > 0 && supply < self.spec.min_size {
+            return PoolPhase::Degraded;
+        }
+        let want = self.spec.desired_size;
+        if supply < want {
+            return PoolPhase::ScalingUp;
+        }
+        if supply > want {
+            return PoolPhase::ScalingDown;
+        }
+        PoolPhase::Steady
+    }
 }
 
 /// What the pool reconciler does when a member reaches `Failed`.
@@ -1300,6 +1436,95 @@ impl PoolStatus {
     #[must_use]
     pub fn observed_now(phase: PoolPhase, members: Vec<PoolMember>) -> Self {
         Self::observed(phase, members, Utc::now())
+    }
+
+    /// Compound composer peer of [`Self::observed_now`] that derives
+    /// the [`PoolPhase`] from `(pool, members)` via the typed
+    /// projection [`crate::pool::EphemeralPool::observed_phase_from`]
+    /// — the ONE substrate owner of the (phase-compute + observed_now
+    /// wall-clock stamp) 2-link chain every pool-reconciler status-
+    /// patch site walked pre-lift.
+    ///
+    /// # Why it exists
+    ///
+    /// Pre-lift the 2-link `let phase = pool_phase_from_members(&pool,
+    /// &members); PoolStatus::observed_now(phase, members.clone())`
+    /// chain was hand-authored at TWO sites past the ★★ PRIME-
+    /// DIRECTIVE ≥ 2 duplication threshold in
+    /// `tatara-pool-reconciler::controller_pool::reconcile_inner`,
+    /// both keyed against the same `(pool, members)` observations:
+    ///
+    /// * The `desired > 0` path — status patch after the
+    ///   `apply_convergence_actions` walk when the operator drives
+    ///   the pool through the R11 desired-count invariant.
+    /// * The legacy allocation-driven path (`desired == 0`) — status
+    ///   patch after the [`crate::pool::PoolDecision`] apply loop.
+    ///
+    /// Both sites walked the SAME 2-link chain — compute the observed
+    /// phase from the (tombstone-first, empty, floor, supply-vs-
+    /// desired) gate ladder against the borrowed `(pool, members)`
+    /// pair, then hand the produced phase + owned members clone to
+    /// the wall-clock-anchored [`Self::observed_now`] composer. Both
+    /// keyed the SAME projection through a repo-internal free
+    /// function (`pool_phase_from_members`) that shadowed the natural
+    /// substrate owner. Post-lift each callsite reads
+    /// `PoolStatus::observed_from(&pool, members.clone())` and the
+    /// compose+dispatch sink lives at ONE substrate owner —
+    /// [`crate::pool::EphemeralPool::observed_phase_from`] +
+    /// [`Self::observed_now`] compose here, at the exact substrate
+    /// site where the pool + status types both live.
+    ///
+    /// # Invariants
+    ///
+    /// - **Same shape:** returns the SAME [`PoolStatus`] the 2-link
+    ///   chain `observed_now(pool.observed_phase_from(&members),
+    ///   members)` returns. This is a delegation, not a re-
+    ///   implementation — the underlying wall-clock stamp still lives
+    ///   at [`Self::observed_now`] and the phase projection still
+    ///   lives at [`crate::pool::EphemeralPool::observed_phase_from`].
+    /// - **Members ride through by owned value:** the members `Vec`
+    ///   is consumed by [`Self::observed_now`] verbatim (no defensive
+    ///   `.clone()` at the composer boundary); the phase projection
+    ///   borrows the same slice through `&members[..]` inside the
+    ///   delegation so the underlying single-pass fold in
+    ///   [`crate::pool::MemberState::counts_toward_supply`]-family
+    ///   composers still gets the same borrowed view it did pre-lift.
+    /// - **Wall-clock read once:** `Utc::now()` is called exactly ONCE
+    ///   per invocation (inherited from [`Self::observed_now`]),
+    ///   preserving the pre-lift shape where each of the two status-
+    ///   patch sites computed its own `chrono::Utc::now()` at its own
+    ///   line.
+    ///
+    /// # `#[must_use]`
+    ///
+    /// Every consumer feeds the returned [`PoolStatus`] into
+    /// `tatara_process::patch::merge_status(&pool_api, &name,
+    /// &<status>)` or a peer status-patch call. Dropping the return
+    /// means the observation composed for no observable reason — the
+    /// attribute surfaces that as a warning at every call site.
+    ///
+    /// Sibling of [`Self::observed_now`] on the (pure phase argument,
+    /// pool-derived phase) axis pair: both compose atop the 3-arg
+    /// [`Self::observed`] primitive, differing only in whether the
+    /// caller has already computed the phase (`observed_now`) or
+    /// hands the pool + members observations to the composer to
+    /// derive the phase in one shot (`observed_from`). Peer of
+    /// [`crate::pool::EphemeralPool::observed_phase_from`] on the
+    /// (pure typed projection, compound-composer) axis.
+    ///
+    /// Theory anchor: THEORY.md §VI.1 (generation over composition —
+    /// the 2-link `pool_phase_from_members + observed_now` chain
+    /// recurred at 2 hand-authored sites past the ★★ PRIME-DIRECTIVE
+    /// ≥ 2 duplication trigger, and is lifted to ONE substrate owner
+    /// here). THEORY.md §II.1 invariant 5 (composition preserves
+    /// proofs — the compound composer inherits the two component
+    /// composers' invariants mechanically, so a regression at either
+    /// component surfaces at the pinned tests here rather than as
+    /// silent skew at either status-patch site).
+    #[must_use]
+    pub fn observed_from(pool: &EphemeralPool, members: Vec<PoolMember>) -> Self {
+        let phase = pool.observed_phase_from(&members);
+        Self::observed_now(phase, members)
     }
 }
 
@@ -4002,6 +4227,434 @@ mod tests {
                 "composed {composed} and hand-authored {hand_authored} must agree within 100ms scheduler jitter for phase={phase:?}"
             );
         }
+    }
+
+    // ─── EphemeralPool::observed_phase_from substrate pins ───────────
+    //
+    // Pins the pure typed projection at fail-before-pass-after
+    // granularity: `observed_phase_from` did not exist on
+    // `EphemeralPool` pre-lift — the gate ladder lived at
+    // `tatara-pool-reconciler::controller_pool::pool_phase_from_members`
+    // as a repo-internal free function. Any test that invokes
+    // `pool.observed_phase_from(&members)` fails to compile pre-lift
+    // and passes post-lift; the truth-table pins below then bind the
+    // ladder's five gate corners individually so a regression that
+    // reordered any two gates, dropped an arm, or drifted a threshold
+    // surfaces per-corner rather than as silent operator-facing skew
+    // at the two `controller_pool` status-patch callsites the
+    // downstream compound composer `PoolStatus::observed_from`
+    // delegates through.
+
+    fn pool_with_desired_and_min(desired: u32, min: u32) -> EphemeralPool {
+        let spec = PoolSpec {
+            desired_size: desired,
+            min_size: min,
+            ..PoolSpec::with_template(empty_template())
+        };
+        EphemeralPool::new("attest-pool", spec)
+    }
+
+    #[test]
+    fn observed_phase_from_returns_draining_on_tombstoned_pool_regardless_of_supply() {
+        // Tombstone-first gate pin: a tombstoned pool MUST return
+        // `Draining` regardless of `spec.min_size`, `spec.desired_size`,
+        // and the member supply. A regression that let the supply
+        // arithmetic pre-empt the tombstone probe would silently
+        // classify a draining pool as `Steady` / `ScalingUp` /
+        // `Degraded` and hide the deletion-in-flight state from
+        // operators reading `kubectl get ephemeralpools`.
+        let p = tombstoned_pool();
+        // Every supply corner must yield the same `Draining` answer.
+        for members in [
+            vec![],
+            vec![member(MemberState::Free)],
+            vec![
+                member(MemberState::Free),
+                member(MemberState::Spawning),
+                member(MemberState::Allocated),
+            ],
+            vec![member(MemberState::Failed)],
+        ] {
+            assert_eq!(
+                p.observed_phase_from(&members),
+                PoolPhase::Draining,
+                "tombstoned pool must project Draining regardless of members={members:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn observed_phase_from_returns_initializing_on_empty_members() {
+        // Empty-members gate pin: an untombstoned pool with zero
+        // members MUST return `Initializing`, regardless of
+        // `spec.desired_size` and `spec.min_size`. A regression that
+        // let the min-floor gate fire on empty members (supply = 0 <
+        // min_size) would misreport the fresh-pool state as
+        // `Degraded` and trip any downstream health aggregator that
+        // treats `Degraded` as an alertable state.
+        for (desired, min) in [(0, 0), (1, 0), (3, 1), (5, 3)] {
+            let p = pool_with_desired_and_min(desired, min);
+            assert_eq!(
+                p.observed_phase_from(&[]),
+                PoolPhase::Initializing,
+                "empty members must project Initializing for (desired={desired}, min={min})",
+            );
+        }
+    }
+
+    #[test]
+    fn observed_phase_from_returns_degraded_when_supply_below_min_size() {
+        // Min-floor gate pin: `min_size > 0 && supply < min_size` MUST
+        // fire `Degraded` before the supply-vs-desired gate gets a
+        // chance to pick `ScalingUp` / `ScalingDown` / `Steady`. Note
+        // the guard `min_size > 0` — a pool with `min_size = 0` never
+        // trips this gate even at zero supply. Sweep the (min, supply)
+        // corners that plausibly reach the reconciler at tick time.
+        let p = pool_with_desired_and_min(5, 2);
+        // supply = 0 → 1 Allocated (does not count) + 0 Free/Spawning
+        let members = vec![member(MemberState::Allocated)];
+        assert_eq!(p.observed_phase_from(&members), PoolPhase::Degraded);
+        // supply = 1 (< min_size = 2) → still Degraded even though
+        // supply < desired (5) would otherwise pick ScalingUp.
+        let members = vec![
+            member(MemberState::Free),
+            member(MemberState::Allocated),
+            member(MemberState::Allocated),
+        ];
+        assert_eq!(p.observed_phase_from(&members), PoolPhase::Degraded);
+    }
+
+    #[test]
+    fn observed_phase_from_returns_scaling_up_when_supply_below_desired() {
+        // Supply-vs-desired gate pin (up arm): `supply < desired_size`
+        // and no min-floor breach → `ScalingUp`. The reconciler's
+        // convergence loop is expected to spawn additional members to
+        // close the gap.
+        let p = pool_with_desired_and_min(3, 0);
+        let members = vec![
+            member(MemberState::Free),
+            member(MemberState::Spawning),
+            member(MemberState::Allocated),
+        ];
+        assert_eq!(p.observed_phase_from(&members), PoolPhase::ScalingUp);
+    }
+
+    #[test]
+    fn observed_phase_from_returns_scaling_down_when_supply_above_desired() {
+        // Supply-vs-desired gate pin (down arm): `supply > desired_size`
+        // → `ScalingDown`. The reconciler's convergence loop is
+        // expected to reap excess Free members.
+        let p = pool_with_desired_and_min(1, 0);
+        let members = vec![
+            member(MemberState::Free),
+            member(MemberState::Free),
+            member(MemberState::Spawning),
+        ];
+        assert_eq!(p.observed_phase_from(&members), PoolPhase::ScalingDown);
+    }
+
+    #[test]
+    fn observed_phase_from_returns_steady_when_supply_equals_desired() {
+        // Terminal-arm pin: `supply == desired_size` with no tombstone,
+        // no floor breach → `Steady`. This is the goal state the
+        // reconciler drives the pool toward.
+        let p = pool_with_desired_and_min(2, 0);
+        let members = vec![
+            member(MemberState::Free),
+            member(MemberState::Spawning),
+            member(MemberState::Allocated),
+        ];
+        // Free + Spawning count toward supply (Allocated does not) → 2.
+        assert_eq!(p.observed_phase_from(&members), PoolPhase::Steady);
+    }
+
+    #[test]
+    fn observed_phase_from_excludes_failed_members_from_supply() {
+        // Closed-set contract pin: `Failed` members MUST NOT count
+        // toward supply (peer of the
+        // `member_state_failed_implies_no_supply` contract on
+        // `MemberState`). A regression that let `Failed` inflate the
+        // supply count would silently satisfy the `supply >= min_size`
+        // gate on a pool that's actually below floor and misclassify
+        // the state as `Steady` / `ScalingUp` instead of `Degraded`.
+        let p = pool_with_desired_and_min(2, 1);
+        let members = vec![
+            member(MemberState::Failed),
+            member(MemberState::Failed),
+            member(MemberState::Failed),
+        ];
+        // supply = 0 (no Free/Spawning) < min_size = 1 → Degraded.
+        assert_eq!(p.observed_phase_from(&members), PoolPhase::Degraded);
+    }
+
+    #[test]
+    fn observed_phase_from_matches_pre_lift_reconciler_chain() {
+        // Byte-identical parity with the pre-lift
+        // `tatara-pool-reconciler::controller_pool::pool_phase_from_members`
+        // free function that the primitive absorbs. Runs across the
+        // FULL corner set of the gate ladder (tombstone, empty, floor
+        // breach, scaling up, scaling down, steady) so a regression
+        // that drifted the gate ladder at the substrate surfaces here
+        // per-corner rather than as silent operator-facing skew at the
+        // two `controller_pool` status-patch callsites.
+        fn pre_lift(pool: &EphemeralPool, members: &[PoolMember]) -> PoolPhase {
+            if pool.is_being_deleted() {
+                return PoolPhase::Draining;
+            }
+            let supply = members
+                .iter()
+                .filter(|m| m.state.counts_toward_supply())
+                .count() as u32;
+            let want = pool.spec.desired_size;
+            if members.is_empty() {
+                return PoolPhase::Initializing;
+            }
+            if pool.spec.min_size > 0 && supply < pool.spec.min_size {
+                return PoolPhase::Degraded;
+            }
+            if supply < want {
+                return PoolPhase::ScalingUp;
+            }
+            if supply > want {
+                return PoolPhase::ScalingDown;
+            }
+            PoolPhase::Steady
+        }
+        let cases: [(EphemeralPool, Vec<PoolMember>); 6] = [
+            (tombstoned_pool(), vec![member(MemberState::Free)]),
+            (pool_with_desired_and_min(3, 0), vec![]),
+            (
+                pool_with_desired_and_min(5, 2),
+                vec![member(MemberState::Allocated)],
+            ),
+            (
+                pool_with_desired_and_min(3, 0),
+                vec![member(MemberState::Free), member(MemberState::Spawning)],
+            ),
+            (
+                pool_with_desired_and_min(1, 0),
+                vec![
+                    member(MemberState::Free),
+                    member(MemberState::Free),
+                    member(MemberState::Spawning),
+                ],
+            ),
+            (
+                pool_with_desired_and_min(2, 0),
+                vec![
+                    member(MemberState::Free),
+                    member(MemberState::Spawning),
+                    member(MemberState::Allocated),
+                ],
+            ),
+        ];
+        for (pool, members) in &cases {
+            assert_eq!(
+                pool.observed_phase_from(members),
+                pre_lift(pool, members),
+                "substrate primitive must match pre-lift reconciler chain for pool={:?} members={members:?}",
+                pool.metadata.name,
+            );
+        }
+    }
+
+    #[test]
+    fn observed_phase_from_is_a_pure_projection() {
+        // Purity pin: two consecutive calls on the same `(pool,
+        // members)` return the same `PoolPhase` — no hidden state,
+        // no per-tick clock read. Guards against a future refactor
+        // that reaches for `Utc::now()` at the tombstone probe or
+        // caches per-instance state.
+        let p = pool_with_desired_and_min(3, 0);
+        let members = vec![
+            member(MemberState::Free),
+            member(MemberState::Spawning),
+            member(MemberState::Allocated),
+        ];
+        let a = p.observed_phase_from(&members);
+        let b = p.observed_phase_from(&members);
+        assert_eq!(a, b);
+        assert_eq!(a, PoolPhase::ScalingUp);
+    }
+
+    // ─── PoolStatus::observed_from substrate pins ────────────────────
+    //
+    // Pins the compound composer at fail-before-pass-after granularity:
+    // `observed_from` did not exist pre-lift; the compiler cannot
+    // resolve the name until the impl block above is in place, so a
+    // rollback of the primitive breaks this whole test group. The
+    // composer owns the 2-link `let phase = pool_phase_from_members
+    // (&pool, &members); PoolStatus::observed_now(phase,
+    // members.clone())` chain that both `controller_pool` status-
+    // patch sites walked pre-lift; a regression that specialized
+    // either component (a stray canonicalization at `observed_from`,
+    // a swapped default at either component, a members-`Vec` clone
+    // slipped into the composer boundary) would surface HERE rather
+    // than as silent skew at either callsite.
+
+    #[test]
+    fn pool_status_observed_from_delegates_through_phase_projection_and_observed_now() {
+        // Delegation-shape pin: `observed_from(pool, members)` MUST
+        // produce the SAME `PoolStatus` as the explicit 2-link
+        // `PoolStatus::observed_now(pool.observed_phase_from(&members),
+        // members)` chain at every slot other than `phase_since`
+        // (which reads the wall clock at different instants and
+        // diverges by scheduler jitter). Sweep the gate corners so a
+        // regression at any phase arm surfaces here rather than as
+        // silent skew at either controller_pool callsite.
+        let cases: [(EphemeralPool, Vec<PoolMember>, PoolPhase); 4] = [
+            (
+                pool_with_desired_and_min(3, 0),
+                vec![
+                    member(MemberState::Free),
+                    member(MemberState::Spawning),
+                    member(MemberState::Allocated),
+                ],
+                PoolPhase::ScalingUp,
+            ),
+            (
+                pool_with_desired_and_min(2, 0),
+                vec![
+                    member(MemberState::Free),
+                    member(MemberState::Spawning),
+                    member(MemberState::Allocated),
+                ],
+                PoolPhase::Steady,
+            ),
+            (
+                pool_with_desired_and_min(1, 0),
+                vec![
+                    member(MemberState::Free),
+                    member(MemberState::Free),
+                    member(MemberState::Spawning),
+                ],
+                PoolPhase::ScalingDown,
+            ),
+            (tombstoned_pool(), vec![], PoolPhase::Draining),
+        ];
+        for (pool, members, expected_phase) in cases {
+            let via_compound = PoolStatus::observed_from(&pool, members.clone());
+            let via_manual =
+                PoolStatus::observed_now(pool.observed_phase_from(&members), members.clone());
+            assert_eq!(via_compound.phase, expected_phase);
+            assert_eq!(via_compound.phase, via_manual.phase);
+            assert_eq!(via_compound.ready_count, via_manual.ready_count);
+            assert_eq!(via_compound.allocated_count, via_manual.allocated_count);
+            assert_eq!(via_compound.spawning_count, via_manual.spawning_count);
+            assert_eq!(via_compound.returning_count, via_manual.returning_count);
+            assert_eq!(via_compound.members.len(), via_manual.members.len());
+            assert_eq!(via_compound.message, via_manual.message);
+            assert_eq!(via_compound.conditions.len(), via_manual.conditions.len(),);
+        }
+    }
+
+    #[test]
+    fn pool_status_observed_from_reads_wall_clock_into_phase_since() {
+        // Wall-clock pin (inherited from `observed_now`): `phase_since`
+        // MUST fall between `Utc::now()` reads bracketed around the
+        // call. A regression that specialized the compound composer
+        // with a stale timestamp constant would fail this bracket.
+        let p = pool_with_desired_and_min(1, 0);
+        let members = vec![member(MemberState::Free)];
+        let before = chrono::Utc::now();
+        let observed = PoolStatus::observed_from(&p, members);
+        let after = chrono::Utc::now();
+        let phase_since = observed
+            .phase_since
+            .expect("observed_from must stamp phase_since with the wall clock");
+        assert!(
+            phase_since >= before && phase_since <= after,
+            "phase_since {phase_since} must fall in [{before}, {after}]"
+        );
+    }
+
+    #[test]
+    fn pool_status_observed_from_derives_phase_from_pool_and_members() {
+        // Phase-derivation pin: the compound composer MUST derive the
+        // phase from the (pool, members) observations via
+        // `EphemeralPool::observed_phase_from`, not via a caller-
+        // supplied phase argument. A regression that reached for a
+        // hard-coded default phase (`Steady` / `Initializing`) would
+        // misreport the observed state at both controller_pool
+        // callsites. Pinned across the five non-tombstone gate arms
+        // so a per-arm regression surfaces per-corner.
+        let cases: [(EphemeralPool, Vec<PoolMember>, PoolPhase); 5] = [
+            (
+                pool_with_desired_and_min(1, 0),
+                vec![],
+                PoolPhase::Initializing,
+            ),
+            (
+                pool_with_desired_and_min(5, 2),
+                vec![member(MemberState::Allocated)],
+                PoolPhase::Degraded,
+            ),
+            (
+                pool_with_desired_and_min(3, 0),
+                vec![member(MemberState::Free), member(MemberState::Spawning)],
+                PoolPhase::ScalingUp,
+            ),
+            (
+                pool_with_desired_and_min(1, 0),
+                vec![
+                    member(MemberState::Free),
+                    member(MemberState::Free),
+                    member(MemberState::Spawning),
+                ],
+                PoolPhase::ScalingDown,
+            ),
+            (
+                pool_with_desired_and_min(2, 0),
+                vec![
+                    member(MemberState::Free),
+                    member(MemberState::Spawning),
+                    member(MemberState::Allocated),
+                ],
+                PoolPhase::Steady,
+            ),
+        ];
+        for (pool, members, expected) in cases {
+            let observed = PoolStatus::observed_from(&pool, members);
+            assert_eq!(
+                observed.phase, expected,
+                "observed_from must derive phase={expected:?} from pool + members",
+            );
+        }
+    }
+
+    #[test]
+    fn pool_status_observed_from_matches_pre_lift_two_link_chain_shape() {
+        // Byte-identical parity with the pre-lift 2-link `let phase =
+        // pool_phase_from_members(&pool, &members);
+        // PoolStatus::observed_now(phase, members.clone())` chain both
+        // hand-authored callsites walked. Both blocks read the wall
+        // clock at DIFFERENT instants so the two `phase_since` stamps
+        // CAN differ by scheduler jitter — bound the divergence at
+        // 100ms scheduler jitter, matching the peer
+        // `pool_status_observed_now_matches_pre_lift_utc_now_composition_shape`
+        // tolerance on the sibling composer.
+        let p = pool_with_desired_and_min(3, 0);
+        let members = vec![
+            member(MemberState::Free),
+            member(MemberState::Spawning),
+            member(MemberState::Allocated),
+        ];
+        let composed = PoolStatus::observed_from(&p, members.clone())
+            .phase_since
+            .expect("observed_from stamps phase_since");
+        // Pre-lift block: compute phase separately, then hand it to
+        // observed_now — exactly the shape the two callsites walked.
+        let hand_authored = {
+            let phase = p.observed_phase_from(&members);
+            PoolStatus::observed_now(phase, members.clone())
+        }
+        .phase_since
+        .expect("observed_now stamps phase_since");
+        let delta = (hand_authored - composed).abs();
+        assert!(
+            delta <= chrono::Duration::milliseconds(100),
+            "composed {composed} and hand-authored {hand_authored} must agree within 100ms scheduler jitter",
+        );
     }
 
     // ─── PoolMember::unallocated substrate pins ───────────────────────

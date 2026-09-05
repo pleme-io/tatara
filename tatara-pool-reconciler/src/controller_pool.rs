@@ -18,7 +18,7 @@ use crate::ReconcilerError;
 use tatara_process::annotations;
 use tatara_process::ephemeral::EphemeralSpec;
 use tatara_process::lifetime::Lifetime;
-use tatara_process::pool::{EphemeralPool, MemberState, PoolMember, PoolPhase, PoolStatus};
+use tatara_process::pool::{EphemeralPool, MemberState, PoolMember, PoolStatus};
 use tatara_process::prelude::{NamespacedApiCoordinates, Process, ProcessSpec};
 
 use crate::context::PoolContext;
@@ -258,26 +258,32 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
         // and a future counter slot lands at ONE match arm in
         // `tatara_process::pool::PoolMember::state_count_fanout`.
         //
-        // Wall-clock read at tick-time rides through the ONE substrate
-        // peer `PoolStatus::observed_now` (delegates to `observed(...,
-        // Utc::now())`) — pre-lift the 4-arg call with a hand-authored
-        // `Utc::now()` third argument was the SAME shape at both
-        // status-patch sites in this module past the ★★ PRIME-
-        // DIRECTIVE ≥ 2 duplication threshold. Post-lift both callers
-        // route through the wall-clock-anchored peer so a future clock
-        // swap (a monotonic clock cross-check, a per-reconciler time
-        // source injection, a test-only override at the production
-        // site) lands at ONE substrate function and both sites inherit
-        // the upgrade mechanically. Sibling to the peer wall-clock-
+        // Compose+dispatch the observed [`PoolStatus`] through the
+        // ONE substrate compound composer
+        // [`tatara_process::pool::PoolStatus::observed_from`] — pre-
+        // lift this was a 2-link `let phase = pool_phase_from_members
+        // (&pool, &members); PoolStatus::observed_now(phase,
+        // members.clone())` chain, one of TWO workspace-wide
+        // restatements past the ★★ PRIME-DIRECTIVE ≥ 2 duplication
+        // threshold in this module (peer at the legacy allocation-
+        // driven `desired == 0` status-patch site below). Post-lift
+        // the compose chain lives at ONE substrate owner + the phase
+        // projection [`EphemeralPool::observed_phase_from`] the
+        // composer delegates through is itself now the ONE typed
+        // owner of the (tombstone-first, empty, floor, supply-vs-
+        // desired) gate ladder that any future consumer (a feira
+        // `pool status --phase` command, an MCP tool, a dashboard SSE
+        // feed) reaches through — the pre-lift free function
+        // `pool_phase_from_members` was repo-internal and shadowed
+        // this natural substrate home. Sibling to the peer wall-clock-
         // anchored primitive `tatara_process::lifetime_clock::
         // evaluate_now` on the same `(typed-pure-fn, wall-clock-
         // anchored peer)` axis pair the workspace's timed-decision
         // family walks.
-        let phase = pool_phase_from_members(&pool, &members);
         let _ = tatara_process::patch::merge_status(
             &pool_api,
             &name,
-            &PoolStatus::observed_now(phase, members.clone()),
+            &PoolStatus::observed_from(&pool, members.clone()),
         )
         .await;
         return Ok(tatara_process::requeue::after_secs(
@@ -413,16 +419,17 @@ async fn reconcile_inner(pool: Arc<EphemeralPool>, ctx: Arc<PoolContext>) -> Res
     //
     // Legacy allocation-driven (`desired == 0`) status-patch seed —
     // sibling of the desired-count status-patch seed above; both ride
-    // the substrate constructor `PoolStatus::observed` composed with
-    // the wall-clock-anchored peer `PoolStatus::observed_now` (which
-    // owns the `Utc::now()` read at tick-time for both status-patch
-    // sites). See the peer site's pre-lift audit note for the
-    // duplication history.
-    let phase = pool_phase_from_members(&pool, &members);
+    // the substrate compound composer
+    // [`tatara_process::pool::PoolStatus::observed_from`] (which
+    // owns the `pool.observed_phase_from(&members)` +
+    // `observed_now(phase, members)` 2-link chain at ONE substrate
+    // site for both status-patch callers). See the peer site's pre-
+    // lift audit note above for the compose+dispatch substrate-lift
+    // story.
     let _ = tatara_process::patch::merge_status(
         &pool_api,
         &name,
-        &PoolStatus::observed_now(phase, members.clone()),
+        &PoolStatus::observed_from(&pool, members.clone()),
     )
     .await;
 
@@ -438,39 +445,6 @@ pub fn error_policy(
 ) -> Action {
     warn!(error = ?err, "pool reconcile failed");
     tatara_process::requeue::after_secs(15)
-}
-
-fn pool_phase_from_members(pool: &EphemeralPool, members: &[PoolMember]) -> PoolPhase {
-    if pool.is_being_deleted() {
-        return PoolPhase::Draining;
-    }
-    // The (free + spawning) supply calc lives at one site: the
-    // `MemberState::counts_toward_supply` closed-set predicate. A
-    // future variant that should also count toward supply (e.g. a
-    // "Warming" state between Spawning and Free) lands at one
-    // predicate arm in `tatara-process::pool::MemberState`; this site
-    // inherits the new bucketing automatically. The
-    // `member_state_failed_implies_no_supply` disjointness contract
-    // in tatara-process pins that a Failed member can never inflate
-    // this count.
-    let supply = members
-        .iter()
-        .filter(|m| m.state.counts_toward_supply())
-        .count() as u32;
-    let want = pool.spec.desired_size;
-    if members.is_empty() {
-        return PoolPhase::Initializing;
-    }
-    if pool.spec.min_size > 0 && supply < pool.spec.min_size {
-        return PoolPhase::Degraded;
-    }
-    if supply < want {
-        return PoolPhase::ScalingUp;
-    }
-    if supply > want {
-        return PoolPhase::ScalingDown;
-    }
-    PoolPhase::Steady
 }
 
 /// **R11 desired-count action applier.** Translates a

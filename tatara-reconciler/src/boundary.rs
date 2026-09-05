@@ -1080,6 +1080,155 @@ pub struct UnmetDependency {
     pub message: String,
 }
 
+impl UnmetDependency {
+    /// The "target Process exists but its observed phase falls short
+    /// of the required gate" arm of [`check_depends_on`]'s per-dep
+    /// dispatch — composes the 5-slot struct literal + the diagnostic
+    /// `<ns>/<name>` prefix at ONE substrate owner.
+    ///
+    /// The `actual` slot preserves the raw `Option<ProcessPhase>` off
+    /// the target's [`Process::observed_phase`] projection (which
+    /// returns `None` for a target whose status has never been
+    /// observed), while the message body substitutes the
+    /// [`ProcessPhase::Pending`] fallback consumers use for the
+    /// "no observation yet" corner. The pre-lift hand-authored shape
+    /// carried this asymmetry inline; post-lift it lives at ONE
+    /// substrate site so a future normalization (a distinct
+    /// `NotObserved` variant that dropped the fallback, a per-corner
+    /// stale-observation gate) lands at this composer's body rather
+    /// than at every downstream `UnmetDependency` reader.
+    ///
+    /// The diagnostic `<ns>/<name>` prefix rides through
+    /// [`crate::ssapply::qualified_process_ref`] (a re-export of the
+    /// workspace-wide [`tatara_process::qualified_process_ref`]
+    /// composer) so a future normalization of the `<ns>/<name>` join
+    /// (case-fold, cross-cluster prefix, unicode collation, a
+    /// `<cluster>/<ns>/<name>` triple-form) reaches this composer's
+    /// message body mechanically through the SAME substrate owner
+    /// every other consumer of the join uses (annotation seeds,
+    /// ProcessTable claim keys, ownership-tag composers).
+    ///
+    /// Peer to [`Self::not_found`] and [`Self::fetch_error`] on the
+    /// (probe-result × diagnostic-body) axis pair — the three
+    /// composers partition the arms of [`check_depends_on`]'s
+    /// per-dependency `match` on `api.get_opt(...)` so a future
+    /// failure-mode arm (cluster admission error, permission denied,
+    /// malformed target status) lands as ONE new composer + ONE new
+    /// arm rather than as a hand-authored struct literal at the
+    /// callsite.
+    ///
+    /// Theory grounding: THEORY.md §VI.1 (generation over composition
+    /// — the 5-slot literal + the `<ns>/<name>` diagnostic prefix
+    /// recurred at THREE hand-authored arms past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication trigger, and is lifted to
+    /// ONE typed composer trio here). THEORY.md §II.1 invariant 5
+    /// (composition preserves proofs — a regression that swapped
+    /// `name` and `namespace` at ONE arm would silently persist a
+    /// slot-inverted diagnostic; the pins at
+    /// [`unmet_dependency_composer_tests::*`] surface HERE rather
+    /// than at every downstream forking-gate reader).
+    #[must_use]
+    pub fn phase_short_of(
+        name: impl Into<String>,
+        namespace: impl Into<String>,
+        required: ProcessPhase,
+        actual: Option<ProcessPhase>,
+    ) -> Self {
+        let name = name.into();
+        let namespace = namespace.into();
+        let actual_phase = actual.unwrap_or(ProcessPhase::Pending);
+        let message = format!(
+            "{} is {actual_phase}; need {required}",
+            crate::ssapply::qualified_process_ref(&namespace, &name),
+        );
+        Self {
+            name,
+            namespace,
+            required,
+            actual,
+            message,
+        }
+    }
+
+    /// The "the referenced Process does not exist in the cluster" arm
+    /// of [`check_depends_on`]'s per-dep dispatch — composes the
+    /// 5-slot struct literal + the diagnostic `<ns>/<name>` prefix at
+    /// ONE substrate owner.
+    ///
+    /// [`Self::actual`] is stamped `None` at this corner: the target
+    /// has no observed phase because it has no observed presence.
+    /// Operators reading the row see the `required` gate they set
+    /// alongside the `"not found"` tail, not a misleading synthesized
+    /// phase.
+    ///
+    /// Peer to [`Self::phase_short_of`] and [`Self::fetch_error`] on
+    /// the (probe-result × diagnostic-body) axis pair. See
+    /// [`Self::phase_short_of`] for the full peer-family +
+    /// [`crate::ssapply::qualified_process_ref`] routing note.
+    #[must_use]
+    pub fn not_found(
+        name: impl Into<String>,
+        namespace: impl Into<String>,
+        required: ProcessPhase,
+    ) -> Self {
+        let name = name.into();
+        let namespace = namespace.into();
+        let message = format!(
+            "{} not found",
+            crate::ssapply::qualified_process_ref(&namespace, &name),
+        );
+        Self {
+            name,
+            namespace,
+            required,
+            actual: None,
+            message,
+        }
+    }
+
+    /// The "the API call to fetch the referenced Process errored" arm
+    /// of [`check_depends_on`]'s per-dep dispatch — composes the
+    /// 5-slot struct literal + the diagnostic `error fetching
+    /// <ns>/<name>: <err>` shape at ONE substrate owner.
+    ///
+    /// The `err` argument accepts any [`std::fmt::Display`]-able type
+    /// (kube-rs's `kube::Error` at the current callsite, an
+    /// `anyhow::Error` at a future caller, a wire-error carrier) so
+    /// the composer stays reusable across future callers that surface
+    /// their own error type through the same diagnostic shape without
+    /// pre-stringifying the error at the callsite.
+    ///
+    /// [`Self::actual`] is stamped `None` at this corner — the API
+    /// call did not return a target so no observation exists to
+    /// project.
+    ///
+    /// Peer to [`Self::phase_short_of`] and [`Self::not_found`] on
+    /// the (probe-result × diagnostic-body) axis pair. See
+    /// [`Self::phase_short_of`] for the full peer-family +
+    /// [`crate::ssapply::qualified_process_ref`] routing note.
+    #[must_use]
+    pub fn fetch_error<E: std::fmt::Display>(
+        name: impl Into<String>,
+        namespace: impl Into<String>,
+        required: ProcessPhase,
+        err: E,
+    ) -> Self {
+        let name = name.into();
+        let namespace = namespace.into();
+        let message = format!(
+            "error fetching {}: {err}",
+            crate::ssapply::qualified_process_ref(&namespace, &name),
+        );
+        Self {
+            name,
+            namespace,
+            required,
+            actual: None,
+            message,
+        }
+    }
+}
+
 /// Check every `spec.dependsOn` entry against live cluster state.
 /// Returns the list of unmet dependencies (empty = proceed).
 pub async fn check_depends_on(client: Client, process: &Process) -> Result<Vec<UnmetDependency>> {
@@ -1090,34 +1239,38 @@ pub async fn check_depends_on(client: Client, process: &Process) -> Result<Vec<U
         let ns = ssapply::resolve_target_namespace(dep.namespace.as_deref(), default_ns);
         let required: ProcessPhase = dep.must_reach.into();
         let api = tatara_process::process_api::namespaced(client.clone(), ns);
+        // Three-arm dispatch on the probe result rides through the
+        // typed [`UnmetDependency`] composer trio — pre-lift each
+        // arm hand-authored the SAME 5-slot struct literal with the
+        // SAME `<ns>/<name>` diagnostic prefix (differing only in
+        // the suffix + the `actual` slot). Post-lift the shared
+        // shape lives at ONE substrate owner per corner + the
+        // `<ns>/<name>` prefix rides through `qualified_process_ref`
+        // uniformly.
         match api.get_opt(&dep.name).await {
             Ok(Some(target)) => {
                 let actual = target.observed_phase();
                 let actual_phase = actual.unwrap_or(ProcessPhase::Pending);
                 if !phase_reached(actual_phase, required) {
-                    unmet.push(UnmetDependency {
-                        name: dep.name.clone(),
-                        namespace: ns.to_string(),
+                    unmet.push(UnmetDependency::phase_short_of(
+                        dep.name.clone(),
+                        ns.to_string(),
                         required,
                         actual,
-                        message: format!("{}/{} is {actual_phase}; need {required}", ns, dep.name),
-                    });
+                    ));
                 }
             }
-            Ok(None) => unmet.push(UnmetDependency {
-                name: dep.name.clone(),
-                namespace: ns.to_string(),
+            Ok(None) => unmet.push(UnmetDependency::not_found(
+                dep.name.clone(),
+                ns.to_string(),
                 required,
-                actual: None,
-                message: format!("{}/{} not found", ns, dep.name),
-            }),
-            Err(e) => unmet.push(UnmetDependency {
-                name: dep.name.clone(),
-                namespace: ns.to_string(),
+            )),
+            Err(e) => unmet.push(UnmetDependency::fetch_error(
+                dep.name.clone(),
+                ns.to_string(),
                 required,
-                actual: None,
-                message: format!("error fetching {}/{}: {e}", ns, dep.name),
-            }),
+                e,
+            )),
         }
     }
     Ok(unmet)
@@ -2185,5 +2338,319 @@ mod classify_receipt_verdict_tests {
                  substrate composer <job_name>++RECEIPT_CM_SUFFIX shape",
             );
         }
+    }
+}
+
+/// Substrate-primitive tests for the [`UnmetDependency`] composer
+/// trio ([`UnmetDependency::phase_short_of`], [`UnmetDependency::not_found`],
+/// [`UnmetDependency::fetch_error`]) that owns the pre-lift 5-slot
+/// struct-literal + `format!("{ns}/{name} <suffix>")` shape every arm
+/// of [`check_depends_on`]'s per-dep dispatch restated by hand.
+///
+/// The pins bind:
+/// * Byte-identity parity vs the pre-lift hand-authored shape at each
+///   of the THREE arms (`Ok(Some(target))` phase-short-of,
+///   `Ok(None)` not-found, `Err(e)` fetch-error) so the substrate
+///   trio produces `UnmetDependency` fields identical to what the
+///   pre-lift `unmet.push(UnmetDependency { .. })` block emitted.
+/// * `<ns>/<name>` diagnostic prefix routes through
+///   [`tatara_process::qualified_process_ref`] at every corner — a
+///   regression that swapped the two slots (`format!("{name}/{ns}
+///   …")` — same types, mechanically indistinguishable to a bad
+///   refactor) surfaces HERE rather than as silent operator-visible
+///   prefix skew.
+/// * `actual` slot semantics at each corner:
+///   * `phase_short_of` preserves the raw `Option<ProcessPhase>` off
+///     the target's `observed_phase()` call (a `None` input stays
+///     `None`, a `Some(Running)` input stays `Some(Running)`) while
+///     the message body substitutes the `Pending` fallback for the
+///     `None` corner — matching the pre-lift asymmetry.
+///   * `not_found` + `fetch_error` stamp `actual: None` at ONE
+///     substrate site — an operator reading the row sees no
+///     misleading synthesized phase.
+///
+/// Sibling of the `parse_condition_params_tests` /
+/// `parse_params_or_return_unknown_tests` / `classify_job_status_tests`
+/// / `classify_receipt_verdict_tests` modules on the same
+/// substrate-primitive-per-file convention — kept as its own module
+/// so a regression at the composer trio surfaces distinctly from the
+/// receipt-parser or Job-status axes.
+#[cfg(test)]
+mod unmet_dependency_composer_tests {
+    use super::{phase_reached, UnmetDependency};
+    use tatara_process::phase::ProcessPhase;
+
+    // ── phase_short_of ────────────────────────────────────────────────
+
+    /// The `Ok(Some(target))` arm's byte-identity parity pin — the
+    /// substrate composer's output MUST equal the pre-lift hand-
+    /// authored struct-literal for a sweep of `(ns, name, required,
+    /// actual)` inputs the arm walks in production.
+    #[test]
+    fn phase_short_of_matches_pre_lift_hand_authored_struct_literal_bytewise() {
+        // Slot values are deliberately distinct so a swap between any
+        // two adjacent `String` positions surfaces as a message-body
+        // failure at the diagnostic assertion, and a swap of the two
+        // adjacent `ProcessPhase` positions surfaces at the
+        // `required` / `actual_phase` diagnostic-body binding.
+        let cases: &[(&str, &str, ProcessPhase, Option<ProcessPhase>)] = &[
+            (
+                "prod-app",
+                "api-gateway",
+                ProcessPhase::Attested,
+                Some(ProcessPhase::Running),
+            ),
+            (
+                "flux-system",
+                "obs-stack",
+                ProcessPhase::Running,
+                Some(ProcessPhase::Execing),
+            ),
+            ("infra", "db-migrate", ProcessPhase::Attested, None),
+            (
+                "",
+                "orphan",
+                ProcessPhase::Running,
+                Some(ProcessPhase::Pending),
+            ),
+        ];
+        for &(ns, name, required, actual) in cases {
+            let composed = UnmetDependency::phase_short_of(name, ns, required, actual);
+            let actual_phase = actual.unwrap_or(ProcessPhase::Pending);
+            let pre_lift_message = format!("{}/{} is {actual_phase}; need {required}", ns, name);
+            assert_eq!(composed.name, name, "name slot at (ns={ns}, name={name})");
+            assert_eq!(
+                composed.namespace, ns,
+                "namespace slot at (ns={ns}, name={name})"
+            );
+            assert_eq!(composed.required, required, "required slot");
+            assert_eq!(composed.actual, actual, "actual slot preserved raw");
+            assert_eq!(
+                composed.message, pre_lift_message,
+                "message body must equal pre-lift `format!(\"{{ns}}/{{name}} is {{actual_phase}}; \
+                 need {{required}}\")` at every callsite shape",
+            );
+        }
+    }
+
+    /// The `<ns>/<name>` diagnostic prefix at `phase_short_of` MUST
+    /// route through `qualified_process_ref` — a regression that
+    /// swapped the two slots at the composer's `format!` body would
+    /// fail HERE rather than as silent operator-visible prefix skew.
+    #[test]
+    fn phase_short_of_diagnostic_prefix_rides_qualified_process_ref() {
+        let u = UnmetDependency::phase_short_of(
+            "api-gateway",
+            "prod-app",
+            ProcessPhase::Attested,
+            Some(ProcessPhase::Running),
+        );
+        // The `qualified_process_ref` join is `<ns>/<name>`, so a
+        // swap at the composer would produce `api-gateway/prod-app`
+        // — reject that shape verbatim.
+        assert!(
+            u.message.starts_with("prod-app/api-gateway "),
+            "diagnostic prefix must be `<ns>/<name>` (via qualified_process_ref); got {:?}",
+            u.message,
+        );
+        assert!(
+            !u.message.starts_with("api-gateway/prod-app "),
+            "prefix must not be `<name>/<ns>` (slot-swap regression); got {:?}",
+            u.message,
+        );
+    }
+
+    /// The `actual` slot at `phase_short_of` MUST preserve the raw
+    /// `Option<ProcessPhase>` from `observed_phase()` — the `None`
+    /// input does NOT collapse to `Some(Pending)` at the struct
+    /// literal even though the message body substitutes the fallback
+    /// for wording.
+    #[test]
+    fn phase_short_of_actual_slot_preserves_none_while_message_substitutes_fallback() {
+        let u = UnmetDependency::phase_short_of("api", "prod", ProcessPhase::Running, None);
+        assert_eq!(
+            u.actual, None,
+            "actual: None must NOT collapse to Some(Pending)"
+        );
+        assert!(
+            u.message.contains(" is Pending; "),
+            "message body must substitute Pending fallback for None input; got {:?}",
+            u.message,
+        );
+    }
+
+    // ── not_found ────────────────────────────────────────────────────
+
+    /// The `Ok(None)` arm's byte-identity parity pin.
+    #[test]
+    fn not_found_matches_pre_lift_hand_authored_struct_literal_bytewise() {
+        let cases: &[(&str, &str, ProcessPhase)] = &[
+            ("prod-app", "api-gateway", ProcessPhase::Attested),
+            ("flux-system", "obs-stack", ProcessPhase::Running),
+            ("infra", "db-migrate", ProcessPhase::Running),
+        ];
+        for &(ns, name, required) in cases {
+            let composed = UnmetDependency::not_found(name, ns, required);
+            let pre_lift_message = format!("{}/{} not found", ns, name);
+            assert_eq!(composed.name, name, "name slot at (ns={ns}, name={name})");
+            assert_eq!(
+                composed.namespace, ns,
+                "namespace slot at (ns={ns}, name={name})"
+            );
+            assert_eq!(composed.required, required, "required slot");
+            assert_eq!(composed.actual, None, "actual slot at not_found stays None");
+            assert_eq!(
+                composed.message, pre_lift_message,
+                "message body must equal pre-lift `format!(\"{{ns}}/{{name}} not found\")`",
+            );
+        }
+    }
+
+    // ── fetch_error ──────────────────────────────────────────────────
+
+    /// The `Err(e)` arm's byte-identity parity pin — the `err`
+    /// argument is projected through `Display` at the composer's
+    /// body so an `anyhow::Error` / `kube::Error` / `String` /
+    /// `&str` all reach the same message shape without pre-
+    /// stringifying at the callsite.
+    #[test]
+    fn fetch_error_matches_pre_lift_hand_authored_struct_literal_bytewise() {
+        let cases: &[(&str, &str, ProcessPhase, &str)] = &[
+            (
+                "prod-app",
+                "api-gateway",
+                ProcessPhase::Attested,
+                "404 not found",
+            ),
+            (
+                "flux-system",
+                "obs-stack",
+                ProcessPhase::Running,
+                "timeout after 30s",
+            ),
+        ];
+        for &(ns, name, required, err) in cases {
+            let composed = UnmetDependency::fetch_error(name, ns, required, err);
+            let pre_lift_message = format!("error fetching {}/{}: {err}", ns, name);
+            assert_eq!(composed.name, name);
+            assert_eq!(composed.namespace, ns);
+            assert_eq!(composed.required, required);
+            assert_eq!(
+                composed.actual, None,
+                "actual slot at fetch_error stays None"
+            );
+            assert_eq!(
+                composed.message, pre_lift_message,
+                "message body must equal pre-lift `format!(\"error fetching {{ns}}/{{name}}: \
+                 {{e}}\")`",
+            );
+        }
+    }
+
+    /// The `err` argument accepts any `Display`-able type — pin the
+    /// `Display` bound holds for the trio's shipped callsites
+    /// (`kube::Error` via `anyhow::Error` promotion in production;
+    /// `&str` / `String` / owned `anyhow::Error` at future callers).
+    #[test]
+    fn fetch_error_accepts_borrowed_owned_and_anyhow_display_shapes() {
+        // &str
+        let u1 = UnmetDependency::fetch_error("n", "ns", ProcessPhase::Running, "boom");
+        assert!(u1.message.ends_with(": boom"));
+        // String
+        let u2 =
+            UnmetDependency::fetch_error("n", "ns", ProcessPhase::Running, String::from("boom"));
+        assert_eq!(u2.message, u1.message);
+        // anyhow::Error (Display forwards to root cause)
+        let e: anyhow::Error = anyhow::anyhow!("boom");
+        let u3 = UnmetDependency::fetch_error("n", "ns", ProcessPhase::Running, e);
+        assert_eq!(u3.message, u1.message);
+    }
+
+    // ── cross-composer coherence ─────────────────────────────────────
+
+    /// The THREE composers MUST agree on the `<ns>/<name>` prefix at
+    /// the same `(ns, name)` input — a regression that drifted ONE
+    /// composer's prefix (a rename, a normalization, a cross-cluster
+    /// extension) without landing at the other two would silently
+    /// bifurcate the diagnostic prefix operators grep for across
+    /// probe-result axes. Pin the cross-composer coherence at ONE
+    /// substrate site.
+    #[test]
+    fn composer_trio_agrees_on_qualified_process_ref_prefix_at_shared_ns_name() {
+        let (ns, name, required) = ("prod-app", "api-gateway", ProcessPhase::Running);
+        let prefix = tatara_process::qualified_process_ref(ns, name);
+        let u_short =
+            UnmetDependency::phase_short_of(name, ns, required, Some(ProcessPhase::Execing));
+        let u_missing = UnmetDependency::not_found(name, ns, required);
+        let u_err = UnmetDependency::fetch_error(name, ns, required, "boom");
+        assert!(u_short.message.starts_with(&format!("{prefix} ")));
+        assert!(u_missing.message.starts_with(&format!("{prefix} ")));
+        assert!(
+            u_err
+                .message
+                .starts_with(&format!("error fetching {prefix}:")),
+            "fetch_error prefix must be `error fetching <ref>:`; got {:?}",
+            u_err.message,
+        );
+    }
+
+    /// The composer trio's coordinate slots MUST match `check_depends_on`'s
+    /// callsite argument order (`name`, `namespace`, `required`, ...)
+    /// exactly — a regression that reshuffled the composer's
+    /// positional arguments would silently persist swapped slots at
+    /// every callsite without the pre-lift struct-literal's named-
+    /// slot safety net. Pin the positional binding contract by
+    /// deliberately choosing distinct `ns` / `name` values so the
+    /// two slots cannot masquerade as identity by accident.
+    #[test]
+    fn composer_positional_arg_order_binds_name_namespace_required_slots() {
+        let u = UnmetDependency::phase_short_of(
+            "some-name",      // name
+            "some-namespace", // namespace
+            ProcessPhase::Attested,
+            Some(ProcessPhase::Pending),
+        );
+        assert_eq!(u.name, "some-name");
+        assert_eq!(u.namespace, "some-namespace");
+        assert_eq!(u.required, ProcessPhase::Attested);
+        assert_eq!(u.actual, Some(ProcessPhase::Pending));
+
+        let u2 = UnmetDependency::not_found("some-name", "some-namespace", ProcessPhase::Running);
+        assert_eq!(u2.name, "some-name");
+        assert_eq!(u2.namespace, "some-namespace");
+        assert_eq!(u2.required, ProcessPhase::Running);
+
+        let u3 =
+            UnmetDependency::fetch_error("some-name", "some-namespace", ProcessPhase::Running, "e");
+        assert_eq!(u3.name, "some-name");
+        assert_eq!(u3.namespace, "some-namespace");
+        assert_eq!(u3.required, ProcessPhase::Running);
+    }
+
+    /// Silence-of-composers pin — `phase_reached` remains the sole
+    /// gate on whether `phase_short_of` is composed at all. The
+    /// composer itself is unconditional (a caller who computed the
+    /// gate independently and decided to push the row gets the
+    /// pre-lift shape regardless of whether the actual-vs-required
+    /// comparison holds), so `check_depends_on`'s dispatch retains
+    /// its `if !phase_reached { push }` short-circuit at the caller.
+    #[test]
+    fn phase_reached_gate_stays_load_bearing_at_caller_not_composer() {
+        // A satisfied phase (Attested >= Running) still constructs a
+        // legal UnmetDependency if the caller pushes it — the
+        // composer does NOT reject at construction. The caller's
+        // gate is what keeps satisfied rows out of the returned Vec.
+        assert!(phase_reached(ProcessPhase::Attested, ProcessPhase::Running));
+        let u = UnmetDependency::phase_short_of(
+            "n",
+            "ns",
+            ProcessPhase::Running,
+            Some(ProcessPhase::Attested),
+        );
+        // The composer produced a well-formed row even though the
+        // gate would have short-circuited the caller — the shape
+        // is byte-identical to what the caller would have pushed
+        // if the gate were disabled.
+        assert_eq!(u.message, "ns/n is Attested; need Running");
     }
 }

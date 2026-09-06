@@ -60,6 +60,48 @@ pub struct EdgeContext<'a> {
     pub is_stable: bool,
 }
 
+impl<'a> EdgeContext<'a> {
+    /// The typed [`RoutingForm`] this edge is rendering for —
+    /// factors the pre-lift `RoutingForm::from_is_stable
+    /// (ctx.is_stable)` bool→enum conversion that hand-authored at
+    /// TWO adjacent production sites in this module past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication threshold, both walking the
+    /// same `is_stable → RoutingForm` step:
+    ///
+    /// * [`routing_edge_labels`] — the `ROUTING_FORM` labels-axis
+    ///   seed (chased with `.as_str().to_string()` for the
+    ///   `Value::String` wrap).
+    /// * [`IngressEdge::render`] — the `ROUTING_FORM` annotations-
+    ///   axis seed (chased with `.as_str()` for the
+    ///   `JsonMapStrExt::insert_str` value slot).
+    ///
+    /// Post-lift both callsites read `ctx.routing_form()` and the
+    /// bool→enum step lives at ONE substrate owner here. A future
+    /// refactor that derives the form from more than a single
+    /// `bool` slot (a compound signal — a `RoutingSpec::priority`
+    /// tie-break, an `EphemeralSpec::sticky_form` slot, a
+    /// hostname-carried override) lands at this ONE method and both
+    /// routing-form consumers inherit the upgrade mechanically —
+    /// neither knows about `RoutingForm::from_is_stable` any more.
+    ///
+    /// Returns the enum, NOT the [`RoutingForm::as_str`] wire form
+    /// — that keeps callers who want the byte-shape at one call
+    /// (`.routing_form().as_str()`) and any future consumer that
+    /// needs the enum for closed-set matching at zero.
+    ///
+    /// Theory anchor: THEORY.md §II.1 invariant 1 (typed entry —
+    /// the raw `bool` slot on this context is projected through the
+    /// typed [`RoutingForm`] closed set at ONE owner). THEORY.md
+    /// §VI.1 (generation over composition — the two-line
+    /// `RoutingForm::from_is_stable(ctx.is_stable)` chain recurred
+    /// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, and is
+    /// lifted to ONE substrate owner here).
+    #[inline]
+    pub(crate) fn routing_form(&self) -> RoutingForm {
+        RoutingForm::from_is_stable(self.is_stable)
+    }
+}
+
 /// One typed edge renderer. Pure function of `EdgeContext`.
 ///
 /// Implementations return `Ok(Some(value))` to emit a single K8s
@@ -92,8 +134,10 @@ pub trait Edge {
 /// Pre-lift the 5-line label-map composition was hand-authored at
 /// TWO sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold,
 /// each restating the same seed + APP-insert + ROUTING_FORM-insert
-/// (with the `RoutingForm::from_is_stable(ctx.is_stable).as_str()`
-/// call composed inline three levels deep):
+/// (with the [`EdgeContext::routing_form`] bool→enum step — pre-
+/// its-own-lift a hand-authored `RoutingForm::from_is_stable(
+/// ctx.is_stable)` chain — chased with `.as_str()` for the wire
+/// form):
 /// * [`IngressEdge::render`] — the Ingress `metadata.labels` seed
 ///   before the `json!({...})` metadata composition.
 /// * [`DnsEndpointEdge::render`] — the DNSEndpoint `metadata.labels`
@@ -135,11 +179,7 @@ pub(crate) fn routing_edge_labels(ctx: &EdgeContext<'_>) -> serde_json::Map<Stri
     );
     labels.insert(
         annotations::ROUTING_FORM.to_string(),
-        Value::String(
-            RoutingForm::from_is_stable(ctx.is_stable)
-                .as_str()
-                .to_string(),
-        ),
+        Value::String(ctx.routing_form().as_str().to_string()),
     );
     labels
 }
@@ -304,15 +344,13 @@ impl Edge for IngressEdge {
         // Seed the annotations map through the shared substrate primitive
         // owning the 2-slot `{MANAGED_BY, PROCESS}` ownership tag; then
         // extend with routing-form + backend + cert-manager annotations.
-        // The routing-form axis rides through ONE typed composer
-        // (`RoutingForm::from_is_stable` + `as_str`) so the two pre-lift
-        // branches collapse to a single insert whose value is decided by
-        // the enum, not by an inline ternary restated per site.
+        // The routing-form axis rides through the [`EdgeContext::
+        // routing_form`] method — sibling on the routing-form axis to
+        // the labels-axis site in `routing_edge_labels`; both callsites
+        // read `ctx.routing_form().as_str()` post-lift and the bool→
+        // enum step lives at ONE substrate owner on the context type.
         let mut annotations_map = crate::ssapply::ownership_annotations(ctx.process_ref);
-        annotations_map.insert_str(
-            annotations::ROUTING_FORM,
-            RoutingForm::from_is_stable(ctx.is_stable).as_str(),
-        );
+        annotations_map.insert_str(annotations::ROUTING_FORM, ctx.routing_form().as_str());
         for (k, v) in &ctx.backend.ingress_annotations {
             annotations_map.insert_str(k.clone(), v.clone());
         }
@@ -516,6 +554,125 @@ mod tests {
 
     fn api_backend() -> RoutingBackend {
         RoutingBackend::plain("demo-app-gateway", 8000)
+    }
+
+    // ─── EdgeContext::routing_form substrate pins ────────────────
+    //
+    // Fail-before-pass-after granularity: the `EdgeContext::
+    // routing_form` method did not exist before this commit, so each
+    // test below fails to compile pre-lift. Post-lift they
+    // collectively pin the bool→enum projection at ONE substrate
+    // owner — a regression that swapped the two arms (a copy-paste
+    // that stamped `RoutingForm::Instance` at the `is_stable = true`
+    // slot), promoted the return to a synthesis (a fallthrough
+    // stamping a fresh `RoutingForm::Instance` regardless of the
+    // input), or drifted the return type away from the typed
+    // [`RoutingForm`] closed set (a stringly `&str` return that
+    // hid the enum's exhaustive match at every downstream consumer)
+    // surfaces HERE rather than as silent per-emit skew across the
+    // two `edges.rs` pre-lift consumers (labels axis +
+    // annotations axis) whose wire output already encoded the
+    // `"stable"` / `"instance"` byte-shape.
+
+    #[test]
+    fn routing_form_projects_true_to_stable_variant() {
+        // The `is_stable = true` arm MUST project through the
+        // substrate primitive to the [`RoutingForm::Stable`]
+        // enum variant — not to a synonym, not to a fallthrough,
+        // not to the `Instance` sibling. A regression that swapped
+        // the two arms would silently drift both the labels axis
+        // AND the annotations axis to the wrong wire form, and
+        // every operator selector `kubectl get -l
+        // tatara.pleme.io/routing-form=stable` would collapse to
+        // the empty set.
+        let h = api_hostname();
+        let b = api_backend();
+        let c = ctx(&h, &b, "host", "demo-prod", true);
+        assert_eq!(c.routing_form(), RoutingForm::Stable);
+    }
+
+    #[test]
+    fn routing_form_projects_false_to_instance_variant() {
+        // Sibling to the true arm above — pins the `is_stable =
+        // false` arm to the [`RoutingForm::Instance`] enum variant.
+        // Together the two pins bind the full 2-corner input space
+        // of the `bool` slot to the 2-variant closed set of the
+        // typed [`RoutingForm`], so no future `is_stable` bool
+        // value can reach an unknown wire form.
+        let h = api_hostname();
+        let b = api_backend();
+        let c = ctx(&h, &b, "host", "demo-prod", false);
+        assert_eq!(c.routing_form(), RoutingForm::Instance);
+    }
+
+    #[test]
+    fn routing_form_agrees_with_direct_from_is_stable_call() {
+        // Byte-shape parity pin: `ctx.routing_form()` MUST return
+        // exactly what the pre-lift hand-authored
+        // `RoutingForm::from_is_stable(ctx.is_stable)` call chained
+        // to at each of the two production sites. A regression at
+        // the primitive that drifted the projection at ONE arm
+        // (say, added a `Debug`-only enum variant the substrate
+        // owner started emitting from the `true` arm for testing)
+        // surfaces here rather than as a subtle apply-time selector
+        // drift after the drift landed at both edges'
+        // `ROUTING_FORM` slot.
+        let h = api_hostname();
+        let b = api_backend();
+        for is_stable in [true, false] {
+            let c = ctx(&h, &b, "host", "demo-prod", is_stable);
+            assert_eq!(c.routing_form(), RoutingForm::from_is_stable(is_stable));
+        }
+    }
+
+    #[test]
+    fn routing_form_flows_into_ingress_annotation_via_as_str() {
+        // Cross-substrate coherence pin: the `IngressEdge::render`
+        // annotations seed MUST reach the wire form via
+        // `ctx.routing_form().as_str()` — a regression that
+        // routed the annotations axis through a different chain
+        // (a hard-coded `if ctx.is_stable { "stable" } else {
+        // "instance" }`, a stringly const table) would pass every
+        // parity pin above (which check the enum only) and fail
+        // HERE at the emitted annotations slot. Pins both boolean
+        // arms so the two-corner input space of the `is_stable`
+        // slot is bound end-to-end from the raw bool through the
+        // typed enum to the emitted wire form.
+        let h = api_hostname();
+        let b = api_backend();
+        for (is_stable, expected) in [(true, RoutingForm::Stable), (false, RoutingForm::Instance)] {
+            let c = ctx(&h, &b, "host", "demo-prod", is_stable);
+            let r = IngressEdge.render(&c).unwrap().unwrap();
+            assert_eq!(
+                r["metadata"]["annotations"][annotations::ROUTING_FORM],
+                expected.as_str(),
+                "IngressEdge annotations must route through ctx.routing_form().as_str() (is_stable={is_stable})",
+            );
+        }
+    }
+
+    #[test]
+    fn routing_form_flows_into_edge_labels_via_as_str() {
+        // Sibling to the annotations-flow pin above — the labels
+        // axis MUST reach the wire form via `ctx.routing_form().
+        // as_str()` too. Any regression that decoupled the two
+        // routing-edge axes from the substrate primitive at ONE
+        // site (routing the labels axis via `RoutingForm::from_is_stable
+        // (ctx.is_stable)` inline, say) would pass the annotations
+        // pin above and fail HERE — the label + annotation slots
+        // on the emitted resource would silently divide the world
+        // into different `stable` / `instance` bisections.
+        let h = api_hostname();
+        let b = api_backend();
+        for (is_stable, expected) in [(true, RoutingForm::Stable), (false, RoutingForm::Instance)] {
+            let c = ctx(&h, &b, "host", "demo-prod", is_stable);
+            let labels = routing_edge_labels(&c);
+            assert_eq!(
+                labels.get(annotations::ROUTING_FORM),
+                Some(&Value::String(expected.as_str().to_string())),
+                "routing_edge_labels must route through ctx.routing_form().as_str() (is_stable={is_stable})",
+            );
+        }
     }
 
     #[test]

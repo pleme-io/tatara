@@ -14,7 +14,9 @@ use serde_json::{json, Value};
 
 use tatara_process::phase::ProcessPhase;
 use tatara_process::prelude::{Identity, Process, ProcessTable};
-use tatara_process::serde_defaults::default_zombie_timeout_seconds;
+use tatara_process::serde_defaults::{
+    default_sigterm_grace_seconds, default_zombie_timeout_seconds,
+};
 use tatara_process::table::ProcessTableSpec;
 
 /// Merge-patch the status subresource of a Process.
@@ -60,6 +62,75 @@ pub async fn patch_process_table_spec(
     tatara_process::patch::merge(api, name, &body).await
 }
 
+/// Bootstrap [`ProcessTableSpec`] the cluster-scoped ProcessTable
+/// singleton is materialized with on first observation.
+///
+/// Extracted out of [`ensure_process_table`] into a pure, kube-free
+/// factory so the composer's spec-slot shape can be pinned at
+/// fail-before-pass-after granularity without a live kube client or
+/// tokio reactor. Every consumer of `ensure_process_table` reaches the
+/// SAME spec through this ONE composer; a regression that drifted a
+/// slot's substrate-routing (a re-introduced bare literal at the
+/// sigterm slot, a decoupling of the zombie slot from the substrate
+/// owner) surfaces at
+/// [`tests::bootstrap_process_table_spec_*`] rather than as silent
+/// operator-facing skew between the reconciler-emitted bootstrap
+/// singleton and the wire-parser fallback layer.
+///
+/// ### Termination-phase timing axis — both slots route through the substrate
+///
+/// The `sigterm_timeout_seconds:` slot binds the SIGTERM→SIGKILL
+/// escalation grace at the workspace-canonical `480u32` owner
+/// [`tatara_process::serde_defaults::default_sigterm_grace_seconds`].
+/// Pre-lift the bare `480u32` literal at this composer's slot recurred
+/// alongside two peer restatements past the ★★ PRIME-DIRECTIVE ≥ 2
+/// duplication threshold: the `#[serde(default = "…")]` slot on
+/// [`tatara_process::table::ProcessTableSpec::sigterm_timeout_seconds`]
+/// and the sibling slot on
+/// [`tatara_process::spec::SignalPolicy::sigterm_grace_seconds`]. The
+/// two serde-default paths were already routed through the substrate
+/// at commit `8681ff4`; this factory closes the last hand-authored
+/// `480u32` restatement in production code.
+///
+/// The `zombie_timeout_seconds:` slot binds the Zombie→Reaped
+/// force-reap window at the workspace-canonical `600u32` owner
+/// [`tatara_process::serde_defaults::default_zombie_timeout_seconds`],
+/// routed through the substrate at commit `5cd1d86`.
+///
+/// A future normalization (a shift to the k8s pod-eviction 30s default
+/// on the SIGTERM axis, a per-fleet env override, a typed
+/// `TerminationGrace` newtype) lands at THIS ONE substrate primitive
+/// per axis and every downstream consumer (this bootstrap composer PLUS
+/// the two serde-default paths PLUS every future termination-window
+/// slot — a per-Process override, a debug-build sub-10s override for
+/// local development) inherits the upgrade mechanically.
+///
+/// Theory anchor: THEORY.md §VI.1 — generation over composition; every
+/// termination-window slot in production code routes through ONE
+/// workspace-canonical substrate owner per axis rather than through a
+/// bare-literal restatement at each consumer. THEORY.md §II.1 invariant
+/// 5 — composition preserves proofs; the factory's byte-shape is pinned
+/// at fail-before-pass-after granularity at
+/// [`tests::bootstrap_process_table_spec_*`], so a regression that
+/// re-introduced a bare-literal restatement of either termination-
+/// window default at either composer slot surfaces at the pin rather
+/// than as silent operator-facing skew between the reconciler-emitted
+/// bootstrap singleton and the wire-parser fallback layer.
+#[must_use]
+pub(crate) fn bootstrap_process_table_spec() -> ProcessTableSpec {
+    ProcessTableSpec {
+        next_sequence: 1,
+        parent_pid: None,
+        dns_domain: None,
+        dns_zone_id: None,
+        max_depth: 0,
+        max_children: 0,
+        sigterm_timeout_seconds: default_sigterm_grace_seconds(),
+        zombie_timeout_seconds: default_zombie_timeout_seconds(),
+        orphan_reaping_enabled: true,
+    }
+}
+
 /// Ensure the cluster-scoped ProcessTable singleton exists, creating it
 /// with defaults if absent.
 pub async fn ensure_process_table(
@@ -74,30 +145,7 @@ pub async fn ensure_process_table(
             name: Some(name.to_string()),
             ..Default::default()
         },
-        spec: ProcessTableSpec {
-            next_sequence: 1,
-            parent_pid: None,
-            dns_domain: None,
-            dns_zone_id: None,
-            max_depth: 0,
-            max_children: 0,
-            sigterm_timeout_seconds: 480,
-            // Zombie-force-reap window rides the substrate owner
-            // `tatara_process::serde_defaults::default_zombie_timeout_seconds`
-            // — pre-lift the bare `600` u32 literal at this composer's
-            // `zombie_timeout_seconds:` slot recurred alongside the
-            // `#[serde(default = "…")]` slot on
-            // `tatara_process::table::ProcessTableSpec::zombie_timeout_seconds`
-            // past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold;
-            // post-lift the composer path and the serde path both
-            // resolve to the SAME workspace-canonical wire-form through
-            // ONE substrate owner. A future normalization (a shift to
-            // 300s, a per-fleet env override, a typed `ReapDeadline`
-            // newtype) lands at the substrate and this bootstrap
-            // composer inherits the upgrade mechanically.
-            zombie_timeout_seconds: default_zombie_timeout_seconds(),
-            orphan_reaping_enabled: true,
-        },
+        spec: bootstrap_process_table_spec(),
         status: None,
     };
     // Create-verb dispatch rides the substrate primitive
@@ -601,6 +649,141 @@ mod tests {
     fn remove_finalizer_idempotent_when_absent() {
         let existing = vec!["other.io/x".to_string()];
         assert!(remove_finalizer_from(&existing, "tatara.pleme.io/process-finalizer").is_none());
+    }
+
+    // ─── bootstrap_process_table_spec substrate pins ─────────────────
+    //
+    // The composer [`bootstrap_process_table_spec`] owns the
+    // ProcessTableSpec struct-literal `ensure_process_table` materializes
+    // for the cluster-scoped singleton on first observation. Both
+    // termination-phase timing slots (`sigterm_timeout_seconds:` +
+    // `zombie_timeout_seconds:`) route through the workspace-canonical
+    // substrate owners
+    // [`tatara_process::serde_defaults::default_sigterm_grace_seconds`]
+    // + [`tatara_process::serde_defaults::default_zombie_timeout_seconds`].
+    // These pins bind the composer's byte-shape at fail-before-pass-
+    // after granularity so a regression that re-introduced a bare
+    // literal restatement of either termination-window default (a
+    // 480/600 typo, a shift to millis without a unit rename, a
+    // decoupling from the substrate owner) surfaces HERE rather than
+    // as silent operator-facing skew between the reconciler-emitted
+    // bootstrap singleton (this composer) and the wire-parser fallback
+    // layer (the serde-default paths on
+    // `ProcessTableSpec::sigterm_timeout_seconds` +
+    // `ProcessTableSpec::zombie_timeout_seconds`, already pinned at
+    // `tatara_process::serde_defaults::tests::*_composes_at_process_table_spec_serde_default`).
+
+    #[test]
+    fn bootstrap_process_table_spec_sigterm_timeout_seconds_routes_through_substrate_owner() {
+        // Byte-shape parity witness against the substrate owner
+        // [`default_sigterm_grace_seconds`]. Pre-lift the composer's
+        // `sigterm_timeout_seconds:` slot carried a bare `480u32`
+        // literal — the ONE remaining hand-authored `480u32`
+        // restatement in production code after commit `8681ff4`
+        // (`default_sigterm_grace_seconds` shim collapse across
+        // SignalPolicy + ProcessTableSpec serde-default paths) landed.
+        // Post-lift the composer routes through the substrate owner AND
+        // the serde paths route through it, so a future normalization
+        // (a shift to the k8s pod-eviction 30s default, a per-fleet env
+        // override, a typed `TerminationGrace` newtype) reaches BOTH
+        // ends of the axis via ONE substrate primitive. Fail-before-
+        // pass-after: this assert fires on the pre-lift factory (which
+        // returned a bare `480`) if the substrate owner ever drifts
+        // from `480`, and on the post-lift factory if the composer
+        // decouples from the substrate — the pin catches decoupling in
+        // both directions.
+        let spec = bootstrap_process_table_spec();
+        assert_eq!(
+            spec.sigterm_timeout_seconds,
+            default_sigterm_grace_seconds(),
+            "bootstrap ProcessTableSpec's sigterm_timeout_seconds slot \
+             must route through default_sigterm_grace_seconds — a bare \
+             literal reintroduction would decouple the composer path \
+             from the SignalPolicy + ProcessTableSpec serde-default \
+             paths that already ride through the substrate",
+        );
+        assert_eq!(
+            spec.sigterm_timeout_seconds, 480,
+            "wire-form witness: the substrate owner returns `480` \
+             bytewise at the composer, matching the pre-lift bare \
+             literal at fail-before-pass-after granularity",
+        );
+    }
+
+    #[test]
+    fn bootstrap_process_table_spec_zombie_timeout_seconds_routes_through_substrate_owner() {
+        // Coherence peer to the sigterm pin above on the workspace-
+        // canonical termination-phase timing axis. Prior commit
+        // `5cd1d86` routed the composer's `zombie_timeout_seconds:`
+        // slot through `default_zombie_timeout_seconds()` but added no
+        // direct pin binding the composer's byte-shape to the substrate
+        // owner — the pins added there live at
+        // `serde_defaults::tests::default_zombie_timeout_seconds_composes_at_process_table_spec_serde_default`
+        // on the SERDE-default axis, not on the composer axis. This
+        // pin closes the composer-side gap so the two-slot
+        // (sigterm, zombie) invariant is symmetric across BOTH ends of
+        // the termination axis at fail-before-pass-after granularity.
+        let spec = bootstrap_process_table_spec();
+        assert_eq!(
+            spec.zombie_timeout_seconds,
+            default_zombie_timeout_seconds(),
+            "bootstrap ProcessTableSpec's zombie_timeout_seconds slot \
+             must route through default_zombie_timeout_seconds — a \
+             bare literal reintroduction would decouple the composer \
+             path from the ProcessTableSpec serde-default path that \
+             already rides through the substrate",
+        );
+        assert_eq!(spec.zombie_timeout_seconds, 600);
+    }
+
+    #[test]
+    fn bootstrap_process_table_spec_pairs_termination_slots_on_zombie_strictly_greater_axis() {
+        // Composition pin: the two termination-phase timing slots fire
+        // sequentially at the reconciler — Exiting-phase grace first
+        // (`sigterm_timeout_seconds`), then Zombie-phase force-reap
+        // (`zombie_timeout_seconds`). The strict inequality
+        // `zombie > sigterm` is the same invariant the substrate-side
+        // pin `default_zombie_timeout_seconds_pairs_with_sigterm_grace_on_termination_axis`
+        // at `serde_defaults::tests` binds — this composer-side peer
+        // pins it AT THE COMPOSER SITE so a regression that flipped
+        // ONE slot's substrate routing (e.g. re-introduced a bare
+        // `10u32` at the sigterm slot only) can't produce a bootstrap
+        // singleton where Zombie fires before SIGTERM has escalated.
+        // Together with the two per-slot pins above, this closes the
+        // (per-slot substrate routing × cross-slot inequality)
+        // termination-axis matrix at the composer.
+        let spec = bootstrap_process_table_spec();
+        assert!(
+            spec.zombie_timeout_seconds > spec.sigterm_timeout_seconds,
+            "Zombie force-reap window ({}) must exceed the SIGTERM \
+             grace window ({}) at the bootstrap composer — a process \
+             only enters Zombie once its SIGTERM grace has already \
+             elapsed, so the reap deadline must be at least the \
+             escalation deadline",
+            spec.zombie_timeout_seconds,
+            spec.sigterm_timeout_seconds,
+        );
+    }
+
+    #[test]
+    fn bootstrap_process_table_spec_seeds_next_sequence_orphan_reaping_and_none_slots() {
+        // Non-termination-axis witness: the composer's remaining slots
+        // (`next_sequence`, `parent_pid`, `dns_domain`, `dns_zone_id`,
+        // `max_depth`, `max_children`, `orphan_reaping_enabled`) all
+        // ride through the factory unchanged from the pre-extraction
+        // struct-literal shape. Pins them here so a future
+        // normalization of a non-termination slot (a rename, a shift
+        // to a typed newtype, a change of default) surfaces at the
+        // composer's byte-shape rather than as silent operator-facing
+        // drift at the bootstrap singleton.
+        let spec = bootstrap_process_table_spec();
+        assert_eq!(spec.next_sequence, 1);
+        assert!(spec.parent_pid.is_none());
+        assert!(spec.dns_domain.is_none());
+        assert!(spec.dns_zone_id.is_none());
+        assert_eq!(spec.max_depth, 0);
+        assert_eq!(spec.max_children, 0);
+        assert!(spec.orphan_reaping_enabled);
     }
 
     // ─── phase_status_base substrate pins ─────────────────────────────────

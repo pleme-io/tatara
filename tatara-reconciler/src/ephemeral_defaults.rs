@@ -32,8 +32,16 @@ use serde::{Deserialize, Serialize};
 pub struct EphemeralDefaults {
     /// Default TTL when a Process's `lifetime.ephemeral.ttl` field is
     /// empty. Parsed by humantime (`"1h"`, `"30m"`, `"2h30m"`).
-    /// Default: `"1h"`.
-    #[serde(default = "default_ttl")]
+    /// Default: `"1h"` — routed through the ONE substrate owner
+    /// [`tatara_process::lifetime::default_ephemeral_ttl`] so this
+    /// operator-facing default stays byte-identical to the typed-side
+    /// [`tatara_process::lifetime::EphemeralLifetime::ttl`] serde
+    /// default (and the `(defephemeral …)` `EphemeralSpec::ttl`
+    /// serde default) by construction, not by three coordinated
+    /// hand-edits. See the substrate owner's doc-comment for the
+    /// full migration rationale (THREE pre-lift sites past the ★★
+    /// PRIME-DIRECTIVE ≥ 2 duplication threshold).
+    #[serde(default = "tatara_process::lifetime::default_ephemeral_ttl")]
     pub default_ttl: String,
 
     /// Maximum concurrent ephemeral Processes cluster-wide. `0` = no cap.
@@ -71,9 +79,12 @@ pub struct EphemeralDefaults {
     pub emit_oci_repository: bool,
 }
 
-fn default_ttl() -> String {
-    "1h".to_string()
-}
+// `default_ttl` for the `default_ttl:` serde slot above routes through
+// the ONE substrate owner [`tatara_process::lifetime::default_ephemeral_ttl`]
+// — see the field's doc-comment and the substrate primitive's own
+// doc-comment for the full migration rationale (THREE pre-lift sites
+// past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold across two
+// workspace crates).
 fn default_registry() -> String {
     "ghcr.io/pleme-io/charts".to_string()
 }
@@ -87,7 +98,7 @@ fn default_true() -> bool {
 impl Default for EphemeralDefaults {
     fn default() -> Self {
         Self {
-            default_ttl: default_ttl(),
+            default_ttl: tatara_process::lifetime::default_ephemeral_ttl(),
             max_concurrent_per_cluster: 0,
             registry: default_registry(),
             root_ca_name: default_root_ca(),
@@ -147,6 +158,41 @@ mod tests {
         assert!(d.default_chart_ref.is_empty());
         assert_eq!(d.max_concurrent_per_cluster, 0);
         assert!(d.emit_oci_repository);
+    }
+
+    #[test]
+    fn default_ttl_routes_through_workspace_canonical_substrate_owner() {
+        // Cross-crate coherence pin: the reconciler-side operator-facing
+        // `default_ttl` slot MUST agree bytewise with the workspace-
+        // canonical substrate owner in `tatara-process`. Pre-lift each
+        // side had its own private `fn default_ttl() -> String { "1h"
+        // .to_string() }` shim; a partial re-tuning that drifted one
+        // side (e.g. a shift to `"30m"` at the tatara-process substrate
+        // owner but not at this reconciler-side shim) would silently
+        // produce operator-facing skew where the typed-side `defephemeral
+        // :ttl <omitted>` defaulted to `"30m"` but the reconciler's own
+        // operator-configured default still landed at `"1h"` on any
+        // legacy Process whose lifetime slot needs fallback.
+        //
+        // Post-lift both sides route through
+        // `tatara_process::lifetime::default_ephemeral_ttl` — a regression
+        // that reintroduces a private shim here surfaces at THIS pin
+        // rather than as three-way skew across the ephemeral-authoring
+        // surface family.
+        assert_eq!(
+            EphemeralDefaults::default().default_ttl,
+            tatara_process::lifetime::default_ephemeral_ttl(),
+            "EphemeralDefaults::default().default_ttl must route through \
+             tatara_process::lifetime::default_ephemeral_ttl — a private-\
+             shim reintroduction skews the reconciler-side default \
+             against the workspace-canonical substrate owner",
+        );
+        assert_eq!(
+            EphemeralDefaults::default().default_ttl,
+            tatara_process::lifetime::DEFAULT_EPHEMERAL_TTL,
+            "EphemeralDefaults::default().default_ttl must byte-match \
+             the paired DEFAULT_EPHEMERAL_TTL const in tatara-process",
+        );
     }
 
     #[test]

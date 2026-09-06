@@ -354,7 +354,7 @@ pub struct PermanentLifetime {}
 pub struct EphemeralLifetime {
     /// `humantime`-parseable duration from `phaseSince(Forking)` after
     /// which the Process is force-SIGTERM'd.
-    #[serde(default = "default_ttl")]
+    #[serde(default = "default_ephemeral_ttl")]
     pub ttl: String,
 
     /// When the Process auto-terminates.
@@ -365,7 +365,7 @@ pub struct EphemeralLifetime {
     /// share the same `spec.identity.name_override` / chart_ref.
     /// `0` = no cap. Enforced by the reconciler before transitioning out
     /// of `Pending`.
-    #[serde(default = "default_max_concurrent")]
+    #[serde(default = "default_ephemeral_max_concurrent")]
     pub max_concurrent: u32,
 
     /// Declared exports — what artifacts survive teardown and where
@@ -489,20 +489,147 @@ impl EphemeralLifetime {
 impl Default for EphemeralLifetime {
     fn default() -> Self {
         Self {
-            ttl: default_ttl(),
+            ttl: default_ephemeral_ttl(),
             teardown_policy: TeardownPolicy::default(),
-            max_concurrent: default_max_concurrent(),
+            max_concurrent: default_ephemeral_max_concurrent(),
             exports: Vec::new(),
         }
     }
 }
 
-fn default_ttl() -> String {
-    "1h".to_string()
+/// Workspace-canonical humantime default TTL for every ephemeral
+/// authoring surface — the ONE substrate owner of the `"1h"` wire-form
+/// default that pre-lift lived as THREE identical private
+/// `fn default_ttl() -> String { "1h".to_string() }` shims across
+/// [`tatara-process`]'s own [`EphemeralLifetime`] + [`crate::ephemeral::
+/// EphemeralSpec`] + [`tatara-reconciler`]'s `EphemeralDefaults`.
+///
+/// Pre-lift the SAME string wire-form `"1h"` was serde-defaulted at
+/// THREE workspace-wide `#[serde(default = "default_ttl")]` slots past
+/// the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold, each carrying its
+/// own private `fn default_ttl() -> String { "1h".to_string() }` shim:
+///
+/// * [`EphemeralLifetime::ttl`] (this module) — the canonical
+///   lifetime-slot default. Round-tripped through
+///   [`EphemeralLifetime::default`] and every serde-deserialize of a
+///   `spec.lifetime.ephemeral` block whose `ttl:` field is omitted.
+/// * [`crate::ephemeral::EphemeralSpec::ttl`] — the `(defephemeral …)`
+///   Lisp authoring surface's serde default, the wire-form default a
+///   `defephemeral` form binds when the operator omits `:ttl`.
+/// * `tatara-reconciler::ephemeral_defaults::EphemeralDefaults::default_ttl`
+///   — the reconciler's operator-configured cluster-wide default TTL,
+///   which itself defaults to `"1h"` when the operator omits it from
+///   the shikumi config file.
+///
+/// All three shims returned bytewise-identical `"1h"` and served the
+/// SAME wire-form default. Any operator-facing re-tuning of the
+/// workspace-canonical default (a shift to `"30m"` for tighter env
+/// recycling, a shift to `"6h"` for long-running attestation suites,
+/// a per-fleet override sourced from a substrate config) pre-lift
+/// required a THREE-site coordinated edit; any drift silently produced
+/// operator-visible skew where `defephemeral :ttl <omitted>` defaulted
+/// to X but the reconciler's own default landed at Y for the SAME
+/// authoring surface. Post-lift every serde slot reads through this
+/// ONE substrate owner and the invariant "every ephemeral-default
+/// surface names the SAME humantime string" holds by construction.
+///
+/// Return-form axis: `String` — matches the serde `default = "…"` slot
+/// contract exactly (serde invokes the named function and stamps its
+/// returned owned value into the field). The paired [`DEFAULT_EPHEMERAL_TTL`]
+/// const exposes the underlying `&'static str` for callers that want
+/// the zero-allocation handle (a compile-time `assert_eq!` pin, a
+/// format-string argument, an ephemeral-context error message).
+///
+/// A future normalization on the workspace-canonical ephemeral TTL
+/// default (a fleet-wide re-tuning, a per-cluster override injected
+/// via a `TATARA_DEFAULT_EPHEMERAL_TTL` env var, a bounded-precision
+/// canonicalization to a specific humantime spelling like `"3600s"`)
+/// lands at THIS ONE substrate primitive and every downstream serde-
+/// default consumer inherits the upgrade mechanically — no per-site
+/// edit at any of the THREE listed callers or at future consumers (a
+/// new ephemeral-adjacent authoring surface, a fleet-wide dashboard
+/// that reads the canonical default, a new tatara-eval fixture).
+///
+/// Peer to [`default_ephemeral_max_concurrent`] on the "workspace-
+/// canonical ephemeral defaults" axis — both lift a THREE-way-
+/// duplicated (TTL) or TWO-way-duplicated (max-concurrent) private
+/// `fn default_*` shim onto ONE substrate owner. The paired
+/// [`DEFAULT_EPHEMERAL_TTL`] const and [`DEFAULT_EPHEMERAL_MAX_CONCURRENT`]
+/// const partition the same axis on the "typed handle over the
+/// wire-form default" side.
+///
+/// Theory anchor: THEORY.md §VI.1 (generation over composition — the
+/// `"1h".to_string()` wire-form default recurred at THREE hand-authored
+/// sites past the ★★ PRIME-DIRECTIVE ≥ 2 duplication trigger, spanning
+/// two workspace crates, and is lifted onto ONE workspace-wide
+/// substrate owner here). THEORY.md §II.1 invariant 5 (composition
+/// preserves proofs — the pins bind the default at fail-before-pass-
+/// after granularity so a regression that drifted the wire-form
+/// surfaces at [`tests::default_ephemeral_ttl_matches_pre_lift_1h_string`]
+/// rather than as silent operator-facing skew across the three
+/// downstream consumers).
+#[must_use]
+pub fn default_ephemeral_ttl() -> String {
+    DEFAULT_EPHEMERAL_TTL.to_string()
 }
-fn default_max_concurrent() -> u32 {
-    1
+
+/// Workspace-canonical humantime default TTL wire-form — the `&'static
+/// str` handle over the same `"1h"` value [`default_ephemeral_ttl`]
+/// returns. Use this const for compile-time comparisons and format
+/// arguments; use [`default_ephemeral_ttl`] for the owned `String` the
+/// serde `default = "…"` slot contract expects.
+pub const DEFAULT_EPHEMERAL_TTL: &str = "1h";
+
+/// Workspace-canonical default cluster-wide concurrency budget for
+/// every ephemeral authoring surface — the ONE substrate owner of the
+/// `1` wire-form default that pre-lift lived as TWO identical private
+/// `fn default_max_concurrent() -> u32 { 1 }` shims across
+/// [`EphemeralLifetime`] + [`crate::ephemeral::EphemeralSpec`].
+///
+/// Pre-lift the SAME `1u32` wire-form was serde-defaulted at TWO
+/// `tatara-process` `#[serde(default = "default_max_concurrent")]`
+/// slots past the ★★ PRIME-DIRECTIVE ≥ 2 duplication threshold, each
+/// carrying its own private shim:
+///
+/// * [`EphemeralLifetime::max_concurrent`] (this module) — the
+///   lifetime-slot default: "at most one ephemeral Process per
+///   `spec.identity.name_override` / chart_ref concurrently until the
+///   operator explicitly widens the budget".
+/// * [`crate::ephemeral::EphemeralSpec::max_concurrent`] — the
+///   `(defephemeral …)` Lisp authoring surface's serde default, the
+///   same conservative "one at a time" invariant a fresh `defephemeral`
+///   binds when the operator omits `:max-concurrent`.
+///
+/// Both shims returned `1` and served the SAME "one-at-a-time"
+/// concurrency invariant. Post-lift both serde slots read through
+/// this ONE substrate owner; a future re-tuning of the workspace-
+/// canonical concurrency invariant (a shift to `2` for parallel-safe
+/// probes, a shift to `0` for uncapped ephemeral fleets, a per-fleet
+/// override) lands at ONE site and both downstream consumers inherit
+/// the upgrade mechanically.
+///
+/// NOT the same axis as `tatara-reconciler::ephemeral_defaults::
+/// EphemeralDefaults::max_concurrent_per_cluster`, which defaults to
+/// `0` (no cap) on purpose — that field is the operator's cluster-
+/// wide ceiling, whereas THIS default is the per-authoring-surface
+/// conservative "one-at-a-time" invariant. The two defaults are
+/// deliberately different values on deliberately different axes and
+/// stay separate.
+///
+/// Peer to [`default_ephemeral_ttl`] on the "workspace-canonical
+/// ephemeral defaults" axis — see that primitive's doc for the shared
+/// motivation.
+#[must_use]
+pub fn default_ephemeral_max_concurrent() -> u32 {
+    DEFAULT_EPHEMERAL_MAX_CONCURRENT
 }
+
+/// Workspace-canonical default cluster-wide concurrency budget wire-
+/// form — the `u32` handle over the same `1` value
+/// [`default_ephemeral_max_concurrent`] returns. Use this const for
+/// compile-time comparisons; use [`default_ephemeral_max_concurrent`]
+/// for the serde `default = "…"` slot contract.
+pub const DEFAULT_EPHEMERAL_MAX_CONCURRENT: u32 = 1;
 
 /// When an ephemeral Process self-terminates.
 ///
@@ -1367,6 +1494,208 @@ mod tests {
                 "composer for {kind:?} must land on the SAME resolver kind",
             );
         }
+    }
+
+    // ─── Workspace-canonical ephemeral-defaults substrate pins ────────
+    //
+    // Bind [`default_ephemeral_ttl`] + [`default_ephemeral_max_concurrent`]
+    // and the paired [`DEFAULT_EPHEMERAL_TTL`] + [`DEFAULT_EPHEMERAL_MAX_CONCURRENT`]
+    // consts at fail-before-pass-after granularity so a regression that
+    // drifted the wire-form default (a shift from `"1h"` to `"30m"` at
+    // ONLY the const, a shift from `1` to `2` at only the fn body, a
+    // decoupling of the const from the fn's returned value) surfaces
+    // HERE rather than as silent operator-visible skew across the
+    // THREE serde-default consumers ([`EphemeralLifetime::ttl`] +
+    // [`crate::ephemeral::EphemeralSpec::ttl`] + `tatara-reconciler
+    // ::ephemeral_defaults::EphemeralDefaults::default_ttl`) that ride
+    // through this ONE substrate owner.
+
+    #[test]
+    fn default_ephemeral_ttl_matches_pre_lift_1h_string_bytewise() {
+        // Byte-shape parity with the THREE hand-authored pre-lift shims
+        // that each returned `"1h".to_string()`. A regression that
+        // drifted the returned string (an accidental locale-specific
+        // `"1 h"` spacing, a typo to `"1H"` that survives serde but
+        // fails humantime parse, a shift to a whole-second `"3600s"`
+        // canonicalization) fails HERE rather than at the three
+        // downstream consumers.
+        assert_eq!(
+            default_ephemeral_ttl(),
+            "1h",
+            "default_ephemeral_ttl must return the pre-lift `\"1h\"` \
+             string bytewise; a regression that drifted the wire-form \
+             surfaces here rather than as three-way skew across the \
+             EphemeralLifetime / EphemeralSpec / EphemeralDefaults \
+             consumers.",
+        );
+    }
+
+    #[test]
+    fn default_ephemeral_ttl_wire_form_const_matches_fn_return_bytewise() {
+        // Cross-form coherence pin: the `pub const DEFAULT_EPHEMERAL_TTL:
+        // &str` handle and the `pub fn default_ephemeral_ttl() -> String`
+        // owner MUST project onto the SAME wire-form value. A regression
+        // that updated one but not the other (e.g. lifted the const to
+        // a new default but forgot the fn body, or vice versa) would
+        // silently produce two divergent workspace-canonical defaults
+        // — the const for compile-time consumers, the fn for serde-
+        // default consumers. Pin the two projections at equality.
+        assert_eq!(
+            DEFAULT_EPHEMERAL_TTL, "1h",
+            "DEFAULT_EPHEMERAL_TTL const must byte-match the pre-lift \
+             wire-form default `\"1h\"`",
+        );
+        assert_eq!(
+            default_ephemeral_ttl(),
+            DEFAULT_EPHEMERAL_TTL,
+            "default_ephemeral_ttl() must byte-match the paired \
+             DEFAULT_EPHEMERAL_TTL const — a divergence would silently \
+             skew serde-default consumers vs compile-time const readers",
+        );
+    }
+
+    #[test]
+    fn default_ephemeral_ttl_composes_at_ephemeral_lifetime_default_field() {
+        // End-to-end: the `EphemeralLifetime::default()` composer routes
+        // its `ttl:` slot through the substrate owner and the resulting
+        // field reads bytewise-identical to the substrate primitive's
+        // return. A regression that reintroduced a hand-authored `"1h"
+        // .to_string()` inline at `Default::default` (or drifted the
+        // ttl slot away from the substrate) would fail here.
+        assert_eq!(
+            EphemeralLifetime::default().ttl,
+            default_ephemeral_ttl(),
+            "EphemeralLifetime::default().ttl must route through \
+             default_ephemeral_ttl — inline `\"1h\".to_string()` reintroduction \
+             surfaces here rather than as skew with the two peer \
+             ephemeral-defaults consumers",
+        );
+    }
+
+    #[test]
+    fn default_ephemeral_ttl_composes_at_ephemeral_spec_serde_default() {
+        // The `(defephemeral …)` Lisp authoring surface's serde default
+        // must round-trip through the substrate owner: a YAML fragment
+        // that omits the `ttl:` field parses into an EphemeralSpec whose
+        // `ttl` reads bytewise-identical to the substrate primitive.
+        // A regression that reintroduced a private `default_ttl` shim
+        // in `ephemeral.rs` (bypassing the substrate) would produce a
+        // silent skew between `defephemeral :ttl <omitted>` and
+        // `EphemeralLifetime::default()`.
+        let yaml = "\
+aplicacao:
+  chartRef: oci://ghcr.io/pleme-io/charts/lareira-demo-app
+  version: \"0.5.5\"
+  profile: all-in-one
+  valuesOverlay: null
+";
+        let spec: crate::ephemeral::EphemeralSpec =
+            serde_yaml::from_str(yaml).expect("EphemeralSpec YAML parses");
+        assert_eq!(
+            spec.ttl,
+            default_ephemeral_ttl(),
+            "EphemeralSpec serde-default for the omitted `ttl:` slot \
+             must route through crate::lifetime::default_ephemeral_ttl \
+             — a private-shim reintroduction skews the two peer \
+             ephemeral-authoring surfaces silently",
+        );
+    }
+
+    #[test]
+    fn default_ephemeral_ttl_parses_as_humantime_1h() {
+        // Substrate invariant: the wire-form default MUST parse as a
+        // humantime duration equal to one hour. A regression that
+        // drifted the const to an unparseable string (a locale-specific
+        // spelling, a serde-friendly-but-humantime-invalid literal)
+        // would silently break every downstream TTL-expiry gate. Pin
+        // the invariant at the substrate boundary rather than at every
+        // consumer's own humantime-parse callsite.
+        let parsed =
+            humantime::parse_duration(DEFAULT_EPHEMERAL_TTL).expect("`\"1h\"` parses as humantime");
+        assert_eq!(
+            parsed,
+            std::time::Duration::from_secs(3_600),
+            "DEFAULT_EPHEMERAL_TTL must parse as a one-hour duration; a \
+             regression that drifted the wire-form to an unparseable \
+             string surfaces here rather than as silent TTL-expiry-gate \
+             misfires at every downstream consumer",
+        );
+    }
+
+    #[test]
+    fn default_ephemeral_max_concurrent_matches_pre_lift_1_bytewise() {
+        // Byte-shape parity with the TWO hand-authored pre-lift shims
+        // that each returned `1u32`. A regression that drifted the
+        // returned value (a shift to `0` for uncapped, a shift to `2`
+        // for parallel-safe defaults) surfaces here rather than at
+        // both `EphemeralLifetime::max_concurrent` and
+        // `EphemeralSpec::max_concurrent` serde defaults.
+        assert_eq!(
+            default_ephemeral_max_concurrent(),
+            1,
+            "default_ephemeral_max_concurrent must return the pre-lift \
+             `1u32` value bytewise; a regression surfaces here rather \
+             than as two-way skew across the EphemeralLifetime + \
+             EphemeralSpec consumers.",
+        );
+    }
+
+    #[test]
+    fn default_ephemeral_max_concurrent_wire_form_const_matches_fn_return_bytewise() {
+        // Peer to the TTL cross-form pin — the `pub const
+        // DEFAULT_EPHEMERAL_MAX_CONCURRENT: u32` handle and the
+        // `pub fn default_ephemeral_max_concurrent() -> u32` owner MUST
+        // project onto the SAME `1u32` value.
+        assert_eq!(DEFAULT_EPHEMERAL_MAX_CONCURRENT, 1);
+        assert_eq!(
+            default_ephemeral_max_concurrent(),
+            DEFAULT_EPHEMERAL_MAX_CONCURRENT,
+        );
+    }
+
+    #[test]
+    fn default_ephemeral_max_concurrent_composes_at_ephemeral_lifetime_default_field() {
+        // Same end-to-end contract as the TTL peer pin: the
+        // `EphemeralLifetime::default()` composer routes its
+        // `max_concurrent:` slot through the substrate owner and the
+        // resulting field bytewise-matches the substrate primitive.
+        assert_eq!(
+            EphemeralLifetime::default().max_concurrent,
+            default_ephemeral_max_concurrent(),
+        );
+    }
+
+    #[test]
+    fn ephemeral_authoring_surfaces_share_workspace_canonical_ttl_default() {
+        // Cross-surface coherence pin: the two `tatara-process`
+        // ephemeral authoring surfaces — the lifetime-slot default and
+        // the `(defephemeral …)` sugar default — MUST reach the SAME
+        // workspace-canonical TTL string via serde default. A drift at
+        // either site (a private-shim reintroduction, an inline literal
+        // shortcut, a partial re-tuning that missed the peer) surfaces
+        // HERE as observable skew between the two Default outputs.
+        let yaml = "\
+aplicacao:
+  chartRef: oci://ghcr.io/pleme-io/charts/x
+  version: \"0.1\"
+  profile: p
+  valuesOverlay: null
+";
+        let spec: crate::ephemeral::EphemeralSpec =
+            serde_yaml::from_str(yaml).expect("EphemeralSpec parses");
+        let lifetime = EphemeralLifetime::default();
+        assert_eq!(
+            spec.ttl, lifetime.ttl,
+            "EphemeralSpec::ttl serde default and \
+             EphemeralLifetime::default().ttl MUST agree — both must \
+             route through crate::lifetime::default_ephemeral_ttl",
+        );
+        assert_eq!(
+            spec.max_concurrent, lifetime.max_concurrent,
+            "EphemeralSpec::max_concurrent serde default and \
+             EphemeralLifetime::default().max_concurrent MUST agree — \
+             both must route through crate::lifetime::default_ephemeral_max_concurrent",
+        );
     }
 
     /// Neither composer produces the ambiguous corner — the composer's

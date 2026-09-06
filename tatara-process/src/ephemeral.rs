@@ -55,7 +55,7 @@ pub struct EphemeralSpec {
     pub aplicacao: AplicacaoIntent,
 
     /// TTL — `humantime` duration (`"1h"`, `"30m"`).
-    #[serde(default = "default_ttl")]
+    #[serde(default = "crate::lifetime::default_ephemeral_ttl")]
     pub ttl: String,
 
     /// When the ephemeral Process auto-terminates.
@@ -64,7 +64,7 @@ pub struct EphemeralSpec {
 
     /// Cluster-wide concurrency budget across ephemeral Processes sharing
     /// the same `:aplicacao :chart-ref`. `0` = no cap.
-    #[serde(default = "default_max_concurrent")]
+    #[serde(default = "crate::lifetime::default_ephemeral_max_concurrent")]
     pub max_concurrent: u32,
 
     /// Boundary postconditions evaluated before reaching `Attested`.
@@ -108,12 +108,18 @@ pub struct EphemeralSpec {
     pub routing: Option<RoutingSpec>,
 }
 
-fn default_ttl() -> String {
-    "1h".to_string()
-}
-fn default_max_concurrent() -> u32 {
-    1
-}
+// `default_ttl` + `default_max_concurrent` bindings for the two serde
+// `#[serde(default = "…")]` slots above route through the ONE
+// substrate owner [`crate::lifetime::default_ephemeral_ttl`] +
+// [`crate::lifetime::default_ephemeral_max_concurrent`] — peer of
+// the [`EphemeralLifetime`] serde-default slots on the SAME
+// workspace-canonical "ephemeral wire-form defaults" axis.
+// Pre-lift both slots carried their own private
+// `fn default_*` shims that returned bytewise-identical `"1h"` /
+// `1` values as the peer [`EphemeralLifetime`] slots — one of THREE
+// (TTL) and TWO (max-concurrent) restatements past the ★★ PRIME-
+// DIRECTIVE ≥ 2 duplication threshold. See the substrate owner's
+// doc-comment for the full migration rationale.
 
 impl From<EphemeralSpec> for ProcessSpec {
     fn from(e: EphemeralSpec) -> Self {
@@ -210,9 +216,9 @@ mod tests {
     fn defaults_resolve_for_ephemeral_spec() {
         let e = EphemeralSpec {
             aplicacao: demo_overlay(),
-            ttl: default_ttl(),
+            ttl: crate::lifetime::default_ephemeral_ttl(),
             teardown: TeardownPolicy::default(),
-            max_concurrent: default_max_concurrent(),
+            max_concurrent: crate::lifetime::default_ephemeral_max_concurrent(),
             postconditions: vec![],
             preconditions: vec![],
             verify_timeout: None,
